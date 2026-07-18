@@ -12,3 +12,14 @@ Changes include a native SwiftUI menu bar host, CoreBluetooth state machine,
 CoreAudio output selection, IOHID permission gating, macOS key injection,
 packaging, and macOS-focused tests. The adapted work is distributed under
 GPL-3.0-only. See LICENSE and THIRD_PARTY_NOTICES.md.
+
+A Windows source/build candidate for the same device, apps/windows/rc003,
+is a clean-room Python reimplementation informed by reading (read-only) the
+same GPL-3.0 reference project and revision above. It does not copy any
+upstream source lines; it reuses only interoperability facts (GATT UUIDs,
+control opcodes, IMA/DVI ADPCM tables, HID usage IDs, VID/PID values). It
+does not include the upstream VB-CABLE packaging, Frida injection, other
+device bridges (T1/V60), or commercial branding. See
+apps/windows/rc003/ATTRIBUTION.md for the file-by-file provenance record.
+This candidate has not completed real-Windows-device acceptance; see
+apps/windows/rc003/README.md, in particular its "Known gaps" section.

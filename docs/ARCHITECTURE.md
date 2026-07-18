@@ -88,7 +88,7 @@ RC003 的 F5→Fn 是一个明确的 macOS 平台策略，只对该设备 HID �
 | 平台 | 当前状态 | 边界 |
 | --- | --- | --- |
 | macOS | RC003 已实现 | CoreBluetooth、IOHID、CoreAudio、AppKit；最低部署目标 11 |
-| Windows | planned | 需独立验证蓝牙、Raw HID、系统音频和按键注入权限模型 |
+| Windows | planned（`apps/windows/rc003/` 已有源码/构建候选，未真机验收） | 需独立验证蓝牙、Raw HID、系统音频和按键注入权限模型 |
 | Linux | planned | 需独立验证 BlueZ、evdev/uhid、PipeWire/PulseAudio 与桌面会话权限 |
 
 这里的 Windows/Linux 技术名只是候选边界，不代表已经选型或实现。
@@ -126,6 +126,8 @@ apps/<platform>/
 ```
 
 在第二个实现出现前不决定共享核心必须使用 Swift、Rust、C++ 或其他语言。先用 schema 固定跨语言事实，再由真实复用与部署约束选择实现语言。
+
+`apps/windows/rc003/` 是一个例外说明：它是**同一个设备（RC003）的第二个平台**候选，不是第二个设备适配器，因此提前以 `apps/<platform>/<device-id>/` 的形式独立落地，而不等待 `core/`/`platforms/` 抽象出现。它是纯 Python 实现，与 `Sources/XiaomiRemoteBridgeMac` 的 Swift 代码没有共享依赖；在真机验收前只是 source/build candidate，见该目录自己的 README（含"Known gaps"一节列出的真机待核验事项）。
 
 ## 兼容原则
 

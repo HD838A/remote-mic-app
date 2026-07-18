@@ -4,13 +4,13 @@ Open Voice Bridge 是一个面向无线麦克风、语音遥控器和其他语�
 
 它把问题拆成六层：设备身份与能力、传输、设备协议、音频图、动作映射和平台后端。一个设备可以组合 BLE GATT、Bluetooth HID、USB 数字音频或系统音频输入；macOS、Windows、Linux 分别实现自己的权限与 I/O 后端。
 
-> 当前唯一已完成实现和真机验收的组合是：**Xiaomi Bluetooth Remote 2 Pro / RC003 + macOS**。Windows、Linux 和 DJI Mic 2 仍是 planned/research，不应理解为已经支持。
+> 当前唯一已完成实现和真机验收的组合是：**Xiaomi Bluetooth Remote 2 Pro / RC003 + macOS**。RC003 Windows 是源码/构建候选：已经在真实 Windows GitHub Actions runner 上通过完整测试与打包流程（未真机验收，见 `apps/windows/rc003/`），不应理解为已经支持；Linux 和 DJI Mic 2 仍是 planned/research。
 
 ## 当前支持矩阵
 
 | 设备 | macOS | Windows | Linux | 主要传输 |
 | --- | --- | --- | --- | --- |
-| Xiaomi RC003 | 已实现并真机验收 | 计划中 | 计划中 | BLE GATT（ATVV 语音）+ Bluetooth HID（按键） |
+| Xiaomi RC003 | 已实现并真机验收 | 源码/构建候选（未真机验收，见 `apps/windows/rc003/`） | 计划中 | BLE GATT（ATVV 语音）+ Bluetooth HID（按键） |
 | DJI Mic 2 | 调研中 | 调研中 | 调研中 | 优先研究接收器 USB-C 数字音频；桌面蓝牙不作先验承诺 |
 | 其他语音外设 | 通过 device profile 接入 | 通过 platform backend 接入 | 通过 platform backend 接入 | 以真实设备枚举和协议证据为准 |
 
@@ -22,6 +22,7 @@ DJI 官方说明 Mic 2 接收器可以通过 USB-C 连接电脑；其发射器�
 - [添加新设备适配器](docs/ADDING_A_DEVICE.md)
 - [设备 profile Schema](specs/device-profile.schema.json)
 - [已实现的 Xiaomi RC003 profile](device-profiles/xiaomi-rc003.json)
+- [Xiaomi RC003 Windows 源码/构建候选（未真机验收）](apps/windows/rc003/README.md)
 - [DJI Mic 2 调研 profile](device-profiles/dji-mic-2.json)
 
 Profile 只记录可核对的事实与状态，不是驱动。只有代码、自动验证和目标平台真机门都通过后，某个设备/平台组合才会标为 `implemented`。

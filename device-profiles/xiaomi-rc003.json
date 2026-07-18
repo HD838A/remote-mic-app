@@ -56,7 +56,7 @@
     {
       "platform": "windows",
       "status": "planned",
-      "notes": "No Open Voice Bridge Windows adapter has been implemented."
+      "notes": "A source/build candidate exists at apps/windows/rc003 (button mapping via the Win32 Raw Input API, ATVV voice via WinRT BLE, user-selected audio output, Tk settings UI). It builds and passes cross-platform contract tests but has not been run on a real Windows machine or against a real RC003; it is not implemented/supported until that real-device verification is complete. See apps/windows/rc003/README.md, in particular its 'Known gaps' section."
     },
     {
       "platform": "linux",
