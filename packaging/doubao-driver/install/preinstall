@@ -1,0 +1,11 @@
+#!/bin/zsh
+set -euo pipefail
+
+TARGET_VOLUME="${3:-/}"
+DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+
+if [[ -e "$DESTINATION" ]]; then
+  print -u2 "未安装：已存在同名驱动 $DESTINATION"
+  print -u2 "为避免覆盖现有驱动，此安装器已停止。请先使用随 DMG 提供的卸载器。"
+  exit 2
+fi

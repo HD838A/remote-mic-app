@@ -14,6 +14,8 @@ VERIFY_ROOT="$(mktemp -d /private/tmp/xrbm-dmg-verify.XXXXXX)"
 MOUNT_POINT="$VERIFY_ROOT/mount"
 SOURCE_EXTRACT="$VERIFY_ROOT/source"
 ZIP_LIST="$VERIFY_ROOT/zip-entries.txt"
+INSTALL_PACKAGE="$MOUNT_POINT/安装豆包兼容麦克风.pkg"
+UNINSTALL_PACKAGE="$MOUNT_POINT/卸载豆包兼容麦克风.pkg"
 ATTACHED=0
 
 mkdir -p "$MOUNT_POINT" "$SOURCE_EXTRACT"
@@ -41,13 +43,19 @@ ATTACHED=1
 
 APP="$MOUNT_POINT/$DISPLAY_NAME.app"
 GUIDE="$MOUNT_POINT/首次安装说明.txt"
+DOUBAO_GUIDE="$MOUNT_POINT/豆包输入法兼容说明.txt"
 SOURCE_ZIP="$MOUNT_POINT/$SOURCE_ARCHIVE"
 
 test -L "$MOUNT_POINT/Applications"
 test "$(readlink "$MOUNT_POINT/Applications")" = "/Applications"
 test -f "$GUIDE"
+test -f "$DOUBAO_GUIDE"
 test -f "$SOURCE_ZIP"
+test -f "$INSTALL_PACKAGE"
+test -f "$UNINSTALL_PACKAGE"
 "$ROOT/scripts/verify-app.sh" --universal "$APP"
+"$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
+"$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
 
 test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "$VERSION"
 test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "$BUILD"
@@ -65,6 +73,11 @@ for required in \
   "$SOURCE_ROOT/.gitattributes" \
   "$SOURCE_ROOT/scripts/build-dmg.sh" \
   "$SOURCE_ROOT/scripts/build-doubao-driver.sh" \
+  "$SOURCE_ROOT/scripts/build-doubao-driver-pkg.sh" \
+  "$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh" \
+  "$SOURCE_ROOT/packaging/doubao-driver/install/preinstall" \
+  "$SOURCE_ROOT/packaging/doubao-driver/install/postinstall" \
+  "$SOURCE_ROOT/packaging/doubao-driver/uninstall/postinstall" \
   "$SOURCE_ROOT/third_party/blackhole/blackhole-device-usb.patch" \
   "$SOURCE_ROOT/Resources/RC003-remote-photo.png" \
   "$SOURCE_ROOT/LICENSE"; do
@@ -91,7 +104,7 @@ if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' \
 fi
 
 if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' \
-  "$APP/Contents" "$GUIDE" "$MOUNT_POINT/THIRD_PARTY_NOTICES.md"; then
+  "$APP/Contents" "$GUIDE" "$DOUBAO_GUIDE" "$MOUNT_POINT/THIRD_PARTY_NOTICES.md"; then
   print -u2 "DMG payload contains a forbidden local path or example device address"
   exit 1
 fi

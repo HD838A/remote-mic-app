@@ -9,21 +9,15 @@ MiRemoteV 2ch 是一份与 BlackHole 并存的、独立的双向 2 声道回环�
 
 它不会修改、删除或覆盖 BlackHole2ch.driver。
 
-构建与安装
-----------
+安装
+----
 
-需要：完整 Xcode、git，以及本项目对应源码。
+不需要安装 Xcode、Git 或运行终端命令。
 
-1. 在源码根目录运行：
-
-   ./scripts/build-doubao-driver.sh
-
-2. 检查成功后运行：
-
-   sudo ./scripts/install-doubao-driver.sh
-
-3. CoreAudio 会自动重启。重新打开“小米遥控器桥接”，点击“刷新音频设备”，然后点击“选择 MiRemoteV 2ch”。
-4. 在豆包输入法中选择“MiRemoteV 2ch”；如果豆包不提供设备选择，则完全退出并重新打开豆包后再测试。
+1. 在 DMG 根目录双击“安装豆包兼容麦克风.pkg”。
+2. 在系统 Installer 中按提示输入管理员密码。安装器会先检查目标路径，拒绝覆盖已有的同名驱动；不会修改或覆盖 BlackHole。
+3. 安装器会校验驱动、重启 CoreAudio。重新打开“小米遥控器桥接”，点击“刷新音频设备”，然后点击“选择 MiRemoteV 2ch”。
+4. 在豆包输入法中使用“MiRemoteV 2ch”；如果豆包不提供设备选择，则完全退出并重新打开豆包后再测试。
 
 验证
 ----
@@ -33,13 +27,11 @@ MiRemoteV 2ch 是一份与 BlackHole 并存的、独立的双向 2 声道回环�
 卸载
 ----
 
-在源码根目录运行：
+在 DMG 根目录双击“卸载豆包兼容麦克风.pkg”，按系统提示完成卸载。
 
-   sudo ./scripts/uninstall-doubao-driver.sh
-
-该命令只删除 /Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver。
+它只删除 /Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver，不会修改 BlackHole。
 
 许可证
 ------
 
-该驱动由 BlackHole v0.7.1 源码、项目内补丁和本地构建参数生成。BlackHole 采用 GPL-3.0；详见 THIRD_PARTY_NOTICES.md。
+该驱动由 BlackHole v0.7.1 源码、项目内补丁和发布构建参数生成。BlackHole 采用 GPL-3.0；详见 THIRD_PARTY_NOTICES.md。DMG 所附源码中的构建脚本仅供开发者复现和审计，不是安装步骤。

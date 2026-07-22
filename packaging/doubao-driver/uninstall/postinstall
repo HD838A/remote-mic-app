@@ -1,0 +1,18 @@
+#!/bin/zsh
+set -euo pipefail
+
+TARGET_VOLUME="${3:-/}"
+DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+PLIST="$DESTINATION/Contents/Info.plist"
+
+if [[ ! -e "$DESTINATION" ]]; then
+  print "未发现 MiRemoteV 2ch，无需卸载。"
+  exit 0
+fi
+
+test -f "$PLIST"
+test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "com.hd838a.MiRemoteV2ch"
+
+/bin/rm -rf -- "$DESTINATION"
+/usr/bin/killall coreaudiod
+print "已卸载 MiRemoteV 2ch。BlackHole 未被修改。"

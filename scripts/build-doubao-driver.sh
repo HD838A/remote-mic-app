@@ -61,4 +61,4 @@ codesign --force --deep --sign - --timestamp=none "$OUTPUT"
 "$ROOT/scripts/verify-doubao-driver.sh" "$OUTPUT"
 
 print "Built: $OUTPUT"
-print "Next: sudo $ROOT/scripts/install-doubao-driver.sh"
+print "Next: $ROOT/scripts/build-doubao-driver-pkg.sh"

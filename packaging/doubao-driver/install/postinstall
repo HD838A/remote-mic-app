@@ -1,0 +1,27 @@
+#!/bin/zsh
+set -euo pipefail
+
+TARGET_VOLUME="${3:-/}"
+DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+PLIST="$DESTINATION/Contents/Info.plist"
+BINARY="$DESTINATION/Contents/MacOS/MiRemoteV2ch"
+
+test -d "$DESTINATION"
+test -f "$PLIST"
+test -x "$BINARY"
+test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "com.hd838a.MiRemoteV2ch"
+test "$(/usr/bin/plutil -extract CFBundleName raw -o - "$PLIST")" = "MiRemoteV2ch"
+
+/usr/sbin/chown -R root:wheel "$DESTINATION"
+/usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \;
+/usr/bin/find "$DESTINATION" -type f -exec /bin/chmod 644 {} \;
+/bin/chmod 755 "$BINARY"
+/usr/bin/codesign --verify --deep --strict "$DESTINATION"
+
+ARCHS="$(/usr/bin/lipo -archs "$BINARY")"
+for required in arm64 x86_64; do
+  print -r -- "$ARCHS" | /usr/bin/tr ' ' '\n' | /usr/bin/grep -qx "$required"
+done
+
+/usr/bin/killall coreaudiod
+print "已安装 MiRemoteV 2ch。请重新打开小米遥控器桥接，刷新音频设备后选择它。"

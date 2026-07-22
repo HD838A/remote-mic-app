@@ -12,6 +12,8 @@ DMG_BASENAME="$DISPLAY_NAME-$VERSION-测试版.dmg"
 DMG="$OUTPUT_DIR/$DMG_BASENAME"
 SOURCE_ROOT="xiaomi-remote-bridge-mac-$VERSION-source"
 SOURCE_ARCHIVE="$DISPLAY_NAME-$VERSION-对应源码.zip"
+INSTALL_PACKAGE="安装豆包兼容麦克风.pkg"
+UNINSTALL_PACKAGE="卸载豆包兼容麦克风.pkg"
 
 mkdir -p "$OUTPUT_DIR"
 WORK_DIR="$(mktemp -d "$OUTPUT_DIR/.package-work.XXXXXX")"
@@ -30,6 +32,8 @@ mkdir -p "$STAGING" "$SOURCE_DIR"
 
 "$ROOT/scripts/build-app.sh" --universal
 "$ROOT/scripts/verify-app.sh" --universal "$APP_DIR"
+"$ROOT/scripts/build-doubao-driver.sh"
+"$ROOT/scripts/build-doubao-driver-pkg.sh"
 
 ditto --norsrc --noextattr --noqtn --noacl \
   "$APP_DIR" "$STAGING/$DISPLAY_NAME.app"
@@ -37,13 +41,19 @@ ln -s /Applications "$STAGING/Applications"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/首次安装说明.txt" "$STAGING/首次安装说明.txt"
 ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/Resources/豆包输入法兼容说明.txt" "$STAGING/豆包输入法兼容说明.txt"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$OUTPUT_DIR/$INSTALL_PACKAGE" "$STAGING/$INSTALL_PACKAGE"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$OUTPUT_DIR/$UNINSTALL_PACKAGE" "$STAGING/$UNINSTALL_PACKAGE"
+ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/LICENSE" "$STAGING/LICENSE"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/COPYRIGHT" "$STAGING/COPYRIGHT"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/THIRD_PARTY_NOTICES.md" "$STAGING/THIRD_PARTY_NOTICES.md"
 
-for item in Package.swift Sources Tests script scripts Resources third_party .codex .gitattributes README.md LICENSE COPYRIGHT THIRD_PARTY_NOTICES.md; do
+for item in Package.swift Sources Tests script scripts Resources third_party packaging .codex .gitattributes README.md LICENSE COPYRIGHT THIRD_PARTY_NOTICES.md; do
   ditto --norsrc --noextattr --noqtn --noacl \
     "$ROOT/$item" "$SOURCE_DIR/$item"
 done

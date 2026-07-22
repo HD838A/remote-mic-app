@@ -16,7 +16,7 @@ The Xiaomi RC003 ATVV UUIDs, microphone command behavior, IMA/DVI ADPCM decoding
 - Pinned source revision: `v0.7.1` / `e2b22aaaba4e507a097131704bf96dabc004d9cf`
 - License: GNU General Public License v3.0 (`GPL-3.0`)
 
-BlackHole remains an optional loopback-device choice. This fork also includes `scripts/build-doubao-driver.sh` and `third_party/blackhole/blackhole-device-usb.patch`, which locally build a distinct `MiRemoteV2ch.driver` from the pinned BlackHole source. The patch changes only the actual Audio Device transport type to USB and assigns a separate CFPlugIn factory UUID; it does not modify an installed `BlackHole2ch.driver`. The derived driver is not bundled in the app or DMG, and is built and installed only when the user explicitly runs the documented scripts.
+BlackHole remains an optional loopback-device choice. This fork includes `scripts/build-doubao-driver.sh` and `third_party/blackhole/blackhole-device-usb.patch`, which build a distinct `MiRemoteV2ch.driver` from the pinned BlackHole source. The patch changes only the actual Audio Device transport type to USB and assigns a separate CFPlugIn factory UUID; it does not modify an installed `BlackHole2ch.driver`. The release DMG embeds that prebuilt derived driver in a dedicated macOS Installer package. The source build scripts remain available for reproducibility and audit, not as an end-user installation step.
 
 ## MiRemoteVoice
 
