@@ -10,7 +10,7 @@
 
 ## 当前状态
 
-0.2.0 测试版已在一只 RC003 和 Apple Silicon Mac 上完成蓝牙连接、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放与真实中文语音转文字验收。Universal 二进制和 macOS 11 部署目标已做构建校验；实际 macOS 11 机器仍待运行验收。
+0.2.0 上游测试版已在一只 RC003 和 Apple Silicon Mac 上完成蓝牙连接、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放与真实中文语音转文字验收。本 fork 的 0.2.1 新增豆包兼容虚拟麦克风：将独立的 BlackHole 派生驱动 `MiRemoteV 2ch` 标识为 USB transport，避免豆包过滤普通 virtual transport 设备。Universal 二进制和 macOS 11 部署目标仍需在目标机运行验收。
 
 ## 系统要求
 
@@ -39,6 +39,23 @@ open "dist/小米遥控器桥接.app"
 
 `scripts/test.sh` 会运行不依赖 XCTest 的协议自测，再编译完整应用。安装了完整 Xcode 的开发机还可以额外运行 `xcrun swift test`；当前 macOS 26 Command Line Tools 自带的 Swift Testing 运行库路径不完整，因此不能只依赖它作为验收入口。
 
+### 豆包兼容虚拟麦克风
+
+如果 QuickTime 已能从 BlackHole 录到遥控器语音、豆包输入法仍没有反应，说明遥控器、ATVV 解码和回环输出已经正常；豆包是在过滤 virtual transport 设备。此 fork 提供可复现的源码构建路径，不会对已安装的 BlackHole 做二进制修改：
+
+```bash
+./scripts/build-doubao-driver.sh
+sudo ./scripts/install-doubao-driver.sh
+```
+
+脚本固定使用 BlackHole `v0.7.1` 源码和项目内补丁，生成独立的 `MiRemoteV2ch.driver`。实际音频 Device 报告为 USB transport，名称是 `MiRemoteV 2ch`，与 `BlackHole2ch.driver` 并存。CoreAudio 重启后，在桥接应用“虚拟麦克风”中点击“刷新音频设备 → 选择 MiRemoteV 2ch”，再在豆包中选择该设备或完全重启豆包。
+
+该驱动是本地 ad-hoc 签名的 GPL-3.0 派生物，需要完整 Xcode、管理员权限和目标机验证。若要移除：
+
+```bash
+sudo ./scripts/uninstall-doubao-driver.sh
+```
+
 首次启用自定义映射时，按系统提示允许：
 
 1. 蓝牙：发现与连接 RC003；
@@ -49,8 +66,8 @@ open "dist/小米遥控器桥接.app"
 
 ## 语音使用
 
-1. 在应用设置中选择 `BlackHole 2ch` 作为语音输出；
-2. 在目标语音输入应用中选择 `BlackHole 2ch` 作为麦克风；
+1. 在应用设置中选择 `BlackHole 2ch`，或豆包兼容模式的 `MiRemoteV 2ch`，作为语音输出；
+2. 在目标语音输入应用中选择同一个设备作为麦克风；
 3. 按住遥控器麦克风键：macOS 会把该遥控器的真实 F5 硬件按下映射为 Fn，应用同时开始桥接 ATVV 语音；松开时硬件键直接释放 Fn 并结束语音流。
 
 应用直接把音频写到所选设备，不会把 BlackHole 设为系统默认设备。

@@ -75,6 +75,20 @@ struct SettingsView: View {
                 Text("测试音只在内存生成、低音量、固定频率，不落盘；RC003 语音进行中时不可用。")
                     .font(.footnote)
                     .foregroundColor(.secondary)
+
+                Divider()
+
+                Text("豆包输入法兼容")
+                    .font(.headline)
+                statusRow("兼容虚拟麦克风", value: model.doubaoAudioStatus)
+                HStack {
+                    Button("选择 MiRemoteV 2ch") { model.selectDoubaoAudioDevice() }
+                        .disabled(!model.hasDoubaoAudioDevice)
+                    Button("打开驱动安装说明") { model.openDoubaoDriverInstructions() }
+                }
+                Text("豆包会过滤普通 virtual transport 音频设备。安装独立的 MiRemoteV 2ch 后，在这里选中它；原 BlackHole 不会被修改或替换。")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
             }
         }
     }

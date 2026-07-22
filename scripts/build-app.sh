@@ -57,6 +57,9 @@ ditto --norsrc --noextattr --noqtn --noacl \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/RC003-remote-photo.png" \
   "$APP_DIR/Contents/Resources/RC003-remote-photo.png"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/Resources/豆包输入法兼容说明.txt" \
+  "$APP_DIR/Contents/Resources/豆包输入法兼容说明.txt"
 codesign --force --deep --sign - "$APP_DIR"
 codesign --verify --deep --strict "$APP_DIR"
 

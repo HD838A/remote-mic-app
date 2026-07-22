@@ -9,5 +9,6 @@ Reference revision:
 
 Changes include a native SwiftUI menu bar host, CoreBluetooth state machine,
 CoreAudio output selection, IOHID permission gating, macOS key injection,
-packaging, and macOS-focused tests. The adapted work is distributed under
-GPL-3.0-only. See LICENSE and THIRD_PARTY_NOTICES.md.
+packaging, macOS-focused tests, and a source-built BlackHole-derived
+MiRemoteV2ch driver option for Doubao input compatibility. The adapted work
+is distributed under GPL-3.0-only. See LICENSE and THIRD_PARTY_NOTICES.md.

@@ -11,7 +11,21 @@ The Xiaomi RC003 ATVV UUIDs, microphone command behavior, IMA/DVI ADPCM decoding
 
 ## BlackHole
 
-BlackHole is not bundled, downloaded, or installed by this project. The application can send decoded PCM to any user-selected CoreAudio output device; BlackHole is only a documented optional loopback-device choice.
+- Project: `ExistentialAudio/BlackHole`
+- Source: <https://github.com/ExistentialAudio/BlackHole>
+- Pinned source revision: `v0.7.1` / `e2b22aaaba4e507a097131704bf96dabc004d9cf`
+- License: GNU General Public License v3.0 (`GPL-3.0`)
+
+BlackHole remains an optional loopback-device choice. This fork also includes `scripts/build-doubao-driver.sh` and `third_party/blackhole/blackhole-device-usb.patch`, which locally build a distinct `MiRemoteV2ch.driver` from the pinned BlackHole source. The patch changes only the actual Audio Device transport type to USB and assigns a separate CFPlugIn factory UUID; it does not modify an installed `BlackHole2ch.driver`. The derived driver is not bundled in the app or DMG, and is built and installed only when the user explicitly runs the documented scripts.
+
+## MiRemoteVoice
+
+- Project: `VincentKingHsu/MiRemoteVoice`
+- Source: <https://github.com/VincentKingHsu/MiRemoteVoice>
+- Reference release: `v1.0.0-beta.1`
+- Application license: MIT
+
+The Doubao compatibility design is informed by MiRemoteVoice: a side-by-side BlackHole-derived device reports its actual audio Device as USB transport so Doubao can enumerate it. This fork reimplements that idea as a pinned, source-built BlackHole patch instead of reusing MiRemoteVoice's version-specific binary replacement script.
 
 ## RC003 product photo
 

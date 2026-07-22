@@ -1,0 +1,45 @@
+豆包输入法兼容虚拟麦克风
+==========================
+
+为什么需要它
+------------
+
+小米遥控器桥接可以把 ATVV 语音写入 BlackHole，但豆包输入法可能过滤 transport 为 virtual 的 CoreAudio 设备。
+MiRemoteV 2ch 是一份与 BlackHole 并存的、独立的双向 2 声道回环驱动：实际 Audio Device 报告为 USB transport，以便豆包枚举。
+
+它不会修改、删除或覆盖 BlackHole2ch.driver。
+
+构建与安装
+----------
+
+需要：完整 Xcode、git，以及本项目对应源码。
+
+1. 在源码根目录运行：
+
+   ./scripts/build-doubao-driver.sh
+
+2. 检查成功后运行：
+
+   sudo ./scripts/install-doubao-driver.sh
+
+3. CoreAudio 会自动重启。重新打开“小米遥控器桥接”，点击“刷新音频设备”，然后点击“选择 MiRemoteV 2ch”。
+4. 在豆包输入法中选择“MiRemoteV 2ch”；如果豆包不提供设备选择，则完全退出并重新打开豆包后再测试。
+
+验证
+----
+
+先在 QuickTime Player 的“新建音频录制”中选择 MiRemoteV 2ch。按住遥控器语音键说话时，电平应变化。随后再测试豆包。
+
+卸载
+----
+
+在源码根目录运行：
+
+   sudo ./scripts/uninstall-doubao-driver.sh
+
+该命令只删除 /Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver。
+
+许可证
+------
+
+该驱动由 BlackHole v0.7.1 源码、项目内补丁和本地构建参数生成。BlackHole 采用 GPL-3.0；详见 THIRD_PARTY_NOTICES.md。

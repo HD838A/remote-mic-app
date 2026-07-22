@@ -8,6 +8,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var connectionStatus = "正在初始化蓝牙"
     @Published private(set) var hidStatus = "按键映射未启用"
     @Published private(set) var audioStatus = "未选择语音输出设备"
+    @Published private(set) var doubaoAudioStatus = "正在检查豆包兼容音频设备"
     @Published private(set) var isStreaming = false
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var testToneStatus = "未选择语音输出设备"
@@ -72,6 +73,31 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func refreshAudioDevices() {
         audioDevices = CoreAudioDeviceCatalog.outputDevices()
+        doubaoAudioStatus = DoubaoAudioDevicePolicy.status(in: audioDevices)
+    }
+
+    var hasDoubaoAudioDevice: Bool {
+        DoubaoAudioDevicePolicy.device(in: audioDevices) != nil
+    }
+
+    func selectDoubaoAudioDevice() {
+        guard let device = DoubaoAudioDevicePolicy.device(in: audioDevices) else {
+            doubaoAudioStatus = "未检测到 \(DoubaoAudioDevicePolicy.deviceName)，请先安装兼容驱动"
+            return
+        }
+        settings.selectedAudioDeviceUID = device.uid
+        applyAudioSettings()
+        doubaoAudioStatus = "已选择 \(device.name) 作为遥控器语音输出"
+    }
+
+    func openDoubaoDriverInstructions() {
+        guard let instructions = Bundle.main.url(
+            forResource: "豆包输入法兼容说明",
+            withExtension: "txt"
+        ) else {
+            return
+        }
+        NSWorkspace.shared.open(instructions)
     }
 
     func applyAudioSettings() {

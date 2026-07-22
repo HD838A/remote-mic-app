@@ -43,7 +43,7 @@ ditto --norsrc --noextattr --noqtn --noacl \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/THIRD_PARTY_NOTICES.md" "$STAGING/THIRD_PARTY_NOTICES.md"
 
-for item in Package.swift Sources Tests scripts Resources README.md LICENSE COPYRIGHT THIRD_PARTY_NOTICES.md; do
+for item in Package.swift Sources Tests script scripts Resources third_party .codex .gitattributes README.md LICENSE COPYRIGHT THIRD_PARTY_NOTICES.md; do
   ditto --norsrc --noextattr --noqtn --noacl \
     "$ROOT/$item" "$SOURCE_DIR/$item"
 done

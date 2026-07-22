@@ -22,9 +22,10 @@ test -f "$APP/Contents/Resources/README.md"
 test -f "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
 test -f "$APP/Contents/Resources/COPYRIGHT"
 test -f "$APP/Contents/Resources/RC003-remote-photo.png"
+test -f "$APP/Contents/Resources/豆包输入法兼容说明.txt"
 
 test "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = \
-  "com.kingwell.XiaomiRemoteBridgeMac"
+  "com.hd838a.XiaomiRemoteBridgeMac"
 test "$(plutil -extract LSUIElement raw -o - "$PLIST")" = "true"
 test "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = "11.0"
 test -n "$(plutil -extract NSBluetoothAlwaysUsageDescription raw -o - "$PLIST")"
@@ -43,7 +44,7 @@ if [[ "$UNIVERSAL" -eq 1 ]]; then
   done
 fi
 
-EXPECTED_FILES=$'Contents/Info.plist\nContents/MacOS/XiaomiRemoteBridgeMac\nContents/Resources/COPYRIGHT\nContents/Resources/LICENSE\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/_CodeSignature/CodeResources'
+EXPECTED_FILES=$'Contents/Info.plist\nContents/MacOS/XiaomiRemoteBridgeMac\nContents/Resources/COPYRIGHT\nContents/Resources/LICENSE\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/豆包输入法兼容说明.txt\nContents/_CodeSignature/CodeResources'
 ACTUAL_FILES="$(find "$APP/Contents" -type f | sed "s#^$APP/##" | LC_ALL=C sort)"
 test "$ACTUAL_FILES" = "$EXPECTED_FILES"
 

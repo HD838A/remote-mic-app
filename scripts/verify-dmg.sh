@@ -61,7 +61,11 @@ for required in \
   "$SOURCE_ROOT/Package.swift" \
   "$SOURCE_ROOT/Sources/XiaomiRemoteBridgeMac/SettingsView.swift" \
   "$SOURCE_ROOT/Tests/SelfTest/main.swift" \
+  "$SOURCE_ROOT/script/build_and_run.sh" \
+  "$SOURCE_ROOT/.gitattributes" \
   "$SOURCE_ROOT/scripts/build-dmg.sh" \
+  "$SOURCE_ROOT/scripts/build-doubao-driver.sh" \
+  "$SOURCE_ROOT/third_party/blackhole/blackhole-device-usb.patch" \
   "$SOURCE_ROOT/Resources/RC003-remote-photo.png" \
   "$SOURCE_ROOT/LICENSE"; do
   rg -qx "$required" "$ZIP_LIST"
