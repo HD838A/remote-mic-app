@@ -45,7 +45,7 @@ open "dist/无线麦.app"
 
 安装器内置由固定 BlackHole `v0.7.1` 源码和项目内补丁构建的独立 `MiRemoteV2ch.driver`。实际音频 Device 报告为 USB transport，名称是 `MiRemoteV 2ch`，与 `BlackHole2ch.driver` 并存且绝不覆盖它。安装器校验应用和驱动、重启 CoreAudio 并启动状态栏应用后，在“虚拟麦克风”中点击“刷新音频设备 → 选择 MiRemoteV 2ch”，再在豆包中使用该设备或完全重启豆包。
 
-若要移除，双击 DMG 中的“卸载豆包兼容麦克风.pkg”。DMG 所附的构建和校验脚本仅供开发者复现、审计和发布构建使用。
+若要移除，双击 DMG 中的“卸载无线麦.pkg”。DMG 根目录只包含安装包、卸载包、应用和 Applications 入口；许可证材料保留在应用包内，完整对应源码由 GitHub 版本标签提供。
 
 首次启用自定义映射时，按系统提示允许：
 

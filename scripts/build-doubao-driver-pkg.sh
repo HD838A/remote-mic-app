@@ -8,7 +8,8 @@ APP="$OUTPUT_DIR/无线麦.app"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 INSTALL_PACKAGE="$OUTPUT_DIR/安装无线麦.pkg"
 LEGACY_INSTALL_PACKAGE="$OUTPUT_DIR/安装豆包兼容麦克风.pkg"
-UNINSTALL_PACKAGE="$OUTPUT_DIR/卸载豆包兼容麦克风.pkg"
+UNINSTALL_PACKAGE="$OUTPUT_DIR/卸载无线麦.pkg"
+LEGACY_UNINSTALL_PACKAGE="$OUTPUT_DIR/卸载豆包兼容麦克风.pkg"
 WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
 INSTALL_SCRIPTS="$WORK_DIR/install-scripts"
@@ -26,7 +27,11 @@ test -x /usr/bin/pkgbuild
 "$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
 "$ROOT/scripts/verify-app.sh" --universal "$APP"
 
-/bin/rm -f -- "$INSTALL_PACKAGE" "$LEGACY_INSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
+/bin/rm -f -- \
+  "$INSTALL_PACKAGE" \
+  "$LEGACY_INSTALL_PACKAGE" \
+  "$UNINSTALL_PACKAGE" \
+  "$LEGACY_UNINSTALL_PACKAGE"
 /bin/mkdir -p "$PAYLOAD_ROOT/Applications" "$PAYLOAD_ROOT/Library/Audio/Plug-Ins/HAL"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$APP" "$PAYLOAD_ROOT/Applications/无线麦.app"
