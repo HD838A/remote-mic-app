@@ -5,9 +5,9 @@ TARGET_VOLUME="${3:-/}"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
 BINARY="$DESTINATION/Contents/MacOS/MiRemoteV2ch"
-APP_DESTINATION="${TARGET_VOLUME%/}/Applications/小米遥控器桥接.app"
+APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
 APP_PLIST="$APP_DESTINATION/Contents/Info.plist"
-APP_BINARY="$APP_DESTINATION/Contents/MacOS/XiaomiRemoteBridgeMac"
+APP_BINARY="$APP_DESTINATION/Contents/MacOS/RemoteMic"
 
 test -d "$DESTINATION"
 test -f "$PLIST"
@@ -17,7 +17,7 @@ test "$(/usr/bin/plutil -extract CFBundleName raw -o - "$PLIST")" = "MiRemoteV2c
 test -d "$APP_DESTINATION"
 test -f "$APP_PLIST"
 test -x "$APP_BINARY"
-test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST")" = "com.hd838a.XiaomiRemoteBridgeMac"
+test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST")" = "com.hd838a.RemoteMic"
 
 /usr/sbin/chown -R root:wheel "$DESTINATION"
 /usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \;
@@ -39,16 +39,16 @@ done
 
 CONSOLE_USER="$(/usr/bin/stat -f '%Su' /dev/console)"
 if [[ "$TARGET_VOLUME" != "/" ]]; then
-  print "已完成安装；请从目标磁盘的“应用程序”目录手动打开小米遥控器桥接。"
+  print "已完成安装；请从目标磁盘的“应用程序”目录手动打开无线麦。"
 elif [[ "$CONSOLE_USER" != "root" && "$CONSOLE_USER" != "loginwindow" ]]; then
   CONSOLE_UID="$(/usr/bin/id -u "$CONSOLE_USER")"
-  /usr/bin/pkill -U "$CONSOLE_UID" -x XiaomiRemoteBridgeMac 2>/dev/null || true
+  /usr/bin/pkill -U "$CONSOLE_UID" -x RemoteMic 2>/dev/null || true
   if /bin/launchctl asuser "$CONSOLE_UID" \
     /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"; then
-    print "已安装并启动小米遥控器桥接；请在状态栏打开设置并选择 MiRemoteV 2ch。"
+    print "已安装并启动无线麦；请在状态栏打开设置并选择 MiRemoteV 2ch。"
   else
-    print "已完成安装，但未能自动启动应用；请从“应用程序”手动打开小米遥控器桥接。"
+    print "已完成安装，但未能自动启动应用；请从“应用程序”手动打开无线麦。"
   fi
 else
-  print "已完成安装；登录桌面后请从“应用程序”打开小米遥控器桥接。"
+  print "已完成安装；登录桌面后请从“应用程序”打开无线麦。"
 fi

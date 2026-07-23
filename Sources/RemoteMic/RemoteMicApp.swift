@@ -4,11 +4,11 @@ import Darwin
 import SwiftUI
 
 @main
-enum XiaomiRemoteBridgeMacApp {
+enum RemoteMicApp {
     @MainActor
     static func main() {
         let application = NSApplication.shared
-        let delegate = XiaomiRemoteBridgeAppDelegate()
+        let delegate = RemoteMicAppDelegate()
         application.delegate = delegate
         application.setActivationPolicy(.accessory)
         withExtendedLifetime(delegate) {
@@ -18,7 +18,7 @@ enum XiaomiRemoteBridgeMacApp {
 }
 
 @MainActor
-private final class XiaomiRemoteBridgeAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let model = BridgeAppModel()
     private var statusItem: NSStatusItem?
     private var settingsWindowController: NSWindowController?
@@ -65,7 +65,7 @@ private final class XiaomiRemoteBridgeAppDelegate: NSObject, NSApplicationDelega
     private func configureStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            button.toolTip = "小米遥控器桥接"
+            button.toolTip = "无线麦"
             if let image = NSImage(
                 systemSymbolName: "dot.radiowaves.left.and.right",
                 accessibilityDescription: "小米遥控器"
@@ -149,11 +149,11 @@ private final class XiaomiRemoteBridgeAppDelegate: NSObject, NSApplicationDelega
             backing: .buffered,
             defer: false
         )
-        window.title = "小米遥控器桥接"
+        window.title = "无线麦"
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 800, height: 650)
-        window.setFrameAutosaveName("XiaomiRemoteBridgeSettings")
+        window.setFrameAutosaveName("RemoteMicSettings")
         window.center()
         return NSWindowController(window: window)
     }

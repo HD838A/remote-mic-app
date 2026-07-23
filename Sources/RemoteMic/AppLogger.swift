@@ -4,13 +4,13 @@ final class AppLogger {
     static let shared = AppLogger()
 
     let logURL: URL
-    private let queue = DispatchQueue(label: "XiaomiRemoteBridgeMac.logger")
+    private let queue = DispatchQueue(label: "RemoteMic.logger")
     private let formatter = ISO8601DateFormatter()
 
     private init() {
         let base = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs", isDirectory: true)
-            .appendingPathComponent("XiaomiRemoteBridgeMac", isDirectory: true)
+            .appendingPathComponent("RemoteMic", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         logURL = base.appendingPathComponent("runtime.log")
     }

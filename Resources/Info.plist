@@ -5,21 +5,21 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleDisplayName</key>
-    <string>小米遥控器桥接</string>
+    <string>无线麦</string>
     <key>CFBundleExecutable</key>
-    <string>XiaomiRemoteBridgeMac</string>
+    <string>RemoteMic</string>
     <key>CFBundleIdentifier</key>
-	<string>com.hd838a.XiaomiRemoteBridgeMac</string>
+	<string>com.hd838a.RemoteMic</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>XiaomiRemoteBridgeMac</string>
+    <string>Remote Mic</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.2.3</string>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>6</string>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
     <key>LSUIElement</key>

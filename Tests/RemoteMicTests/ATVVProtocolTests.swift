@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import XiaomiRemoteBridgeMac
+@testable import RemoteMic
 
 @Suite("ATVV protocol")
 struct ATVVProtocolTests {

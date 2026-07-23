@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT="${0:A:h:h}"
 CONFIGURATION="${CONFIGURATION:-release}"
-APP_NAME="XiaomiRemoteBridgeMac"
-DISPLAY_NAME="小米遥控器桥接"
+APP_NAME="RemoteMic"
+DISPLAY_NAME="无线麦"
 OUTPUT_DIR="$ROOT/dist"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 

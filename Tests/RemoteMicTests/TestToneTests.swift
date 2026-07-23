@@ -1,5 +1,5 @@
 import Testing
-@testable import XiaomiRemoteBridgeMac
+@testable import RemoteMic
 
 @Suite("Test tone")
 struct TestToneTests {

@@ -3,18 +3,18 @@ set -euo pipefail
 
 ROOT="${0:A:h:h}"
 OUTPUT_DIR="$ROOT/dist"
-DISPLAY_NAME="小米遥控器桥接"
+DISPLAY_NAME="无线麦"
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
-DMG="${1:-$OUTPUT_DIR/XiaomiRemoteBridgeMac-$VERSION-doubao-preview.dmg}"
+DMG="${1:-$OUTPUT_DIR/Remote-Mic-$VERSION-preview.dmg}"
 CHECKSUM="$DMG.sha256"
-SOURCE_ROOT="xiaomi-remote-bridge-mac-$VERSION-source"
+SOURCE_ROOT="remote-mic-app-$VERSION-source"
 SOURCE_ARCHIVE="$DISPLAY_NAME-$VERSION-对应源码.zip"
-VERIFY_ROOT="$(mktemp -d /private/tmp/xrbm-dmg-verify.XXXXXX)"
+VERIFY_ROOT="$(mktemp -d /private/tmp/remote-mic-dmg-verify.XXXXXX)"
 MOUNT_POINT="$VERIFY_ROOT/mount"
 SOURCE_EXTRACT="$VERIFY_ROOT/source"
 ZIP_LIST="$VERIFY_ROOT/zip-entries.txt"
-INSTALL_PACKAGE="$MOUNT_POINT/安装小米遥控器桥接.pkg"
+INSTALL_PACKAGE="$MOUNT_POINT/安装无线麦.pkg"
 UNINSTALL_PACKAGE="$MOUNT_POINT/卸载豆包兼容麦克风.pkg"
 ATTACHED=0
 
@@ -25,7 +25,7 @@ cleanup() {
     hdiutil detach "$MOUNT_POINT" -quiet || true
   fi
   case "$VERIFY_ROOT" in
-    /private/tmp/xrbm-dmg-verify.*) rm -rf -- "$VERIFY_ROOT" ;;
+    /private/tmp/remote-mic-dmg-verify.*) rm -rf -- "$VERIFY_ROOT" ;;
     *) print -u2 "refusing to clean unexpected verification path: $VERIFY_ROOT" ;;
   esac
 }
@@ -67,7 +67,7 @@ test "$(sips -g pixelHeight "$APP/Contents/Resources/RC003-remote-photo.png" | t
 unzip -Z1 "$SOURCE_ZIP" > "$ZIP_LIST"
 for required in \
   "$SOURCE_ROOT/Package.swift" \
-  "$SOURCE_ROOT/Sources/XiaomiRemoteBridgeMac/SettingsView.swift" \
+  "$SOURCE_ROOT/Sources/RemoteMic/SettingsView.swift" \
   "$SOURCE_ROOT/Tests/SelfTest/main.swift" \
   "$SOURCE_ROOT/script/build_and_run.sh" \
   "$SOURCE_ROOT/.gitattributes" \

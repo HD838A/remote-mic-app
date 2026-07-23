@@ -349,7 +349,7 @@ check(
     "test tone safety gate rejects missing device, active RC003 voice stream, or in-flight playback"
 )
 
-let suiteName = "XiaomiRemoteBridgeMacSelfTest.\(UUID().uuidString)"
+let suiteName = "RemoteMicSelfTest.\(UUID().uuidString)"
 if let defaults = UserDefaults(suiteName: suiteName) {
     let saved = try JSONEncoder().encode([
         RemoteButton.back.rawValue: ButtonAction.disabled,

@@ -1,5 +1,5 @@
 import Testing
-@testable import XiaomiRemoteBridgeMac
+@testable import RemoteMic
 
 @Suite("RC003 hardware Fn mapping")
 struct RemoteVoiceFunctionMapperTests {

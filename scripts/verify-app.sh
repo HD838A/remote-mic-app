@@ -10,9 +10,9 @@ for arg in "$@"; do
     *) APP="$arg" ;;
   esac
 done
-APP="${APP:-$ROOT/dist/小米遥控器桥接.app}"
+APP="${APP:-$ROOT/dist/无线麦.app}"
 PLIST="$APP/Contents/Info.plist"
-BINARY="$APP/Contents/MacOS/XiaomiRemoteBridgeMac"
+BINARY="$APP/Contents/MacOS/RemoteMic"
 
 test -d "$APP"
 test -f "$PLIST"
@@ -25,7 +25,7 @@ test -f "$APP/Contents/Resources/RC003-remote-photo.png"
 test -f "$APP/Contents/Resources/豆包输入法兼容说明.txt"
 
 test "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = \
-  "com.hd838a.XiaomiRemoteBridgeMac"
+  "com.hd838a.RemoteMic"
 test "$(plutil -extract LSUIElement raw -o - "$PLIST")" = "true"
 test "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = "11.0"
 test -n "$(plutil -extract NSBluetoothAlwaysUsageDescription raw -o - "$PLIST")"
@@ -44,7 +44,7 @@ if [[ "$UNIVERSAL" -eq 1 ]]; then
   done
 fi
 
-EXPECTED_FILES=$'Contents/Info.plist\nContents/MacOS/XiaomiRemoteBridgeMac\nContents/Resources/COPYRIGHT\nContents/Resources/LICENSE\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/豆包输入法兼容说明.txt\nContents/_CodeSignature/CodeResources'
+EXPECTED_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/COPYRIGHT\nContents/Resources/LICENSE\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/豆包输入法兼容说明.txt\nContents/_CodeSignature/CodeResources'
 ACTUAL_FILES="$(find "$APP/Contents" -type f | sed "s#^$APP/##" | LC_ALL=C sort)"
 test "$ACTUAL_FILES" = "$EXPECTED_FILES"
 

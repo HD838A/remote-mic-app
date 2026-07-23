@@ -1,5 +1,5 @@
 import Testing
-@testable import XiaomiRemoteBridgeMac
+@testable import RemoteMic
 
 @Suite("Voice Fn hold")
 struct VoiceFunctionKeyLatchTests {

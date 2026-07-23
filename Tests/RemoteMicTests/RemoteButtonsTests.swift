@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import XiaomiRemoteBridgeMac
+@testable import RemoteMic
 
 @Suite("Remote buttons")
 struct RemoteButtonsTests {
@@ -85,7 +85,7 @@ struct RemoteButtonsTests {
     }
 
     @Test func savedBindingsMergeWithDefaults() throws {
-        let suiteName = "XiaomiRemoteBridgeMacTests.\(UUID().uuidString)"
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
@@ -98,7 +98,7 @@ struct RemoteButtonsTests {
     }
 
     @Test func migratesLegacyExclusiveToggleToCustomMappingToggle() throws {
-        let suiteName = "XiaomiRemoteBridgeMacTests.\(UUID().uuidString)"
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 

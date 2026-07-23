@@ -1,6 +1,6 @@
-# 小米蓝牙遥控器 2 Pro · macOS 桥接
+# 无线麦（Remote Mic）
 
-这是 `remote-bridge-hub` 小米 RC003 桥接能力的原生 macOS 版本。它常驻菜单栏，负责：
+无线麦是把小米蓝牙遥控器 2 Pro / RC003 变成 Mac 语音输入设备的开源菜单栏工具。它基于 `remote-bridge-hub` 的 RC003 能力，负责：
 
 - 自动发现、连接和重连小米蓝牙遥控器 2 Pro / RC003：精确匹配系统显示名称 `MI RC`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”（trim 后比较，英文大小写不敏感），或命中 ATVV service UUID；不做任意“小米”设备的模糊匹配；
 - 接收 Android TV Voice-over-BLE（ATVV）语音并解码为 16 kHz PCM；
@@ -19,7 +19,7 @@
 - 已在“系统设置 → 蓝牙”中配对的小米蓝牙遥控器 2 Pro / RC003；
 - 语音作为虚拟麦克风使用时，安装 [BlackHole 2ch](https://existential.audio/blackhole/) 或等价的可写 CoreAudio 回环设备。
 
-应用不会自行修改系统默认输入/输出设备。用户主动运行 DMG 中的“安装小米遥控器桥接.pkg”时，安装器会把应用放入 `/Applications`、安装 `MiRemoteV2ch.driver`，并为当前桌面用户启动状态栏应用；不需要兼容驱动时仍可只拖拽 `.app`。
+应用不会自行修改系统默认输入/输出设备。用户主动运行 DMG 中的“安装无线麦.pkg”时，安装器会把应用放入 `/Applications`、安装 `MiRemoteV2ch.driver`，并为当前桌面用户启动状态栏应用；不需要兼容驱动时仍可只拖拽 `.app`。
 
 ## 构建
 
@@ -27,7 +27,7 @@
 ./scripts/test.sh
 ./scripts/build-app.sh
 ./scripts/verify-app.sh
-open "dist/小米遥控器桥接.app"
+open "dist/无线麦.app"
 ```
 
 生成真正包含 arm64 与 x86_64 的 Universal 候选包：
@@ -41,7 +41,7 @@ open "dist/小米遥控器桥接.app"
 
 ### 豆包兼容虚拟麦克风
 
-如果 QuickTime 已能从 BlackHole 录到遥控器语音、豆包输入法仍没有反应，说明遥控器、ATVV 解码和回环输出已经正常；豆包是在过滤 virtual transport 设备。下载 DMG 后，双击其中的“安装小米遥控器桥接.pkg”，按系统 Installer 提示授权即可；它会一次安装应用和兼容驱动，完成后自动启动状态栏应用，不需要 Xcode、Git 或终端命令。
+如果 QuickTime 已能从 BlackHole 录到遥控器语音、豆包输入法仍没有反应，说明遥控器、ATVV 解码和回环输出已经正常；豆包是在过滤 virtual transport 设备。下载 DMG 后，双击其中的“安装无线麦.pkg”，按系统 Installer 提示授权即可；它会一次安装应用和兼容驱动，完成后自动启动状态栏应用，不需要 Xcode、Git 或终端命令。
 
 安装器内置由固定 BlackHole `v0.7.1` 源码和项目内补丁构建的独立 `MiRemoteV2ch.driver`。实际音频 Device 报告为 USB transport，名称是 `MiRemoteV 2ch`，与 `BlackHole2ch.driver` 并存且绝不覆盖它。安装器校验应用和驱动、重启 CoreAudio 并启动状态栏应用后，在“虚拟麦克风”中点击“刷新音频设备 → 选择 MiRemoteV 2ch”，再在豆包中使用该设备或完全重启豆包。
 

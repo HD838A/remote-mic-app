@@ -2,23 +2,23 @@
 import PackageDescription
 
 let package = Package(
-    name: "XiaomiRemoteBridgeMac",
+    name: "RemoteMic",
     platforms: [.macOS(.v11)],
     products: [
         .executable(
-            name: "XiaomiRemoteBridgeMac",
-            targets: ["XiaomiRemoteBridgeMac"]
+            name: "RemoteMic",
+            targets: ["RemoteMic"]
         )
     ],
     targets: [
         .executableTarget(
-            name: "XiaomiRemoteBridgeMac",
-            path: "Sources/XiaomiRemoteBridgeMac"
+            name: "RemoteMic",
+            path: "Sources/RemoteMic"
         ),
         .testTarget(
-            name: "XiaomiRemoteBridgeMacTests",
-            dependencies: ["XiaomiRemoteBridgeMac"],
-            path: "Tests/XiaomiRemoteBridgeMacTests"
+            name: "RemoteMicTests",
+            dependencies: ["RemoteMic"],
+            path: "Tests/RemoteMicTests"
         ),
     ],
     swiftLanguageModes: [.v5]

@@ -2,10 +2,10 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="XiaomiRemoteBridgeMac"
-BUNDLE_ID="com.hd838a.XiaomiRemoteBridgeMac"
+APP_NAME="RemoteMic"
+BUNDLE_ID="com.hd838a.RemoteMic"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_BUNDLE="$ROOT_DIR/dist/小米遥控器桥接.app"
+APP_BUNDLE="$ROOT_DIR/dist/无线麦.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true

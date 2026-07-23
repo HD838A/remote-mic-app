@@ -47,7 +47,7 @@ struct SettingsView: View {
                     }
                 }
                 HStack {
-                    Text("增益")
+                    Text("增益（音量增强）")
                     Slider(value: Binding(
                         get: { settings.gainDB },
                         set: { settings.gainDB = $0 }
@@ -56,6 +56,9 @@ struct SettingsView: View {
                         .font(.system(.body, design: .monospaced))
                         .frame(width: 52, alignment: .trailing)
                 }
+                Text("增益用于放大遥控器麦克风的语音音量。如果豆包已经显示波纹但没有输出文字，可能是输入音量低于识别阈值，可逐步提高增益；数值越大也会放大底噪，出现爆音时请适当调低。")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
                 statusRow("音频状态", value: model.audioStatus)
                 HStack {
                     Button("刷新音频设备") { model.refreshAudioDevices() }
