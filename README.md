@@ -137,3 +137,7 @@ open "dist/无线麦.app"
 ## 来源与许可
 
 ATVV UUID、握手、RC003 HID usage 与 IMA/DVI ADPCM 行为参考 GPL-3.0 项目 [xxb26553663-star/remote-bridge-hub](https://github.com/xxb26553663-star/remote-bridge-hub)。本适配版本统一按 `GPL-3.0-only` 发布；参考项目的品牌与商业资产不包含在本项目中。修改与归属说明见 `COPYRIGHT` 和 `THIRD_PARTY_NOTICES.md`。
+
+## Fork 来源
+
+本项目最初 fork 自 [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge)，现已在其基础上独立维护和演进。
