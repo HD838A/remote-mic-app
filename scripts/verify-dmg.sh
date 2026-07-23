@@ -51,7 +51,7 @@ test -L "$MOUNT_POINT/Applications"
 test "$(readlink "$MOUNT_POINT/Applications")" = "/Applications"
 test -f "$INSTALL_PACKAGE"
 test -f "$UNINSTALL_PACKAGE"
-"$ROOT/scripts/verify-app.sh" --universal "$APP"
+"$ROOT/scripts/verify-app.sh" "$APP"
 "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
 "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
 

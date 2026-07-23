@@ -49,6 +49,9 @@ xcodebuild \
   -target BlackHole \
   -configuration Release \
   -sdk macosx \
+  ARCHS=arm64 \
+  ONLY_ACTIVE_ARCH=NO \
+  MACOSX_DEPLOYMENT_TARGET=26.0 \
   CODE_SIGNING_ALLOWED=NO \
   PRODUCT_NAME="$PRODUCT_NAME" \
   PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
