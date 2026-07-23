@@ -337,8 +337,14 @@ struct SettingsView: View {
                     GlassPanel {
                         RemoteControlDiagram(
                             selectedButton: $selectedRemoteButton,
+                            activeButtons: model.activeRemoteButtons,
                             voiceActive: model.isStreaming
                         )
+                        .onReceive(model.$activeRemoteButtons) { buttons in
+                            if let button = RemoteButton.allCases.first(where: { buttons.contains($0) }) {
+                                selectedRemoteButton = button
+                            }
+                        }
                     }
                     .frame(width: 218)
 
@@ -347,7 +353,7 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("按键动作")
                                     .font(.headline)
-                                Text("点击左侧实体按键定位；修改后自动保存。")
+                                Text("点击或按下左侧实体按键定位；修改后自动保存。")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -380,6 +386,8 @@ struct SettingsView: View {
     @ViewBuilder
     private func mappingRow(_ button: RemoteButton) -> some View {
         let selected = selectedRemoteButton == button
+        let currentAction = settings.action(for: button)
+        let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
         let content = HStack(spacing: 10) {
             Button {
                 selectedRemoteButton = button
@@ -401,11 +409,17 @@ struct SettingsView: View {
             Spacer(minLength: 8)
 
             Picker("", selection: Binding(
-                get: { settings.action(for: button) },
+                get: { currentAction },
                 set: { settings.setAction($0, for: button) }
             )) {
-                ForEach(ButtonAction.allCases) { action in
-                    Text(action.displayName).tag(action)
+                ForEach(ButtonAction.pickerActions(
+                    installedBundleIdentifiers: installedBundleIdentifiers,
+                    current: currentAction
+                )) { action in
+                    let unavailable = action.presetApplication.map {
+                        !installedBundleIdentifiers.contains($0.bundleIdentifier)
+                    } ?? false
+                    Text(action.displayName + (unavailable ? "（未安装）" : "")).tag(action)
                 }
             }
             .labelsHidden()
@@ -713,6 +727,7 @@ private struct RC003Photo: View {
 
 private struct RemoteControlDiagram: View {
     @Binding var selectedButton: RemoteButton
+    let activeButtons: Set<RemoteButton>
     let voiceActive: Bool
 
     private let canvasSize = CGSize(width: 190, height: 385)
@@ -742,7 +757,7 @@ private struct RemoteControlDiagram: View {
             .frame(width: canvasSize.width, height: canvasSize.height)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            Text("点击实物按键定位映射；麦克风键固定为硬件语音/Fn。")
+            Text("点击或按下实物按键定位映射；麦克风键固定为硬件语音/Fn。")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -756,15 +771,16 @@ private struct RemoteControlDiagram: View {
         width: CGFloat,
         height: CGFloat
     ) -> some View {
-        Button {
+        let active = activeButtons.contains(button)
+        return Button {
             selectedButton = button
         } label: {
             RoundedRectangle(cornerRadius: 999, style: .continuous)
-                .fill(selectedButton == button ? Color.accentColor.opacity(0.24) : Color.clear)
+                .fill(active ? Color.orange.opacity(0.30) : selectedButton == button ? Color.accentColor.opacity(0.24) : Color.clear)
                 .overlay {
                     RoundedRectangle(cornerRadius: 999, style: .continuous)
                         .stroke(
-                            selectedButton == button ? Color.accentColor : Color.clear,
+                            active ? Color.orange : selectedButton == button ? Color.accentColor : Color.clear,
                             lineWidth: 2
                         )
                 }

@@ -10,7 +10,7 @@ private func hidDeviceMatched(
 ) {
     guard let context else { return }
     let monitor = Unmanaged<HIDRemoteMonitor>.fromOpaque(context).takeUnretainedValue()
-    DispatchQueue.main.async { monitor.deviceDidMatch(result: result, device: device) }
+    monitor.deviceDidMatch(result: result, device: device)
 }
 
 private func hidDeviceRemoved(
@@ -21,7 +21,7 @@ private func hidDeviceRemoved(
 ) {
     guard let context else { return }
     let monitor = Unmanaged<HIDRemoteMonitor>.fromOpaque(context).takeUnretainedValue()
-    DispatchQueue.main.async { monitor.deviceDidRemove(device: device) }
+    monitor.deviceDidRemove(device: device)
 }
 
 private func hidInputReport(
@@ -36,9 +36,7 @@ private func hidInputReport(
     guard let context, result == kIOReturnSuccess, reportLength > 0 else { return }
     let monitor = Unmanaged<HIDRemoteMonitor>.fromOpaque(context).takeUnretainedValue()
     let data = Data(bytes: report, count: reportLength)
-    DispatchQueue.main.async {
-        monitor.handleReport(reportID: reportID, data: data)
-    }
+    monitor.handleReport(reportID: reportID, data: data)
 }
 
 final class HIDRemoteMonitor {
@@ -52,6 +50,7 @@ final class HIDRemoteMonitor {
     private var permissionMonitor: DispatchSourceTimer?
     private(set) var status = "按键映射未启用"
     var onStatus: ((String) -> Void)?
+    var onActiveButtons: ((Set<RemoteButton>) -> Void)?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -137,6 +136,7 @@ final class HIDRemoteMonitor {
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
         activeUsages.removeAll()
+        onActiveButtons?([])
         eventSuppressor.stop()
         if let activeDevice {
             IOHIDDeviceClose(activeDevice, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -193,6 +193,7 @@ final class HIDRemoteMonitor {
         self.activeDevice = nil
         activeDeviceIsSeized = false
         activeUsages.removeAll()
+        onActiveButtons?([])
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
         updateStatus("RC003 按键设备已断开")
@@ -211,6 +212,7 @@ final class HIDRemoteMonitor {
         let pressed = usages.subtracting(activeUsages)
         let released = activeUsages.subtracting(usages)
         activeUsages = usages
+        onActiveButtons?(RemoteButton.buttons(for: usages))
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
@@ -243,7 +245,7 @@ final class HIDRemoteMonitor {
         let repeatable: Set<RemoteButton> = [
             .up, .down, .left, .right, .back, .volumeUp, .volumeDown,
         ]
-        guard repeatable.contains(button), action != .disabled else { return }
+        guard repeatable.contains(button), action != .disabled, action.allowsRepeat else { return }
 
         let timer = DispatchSource.makeTimerSource(queue: .main)
         let interval: DispatchTimeInterval = button == .back ? .milliseconds(50) : .milliseconds(100)

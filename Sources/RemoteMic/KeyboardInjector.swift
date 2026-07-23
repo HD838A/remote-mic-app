@@ -4,7 +4,14 @@ import CoreGraphics
 import Foundation
 
 enum KeyboardInjector {
+    typealias ApplicationOpener = (
+        URL,
+        PresetApplication,
+        @escaping (Error?) -> Void
+    ) -> Void
+
     static let syntheticEventMarker: Int64 = 0x5849_414F
+    static let contextualMenuKeyCode: CGKeyCode = 110
 
     static var isAccessibilityTrusted: Bool {
         AXIsProcessTrusted()
@@ -19,8 +26,22 @@ enum KeyboardInjector {
     }
 
     @discardableResult
-    static func send(_ action: ButtonAction) -> Bool {
+    static func send(
+        _ action: ButtonAction,
+        applicationURL: (String) -> URL? = {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+        },
+        applicationOpener: ApplicationOpener = openApplication
+    ) -> Bool {
         guard action != .disabled else { return true }
+        if let application = action.presetApplication {
+            open(
+                application,
+                applicationURL: applicationURL,
+                applicationOpener: applicationOpener
+            )
+            return true
+        }
         guard isAccessibilityTrusted else { return false }
 
         switch action {
@@ -43,7 +64,7 @@ enum KeyboardInjector {
         case .showDesktop:
             postKey(code: 103, flags: .maskSecondaryFn)
         case .contextMenu:
-            postKey(code: 109, flags: .maskShift)
+            postKey(code: contextualMenuKeyCode)
         case .appSwitcher:
             postKey(code: 48, flags: .maskCommand)
         case .volumeUp:
@@ -54,8 +75,45 @@ enum KeyboardInjector {
             postSystemKey(type: 7)
         case .playPause:
             postSystemKey(type: 16)
+        case .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor, .openXcode,
+             .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari, .openZed:
+            break
         }
         return true
+    }
+
+    private static func open(
+        _ application: PresetApplication,
+        applicationURL: (String) -> URL?,
+        applicationOpener: ApplicationOpener
+    ) {
+        guard let url = applicationURL(application.bundleIdentifier) else {
+            AppLogger.shared.write("APP ACTION unavailable bundle=\(application.bundleIdentifier)")
+            return
+        }
+
+        applicationOpener(url, application) { error in
+            if let error {
+                AppLogger.shared.write(
+                    "APP ACTION failed bundle=\(application.bundleIdentifier) error=\(error.localizedDescription)"
+                )
+            } else {
+                AppLogger.shared.write("APP ACTION opened bundle=\(application.bundleIdentifier)")
+            }
+        }
+    }
+
+    private static func openApplication(
+        at url: URL,
+        application: PresetApplication,
+        completion: @escaping (Error?) -> Void
+    ) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
+            completion(error)
+        }
     }
 
     private static func postKey(code: CGKeyCode, flags: CGEventFlags = []) {

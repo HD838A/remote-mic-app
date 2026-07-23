@@ -10,6 +10,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var audioStatus = "未选择语音输出设备"
     @Published private(set) var doubaoAudioStatus = "正在检查豆包兼容音频设备"
     @Published private(set) var isStreaming = false
+    @Published private(set) var activeRemoteButtons = Set<RemoteButton>()
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var testToneStatus = "未选择语音输出设备"
     @Published private(set) var isPlayingTestTone = false
@@ -24,6 +25,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let monitor = HIDRemoteMonitor(settings: settings)
         monitor.onStatus = { [weak self] value in
             self?.hidStatus = value
+        }
+        monitor.onActiveButtons = { [weak self] buttons in
+            self?.activeRemoteButtons = buttons
         }
         return monitor
     }()

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 enum RemoteButton: String, CaseIterable, Codable, Identifiable {
@@ -71,6 +72,10 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         uniqueKeysWithValues: allCases.map { ($0.hidUsage, $0) }
     )
 
+    static func buttons(for usages: Set<UInt16>) -> Set<RemoteButton> {
+        Set(usages.compactMap { usageMap[$0] })
+    }
+
     var nativeEvent: RemoteNativeEvent? {
         switch self {
         case .ok: return .keyboard(keyCode: 36)
@@ -99,6 +104,64 @@ enum RemoteEventEdge: Equatable {
     case up
 }
 
+enum PresetApplication: String, CaseIterable, Identifiable {
+    case codex
+    case claude
+    case cmux
+    case weChat
+    case cursor
+    case xcode
+    case slack
+    case weCom
+    case neteaseMusic
+    case chrome
+    case safari
+    case zed
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .codex: return "Codex"
+        case .claude: return "Claude"
+        case .cmux: return "cmux"
+        case .weChat: return "微信"
+        case .cursor: return "Cursor"
+        case .xcode: return "Xcode"
+        case .slack: return "Slack"
+        case .weCom: return "企业微信"
+        case .neteaseMusic: return "网易云音乐"
+        case .chrome: return "Chrome"
+        case .safari: return "Safari"
+        case .zed: return "Zed"
+        }
+    }
+
+    var bundleIdentifier: String {
+        switch self {
+        case .codex: return "com.openai.codex"
+        case .claude: return "com.anthropic.claudefordesktop"
+        case .cmux: return "com.cmuxterm.app"
+        case .weChat: return "com.tencent.xinWeChat"
+        case .cursor: return "com.todesktop.230313mzl4w4u92"
+        case .xcode: return "com.apple.dt.Xcode"
+        case .slack: return "com.tinyspeck.slackmacgap"
+        case .weCom: return "com.tencent.WeWorkMac"
+        case .neteaseMusic: return "com.netease.163music"
+        case .chrome: return "com.google.Chrome"
+        case .safari: return "com.apple.Safari"
+        case .zed: return "dev.zed.Zed"
+        }
+    }
+
+    static var installedBundleIdentifiers: Set<String> {
+        Set(allCases.compactMap { application in
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: application.bundleIdentifier)
+                .map { _ in application.bundleIdentifier }
+        })
+    }
+}
+
 enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case disabled
     case escape
@@ -115,6 +178,18 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeDown
     case volumeMute
     case playPause
+    case openCodex
+    case openClaude
+    case openCmux
+    case openWeChat
+    case openCursor
+    case openXcode
+    case openSlack
+    case openWeCom
+    case openNeteaseMusic
+    case openChrome
+    case openSafari
+    case openZed
 
     var id: String { rawValue }
 
@@ -129,12 +204,56 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .arrowRight: return "方向右"
         case .deleteBackward: return "Delete（退格）"
         case .showDesktop: return "显示桌面"
-        case .contextMenu: return "Shift-F10"
+        case .contextMenu: return "上下文菜单"
         case .appSwitcher: return "Command-Tab"
         case .volumeUp: return "系统音量 +"
         case .volumeDown: return "系统音量 -"
         case .volumeMute: return "系统静音"
         case .playPause: return "播放 / 暂停"
+        case .openCodex: return "打开 Codex"
+        case .openClaude: return "打开 Claude"
+        case .openCmux: return "打开 cmux"
+        case .openWeChat: return "打开微信"
+        case .openCursor: return "打开 Cursor"
+        case .openXcode: return "打开 Xcode"
+        case .openSlack: return "打开 Slack"
+        case .openWeCom: return "打开企业微信"
+        case .openNeteaseMusic: return "打开网易云音乐"
+        case .openChrome: return "打开 Chrome"
+        case .openSafari: return "打开 Safari"
+        case .openZed: return "打开 Zed"
+        }
+    }
+
+    var presetApplication: PresetApplication? {
+        switch self {
+        case .openCodex: return .codex
+        case .openClaude: return .claude
+        case .openCmux: return .cmux
+        case .openWeChat: return .weChat
+        case .openCursor: return .cursor
+        case .openXcode: return .xcode
+        case .openSlack: return .slack
+        case .openWeCom: return .weCom
+        case .openNeteaseMusic: return .neteaseMusic
+        case .openChrome: return .chrome
+        case .openSafari: return .safari
+        case .openZed: return .zed
+        default: return nil
+        }
+    }
+
+    var allowsRepeat: Bool {
+        presetApplication == nil
+    }
+
+    static func pickerActions(
+        installedBundleIdentifiers: Set<String>,
+        current: ButtonAction
+    ) -> [ButtonAction] {
+        allCases.filter { action in
+            guard let application = action.presetApplication else { return true }
+            return installedBundleIdentifiers.contains(application.bundleIdentifier) || action == current
         }
     }
 }
