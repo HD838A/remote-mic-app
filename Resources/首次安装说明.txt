@@ -1,11 +1,11 @@
-无线麦（Remote Mic）0.2.3 测试版
+无线麦（Remote Mic）0.9.0
 ================================
 
 重要说明
 --------
 
-这是供小范围测试的 Universal 应用，支持 Apple Silicon 和 Intel，最低部署目标为 macOS 11 Big Sur。
-应用使用 ad-hoc 签名，DMG 内的两个 .pkg 尚未使用 Installer 证书签名；它们都没有 Apple Developer ID 或 Apple 公证，属于测试发行版。
+这是支持 Apple Silicon 和 Intel 的 Universal 应用，最低部署目标为 macOS 11 Big Sur。
+应用使用 ad-hoc 签名，DMG 内的两个 .pkg 尚未使用 Installer 证书签名；它们都没有 Apple Developer ID 或 Apple 公证。
 macOS 11 部署目标已经双架构编译校验，但尚未在真实 macOS 11 机器上运行验收。
 
 首次安装

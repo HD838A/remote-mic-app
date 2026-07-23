@@ -66,11 +66,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             button.toolTip = "无线麦"
-            if let image = NSImage(
-                systemSymbolName: "dot.radiowaves.left.and.right",
-                accessibilityDescription: "小米遥控器"
-            ) {
-                image.isTemplate = true
+            if let image = statusImage(isStreaming: false) {
                 button.image = image
             } else {
                 button.title = "小米遥控器"
@@ -120,10 +116,22 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         connectionItem.title = model.connectionStatus
         audioItem.title = model.isStreaming ? "语音中" : model.audioStatus
         hidItem.title = model.hidStatus
-        statusItem?.button?.image = NSImage(
-            systemSymbolName: model.isStreaming ? "mic.fill" : "dot.radiowaves.left.and.right",
-            accessibilityDescription: model.isStreaming ? "小米遥控器语音中" : "小米遥控器"
-        )
+        statusItem?.button?.image = statusImage(isStreaming: model.isStreaming)
+    }
+
+    private func statusImage(isStreaming: Bool) -> NSImage? {
+        let resourceName = isStreaming ? "StatusIconActiveTemplate" : "StatusIconTemplate"
+        let fallbackSymbol = isStreaming ? "mic.fill" : "dot.radiowaves.left.and.right"
+        let accessibilityDescription = isStreaming ? "小米遥控器语音中" : "小米遥控器"
+        let image = NSImage(named: NSImage.Name(resourceName))
+            ?? NSImage(
+                systemSymbolName: fallbackSymbol,
+                accessibilityDescription: accessibilityDescription
+            )
+        image?.isTemplate = true
+        image?.size = NSSize(width: 18, height: 18)
+        image?.accessibilityDescription = accessibilityDescription
+        return image
     }
 
     @objc private func reconnect() {

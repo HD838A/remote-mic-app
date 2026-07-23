@@ -10,6 +10,8 @@
     <string>RemoteMic</string>
     <key>CFBundleIdentifier</key>
 	<string>com.hd838a.RemoteMic</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -17,9 +19,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.3</string>
+	<string>0.9.0</string>
 	<key>CFBundleVersion</key>
-	<string>6</string>
+	<string>7</string>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
     <key>LSUIElement</key>

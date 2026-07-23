@@ -57,6 +57,16 @@ ditto --norsrc --noextattr --noqtn --noacl \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/RC003-remote-photo.png" \
   "$APP_DIR/Contents/Resources/RC003-remote-photo.png"
+for icon_resource in \
+  AppIcon.icns \
+  StatusIconTemplate.png \
+  StatusIconTemplate@2x.png \
+  StatusIconActiveTemplate.png \
+  StatusIconActiveTemplate@2x.png; do
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$ROOT/Resources/$icon_resource" \
+    "$APP_DIR/Contents/Resources/$icon_resource"
+done
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/豆包输入法兼容说明.txt" \
   "$APP_DIR/Contents/Resources/豆包输入法兼容说明.txt"

@@ -8,7 +8,7 @@ APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 PLIST="$ROOT/Resources/Info.plist"
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$PLIST")"
-DMG_BASENAME="Remote-Mic-$VERSION-preview.dmg"
+DMG_BASENAME="Remote-Mic-$VERSION.dmg"
 DMG="$OUTPUT_DIR/$DMG_BASENAME"
 SOURCE_ROOT="remote-mic-app-$VERSION-source"
 SOURCE_ARCHIVE="$DISPLAY_NAME-$VERSION-对应源码.zip"
@@ -62,7 +62,7 @@ ditto -c -k --keepParent --norsrc --noextattr --noqtn --noacl \
   "$SOURCE_DIR" "$STAGING/$SOURCE_ARCHIVE"
 
 hdiutil create \
-  -volname "$DISPLAY_NAME $VERSION 测试版" \
+  -volname "$DISPLAY_NAME $VERSION" \
   -srcfolder "$STAGING" \
   -fs "HFS+" \
   -format UDZO \

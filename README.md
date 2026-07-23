@@ -10,7 +10,7 @@
 
 ## 当前状态
 
-0.2.0 上游测试版已在一只 RC003 和 Apple Silicon Mac 上完成蓝牙连接、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放与真实中文语音转文字验收。本 fork 的 0.2.3 新增豆包兼容虚拟麦克风和一键安装流程：将独立的 BlackHole 派生驱动 `MiRemoteV 2ch` 标识为 USB transport，避免豆包过滤普通 virtual transport 设备，并由系统安装器一次安装应用与驱动。Universal 二进制和 macOS 11 部署目标仍需在目标机运行验收。
+0.2.0 上游测试版已在一只 RC003 和 Apple Silicon Mac 上完成蓝牙连接、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放与真实中文语音转文字验收。本 fork 的 0.9.0 提供豆包兼容虚拟麦克风、一键安装流程与全新的应用及状态栏图标：将独立的 BlackHole 派生驱动 `MiRemoteV 2ch` 标识为 USB transport，避免豆包过滤普通 virtual transport 设备，并由系统安装器一次安装应用与驱动。Universal 二进制和 macOS 11 部署目标仍需在目标机运行验收。
 
 ## 系统要求
 
@@ -30,7 +30,7 @@
 open "dist/无线麦.app"
 ```
 
-生成真正包含 arm64 与 x86_64 的 Universal 候选包：
+生成真正包含 arm64 与 x86_64 的 Universal 发布包：
 
 ```bash
 ./scripts/build-app.sh --universal
