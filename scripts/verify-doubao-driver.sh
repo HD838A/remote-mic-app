@@ -13,9 +13,8 @@ test "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "com.hd838a.MiR
 test "$(plutil -extract CFBundleName raw -o - "$PLIST")" = "MiRemoteV2ch"
 codesign --verify --deep --strict "$DRIVER"
 ARCHS="$(lipo -archs "$BINARY")"
-for required in arm64 x86_64; do
-  print -r -- "$ARCHS" | tr ' ' '\n' | rg -qx "$required"
-done
+test "$ARCHS" = "arm64"
+xcrun vtool -show-build "$BINARY" | rg -q 'minos 26\.0'
 strings "$BINARY" | rg -qx 'MiRemoteV %ich'
 strings "$BINARY" | rg -qx 'MiRemoteV%ich_UID'
 

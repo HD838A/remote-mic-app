@@ -4,9 +4,9 @@
 重要说明
 --------
 
-这是支持 Apple Silicon 和 Intel 的 Universal 应用，最低部署目标为 macOS 11 Big Sur。
+这是仅支持 Apple Silicon 的 arm64 应用，最低部署目标为 macOS 26。
 应用使用 ad-hoc 签名，DMG 内的两个 .pkg 尚未使用 Installer 证书签名；它们都没有 Apple Developer ID 或 Apple 公证。
-macOS 11 部署目标已经双架构编译校验，但尚未在真实 macOS 11 机器上运行验收。
+应用与豆包兼容麦克风驱动均按 macOS 26 / arm64 构建和校验。
 
 首次安装
 --------

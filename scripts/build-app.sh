@@ -8,32 +8,15 @@ DISPLAY_NAME="无线麦"
 OUTPUT_DIR="$ROOT/dist"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 
-UNIVERSAL=0
-for arg in "$@"; do
-  case "$arg" in
-    --universal) UNIVERSAL=1 ;;
-    *) print -u2 "unknown argument: $arg"; exit 1 ;;
-  esac
-done
+if [[ "$#" -ne 0 ]]; then
+  print -u2 "usage: $0"
+  exit 1
+fi
 
 cd "$ROOT"
 
-if [[ "$UNIVERSAL" -eq 1 ]]; then
-  xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx11.0
-  ARM64_BIN_DIR="$(xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx11.0 --show-bin-path)"
-  xcrun swift build -c "$CONFIGURATION" --triple x86_64-apple-macosx11.0
-  X86_64_BIN_DIR="$(xcrun swift build -c "$CONFIGURATION" --triple x86_64-apple-macosx11.0 --show-bin-path)"
-
-  UNIVERSAL_BIN="$ROOT/.build/universal-$CONFIGURATION/$APP_NAME"
-  mkdir -p "${UNIVERSAL_BIN:h}"
-  lipo -create -output "$UNIVERSAL_BIN" \
-    "$ARM64_BIN_DIR/$APP_NAME" \
-    "$X86_64_BIN_DIR/$APP_NAME"
-  BIN_PATH="$UNIVERSAL_BIN"
-else
-  xcrun swift build -c "$CONFIGURATION"
-  BIN_PATH="$(xcrun swift build -c "$CONFIGURATION" --show-bin-path)/$APP_NAME"
-fi
+xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx26.0
+BIN_PATH="$(xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx26.0 --show-bin-path)/$APP_NAME"
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app) ;;

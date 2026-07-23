@@ -18,6 +18,10 @@ test -d "$APP_DESTINATION"
 test -f "$APP_PLIST"
 test -x "$APP_BINARY"
 test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST")" = "com.hd838a.RemoteMic"
+test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - "$APP_PLIST")" = "26.0"
+test "$(/usr/bin/uname -m)" = "arm64"
+SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
+test "$SYSTEM_MAJOR" -ge 26
 
 /usr/sbin/chown -R root:wheel "$DESTINATION"
 /usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \;
@@ -30,10 +34,12 @@ test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST")" = "c
 /bin/chmod 755 "$APP_BINARY"
 /usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"
 
-ARCHS="$(/usr/bin/lipo -archs "$BINARY")"
-for required in arm64 x86_64; do
-  print -r -- "$ARCHS" | /usr/bin/tr ' ' '\n' | /usr/bin/grep -qx "$required"
-done
+DRIVER_ARCHS="$(/usr/bin/lipo -archs "$BINARY")"
+APP_ARCHS="$(/usr/bin/lipo -archs "$APP_BINARY")"
+test "$DRIVER_ARCHS" = "arm64"
+test "$APP_ARCHS" = "arm64"
+/usr/bin/vtool -show-build "$BINARY" | /usr/bin/grep -q 'minos 26\.0'
+/usr/bin/vtool -show-build "$APP_BINARY" | /usr/bin/grep -q 'minos 26\.0'
 
 /usr/bin/killall coreaudiod
 

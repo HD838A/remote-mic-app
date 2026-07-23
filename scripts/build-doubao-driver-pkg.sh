@@ -25,7 +25,7 @@ trap cleanup EXIT
 
 test -x /usr/bin/pkgbuild
 "$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
-"$ROOT/scripts/verify-app.sh" --universal "$APP"
+"$ROOT/scripts/verify-app.sh" "$APP"
 
 /bin/rm -f -- \
   "$INSTALL_PACKAGE" \

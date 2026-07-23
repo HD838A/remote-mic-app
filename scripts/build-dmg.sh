@@ -27,8 +27,8 @@ trap cleanup EXIT
 
 mkdir -p "$STAGING"
 
-"$ROOT/scripts/build-app.sh" --universal
-"$ROOT/scripts/verify-app.sh" --universal "$APP_DIR"
+"$ROOT/scripts/build-app.sh"
+"$ROOT/scripts/verify-app.sh" "$APP_DIR"
 "$ROOT/scripts/build-doubao-driver.sh"
 "$ROOT/scripts/build-doubao-driver-pkg.sh"
 

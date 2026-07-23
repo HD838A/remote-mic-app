@@ -1,10 +1,61 @@
 import AppKit
+import Combine
+import CoreBluetooth
 import SwiftUI
+
+private enum SettingsSection: String, CaseIterable, Identifiable {
+    case connection
+    case mapping
+    case permissions
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .connection: return "连接"
+        case .mapping: return "按键"
+        case .permissions: return "权限"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .connection: return "link"
+        case .mapping: return "keyboard"
+        case .permissions: return "shield.lefthalf.filled"
+        }
+    }
+}
+
+private enum PermissionVisualState {
+    case granted
+    case pending
+
+    var title: String {
+        switch self {
+        case .granted: return "已开启"
+        case .pending: return "待授权"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .granted: return .green
+        case .pending: return .orange
+        }
+    }
+}
 
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
+
+    @State private var selectedSection: SettingsSection = .connection
     @State private var selectedRemoteButton: RemoteButton = .ok
+    @State private var bluetoothAuthorization = CBManager.authorization
+    @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
+    @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    @Namespace private var navigationGlassNamespace
 
     init(model: BridgeAppModel) {
         self.model = model
@@ -12,176 +63,336 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        TabView {
-            generalTab
-                .tabItem { Label("连接", systemImage: "antenna.radiowaves.left.and.right") }
-            mappingTab
-                .tabItem { Label("按键", systemImage: "keyboard") }
-            permissionsTab
-                .tabItem { Label("权限", systemImage: "lock.shield") }
+        NavigationSplitView {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 84, ideal: 92, max: 108)
+        } detail: {
+            selectedPage
         }
-        .frame(width: 760, height: 600)
-        .padding()
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 760, minHeight: 600)
+        .onAppear(perform: refreshPermissionStates)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshPermissionStates()
+        }
     }
 
-    private var generalTab: some View {
-        Form {
-            Section(header: Text("遥控器")) {
-                statusRow("蓝牙状态", value: model.connectionStatus)
-                statusRow("语音状态", value: model.isStreaming ? "语音中" : "等待麦克风键")
-                statusRow("语音触发", value: model.voiceShortcutStatus)
-                Button("立即重新连接") { model.reconnect() }
+    private var sidebar: some View {
+        GlassEffectContainer(spacing: 10) {
+            VStack(spacing: 10) {
+                ForEach(SettingsSection.allCases) { section in
+                    sidebarButton(section)
+                }
+                Spacer(minLength: 0)
             }
+            .padding(10)
+        }
+    }
 
-            Section(header: Text("虚拟麦克风")) {
-                Picker("语音输出", selection: Binding(
-                    get: { settings.selectedAudioDeviceUID },
-                    set: { value in
-                        settings.selectedAudioDeviceUID = value
-                        model.applyAudioSettings()
-                    }
-                )) {
-                    Text("不输出语音").tag("")
-                    ForEach(model.audioDevices) { device in
-                        Text(device.name).tag(device.uid)
+    private func sidebarButton(_ section: SettingsSection) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.24)) {
+                selectedSection = section
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: section.systemImage)
+                    .font(.system(size: 17, weight: .semibold))
+                Text(section.title)
+                    .font(.caption.weight(.medium))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .modifier(
+            SidebarGlassModifier(
+                isSelected: selectedSection == section,
+                namespace: navigationGlassNamespace
+            )
+        )
+        .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var selectedPage: some View {
+        switch selectedSection {
+        case .connection:
+            connectionPage
+        case .mapping:
+            mappingPage
+        case .permissions:
+            permissionsPage
+        }
+    }
+
+    private var connectionPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                PageHeader(
+                    title: "连接与语音",
+                    subtitle: "连接 RC003，并配置语音输出与触发方式"
+                )
+
+                GlassEffectContainer(spacing: 14) {
+                    HStack(alignment: .top, spacing: 14) {
+                        connectionDevicePanel
+                            .frame(width: 196)
+                        audioSettingsPanel
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
-                HStack {
-                    Text("增益（音量增强）")
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .scrollEdgeEffectStyle(.soft, for: .top)
+    }
+
+    private var connectionDevicePanel: some View {
+        GlassPanel {
+            VStack(spacing: 14) {
+                VStack(spacing: 2) {
+                    Text("RC003")
+                        .font(.headline)
+                    Text("语音遥控器")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                RC003Photo()
+                    .frame(width: 70, height: 142)
+
+                VStack(spacing: 12) {
+                    DeviceStatusStep(
+                        symbol: "antenna.radiowaves.left.and.right",
+                        title: "蓝牙状态",
+                        detail: model.connectionStatus,
+                        badge: connectionBadge,
+                        tint: connectionTint
+                    )
+                    DeviceStatusStep(
+                        symbol: "waveform",
+                        title: "语音状态",
+                        detail: model.isStreaming ? "正在传输遥控器语音" : "等待麦克风键",
+                        badge: model.isStreaming ? "语音中" : "已就绪",
+                        tint: model.isStreaming ? .orange : .blue
+                    )
+                    DeviceStatusStep(
+                        symbol: "mic.fill",
+                        title: "语音触发",
+                        detail: model.voiceShortcutStatus,
+                        badge: voiceTriggerBadge,
+                        tint: .blue
+                    )
+                }
+
+                Button("立即重新连接") { model.reconnect() }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.roundedRectangle(radius: 10))
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private var audioSettingsPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 13) {
+                Text("音频设置")
+                    .font(.headline)
+
+                HStack(spacing: 14) {
+                    Text("语音输出")
+                        .frame(width: 72, alignment: .leading)
+                    Picker("", selection: Binding(
+                        get: { settings.selectedAudioDeviceUID },
+                        set: { value in
+                            settings.selectedAudioDeviceUID = value
+                            model.applyAudioSettings()
+                        }
+                    )) {
+                        Text("不输出语音").tag("")
+                        ForEach(model.audioDevices) { device in
+                            Text(device.name).tag(device.uid)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 270)
+                }
+
+                HStack(spacing: 14) {
+                    Text("增益")
+                        .frame(width: 72, alignment: .leading)
                     Slider(value: Binding(
                         get: { settings.gainDB },
                         set: { settings.gainDB = $0 }
                     ), in: 0...24, step: 1)
                     Text("\(Int(settings.gainDB)) dB")
                         .font(.system(.body, design: .monospaced))
-                        .frame(width: 52, alignment: .trailing)
+                        .frame(width: 54, alignment: .trailing)
                 }
-                Text("增益用于放大遥控器麦克风的语音音量。如果豆包已经显示波纹但没有输出文字，可能是输入音量低于识别阈值，可逐步提高增益；数值越大也会放大底噪，出现爆音时请适当调低。")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                statusRow("音频状态", value: model.audioStatus)
-                HStack {
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text("音频状态")
+                        .frame(width: 72, alignment: .leading)
+                    Spacer(minLength: 10)
+                    Text(model.audioStatus)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+
+                HStack(spacing: 10) {
                     Button("刷新音频设备") { model.refreshAudioDevices() }
+                        .buttonStyle(.glassProminent)
                     Link("获取 BlackHole", destination: URL(string: "https://existential.audio/blackhole/")!)
+                        .buttonStyle(.glass)
+                    Button("发送 1 秒测试音") { model.sendTestTone() }
+                        .buttonStyle(.glass)
+                        .disabled(!model.canSendTestTone)
                 }
+
                 Text("应用只把 RC003 语音写到所选设备，不会修改系统默认输入或输出。")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 HStack {
-                    Button("发送 1 秒测试音") { model.sendTestTone() }
-                        .disabled(!model.canSendTestTone)
                     Text(model.testToneStatus)
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                Text("测试音只在内存生成、低音量、固定频率，不落盘；RC003 语音进行中时不可用。")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
 
                 Divider()
 
-                Text("豆包输入法兼容")
-                    .font(.headline)
-                statusRow("兼容虚拟麦克风", value: model.doubaoAudioStatus)
-                HStack {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("豆包输入法兼容")
+                            .font(.headline)
+                        Text("兼容虚拟麦克风")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 20)
+                    Text(model.doubaoAudioStatus)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+
+                HStack(spacing: 10) {
                     Button("选择 MiRemoteV 2ch") { model.selectDoubaoAudioDevice() }
+                        .buttonStyle(.glass)
                         .disabled(!model.hasDoubaoAudioDevice)
                     Button("打开驱动安装说明") { model.openDoubaoDriverInstructions() }
+                        .buttonStyle(.glass)
                 }
-                Text("豆包会过滤普通 virtual transport 音频设备。安装独立的 MiRemoteV 2ch 后，在这里选中它；原 BlackHole 不会被修改或替换。")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
+
+                Text("豆包会过滤普通 virtual transport 音频设备。安装独立的 MiRemoteV 2ch 后在这里选中；原 BlackHole 不会被修改或替换。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private var mappingTab: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
+    private var mappingPage: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            PageHeader(
+                title: "按键映射",
+                subtitle: "自定义 RC003 按键功能，并保留语音键的固定核心行为"
+            )
+
+            GlassPanel {
+                HStack(alignment: .center, spacing: 12) {
                     Toggle("启用 RC003 自定义按键映射", isOn: Binding(
-                    get: { settings.customMappingEnabled },
-                    set: { enabled in
-                        settings.customMappingEnabled = enabled
-                        model.applyHIDSettings()
+                        get: { settings.customMappingEnabled },
+                        set: { enabled in
+                            settings.customMappingEnabled = enabled
+                            model.applyHIDSettings()
+                        }
+                    ))
+                    Spacer(minLength: 12)
+                    StatusPill(
+                        text: settings.customMappingEnabled ? "已启用" : "未启用",
+                        tint: settings.customMappingEnabled ? .green : .secondary
+                    )
+                    Button("恢复默认") {
+                        settings.resetBindings()
+                        selectedRemoteButton = .ok
                     }
-                ))
-                    statusRow("按键状态", value: model.hidStatus)
-                    Text("优先独占 RC003；系统不允许独占时自动使用兼容监听，并只在遥控器原始报告附近拦截对应的系统按键，避免影响其他键盘。")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
+                    .buttonStyle(.glass)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("按键状态")
+                        .font(.caption.weight(.semibold))
+                    Text(model.hidStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
-            HStack(alignment: .top, spacing: 16) {
-                RemoteControlDiagram(
-                    selectedButton: $selectedRemoteButton,
-                    voiceActive: model.isStreaming
-                )
-                    .frame(width: 210)
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("按键动作")
-                                .font(.headline)
-                            Text("点击左侧按键定位；修改后自动保存。")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Button("恢复默认") {
-                            settings.resetBindings()
-                            selectedRemoteButton = .ok
-                        }
+            GlassEffectContainer(spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    GlassPanel {
+                        RemoteControlDiagram(
+                            selectedButton: $selectedRemoteButton,
+                            voiceActive: model.isStreaming
+                        )
                     }
+                    .frame(width: 218)
 
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 7) {
-                                ForEach(RemoteButton.allCases) { button in
-                                    mappingRow(button)
-                                        .id(button.id)
+                    GlassPanel {
+                        VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("按键动作")
+                                    .font(.headline)
+                                Text("点击左侧实体按键定位；修改后自动保存。")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    LazyVStack(spacing: 4) {
+                                        ForEach(RemoteButton.allCases) { button in
+                                            mappingRow(button)
+                                                .id(button.id)
+                                        }
+                                    }
+                                }
+                                .onChange(of: selectedRemoteButton) { _, button in
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        proxy.scrollTo(button.id, anchor: .center)
+                                    }
                                 }
                             }
-                            .padding(.trailing, 4)
-                        }
-                        .onChange(of: selectedRemoteButton) { button in
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                proxy.scrollTo(button.id, anchor: .center)
-                            }
                         }
                     }
+                    .frame(maxWidth: .infinity)
                 }
             }
+            .frame(maxHeight: .infinity)
         }
-        .padding(4)
+        .padding(22)
     }
 
+    @ViewBuilder
     private func mappingRow(_ button: RemoteButton) -> some View {
-        HStack(spacing: 10) {
+        let selected = selectedRemoteButton == button
+        let content = HStack(spacing: 10) {
             Button {
                 selectedRemoteButton = button
             } label: {
                 HStack(spacing: 9) {
                     Text(button.shortLabel)
                         .font(.caption.weight(.semibold))
-                        .frame(width: 42, height: 30)
-                        .background(
-                            selectedRemoteButton == button
-                                ? Color.accentColor
-                                : Color.secondary.opacity(0.14)
-                        )
-                        .foregroundColor(selectedRemoteButton == button ? .white : .primary)
-                        .clipShape(Capsule())
+                        .frame(width: 42, height: 28)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(button.displayName)
                         Text(String(format: "HID 0x%02X", button.hidUsage))
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -198,84 +409,304 @@ struct SettingsView: View {
                 }
             }
             .labelsHidden()
-            .frame(width: 175)
+            .frame(width: 168)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(
-            selectedRemoteButton == button
-                ? Color.accentColor.opacity(0.09)
-                : Color.secondary.opacity(0.055)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(
-                    selectedRemoteButton == button
-                        ? Color.accentColor.opacity(0.45)
-                        : Color.clear,
-                    lineWidth: 1
+        .padding(.vertical, 6)
+
+        if selected {
+            content
+                .glassEffect(
+                    .clear.tint(Color.accentColor.opacity(0.10)).interactive(),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                 )
-        )
-    }
-
-    private var permissionsTab: some View {
-        Form {
-            Section(header: Text("所需权限")) {
-                permissionRow(
-                    title: "蓝牙",
-                    detail: "连接 RC003 并读取 ATVV 语音服务",
-                    actionTitle: "打开蓝牙设置"
-                ) {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
-                permissionRow(
-                    title: "输入监控",
-                    detail: "读取 RC003 原始 HID 报告，并在兼容模式下抑制重复系统事件",
-                    actionTitle: "请求权限"
-                ) { model.requestInputMonitoringPermission() }
-                permissionRow(
-                    title: "辅助功能",
-                    detail: "把映射后的按键动作发送给当前应用",
-                    actionTitle: "请求权限"
-                ) { model.requestAccessibilityPermission() }
-            }
-
-            Section(header: Text("诊断")) {
-                Button("在 Finder 中显示日志") { model.openLogFolder() }
-                Text("日志不记录语音内容、蓝牙地址或外设 UUID。")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
+        } else {
+            VStack(spacing: 0) {
+                content
+                Divider()
+                    .padding(.leading, 60)
             }
         }
+    }
+
+    private var permissionsPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                PageHeader(
+                    title: "权限与隐私",
+                    subtitle: "按顺序完成权限设置，确保 RC003 正常连接和发送按键"
+                )
+
+                GlassEffectContainer(spacing: 14) {
+                    GlassPanel {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("所需权限")
+                                .font(.headline)
+                                .padding(.bottom, 8)
+
+                            permissionRow(
+                                index: 1,
+                                symbol: "antenna.radiowaves.left.and.right",
+                                title: "蓝牙",
+                                detail: "连接 RC003 并读取 ATVV 语音服务",
+                                state: bluetoothPermissionState,
+                                actionTitle: "打开蓝牙设置"
+                            ) {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+
+                            Divider().padding(.leading, 62)
+
+                            permissionRow(
+                                index: 2,
+                                symbol: "keyboard",
+                                title: "输入监控",
+                                detail: "读取 RC003 原始 HID 报告，并在兼容模式下抑制重复系统事件",
+                                state: inputMonitoringGranted ? .granted : .pending,
+                                actionTitle: "请求权限"
+                            ) {
+                                model.requestInputMonitoringPermission()
+                            }
+
+                            Divider().padding(.leading, 62)
+
+                            permissionRow(
+                                index: 3,
+                                symbol: "accessibility",
+                                title: "辅助功能",
+                                detail: "把映射后的按键动作发送给当前应用",
+                                state: accessibilityGranted ? .granted : .pending,
+                                actionTitle: "请求权限"
+                            ) {
+                                model.requestAccessibilityPermission()
+                            }
+                        }
+                    }
+
+                    GlassPanel {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("诊断")
+                                .font(.headline)
+                            HStack(spacing: 12) {
+                                Image(systemName: "doc.text.magnifyingglass")
+                                    .font(.title3)
+                                    .frame(width: 34, height: 34)
+                                    .glassEffect(
+                                        .clear.tint(Color.accentColor),
+                                        in: Circle()
+                                    )
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("应用日志")
+                                    Text("日志不记录语音内容、蓝牙地址或外设 UUID。")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("在 Finder 中显示日志") { model.openLogFolder() }
+                                    .buttonStyle(.glass)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .scrollEdgeEffectStyle(.soft, for: .top)
     }
 
     private func permissionRow(
+        index: Int,
+        symbol: String,
         title: String,
         detail: String,
+        state: PermissionVisualState,
         actionTitle: String,
         action: @escaping () -> Void
     ) -> some View {
-        HStack {
-            VStack(alignment: .leading) {
+        HStack(spacing: 14) {
+            Text("\(index)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Color.accentColor, in: Circle())
+
+            Image(systemName: symbol)
+                .font(.system(size: 19, weight: .semibold))
+                .frame(width: 42, height: 42)
+                .glassEffect(
+                    .clear.tint(Color.accentColor),
+                    in: Circle()
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
+                    .font(.headline)
                 Text(detail)
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
+
+            Spacer(minLength: 16)
+            StatusPill(text: state.title, tint: state.tint)
             Button(actionTitle, action: action)
+                .buttonStyle(.glass)
+                .frame(width: 112)
         }
+        .padding(.vertical, 12)
     }
 
-    private func statusRow(_ title: String, value: String) -> some View {
-        HStack {
+    private var connectionBadge: String {
+        model.connectionStatus.contains("已连接") ? "已连接" : "连接中"
+    }
+
+    private var connectionTint: Color {
+        model.connectionStatus.contains("已连接") ? .green : .orange
+    }
+
+    private var voiceTriggerBadge: String {
+        if model.voiceShortcutStatus.contains("已释放") ||
+            model.voiceShortcutStatus.contains("已硬件映射") {
+            return "已启用"
+        }
+        return "准备中"
+    }
+
+    private var bluetoothPermissionState: PermissionVisualState {
+        bluetoothAuthorization == .allowedAlways ? .granted : .pending
+    }
+
+    private func refreshPermissionStates() {
+        bluetoothAuthorization = CBManager.authorization
+        inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
+        accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    }
+}
+
+private struct SidebarGlassModifier: ViewModifier {
+    let isSelected: Bool
+    let namespace: Namespace.ID
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .foregroundStyle(Color.accentColor)
+                .glassEffect(
+                    .clear.tint(Color.accentColor.opacity(0.08)).interactive(),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+                .glassEffectID("settings-navigation-selection", in: namespace)
+        } else {
+            content
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct PageHeader: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
-            Spacer()
-            Text(value)
-                .foregroundColor(.secondary)
+                .font(.system(size: 25, weight: .semibold))
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct GlassPanel<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(16)
+            .glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+    }
+}
+
+private struct StatusPill: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .glassEffect(.clear.tint(tint), in: Capsule())
+    }
+}
+
+private struct DeviceStatusStep: View {
+    let symbol: String
+    let title: String
+    let detail: String
+    let badge: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .glassEffect(.clear.tint(tint), in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                    Spacer(minLength: 4)
+                    StatusPill(text: badge, tint: tint)
+                }
+                Text(detail)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private enum RC003ImageResource {
+    static let image: NSImage? = {
+        guard let url = Bundle.main.url(
+            forResource: "RC003-remote-photo",
+            withExtension: "png"
+        ) else { return nil }
+        return NSImage(contentsOf: url)
+    }()
+}
+
+private struct RC003Photo: View {
+    var body: some View {
+        Group {
+            if let photo = RC003ImageResource.image {
+                Image(nsImage: photo)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.quaternary)
+                    .overlay {
+                        Text("实物图资源缺失")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+            }
         }
     }
 }
@@ -284,61 +715,36 @@ private struct RemoteControlDiagram: View {
     @Binding var selectedButton: RemoteButton
     let voiceActive: Bool
 
-    private static let photo: NSImage? = {
-        guard let url = Bundle.main.url(
-            forResource: "RC003-remote-photo",
-            withExtension: "png"
-        ) else { return nil }
-        return NSImage(contentsOf: url)
-    }()
+    private let canvasSize = CGSize(width: 190, height: 385)
 
     var body: some View {
-        VStack(spacing: 6) {
-            GeometryReader { geometry in
-                ZStack {
-                    if let photo = Self.photo {
-                        Image(nsImage: photo)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(
-                                width: geometry.size.width,
-                                height: geometry.size.height
-                            )
-                    } else {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.secondary.opacity(0.10))
-                        Text("实物图资源缺失")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+        VStack(spacing: 8) {
+            ZStack {
+                RC003Photo()
+                    .frame(width: canvasSize.width, height: canvasSize.height)
 
-                    hotspot(.power, x: 0.386, y: 0.099, width: 0.15, height: 0.072)
-                    voiceHotspot(x: 0.630, y: 0.099, width: 0.15, height: 0.072)
+                hotspot(.power, x: 0.386, y: 0.099, width: 0.15, height: 0.072)
+                voiceHotspot(x: 0.630, y: 0.099, width: 0.15, height: 0.072)
 
-                    hotspot(.up, x: 0.502, y: 0.179, width: 0.18, height: 0.065)
-                    hotspot(.left, x: 0.362, y: 0.246, width: 0.15, height: 0.080)
-                    hotspot(.ok, x: 0.502, y: 0.246, width: 0.19, height: 0.095)
-                    hotspot(.right, x: 0.638, y: 0.246, width: 0.15, height: 0.080)
-                    hotspot(.down, x: 0.502, y: 0.317, width: 0.18, height: 0.065)
+                hotspot(.up, x: 0.502, y: 0.179, width: 0.18, height: 0.065)
+                hotspot(.left, x: 0.362, y: 0.246, width: 0.15, height: 0.080)
+                hotspot(.ok, x: 0.502, y: 0.246, width: 0.19, height: 0.095)
+                hotspot(.right, x: 0.638, y: 0.246, width: 0.15, height: 0.080)
+                hotspot(.down, x: 0.502, y: 0.317, width: 0.18, height: 0.065)
 
-                    hotspot(.back, x: 0.406, y: 0.389, width: 0.17, height: 0.080)
-                    hotspot(.volumeUp, x: 0.604, y: 0.390, width: 0.16, height: 0.080)
-                    hotspot(.home, x: 0.406, y: 0.479, width: 0.17, height: 0.080)
-                    hotspot(.volumeDown, x: 0.604, y: 0.480, width: 0.16, height: 0.080)
-                    hotspot(.menu, x: 0.406, y: 0.569, width: 0.17, height: 0.080)
-                    hotspot(.tv, x: 0.604, y: 0.569, width: 0.17, height: 0.080)
-                }
+                hotspot(.back, x: 0.406, y: 0.389, width: 0.17, height: 0.080)
+                hotspot(.volumeUp, x: 0.604, y: 0.390, width: 0.16, height: 0.080)
+                hotspot(.home, x: 0.406, y: 0.479, width: 0.17, height: 0.080)
+                hotspot(.volumeDown, x: 0.604, y: 0.480, width: 0.16, height: 0.080)
+                hotspot(.menu, x: 0.406, y: 0.569, width: 0.17, height: 0.080)
+                hotspot(.tv, x: 0.604, y: 0.569, width: 0.17, height: 0.080)
             }
-            .frame(width: 210, height: 426)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.20), lineWidth: 1)
-            )
+            .frame(width: canvasSize.width, height: canvasSize.height)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             Text("点击实物按键定位映射；麦克风键固定为硬件语音/Fn。")
                 .font(.system(size: 10))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
     }
@@ -354,23 +760,19 @@ private struct RemoteControlDiagram: View {
             selectedButton = button
         } label: {
             RoundedRectangle(cornerRadius: 999, style: .continuous)
-                .fill(
-                    selectedButton == button
-                        ? Color.accentColor.opacity(0.27)
-                        : Color.clear
-                )
-                .overlay(
+                .fill(selectedButton == button ? Color.accentColor.opacity(0.24) : Color.clear)
+                .overlay {
                     RoundedRectangle(cornerRadius: 999, style: .continuous)
                         .stroke(
                             selectedButton == button ? Color.accentColor : Color.clear,
                             lineWidth: 2
                         )
-                )
+                }
                 .contentShape(RoundedRectangle(cornerRadius: 999, style: .continuous))
         }
         .buttonStyle(.plain)
-        .frame(width: 210 * width, height: 426 * height)
-        .position(x: 210 * x, y: 426 * y)
+        .frame(width: canvasSize.width * width, height: canvasSize.height * height)
+        .position(x: canvasSize.width * x, y: canvasSize.height * y)
         .help(button.displayName)
         .accessibilityLabel(Text(button.displayName))
     }
@@ -382,18 +784,15 @@ private struct RemoteControlDiagram: View {
         height: CGFloat
     ) -> some View {
         Circle()
-            .fill(voiceActive ? Color.orange.opacity(0.30) : Color.clear)
-            .overlay(
-                Circle().stroke(
-                    voiceActive ? Color.orange : Color.clear,
-                    lineWidth: 2
-                )
-            )
+            .fill(voiceActive ? Color.orange.opacity(0.28) : Color.clear)
+            .overlay {
+                Circle().stroke(voiceActive ? Color.orange : Color.clear, lineWidth: 2)
+            }
             .contentShape(Circle())
-            .frame(width: 210 * width, height: 426 * height)
-            .position(x: 210 * x, y: 426 * y)
-        .help("遥控器真实 F5 硬件按下/松开会映射为 Mac Fn；同时桥接 ATVV 语音")
-        .accessibilityElement()
-        .accessibilityLabel(Text("语音/Fn 键，固定核心功能"))
+            .frame(width: canvasSize.width * width, height: canvasSize.height * height)
+            .position(x: canvasSize.width * x, y: canvasSize.height * y)
+            .help("遥控器真实 F5 硬件按下/松开会映射为 Mac Fn；同时桥接 ATVV 语音")
+            .accessibilityElement()
+            .accessibilityLabel(Text("语音/Fn 键，固定核心功能"))
     }
 }
