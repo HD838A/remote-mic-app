@@ -1,6 +1,6 @@
 # 无线麦（Remote Mic）
 
-无线麦是把小米蓝牙遥控器 2 Pro / RC003 变成 Mac 语音输入设备的开源菜单栏工具。当前版本为 **0.9.2（9）**，仅支持 macOS 26 和 Apple Silicon。它负责：
+无线麦是把小米蓝牙遥控器 2 Pro / RC003 变成 Mac 语音输入设备的开源菜单栏工具。当前版本为 **0.9.3（10）**，仅支持 macOS 26 和 Apple Silicon。它负责：
 
 - 自动发现、连接和重连小米蓝牙遥控器 2 Pro / RC003：精确匹配系统显示名称 `MI RC`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”（trim 后比较，英文大小写不敏感），或命中 ATVV service UUID；不做任意“小米”设备的模糊匹配；
 - 接收 Android TV Voice-over-BLE（ATVV）语音并解码为 16 kHz PCM；
@@ -34,7 +34,7 @@
 
 ## 当前状态
 
-0.9.2 已在 Apple Silicon Mac 上完成 RC003 蓝牙连接、自动重连、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放、虚拟麦克风输出和真实中文语音转文字验收。应用提供 macOS 26 Liquid Glass 设置界面、完整按键映射、预置 APP 启动动作、低音量测试音和豆包兼容虚拟麦克风。
+0.9.3 已在 Apple Silicon Mac 上完成 RC003 蓝牙连接、自动重连、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放、虚拟麦克风输出和真实中文语音转文字验收。应用提供 macOS 26 Liquid Glass 设置界面、完整按键映射、预置 APP 启动动作、低音量测试音和豆包兼容虚拟麦克风。
 
 豆包兼容驱动基于固定版本的 BlackHole `v0.7.1` 构建，设备名为 `MiRemoteV 2ch`，并报告为 USB transport，避免豆包过滤普通 virtual transport 设备。它与系统中已有的 `BlackHole 2ch` 并存，不会覆盖或修改原驱动。
 
@@ -49,12 +49,12 @@
 
 ## 安装与首次启动
 
-推荐下载 `Remote-Mic-0.9.2.dmg`，然后根据需要选择一种安装方式：
+推荐下载 `Remote-Mic-0.9.3.dmg`，然后根据需要选择一种安装方式：
 
 1. 双击 `安装无线麦.pkg`：把应用安装到 `/Applications`，同时安装 `MiRemoteV2ch.driver`，重启 CoreAudio，并为当前桌面用户启动菜单栏应用。这是使用豆包输入法时的推荐方式。
 2. 把 `无线麦.app` 拖入 `Applications`：只安装应用。此方式需要系统中已有 [BlackHole 2ch](https://existential.audio/blackhole/) 或其他可写 CoreAudio 回环设备。
 
-应用启动后显示在菜单栏。通过“打开设置…”进入设置窗口，并按顺序完成以下授权：
+应用启动后显示在菜单栏。左键单击状态栏图标直接打开设置窗口；右键单击显示状态菜单，菜单中包含重新连接、日志、关于、GitHub 和退出操作。首次使用时按顺序完成以下授权：
 
 1. 蓝牙：发现并连接 RC003；
 2. 输入监控：读取遥控器原始 HID 报告；
@@ -72,7 +72,7 @@ swift test
 open "dist/无线麦.app"
 ```
 
-`scripts/test.sh` 会运行协议自测并编译完整应用，`swift test` 当前包含 38 项 Swift Testing 测试。`build-app.sh` 固定以 `arm64-apple-macosx26.0` 构建，`verify-app.sh` 会检查应用内容、签名、单一 `arm64` 架构和 Mach-O `minos 26.0`。
+`scripts/test.sh` 会运行协议自测并编译完整应用，`swift test` 当前包含 47 项 Swift Testing 测试。`build-app.sh` 固定以 `arm64-apple-macosx26.0` 构建，`verify-app.sh` 会检查应用内容、签名、单一 `arm64` 架构和 Mach-O `minos 26.0`。
 
 构建并验证完整发布产物：
 
@@ -89,8 +89,8 @@ open "dist/无线麦.app"
 - `MiRemoteV2ch.driver`
 - `安装无线麦.pkg`
 - `卸载无线麦.pkg`
-- `Remote-Mic-0.9.2.dmg`
-- `Remote-Mic-0.9.2.dmg.sha256`
+- `Remote-Mic-0.9.3.dmg`
+- `Remote-Mic-0.9.3.dmg.sha256`
 
 ### 豆包兼容虚拟麦克风
 

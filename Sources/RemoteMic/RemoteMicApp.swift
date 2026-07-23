@@ -21,6 +21,7 @@ enum RemoteMicApp {
 private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let model = BridgeAppModel()
     private var statusItem: NSStatusItem?
+    private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
@@ -66,6 +67,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             button.toolTip = "无线麦"
+            button.target = self
+            button.action = #selector(handleStatusItemClick(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             if let image = statusImage(isStreaming: false) {
                 button.image = image
             } else {
@@ -87,8 +91,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(menuItem("打开设置…", action: #selector(showSettings)))
         menu.addItem(menuItem("显示日志", action: #selector(showLog)))
         menu.addItem(.separator())
+        menu.addItem(menuItem("关于无线麦", action: #selector(showAbout)))
+        menu.addItem(menuItem("GitHub", action: #selector(openGitHub)))
+        menu.addItem(.separator())
         menu.addItem(menuItem("退出", action: #selector(quit)))
-        item.menu = menu
+        statusMenu = menu
         statusItem = item
     }
 
@@ -134,6 +141,22 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         return image
     }
 
+    @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showStatusMenu()
+        } else {
+            showSettings()
+        }
+    }
+
+    private func showStatusMenu() {
+        guard let statusItem, let statusMenu else { return }
+        refreshMenuStatus()
+        statusItem.menu = statusMenu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
     @objc private func reconnect() {
         model.reconnect()
     }
@@ -168,6 +191,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func showLog() {
         model.openLogFolder()
+    }
+
+    @objc private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    @objc private func openGitHub() {
+        guard let url = URL(string: "https://github.com/HD838A/remote-mic-app") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func quit() {

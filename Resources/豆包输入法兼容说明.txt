@@ -34,4 +34,4 @@ MiRemoteV 2ch 是一份与 BlackHole 并存的、独立的双向 2 声道回环�
 许可证
 ------
 
-该驱动由 BlackHole v0.7.1 源码、项目内补丁和发布构建参数生成。BlackHole 采用 GPL-3.0；详见应用包内的 THIRD_PARTY_NOTICES.md。完整对应源码由 GitHub 的 v0.9.0 标签提供。
+该驱动由 BlackHole v0.7.1 源码、项目内补丁和发布构建参数生成。BlackHole 采用 GPL-3.0；详见应用包内的 THIRD_PARTY_NOTICES.md。完整对应源码由 GitHub 的 v0.9.3 标签提供。
