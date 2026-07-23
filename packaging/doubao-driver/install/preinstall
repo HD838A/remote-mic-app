@@ -3,9 +3,14 @@ set -euo pipefail
 
 TARGET_VOLUME="${3:-/}"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+PLIST="$DESTINATION/Contents/Info.plist"
 
 if [[ -e "$DESTINATION" ]]; then
-  print -u2 "未安装：已存在同名驱动 $DESTINATION"
-  print -u2 "为避免覆盖现有驱动，此安装器已停止。请先使用随 DMG 提供的卸载器。"
-  exit 2
+  if [[ ! -f "$PLIST" ]] || \
+     [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST" 2>/dev/null || true)" != "com.hd838a.MiRemoteV2ch" ]]; then
+    print -u2 "未安装：目标路径存在无法识别的音频驱动 $DESTINATION"
+    print -u2 "为避免覆盖其他软件，安装器已停止。"
+    exit 2
+  fi
+  print "检测到已有 MiRemoteV 2ch，将原位升级。"
 fi

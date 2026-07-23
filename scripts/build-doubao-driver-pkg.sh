@@ -4,8 +4,10 @@ set -euo pipefail
 ROOT="${0:A:h:h}"
 OUTPUT_DIR="$ROOT/dist"
 DRIVER="$OUTPUT_DIR/MiRemoteV2ch.driver"
+APP="$OUTPUT_DIR/小米遥控器桥接.app"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
-INSTALL_PACKAGE="$OUTPUT_DIR/安装豆包兼容麦克风.pkg"
+INSTALL_PACKAGE="$OUTPUT_DIR/安装小米遥控器桥接.pkg"
+LEGACY_INSTALL_PACKAGE="$OUTPUT_DIR/安装豆包兼容麦克风.pkg"
 UNINSTALL_PACKAGE="$OUTPUT_DIR/卸载豆包兼容麦克风.pkg"
 WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
@@ -22,9 +24,12 @@ trap cleanup EXIT
 
 test -x /usr/bin/pkgbuild
 "$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
+"$ROOT/scripts/verify-app.sh" --universal "$APP"
 
-/bin/rm -f -- "$INSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
-/bin/mkdir -p "$PAYLOAD_ROOT/Library/Audio/Plug-Ins/HAL"
+/bin/rm -f -- "$INSTALL_PACKAGE" "$LEGACY_INSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
+/bin/mkdir -p "$PAYLOAD_ROOT/Applications" "$PAYLOAD_ROOT/Library/Audio/Plug-Ins/HAL"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$APP" "$PAYLOAD_ROOT/Applications/小米遥控器桥接.app"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$DRIVER" "$PAYLOAD_ROOT/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
@@ -35,7 +40,7 @@ test -x /usr/bin/pkgbuild
 /usr/bin/pkgbuild \
   --root "$PAYLOAD_ROOT" \
   --scripts "$INSTALL_SCRIPTS" \
-  --identifier "com.hd838a.MiRemoteV2ch.installer" \
+  --identifier "com.hd838a.XiaomiRemoteBridgeMac.installer" \
   --version "$VERSION" \
   --install-location / \
   --ownership recommended \

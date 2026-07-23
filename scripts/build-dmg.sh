@@ -12,7 +12,7 @@ DMG_BASENAME="XiaomiRemoteBridgeMac-$VERSION-doubao-preview.dmg"
 DMG="$OUTPUT_DIR/$DMG_BASENAME"
 SOURCE_ROOT="xiaomi-remote-bridge-mac-$VERSION-source"
 SOURCE_ARCHIVE="$DISPLAY_NAME-$VERSION-对应源码.zip"
-INSTALL_PACKAGE="安装豆包兼容麦克风.pkg"
+INSTALL_PACKAGE="安装小米遥控器桥接.pkg"
 UNINSTALL_PACKAGE="卸载豆包兼容麦克风.pkg"
 
 mkdir -p "$OUTPUT_DIR"

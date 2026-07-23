@@ -10,7 +10,7 @@
 
 ## 当前状态
 
-0.2.0 上游测试版已在一只 RC003 和 Apple Silicon Mac 上完成蓝牙连接、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放与真实中文语音转文字验收。本 fork 的 0.2.2 新增豆包兼容虚拟麦克风：将独立的 BlackHole 派生驱动 `MiRemoteV 2ch` 标识为 USB transport，避免豆包过滤普通 virtual transport 设备。DMG 包含可双击的系统安装器，Universal 二进制和 macOS 11 部署目标仍需在目标机运行验收。
+0.2.0 上游测试版已在一只 RC003 和 Apple Silicon Mac 上完成蓝牙连接、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放与真实中文语音转文字验收。本 fork 的 0.2.3 新增豆包兼容虚拟麦克风和一键安装流程：将独立的 BlackHole 派生驱动 `MiRemoteV 2ch` 标识为 USB transport，避免豆包过滤普通 virtual transport 设备，并由系统安装器一次安装应用与驱动。Universal 二进制和 macOS 11 部署目标仍需在目标机运行验收。
 
 ## 系统要求
 
@@ -19,7 +19,7 @@
 - 已在“系统设置 → 蓝牙”中配对的小米蓝牙遥控器 2 Pro / RC003；
 - 语音作为虚拟麦克风使用时，安装 [BlackHole 2ch](https://existential.audio/blackhole/) 或等价的可写 CoreAudio 回环设备。
 
-应用不会自动安装音频驱动，也不会修改系统默认输入/输出设备；只有用户主动运行 DMG 中的系统安装器，才会安装 `MiRemoteV2ch.driver`。
+应用不会自行修改系统默认输入/输出设备。用户主动运行 DMG 中的“安装小米遥控器桥接.pkg”时，安装器会把应用放入 `/Applications`、安装 `MiRemoteV2ch.driver`，并为当前桌面用户启动状态栏应用；不需要兼容驱动时仍可只拖拽 `.app`。
 
 ## 构建
 
@@ -41,9 +41,9 @@ open "dist/小米遥控器桥接.app"
 
 ### 豆包兼容虚拟麦克风
 
-如果 QuickTime 已能从 BlackHole 录到遥控器语音、豆包输入法仍没有反应，说明遥控器、ATVV 解码和回环输出已经正常；豆包是在过滤 virtual transport 设备。下载 DMG 后，双击其中的“安装豆包兼容麦克风.pkg”，按系统 Installer 提示授权即可；不需要 Xcode、Git 或终端命令。
+如果 QuickTime 已能从 BlackHole 录到遥控器语音、豆包输入法仍没有反应，说明遥控器、ATVV 解码和回环输出已经正常；豆包是在过滤 virtual transport 设备。下载 DMG 后，双击其中的“安装小米遥控器桥接.pkg”，按系统 Installer 提示授权即可；它会一次安装应用和兼容驱动，完成后自动启动状态栏应用，不需要 Xcode、Git 或终端命令。
 
-安装器内置由固定 BlackHole `v0.7.1` 源码和项目内补丁构建的独立 `MiRemoteV2ch.driver`。实际音频 Device 报告为 USB transport，名称是 `MiRemoteV 2ch`，与 `BlackHole2ch.driver` 并存且绝不覆盖它。安装器校验驱动并重启 CoreAudio 后，在桥接应用“虚拟麦克风”中点击“刷新音频设备 → 选择 MiRemoteV 2ch”，再在豆包中使用该设备或完全重启豆包。
+安装器内置由固定 BlackHole `v0.7.1` 源码和项目内补丁构建的独立 `MiRemoteV2ch.driver`。实际音频 Device 报告为 USB transport，名称是 `MiRemoteV 2ch`，与 `BlackHole2ch.driver` 并存且绝不覆盖它。安装器校验应用和驱动、重启 CoreAudio 并启动状态栏应用后，在“虚拟麦克风”中点击“刷新音频设备 → 选择 MiRemoteV 2ch”，再在豆包中使用该设备或完全重启豆包。
 
 若要移除，双击 DMG 中的“卸载豆包兼容麦克风.pkg”。DMG 所附的构建和校验脚本仅供开发者复现、审计和发布构建使用。
 

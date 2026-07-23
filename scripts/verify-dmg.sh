@@ -14,7 +14,7 @@ VERIFY_ROOT="$(mktemp -d /private/tmp/xrbm-dmg-verify.XXXXXX)"
 MOUNT_POINT="$VERIFY_ROOT/mount"
 SOURCE_EXTRACT="$VERIFY_ROOT/source"
 ZIP_LIST="$VERIFY_ROOT/zip-entries.txt"
-INSTALL_PACKAGE="$MOUNT_POINT/安装豆包兼容麦克风.pkg"
+INSTALL_PACKAGE="$MOUNT_POINT/安装小米遥控器桥接.pkg"
 UNINSTALL_PACKAGE="$MOUNT_POINT/卸载豆包兼容麦克风.pkg"
 ATTACHED=0
 

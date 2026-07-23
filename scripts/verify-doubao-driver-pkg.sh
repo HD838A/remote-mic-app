@@ -22,15 +22,20 @@ test -f "$EXPANDED/PackageInfo"
 
 case "$MODE" in
   install)
-    /usr/bin/grep -Fq 'identifier="com.hd838a.MiRemoteV2ch.installer"' "$EXPANDED/PackageInfo"
+    /usr/bin/grep -Fq 'identifier="com.hd838a.XiaomiRemoteBridgeMac.installer"' "$EXPANDED/PackageInfo"
     /usr/bin/grep -Fq '<payload ' "$EXPANDED/PackageInfo"
+    /usr/sbin/pkgutil --payload-files "$PACKAGE" | /usr/bin/grep -qx './Applications/小米遥控器桥接.app/Contents/Info.plist'
+    /usr/sbin/pkgutil --payload-files "$PACKAGE" | /usr/bin/grep -qx './Applications/小米遥控器桥接.app/Contents/MacOS/XiaomiRemoteBridgeMac'
     /usr/sbin/pkgutil --payload-files "$PACKAGE" | /usr/bin/grep -qx './Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver/Contents/Info.plist'
     /usr/sbin/pkgutil --payload-files "$PACKAGE" | /usr/bin/grep -qx './Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch'
     test -x "$EXPANDED/Scripts/preinstall"
     test -x "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx 'DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"' "$EXPANDED/Scripts/preinstall"
     /usr/bin/grep -Fqx '/usr/bin/codesign --verify --deep --strict "$DESTINATION"' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fqx '/usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx '/usr/bin/killall coreaudiod' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq '/bin/launchctl asuser "$CONSOLE_UID"' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq '/usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"' "$EXPANDED/Scripts/postinstall"
     ;;
   uninstall)
     /usr/bin/grep -Fq 'identifier="com.hd838a.MiRemoteV2ch.uninstaller"' "$EXPANDED/PackageInfo"
