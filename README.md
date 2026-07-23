@@ -1,6 +1,6 @@
 # 无线麦（Remote Mic）
 
-无线麦是把小米蓝牙遥控器 2 Pro / RC003 变成 Mac 语音输入设备的开源菜单栏工具。当前版本为 **0.9.0（7）**，仅支持 macOS 26 和 Apple Silicon。它负责：
+无线麦是把小米蓝牙遥控器 2 Pro / RC003 变成 Mac 语音输入设备的开源菜单栏工具。当前版本为 **0.9.1（8）**，仅支持 macOS 26 和 Apple Silicon。它负责：
 
 - 自动发现、连接和重连小米蓝牙遥控器 2 Pro / RC003：精确匹配系统显示名称 `MI RC`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”（trim 后比较，英文大小写不敏感），或命中 ATVV service UUID；不做任意“小米”设备的模糊匹配；
 - 接收 Android TV Voice-over-BLE（ATVV）语音并解码为 16 kHz PCM；
@@ -14,25 +14,25 @@
 
 ### 连接与语音
 
-![连接与语音设置页](Screenshots/connection-and-voice.jpeg)
+![连接与语音设置页](Screenshots/connection-and-voice.png)
 
 显示 RC003 连接、ATVV 语音和 Fn 触发状态，可选择语音输出设备、调整增益、发送测试音，以及选择豆包兼容的 `MiRemoteV 2ch`。
 
 ### 按键映射
 
-![按键映射设置页](Screenshots/key-mapping.jpeg)
+![按键映射设置页](Screenshots/key-mapping.png)
 
 点击遥控器实物图上的按键即可定位映射项。修改会自动保存，也可一键恢复默认映射；语音键仍保留固定的设备专属核心行为。
 
 ### 权限与隐私
 
-![权限与隐私设置页](Screenshots/permissions-and-privacy.jpeg)
+![权限与隐私设置页](Screenshots/permissions-and-privacy.png)
 
 集中显示蓝牙、输入监控和辅助功能状态，并提供系统设置跳转及本地日志诊断入口。
 
 ## 当前状态
 
-0.9.0 已在 Apple Silicon Mac 上完成 RC003 蓝牙连接、自动重连、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放、虚拟麦克风输出和真实中文语音转文字验收。应用提供 macOS 26 Liquid Glass 设置界面、完整按键映射、低音量测试音和豆包兼容虚拟麦克风。
+0.9.1 已在 Apple Silicon Mac 上完成 RC003 蓝牙连接、自动重连、方向/确定/返回/主页/菜单/TV/音量按键、ATVV 语音、Fn 按住/释放、虚拟麦克风输出和真实中文语音转文字验收。应用提供 macOS 26 Liquid Glass 设置界面、完整按键映射、低音量测试音和豆包兼容虚拟麦克风。
 
 豆包兼容驱动基于固定版本的 BlackHole `v0.7.1` 构建，设备名为 `MiRemoteV 2ch`，并报告为 USB transport，避免豆包过滤普通 virtual transport 设备。它与系统中已有的 `BlackHole 2ch` 并存，不会覆盖或修改原驱动。
 
@@ -47,7 +47,7 @@
 
 ## 安装与首次启动
 
-推荐下载 `Remote-Mic-0.9.0.dmg`，然后根据需要选择一种安装方式：
+推荐下载 `Remote-Mic-0.9.1.dmg`，然后根据需要选择一种安装方式：
 
 1. 双击 `安装无线麦.pkg`：把应用安装到 `/Applications`，同时安装 `MiRemoteV2ch.driver`，重启 CoreAudio，并为当前桌面用户启动菜单栏应用。这是使用豆包输入法时的推荐方式。
 2. 把 `无线麦.app` 拖入 `Applications`：只安装应用。此方式需要系统中已有 [BlackHole 2ch](https://existential.audio/blackhole/) 或其他可写 CoreAudio 回环设备。
@@ -87,8 +87,8 @@ open "dist/无线麦.app"
 - `MiRemoteV2ch.driver`
 - `安装无线麦.pkg`
 - `卸载无线麦.pkg`
-- `Remote-Mic-0.9.0.dmg`
-- `Remote-Mic-0.9.0.dmg.sha256`
+- `Remote-Mic-0.9.1.dmg`
+- `Remote-Mic-0.9.1.dmg.sha256`
 
 ### 豆包兼容虚拟麦克风
 
