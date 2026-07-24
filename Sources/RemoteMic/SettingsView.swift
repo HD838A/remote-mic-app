@@ -66,7 +66,7 @@ struct SettingsView: View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
             sidebar
                 .toolbar(removing: .sidebarToggle)
-                .navigationSplitViewColumnWidth(min: 84, ideal: 92, max: 108)
+                .navigationSplitViewColumnWidth(min: 96, ideal: 108, max: 120)
         } detail: {
             selectedPage
         }
@@ -92,18 +92,16 @@ struct SettingsView: View {
 
     private func sidebarButton(_ section: SettingsSection) -> some View {
         Button {
-            withAnimation(.snappy(duration: 0.24)) {
-                selectedSection = section
-            }
+            selectedSection = section
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 7) {
                 Image(systemName: section.systemImage)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 21, weight: .semibold))
                 Text(section.title)
-                    .font(.caption.weight(.medium))
+                    .font(.system(size: 13, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

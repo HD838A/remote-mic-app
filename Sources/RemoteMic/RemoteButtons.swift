@@ -105,6 +105,7 @@ enum RemoteEventEdge: Equatable {
 }
 
 enum PresetApplication: String, CaseIterable, Identifiable {
+    case remoteMic
     case codex
     case claude
     case cmux
@@ -122,6 +123,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
+        case .remoteMic: return "无线麦"
         case .codex: return "Codex"
         case .claude: return "Claude"
         case .cmux: return "cmux"
@@ -139,6 +141,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
 
     var bundleIdentifier: String {
         switch self {
+        case .remoteMic: return "com.hd838a.RemoteMic"
         case .codex: return "com.openai.codex"
         case .claude: return "com.anthropic.claudefordesktop"
         case .cmux: return "com.cmuxterm.app"
@@ -155,10 +158,12 @@ enum PresetApplication: String, CaseIterable, Identifiable {
     }
 
     static var installedBundleIdentifiers: Set<String> {
-        Set(allCases.compactMap { application in
+        var identifiers: Set<String> = [remoteMic.bundleIdentifier]
+        identifiers.formUnion(allCases.compactMap { application in
             NSWorkspace.shared.urlForApplication(withBundleIdentifier: application.bundleIdentifier)
                 .map { _ in application.bundleIdentifier }
         })
+        return identifiers
     }
 }
 
@@ -178,6 +183,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeDown
     case volumeMute
     case playPause
+    case openRemoteMic
     case openCodex
     case openClaude
     case openCmux
@@ -210,6 +216,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .volumeDown: return "系统音量 -"
         case .volumeMute: return "系统静音"
         case .playPause: return "播放 / 暂停"
+        case .openRemoteMic: return "打开无线麦"
         case .openCodex: return "打开 Codex"
         case .openClaude: return "打开 Claude"
         case .openCmux: return "打开 cmux"
@@ -227,6 +234,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
 
     var presetApplication: PresetApplication? {
         switch self {
+        case .openRemoteMic: return .remoteMic
         case .openCodex: return .codex
         case .openClaude: return .claude
         case .openCmux: return .cmux

@@ -29,7 +29,10 @@ enum KeyboardInjector {
     static func send(
         _ action: ButtonAction,
         applicationURL: (String) -> URL? = {
-            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+            if $0 == PresetApplication.remoteMic.bundleIdentifier {
+                return Bundle.main.bundleURL
+            }
+            return NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
         },
         applicationOpener: ApplicationOpener = openApplication
     ) -> Bool {
@@ -75,7 +78,7 @@ enum KeyboardInjector {
             postSystemKey(type: 7)
         case .playPause:
             postSystemKey(type: 16)
-        case .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor, .openXcode,
+        case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor, .openXcode,
              .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari, .openZed:
             break
         }

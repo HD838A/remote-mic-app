@@ -1,5 +1,7 @@
 # 无线麦
 
+![无线麦——为 Vibe Coding 而生的语音遥控器](Screenshots/Remote-Mic-Introduce-1.png)
+
 无线麦是一款 macOS 菜单栏应用，可以把小米蓝牙遥控器 2 Pro（RC003）变成 Mac 的无线语音遥控器。
 
 按住遥控器的语音键即可说话；遥控器上的方向、确定、返回、主页、菜单、TV 和音量键也可以用来控制 Mac，或设置为打开常用应用。
@@ -15,7 +17,7 @@
 
 ## 下载与安装
 
-请从 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 下载 `Remote-Mic-1.0.1.dmg`。
+请从 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 下载 `Remote-Mic-1.0.2.dmg`。
 
 打开 DMG 后有两种安装方式：
 

@@ -57,7 +57,13 @@ test -f "$UNINSTALL_PACKAGE"
 
 test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "$VERSION"
 test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "$BUILD"
-codesign -dv --verbose=4 "$APP" 2>&1 | rg -q '^Signature=adhoc$'
+SIGNATURE="$(
+  codesign -dv --verbose=4 "$APP" 2>&1 | awk -F= '
+    /^Authority=/ { print $2; exit }
+    /^Signature=/ { print $2; exit }
+  '
+)"
+test -n "$SIGNATURE"
 
 test "$(sips -g pixelWidth "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "508"
 test "$(sips -g pixelHeight "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "1030"
@@ -70,4 +76,4 @@ fi
 
 print "DMG VERIFY PASS: $DMG"
 print "VERSION: $VERSION ($BUILD)"
-print "SIGNATURE: ad-hoc / not notarized"
+print "SIGNATURE: $SIGNATURE / not notarized"

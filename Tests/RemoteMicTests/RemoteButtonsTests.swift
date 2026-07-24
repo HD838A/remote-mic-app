@@ -9,6 +9,7 @@ struct RemoteButtonsTests {
             ($0.displayName, $0.bundleIdentifier)
         })
         #expect(mappings == [
+            "无线麦": "com.hd838a.RemoteMic",
             "Codex": "com.openai.codex",
             "Claude": "com.anthropic.claudefordesktop",
             "cmux": "com.cmuxterm.app",
@@ -23,6 +24,17 @@ struct RemoteButtonsTests {
             "Zed": "dev.zed.Zed",
         ])
         #expect(Set(ButtonAction.allCases.compactMap(\.presetApplication)) == Set(PresetApplication.allCases))
+    }
+
+    @Test func remoteMicApplicationActionIsAlwaysAvailable() {
+        #expect(PresetApplication.installedBundleIdentifiers.contains(
+            PresetApplication.remoteMic.bundleIdentifier
+        ))
+        #expect(ButtonAction.pickerActions(
+            installedBundleIdentifiers: PresetApplication.installedBundleIdentifiers,
+            current: .escape
+        ).contains(.openRemoteMic))
+        #expect(ButtonAction.openRemoteMic.displayName == "打开无线麦")
     }
 
     @Test func pickerHidesUnavailableApplicationsAndPreservesCurrentMissingSelection() {

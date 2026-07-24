@@ -1,6 +1,6 @@
 # 无线麦技术文档
 
-本文面向开发、审计和发布人员，描述 `1.0.1 (12)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
+本文面向开发、审计和发布人员，描述 `1.0.2 (13)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
 
 ## 支持范围
 
@@ -9,7 +9,7 @@
 - 目标遥控器：小米蓝牙遥控器 2 Pro / RC003；
 - HID 标识：Vendor ID `0x2717`、Product ID `0x32B8`；
 - Swift 工具链：Swift 6.2，源码以 Swift 5 语言模式编译；
-- 发布签名：应用和驱动使用 ad-hoc 签名，PKG 未使用 Installer 证书签名，当前未公证。
+- 发布签名：应用优先使用与 Git 邮箱匹配的可用 Apple Development 证书，否则使用带固定 designated requirement 的 ad-hoc 签名；驱动使用 ad-hoc 签名，PKG 未使用 Installer 证书签名，当前未公证。
 
 `Package.swift`、`Resources/Info.plist`、构建脚本和验证脚本都把最低系统版本固定为 macOS 26，并验证发布二进制只有 `arm64` 架构。
 
@@ -151,8 +151,8 @@ xcrun swift test
 - `dist/MiRemoteV2ch.driver`；
 - `dist/安装无线麦.pkg`；
 - `dist/卸载无线麦.pkg`；
-- `dist/Remote-Mic-1.0.1.dmg`；
-- `dist/Remote-Mic-1.0.1.dmg.sha256`。
+- `dist/Remote-Mic-1.0.2.dmg`；
+- `dist/Remote-Mic-1.0.2.dmg.sha256`。
 
 DMG 根目录严格只有四项：
 
@@ -161,7 +161,7 @@ DMG 根目录严格只有四项：
 - `无线麦.app`；
 - 指向 `/Applications` 的 `Applications` 入口。
 
-`verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 26 最低版本、ad-hoc 签名和本地路径泄漏。
+`verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 26 最低版本、有效代码签名和本地路径泄漏。
 
 ## 许可与来源
 

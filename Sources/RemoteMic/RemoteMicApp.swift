@@ -44,6 +44,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         terminationSignalSources.removeAll()
     }
 
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        showSettings()
+        return true
+    }
+
     private func installTerminationSignalHandlers() {
         for signalNumber in [SIGTERM, SIGINT] {
             signal(signalNumber, SIG_IGN)
