@@ -97,7 +97,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func openDoubaoDriverInstructions() {
         guard let instructions = Bundle.main.url(
             forResource: "豆包输入法兼容说明",
-            withExtension: "txt"
+            withExtension: "md"
         ) else {
             return
         }

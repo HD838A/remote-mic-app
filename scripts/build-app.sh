@@ -30,13 +30,13 @@ strip -S -x "$APP_DIR/Contents/MacOS/$APP_NAME"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 ditto --norsrc --noextattr --noqtn --noacl \
-  "$ROOT/LICENSE" "$APP_DIR/Contents/Resources/LICENSE"
+  "$ROOT/LICENSE.md" "$APP_DIR/Contents/Resources/LICENSE.md"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/README.md" "$APP_DIR/Contents/Resources/README.md"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/THIRD_PARTY_NOTICES.md" "$APP_DIR/Contents/Resources/THIRD_PARTY_NOTICES.md"
 ditto --norsrc --noextattr --noqtn --noacl \
-  "$ROOT/COPYRIGHT" "$APP_DIR/Contents/Resources/COPYRIGHT"
+  "$ROOT/COPYRIGHT.md" "$APP_DIR/Contents/Resources/COPYRIGHT.md"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/RC003-remote-photo.png" \
   "$APP_DIR/Contents/Resources/RC003-remote-photo.png"
@@ -51,8 +51,8 @@ for icon_resource in \
     "$APP_DIR/Contents/Resources/$icon_resource"
 done
 ditto --norsrc --noextattr --noqtn --noacl \
-  "$ROOT/Resources/豆包输入法兼容说明.txt" \
-  "$APP_DIR/Contents/Resources/豆包输入法兼容说明.txt"
+  "$ROOT/Resources/豆包输入法兼容说明.md" \
+  "$APP_DIR/Contents/Resources/豆包输入法兼容说明.md"
 codesign --force --deep --sign - "$APP_DIR"
 codesign --verify --deep --strict "$APP_DIR"
 
