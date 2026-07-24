@@ -63,8 +63,9 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             sidebar
+                .toolbar(removing: .sidebarToggle)
                 .navigationSplitViewColumnWidth(min: 84, ideal: 92, max: 108)
         } detail: {
             selectedPage
@@ -188,7 +189,12 @@ struct SettingsView: View {
                     )
                 }
 
-                Button("立即重新连接") { model.reconnect() }
+                Button {
+                    model.reconnect()
+                } label: {
+                    Text("立即重新连接")
+                        .foregroundStyle(.white)
+                }
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.roundedRectangle(radius: 10))
                     .frame(maxWidth: .infinity)
@@ -221,16 +227,24 @@ struct SettingsView: View {
                     .frame(maxWidth: 270)
                 }
 
-                HStack(spacing: 14) {
-                    Text("增益")
-                        .frame(width: 72, alignment: .leading)
-                    Slider(value: Binding(
-                        get: { settings.gainDB },
-                        set: { settings.gainDB = $0 }
-                    ), in: 0...24, step: 1)
-                    Text("\(Int(settings.gainDB)) dB")
-                        .font(.system(.body, design: .monospaced))
-                        .frame(width: 54, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 14) {
+                        Text("增益")
+                            .frame(width: 72, alignment: .leading)
+                        Slider(value: Binding(
+                            get: { settings.gainDB },
+                            set: { settings.gainDB = $0 }
+                        ), in: 0...24, step: 1)
+                        Text("\(Int(settings.gainDB)) dB")
+                            .font(.system(.body, design: .monospaced))
+                            .frame(width: 54, alignment: .trailing)
+                    }
+
+                    Text("0 dB 保持原始音量；数值越大声音越响，也会放大环境噪声。建议先从 6–12 dB 开始。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 86)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HStack(alignment: .firstTextBaseline) {
@@ -243,7 +257,12 @@ struct SettingsView: View {
                 }
 
                 HStack(spacing: 10) {
-                    Button("刷新音频设备") { model.refreshAudioDevices() }
+                    Button {
+                        model.refreshAudioDevices()
+                    } label: {
+                        Text("刷新音频设备")
+                            .foregroundStyle(.white)
+                    }
                         .buttonStyle(.glassProminent)
                     Link("获取 BlackHole", destination: URL(string: "https://existential.audio/blackhole/")!)
                         .buttonStyle(.glass)
@@ -304,13 +323,18 @@ struct SettingsView: View {
 
             GlassPanel {
                 HStack(alignment: .center, spacing: 12) {
-                    Toggle("启用 RC003 自定义按键映射", isOn: Binding(
-                        get: { settings.customMappingEnabled },
-                        set: { enabled in
-                            settings.customMappingEnabled = enabled
-                            model.applyHIDSettings()
-                        }
-                    ))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("启用 RC003 自定义按键映射", isOn: Binding(
+                            get: { settings.customMappingEnabled },
+                            set: { enabled in
+                                settings.customMappingEnabled = enabled
+                                model.applyHIDSettings()
+                            }
+                        ))
+                        Text(model.hidStatus)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer(minLength: 12)
                     StatusPill(
                         text: settings.customMappingEnabled ? "已启用" : "未启用",
@@ -321,14 +345,6 @@ struct SettingsView: View {
                         selectedRemoteButton = .ok
                     }
                     .buttonStyle(.glass)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("按键状态")
-                        .font(.caption.weight(.semibold))
-                    Text(model.hidStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -346,7 +362,7 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    .frame(width: 218)
+                    .frame(width: 206)
 
                     GlassPanel {
                         VStack(alignment: .leading, spacing: 10) {
@@ -358,19 +374,20 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
 
-                            ScrollViewReader { proxy in
-                                ScrollView {
-                                    LazyVStack(spacing: 4) {
-                                        ForEach(RemoteButton.allCases) { button in
+                            let buttons = RemoteButton.allCases
+                            let midpoint = (buttons.count + 1) / 2
+
+                            HStack(alignment: .top, spacing: 8) {
+                                ForEach(0..<2, id: \.self) { column in
+                                    VStack(spacing: 4) {
+                                        let range = column == 0
+                                            ? buttons.prefix(midpoint)
+                                            : buttons.suffix(from: midpoint)
+                                        ForEach(range) { button in
                                             mappingRow(button)
-                                                .id(button.id)
                                         }
                                     }
-                                }
-                                .onChange(of: selectedRemoteButton) { _, button in
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        proxy.scrollTo(button.id, anchor: .center)
-                                    }
+                                    .frame(maxWidth: .infinity)
                                 }
                             }
                         }
@@ -388,25 +405,17 @@ struct SettingsView: View {
         let selected = selectedRemoteButton == button
         let currentAction = settings.action(for: button)
         let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
-        let content = HStack(spacing: 10) {
+        let content = HStack(spacing: 8) {
             Button {
                 selectedRemoteButton = button
             } label: {
-                HStack(spacing: 9) {
-                    Text(button.shortLabel)
-                        .font(.caption.weight(.semibold))
-                        .frame(width: 42, height: 28)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(button.displayName)
-                        Text(String(format: "HID 0x%02X", button.hidUsage))
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                Text(button.displayName)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-
-            Spacer(minLength: 8)
+            .help("\(button.displayName) · HID \(String(format: "0x%02X", button.hidUsage))")
 
             Picker("", selection: Binding(
                 get: { currentAction },
@@ -423,10 +432,10 @@ struct SettingsView: View {
                 }
             }
             .labelsHidden()
-            .frame(width: 168)
+            .frame(width: 112)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
 
         if selected {
             content
@@ -438,7 +447,7 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 content
                 Divider()
-                    .padding(.leading, 60)
+                    .padding(.leading, 8)
             }
         }
     }
@@ -506,9 +515,10 @@ struct SettingsView: View {
                             HStack(spacing: 12) {
                                 Image(systemName: "doc.text.magnifyingglass")
                                     .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
                                     .frame(width: 34, height: 34)
                                     .glassEffect(
-                                        .clear.tint(Color.accentColor),
+                                        .clear.tint(Color.accentColor.opacity(0.14)),
                                         in: Circle()
                                     )
                                 VStack(alignment: .leading, spacing: 2) {
@@ -549,9 +559,10 @@ struct SettingsView: View {
 
             Image(systemName: symbol)
                 .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
                 .frame(width: 42, height: 42)
                 .glassEffect(
-                    .clear.tint(Color.accentColor),
+                    .clear.tint(Color.accentColor.opacity(0.14)),
                     in: Circle()
                 )
 
@@ -660,9 +671,10 @@ private struct StatusPill: View {
     var body: some View {
         Text(text)
             .font(.caption.weight(.semibold))
+            .foregroundStyle(tint)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .glassEffect(.clear.tint(tint), in: Capsule())
+            .glassEffect(.clear.tint(tint.opacity(0.14)), in: Capsule())
     }
 }
 
@@ -677,8 +689,9 @@ private struct DeviceStatusStep: View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(tint)
                 .frame(width: 28, height: 28)
-                .glassEffect(.clear.tint(tint), in: Circle())
+                .glassEffect(.clear.tint(tint.opacity(0.14)), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(title)
@@ -730,7 +743,7 @@ private struct RemoteControlDiagram: View {
     let activeButtons: Set<RemoteButton>
     let voiceActive: Bool
 
-    private let canvasSize = CGSize(width: 190, height: 385)
+    private let canvasSize = CGSize(width: 174, height: 352)
 
     var body: some View {
         VStack(spacing: 8) {
