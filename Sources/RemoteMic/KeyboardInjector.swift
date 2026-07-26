@@ -9,6 +9,7 @@ enum KeyboardInjector {
         PresetApplication,
         @escaping (Error?) -> Void
     ) -> Void
+    typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
 
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
@@ -28,13 +29,16 @@ enum KeyboardInjector {
     @discardableResult
     static func send(
         _ action: ButtonAction,
+        shortcut: CustomKeyboardShortcut? = nil,
         applicationURL: (String) -> URL? = {
             if $0 == PresetApplication.remoteMic.bundleIdentifier {
                 return Bundle.main.bundleURL
             }
             return NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
         },
-        applicationOpener: ApplicationOpener = openApplication
+        applicationOpener: ApplicationOpener = openApplication,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyPoster: KeyPoster = { postKey(code: $0, flags: $1) }
     ) -> Bool {
         guard action != .disabled else { return true }
         if let application = action.presetApplication {
@@ -45,31 +49,35 @@ enum KeyboardInjector {
             )
             return true
         }
-        guard isAccessibilityTrusted else { return false }
+        if action == .customShortcut, shortcut == nil {
+            AppLogger.shared.write("SHORTCUT ACTION ignored reason=not_configured")
+            return true
+        }
+        guard accessibilityTrusted() else { return false }
 
         switch action {
         case .disabled:
             return true
         case .escape:
-            postKey(code: 53)
+            keyPoster(53, [])
         case .returnKey:
-            postKey(code: 36)
+            keyPoster(36, [])
         case .arrowUp:
-            postKey(code: 126)
+            keyPoster(126, [])
         case .arrowDown:
-            postKey(code: 125)
+            keyPoster(125, [])
         case .arrowLeft:
-            postKey(code: 123)
+            keyPoster(123, [])
         case .arrowRight:
-            postKey(code: 124)
+            keyPoster(124, [])
         case .deleteBackward:
-            postKey(code: 51)
+            keyPoster(51, [])
         case .showDesktop:
-            postKey(code: 103, flags: .maskSecondaryFn)
+            keyPoster(103, .maskSecondaryFn)
         case .contextMenu:
-            postKey(code: contextualMenuKeyCode)
+            keyPoster(contextualMenuKeyCode, [])
         case .appSwitcher:
-            postKey(code: 48, flags: .maskCommand)
+            keyPoster(48, .maskCommand)
         case .volumeUp:
             postSystemKey(type: 0)
         case .volumeDown:
@@ -78,6 +86,10 @@ enum KeyboardInjector {
             postSystemKey(type: 7)
         case .playPause:
             postSystemKey(type: 16)
+        case .customShortcut:
+            if let shortcut {
+                keyPoster(CGKeyCode(shortcut.keyCode), shortcut.cgEventFlags)
+            }
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor, .openXcode,
              .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari, .openZed:
             break

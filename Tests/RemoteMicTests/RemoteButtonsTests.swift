@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import RemoteMic
@@ -64,10 +65,63 @@ struct RemoteButtonsTests {
         let legacy = try JSONDecoder().decode(ButtonAction.self, from: Data(#""appSwitcher""#.utf8))
         #expect(legacy == .appSwitcher)
 
-        for action in ButtonAction.allCases where action.presetApplication != nil {
+        let custom = try JSONDecoder().decode(ButtonAction.self, from: Data(#""customShortcut""#.utf8))
+        #expect(custom == .customShortcut)
+
+        for action in ButtonAction.allCases {
             let encoded = try JSONEncoder().encode(action)
             #expect(try JSONDecoder().decode(ButtonAction.self, from: encoded) == action)
         }
+    }
+
+    @Test func customShortcutNormalizesDisplaysAndConvertsModifiers() throws {
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 40,
+            modifierFlags: [.capsLock, .shift, .command],
+            keyLabel: "K"
+        )
+
+        #expect(shortcut.displayName == "⇧⌘K")
+        #expect(shortcut.modifierFlags == [.shift, .command])
+        #expect(shortcut.cgEventFlags == [.maskShift, .maskCommand])
+        #expect(try JSONDecoder().decode(
+            CustomKeyboardShortcut.self,
+            from: JSONEncoder().encode(shortcut)
+        ) == shortcut)
+    }
+
+    @Test func customShortcutPostsRecordedKeyAndRequiresAccessibility() {
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 40,
+            modifierFlags: [.control, .option],
+            keyLabel: "K"
+        )
+        var posted: (CGKeyCode, CGEventFlags)?
+
+        #expect(KeyboardInjector.send(
+            .customShortcut,
+            shortcut: shortcut,
+            accessibilityTrusted: { true },
+            keyPoster: { posted = ($0, $1) }
+        ))
+        #expect(posted?.0 == 40)
+        #expect(posted?.1 == [.maskControl, .maskAlternate])
+
+        posted = nil
+        #expect(!KeyboardInjector.send(
+            .customShortcut,
+            shortcut: shortcut,
+            accessibilityTrusted: { false },
+            keyPoster: { posted = ($0, $1) }
+        ))
+        #expect(posted == nil)
+    }
+
+    @Test func unconfiguredCustomShortcutDoesNotReportPermissionFailure() {
+        #expect(KeyboardInjector.send(
+            .customShortcut,
+            accessibilityTrusted: { false }
+        ))
     }
 
     @Test func missingApplicationIsHandledWithoutPermissionFailure() {
@@ -196,6 +250,65 @@ struct RemoteButtonsTests {
 
         #expect(settings.action(for: .back) == .disabled)
         #expect(settings.action(for: .up) == .arrowUp)
+    }
+
+    @Test func customShortcutsPersistAndResetWithBindings() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 8,
+            modifierFlags: [.command, .shift],
+            keyLabel: "C"
+        )
+
+        let settings = AppSettings(defaults: defaults)
+        settings.setAction(.customShortcut, for: .tv)
+        settings.setShortcut(shortcut, for: .tv)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.action(for: .tv) == .customShortcut)
+        #expect(restored.shortcut(for: .tv) == shortcut)
+
+        restored.resetBindings()
+        #expect(restored.action(for: .tv) == .appSwitcher)
+        #expect(restored.shortcut(for: .tv) == nil)
+    }
+
+    @Test func secondaryTriggerActionsPersistAndResetWithoutChangingSingleClick() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 9,
+            modifierFlags: [.control, .command],
+            keyLabel: "V"
+        )
+
+        let settings = AppSettings(defaults: defaults)
+        settings.setAction(.openCodex, for: .tv, trigger: .doubleClick)
+        settings.setAction(.customShortcut, for: .tv, trigger: .longPress)
+        settings.setShortcut(shortcut, for: .tv, trigger: .longPress)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.action(for: .tv) == .appSwitcher)
+        #expect(restored.configuredAction(for: .tv, trigger: .doubleClick) == ConfiguredButtonAction(
+            action: .openCodex,
+            shortcut: nil
+        ))
+        #expect(restored.configuredAction(for: .tv, trigger: .longPress) == ConfiguredButtonAction(
+            action: .customShortcut,
+            shortcut: shortcut
+        ))
+        #expect(restored.hasSecondaryAction(for: .tv))
+
+        restored.setAction(.disabled, for: .tv, trigger: .doubleClick)
+        #expect(restored.configuredAction(for: .tv, trigger: .doubleClick) == .disabled)
+        #expect(restored.hasSecondaryAction(for: .tv))
+
+        restored.resetBindings()
+        #expect(restored.action(for: .tv) == .appSwitcher)
+        #expect(!restored.hasSecondaryAction(for: .tv))
     }
 
     @Test func migratesLegacyExclusiveToggleToCustomMappingToggle() throws {

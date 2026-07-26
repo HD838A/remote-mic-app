@@ -104,6 +104,123 @@ enum RemoteEventEdge: Equatable {
     case up
 }
 
+struct CustomKeyboardShortcut: Codable, Equatable {
+    static let supportedModifiers: NSEvent.ModifierFlags = [
+        .control, .option, .shift, .command, .function,
+    ]
+
+    let keyCode: UInt16
+    let modifierFlagsRawValue: UInt
+    let keyLabel: String
+
+    init(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags, keyLabel: String) {
+        self.keyCode = keyCode
+        modifierFlagsRawValue = modifierFlags.intersection(Self.supportedModifiers).rawValue
+        self.keyLabel = keyLabel
+    }
+
+    init(event: NSEvent) {
+        self.init(
+            keyCode: event.keyCode,
+            modifierFlags: event.modifierFlags,
+            keyLabel: Self.keyLabel(for: event)
+        )
+    }
+
+    var modifierFlags: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: modifierFlagsRawValue)
+            .intersection(Self.supportedModifiers)
+    }
+
+    var cgEventFlags: CGEventFlags {
+        var flags: CGEventFlags = []
+        if modifierFlags.contains(.control) { flags.insert(.maskControl) }
+        if modifierFlags.contains(.option) { flags.insert(.maskAlternate) }
+        if modifierFlags.contains(.shift) { flags.insert(.maskShift) }
+        if modifierFlags.contains(.command) { flags.insert(.maskCommand) }
+        if modifierFlags.contains(.function) { flags.insert(.maskSecondaryFn) }
+        return flags
+    }
+
+    var displayName: String {
+        var result = ""
+        if modifierFlags.contains(.control) { result += "⌃" }
+        if modifierFlags.contains(.option) { result += "⌥" }
+        if modifierFlags.contains(.shift) { result += "⇧" }
+        if modifierFlags.contains(.command) { result += "⌘" }
+        if modifierFlags.contains(.function) { result += "fn " }
+        return result + keyLabel
+    }
+
+    private static func keyLabel(for event: NSEvent) -> String {
+        switch event.keyCode {
+        case 36: return "Return"
+        case 48: return "Tab"
+        case 49: return "Space"
+        case 51: return "⌫"
+        case 53: return "Esc"
+        case 64: return "F17"
+        case 71: return "Clear"
+        case 76: return "Enter"
+        case 79: return "F18"
+        case 80: return "F19"
+        case 90: return "F20"
+        case 96: return "F5"
+        case 97: return "F6"
+        case 98: return "F7"
+        case 99: return "F3"
+        case 100: return "F8"
+        case 101: return "F9"
+        case 103: return "F11"
+        case 105: return "F13"
+        case 106: return "F16"
+        case 107: return "F14"
+        case 109: return "F10"
+        case 111: return "F12"
+        case 113: return "F15"
+        case 114: return "Help"
+        case 115: return "Home"
+        case 116: return "Page Up"
+        case 117: return "⌦"
+        case 118: return "F4"
+        case 119: return "End"
+        case 120: return "F2"
+        case 121: return "Page Down"
+        case 122: return "F1"
+        case 123: return "←"
+        case 124: return "→"
+        case 125: return "↓"
+        case 126: return "↑"
+        default:
+            let characters = event.charactersIgnoringModifiers ?? ""
+            return characters.isEmpty ? "键码 \(event.keyCode)" : characters.uppercased()
+        }
+    }
+}
+
+enum ButtonTrigger: String, CaseIterable, Codable, Identifiable {
+    case singleClick
+    case doubleClick
+    case longPress
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .singleClick: return "单击"
+        case .doubleClick: return "双击"
+        case .longPress: return "长按"
+        }
+    }
+}
+
+struct ConfiguredButtonAction: Codable, Equatable {
+    var action: ButtonAction
+    var shortcut: CustomKeyboardShortcut?
+
+    static let disabled = ConfiguredButtonAction(action: .disabled, shortcut: nil)
+}
+
 enum PresetApplication: String, CaseIterable, Identifiable {
     case remoteMic
     case codex
@@ -183,6 +300,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeDown
     case volumeMute
     case playPause
+    case customShortcut
     case openRemoteMic
     case openCodex
     case openClaude
@@ -216,6 +334,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .volumeDown: return "系统音量 -"
         case .volumeMute: return "系统静音"
         case .playPause: return "播放 / 暂停"
+        case .customShortcut: return "自定义快捷键"
         case .openRemoteMic: return "打开无线麦"
         case .openCodex: return "打开 Codex"
         case .openClaude: return "打开 Claude"

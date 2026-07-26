@@ -46,12 +46,20 @@ private enum PermissionVisualState {
     }
 }
 
+private struct ShortcutEditingTarget: Identifiable {
+    let button: RemoteButton
+    let trigger: ButtonTrigger
+
+    var id: String { "\(button.rawValue)-\(trigger.rawValue)" }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
 
     @State private var selectedSection: SettingsSection = .connection
     @State private var selectedRemoteButton: RemoteButton = .ok
+    @State private var shortcutEditingTarget: ShortcutEditingTarget?
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
@@ -75,6 +83,22 @@ struct SettingsView: View {
         .onAppear(perform: refreshPermissionStates)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
+        }
+        .sheet(item: $shortcutEditingTarget) { target in
+            ShortcutEditorSheet(
+                button: target.button,
+                trigger: target.trigger,
+                currentShortcut: settings.configuredAction(
+                    for: target.button,
+                    trigger: target.trigger
+                ).shortcut
+            ) { shortcut in
+                settings.setShortcut(
+                    shortcut,
+                    for: target.button,
+                    trigger: target.trigger
+                )
+            }
         }
     }
 
@@ -388,6 +412,9 @@ struct SettingsView: View {
                                     .frame(maxWidth: .infinity)
                                 }
                             }
+
+                            Divider()
+                            secondaryActionsPanel(for: selectedRemoteButton)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -402,35 +429,73 @@ struct SettingsView: View {
     private func mappingRow(_ button: RemoteButton) -> some View {
         let selected = selectedRemoteButton == button
         let currentAction = settings.action(for: button)
+        let currentShortcut = settings.shortcut(for: button)
         let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
-        let content = HStack(spacing: 8) {
-            Button {
-                selectedRemoteButton = button
-            } label: {
-                Text(button.displayName)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-            .help("\(button.displayName) · HID \(String(format: "0x%02X", button.hidUsage))")
-
-            Picker("", selection: Binding(
-                get: { currentAction },
-                set: { settings.setAction($0, for: button) }
-            )) {
-                ForEach(ButtonAction.pickerActions(
-                    installedBundleIdentifiers: installedBundleIdentifiers,
-                    current: currentAction
-                )) { action in
-                    let unavailable = action.presetApplication.map {
-                        !installedBundleIdentifiers.contains($0.bundleIdentifier)
-                    } ?? false
-                    Text(action.displayName + (unavailable ? "（未安装）" : "")).tag(action)
+        let content = VStack(spacing: 4) {
+            HStack(spacing: 8) {
+                Button {
+                    selectedRemoteButton = button
+                } label: {
+                    Text(button.displayName)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .buttonStyle(.plain)
+                .help("\(button.displayName) · HID \(String(format: "0x%02X", button.hidUsage))")
+
+                Picker("", selection: Binding(
+                    get: { currentAction },
+                    set: { action in
+                        settings.setAction(action, for: button)
+                        selectedRemoteButton = button
+                        if action == .customShortcut {
+                            shortcutEditingTarget = ShortcutEditingTarget(
+                                button: button,
+                                trigger: .singleClick
+                            )
+                        }
+                    }
+                )) {
+                    ForEach(ButtonAction.pickerActions(
+                        installedBundleIdentifiers: installedBundleIdentifiers,
+                        current: currentAction
+                    )) { action in
+                        let unavailable = action.presetApplication.map {
+                            !installedBundleIdentifiers.contains($0.bundleIdentifier)
+                        } ?? false
+                        Text(action.displayName + (unavailable ? "（未安装）" : "")).tag(action)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 112)
             }
-            .labelsHidden()
-            .frame(width: 112)
+
+            if currentAction == .customShortcut {
+                Button {
+                    selectedRemoteButton = button
+                    shortcutEditingTarget = ShortcutEditingTarget(
+                        button: button,
+                        trigger: .singleClick
+                    )
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "keyboard")
+                        Text(currentShortcut?.displayName ?? "点击录入快捷键")
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Image(systemName: "pencil")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(currentShortcut == nil ? Color.orange : Color.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .frame(maxWidth: .infinity)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+                .help("录入要发送给当前应用的键盘快捷键")
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -447,6 +512,89 @@ struct SettingsView: View {
                 Divider()
                     .padding(.leading, 8)
             }
+        }
+    }
+
+    private func secondaryActionsPanel(for button: RemoteButton) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("\(button.displayName)其他触发")
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                if settings.hasSecondaryAction(for: button) {
+                    Text("按住重复已停用")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            secondaryActionRow(button, trigger: .doubleClick)
+            secondaryActionRow(button, trigger: .longPress)
+
+            Text("双击会等待约 0.3 秒确认单击；长按约 0.55 秒触发。未配置时保持原有即时响应。")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func secondaryActionRow(
+        _ button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> some View {
+        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
+        return HStack(spacing: 8) {
+            Text(trigger.displayName)
+                .font(.caption)
+                .frame(width: 38, alignment: .leading)
+
+            Picker("", selection: Binding(
+                get: { configured.action },
+                set: { action in
+                    settings.setAction(action, for: button, trigger: trigger)
+                    if action == .customShortcut {
+                        shortcutEditingTarget = ShortcutEditingTarget(
+                            button: button,
+                            trigger: trigger
+                        )
+                    }
+                }
+            )) {
+                ForEach(ButtonAction.pickerActions(
+                    installedBundleIdentifiers: installedBundleIdentifiers,
+                    current: configured.action
+                )) { action in
+                    let unavailable = action.presetApplication.map {
+                        !installedBundleIdentifiers.contains($0.bundleIdentifier)
+                    } ?? false
+                    Text(action.displayName + (unavailable ? "（未安装）" : "")).tag(action)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 150)
+
+            if configured.action == .customShortcut {
+                Button {
+                    shortcutEditingTarget = ShortcutEditingTarget(
+                        button: button,
+                        trigger: trigger
+                    )
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(configured.shortcut?.displayName ?? "点击录入")
+                            .lineLimit(1)
+                        Image(systemName: "pencil")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(configured.shortcut == nil ? Color.orange : Color.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer(minLength: 0)
         }
     }
 
@@ -606,6 +754,136 @@ struct SettingsView: View {
         bluetoothAuthorization = CBManager.authorization
         inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
         accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    }
+}
+
+private struct ShortcutEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let button: RemoteButton
+    let trigger: ButtonTrigger
+    let currentShortcut: CustomKeyboardShortcut?
+    let onSave: (CustomKeyboardShortcut?) -> Void
+
+    @State private var shortcut: CustomKeyboardShortcut?
+
+    init(
+        button: RemoteButton,
+        trigger: ButtonTrigger,
+        currentShortcut: CustomKeyboardShortcut?,
+        onSave: @escaping (CustomKeyboardShortcut?) -> Void
+    ) {
+        self.button = button
+        self.trigger = trigger
+        self.currentShortcut = currentShortcut
+        self.onSave = onSave
+        _shortcut = State(initialValue: currentShortcut)
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 5) {
+                Text("录入\(button.displayName)\(trigger.displayName)快捷键")
+                    .font(.title3.weight(.semibold))
+                Text("直接按下想要的按键组合，支持 Command、Option、Control、Shift 和 Fn。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Text(shortcut?.displayName ?? "等待按键…")
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .foregroundStyle(shortcut == nil ? Color.secondary : Color.primary)
+                .frame(maxWidth: .infinity, minHeight: 62)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+
+            ShortcutCaptureView { shortcut = $0 }
+                .frame(height: 1)
+
+            HStack {
+                Button("清除") {
+                    onSave(nil)
+                    dismiss()
+                }
+                .disabled(currentShortcut == nil)
+
+                Spacer()
+
+                Button("取消") { dismiss() }
+                Button("保存") {
+                    onSave(shortcut)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(shortcut == nil)
+            }
+        }
+        .padding(24)
+        .frame(width: 400)
+    }
+}
+
+private struct ShortcutCaptureView: NSViewRepresentable {
+    let onCapture: (CustomKeyboardShortcut) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCapture: onCapture)
+    }
+
+    func makeNSView(context: Context) -> ShortcutCaptureNSView {
+        let view = ShortcutCaptureNSView()
+        context.coordinator.view = view
+        context.coordinator.startMonitoring()
+        return view
+    }
+
+    func updateNSView(_ nsView: ShortcutCaptureNSView, context: Context) {
+        context.coordinator.onCapture = onCapture
+    }
+
+    static func dismantleNSView(_ nsView: ShortcutCaptureNSView, coordinator: Coordinator) {
+        coordinator.stopMonitoring()
+    }
+
+    final class Coordinator {
+        var onCapture: (CustomKeyboardShortcut) -> Void
+        weak var view: NSView?
+        private var monitor: Any?
+
+        init(onCapture: @escaping (CustomKeyboardShortcut) -> Void) {
+            self.onCapture = onCapture
+        }
+
+        func startMonitoring() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, event.window === self.view?.window else { return event }
+                self.onCapture(CustomKeyboardShortcut(event: event))
+                return nil
+            }
+        }
+
+        func stopMonitoring() {
+            guard let monitor else { return }
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+
+        deinit {
+            stopMonitoring()
+        }
+    }
+}
+
+private final class ShortcutCaptureNSView: NSView {
+    override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.window?.makeFirstResponder(self)
+        }
     }
 }
 
