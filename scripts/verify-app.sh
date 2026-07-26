@@ -17,6 +17,7 @@ test -f "$APP/Contents/Resources/LICENSE.md"
 test -f "$APP/Contents/Resources/README.md"
 test -f "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
 test -f "$APP/Contents/Resources/COPYRIGHT.md"
+test -f "$APP/Contents/Resources/LOGO-LICENSE.md"
 test -f "$APP/Contents/Resources/RC003-remote-photo.png"
 test -f "$APP/Contents/Resources/AppIcon.icns"
 test -f "$APP/Contents/Resources/StatusIconTemplate.png"
@@ -38,7 +39,7 @@ ARCHS="$(lipo -archs "$BINARY")"
 test "$ARCHS" = "arm64"
 xcrun vtool -show-build "$BINARY" | rg -q 'minos 26\.0'
 
-EXPECTED_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/豆包输入法兼容说明.md\nContents/_CodeSignature/CodeResources'
+EXPECTED_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/豆包输入法兼容说明.md\nContents/_CodeSignature/CodeResources'
 ACTUAL_FILES="$(find "$APP/Contents" -type f | sed "s#^$APP/##" | LC_ALL=C sort)"
 test "$ACTUAL_FILES" = "$EXPECTED_FILES"
 

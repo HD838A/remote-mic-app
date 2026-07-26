@@ -15,4 +15,16 @@ Copyright (C) 2026 Remote Mic contributors
 - macOS 构建、测试、安装和发布流程；
 - 从固定 BlackHole 源码构建的 `MiRemoteV2ch.driver` 豆包兼容方案。
 
-本适配作品按 `GPL-3.0-only` 发布。完整许可见 [LICENSE.md](LICENSE.md)，第三方来源和归属见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本适配作品的软件代码按 `GPL-3.0-only` 发布。完整许可见 [LICENSE.md](LICENSE.md)，第三方来源和归属见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## App Logo
+
+以下 App Logo 是独立的专有品牌资产，不属于 `GPL-3.0-only` 授权范围：
+
+- `Resources/AppIcon.png`；
+- `Resources/AppIcon.icns`；
+- 由上述文件生成或演绎的版本。
+
+允许在未经修改的无线麦官方源码和官方发行版本中原样分发。用于其他应用、Fork、修改版本、产品或品牌标识时，必须事先取得版权所有者的书面授权。完整条款见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。
+
+本声明不覆盖菜单栏状态图标、程序代码或未在上述列表中明确列出的其他项目资源，也不追溯撤销旧副本已经依法取得的权利。

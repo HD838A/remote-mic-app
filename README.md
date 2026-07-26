@@ -17,7 +17,7 @@
 
 ## 下载与安装
 
-请从 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 下载 `Remote-Mic-1.1.1.dmg`。
+请从 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 下载 `Remote-Mic-1.1.2.dmg`。
 
 打开 DMG 后有两种安装方式：
 
@@ -90,6 +90,6 @@
 
 ## 许可与来源
 
-本项目采用 `GPL-3.0-only` 许可。详情见 [LICENSE.md](LICENSE.md)、[COPYRIGHT.md](COPYRIGHT.md) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本项目软件代码采用 `GPL-3.0-only` 许可。App Logo 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 项目最初 fork 自 [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge)，现由本仓库独立维护。

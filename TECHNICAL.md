@@ -1,6 +1,6 @@
 # 无线麦技术文档
 
-本文面向开发、审计和发布人员，描述 `1.1.1 (15)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
+本文面向开发、审计和发布人员，描述 `1.1.2 (16)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
 
 ## 支持范围
 
@@ -151,8 +151,8 @@ xcrun swift test
 - `dist/MiRemoteV2ch.driver`；
 - `dist/安装无线麦.pkg`；
 - `dist/卸载无线麦.pkg`；
-- `dist/Remote-Mic-1.1.1.dmg`；
-- `dist/Remote-Mic-1.1.1.dmg.sha256`。
+- `dist/Remote-Mic-1.1.2.dmg`；
+- `dist/Remote-Mic-1.1.2.dmg.sha256`。
 
 DMG 根目录严格只有四项：
 
@@ -165,4 +165,4 @@ DMG 根目录严格只有四项：
 
 ## 许可与来源
 
-项目按 `GPL-3.0-only` 发布。ATVV 与 RC003 行为参考 `xxb26553663-star/remote-bridge-hub`，豆包兼容驱动基于固定版本 BlackHole 构建；完整归属与限制见 [COPYRIGHT.md](COPYRIGHT.md) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+项目软件代码按 `GPL-3.0-only` 发布，App Logo 按独立的 [Logo 许可](LOGO-LICENSE.md) 管理。ATVV 与 RC003 行为参考 `xxb26553663-star/remote-bridge-hub`，豆包兼容驱动基于固定版本 BlackHole 构建；完整归属与限制见 [COPYRIGHT.md](COPYRIGHT.md) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

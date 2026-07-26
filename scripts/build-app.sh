@@ -58,6 +58,8 @@ ditto --norsrc --noextattr --noqtn --noacl \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/COPYRIGHT.md" "$APP_DIR/Contents/Resources/COPYRIGHT.md"
 ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/LOGO-LICENSE.md" "$APP_DIR/Contents/Resources/LOGO-LICENSE.md"
+ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/RC003-remote-photo.png" \
   "$APP_DIR/Contents/Resources/RC003-remote-photo.png"
 for icon_resource in \
