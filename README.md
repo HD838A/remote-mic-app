@@ -17,7 +17,7 @@
 
 ## 下载与安装
 
-请从 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 下载 `Remote-Mic-1.1.0.dmg`。
+请从 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 下载 `Remote-Mic-1.1.1.dmg`。
 
 打开 DMG 后有两种安装方式：
 
