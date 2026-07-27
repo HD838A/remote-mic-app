@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Darwin
+import Sparkle
 import SwiftUI
 
 @main
@@ -25,6 +26,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var settingsWindowController: NSWindowController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     private let connectionItem = NSMenuItem(title: "正在初始化蓝牙", action: nil, keyEquivalent: "")
     private let audioItem = NSMenuItem(title: "未选择语音输出设备", action: nil, keyEquivalent: "")
@@ -100,6 +106,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(menuItem("显示日志", action: #selector(showLog)))
         menu.addItem(.separator())
         menu.addItem(menuItem("关于无线麦", action: #selector(showAbout)))
+        menu.addItem(menuItem("检查更新…", action: #selector(checkForUpdates)))
         menu.addItem(menuItem("GitHub", action: #selector(openGitHub)))
         menu.addItem(.separator())
         menu.addItem(menuItem("退出", action: #selector(quit)))
@@ -204,6 +211,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     @objc private func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    @objc private func checkForUpdates() {
+        updaterController.checkForUpdates(nil)
     }
 
     @objc private func openGitHub() {

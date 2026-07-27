@@ -57,12 +57,12 @@ test -f "$UNINSTALL_PACKAGE"
 
 test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "$VERSION"
 test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "$BUILD"
-SIGNATURE="$(
-  codesign -dv --verbose=4 "$APP" 2>&1 | awk -F= '
-    /^Authority=/ { print $2; exit }
-    /^Signature=/ { print $2; exit }
-  '
-)"
+SIGNATURE_DETAILS="$VERIFY_ROOT/signature-details"
+codesign -dv --verbose=4 "$APP" > "$SIGNATURE_DETAILS" 2>&1
+SIGNATURE="$(awk -F= '
+  /^Authority=/ { print $2; exit }
+  /^Signature=/ { print $2; exit }
+' "$SIGNATURE_DETAILS")"
 test -n "$SIGNATURE"
 
 test "$(sips -g pixelWidth "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "508"

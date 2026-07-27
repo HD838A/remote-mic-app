@@ -7,6 +7,7 @@ APP_NAME="RemoteMic"
 DISPLAY_NAME="无线麦"
 OUTPUT_DIR="$ROOT/dist"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
+SPARKLE_FRAMEWORK="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:-}"
 SIGNING_IDENTITY_WAS_EXPLICIT=0
 if [[ -n "$SIGNING_IDENTITY" ]]; then
@@ -44,11 +45,17 @@ case "$APP_DIR" in
 esac
 rm -rf -- "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
+test -d "$SPARKLE_FRAMEWORK"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$BIN_PATH" "$APP_DIR/Contents/MacOS/$APP_NAME"
 strip -S -x "$APP_DIR/Contents/MacOS/$APP_NAME"
+install_name_tool -add_rpath @executable_path/../Frameworks \
+  "$APP_DIR/Contents/MacOS/$APP_NAME"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
+mkdir -p "$APP_DIR/Contents/Frameworks"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/LICENSE.md" "$APP_DIR/Contents/Resources/LICENSE.md"
 ditto --norsrc --noextattr --noqtn --noacl \

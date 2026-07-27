@@ -10,9 +10,15 @@ let package = Package(
             targets: ["RemoteMic"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
+    ],
     targets: [
         .executableTarget(
             name: "RemoteMic",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/RemoteMic"
         ),
         .testTarget(

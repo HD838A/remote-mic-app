@@ -7,6 +7,7 @@ MODE="${2:?usage: verify-doubao-driver-pkg.sh PACKAGE install|uninstall}"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remote-mic-driver-package-verify.XXXXXX)"
 EXPANDED="$WORK_DIR/expanded"
+PAYLOAD_FILES="$WORK_DIR/payload-files"
 
 cleanup() {
   case "$WORK_DIR" in
@@ -24,10 +25,11 @@ case "$MODE" in
   install)
     /usr/bin/grep -Fq 'identifier="com.hd838a.RemoteMic.installer"' "$EXPANDED/PackageInfo"
     /usr/bin/grep -Fq '<payload ' "$EXPANDED/PackageInfo"
-    /usr/sbin/pkgutil --payload-files "$PACKAGE" | /usr/bin/grep -qx './Applications/无线麦.app/Contents/Info.plist'
-    /usr/sbin/pkgutil --payload-files "$PACKAGE" | /usr/bin/grep -qx './Applications/无线麦.app/Contents/MacOS/RemoteMic'
-    /usr/sbin/pkgutil --payload-files "$PACKAGE" | /usr/bin/grep -qx './Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver/Contents/Info.plist'
-    /usr/sbin/pkgutil --payload-files "$PACKAGE" | /usr/bin/grep -qx './Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch'
+    /usr/sbin/pkgutil --payload-files "$PACKAGE" > "$PAYLOAD_FILES"
+    /usr/bin/grep -qx './Applications/无线麦.app/Contents/Info.plist' "$PAYLOAD_FILES"
+    /usr/bin/grep -qx './Applications/无线麦.app/Contents/MacOS/RemoteMic' "$PAYLOAD_FILES"
+    /usr/bin/grep -qx './Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver/Contents/Info.plist' "$PAYLOAD_FILES"
+    /usr/bin/grep -qx './Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch' "$PAYLOAD_FILES"
     test -x "$EXPANDED/Scripts/preinstall"
     test -x "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx 'DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"' "$EXPANDED/Scripts/preinstall"
