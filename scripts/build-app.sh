@@ -8,11 +8,7 @@ DISPLAY_NAME="无线麦"
 OUTPUT_DIR="$ROOT/dist"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 SPARKLE_FRAMEWORK="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
-SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:-}"
-SIGNING_IDENTITY_WAS_EXPLICIT=0
-if [[ -n "$SIGNING_IDENTITY" ]]; then
-  SIGNING_IDENTITY_WAS_EXPLICIT=1
-fi
+SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
@@ -21,21 +17,6 @@ fi
 
 cd "$ROOT"
 
-if [[ -z "$SIGNING_IDENTITY" ]]; then
-  DEFAULT_KEYCHAIN="$(security default-keychain -d user | tr -d ' \"')"
-  GIT_EMAIL="$(git config --get user.email || true)"
-  if [[ -n "$GIT_EMAIL" ]] && security show-keychain-info "$DEFAULT_KEYCHAIN" >/dev/null 2>&1; then
-    SIGNING_IDENTITY="$(
-      security find-identity -p codesigning -v | awk -v email="$GIT_EMAIL" '
-        index($0, email) {
-          match($0, /"[^"]+"/)
-          if (RSTART > 0) print substr($0, RSTART + 1, RLENGTH - 2)
-          exit
-        }
-      '
-    )"
-  fi
-fi
 xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx26.0
 BIN_PATH="$(xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx26.0 --show-bin-path)/$APP_NAME"
 
@@ -82,22 +63,19 @@ done
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/豆包输入法兼容说明.md" \
   "$APP_DIR/Contents/Resources/豆包输入法兼容说明.md"
-if [[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != "-" ]]; then
-  if ! codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_DIR"; then
-    if [[ "$SIGNING_IDENTITY_WAS_EXPLICIT" -eq 1 ]]; then
-      print -u2 "unable to use CODE_SIGN_IDENTITY: $SIGNING_IDENTITY"
-      exit 1
-    fi
-    print -u2 "warning: matched signing identity is unavailable; using stable ad-hoc requirement"
-    SIGNING_IDENTITY="-"
-  fi
+if [[ "$SIGNING_IDENTITY" != "-" ]]; then
+  codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_DIR"
 fi
-if [[ -z "$SIGNING_IDENTITY" || "$SIGNING_IDENTITY" == "-" ]]; then
-  SIGNING_IDENTITY="-"
+if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   BUNDLE_IDENTIFIER="$(plutil -extract CFBundleIdentifier raw -o - "$APP_DIR/Contents/Info.plist")"
   codesign \
     --force \
     --deep \
+    --timestamp=none \
+    --sign - \
+    "$APP_DIR"
+  codesign \
+    --force \
     --timestamp=none \
     --sign - \
     --requirements "=designated => identifier \"$BUNDLE_IDENTIFIER\"" \

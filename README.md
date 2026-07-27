@@ -17,7 +17,7 @@
 
 ## 下载与安装
 
-请从 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 下载 `Remote-Mic-1.2.0.dmg`。
+发布的安装包会在 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 提供，文件名为 `Remote-Mic-<版本>.dmg`。
 
 打开 DMG 后有两种安装方式：
 
@@ -37,9 +37,9 @@
 应用启动后常驻菜单栏：
 
 - 左键单击图标：打开设置面板；
-- 右键单击图标：显示连接状态、重新连接、日志、关于、检查更新、GitHub 和退出菜单。
+- 右键单击图标：显示连接状态、重新连接、日志、关于、GitHub 和退出菜单。
 
-安装 `1.2.0` 后，应用会通过 GitHub Releases 自动检查更新；也可从右键菜单选择“检查更新…”。自动更新仅替换应用本体，兼容麦克风驱动仍由 DMG 中的安装包管理。
+当前版本保留 Sparkle 自动更新基础设施，但在获得有效的 Developer ID 签名和公证前不会启动更新检查。更新恢复后仅替换应用本体，兼容麦克风驱动仍由 DMG 中的安装包管理。
 
 ## 使用语音输入
 

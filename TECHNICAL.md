@@ -1,6 +1,6 @@
 # 无线麦技术文档
 
-本文面向开发、审计和发布人员，描述 `1.2.0 (17)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
+本文面向开发、审计和发布人员，描述 `1.2.1 (18)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
 
 ## 支持范围
 
@@ -9,7 +9,7 @@
 - 目标遥控器：小米蓝牙遥控器 2 Pro / RC003；
 - HID 标识：Vendor ID `0x2717`、Product ID `0x32B8`；
 - Swift 工具链：Swift 6.2，源码以 Swift 5 语言模式编译；
-- 发布签名：应用优先使用与 Git 邮箱匹配的可用 Apple Development 证书，否则使用带固定 designated requirement 的 ad-hoc 签名；驱动使用 ad-hoc 签名，PKG 未使用 Installer 证书签名，当前未公证。
+- 发布签名：应用默认使用带固定 designated requirement 的 ad-hoc 签名；仅在显式传入有效签名身份时使用该身份。驱动使用 ad-hoc 签名，PKG 未使用 Installer 证书签名，当前未公证。
 
 `Package.swift`、`Resources/Info.plist`、构建脚本和验证脚本都把最低系统版本固定为 macOS 26，并验证发布二进制只有 `arm64` 架构。
 
@@ -17,7 +17,7 @@
 
 | 模块 | 主要职责 |
 | --- | --- |
-| `RemoteMicApp.swift` | AppKit 生命周期、菜单栏图标、左键设置窗口、右键菜单、关于面板与 Sparkle 更新入口 |
+| `RemoteMicApp.swift` | AppKit 生命周期、菜单栏图标、左键设置窗口、右键菜单、关于面板与保留的 Sparkle 更新入口 |
 | `SettingsView.swift` | macOS 26 Liquid Glass 设置界面、状态展示、音频选择、按键映射和权限入口 |
 | `BridgeAppModel.swift` | 蓝牙、音频、HID、Fn 映射和 UI 状态的协调层 |
 | `XiaomiBluetoothBridge.swift` | CoreBluetooth 扫描、连接、能力协商、语音会话和自动重连 |
@@ -103,7 +103,7 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 应用以 `LSUIElement` accessory 模式运行，不显示 Dock 图标。状态栏按钮同时接收左右鼠标抬起事件：
 
 - 左键：创建或置前 800×650 的可缩放设置窗口；
-- 右键：显示连接、音频、HID 状态，以及重新连接、打开设置、日志、关于、检查更新、GitHub 和退出菜单。
+- 右键：显示连接、音频、HID 状态，以及重新连接、打开设置、日志、关于、GitHub 和退出菜单。
 
 设置窗口包含“连接”“按键”“权限”三个页面，使用 macOS 26 原生 `glassEffect` 和 glass button style，并跟随系统浅色、深色、降低透明度与增强对比度设置。
 
@@ -151,9 +151,8 @@ xcrun swift test
 - `dist/MiRemoteV2ch.driver`；
 - `dist/安装无线麦.pkg`；
 - `dist/卸载无线麦.pkg`；
-- `dist/Remote-Mic-1.2.0.dmg`；
-- `dist/Remote-Mic-1.2.0.dmg.sha256`；
-- 供 Sparkle 使用的 `Remote-Mic-1.2.0.zip` 和签名 `appcast.xml`。
+- `dist/Remote-Mic-1.2.1.dmg`；
+- `dist/Remote-Mic-1.2.1.dmg.sha256`。
 
 DMG 根目录严格只有四项：
 
@@ -164,7 +163,7 @@ DMG 根目录严格只有四项：
 
 `verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 26 最低版本、有效代码签名和本地路径泄漏。
 
-Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`appcast.xml` 与更新 ZIP 作为同一 GitHub Release 资产发布，Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
+Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。更新器目前关闭，待有效的 Developer ID 签名和公证可用后再启用；恢复后 Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
 
 ## 许可与来源
 
