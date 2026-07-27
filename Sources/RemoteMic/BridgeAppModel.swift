@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CoreAudio
 import Foundation
 
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
@@ -33,12 +34,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }()
     private var started = false
     private var terminationObserver: NSObjectProtocol?
+    private let audioHardwareListenerQueue = DispatchQueue(label: "RemoteMic.audioHardware")
+    private var observedAudioHardwareAddresses: [AudioObjectPropertyAddress] = []
+    private var audioRecoveryWorkItem: DispatchWorkItem?
+    private var audioRecoveryGeneration: UInt64 = 0
+    private lazy var audioHardwareListener: AudioObjectPropertyListenerBlock = { [weak self] count, addresses in
+        let properties = Self.audioHardwarePropertyNames(count: count, addresses: addresses)
+        self?.scheduleAudioRecovery(reason: "hardware_change", details: "properties=\(properties)")
+    }
+
+    init() {
+        audioOutput.onConfigurationChange = { [weak self] in
+            self?.scheduleAudioRecovery(reason: "engine_configuration_change")
+        }
+    }
 
     func startIfNeeded() {
         guard !started else { return }
         started = true
         refreshAudioDevices()
-        applyAudioSettings()
+        applyAudioSettings(reason: "startup")
+        startObservingAudioHardware()
         applyHIDSettings()
         applyVoiceFunctionMapping()
         bluetoothBridge.start()
@@ -57,6 +73,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func stop() {
         guard started else { return }
+        started = false
+        audioRecoveryGeneration &+= 1
+        audioRecoveryWorkItem?.cancel()
+        audioRecoveryWorkItem = nil
+        stopObservingAudioHardware()
         cancelTestToneIfNeeded(statusMessage: "应用已停止", logReason: "app_stop")
         bluetoothBridge.stop()
         updateVoiceFunctionKeyState(streaming: false)
@@ -67,7 +88,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             NotificationCenter.default.removeObserver(terminationObserver)
             self.terminationObserver = nil
         }
-        started = false
         AppLogger.shared.write("APP STOP")
     }
 
@@ -78,6 +98,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func refreshAudioDevices() {
         audioDevices = CoreAudioDeviceCatalog.outputDevices()
         doubaoAudioStatus = DoubaoAudioDevicePolicy.status(in: audioDevices)
+        AppLogger.shared.write(
+            "AUDIO DEVICES refreshed outputs={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(audioDevices))} " +
+                "\(CoreAudioDeviceCatalog.routeDiagnostic())"
+        )
     }
 
     var hasDoubaoAudioDevice: Bool {
@@ -90,7 +114,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         settings.selectedAudioDeviceUID = device.uid
-        applyAudioSettings()
+        applyAudioSettings(reason: "doubao_device_selected")
         doubaoAudioStatus = "已选择 \(device.name) 作为遥控器语音输出"
     }
 
@@ -104,13 +128,131 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         NSWorkspace.shared.open(instructions)
     }
 
-    func applyAudioSettings() {
+    func applyAudioSettings(reason: String = "settings_change") {
+        AppLogger.shared.write("AUDIO REBIND begin reason=\(reason) state={\(audioOutput.diagnosticState())}")
         cancelTestToneIfNeeded(statusMessage: "设备已更新，测试音已取消", logReason: "device_reconfigure")
-        _ = audioOutput.configure(deviceUID: settings.selectedAudioDeviceUID)
+        let configured = audioOutput.configure(deviceUID: settings.selectedAudioDeviceUID)
         audioStatus = audioOutput.status
         testToneStatus = audioOutput.isReadyForTestTone
             ? "可发送测试音"
             : "未选择语音输出设备或设备不可用"
+        AppLogger.shared.write(
+            "AUDIO REBIND finished reason=\(reason) success=\(configured) status=\(audioStatus) " +
+                "state={\(audioOutput.diagnosticState())}"
+        )
+    }
+
+    private func startObservingAudioHardware() {
+        guard observedAudioHardwareAddresses.isEmpty else { return }
+        for selector in [
+            kAudioHardwarePropertyDevices,
+            kAudioHardwarePropertyDefaultInputDevice,
+            kAudioHardwarePropertyDefaultOutputDevice,
+            kAudioHardwarePropertyDefaultSystemOutputDevice,
+        ] {
+            var address = AudioObjectPropertyAddress(
+                mSelector: selector,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            let result = AudioObjectAddPropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                audioHardwareListenerQueue,
+                audioHardwareListener
+            )
+            if result == noErr {
+                observedAudioHardwareAddresses.append(address)
+            } else {
+                AppLogger.shared.write("AUDIO RECOVERY listener_failed selector=\(selector) error=\(result)")
+            }
+        }
+        AppLogger.shared.write("AUDIO ROUTE_MONITOR started properties=\(Self.audioHardwarePropertyNames(for: observedAudioHardwareAddresses))")
+    }
+
+    private func stopObservingAudioHardware() {
+        for var address in observedAudioHardwareAddresses {
+            _ = AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                audioHardwareListenerQueue,
+                audioHardwareListener
+            )
+        }
+        if !observedAudioHardwareAddresses.isEmpty {
+            AppLogger.shared.write("AUDIO ROUTE_MONITOR stopped properties=\(Self.audioHardwarePropertyNames(for: observedAudioHardwareAddresses))")
+        }
+        observedAudioHardwareAddresses.removeAll()
+    }
+
+    private func scheduleAudioRecovery(reason: String, details: String = "") {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.started else { return }
+            guard !self.settings.selectedAudioDeviceUID.isEmpty else {
+                AppLogger.shared.write("AUDIO RECOVERY ignored reason=\(reason) detail=\(details) no_selected_device")
+                return
+            }
+            self.audioRecoveryGeneration &+= 1
+            let generation = self.audioRecoveryGeneration
+            let replacedPendingRecovery = self.audioRecoveryWorkItem != nil
+            self.audioRecoveryWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self,
+                      self.started,
+                      self.audioRecoveryGeneration == generation
+                else { return }
+                AppLogger.shared.write(
+                    "AUDIO RECOVERY begin id=\(generation) reason=\(reason) detail=\(details) " +
+                        "state={\(self.audioOutput.diagnosticState())}"
+                )
+                self.refreshAudioDevices()
+                self.applyAudioSettings(reason: "recovery_\(reason)")
+                AppLogger.shared.write(
+                    "AUDIO RECOVERY completed id=\(generation) reason=\(reason) " +
+                        "state={\(self.audioOutput.diagnosticState())}"
+                )
+                self.audioRecoveryWorkItem = nil
+            }
+            self.audioRecoveryWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
+            AppLogger.shared.write(
+                "AUDIO RECOVERY scheduled id=\(generation) reason=\(reason) detail=\(details) " +
+                    "replaced_pending=\(replacedPendingRecovery) state={\(self.audioOutput.diagnosticState())}"
+            )
+        }
+    }
+
+    private static func audioHardwarePropertyNames(
+        count: UInt32,
+        addresses: UnsafePointer<AudioObjectPropertyAddress>
+    ) -> String {
+        guard count > 0 else { return "none" }
+        return (0..<Int(count))
+            .map { audioHardwarePropertyName(addresses[$0].mSelector) }
+            .joined(separator: ",")
+    }
+
+    private static func audioHardwarePropertyNames(
+        for addresses: [AudioObjectPropertyAddress]
+    ) -> String {
+        addresses.map { audioHardwarePropertyName($0.mSelector) }.joined(separator: ",")
+    }
+
+    private static func audioHardwarePropertyName(
+        _ selector: AudioObjectPropertySelector
+    ) -> String {
+        switch selector {
+        case kAudioHardwarePropertyDevices:
+            return "devices"
+        case kAudioHardwarePropertyDefaultInputDevice:
+            return "default_input"
+        case kAudioHardwarePropertyDefaultOutputDevice:
+            return "default_output"
+        case kAudioHardwarePropertyDefaultSystemOutputDevice:
+            return "default_system_output"
+        default:
+            return "selector_\(selector)"
+        }
     }
 
     var canSendTestTone: Bool {

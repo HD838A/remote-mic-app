@@ -37,13 +37,55 @@ enum CoreAudioDeviceCatalog {
         ) == noErr else { return [] }
 
         return deviceIDs.compactMap { deviceID in
-            guard outputChannelCount(for: deviceID) > 0,
-                  let uid = stringProperty(deviceID, selector: kAudioDevicePropertyDeviceUID),
-                  let name = stringProperty(deviceID, selector: kAudioObjectPropertyName)
-            else { return nil }
-            return AudioDeviceInfo(id: deviceID, uid: uid, name: name)
+            guard outputChannelCount(for: deviceID) > 0 else { return nil }
+            return deviceInfo(for: deviceID)
         }
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    static func deviceInfo(for deviceID: AudioDeviceID) -> AudioDeviceInfo? {
+        guard deviceID != kAudioObjectUnknown,
+              let uid = stringProperty(deviceID, selector: kAudioDevicePropertyDeviceUID),
+              let name = stringProperty(deviceID, selector: kAudioObjectPropertyName)
+        else { return nil }
+        return AudioDeviceInfo(id: deviceID, uid: uid, name: name)
+    }
+
+    static func routeDiagnostic() -> String {
+        let input = defaultDevice(selector: kAudioHardwarePropertyDefaultInputDevice)
+        let output = defaultDevice(selector: kAudioHardwarePropertyDefaultOutputDevice)
+        let systemOutput = defaultDevice(selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
+        return "default_input={\(deviceDiagnostic(input))} " +
+            "default_output={\(deviceDiagnostic(output))} " +
+            "default_system_output={\(deviceDiagnostic(systemOutput))}"
+    }
+
+    static func outputDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
+        devices.map(deviceDiagnostic).joined(separator: " | ")
+    }
+
+    static func deviceDiagnostic(_ device: AudioDeviceInfo?) -> String {
+        guard let device else { return "none" }
+        return "name=\(device.name) id=\(device.id)"
+    }
+
+    private static func defaultDevice(selector: AudioObjectPropertySelector) -> AudioDeviceInfo? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var deviceID = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &size,
+            &deviceID
+        ) == noErr else { return nil }
+        return deviceInfo(for: deviceID)
     }
 
     private static func stringProperty(
@@ -97,6 +139,10 @@ enum CoreAudioDeviceCatalog {
 final class VirtualAudioOutput {
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
+    private var engineConfigurationObserver: NSObjectProtocol?
+    private var engineConfigurationGeneration: UInt64 = 0
+    private var rejectedWriteCount = 0
+    private var lastRejectedWriteLogDate = Date.distantPast
     private let sourceFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
@@ -106,18 +152,30 @@ final class VirtualAudioOutput {
 
     private(set) var selectedDevice: AudioDeviceInfo?
     private(set) var status = "未选择语音输出设备"
+    var onConfigurationChange: (() -> Void)?
 
     @discardableResult
     func configure(deviceUID: String) -> Bool {
+        let previousState = diagnosticState()
         stop()
         guard !deviceUID.isEmpty else {
             status = "未选择语音输出设备"
+            AppLogger.shared.write("AUDIO CONFIGURE skipped reason=no_selected_device previous={\(previousState)}")
             return false
         }
-        guard let device = CoreAudioDeviceCatalog.outputDevices().first(where: { $0.uid == deviceUID }) else {
+        let availableDevices = CoreAudioDeviceCatalog.outputDevices()
+        guard let device = availableDevices.first(where: { $0.uid == deviceUID }) else {
             status = "所选语音输出设备不可用"
+            AppLogger.shared.write(
+                "AUDIO CONFIGURE failed reason=selected_device_unavailable " +
+                    "available={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(availableDevices))}"
+            )
             return false
         }
+        AppLogger.shared.write(
+            "AUDIO CONFIGURE begin target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
+                "previous={\(previousState)}"
+        )
 
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
@@ -126,6 +184,7 @@ final class VirtualAudioOutput {
 
         guard let outputUnit = engine.outputNode.audioUnit else {
             status = "无法打开 CoreAudio 输出单元"
+            AppLogger.shared.write("AUDIO CONFIGURE failed reason=no_output_unit target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}")
             return false
         }
         var deviceID = device.id
@@ -139,6 +198,10 @@ final class VirtualAudioOutput {
         )
         guard result == noErr else {
             status = "无法选择音频设备（错误 \(result)）"
+            AppLogger.shared.write(
+                "AUDIO CONFIGURE failed reason=set_current_device " +
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} error=\(result)"
+            )
             return false
         }
 
@@ -149,12 +212,16 @@ final class VirtualAudioOutput {
             self.engine = engine
             self.player = player
             selectedDevice = device
+            observeConfigurationChanges(for: engine)
             status = "语音输出：\(device.name)"
-            AppLogger.shared.write("AUDIO READY device=\(device.name)")
+            AppLogger.shared.write("AUDIO READY target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} state={\(diagnosticState())}")
             return true
         } catch {
             status = "启动音频输出失败：\(error.localizedDescription)"
-            AppLogger.shared.write("AUDIO ERROR start_failed=\(error.localizedDescription)")
+            AppLogger.shared.write(
+                "AUDIO ERROR start_failed=\(error.localizedDescription) " +
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} state={\(diagnosticState())}"
+            )
             return false
         }
     }
@@ -209,7 +276,12 @@ final class VirtualAudioOutput {
     @discardableResult
     func enqueue(samples: [Int16]) -> Bool {
         guard let player, engine?.isRunning == true, let buffer = makeBuffer(samples: samples) else {
+            logRejectedWrite()
             return false
+        }
+        if rejectedWriteCount > 0 {
+            AppLogger.shared.write("AUDIO WRITE resumed rejected_count=\(rejectedWriteCount) state={\(basicDiagnosticState())}")
+            rejectedWriteCount = 0
         }
         player.scheduleBuffer(buffer)
         return true
@@ -227,10 +299,77 @@ final class VirtualAudioOutput {
     }
 
     func stop() {
+        removeEngineConfigurationObserver()
         player?.stop()
         engine?.stop()
         player = nil
         engine = nil
         selectedDevice = nil
+    }
+
+    private func observeConfigurationChanges(for engine: AVAudioEngine) {
+        engineConfigurationGeneration &+= 1
+        let generation = engineConfigurationGeneration
+        engineConfigurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self, weak engine] _ in
+            guard let self,
+                  let engine,
+                  self.engine === engine,
+                  self.engineConfigurationGeneration == generation
+            else { return }
+            AppLogger.shared.write("AUDIO ENGINE configuration_changed generation=\(generation)")
+            self.onConfigurationChange?()
+        }
+    }
+
+    private func removeEngineConfigurationObserver() {
+        if let engineConfigurationObserver {
+            NotificationCenter.default.removeObserver(engineConfigurationObserver)
+            self.engineConfigurationObserver = nil
+        }
+        engineConfigurationGeneration &+= 1
+    }
+
+    func diagnosticState() -> String {
+        let actualOutput = currentOutputDevice()
+        let isBound: String
+        if let selectedDevice, let actualOutput {
+            isBound = selectedDevice.id == actualOutput.id ? "true" : "false"
+        } else {
+            isBound = "unknown"
+        }
+        return "\(basicDiagnosticState()) " +
+            "actual_output={\(CoreAudioDeviceCatalog.deviceDiagnostic(actualOutput))} " +
+            "bound_to_selected=\(isBound) \(CoreAudioDeviceCatalog.routeDiagnostic())"
+    }
+
+    private func basicDiagnosticState() -> String {
+        "engine_running=\(engine?.isRunning == true) selected={\(CoreAudioDeviceCatalog.deviceDiagnostic(selectedDevice))}"
+    }
+
+    private func currentOutputDevice() -> AudioDeviceInfo? {
+        guard let outputUnit = engine?.outputNode.audioUnit else { return nil }
+        var deviceID = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioUnitGetProperty(
+            outputUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &deviceID,
+            &size
+        ) == noErr else { return nil }
+        return CoreAudioDeviceCatalog.deviceInfo(for: deviceID)
+    }
+
+    private func logRejectedWrite() {
+        rejectedWriteCount += 1
+        let now = Date()
+        guard now.timeIntervalSince(lastRejectedWriteLogDate) >= 1 else { return }
+        lastRejectedWriteLogDate = now
+        AppLogger.shared.write("AUDIO WRITE rejected count=\(rejectedWriteCount) state={\(basicDiagnosticState())}")
     }
 }
