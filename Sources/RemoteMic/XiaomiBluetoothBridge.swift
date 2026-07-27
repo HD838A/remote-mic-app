@@ -110,6 +110,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private var controlCharacteristic: CBCharacteristic?
     private var subscribedUUIDs = Set<CBUUID>()
     private var reconnectWorkItem: DispatchWorkItem?
+    private var connectionTimeoutWorkItem: DispatchWorkItem?
     private var initializationTimeoutWorkItem: DispatchWorkItem?
     private var capabilitiesRequested = false
     private var capabilitiesConfirmed = false
@@ -207,13 +208,13 @@ final class XiaomiBluetoothBridge: NSObject {
 
         if let identifier = settings.peripheralIdentifier,
            let saved = central.retrievePeripherals(withIdentifiers: [identifier]).first {
-            connect(saved, using: central, generation: generation)
+            connect(saved, using: central, generation: generation, source: "saved_identifier")
             return
         }
 
         if let connected = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
             .first(where: isCandidate) {
-            connect(connected, using: central, generation: generation)
+            connect(connected, using: central, generation: generation, source: "connected_peripheral")
             return
         }
 
@@ -228,7 +229,8 @@ final class XiaomiBluetoothBridge: NSObject {
     private func connect(
         _ candidate: CBPeripheral,
         using central: CBCentralManager,
-        generation: UInt64
+        generation: UInt64,
+        source: String
     ) {
         guard shouldRun,
               self.central === central,
@@ -242,8 +244,9 @@ final class XiaomiBluetoothBridge: NSObject {
         candidate.delegate = proxy
         lifecycle = .connecting(generation)
         state = .connecting
+        startConnectionTimeout(generation: generation)
         central.connect(candidate, options: nil)
-        AppLogger.shared.write("BLE CONNECTING name=\(candidate.name ?? "unknown")")
+        AppLogger.shared.write("BLE CONNECTING source=\(source) name=\(candidate.name ?? "unknown")")
     }
 
     private func isCandidate(_ candidate: CBPeripheral) -> Bool {
@@ -258,6 +261,8 @@ final class XiaomiBluetoothBridge: NSObject {
         audioCharacteristic = nil
         controlCharacteristic = nil
         subscribedUUIDs.removeAll()
+        connectionTimeoutWorkItem?.cancel()
+        connectionTimeoutWorkItem = nil
         initializationTimeoutWorkItem?.cancel()
         initializationTimeoutWorkItem = nil
         capabilitiesRequested = false
@@ -287,6 +292,28 @@ final class XiaomiBluetoothBridge: NSObject {
             self.failInitialization("ATVV 初始化超时")
         }
         initializationTimeoutWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
+    }
+
+    private func startConnectionTimeout(generation: UInt64) {
+        connectionTimeoutWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.shouldRun,
+                  self.currentGeneration() == generation,
+                  self.lifecycle == .connecting(generation)
+            else { return }
+            AppLogger.shared.write("BLE CONNECT TIMEOUT cached_identifier_cleared=true")
+            self.settings.peripheralIdentifier = nil
+            self.state = .reconnecting
+            if let central = self.central,
+               let peripheral = self.peripheral,
+               peripheral.state != .disconnected {
+                central.cancelPeripheralConnection(peripheral)
+            }
+            self.finishAttempt(reconnectAfter: 3)
+        }
+        connectionTimeoutWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
     }
 
@@ -332,6 +359,7 @@ final class XiaomiBluetoothBridge: NSObject {
             return
         }
 
+        state = .reconnecting
         lifecycle = .waitingReconnect(finishedGeneration)
         let work = DispatchWorkItem { [weak self] in
             guard let self,
@@ -591,7 +619,7 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               self.peripheral == nil,
               serviceMatch || isCandidate(peripheral) || RC003NameMatcher.matches(advertisedName)
         else { return }
-        connect(peripheral, using: central, generation: generation)
+        connect(peripheral, using: central, generation: generation, source: "scan")
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
@@ -604,6 +632,8 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               let generation = centralGeneration,
               lifecycle.acceptsDidConnect(generation: generation)
         else { return }
+        connectionTimeoutWorkItem?.cancel()
+        connectionTimeoutWorkItem = nil
         lifecycle = .discovering(generation)
         state = .discovering
         startInitializationTimeout(generation: generation)
@@ -657,7 +687,20 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     }
 
     private func handleDisconnect(error: Error?) {
-        AppLogger.shared.write("BLE DISCONNECTED error=\(error?.localizedDescription ?? "none")")
+        let shouldDiscardCachedIdentity: Bool
+        switch lifecycle {
+        case .connecting, .discovering, .awaitingCapabilities:
+            shouldDiscardCachedIdentity = true
+        default:
+            shouldDiscardCachedIdentity = false
+        }
+        if shouldDiscardCachedIdentity {
+            settings.peripheralIdentifier = nil
+        }
+        AppLogger.shared.write(
+            "BLE DISCONNECTED phase=\(lifecycle) cached_identifier_cleared=\(shouldDiscardCachedIdentity) " +
+                "error=\(error?.localizedDescription ?? "none")"
+        )
         let delay = shouldRun ? (requestedReconnectDelay ?? 3) : nil
         finishAttempt(reconnectAfter: delay)
         if !shouldRun { state = .stopped }

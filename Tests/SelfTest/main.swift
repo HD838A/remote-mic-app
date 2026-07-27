@@ -80,7 +80,8 @@ let disconnecting = BluetoothLifecyclePhase.disconnecting(generationOne)
 check(
     connecting.acceptsDidConnect(generation: generationOne) &&
         connecting.acceptsDidFailToConnect(generation: generationOne) &&
-        !connecting.acceptsDisconnect(generation: generationOne) &&
+        connecting.acceptsDisconnect(generation: generationOne) &&
+        !connecting.acceptsDisconnect(generation: generationTwo) &&
         !connecting.acceptsDidConnect(generation: generationTwo) &&
         disconnecting.acceptsDidFailToConnect(generation: generationOne),
     "Bluetooth generation and connect phase"

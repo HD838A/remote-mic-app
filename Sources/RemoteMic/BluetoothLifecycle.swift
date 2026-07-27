@@ -73,7 +73,8 @@ enum BluetoothLifecyclePhase: Equatable {
 
     func acceptsDisconnect(generation: UInt64) -> Bool {
         switch self {
-        case .discovering(generation),
+        case .connecting(generation),
+             .discovering(generation),
              .awaitingCapabilities(generation),
              .ready(generation),
              .disconnecting(generation):
