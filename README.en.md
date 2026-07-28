@@ -26,7 +26,7 @@ The DMG provides two installation paths:
 1. Recommended: double-click **Install Remote Mic.pkg**. It installs **Remote Mic.app** and the MiRemoteV 2ch compatible microphone for Doubao Input Method and other voice-input apps.
 2. App only: drag **Remote Mic.app** to Applications. This requires a usable loopback audio device to already be installed.
 
-The current release is not notarized by Apple. If macOS blocks it, open **System Settings → Privacy & Security** and choose to open the file after confirming that it came from a source you trust.
+Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only from this project's GitHub Releases and verify the DMG with the `.sha256` file from the same release.
 
 ## First use
 

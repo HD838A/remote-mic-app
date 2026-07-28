@@ -26,7 +26,7 @@
 1. 推荐：双击 Install Remote Mic.pkg。它会同时安装 Remote Mic 和 `MiRemoteV 2ch` 兼容麦克风，适合豆包输入法及其他语音输入应用。
 2. 仅安装应用：把 Remote Mic.app 拖到 Applications。如果使用这种方式，请确保 Mac 上已经有可用的回环音频设备。
 
-当前安装包尚未进行 Apple 公证。若 macOS 阻止打开，请前往“系统设置 → 隐私与安全性”，确认文件来自你信任的来源后选择继续打开。
+自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从本项目 GitHub Releases 下载，并使用同一 Release 中的 `.sha256` 文件核对 DMG。
 
 ## 首次使用
 

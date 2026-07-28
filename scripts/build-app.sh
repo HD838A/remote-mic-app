@@ -9,6 +9,7 @@ OUTPUT_DIR="$ROOT/dist"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 SPARKLE_FRAMEWORK="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
+REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
@@ -16,6 +17,15 @@ if [[ "$#" -ne 0 ]]; then
 fi
 
 cd "$ROOT"
+
+case "$REQUIRE_DEVELOPER_ID_SIGNING" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; then
+  print -u2 "Developer ID Application signing is required"
+  exit 1
+fi
 
 xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx26.0
 BIN_PATH="$(xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx26.0 --show-bin-path)/$APP_NAME"
@@ -67,7 +77,13 @@ for localization in en zh-Hans; do
     "$APP_DIR/Contents/Resources/$localization.lproj"
 done
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
-  codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_DIR"
+  codesign \
+    --force \
+    --deep \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
+    "$APP_DIR"
 fi
 if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   BUNDLE_IDENTIFIER="$(plutil -extract CFBundleIdentifier raw -o - "$APP_DIR/Contents/Info.plist")"

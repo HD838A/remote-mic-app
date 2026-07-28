@@ -10,6 +10,26 @@ APP="${1:-$ROOT/dist/Remote Mic.app}"
 PLIST="$APP/Contents/Info.plist"
 BINARY="$APP/Contents/MacOS/RemoteMic"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
+EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
+REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
+REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
+
+case "$REQUIRE_DEVELOPER_ID_SIGNING" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_NOTARIZATION" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_NOTARIZATION must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && -z "$EXPECTED_DEVELOPER_TEAM_ID" ]]; then
+  print -u2 "EXPECTED_DEVELOPER_TEAM_ID is required for Developer ID verification"
+  exit 1
+fi
+if [[ "$REQUIRE_NOTARIZATION" == "1" && "$REQUIRE_DEVELOPER_ID_SIGNING" != "1" ]]; then
+  print -u2 "notarization verification requires Developer ID verification"
+  exit 1
+fi
 
 test -d "$APP"
 test -f "$PLIST"
@@ -61,6 +81,12 @@ test "$(plutil -extract SUEnableAutomaticChecks raw -o - "$PLIST")" = "false"
 test -n "$(plutil -extract SUPublicEDKey raw -o - "$PLIST")"
 
 codesign --verify --deep --strict "$APP"
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
+  SIGNATURE_DETAILS="$(codesign -dvvv "$APP" 2>&1)"
+  print -r -- "$SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:'
+  print -r -- "$SIGNATURE_DETAILS" | rg -q "^TeamIdentifier=$EXPECTED_DEVELOPER_TEAM_ID$"
+  print -r -- "$SIGNATURE_DETAILS" | rg -q '^CodeDirectory .*flags=.*runtime'
+fi
 file "$BINARY" | rg -q 'Mach-O 64-bit executable'
 ARCHS="$(lipo -archs "$BINARY")"
 test "$ARCHS" = "arm64"
@@ -75,6 +101,11 @@ done <<< "$EXPECTED_APP_FILES"
 if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' "$APP/Contents"; then
   print -u2 "bundle contains a forbidden local path or example device address"
   exit 1
+fi
+
+if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
+  xcrun stapler validate "$APP"
+  /usr/sbin/spctl -a -vv -t open "$APP"
 fi
 
 print "APP VERIFY PASS: $APP"

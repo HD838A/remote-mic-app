@@ -10,6 +10,8 @@ INSTALL_PACKAGE="$OUTPUT_DIR/Install Remote Mic.pkg"
 LEGACY_INSTALL_PACKAGE="$OUTPUT_DIR/安装豆包兼容麦克风.pkg"
 UNINSTALL_PACKAGE="$OUTPUT_DIR/Uninstall Remote Mic.pkg"
 LEGACY_UNINSTALL_PACKAGE="$OUTPUT_DIR/卸载豆包兼容麦克风.pkg"
+INSTALLER_SIGNING_IDENTITY="${INSTALLER_SIGNING_IDENTITY:--}"
+REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
 INSTALL_SCRIPTS="$WORK_DIR/install-scripts"
@@ -24,6 +26,14 @@ cleanup() {
 trap cleanup EXIT
 
 test -x /usr/bin/pkgbuild
+case "$REQUIRE_DEVELOPER_ID_SIGNING" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$INSTALLER_SIGNING_IDENTITY" == "-" ]]; then
+  print -u2 "Developer ID Installer signing is required"
+  exit 1
+fi
 "$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
 "$ROOT/scripts/verify-app.sh" "$APP"
 
@@ -42,6 +52,11 @@ test -x /usr/bin/pkgbuild
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
+PACKAGE_SIGNING_OPTIONS=()
+if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
+  PACKAGE_SIGNING_OPTIONS=(--sign "$INSTALLER_SIGNING_IDENTITY")
+fi
+
 /usr/bin/pkgbuild \
   --root "$PAYLOAD_ROOT" \
   --scripts "$INSTALL_SCRIPTS" \
@@ -49,6 +64,7 @@ test -x /usr/bin/pkgbuild
   --version "$VERSION" \
   --install-location / \
   --ownership recommended \
+  "${PACKAGE_SIGNING_OPTIONS[@]}" \
   "$INSTALL_PACKAGE"
 
 /usr/bin/pkgbuild \
@@ -56,6 +72,7 @@ test -x /usr/bin/pkgbuild
   --scripts "$UNINSTALL_SCRIPTS" \
   --identifier "com.hd838a.MiRemoteV2ch.uninstaller" \
   --version "$VERSION" \
+  "${PACKAGE_SIGNING_OPTIONS[@]}" \
   "$UNINSTALL_PACKAGE"
 
 "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
@@ -63,3 +80,4 @@ test -x /usr/bin/pkgbuild
 
 print "Built: $INSTALL_PACKAGE"
 print "Built: $UNINSTALL_PACKAGE"
+print "INSTALLER SIGNING IDENTITY: $INSTALLER_SIGNING_IDENTITY"

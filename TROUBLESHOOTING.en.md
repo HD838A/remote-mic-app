@@ -70,7 +70,7 @@ Remote Mic restores the RC003 voice-button mapping that existed before launch wh
 
 ## macOS blocks the installer
 
-The release uses ad-hoc app signing. The PKGs are not signed with an Installer certificate and are not notarized. Download only from this project's GitHub Releases, then approve opening it in **System Settings → Privacy & Security**.
+Starting with v1.3.0, official releases sign the app, both PKGs, and the DMG with Developer ID identities and notarize them with Apple. If macOS still blocks installation, delete the local download, download it again from this project's GitHub Releases, and verify it with the `.sha256` file from the same release; do not use an untrusted copy.
 
 Verify a DMG with the checksum file from the same release:
 

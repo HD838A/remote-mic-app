@@ -11,7 +11,7 @@
 - 目标遥控器：小米蓝牙遥控器 2 Pro / RC003；
 - HID 标识：Vendor ID `0x2717`、Product ID `0x32B8`；
 - Swift 工具链：Swift 6.2，源码以 Swift 5 语言模式编译；
-- 发布签名：应用默认使用带固定 designated requirement 的 ad-hoc 签名；仅在显式传入有效签名身份时使用该身份。驱动使用 ad-hoc 签名，PKG 未使用 Installer 证书签名，当前未公证。
+- 发布签名：本地开发构建保持带固定 designated requirement 的 ad-hoc 签名。自 v1.3.0 起的正式发布使用 Developer ID Application 与 Developer ID Installer 签名；应用和驱动启用 Hardened Runtime 与可信时间戳，应用、两个 PKG 和 DMG 都经过 Apple 公证并 stapled。
 
 `Package.swift`、`Resources/Info.plist`、构建脚本和验证脚本都把最低系统版本固定为 macOS 26，并验证发布二进制只有 `arm64` 架构。
 
@@ -169,9 +169,11 @@ DMG 根目录严格只有四项：
 - `Remote Mic.app`；
 - 指向 `/Applications` 的 `Applications` 入口。
 
-`verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 26 最低版本、有效代码签名和本地路径泄漏。
+`verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 26 最低版本、有效代码签名和本地路径泄漏。正式模式还校验 Developer ID Team、Hardened Runtime、PKG/DMG 签名、stapled 公证票据与 Gatekeeper 评估。
 
 Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=false` 禁止启动时和定时检查，只有用户选择菜单中的“检查更新…”时才会访问更新源。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
+
+正式发布使用 `scripts/notarize-release.sh`：它只接受已同步到发布 Mac 的既有 Developer ID 身份、Keychain 中的本地公证 profile 和受限的 Sparkle 私钥文件引用。脚本按应用、两个 PKG、DMG 的顺序公证和 staple，最后从已 staple 的应用生成 Sparkle ZIP 与签名 appcast；不会把任何证书、P12、API 密钥或私钥写入仓库或 Release。
 
 ## 许可与来源
 

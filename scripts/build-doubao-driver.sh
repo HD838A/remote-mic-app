@@ -11,6 +11,8 @@ OUTPUT="$ROOT/dist/MiRemoteV2ch.driver"
 PRODUCT_NAME="MiRemoteV2ch"
 BUNDLE_ID="com.hd838a.MiRemoteV2ch"
 DEFINITIONS='$GCC_PREPROCESSOR_DEFINITIONS kDriver_Name=\"MiRemoteV\" kPlugIn_BundleID=\"com.hd838a.MiRemoteV2ch\" kNumber_Of_Channels=2'
+SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
+REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 
 if ! command -v git >/dev/null 2>&1; then
   print -u2 "Missing required command: git"
@@ -18,6 +20,14 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 if ! command -v xcodebuild >/dev/null 2>&1; then
   print -u2 "Missing required command: xcodebuild. Install Xcode before building the Doubao compatibility driver."
+  exit 1
+fi
+case "$REQUIRE_DEVELOPER_ID_SIGNING" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; then
+  print -u2 "Developer ID Application signing is required"
   exit 1
 fi
 
@@ -60,8 +70,19 @@ xcodebuild \
 
 ditto --norsrc --noextattr --noqtn --noacl \
   "$SOURCE_ROOT/build/Release/$PRODUCT_NAME.driver" "$OUTPUT"
-codesign --force --deep --sign - --timestamp=none "$OUTPUT"
+if [[ "$SIGNING_IDENTITY" == "-" ]]; then
+  codesign --force --deep --sign - --timestamp=none "$OUTPUT"
+else
+  codesign \
+    --force \
+    --deep \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
+    "$OUTPUT"
+fi
 "$ROOT/scripts/verify-doubao-driver.sh" "$OUTPUT"
 
 print "Built: $OUTPUT"
+print "SIGNING IDENTITY: $SIGNING_IDENTITY"
 print "Next: $ROOT/scripts/build-doubao-driver-pkg.sh"

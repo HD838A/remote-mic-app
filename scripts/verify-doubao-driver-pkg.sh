@@ -5,6 +5,9 @@ ROOT="${0:A:h:h}"
 PACKAGE="${1:?usage: verify-doubao-driver-pkg.sh PACKAGE install|uninstall}"
 MODE="${2:?usage: verify-doubao-driver-pkg.sh PACKAGE install|uninstall}"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
+EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
+REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
+REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remote-mic-driver-package-verify.XXXXXX)"
 EXPANDED="$WORK_DIR/expanded"
 PAYLOAD_FILES="$WORK_DIR/payload-files"
@@ -16,6 +19,23 @@ cleanup() {
   esac
 }
 trap cleanup EXIT
+
+case "$REQUIRE_DEVELOPER_ID_SIGNING" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_NOTARIZATION" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_NOTARIZATION must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && -z "$EXPECTED_DEVELOPER_TEAM_ID" ]]; then
+  print -u2 "EXPECTED_DEVELOPER_TEAM_ID is required for Developer ID verification"
+  exit 1
+fi
+if [[ "$REQUIRE_NOTARIZATION" == "1" && "$REQUIRE_DEVELOPER_ID_SIGNING" != "1" ]]; then
+  print -u2 "notarization verification requires Developer ID verification"
+  exit 1
+fi
 
 test -f "$PACKAGE"
 /usr/sbin/pkgutil --expand "$PACKAGE" "$EXPANDED"
@@ -63,4 +83,13 @@ case "$MODE" in
 esac
 
 /usr/bin/grep -Fq "version=\"$VERSION\"" "$EXPANDED/PackageInfo"
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
+  SIGNATURE_DETAILS="$(/usr/sbin/pkgutil --check-signature "$PACKAGE" 2>&1)"
+  print -r -- "$SIGNATURE_DETAILS" | rg -q 'Status: signed by a developer certificate issued by Apple for distribution'
+  print -r -- "$SIGNATURE_DETAILS" | rg -q "Developer ID Installer: .*\\($EXPECTED_DEVELOPER_TEAM_ID\\)"
+fi
+if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
+  xcrun stapler validate "$PACKAGE"
+  /usr/sbin/spctl -a -vv -t install "$PACKAGE"
+fi
 print "DOUBAO DRIVER PACKAGE VERIFY PASS: $PACKAGE ($MODE)"

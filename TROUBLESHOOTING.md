@@ -70,7 +70,7 @@
 
 ## 安装包被 macOS 阻止
 
-当前发布使用 ad-hoc 应用签名，PKG 未使用 Installer 证书签名，也未进行 Apple 公证。请只从本项目 GitHub Releases 下载，并在“系统设置 → 隐私与安全性”中确认后继续打开。
+自 v1.3.0 起，正式 Release 的应用、两个 PKG 和 DMG 均使用 Developer ID 签名并已完成 Apple 公证。若 macOS 仍阻止安装，请删除本地下载件，从本项目 GitHub Releases 重新下载，并核对同一 Release 中的 `.sha256` 文件；不要使用来源不明的副本。
 
 可使用同一 Release 提供的 `.sha256` 文件核对 DMG：
 

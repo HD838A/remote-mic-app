@@ -12,6 +12,9 @@ VERIFY_ROOT="$(mktemp -d /private/tmp/remote-mic-dmg-verify.XXXXXX)"
 MOUNT_POINT="$VERIFY_ROOT/mount"
 INSTALL_PACKAGE="$MOUNT_POINT/Install Remote Mic.pkg"
 UNINSTALL_PACKAGE="$MOUNT_POINT/Uninstall Remote Mic.pkg"
+EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
+REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
+REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
 ATTACHED=0
 
 mkdir -p "$MOUNT_POINT"
@@ -27,8 +30,35 @@ cleanup() {
 }
 trap cleanup EXIT
 
+case "$REQUIRE_DEVELOPER_ID_SIGNING" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_NOTARIZATION" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_NOTARIZATION must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && -z "$EXPECTED_DEVELOPER_TEAM_ID" ]]; then
+  print -u2 "EXPECTED_DEVELOPER_TEAM_ID is required for Developer ID verification"
+  exit 1
+fi
+if [[ "$REQUIRE_NOTARIZATION" == "1" && "$REQUIRE_DEVELOPER_ID_SIGNING" != "1" ]]; then
+  print -u2 "notarization verification requires Developer ID verification"
+  exit 1
+fi
+
 test -f "$DMG"
 test -f "$CHECKSUM"
+if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
+  codesign --verify --strict "$DMG"
+  DMG_SIGNATURE_DETAILS="$(codesign -dvvv "$DMG" 2>&1)"
+  print -r -- "$DMG_SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:'
+  print -r -- "$DMG_SIGNATURE_DETAILS" | rg -q "^TeamIdentifier=$EXPECTED_DEVELOPER_TEAM_ID$"
+fi
+if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
+  xcrun stapler validate "$DMG"
+  /usr/sbin/spctl -a -vv -t open "$DMG"
+fi
 (
   cd "${DMG:h}"
   shasum -a 256 -c "${CHECKSUM:t}"
@@ -76,4 +106,7 @@ fi
 
 print "DMG VERIFY PASS: $DMG"
 print "VERSION: $VERSION ($BUILD)"
-print "SIGNATURE: $SIGNATURE / not notarized"
+print "SIGNATURE: $SIGNATURE"
+if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
+  print "NOTARIZATION: stapled and accepted by Gatekeeper"
+fi

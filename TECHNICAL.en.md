@@ -11,7 +11,7 @@ This document is for developers, auditors, and release engineers. It describes t
 - Target remote: Xiaomi Bluetooth Remote 2 Pro / RC003
 - HID identity: Vendor ID 0x2717, Product ID 0x32B8
 - Swift toolchain: Swift 6.2, with source compiled in Swift 5 language mode
-- Release signing: the app uses ad-hoc signing with a fixed designated requirement unless a valid signing identity is explicitly supplied. The driver is ad-hoc signed. PKGs do not use an Installer certificate and are not notarized.
+- Release signing: local development builds retain ad-hoc signing with a fixed designated requirement. Starting with v1.3.0, official releases use Developer ID Application and Developer ID Installer signing; the app and driver use the Hardened Runtime and trusted timestamps, while the app, both PKGs, and the DMG are notarized by Apple and stapled.
 
 Package.swift, Resources/Info.plist, build scripts, and verification scripts all pin the minimum system version to macOS 26 and verify that release binaries contain only arm64.
 
@@ -162,9 +162,11 @@ The DMG root contains exactly four items:
 - Remote Mic.app
 - Applications, a link to /Applications
 
-verify-dmg.sh validates the SHA-256, HFS+ image, root manifest, app bundle contents, PKG payloads, version, arm64 architecture, macOS 26 minimum version, valid code signature, localized resources, and absence of leaked local paths.
+verify-dmg.sh validates the SHA-256, HFS+ image, root manifest, app bundle contents, PKG payloads, version, arm64 architecture, macOS 26 minimum version, valid code signature, localized resources, and absence of leaked local paths. In official mode it also validates the Developer ID Team, Hardened Runtime, PKG/DMG signatures, stapled notarization tickets, and Gatekeeper assessment.
 
 Sparkle 2.9.4 is embedded through SwiftPM. Its feed URL and EdDSA public key are in Info.plist; the private key remains in the publisher's restricted local storage and never enters the project or a release. SUEnableAutomaticChecks=false prevents startup and scheduled checks. Only the explicit menu command accesses the feed. Sparkle updates the app bundle only and never installs or replaces the compatibility microphone driver.
+
+Official publishing uses scripts/notarize-release.sh. It accepts only the existing Developer ID identities synchronized to the release Mac, a local Keychain notarization profile, and a reference to the restricted Sparkle private-key file. The script notarizes and staples the app, both PKGs, and the DMG in order, then creates the Sparkle ZIP and signed appcast from the stapled app. It never writes certificates, P12 files, API keys, or private keys into the repository or a Release.
 
 ## License and sources
 
