@@ -39,6 +39,7 @@ test "$(plutil -extract CFBundleIconFile raw -o - "$PLIST")" = "AppIcon"
 test -n "$(plutil -extract NSBluetoothAlwaysUsageDescription raw -o - "$PLIST")"
 test "$(plutil -extract SUFeedURL raw -o - "$PLIST")" = \
   "https://github.com/HD838A/remote-mic-app/releases/latest/download/appcast.xml"
+test "$(plutil -extract SUEnableAutomaticChecks raw -o - "$PLIST")" = "false"
 test -n "$(plutil -extract SUPublicEDKey raw -o - "$PLIST")"
 
 codesign --verify --deep --strict "$APP"

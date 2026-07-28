@@ -19,9 +19,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2.2</string>
+	<string>1.2.3</string>
 	<key>CFBundleVersion</key>
-	<string>19</string>
+	<string>20</string>
     <key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
     <key>LSUIElement</key>
@@ -34,6 +34,8 @@
     <string>NSApplication</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/HD838A/remote-mic-app/releases/latest/download/appcast.xml</string>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
 	<key>SUPublicEDKey</key>
 	<string>8dWQovCnGPucjMcQuCHfrAv4PtjuDjJSbHNmItqYiyc=</string>
 </dict>
