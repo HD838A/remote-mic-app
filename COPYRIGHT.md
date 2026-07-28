@@ -1,5 +1,7 @@
 # Copyright
 
+[English](COPYRIGHT.en.md)
+
 **Remote Mic**
 
 Copyright (C) 2026 Remote Mic contributors

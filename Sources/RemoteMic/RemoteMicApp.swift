@@ -21,6 +21,7 @@ enum RemoteMicApp {
 @MainActor
 private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let model = BridgeAppModel()
+    private lazy var localization = LocalizationStore(settings: model.settings)
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
@@ -32,14 +33,15 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         userDriverDelegate: nil
     )
 
-    private let connectionItem = NSMenuItem(title: "正在初始化蓝牙", action: nil, keyEquivalent: "")
-    private let audioItem = NSMenuItem(title: "未选择语音输出设备", action: nil, keyEquivalent: "")
-    private let hidItem = NSMenuItem(title: "按键映射未启用", action: nil, keyEquivalent: "")
+    private let connectionItem = NSMenuItem()
+    private let audioItem = NSMenuItem()
+    private let hidItem = NSMenuItem()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installTerminationSignalHandlers()
         configureStatusItem()
         observeModel()
+        observeLocalization()
         model.startIfNeeded()
         refreshMenuStatus()
     }
@@ -80,14 +82,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private func configureStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            button.toolTip = "无线麦"
+            button.toolTip = localization.text("无线麦")
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             if let image = statusImage(isStreaming: false) {
                 button.image = image
             } else {
-                button.title = "小米遥控器"
+                button.title = localization.text("小米遥控器")
             }
         }
 
@@ -95,6 +97,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         audioItem.isEnabled = false
         hidItem.isEnabled = false
 
+        statusItem = item
+        rebuildStatusMenu()
+    }
+
+    private func rebuildStatusMenu() {
         let menu = NSMenu()
         menu.delegate = self
         menu.addItem(connectionItem)
@@ -104,6 +111,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(menuItem("立即重新连接", action: #selector(reconnect)))
         menu.addItem(menuItem("打开设置…", action: #selector(showSettings)))
         menu.addItem(menuItem("显示日志", action: #selector(showLog)))
+        menu.addItem(languageMenuItem())
         menu.addItem(.separator())
         menu.addItem(menuItem("关于无线麦", action: #selector(showAbout)))
         menu.addItem(versionMenuItem())
@@ -112,21 +120,52 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(.separator())
         menu.addItem(menuItem("退出", action: #selector(quit)))
         statusMenu = menu
-        statusItem = item
+        refreshMenuStatus()
     }
 
     private func menuItem(_ title: String, action: Selector) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        let item = NSMenuItem(title: localization.text(title), action: action, keyEquivalent: "")
         item.target = self
+        return item
+    }
+
+    private func languageMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: localization.text("语言"), action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for language in AppLanguage.allCases {
+            let title: String
+            switch language {
+            case .system:
+                title = localization.text("跟随系统")
+            case .simplifiedChinese, .english:
+                title = language.nativeDisplayName
+            }
+            let languageItem = NSMenuItem(title: title, action: #selector(selectLanguage(_:)), keyEquivalent: "")
+            languageItem.target = self
+            languageItem.representedObject = language.rawValue
+            languageItem.state = language == localization.language ? .on : .off
+            submenu.addItem(languageItem)
+        }
+        item.submenu = submenu
         return item
     }
 
     private func versionMenuItem() -> NSMenuItem {
         let shortVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "未知"
+        ) as? String ?? localization.text("未知")
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        let title = build.map { "版本 \(shortVersion) (\($0))" } ?? "版本 \(shortVersion)"
+        let title = build.map {
+            String(
+                format: localization.text("版本 %@ (%@)"),
+                locale: localization.locale,
+                arguments: [shortVersion, $0]
+            )
+        } ?? String(
+            format: localization.text("版本 %@"),
+            locale: localization.locale,
+            arguments: [shortVersion]
+        )
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
@@ -146,17 +185,33 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         .store(in: &subscriptions)
     }
 
+    private func observeLocalization() {
+        localization.$locale
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.statusItem?.button?.toolTip = self.localization.text("无线麦")
+                self.settingsWindowController?.window?.title = self.localization.text("无线麦")
+                self.rebuildStatusMenu()
+            }
+            .store(in: &subscriptions)
+    }
+
     private func refreshMenuStatus() {
-        connectionItem.title = model.connectionStatus
-        audioItem.title = model.isStreaming ? "语音中" : model.audioStatus
-        hidItem.title = model.hidStatus
+        connectionItem.title = model.connectionStatus.text(using: localization)
+        audioItem.title = model.isStreaming
+            ? localization.text("语音中")
+            : model.audioStatus.text(using: localization)
+        hidItem.title = model.hidStatus.text(using: localization)
         statusItem?.button?.image = statusImage(isStreaming: model.isStreaming)
     }
 
     private func statusImage(isStreaming: Bool) -> NSImage? {
         let resourceName = isStreaming ? "StatusIconActiveTemplate" : "StatusIconTemplate"
         let fallbackSymbol = isStreaming ? "mic.fill" : "dot.radiowaves.left.and.right"
-        let accessibilityDescription = isStreaming ? "小米遥控器语音中" : "小米遥控器"
+        let accessibilityDescription = localization.text(
+            isStreaming ? "小米遥控器语音中" : "小米遥控器"
+        )
         let image = NSImage(named: NSImage.Name(resourceName))
             ?? NSImage(
                 systemSymbolName: fallbackSymbol,
@@ -200,14 +255,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func makeSettingsWindowController() -> NSWindowController {
-        let hostingController = NSHostingController(rootView: SettingsView(model: model))
+        let hostingController = NSHostingController(
+            rootView: SettingsView(model: model).environmentObject(localization)
+        )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 650),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "无线麦"
+        window.title = localization.text("无线麦")
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 800, height: 650)
@@ -222,7 +279,25 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(nil)
+        let shortVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? localization.text("未知")
+        let alert = NSAlert()
+        alert.messageText = localization.text("无线麦")
+        alert.informativeText = String(
+            format: localization.text("版本 %@\nRC003 蓝牙语音遥控器桥接工具。"),
+            locale: localization.locale,
+            arguments: [shortVersion]
+        )
+        alert.addButton(withTitle: localization.text("好"))
+        alert.runModal()
+    }
+
+    @objc private func selectLanguage(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let language = AppLanguage(rawValue: rawValue)
+        else { return }
+        localization.select(language)
     }
 
     @objc private func checkForUpdates() {

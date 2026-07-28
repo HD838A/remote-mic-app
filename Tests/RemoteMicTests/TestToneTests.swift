@@ -54,6 +54,6 @@ struct TestToneTests {
         model.sendTestTone()
 
         #expect(!model.isPlayingTestTone)
-        #expect(model.testToneStatus == "未选择语音输出设备或设备不可用")
+        #expect(model.testToneStatus.key == "未选择语音输出设备或设备不可用")
     }
 }

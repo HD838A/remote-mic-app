@@ -1,6 +1,8 @@
 # 无线麦技术文档
 
-本文面向开发、审计和发布人员，描述 `1.2.3 (20)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
+[English](TECHNICAL.en.md)
+
+本文面向开发、审计和发布人员，描述 `1.3.0 (21)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
 
 ## 支持范围
 
@@ -28,6 +30,12 @@
 | `KeyboardInjector.swift` | 键盘、媒体键和预置应用启动动作 |
 | `RemoteVoiceFunctionMapper.swift` | 只对 RC003 把语音键的 F5 usage 映射为 Fn/Globe，并在退出时恢复 |
 | `AppSettings.swift` | 音频设备、增益、HID 开关、按键映射和外设标识持久化 |
+
+## 国际化
+
+应用支持简体中文和英文。语言选择保存在 AppSettings 中；LocalizationStore 不修改 AppleLanguages，而是直接发布新的 Locale。SwiftUI 使用环境 Locale 刷新静态文案，AppKit 菜单栏边界重建菜单和窗口标题；动态状态保存为资源键与参数，因此语言切换后无需重启即可重新渲染。
+
+应用包同时包含 en.lproj 和 zh-Hans.lproj 的 Localizable.strings、InfoPlist.strings 与内置帮助。系统权限提示与 Sparkle 等第三方界面仍由 macOS 或第三方组件在下次显示时决定语言。
 
 ## 蓝牙与 ATVV
 
@@ -65,7 +73,7 @@ ATVV 通道为：
 
 安装 PKG 的 payload 包含：
 
-- `/Applications/无线麦.app`；
+- `/Applications/Remote Mic.app`；
 - `/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver`。
 
 安装脚本校验架构、最低系统版本和签名，重启 CoreAudio，并为当前桌面用户启动应用。卸载 PKG 只删除 `MiRemoteV2ch.driver` 并重启 CoreAudio，不删除应用或 BlackHole。
@@ -125,7 +133,7 @@ xcrun swift test
 ./scripts/verify-app.sh
 ```
 
-`scripts/test.sh` 运行 36 项协议/策略自检并编译完整应用。当前 Swift Testing 测试为 61 项，覆盖 ATVV、蓝牙生命周期、音频设备策略、按键、权限、Fn 映射和测试音。
+`scripts/test.sh` 运行 36 项协议/策略自检并编译完整应用。当前 Swift Testing 测试为 62 项，覆盖 ATVV、蓝牙生命周期、音频设备策略、按键、权限、语言选择持久化与即时 Locale 更新、Fn 映射和测试音。
 
 构建并启动应用：
 
@@ -147,18 +155,18 @@ xcrun swift test
 
 `build-dmg.sh` 会依次构建并验证应用、驱动、安装 PKG 和卸载 PKG，生成：
 
-- `dist/无线麦.app`；
+- `dist/Remote Mic.app`；
 - `dist/MiRemoteV2ch.driver`；
-- `dist/安装无线麦.pkg`；
-- `dist/卸载无线麦.pkg`；
-- `dist/Remote-Mic-1.2.3.dmg`；
-- `dist/Remote-Mic-1.2.3.dmg.sha256`。
+- `dist/Install Remote Mic.pkg`；
+- `dist/Uninstall Remote Mic.pkg`；
+- `dist/Remote-Mic-1.3.0.dmg`；
+- `dist/Remote-Mic-1.3.0.dmg.sha256`。
 
 DMG 根目录严格只有四项：
 
-- `安装无线麦.pkg`；
-- `卸载无线麦.pkg`；
-- `无线麦.app`；
+- `Install Remote Mic.pkg`；
+- `Uninstall Remote Mic.pkg`；
+- `Remote Mic.app`；
 - 指向 `/Applications` 的 `Applications` 入口。
 
 `verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 26 最低版本、有效代码签名和本地路径泄漏。

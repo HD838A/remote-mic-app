@@ -21,13 +21,13 @@ struct DoubaoAudioDeviceTests {
         )
 
         #expect(DoubaoAudioDevicePolicy.device(in: [device])?.id == device.id)
-        #expect(DoubaoAudioDevicePolicy.status(in: [device]).contains("已检测到"))
+        #expect(DoubaoAudioDevicePolicy.status(in: [device]).key == "已检测到 %@（豆包兼容）")
     }
 
     @Test func reportsWhenTheCompatibilityDriverIsMissing() {
         let physicalDevice = AudioDeviceInfo(id: 3, uid: "BuiltIn", name: "MacBook 麦克风")
 
         #expect(DoubaoAudioDevicePolicy.device(in: [physicalDevice]) == nil)
-        #expect(DoubaoAudioDevicePolicy.status(in: [physicalDevice]).contains("未检测到"))
+        #expect(DoubaoAudioDevicePolicy.status(in: [physicalDevice]).key == "未检测到 %@")
     }
 }

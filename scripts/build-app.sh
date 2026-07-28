@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${0:A:h:h}"
 CONFIGURATION="${CONFIGURATION:-release}"
 APP_NAME="RemoteMic"
-DISPLAY_NAME="无线麦"
+DISPLAY_NAME="Remote Mic"
 OUTPUT_DIR="$ROOT/dist"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 SPARKLE_FRAMEWORK="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
@@ -39,14 +39,15 @@ ditto --norsrc --noextattr --noqtn --noacl \
   "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/LICENSE.md" "$APP_DIR/Contents/Resources/LICENSE.md"
-ditto --norsrc --noextattr --noqtn --noacl \
-  "$ROOT/README.md" "$APP_DIR/Contents/Resources/README.md"
+for document in README TECHNICAL TROUBLESHOOTING COPYRIGHT LOGO-LICENSE; do
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$ROOT/$document.en.md" "$APP_DIR/Contents/Resources/$document.md"
+done
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/THIRD_PARTY_NOTICES.md" "$APP_DIR/Contents/Resources/THIRD_PARTY_NOTICES.md"
 ditto --norsrc --noextattr --noqtn --noacl \
-  "$ROOT/COPYRIGHT.md" "$APP_DIR/Contents/Resources/COPYRIGHT.md"
-ditto --norsrc --noextattr --noqtn --noacl \
-  "$ROOT/LOGO-LICENSE.md" "$APP_DIR/Contents/Resources/LOGO-LICENSE.md"
+  "$ROOT/Resources/首次安装说明.en.md" \
+  "$APP_DIR/Contents/Resources/FirstInstallGuide.md"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/RC003-remote-photo.png" \
   "$APP_DIR/Contents/Resources/RC003-remote-photo.png"
@@ -60,9 +61,11 @@ for icon_resource in \
     "$ROOT/Resources/$icon_resource" \
     "$APP_DIR/Contents/Resources/$icon_resource"
 done
-ditto --norsrc --noextattr --noqtn --noacl \
-  "$ROOT/Resources/豆包输入法兼容说明.md" \
-  "$APP_DIR/Contents/Resources/豆包输入法兼容说明.md"
+for localization in en zh-Hans; do
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$ROOT/Resources/$localization.lproj" \
+    "$APP_DIR/Contents/Resources/$localization.lproj"
+done
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
   codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_DIR"
 fi

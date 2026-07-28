@@ -3,15 +3,15 @@ set -euo pipefail
 
 ROOT="${0:A:h:h}"
 OUTPUT_DIR="$ROOT/dist"
-DISPLAY_NAME="无线麦"
+DISPLAY_NAME="Remote Mic"
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
 DMG="${1:-$OUTPUT_DIR/Remote-Mic-$VERSION.dmg}"
 CHECKSUM="$DMG.sha256"
 VERIFY_ROOT="$(mktemp -d /private/tmp/remote-mic-dmg-verify.XXXXXX)"
 MOUNT_POINT="$VERIFY_ROOT/mount"
-INSTALL_PACKAGE="$MOUNT_POINT/安装无线麦.pkg"
-UNINSTALL_PACKAGE="$MOUNT_POINT/卸载无线麦.pkg"
+INSTALL_PACKAGE="$MOUNT_POINT/Install Remote Mic.pkg"
+UNINSTALL_PACKAGE="$MOUNT_POINT/Uninstall Remote Mic.pkg"
 ATTACHED=0
 
 mkdir -p "$MOUNT_POINT"
@@ -40,9 +40,9 @@ ATTACHED=1
 APP="$MOUNT_POINT/$DISPLAY_NAME.app"
 EXPECTED_ROOT_ENTRIES="$(printf '%s\n' \
   Applications \
-  安装无线麦.pkg \
-  卸载无线麦.pkg \
-  无线麦.app | LC_ALL=C sort)"
+  Install\ Remote\ Mic.pkg \
+  Remote\ Mic.app \
+  Uninstall\ Remote\ Mic.pkg | LC_ALL=C sort)"
 ACTUAL_ROOT_ENTRIES="$(find "$MOUNT_POINT" -mindepth 1 -maxdepth 1 \
   -exec basename {} \; | LC_ALL=C sort)"
 

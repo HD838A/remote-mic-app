@@ -34,37 +34,37 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    var shortLabel: String {
+    func shortLabel(using localization: LocalizationStore) -> String {
         switch self {
-        case .power: return "电源"
-        case .up: return "上"
-        case .left: return "左"
+        case .power: return localization.text("电源")
+        case .up: return localization.text("上")
+        case .left: return localization.text("左")
         case .ok: return "OK"
-        case .right: return "右"
-        case .down: return "下"
-        case .back: return "返回"
+        case .right: return localization.text("右")
+        case .down: return localization.text("下")
+        case .back: return localization.text("返回")
         case .volumeUp: return "+"
-        case .home: return "主页"
+        case .home: return localization.text("主页")
         case .volumeDown: return "−"
-        case .menu: return "菜单"
+        case .menu: return localization.text("菜单")
         case .tv: return "TV"
         }
     }
 
-    var displayName: String {
+    func displayName(using localization: LocalizationStore) -> String {
         switch self {
-        case .power: return "电源键"
-        case .up: return "上键"
-        case .left: return "左键"
-        case .ok: return "确定键"
-        case .right: return "右键"
-        case .down: return "下键"
-        case .back: return "返回键"
-        case .volumeUp: return "音量 +"
-        case .home: return "主页键"
-        case .volumeDown: return "音量 -"
-        case .menu: return "菜单键"
-        case .tv: return "TV 键"
+        case .power: return localization.text("电源键")
+        case .up: return localization.text("上键")
+        case .left: return localization.text("左键")
+        case .ok: return localization.text("确定键")
+        case .right: return localization.text("右键")
+        case .down: return localization.text("下键")
+        case .back: return localization.text("返回键")
+        case .volumeUp: return localization.text("音量 +")
+        case .home: return localization.text("主页键")
+        case .volumeDown: return localization.text("音量 -")
+        case .menu: return localization.text("菜单键")
+        case .tv: return localization.text("TV 键")
         }
     }
 
@@ -142,14 +142,38 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         return flags
     }
 
-    var displayName: String {
+    func displayName(using localization: LocalizationStore) -> String {
         var result = ""
         if modifierFlags.contains(.control) { result += "⌃" }
         if modifierFlags.contains(.option) { result += "⌥" }
         if modifierFlags.contains(.shift) { result += "⇧" }
         if modifierFlags.contains(.command) { result += "⌘" }
         if modifierFlags.contains(.function) { result += "fn " }
-        return result + keyLabel
+        return result + localizedKeyLabel(using: localization)
+    }
+
+    private func localizedKeyLabel(using localization: LocalizationStore) -> String {
+        switch keyCode {
+        case 36: return localization.text("Return")
+        case 48: return localization.text("Tab")
+        case 49: return localization.text("Space")
+        case 71: return localization.text("Clear")
+        case 76: return localization.text("Enter")
+        case 114: return localization.text("Help")
+        case 115: return localization.text("Home")
+        case 116: return localization.text("Page Up")
+        case 119: return localization.text("End")
+        case 121: return localization.text("Page Down")
+        default:
+            if keyLabel.hasPrefix("键码 "), let keyCode = Int(keyLabel.dropFirst(3)) {
+                return String(
+                    format: localization.text("键码 %@"),
+                    locale: localization.locale,
+                    arguments: [String(keyCode)]
+                )
+            }
+            return keyLabel
+        }
     }
 
     private static func keyLabel(for event: NSEvent) -> String {
@@ -193,7 +217,7 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         case 126: return "↑"
         default:
             let characters = event.charactersIgnoringModifiers ?? ""
-            return characters.isEmpty ? "键码 \(event.keyCode)" : characters.uppercased()
+            return characters.isEmpty ? "Key Code \(event.keyCode)" : characters.uppercased()
         }
     }
 }
@@ -205,11 +229,11 @@ enum ButtonTrigger: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
+    func displayName(using localization: LocalizationStore) -> String {
         switch self {
-        case .singleClick: return "单击"
-        case .doubleClick: return "双击"
-        case .longPress: return "长按"
+        case .singleClick: return localization.text("单击")
+        case .doubleClick: return localization.text("双击")
+        case .longPress: return localization.text("长按")
         }
     }
 }
@@ -238,18 +262,18 @@ enum PresetApplication: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
+    func displayName(using localization: LocalizationStore) -> String {
         switch self {
-        case .remoteMic: return "无线麦"
+        case .remoteMic: return localization.text("无线麦")
         case .codex: return "Codex"
         case .claude: return "Claude"
         case .cmux: return "cmux"
-        case .weChat: return "微信"
+        case .weChat: return localization.text("微信")
         case .cursor: return "Cursor"
         case .xcode: return "Xcode"
         case .slack: return "Slack"
-        case .weCom: return "企业微信"
-        case .neteaseMusic: return "网易云音乐"
+        case .weCom: return localization.text("企业微信")
+        case .neteaseMusic: return localization.text("网易云音乐")
         case .chrome: return "Chrome"
         case .safari: return "Safari"
         case .zed: return "Zed"
@@ -317,37 +341,37 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
+    func displayName(using localization: LocalizationStore) -> String {
         switch self {
-        case .disabled: return "禁用"
+        case .disabled: return localization.text("禁用")
         case .escape: return "Escape"
         case .returnKey: return "Return"
-        case .arrowUp: return "方向上"
-        case .arrowDown: return "方向下"
-        case .arrowLeft: return "方向左"
-        case .arrowRight: return "方向右"
-        case .deleteBackward: return "Delete（退格）"
-        case .showDesktop: return "显示桌面"
-        case .contextMenu: return "上下文菜单"
+        case .arrowUp: return localization.text("方向上")
+        case .arrowDown: return localization.text("方向下")
+        case .arrowLeft: return localization.text("方向左")
+        case .arrowRight: return localization.text("方向右")
+        case .deleteBackward: return localization.text("Delete（退格）")
+        case .showDesktop: return localization.text("显示桌面")
+        case .contextMenu: return localization.text("上下文菜单")
         case .appSwitcher: return "Command-Tab"
-        case .volumeUp: return "系统音量 +"
-        case .volumeDown: return "系统音量 -"
-        case .volumeMute: return "系统静音"
-        case .playPause: return "播放 / 暂停"
-        case .customShortcut: return "自定义快捷键"
-        case .openRemoteMic: return "打开无线麦"
-        case .openCodex: return "打开 Codex"
-        case .openClaude: return "打开 Claude"
-        case .openCmux: return "打开 cmux"
-        case .openWeChat: return "打开微信"
-        case .openCursor: return "打开 Cursor"
-        case .openXcode: return "打开 Xcode"
-        case .openSlack: return "打开 Slack"
-        case .openWeCom: return "打开企业微信"
-        case .openNeteaseMusic: return "打开网易云音乐"
-        case .openChrome: return "打开 Chrome"
-        case .openSafari: return "打开 Safari"
-        case .openZed: return "打开 Zed"
+        case .volumeUp: return localization.text("系统音量 +")
+        case .volumeDown: return localization.text("系统音量 -")
+        case .volumeMute: return localization.text("系统静音")
+        case .playPause: return localization.text("播放 / 暂停")
+        case .customShortcut: return localization.text("自定义快捷键")
+        case .openRemoteMic: return localization.text("打开无线麦")
+        case .openCodex: return localization.text("打开 Codex")
+        case .openClaude: return localization.text("打开 Claude")
+        case .openCmux: return localization.text("打开 cmux")
+        case .openWeChat: return localization.text("打开微信")
+        case .openCursor: return localization.text("打开 Cursor")
+        case .openXcode: return localization.text("打开 Xcode")
+        case .openSlack: return localization.text("打开 Slack")
+        case .openWeCom: return localization.text("打开企业微信")
+        case .openNeteaseMusic: return localization.text("打开网易云音乐")
+        case .openChrome: return localization.text("打开 Chrome")
+        case .openSafari: return localization.text("打开 Safari")
+        case .openZed: return localization.text("打开 Zed")
         }
     }
 

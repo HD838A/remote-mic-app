@@ -5,8 +5,23 @@ TARGET_VOLUME="${3:-/}"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
 
+uses_chinese_locale() {
+  local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+  [[ "$locale" == zh* ]]
+}
+
+installer_message() {
+  if uses_chinese_locale; then
+    print "$1"
+  else
+    print "$2"
+  fi
+}
+
 if [[ ! -e "$DESTINATION" ]]; then
-  print "未发现 MiRemoteV 2ch，无需卸载。"
+  installer_message \
+    "未发现 MiRemoteV 2ch，无需卸载。" \
+    "MiRemoteV 2ch was not found; nothing needs to be uninstalled."
   exit 0
 fi
 
@@ -15,4 +30,6 @@ test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "com.h
 
 /bin/rm -rf -- "$DESTINATION"
 /usr/bin/killall coreaudiod
-print "已卸载 MiRemoteV 2ch。BlackHole 未被修改。"
+installer_message \
+  "已卸载 MiRemoteV 2ch。BlackHole 未被修改。" \
+  "MiRemoteV 2ch has been uninstalled. BlackHole was not changed."

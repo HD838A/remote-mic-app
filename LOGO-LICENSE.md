@@ -1,5 +1,7 @@
 # 无线麦 App Logo 许可
 
+[English](LOGO-LICENSE.en.md)
+
 Copyright (C) 2026 HD838A. All rights reserved.
 
 ## 适用范围

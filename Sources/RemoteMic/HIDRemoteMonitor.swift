@@ -51,8 +51,8 @@ final class HIDRemoteMonitor {
     private var doubleClickTimers: [RemoteButton: DispatchSourceTimer] = [:]
     private var longPressTimers: [RemoteButton: DispatchSourceTimer] = [:]
     private var permissionMonitor: DispatchSourceTimer?
-    private(set) var status = "按键映射未启用"
-    var onStatus: ((String) -> Void)?
+    private(set) var status = LocalizedMessage("按键映射未启用")
+    var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((Set<RemoteButton>) -> Void)?
 
     init(settings: AppSettings) {
@@ -75,7 +75,7 @@ final class HIDRemoteMonitor {
     func start() {
         stop()
         guard settings.customMappingEnabled else {
-            updateStatus("按键由 macOS 原生处理")
+            updateStatus(LocalizedMessage("按键由 macOS 原生处理"))
             return
         }
         let inputGranted = Self.isInputMonitoringGranted
@@ -89,9 +89,9 @@ final class HIDRemoteMonitor {
             accessibilityGranted: accessibilityGranted
         ) else {
             if !inputGranted {
-                updateStatus("需要输入监控权限；未读取遥控器按键")
+                updateStatus(LocalizedMessage("需要输入监控权限；未读取遥控器按键"))
             } else {
-                updateStatus("需要辅助功能权限；未发送映射动作")
+                updateStatus(LocalizedMessage("需要辅助功能权限；未发送映射动作"))
             }
             return
         }
@@ -124,12 +124,12 @@ final class HIDRemoteMonitor {
                 CFRunLoopMode.commonModes.rawValue
             )
             eventSuppressor.stop()
-            updateStatus("无法读取遥控器（错误 \(result)）")
+            updateStatus(LocalizedMessage("无法读取遥控器（错误 %@）", arguments: [String(result)]))
             return
         }
         self.manager = manager
         startPermissionMonitor()
-        updateStatus("等待 RC003 按键设备")
+        updateStatus(LocalizedMessage("等待 RC003 按键设备"))
         AppLogger.shared.write("HID START mode=adaptive")
     }
 
@@ -159,7 +159,7 @@ final class HIDRemoteMonitor {
 
     fileprivate func deviceDidMatch(result: IOReturn, device: IOHIDDevice) {
         guard result == kIOReturnSuccess else {
-            updateStatus("RC003 HID 打开失败")
+            updateStatus(LocalizedMessage("RC003 HID 打开失败"))
             return
         }
         guard activeDevice == nil else { return }
@@ -170,14 +170,14 @@ final class HIDRemoteMonitor {
         if seizeResult == kIOReturnSuccess {
             activeDevice = device
             activeDeviceIsSeized = true
-            updateStatus("RC003 按键映射已连接（独占模式）")
+            updateStatus(LocalizedMessage("RC003 按键映射已连接（独占模式）"))
             AppLogger.shared.write("HID CONNECTED mode=seized")
             return
         }
 
         let monitorResult = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
         guard monitorResult == kIOReturnSuccess else {
-            updateStatus("无法读取 RC003（错误 \(monitorResult)）")
+            updateStatus(LocalizedMessage("无法读取 RC003（错误 %@）", arguments: [String(monitorResult)]))
             AppLogger.shared.write(
                 "HID DEVICE OPEN FAILED seize=\(seizeResult) monitor=\(monitorResult)"
             )
@@ -186,8 +186,13 @@ final class HIDRemoteMonitor {
 
         activeDevice = device
         activeDeviceIsSeized = false
-        let suffix = eventSuppressor.isRunning ? "兼容模式" : "兼容模式；系统原动作可能保留"
-        updateStatus("RC003 按键映射已连接（\(suffix)）")
+        updateStatus(
+            LocalizedMessage(
+                eventSuppressor.isRunning
+                    ? "RC003 按键映射已连接（兼容模式）"
+                    : "RC003 按键映射已连接（兼容模式；系统原动作可能保留）"
+            )
+        )
         AppLogger.shared.write("HID CONNECTED mode=monitored seize_error=\(seizeResult)")
     }
 
@@ -201,7 +206,7 @@ final class HIDRemoteMonitor {
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
         resetGestureRecognition()
-        updateStatus("RC003 按键设备已断开")
+        updateStatus(LocalizedMessage("RC003 按键设备已断开"))
         AppLogger.shared.write("HID DISCONNECTED")
     }
 
@@ -357,7 +362,7 @@ final class HIDRemoteMonitor {
         let configured = settings.configuredAction(for: button, trigger: trigger)
         guard KeyboardInjector.send(configured.action, shortcut: configured.shortcut) else {
             stop()
-            updateStatus("辅助功能权限已失效；已释放遥控器")
+            updateStatus(LocalizedMessage("辅助功能权限已失效；已释放遥控器"))
             return false
         }
         AppLogger.shared.write(
@@ -394,11 +399,11 @@ final class HIDRemoteMonitor {
 
     private func releaseForRevokedPermissions() {
         stop()
-        updateStatus("系统权限已失效；已释放遥控器")
+        updateStatus(LocalizedMessage("系统权限已失效；已释放遥控器"))
         AppLogger.shared.write("HID RELEASED permission_revoked")
     }
 
-    private func updateStatus(_ value: String) {
+    private func updateStatus(_ value: LocalizedMessage) {
         status = value
         onStatus?(value)
     }

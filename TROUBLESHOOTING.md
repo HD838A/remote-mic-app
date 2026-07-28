@@ -1,6 +1,8 @@
 # 无线麦排障指南
 
-本文适用于 `1.2.1`。请先确认 Mac 为 Apple Silicon，系统版本为 macOS 26 或更高。
+[English](TROUBLESHOOTING.en.md)
+
+本文适用于 `1.3.0`。请先确认 Mac 为 Apple Silicon，系统版本为 macOS 26 或更高。
 
 ## 找不到或连不上遥控器
 
@@ -26,7 +28,7 @@
 
 这通常表示遥控器和音频链路已经工作，但豆包没有使用普通虚拟音频设备。
 
-1. 使用 DMG 中的“安装无线麦.pkg”安装 `MiRemoteV 2ch`。
+1. 使用 DMG 中的 Install Remote Mic.pkg 安装 `MiRemoteV 2ch`。
 2. 完全退出并重新打开豆包。
 3. 在无线麦中点击“刷新音频设备”，选择 `MiRemoteV 2ch`。
 4. 单击可编辑输入框，确认插入光标已经出现，再按住遥控器语音键。
@@ -73,7 +75,7 @@
 可使用同一 Release 提供的 `.sha256` 文件核对 DMG：
 
 ```bash
-shasum -a 256 -c Remote-Mic-1.2.1.dmg.sha256
+shasum -a 256 -c Remote-Mic-1.3.0.dmg.sha256
 ```
 
 ## 查看日志

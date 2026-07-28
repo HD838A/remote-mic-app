@@ -1,5 +1,7 @@
 # Design QA：macOS 26 Liquid Glass 设置页
 
+[English](design-qa.en.md)
+
 ## 审查范围
 
 - 设置窗口：最小尺寸 800×650，可自由缩放；

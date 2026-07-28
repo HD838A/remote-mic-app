@@ -3,23 +3,23 @@ import Foundation
 
 enum BluetoothBridgeState: Equatable {
     case stopped
-    case bluetoothUnavailable(String)
+    case bluetoothUnavailable(LocalizedMessage)
     case scanning
     case connecting
     case discovering
     case ready(String)
     case reconnecting
-    case failed(String)
+    case failed(LocalizedMessage)
 
-    var displayText: String {
+    var message: LocalizedMessage {
         switch self {
-        case .stopped: return "已停止"
+        case .stopped: return LocalizedMessage("已停止")
         case .bluetoothUnavailable(let reason): return reason
-        case .scanning: return "正在寻找 MI RC"
-        case .connecting: return "正在连接遥控器"
-        case .discovering: return "正在初始化语音服务"
-        case .ready(let name): return "已连接 \(name)"
-        case .reconnecting: return "连接断开，准备重连"
+        case .scanning: return LocalizedMessage("正在寻找 MI RC")
+        case .connecting: return LocalizedMessage("正在连接遥控器")
+        case .discovering: return LocalizedMessage("正在初始化语音服务")
+        case .ready(let name): return LocalizedMessage("已连接 %@", arguments: [name])
+        case .reconnecting: return LocalizedMessage("连接断开，准备重连")
         case .failed(let reason): return reason
         }
     }
@@ -289,7 +289,7 @@ final class XiaomiBluetoothBridge: NSObject {
                   self.lifecycle == .discovering(generation) ||
                     self.lifecycle == .awaitingCapabilities(generation)
             else { return }
-            self.failInitialization("ATVV 初始化超时")
+            self.failInitialization(LocalizedMessage("ATVV 初始化超时"))
         }
         initializationTimeoutWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
@@ -422,7 +422,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 return
             }
             guard let parsed = ATVVCapabilities.parse(data) else {
-                failInitialization("遥控器返回了无效的 ATVV 能力响应")
+                failInitialization(LocalizedMessage("遥控器返回了无效的 ATVV 能力响应"))
                 return
             }
             capabilities = parsed
@@ -430,7 +430,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 "ATVV CAPS version=\(parsed.version) codec=\(parsed.selectedCodec) frame=\(parsed.frameSize)"
             )
             if !ATVVProtocol.supportsAudio(sampleRate: parsed.sampleRate) {
-                rejectUnsupportedAudio("遥控器未提供受支持的 16 kHz 语音编码")
+                rejectUnsupportedAudio(LocalizedMessage("遥控器未提供受支持的 16 kHz 语音编码"))
                 return
             }
             capabilitiesConfirmed = true
@@ -480,7 +480,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 )
             }
             guard ATVVProtocol.supportsAudio(sampleRate: capabilities.sampleRate) else {
-                rejectUnsupportedAudio("遥控器切换到了不受支持的 8 kHz 语音编码")
+                rejectUnsupportedAudio(LocalizedMessage("遥控器切换到了不受支持的 8 kHz 语音编码"))
                 return
             }
             sessionID = bytes.count >= 4 ? bytes[3] : 0
@@ -556,7 +556,7 @@ final class XiaomiBluetoothBridge: NSObject {
         }
     }
 
-    private func rejectUnsupportedAudio(_ message: String) {
+    private func rejectUnsupportedAudio(_ message: LocalizedMessage) {
         state = .failed(message)
         closeMicrophoneIfNeeded()
         if streaming {
@@ -569,7 +569,7 @@ final class XiaomiBluetoothBridge: NSObject {
         scheduleReconnect(discardCachedIdentity: true)
     }
 
-    private func failInitialization(_ message: String) {
+    private func failInitialization(_ message: LocalizedMessage) {
         state = .failed(message)
         accumulator.reset()
         pendingSync = nil
@@ -587,20 +587,20 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         case .poweredOff:
             resetPeripheral()
             lifecycle = .scanning(generation)
-            state = .bluetoothUnavailable("蓝牙已关闭")
+            state = .bluetoothUnavailable(LocalizedMessage("蓝牙已关闭"))
         case .unauthorized:
             resetSession()
-            state = .bluetoothUnavailable("未获得蓝牙权限")
+            state = .bluetoothUnavailable(LocalizedMessage("未获得蓝牙权限"))
         case .unsupported:
-            state = .bluetoothUnavailable("此 Mac 不支持低功耗蓝牙")
+            state = .bluetoothUnavailable(LocalizedMessage("此 Mac 不支持低功耗蓝牙"))
         case .resetting:
             resetPeripheral()
             lifecycle = .scanning(generation)
-            state = .bluetoothUnavailable("蓝牙正在重置")
+            state = .bluetoothUnavailable(LocalizedMessage("蓝牙正在重置"))
         case .unknown:
-            state = .bluetoothUnavailable("正在初始化蓝牙")
+            state = .bluetoothUnavailable(LocalizedMessage("正在初始化蓝牙"))
         @unknown default:
-            state = .bluetoothUnavailable("蓝牙状态不可用")
+            state = .bluetoothUnavailable(LocalizedMessage("蓝牙状态不可用"))
         }
     }
 
@@ -719,12 +719,17 @@ extension XiaomiBluetoothBridge {
               lifecycle.acceptsInitializationCallback(generation: generation)
         else { return }
         if let error {
-            state = .failed("发现语音服务失败：\(error.localizedDescription)")
+            state = .failed(
+                LocalizedMessage(
+                    "发现语音服务失败：%@",
+                    arguments: [error.localizedDescription]
+                )
+            )
             scheduleReconnect(discardCachedIdentity: true)
             return
         }
         guard let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else {
-            state = .failed("遥控器未提供 ATVV 语音服务")
+            state = .failed(LocalizedMessage("遥控器未提供 ATVV 语音服务"))
             scheduleReconnect(discardCachedIdentity: true)
             return
         }
@@ -746,7 +751,12 @@ extension XiaomiBluetoothBridge {
               lifecycle.acceptsInitializationCallback(generation: generation)
         else { return }
         if let error {
-            state = .failed("发现语音通道失败：\(error.localizedDescription)")
+            state = .failed(
+                LocalizedMessage(
+                    "发现语音通道失败：%@",
+                    arguments: [error.localizedDescription]
+                )
+            )
             scheduleReconnect(discardCachedIdentity: true)
             return
         }
@@ -768,7 +778,7 @@ extension XiaomiBluetoothBridge {
               audioCharacteristic != nil,
               controlCharacteristic != nil
         else {
-            state = .failed("ATVV 通道不完整")
+            state = .failed(LocalizedMessage("ATVV 通道不完整"))
             scheduleReconnect(discardCachedIdentity: true)
             return
         }
@@ -787,7 +797,12 @@ extension XiaomiBluetoothBridge {
               lifecycle.acceptsNotificationUpdate(generation: generation)
         else { return }
         if let error {
-            state = .failed("订阅语音通道失败：\(error.localizedDescription)")
+            state = .failed(
+                LocalizedMessage(
+                    "订阅语音通道失败：%@",
+                    arguments: [error.localizedDescription]
+                )
+            )
             scheduleReconnect(discardCachedIdentity: true)
             return
         }
@@ -796,7 +811,7 @@ extension XiaomiBluetoothBridge {
         }
         guard characteristic.isNotifying else {
             subscribedUUIDs.remove(characteristic.uuid)
-            failInitialization("ATVV 通知订阅未生效")
+            failInitialization(LocalizedMessage("ATVV 通知订阅未生效"))
             return
         }
         subscribedUUIDs.insert(characteristic.uuid)

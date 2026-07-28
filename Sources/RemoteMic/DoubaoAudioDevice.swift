@@ -10,10 +10,10 @@ enum DoubaoAudioDevicePolicy {
         }
     }
 
-    static func status(in devices: [AudioDeviceInfo]) -> String {
+    static func status(in devices: [AudioDeviceInfo]) -> LocalizedMessage {
         if device(in: devices) != nil {
-            return "已检测到 \(deviceName)（豆包兼容）"
+            return LocalizedMessage("已检测到 %@（豆包兼容）", arguments: [deviceName])
         }
-        return "未检测到 \(deviceName)"
+        return LocalizedMessage("未检测到 %@", arguments: [deviceName])
     }
 }

@@ -6,20 +6,21 @@ import Testing
 @Suite("Remote buttons")
 struct RemoteButtonsTests {
     @Test func presetApplicationsHaveExpectedNamesAndBundleIdentifiers() {
+        let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
         let mappings = Dictionary(uniqueKeysWithValues: PresetApplication.allCases.map {
-            ($0.displayName, $0.bundleIdentifier)
+            ($0.displayName(using: localization), $0.bundleIdentifier)
         })
         #expect(mappings == [
-            "无线麦": "com.hd838a.RemoteMic",
+            localization.text("无线麦"): "com.hd838a.RemoteMic",
             "Codex": "com.openai.codex",
             "Claude": "com.anthropic.claudefordesktop",
             "cmux": "com.cmuxterm.app",
-            "微信": "com.tencent.xinWeChat",
+            localization.text("微信"): "com.tencent.xinWeChat",
             "Cursor": "com.todesktop.230313mzl4w4u92",
             "Xcode": "com.apple.dt.Xcode",
             "Slack": "com.tinyspeck.slackmacgap",
-            "企业微信": "com.tencent.WeWorkMac",
-            "网易云音乐": "com.netease.163music",
+            localization.text("企业微信"): "com.tencent.WeWorkMac",
+            localization.text("网易云音乐"): "com.netease.163music",
             "Chrome": "com.google.Chrome",
             "Safari": "com.apple.Safari",
             "Zed": "dev.zed.Zed",
@@ -28,6 +29,7 @@ struct RemoteButtonsTests {
     }
 
     @Test func remoteMicApplicationActionIsAlwaysAvailable() {
+        let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
         #expect(PresetApplication.installedBundleIdentifiers.contains(
             PresetApplication.remoteMic.bundleIdentifier
         ))
@@ -35,7 +37,10 @@ struct RemoteButtonsTests {
             installedBundleIdentifiers: PresetApplication.installedBundleIdentifiers,
             current: .escape
         ).contains(.openRemoteMic))
-        #expect(ButtonAction.openRemoteMic.displayName == "打开无线麦")
+        #expect(
+            ButtonAction.openRemoteMic.displayName(using: localization) ==
+                localization.text("打开无线麦")
+        )
     }
 
     @Test func pickerHidesUnavailableApplicationsAndPreservesCurrentMissingSelection() {
@@ -75,13 +80,14 @@ struct RemoteButtonsTests {
     }
 
     @Test func customShortcutNormalizesDisplaysAndConvertsModifiers() throws {
+        let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
         let shortcut = CustomKeyboardShortcut(
             keyCode: 40,
             modifierFlags: [.capsLock, .shift, .command],
             keyLabel: "K"
         )
 
-        #expect(shortcut.displayName == "⇧⌘K")
+        #expect(shortcut.displayName(using: localization) == "⇧⌘K")
         #expect(shortcut.modifierFlags == [.shift, .command])
         #expect(shortcut.cgEventFlags == [.maskShift, .maskCommand])
         #expect(try JSONDecoder().decode(

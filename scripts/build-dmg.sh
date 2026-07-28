@@ -3,15 +3,15 @@ set -euo pipefail
 
 ROOT="${0:A:h:h}"
 OUTPUT_DIR="$ROOT/dist"
-DISPLAY_NAME="无线麦"
+DISPLAY_NAME="Remote Mic"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 PLIST="$ROOT/Resources/Info.plist"
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$PLIST")"
 DMG_BASENAME="Remote-Mic-$VERSION.dmg"
 DMG="$OUTPUT_DIR/$DMG_BASENAME"
-INSTALL_PACKAGE="安装无线麦.pkg"
-UNINSTALL_PACKAGE="卸载无线麦.pkg"
+INSTALL_PACKAGE="Install Remote Mic.pkg"
+UNINSTALL_PACKAGE="Uninstall Remote Mic.pkg"
 
 mkdir -p "$OUTPUT_DIR"
 WORK_DIR="$(mktemp -d "$OUTPUT_DIR/.package-work.XXXXXX")"

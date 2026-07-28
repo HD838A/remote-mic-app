@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
-    <string>zh_CN</string>
+    <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>无线麦</string>
+    <string>Remote Mic</string>
     <key>CFBundleExecutable</key>
     <string>RemoteMic</string>
     <key>CFBundleIdentifier</key>
@@ -16,18 +16,23 @@
     <string>6.0</string>
     <key>CFBundleName</key>
     <string>Remote Mic</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>zh-Hans</string>
+    </array>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2.3</string>
+	<string>1.3.0</string>
 	<key>CFBundleVersion</key>
-	<string>20</string>
+	<string>21</string>
     <key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>连接小米蓝牙遥控器 2 Pro，接收按键与语音数据。</string>
+    <string>Connect to the Xiaomi Bluetooth Remote 2 Pro to receive button and voice data.</string>
     <key>NSHumanReadableCopyright</key>
     <string>GPL-3.0-only</string>
     <key>NSPrincipalClass</key>

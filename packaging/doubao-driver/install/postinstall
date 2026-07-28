@@ -5,9 +5,24 @@ TARGET_VOLUME="${3:-/}"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
 BINARY="$DESTINATION/Contents/MacOS/MiRemoteV2ch"
-APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
+APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
 APP_PLIST="$APP_DESTINATION/Contents/Info.plist"
 APP_BINARY="$APP_DESTINATION/Contents/MacOS/RemoteMic"
+LEGACY_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
+LEGACY_APP_PLIST="$LEGACY_APP_DESTINATION/Contents/Info.plist"
+
+uses_chinese_locale() {
+  local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+  [[ "$locale" == zh* ]]
+}
+
+installer_message() {
+  if uses_chinese_locale; then
+    print "$1"
+  else
+    print "$2"
+  fi
+}
 
 test -d "$DESTINATION"
 test -f "$PLIST"
@@ -43,18 +58,41 @@ test "$APP_ARCHS" = "arm64"
 
 /usr/bin/killall coreaudiod
 
+if [[ -e "$LEGACY_APP_DESTINATION" || -L "$LEGACY_APP_DESTINATION" ]]; then
+  if [[ -f "$LEGACY_APP_PLIST" ]] && \
+     [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$LEGACY_APP_PLIST" 2>/dev/null || true)" == "com.hd838a.RemoteMic" ]]; then
+    /usr/bin/pkill -x RemoteMic 2>/dev/null || true
+    /bin/rm -rf -- "$LEGACY_APP_DESTINATION"
+    installer_message \
+      "已将旧版“无线麦.app”迁移到“Remote Mic.app”。" \
+      "Migrated the legacy app to Remote Mic.app."
+  else
+    installer_message \
+      "旧中文应用路径不属于 Remote Mic，安装器已保留它不作处理。" \
+      "The legacy Chinese app path does not belong to Remote Mic and was left untouched."
+  fi
+fi
+
 CONSOLE_USER="$(/usr/bin/stat -f '%Su' /dev/console)"
 if [[ "$TARGET_VOLUME" != "/" ]]; then
-  print "已完成安装；请从目标磁盘的“应用程序”目录手动打开无线麦。"
+  installer_message \
+    "已完成安装；请从目标磁盘的“应用程序”目录手动打开 Remote Mic。" \
+    "Installation is complete. Open Remote Mic from Applications on the target disk."
 elif [[ "$CONSOLE_USER" != "root" && "$CONSOLE_USER" != "loginwindow" ]]; then
   CONSOLE_UID="$(/usr/bin/id -u "$CONSOLE_USER")"
   /usr/bin/pkill -U "$CONSOLE_UID" -x RemoteMic 2>/dev/null || true
   if /bin/launchctl asuser "$CONSOLE_UID" \
     /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"; then
-    print "已安装并启动无线麦；请在状态栏打开设置并选择 MiRemoteV 2ch。"
+    installer_message \
+      "已安装并启动 Remote Mic；请在状态栏打开设置并选择 MiRemoteV 2ch。" \
+      "Remote Mic is installed and running. Open its menu bar settings and select MiRemoteV 2ch."
   else
-    print "已完成安装，但未能自动启动应用；请从“应用程序”手动打开无线麦。"
+    installer_message \
+      "已完成安装，但未能自动启动应用；请从“应用程序”手动打开 Remote Mic。" \
+      "Installation is complete, but the app could not be launched automatically. Open Remote Mic from Applications."
   fi
 else
-  print "已完成安装；登录桌面后请从“应用程序”打开无线麦。"
+  installer_message \
+    "已完成安装；登录桌面后请从“应用程序”打开 Remote Mic。" \
+    "Installation is complete. After signing in, open Remote Mic from Applications."
 fi

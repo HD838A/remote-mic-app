@@ -4,13 +4,47 @@ set -euo pipefail
 TARGET_VOLUME="${3:-/}"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
+LEGACY_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
+LEGACY_APP_PLIST="$LEGACY_APP_DESTINATION/Contents/Info.plist"
+
+uses_chinese_locale() {
+  local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+  [[ "$locale" == zh* ]]
+}
+
+installer_message() {
+  if uses_chinese_locale; then
+    print "$1"
+  else
+    print "$2"
+  fi
+}
 
 if [[ -e "$DESTINATION" ]]; then
   if [[ ! -f "$PLIST" ]] || \
      [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST" 2>/dev/null || true)" != "com.hd838a.MiRemoteV2ch" ]]; then
-    print -u2 "未安装：目标路径存在无法识别的音频驱动 $DESTINATION"
-    print -u2 "为避免覆盖其他软件，安装器已停止。"
+    installer_message \
+      "未安装：目标路径存在无法识别的音频驱动 $DESTINATION" \
+      "Installation stopped: an unrecognized audio driver exists at $DESTINATION." >&2
+    installer_message \
+      "为避免覆盖其他软件，安装器已停止。" \
+      "To avoid overwriting other software, the installer has stopped." >&2
     exit 2
   fi
-  print "检测到已有 MiRemoteV 2ch，将原位升级。"
+  installer_message \
+    "检测到已有 MiRemoteV 2ch，将原位升级。" \
+    "An existing MiRemoteV 2ch installation will be upgraded in place."
+fi
+
+if [[ -e "$LEGACY_APP_DESTINATION" || -L "$LEGACY_APP_DESTINATION" ]]; then
+  if [[ -f "$LEGACY_APP_PLIST" ]] && \
+     [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$LEGACY_APP_PLIST" 2>/dev/null || true)" == "com.hd838a.RemoteMic" ]]; then
+    installer_message \
+      "检测到旧版“无线麦.app”；安装完成后将迁移到“Remote Mic.app”。" \
+      "A legacy Remote Mic app was found; it will be migrated to Remote Mic.app after installation."
+  else
+    installer_message \
+      "旧中文应用路径不属于 Remote Mic，安装器将保留它不作处理。" \
+      "The legacy Chinese app path does not belong to Remote Mic and will be left untouched."
+  fi
 fi

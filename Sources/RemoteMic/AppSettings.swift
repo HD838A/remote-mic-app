@@ -11,6 +11,7 @@ final class AppSettings: ObservableObject {
         static let buttonShortcuts = "buttonShortcuts"
         static let secondaryButtonBindings = "secondaryButtonBindings"
         static let peripheralIdentifier = "peripheralIdentifier"
+        static let applicationLanguage = "applicationLanguage"
     }
 
     private let defaults: UserDefaults
@@ -37,6 +38,10 @@ final class AppSettings: ObservableObject {
 
     @Published var secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] {
         didSet { saveSecondaryBindings() }
+    }
+
+    @Published var applicationLanguage: AppLanguage {
+        didSet { defaults.set(applicationLanguage.rawValue, forKey: Keys.applicationLanguage) }
     }
 
     var peripheralIdentifier: UUID? {
@@ -102,6 +107,10 @@ final class AppSettings: ObservableObject {
         } else {
             secondaryButtonBindings = [:]
         }
+
+        applicationLanguage = AppLanguage(
+            rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
+        ) ?? .system
     }
 
     func action(for button: RemoteButton) -> ButtonAction {

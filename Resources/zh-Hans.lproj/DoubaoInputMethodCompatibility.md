@@ -1,0 +1,34 @@
+# 豆包输入法兼容虚拟麦克风
+
+MiRemoteV 2ch 是 Remote Mic 提供的独立双声道回环设备，用于让豆包能够识别遥控器语音。它可与 BlackHole 2ch 并存，不会修改、删除或覆盖 BlackHole。
+
+## 安装
+
+不需要安装 Xcode、Git，也不需要运行终端命令。
+
+1. 在 DMG 根目录双击 Install Remote Mic.pkg。
+2. 在系统安装器中按提示输入管理员密码。
+3. 安装器会同时安装 Remote Mic 和 MiRemoteV 2ch，重启 CoreAudio，并自动启动 Remote Mic。
+4. 左键单击菜单栏图标，在“连接与语音”中点击“刷新音频设备”。
+5. 点击“选择 MiRemoteV 2ch”。
+6. 完全退出并重新打开豆包后再次测试。
+
+## 验证
+
+在 QuickTime Player 中选择“文件 → 新建音频录制”，把输入设备设为 MiRemoteV 2ch。按住遥控器语音键说话时，输入电平应发生变化。
+
+如果 QuickTime 有电平但豆包没有反应，请重新单击可编辑输入框，确认插入光标已经出现，再按住语音键。
+
+## 卸载
+
+双击 DMG 根目录中的 Uninstall Remote Mic.pkg。它只删除：
+
+    /Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver
+
+卸载后会重启 CoreAudio，不会删除 Remote Mic 应用，也不会修改 BlackHole。
+
+## 技术与许可
+
+该驱动由固定的 BlackHole v0.7.1 源码、项目补丁和发布构建参数生成。实际 Audio Device 报告为 USB transport，设备名为 MiRemoteV 2ch。
+
+BlackHole 采用 GPL-3.0 许可。详情见应用包内的 THIRD_PARTY_NOTICES.md。

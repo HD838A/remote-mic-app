@@ -25,4 +25,4 @@ codesign --verify --deep --strict "$DESTINATION"
 
 killall coreaudiod
 print "Installed: $DESTINATION"
-print "Open 无线麦, refresh audio devices, then select MiRemoteV 2ch."
+print "Open Remote Mic, refresh audio devices, then select MiRemoteV 2ch."

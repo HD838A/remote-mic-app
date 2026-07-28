@@ -10,7 +10,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var title: LocalizedStringKey {
         switch self {
         case .connection: return "连接"
         case .mapping: return "按键"
@@ -31,10 +31,10 @@ private enum PermissionVisualState {
     case granted
     case pending
 
-    var title: String {
+    func title(using localization: LocalizationStore) -> String {
         switch self {
-        case .granted: return "已开启"
-        case .pending: return "待授权"
+        case .granted: return localization.text("已开启")
+        case .pending: return localization.text("待授权")
         }
     }
 
@@ -56,6 +56,7 @@ private struct ShortcutEditingTarget: Identifiable {
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
+    @EnvironmentObject private var localization: LocalizationStore
 
     @State private var selectedSection: SettingsSection = .connection
     @State private var selectedRemoteButton: RemoteButton = .ok
@@ -79,6 +80,7 @@ struct SettingsView: View {
             selectedPage
         }
         .navigationSplitViewStyle(.balanced)
+        .environment(\.locale, localization.locale)
         .frame(minWidth: 760, minHeight: 600)
         .onAppear(perform: refreshPermissionStates)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -154,8 +156,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
-                    title: "连接与语音",
-                    subtitle: "连接 RC003，并配置语音输出与触发方式"
+                    title: localization.text("连接与语音"),
+                    subtitle: localization.text("连接 RC003，并配置语音输出与触发方式")
                 )
 
                 GlassEffectContainer(spacing: 14) {
@@ -190,22 +192,24 @@ struct SettingsView: View {
                 VStack(spacing: 12) {
                     DeviceStatusStep(
                         symbol: "antenna.radiowaves.left.and.right",
-                        title: "蓝牙状态",
-                        detail: model.connectionStatus,
+                        title: localization.text("蓝牙状态"),
+                        detail: model.connectionStatus.text(using: localization),
                         badge: connectionBadge,
                         tint: connectionTint
                     )
                     DeviceStatusStep(
                         symbol: "waveform",
-                        title: "语音状态",
-                        detail: model.isStreaming ? "正在传输遥控器语音" : "等待麦克风键",
-                        badge: model.isStreaming ? "语音中" : "已就绪",
+                        title: localization.text("语音状态"),
+                        detail: localization.text(
+                            model.isStreaming ? "正在传输遥控器语音" : "等待麦克风键"
+                        ),
+                        badge: localization.text(model.isStreaming ? "语音中" : "已就绪"),
                         tint: model.isStreaming ? .orange : .blue
                     )
                     DeviceStatusStep(
                         symbol: "mic.fill",
-                        title: "语音触发",
-                        detail: model.voiceShortcutStatus,
+                        title: localization.text("语音触发"),
+                        detail: model.voiceShortcutStatus.text(using: localization),
                         badge: voiceTriggerBadge,
                         tint: .blue
                     )
@@ -273,7 +277,7 @@ struct SettingsView: View {
                     Text("音频状态")
                         .frame(width: 72, alignment: .leading)
                     Spacer(minLength: 10)
-                    Text(model.audioStatus)
+                    Text(model.audioStatus.text(using: localization))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)
                 }
@@ -298,7 +302,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
 
                 HStack {
-                    Text(model.testToneStatus)
+                    Text(model.testToneStatus.text(using: localization))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -315,7 +319,7 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 20)
-                    Text(model.doubaoAudioStatus)
+                    Text(model.doubaoAudioStatus.text(using: localization))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)
                 }
@@ -324,7 +328,9 @@ struct SettingsView: View {
                     Button("选择 MiRemoteV 2ch") { model.selectDoubaoAudioDevice() }
                         .buttonStyle(.glass)
                         .disabled(!model.hasDoubaoAudioDevice)
-                    Button("打开驱动安装说明") { model.openDoubaoDriverInstructions() }
+                    Button("打开驱动安装说明") {
+                        model.openDoubaoDriverInstructions(using: localization)
+                    }
                         .buttonStyle(.glass)
                 }
 
@@ -339,8 +345,8 @@ struct SettingsView: View {
     private var mappingPage: some View {
         VStack(alignment: .leading, spacing: 16) {
             PageHeader(
-                title: "按键映射",
-                subtitle: "自定义 RC003 按键功能，并保留语音键的固定核心行为"
+                title: localization.text("按键映射"),
+                subtitle: localization.text("自定义 RC003 按键功能，并保留语音键的固定核心行为")
             )
 
             GlassPanel {
@@ -353,13 +359,13 @@ struct SettingsView: View {
                                 model.applyHIDSettings()
                             }
                         ))
-                        Text(model.hidStatus)
+                        Text(model.hidStatus.text(using: localization))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 12)
                     StatusPill(
-                        text: settings.customMappingEnabled ? "已启用" : "未启用",
+                        text: localization.text(settings.customMappingEnabled ? "已启用" : "未启用"),
                         tint: settings.customMappingEnabled ? .green : .secondary
                     )
                     Button("恢复默认") {
@@ -436,13 +442,15 @@ struct SettingsView: View {
                 Button {
                     selectedRemoteButton = button
                 } label: {
-                    Text(button.displayName)
+                    Text(button.displayName(using: localization))
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
-                .help("\(button.displayName) · HID \(String(format: "0x%02X", button.hidUsage))")
+                .help(
+                    "\(button.displayName(using: localization)) · HID \(String(format: "0x%02X", button.hidUsage))"
+                )
 
                 Picker("", selection: Binding(
                     get: { currentAction },
@@ -464,7 +472,11 @@ struct SettingsView: View {
                         let unavailable = action.presetApplication.map {
                             !installedBundleIdentifiers.contains($0.bundleIdentifier)
                         } ?? false
-                        Text(action.displayName + (unavailable ? "（未安装）" : "")).tag(action)
+                        Text(
+                            action.displayName(using: localization) +
+                                (unavailable ? localization.text("（未安装）") : "")
+                        )
+                        .tag(action)
                     }
                 }
                 .labelsHidden()
@@ -481,7 +493,10 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "keyboard")
-                        Text(currentShortcut?.displayName ?? "点击录入快捷键")
+                        Text(
+                            currentShortcut?.displayName(using: localization) ??
+                                localization.text("点击录入快捷键")
+                        )
                             .lineLimit(1)
                         Spacer(minLength: 4)
                         Image(systemName: "pencil")
@@ -494,7 +509,7 @@ struct SettingsView: View {
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
-                .help("录入要发送给当前应用的键盘快捷键")
+                .help(localization.text("录入要发送给当前应用的键盘快捷键"))
             }
         }
         .padding(.horizontal, 8)
@@ -518,7 +533,13 @@ struct SettingsView: View {
     private func secondaryActionsPanel(for button: RemoteButton) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("\(button.displayName)其他触发")
+                Text(
+                    String(
+                        format: localization.text("%@其他触发"),
+                        locale: localization.locale,
+                        arguments: [button.displayName(using: localization)]
+                    )
+                )
                     .font(.caption.weight(.semibold))
                 Spacer()
                 if settings.hasSecondaryAction(for: button) {
@@ -544,7 +565,7 @@ struct SettingsView: View {
         let configured = settings.configuredAction(for: button, trigger: trigger)
         let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
         return HStack(spacing: 8) {
-            Text(trigger.displayName)
+            Text(trigger.displayName(using: localization))
                 .font(.caption)
                 .frame(width: 38, alignment: .leading)
 
@@ -567,7 +588,11 @@ struct SettingsView: View {
                     let unavailable = action.presetApplication.map {
                         !installedBundleIdentifiers.contains($0.bundleIdentifier)
                     } ?? false
-                    Text(action.displayName + (unavailable ? "（未安装）" : "")).tag(action)
+                    Text(
+                        action.displayName(using: localization) +
+                            (unavailable ? localization.text("（未安装）") : "")
+                    )
+                    .tag(action)
                 }
             }
             .labelsHidden()
@@ -581,7 +606,10 @@ struct SettingsView: View {
                     )
                 } label: {
                     HStack(spacing: 5) {
-                        Text(configured.shortcut?.displayName ?? "点击录入")
+                        Text(
+                            configured.shortcut?.displayName(using: localization) ??
+                                localization.text("点击录入")
+                        )
                             .lineLimit(1)
                         Image(systemName: "pencil")
                     }
@@ -602,8 +630,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
-                    title: "权限与隐私",
-                    subtitle: "按顺序完成权限设置，确保 RC003 正常连接和发送按键"
+                    title: localization.text("权限与隐私"),
+                    subtitle: localization.text("按顺序完成权限设置，确保 RC003 正常连接和发送按键")
                 )
 
                 GlassEffectContainer(spacing: 14) {
@@ -616,10 +644,10 @@ struct SettingsView: View {
                             permissionRow(
                                 index: 1,
                                 symbol: "antenna.radiowaves.left.and.right",
-                                title: "蓝牙",
-                                detail: "连接 RC003 并读取 ATVV 语音服务",
+                                title: localization.text("蓝牙"),
+                                detail: localization.text("连接 RC003 并读取 ATVV 语音服务"),
                                 state: bluetoothPermissionState,
-                                actionTitle: "打开蓝牙设置"
+                                actionTitle: localization.text("打开蓝牙设置")
                             ) {
                                 if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
                                     NSWorkspace.shared.open(url)
@@ -631,10 +659,10 @@ struct SettingsView: View {
                             permissionRow(
                                 index: 2,
                                 symbol: "keyboard",
-                                title: "输入监控",
-                                detail: "读取 RC003 原始 HID 报告，并在兼容模式下抑制重复系统事件",
+                                title: localization.text("输入监控"),
+                                detail: localization.text("读取 RC003 原始 HID 报告，并在兼容模式下抑制重复系统事件"),
                                 state: inputMonitoringGranted ? .granted : .pending,
-                                actionTitle: "请求权限"
+                                actionTitle: localization.text("请求权限")
                             ) {
                                 model.requestInputMonitoringPermission()
                             }
@@ -644,10 +672,10 @@ struct SettingsView: View {
                             permissionRow(
                                 index: 3,
                                 symbol: "accessibility",
-                                title: "辅助功能",
-                                detail: "把映射后的按键动作发送给当前应用",
+                                title: localization.text("辅助功能"),
+                                detail: localization.text("把映射后的按键动作发送给当前应用"),
                                 state: accessibilityGranted ? .granted : .pending,
-                                actionTitle: "请求权限"
+                                actionTitle: localization.text("请求权限")
                             ) {
                                 model.requestAccessibilityPermission()
                             }
@@ -722,7 +750,7 @@ struct SettingsView: View {
             }
 
             Spacer(minLength: 16)
-            StatusPill(text: state.title, tint: state.tint)
+            StatusPill(text: state.title(using: localization), tint: state.tint)
             Button(actionTitle, action: action)
                 .buttonStyle(.glass)
                 .frame(width: 112)
@@ -731,19 +759,15 @@ struct SettingsView: View {
     }
 
     private var connectionBadge: String {
-        model.connectionStatus.contains("已连接") ? "已连接" : "连接中"
+        localization.text(model.isConnected ? "已连接" : "连接中")
     }
 
     private var connectionTint: Color {
-        model.connectionStatus.contains("已连接") ? .green : .orange
+        model.isConnected ? .green : .orange
     }
 
     private var voiceTriggerBadge: String {
-        if model.voiceShortcutStatus.contains("已释放") ||
-            model.voiceShortcutStatus.contains("已硬件映射") {
-            return "已启用"
-        }
-        return "准备中"
+        localization.text(model.isVoiceTriggerEnabled ? "已启用" : "准备中")
     }
 
     private var bluetoothPermissionState: PermissionVisualState {
@@ -759,6 +783,7 @@ struct SettingsView: View {
 
 private struct ShortcutEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var localization: LocalizationStore
 
     let button: RemoteButton
     let trigger: ButtonTrigger
@@ -783,7 +808,16 @@ private struct ShortcutEditorSheet: View {
     var body: some View {
         VStack(spacing: 18) {
             VStack(spacing: 5) {
-                Text("录入\(button.displayName)\(trigger.displayName)快捷键")
+                Text(
+                    String(
+                        format: localization.text("录入%@%@快捷键"),
+                        locale: localization.locale,
+                        arguments: [
+                            button.displayName(using: localization),
+                            trigger.displayName(using: localization),
+                        ]
+                    )
+                )
                     .font(.title3.weight(.semibold))
                 Text("直接按下想要的按键组合，支持 Command、Option、Control、Shift 和 Fn。")
                     .font(.caption)
@@ -791,7 +825,10 @@ private struct ShortcutEditorSheet: View {
                     .multilineTextAlignment(.center)
             }
 
-            Text(shortcut?.displayName ?? "等待按键…")
+            Text(
+                shortcut?.displayName(using: localization) ??
+                    localization.text("等待按键…")
+            )
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .foregroundStyle(shortcut == nil ? Color.secondary : Color.primary)
                 .frame(maxWidth: .infinity, minHeight: 62)
@@ -1015,6 +1052,7 @@ private struct RC003Photo: View {
 }
 
 private struct RemoteControlDiagram: View {
+    @EnvironmentObject private var localization: LocalizationStore
     @Binding var selectedButton: RemoteButton
     let activeButtons: Set<RemoteButton>
     let voiceActive: Bool
@@ -1078,8 +1116,8 @@ private struct RemoteControlDiagram: View {
         .buttonStyle(.plain)
         .frame(width: canvasSize.width * width, height: canvasSize.height * height)
         .position(x: canvasSize.width * x, y: canvasSize.height * y)
-        .help(button.displayName)
-        .accessibilityLabel(Text(button.displayName))
+        .help(button.displayName(using: localization))
+        .accessibilityLabel(Text(button.displayName(using: localization)))
     }
 
     private func voiceHotspot(
@@ -1096,8 +1134,8 @@ private struct RemoteControlDiagram: View {
             .contentShape(Circle())
             .frame(width: canvasSize.width * width, height: canvasSize.height * height)
             .position(x: canvasSize.width * x, y: canvasSize.height * y)
-            .help("遥控器真实 F5 硬件按下/松开会映射为 Mac Fn；同时桥接 ATVV 语音")
+            .help(localization.text("遥控器真实 F5 硬件按下/松开会映射为 Mac Fn；同时桥接 ATVV 语音"))
             .accessibilityElement()
-            .accessibilityLabel(Text("语音/Fn 键，固定核心功能"))
+            .accessibilityLabel(Text(localization.text("语音/Fn 键，固定核心功能")))
     }
 }
