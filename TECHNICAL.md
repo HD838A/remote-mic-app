@@ -175,6 +175,29 @@ Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应
 
 正式发布使用 `scripts/notarize-release.sh`：它只接受已同步到发布 Mac 的既有 Developer ID 身份、Keychain 中的本地公证 profile 和受限的 Sparkle 私钥文件引用。脚本按应用、两个 PKG、DMG 的顺序公证和 staple，最后从已 staple 的应用生成 Sparkle ZIP 与签名 appcast；不会把任何证书、P12、API 密钥或私钥写入仓库或 Release。
 
+### 发布故障复盘与强制检查
+
+`1.4.2` / `1.4.3` 的安装 PKG 曾在 `postinstall` 中先把应用目录内的普通文件全部改为 `0644`，随后只把 `Contents/MacOS/RemoteMic` 恢复为 `0755`。这会在安装完成后移除 Sparkle、`Autoupdate`、Updater 及 XPC 服务的执行权限。原始 App、ZIP、PKG、DMG 的签名、公证和 Gatekeeper 检查仍可能全部通过，因为错误发生在安装后的文件权限改写阶段；因此只验证发布产物不足以发现该问题。
+
+安装后的应用必须保持以下文件为 `0755`：
+
+- `Contents/MacOS/RemoteMic`；
+- `Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle`；
+- `Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate`；
+- `Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater`；
+- `Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer`；
+- `Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader`。
+
+`packaging/doubao-driver/install/postinstall` 逐项恢复并检查这些权限，`scripts/verify-doubao-driver-pkg.sh` 会拒绝缺少相应规则的安装包。每次正式发布还必须：
+
+1. 在隔离目标目录模拟 PKG 安装后的权限处理，而不是只检查 payload；
+2. 对安装后的应用执行 `codesign --verify --deep --strict`，并通过 launchd 实际启动 `Autoupdate`、Updater 与相关 XPC/Mach 服务；
+3. 从已发布 Release 重新下载 appcast、ZIP、DMG 和两个 PKG，核对 GitHub digest、本地 SHA-256、签名、公证票据和 Gatekeeper；
+4. 仅在图形会话已解锁时声明完成了 Sparkle 端到端 UI 升级。锁屏下 appcast 返回 HTTP 200 只证明更新源可访问；
+5. 明确区分旧安装与新安装：已被旧 PKG 改坏的更新器不能自我更新，必须先运行新版 Installer.pkg 或通过远程终端恢复权限。
+
+发布签名还必须区分“证书可列出”和“私钥可使用”。登录 Keychain 锁定时，`security find-identity` 可能仍能列出证书，但 `codesign` 会因无法访问私钥而返回 `errSecInternalComponent`。在用户明确授权时，可沿用 readonly Match/P12，把既有证书同步到仅用于本次发布的一次性空密码 Keychain；不得创建、撤销或更改证书。发布结束必须删除一次性 Keychain、P8、Match 密码和临时 clone，并确认用户 Keychain 搜索列表只保留原有登录 Keychain。
+
 ## 许可与来源
 
 项目软件代码按 `GPL-3.0-only` 发布，App Logo 按独立的 [Logo 许可](LOGO-LICENSE.md) 管理。ATVV 与 RC003 行为参考 `xxb26553663-star/remote-bridge-hub`，豆包兼容驱动基于固定版本 BlackHole 构建；完整归属与限制见 [COPYRIGHT.md](COPYRIGHT.md) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

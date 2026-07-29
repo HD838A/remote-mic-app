@@ -168,6 +168,29 @@ Sparkle 2.9.4 is embedded through SwiftPM. Its feed URL and EdDSA public key are
 
 Official publishing uses scripts/notarize-release.sh. It accepts only the existing Developer ID identities synchronized to the release Mac, a local Keychain notarization profile, and a reference to the restricted Sparkle private-key file. The script notarizes and staples the app, both PKGs, and the DMG in order, then creates the Sparkle ZIP and signed appcast from the stapled app. It never writes certificates, P12 files, API keys, or private keys into the repository or a Release.
 
+### Release incident review and mandatory checks
+
+The `1.4.2` / `1.4.3` installer PKGs changed every regular file in the app directory to mode `0644` during `postinstall`, then restored `0755` only on `Contents/MacOS/RemoteMic`. This removed executable permissions from Sparkle, Autoupdate, Updater, and the XPC services after installation. The original app, ZIP, PKG, and DMG could still pass signing, notarization, and Gatekeeper checks because the damaging permission rewrite happened after installation. Validating release artifacts alone therefore cannot detect this failure.
+
+The installed app must keep these files at mode `0755`:
+
+- `Contents/MacOS/RemoteMic`
+- `Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle`
+- `Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate`
+- `Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater`
+- `Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer`
+- `Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader`
+
+`packaging/doubao-driver/install/postinstall` restores and tests each permission explicitly. `scripts/verify-doubao-driver-pkg.sh` rejects an installer that omits these rules. Every official release must also:
+
+1. Simulate the PKG's post-install permission handling in an isolated target instead of inspecting only the payload.
+2. Run `codesign --verify --deep --strict` on the installed app and launch Autoupdate, Updater, and the related XPC/Mach services through launchd.
+3. Download the appcast, ZIP, DMG, and both PKGs back from the published Release, then compare GitHub digests, local SHA-256 values, signatures, stapled notarization tickets, and Gatekeeper results.
+4. Claim a completed end-to-end Sparkle UI upgrade only from an unlocked graphical session. An HTTP 200 appcast response while the screen is locked proves only feed reachability.
+5. Distinguish an old installation from a new one. An updater already damaged by an older PKG cannot update itself; it must first be repaired with the current Installer.pkg or by restoring permissions through a remote shell.
+
+Release signing must also distinguish a certificate being listed from its private key being usable. When the login Keychain is locked, `security find-identity` may still list the certificate while `codesign` fails with `errSecInternalComponent` because it cannot access the private key. With explicit user authorization, the existing certificate may be synchronized through readonly Match/P12 into a temporary empty-password release Keychain used only for that release; no certificate may be created, revoked, or changed. After publishing, remove the temporary Keychain, P8 file, Match password, and temporary clone, then confirm that the user Keychain search list contains only its original login Keychain.
+
 ## License and sources
 
 Program code is GPL-3.0-only. The app logo is governed by the separate [Logo License](LOGO-LICENSE.en.md). ATVV and RC003 behavior refer to xxb26553663-star/remote-bridge-hub; the Doubao compatibility driver is built from a pinned BlackHole version. See [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full attribution and constraints.

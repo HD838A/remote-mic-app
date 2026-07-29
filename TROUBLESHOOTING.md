@@ -78,6 +78,34 @@
 shasum -a 256 -c Remote-Mic-1.3.0.dmg.sha256
 ```
 
+## 自动更新提示 Autoupdate 没有执行权限
+
+如果 Console 中出现以下任一信息，问题不在 appcast、下载网络或更新包签名，而是当前已安装应用中的 Sparkle 更新器失去了执行权限：
+
+```text
+The remote port connection was invalidated from the updater.
+Autoupdate may not have executable permissions.
+failed to probe status service for com.hd838a.RemoteMic
+```
+
+旧版 `1.4.2` / `1.4.3` 的安装 PKG 曾把应用内所有普通文件统一改为 `0644`，但只恢复了主程序的执行权限，因而 `Autoupdate`、Updater 和两个 XPC 服务无法启动。重新检查更新或重新安装同一旧版 PKG 不会修复；损坏的更新器也不能通过自动更新修复自身。
+
+首选恢复方式是从最新 Release 下载并远程运行一次 `Remote-Mic-<版本>-Installer.pkg`。如果只能使用远程终端，可执行：
+
+```bash
+sudo chmod 755 \
+  "/Applications/Remote Mic.app/Contents/MacOS/RemoteMic" \
+  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" \
+  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
+  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater" \
+  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
+  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
+
+codesign --verify --deep --strict "/Applications/Remote Mic.app"
+```
+
+远程修复不要求物理接触 Mac；但 Sparkle 的安装确认界面需要处于已解锁的图形会话。锁屏状态下成功取得 appcast（HTTP 200）只证明更新源可访问，不能视为已完成升级。
+
 ## 查看日志
 
 右键单击菜单栏图标，选择“显示日志”。日志文件位于：

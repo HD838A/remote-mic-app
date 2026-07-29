@@ -76,6 +76,30 @@ Verify a DMG with the checksum file from the same release:
 
     shasum -a 256 -c Remote-Mic-1.3.0.dmg.sha256
 
+## Automatic update reports missing Autoupdate executable permissions
+
+If Console contains any of the following messages, the problem is not the appcast, download network, or update signature. The installed copy of Sparkle has lost executable permissions:
+
+    The remote port connection was invalidated from the updater.
+    Autoupdate may not have executable permissions.
+    failed to probe status service for com.hd838a.RemoteMic
+
+The older `1.4.2` / `1.4.3` installer PKGs changed every regular file in the app to mode `0644` and restored executable permissions only on the main binary. This prevented Autoupdate, Updater, and both XPC services from launching. Checking again or reinstalling the same old PKG does not repair it, and a broken updater cannot update itself.
+
+The preferred recovery is to download the latest `Remote-Mic-<version>-Installer.pkg` from GitHub Releases and run it once through local or remote management. If only a remote shell is available, run:
+
+    sudo chmod 755 \
+      "/Applications/Remote Mic.app/Contents/MacOS/RemoteMic" \
+      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" \
+      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
+      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater" \
+      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
+      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
+
+    codesign --verify --deep --strict "/Applications/Remote Mic.app"
+
+Remote repair does not require physical access to the Mac. Sparkle's installation confirmation UI does require an unlocked graphical session, however. Fetching the appcast successfully while the screen is locked proves only that the feed is reachable; it is not proof of a completed upgrade.
+
 ## View logs
 
 Right-click the menu bar icon and choose **Show Logs**. The log file is:
