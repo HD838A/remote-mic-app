@@ -18,6 +18,7 @@ CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:?Set CODE_SIGN_IDENTITY to a Developer 
 INSTALLER_SIGNING_IDENTITY="${INSTALLER_SIGNING_IDENTITY:?Set INSTALLER_SIGNING_IDENTITY to a Developer ID Installer identity}"
 SPARKLE_PRIVATE_KEY_FILE="${SPARKLE_PRIVATE_KEY_FILE:?Set SPARKLE_PRIVATE_KEY_FILE to the restricted local EdDSA key file}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-RemoteMic-notary}"
+NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
 DOWNLOAD_PREFIX="https://github.com/HD838A/remote-mic-app/releases/latest/download/"
 RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/v$VERSION"
@@ -52,6 +53,11 @@ for command in codesign ditto security xcrun; do
 done
 test -x "$GENERATE_APPCAST"
 test -x "$SIGN_UPDATE"
+NOTARY_KEYCHAIN_ARGS=()
+if [[ -n "$NOTARY_KEYCHAIN" ]]; then
+  test -f "$NOTARY_KEYCHAIN"
+  NOTARY_KEYCHAIN_ARGS=(--keychain "$NOTARY_KEYCHAIN")
+fi
 if ! security find-identity -v -p codesigning | rg -Fq "\"$CODE_SIGN_IDENTITY\""; then
   print -u2 "Developer ID Application identity is unavailable in the local keychain"
   exit 1
@@ -75,7 +81,10 @@ trap cleanup EXIT
 
 notarize() {
   local artifact="$1"
-  xcrun notarytool submit "$artifact" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun notarytool submit "$artifact" \
+    --keychain-profile "$NOTARY_PROFILE" \
+    "${NOTARY_KEYCHAIN_ARGS[@]}" \
+    --wait
 }
 
 staple_and_validate() {
