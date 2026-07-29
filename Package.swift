@@ -17,9 +17,15 @@ let package = Package(
         .executableTarget(
             name: "RemoteMic",
             dependencies: [
+                "AudioExceptionGuard",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/RemoteMic"
+        ),
+        .target(
+            name: "AudioExceptionGuard",
+            path: "Sources/AudioExceptionGuard",
+            publicHeadersPath: "include"
         ),
         .testTarget(
             name: "RemoteMicTests",

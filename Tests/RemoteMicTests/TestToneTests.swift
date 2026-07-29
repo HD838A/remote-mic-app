@@ -1,3 +1,4 @@
+import AVFAudio
 import Testing
 @testable import RemoteMic
 
@@ -45,6 +46,12 @@ struct TestToneTests {
 
         output.cancelTestTone()
         output.endSession()
+    }
+
+    @Test func disconnectedAudioPlayerFailsClosedInsteadOfCrashing() {
+        let player = AVAudioPlayerNode()
+
+        #expect(!AudioPlayerNodeSafety.play(player))
     }
 
     @Test func productionModelRejectsTestToneWithoutAReadyDevice() {

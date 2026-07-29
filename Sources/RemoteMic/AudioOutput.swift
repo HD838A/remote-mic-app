@@ -1,4 +1,5 @@
 import AVFoundation
+import AudioExceptionGuard
 import AudioToolbox
 import CoreAudio
 import Foundation
@@ -7,6 +8,12 @@ struct AudioDeviceInfo: Identifiable, Equatable {
     let id: AudioDeviceID
     let uid: String
     let name: String
+}
+
+enum AudioPlayerNodeSafety {
+    static func play(_ player: AVAudioPlayerNode) -> Bool {
+        RemoteMicTryPlayAudioPlayerNode(player)
+    }
 }
 
 enum CoreAudioDeviceCatalog {
@@ -233,7 +240,16 @@ final class VirtualAudioOutput {
         do {
             engine.prepare()
             try engine.start()
-            player.play()
+            guard AudioPlayerNodeSafety.play(player) else {
+                player.stop()
+                engine.stop()
+                status = LocalizedMessage("所选语音输出设备不可用")
+                AppLogger.shared.write(
+                    "AUDIO ERROR player_start_exception " +
+                        "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
+                )
+                return false
+            }
             self.engine = engine
             self.player = player
             selectedDevice = device
@@ -323,7 +339,12 @@ final class VirtualAudioOutput {
         guard let player, engine?.isRunning == true else { return }
         player.stop()
         player.reset()
-        player.play()
+        guard AudioPlayerNodeSafety.play(player) else {
+            AppLogger.shared.write("AUDIO ERROR player_restart_exception state={\(diagnosticState())}")
+            stop()
+            onConfigurationChange?()
+            return
+        }
     }
 
     func stop() {
