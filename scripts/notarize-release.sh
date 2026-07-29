@@ -144,6 +144,7 @@ test -n "$ENCLOSURE_SIGNATURE"
 rg -Fq "url=\"$DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
 rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
 "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$UPDATE_ZIP" "$ENCLOSURE_SIGNATURE"
+"$SIGN_UPDATE" --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
 "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
 
 print "NOTARIZED RELEASE READY"
