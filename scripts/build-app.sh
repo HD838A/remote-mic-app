@@ -1,5 +1,6 @@
 #!/bin/zsh
 set -euo pipefail
+umask 022
 
 ROOT="${0:A:h:h}"
 CONFIGURATION="${CONFIGURATION:-release}"

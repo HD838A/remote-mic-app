@@ -38,6 +38,14 @@ test -d "$SPARKLE_FRAMEWORK"
 test -x "$SPARKLE_FRAMEWORK/Versions/B/Sparkle"
 test -x "$SPARKLE_FRAMEWORK/Versions/B/Autoupdate"
 test -x "$SPARKLE_FRAMEWORK/Versions/B/Updater.app/Contents/MacOS/Updater"
+if [[ -n "$(find "$APP" -type d ! -perm 0755 -print -quit)" ]]; then
+  print -u2 "app bundle contains a directory without 0755 permissions"
+  exit 1
+fi
+if [[ -n "$(find "$APP" -type f ! -perm 0644 ! -perm 0755 -print -quit)" ]]; then
+  print -u2 "app bundle contains a file without 0644 or 0755 permissions"
+  exit 1
+fi
 test -f "$APP/Contents/Resources/LICENSE.md"
 test -f "$APP/Contents/Resources/README.md"
 test -f "$APP/Contents/Resources/TECHNICAL.md"
