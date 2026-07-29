@@ -16,6 +16,8 @@ WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
 INSTALL_SCRIPTS="$WORK_DIR/install-scripts"
 UNINSTALL_SCRIPTS="$WORK_DIR/uninstall-scripts"
+UNSIGNED_INSTALL_PACKAGE="$WORK_DIR/Install Remote Mic-unsigned.pkg"
+UNSIGNED_UNINSTALL_PACKAGE="$WORK_DIR/Uninstall Remote Mic-unsigned.pkg"
 
 cleanup() {
   case "$WORK_DIR" in
@@ -52,11 +54,6 @@ fi
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
-PACKAGE_SIGNING_OPTIONS=()
-if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
-  PACKAGE_SIGNING_OPTIONS=(--sign "$INSTALLER_SIGNING_IDENTITY")
-fi
-
 /usr/bin/pkgbuild \
   --root "$PAYLOAD_ROOT" \
   --scripts "$INSTALL_SCRIPTS" \
@@ -64,16 +61,25 @@ fi
   --version "$VERSION" \
   --install-location / \
   --ownership recommended \
-  "${PACKAGE_SIGNING_OPTIONS[@]}" \
-  "$INSTALL_PACKAGE"
+  "$UNSIGNED_INSTALL_PACKAGE"
 
 /usr/bin/pkgbuild \
   --nopayload \
   --scripts "$UNINSTALL_SCRIPTS" \
   --identifier "com.hd838a.MiRemoteV2ch.uninstaller" \
   --version "$VERSION" \
-  "${PACKAGE_SIGNING_OPTIONS[@]}" \
-  "$UNINSTALL_PACKAGE"
+  "$UNSIGNED_UNINSTALL_PACKAGE"
+
+if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
+  test -x /usr/bin/productsign
+  /usr/bin/productsign --sign "$INSTALLER_SIGNING_IDENTITY" \
+    "$UNSIGNED_INSTALL_PACKAGE" "$INSTALL_PACKAGE"
+  /usr/bin/productsign --sign "$INSTALLER_SIGNING_IDENTITY" \
+    "$UNSIGNED_UNINSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
+else
+  /bin/mv "$UNSIGNED_INSTALL_PACKAGE" "$INSTALL_PACKAGE"
+  /bin/mv "$UNSIGNED_UNINSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
+fi
 
 "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
 "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
