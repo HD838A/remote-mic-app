@@ -97,6 +97,19 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
   print -r -- "$SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:'
   print -r -- "$SIGNATURE_DETAILS" | rg -q "^TeamIdentifier=$EXPECTED_DEVELOPER_TEAM_ID$"
   print -r -- "$SIGNATURE_DETAILS" | rg -q '^CodeDirectory .*flags=.*runtime'
+  for signed_component in \
+    "$SPARKLE_FRAMEWORK/Versions/B/XPCServices/Installer.xpc" \
+    "$SPARKLE_FRAMEWORK/Versions/B/XPCServices/Downloader.xpc" \
+    "$SPARKLE_FRAMEWORK/Versions/B/Autoupdate" \
+    "$SPARKLE_FRAMEWORK/Versions/B/Updater.app" \
+    "$SPARKLE_FRAMEWORK"; do
+    COMPONENT_SIGNATURE_DETAILS="$(codesign -dvvv "$signed_component" 2>&1)"
+    print -r -- "$COMPONENT_SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:'
+    print -r -- "$COMPONENT_SIGNATURE_DETAILS" | \
+      rg -q "^TeamIdentifier=$EXPECTED_DEVELOPER_TEAM_ID$"
+    print -r -- "$COMPONENT_SIGNATURE_DETAILS" | \
+      rg -q '^CodeDirectory .*flags=.*runtime'
+  done
 fi
 file "$BINARY" | rg -q 'Mach-O 64-bit executable'
 ARCHS="$(lipo -archs "$BINARY")"

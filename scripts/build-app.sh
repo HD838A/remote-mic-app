@@ -77,10 +77,41 @@ for localization in en zh-Hans; do
     "$ROOT/Resources/$localization.lproj" \
     "$APP_DIR/Contents/Resources/$localization.lproj"
 done
+SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
   codesign \
     --force \
-    --deep \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
+    "$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --preserve-metadata=entitlements \
+    --sign "$SIGNING_IDENTITY" \
+    "$SPARKLE_VERSION_DIR/XPCServices/Downloader.xpc"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
+    "$SPARKLE_VERSION_DIR/Autoupdate"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
+    "$SPARKLE_VERSION_DIR/Updater.app"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
+    "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+  codesign \
+    --force \
     --options runtime \
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
@@ -90,12 +121,38 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   BUNDLE_IDENTIFIER="$(plutil -extract CFBundleIdentifier raw -o - "$APP_DIR/Contents/Info.plist")"
   codesign \
     --force \
-    --deep \
+    --options runtime \
     --timestamp=none \
     --sign - \
-    "$APP_DIR"
+    "$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc"
   codesign \
     --force \
+    --options runtime \
+    --timestamp=none \
+    --preserve-metadata=entitlements \
+    --sign - \
+    "$SPARKLE_VERSION_DIR/XPCServices/Downloader.xpc"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp=none \
+    --sign - \
+    "$SPARKLE_VERSION_DIR/Autoupdate"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp=none \
+    --sign - \
+    "$SPARKLE_VERSION_DIR/Updater.app"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp=none \
+    --sign - \
+    "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+  codesign \
+    --force \
+    --options runtime \
     --timestamp=none \
     --sign - \
     --requirements "=designated => identifier \"$BUNDLE_IDENTIFIER\"" \
