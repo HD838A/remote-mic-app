@@ -62,13 +62,6 @@ for app_executable in "${APP_EXECUTABLES[@]}"; do
 done
 /usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"
 
-DRIVER_ARCHS="$(/usr/bin/lipo -archs "$BINARY")"
-APP_ARCHS="$(/usr/bin/lipo -archs "$APP_BINARY")"
-test "$DRIVER_ARCHS" = "arm64"
-test "$APP_ARCHS" = "arm64"
-/usr/bin/vtool -show-build "$BINARY" | /usr/bin/grep -q 'minos 26\.0'
-/usr/bin/vtool -show-build "$APP_BINARY" | /usr/bin/grep -q 'minos 26\.0'
-
 /usr/bin/killall coreaudiod
 
 if [[ -e "$LEGACY_APP_DESTINATION" || -L "$LEGACY_APP_DESTINATION" ]]; then

@@ -40,6 +40,13 @@ fi
 test -f "$PACKAGE"
 /usr/sbin/pkgutil --expand "$PACKAGE" "$EXPANDED"
 test -f "$EXPANDED/PackageInfo"
+if [[ -d "$EXPANDED/Scripts" ]] && \
+   rg -n --pcre2 \
+     '(?<![[:alnum:]_.-])(?:/usr/bin/)?(?:lipo|vtool|xcrun|xcode-select|xcodebuild|swift|swiftc|clang)(?![[:alnum:]_.-])' \
+     "$EXPANDED/Scripts"; then
+  print -u2 "package scripts must not require Xcode or Command Line Tools"
+  exit 1
+fi
 
 case "$MODE" in
   install)
@@ -73,10 +80,6 @@ case "$MODE" in
     /usr/bin/grep -Fqx '  test -x "$app_executable"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx '/usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx 'test "$(/usr/bin/uname -m)" = "arm64"' "$EXPANDED/Scripts/postinstall"
-    /usr/bin/grep -Fqx 'test "$DRIVER_ARCHS" = "arm64"' "$EXPANDED/Scripts/postinstall"
-    /usr/bin/grep -Fqx 'test "$APP_ARCHS" = "arm64"' "$EXPANDED/Scripts/postinstall"
-    /usr/bin/grep -Fqx "/usr/bin/vtool -show-build \"\$BINARY\" | /usr/bin/grep -q 'minos 26\\.0'" "$EXPANDED/Scripts/postinstall"
-    /usr/bin/grep -Fqx "/usr/bin/vtool -show-build \"\$APP_BINARY\" | /usr/bin/grep -q 'minos 26\\.0'" "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx '/usr/bin/killall coreaudiod' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fq '/bin/launchctl asuser "$CONSOLE_UID"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fq '/usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"' "$EXPANDED/Scripts/postinstall"
