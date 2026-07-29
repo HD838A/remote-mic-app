@@ -4,6 +4,23 @@ dist/
 *.xcuserstate
 .DS_Store
 
+# Local credentials, signing identities, and notarization material.
+.env
+.env.*
+*.p12
+*.pfx
+*.p8
+*.key
+*.pem
+*.cer
+*.crt
+*.der
+*.csr
+*.mobileprovision
+*.provisionprofile
+*.keychain*
+*.age
+
 # Local project-control records are not part of the public source release.
 docs/
 AGENTS.md
