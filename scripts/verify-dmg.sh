@@ -57,7 +57,7 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
 fi
 if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
   xcrun stapler validate "$DMG"
-  /usr/sbin/spctl -a -vv -t open "$DMG"
+  /usr/sbin/spctl -a -vv -t open --context context:primary-signature "$DMG"
 fi
 (
   cd "${DMG:h}"

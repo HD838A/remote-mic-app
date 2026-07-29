@@ -105,7 +105,7 @@ fi
 
 if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
   xcrun stapler validate "$APP"
-  /usr/sbin/spctl -a -vv -t open "$APP"
+  /usr/sbin/spctl -a -vv -t open --context context:primary-signature "$APP"
 fi
 
 print "APP VERIFY PASS: $APP"
