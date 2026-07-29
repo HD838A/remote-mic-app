@@ -245,7 +245,7 @@ struct SettingsView: View {
                         }
                     )) {
                         Text("不输出语音").tag("")
-                        ForEach(model.audioDevices) { device in
+                        ForEach(model.audioDevices, id: \.uid) { device in
                             Text(device.name).tag(device.uid)
                         }
                     }

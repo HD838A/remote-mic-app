@@ -2,7 +2,7 @@
 
 [English](TECHNICAL.en.md)
 
-本文面向开发、审计和发布人员，描述 `1.3.1 (22)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
+本文面向开发、审计和发布人员，描述 `1.3.2 (23)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
 
 ## 支持范围
 
@@ -159,8 +159,8 @@ xcrun swift test
 - `dist/MiRemoteV2ch.driver`；
 - `dist/Install Remote Mic.pkg`；
 - `dist/Uninstall Remote Mic.pkg`；
-- `dist/Remote-Mic-1.3.1.dmg`；
-- `dist/Remote-Mic-1.3.1.dmg.sha256`。
+- `dist/Remote-Mic-1.3.2.dmg`；
+- `dist/Remote-Mic-1.3.2.dmg.sha256`。
 
 DMG 根目录严格只有四项：
 

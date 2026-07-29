@@ -10,7 +10,15 @@ struct AudioDeviceInfo: Identifiable, Equatable {
 }
 
 enum CoreAudioDeviceCatalog {
+    private static let propertyLock = NSRecursiveLock()
+
     static func outputDevices() -> [AudioDeviceInfo] {
+        withPropertyLock {
+            outputDevicesLocked()
+        }
+    }
+
+    private static func outputDevicesLocked() -> [AudioDeviceInfo] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -26,38 +34,49 @@ enum CoreAudioDeviceCatalog {
         ) == noErr else { return [] }
 
         let count = Int(size) / MemoryLayout<AudioDeviceID>.size
+        guard count > 0 else { return [] }
         var deviceIDs = Array(repeating: AudioDeviceID(0), count: count)
-        guard AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            0,
-            nil,
-            &size,
-            &deviceIDs
-        ) == noErr else { return [] }
+        let result = deviceIDs.withUnsafeMutableBufferPointer { buffer -> OSStatus in
+            guard let baseAddress = buffer.baseAddress else { return OSStatus(-1) }
+            return AudioObjectGetPropertyData(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                0,
+                nil,
+                &size,
+                baseAddress
+            )
+        }
+        guard result == noErr else { return [] }
 
+        var seenUIDs = Set<String>()
         return deviceIDs.compactMap { deviceID in
             guard outputChannelCount(for: deviceID) > 0 else { return nil }
             return deviceInfo(for: deviceID)
         }
+        .filter { seenUIDs.insert($0.uid).inserted }
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     static func deviceInfo(for deviceID: AudioDeviceID) -> AudioDeviceInfo? {
-        guard deviceID != kAudioObjectUnknown,
-              let uid = stringProperty(deviceID, selector: kAudioDevicePropertyDeviceUID),
-              let name = stringProperty(deviceID, selector: kAudioObjectPropertyName)
-        else { return nil }
-        return AudioDeviceInfo(id: deviceID, uid: uid, name: name)
+        withPropertyLock {
+            guard deviceID != kAudioObjectUnknown,
+                  let uid = stringProperty(deviceID, selector: kAudioDevicePropertyDeviceUID),
+                  let name = stringProperty(deviceID, selector: kAudioObjectPropertyName)
+            else { return nil }
+            return AudioDeviceInfo(id: deviceID, uid: uid, name: name)
+        }
     }
 
     static func routeDiagnostic() -> String {
-        let input = defaultDevice(selector: kAudioHardwarePropertyDefaultInputDevice)
-        let output = defaultDevice(selector: kAudioHardwarePropertyDefaultOutputDevice)
-        let systemOutput = defaultDevice(selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
-        return "default_input={\(deviceDiagnostic(input))} " +
-            "default_output={\(deviceDiagnostic(output))} " +
-            "default_system_output={\(deviceDiagnostic(systemOutput))}"
+        withPropertyLock {
+            let input = defaultDevice(selector: kAudioHardwarePropertyDefaultInputDevice)
+            let output = defaultDevice(selector: kAudioHardwarePropertyDefaultOutputDevice)
+            let systemOutput = defaultDevice(selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
+            return "default_input={\(deviceDiagnostic(input))} " +
+                "default_output={\(deviceDiagnostic(output))} " +
+                "default_system_output={\(deviceDiagnostic(systemOutput))}"
+        }
     }
 
     static func outputDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
@@ -133,6 +152,12 @@ enum CoreAudioDeviceCatalog {
             raw.assumingMemoryBound(to: AudioBufferList.self)
         )
         return bufferList.reduce(0) { $0 + Int($1.mNumberChannels) }
+    }
+
+    private static func withPropertyLock<T>(_ operation: () -> T) -> T {
+        propertyLock.lock()
+        defer { propertyLock.unlock() }
+        return operation()
     }
 }
 
@@ -323,6 +348,14 @@ final class VirtualAudioOutput {
                   self.engine === engine,
                   self.engineConfigurationGeneration == generation
             else { return }
+            if self.isReadyForTestTone,
+               let selectedDevice = self.selectedDevice,
+               self.currentOutputDevice()?.id == selectedDevice.id {
+                AppLogger.shared.write(
+                    "AUDIO ENGINE configuration_ignored generation=\(generation) reason=still_bound"
+                )
+                return
+            }
             AppLogger.shared.write("AUDIO ENGINE configuration_changed generation=\(generation)")
             self.onConfigurationChange?()
         }

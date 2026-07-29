@@ -17,6 +17,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var testToneStatus = LocalizedMessage("未选择语音输出设备")
     @Published private(set) var isPlayingTestTone = false
+    @Published private(set) var isAudioOutputReady = false
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("正在准备遥控器 Fn 硬件映射")
 
     private let audioOutput = VirtualAudioOutput()
@@ -36,6 +37,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }()
     private var started = false
     private var terminationObserver: NSObjectProtocol?
+    private let audioPreparationQueue = DispatchQueue(label: "RemoteMic.audioPreparation", qos: .userInitiated)
+    private var audioStartupGeneration: UInt64 = 0
+    private var audioDeviceRefreshGeneration: UInt64 = 0
+    private var audioStartupPending = false
     private let audioHardwareListenerQueue = DispatchQueue(label: "RemoteMic.audioHardware")
     private var observedAudioHardwareAddresses: [AudioObjectPropertyAddress] = []
     private var audioRecoveryWorkItem: DispatchWorkItem?
@@ -54,12 +59,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func startIfNeeded() {
         guard !started else { return }
         started = true
-        refreshAudioDevices()
-        applyAudioSettings(reason: "startup")
-        startObservingAudioHardware()
+        startAudioSubsystem()
         applyHIDSettings()
         applyVoiceFunctionMapping()
-        bluetoothBridge.start()
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -76,6 +78,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func stop() {
         guard started else { return }
         started = false
+        audioStartupGeneration &+= 1
+        audioDeviceRefreshGeneration &+= 1
+        let shouldStopAudioOnPreparationQueue = audioStartupPending
+        audioStartupPending = false
         audioRecoveryGeneration &+= 1
         audioRecoveryWorkItem?.cancel()
         audioRecoveryWorkItem = nil
@@ -87,7 +93,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothBridge.stop()
         updateVoiceFunctionKeyState(streaming: false)
         hidMonitor.stop()
-        audioOutput.stop()
+        isAudioOutputReady = false
+        if shouldStopAudioOnPreparationQueue {
+            audioPreparationQueue.async { [weak self] in
+                self?.audioOutput.stop()
+            }
+        } else {
+            audioOutput.stop()
+        }
         voiceFunctionMapper.restore()
         if let terminationObserver {
             NotificationCenter.default.removeObserver(terminationObserver)
@@ -101,12 +114,75 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func refreshAudioDevices() {
-        audioDevices = CoreAudioDeviceCatalog.outputDevices()
-        doubaoAudioStatus = DoubaoAudioDevicePolicy.status(in: audioDevices)
-        AppLogger.shared.write(
-            "AUDIO DEVICES refreshed outputs={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(audioDevices))} " +
-                "\(CoreAudioDeviceCatalog.routeDiagnostic())"
-        )
+        audioDeviceRefreshGeneration &+= 1
+        let generation = audioDeviceRefreshGeneration
+        AppLogger.shared.write("AUDIO DEVICES refresh_requested id=\(generation)")
+        audioPreparationQueue.async { [weak self] in
+            let devices = CoreAudioDeviceCatalog.outputDevices()
+            let diagnostic = Self.audioDevicesDiagnostic(devices)
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.started,
+                      self.audioDeviceRefreshGeneration == generation
+                else { return }
+                self.publishAudioDevices(devices)
+                AppLogger.shared.write("AUDIO DEVICES refreshed id=\(generation) \(diagnostic)")
+            }
+        }
+    }
+
+    private func startAudioSubsystem() {
+        audioStartupGeneration &+= 1
+        let generation = audioStartupGeneration
+        let selectedDeviceUID = settings.selectedAudioDeviceUID
+        audioStartupPending = true
+        AppLogger.shared.write("AUDIO STARTUP scheduled id=\(generation)")
+        audioPreparationQueue.async { [weak self] in
+            guard let self else { return }
+            let devices = CoreAudioDeviceCatalog.outputDevices()
+            let devicesDiagnostic = Self.audioDevicesDiagnostic(devices)
+            AppLogger.shared.write("AUDIO DEVICES startup id=\(generation) \(devicesDiagnostic)")
+            AppLogger.shared.write(
+                "AUDIO REBIND begin reason=startup state={\(self.audioOutput.diagnosticState())}"
+            )
+            let configured = self.audioOutput.configure(deviceUID: selectedDeviceUID)
+            let audioStatus = self.audioOutput.status
+            let isAudioOutputReady = self.audioOutput.isReadyForTestTone
+            let testToneStatus = isAudioOutputReady
+                ? LocalizedMessage("可发送测试音")
+                : LocalizedMessage("未选择语音输出设备或设备不可用")
+            let outputState = self.audioOutput.diagnosticState()
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                guard self.started, self.audioStartupGeneration == generation else {
+                    self.audioPreparationQueue.async { [weak self] in
+                        self?.audioOutput.stop()
+                    }
+                    return
+                }
+                self.audioStartupPending = false
+                self.publishAudioDevices(devices)
+                self.audioStatus = audioStatus
+                self.isAudioOutputReady = isAudioOutputReady
+                self.testToneStatus = testToneStatus
+                self.startObservingAudioHardware()
+                self.bluetoothBridge.start()
+                AppLogger.shared.write(
+                    "AUDIO REBIND finished reason=startup success=\(configured) status=\(audioStatus.key) " +
+                        "state={\(outputState)}"
+                )
+            }
+        }
+    }
+
+    private func publishAudioDevices(_ devices: [AudioDeviceInfo]) {
+        audioDevices = devices
+        doubaoAudioStatus = DoubaoAudioDevicePolicy.status(in: devices)
+    }
+
+    private static func audioDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
+        "outputs={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(devices))} " +
+            CoreAudioDeviceCatalog.routeDiagnostic()
     }
 
     var hasDoubaoAudioDevice: Bool {
@@ -147,7 +223,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         let configured = audioOutput.configure(deviceUID: settings.selectedAudioDeviceUID)
         audioStatus = audioOutput.status
-        testToneStatus = audioOutput.isReadyForTestTone
+        isAudioOutputReady = audioOutput.isReadyForTestTone
+        testToneStatus = isAudioOutputReady
             ? LocalizedMessage("可发送测试音")
             : LocalizedMessage("未选择语音输出设备或设备不可用")
         AppLogger.shared.write(
@@ -271,7 +348,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     var canSendTestTone: Bool {
         TestToneGate.canPlay(
-            hasSelectedDevice: audioOutput.isReadyForTestTone,
+            hasSelectedDevice: isAudioOutputReady,
             isStreaming: isStreaming,
             isPlaying: isPlayingTestTone
         )
@@ -279,7 +356,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func sendTestTone() {
         guard TestToneGate.canPlay(
-            hasSelectedDevice: audioOutput.isReadyForTestTone,
+            hasSelectedDevice: isAudioOutputReady,
             isStreaming: isStreaming,
             isPlaying: isPlayingTestTone
         ) else {
