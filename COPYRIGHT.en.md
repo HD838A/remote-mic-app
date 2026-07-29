@@ -10,7 +10,7 @@ This program is a macOS adaptation whose implementation references the GPL-3.0-o
 
 This project adds:
 
-- a native SwiftUI/AppKit menu bar app;
+- a native SwiftUI/AppKit macOS app with Dock and menu bar entry points;
 - CoreBluetooth connection and state management;
 - CoreAudio output-device selection;
 - IOHID permissions, button reading, and macOS action injection;

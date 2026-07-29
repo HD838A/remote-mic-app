@@ -202,3 +202,11 @@
 "小米遥控器" = "Xiaomi remote";
 "版本 %@\nRC003 蓝牙语音遥控器桥接工具。" = "Version %@\nRC003 Bluetooth Voice Remote Bridge.";
 "好" = "OK";
+"关于" = "About";
+"查看版本、更新、语言和应用显示选项" = "View version, updates, language, and app display options";
+"RC003 蓝牙语音遥控器桥接工具。" = "RC003 Bluetooth voice remote bridge.";
+"应用与支持" = "App & Support";
+"在 Dock 中显示应用图标" = "Show app icon in the Dock";
+"关闭后仍可通过菜单栏图标打开无线麦。" = "When hidden, Remote Mic remains available from the menu bar.";
+"应用语言" = "App Language";
+"更改后界面会立即更新，无需重新启动。" = "Changes apply immediately without restarting the app.";

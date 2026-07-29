@@ -2,7 +2,7 @@
 
 [简体中文](TECHNICAL.md)
 
-This document is for developers, auditors, and release engineers. It describes the implementation, build, and release constraints for version 1.3.2 (23). End users should start with [README.en.md](README.en.md).
+This document is for developers, auditors, and release engineers. It describes the implementation, build, and release constraints for version 1.4.0 (24). End users should start with [README.en.md](README.en.md).
 
 ## Support boundary
 
@@ -152,8 +152,8 @@ build-dmg.sh builds and verifies the app, driver, install PKG, and uninstall PKG
 - dist/MiRemoteV2ch.driver
 - dist/Install Remote Mic.pkg
 - dist/Uninstall Remote Mic.pkg
-- dist/Remote-Mic-1.3.2.dmg
-- dist/Remote-Mic-1.3.2.dmg.sha256
+- dist/Remote-Mic-1.4.0.dmg
+- dist/Remote-Mic-1.4.0.dmg.sha256
 
 The DMG root contains exactly four items:
 

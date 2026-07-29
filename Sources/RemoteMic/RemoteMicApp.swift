@@ -11,7 +11,7 @@ enum RemoteMicApp {
         let application = NSApplication.shared
         let delegate = RemoteMicAppDelegate()
         application.delegate = delegate
-        application.setActivationPolicy(.accessory)
+        application.setActivationPolicy(delegate.activationPolicy)
         withExtendedLifetime(delegate) {
             application.run()
         }
@@ -36,6 +36,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private let connectionItem = NSMenuItem()
     private let audioItem = NSMenuItem()
     private let hidItem = NSMenuItem()
+
+    var activationPolicy: NSApplication.ActivationPolicy {
+        model.settings.showDockIcon ? .regular : .accessory
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installTerminationSignalHandlers()
@@ -256,7 +260,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     private func makeSettingsWindowController() -> NSWindowController {
         let hostingController = NSHostingController(
-            rootView: SettingsView(model: model).environmentObject(localization)
+            rootView: SettingsView(
+                model: model,
+                checkForUpdates: { [weak self] in self?.checkForUpdates() },
+                setDockIconVisible: { [weak self] isVisible in
+                    self?.setDockIconVisible(isVisible)
+                }
+            )
+            .environmentObject(localization)
         )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 650),
@@ -302,6 +313,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func checkForUpdates() {
         updaterController.checkForUpdates(nil)
+    }
+
+    private func setDockIconVisible(_ isVisible: Bool) {
+        model.settings.showDockIcon = isVisible
+        NSApp.setActivationPolicy(isVisible ? .regular : .accessory)
+        if isVisible {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     @objc private func openGitHub() {

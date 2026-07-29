@@ -7,6 +7,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
     case mapping
     case permissions
+    case about
 
     var id: String { rawValue }
 
@@ -15,6 +16,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: return "连接"
         case .mapping: return "按键"
         case .permissions: return "权限"
+        case .about: return "关于"
         }
     }
 
@@ -23,6 +25,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: return "link"
         case .mapping: return "keyboard"
         case .permissions: return "shield.lefthalf.filled"
+        case .about: return "info.circle"
         }
     }
 }
@@ -58,6 +61,9 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @EnvironmentObject private var localization: LocalizationStore
 
+    private let checkForUpdates: () -> Void
+    private let setDockIconVisible: (Bool) -> Void
+
     @State private var selectedSection: SettingsSection = .connection
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var shortcutEditingTarget: ShortcutEditingTarget?
@@ -66,9 +72,15 @@ struct SettingsView: View {
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
     @Namespace private var navigationGlassNamespace
 
-    init(model: BridgeAppModel) {
+    init(
+        model: BridgeAppModel,
+        checkForUpdates: @escaping () -> Void = {},
+        setDockIconVisible: @escaping (Bool) -> Void = { _ in }
+    ) {
         self.model = model
         settings = model.settings
+        self.checkForUpdates = checkForUpdates
+        self.setDockIconVisible = setDockIconVisible
     }
 
     var body: some View {
@@ -149,6 +161,8 @@ struct SettingsView: View {
             mappingPage
         case .permissions:
             permissionsPage
+        case .about:
+            aboutPage
         }
     }
 
@@ -713,6 +727,118 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
+    }
+
+    private var aboutPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                PageHeader(
+                    title: localization.text("关于无线麦"),
+                    subtitle: localization.text("查看版本、更新、语言和应用显示选项")
+                )
+
+                GlassEffectContainer(spacing: 14) {
+                    GlassPanel {
+                        HStack(spacing: 18) {
+                            Image(nsImage: NSApp.applicationIconImage)
+                                .resizable()
+                                .frame(width: 76, height: 76)
+
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("无线麦")
+                                    .font(.title2.weight(.semibold))
+                                Text("RC003 蓝牙语音遥控器桥接工具。")
+                                    .foregroundStyle(.secondary)
+                                Text(versionText)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 16)
+                        }
+                    }
+
+                    GlassPanel {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("应用与支持")
+                                .font(.headline)
+
+                            Toggle("在 Dock 中显示应用图标", isOn: Binding(
+                                get: { settings.showDockIcon },
+                                set: { setDockIconVisible($0) }
+                            ))
+
+                            Text("关闭后仍可通过菜单栏图标打开无线麦。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Text("应用语言")
+                                    .frame(width: 90, alignment: .leading)
+                                Picker("", selection: Binding(
+                                    get: { localization.language },
+                                    set: { localization.select($0) }
+                                )) {
+                                    ForEach(AppLanguage.allCases) { language in
+                                        Text(languageTitle(language)).tag(language)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 180)
+                                Spacer()
+                            }
+
+                            Text("更改后界面会立即更新，无需重新启动。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Divider()
+
+                            HStack(spacing: 10) {
+                                Button("检查更新…", action: checkForUpdates)
+                                    .buttonStyle(.glassProminent)
+                                Link(
+                                    "GitHub",
+                                    destination: URL(string: "https://github.com/HD838A/remote-mic-app")!
+                                )
+                                .buttonStyle(.glass)
+                                Spacer()
+                                Button("退出") { NSApp.terminate(nil) }
+                                    .buttonStyle(.glass)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .scrollEdgeEffectStyle(.soft, for: .top)
+    }
+
+    private var versionText: String {
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? localization.text("未知")
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        guard let build else {
+            return String(
+                format: localization.text("版本 %@"),
+                locale: localization.locale,
+                arguments: [version]
+            )
+        }
+        return String(
+            format: localization.text("版本 %@ (%@)"),
+            locale: localization.locale,
+            arguments: [version, build]
+        )
+    }
+
+    private func languageTitle(_ language: AppLanguage) -> String {
+        language == .system ? localization.text("跟随系统") : language.nativeDisplayName
     }
 
     private func permissionRow(

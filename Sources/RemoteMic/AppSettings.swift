@@ -12,6 +12,7 @@ final class AppSettings: ObservableObject {
         static let secondaryButtonBindings = "secondaryButtonBindings"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let applicationLanguage = "applicationLanguage"
+        static let showDockIcon = "showDockIcon"
     }
 
     private let defaults: UserDefaults
@@ -42,6 +43,10 @@ final class AppSettings: ObservableObject {
 
     @Published var applicationLanguage: AppLanguage {
         didSet { defaults.set(applicationLanguage.rawValue, forKey: Keys.applicationLanguage) }
+    }
+
+    @Published var showDockIcon: Bool {
+        didSet { defaults.set(showDockIcon, forKey: Keys.showDockIcon) }
     }
 
     var peripheralIdentifier: UUID? {
@@ -111,6 +116,9 @@ final class AppSettings: ObservableObject {
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
         ) ?? .system
+        showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
+            ? true
+            : defaults.bool(forKey: Keys.showDockIcon)
     }
 
     func action(for button: RemoteButton) -> ButtonAction {

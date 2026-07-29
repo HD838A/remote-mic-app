@@ -4,7 +4,7 @@
 
 ![Remote Mic — a voice remote for Vibe Coding](Screenshots/Remote-Mic-Introduce-1.png)
 
-Remote Mic is a macOS menu bar app that turns a Xiaomi Bluetooth Remote 2 Pro (RC003) into a wireless voice remote for your Mac.
+Remote Mic is a macOS app that turns a Xiaomi Bluetooth Remote 2 Pro (RC003) into a wireless voice remote for your Mac. It provides both a standard Dock entry and a persistent menu bar entry.
 
 Hold the remote voice button to speak. The direction, OK, Back, Home, Menu, TV, Power, and volume buttons can control macOS or launch commonly used apps.
 
@@ -36,14 +36,17 @@ Starting with v1.3.0, official release packages are signed with an Apple Develop
 4. Launch Remote Mic and grant Bluetooth access when asked.
 5. To customize ordinary buttons, also grant Input Monitoring and Accessibility. Restarting the app is required only after changing those macOS permissions.
 
-Remote Mic remains in the menu bar after launch:
+Remote Mic appears in the Dock and remains in the menu bar after launch:
 
+- Click the Dock icon to open Settings.
 - Left-click the icon to open Settings.
 - Right-click the icon to show status, reconnect, logs, About, version, update, GitHub, language, and Quit actions.
 
-Choose **Language** from the right-click menu to use **System Default**, **简体中文**, or **English**. Remote Mic's open settings window, status text, menu, and built-in help update immediately; restarting the app is not required. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
+The **About** page at the bottom of the Settings sidebar provides version, update, GitHub, language, Quit, and Dock display controls. Turn off **Show app icon in the Dock** to keep Remote Mic available only from its menu bar entry; the Dock icon can be restored from the same page.
 
-The app checks for updates once per day and asks before installing a newer version; it does not silently download or install updates. **Check for Updates…** in the right-click menu remains available for manual checks. Sparkle updates the app bundle only; the compatible microphone driver is managed by the installer in the DMG.
+Choose **System Default**, **简体中文**, or **English** under **App Language**. Remote Mic's open settings window, status text, menu, and built-in help update immediately; restarting the app is not required. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
+
+The app checks for updates once per day and asks before installing a newer version; it does not silently download or install updates. **Check for Updates…** is available from both the About page and the right-click menu. Sparkle updates the app bundle only; the compatible microphone driver is managed by the installer in the DMG.
 
 ## Use voice input
 

@@ -10,7 +10,7 @@ Copyright (C) 2026 Remote Mic contributors
 
 本项目的改动包括：
 
-- 原生 SwiftUI/AppKit 菜单栏应用；
+- 带 Dock 与菜单栏入口的原生 SwiftUI/AppKit macOS 应用；
 - CoreBluetooth 连接与状态管理；
 - CoreAudio 输出设备选择；
 - IOHID 权限、按键读取与 macOS 动作注入；
