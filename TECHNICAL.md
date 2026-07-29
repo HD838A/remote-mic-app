@@ -2,7 +2,7 @@
 
 [English](TECHNICAL.en.md)
 
-本文面向开发、审计和发布人员，描述 `1.3.0 (21)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
+本文面向开发、审计和发布人员，描述 `1.3.1 (22)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
 
 ## 支持范围
 
@@ -159,8 +159,8 @@ xcrun swift test
 - `dist/MiRemoteV2ch.driver`；
 - `dist/Install Remote Mic.pkg`；
 - `dist/Uninstall Remote Mic.pkg`；
-- `dist/Remote-Mic-1.3.0.dmg`；
-- `dist/Remote-Mic-1.3.0.dmg.sha256`。
+- `dist/Remote-Mic-1.3.1.dmg`；
+- `dist/Remote-Mic-1.3.1.dmg.sha256`。
 
 DMG 根目录严格只有四项：
 
@@ -171,7 +171,7 @@ DMG 根目录严格只有四项：
 
 `verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 26 最低版本、有效代码签名和本地路径泄漏。正式模式还校验 Developer ID Team、Hardened Runtime、PKG/DMG 签名、stapled 公证票据与 Gatekeeper 评估。
 
-Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=false` 禁止启动时和定时检查，只有用户选择菜单中的“检查更新…”时才会访问更新源。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
+Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=true` 与 `SUScheduledCheckInterval=86400` 启用每日自动检查；`SUAutomaticallyUpdate=false` 与 `SUAllowsAutomaticUpdates=false` 禁止静默下载或自动安装。用户仍可选择菜单中的“检查更新…”立即检查。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
 
 正式发布使用 `scripts/notarize-release.sh`：它只接受已同步到发布 Mac 的既有 Developer ID 身份、Keychain 中的本地公证 profile 和受限的 Sparkle 私钥文件引用。脚本按应用、两个 PKG、DMG 的顺序公证和 staple，最后从已 staple 的应用生成 Sparkle ZIP 与签名 appcast；不会把任何证书、P12、API 密钥或私钥写入仓库或 Release。
 

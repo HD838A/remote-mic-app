@@ -43,7 +43,7 @@ Remote Mic remains in the menu bar after launch:
 
 Choose **Language** from the right-click menu to use **System Default**, **简体中文**, or **English**. Remote Mic's open settings window, status text, menu, and built-in help update immediately; restarting the app is not required. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
 
-The app never checks for updates automatically. Only **Check for Updates…** in the right-click menu contacts the update feed. Sparkle updates the app bundle only; the compatible microphone driver is managed by the installer in the DMG.
+The app checks for updates once per day and asks before installing a newer version; it does not silently download or install updates. **Check for Updates…** in the right-click menu remains available for manual checks. Sparkle updates the app bundle only; the compatible microphone driver is managed by the installer in the DMG.
 
 ## Use voice input
 

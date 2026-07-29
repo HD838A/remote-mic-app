@@ -4,6 +4,8 @@ set -euo pipefail
 TARGET_VOLUME="${3:-/}"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
+APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
+APP_PLIST="$APP_DESTINATION/Contents/Info.plist"
 LEGACY_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
 LEGACY_APP_PLIST="$LEGACY_APP_DESTINATION/Contents/Info.plist"
 
@@ -36,12 +38,32 @@ if [[ -e "$DESTINATION" ]]; then
     "An existing MiRemoteV 2ch installation will be upgraded in place."
 fi
 
+if [[ -e "$APP_DESTINATION" || -L "$APP_DESTINATION" ]]; then
+  if [[ ! -f "$APP_PLIST" ]] || \
+     [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST" 2>/dev/null || true)" != "com.hd838a.RemoteMic" ]]; then
+    installer_message \
+      "未安装：目标路径存在不属于 Remote Mic 的应用 $APP_DESTINATION" \
+      "Installation stopped: an app not owned by Remote Mic exists at $APP_DESTINATION." >&2
+    installer_message \
+      "为避免覆盖其他软件，安装器已停止。" \
+      "To avoid overwriting other software, the installer has stopped." >&2
+    exit 2
+  fi
+  /usr/bin/pkill -x RemoteMic 2>/dev/null || true
+  /bin/rm -rf -- "$APP_DESTINATION"
+  installer_message \
+    "已移除旧版 Remote Mic.app，准备安装新版本。" \
+    "Removed the previous Remote Mic.app before installing the new version."
+fi
+
 if [[ -e "$LEGACY_APP_DESTINATION" || -L "$LEGACY_APP_DESTINATION" ]]; then
   if [[ -f "$LEGACY_APP_PLIST" ]] && \
      [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$LEGACY_APP_PLIST" 2>/dev/null || true)" == "com.hd838a.RemoteMic" ]]; then
+    /usr/bin/pkill -x RemoteMic 2>/dev/null || true
+    /bin/rm -rf -- "$LEGACY_APP_DESTINATION"
     installer_message \
-      "检测到旧版“无线麦.app”；安装完成后将迁移到“Remote Mic.app”。" \
-      "A legacy Remote Mic app was found; it will be migrated to Remote Mic.app after installation."
+      "已移除旧版“无线麦.app”，准备安装新版本。" \
+      "Removed the legacy Remote Mic app before installing the new version."
   else
     installer_message \
       "旧中文应用路径不属于 Remote Mic，安装器将保留它不作处理。" \

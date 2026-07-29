@@ -2,7 +2,7 @@
 
 [简体中文](TECHNICAL.md)
 
-This document is for developers, auditors, and release engineers. It describes the implementation, build, and release constraints for version 1.3.0 (21). End users should start with [README.en.md](README.en.md).
+This document is for developers, auditors, and release engineers. It describes the implementation, build, and release constraints for version 1.3.1 (22). End users should start with [README.en.md](README.en.md).
 
 ## Support boundary
 
@@ -152,8 +152,8 @@ build-dmg.sh builds and verifies the app, driver, install PKG, and uninstall PKG
 - dist/MiRemoteV2ch.driver
 - dist/Install Remote Mic.pkg
 - dist/Uninstall Remote Mic.pkg
-- dist/Remote-Mic-1.3.0.dmg
-- dist/Remote-Mic-1.3.0.dmg.sha256
+- dist/Remote-Mic-1.3.1.dmg
+- dist/Remote-Mic-1.3.1.dmg.sha256
 
 The DMG root contains exactly four items:
 
@@ -164,7 +164,7 @@ The DMG root contains exactly four items:
 
 verify-dmg.sh validates the SHA-256, HFS+ image, root manifest, app bundle contents, PKG payloads, version, arm64 architecture, macOS 26 minimum version, valid code signature, localized resources, and absence of leaked local paths. In official mode it also validates the Developer ID Team, Hardened Runtime, PKG/DMG signatures, stapled notarization tickets, and Gatekeeper assessment.
 
-Sparkle 2.9.4 is embedded through SwiftPM. Its feed URL and EdDSA public key are in Info.plist; the private key remains in the publisher's restricted local storage and never enters the project or a release. SUEnableAutomaticChecks=false prevents startup and scheduled checks. Only the explicit menu command accesses the feed. Sparkle updates the app bundle only and never installs or replaces the compatibility microphone driver.
+Sparkle 2.9.4 is embedded through SwiftPM. Its feed URL and EdDSA public key are in Info.plist; the private key remains in the publisher's restricted local storage and never enters the project or a release. SUEnableAutomaticChecks=true with SUScheduledCheckInterval=86400 enables daily checks, while SUAutomaticallyUpdate=false and SUAllowsAutomaticUpdates=false prevent silent downloads or automatic installation. The menu command remains available for immediate checks. Sparkle updates the app bundle only and never installs or replaces the compatibility microphone driver.
 
 Official publishing uses scripts/notarize-release.sh. It accepts only the existing Developer ID identities synchronized to the release Mac, a local Keychain notarization profile, and a reference to the restricted Sparkle private-key file. The script notarizes and staples the app, both PKGs, and the DMG in order, then creates the Sparkle ZIP and signed appcast from the stapled app. It never writes certificates, P12 files, API keys, or private keys into the repository or a Release.
 
