@@ -8,6 +8,15 @@ BINARY="$DESTINATION/Contents/MacOS/MiRemoteV2ch"
 APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
 APP_PLIST="$APP_DESTINATION/Contents/Info.plist"
 APP_BINARY="$APP_DESTINATION/Contents/MacOS/RemoteMic"
+SPARKLE_VERSION_DIR="$APP_DESTINATION/Contents/Frameworks/Sparkle.framework/Versions/B"
+APP_EXECUTABLES=(
+  "$APP_BINARY"
+  "$SPARKLE_VERSION_DIR/Sparkle"
+  "$SPARKLE_VERSION_DIR/Autoupdate"
+  "$SPARKLE_VERSION_DIR/Updater.app/Contents/MacOS/Updater"
+  "$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc/Contents/MacOS/Installer"
+  "$SPARKLE_VERSION_DIR/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
+)
 LEGACY_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
 LEGACY_APP_PLIST="$LEGACY_APP_DESTINATION/Contents/Info.plist"
 
@@ -46,7 +55,11 @@ test "$SYSTEM_MAJOR" -ge 26
 /usr/sbin/chown -R root:wheel "$APP_DESTINATION"
 /usr/bin/find "$APP_DESTINATION" -type d -exec /bin/chmod 755 {} \;
 /usr/bin/find "$APP_DESTINATION" -type f -exec /bin/chmod 644 {} \;
-/bin/chmod 755 "$APP_BINARY"
+for app_executable in "${APP_EXECUTABLES[@]}"; do
+  test -f "$app_executable"
+  /bin/chmod 755 "$app_executable"
+  test -x "$app_executable"
+done
 /usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"
 
 DRIVER_ARCHS="$(/usr/bin/lipo -archs "$BINARY")"

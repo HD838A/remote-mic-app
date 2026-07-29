@@ -60,6 +60,17 @@ case "$MODE" in
     /usr/bin/grep -Fqx '/usr/bin/codesign --verify --deep --strict "$DESTINATION"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx 'APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx 'LEGACY_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"' "$EXPANDED/Scripts/postinstall"
+    for sparkle_executable in \
+      '$SPARKLE_VERSION_DIR/Sparkle' \
+      '$SPARKLE_VERSION_DIR/Autoupdate' \
+      '$SPARKLE_VERSION_DIR/Updater.app/Contents/MacOS/Updater' \
+      '$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc/Contents/MacOS/Installer' \
+      '$SPARKLE_VERSION_DIR/XPCServices/Downloader.xpc/Contents/MacOS/Downloader'; do
+      /usr/bin/grep -Fq "$sparkle_executable" "$EXPANDED/Scripts/postinstall"
+    done
+    /usr/bin/grep -Fqx 'for app_executable in "${APP_EXECUTABLES[@]}"; do' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fqx '  /bin/chmod 755 "$app_executable"' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fqx '  test -x "$app_executable"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx '/usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx 'test "$(/usr/bin/uname -m)" = "arm64"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx 'test "$DRIVER_ARCHS" = "arm64"' "$EXPANDED/Scripts/postinstall"
