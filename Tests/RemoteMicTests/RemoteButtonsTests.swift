@@ -347,6 +347,24 @@ struct RemoteButtonsTests {
         ) == 1)
     }
 
+    @Test func cmuxFocusRequiresTheApplicationFocusedElementToMatchTheTerminal() {
+        #expect(!KeyboardInjector.accessibilityFocusIsConfirmed(
+            elementFocused: true,
+            applicationFocusedElementMatches: false,
+            requiresApplicationFocusedElement: true
+        ))
+        #expect(KeyboardInjector.accessibilityFocusIsConfirmed(
+            elementFocused: false,
+            applicationFocusedElementMatches: true,
+            requiresApplicationFocusedElement: true
+        ))
+        #expect(KeyboardInjector.accessibilityFocusIsConfirmed(
+            elementFocused: true,
+            applicationFocusedElementMatches: false,
+            requiresApplicationFocusedElement: false
+        ))
+    }
+
     @Test func cmuxFocusUsesCurrentTerminalSurfaceThenFocusesIt() throws {
         let surfaceID = UUID().uuidString
         var commands: [[String]] = []

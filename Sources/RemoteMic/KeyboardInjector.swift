@@ -428,9 +428,14 @@ enum KeyboardInjector {
 
     private static func focusAccessibilityElement(
         _ element: AXUIElement,
-        applicationElement: AXUIElement
+        applicationElement: AXUIElement,
+        requiresApplicationFocusedElement: Bool = false
     ) -> Bool {
-        if accessibilityElementIsFocused(element, applicationElement: applicationElement) {
+        if accessibilityElementIsFocused(
+            element,
+            applicationElement: applicationElement,
+            requiresApplicationFocusedElement: requiresApplicationFocusedElement
+        ) {
             return true
         }
         _ = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
@@ -439,24 +444,46 @@ enum KeyboardInjector {
             kAXFocusedUIElementAttribute as CFString,
             element
         )
-        if accessibilityElementIsFocused(element, applicationElement: applicationElement) {
+        if accessibilityElementIsFocused(
+            element,
+            applicationElement: applicationElement,
+            requiresApplicationFocusedElement: requiresApplicationFocusedElement
+        ) {
             return true
         }
         _ = AXUIElementPerformAction(element, kAXPressAction as CFString)
-        return accessibilityElementIsFocused(element, applicationElement: applicationElement)
+        return accessibilityElementIsFocused(
+            element,
+            applicationElement: applicationElement,
+            requiresApplicationFocusedElement: requiresApplicationFocusedElement
+        )
     }
 
     private static func accessibilityElementIsFocused(
         _ element: AXUIElement,
-        applicationElement: AXUIElement
+        applicationElement: AXUIElement,
+        requiresApplicationFocusedElement: Bool
     ) -> Bool {
-        if axBool(element, attribute: kAXFocusedAttribute) == true {
-            return true
+        let applicationFocusedElementMatches = axElement(
+            applicationElement,
+            attribute: kAXFocusedUIElementAttribute
+        ).map { CFEqual($0, element) }
+        return accessibilityFocusIsConfirmed(
+            elementFocused: axBool(element, attribute: kAXFocusedAttribute) == true,
+            applicationFocusedElementMatches: applicationFocusedElementMatches,
+            requiresApplicationFocusedElement: requiresApplicationFocusedElement
+        )
+    }
+
+    static func accessibilityFocusIsConfirmed(
+        elementFocused: Bool,
+        applicationFocusedElementMatches: Bool?,
+        requiresApplicationFocusedElement: Bool
+    ) -> Bool {
+        if requiresApplicationFocusedElement {
+            return applicationFocusedElementMatches == true
         }
-        guard let focusedElement = axElement(applicationElement, attribute: kAXFocusedUIElementAttribute) else {
-            return false
-        }
-        return CFEqual(focusedElement, element)
+        return elementFocused || applicationFocusedElementMatches == true
     }
 
     static func bestComposerCandidateIndex(
@@ -551,7 +578,8 @@ enum KeyboardInjector {
             ) else { continue }
             if focusAccessibilityElement(
                 candidates[candidateIndex].element,
-                applicationElement: applicationElement
+                applicationElement: applicationElement,
+                requiresApplicationFocusedElement: true
             ) {
                 return true
             }
