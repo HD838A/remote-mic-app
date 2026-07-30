@@ -97,6 +97,8 @@
 
 开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)。
 
+后续开发计划见 [TODO](TODO.md)。
+
 ## 许可与来源
 
 本项目软件代码采用 `GPL-3.0-only` 许可。App Logo 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

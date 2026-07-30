@@ -8,6 +8,7 @@ PLIST="$ROOT/Resources/Info.plist"
 DISPLAY_NAME="Remote Mic"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
+RELEASE_TAG="${RELEASE_TAG:-v$VERSION}"
 APP="$OUTPUT_DIR/$DISPLAY_NAME.app"
 INSTALL_PACKAGE="$OUTPUT_DIR/Install Remote Mic.pkg"
 UNINSTALL_PACKAGE="$OUTPUT_DIR/Uninstall Remote Mic.pkg"
@@ -21,8 +22,8 @@ SPARKLE_PRIVATE_KEY_FILE="${SPARKLE_PRIVATE_KEY_FILE:?Set SPARKLE_PRIVATE_KEY_FI
 NOTARY_PROFILE="${NOTARY_PROFILE:-RemoteMic-notary}"
 NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
-DOWNLOAD_PREFIX="https://github.com/HD838A/remote-mic-app/releases/latest/download/"
-RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/v$VERSION"
+DOWNLOAD_PREFIX="https://github.com/HD838A/remote-mic-app/releases/download/$RELEASE_TAG/"
+RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG"
 GENERATE_APPCAST="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 SIGN_UPDATE="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
 
@@ -32,6 +33,10 @@ if [[ "$#" -ne 0 ]]; then
 fi
 if [[ "$EXPECTED_DEVELOPER_TEAM_ID" != "L3QHLDRPAY" ]]; then
   print -u2 "refusing to release for an unexpected Apple Developer Team"
+  exit 1
+fi
+if ! print -r -- "$RELEASE_TAG" | rg -q '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+  print -u2 "RELEASE_TAG must be a version tag such as v1.5.0 or v1.5.0-rc.1"
   exit 1
 fi
 if [[ "$CODE_SIGN_IDENTITY" != "Developer ID Application: "* ]]; then
@@ -158,6 +163,7 @@ rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
 "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
 
 print "NOTARIZED RELEASE READY"
+print "RELEASE TAG: $RELEASE_TAG"
 print "DMG: $DMG"
 print "SHA256: $DMG.sha256"
 print "INSTALL PACKAGE: $INSTALL_PACKAGE"

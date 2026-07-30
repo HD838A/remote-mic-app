@@ -175,6 +175,12 @@ Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应
 
 正式发布使用 `scripts/notarize-release.sh`：它只接受已同步到发布 Mac 的既有 Developer ID 身份、Keychain 中的本地公证 profile 和受限的 Sparkle 私钥文件引用。脚本按应用、两个 PKG、DMG 的顺序公证和 staple，最后从已 staple 的应用生成 Sparkle ZIP 与签名 appcast；不会把任何证书、P12、API 密钥或私钥写入仓库或 Release。
 
+候选版本先以 GitHub pre-release 发布。`notarize-release.sh` 使用固定 `RELEASE_TAG` 生成 appcast 的发布页和 enclosure URL，不使用 `latest/download`；应用内的 `SUFeedURL` 仍固定为 `releases/latest/download/appcast.xml`。GitHub 的 latest release 排除 draft 和 pre-release，因此普通用户继续取得上一个正式版本的 appcast，不会检测到候选版本。
+
+`scripts/publish-release.sh prerelease` 只接受干净、已推送且由同一远端 Tag 指向的源提交，发布 ZIP、两个 PKG、DMG、校验文件和 appcast，并确认 pre-release 未改变 latest release。脚本随后从公开 Release 回下载六个资产并逐字节比较。测试机可临时执行 `defaults write com.hd838a.RemoteMic SUFeedURL <候选版本 appcast URL>`，重启应用后完成从当前正式版本到候选版本的 Sparkle 更新测试；测试结束必须执行 `defaults delete com.hd838a.RemoteMic SUFeedURL` 并重启应用，恢复正式更新源。
+
+候选版本通过干净安装、运行和 Sparkle 端到端更新测试后，运行 `scripts/publish-release.sh promote` 将相同 Tag 和相同资产晋升为正式版。晋升后必须再次确认 latest appcast 与候选版本 appcast 逐字节一致。失败的候选版本不得覆盖资产或晋升；应递增显示版本和 `CFBundleVersion`，重新构建、签名、公证并发布新的 pre-release。
+
 ### 发布故障复盘与强制检查
 
 `1.4.5` 的安装 PKG 曾在 `postinstall` 中调用 `/usr/bin/lipo` 和 `/usr/bin/vtool` 检查架构与最低系统版本。这两个命令属于 Xcode Command Line Tools，不是普通 macOS 安装环境的组成部分；未安装开发工具的用户会在安装时被要求下载命令行开发者工具，并因 `set -e` 直接中止安装。该问题来自安装脚本，不是应用运行逻辑、Developer ID 签名或 Apple 公证。
