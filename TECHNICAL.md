@@ -177,6 +177,12 @@ Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应
 
 ### 发布故障复盘与强制检查
 
+`1.4.5` 的安装 PKG 曾在 `postinstall` 中调用 `/usr/bin/lipo` 和 `/usr/bin/vtool` 检查架构与最低系统版本。这两个命令属于 Xcode Command Line Tools，不是普通 macOS 安装环境的组成部分；未安装开发工具的用户会在安装时被要求下载命令行开发者工具，并因 `set -e` 直接中止安装。该问题来自安装脚本，不是应用运行逻辑、Developer ID 签名或 Apple 公证。
+
+安装脚本运行在最终用户机器上，只能依赖产品最低系统版本保证存在的系统命令。`lipo`、`vtool`、`xcrun`、`xcode-select`、`xcodebuild`、`swift`、`swiftc` 和 `clang` 等开发工具不得出现在 PKG 的 `preinstall`、`postinstall` 或其他安装脚本中。架构和最低系统版本必须在发布机上由 `verify-app.sh`、`verify-doubao-driver.sh` 等构建验证脚本检查，不能在用户机器重复检查。
+
+`scripts/verify-doubao-driver-pkg.sh` 会展开最终 PKG 并拒绝包含上述开发工具调用的安装脚本。每次发布还必须对从 GitHub Release 回下载的最终 PKG 再执行同一检查；只检查仓库中的脚本源码不够，因为打包过程可能使用了不同或过期的脚本副本。
+
 `1.4.2` / `1.4.3` 的安装 PKG 曾在 `postinstall` 中先把应用目录内的普通文件全部改为 `0644`，随后只把 `Contents/MacOS/RemoteMic` 恢复为 `0755`。这会在安装完成后移除 Sparkle、`Autoupdate`、Updater 及 XPC 服务的执行权限。原始 App、ZIP、PKG、DMG 的签名、公证和 Gatekeeper 检查仍可能全部通过，因为错误发生在安装后的文件权限改写阶段；因此只验证发布产物不足以发现该问题。
 
 安装后的应用必须保持以下文件为 `0755`：

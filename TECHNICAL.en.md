@@ -170,6 +170,12 @@ Official publishing uses scripts/notarize-release.sh. It accepts only the existi
 
 ### Release incident review and mandatory checks
 
+The `1.4.5` installer PKG called `/usr/bin/lipo` and `/usr/bin/vtool` from `postinstall` to check architecture and minimum OS version. Those commands belong to the Xcode Command Line Tools and are not part of a normal macOS installation environment. Macs without developer tools prompted the user to download them, and `set -e` then aborted installation. This was an installer-script defect, not an application runtime, Developer ID signing, or Apple notarization failure.
+
+Installer scripts run on the end user's Mac and may depend only on system commands guaranteed by the product's minimum macOS version. Developer tools such as `lipo`, `vtool`, `xcrun`, `xcode-select`, `xcodebuild`, `swift`, `swiftc`, and `clang` must not appear in PKG `preinstall`, `postinstall`, or other installation scripts. Architecture and minimum-OS checks belong on the release machine in build verifiers such as `verify-app.sh` and `verify-doubao-driver.sh`; they must not be repeated on the user's Mac.
+
+`scripts/verify-doubao-driver-pkg.sh` expands the final PKG and rejects installer scripts that invoke any of those developer tools. Every release must run the same check again against the final PKG downloaded back from GitHub Releases. Inspecting only the script source in the repository is insufficient because packaging may consume a different or stale copy.
+
 The `1.4.2` / `1.4.3` installer PKGs changed every regular file in the app directory to mode `0644` during `postinstall`, then restored `0755` only on `Contents/MacOS/RemoteMic`. This removed executable permissions from Sparkle, Autoupdate, Updater, and the XPC services after installation. The original app, ZIP, PKG, and DMG could still pass signing, notarization, and Gatekeeper checks because the damaging permission rewrite happened after installation. Validating release artifacts alone therefore cannot detect this failure.
 
 The installed app must keep these files at mode `0755`:
