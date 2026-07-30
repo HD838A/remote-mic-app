@@ -281,9 +281,76 @@ struct RemoteButtonsTests {
         #expect(KeyboardInjector.composerCandidateScore(terminal, windowFrame: windowFrame) == nil)
     }
 
+    @Test func codexComposerSemanticsAndTraversalPriorityReachTheVisibleEditor() {
+        let codexComposer = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextArea",
+            identifier: "",
+            title: "Message ChatGPT",
+            description: "",
+            help: "",
+            placeholder: "Message ChatGPT",
+            context: "",
+            frame: nil,
+            enabled: true
+        )
+        #expect(KeyboardInjector.composerCandidateScore(codexComposer, windowFrame: nil) == 120)
+
+        let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let transcriptPriority = KeyboardInjector.accessibilityTraversalPriority(
+            role: "AXGroup",
+            frame: CGRect(x: 200, y: 80, width: 700, height: 520),
+            windowFrame: windowFrame
+        )
+        let composerPriority = KeyboardInjector.accessibilityTraversalPriority(
+            role: "AXTextArea",
+            frame: CGRect(x: 200, y: 650, width: 700, height: 100),
+            windowFrame: windowFrame
+        )
+        #expect(composerPriority > transcriptPriority)
+        #expect(KeyboardInjector.maximumAccessibilityTraversalCount > 1_500)
+        #expect(KeyboardInjector.accessibilityChildAttributes == [
+            "AXChildrenInNavigationOrder", "AXVisibleChildren", "AXContents", "AXChildren",
+        ])
+    }
+
+    @Test func cmuxTerminalRankingRequiresItsExplicitEditableAccessibilityElement() {
+        let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let sidebar = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextArea",
+            identifier: "sidebar-note",
+            title: "Terminal notes",
+            description: "",
+            help: "",
+            placeholder: "",
+            context: "sidebar",
+            frame: CGRect(x: 800, y: 100, width: 180, height: 500),
+            enabled: true,
+            selectedContext: true
+        )
+        let terminal = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextArea",
+            identifier: "",
+            title: "",
+            description: "",
+            help: "Terminal content area",
+            placeholder: "",
+            context: "",
+            frame: CGRect(x: 100, y: 100, width: 680, height: 600),
+            enabled: true,
+            selectedContext: true
+        )
+
+        #expect(KeyboardInjector.cmuxTerminalCandidateScore(sidebar, windowFrame: windowFrame) == nil)
+        #expect(KeyboardInjector.bestCmuxTerminalCandidateIndex(
+            [sidebar, terminal],
+            windowFrame: windowFrame
+        ) == 1)
+    }
+
     @Test func cmuxFocusUsesCurrentTerminalSurfaceThenFocusesIt() throws {
         let surfaceID = UUID().uuidString
         var commands: [[String]] = []
+        var focusedSurfaceID: String?
         let result = KeyboardInjector.focusCmux(
             applicationURL: URL(fileURLWithPath: "/Applications/cmux.app"),
             cliURL: URL(fileURLWithPath: "/Applications/cmux.app/Contents/bin/cmux"),
@@ -301,10 +368,15 @@ struct RemoteButtonsTests {
                     standardOutput: Data(#"{"surface_id":"\#(surfaceID)"}"#.utf8),
                     timedOut: false
                 )
+            },
+            terminalFocuser: {
+                focusedSurfaceID = $0
+                return true
             }
         )
 
         #expect(result)
+        #expect(focusedSurfaceID == surfaceID)
         #expect(commands.count == 2)
         #expect(commands[0] == ["rpc", "surface.current", "{}"])
         #expect(commands[1][0...1] == ["rpc", "surface.focus"])

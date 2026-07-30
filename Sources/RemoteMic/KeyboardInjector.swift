@@ -24,6 +24,34 @@ enum KeyboardInjector {
         let context: String
         let frame: CGRect?
         let enabled: Bool
+        let focused: Bool
+        let selectedContext: Bool
+
+        init(
+            role: String,
+            identifier: String,
+            title: String,
+            description: String,
+            help: String,
+            placeholder: String,
+            context: String,
+            frame: CGRect?,
+            enabled: Bool,
+            focused: Bool = false,
+            selectedContext: Bool = false
+        ) {
+            self.role = role
+            self.identifier = identifier
+            self.title = title
+            self.description = description
+            self.help = help
+            self.placeholder = placeholder
+            self.context = context
+            self.frame = frame
+            self.enabled = enabled
+            self.focused = focused
+            self.selectedContext = selectedContext
+        }
     }
 
     struct CmuxCommandResult: Equatable {
@@ -39,6 +67,13 @@ enum KeyboardInjector {
         label: "RemoteMic.application-focus",
         qos: .userInitiated
     )
+    static let accessibilityChildAttributes = [
+        "AXChildrenInNavigationOrder",
+        kAXVisibleChildrenAttribute,
+        kAXContentsAttribute,
+        kAXChildrenAttribute,
+    ]
+    static let maximumAccessibilityTraversalCount = 5_000
 
     static var isAccessibilityTrusted: Bool {
         AXIsProcessTrusted()
@@ -190,9 +225,26 @@ enum KeyboardInjector {
                 guard canContinue() else { return }
                 if focusCmux(
                     applicationURL: applicationURL,
-                    canContinue: canContinue
+                    canContinue: canContinue,
+                    terminalFocuser: { _ in
+                        guard isAccessibilityTrusted else {
+                            AppLogger.shared.write(
+                                "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=not_trusted"
+                            )
+                            return false
+                        }
+                        let focused = focusCmuxTerminal(processIdentifier: processIdentifier)
+                        if !focused {
+                            AppLogger.shared.write(
+                                "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=terminal_not_focused"
+                            )
+                        }
+                        return focused
+                    }
                 ) {
-                    AppLogger.shared.write("APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=cmux_api")
+                    AppLogger.shared.write(
+                        "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=cmux_api_accessibility"
+                    )
                 }
             }
         }
@@ -246,30 +298,68 @@ enum KeyboardInjector {
 
     private static func focusComposer(processIdentifier: pid_t) -> Bool {
         let applicationElement = AXUIElementCreateApplication(processIdentifier)
-        guard let window = axElement(applicationElement, attribute: kAXFocusedWindowAttribute)
-                ?? axElement(applicationElement, attribute: kAXMainWindowAttribute)
-        else { return false }
+        for window in applicationWindows(applicationElement) {
+            let windowTitle = axString(window, attribute: kAXTitleAttribute).lowercased()
+            let excludedWindowTerms = ["settings", "preferences", "设置", "偏好设置"]
+            guard !excludedWindowTerms.contains(where: windowTitle.contains) else { continue }
+            let candidates = accessibilityTextCandidates(in: window)
+            guard let candidateIndex = bestComposerCandidateIndex(
+                candidates.map(\.snapshot),
+                windowFrame: axFrame(window)
+            ) else { continue }
+            if focusAccessibilityElement(
+                candidates[candidateIndex].element,
+                applicationElement: applicationElement
+            ) {
+                return true
+            }
+        }
+        return false
+    }
 
-        let windowTitle = axString(window, attribute: kAXTitleAttribute).lowercased()
-        let excludedWindowTerms = ["settings", "preferences", "设置", "偏好设置"]
-        guard !excludedWindowTerms.contains(where: windowTitle.contains) else { return false }
+    private static func applicationWindows(_ applicationElement: AXUIElement) -> [AXUIElement] {
+        var windows: [AXUIElement] = []
+        for window in [
+            axElement(applicationElement, attribute: kAXFocusedWindowAttribute),
+            axElement(applicationElement, attribute: kAXMainWindowAttribute),
+        ].compactMap({ $0 }) + axElements(applicationElement, attribute: kAXWindowsAttribute) {
+            if !windows.contains(where: { CFEqual($0, window) }) {
+                windows.append(window)
+            }
+        }
+        return windows
+    }
+
+    private static func accessibilityTextCandidates(
+        in window: AXUIElement
+    ) -> [(element: AXUIElement, snapshot: AccessibilityTextCandidate)] {
+        struct PendingElement {
+            let element: AXUIElement
+            let context: String
+            let selectedContext: Bool
+        }
 
         let windowFrame = axFrame(window)
-        var queue: [(element: AXUIElement, context: String)] = [
-            (window, axSemanticText(window))
-        ]
-        var cursor = 0
+        var stack = [PendingElement(
+            element: window,
+            context: axSemanticText(window),
+            selectedContext: axBool(window, attribute: kAXSelectedAttribute) ?? false
+        )]
+        var visitedElements: [CFHashCode: [AXUIElement]] = [CFHash(window): [window]]
+        var visitedCount = 0
         var candidates: [(element: AXUIElement, snapshot: AccessibilityTextCandidate)] = []
 
-        while cursor < queue.count, cursor < 1_500 {
-            let current = queue[cursor]
-            cursor += 1
-
+        while let current = stack.popLast(), visitedCount < maximumAccessibilityTraversalCount {
+            visitedCount += 1
             let ownContext = axSemanticText(current.element)
             let combinedContext = [current.context, ownContext]
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
             let role = axString(current.element, attribute: kAXRoleAttribute)
+            let frame = axFrame(current.element)
+            let selectedContext = current.selectedContext ||
+                (axBool(current.element, attribute: kAXSelectedAttribute) ?? false)
+
             if role == "AXTextArea" || role == "AXTextField" {
                 candidates.append((
                     current.element,
@@ -281,32 +371,92 @@ enum KeyboardInjector {
                         help: axString(current.element, attribute: kAXHelpAttribute),
                         placeholder: axString(current.element, attribute: kAXPlaceholderValueAttribute),
                         context: combinedContext,
-                        frame: axFrame(current.element),
-                        enabled: axBool(current.element, attribute: kAXEnabledAttribute) ?? true
+                        frame: frame,
+                        enabled: axBool(current.element, attribute: kAXEnabledAttribute) ?? true,
+                        focused: axBool(current.element, attribute: kAXFocusedAttribute) ?? false,
+                        selectedContext: selectedContext
                     )
                 ))
             }
 
             let childContext = String(combinedContext.suffix(512))
-            for child in axElements(current.element, attribute: kAXChildrenAttribute) {
-                queue.append((child, childContext))
+            var children: [AXUIElement] = []
+            for attribute in accessibilityChildAttributes {
+                for child in axElements(current.element, attribute: attribute) {
+                    let hash = CFHash(child)
+                    if visitedElements[hash]?.contains(where: { CFEqual($0, child) }) == true {
+                        continue
+                    }
+                    visitedElements[hash, default: []].append(child)
+                    children.append(child)
+                }
             }
+            children.sort {
+                accessibilityTraversalPriority(
+                    role: axString($0, attribute: kAXRoleAttribute),
+                    frame: axFrame($0),
+                    windowFrame: windowFrame
+                ) < accessibilityTraversalPriority(
+                    role: axString($1, attribute: kAXRoleAttribute),
+                    frame: axFrame($1),
+                    windowFrame: windowFrame
+                )
+            }
+            stack.append(contentsOf: children.map {
+                PendingElement(element: $0, context: childContext, selectedContext: selectedContext)
+            })
         }
+        return candidates
+    }
 
-        guard let candidateIndex = bestComposerCandidateIndex(
-            candidates.map(\.snapshot),
-            windowFrame: windowFrame
-        ) else { return false }
+    static func accessibilityTraversalPriority(
+        role: String,
+        frame: CGRect?,
+        windowFrame: CGRect?
+    ) -> Int {
+        var priority = role == "AXTextArea" || role == "AXTextField" ? 1_000_000 : 0
+        guard let frame, let windowFrame, windowFrame.width > 0, windowFrame.height > 0 else {
+            return priority
+        }
+        if frame.intersects(windowFrame) {
+            priority += 100_000
+        }
+        let verticalPosition = (frame.midY - windowFrame.minY) / windowFrame.height
+        priority += Int(max(0, min(1, verticalPosition)) * 10_000)
+        return priority
+    }
 
-        let candidate = candidates[candidateIndex].element
-        if AXUIElementSetAttributeValue(candidate, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success {
+    private static func focusAccessibilityElement(
+        _ element: AXUIElement,
+        applicationElement: AXUIElement
+    ) -> Bool {
+        if accessibilityElementIsFocused(element, applicationElement: applicationElement) {
             return true
         }
-        return AXUIElementSetAttributeValue(
+        _ = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        _ = AXUIElementSetAttributeValue(
             applicationElement,
             kAXFocusedUIElementAttribute as CFString,
-            candidate
-        ) == .success
+            element
+        )
+        if accessibilityElementIsFocused(element, applicationElement: applicationElement) {
+            return true
+        }
+        _ = AXUIElementPerformAction(element, kAXPressAction as CFString)
+        return accessibilityElementIsFocused(element, applicationElement: applicationElement)
+    }
+
+    private static func accessibilityElementIsFocused(
+        _ element: AXUIElement,
+        applicationElement: AXUIElement
+    ) -> Bool {
+        if axBool(element, attribute: kAXFocusedAttribute) == true {
+            return true
+        }
+        guard let focusedElement = axElement(applicationElement, attribute: kAXFocusedUIElementAttribute) else {
+            return false
+        }
+        return CFEqual(focusedElement, element)
     }
 
     static func bestComposerCandidateIndex(
@@ -391,12 +541,74 @@ enum KeyboardInjector {
         return score >= 80 ? score : nil
     }
 
+    private static func focusCmuxTerminal(processIdentifier: pid_t) -> Bool {
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        for window in applicationWindows(applicationElement) {
+            let candidates = accessibilityTextCandidates(in: window)
+            guard let candidateIndex = bestCmuxTerminalCandidateIndex(
+                candidates.map(\.snapshot),
+                windowFrame: axFrame(window)
+            ) else { continue }
+            if focusAccessibilityElement(
+                candidates[candidateIndex].element,
+                applicationElement: applicationElement
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+
+    static func bestCmuxTerminalCandidateIndex(
+        _ candidates: [AccessibilityTextCandidate],
+        windowFrame: CGRect?
+    ) -> Int? {
+        var best: (index: Int, score: Int)?
+        for index in candidates.indices {
+            guard let score = cmuxTerminalCandidateScore(candidates[index], windowFrame: windowFrame) else {
+                continue
+            }
+            if best == nil || score > best!.score {
+                best = (index, score)
+            }
+        }
+        return best?.index
+    }
+
+    static func cmuxTerminalCandidateScore(
+        _ candidate: AccessibilityTextCandidate,
+        windowFrame: CGRect?
+    ) -> Int? {
+        guard candidate.enabled, candidate.role == "AXTextArea" else { return nil }
+        let semanticText = [
+            candidate.identifier,
+            candidate.title,
+            candidate.description,
+            candidate.help,
+            candidate.placeholder,
+            candidate.context,
+        ]
+        .joined(separator: " ")
+        .lowercased()
+        guard semanticText.contains("terminal content area") else { return nil }
+
+        var score = 200
+        if candidate.focused { score += 1_000 }
+        if candidate.selectedContext { score += 500 }
+        if let frame = candidate.frame {
+            score += min(100, Int(frame.width * frame.height / 10_000))
+            if let windowFrame, frame.intersects(windowFrame) { score += 100 }
+        }
+        return score
+    }
+
     @discardableResult
     static func focusCmux(
         applicationURL: URL,
         cliURL: URL? = nil,
         runner: CmuxCommandRunner = runCmuxCommand,
-        canContinue: () -> Bool = { true }
+        canContinue: () -> Bool = { true },
+        terminalFocuser: (String) -> Bool = { _ in true }
     ) -> Bool {
         guard canContinue() else { return false }
         guard let cliURL = cliURL ?? cmuxCLIURL(applicationURL: applicationURL) else {
@@ -435,7 +647,8 @@ enum KeyboardInjector {
             AppLogger.shared.write("APP FOCUS failed bundle=\(PresetApplication.cmux.bundleIdentifier) method=cmux_api reason=\(reason)")
             return false
         }
-        return true
+        guard canContinue() else { return false }
+        return terminalFocuser(surfaceID)
     }
 
     static func cmuxCLIURL(
