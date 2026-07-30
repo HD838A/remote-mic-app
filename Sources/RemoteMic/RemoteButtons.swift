@@ -245,6 +245,11 @@ struct ConfiguredButtonAction: Codable, Equatable {
     static let disabled = ConfiguredButtonAction(action: .disabled, shortcut: nil)
 }
 
+enum ApplicationFocusStrategy: Equatable {
+    case accessibilityComposer
+    case cmuxSurfaceAPI
+}
+
 enum PresetApplication: String, CaseIterable, Identifiable {
     case remoteMic
     case codex
@@ -295,6 +300,14 @@ enum PresetApplication: String, CaseIterable, Identifiable {
         case .chrome: return "com.google.Chrome"
         case .safari: return "com.apple.Safari"
         case .zed: return "dev.zed.Zed"
+        }
+    }
+
+    var focusStrategy: ApplicationFocusStrategy? {
+        switch self {
+        case .codex, .claude: return .accessibilityComposer
+        case .cmux: return .cmuxSurfaceAPI
+        default: return nil
         }
     }
 

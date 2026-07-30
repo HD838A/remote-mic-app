@@ -28,6 +28,15 @@ struct RemoteButtonsTests {
         #expect(Set(ButtonAction.allCases.compactMap(\.presetApplication)) == Set(PresetApplication.allCases))
     }
 
+    @Test func onlySupportedApplicationsHaveAutomaticFocusStrategies() {
+        #expect(PresetApplication.codex.focusStrategy == .accessibilityComposer)
+        #expect(PresetApplication.claude.focusStrategy == .accessibilityComposer)
+        #expect(PresetApplication.cmux.focusStrategy == .cmuxSurfaceAPI)
+        #expect(PresetApplication.allCases.filter { $0.focusStrategy == nil } == [
+            .remoteMic, .weChat, .cursor, .xcode, .slack, .weCom, .neteaseMusic, .chrome, .safari, .zed,
+        ])
+    }
+
     @Test func remoteMicApplicationActionIsAlwaysAvailable() {
         let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
         #expect(PresetApplication.installedBundleIdentifiers.contains(
@@ -137,18 +146,244 @@ struct RemoteButtonsTests {
     @Test func applicationLaunchFailureIsHandledWithoutPermissionFailure() {
         struct LaunchFailure: Error {}
         var attemptedApplication: PresetApplication?
+        var focusAttempted = false
 
         let handled = KeyboardInjector.send(
             .openCodex,
             applicationURL: { _ in URL(fileURLWithPath: "/Applications/Codex.app") },
             applicationOpener: { _, application, completion in
                 attemptedApplication = application
-                completion(LaunchFailure())
-            }
+                completion(nil, LaunchFailure())
+            },
+            applicationFocuser: { _, _, _, _ in focusAttempted = true }
         )
 
         #expect(handled)
         #expect(attemptedApplication == .codex)
+        #expect(!focusAttempted)
+    }
+
+    @Test func successfulCodexAndClaudeLaunchesPassURLApplicationAndPIDToFocuser() {
+        let cases: [(ButtonAction, PresetApplication, pid_t)] = [
+            (.openCodex, .codex, 4_242),
+            (.openClaude, .claude, 4_243),
+        ]
+
+        for (action, expectedApplication, expectedProcessIdentifier) in cases {
+            let applicationURL = URL(fileURLWithPath: "/Applications/\(expectedApplication.rawValue).app")
+            var focusedApplication: PresetApplication?
+            var focusedURL: URL?
+            var focusedProcessIdentifier: pid_t?
+
+            let handled = KeyboardInjector.send(
+                action,
+                applicationURL: { _ in applicationURL },
+                applicationOpener: { _, _, completion in completion(expectedProcessIdentifier, nil) },
+                applicationFocuser: { url, application, processIdentifier, _ in
+                    focusedURL = url
+                    focusedApplication = application
+                    focusedProcessIdentifier = processIdentifier
+                }
+            )
+
+            #expect(handled)
+            #expect(focusedURL == applicationURL)
+            #expect(focusedApplication == expectedApplication)
+            #expect(focusedProcessIdentifier == expectedProcessIdentifier)
+        }
+    }
+
+    @Test func applicationsWithoutFocusStrategyOnlyActivate() {
+        var focusAttempted = false
+        #expect(KeyboardInjector.send(
+            .openSafari,
+            applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
+            applicationOpener: { _, _, completion in completion(123, nil) },
+            applicationFocuser: { _, _, _, _ in focusAttempted = true }
+        ))
+        #expect(!focusAttempted)
+    }
+
+    @Test func newerApplicationFocusRequestInvalidatesOlderRequest() {
+        let gate = ApplicationFocusRequestGate()
+        let first = gate.begin()
+        #expect(gate.isCurrent(first))
+
+        let second = gate.begin()
+        #expect(!gate.isCurrent(first))
+        #expect(gate.isCurrent(second))
+    }
+
+    @Test func composerCandidateRankingPrefersWideLowerComposerAndRejectsSensitiveFields() {
+        let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let candidates = [
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextField",
+                identifier: "global-search",
+                title: "Search",
+                description: "",
+                help: "",
+                placeholder: "Search conversations",
+                context: "",
+                frame: CGRect(x: 100, y: 60, width: 500, height: 36),
+                enabled: true
+            ),
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextField",
+                identifier: "api-key",
+                title: "",
+                description: "",
+                help: "",
+                placeholder: "API Key",
+                context: "Settings",
+                frame: CGRect(x: 100, y: 500, width: 700, height: 36),
+                enabled: true
+            ),
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextArea",
+                identifier: "prompt-editor",
+                title: "",
+                description: "Message input",
+                help: "",
+                placeholder: "Ask anything",
+                context: "conversation composer",
+                frame: CGRect(x: 100, y: 620, width: 800, height: 120),
+                enabled: true
+            ),
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextArea",
+                identifier: "notes",
+                title: "",
+                description: "",
+                help: "",
+                placeholder: "",
+                context: "",
+                frame: CGRect(x: 100, y: 100, width: 800, height: 300),
+                enabled: true
+            ),
+        ]
+
+        #expect(KeyboardInjector.bestComposerCandidateIndex(candidates, windowFrame: windowFrame) == 2)
+        #expect(KeyboardInjector.composerCandidateScore(candidates[0], windowFrame: windowFrame) == nil)
+        #expect(KeyboardInjector.composerCandidateScore(candidates[1], windowFrame: windowFrame) == nil)
+
+        let terminal = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextArea",
+            identifier: "terminal-input",
+            title: "Terminal",
+            description: "Shell console",
+            help: "",
+            placeholder: "",
+            context: "terminal panel",
+            frame: CGRect(x: 50, y: 200, width: 900, height: 500),
+            enabled: true
+        )
+        #expect(KeyboardInjector.composerCandidateScore(terminal, windowFrame: windowFrame) == nil)
+    }
+
+    @Test func cmuxFocusUsesCurrentTerminalSurfaceThenFocusesIt() throws {
+        let surfaceID = UUID().uuidString
+        var commands: [[String]] = []
+        let result = KeyboardInjector.focusCmux(
+            applicationURL: URL(fileURLWithPath: "/Applications/cmux.app"),
+            cliURL: URL(fileURLWithPath: "/Applications/cmux.app/Contents/bin/cmux"),
+            runner: { _, arguments, _ in
+                commands.append(arguments)
+                if arguments[1] == "surface.current" {
+                    return KeyboardInjector.CmuxCommandResult(
+                        terminationStatus: 0,
+                        standardOutput: Data(#"{"surface_id":"\#(surfaceID)","surface_type":"terminal","focused":true}"#.utf8),
+                        timedOut: false
+                    )
+                }
+                return KeyboardInjector.CmuxCommandResult(
+                    terminationStatus: 0,
+                    standardOutput: Data(#"{"surface_id":"\#(surfaceID)"}"#.utf8),
+                    timedOut: false
+                )
+            }
+        )
+
+        #expect(result)
+        #expect(commands.count == 2)
+        #expect(commands[0] == ["rpc", "surface.current", "{}"])
+        #expect(commands[1][0...1] == ["rpc", "surface.focus"])
+        let focusParameters = try #require(
+            JSONSerialization.jsonObject(with: Data(commands[1][2].utf8)) as? [String: String]
+        )
+        #expect(focusParameters == ["surface_id": surfaceID])
+    }
+
+    @Test func cmuxFocusStopsForNonTerminalInvalidOrCancelledCurrentSurface() {
+        let surfaceID = UUID().uuidString
+        var commandCount = 0
+        let nonTerminal = KeyboardInjector.focusCmux(
+            applicationURL: URL(fileURLWithPath: "/Applications/cmux.app"),
+            cliURL: URL(fileURLWithPath: "/tmp/cmux"),
+            runner: { _, _, _ in
+                commandCount += 1
+                return KeyboardInjector.CmuxCommandResult(
+                    terminationStatus: 0,
+                    standardOutput: Data(#"{"surface_id":"\#(surfaceID)","surface_type":"browser"}"#.utf8),
+                    timedOut: false
+                )
+            }
+        )
+        #expect(!nonTerminal)
+        #expect(commandCount == 1)
+
+        var active = true
+        commandCount = 0
+        let cancelled = KeyboardInjector.focusCmux(
+            applicationURL: URL(fileURLWithPath: "/Applications/cmux.app"),
+            cliURL: URL(fileURLWithPath: "/tmp/cmux"),
+            runner: { _, _, _ in
+                commandCount += 1
+                active = false
+                return KeyboardInjector.CmuxCommandResult(
+                    terminationStatus: 0,
+                    standardOutput: Data(#"{"surface_id":"\#(surfaceID)","surface_type":"terminal"}"#.utf8),
+                    timedOut: false
+                )
+            },
+            canContinue: { active }
+        )
+        #expect(!cancelled)
+        #expect(commandCount == 1)
+    }
+
+    @Test func cmuxFocusSafelyStopsOnTimeoutAndInvalidJSON() {
+        var commandCount = 0
+        let timedOut = KeyboardInjector.focusCmux(
+            applicationURL: URL(fileURLWithPath: "/Applications/cmux.app"),
+            cliURL: URL(fileURLWithPath: "/tmp/cmux"),
+            runner: { _, _, _ in
+                commandCount += 1
+                return KeyboardInjector.CmuxCommandResult(
+                    terminationStatus: -1,
+                    standardOutput: Data(),
+                    timedOut: true
+                )
+            }
+        )
+        #expect(!timedOut)
+        #expect(commandCount == 1)
+
+        commandCount = 0
+        let invalidJSON = KeyboardInjector.focusCmux(
+            applicationURL: URL(fileURLWithPath: "/Applications/cmux.app"),
+            cliURL: URL(fileURLWithPath: "/tmp/cmux"),
+            runner: { _, _, _ in
+                commandCount += 1
+                return KeyboardInjector.CmuxCommandResult(
+                    terminationStatus: 0,
+                    standardOutput: Data("not-json".utf8),
+                    timedOut: false
+                )
+            }
+        )
+        #expect(!invalidJSON)
+        #expect(commandCount == 1)
     }
 
     @Test func tvDefaultRemainsAppSwitcher() {
