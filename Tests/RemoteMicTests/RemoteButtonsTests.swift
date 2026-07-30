@@ -365,6 +365,38 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func cmuxFocusRecoveryUsesCmuxOwnedForceFocusShortcuts() {
+        let terminalFrame = CGRect(x: 300, y: 100, width: 600, height: 600)
+        let textBoxFrame = CGRect(x: 320, y: 620, width: 560, height: 60)
+        let leftSidebarFrame = CGRect(x: 40, y: 100, width: 240, height: 600)
+        let rightSidebarFrame = CGRect(x: 920, y: 100, width: 240, height: 600)
+
+        #expect(KeyboardInjector.cmuxFocusRecoveryShortcutKeyCode(
+            focusedRole: "AXTextArea", focusedFrame: textBoxFrame, terminalFrame: terminalFrame
+        ) == 0)
+        #expect(KeyboardInjector.cmuxFocusRecoveryShortcutKeyCode(
+            focusedRole: "AXOutline", focusedFrame: rightSidebarFrame, terminalFrame: terminalFrame
+        ) == 14)
+        #expect(KeyboardInjector.cmuxFocusRecoveryShortcutKeyCode(
+            focusedRole: "AXTable", focusedFrame: leftSidebarFrame, terminalFrame: terminalFrame
+        ) == nil)
+        #expect(KeyboardInjector.cmuxFocusRecoveryShortcutKeyCode(
+            focusedRole: "AXWindow", focusedFrame: nil, terminalFrame: terminalFrame
+        ) == nil)
+    }
+
+    @Test func liveCmuxFrontmostFocusUsesTheProductionOpenAction() async throws {
+        guard ProcessInfo.processInfo.environment["REMOTEMIC_LIVE_CMUX_TEST"] == "1" else { return }
+        let application = try #require(
+            NSRunningApplication.runningApplications(withBundleIdentifier: PresetApplication.cmux.bundleIdentifier).first
+        )
+        #expect(KeyboardInjector.send(.openCmux))
+        try await Task.sleep(for: .seconds(2))
+        #expect(KeyboardInjector.cmuxTerminalIsApplicationFocused(
+            processIdentifier: application.processIdentifier
+        ))
+    }
+
     @Test func cmuxFocusUsesCurrentTerminalSurfaceThenFocusesIt() throws {
         let surfaceID = UUID().uuidString
         var commands: [[String]] = []

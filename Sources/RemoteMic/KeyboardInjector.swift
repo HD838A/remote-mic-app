@@ -218,34 +218,78 @@ enum KeyboardInjector {
                 attempt: 0
             )
         case .cmuxSurfaceAPI:
-            focusQueue.asyncAfter(deadline: .now() + .milliseconds(100)) {
-                let canContinue = {
-                    focusRequests.isCurrent(requestID) && applicationIsFrontmost(processIdentifier)
-                }
-                guard canContinue() else { return }
-                if focusCmux(
-                    applicationURL: applicationURL,
-                    canContinue: canContinue,
-                    terminalFocuser: { _ in
-                        guard isAccessibilityTrusted else {
-                            AppLogger.shared.write(
-                                "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=not_trusted"
-                            )
-                            return false
-                        }
-                        let focused = focusCmuxTerminal(processIdentifier: processIdentifier)
-                        if !focused {
-                            AppLogger.shared.write(
-                                "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=terminal_not_focused"
-                            )
-                        }
-                        return focused
-                    }
-                ) {
-                    AppLogger.shared.write(
-                        "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=cmux_api_accessibility"
+            scheduleCmuxFocus(
+                applicationURL: applicationURL,
+                application: application,
+                processIdentifier: processIdentifier,
+                requestID: requestID,
+                attempt: 0
+            )
+        }
+    }
+
+    private static func scheduleCmuxFocus(
+        applicationURL: URL,
+        application: PresetApplication,
+        processIdentifier: pid_t,
+        requestID: UInt64,
+        attempt: Int
+    ) {
+        let maximumAttempts = 4
+        let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(100) : .milliseconds(200)
+        focusQueue.asyncAfter(deadline: .now() + delay) {
+            guard focusRequests.isCurrent(requestID) else { return }
+            let nextAttempt = attempt + 1
+            if !applicationIsFrontmost(processIdentifier) {
+                if nextAttempt < maximumAttempts {
+                    scheduleCmuxFocus(
+                        applicationURL: applicationURL,
+                        application: application,
+                        processIdentifier: processIdentifier,
+                        requestID: requestID,
+                        attempt: nextAttempt
                     )
                 }
+                return
+            }
+            let canContinue = {
+                focusRequests.isCurrent(requestID) && applicationIsFrontmost(processIdentifier)
+            }
+            let focused = focusCmux(
+                applicationURL: applicationURL,
+                canContinue: canContinue,
+                terminalFocuser: { _ in
+                    guard isAccessibilityTrusted else {
+                        AppLogger.shared.write(
+                            "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=not_trusted"
+                        )
+                        return false
+                    }
+                    return focusCmuxTerminal(
+                        processIdentifier: processIdentifier,
+                        keyPoster: { postKey(code: $0, flags: $1) }
+                    )
+                }
+            )
+            if focused {
+                AppLogger.shared.write(
+                    "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=cmux_api_accessibility"
+                )
+                return
+            }
+
+            if nextAttempt < maximumAttempts {
+                scheduleCmuxFocus(
+                    applicationURL: applicationURL,
+                    application: application,
+                    processIdentifier: processIdentifier,
+                    requestID: requestID,
+                    attempt: nextAttempt
+                )
+            } else if focusRequests.isCurrent(requestID) {
+                AppLogger.shared.write(
+                    "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=terminal_not_focused"
+                )
             }
         }
     }
@@ -568,14 +612,19 @@ enum KeyboardInjector {
         return score >= 80 ? score : nil
     }
 
-    private static func focusCmuxTerminal(processIdentifier: pid_t) -> Bool {
+    private static func focusCmuxTerminal(
+        processIdentifier: pid_t,
+        keyPoster: KeyPoster
+    ) -> Bool {
         let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        var terminalFrame: CGRect?
         for window in applicationWindows(applicationElement) {
             let candidates = accessibilityTextCandidates(in: window)
             guard let candidateIndex = bestCmuxTerminalCandidateIndex(
                 candidates.map(\.snapshot),
                 windowFrame: axFrame(window)
             ) else { continue }
+            terminalFrame = terminalFrame ?? candidates[candidateIndex].snapshot.frame
             if focusAccessibilityElement(
                 candidates[candidateIndex].element,
                 applicationElement: applicationElement,
@@ -584,7 +633,57 @@ enum KeyboardInjector {
                 return true
             }
         }
+
+        let focusedElementSnapshot = axElement(
+            applicationElement,
+            attribute: kAXFocusedUIElementAttribute
+        ).map { focusedElement in
+            (
+                role: axString(focusedElement, attribute: kAXRoleAttribute),
+                frame: axFrame(focusedElement)
+            )
+        }
+        if let keyCode = cmuxFocusRecoveryShortcutKeyCode(
+            focusedRole: focusedElementSnapshot?.role,
+            focusedFrame: focusedElementSnapshot?.frame,
+            terminalFrame: terminalFrame
+        ) {
+            keyPoster(keyCode, [.maskCommand, .maskShift])
+        }
         return false
+    }
+
+    static func cmuxFocusRecoveryShortcutKeyCode(
+        focusedRole: String?,
+        focusedFrame: CGRect?,
+        terminalFrame: CGRect?
+    ) -> CGKeyCode? {
+        if let focusedFrame, let terminalFrame,
+           focusedFrame.minX >= terminalFrame.maxX {
+            return 14 // Cmd+Shift+E: cmux Toggle Right Sidebar Focus returns to the terminal.
+        }
+        switch focusedRole {
+        case "AXTextArea", "AXTextField":
+            return 0 // Cmd+Shift+A: cmux Focus TextBox Input toggles back to the terminal.
+        case nil, "", "AXApplication", "AXWindow":
+            return nil
+        default:
+            return nil // Left-sidebar and other controls are recovered by the scheduled surface.focus retry.
+        }
+    }
+
+    static func cmuxTerminalIsApplicationFocused(processIdentifier: pid_t) -> Bool {
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        guard let focusedElement = axElement(
+            applicationElement,
+            attribute: kAXFocusedUIElementAttribute
+        ) else { return false }
+        return applicationWindows(applicationElement).contains { window in
+            accessibilityTextCandidates(in: window).contains { candidate in
+                cmuxTerminalCandidateScore(candidate.snapshot, windowFrame: axFrame(window)) != nil &&
+                    CFEqual(candidate.element, focusedElement)
+            }
+        }
     }
 
     static func bestCmuxTerminalCandidateIndex(
