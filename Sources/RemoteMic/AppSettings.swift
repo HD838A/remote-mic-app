@@ -1,6 +1,23 @@
 import Combine
 import Foundation
 
+enum AppConfigurationError: Error {
+    case unsupportedVersion
+    case invalidValues
+}
+
+private struct PersonalizedConfiguration: Codable {
+    let formatVersion: Int
+    let gainDB: Double
+    let selectedAudioDeviceUID: String
+    let customMappingEnabled: Bool
+    let buttonBindings: [String: ButtonAction]
+    let buttonShortcuts: [String: CustomKeyboardShortcut]
+    let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
+    let applicationLanguage: AppLanguage
+    let showDockIcon: Bool
+}
+
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let gainDB = "gainDB"
@@ -13,6 +30,8 @@ final class AppSettings: ObservableObject {
         static let peripheralIdentifier = "peripheralIdentifier"
         static let applicationLanguage = "applicationLanguage"
         static let showDockIcon = "showDockIcon"
+        static let totalButtonPressCount = "usage.totalButtonPressCount"
+        static let totalVoiceDuration = "usage.totalVoiceDuration"
     }
 
     private let defaults: UserDefaults
@@ -47,6 +66,16 @@ final class AppSettings: ObservableObject {
 
     @Published var showDockIcon: Bool {
         didSet { defaults.set(showDockIcon, forKey: Keys.showDockIcon) }
+    }
+
+    @Published private(set) var totalButtonPressCount: UInt64 {
+        didSet {
+            defaults.set(NSNumber(value: totalButtonPressCount), forKey: Keys.totalButtonPressCount)
+        }
+    }
+
+    @Published private(set) var totalVoiceDuration: TimeInterval {
+        didSet { defaults.set(totalVoiceDuration, forKey: Keys.totalVoiceDuration) }
     }
 
     var peripheralIdentifier: UUID? {
@@ -119,6 +148,12 @@ final class AppSettings: ObservableObject {
         showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
             ? true
             : defaults.bool(forKey: Keys.showDockIcon)
+        totalButtonPressCount = (
+            defaults.object(forKey: Keys.totalButtonPressCount) as? NSNumber
+        )?.uint64Value ?? 0
+        totalVoiceDuration = defaults.object(forKey: Keys.totalVoiceDuration) == nil
+            ? 0
+            : max(0, defaults.double(forKey: Keys.totalVoiceDuration))
     }
 
     func action(for button: RemoteButton) -> ButtonAction {
@@ -194,6 +229,86 @@ final class AppSettings: ObservableObject {
         buttonBindings = Self.defaultBindings
         buttonShortcuts = [:]
         secondaryButtonBindings = [:]
+    }
+
+    func recordButtonPress() {
+        guard totalButtonPressCount < .max else { return }
+        totalButtonPressCount += 1
+    }
+
+    func recordVoiceDuration(_ duration: TimeInterval) {
+        guard duration.isFinite, duration > 0 else { return }
+        totalVoiceDuration += duration
+    }
+
+    func exportedConfigurationData() throws -> Data {
+        let configuration = PersonalizedConfiguration(
+            formatVersion: 1,
+            gainDB: gainDB,
+            selectedAudioDeviceUID: selectedAudioDeviceUID,
+            customMappingEnabled: customMappingEnabled,
+            buttonBindings: Dictionary(
+                uniqueKeysWithValues: buttonBindings.map { ($0.key.rawValue, $0.value) }
+            ),
+            buttonShortcuts: Dictionary(
+                uniqueKeysWithValues: buttonShortcuts.map { ($0.key.rawValue, $0.value) }
+            ),
+            secondaryButtonBindings: Dictionary(
+                uniqueKeysWithValues: secondaryButtonBindings.map { button, bindings in
+                    (
+                        button.rawValue,
+                        Dictionary(uniqueKeysWithValues: bindings.map { ($0.key.rawValue, $0.value) })
+                    )
+                }
+            ),
+            applicationLanguage: applicationLanguage,
+            showDockIcon: showDockIcon
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(configuration)
+    }
+
+    func importConfiguration(from data: Data) throws {
+        let configuration = try JSONDecoder().decode(PersonalizedConfiguration.self, from: data)
+        guard configuration.formatVersion == 1 else {
+            throw AppConfigurationError.unsupportedVersion
+        }
+        guard configuration.gainDB.isFinite, (0...24).contains(configuration.gainDB) else {
+            throw AppConfigurationError.invalidValues
+        }
+
+        let importedBindings = Dictionary(
+            uniqueKeysWithValues: configuration.buttonBindings.compactMap { key, value in
+                RemoteButton(rawValue: key).map { ($0, value) }
+            }
+        )
+        let importedShortcuts = Dictionary(
+            uniqueKeysWithValues: configuration.buttonShortcuts.compactMap { key, value in
+                RemoteButton(rawValue: key).map { ($0, value) }
+            }
+        )
+        let importedSecondaryBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] =
+            Dictionary(
+                uniqueKeysWithValues: configuration.secondaryButtonBindings.compactMap { buttonKey, bindings in
+                    guard let button = RemoteButton(rawValue: buttonKey) else { return nil }
+                    let parsed = Dictionary(
+                        uniqueKeysWithValues: bindings.compactMap { triggerKey, binding in
+                            ButtonTrigger(rawValue: triggerKey).map { ($0, binding) }
+                        }
+                    )
+                    return parsed.isEmpty ? nil : (button, parsed)
+                }
+            )
+
+        gainDB = configuration.gainDB
+        selectedAudioDeviceUID = configuration.selectedAudioDeviceUID
+        customMappingEnabled = configuration.customMappingEnabled
+        buttonBindings = Self.defaultBindings.merging(importedBindings) { _, imported in imported }
+        buttonShortcuts = importedShortcuts
+        secondaryButtonBindings = importedSecondaryBindings
+        applicationLanguage = configuration.applicationLanguage
+        showDockIcon = configuration.showDockIcon
     }
 
     private func saveBindings() {

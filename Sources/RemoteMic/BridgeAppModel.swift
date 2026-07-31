@@ -24,6 +24,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
     private var testToneGeneration = 0
     private var voiceFunctionKeyLatch = VoiceFunctionKeyLatch()
+    private var voiceSessionStartedAt: Date?
     private lazy var bluetoothBridge = XiaomiBluetoothBridge(settings: settings, delegate: self)
     private lazy var hidMonitor: HIDRemoteMonitor = {
         let monitor = HIDRemoteMonitor(settings: settings)
@@ -32,6 +33,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         monitor.onActiveButtons = { [weak self] buttons in
             self?.activeRemoteButtons = buttons
+        }
+        monitor.onButtonPressed = { [weak self] _ in
+            self?.settings.recordButtonPress()
         }
         return monitor
     }()
@@ -476,11 +480,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             statusMessage: LocalizedMessage("RC003 语音进行中，已拒绝测试音"),
             logReason: "voice_start"
         )
+        if voiceSessionStartedAt == nil {
+            settings.recordButtonPress()
+            voiceSessionStartedAt = Date()
+        }
         updateVoiceFunctionKeyState(streaming: true)
         isStreaming = true
     }
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
+        if let voiceSessionStartedAt {
+            settings.recordVoiceDuration(Date().timeIntervalSince(voiceSessionStartedAt))
+            self.voiceSessionStartedAt = nil
+        }
         updateVoiceFunctionKeyState(streaming: false)
         isStreaming = false
         audioOutput.endSession()

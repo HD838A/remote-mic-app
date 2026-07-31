@@ -54,6 +54,7 @@ final class HIDRemoteMonitor {
     private(set) var status = LocalizedMessage("按键映射未启用")
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((Set<RemoteButton>) -> Void)?
+    var onButtonPressed: ((RemoteButton) -> Void)?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -226,6 +227,7 @@ final class HIDRemoteMonitor {
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
+            onButtonPressed?(button)
             if !activeDeviceIsSeized {
                 eventSuppressor.arm(button: button, edge: .down)
             }

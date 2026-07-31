@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CoreBluetooth
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
@@ -56,6 +57,12 @@ private struct ShortcutEditingTarget: Identifiable {
     var id: String { "\(button.rawValue)-\(trigger.rawValue)" }
 }
 
+private struct ConfigurationStatus {
+    let message: LocalizedMessage
+    let tint: Color
+    let systemImage: String
+}
+
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
@@ -70,6 +77,7 @@ struct SettingsView: View {
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    @State private var configurationStatus: ConfigurationStatus?
     @Namespace private var navigationGlassNamespace
 
     init(
@@ -734,81 +742,191 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
                     title: localization.text("关于无线麦"),
-                    subtitle: localization.text("查看版本、更新、语言和应用显示选项")
+                    subtitle: localization.text("你的无线语音工作台，配置、统计与隐私一目了然")
                 )
 
                 GlassEffectContainer(spacing: 14) {
-                    GlassPanel {
-                        HStack(spacing: 18) {
-                            Image(nsImage: NSApp.applicationIconImage)
-                                .resizable()
-                                .frame(width: 76, height: 76)
+                    VStack(spacing: 14) {
+                        GlassPanel {
+                            HStack(spacing: 20) {
+                                Image(nsImage: NSApp.applicationIconImage)
+                                    .resizable()
+                                    .frame(width: 88, height: 88)
+                                    .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
 
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("无线麦")
-                                    .font(.title2.weight(.semibold))
-                                Text("RC003 蓝牙语音遥控器桥接工具。")
-                                    .foregroundStyle(.secondary)
-                                Text(versionText)
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer(minLength: 16)
-                        }
-                    }
-
-                    GlassPanel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("应用与支持")
-                                .font(.headline)
-
-                            Toggle("在 Dock 中显示应用图标", isOn: Binding(
-                                get: { settings.showDockIcon },
-                                set: { setDockIconVisible($0) }
-                            ))
-
-                            Text("关闭后仍可通过菜单栏图标打开无线麦。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Text("应用语言")
-                                    .frame(width: 90, alignment: .leading)
-                                Picker("", selection: Binding(
-                                    get: { localization.language },
-                                    set: { localization.select($0) }
-                                )) {
-                                    ForEach(AppLanguage.allCases) { language in
-                                        Text(languageTitle(language)).tag(language)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("无线麦")
+                                        .font(.system(size: 28, weight: .semibold))
+                                    Text("让遥控器成为随手可用的 Mac 语音与快捷操作入口。")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    HStack(spacing: 8) {
+                                        StatusPill(text: versionText, tint: .accentColor)
+                                        StatusPill(
+                                            text: localization.text("数据仅存本机"),
+                                            tint: .green
+                                        )
                                     }
                                 }
-                                .labelsHidden()
-                                .pickerStyle(.segmented)
-                                .frame(width: 360)
-                                Spacer()
+
+                                Spacer(minLength: 20)
+
+                                Image(systemName: "waveform.and.mic")
+                                    .font(.system(size: 42, weight: .medium))
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 76, height: 76)
+                                    .glassEffect(
+                                        .clear.tint(Color.accentColor.opacity(0.12)),
+                                        in: Circle()
+                                    )
                             }
+                        }
 
-                            Text("更改后界面会立即更新，无需重新启动。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        GlassPanel {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("本地使用统计")
+                                            .font(.headline)
+                                        Text("只记录使用量，不记录、保存或分析任何语音内容。")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "lock.shield.fill")
+                                        .foregroundStyle(.green)
+                                }
 
-                            Divider()
+                                HStack(spacing: 12) {
+                                    UsageStatisticCard(
+                                        systemImage: "button.programmable",
+                                        title: localization.text("按键次数"),
+                                        value: buttonPressCountText,
+                                        tint: .blue
+                                    )
+                                    UsageStatisticCard(
+                                        systemImage: "waveform",
+                                        title: localization.text("语音时长"),
+                                        value: voiceDurationText,
+                                        tint: .orange
+                                    )
+                                }
 
-                            HStack(spacing: 10) {
-                                Button("检查更新…", action: checkForUpdates)
+                                Text("统计仅保存在这台 Mac 上，配置导出不会包含这些数据。按键次数包含应用识别的普通按键与语音键。")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        GlassPanel {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("个性化配置")
+                                            .font(.headline)
+                                        Text("迁移增益、音频设备、按键映射、快捷键、语言与 Dock 显示设置。")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "arrow.left.arrow.right.circle.fill")
+                                        .font(.title2)
+                                        .foregroundStyle(Color.accentColor)
+                                }
+
+                                HStack(spacing: 10) {
+                                    Button(action: exportConfiguration) {
+                                        Label("导出配置…", systemImage: "square.and.arrow.up")
+                                    }
                                     .buttonStyle(.glassProminent)
-                                Link(
-                                    "GitHub",
-                                    destination: URL(string: "https://github.com/HD838A/remote-mic-app")!
-                                )
-                                .buttonStyle(.glass)
-                                Spacer()
-                                Button("退出") { NSApp.terminate(nil) }
+
+                                    Button(action: importConfiguration) {
+                                        Label("导入配置…", systemImage: "square.and.arrow.down")
+                                    }
                                     .buttonStyle(.glass)
+
+                                    Spacer()
+
+                                    if let configurationStatus {
+                                        Label(
+                                            configurationStatus.message.text(using: localization),
+                                            systemImage: configurationStatus.systemImage
+                                        )
+                                        .font(.caption)
+                                        .foregroundStyle(configurationStatus.tint)
+                                    }
+                                }
                             }
+                        }
+
+                        HStack(alignment: .top, spacing: 14) {
+                            GlassPanel {
+                                VStack(alignment: .leading, spacing: 14) {
+                                    Text("应用偏好")
+                                        .font(.headline)
+
+                                    Toggle("在 Dock 中显示应用图标", isOn: Binding(
+                                        get: { settings.showDockIcon },
+                                        set: { setDockIconVisible($0) }
+                                    ))
+
+                                    Text("关闭后仍可通过菜单栏图标打开无线麦。")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+
+                                    Divider()
+
+                                    HStack {
+                                        Text("应用语言")
+                                        Spacer()
+                                        Picker("", selection: Binding(
+                                            get: { localization.language },
+                                            set: { localization.select($0) }
+                                        )) {
+                                            ForEach(AppLanguage.allCases) { language in
+                                                Text(languageTitle(language)).tag(language)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                        .frame(width: 150)
+                                    }
+
+                                    Text("更改后界面会立即更新，无需重新启动。")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .top)
+
+                            GlassPanel {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("更新与支持")
+                                        .font(.headline)
+
+                                    Button(action: checkForUpdates) {
+                                        Label("检查更新…", systemImage: "arrow.triangle.2.circlepath")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .buttonStyle(.glassProminent)
+
+                                    Link(
+                                        destination: URL(string: "https://github.com/HD838A/remote-mic-app")!
+                                    ) {
+                                        Label("GitHub", systemImage: "link")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .buttonStyle(.glass)
+
+                                    Button {
+                                        NSApp.terminate(nil)
+                                    } label: {
+                                        Label("退出", systemImage: "power")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .buttonStyle(.glass)
+                                }
+                            }
+                            .frame(width: 210, alignment: .top)
                         }
                     }
                 }
@@ -840,6 +958,101 @@ struct SettingsView: View {
 
     private func languageTitle(_ language: AppLanguage) -> String {
         language == .system ? localization.text("跟随系统") : language.nativeDisplayName
+    }
+
+    private var buttonPressCountText: String {
+        localizedNumber(settings.totalButtonPressCount)
+    }
+
+    private var voiceDurationText: String {
+        let totalSeconds = max(
+            0,
+            Int(min(settings.totalVoiceDuration.rounded(), Double(Int.max)))
+        )
+        let hours = totalSeconds / 3_600
+        let minutes = totalSeconds % 3_600 / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return String(
+                format: localization.text("%@ 小时 %@ 分钟"),
+                locale: localization.locale,
+                arguments: [localizedNumber(UInt64(hours)), localizedNumber(UInt64(minutes))]
+            )
+        }
+        if minutes > 0 {
+            return String(
+                format: localization.text("%@ 分钟 %@ 秒"),
+                locale: localization.locale,
+                arguments: [localizedNumber(UInt64(minutes)), localizedNumber(UInt64(seconds))]
+            )
+        }
+        return String(
+            format: localization.text("%@ 秒"),
+            locale: localization.locale,
+            arguments: [localizedNumber(UInt64(seconds))]
+        )
+    }
+
+    private func localizedNumber(_ value: UInt64) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = localization.locale
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+
+    private func exportConfiguration() {
+        configurationStatus = nil
+        guard let url = ConfigurationFilePanel.exportURL(
+            title: localization.text("导出个性化配置"),
+            prompt: localization.text("导出")
+        ) else { return }
+        do {
+            let data = try settings.exportedConfigurationData()
+            try data.write(to: url, options: .atomic)
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("配置已导出"),
+                tint: .green,
+                systemImage: "checkmark.circle.fill"
+            )
+        } catch {
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("导出失败：无法写入文件"),
+                tint: .red,
+                systemImage: "exclamationmark.triangle.fill"
+            )
+        }
+    }
+
+    private func importConfiguration() {
+        configurationStatus = nil
+        guard let url = ConfigurationFilePanel.importURL(
+            title: localization.text("导入个性化配置"),
+            prompt: localization.text("导入")
+        ) else { return }
+        do {
+            try settings.importConfiguration(from: Data(contentsOf: url))
+            localization.select(settings.applicationLanguage)
+            setDockIconVisible(settings.showDockIcon)
+            model.applyAudioSettings(reason: "configuration_import")
+            model.applyHIDSettings()
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("配置已导入并应用"),
+                tint: .green,
+                systemImage: "checkmark.circle.fill"
+            )
+        } catch AppConfigurationError.unsupportedVersion {
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("导入失败：不支持此配置版本"),
+                tint: .red,
+                systemImage: "exclamationmark.triangle.fill"
+            )
+        } catch {
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("导入失败：配置文件无效"),
+                tint: .red,
+                systemImage: "exclamationmark.triangle.fill"
+            )
+        }
     }
 
     private func permissionRow(
@@ -1101,6 +1314,65 @@ private struct GlassPanel<Content: View>: View {
                 .regular,
                 in: RoundedRectangle(cornerRadius: 20, style: .continuous)
             )
+    }
+}
+
+private struct UsageStatisticCard: View {
+    let systemImage: String
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: systemImage)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .glassEffect(.clear.tint(tint.opacity(0.14)), in: Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.system(size: 21, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(
+            .clear.tint(tint.opacity(0.08)),
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+    }
+}
+
+@MainActor
+private enum ConfigurationFilePanel {
+    static func exportURL(title: String, prompt: String) -> URL? {
+        let panel = NSSavePanel()
+        panel.title = title
+        panel.prompt = prompt
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "Remote-Mic-Settings.json"
+        panel.canCreateDirectories = true
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    static func importURL(title: String, prompt: String) -> URL? {
+        let panel = NSOpenPanel()
+        panel.title = title
+        panel.prompt = prompt
+        panel.allowedContentTypes = [.json]
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        return panel.runModal() == .OK ? panel.url : nil
     }
 }
 
