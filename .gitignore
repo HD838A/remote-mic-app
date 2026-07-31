@@ -23,7 +23,6 @@ dist/
 
 # Local project-control records are not part of the public source release.
 docs/
-AGENTS.md
 
 # Local promotion copy is kept outside the public source release.
 marketing/

@@ -1,6 +1,10 @@
 # TODO
 
 - [ ] Windows 版本
+  - 当前范围只包含小米 RC003；已完成相关 forks、Windows 实现、权限/安装和虚拟麦克风路线研究。首选源码基线为 `miaomiaozii/windows-remote-mic-app`，但产品化仍需独立真机验收、免费自签流程和第三方组件审查。
+  - Windows 与 macOS 必须独立构建、签名、打包、验证和发布：Windows 当前决定只使用免费自签 Authenticode 证书与 EXE/MSI/ZIP 产物，不购买微软/公共 CA 签名，也不复用 Apple Developer ID、APP/PKG/DMG、公证或 Sparkle 流水线。自签版本仍会出现未知发布者或 SmartScreen 提示。
+  - 总体方案见 [Windows 支持可行性研究](Research/WindowsSupport/README.md)。
+  - fork、Release、CI、许可与最终排名见 [Windows 源码与 fork 对比](Research/WindowsSupport/candidate-comparison.md)。
 - [x] ~~自动聚焦输入框~~（已完成：打开 Codex、Claude、cmux 后自动聚焦其输入区域）
 - [x] ~~配置导入导出~~（已完成：支持版本化 JSON 导入导出全部个性化设置；本地使用统计不随配置迁移）
 - [x] ~~按键一次后长时间语音输入~~（已测试：遥控器硬件不支持，必须长按语音键才能持续收音）
@@ -10,3 +14,4 @@
   - 已完成 SiriRemoteForge、Wand、siri-remote-steamos、SiriRemoteVibe 及其他相关开源项目的可行性研究；当前总体首选 SiriRemoteForge，建议按“按键 → 触摸/滚动 → 麦克风高级组件”分阶段验证。
   - 详细结论见 [SiriRemoteForge 与“无线麦”集成评估](Research/SiriRemoteForge/README.md)。
   - 三个新增候选的源码、Release 和验证对比见 [候选项目深度对比与最终选型](Research/SiriRemoteForge/candidate-comparison.md)。
+  - Apple Remote 的 Windows 路线目前暂停，不属于 Windows 版本当前范围；既有研究保留在 [Apple Siri Remote 的 Windows 路线](Research/WindowsSupport/apple-siri-remote.md)，供以后备用。
