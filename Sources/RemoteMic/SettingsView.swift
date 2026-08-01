@@ -1146,10 +1146,10 @@ private struct ReleaseHistorySheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("版本历史")
+                Text(localization.text("版本历史"))
                     .font(.title2.weight(.semibold))
                 Spacer()
-                Button("关闭") { dismiss() }
+                Button(localization.text("关闭")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
             .padding(20)
@@ -1178,7 +1178,7 @@ private struct ReleaseHistorySheet: View {
                     .textSelection(.enabled)
                     .padding(24)
                 } else {
-                    Text("无法加载版本历史。")
+                    Text(localization.text("无法加载版本历史。"))
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .padding(24)
                 }
