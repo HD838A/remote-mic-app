@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "remote-mic-rc003"
+version = "0.1.0"
+description = "Remote Mic - Xiaomi RC003 Windows client (source/build candidate, not yet real-device verified)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-only" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
