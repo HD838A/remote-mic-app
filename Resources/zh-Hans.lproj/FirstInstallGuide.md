@@ -3,7 +3,7 @@
 ## 使用要求
 
 - Apple Silicon Mac；
-- macOS 26 或更高版本；
+- macOS 14 或更高版本；
 - 小米蓝牙遥控器 2 Pro / RC003。
 
 打开 Remote-Mic-<version>.dmg 后，推荐双击 Install Remote Mic.pkg。安装器会把 Remote Mic.app 安装到 Applications、安装 MiRemoteV 2ch、重启 CoreAudio，并为当前桌面用户启动 Remote Mic。

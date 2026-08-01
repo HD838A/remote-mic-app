@@ -6,21 +6,21 @@
 
 ## 支持范围
 
-- 运行系统：macOS 26 或更高版本；
+- 运行系统：macOS 14 或更高版本；
 - 架构：Apple Silicon `arm64`；
 - 目标遥控器：小米蓝牙遥控器 2 Pro / RC003；
 - HID 标识：Vendor ID `0x2717`、Product ID `0x32B8`；
 - Swift 工具链：Swift 6.2，源码以 Swift 5 语言模式编译；
 - 发布签名：本地开发构建保持带固定 designated requirement 的 ad-hoc 签名。自 v1.3.0 起的正式发布使用 Developer ID Application 与 Developer ID Installer 签名；应用和驱动启用 Hardened Runtime 与可信时间戳，应用、两个 PKG 和 DMG 都经过 Apple 公证并 stapled。
 
-`Package.swift`、`Resources/Info.plist`、构建脚本和验证脚本都把最低系统版本固定为 macOS 26，并验证发布二进制只有 `arm64` 架构。
+`Package.swift`、`Resources/Info.plist`、构建脚本和验证脚本都把最低系统版本固定为 macOS 14.0，并验证发布二进制只有 `arm64` 架构。
 
 ## 模块结构
 
 | 模块 | 主要职责 |
 | --- | --- |
 | `RemoteMicApp.swift` | AppKit 生命周期、菜单栏图标、左键设置窗口、右键菜单、关于与版本菜单项、Sparkle 手动更新入口 |
-| `SettingsView.swift` | macOS 26 Liquid Glass 设置界面、状态展示、音频选择、按键映射和权限入口 |
+| `SettingsView.swift` | 设置界面、状态展示、音频选择、按键映射和权限入口；macOS 26 使用 Liquid Glass，macOS 14/15 使用兼容样式 |
 | `BridgeAppModel.swift` | 蓝牙、音频、HID、Fn 映射和 UI 状态的协调层 |
 | `XiaomiBluetoothBridge.swift` | CoreBluetooth 扫描、连接、能力协商、语音会话和自动重连 |
 | `ATVVProtocol.swift` | ATVV 命令、能力解析、IMA/DVI ADPCM 解码、帧累积与 PCM 后处理 |
@@ -113,7 +113,7 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 - 左键：创建或置前 800×650 的可缩放设置窗口；
 - 右键：显示连接、音频、HID 状态，以及重新连接、打开设置、日志、关于、版本号、检查更新、GitHub 和退出菜单。
 
-设置窗口包含“连接”“按键”“权限”三个页面，使用 macOS 26 原生 `glassEffect` 和 glass button style，并跟随系统浅色、深色、降低透明度与增强对比度设置。
+设置窗口在 macOS 26 使用原生 `glassEffect`、glass button style 和滚动边缘效果；macOS 14/15 使用标准按钮、系统 Material 面板和兼容选中状态。两套样式共用相同功能与布局，并跟随系统浅色、深色、降低透明度与增强对比度设置。
 
 ## 数据与日志
 
@@ -169,7 +169,7 @@ DMG 根目录严格只有四项：
 - `Remote Mic.app`；
 - 指向 `/Applications` 的 `Applications` 入口。
 
-`verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 26 最低版本、有效代码签名和本地路径泄漏。正式模式还校验 Developer ID Team、Hardened Runtime、PKG/DMG 签名、stapled 公证票据与 Gatekeeper 评估。
+`verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 14.0 最低版本、有效代码签名和本地路径泄漏。正式模式还校验 Developer ID Team、Hardened Runtime、PKG/DMG 签名、stapled 公证票据与 Gatekeeper 评估。
 
 Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=true` 与 `SUScheduledCheckInterval=86400` 启用每日自动检查；`SUAutomaticallyUpdate=false` 与 `SUAllowsAutomaticUpdates=false` 禁止静默下载或自动安装。用户仍可选择菜单中的“检查更新…”立即检查。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
 

@@ -1,4 +1,4 @@
-# Design QA: macOS 26 Liquid Glass Settings
+# Design QA: macOS 14 Compatibility and macOS 26 Liquid Glass Settings
 
 [简体中文](design-qa.md)
 
@@ -16,7 +16,7 @@
 - The settings UI uses a narrow sidebar, header, and layered content areas. The primary actions on all three pages remain available at the minimum window size.
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
 - It uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
-- Panels and buttons use native macOS 26 glassEffect and glass button styles without a custom blur background.
+- Panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
 - The UI does not show a separate mute key that is absent from the physical remote.
@@ -29,4 +29,4 @@
 
 ## Conclusion
 
-The repository screenshots and implementation correspond to the macOS 26 Liquid Glass three-page settings UI. No review reference depends on a local temporary directory.
+The repository screenshots show the macOS 26 Liquid Glass appearance; the same page structure automatically uses compatibility styling on macOS 14/15. No review reference depends on a local temporary directory.

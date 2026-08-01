@@ -125,7 +125,7 @@ struct SettingsView: View {
     }
 
     private var sidebar: some View {
-        GlassEffectContainer(spacing: 10) {
+        CompatibilityGlassContainer(spacing: 10) {
             VStack(spacing: 10) {
                 ForEach(SettingsSection.allCases) { section in
                     sidebarButton(section)
@@ -182,7 +182,7 @@ struct SettingsView: View {
                     subtitle: localization.text("连接 RC003，并配置语音输出与触发方式")
                 )
 
-                GlassEffectContainer(spacing: 14) {
+                CompatibilityGlassContainer(spacing: 14) {
                     HStack(alignment: .top, spacing: 14) {
                         connectionDevicePanel
                             .frame(width: 196)
@@ -194,7 +194,7 @@ struct SettingsView: View {
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .compatibilityScrollEdgeEffect()
     }
 
     private var connectionDevicePanel: some View {
@@ -243,7 +243,7 @@ struct SettingsView: View {
                     Text("立即重新连接")
                         .foregroundStyle(.white)
                 }
-                    .buttonStyle(.glassProminent)
+                    .compatibilityButtonStyle(.prominent)
                     .buttonBorderShape(.roundedRectangle(radius: 10))
                     .frame(maxWidth: .infinity)
             }
@@ -311,11 +311,11 @@ struct SettingsView: View {
                         Text("刷新音频设备")
                             .foregroundStyle(.white)
                     }
-                        .buttonStyle(.glassProminent)
+                        .compatibilityButtonStyle(.prominent)
                     Link("获取 BlackHole", destination: URL(string: "https://existential.audio/blackhole/")!)
-                        .buttonStyle(.glass)
+                        .compatibilityButtonStyle(.standard)
                     Button("发送 1 秒测试音") { model.sendTestTone() }
-                        .buttonStyle(.glass)
+                        .compatibilityButtonStyle(.standard)
                         .disabled(!model.canSendTestTone)
                 }
 
@@ -348,12 +348,12 @@ struct SettingsView: View {
 
                 HStack(spacing: 10) {
                     Button("选择 MiRemoteV 2ch") { model.selectDoubaoAudioDevice() }
-                        .buttonStyle(.glass)
+                        .compatibilityButtonStyle(.standard)
                         .disabled(!model.hasDoubaoAudioDevice)
                     Button("打开驱动安装说明") {
                         model.openDoubaoDriverInstructions(using: localization)
                     }
-                        .buttonStyle(.glass)
+                        .compatibilityButtonStyle(.standard)
                 }
 
                 Text("豆包会过滤普通 virtual transport 音频设备。安装独立的 MiRemoteV 2ch 后在这里选中；原 BlackHole 不会被修改或替换。")
@@ -394,11 +394,11 @@ struct SettingsView: View {
                         settings.resetBindings()
                         selectedRemoteButton = .ok
                     }
-                    .buttonStyle(.glass)
+                    .compatibilityButtonStyle(.standard)
                 }
             }
 
-            GlassEffectContainer(spacing: 14) {
+            CompatibilityGlassContainer(spacing: 14) {
                 HStack(alignment: .top, spacing: 14) {
                     GlassPanel {
                         RemoteControlDiagram(
@@ -538,11 +538,11 @@ struct SettingsView: View {
         .padding(.vertical, 4)
 
         if selected {
-            content
-                .glassEffect(
-                    .clear.tint(Color.accentColor.opacity(0.10)).interactive(),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
+            content.compatibilityTintedGlass(
+                tint: Color.accentColor.opacity(0.10),
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                interactive: true
+            )
         } else {
             VStack(spacing: 0) {
                 content
@@ -656,7 +656,7 @@ struct SettingsView: View {
                     subtitle: localization.text("按顺序完成权限设置，确保 RC003 正常连接和发送按键")
                 )
 
-                GlassEffectContainer(spacing: 14) {
+                CompatibilityGlassContainer(spacing: 14) {
                     GlassPanel {
                         VStack(alignment: .leading, spacing: 0) {
                             Text("所需权限")
@@ -713,8 +713,8 @@ struct SettingsView: View {
                                     .font(.title3)
                                     .foregroundStyle(Color.accentColor)
                                     .frame(width: 34, height: 34)
-                                    .glassEffect(
-                                        .clear.tint(Color.accentColor.opacity(0.14)),
+                                    .compatibilityTintedGlass(
+                                        tint: Color.accentColor.opacity(0.14),
                                         in: Circle()
                                     )
                                 VStack(alignment: .leading, spacing: 2) {
@@ -725,7 +725,7 @@ struct SettingsView: View {
                                 }
                                 Spacer()
                                 Button("在 Finder 中显示日志") { model.openLogFolder() }
-                                    .buttonStyle(.glass)
+                                    .compatibilityButtonStyle(.standard)
                             }
                         }
                     }
@@ -734,7 +734,7 @@ struct SettingsView: View {
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .compatibilityScrollEdgeEffect()
     }
 
     private var aboutPage: some View {
@@ -745,7 +745,7 @@ struct SettingsView: View {
                     subtitle: localization.text("你的无线语音工作台，配置、统计与隐私一目了然")
                 )
 
-                GlassEffectContainer(spacing: 14) {
+                CompatibilityGlassContainer(spacing: 14) {
                     VStack(spacing: 14) {
                         GlassPanel {
                             HStack(spacing: 20) {
@@ -775,8 +775,8 @@ struct SettingsView: View {
                                     .font(.system(size: 42, weight: .medium))
                                     .foregroundStyle(Color.accentColor)
                                     .frame(width: 76, height: 76)
-                                    .glassEffect(
-                                        .clear.tint(Color.accentColor.opacity(0.12)),
+                                    .compatibilityTintedGlass(
+                                        tint: Color.accentColor.opacity(0.12),
                                         in: Circle()
                                     )
                             }
@@ -838,12 +838,12 @@ struct SettingsView: View {
                                     Button(action: exportConfiguration) {
                                         Label("导出配置…", systemImage: "square.and.arrow.up")
                                     }
-                                    .buttonStyle(.glassProminent)
+                                    .compatibilityButtonStyle(.prominent)
 
                                     Button(action: importConfiguration) {
                                         Label("导入配置…", systemImage: "square.and.arrow.down")
                                     }
-                                    .buttonStyle(.glass)
+                                    .compatibilityButtonStyle(.standard)
 
                                     Spacer()
 
@@ -907,7 +907,7 @@ struct SettingsView: View {
                                         Label("检查更新…", systemImage: "arrow.triangle.2.circlepath")
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .buttonStyle(.glassProminent)
+                                    .compatibilityButtonStyle(.prominent)
 
                                     Link(
                                         destination: URL(string: "https://github.com/HD838A/remote-mic-app")!
@@ -915,7 +915,7 @@ struct SettingsView: View {
                                         Label("GitHub", systemImage: "link")
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .buttonStyle(.glass)
+                                    .compatibilityButtonStyle(.standard)
 
                                     Button {
                                         NSApp.terminate(nil)
@@ -923,7 +923,7 @@ struct SettingsView: View {
                                         Label("退出", systemImage: "power")
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .buttonStyle(.glass)
+                                    .compatibilityButtonStyle(.standard)
                                 }
                             }
                             .frame(width: 210, alignment: .top)
@@ -934,7 +934,7 @@ struct SettingsView: View {
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .compatibilityScrollEdgeEffect()
     }
 
     private var versionText: String {
@@ -1075,8 +1075,8 @@ struct SettingsView: View {
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 42, height: 42)
-                .glassEffect(
-                    .clear.tint(Color.accentColor.opacity(0.14)),
+                .compatibilityTintedGlass(
+                    tint: Color.accentColor.opacity(0.14),
                     in: Circle()
                 )
 
@@ -1092,7 +1092,7 @@ struct SettingsView: View {
             Spacer(minLength: 16)
             StatusPill(text: state.title(using: localization), tint: state.tint)
             Button(actionTitle, action: action)
-                .buttonStyle(.glass)
+                .compatibilityButtonStyle(.standard)
                 .frame(width: 112)
         }
         .padding(.vertical, 12)
@@ -1264,6 +1264,116 @@ private final class ShortcutCaptureNSView: NSView {
     }
 }
 
+private enum CompatibilityButtonStyle {
+    case standard
+    case prominent
+}
+
+private struct CompatibilityGlassContainer<Content: View>: View {
+    let spacing: CGFloat
+    private let content: Content
+
+    init(spacing: CGFloat, @ViewBuilder content: () -> Content) {
+        self.spacing = spacing
+        self.content = content()
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) {
+                content
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private struct CompatibilityButtonStyleModifier: ViewModifier {
+    let style: CompatibilityButtonStyle
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            switch style {
+            case .standard:
+                content.buttonStyle(.glass)
+            case .prominent:
+                content.buttonStyle(.glassProminent)
+            }
+        } else {
+            switch style {
+            case .standard:
+                content.buttonStyle(.bordered)
+            case .prominent:
+                content.buttonStyle(.borderedProminent)
+            }
+        }
+    }
+}
+
+private struct CompatibilityScrollEdgeEffectModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            content
+        }
+    }
+}
+
+private struct CompatibilityTintedGlassModifier<GlassShape: Shape>: ViewModifier {
+    let tint: Color
+    let shape: GlassShape
+    let interactive: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            if interactive {
+                content.glassEffect(.clear.tint(tint).interactive(), in: shape)
+            } else {
+                content.glassEffect(.clear.tint(tint), in: shape)
+            }
+        } else {
+            content
+                .background(tint, in: shape)
+                .overlay(
+                    shape.stroke(
+                        Color(nsColor: .separatorColor).opacity(0.45),
+                        lineWidth: 1
+                    )
+                )
+        }
+    }
+}
+
+private extension View {
+    func compatibilityButtonStyle(_ style: CompatibilityButtonStyle) -> some View {
+        modifier(CompatibilityButtonStyleModifier(style: style))
+    }
+
+    func compatibilityScrollEdgeEffect() -> some View {
+        modifier(CompatibilityScrollEdgeEffectModifier())
+    }
+
+    func compatibilityTintedGlass<GlassShape: Shape>(
+        tint: Color,
+        in shape: GlassShape,
+        interactive: Bool = false
+    ) -> some View {
+        modifier(
+            CompatibilityTintedGlassModifier(
+                tint: tint,
+                shape: shape,
+                interactive: interactive
+            )
+        )
+    }
+}
+
 private struct SidebarGlassModifier: ViewModifier {
     let isSelected: Bool
     let namespace: Namespace.ID
@@ -1271,13 +1381,22 @@ private struct SidebarGlassModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if isSelected {
-            content
-                .foregroundStyle(Color.accentColor)
-                .glassEffect(
-                    .clear.tint(Color.accentColor.opacity(0.08)).interactive(),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-                .glassEffectID("settings-navigation-selection", in: namespace)
+            if #available(macOS 26.0, *) {
+                content
+                    .foregroundStyle(Color.accentColor)
+                    .glassEffect(
+                        .clear.tint(Color.accentColor.opacity(0.08)).interactive(),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                    .glassEffectID("settings-navigation-selection", in: namespace)
+            } else {
+                content
+                    .foregroundStyle(Color.accentColor)
+                    .background(
+                        Color.accentColor.opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+            }
         } else {
             content
                 .foregroundStyle(.secondary)
@@ -1308,12 +1427,22 @@ private struct GlassPanel<Content: View>: View {
     }
 
     var body: some View {
-        content
-            .padding(16)
-            .glassEffect(
-                .regular,
-                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-            )
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        if #available(macOS 26.0, *) {
+            content
+                .padding(16)
+                .glassEffect(.regular, in: shape)
+        } else {
+            content
+                .padding(16)
+                .background(.regularMaterial, in: shape)
+                .overlay(
+                    shape.stroke(
+                        Color(nsColor: .separatorColor).opacity(0.45),
+                        lineWidth: 1
+                    )
+                )
+        }
     }
 }
 
@@ -1329,7 +1458,7 @@ private struct UsageStatisticCard: View {
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 44, height: 44)
-                .glassEffect(.clear.tint(tint.opacity(0.14)), in: Circle())
+                .compatibilityTintedGlass(tint: tint.opacity(0.14), in: Circle())
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -1345,8 +1474,8 @@ private struct UsageStatisticCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(
-            .clear.tint(tint.opacity(0.08)),
+        .compatibilityTintedGlass(
+            tint: tint.opacity(0.08),
             in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
     }
@@ -1386,7 +1515,7 @@ private struct StatusPill: View {
             .foregroundStyle(tint)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .glassEffect(.clear.tint(tint.opacity(0.14)), in: Capsule())
+            .compatibilityTintedGlass(tint: tint.opacity(0.14), in: Capsule())
     }
 }
 
@@ -1403,7 +1532,7 @@ private struct DeviceStatusStep: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 28, height: 28)
-                .glassEffect(.clear.tint(tint.opacity(0.14)), in: Circle())
+                .compatibilityTintedGlass(tint: tint.opacity(0.14), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(title)

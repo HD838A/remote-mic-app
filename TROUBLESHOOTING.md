@@ -2,7 +2,7 @@
 
 [English](TROUBLESHOOTING.en.md)
 
-本文适用于 `1.3.0`。请先确认 Mac 为 Apple Silicon，系统版本为 macOS 26 或更高。
+请先确认 Mac 为 Apple Silicon，系统版本为 macOS 14 或更高。
 
 ## 找不到或连不上遥控器
 

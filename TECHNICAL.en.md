@@ -6,14 +6,14 @@ This document is for developers, auditors, and release engineers. It describes t
 
 ## Support boundary
 
-- Operating system: macOS 26 or later
+- Operating system: macOS 14 or later
 - Architecture: Apple Silicon arm64
 - Target remote: Xiaomi Bluetooth Remote 2 Pro / RC003
 - HID identity: Vendor ID 0x2717, Product ID 0x32B8
 - Swift toolchain: Swift 6.2, with source compiled in Swift 5 language mode
 - Release signing: local development builds retain ad-hoc signing with a fixed designated requirement. Starting with v1.3.0, official releases use Developer ID Application and Developer ID Installer signing; the app and driver use the Hardened Runtime and trusted timestamps, while the app, both PKGs, and the DMG are notarized by Apple and stapled.
 
-Package.swift, Resources/Info.plist, build scripts, and verification scripts all pin the minimum system version to macOS 26 and verify that release binaries contain only arm64.
+Package.swift, Resources/Info.plist, build scripts, and verification scripts all pin the minimum system version to macOS 14.0 and verify that release binaries contain only arm64.
 
 ## Localization
 
@@ -28,7 +28,7 @@ The bundle contains en.lproj and zh-Hans.lproj with Localizable.strings, InfoPli
 | Module | Main responsibility |
 | --- | --- |
 | RemoteMicApp.swift | AppKit lifecycle, status item, settings window, right-click menu, About/version, language menu, and Sparkle manual update entry |
-| SettingsView.swift | macOS 26 Liquid Glass settings UI, status, audio selection, button mapping, and permissions |
+| SettingsView.swift | Settings UI, status, audio selection, button mapping, and permissions; Liquid Glass on macOS 26 with compatibility styling on macOS 14/15 |
 | Localization.swift | language selection, locale resolution, localized resources, and dynamic message rendering |
 | BridgeAppModel.swift | coordination of Bluetooth, audio, HID, Fn mapping, and UI state |
 | XiaomiBluetoothBridge.swift | CoreBluetooth scan, connection, capability negotiation, voice session, and reconnect |
@@ -112,7 +112,7 @@ The app runs as an LSUIElement accessory and has no Dock icon. The status item r
 - Left-click creates or brings forward a resizable 800×650 settings window.
 - Right-click shows connection, audio, and HID status plus reconnect, settings, logs, language, About, version, update, GitHub, and Quit actions.
 
-The settings window contains Connection, Buttons, and Permissions pages. It uses native macOS 26 glassEffect and glass button styles, following system light/dark appearance, reduced transparency, and increased contrast.
+On macOS 26, the settings window uses native `glassEffect`, glass button styles, and scroll-edge effects. On macOS 14/15 it uses standard buttons, system Material panels, and compatible selection states. Both paths share the same functionality and layout and follow the system light/dark appearance, reduced transparency, and increased contrast settings.
 
 ## Data and logs
 
@@ -162,7 +162,7 @@ The DMG root contains exactly four items:
 - Remote Mic.app
 - Applications, a link to /Applications
 
-verify-dmg.sh validates the SHA-256, HFS+ image, root manifest, app bundle contents, PKG payloads, version, arm64 architecture, macOS 26 minimum version, valid code signature, localized resources, and absence of leaked local paths. In official mode it also validates the Developer ID Team, Hardened Runtime, PKG/DMG signatures, stapled notarization tickets, and Gatekeeper assessment.
+verify-dmg.sh validates the SHA-256, HFS+ image, root manifest, app bundle contents, PKG payloads, version, arm64 architecture, macOS 14.0 minimum version, valid code signature, localized resources, and absence of leaked local paths. In official mode it also validates the Developer ID Team, Hardened Runtime, PKG/DMG signatures, stapled notarization tickets, and Gatekeeper assessment.
 
 Sparkle 2.9.4 is embedded through SwiftPM. Its feed URL and EdDSA public key are in Info.plist; the private key remains in the publisher's restricted local storage and never enters the project or a release. SUEnableAutomaticChecks=true with SUScheduledCheckInterval=86400 enables daily checks, while SUAutomaticallyUpdate=false and SUAllowsAutomaticUpdates=false prevent silent downloads or automatic installation. The menu command remains available for immediate checks. Sparkle updates the app bundle only and never installs or replaces the compatibility microphone driver.
 

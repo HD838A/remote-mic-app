@@ -28,8 +28,8 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; t
   exit 1
 fi
 
-xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx26.0
-BIN_PATH="$(xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx26.0 --show-bin-path)/$APP_NAME"
+xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx14.0
+BIN_PATH="$(xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx14.0 --show-bin-path)/$APP_NAME"
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app) ;;

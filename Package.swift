@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "RemoteMic",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v14)],
     products: [
         .executable(
             name: "RemoteMic",

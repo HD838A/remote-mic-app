@@ -10,7 +10,8 @@
   - MiRemoteV 2ch 已成功构建为 `arm64`、Mach-O `minos 14.0`；Sparkle 2.9.4 的 Apple Silicon Framework 最低版本为 macOS 11.0。
   - macOS 26 继续使用原生 Liquid Glass；macOS 14/15 使用非 Glass 系统兼容样式，保持功能和布局可用，不要求视觉完全一致。
   - 发布产物继续只包含 `arm64`，不支持 Intel、`x86_64` 或 Universal Binary；同步调整并验证 App、MiRemoteV 2ch、PKG、DMG、Sparkle 更新和公证流程。
-  - 完整研究、实现边界和验收门禁见 [macOS 14 支持评估](Research/MacOS14Support/README.md)。完成实现和发布机验证后才可勾选；正式晋升前仍需真实 macOS 14 Apple Silicon 机器完成端到端运行时验收。
+  - 代码与发布机验证已完成：macOS 14.0 App 编译、36 项 Self Test、76 项 Swift Testing、App/驱动 `minos 14.0`、两个 PKG 和 DMG 的结构及权限验证均通过。
+  - 完整研究、实现边界和验收门禁见 [macOS 14 支持评估](Research/MacOS14Support/README.md)。当前只发布 pre-release；在真实 macOS 14 Apple Silicon 机器完成蓝牙、HID、权限、音频驱动和 Sparkle 端到端运行时验收后才能勾选并晋升正式版。
 - [x] ~~自动聚焦输入框~~（已完成：打开 Codex、Claude、cmux 后自动聚焦其输入区域）
 - [x] ~~配置导入导出~~（已完成：支持版本化 JSON 导入导出全部个性化设置；本地使用统计不随配置迁移）
 - [x] ~~按键一次后长时间语音输入~~（已测试：遥控器硬件不支持，必须长按语音键才能持续收音）

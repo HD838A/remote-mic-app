@@ -2,7 +2,7 @@
 
 [简体中文](TROUBLESHOOTING.md)
 
-This guide applies to version 1.3.0. Confirm that your Mac is Apple Silicon and runs macOS 26 or later.
+Confirm that your Mac is Apple Silicon and runs macOS 14 or later.
 
 ## The remote cannot be found or connected
 

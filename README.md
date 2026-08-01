@@ -13,7 +13,7 @@
 ## 使用要求
 
 - Apple Silicon Mac；
-- macOS 26 或更高版本；
+- macOS 14 或更高版本；
 - 小米蓝牙遥控器 2 Pro / RC003；
 - 使用语音输入时，需要安装随安装包提供的兼容麦克风，或在 Mac 上已有 BlackHole 2ch 等回环音频设备。
 

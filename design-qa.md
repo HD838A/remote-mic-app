@@ -1,4 +1,4 @@
-# Design QA：macOS 26 Liquid Glass 设置页
+# Design QA：macOS 14 兼容与 macOS 26 Liquid Glass 设置页
 
 [English](design-qa.en.md)
 
@@ -16,7 +16,7 @@
 - 设置页使用窄侧栏、标题区和分层内容区，三个页面的主要操作在最小窗口下可访问；
 - 侧栏选择态和按键选择态使用低透明度语义蓝交互玻璃；
 - 使用系统字体、语义字号和系统颜色，跟随浅色、深色、降低透明度与增强对比度设置；
-- 面板和按钮使用 macOS 26 原生 `glassEffect` 与 glass button style，没有自定义模糊背景；
+- macOS 26 的面板和按钮使用原生 `glassEffect` 与 glass button style；macOS 14/15 使用系统 Material 与标准按钮，不使用自定义模糊实现；
 - 按键页面复用 `Resources/RC003-remote-photo.png`，保持 508×1030 原始比例；
 - 普通实体按键按下时会高亮遥控器示意图并定位映射行，语音键使用独立的语音活动状态；
 - 界面未展示实物上不存在的独立静音键。
@@ -29,4 +29,4 @@
 
 ## 结论
 
-当前仓库截图和实现均对应 macOS 26 Liquid Glass 三页设置界面，未保留依赖本机临时目录的审查引用。
+当前仓库截图对应 macOS 26 Liquid Glass 外观；同一页面结构在 macOS 14/15 自动切换到兼容样式。仓库未保留依赖本机临时目录的审查引用。

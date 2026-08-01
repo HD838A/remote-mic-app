@@ -13,7 +13,7 @@ Hold the remote voice button to speak. The direction, OK, Back, Home, Menu, TV, 
 ## Requirements
 
 - Apple Silicon Mac
-- macOS 26 or later
+- macOS 14 or later
 - Xiaomi Bluetooth Remote 2 Pro / RC003
 - For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
 

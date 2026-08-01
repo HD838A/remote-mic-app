@@ -42,10 +42,10 @@ test -d "$APP_DESTINATION"
 test -f "$APP_PLIST"
 test -x "$APP_BINARY"
 test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST")" = "com.hd838a.RemoteMic"
-test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - "$APP_PLIST")" = "26.0"
+test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - "$APP_PLIST")" = "14.0"
 test "$(/usr/bin/uname -m)" = "arm64"
 SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
-test "$SYSTEM_MAJOR" -ge 26
+test "$SYSTEM_MAJOR" -ge 14
 
 /usr/sbin/chown -R root:wheel "$DESTINATION"
 /usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \;
