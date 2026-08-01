@@ -1157,27 +1157,76 @@ private struct ReleaseHistorySheet: View {
             Divider()
 
             ScrollView {
-                Text(releaseHistory)
+                if let sections = releaseHistorySections {
+                    LazyVStack(alignment: .leading, spacing: 24) {
+                        ForEach(sections) { section in
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(section.title)
+                                    .font(.title3.weight(.semibold).monospacedDigit())
+
+                                ForEach(Array(section.entries.enumerated()), id: \.offset) { _, entry in
+                                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                        Text("•")
+                                        Text(entry)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .textSelection(.enabled)
                     .padding(24)
+                } else {
+                    Text("无法加载版本历史。")
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(24)
+                }
             }
         }
         .frame(width: 640, height: 520)
     }
 
-    private var releaseHistory: AttributedString {
+    private var releaseHistorySections: [ReleaseHistorySection]? {
         guard let url = localization.localizedURL(
             forResource: "ReleaseHistory",
             withExtension: "md"
         ),
-        let markdown = try? String(contentsOf: url, encoding: .utf8),
-        let attributed = try? AttributedString(markdown: markdown)
+        let markdown = try? String(contentsOf: url, encoding: .utf8)
         else {
-            return AttributedString(localization.text("无法加载版本历史。"))
+            return nil
         }
-        return attributed
+
+        var sections: [ReleaseHistorySection] = []
+        var title: String?
+        var entries: [String] = []
+
+        func appendSection() {
+            guard let title, !entries.isEmpty else { return }
+            sections.append(ReleaseHistorySection(title: title, entries: entries))
+        }
+
+        for rawLine in markdown.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("## ") {
+                appendSection()
+                title = String(line.dropFirst(3))
+                entries = []
+            } else if line.hasPrefix("- "), title != nil {
+                entries.append(String(line.dropFirst(2)))
+            }
+        }
+        appendSection()
+
+        return sections.isEmpty ? nil : sections
     }
+}
+
+private struct ReleaseHistorySection: Identifiable {
+    let title: String
+    let entries: [String]
+
+    var id: String { title }
 }
 
 private struct ShortcutEditorSheet: View {
