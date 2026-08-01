@@ -2,7 +2,7 @@
 
 [简体中文](TECHNICAL.md)
 
-This document is for developers, auditors, and release engineers. It describes the implementation, build, and release constraints for version 1.4.0 (24). End users should start with [README.en.md](README.en.md).
+This document is for developers, auditors, and release engineers. It describes the implementation, build, and release constraints of the current source. End users should start with [README.en.md](README.en.md).
 
 ## Support boundary
 
@@ -10,7 +10,7 @@ This document is for developers, auditors, and release engineers. It describes t
 - Architecture: Apple Silicon arm64
 - Target remote: Xiaomi Bluetooth Remote 2 Pro / RC003
 - HID identity: Vendor ID 0x2717, Product ID 0x32B8
-- Swift toolchain: Swift 6.2, with source compiled in Swift 5 language mode
+- Swift tools version: 6.2; the current release Mac uses Swift 6.3, with source compiled in Swift 5 language mode
 - Release signing: local development builds retain ad-hoc signing with a fixed designated requirement. Starting with v1.3.0, official releases use Developer ID Application and Developer ID Installer signing; the app and driver use the Hardened Runtime and trusted timestamps, while the app, both PKGs, and the DMG are notarized by Apple and stapled.
 
 Package.swift, Resources/Info.plist, build scripts, and verification scripts all pin the minimum system version to macOS 14.0 and verify that release binaries contain only arm64.
@@ -130,7 +130,7 @@ Development verification:
     ./scripts/build-app.sh
     ./scripts/verify-app.sh
 
-scripts/test.sh runs protocol and policy self-tests and compiles the full app. Swift Testing covers ATVV, Bluetooth lifecycle, audio-device policy, button mapping, permissions, language-selection persistence and immediate locale updates, Fn mapping, and test tone behavior.
+scripts/test.sh runs 36 protocol and policy self-tests and compiles the full app. The current Swift Testing suite contains 76 tests covering ATVV, Bluetooth lifecycle, audio-device policy, button mapping, permissions, language-selection persistence and immediate locale updates, Fn mapping, and test tone behavior.
 
 Build and launch:
 
@@ -152,8 +152,8 @@ build-dmg.sh builds and verifies the app, driver, install PKG, and uninstall PKG
 - dist/MiRemoteV2ch.driver
 - dist/Install Remote Mic.pkg
 - dist/Uninstall Remote Mic.pkg
-- dist/Remote-Mic-1.4.0.dmg
-- dist/Remote-Mic-1.4.0.dmg.sha256
+- dist/Remote-Mic-<version>.dmg
+- dist/Remote-Mic-<version>.dmg.sha256
 
 The DMG root contains exactly four items:
 
@@ -170,7 +170,7 @@ Official publishing uses scripts/notarize-release.sh. It accepts only the existi
 
 Candidate builds are published as GitHub pre-releases first. `notarize-release.sh` uses a fixed `RELEASE_TAG` for the appcast release page and enclosure URL instead of `latest/download`; the application's `SUFeedURL` remains fixed at `releases/latest/download/appcast.xml`. GitHub excludes drafts and pre-releases from the latest full release, so ordinary users continue to receive the previous production appcast and cannot discover a candidate build.
 
-`scripts/publish-release.sh prerelease` accepts only a clean, pushed source commit referenced by the same remote tag. It publishes the ZIP, both PKGs, DMG, checksum, and appcast, verifies that the pre-release did not change the latest full release, then downloads all six public assets and compares them byte for byte. A test Mac may temporarily run `defaults write com.hd838a.RemoteMic SUFeedURL <candidate appcast URL>`, restart the app, and perform a complete Sparkle update from the current production build to the candidate. Testing must end with `defaults delete com.hd838a.RemoteMic SUFeedURL` and another app restart to restore the production feed.
+`scripts/publish-release.sh prerelease` accepts only a clean, pushed source commit referenced by the same remote tag. It publishes the ZIP, both PKGs, DMG, checksum, and appcast, verifies that the pre-release did not change the latest full release, then downloads all six public assets and compares them byte for byte. A test Mac should use Sparkle CLI's one-shot `--feed-url <candidate appcast URL>` override for candidate discovery or installation without persisting an `SUFeedURL` preference. Installing the candidate requires an unlocked graphical session.
 
 After the candidate passes clean installation, runtime, and end-to-end Sparkle update testing, run `scripts/publish-release.sh promote` to promote the same tag and the same assets to a full release. The promotion gate verifies that the latest appcast is byte-identical to the tested candidate appcast. Never replace or promote a failed candidate; increment both the display version and `CFBundleVersion`, then rebuild, sign, notarize, and publish a new pre-release.
 

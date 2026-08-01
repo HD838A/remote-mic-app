@@ -78,6 +78,7 @@ struct SettingsView: View {
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
     @State private var configurationStatus: ConfigurationStatus?
+    @State private var isReleaseHistoryPresented = false
     @Namespace private var navigationGlassNamespace
 
     init(
@@ -121,6 +122,9 @@ struct SettingsView: View {
                     trigger: target.trigger
                 )
             }
+        }
+        .sheet(isPresented: $isReleaseHistoryPresented) {
+            ReleaseHistorySheet()
         }
     }
 
@@ -760,13 +764,10 @@ struct SettingsView: View {
                                     Text("让遥控器成为随手可用的 Mac 语音与快捷操作入口。")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
-                                    HStack(spacing: 8) {
-                                        StatusPill(text: versionText, tint: .accentColor)
-                                        StatusPill(
-                                            text: localization.text("数据仅存本机"),
-                                            tint: .green
-                                        )
-                                    }
+                                    StatusPill(
+                                        text: localization.text("数据仅存本机"),
+                                        tint: .green
+                                    )
                                 }
 
                                 Spacer(minLength: 20)
@@ -876,10 +877,10 @@ struct SettingsView: View {
 
                                     Divider()
 
-                                    HStack {
+                                    VStack(alignment: .leading, spacing: 8) {
                                         Text("应用语言")
-                                        Spacer()
-                                        Picker("", selection: Binding(
+                                            .font(.subheadline.weight(.medium))
+                                        Picker("应用语言", selection: Binding(
                                             get: { localization.language },
                                             set: { localization.select($0) }
                                         )) {
@@ -888,26 +889,43 @@ struct SettingsView: View {
                                             }
                                         }
                                         .labelsHidden()
-                                        .frame(width: 150)
+                                        .pickerStyle(.segmented)
                                     }
-
-                                    Text("更改后界面会立即更新，无需重新启动。")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .top)
 
                             GlassPanel {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("更新与支持")
+                                    Text("版本与更新")
                                         .font(.headline)
 
-                                    Button(action: checkForUpdates) {
-                                        Label("检查更新…", systemImage: "arrow.triangle.2.circlepath")
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text("当前版本")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Text(versionText)
+                                            .font(.title3.weight(.semibold).monospacedDigit())
+
+                                        Button(action: checkForUpdates) {
+                                            Label(
+                                                "检查更新…",
+                                                systemImage: "arrow.triangle.2.circlepath"
+                                            )
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                        .compatibilityButtonStyle(.prominent)
+                                    }
+
+                                    Divider()
+
+                                    Button {
+                                        isReleaseHistoryPresented = true
+                                    } label: {
+                                        Label("版本历史", systemImage: "clock.arrow.circlepath")
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .compatibilityButtonStyle(.prominent)
+                                    .compatibilityButtonStyle(.standard)
 
                                     Link(
                                         destination: URL(string: "https://github.com/HD838A/remote-mic-app")!
@@ -926,7 +944,7 @@ struct SettingsView: View {
                                     .compatibilityButtonStyle(.standard)
                                 }
                             }
-                            .frame(width: 210, alignment: .top)
+                            .frame(width: 280, alignment: .top)
                         }
                     }
                 }
@@ -1118,6 +1136,47 @@ struct SettingsView: View {
         bluetoothAuthorization = CBManager.authorization
         inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
         accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    }
+}
+
+private struct ReleaseHistorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var localization: LocalizationStore
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("版本历史")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Button("关闭") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(20)
+
+            Divider()
+
+            ScrollView {
+                Text(releaseHistory)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .textSelection(.enabled)
+                    .padding(24)
+            }
+        }
+        .frame(width: 640, height: 520)
+    }
+
+    private var releaseHistory: AttributedString {
+        guard let url = localization.localizedURL(
+            forResource: "ReleaseHistory",
+            withExtension: "md"
+        ),
+        let markdown = try? String(contentsOf: url, encoding: .utf8),
+        let attributed = try? AttributedString(markdown: markdown)
+        else {
+            return AttributedString(localization.text("无法加载版本历史。"))
+        }
+        return attributed
     }
 }
 

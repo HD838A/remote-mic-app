@@ -75,7 +75,7 @@
 可使用同一 Release 提供的 `.sha256` 文件核对 DMG：
 
 ```bash
-shasum -a 256 -c Remote-Mic-1.3.0.dmg.sha256
+shasum -a 256 -c "Remote-Mic-<版本>.dmg.sha256"
 ```
 
 ## 自动更新提示 Autoupdate 没有执行权限

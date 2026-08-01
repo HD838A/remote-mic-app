@@ -74,7 +74,7 @@ Starting with v1.3.0, official releases sign the app, both PKGs, and the DMG wit
 
 Verify a DMG with the checksum file from the same release:
 
-    shasum -a 256 -c Remote-Mic-1.3.0.dmg.sha256
+    shasum -a 256 -c "Remote-Mic-<version>.dmg.sha256"
 
 ## Automatic update reports missing Autoupdate executable permissions
 

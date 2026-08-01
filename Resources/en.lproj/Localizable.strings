@@ -209,7 +209,6 @@
 "在 Dock 中显示应用图标" = "Show app icon in the Dock";
 "关闭后仍可通过菜单栏图标打开无线麦。" = "When hidden, Remote Mic remains available from the menu bar.";
 "应用语言" = "App Language";
-"更改后界面会立即更新，无需重新启动。" = "Changes apply immediately without restarting the app.";
 "你的无线语音工作台，配置、统计与隐私一目了然" = "Your wireless voice workspace, with settings, usage, and privacy at a glance";
 "让遥控器成为随手可用的 Mac 语音与快捷操作入口。" = "Turn your remote into an always-ready voice and shortcut controller for your Mac.";
 "数据仅存本机" = "Data stays on this Mac";
@@ -224,6 +223,11 @@
 "导入配置…" = "Import Configuration…";
 "应用偏好" = "App Preferences";
 "更新与支持" = "Updates & Support";
+"版本与更新" = "Version & Updates";
+"当前版本" = "Current Version";
+"版本历史" = "Version History";
+"关闭" = "Close";
+"无法加载版本历史。" = "Version history could not be loaded.";
 "%@ 小时 %@ 分钟" = "%@ hr %@ min";
 "%@ 分钟 %@ 秒" = "%@ min %@ sec";
 "%@ 秒" = "%@ sec";

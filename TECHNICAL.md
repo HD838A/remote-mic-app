@@ -2,7 +2,7 @@
 
 [English](TECHNICAL.en.md)
 
-本文面向开发、审计和发布人员，描述 `1.4.0 (24)` 对应代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
+本文面向开发、审计和发布人员，描述当前代码的实现、构建和发布约束。普通用户请阅读 [README.md](README.md)。
 
 ## 支持范围
 
@@ -10,7 +10,7 @@
 - 架构：Apple Silicon `arm64`；
 - 目标遥控器：小米蓝牙遥控器 2 Pro / RC003；
 - HID 标识：Vendor ID `0x2717`、Product ID `0x32B8`；
-- Swift 工具链：Swift 6.2，源码以 Swift 5 语言模式编译；
+- Swift tools version：6.2；发布机当前使用 Swift 6.3，源码以 Swift 5 语言模式编译；
 - 发布签名：本地开发构建保持带固定 designated requirement 的 ad-hoc 签名。自 v1.3.0 起的正式发布使用 Developer ID Application 与 Developer ID Installer 签名；应用和驱动启用 Hardened Runtime 与可信时间戳，应用、两个 PKG 和 DMG 都经过 Apple 公证并 stapled。
 
 `Package.swift`、`Resources/Info.plist`、构建脚本和验证脚本都把最低系统版本固定为 macOS 14.0，并验证发布二进制只有 `arm64` 架构。
@@ -133,7 +133,7 @@ xcrun swift test
 ./scripts/verify-app.sh
 ```
 
-`scripts/test.sh` 运行 36 项协议/策略自检并编译完整应用。当前 Swift Testing 测试为 62 项，覆盖 ATVV、蓝牙生命周期、音频设备策略、按键、权限、语言选择持久化与即时 Locale 更新、Fn 映射和测试音。
+`scripts/test.sh` 运行 36 项协议/策略自检并编译完整应用。当前 Swift Testing 测试为 76 项，覆盖 ATVV、蓝牙生命周期、音频设备策略、按键、权限、语言选择持久化与即时 Locale 更新、Fn 映射和测试音。
 
 构建并启动应用：
 
@@ -159,8 +159,8 @@ xcrun swift test
 - `dist/MiRemoteV2ch.driver`；
 - `dist/Install Remote Mic.pkg`；
 - `dist/Uninstall Remote Mic.pkg`；
-- `dist/Remote-Mic-1.4.0.dmg`；
-- `dist/Remote-Mic-1.4.0.dmg.sha256`。
+- `dist/Remote-Mic-<版本>.dmg`；
+- `dist/Remote-Mic-<版本>.dmg.sha256`。
 
 DMG 根目录严格只有四项：
 
@@ -177,7 +177,7 @@ Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应
 
 候选版本先以 GitHub pre-release 发布。`notarize-release.sh` 使用固定 `RELEASE_TAG` 生成 appcast 的发布页和 enclosure URL，不使用 `latest/download`；应用内的 `SUFeedURL` 仍固定为 `releases/latest/download/appcast.xml`。GitHub 的 latest release 排除 draft 和 pre-release，因此普通用户继续取得上一个正式版本的 appcast，不会检测到候选版本。
 
-`scripts/publish-release.sh prerelease` 只接受干净、已推送且由同一远端 Tag 指向的源提交，发布 ZIP、两个 PKG、DMG、校验文件和 appcast，并确认 pre-release 未改变 latest release。脚本随后从公开 Release 回下载六个资产并逐字节比较。测试机可临时执行 `defaults write com.hd838a.RemoteMic SUFeedURL <候选版本 appcast URL>`，重启应用后完成从当前正式版本到候选版本的 Sparkle 更新测试；测试结束必须执行 `defaults delete com.hd838a.RemoteMic SUFeedURL` 并重启应用，恢复正式更新源。
+`scripts/publish-release.sh prerelease` 只接受干净、已推送且由同一远端 Tag 指向的源提交，发布 ZIP、两个 PKG、DMG、校验文件和 appcast，并确认 pre-release 未改变 latest release。脚本随后从公开 Release 回下载六个资产并逐字节比较。测试机应使用 Sparkle CLI 的单次 `--feed-url <候选版本 appcast URL>` 覆盖完成候选探测或更新，不写入持久化的 `SUFeedURL` 偏好；实际安装候选版本时需要处于已解锁的图形会话。
 
 候选版本通过干净安装、运行和 Sparkle 端到端更新测试后，运行 `scripts/publish-release.sh promote` 将相同 Tag 和相同资产晋升为正式版。晋升后必须再次确认 latest appcast 与候选版本 appcast 逐字节一致。失败的候选版本不得覆盖资产或晋升；应递增显示版本和 `CFBundleVersion`，重新构建、签名、公证并发布新的 pre-release。
 

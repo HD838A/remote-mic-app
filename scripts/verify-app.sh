@@ -66,6 +66,7 @@ for localization in en zh-Hans; do
   test -f "$RESOURCE_DIR/Localizable.strings"
   test -f "$RESOURCE_DIR/DoubaoInputMethodCompatibility.md"
   test -f "$RESOURCE_DIR/FirstInstallGuide.md"
+  test -f "$RESOURCE_DIR/ReleaseHistory.md"
   plutil -lint "$RESOURCE_DIR/InfoPlist.strings"
   plutil -lint "$RESOURCE_DIR/Localizable.strings"
 done
@@ -117,7 +118,7 @@ test "$ARCHS" = "arm64"
 xcrun vtool -show-build "$BINARY" | rg -q 'minos 14\.0'
 otool -l "$BINARY" | rg -A2 'LC_RPATH' | rg -q '@executable_path/\.\./Frameworks'
 
-EXPECTED_APP_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/Resources/en.lproj/DoubaoInputMethodCompatibility.md\nContents/Resources/en.lproj/FirstInstallGuide.md\nContents/Resources/en.lproj/InfoPlist.strings\nContents/Resources/en.lproj/Localizable.strings\nContents/Resources/zh-Hans.lproj/DoubaoInputMethodCompatibility.md\nContents/Resources/zh-Hans.lproj/FirstInstallGuide.md\nContents/Resources/zh-Hans.lproj/InfoPlist.strings\nContents/Resources/zh-Hans.lproj/Localizable.strings\nContents/_CodeSignature/CodeResources'
+EXPECTED_APP_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/Resources/en.lproj/DoubaoInputMethodCompatibility.md\nContents/Resources/en.lproj/FirstInstallGuide.md\nContents/Resources/en.lproj/InfoPlist.strings\nContents/Resources/en.lproj/Localizable.strings\nContents/Resources/en.lproj/ReleaseHistory.md\nContents/Resources/zh-Hans.lproj/DoubaoInputMethodCompatibility.md\nContents/Resources/zh-Hans.lproj/FirstInstallGuide.md\nContents/Resources/zh-Hans.lproj/InfoPlist.strings\nContents/Resources/zh-Hans.lproj/Localizable.strings\nContents/Resources/zh-Hans.lproj/ReleaseHistory.md\nContents/_CodeSignature/CodeResources'
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"

@@ -3,7 +3,7 @@
 - 研究日期：2026-07-30
 - 研究对象：[HOLODATA-COM/SiriRemoteForge](https://github.com/HOLODATA-COM/SiriRemoteForge)
 - SiriRemoteForge 研究提交：[`10581a960f0738e36516defb79db24b18df214d3`](https://github.com/HOLODATA-COM/SiriRemoteForge/tree/10581a960f0738e36516defb79db24b18df214d3)
-- 当前仓库基线：`Remote Mic 1.4.8 (32)`，macOS 26+，Apple Silicon
+- 研究时仓库基线：`Remote Mic 1.4.8 (32)`，macOS 26+，Apple Silicon；当前产品基线已降低为 macOS 14+、Apple Silicon
 
 本文只做源码、安装包逻辑和公开项目的研究，没有修改应用代码、构建脚本、签名配置或安装包逻辑，也没有在当前项目中安装 SiriRemoteForge 的系统组件。
 
@@ -24,7 +24,7 @@
 - **已由源码确认**：可以从当前仓库或指定提交直接确认实现和安装行为。
 - **上游已实机验证**：SiriRemoteForge 文档记录了指定硬件上的实际捕获或系统验证，但本项目尚未复现。
 - **外部项目佐证**：其他公开项目独立得到相同协议或平台结论。
-- **待本项目验证**：在当前 macOS 26、当前签名、公证和目标 A2854 固件组合上仍需实机验证。
+- **待本项目验证**：在当前签名、公证和目标 A2854 固件组合上，仍需覆盖 macOS 14 至 macOS 26 的受支持系统范围进行实机验证。
 
 ## 当前“无线麦”的基线
 
@@ -278,7 +278,7 @@ PacketLogger/root capture helper
 ## 当前无线麦相对更成熟的部分
 
 - 已有 Developer ID 签名、公证、staple 和完整发布验证；
-- 已有面向 macOS 26、Apple Silicon 的产品化安装和卸载包；
+- 研究时已有面向 macOS 26、Apple Silicon 的产品化安装和卸载包；当前产品最低版本已降低为 macOS 14；
 - 已有 Sparkle 更新、多语言、设置 UI 和日志隐私规则；
 - 已有豆包兼容的 `MiRemoteV 2ch`；
 - RC003 语音通过公开 CoreBluetooth ATVV 直接进入应用，不需要 root、PacketLogger 或 HCI 调试；
@@ -298,7 +298,7 @@ PacketLogger/root capture helper
 - 必须授权辅助功能；按键/HID 还需要输入监控；
 - 依赖私有 `MultitouchSupport`，不是受 Apple 保证的公开 API；
 - 只应承诺第三代 USB-C Siri Remote，其他代际需要单独硬件验证；
-- 必须在本项目正式签名、公证的 macOS 26 构建上验证触摸回调不会被 Hardened Runtime 杀死；
+- 必须在本项目正式签名、公证的 macOS 14 至 macOS 26 构建矩阵上验证触摸回调不会被 Hardened Runtime 杀死；
 - 需要实测触摸睡眠、唤醒、重连、点击环和触摸同时到达时的抑制策略。
 
 ## 其他 GitHub 项目研究
@@ -352,7 +352,7 @@ PacketLogger/root capture helper
 ### 仍需验证的机会
 
 - Wand 的公开 `v0.2.0` 证明 Apple 公证服务能够接受一个链接 `MultitouchSupport`、带 Hardened Runtime 的应用；这说明“私有框架一定无法公证”不是绝对结论。
-- 但公证成功不等于触摸回调在所有机器和系统版本上运行成功。SiriRemoteForge 和 Wand 的运行时结论不一致，应以本项目 macOS 26 + A2854 的签名产物实测为准。
+- 但公证成功不等于触摸回调在所有机器和系统版本上运行成功。SiriRemoteForge 和 Wand 的运行时结论不一致，应以本项目 macOS 14 与 macOS 26 + A2854 的签名产物实测为准。
 - 若主 App 的 Hardened Runtime 与触摸回调确实冲突，可以评估把触摸采集隔离到独立进程，但这会新增 IPC、签名、TCC 归属和生命周期复杂度，不能在没有验证前承诺可行。
 
 ## 许可和再分发
@@ -378,7 +378,7 @@ PacketLogger/root capture helper
 - 在独立实验构建中验证 `MultitouchSupport` 触摸帧；
 - 同时验证本地开发签名、Developer ID + Hardened Runtime、公证后三种产物；
 - 先支持鼠标移动、双指滚动和点击，再决定是否加入圆周滚动、拖拽和手势；
-- 只有通过 macOS 26 + A2854 实机稳定性测试后，才写入正式功能承诺。
+- 只有通过 macOS 14 与 macOS 26 + A2854 实机稳定性测试后，才写入正式功能承诺。
 
 ### 阶段 3：独立评估麦克风
 
@@ -395,13 +395,13 @@ PacketLogger/root capture helper
 - 为 root helper、router、HAL、PKG、DMG 建立完整签名、公证和安装后验证；
 - 提供 HCI 设置备份/恢复、卸载器、安装 watchdog 和失败回滚；
 - 明确 Sparkle 只更新 App，系统组件由 PKG 版本管理；
-- 在多台 Mac、多个 macOS 26 小版本和多个 A2854 固件上完成硬件验收。
+- 在多台 Mac、覆盖 macOS 14 至 macOS 26 的代表性系统版本和多个 A2854 固件上完成硬件验收。
 
 ## 尚未解决的问题
 
 1. SiriRemoteForge 的触摸回调为何在其 Hardened Runtime 构建中被杀，而 Wand 的公证产物仍启用了 Hardened Runtime；两者在编译、签名或调用方式上的差异尚未定位。
 2. Wand 的触摸功能在公开源码中存在硬件验证不足的注释，不能用 README 或签名结果代替实机验收。
-3. PacketLogger 和 `/Library/Preferences/com.apple.MobileBluetooth.debug` 的行为是否在所有 macOS 26 小版本一致。
+3. PacketLogger 和 `/Library/Preferences/com.apple.MobileBluetooth.debug` 的行为是否在 macOS 14 至 macOS 26 的受支持系统范围内一致。
 4. HCI 捕获会包含同一蓝牙控制器上的其他通信；应如何最小化捕获、限制文件权限并及时删除。
 5. Apple Remote 语音帧在不同固件、不同连接 handle 和断线重连后的识别稳定性。
 6. 复用 `MiRemoteV 2ch` 时，root capture helper 与用户会话 App 之间的 IPC、安全和生命周期设计。

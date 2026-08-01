@@ -5,14 +5,18 @@
   - Windows 与 macOS 必须独立构建、签名、打包、验证和发布：Windows 当前决定只使用免费自签 Authenticode 证书与 EXE/MSI/ZIP 产物，不购买微软/公共 CA 签名，也不复用 Apple Developer ID、APP/PKG/DMG、公证或 Sparkle 流水线。自签版本仍会出现未知发布者或 SmartScreen 提示。
   - 总体方案见 [Windows 支持可行性研究](Research/WindowsSupport/README.md)。
   - fork、Release、CI、许可与最终排名见 [Windows 源码与 fork 对比](Research/WindowsSupport/candidate-comparison.md)。
-- [ ] 将最低支持版本降低到 macOS 14.0，仅支持 Apple Silicon Mac
+- [x] 将最低支持版本降低到 macOS 14.0，仅支持 Apple Silicon Mac
   - macOS 14.0、14.4 和 15.0 的 `arm64` 编译探测结果完全一致：66 条可用性诊断全部集中在 `SettingsView.swift` 的 macOS 26 Liquid Glass API，没有额外核心功能编译错误。
   - MiRemoteV 2ch 已成功构建为 `arm64`、Mach-O `minos 14.0`；Sparkle 2.9.4 的 Apple Silicon Framework 最低版本为 macOS 11.0。
   - macOS 26 继续使用原生 Liquid Glass；macOS 14/15 使用非 Glass 系统兼容样式，保持功能和布局可用，不要求视觉完全一致。
   - 发布产物继续只包含 `arm64`，不支持 Intel、`x86_64` 或 Universal Binary；同步调整并验证 App、MiRemoteV 2ch、PKG、DMG、Sparkle 更新和公证流程。
   - 代码与发布机验证已完成：macOS 14.0 App 编译、36 项 Self Test、76 项 Swift Testing、App/驱动 `minos 14.0`、两个 PKG 和 DMG 的结构及权限验证均通过。
   - 发布机运行时审计发现并修复了本地化订阅触发菜单重建时复用状态项被同时插入两个 `NSMenu` 的 AppKit 断言；启动和语言切换必须保持无该异常。
-  - 完整研究、实现边界和验收门禁见 [macOS 14 支持评估](Research/MacOS14Support/README.md)。当前只发布 pre-release；在真实 macOS 14 Apple Silicon 机器完成蓝牙、HID、权限、音频驱动和 Sparkle 端到端运行时验收后才能勾选并晋升正式版。
+  - v1.4.12 以 pre-release 发布，v1.4.13 已晋升正式版；最低版本、架构、签名、公证和 Sparkle 元数据均已进入正式发布链。
+  - 完整研究、实现边界和验收要求见 [macOS 14 支持评估](Research/MacOS14Support/README.md)。
+- [ ] 在真实 macOS 14 Apple Silicon 机器完成运行时验收
+  - 仍需覆盖安装与卸载、降级界面、蓝牙配对与重连、HID、权限、ATVV 音频、MiRemoteV 2ch、Sparkle 更新、睡眠唤醒和音频路由变化。
+  - 正式发布状态不能替代真机证据；完成后应把系统版本、硬件、安装方式和结果写入 [macOS 14 支持评估](Research/MacOS14Support/README.md)。
 - [x] ~~自动聚焦输入框~~（已完成：打开 Codex、Claude、cmux 后自动聚焦其输入区域）
 - [x] ~~配置导入导出~~（已完成：支持版本化 JSON 导入导出全部个性化设置；本地使用统计不随配置迁移）
 - [x] ~~按键一次后长时间语音输入~~（已测试：遥控器硬件不支持，必须长按语音键才能持续收音）

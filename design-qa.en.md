@@ -5,7 +5,7 @@
 ## Review scope
 
 - Settings window: minimum size 800×650 and freely resizable
-- Pages: Connection & Voice, Button Mapping, and Permissions & Privacy
+- Pages: Connection & Voice, Button Mapping, Permissions & Privacy, and About
 - Repository screenshots:
   - [Connection & Voice](Screenshots/connection-and-voice.png)
   - [Button Mapping](Screenshots/key-mapping.png)
@@ -13,13 +13,14 @@
 
 ## Current implementation
 
-- The settings UI uses a narrow sidebar, header, and layered content areas. The primary actions on all three pages remain available at the minimum window size.
+- The settings UI uses a narrow sidebar, header, and layered content areas. The primary actions on all four pages remain available at the minimum window size.
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
 - It uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
 - Panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
 - The UI does not show a separate mute key that is absent from the physical remote.
+- About keeps the current version and update check together, displays every language option at once, and presents localized version history in a sheet.
 
 ## Code locations
 

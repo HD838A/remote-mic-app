@@ -42,9 +42,9 @@ Remote Mic appears in the Dock and remains in the menu bar after launch:
 - Left-click the icon to open Settings.
 - Right-click the icon to show status, reconnect, logs, About, version, update, GitHub, language, and Quit actions.
 
-The **About** page at the bottom of the Settings sidebar provides version, update, GitHub, language, Quit, and Dock display controls. Turn off **Show app icon in the Dock** to keep Remote Mic available only from its menu bar entry; the Dock icon can be restored from the same page.
+The **About** page at the bottom of the Settings sidebar provides version, update, version history, GitHub, language, Quit, and Dock display controls. Turn off **Show app icon in the Dock** to keep Remote Mic available only from its menu bar entry; the Dock icon can be restored from the same page.
 
-Choose **System Default**, **简体中文**, or **English** under **App Language**. Remote Mic's open settings window, status text, menu, and built-in help update immediately; restarting the app is not required. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
+**App Language** displays **System Default**, **简体中文**, and **English** together. The settings window, status text, menu, and built-in help follow the selection. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
 
 The app checks for updates once per day and asks before installing a newer version; it does not silently download or install updates. **Check for Updates…** is available from both the About page and the right-click menu. Sparkle updates the app bundle only; the compatible microphone driver is managed by the installer in the DMG.
 
