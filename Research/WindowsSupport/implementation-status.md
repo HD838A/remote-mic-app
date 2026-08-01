@@ -4,7 +4,7 @@
 - 开发环境：macOS，不安装 Windows 模拟器或虚拟机
 - Windows 目标：Windows 10 1809+ / Windows 11 x64
 - 当前仓库：公开仓库 `HD838A/remote-mic-app`
-- 状态：最小实现和构建定义已落地；Windows Runner 与真实 RC003 验收待执行
+- 状态：Windows Runner unsigned 打包已通过；真实 RC003 与免费自签 tag 验收待执行
 
 ## 最终技术选择
 
@@ -114,13 +114,22 @@ Release Runner 临时把证书导入当前用户证书库，签署主 EXE，并�
 
 在 macOS 上首次运行移植测试：149 项中 147 项通过，2 项仅因本机缺少 NumPy。随后在 `/tmp` 一次性虚拟环境安装固定依赖，并新增配置、应用资源清理、入口退出码和发布边界测试；最终 163 项测试全部通过。`compileall`、`--dry-run`、TOML/YAML/Spec 解析和 shell 语法检查也已通过。
 
-免费证书脚本已用临时密码实际执行：生成的证书为 3072-bit RSA、`CA:false`、仅含 Code Signing EKU，PFX 使用密码加密，所有产物均被 Git 忽略；验证后已删除该测试证书。Mac 上没有 PowerShell、Inno Setup 和 SignTool，因此这些 Windows 专用脚本的真实执行仍由首次 Windows Actions 完成。
+免费证书脚本已用临时密码实际执行：生成的证书为 3072-bit RSA、`CA:false`、仅含 Code Signing EKU，PFX 使用密码加密，所有产物均被 Git 忽略；验证后已删除该测试证书。Mac 上没有 SignTool，因此正式自签仍由后续 `windows-rc003-v*` tag 构建验证。
 
-当前不能标记“Windows 版本完成”，因为尚缺：
+2026-08-01 的首次 Windows Runner 因 Inno Setup `[Icons]` 不支持 `runhidden` 标志失败；修正为 PowerShell `-WindowStyle Hidden` 后，[Actions run 30706328727](https://github.com/HD838A/remote-mic-app/actions/runs/30706328727) 在真实 `windows-latest` Runner 上完成：
 
-- 本仓库 workflow 的首次真实 Windows Runner 成功记录；
-- Windows 安装器和签名产物下载检查；
-- 真实 RC003 + VB-CABLE 端到端验收。
+- Windows 依赖安装和 164 项测试；
+- PyInstaller one-dir 和内置 EXE `--dry-run`；
+- Inno Setup 安装器编译；
+- portable ZIP、`SHA256SUMS.txt` 和 artifact 上传。
+
+下载后的 artifact `RemoteMicRC003-0.1.0-ci.2-unsigned-windows-x64` 约 44.4 MB，其中安装器约 18 MB、portable ZIP 约 25 MB。Mac 侧重新计算两个 SHA-256 均匹配；ZIP 内容扫描确认没有 Frida、VB-CABLE 安装器/驱动、WUDFHost、ImeService 或 DJI 文件。
+
+当前仍不能标记“Windows 版本完成”，因为尚缺：
+
+- 免费自签 `windows-rc003-v*` tag 的 SignTool、签名安装器/卸载器和证书指纹验证；
+- 真实 Windows 机器上的安装、启动、停止和卸载体验；
+- 真实 RC003 + 用户自行安装的 VB-CABLE 端到端验收。
 
 ## 结论
 

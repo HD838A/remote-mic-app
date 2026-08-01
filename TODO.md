@@ -4,7 +4,7 @@
   - 当前范围只包含小米 RC003 麦克风；已按“选择性移植 PR 核心”落地 WinRT BLE、ATVV/ADPCM、显式音频端点、最小设置页、重连和单实例保护。第一版不包含 DJI、Frida、WUDFHost 注入、豆包进程附加、按键注入或 VB-CABLE 分发。
   - Windows 与 macOS 独立构建、签名、打包、验证和发布：Windows 使用独立 PyInstaller one-dir、Inno Setup 安装器 EXE 和 portable ZIP，不生成 MSI，也不复用 Apple Developer ID、APP/PKG/DMG、公证或 Sparkle 流水线。
   - 公开仓库的标准 `windows-latest` GitHub Runner 当前不收取 Actions 分钟费用；PR/分支构建为 unsigned，`windows-rc003-v*` tag 使用 Mac 生成的免费自签 Authenticode PFX。自签成本为 0，但仍会出现未知发布者、签名链不受信任或 SmartScreen 提示。
-  - 此条仍未完成：必须先取得本仓库 Windows Actions 成功记录，并在真实 Windows + RC003 + 用户自行安装的 VB-CABLE 上完成端到端验收。
+  - unsigned Windows Actions 已在 [run 30706328727](https://github.com/HD838A/remote-mic-app/actions/runs/30706328727) 成功生成安装器 EXE、portable ZIP 和 SHA-256；此条仍未完成，尚需免费自签 tag 验证及真实 Windows + RC003 + 用户自行安装的 VB-CABLE 端到端验收。
   - 总体方案见 [Windows 支持可行性研究](Research/WindowsSupport/README.md)。
   - 当前代码、打包、免费 CI、自签和无 Windows 电脑测试方案见 [Windows RC003 实施状态](Research/WindowsSupport/implementation-status.md)。
   - fork、Release、CI、许可与最终排名见 [Windows 源码与 fork 对比](Research/WindowsSupport/candidate-comparison.md)。
