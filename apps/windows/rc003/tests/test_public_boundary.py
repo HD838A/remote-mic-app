@@ -35,6 +35,14 @@ class PublicBoundaryTests(unittest.TestCase):
         self.assertNotIn("runas", installer)
         self.assertIn("privilegesrequired=lowest", installer)
 
+    def test_stop_shortcut_uses_powershell_window_style_not_invalid_icon_flag(self):
+        installer = (RC003_ROOT / "installer" / "RemoteMicRC003Setup.iss").read_text(
+            encoding="utf-8"
+        ).lower()
+        icons = installer.split("[icons]", 1)[1].split("[run]", 1)[0]
+        self.assertNotIn("runhidden", icons)
+        self.assertIn("-windowstyle hidden", icons)
+
     def test_windows_workflow_is_separate_from_macos_packaging(self):
         workflow = (REPO_ROOT / ".github" / "workflows" / "windows-rc003-ci.yml").read_text(
             encoding="utf-8"

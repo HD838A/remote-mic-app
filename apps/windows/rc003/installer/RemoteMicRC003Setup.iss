@@ -45,7 +45,7 @@ Source: "..\ATTRIBUTION.md"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\Remote Mic · RC003 设置"; Filename: "{app}\{#AppExeName}"; Parameters: "--settings"
 Name: "{group}\启动 RC003 麦克风桥接"; Filename: "{app}\{#AppExeName}"; Parameters: "--bridge"
-Name: "{group}\停止 RC003 麦克风桥接"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\stop-app.ps1"""; Flags: runhidden
+Name: "{group}\停止 RC003 麦克风桥接"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\stop-app.ps1"""
 Name: "{group}\卸载 Remote Mic · RC003"; Filename: "{uninstallexe}"
 
 [Run]
