@@ -6,7 +6,7 @@
 
 Copyright (C) 2026 Remote Mic contributors
 
-This program is a macOS adaptation whose implementation references the GPL-3.0-only project [xxb26553663-star/remote-bridge-hub](https://github.com/xxb26553663-star/remote-bridge-hub), at reference commit 8a93f321ac71a602300c6cd77f7256fa4b63068e.
+This repository contains a native macOS adaptation and an independently packaged Windows RC003 microphone client. The implementation references the GPL-3.0-only project [xxb26553663-star/remote-bridge-hub](https://github.com/xxb26553663-star/remote-bridge-hub), at reference commit 8a93f321ac71a602300c6cd77f7256fa4b63068e; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the Windows selective-port provenance.
 
 This project adds:
 
@@ -16,6 +16,7 @@ This project adds:
 - IOHID permissions, button reading, and macOS action injection;
 - macOS build, test, installer, and release workflows;
 - a Doubao-compatible MiRemoteV2ch.driver solution built from pinned BlackHole source.
+- an independent Windows RC003 WinRT BLE/ATVV microphone bridge, Windows CI, PyInstaller/Inno Setup packaging, and a free self-signed release workflow.
 
 The software code in this adaptation is released under GPL-3.0-only. See [LICENSE.md](LICENSE.md) for the complete license and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party sources and attribution.
 

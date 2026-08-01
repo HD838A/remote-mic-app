@@ -9,6 +9,17 @@
 
 The Xiaomi RC003 ATVV UUIDs, microphone command behavior, IMA/DVI ADPCM decoding order, capability parsing, and HID usage mapping were adapted from this project. The macOS implementation uses Apple public frameworks and does not include the upstream Windows injection, VB-CABLE packaging, commercial branding, or customer systems.
 
+## Windows RC003 selective port
+
+- Source PR: `HD838A/remote-mic-app#3`
+- Reference revision: `c8f68611e4d56440a4ae527a10195c18bed1409e`
+- Related fork: <https://github.com/miaomiaozii/windows-remote-mic-app>
+- License: GNU General Public License v3.0 only (`GPL-3.0-only`)
+
+The independent Windows client under `apps/windows/rc003` selectively ports the WinRT BLE/GATT transport, ATVV session, IMA/DVI ADPCM decoder, PortAudio playback, reconnection, identity, and single-instance logic. It does not include the PR's DJI support, Frida/WUDFHost injection, input-method attachment, Raw Input/SendInput mapping, Qt/QML UI, or VB-CABLE bundle.
+
+Its pinned runtime/build dependencies include NumPy (BSD-3-Clause), python-sounddevice (MIT; Windows wheels use PortAudio), PyWinRT projections (MIT), PyInstaller (GPL-2.0-or-later with its bootloader exception), and Inno Setup (Inno Setup license). See each pinned package or tool distribution for its complete license text. VB-CABLE is not distributed by this repository; the app only links to the vendor website for optional user-managed installation.
+
 ## BlackHole
 
 - Project: `ExistentialAudio/BlackHole`

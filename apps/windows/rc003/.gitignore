@@ -1,0 +1,7 @@
+.venv/
+build/pyinstaller-work/
+build/secrets/
+dist/
+*.spec.bak
+__pycache__/
+*.py[cod]

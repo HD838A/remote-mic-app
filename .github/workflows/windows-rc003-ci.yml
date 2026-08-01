@@ -1,0 +1,102 @@
+name: windows-rc003-ci
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "windows-rc003-v*"
+    paths:
+      - "apps/windows/rc003/**"
+      - ".github/workflows/windows-rc003-ci.yml"
+      - "LICENSE.md"
+      - "COPYRIGHT.md"
+      - "THIRD_PARTY_NOTICES.md"
+  pull_request:
+    paths:
+      - "apps/windows/rc003/**"
+      - ".github/workflows/windows-rc003-ci.yml"
+      - "LICENSE.md"
+      - "COPYRIGHT.md"
+      - "THIRD_PARTY_NOTICES.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-rc003-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-build-package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: apps/windows/rc003
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Windows package version
+        run: |
+          $prefix = "refs/tags/windows-rc003-v"
+          if ($env:GITHUB_REF.StartsWith($prefix)) {
+            $version = $env:GITHUB_REF.Substring($prefix.Length)
+            $release = "true"
+          } else {
+            $version = "0.1.0-ci.$env:GITHUB_RUN_NUMBER-unsigned"
+            $release = "false"
+          }
+          "WINDOWS_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WINDOWS_RELEASE=$release" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/windows/rc003/requirements-dev.txt
+
+      - name: Install Inno Setup 6
+        run: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Compile, test and build unsigned Windows candidate
+        run: |
+          ./build/build-windows.ps1 -PythonExecutable python -Version $env:WINDOWS_VERSION -SkipPackage
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sign tag build with free self-signed Authenticode certificate
+        if: env.WINDOWS_RELEASE == 'true'
+        env:
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "Windows tag 构建缺少免费自签证书 Secrets；拒绝发布 unsigned 正式包。"
+          }
+          ./build/sign-windows.ps1 -Version $env:WINDOWS_VERSION
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package Windows-only EXE installer and portable ZIP
+        run: |
+          if ($env:WINDOWS_RELEASE -eq "true") {
+            ./build/package-windows.ps1 -Version $env:WINDOWS_VERSION -IncludeCertificateFingerprint
+          } else {
+            ./build/package-windows.ps1 -Version $env:WINDOWS_VERSION
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RemoteMicRC003-${{ env.WINDOWS_VERSION }}-windows-x64
+          path: apps/windows/rc003/dist/release/
+          if-no-files-found: error
+          retention-days: 7

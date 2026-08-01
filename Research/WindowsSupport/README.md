@@ -2,11 +2,13 @@
 
 - 研究日期：2026-07-31
 - 当前仓库：[HD838A/remote-mic-app](https://github.com/HD838A/remote-mic-app)
-- 当前仓库研究基线：[`bbf6895389a70343246bcf1f92ae9e06df3e9c47`](https://github.com/HD838A/remote-mic-app/tree/bbf6895389a70343246bcf1f92ae9e06df3e9c47)
+- 当前实施基线：`a965d193c5f7a5b28b26d2340d372d87aff09be5`
 - 首选 Windows fork：[`miaomiaozii/windows-remote-mic-app@271ed794`](https://github.com/miaomiaozii/windows-remote-mic-app/tree/271ed7947eec19c4c691ed3ba97f338461be8051)
 - 当前实施范围：**仅小米蓝牙遥控器 2 Pro / RC003**
 
-本文只做源码、发布资产和公开资料研究，没有修改应用代码，没有安装 Windows 驱动，没有操作真实 RC003 或 Apple Siri Remote，也没有在 Windows 主机上完成独立硬件验收。
+本文最初只做源码、发布资产和公开资料研究；当前已经按研究结论在 [`apps/windows/rc003`](../../apps/windows/rc003/) 落地最小麦克风实现。仍未安装 Windows 驱动、操作真实 RC003 或在 Windows 主机上完成独立硬件验收。
+
+当前代码、独立打包、公开仓库免费 CI、自签证书和无 Windows 电脑测试边界见 [Windows RC003 实施状态](implementation-status.md)。
 
 候选项目的逐项证据见 [Windows 源码与 fork 对比](candidate-comparison.md)。Apple Siri Remote 的 Windows 专项研究已经完成并保留在 [Apple Siri Remote Windows 路线](apple-siri-remote.md)，但目前暂停，不进入本方案的实施、验收和发布范围。
 
@@ -16,10 +18,10 @@
 2. **最佳短期路线是以该 Windows fork 为产品源码基线，而不是移植现有 Swift/AppKit 应用。** macOS 的 CoreBluetooth、IOHID、CoreAudio HAL、AppKit、Sparkle 和签名脚本都不能在 Windows 直接复用；可复用的是协议事实、测试向量、设备画像、产品交互和隐私约束。
 3. **麦克风主链路在 Windows 上可行，而且不必依赖 Frida。** RC003 语音可以通过 WinRT GATT 接收并解码，再写入用户选择的播放端点。要让输入法把它当作麦克风，当前候选依赖 VB-CABLE：程序写入 `CABLE Input`，输入法选择 `CABLE Output`。
 4. **完整安装体验会比当前 macOS 版多一个第三方驱动步骤。** 基础应用可按当前候选安装到用户目录，不要求管理员权限；VB-CABLE 安装需要 UAC、管理员权限和通常一次重启。当前项目决定只使用免费自签 Windows 证书，因此即使文件带有自签 Authenticode 签名，SmartScreen 和“未知发布者”提示仍可能继续出现。
-5. **完整的 RC003 按键支持比麦克风更敏感。** Windows 普通 Raw Input 拿不到或不能可靠区分部分 HID 报告。候选使用 Frida Gadget 注入 RC003 对应的 `WUDFHost.exe`，并为豆包输入法附加 `ImeService.exe` 来处理注入标记。这需要管理员/调试权限，可能触发安全软件，也是正式产品化前最大的安全与维护风险。
+5. **第一版明确不做完整按键支持。** 上游候选为部分 HID 报告使用 Frida/WUDFHost 和输入法进程附加，但当前实现没有移植 Raw Input、SendInput、Frida、`WUDFHost.exe` 注入或 `ImeService.exe` 附加，只保留 BLE 麦克风链路。
 6. **Windows 没有 macOS 的“输入监控/辅助功能”授权模型。** 普通 BLE、Raw Input 和同完整性级别的 `SendInput` 没有对应的 TCC 弹窗；但 `SendInput` 受 UIPI 限制，不能可靠控制更高完整性级别的管理员应用。驱动安装、WUDFHost 注入和调试权限改由 UAC/管理员权限承担。
-7. **当前所有实施资源只投入 RC003 Windows 正式化。** 优先交付不依赖进程注入的 RC003 麦克风主链路，再处理普通按键、可选完整 HID tap、签名和正式安装。Apple Remote 不参与当前技术选型，也不作为 Windows 首版或后续阶段的验收项。
-8. **Windows 和 macOS 必须是两条完全独立的发布流水线。** Apple Developer ID 只能用于 macOS；Windows 在 Windows 构建环境中使用独立的免费自签 Authenticode 证书生成和签署 EXE/MSI/安装器。两端可以共享产品版本概念，但不能共享二进制、安装包、签名证书、公证或自动更新产物。
+7. **当前所有实施资源只投入 RC003 Windows 麦克风。** 已落地不依赖进程注入的麦克风主链路、最小设置页、独立打包和免费自签脚本；普通按键与完整 HID tap 不属于第一版。Apple Remote 不参与当前技术选型，也不作为 Windows 首版验收项。
+8. **Windows 和 macOS 必须是两条完全独立的发布流水线。** Apple Developer ID 只能用于 macOS；Windows 在 Windows 构建环境中使用独立的免费自签 Authenticode 证书签署应用 EXE、Inno Setup 安装器和卸载器，portable ZIP 另行发布 SHA-256。两端可以共享产品版本概念，但不能共享二进制、安装包、签名证书、公证或自动更新产物。
 
 ## 当前研究与实施范围
 
@@ -258,10 +260,10 @@ Windows 应用的 Authenticode 签名不能直接用于发布新的内核驱动�
 
 ### 基础应用
 
-当前候选使用 Inno Setup，默认安装到 `%LOCALAPPDATA%\RemoteMic\RC003`：
+当前最小实现使用 Inno Setup，默认安装到 `%LOCALAPPDATA%\RemoteMic\RC003`：
 
 ```text
-运行未签名安装器
+运行 unsigned CI 安装器或免费自签 tag 安装器
 → SmartScreen 可能警告
 → 当前用户目录安装应用
 → 创建设置/启动/停止/卸载入口
@@ -275,7 +277,7 @@ Windows 应用的 Authenticode 签名不能直接用于发布新的内核驱动�
 
 ```text
 安装基础应用
-→ 用户选择安装/修复 VB-CABLE
+→ 用户自行从 VB-Audio 官网下载并安装 VB-CABLE
 → Windows UAC
 → 运行 VB-Audio 原始驱动安装器
 → 重启 Windows
@@ -283,9 +285,9 @@ Windows 应用的 Authenticode 签名不能直接用于发布新的内核驱动�
 → 输入法选择 CABLE Output
 ```
 
-VB-CABLE 不是本项目的 GPL 代码，也不是开源库。是否允许随包分发、商业使用和品牌展示必须按 VB-Audio 的实际许可单独确认；即使技术上能打包，也不能仅凭 Donationware 描述推断全部分发权。
+VB-CABLE 不是本项目的 GPL 代码，也不是开源库。当前实现只打开厂商官网，不下载、不捆绑、不自动安装，也不代替用户接受第三方许可。
 
-### 完整按键高级组件
+### 完整按键高级组件（仅保留研究，不进入第一版）
 
 候选为部分 RC003 HID 报告使用 Frida Gadget：
 
@@ -325,31 +327,31 @@ VB-CABLE 不是本项目的 GPL 代码，也不是开源库。是否允许随包
 
 ## 推荐实施路线
 
-### 阶段 0：固定源码与法律边界
+### 阶段 0：固定源码与法律边界（已完成最小范围）
 
 - 以 `271ed7947eec19c4c691ed3ba97f338461be8051` 或后续经过审查的固定提交为基线；
 - 保留 GPL 来源和上游归属；
-- 核对 Frida、Qt、PortAudio、NumPy、VB-CABLE 的分发义务；
+- 已从当前范围删除 Frida、Qt 和 VB-CABLE 分发；保留并声明 PortAudio/sounddevice、NumPy、PyWinRT、PyInstaller 和 Inno Setup；
 - 统一 README、安装器注释和实际 Release 内容。
 
-### 阶段 1：只验证最重要的麦克风链路
+### 阶段 1：只验证最重要的麦克风链路（代码已落地，真机待验收）
 
 - Windows 11 x64 + 真实 RC003；
-- 不启用 Frida，不注入 WUDFHost 或 ImeService；
+- 代码与安装包中不包含 Frida，不注入 WUDFHost 或 ImeService；
 - 完成配对、GATT 订阅、按住说话、ADPCM 解码、CABLE Input 输出；
 - 在 Windows 听写、豆包输入法和至少一个通用语音应用中分别验证；
 - 测量首帧延迟、丢帧、增益、长时间重连和睡眠唤醒。
 
 只有这一阶段通过，才说明 Windows 版本满足“麦克风最重要”的核心目标。
 
-### 阶段 2：安全的普通按键
+### 阶段 2：安全的普通按键（暂不实施）
 
 - 先只使用 Raw Input 和 SendInput；
 - 列出无需管理员权限即可稳定识别的按键；
 - 明确管理员应用不受普通映射控制的 UIPI 限制；
 - 复用当前产品的映射语义，而不是直接复制 macOS key code。
 
-### 阶段 3：可选完整 HID tap
+### 阶段 3：可选完整 HID tap（暂不实施）
 
 - 对 Frida/WUDFHost 路线做单独威胁模型和杀毒软件兼容测试；
 - 明确启用、停用、升级和崩溃恢复；
@@ -376,8 +378,8 @@ VB-CABLE 不是本项目的 GPL 代码，也不是开源库。是否允许随包
 4. 连续 100 次语音按下/释放无卡死、无首音节稳定丢失；
 5. CABLE Input/Output 方向错误时有明确诊断；
 6. 无 Frida 模式下麦克风完全可用；
-7. 启用 Frida 时安全软件、UAC、崩溃和升级行为可解释并可恢复；
-8. 安装器、应用和所有本项目二进制完成自签签名、证书指纹、哈希和来源核验；
+7. 第一版发布产物扫描确认不包含 Frida、WUDFHost 注入和输入法进程附加；
+8. 应用主 EXE、安装器和卸载器完成自签签名，并发布证书指纹、资产哈希和来源核验信息；
 9. 卸载不会删除用户未授权删除的第三方驱动，也不会残留本项目注入进程；
 10. 不把上游 README 的真机声明当作本项目自己的验收结果。
 
