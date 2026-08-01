@@ -5,12 +5,12 @@
   - Windows 与 macOS 必须独立构建、签名、打包、验证和发布：Windows 当前决定只使用免费自签 Authenticode 证书与 EXE/MSI/ZIP 产物，不购买微软/公共 CA 签名，也不复用 Apple Developer ID、APP/PKG/DMG、公证或 Sparkle 流水线。自签版本仍会出现未知发布者或 SmartScreen 提示。
   - 总体方案见 [Windows 支持可行性研究](Research/WindowsSupport/README.md)。
   - fork、Release、CI、许可与最终排名见 [Windows 源码与 fork 对比](Research/WindowsSupport/candidate-comparison.md)。
-- [ ] 降低最低 macOS 版本，仅支持 Apple Silicon Mac
-  - 当前评估：工作量中等偏多，不是只修改一个部署版本数字。项目的 SwiftPM、Info.plist、App/驱动构建脚本、安装器、验证脚本和文档目前都固定为 macOS 26。
-  - 以 macOS 15、arm64 为目标的临时编译探测发现 66 处可用性错误，全部集中在 `SettingsView.swift` 的 macOS 26 Liquid Glass API；核心蓝牙、HID、语音、音频和 AppKit 生命周期代码没有先出现版本阻塞。Sparkle 2.9.4 的包清单声明最低支持 macOS 10.13，当前不是主要障碍。
-  - macOS 26 继续使用原生 Liquid Glass；旧系统需要为面板、按钮、选中状态和滚动边缘效果提供非 Glass 降级样式，保持功能和布局可用，不要求视觉完全一致。
-  - 发布产物继续只包含 `arm64`，明确不支持 Intel、`x86_64` 或 Universal Binary；需要同步调整并验证 App、MiRemoteV 2ch 驱动、PKG、DMG、Sparkle 更新和公证流程的最低系统版本。
-  - 实现前先确定最终最低版本（优先评估 macOS 15；若继续降低到 macOS 14 或更早，需要重新编译并扩大 API、权限和驱动兼容性检查），并在对应版本的真实 Apple Silicon Mac 上验证蓝牙配对、HID 按键、ATVV 语音、辅助功能权限、音频驱动安装及端到端更新。
+- [ ] 将最低支持版本降低到 macOS 14.0，仅支持 Apple Silicon Mac
+  - macOS 14.0、14.4 和 15.0 的 `arm64` 编译探测结果完全一致：66 条可用性诊断全部集中在 `SettingsView.swift` 的 macOS 26 Liquid Glass API，没有额外核心功能编译错误。
+  - MiRemoteV 2ch 已成功构建为 `arm64`、Mach-O `minos 14.0`；Sparkle 2.9.4 的 Apple Silicon Framework 最低版本为 macOS 11.0。
+  - macOS 26 继续使用原生 Liquid Glass；macOS 14/15 使用非 Glass 系统兼容样式，保持功能和布局可用，不要求视觉完全一致。
+  - 发布产物继续只包含 `arm64`，不支持 Intel、`x86_64` 或 Universal Binary；同步调整并验证 App、MiRemoteV 2ch、PKG、DMG、Sparkle 更新和公证流程。
+  - 完整研究、实现边界和验收门禁见 [macOS 14 支持评估](Research/MacOS14Support/README.md)。完成实现和发布机验证后才可勾选；正式晋升前仍需真实 macOS 14 Apple Silicon 机器完成端到端运行时验收。
 - [x] ~~自动聚焦输入框~~（已完成：打开 Codex、Claude、cmux 后自动聚焦其输入区域）
 - [x] ~~配置导入导出~~（已完成：支持版本化 JSON 导入导出全部个性化设置；本地使用统计不随配置迁移）
 - [x] ~~按键一次后长时间语音输入~~（已测试：遥控器硬件不支持，必须长按语音键才能持续收音）
