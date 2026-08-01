@@ -9,9 +9,18 @@
 - [x] ~~配置导入导出~~（已完成：支持版本化 JSON 导入导出全部个性化设置；本地使用统计不随配置迁移）
 - [x] ~~按键一次后长时间语音输入~~（已测试：遥控器硬件不支持，必须长按语音键才能持续收音）
 - [x] 新增 pre-release 发布，避免未实测的功能被检测到更新
+- [ ] 改进更新完成和 App 启动时的主面板可见性
+  - 更新安装成功并重启 App 后，将更新完成提示及 App 窗口置于最前方，避免弹窗被其他窗口遮挡而遭到忽略。
+  - 更新成功并重启后自动打开主面板（设置面板）；此行为始终生效，不受普通启动开关影响。
+  - App 普通启动时默认自动打开主面板，而不是只在菜单栏后台运行。
+  - 在“关于”页面增加“启动时自动打开主面板”开关，默认开启；关闭后仅取消普通启动时自动打开，用户仍可通过菜单栏手动打开主面板。
 - [ ] 解决组合快捷键配置问题，例如配置 Command + Space 唤起 Spotlight
 - [ ] 支持苹果遥控器，方便海外用户购买和使用
   - 已完成 SiriRemoteForge、Wand、siri-remote-steamos、SiriRemoteVibe 及其他相关开源项目的可行性研究；当前总体首选 SiriRemoteForge，建议按“按键 → 触摸/滚动 → 麦克风高级组件”分阶段验证。
   - 详细结论见 [SiriRemoteForge 与“无线麦”集成评估](Research/SiriRemoteForge/README.md)。
   - 三个新增候选的源码、Release 和验证对比见 [候选项目深度对比与最终选型](Research/SiriRemoteForge/candidate-comparison.md)。
   - Apple Remote 的 Windows 路线目前暂停，不属于 Windows 版本当前范围；既有研究保留在 [Apple Siri Remote 的 Windows 路线](Research/WindowsSupport/apple-siri-remote.md)，供以后备用。
+- [ ] 同一个遥控器在多台已配对 Mac 之间切换蓝牙连接（不使用网络转发）
+  - 当前结论：小米产品页与 Bluetooth SIG 官方产品记录均未声明 RC003 支持多个配对主机或主机切换；Apple 也明确说明 App 取消本地 CoreBluetooth 连接不保证底层物理链路断开。因此“在任意一台 Mac 的 App 中单击后直接抢占遥控器”目前不能判定为可实现。
+  - 必须先用同一只 RC003 和两台 Mac 验证：分别配对后无需重新配对即可来回重连、当前 Mac 释放后遥控器会重新广播、macOS HID 不会立即抢回连接。通过后可实现“当前 Mac 释放 → 目标 Mac 连接”；任一关键条件失败则纯 App 方案不支持，并在此条目标明硬件限制。
+  - 研究结论和真机验收步骤见 [RC003 多 Mac 直连切换可行性研究](Research/MultiMacControl/README.md)。
