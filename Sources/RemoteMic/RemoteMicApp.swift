@@ -106,6 +106,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func rebuildStatusMenu() {
+        statusMenu?.removeItem(connectionItem)
+        statusMenu?.removeItem(audioItem)
+        statusMenu?.removeItem(hidItem)
+
         let menu = NSMenu()
         menu.delegate = self
         menu.addItem(connectionItem)

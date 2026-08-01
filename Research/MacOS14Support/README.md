@@ -62,6 +62,7 @@
 3. App、Sparkle Framework/XPC/Autoupdate、PKG 和 DMG 的签名、公证、权限及符号链接验证通过。
 4. 安装器脚本不依赖 Xcode 或 Command Line Tools。
 5. 公开 pre-release 资产与本地产物逐字节一致，候选 appcast 使用固定 Tag URL，稳定 Latest 不改变。
+6. App 启动与语言切换不产生 AppKit 菜单项重复挂载异常；重建菜单前必须先把复用的状态项从旧菜单移除。
 
 真实 macOS 14 Apple Silicon 验证：
 
