@@ -615,6 +615,62 @@ struct RemoteButtonsTests {
         #expect(settings.action(for: .up) == .arrowUp)
     }
 
+    @Test func mainWindowLaunchPreferencePersistsAndImportsCompatibly() throws {
+        let sourceSuiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
+        let sourceSettings = AppSettings(defaults: sourceDefaults)
+        #expect(sourceSettings.openMainWindowAtLaunch)
+        sourceSettings.openMainWindowAtLaunch = false
+        #expect(!AppSettings(defaults: sourceDefaults).openMainWindowAtLaunch)
+
+        let exportedData = try sourceSettings.exportedConfigurationData()
+        let targetSuiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuiteName))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuiteName) }
+        let targetSettings = AppSettings(defaults: targetDefaults)
+        try targetSettings.importConfiguration(from: exportedData)
+        #expect(!targetSettings.openMainWindowAtLaunch)
+
+        var legacyObject = try #require(
+            JSONSerialization.jsonObject(with: exportedData) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "openMainWindowAtLaunch")
+        targetSettings.openMainWindowAtLaunch = true
+        try targetSettings.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(targetSettings.openMainWindowAtLaunch)
+    }
+
+    @Test func completedUpdateDetectionCoversBuildIncreaseAndExistingInstallMigration() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+
+        #expect(!settings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "39",
+            sparkleHadLaunchedBefore: false
+        ))
+        #expect(!settings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "39",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(settings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "40",
+            sparkleHadLaunchedBefore: true
+        ))
+
+        let migrationSuiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let migrationDefaults = try #require(UserDefaults(suiteName: migrationSuiteName))
+        defer { migrationDefaults.removePersistentDomain(forName: migrationSuiteName) }
+        #expect(AppSettings(defaults: migrationDefaults).recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "39",
+            sparkleHadLaunchedBefore: true
+        ))
+    }
+
     @Test func customShortcutsPersistAndResetWithBindings() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

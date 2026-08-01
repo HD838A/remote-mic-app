@@ -27,7 +27,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var settingsWindowController: NSWindowController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
-    private let updaterController = SPUStandardUpdaterController(
+    private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: nil,
         userDriverDelegate: nil
@@ -42,12 +42,28 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let currentBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        let completedUpdate = model.settings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: currentBuild,
+            sparkleHadLaunchedBefore: UserDefaults.standard.bool(forKey: "SUHasLaunchedBefore")
+        )
+        _ = updaterController
         installTerminationSignalHandlers()
         configureStatusItem()
         observeModel()
         observeLocalization()
         model.startIfNeeded()
         refreshMenuStatus()
+
+        if completedUpdate || model.settings.openMainWindowAtLaunch {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.showSettings()
+                if completedUpdate {
+                    self.showUpdateCompletedAlert()
+                }
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -317,6 +333,24 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func checkForUpdates() {
         updaterController.checkForUpdates(nil)
+    }
+
+    private func showUpdateCompletedAlert() {
+        guard let window = settingsWindowController?.window else { return }
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? localization.text("未知")
+        let alert = NSAlert()
+        alert.messageText = localization.text("无线麦已更新")
+        alert.informativeText = String(
+            format: localization.text("已成功更新到版本 %@。"),
+            locale: localization.locale,
+            arguments: [version]
+        )
+        alert.addButton(withTitle: localization.text("好"))
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        alert.beginSheetModal(for: window, completionHandler: nil)
     }
 
     private func setDockIconVisible(_ isVisible: Bool) {

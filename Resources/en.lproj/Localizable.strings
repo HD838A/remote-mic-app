@@ -218,7 +218,7 @@
 "语音时长" = "Voice Duration";
 "统计仅保存在这台 Mac 上，配置导出不会包含这些数据。按键次数包含应用识别的普通按键与语音键。" = "Usage totals stay on this Mac and are excluded from configuration exports. Button presses include ordinary buttons recognized by the app and the voice button.";
 "个性化配置" = "Personalized Configuration";
-"迁移增益、音频设备、按键映射、快捷键、语言与 Dock 显示设置。" = "Move gain, audio device, button mapping, shortcuts, language, and Dock display settings.";
+"迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示与启动设置。" = "Move gain, audio device, button mapping, shortcuts, language, Dock display, and launch settings.";
 "导出配置…" = "Export Configuration…";
 "导入配置…" = "Import Configuration…";
 "应用偏好" = "App Preferences";
@@ -228,6 +228,10 @@
 "版本历史" = "Version History";
 "关闭" = "Close";
 "无法加载版本历史。" = "Version history could not be loaded.";
+"启动时自动打开主面板" = "Open main window at launch";
+"关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。" = "When disabled, ordinary launches stay in the menu bar; the main window still appears after an update.";
+"无线麦已更新" = "Remote Mic Updated";
+"已成功更新到版本 %@。" = "Successfully updated to version %@.";
 "%@ 小时 %@ 分钟" = "%@ hr %@ min";
 "%@ 分钟 %@ 秒" = "%@ min %@ sec";
 "%@ 秒" = "%@ sec";

@@ -121,38 +121,32 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   BUNDLE_IDENTIFIER="$(plutil -extract CFBundleIdentifier raw -o - "$APP_DIR/Contents/Info.plist")"
   codesign \
     --force \
-    --options runtime \
     --timestamp=none \
     --sign - \
     "$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc"
   codesign \
     --force \
-    --options runtime \
     --timestamp=none \
     --preserve-metadata=entitlements \
     --sign - \
     "$SPARKLE_VERSION_DIR/XPCServices/Downloader.xpc"
   codesign \
     --force \
-    --options runtime \
     --timestamp=none \
     --sign - \
     "$SPARKLE_VERSION_DIR/Autoupdate"
   codesign \
     --force \
-    --options runtime \
     --timestamp=none \
     --sign - \
     "$SPARKLE_VERSION_DIR/Updater.app"
   codesign \
     --force \
-    --options runtime \
     --timestamp=none \
     --sign - \
     "$APP_DIR/Contents/Frameworks/Sparkle.framework"
   codesign \
     --force \
-    --options runtime \
     --timestamp=none \
     --sign - \
     --requirements "=designated => identifier \"$BUNDLE_IDENTIFIER\"" \

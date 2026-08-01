@@ -20,7 +20,7 @@
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
 - The UI does not show a separate mute key that is absent from the physical remote.
-- About keeps the current version and update check together, displays every language option at once, and presents localized version history in a sheet.
+- About keeps the current version and update check together, displays every language option at once, presents localized version history in a sheet, and controls whether ordinary launches open the main window automatically.
 
 ## Code locations
 

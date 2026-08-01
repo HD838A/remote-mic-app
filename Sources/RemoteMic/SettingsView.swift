@@ -825,7 +825,7 @@ struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text("个性化配置")
                                             .font(.headline)
-                                        Text("迁移增益、音频设备、按键映射、快捷键、语言与 Dock 显示设置。")
+                                        Text("迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示与启动设置。")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -872,6 +872,17 @@ struct SettingsView: View {
                                     ))
 
                                     Text("关闭后仍可通过菜单栏图标打开无线麦。")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+
+                                    Divider()
+
+                                    Toggle(
+                                        "启动时自动打开主面板",
+                                        isOn: $settings.openMainWindowAtLaunch
+                                    )
+
+                                    Text("关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
 

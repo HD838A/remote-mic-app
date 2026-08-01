@@ -26,5 +26,11 @@ struct BuildSigningTests {
         #expect(!source.contains("git config --get user.email"))
         let signingSource = try #require(source.components(separatedBy: "codesign --verify --deep").first)
         #expect(!signingSource.contains("--deep"))
+        let adHocSigningSource = try #require(
+            signingSource.components(
+                separatedBy: "if [[ \"$SIGNING_IDENTITY\" == \"-\" ]]; then"
+            ).last
+        )
+        #expect(!adHocSigningSource.contains("--options runtime"))
     }
 }

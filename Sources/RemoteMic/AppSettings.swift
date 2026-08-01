@@ -16,6 +16,7 @@ private struct PersonalizedConfiguration: Codable {
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     let applicationLanguage: AppLanguage
     let showDockIcon: Bool
+    let openMainWindowAtLaunch: Bool?
 }
 
 final class AppSettings: ObservableObject {
@@ -30,6 +31,8 @@ final class AppSettings: ObservableObject {
         static let peripheralIdentifier = "peripheralIdentifier"
         static let applicationLanguage = "applicationLanguage"
         static let showDockIcon = "showDockIcon"
+        static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
+        static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
         static let totalVoiceDuration = "usage.totalVoiceDuration"
     }
@@ -66,6 +69,10 @@ final class AppSettings: ObservableObject {
 
     @Published var showDockIcon: Bool {
         didSet { defaults.set(showDockIcon, forKey: Keys.showDockIcon) }
+    }
+
+    @Published var openMainWindowAtLaunch: Bool {
+        didSet { defaults.set(openMainWindowAtLaunch, forKey: Keys.openMainWindowAtLaunch) }
     }
 
     @Published private(set) var totalButtonPressCount: UInt64 {
@@ -148,6 +155,9 @@ final class AppSettings: ObservableObject {
         showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
             ? true
             : defaults.bool(forKey: Keys.showDockIcon)
+        openMainWindowAtLaunch = defaults.object(forKey: Keys.openMainWindowAtLaunch) == nil
+            ? true
+            : defaults.bool(forKey: Keys.openMainWindowAtLaunch)
         totalButtonPressCount = (
             defaults.object(forKey: Keys.totalButtonPressCount) as? NSNumber
         )?.uint64Value ?? 0
@@ -241,6 +251,22 @@ final class AppSettings: ObservableObject {
         totalVoiceDuration += duration
     }
 
+    func recordLaunchAndDetectCompletedUpdate(
+        currentBuild: String,
+        sparkleHadLaunchedBefore: Bool
+    ) -> Bool {
+        let previousBuild = defaults.string(forKey: Keys.lastLaunchedBuild)
+        defaults.set(currentBuild, forKey: Keys.lastLaunchedBuild)
+        if
+            let previousBuild,
+            let previousBuildNumber = Int(previousBuild),
+            let currentBuildNumber = Int(currentBuild)
+        {
+            return currentBuildNumber > previousBuildNumber
+        }
+        return previousBuild == nil && sparkleHadLaunchedBefore
+    }
+
     func exportedConfigurationData() throws -> Data {
         let configuration = PersonalizedConfiguration(
             formatVersion: 1,
@@ -262,7 +288,8 @@ final class AppSettings: ObservableObject {
                 }
             ),
             applicationLanguage: applicationLanguage,
-            showDockIcon: showDockIcon
+            showDockIcon: showDockIcon,
+            openMainWindowAtLaunch: openMainWindowAtLaunch
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -309,6 +336,9 @@ final class AppSettings: ObservableObject {
         secondaryButtonBindings = importedSecondaryBindings
         applicationLanguage = configuration.applicationLanguage
         showDockIcon = configuration.showDockIcon
+        if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {
+            self.openMainWindowAtLaunch = openMainWindowAtLaunch
+        }
     }
 
     private func saveBindings() {

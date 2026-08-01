@@ -1,5 +1,10 @@
 # Version History
 
+## 1.5.1
+
+- Opened the main window by default on ordinary launches, with an About-page preference to disable it.
+- Always brought the main window and update-completed confirmation to the front after an update relaunch.
+
 ## 1.5.0
 
 - Redesigned About so the version and update check appear together.
