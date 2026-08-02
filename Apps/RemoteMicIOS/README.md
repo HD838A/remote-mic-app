@@ -1,24 +1,22 @@
 # Remote Mic iOS
 
-`RemoteMicIOS` 是独立的 iOS 17+ SwiftUI 伴侣 App。它与仓库中的 macOS App 使用同一个 Apple Developer Team，但拥有独立的 Bundle ID、App Store Connect 应用记录、发布流程和软件许可证。
+`RemoteMicIOS` 是独立的 iOS 17+ SwiftUI 伴侣 App。它拥有独立的 App Store Connect 应用记录、发布流程和软件许可证。
 
-## 工程标识
+## 工程与发布
 
-- Team ID：`L3QHLDRPAY`
-- Bundle ID：`com.hd838a.RemoteMicIOS`
 - Scheme：`RemoteMicIOS`
 - 最低系统：iOS 17.0
 - 签名：Automatic Signing / Apple cloud-managed signing
 
-macOS App 的 Bundle ID 是 `com.hd838a.RemoteMic`。两个 App 不使用同一个 Bundle ID，也不组成 App Store Universal Purchase。
+开发者团队和应用标识由发布配置维护，不在公开说明文档中列出。iOS 与 macOS App 拥有独立的应用记录，不组成 App Store Universal Purchase。
 
 ## 当前范围
 
 当前版本提供方向、确定、返回、主页、菜单、TV、关机、音量和按住说话等核心遥控交互，并为每个按键提供明显的震动反馈。页面使用固定单屏布局，不支持滚动。
 
-iOS App 会通过 Bonjour 自动发现附近运行新版无线麦的 Mac，显示真实 Mac 名称，并复用 Mac 端现有按键映射和虚拟音频输出。首次连接时，双方使用临时 Curve25519 密钥协商并显示同一个六位校验码；用户在 Mac 明确允许后，按键和 16kHz 单声道麦克风音频通过 ChaChaPoly 加密传输。授权只对当前连接有效，断开后需要重新确认。
+iOS App 会自动发现附近运行新版无线麦的 Mac，显示真实 Mac 名称，并复用 Mac 端现有按键映射和虚拟音频输出。首次连接时，双方显示同一个六位校验码；用户在 Mac 明确允许后，按键和 16kHz 单声道麦克风音频通过安全连接传输。
 
-当前版本尚未保存长期受信任设备，也没有跨互联网控制能力。iOS 与 macOS App 必须同时更新到包含手机伴侣连接功能的版本才能使用真实遥控和语音链路。
+首次允许后，该次 iOS App 安装会成为受信任设备，后续附近连接自动授权。删除并重新安装 iOS App，或在 Mac 设置中清除受信任设备后，需要重新确认。当前版本没有跨互联网控制能力；iOS 与 macOS App 必须同时更新到包含手机伴侣连接功能的版本才能使用真实遥控和语音链路。
 
 ## Xcode Cloud / TestFlight
 

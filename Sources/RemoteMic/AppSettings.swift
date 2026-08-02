@@ -35,6 +35,7 @@ final class AppSettings: ObservableObject {
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
         static let totalVoiceDuration = "usage.totalVoiceDuration"
+        static let trustedPhoneIdentityFingerprints = "security.trustedPhoneIdentityFingerprints"
     }
 
     private let defaults: UserDefaults
@@ -83,6 +84,15 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var totalVoiceDuration: TimeInterval {
         didSet { defaults.set(totalVoiceDuration, forKey: Keys.totalVoiceDuration) }
+    }
+
+    @Published private(set) var trustedPhoneIdentityFingerprints: Set<String> {
+        didSet {
+            defaults.set(
+                trustedPhoneIdentityFingerprints.sorted(),
+                forKey: Keys.trustedPhoneIdentityFingerprints
+            )
+        }
     }
 
     var peripheralIdentifier: UUID? {
@@ -164,6 +174,9 @@ final class AppSettings: ObservableObject {
         totalVoiceDuration = defaults.object(forKey: Keys.totalVoiceDuration) == nil
             ? 0
             : max(0, defaults.double(forKey: Keys.totalVoiceDuration))
+        trustedPhoneIdentityFingerprints = Set(
+            defaults.stringArray(forKey: Keys.trustedPhoneIdentityFingerprints) ?? []
+        )
     }
 
     func action(for button: RemoteButton) -> ButtonAction {
@@ -249,6 +262,19 @@ final class AppSettings: ObservableObject {
     func recordVoiceDuration(_ duration: TimeInterval) {
         guard duration.isFinite, duration > 0 else { return }
         totalVoiceDuration += duration
+    }
+
+    func isPhoneIdentityTrusted(_ fingerprint: String) -> Bool {
+        trustedPhoneIdentityFingerprints.contains(fingerprint)
+    }
+
+    func trustPhoneIdentity(_ fingerprint: String) {
+        guard !fingerprint.isEmpty else { return }
+        trustedPhoneIdentityFingerprints.insert(fingerprint)
+    }
+
+    func clearTrustedPhoneIdentities() {
+        trustedPhoneIdentityFingerprints.removeAll()
     }
 
     func recordLaunchAndDetectCompletedUpdate(

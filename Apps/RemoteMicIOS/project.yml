@@ -29,7 +29,7 @@ targets:
         INFOPLIST_FILE: Resources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 0.8.0
         TARGETED_DEVICE_FAMILY: "1,2"
 
 schemes:

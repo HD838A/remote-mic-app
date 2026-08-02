@@ -141,6 +141,12 @@
 "common.status.ready" = "已就绪";
 "connection.status.voice_trigger" = "语音触发";
 "connection.action.reconnect" = "立即重新连接";
+"connection.trusted_devices.title" = "受信任的手机";
+"connection.trusted_devices.help" = "首次允许后会自动连接。清除记录后，所有手机都需要重新确认授权。";
+"connection.trusted_devices.count" = "%1$@ 台";
+"connection.trusted_devices.clear" = "清除受信任设备";
+"connection.trusted_devices.clear_confirm.title" = "清除所有受信任设备？";
+"connection.trusted_devices.clear_confirm.message" = "当前连接不会中断，下次连接时需要重新确认授权。";
 "audio.section.title" = "音频设置";
 "audio.output.title" = "语音输出";
 "audio.output.disabled" = "不输出语音";

@@ -7,5 +7,7 @@ struct RemoteWireMessage: Codable {
     var samples: String?
     var detail: String?
     var publicKey: String?
+    var identityPublicKey: String?
+    var identitySignature: String?
     var payload: String?
 }

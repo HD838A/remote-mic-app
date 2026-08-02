@@ -90,21 +90,31 @@ struct RemoteControlScreen: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 7) {
-                        Circle()
-                            .fill(connection.isConnected ? Color.green : Color.orange)
-                            .frame(width: 8, height: 8)
-                        Text(connection.statusText)
-                            .foregroundStyle(
-                                connection.isConnected
-                                    ? Color.green.opacity(0.88)
-                                    : Color.orange.opacity(0.92)
-                            )
+                    if let pairingCode = connection.displayedPairingCode {
+                        Text("校验码")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(RemotePalette.text.opacity(0.62))
+                        Text(pairingCode.map(String.init).joined(separator: " "))
+                            .font(.system(size: 22, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color.orange.opacity(0.95))
+                            .accessibilityLabel("校验码 \(pairingCode)")
+                    } else {
+                        HStack(spacing: 7) {
+                            Circle()
+                                .fill(connection.isConnected ? Color.green : Color.orange)
+                                .frame(width: 8, height: 8)
+                            Text(connection.statusText)
+                                .foregroundStyle(
+                                    connection.isConnected
+                                        ? Color.green.opacity(0.88)
+                                        : Color.orange.opacity(0.92)
+                                )
+                        }
+                        Text(connection.macName)
+                            .foregroundStyle(RemotePalette.text.opacity(0.72))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
                     }
-                    Text(connection.macName)
-                        .foregroundStyle(RemotePalette.text.opacity(0.72))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
                 }
                 .font(.system(size: 14, weight: .medium))
             }

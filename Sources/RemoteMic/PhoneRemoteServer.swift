@@ -9,17 +9,59 @@ struct PhoneRemoteWireMessage: Codable {
     var samples: String?
     var detail: String?
     var publicKey: String?
+    var identityPublicKey: String?
+    var identitySignature: String?
     var payload: String?
 }
 
+enum PhoneRemoteIdentityVerification: Equatable {
+    case unavailable
+    case verified(String)
+    case invalid
+}
+
+enum PhoneRemoteIdentityVerifier {
+    static func verify(
+        identityPublicKey encodedIdentityKey: String?,
+        identitySignature encodedSignature: String?,
+        sessionPublicKey: Data
+    ) -> PhoneRemoteIdentityVerification {
+        if encodedIdentityKey == nil, encodedSignature == nil {
+            return .unavailable
+        }
+        guard let encodedIdentityKey,
+              let encodedSignature,
+              let identityKeyData = Data(base64Encoded: encodedIdentityKey),
+              let signatureData = Data(base64Encoded: encodedSignature),
+              let identityKey = try? P256.Signing.PublicKey(rawRepresentation: identityKeyData),
+              let signature = try? P256.Signing.ECDSASignature(rawRepresentation: signatureData),
+              identityKey.isValidSignature(signature, for: proof(for: sessionPublicKey))
+        else {
+            return .invalid
+        }
+        let fingerprint = SHA256.hash(data: identityKeyData)
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return .verified(fingerprint)
+    }
+
+    static func proof(for sessionPublicKey: Data) -> Data {
+        var proof = Data("RemoteMic nearby identity v1\0".utf8)
+        proof.append(sessionPublicKey)
+        return proof
+    }
+}
+
 final class PhoneRemoteServer {
-    typealias ApprovalHandler = (String, String, @escaping (Bool) -> Void) -> Void
+    typealias ApprovalHandler = (String, String, String?, @escaping (Bool) -> Void) -> Void
 
     private let queue = DispatchQueue(label: "RemoteMic.phoneRemote", qos: .userInitiated)
     private var listener: NWListener?
     private var clients: [ObjectIdentifier: Client] = [:]
 
     var onApprovalRequested: ApprovalHandler?
+    var onApprovalCancelled: (() -> Void)?
+    var isIdentityTrusted: ((String) -> Bool)?
     var onCommand: ((RemoteButton, @escaping (Bool) -> Void) -> Void)?
     var onVoiceStart: ((@escaping (Bool) -> Void) -> Void)?
     var onVoiceStop: (() -> Void)?
@@ -73,20 +115,26 @@ final class PhoneRemoteServer {
     }
 
     private func accept(_ connection: NWConnection) {
-        guard clients.isEmpty else {
-            connection.cancel()
-            return
+        if let currentClient = clients.values.first {
+            guard currentClient.canBeReplaced else {
+                connection.cancel()
+                return
+            }
+            currentClient.cancel()
         }
         let client = Client(connection: connection, queue: queue, macName: Self.macName)
         let identifier = ObjectIdentifier(client)
         clients[identifier] = client
-        client.onApprovalRequested = { [weak self, weak client] deviceName, pairingCode in
+        client.isIdentityTrusted = { [weak self] fingerprint in
+            self?.isIdentityTrusted?(fingerprint) ?? false
+        }
+        client.onApprovalRequested = { [weak self, weak client] deviceName, pairingCode, fingerprint in
             guard let self, let client else { return }
             guard let approval = self.onApprovalRequested else {
                 client.resolveApproval(false)
                 return
             }
-            approval(deviceName, pairingCode) { [weak client] allowed in
+            approval(deviceName, pairingCode, fingerprint) { [weak client] allowed in
                 self.queue.async {
                     client?.resolveApproval(allowed)
                 }
@@ -112,7 +160,10 @@ final class PhoneRemoteServer {
         client.onAudio = { [weak self] samples in
             self?.onAudio?(samples)
         }
-        client.onClosed = { [weak self] in
+        client.onClosed = { [weak self, weak client] in
+            if client?.hasPendingApproval == true {
+                self?.onApprovalCancelled?()
+            }
             self?.clients.removeValue(forKey: identifier)
         }
         client.start()
@@ -133,13 +184,21 @@ private final class Client {
     private var isVoiceStarting = false
     private var requestedApproval = false
     private var sessionKey: SymmetricKey?
+    private var identityFingerprint: String?
+    private var waitsForPairingReady = false
+    private var pendingDisplayName: String?
+    private var pendingPairingCode: String?
 
-    var onApprovalRequested: ((String, String) -> Void)?
+    var isIdentityTrusted: ((String) -> Bool)?
+    var onApprovalRequested: ((String, String, String?) -> Void)?
     var onCommand: ((RemoteButton, @escaping (Bool) -> Void) -> Void)?
     var onVoiceStart: ((@escaping (Bool) -> Void) -> Void)?
     var onVoiceStop: (() -> Void)?
     var onAudio: (([Int16]) -> Void)?
     var onClosed: (() -> Void)?
+
+    var canBeReplaced: Bool { !isApproved }
+    var hasPendingApproval: Bool { requestedApproval && !isApproved }
 
     init(connection: NWConnection, queue: DispatchQueue, macName: String) {
         self.connection = connection
@@ -215,9 +274,13 @@ private final class Client {
             return
         }
         guard message.type == "secure",
-              let message = decrypt(message),
-              isApproved
+              let message = decrypt(message)
         else { return }
+        if message.type == "pairingReady" {
+            finishSessionSetup()
+            return
+        }
+        guard isApproved else { return }
         handleSecure(message)
     }
 
@@ -240,18 +303,55 @@ private final class Client {
             sharedInfo: Data(),
             outputByteCount: 32
         )
+        switch PhoneRemoteIdentityVerifier.verify(
+            identityPublicKey: message.identityPublicKey,
+            identitySignature: message.identitySignature,
+            sessionPublicKey: data
+        ) {
+        case .unavailable:
+            identityFingerprint = nil
+            waitsForPairingReady = false
+        case let .verified(fingerprint):
+            identityFingerprint = fingerprint
+            waitsForPairingReady = true
+        case .invalid:
+            connection.cancel()
+            return
+        }
         sessionKey = key
         requestedApproval = true
 
-        sendPlain(PhoneRemoteWireMessage(
-            type: "serverKey",
-            publicKey: privateKey.publicKey.rawRepresentation.base64EncodedString()
-        ))
         let deviceName = message.deviceName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayName = deviceName
             .flatMap { $0.isEmpty ? nil : String($0.prefix(80)) }
             ?? "iPhone"
-        onApprovalRequested?(displayName, Self.pairingCode(for: key))
+        pendingDisplayName = displayName
+        pendingPairingCode = Self.pairingCode(for: key)
+        sendPlain(PhoneRemoteWireMessage(
+            type: "serverKey",
+            publicKey: privateKey.publicKey.rawRepresentation.base64EncodedString()
+        )) { [weak self] in
+            guard let self, !self.waitsForPairingReady else { return }
+            self.finishSessionSetup()
+        }
+    }
+
+    private func finishSessionSetup() {
+        guard requestedApproval,
+              !isApproved,
+              let displayName = pendingDisplayName,
+              let pairingCode = pendingPairingCode
+        else { return }
+        pendingDisplayName = nil
+        pendingPairingCode = nil
+        if let identityFingerprint,
+           isIdentityTrusted?(identityFingerprint) == true {
+            isApproved = true
+            sendSecure(PhoneRemoteWireMessage(type: "ready", deviceName: macName))
+            AppLogger.shared.write("PHONE REMOTE trusted_identity_approved")
+            return
+        }
+        onApprovalRequested?(displayName, pairingCode, identityFingerprint)
     }
 
     private func handleSecure(_ message: PhoneRemoteWireMessage) {
@@ -360,7 +460,11 @@ private final class Client {
     ) {
         guard var data = try? JSONEncoder().encode(message) else { return }
         data.append(0x0A)
-        connection.send(content: data, completion: .contentProcessed { _ in
+        connection.send(content: data, completion: .contentProcessed { [weak self] error in
+            guard error == nil else {
+                self?.connection.cancel()
+                return
+            }
             completion?()
         })
     }

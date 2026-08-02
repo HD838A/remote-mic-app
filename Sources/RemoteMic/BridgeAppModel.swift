@@ -28,6 +28,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var voiceSessionStartedAt: Date?
     private var bluetoothVoiceActive = false
     private var phoneVoiceActive = false
+    private var phoneApprovalAlert: NSAlert?
     private lazy var bluetoothBridge = XiaomiBluetoothBridge(settings: settings, delegate: self)
     private lazy var hidMonitor: HIDRemoteMonitor = {
         let monitor = HIDRemoteMonitor(settings: settings)
@@ -61,7 +62,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
         }
-        phoneRemoteServer.onApprovalRequested = { [weak self] deviceName, pairingCode, completion in
+        phoneRemoteServer.isIdentityTrusted = { [weak self] fingerprint in
+            self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
+        }
+        phoneRemoteServer.onApprovalCancelled = { [weak self] in
+            self?.cancelPhoneApproval()
+        }
+        phoneRemoteServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
             guard let self else {
                 completion(false)
                 return
@@ -69,6 +76,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             requestPhoneApproval(
                 deviceName: deviceName,
                 pairingCode: pairingCode,
+                identityFingerprint: fingerprint,
                 completion: completion
             )
         }
@@ -530,16 +538,43 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func requestPhoneApproval(
         deviceName: String,
         pairingCode: String,
+        identityFingerprint: String?,
         completion: @escaping (Bool) -> Void
     ) {
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
-            alert.messageText = "允许“\(deviceName)”控制这台 Mac？"
-            alert.informativeText = "请确认 iPhone 顶部显示的校验码也是 \(pairingCode)。允许后，这台手机可在当前连接期间发送加密的遥控按键和麦克风音频。"
-            alert.addButton(withTitle: "允许")
+            alert.messageText = "允许“\(deviceName)”连接无线麦？"
+            alert.informativeText = "这台 iPhone 将连接“无线麦”App，代替实体遥控器发送按键和按住说话音频。请确认 iPhone 上显示的 6 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
+            let codeLabel = NSTextField(labelWithString: pairingCode.map(String.init).joined(separator: " "))
+            codeLabel.frame = NSRect(x: 0, y: 0, width: 300, height: 44)
+            codeLabel.alignment = .center
+            codeLabel.font = .monospacedDigitSystemFont(ofSize: 30, weight: .bold)
+            codeLabel.textColor = .controlAccentColor
+            codeLabel.setAccessibilityLabel("校验码 \(pairingCode)")
+            alert.accessoryView = codeLabel
+            alert.addButton(withTitle: "允许连接")
             alert.addButton(withTitle: "拒绝")
-            completion(alert.runModal() == .alertFirstButtonReturn)
+            self.phoneApprovalAlert = alert
+            let allowed = alert.runModal() == .alertFirstButtonReturn
+            guard self.phoneApprovalAlert === alert else {
+                completion(false)
+                return
+            }
+            self.phoneApprovalAlert = nil
+            if allowed, let identityFingerprint {
+                self.settings.trustPhoneIdentity(identityFingerprint)
+            }
+            completion(allowed)
+        }
+    }
+
+    private func cancelPhoneApproval() {
+        DispatchQueue.main.async {
+            guard let alert = self.phoneApprovalAlert else { return }
+            self.phoneApprovalAlert = nil
+            NSApp.abortModal()
+            alert.window.orderOut(nil)
         }
     }
 

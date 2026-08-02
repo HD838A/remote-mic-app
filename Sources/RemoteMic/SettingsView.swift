@@ -79,6 +79,7 @@ struct SettingsView: View {
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
     @State private var configurationStatus: ConfigurationStatus?
     @State private var isReleaseHistoryPresented = false
+    @State private var isClearTrustedPhonesConfirmationPresented = false
     @Namespace private var navigationGlassNamespace
 
     init(
@@ -126,6 +127,20 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $isReleaseHistoryPresented) {
             ReleaseHistorySheet()
+        }
+        .alert(
+            localization.text("connection.trusted_devices.clear_confirm.title"),
+            isPresented: $isClearTrustedPhonesConfirmationPresented
+        ) {
+            Button(
+                localization.text("connection.trusted_devices.clear"),
+                role: .destructive
+            ) {
+                settings.clearTrustedPhoneIdentities()
+            }
+            Button(localization.text("common.action.cancel"), role: .cancel) {}
+        } message: {
+            Text("connection.trusted_devices.clear_confirm.message")
         }
     }
 
@@ -195,11 +210,41 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
+
+                trustedPhoneDevicesPanel
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .compatibilityScrollEdgeEffect()
+    }
+
+    private var trustedPhoneDevicesPanel: some View {
+        GlassPanel {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("connection.trusted_devices.title")
+                        .font(.headline)
+                    Text("connection.trusted_devices.help")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 16)
+                Text(
+                    LocalizedMessage(
+                        "connection.trusted_devices.count",
+                        arguments: [String(settings.trustedPhoneIdentityFingerprints.count)]
+                    ).text(using: localization)
+                )
+                .foregroundStyle(.secondary)
+                Button("connection.trusted_devices.clear") {
+                    isClearTrustedPhonesConfirmationPresented = true
+                }
+                .compatibilityButtonStyle(.standard)
+                .disabled(settings.trustedPhoneIdentityFingerprints.isEmpty)
+            }
+        }
     }
 
     private var connectionDevicePanel: some View {

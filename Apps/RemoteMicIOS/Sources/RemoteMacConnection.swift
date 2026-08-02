@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import Network
 import OSLog
+import Security
 import UIKit
 
 @MainActor
@@ -22,8 +23,9 @@ final class RemoteMacConnection: ObservableObject {
 
     private let queue = DispatchQueue(label: "RemoteMicIOS.network", qos: .userInitiated)
     private let microphone = MicrophoneStreamer()
+    private let identityPrivateKey: P256.Signing.PrivateKey?
     private let logger = Logger(
-        subsystem: "com.hd838a.RemoteMicIOS",
+        subsystem: Bundle.main.bundleIdentifier ?? "RemoteMicIOS",
         category: "NearbyConnection"
     )
     private var browser: NWBrowser?
@@ -37,6 +39,7 @@ final class RemoteMacConnection: ObservableObject {
     private var pairingCode: String?
 
     init() {
+        identityPrivateKey = InstallationIdentity.loadOrCreate()
         microphone.onSamples = { [weak self] samples in
             self?.sendAudio(samples)
         }
@@ -60,6 +63,11 @@ final class RemoteMacConnection: ObservableObject {
         case .connected, .connectedWithError: return true
         default: return false
         }
+    }
+
+    var displayedPairingCode: String? {
+        guard case .awaitingApproval = state else { return nil }
+        return pairingCode
     }
 
     var guidanceText: String {
@@ -204,12 +212,25 @@ final class RemoteMacConnection: ObservableObject {
         guard connection === self.connection else { return }
         switch connectionState {
         case .ready:
+            guard let identityPrivateKey else {
+                handleFailure("无法准备安全连接，请重新安装 App 后重试")
+                return
+            }
             let privateKey = Curve25519.KeyAgreement.PrivateKey()
+            let publicKeyData = privateKey.publicKey.rawRepresentation
+            guard let identitySignature = try? identityPrivateKey.signature(
+                for: Self.identityProof(for: publicKeyData)
+            ) else {
+                handleFailure("无法准备安全连接，请重新安装 App 后重试")
+                return
+            }
             self.privateKey = privateKey
             sendPlain(RemoteWireMessage(
                 type: "hello",
                 deviceName: UIDevice.current.name,
-                publicKey: privateKey.publicKey.rawRepresentation.base64EncodedString()
+                publicKey: publicKeyData.base64EncodedString(),
+                identityPublicKey: identityPrivateKey.publicKey.rawRepresentation.base64EncodedString(),
+                identitySignature: identitySignature.rawRepresentation.base64EncodedString()
             ))
             receiveNext()
         case let .failed(error):
@@ -284,6 +305,7 @@ final class RemoteMacConnection: ObservableObject {
         self.privateKey = nil
         pairingCode = Self.pairingCode(for: key)
         state = .awaitingApproval
+        send(RemoteWireMessage(type: "pairingReady"))
     }
 
     private func handleSecure(_ message: RemoteWireMessage) {
@@ -408,6 +430,66 @@ final class RemoteMacConnection: ObservableObject {
             bytes.prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         }
         return String(format: "%06d", value % 1_000_000)
+    }
+
+    private static func identityProof(for sessionPublicKey: Data) -> Data {
+        var proof = Data("RemoteMic nearby identity v1\0".utf8)
+        proof.append(sessionPublicKey)
+        return proof
+    }
+}
+
+private enum InstallationIdentity {
+    private static let installationMarkerKey = "nearbyIdentity.installationInitialized"
+    private static let keychainAccount = "nearby-controller-identity-v1"
+
+    static func loadOrCreate() -> P256.Signing.PrivateKey? {
+        let defaults = UserDefaults.standard
+        if !defaults.bool(forKey: installationMarkerKey) {
+            deleteStoredKey()
+            defaults.set(true, forKey: installationMarkerKey)
+        }
+
+        if let storedData = storedKeyData() {
+            if let key = try? P256.Signing.PrivateKey(rawRepresentation: storedData) {
+                return key
+            }
+            deleteStoredKey()
+        }
+
+        let key = P256.Signing.PrivateKey()
+        guard store(key.rawRepresentation) else { return nil }
+        return key
+    }
+
+    private static var baseQuery: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Bundle.main.bundleIdentifier ?? "RemoteMicIOS",
+            kSecAttrAccount as String: keychainAccount,
+        ]
+    }
+
+    private static func storedKeyData() -> Data? {
+        var query = baseQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else {
+            return nil
+        }
+        return result as? Data
+    }
+
+    private static func store(_ data: Data) -> Bool {
+        var attributes = baseQuery
+        attributes[kSecValueData as String] = data
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
+    }
+
+    private static func deleteStoredKey() {
+        SecItemDelete(baseQuery as CFDictionary)
     }
 }
 

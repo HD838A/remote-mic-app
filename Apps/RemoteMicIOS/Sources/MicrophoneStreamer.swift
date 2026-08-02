@@ -17,6 +17,7 @@ final class MicrophoneStreamer {
     private let converterLock = NSLock()
     private var converter: AVAudioConverter?
     private var isRunning = false
+    private var tapInstalled = false
     var onSamples: (([Int16]) -> Void)?
 
     @MainActor
@@ -32,30 +33,36 @@ final class MicrophoneStreamer {
         }
 
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .voiceChat, options: [.allowBluetoothHFP])
-        try session.setActive(true)
-
-        let input = engine.inputNode
-        let inputFormat = input.outputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0,
-              inputFormat.channelCount > 0,
-              let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
-        else {
-            throw StreamError.formatUnavailable
-        }
-        converterLock.withLock {
-            self.converter = converter
-        }
-
-        input.installTap(onBus: 0, bufferSize: 960, format: inputFormat) { [weak self] buffer, _ in
-            self?.convertAndPublish(buffer)
-        }
-        engine.prepare()
         do {
+            try session.setCategory(.record, mode: .measurement)
+            try session.setActive(true)
+
+            let input = engine.inputNode
+            let inputFormat = input.outputFormat(forBus: 0)
+            guard inputFormat.sampleRate > 0,
+                  inputFormat.channelCount > 0,
+                  let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+            else {
+                throw StreamError.formatUnavailable
+            }
+            converterLock.withLock {
+                self.converter = converter
+            }
+
+            input.installTap(onBus: 0, bufferSize: 960, format: inputFormat) { [weak self] buffer, _ in
+                self?.convertAndPublish(buffer)
+            }
+            tapInstalled = true
+            engine.prepare()
             try engine.start()
             isRunning = true
         } catch {
-            input.removeTap(onBus: 0)
+            if tapInstalled {
+                engine.inputNode.removeTap(onBus: 0)
+                tapInstalled = false
+            }
+            engine.stop()
+            engine.reset()
             converterLock.withLock {
                 self.converter = nil
             }
@@ -67,9 +74,13 @@ final class MicrophoneStreamer {
     @MainActor
     func stop() {
         let hasConverter = converterLock.withLock { converter != nil }
-        guard isRunning || hasConverter else { return }
-        engine.inputNode.removeTap(onBus: 0)
+        guard isRunning || hasConverter || tapInstalled else { return }
+        if tapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
         engine.stop()
+        engine.reset()
         converterLock.withLock {
             converter = nil
         }

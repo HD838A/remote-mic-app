@@ -141,6 +141,12 @@
 "common.status.ready" = "Ready";
 "connection.status.voice_trigger" = "Voice trigger";
 "connection.action.reconnect" = "Reconnect Now";
+"connection.trusted_devices.title" = "Trusted Phones";
+"connection.trusted_devices.help" = "A phone connects automatically after the first approval. Clearing this list requires every phone to be approved again.";
+"connection.trusted_devices.count" = "%1$@ trusted";
+"connection.trusted_devices.clear" = "Clear Trusted Devices";
+"connection.trusted_devices.clear_confirm.title" = "Clear All Trusted Devices?";
+"connection.trusted_devices.clear_confirm.message" = "The current connection stays active. Approval is required again the next time a phone connects.";
 "audio.section.title" = "Audio Settings";
 "audio.output.title" = "Voice output";
 "audio.output.disabled" = "No voice output";
