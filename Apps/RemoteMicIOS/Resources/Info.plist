@@ -29,7 +29,7 @@
 		<string>_remotemic._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>发现并连接附近运行无线麦的 Mac。</string>
+	<string>允许访问本地网络，用于发现并连接附近运行无线麦的 Mac。</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>按住说话键时使用麦克风，把语音发送到已连接的 Mac。</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

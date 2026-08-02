@@ -7,8 +7,8 @@
   - fork、Release、CI、许可与最终排名见 [Windows 源码与 fork 对比](Research/WindowsSupport/candidate-comparison.md)。
 - [ ] 开发手机伴侣 App，让手机可以替代或补充蓝牙遥控器控制 Mac
   - 当前结论：可行。Mac 端继续负责执行按键动作、打开应用和输出虚拟麦克风；手机端提供虚拟遥控按键和按住说话，不要求用户必须购买 RC003。
-  - 已新增同仓库独立 iOS 17+ SwiftUI 工程并完成核心遥控页面：方向、确定、返回、菜单、音量加、主页、TV、音量减、关机和按住说话均具备按压状态、无障碍标签与增强震动反馈；六枚中部按键与底部主按钮左右边缘对齐，页面为固定单屏布局且不支持滚动。
-  - 已接入附近直连最小闭环：iOS 通过 Bonjour 发现 Mac 并显示真实设备名称；Mac 明确批准当前连接后，手机按键复用本机 `AppSettings` / `ButtonAction` / `KeyboardInjector` 执行，手机麦克风转换为 16kHz 单声道 PCM 并接入现有 `VirtualAudioOutput`。本地网络权限在发现时触发，麦克风权限只在首次按住说话时触发。
+  - 已新增同仓库独立 iOS 17+ SwiftUI 工程并完成核心遥控页面：方向、确定、返回、主页、菜单、TV、音量、关机和按住说话均具备按压状态、无障碍标签与增强震动反馈；顶部设备信息向关机键靠近，六枚中部按键按设计稿顺序排列并向中心微收，页面为固定单屏布局且不支持滚动。
+  - 已接入附近直连最小闭环：iOS 通过 Bonjour 发现 Mac 并显示真实设备名称；浏览器只有在本地网络权限链路进入 `ready` 后才建立连接，等待授权期间不提前连接。所有 Network、音频和服务端底层错误只保留在开发日志中，用户界面统一显示可理解的中文提示。麦克风权限只在首次按住说话时触发，授权后再次按住即可录音。
   - 当前会话使用临时 Curve25519 密钥协商、双方六位校验码和 ChaChaPoly 加密；Mac 授权仅对当前连接有效。长期受信任设备、Keychain 持久密钥、设备撤销和跨互联网控制尚未实现，因此本条保持未完成。
   - TestFlight 发布链路已跑通：iOS 工程固定使用 Team `L3QHLDRPAY`、Bundle ID `com.hd838a.RemoteMicIOS` 和 Automatic Signing，Xcode Cloud 已成功上传内部 TestFlight，且已完成真机安装体验。首次按住说话会主动请求麦克风权限，即使 Mac 尚未连接也不会静默忽略授权入口。
   - 第一阶段优先支持 iPhone/iPad 前台使用：通过 Network framework、Bonjour、临时密钥加密和双方校验码发现并连接 Mac。启用 `includePeerToPeer` 后，附近设备可以使用点对点链路，不应把“连接同一个无线路由器”设为硬性前提；长期设备信任再评估 TLS 身份与 Keychain 持久密钥。

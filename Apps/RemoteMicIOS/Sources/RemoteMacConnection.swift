@@ -1,12 +1,14 @@
 import CryptoKit
 import Foundation
 import Network
+import OSLog
 import UIKit
 
 @MainActor
 final class RemoteMacConnection: ObservableObject {
     enum State: Equatable {
         case searching
+        case awaitingLocalNetworkPermission
         case connecting
         case awaitingApproval
         case connected
@@ -20,8 +22,14 @@ final class RemoteMacConnection: ObservableObject {
 
     private let queue = DispatchQueue(label: "RemoteMicIOS.network", qos: .userInitiated)
     private let microphone = MicrophoneStreamer()
+    private let logger = Logger(
+        subsystem: "com.hd838a.RemoteMicIOS",
+        category: "NearbyConnection"
+    )
     private var browser: NWBrowser?
     private var connection: NWConnection?
+    private var isBrowserReady = false
+    private var pendingEndpoint: NWEndpoint?
     private var receiveBuffer = Data()
     private var voiceRequestID: UInt64 = 0
     private var privateKey: Curve25519.KeyAgreement.PrivateKey?
@@ -37,6 +45,7 @@ final class RemoteMacConnection: ObservableObject {
     var statusText: String {
         switch state {
         case .searching: return "正在查找"
+        case .awaitingLocalNetworkPermission: return "等待网络授权"
         case .connecting: return "正在连接"
         case .awaitingApproval:
             return pairingCode.map { "确认码 \($0)" } ?? "等待 Mac 确认"
@@ -57,6 +66,8 @@ final class RemoteMacConnection: ObservableObject {
         switch state {
         case let .connectedWithError(detail), let .unavailable(detail):
             return detail
+        case .awaitingLocalNetworkPermission:
+            return "请允许访问本地网络，以发现附近的 Mac"
         default:
             return "麦克风仅在按住时启用"
         }
@@ -64,7 +75,7 @@ final class RemoteMacConnection: ObservableObject {
 
     var hasIssue: Bool {
         switch state {
-        case .connectedWithError, .unavailable: return true
+        case .awaitingLocalNetworkPermission, .connectedWithError, .unavailable: return true
         default: return false
         }
     }
@@ -80,20 +91,16 @@ final class RemoteMacConnection: ObservableObject {
             for: .bonjour(type: "_remotemic._tcp", domain: nil),
             using: parameters
         )
-        browser.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case let .failed(error), let .waiting(error):
-                DispatchQueue.main.async {
-                    self?.handleFailure(error.localizedDescription)
-                }
-            default:
-                break
+        browser.stateUpdateHandler = { [weak self, weak browser] state in
+            DispatchQueue.main.async {
+                guard let self, browser === self.browser else { return }
+                self.handleBrowserState(state)
             }
         }
-        browser.browseResultsChangedHandler = { [weak self] results, _ in
-            guard let endpoint = results.first?.endpoint else { return }
+        browser.browseResultsChangedHandler = { [weak self, weak browser] results, _ in
             DispatchQueue.main.async {
-                self?.connect(to: endpoint)
+                guard let self, browser === self.browser else { return }
+                self.handleBrowseResults(results)
             }
         }
         self.browser = browser
@@ -109,6 +116,8 @@ final class RemoteMacConnection: ObservableObject {
         pairingCode = nil
         browser?.cancel()
         browser = nil
+        isBrowserReady = false
+        pendingEndpoint = nil
         receiveBuffer.removeAll(keepingCapacity: true)
         start()
     }
@@ -141,10 +150,17 @@ final class RemoteMacConnection: ObservableObject {
             } catch {
                 guard voiceRequestID == requestID else { return }
                 isVoiceActive = false
-                if isConnected {
-                    state = .connectedWithError("无法使用麦克风，请在系统设置中允许访问")
+                logger.error("Microphone start failed: \(String(describing: error), privacy: .public)")
+                let message: String
+                if case MicrophoneStreamer.StreamError.permissionDenied = error {
+                    message = "请在系统设置中允许麦克风访问"
                 } else {
-                    state = .unavailable("无法使用麦克风，请在系统设置中允许访问")
+                    message = "暂时无法使用麦克风，请稍后重试"
+                }
+                if isConnected {
+                    state = .connectedWithError(message)
+                } else {
+                    state = .unavailable(message)
                 }
             }
         }
@@ -161,7 +177,12 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     private func connect(to endpoint: NWEndpoint) {
+        guard isBrowserReady else {
+            pendingEndpoint = endpoint
+            return
+        }
         guard connection == nil else { return }
+        pendingEndpoint = nil
         state = .connecting
         if case let .service(name, _, _, _) = endpoint {
             macName = name
@@ -192,10 +213,11 @@ final class RemoteMacConnection: ObservableObject {
             ))
             receiveNext()
         case let .failed(error):
-            handleFailure(error.localizedDescription)
+            logger.error("Connection failed: \(String(describing: error), privacy: .public)")
+            handleFailure("连接 Mac 失败，请确认两台设备在附近并重试")
         case .cancelled:
             if self.connection != nil {
-                handleFailure("连接已断开")
+                handleFailure("与 Mac 的连接已断开，请重新连接")
             }
         default:
             break
@@ -208,7 +230,10 @@ final class RemoteMacConnection: ObservableObject {
                 guard let self else { return }
                 if let data { self.consume(data) }
                 if isComplete || error != nil {
-                    self.handleFailure(error?.localizedDescription ?? "连接已断开")
+                    if let error {
+                        self.logger.error("Receive failed: \(String(describing: error), privacy: .public)")
+                    }
+                    self.handleFailure("与 Mac 的连接已断开，请重新连接")
                 } else {
                     self.receiveNext()
                 }
@@ -270,7 +295,10 @@ final class RemoteMacConnection: ObservableObject {
             handleFailure("Mac 拒绝了本次连接")
         case "error":
             endVoice()
-            state = .connectedWithError(message.detail ?? "Mac 无法执行这个操作")
+            if let detail = message.detail {
+                logger.error("Mac reported an operation error: \(detail, privacy: .public)")
+            }
+            state = .connectedWithError("Mac 暂时无法执行这个操作，请稍后重试")
         default:
             break
         }
@@ -303,9 +331,53 @@ final class RemoteMacConnection: ObservableObject {
         connection.send(content: data, completion: .contentProcessed { [weak self] error in
             guard let error else { return }
             DispatchQueue.main.async {
-                self?.handleFailure(error.localizedDescription)
+                guard let self else { return }
+                self.logger.error("Send failed: \(String(describing: error), privacy: .public)")
+                self.handleFailure("发送失败，请重新连接 Mac 后重试")
             }
         })
+    }
+
+    private func handleBrowserState(_ browserState: NWBrowser.State) {
+        switch browserState {
+        case .ready:
+            isBrowserReady = true
+            if connection == nil {
+                state = .searching
+                macName = "正在查找 Mac"
+                if let pendingEndpoint {
+                    connect(to: pendingEndpoint)
+                }
+            }
+        case let .waiting(error):
+            isBrowserReady = false
+            logger.notice("Bonjour browser is waiting: \(String(describing: error), privacy: .public)")
+            if connection == nil {
+                state = .awaitingLocalNetworkPermission
+                macName = "等待访问本地网络"
+            }
+        case let .failed(error):
+            isBrowserReady = false
+            logger.error("Bonjour browser failed: \(String(describing: error), privacy: .public)")
+            browser?.cancel()
+            browser = nil
+            handleFailure("无法发现附近的 Mac，请检查本地网络权限后重试")
+        case .cancelled:
+            isBrowserReady = false
+        default:
+            break
+        }
+    }
+
+    private func handleBrowseResults(_ results: Set<NWBrowser.Result>) {
+        guard let endpoint = results.first?.endpoint else {
+            pendingEndpoint = nil
+            return
+        }
+        pendingEndpoint = endpoint
+        if isBrowserReady {
+            connect(to: endpoint)
+        }
     }
 
     private func handleFailure(_ detail: String) {
@@ -315,6 +387,7 @@ final class RemoteMacConnection: ObservableObject {
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
+        pendingEndpoint = nil
         receiveBuffer.removeAll(keepingCapacity: true)
         state = .unavailable(detail)
         macName = "未找到可用的 Mac"

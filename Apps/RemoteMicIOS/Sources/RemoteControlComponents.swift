@@ -139,14 +139,34 @@ struct DPadView: View {
                     }
                     .shadow(color: .black.opacity(0.2), radius: 7, x: 0, y: 5)
 
-                directionButton(symbol: "chevron.up", command: .up)
-                    .offset(y: -directionalOffset)
-                directionButton(symbol: "chevron.down", command: .down)
-                    .offset(y: directionalOffset)
-                directionButton(symbol: "chevron.left", command: .left)
-                    .offset(x: -directionalOffset)
-                directionButton(symbol: "chevron.right", command: .right)
-                    .offset(x: directionalOffset)
+                DPadDirectionControl(
+                    symbol: "chevron.up",
+                    direction: .up,
+                    directionalOffset: directionalOffset
+                ) {
+                    perform(.up)
+                }
+                DPadDirectionControl(
+                    symbol: "chevron.down",
+                    direction: .down,
+                    directionalOffset: directionalOffset
+                ) {
+                    perform(.down)
+                }
+                DPadDirectionControl(
+                    symbol: "chevron.left",
+                    direction: .left,
+                    directionalOffset: directionalOffset
+                ) {
+                    perform(.left)
+                }
+                DPadDirectionControl(
+                    symbol: "chevron.right",
+                    direction: .right,
+                    directionalOffset: directionalOffset
+                ) {
+                    perform(.right)
+                }
 
                 Button {
                     perform(.confirm)
@@ -179,28 +199,126 @@ struct DPadView: View {
         .aspectRatio(1, contentMode: .fit)
     }
 
-    private func directionButton(symbol: String, command: RemoteCommand) -> some View {
-        Button {
-            perform(command)
-        } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.94))
-                .frame(width: 68, height: 68)
-                .contentShape(Rectangle())
+}
+
+private enum DPadDirection {
+    case up
+    case down
+    case left
+    case right
+
+    var accessibilityLabel: String {
+        switch self {
+        case .up: return "向上"
+        case .down: return "向下"
+        case .left: return "向左"
+        case .right: return "向右"
         }
-        .buttonStyle(TactileButtonStyle())
-        .accessibilityLabel(accessibilityLabel(for: command))
     }
 
-    private func accessibilityLabel(for command: RemoteCommand) -> String {
-        switch command {
-        case .up: "向上"
-        case .down: "向下"
-        case .left: "向左"
-        case .right: "向右"
-        default: "方向"
+    func iconOffset(distance: CGFloat) -> CGSize {
+        switch self {
+        case .up: return CGSize(width: 0, height: -distance)
+        case .down: return CGSize(width: 0, height: distance)
+        case .left: return CGSize(width: -distance, height: 0)
+        case .right: return CGSize(width: distance, height: 0)
         }
+    }
+
+    var startAngle: Double {
+        switch self {
+        case .up: return 225
+        case .right: return 315
+        case .down: return 45
+        case .left: return 135
+        }
+    }
+}
+
+private struct DPadDirectionControl: View {
+    let symbol: String
+    let direction: DPadDirection
+    let directionalOffset: CGFloat
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        let iconOffset = direction.iconOffset(distance: directionalOffset)
+
+        ZStack {
+            DPadSectorShape(direction: direction)
+                .fill(Color.black.opacity(isPressed ? 0.13 : 0))
+
+            Image(systemName: symbol)
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(.white.opacity(isPressed ? 0.88 : 0.94))
+                .offset(
+                    x: iconOffset.width,
+                    y: iconOffset.height + (isPressed ? 2 : 0)
+                )
+        }
+        .contentShape(DPadSectorShape(direction: direction))
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !isPressed else { return }
+                    isPressed = true
+                    action()
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
+        .animation(.easeOut(duration: 0.08), value: isPressed)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(direction.accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            action()
+        }
+    }
+}
+
+private struct DPadSectorShape: Shape {
+    let direction: DPadDirection
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        let innerRadius = min(rect.width, rect.height) * 0.195
+        let startAngle = direction.startAngle
+        let endAngle = startAngle + 90
+        let startRadians = startAngle * .pi / 180
+        let endRadians = endAngle * .pi / 180
+        let outerStart = CGPoint(
+            x: center.x + cos(startRadians) * radius,
+            y: center.y + sin(startRadians) * radius
+        )
+        let innerEnd = CGPoint(
+            x: center.x + cos(endRadians) * innerRadius,
+            y: center.y + sin(endRadians) * innerRadius
+        )
+
+        var path = Path()
+        path.move(to: outerStart)
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(startAngle),
+            endAngle: .degrees(endAngle),
+            clockwise: false
+        )
+        path.addLine(to: innerEnd)
+        path.addArc(
+            center: center,
+            radius: innerRadius,
+            startAngle: .degrees(endAngle),
+            endAngle: .degrees(startAngle),
+            clockwise: true
+        )
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -252,11 +370,13 @@ struct VoiceButton: View {
     @State private var isTrackingPress = false
 
     var body: some View {
+        let visualActive = isActive || isTrackingPress
+
         ZStack {
             AppIconRoundedRectangle()
                 .fill(
                     LinearGradient(
-                        colors: isActive
+                        colors: visualActive
                             ? [Color(red: 0.23, green: 0.58, blue: 0.83), Color(red: 0.09, green: 0.37, blue: 0.68)]
                             : [RemotePalette.blueTop, RemotePalette.blueBottom],
                         startPoint: .top,
@@ -270,18 +390,18 @@ struct VoiceButton: View {
                 .stroke(Color.black.opacity(0.25), lineWidth: 1.4)
 
             VStack(spacing: 10) {
-                Image(systemName: isActive ? "waveform" : "mic.fill")
+                Image(systemName: visualActive ? "waveform" : "mic.fill")
                     .font(.system(size: 45, weight: .medium))
-                Text(isActive ? "正在说话" : "按住说话")
+                Text(visualActive ? "正在说话" : "按住说话")
                     .font(.system(size: 24, weight: .bold))
-                Text(isActive ? "松手停止" : "松手停止")
+                Text("松手停止")
                     .font(.system(size: 15, weight: .medium))
                     .opacity(0.9)
             }
             .foregroundStyle(.white)
         }
-        .shadow(color: .black.opacity(isActive ? 0.11 : 0.18), radius: isActive ? 2 : 5, x: 0, y: isActive ? 1 : 4)
-        .scaleEffect(isActive ? 0.98 : 1)
+        .shadow(color: .black.opacity(visualActive ? 0.11 : 0.18), radius: visualActive ? 2 : 5, x: 0, y: visualActive ? 1 : 4)
+        .scaleEffect(visualActive ? 0.98 : 1)
         .contentShape(AppIconRoundedRectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
@@ -296,10 +416,10 @@ struct VoiceButton: View {
                     onPressChanged(false)
                 }
         )
-        .animation(.easeOut(duration: 0.1), value: isActive)
+        .animation(.easeOut(duration: 0.1), value: visualActive)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("按住说话")
-        .accessibilityValue(isActive ? "正在录音" : "未录音")
+        .accessibilityValue(isActive ? "正在录音" : isTrackingPress ? "正在准备" : "未录音")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
             onPressChanged(!isActive)
