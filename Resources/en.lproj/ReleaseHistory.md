@@ -1,6 +1,6 @@
 # Version History
 
-## 1.6.1 (Pre-release)
+## 1.6.1
 
 - Added nearby iPhone/iPad remote control and push-to-talk with pairing-code verification and encrypted transport.
 - Reused the Mac's current button mappings and routed phone microphone audio into the existing virtual audio output.
