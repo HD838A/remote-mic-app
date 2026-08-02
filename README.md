@@ -60,6 +60,8 @@
 
 豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 Install Remote Mic.pkg，然后在 Remote Mic 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
 
+![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
+
 ## 自定义遥控器按键
 
 ![按键映射设置页](Screenshots/key-mapping.png)
