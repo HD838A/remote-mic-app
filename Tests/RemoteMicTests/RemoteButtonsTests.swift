@@ -11,16 +11,16 @@ struct RemoteButtonsTests {
             ($0.displayName(using: localization), $0.bundleIdentifier)
         })
         #expect(mappings == [
-            localization.text("无线麦"): "com.hd838a.RemoteMic",
+            localization.text("app.name"): "com.hd838a.RemoteMic",
             "Codex": "com.openai.codex",
             "Claude": "com.anthropic.claudefordesktop",
             "cmux": "com.cmuxterm.app",
-            localization.text("微信"): "com.tencent.xinWeChat",
+            localization.text("application.wechat"): "com.tencent.xinWeChat",
             "Cursor": "com.todesktop.230313mzl4w4u92",
             "Xcode": "com.apple.dt.Xcode",
             "Slack": "com.tinyspeck.slackmacgap",
-            localization.text("企业微信"): "com.tencent.WeWorkMac",
-            localization.text("网易云音乐"): "com.netease.163music",
+            localization.text("application.wecom"): "com.tencent.WeWorkMac",
+            localization.text("application.netease_music"): "com.netease.163music",
             "Chrome": "com.google.Chrome",
             "Safari": "com.apple.Safari",
             "Zed": "dev.zed.Zed",
@@ -48,7 +48,7 @@ struct RemoteButtonsTests {
         ).contains(.openRemoteMic))
         #expect(
             ButtonAction.openRemoteMic.displayName(using: localization) ==
-                localization.text("打开无线麦")
+                localization.text("action.open_remote_mic")
         )
     }
 

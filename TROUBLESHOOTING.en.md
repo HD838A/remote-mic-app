@@ -12,7 +12,7 @@ Confirm that your Mac is Apple Silicon and runs macOS 14 or later.
 4. Left-click the Remote Mic menu bar icon and choose **Reconnect Now**.
 5. If the status does not change, quit and relaunch Remote Mic, then confirm that Bluetooth access is still granted.
 
-The app connects only to RC003 devices with an approved name or an advertised ATVV service. It does not fuzzy-match other Xiaomi Bluetooth devices.
+The app connects only to the supported Xiaomi Bluetooth remote. It does not fuzzy-match other Xiaomi Bluetooth devices.
 
 ## Holding the voice button produces no sound
 
@@ -37,7 +37,7 @@ For details, read the [Doubao Input Method Compatibility Guide](Resources/豆包
 
 ## Ordinary buttons do not work
 
-1. Open **Button Mapping** and enable **RC003 Custom Button Mapping**.
+1. Open **Button Mapping** and enable **Custom Button Controls**.
 2. Grant Input Monitoring and Accessibility from the **Permissions** page in that order.
 3. Quit and reopen Remote Mic so macOS applies newly granted permissions.
 4. Return to Button Mapping and press a physical button. Its matching button should highlight and its mapping row should be selected.
@@ -46,7 +46,7 @@ When custom mapping is disabled, macOS may still handle some remote buttons as a
 
 ## Buttons repeat or make a system alert sound
 
-Remote Mic first attempts exclusive access to the RC003 button device. If macOS rejects that, the app uses compatibility mode and briefly suppresses matching native system events.
+Remote Mic uses the button connection method allowed by the current system and reduces duplicate original system actions where possible.
 
 Try the following:
 
@@ -55,18 +55,18 @@ Try the following:
 3. Quit other utilities that rewrite keyboard or media keys.
 4. Right-click the menu bar icon, choose **Show Logs**, and record the button and state at the time of the issue.
 
-The Menu action uses the native macOS context-menu key rather than Shift-F10. If an alert sound remains, report the physical button, current mapping, foreground app, and whether HID status is exclusive or compatibility mode.
+The Menu action uses the native macOS context-menu key rather than Shift-F10. If an alert sound remains, report the physical button, current mapping, foreground app, and the button status shown by Remote Mic.
 
 ## The voice button does not trigger Fn
 
-The Fn mapping matches RC003 only; it never changes a MacBook keyboard or other devices.
+The Fn function applies only to the supported Xiaomi Bluetooth remote; it never changes a MacBook keyboard or other devices.
 
 1. Confirm that Bluetooth status shows a successful connection.
 2. Quit and relaunch Remote Mic so the device mapping can be applied again.
-3. Confirm that the remote model is RC003.
+3. Confirm that the remote is a Xiaomi Bluetooth Remote 2 Pro.
 4. Inspect **Voice Trigger** under **Connection & Voice**.
 
-Remote Mic restores the RC003 voice-button mapping that existed before launch when it quits.
+Remote Mic restores the remote voice-button setting that existed before launch when it quits.
 
 ## macOS blocks the installer
 
@@ -106,4 +106,4 @@ Right-click the menu bar icon and choose **Show Logs**. The log file is:
 
     ~/Library/Logs/RemoteMic/runtime.log
 
-Logs do not contain voice content, Bluetooth addresses, or peripheral UUIDs. When reporting an issue, include macOS version, Mac chip, remote model, reproduction steps, and the relevant log excerpt.
+Logs do not contain voice content, Bluetooth addresses, or unique device identifiers. When reporting an issue, include macOS version, Mac chip, remote model, reproduction steps, and the relevant log excerpt.

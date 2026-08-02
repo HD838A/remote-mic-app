@@ -6,19 +6,19 @@ import Foundation
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     let settings = AppSettings()
 
-    @Published private(set) var connectionStatus = LocalizedMessage("正在初始化蓝牙")
-    @Published private(set) var hidStatus = LocalizedMessage("按键映射未启用")
-    @Published private(set) var audioStatus = LocalizedMessage("未选择语音输出设备")
-    @Published private(set) var doubaoAudioStatus = LocalizedMessage("正在检查豆包兼容音频设备")
+    @Published private(set) var connectionStatus = LocalizedMessage("bluetooth.status.initializing")
+    @Published private(set) var hidStatus = LocalizedMessage("button_mapping.status.disabled")
+    @Published private(set) var audioStatus = LocalizedMessage("audio.output.none_selected")
+    @Published private(set) var doubaoAudioStatus = LocalizedMessage("audio.compatibility.checking")
     @Published private(set) var isStreaming = false
     @Published private(set) var isConnected = false
     @Published private(set) var isVoiceTriggerEnabled = false
     @Published private(set) var activeRemoteButtons = Set<RemoteButton>()
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
-    @Published private(set) var testToneStatus = LocalizedMessage("未选择语音输出设备")
+    @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
     @Published private(set) var isAudioOutputReady = false
-    @Published private(set) var voiceShortcutStatus = LocalizedMessage("正在准备遥控器 Fn 硬件映射")
+    @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
 
     private let audioOutput = VirtualAudioOutput()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
@@ -91,7 +91,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioRecoveryWorkItem = nil
         stopObservingAudioHardware()
         cancelTestToneIfNeeded(
-            statusMessage: LocalizedMessage("应用已停止"),
+            statusMessage: LocalizedMessage("app.status.stopped"),
             logReason: "app_stop"
         )
         bluetoothBridge.stop()
@@ -153,8 +153,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             let audioStatus = self.audioOutput.status
             let isAudioOutputReady = self.audioOutput.isReadyForTestTone
             let testToneStatus = isAudioOutputReady
-                ? LocalizedMessage("可发送测试音")
-                : LocalizedMessage("未选择语音输出设备或设备不可用")
+                ? LocalizedMessage("audio.test_tone.ready")
+                : LocalizedMessage("audio.output.none_or_unavailable")
             let outputState = self.audioOutput.diagnosticState()
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -196,7 +196,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func selectDoubaoAudioDevice() {
         guard let device = DoubaoAudioDevicePolicy.device(in: audioDevices) else {
             doubaoAudioStatus = LocalizedMessage(
-                "未检测到 %@，请先安装兼容驱动",
+                "audio.compatibility.device_missing",
                 arguments: [DoubaoAudioDevicePolicy.deviceName]
             )
             return
@@ -204,7 +204,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         settings.selectedAudioDeviceUID = device.uid
         applyAudioSettings(reason: "doubao_device_selected")
         doubaoAudioStatus = LocalizedMessage(
-            "已选择 %@ 作为遥控器语音输出",
+            "audio.compatibility.device_selected",
             arguments: [device.name]
         )
     }
@@ -222,15 +222,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func applyAudioSettings(reason: String = "settings_change") {
         AppLogger.shared.write("AUDIO REBIND begin reason=\(reason) state={\(audioOutput.diagnosticState())}")
         cancelTestToneIfNeeded(
-            statusMessage: LocalizedMessage("设备已更新，测试音已取消"),
+            statusMessage: LocalizedMessage("audio.test_tone.cancelled_device_changed"),
             logReason: "device_reconfigure"
         )
         let configured = audioOutput.configure(deviceUID: settings.selectedAudioDeviceUID)
         audioStatus = audioOutput.status
         isAudioOutputReady = audioOutput.isReadyForTestTone
         testToneStatus = isAudioOutputReady
-            ? LocalizedMessage("可发送测试音")
-            : LocalizedMessage("未选择语音输出设备或设备不可用")
+            ? LocalizedMessage("audio.test_tone.ready")
+            : LocalizedMessage("audio.output.none_or_unavailable")
         AppLogger.shared.write(
             "AUDIO REBIND finished reason=\(reason) success=\(configured) status=\(audioStatus.key) " +
                 "state={\(audioOutput.diagnosticState())}"
@@ -365,12 +365,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             isPlaying: isPlayingTestTone
         ) else {
             if isStreaming {
-                testToneStatus = LocalizedMessage("RC003 语音进行中，已拒绝测试音")
+                testToneStatus = LocalizedMessage("audio.test_tone.blocked_voice_active")
                 AppLogger.shared.write("AUDIO TEST_TONE rejected_streaming")
             } else if isPlayingTestTone {
-                testToneStatus = LocalizedMessage("测试音正在播放中")
+                testToneStatus = LocalizedMessage("audio.test_tone.already_playing")
             } else {
-                testToneStatus = LocalizedMessage("未选择语音输出设备或设备不可用")
+                testToneStatus = LocalizedMessage("audio.output.none_or_unavailable")
             }
             return
         }
@@ -383,18 +383,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
         }
         guard started else {
-            testToneStatus = LocalizedMessage("测试音发送失败：设备未就绪")
+            testToneStatus = LocalizedMessage("audio.test_tone.device_not_ready")
             return
         }
         isPlayingTestTone = true
-        testToneStatus = LocalizedMessage("正在播放约 1 秒测试音")
+        testToneStatus = LocalizedMessage("audio.test_tone.playing")
         AppLogger.shared.write("AUDIO TEST_TONE played")
     }
 
     private func handleTestToneCompletion(generation: Int, finished: Bool) {
         guard generation == testToneGeneration, isPlayingTestTone else { return }
         isPlayingTestTone = false
-        testToneStatus = LocalizedMessage(finished ? "测试音已完成" : "测试音已取消")
+        testToneStatus = LocalizedMessage(finished ? "audio.test_tone.completed" : "audio.test_tone.cancelled")
         AppLogger.shared.write("AUDIO TEST_TONE \(finished ? "finished" : "cut_short")")
     }
 
@@ -477,7 +477,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func bluetoothBridgeDidStartVoice(_ bridge: XiaomiBluetoothBridge) {
         cancelTestToneIfNeeded(
-            statusMessage: LocalizedMessage("RC003 语音进行中，已拒绝测试音"),
+            statusMessage: LocalizedMessage("audio.test_tone.blocked_voice_active"),
             logReason: "voice_start"
         )
         if voiceSessionStartedAt == nil {
@@ -507,7 +507,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard !isStreaming else { return }
         isVoiceTriggerEnabled = applied
         voiceShortcutStatus = LocalizedMessage(
-            applied ? "遥控器语音键已硬件映射为 Fn" : "等待遥控器 Fn 硬件映射"
+            applied ? "voice_button.status.fn_enabled" : "voice_button.status.waiting"
         )
     }
 
@@ -516,7 +516,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let shouldHold = transition == .press
         isVoiceTriggerEnabled = !shouldHold
         voiceShortcutStatus = LocalizedMessage(
-            shouldHold ? "硬件 Fn 已按下；松开语音键即释放" : "硬件 Fn 已释放"
+            shouldHold ? "voice_button.status.fn_pressed" : "voice_button.status.fn_released"
         )
         AppLogger.shared.write(
             "VOICE FN HARDWARE \(shouldHold ? "DOWN" : "UP") " +

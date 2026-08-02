@@ -1,5 +1,11 @@
 # Version History
 
+## 1.6.0 (Pre-release)
+
+- Migrated all interface copy to stable semantic localization keys, with English fallback and dynamic language-resource validation.
+- Replaced implementation terminology in ordinary screens with user-facing product language and added a bilingual Glossary entry to About.
+- Hid the visible window title and separator so the page background blends naturally with the native macOS window controls.
+
 ## 1.5.1
 
 - Opened the main window by default on ordinary launches, with an About-page preference to disable it.

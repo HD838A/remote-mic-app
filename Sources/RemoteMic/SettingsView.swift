@@ -14,10 +14,10 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 
     var title: LocalizedStringKey {
         switch self {
-        case .connection: return "连接"
-        case .mapping: return "按键"
-        case .permissions: return "权限"
-        case .about: return "关于"
+        case .connection: return "settings.section.connection"
+        case .mapping: return "settings.section.buttons"
+        case .permissions: return "settings.section.permissions"
+        case .about: return "settings.section.about"
         }
     }
 
@@ -37,8 +37,8 @@ private enum PermissionVisualState {
 
     func title(using localization: LocalizationStore) -> String {
         switch self {
-        case .granted: return localization.text("已开启")
-        case .pending: return localization.text("待授权")
+        case .granted: return localization.text("permission.status.enabled")
+        case .pending: return localization.text("permission.status.pending")
         }
     }
 
@@ -101,6 +101,7 @@ struct SettingsView: View {
             selectedPage
         }
         .navigationSplitViewStyle(.balanced)
+        .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
         .frame(minWidth: 760, minHeight: 600)
         .onAppear(perform: refreshPermissionStates)
@@ -182,8 +183,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
-                    title: localization.text("连接与语音"),
-                    subtitle: localization.text("连接 RC003，并配置语音输出与触发方式")
+                    title: localization.text("connection.page.title"),
+                    subtitle: localization.text("connection.page.subtitle")
                 )
 
                 CompatibilityGlassContainer(spacing: 14) {
@@ -205,9 +206,9 @@ struct SettingsView: View {
         GlassPanel {
             VStack(spacing: 14) {
                 VStack(spacing: 2) {
-                    Text("RC003")
+                    Text("connection.device.name")
                         .font(.headline)
-                    Text("语音遥控器")
+                    Text("connection.device.type")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -218,23 +219,23 @@ struct SettingsView: View {
                 VStack(spacing: 12) {
                     DeviceStatusStep(
                         symbol: "antenna.radiowaves.left.and.right",
-                        title: localization.text("蓝牙状态"),
+                        title: localization.text("connection.status.bluetooth_title"),
                         detail: model.connectionStatus.text(using: localization),
                         badge: connectionBadge,
                         tint: connectionTint
                     )
                     DeviceStatusStep(
                         symbol: "waveform",
-                        title: localization.text("语音状态"),
+                        title: localization.text("connection.status.voice_title"),
                         detail: localization.text(
-                            model.isStreaming ? "正在传输遥控器语音" : "等待麦克风键"
+                            model.isStreaming ? "connection.status.voice_streaming" : "connection.status.waiting_voice_button"
                         ),
-                        badge: localization.text(model.isStreaming ? "语音中" : "已就绪"),
+                        badge: localization.text(model.isStreaming ? "connection.status.voice_active" : "common.status.ready"),
                         tint: model.isStreaming ? .orange : .blue
                     )
                     DeviceStatusStep(
                         symbol: "mic.fill",
-                        title: localization.text("语音触发"),
+                        title: localization.text("connection.status.voice_trigger"),
                         detail: model.voiceShortcutStatus.text(using: localization),
                         badge: voiceTriggerBadge,
                         tint: .blue
@@ -244,7 +245,7 @@ struct SettingsView: View {
                 Button {
                     model.reconnect()
                 } label: {
-                    Text("立即重新连接")
+                    Text("connection.action.reconnect")
                         .foregroundStyle(.white)
                 }
                     .compatibilityButtonStyle(.prominent)
@@ -257,11 +258,11 @@ struct SettingsView: View {
     private var audioSettingsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 13) {
-                Text("音频设置")
+                Text("audio.section.title")
                     .font(.headline)
 
                 HStack(spacing: 14) {
-                    Text("语音输出")
+                    Text("audio.output.title")
                         .frame(width: 72, alignment: .leading)
                     Picker("", selection: Binding(
                         get: { settings.selectedAudioDeviceUID },
@@ -270,7 +271,7 @@ struct SettingsView: View {
                             model.applyAudioSettings()
                         }
                     )) {
-                        Text("不输出语音").tag("")
+                        Text("audio.output.disabled").tag("")
                         ForEach(model.audioDevices, id: \.uid) { device in
                             Text(device.name).tag(device.uid)
                         }
@@ -281,7 +282,7 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 14) {
-                        Text("增益")
+                        Text("audio.gain.title")
                             .frame(width: 72, alignment: .leading)
                         Slider(value: Binding(
                             get: { settings.gainDB },
@@ -292,7 +293,7 @@ struct SettingsView: View {
                             .frame(width: 54, alignment: .trailing)
                     }
 
-                    Text("0 dB 保持原始音量；数值越大声音越响，也会放大环境噪声。建议先从 6–12 dB 开始。")
+                    Text("audio.gain.help")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.leading, 86)
@@ -300,7 +301,7 @@ struct SettingsView: View {
                 }
 
                 HStack(alignment: .firstTextBaseline) {
-                    Text("音频状态")
+                    Text("audio.status.title")
                         .frame(width: 72, alignment: .leading)
                     Spacer(minLength: 10)
                     Text(model.audioStatus.text(using: localization))
@@ -312,18 +313,18 @@ struct SettingsView: View {
                     Button {
                         model.refreshAudioDevices()
                     } label: {
-                        Text("刷新音频设备")
+                        Text("audio.action.refresh_devices")
                             .foregroundStyle(.white)
                     }
                         .compatibilityButtonStyle(.prominent)
-                    Link("获取 BlackHole", destination: URL(string: "https://existential.audio/blackhole/")!)
+                    Link("audio.action.learn_virtual_microphones", destination: URL(string: "https://existential.audio/blackhole/")!)
                         .compatibilityButtonStyle(.standard)
-                    Button("发送 1 秒测试音") { model.sendTestTone() }
+                    Button("audio.action.send_test_tone") { model.sendTestTone() }
                         .compatibilityButtonStyle(.standard)
                         .disabled(!model.canSendTestTone)
                 }
 
-                Text("应用只把 RC003 语音写到所选设备，不会修改系统默认输入或输出。")
+                Text("audio.output.privacy_help")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -338,9 +339,9 @@ struct SettingsView: View {
 
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("豆包输入法兼容")
+                        Text("audio.compatibility.title")
                             .font(.headline)
-                        Text("兼容虚拟麦克风")
+                        Text("audio.compatibility.microphone_label")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -351,16 +352,16 @@ struct SettingsView: View {
                 }
 
                 HStack(spacing: 10) {
-                    Button("选择 MiRemoteV 2ch") { model.selectDoubaoAudioDevice() }
+                    Button("audio.compatibility.select_microphone") { model.selectDoubaoAudioDevice() }
                         .compatibilityButtonStyle(.standard)
                         .disabled(!model.hasDoubaoAudioDevice)
-                    Button("打开驱动安装说明") {
+                    Button("audio.compatibility.open_install_guide") {
                         model.openDoubaoDriverInstructions(using: localization)
                     }
                         .compatibilityButtonStyle(.standard)
                 }
 
-                Text("豆包会过滤普通 virtual transport 音频设备。安装独立的 MiRemoteV 2ch 后在这里选中；原 BlackHole 不会被修改或替换。")
+                Text("audio.compatibility.help")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -371,14 +372,14 @@ struct SettingsView: View {
     private var mappingPage: some View {
         VStack(alignment: .leading, spacing: 16) {
             PageHeader(
-                title: localization.text("按键映射"),
-                subtitle: localization.text("自定义 RC003 按键功能，并保留语音键的固定核心行为")
+                title: localization.text("button_mapping.page.title"),
+                subtitle: localization.text("button_mapping.page.subtitle")
             )
 
             GlassPanel {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Toggle("启用 RC003 自定义按键映射", isOn: Binding(
+                        Toggle("button_mapping.toggle.enabled", isOn: Binding(
                             get: { settings.customMappingEnabled },
                             set: { enabled in
                                 settings.customMappingEnabled = enabled
@@ -391,10 +392,10 @@ struct SettingsView: View {
                     }
                     Spacer(minLength: 12)
                     StatusPill(
-                        text: localization.text(settings.customMappingEnabled ? "已启用" : "未启用"),
+                        text: localization.text(settings.customMappingEnabled ? "common.status.enabled" : "common.status.disabled"),
                         tint: settings.customMappingEnabled ? .green : .secondary
                     )
-                    Button("恢复默认") {
+                    Button("common.action.restore_defaults") {
                         settings.resetBindings()
                         selectedRemoteButton = .ok
                     }
@@ -421,9 +422,9 @@ struct SettingsView: View {
                     GlassPanel {
                         VStack(alignment: .leading, spacing: 10) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("按键动作")
+                                Text("button_mapping.actions.title")
                                     .font(.headline)
-                                Text("点击或按下左侧实体按键定位；修改后自动保存。")
+                                Text("button_mapping.actions.help")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -474,9 +475,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
-                .help(
-                    "\(button.displayName(using: localization)) · HID \(String(format: "0x%02X", button.hidUsage))"
-                )
+                .help(button.displayName(using: localization))
 
                 Picker("", selection: Binding(
                     get: { currentAction },
@@ -500,7 +499,7 @@ struct SettingsView: View {
                         } ?? false
                         Text(
                             action.displayName(using: localization) +
-                                (unavailable ? localization.text("（未安装）") : "")
+                                (unavailable ? localization.text("common.suffix.not_installed") : "")
                         )
                         .tag(action)
                     }
@@ -521,7 +520,7 @@ struct SettingsView: View {
                         Image(systemName: "keyboard")
                         Text(
                             currentShortcut?.displayName(using: localization) ??
-                                localization.text("点击录入快捷键")
+                                localization.text("shortcut.action.record")
                         )
                             .lineLimit(1)
                         Spacer(minLength: 4)
@@ -535,7 +534,7 @@ struct SettingsView: View {
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
-                .help(localization.text("录入要发送给当前应用的键盘快捷键"))
+                .help(localization.text("shortcut.record.help"))
             }
         }
         .padding(.horizontal, 8)
@@ -561,7 +560,7 @@ struct SettingsView: View {
             HStack {
                 Text(
                     String(
-                        format: localization.text("%@其他触发"),
+                        format: localization.text("trigger.other_actions"),
                         locale: localization.locale,
                         arguments: [button.displayName(using: localization)]
                     )
@@ -569,7 +568,7 @@ struct SettingsView: View {
                     .font(.caption.weight(.semibold))
                 Spacer()
                 if settings.hasSecondaryAction(for: button) {
-                    Text("按住重复已停用")
+                    Text("trigger.hold_repeat_disabled")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.orange)
                 }
@@ -578,7 +577,7 @@ struct SettingsView: View {
             secondaryActionRow(button, trigger: .doubleClick)
             secondaryActionRow(button, trigger: .longPress)
 
-            Text("双击会等待约 0.3 秒确认单击；长按约 0.55 秒触发。未配置时保持原有即时响应。")
+            Text("trigger.timing.help")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
         }
@@ -616,7 +615,7 @@ struct SettingsView: View {
                     } ?? false
                     Text(
                         action.displayName(using: localization) +
-                            (unavailable ? localization.text("（未安装）") : "")
+                            (unavailable ? localization.text("common.suffix.not_installed") : "")
                     )
                     .tag(action)
                 }
@@ -634,7 +633,7 @@ struct SettingsView: View {
                     HStack(spacing: 5) {
                         Text(
                             configured.shortcut?.displayName(using: localization) ??
-                                localization.text("点击录入")
+                                localization.text("shortcut.action.click_to_record")
                         )
                             .lineLimit(1)
                         Image(systemName: "pencil")
@@ -656,24 +655,24 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
-                    title: localization.text("权限与隐私"),
-                    subtitle: localization.text("按顺序完成权限设置，确保 RC003 正常连接和发送按键")
+                    title: localization.text("permissions.page.title"),
+                    subtitle: localization.text("permissions.page.subtitle")
                 )
 
                 CompatibilityGlassContainer(spacing: 14) {
                     GlassPanel {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("所需权限")
+                            Text("permissions.required.title")
                                 .font(.headline)
                                 .padding(.bottom, 8)
 
                             permissionRow(
                                 index: 1,
                                 symbol: "antenna.radiowaves.left.and.right",
-                                title: localization.text("蓝牙"),
-                                detail: localization.text("连接 RC003 并读取 ATVV 语音服务"),
+                                title: localization.text("permission.bluetooth.title"),
+                                detail: localization.text("permission.bluetooth.description"),
                                 state: bluetoothPermissionState,
-                                actionTitle: localization.text("打开蓝牙设置")
+                                actionTitle: localization.text("permission.bluetooth.open_settings")
                             ) {
                                 if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
                                     NSWorkspace.shared.open(url)
@@ -685,10 +684,10 @@ struct SettingsView: View {
                             permissionRow(
                                 index: 2,
                                 symbol: "keyboard",
-                                title: localization.text("输入监控"),
-                                detail: localization.text("读取 RC003 原始 HID 报告，并在兼容模式下抑制重复系统事件"),
+                                title: localization.text("permission.input_monitoring.title"),
+                                detail: localization.text("permission.input_monitoring.description"),
                                 state: inputMonitoringGranted ? .granted : .pending,
-                                actionTitle: localization.text("请求权限")
+                                actionTitle: localization.text("permission.action.request")
                             ) {
                                 model.requestInputMonitoringPermission()
                             }
@@ -698,10 +697,10 @@ struct SettingsView: View {
                             permissionRow(
                                 index: 3,
                                 symbol: "accessibility",
-                                title: localization.text("辅助功能"),
-                                detail: localization.text("把映射后的按键动作发送给当前应用"),
+                                title: localization.text("permission.accessibility.title"),
+                                detail: localization.text("permission.accessibility.description"),
                                 state: accessibilityGranted ? .granted : .pending,
-                                actionTitle: localization.text("请求权限")
+                                actionTitle: localization.text("permission.action.request")
                             ) {
                                 model.requestAccessibilityPermission()
                             }
@@ -710,7 +709,7 @@ struct SettingsView: View {
 
                     GlassPanel {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("诊断")
+                            Text("diagnostics.title")
                                 .font(.headline)
                             HStack(spacing: 12) {
                                 Image(systemName: "doc.text.magnifyingglass")
@@ -722,13 +721,13 @@ struct SettingsView: View {
                                         in: Circle()
                                     )
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("应用日志")
-                                    Text("日志不记录语音内容、蓝牙地址或外设 UUID。")
+                                    Text("diagnostics.logs.title")
+                                    Text("diagnostics.logs.privacy")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Button("在 Finder 中显示日志") { model.openLogFolder() }
+                                Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
                                     .compatibilityButtonStyle(.standard)
                             }
                         }
@@ -745,8 +744,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
-                    title: localization.text("关于无线麦"),
-                    subtitle: localization.text("你的无线语音工作台，配置、统计与隐私一目了然")
+                    title: localization.text("menu.about"),
+                    subtitle: localization.text("about.page.hero_subtitle")
                 )
 
                 CompatibilityGlassContainer(spacing: 14) {
@@ -759,13 +758,13 @@ struct SettingsView: View {
                                     .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("无线麦")
+                                    Text("app.name")
                                         .font(.system(size: 28, weight: .semibold))
-                                    Text("让遥控器成为随手可用的 Mac 语音与快捷操作入口。")
+                                    Text("about.page.hero_description")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                     StatusPill(
-                                        text: localization.text("数据仅存本机"),
+                                        text: localization.text("about.privacy.local_only"),
                                         tint: .green
                                     )
                                 }
@@ -787,9 +786,9 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 14) {
                                 HStack(alignment: .firstTextBaseline) {
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text("本地使用统计")
+                                        Text("about.usage.title")
                                             .font(.headline)
-                                        Text("只记录使用量，不记录、保存或分析任何语音内容。")
+                                        Text("about.usage.description")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -801,19 +800,19 @@ struct SettingsView: View {
                                 HStack(spacing: 12) {
                                     UsageStatisticCard(
                                         systemImage: "button.programmable",
-                                        title: localization.text("按键次数"),
+                                        title: localization.text("about.usage.button_count"),
                                         value: buttonPressCountText,
                                         tint: .blue
                                     )
                                     UsageStatisticCard(
                                         systemImage: "waveform",
-                                        title: localization.text("语音时长"),
+                                        title: localization.text("about.usage.voice_duration"),
                                         value: voiceDurationText,
                                         tint: .orange
                                     )
                                 }
 
-                                Text("统计仅保存在这台 Mac 上，配置导出不会包含这些数据。按键次数包含应用识别的普通按键与语音键。")
+                                Text("about.usage.details")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -823,9 +822,9 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 14) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text("个性化配置")
+                                        Text("about.configuration.title")
                                             .font(.headline)
-                                        Text("迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示与启动设置。")
+                                        Text("about.configuration.description")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -837,12 +836,12 @@ struct SettingsView: View {
 
                                 HStack(spacing: 10) {
                                     Button(action: exportConfiguration) {
-                                        Label("导出配置…", systemImage: "square.and.arrow.up")
+                                        Label("about.configuration.export", systemImage: "square.and.arrow.up")
                                     }
                                     .compatibilityButtonStyle(.prominent)
 
                                     Button(action: importConfiguration) {
-                                        Label("导入配置…", systemImage: "square.and.arrow.down")
+                                        Label("about.configuration.import", systemImage: "square.and.arrow.down")
                                     }
                                     .compatibilityButtonStyle(.standard)
 
@@ -863,35 +862,35 @@ struct SettingsView: View {
                         HStack(alignment: .top, spacing: 14) {
                             GlassPanel {
                                 VStack(alignment: .leading, spacing: 14) {
-                                    Text("应用偏好")
+                                    Text("about.preferences.title")
                                         .font(.headline)
 
-                                    Toggle("在 Dock 中显示应用图标", isOn: Binding(
+                                    Toggle("about.preferences.show_dock_icon", isOn: Binding(
                                         get: { settings.showDockIcon },
                                         set: { setDockIconVisible($0) }
                                     ))
 
-                                    Text("关闭后仍可通过菜单栏图标打开无线麦。")
+                                    Text("about.preferences.show_dock_icon_help")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
 
                                     Divider()
 
                                     Toggle(
-                                        "启动时自动打开主面板",
+                                        "about.preferences.open_main_window_at_launch",
                                         isOn: $settings.openMainWindowAtLaunch
                                     )
 
-                                    Text("关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。")
+                                    Text("about.preferences.open_main_window_help")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
 
                                     Divider()
 
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("应用语言")
+                                        Text("about.preferences.language")
                                             .font(.subheadline.weight(.medium))
-                                        Picker("应用语言", selection: Binding(
+                                        Picker("about.preferences.language", selection: Binding(
                                             get: { localization.language },
                                             set: { localization.select($0) }
                                         )) {
@@ -908,11 +907,11 @@ struct SettingsView: View {
 
                             GlassPanel {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("版本与更新")
+                                    Text("about.version.title")
                                         .font(.headline)
 
                                     VStack(alignment: .leading, spacing: 10) {
-                                        Text("当前版本")
+                                        Text("about.version.current")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                         Text(versionText)
@@ -920,7 +919,7 @@ struct SettingsView: View {
 
                                         Button(action: checkForUpdates) {
                                             Label(
-                                                "检查更新…",
+                                                "menu.check_for_updates",
                                                 systemImage: "arrow.triangle.2.circlepath"
                                             )
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -933,7 +932,13 @@ struct SettingsView: View {
                                     Button {
                                         isReleaseHistoryPresented = true
                                     } label: {
-                                        Label("版本历史", systemImage: "clock.arrow.circlepath")
+                                        Label("about.version.history", systemImage: "clock.arrow.circlepath")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .compatibilityButtonStyle(.standard)
+
+                                    Button(action: openGlossary) {
+                                        Label("help.glossary.open", systemImage: "book.closed")
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .compatibilityButtonStyle(.standard)
@@ -941,7 +946,7 @@ struct SettingsView: View {
                                     Link(
                                         destination: URL(string: "https://github.com/HD838A/remote-mic-app")!
                                     ) {
-                                        Label("GitHub", systemImage: "link")
+                                        Label("about.support.github", systemImage: "link")
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .compatibilityButtonStyle(.standard)
@@ -949,7 +954,7 @@ struct SettingsView: View {
                                     Button {
                                         NSApp.terminate(nil)
                                     } label: {
-                                        Label("退出", systemImage: "power")
+                                        Label("common.action.quit", systemImage: "power")
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .compatibilityButtonStyle(.standard)
@@ -969,24 +974,32 @@ struct SettingsView: View {
     private var versionText: String {
         let version = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? localization.text("未知")
+        ) as? String ?? localization.text("common.value.unknown")
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
         guard let build else {
             return String(
-                format: localization.text("版本 %@"),
+                format: localization.text("app.version"),
                 locale: localization.locale,
                 arguments: [version]
             )
         }
         return String(
-            format: localization.text("版本 %@ (%@)"),
+            format: localization.text("app.version_with_build"),
             locale: localization.locale,
             arguments: [version, build]
         )
     }
 
     private func languageTitle(_ language: AppLanguage) -> String {
-        language == .system ? localization.text("跟随系统") : language.nativeDisplayName
+        language == .system ? localization.text("language.system") : language.nativeDisplayName
+    }
+
+    private func openGlossary() {
+        guard let url = localization.localizedURL(
+            forResource: "Glossary",
+            withExtension: "md"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private var buttonPressCountText: String {
@@ -1003,20 +1016,20 @@ struct SettingsView: View {
         let seconds = totalSeconds % 60
         if hours > 0 {
             return String(
-                format: localization.text("%@ 小时 %@ 分钟"),
+                format: localization.text("usage.duration.hours_minutes"),
                 locale: localization.locale,
                 arguments: [localizedNumber(UInt64(hours)), localizedNumber(UInt64(minutes))]
             )
         }
         if minutes > 0 {
             return String(
-                format: localization.text("%@ 分钟 %@ 秒"),
+                format: localization.text("usage.duration.minutes_seconds"),
                 locale: localization.locale,
                 arguments: [localizedNumber(UInt64(minutes)), localizedNumber(UInt64(seconds))]
             )
         }
         return String(
-            format: localization.text("%@ 秒"),
+            format: localization.text("usage.duration.seconds"),
             locale: localization.locale,
             arguments: [localizedNumber(UInt64(seconds))]
         )
@@ -1032,20 +1045,20 @@ struct SettingsView: View {
     private func exportConfiguration() {
         configurationStatus = nil
         guard let url = ConfigurationFilePanel.exportURL(
-            title: localization.text("导出个性化配置"),
-            prompt: localization.text("导出")
+            title: localization.text("configuration.export.panel_title"),
+            prompt: localization.text("configuration.export.prompt")
         ) else { return }
         do {
             let data = try settings.exportedConfigurationData()
             try data.write(to: url, options: .atomic)
             configurationStatus = ConfigurationStatus(
-                message: LocalizedMessage("配置已导出"),
+                message: LocalizedMessage("configuration.export.success"),
                 tint: .green,
                 systemImage: "checkmark.circle.fill"
             )
         } catch {
             configurationStatus = ConfigurationStatus(
-                message: LocalizedMessage("导出失败：无法写入文件"),
+                message: LocalizedMessage("configuration.export.write_failed"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
             )
@@ -1055,8 +1068,8 @@ struct SettingsView: View {
     private func importConfiguration() {
         configurationStatus = nil
         guard let url = ConfigurationFilePanel.importURL(
-            title: localization.text("导入个性化配置"),
-            prompt: localization.text("导入")
+            title: localization.text("configuration.import.panel_title"),
+            prompt: localization.text("configuration.import.prompt")
         ) else { return }
         do {
             try settings.importConfiguration(from: Data(contentsOf: url))
@@ -1065,19 +1078,19 @@ struct SettingsView: View {
             model.applyAudioSettings(reason: "configuration_import")
             model.applyHIDSettings()
             configurationStatus = ConfigurationStatus(
-                message: LocalizedMessage("配置已导入并应用"),
+                message: LocalizedMessage("configuration.import.success"),
                 tint: .green,
                 systemImage: "checkmark.circle.fill"
             )
         } catch AppConfigurationError.unsupportedVersion {
             configurationStatus = ConfigurationStatus(
-                message: LocalizedMessage("导入失败：不支持此配置版本"),
+                message: LocalizedMessage("configuration.import.unsupported_version"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
             )
         } catch {
             configurationStatus = ConfigurationStatus(
-                message: LocalizedMessage("导入失败：配置文件无效"),
+                message: LocalizedMessage("configuration.import.invalid_file"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
             )
@@ -1128,7 +1141,7 @@ struct SettingsView: View {
     }
 
     private var connectionBadge: String {
-        localization.text(model.isConnected ? "已连接" : "连接中")
+        localization.text(model.isConnected ? "common.status.connected" : "common.status.connecting")
     }
 
     private var connectionTint: Color {
@@ -1136,7 +1149,7 @@ struct SettingsView: View {
     }
 
     private var voiceTriggerBadge: String {
-        localization.text(model.isVoiceTriggerEnabled ? "已启用" : "准备中")
+        localization.text(model.isVoiceTriggerEnabled ? "common.status.enabled" : "common.status.preparing")
     }
 
     private var bluetoothPermissionState: PermissionVisualState {
@@ -1157,10 +1170,10 @@ private struct ReleaseHistorySheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(localization.text("版本历史"))
+                Text(localization.text("about.version.history"))
                     .font(.title2.weight(.semibold))
                 Spacer()
-                Button(localization.text("关闭")) { dismiss() }
+                Button(localization.text("common.action.close")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
             .padding(20)
@@ -1189,7 +1202,7 @@ private struct ReleaseHistorySheet: View {
                     .textSelection(.enabled)
                     .padding(24)
                 } else {
-                    Text(localization.text("无法加载版本历史。"))
+                    Text(localization.text("about.version.history_load_failed"))
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .padding(24)
                 }
@@ -1269,7 +1282,7 @@ private struct ShortcutEditorSheet: View {
             VStack(spacing: 5) {
                 Text(
                     String(
-                        format: localization.text("录入%@%@快捷键"),
+                        format: localization.text("shortcut.editor.title"),
                         locale: localization.locale,
                         arguments: [
                             button.displayName(using: localization),
@@ -1278,7 +1291,7 @@ private struct ShortcutEditorSheet: View {
                     )
                 )
                     .font(.title3.weight(.semibold))
-                Text("直接按下想要的按键组合，支持 Command、Option、Control、Shift 和 Fn。")
+                Text("shortcut.editor.instructions")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -1286,7 +1299,7 @@ private struct ShortcutEditorSheet: View {
 
             Text(
                 shortcut?.displayName(using: localization) ??
-                    localization.text("等待按键…")
+                    localization.text("shortcut.editor.waiting")
             )
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .foregroundStyle(shortcut == nil ? Color.secondary : Color.primary)
@@ -1297,7 +1310,7 @@ private struct ShortcutEditorSheet: View {
                 .frame(height: 1)
 
             HStack {
-                Button("清除") {
+                Button("common.action.clear") {
                     onSave(nil)
                     dismiss()
                 }
@@ -1305,8 +1318,8 @@ private struct ShortcutEditorSheet: View {
 
                 Spacer()
 
-                Button("取消") { dismiss() }
-                Button("保存") {
+                Button("common.action.cancel") { dismiss() }
+                Button("common.action.save") {
                     onSave(shortcut)
                     dismiss()
                 }
@@ -1689,7 +1702,7 @@ private struct RC003Photo: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(.quaternary)
                     .overlay {
-                        Text("实物图资源缺失")
+                        Text("remote.photo.missing")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -1731,7 +1744,7 @@ private struct RemoteControlDiagram: View {
             .frame(width: canvasSize.width, height: canvasSize.height)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            Text("点击或按下实物按键定位映射；麦克风键固定为硬件语音/Fn。")
+            Text("remote.mapping.instructions")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -1781,8 +1794,8 @@ private struct RemoteControlDiagram: View {
             .contentShape(Circle())
             .frame(width: canvasSize.width * width, height: canvasSize.height * height)
             .position(x: canvasSize.width * x, y: canvasSize.height * y)
-            .help(localization.text("遥控器真实 F5 硬件按下/松开会映射为 Mac Fn；同时桥接 ATVV 语音"))
+            .help(localization.text("remote.voice_button.help"))
             .accessibilityElement()
-            .accessibilityLabel(Text(localization.text("语音/Fn 键，固定核心功能")))
+            .accessibilityLabel(Text(localization.text("remote.voice_button.accessibility_label")))
     }
 }

@@ -60,21 +60,60 @@ test -f "$APP/Contents/Resources/StatusIconTemplate.png"
 test -f "$APP/Contents/Resources/StatusIconTemplate@2x.png"
 test -f "$APP/Contents/Resources/StatusIconActiveTemplate.png"
 test -f "$APP/Contents/Resources/StatusIconActiveTemplate@2x.png"
-for localization in en zh-Hans; do
-  RESOURCE_DIR="$APP/Contents/Resources/$localization.lproj"
+LOCALIZATION_DIRS=("$APP"/Contents/Resources/*.lproj(N))
+if (( ${#LOCALIZATION_DIRS} == 0 )); then
+  print -u2 "app bundle contains no localization resources"
+  exit 1
+fi
+test -d "$APP/Contents/Resources/en.lproj"
+test -f "$APP/Contents/Resources/en.lproj/Glossary.md"
+for RESOURCE_DIR in "${LOCALIZATION_DIRS[@]}"; do
   test -f "$RESOURCE_DIR/InfoPlist.strings"
   test -f "$RESOURCE_DIR/Localizable.strings"
-  test -f "$RESOURCE_DIR/DoubaoInputMethodCompatibility.md"
-  test -f "$RESOURCE_DIR/FirstInstallGuide.md"
-  test -f "$RESOURCE_DIR/ReleaseHistory.md"
   plutil -lint "$RESOURCE_DIR/InfoPlist.strings"
   plutil -lint "$RESOURCE_DIR/Localizable.strings"
 done
-rg -q '^"无线麦" = "Remote Mic";$' "$APP/Contents/Resources/en.lproj/Localizable.strings"
-rg -q '^"无线麦" = "无线麦";$' "$APP/Contents/Resources/zh-Hans.lproj/Localizable.strings"
-ZH_KEYS="$(plutil -convert xml1 -o - "$APP/Contents/Resources/zh-Hans.lproj/Localizable.strings" | sed -n 's/^[[:space:]]*<key>\(.*\)<\/key>$/\1/p' | LC_ALL=C sort)"
-EN_KEYS="$(plutil -convert xml1 -o - "$APP/Contents/Resources/en.lproj/Localizable.strings" | sed -n 's/^[[:space:]]*<key>\(.*\)<\/key>$/\1/p' | LC_ALL=C sort)"
-test "$ZH_KEYS" = "$EN_KEYS"
+rg -q '^"app.name" = "Remote Mic";$' "$APP/Contents/Resources/en.lproj/Localizable.strings"
+/usr/bin/ruby - "${LOCALIZATION_DIRS[@]}" <<'RUBY'
+def strings(path)
+  result = {}
+  File.foreach(path, encoding: "UTF-8") do |line|
+    match = line.match(/^"([^"]+)" = "(.*)";$/)
+    result[match[1]] = match[2] if match
+  end
+  result
+end
+
+directories = ARGV
+english_directory = directories.find { |path| File.basename(path) == "en.lproj" }
+abort "English localization is required" unless english_directory
+english = strings(File.join(english_directory, "Localizable.strings"))
+abort "English localization is empty" if english.empty?
+semantic_key = /\A[a-z0-9]+(?:[._][a-z0-9]+)*\z/
+invalid_keys = english.keys.reject { |key| semantic_key.match?(key) }
+abort "Invalid localization keys: #{invalid_keys.join(", ")}" unless invalid_keys.empty?
+
+format_pattern = /%(?:[0-9]+\$)?[a-zA-Z@]/
+restricted_terms = /RC003|ATVV|\bHID\b|\bUUID\b|virtual[ -]transport/i
+directories.each do |directory|
+  localized = strings(File.join(directory, "Localizable.strings"))
+  missing = english.keys - localized.keys
+  extra = localized.keys - english.keys
+  abort "#{directory} has missing keys: #{missing.join(", ")}" unless missing.empty?
+  abort "#{directory} has extra keys: #{extra.join(", ")}" unless extra.empty?
+  localized.each do |key, value|
+    abort "#{directory} has an empty value for #{key}" if value.empty?
+    expected_formats = english.fetch(key).scan(format_pattern).sort
+    actual_formats = value.scan(format_pattern).sort
+    abort "#{directory} has mismatched formats for #{key}" unless actual_formats == expected_formats
+    abort "#{directory} exposes a restricted term in #{key}" if value.match?(restricted_terms)
+  end
+
+  english_info = strings(File.join(english_directory, "InfoPlist.strings"))
+  localized_info = strings(File.join(directory, "InfoPlist.strings"))
+  abort "#{directory} has incomplete InfoPlist.strings" unless localized_info.keys.sort == english_info.keys.sort
+end
+RUBY
 
 test "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = \
   "com.hd838a.RemoteMic"
@@ -118,10 +157,17 @@ test "$ARCHS" = "arm64"
 xcrun vtool -show-build "$BINARY" | rg -q 'minos 14\.0'
 otool -l "$BINARY" | rg -A2 'LC_RPATH' | rg -q '@executable_path/\.\./Frameworks'
 
-EXPECTED_APP_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/Resources/en.lproj/DoubaoInputMethodCompatibility.md\nContents/Resources/en.lproj/FirstInstallGuide.md\nContents/Resources/en.lproj/InfoPlist.strings\nContents/Resources/en.lproj/Localizable.strings\nContents/Resources/en.lproj/ReleaseHistory.md\nContents/Resources/zh-Hans.lproj/DoubaoInputMethodCompatibility.md\nContents/Resources/zh-Hans.lproj/FirstInstallGuide.md\nContents/Resources/zh-Hans.lproj/InfoPlist.strings\nContents/Resources/zh-Hans.lproj/Localizable.strings\nContents/Resources/zh-Hans.lproj/ReleaseHistory.md\nContents/_CodeSignature/CodeResources'
+EXPECTED_APP_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"
+for source_localization_dir in "$ROOT"/Resources/*.lproj(N); do
+  localization_name="${source_localization_dir:t}"
+  while IFS= read -r source_file; do
+    relative_path="${source_file#$source_localization_dir/}"
+    test -f "$APP/Contents/Resources/$localization_name/$relative_path"
+  done < <(find "$source_localization_dir" -type f | LC_ALL=C sort)
+done
 
 if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' "$APP/Contents"; then
   print -u2 "bundle contains a forbidden local path or example device address"

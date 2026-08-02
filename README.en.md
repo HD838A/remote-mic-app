@@ -4,7 +4,7 @@
 
 ![Remote Mic — a voice remote for Vibe Coding](Screenshots/Remote-Mic-Introduce-1.png)
 
-Remote Mic is a macOS app that turns a Xiaomi Bluetooth Remote 2 Pro (RC003) into a wireless voice remote for your Mac. It provides both a standard Dock entry and a persistent menu bar entry.
+Remote Mic is a macOS app that turns a Xiaomi Bluetooth Remote 2 Pro into a wireless voice remote for your Mac. It provides both a standard Dock entry and a persistent menu bar entry.
 
 Hold the remote voice button to speak. The direction, OK, Back, Home, Menu, TV, Power, and volume buttons can control macOS or launch commonly used apps.
 
@@ -14,7 +14,7 @@ Hold the remote voice button to speak. The direction, OK, Back, Home, Menu, TV, 
 
 - Apple Silicon Mac
 - macOS 14 or later
-- Xiaomi Bluetooth Remote 2 Pro / RC003
+- Xiaomi Bluetooth Remote 2 Pro
 - For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
 
 ## Download and install
@@ -42,7 +42,7 @@ Remote Mic appears in the Dock and remains in the menu bar after launch:
 - Left-click the icon to open Settings.
 - Right-click the icon to show status, reconnect, logs, About, version, update, GitHub, language, and Quit actions.
 
-Remote Mic opens its main window by default on ordinary launches. The **About** page at the bottom of the Settings sidebar provides version, update, version history, GitHub, language, Quit, Dock display, and launch controls. Turn off **Open main window at launch** to keep ordinary launches in the menu bar; an update relaunch still opens the main window unconditionally. Turn off **Show app icon in the Dock** to keep Remote Mic available only from its menu bar entry; the Dock icon can be restored from the same page.
+Remote Mic opens its main window by default on ordinary launches. The **About** page at the bottom of the Settings sidebar provides version, update, version history, glossary, GitHub, language, Quit, Dock display, and launch controls. Turn off **Open main window at launch** to keep ordinary launches in the menu bar; an update relaunch still opens the main window unconditionally. Turn off **Show app icon in the Dock** to keep Remote Mic available only from its menu bar entry; the Dock icon can be restored from the same page.
 
 **App Language** displays **System Default**, **简体中文**, and **English** together. The settings window, status text, menu, and built-in help follow the selection. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
 
@@ -73,7 +73,7 @@ Each ordinary button supports a single-click action and optional double-click an
 - A long press triggers after about 0.55 seconds and suppresses the single-click action.
 - Buttons with a configured double-click or long-press do not hold-repeat, preventing multiple actions from firing at once.
 
-The voice button is always reserved for voice input and does not participate in ordinary button mapping.
+The voice button is always reserved for voice input and Fn functions and does not participate in ordinary button mapping.
 
 ## Permissions and privacy
 

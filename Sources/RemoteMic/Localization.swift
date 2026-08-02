@@ -9,11 +9,9 @@ enum AppLanguage: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 
     var nativeDisplayName: String {
-        switch self {
-        case .system: return "System Default"
-        case .simplifiedChinese: return "简体中文"
-        case .english: return "English"
-        }
+        guard self != .system else { return rawValue }
+        let nativeLocale = Locale(identifier: rawValue)
+        return nativeLocale.localizedString(forIdentifier: rawValue) ?? rawValue
     }
 }
 
@@ -42,19 +40,27 @@ final class LocalizationStore: ObservableObject {
     @Published private(set) var locale: Locale
 
     private let settings: AppSettings
+    private let resourceBundle: Bundle
     private var localeObserver: NSObjectProtocol?
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, resourceBundle: Bundle = .main) {
         self.settings = settings
+        self.resourceBundle = resourceBundle
         language = settings.applicationLanguage
-        locale = Self.resolvedLocale(for: settings.applicationLanguage)
+        locale = Self.resolvedLocale(
+            for: settings.applicationLanguage,
+            resourceBundle: resourceBundle
+        )
         localeObserver = NotificationCenter.default.addObserver(
             forName: NSLocale.currentLocaleDidChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             guard let self, self.language == .system else { return }
-            self.locale = Self.resolvedLocale(for: .system)
+            self.locale = Self.resolvedLocale(
+                for: .system,
+                resourceBundle: self.resourceBundle
+            )
         }
     }
 
@@ -68,42 +74,78 @@ final class LocalizationStore: ObservableObject {
         guard self.language != language else { return }
         settings.applicationLanguage = language
         self.language = language
-        locale = Self.resolvedLocale(for: language)
+        locale = Self.resolvedLocale(for: language, resourceBundle: resourceBundle)
     }
 
     func text(_ key: String) -> String {
-        localizedBundle.localizedString(forKey: key, value: key, table: "Localizable")
+        if let localizedBundle = bundle(for: locale.identifier) {
+            let value = localizedBundle.localizedString(
+                forKey: key,
+                value: nil,
+                table: "Localizable"
+            )
+            if value != key {
+                return value
+            }
+        }
+
+        if locale.identifier != AppLanguage.english.rawValue,
+           let englishBundle = bundle(for: AppLanguage.english.rawValue) {
+            return englishBundle.localizedString(
+                forKey: key,
+                value: key,
+                table: "Localizable"
+            )
+        }
+
+        return key
     }
 
     func localizedURL(forResource name: String, withExtension extension: String) -> URL? {
-        Bundle.main.url(
+        if let localizedURL = resourceBundle.url(
             forResource: name,
             withExtension: `extension`,
             subdirectory: nil,
             localization: locale.identifier
+        ) {
+            return localizedURL
+        }
+
+        guard locale.identifier != AppLanguage.english.rawValue else { return nil }
+        return resourceBundle.url(
+            forResource: name,
+            withExtension: `extension`,
+            subdirectory: nil,
+            localization: AppLanguage.english.rawValue
         )
     }
 
-    private var localizedBundle: Bundle {
-        guard let path = Bundle.main.path(forResource: locale.identifier, ofType: "lproj"),
-              let bundle = Bundle(path: path)
-        else {
-            return .main
+    private func bundle(for localizationIdentifier: String) -> Bundle? {
+        guard let path = resourceBundle.path(
+            forResource: localizationIdentifier,
+            ofType: "lproj"
+        ) else {
+            return nil
         }
-        return bundle
+        return Bundle(path: path)
     }
 
-    private static func resolvedLocale(for language: AppLanguage) -> Locale {
+    private static func resolvedLocale(
+        for language: AppLanguage,
+        resourceBundle: Bundle
+    ) -> Locale {
         switch language {
         case .simplifiedChinese:
             return Locale(identifier: "zh-Hans")
         case .english:
             return Locale(identifier: "en")
         case .system:
-            let usesChinese = Locale.preferredLanguages.contains { identifier in
-                Locale(identifier: identifier).language.languageCode?.identifier == "zh"
-            }
-            return Locale(identifier: usesChinese ? "zh-Hans" : "en")
+            let supportedLocalizations = resourceBundle.localizations.filter { $0 != "Base" }
+            let preferredLocalization = Bundle.preferredLocalizations(
+                from: supportedLocalizations,
+                forPreferences: Locale.preferredLanguages
+            ).first ?? AppLanguage.english.rawValue
+            return Locale(identifier: preferredLocalization)
         }
     }
 }

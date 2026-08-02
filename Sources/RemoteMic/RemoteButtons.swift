@@ -36,35 +36,35 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
 
     func shortLabel(using localization: LocalizationStore) -> String {
         switch self {
-        case .power: return localization.text("电源")
-        case .up: return localization.text("上")
-        case .left: return localization.text("左")
+        case .power: return localization.text("remote.button.short.power")
+        case .up: return localization.text("remote.button.short.up")
+        case .left: return localization.text("remote.button.short.left")
         case .ok: return "OK"
-        case .right: return localization.text("右")
-        case .down: return localization.text("下")
-        case .back: return localization.text("返回")
+        case .right: return localization.text("remote.button.short.right")
+        case .down: return localization.text("remote.button.short.down")
+        case .back: return localization.text("remote.button.short.back")
         case .volumeUp: return "+"
-        case .home: return localization.text("主页")
+        case .home: return localization.text("remote.button.short.home")
         case .volumeDown: return "−"
-        case .menu: return localization.text("菜单")
+        case .menu: return localization.text("remote.button.short.menu")
         case .tv: return "TV"
         }
     }
 
     func displayName(using localization: LocalizationStore) -> String {
         switch self {
-        case .power: return localization.text("电源键")
-        case .up: return localization.text("上键")
-        case .left: return localization.text("左键")
-        case .ok: return localization.text("确定键")
-        case .right: return localization.text("右键")
-        case .down: return localization.text("下键")
-        case .back: return localization.text("返回键")
-        case .volumeUp: return localization.text("音量 +")
-        case .home: return localization.text("主页键")
-        case .volumeDown: return localization.text("音量 -")
-        case .menu: return localization.text("菜单键")
-        case .tv: return localization.text("TV 键")
+        case .power: return localization.text("remote.button.full.power")
+        case .up: return localization.text("remote.button.full.up")
+        case .left: return localization.text("remote.button.full.left")
+        case .ok: return localization.text("remote.button.full.ok")
+        case .right: return localization.text("remote.button.full.right")
+        case .down: return localization.text("remote.button.full.down")
+        case .back: return localization.text("remote.button.full.back")
+        case .volumeUp: return localization.text("remote.button.full.volume_up")
+        case .home: return localization.text("remote.button.full.home")
+        case .volumeDown: return localization.text("remote.button.full.volume_down")
+        case .menu: return localization.text("remote.button.full.menu")
+        case .tv: return localization.text("remote.button.full.tv")
         }
     }
 
@@ -154,20 +154,20 @@ struct CustomKeyboardShortcut: Codable, Equatable {
 
     private func localizedKeyLabel(using localization: LocalizationStore) -> String {
         switch keyCode {
-        case 36: return localization.text("Return")
-        case 48: return localization.text("Tab")
-        case 49: return localization.text("Space")
-        case 71: return localization.text("Clear")
-        case 76: return localization.text("Enter")
-        case 114: return localization.text("Help")
-        case 115: return localization.text("Home")
-        case 116: return localization.text("Page Up")
-        case 119: return localization.text("End")
-        case 121: return localization.text("Page Down")
+        case 36: return localization.text("keyboard.key.return")
+        case 48: return localization.text("keyboard.key.tab")
+        case 49: return localization.text("keyboard.key.space")
+        case 71: return localization.text("keyboard.key.clear")
+        case 76: return localization.text("keyboard.key.enter")
+        case 114: return localization.text("keyboard.key.help")
+        case 115: return localization.text("keyboard.key.home")
+        case 116: return localization.text("keyboard.key.page_up")
+        case 119: return localization.text("keyboard.key.end")
+        case 121: return localization.text("keyboard.key.page_down")
         default:
-            if keyLabel.hasPrefix("键码 "), let keyCode = Int(keyLabel.dropFirst(3)) {
+            if keyLabel.hasPrefix("Key Code ") || keyLabel.hasPrefix("键码 ") {
                 return String(
-                    format: localization.text("键码 %@"),
+                    format: localization.text("keyboard.key_code"),
                     locale: localization.locale,
                     arguments: [String(keyCode)]
                 )
@@ -231,9 +231,9 @@ enum ButtonTrigger: String, CaseIterable, Codable, Identifiable {
 
     func displayName(using localization: LocalizationStore) -> String {
         switch self {
-        case .singleClick: return localization.text("单击")
-        case .doubleClick: return localization.text("双击")
-        case .longPress: return localization.text("长按")
+        case .singleClick: return localization.text("trigger.single_click")
+        case .doubleClick: return localization.text("trigger.double_click")
+        case .longPress: return localization.text("trigger.long_press")
         }
     }
 }
@@ -269,16 +269,16 @@ enum PresetApplication: String, CaseIterable, Identifiable {
 
     func displayName(using localization: LocalizationStore) -> String {
         switch self {
-        case .remoteMic: return localization.text("无线麦")
+        case .remoteMic: return localization.text("app.name")
         case .codex: return "Codex"
         case .claude: return "Claude"
         case .cmux: return "cmux"
-        case .weChat: return localization.text("微信")
+        case .weChat: return localization.text("application.wechat")
         case .cursor: return "Cursor"
         case .xcode: return "Xcode"
         case .slack: return "Slack"
-        case .weCom: return localization.text("企业微信")
-        case .neteaseMusic: return localization.text("网易云音乐")
+        case .weCom: return localization.text("application.wecom")
+        case .neteaseMusic: return localization.text("application.netease_music")
         case .chrome: return "Chrome"
         case .safari: return "Safari"
         case .zed: return "Zed"
@@ -356,35 +356,35 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
 
     func displayName(using localization: LocalizationStore) -> String {
         switch self {
-        case .disabled: return localization.text("禁用")
+        case .disabled: return localization.text("action.disabled")
         case .escape: return "Escape"
         case .returnKey: return "Return"
-        case .arrowUp: return localization.text("方向上")
-        case .arrowDown: return localization.text("方向下")
-        case .arrowLeft: return localization.text("方向左")
-        case .arrowRight: return localization.text("方向右")
-        case .deleteBackward: return localization.text("Delete（退格）")
-        case .showDesktop: return localization.text("显示桌面")
-        case .contextMenu: return localization.text("上下文菜单")
+        case .arrowUp: return localization.text("action.arrow_up")
+        case .arrowDown: return localization.text("action.arrow_down")
+        case .arrowLeft: return localization.text("action.arrow_left")
+        case .arrowRight: return localization.text("action.arrow_right")
+        case .deleteBackward: return localization.text("action.delete_backspace")
+        case .showDesktop: return localization.text("action.show_desktop")
+        case .contextMenu: return localization.text("action.context_menu")
         case .appSwitcher: return "Command-Tab"
-        case .volumeUp: return localization.text("系统音量 +")
-        case .volumeDown: return localization.text("系统音量 -")
-        case .volumeMute: return localization.text("系统静音")
-        case .playPause: return localization.text("播放 / 暂停")
-        case .customShortcut: return localization.text("自定义快捷键")
-        case .openRemoteMic: return localization.text("打开无线麦")
-        case .openCodex: return localization.text("打开 Codex")
-        case .openClaude: return localization.text("打开 Claude")
-        case .openCmux: return localization.text("打开 cmux")
-        case .openWeChat: return localization.text("打开微信")
-        case .openCursor: return localization.text("打开 Cursor")
-        case .openXcode: return localization.text("打开 Xcode")
-        case .openSlack: return localization.text("打开 Slack")
-        case .openWeCom: return localization.text("打开企业微信")
-        case .openNeteaseMusic: return localization.text("打开网易云音乐")
-        case .openChrome: return localization.text("打开 Chrome")
-        case .openSafari: return localization.text("打开 Safari")
-        case .openZed: return localization.text("打开 Zed")
+        case .volumeUp: return localization.text("action.system_volume_up")
+        case .volumeDown: return localization.text("action.system_volume_down")
+        case .volumeMute: return localization.text("action.system_mute")
+        case .playPause: return localization.text("action.play_pause")
+        case .customShortcut: return localization.text("action.custom_shortcut")
+        case .openRemoteMic: return localization.text("action.open_remote_mic")
+        case .openCodex: return localization.text("action.open_codex")
+        case .openClaude: return localization.text("action.open_claude")
+        case .openCmux: return localization.text("action.open_cmux")
+        case .openWeChat: return localization.text("action.open_wechat")
+        case .openCursor: return localization.text("action.open_cursor")
+        case .openXcode: return localization.text("action.open_xcode")
+        case .openSlack: return localization.text("action.open_slack")
+        case .openWeCom: return localization.text("action.open_wecom")
+        case .openNeteaseMusic: return localization.text("action.open_netease_music")
+        case .openChrome: return localization.text("action.open_chrome")
+        case .openSafari: return localization.text("action.open_safari")
+        case .openZed: return localization.text("action.open_zed")
         }
     }
 

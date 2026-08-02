@@ -72,10 +72,16 @@ for icon_resource in \
     "$ROOT/Resources/$icon_resource" \
     "$APP_DIR/Contents/Resources/$icon_resource"
 done
-for localization in en zh-Hans; do
+LOCALIZATION_DIRS=("$ROOT"/Resources/*.lproj(N))
+if (( ${#LOCALIZATION_DIRS} == 0 )); then
+  print -u2 "no localization resources found"
+  exit 1
+fi
+for localization_dir in "${LOCALIZATION_DIRS[@]}"; do
+  localization="${localization_dir:t}"
   ditto --norsrc --noextattr --noqtn --noacl \
-    "$ROOT/Resources/$localization.lproj" \
-    "$APP_DIR/Contents/Resources/$localization.lproj"
+    "$localization_dir" \
+    "$APP_DIR/Contents/Resources/$localization"
 done
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then

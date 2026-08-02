@@ -22,4 +22,133 @@ struct LocalizationTests {
         #expect(localization.locale.identifier == "zh-Hans")
         #expect(AppSettings(defaults: defaults).applicationLanguage == .simplifiedChinese)
     }
+
+    @Test func localizationFilesUseSemanticCompleteKeysAndMatchingFormats() throws {
+        let localizationDirectories = try sourceLocalizationDirectories()
+        let englishDirectory = try #require(
+            localizationDirectories.first { $0.lastPathComponent == "en.lproj" }
+        )
+        let english = try strings(at: englishDirectory.appendingPathComponent("Localizable.strings"))
+        let englishInfo = try strings(at: englishDirectory.appendingPathComponent("InfoPlist.strings"))
+
+        #expect(!english.isEmpty)
+        for (key, value) in english {
+            #expect(key.range(of: #"^[a-z0-9]+(?:[._][a-z0-9]+)*$"#, options: .regularExpression) != nil)
+            #expect(!value.isEmpty)
+            #expect(value != key)
+        }
+
+        for directory in localizationDirectories {
+            let localized = try strings(at: directory.appendingPathComponent("Localizable.strings"))
+            let localizedInfo = try strings(at: directory.appendingPathComponent("InfoPlist.strings"))
+            #expect(Set(localized.keys) == Set(english.keys))
+            #expect(Set(localizedInfo.keys) == Set(englishInfo.keys))
+
+            for key in english.keys {
+                let englishValue = try #require(english[key])
+                let localizedValue = try #require(localized[key])
+                #expect(!localizedValue.isEmpty)
+                #expect(localizedValue != key)
+                #expect(formatPlaceholders(in: localizedValue) == formatPlaceholders(in: englishValue))
+                #expect(!containsRestrictedUserTerm(localizedValue))
+            }
+        }
+    }
+
+    @Test func glossaryResourcesContainTheDocumentedTechnicalTerms() throws {
+        for localization in ["en", "zh-Hans"] {
+            let glossaryURL = repositoryRoot
+                .appendingPathComponent("Resources")
+                .appendingPathComponent("\(localization).lproj")
+                .appendingPathComponent("Glossary.md")
+            let glossary = try String(contentsOf: glossaryURL, encoding: .utf8)
+            for term in ["RC003", "ATVV", "HID", "UUID", "Core Audio", "DMG", "PKG"] {
+                #expect(glossary.contains(term))
+            }
+        }
+    }
+
+    @Test func localizedDocumentsFallBackToEnglish() throws {
+        let fileManager = FileManager.default
+        let temporaryRoot = fileManager.temporaryDirectory
+            .appendingPathComponent("RemoteMicLocalizationTests-\(UUID().uuidString)")
+        let bundleURL = temporaryRoot.appendingPathComponent("Localization.bundle")
+        let contentsURL = bundleURL.appendingPathComponent("Contents")
+        let resourcesURL = contentsURL.appendingPathComponent("Resources")
+        let englishURL = resourcesURL.appendingPathComponent("en.lproj")
+        let chineseURL = resourcesURL.appendingPathComponent("zh-Hans.lproj")
+        defer { try? fileManager.removeItem(at: temporaryRoot) }
+
+        try fileManager.createDirectory(at: englishURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: chineseURL, withIntermediateDirectories: true)
+        let info: [String: Any] = [
+            "CFBundleDevelopmentRegion": "en",
+            "CFBundleIdentifier": "com.hd838a.RemoteMic.LocalizationTests",
+            "CFBundlePackageType": "BNDL"
+        ]
+        let infoData = try PropertyListSerialization.data(
+            fromPropertyList: info,
+            format: .xml,
+            options: 0
+        )
+        try infoData.write(to: contentsURL.appendingPathComponent("Info.plist"))
+        try Data("English glossary".utf8).write(to: englishURL.appendingPathComponent("Glossary.md"))
+
+        let bundle = try #require(Bundle(url: bundleURL))
+        let suiteName = "RemoteMicTests.LocalizationFallback.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.applicationLanguage = .simplifiedChinese
+        let localization = LocalizationStore(settings: settings, resourceBundle: bundle)
+        let localizedURL = try #require(
+            localization.localizedURL(forResource: "Glossary", withExtension: "md")
+        )
+
+        #expect(try String(contentsOf: localizedURL, encoding: .utf8) == "English glossary")
+    }
+}
+
+private var repositoryRoot: URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+}
+
+private func sourceLocalizationDirectories() throws -> [URL] {
+    let resourcesURL = repositoryRoot.appendingPathComponent("Resources")
+    return try FileManager.default.contentsOfDirectory(
+        at: resourcesURL,
+        includingPropertiesForKeys: [.isDirectoryKey],
+        options: [.skipsHiddenFiles]
+    )
+    .filter { $0.pathExtension == "lproj" }
+    .sorted { $0.lastPathComponent < $1.lastPathComponent }
+}
+
+private func strings(at url: URL) throws -> [String: String] {
+    let data = try Data(contentsOf: url)
+    let propertyList = try PropertyListSerialization.propertyList(
+        from: data,
+        options: [],
+        format: nil
+    )
+    return try #require(propertyList as? [String: String])
+}
+
+private func formatPlaceholders(in value: String) -> [String] {
+    let expression = try! NSRegularExpression(pattern: #"%(?:[0-9]+\$)?[a-zA-Z@]"#)
+    let range = NSRange(value.startIndex..., in: value)
+    return expression.matches(in: value, range: range).compactMap { match in
+        guard let range = Range(match.range, in: value) else { return nil }
+        return String(value[range])
+    }.sorted()
+}
+
+private func containsRestrictedUserTerm(_ value: String) -> Bool {
+    value.range(
+        of: #"RC003|ATVV|\bHID\b|\bUUID\b|virtual[ -]transport"#,
+        options: [.regularExpression, .caseInsensitive]
+    ) != nil
 }

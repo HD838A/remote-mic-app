@@ -183,7 +183,7 @@ final class VirtualAudioOutput {
     )!
 
     private(set) var selectedDevice: AudioDeviceInfo?
-    private(set) var status = LocalizedMessage("未选择语音输出设备")
+    private(set) var status = LocalizedMessage("audio.output.none_selected")
     var onConfigurationChange: (() -> Void)?
 
     @discardableResult
@@ -191,13 +191,13 @@ final class VirtualAudioOutput {
         let previousState = diagnosticState()
         stop()
         guard !deviceUID.isEmpty else {
-            status = LocalizedMessage("未选择语音输出设备")
+            status = LocalizedMessage("audio.output.none_selected")
             AppLogger.shared.write("AUDIO CONFIGURE skipped reason=no_selected_device previous={\(previousState)}")
             return false
         }
         let availableDevices = CoreAudioDeviceCatalog.outputDevices()
         guard let device = availableDevices.first(where: { $0.uid == deviceUID }) else {
-            status = LocalizedMessage("所选语音输出设备不可用")
+            status = LocalizedMessage("audio.output.selected_unavailable")
             AppLogger.shared.write(
                 "AUDIO CONFIGURE failed reason=selected_device_unavailable " +
                     "available={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(availableDevices))}"
@@ -215,7 +215,7 @@ final class VirtualAudioOutput {
         engine.connect(player, to: engine.mainMixerNode, format: sourceFormat)
 
         guard let outputUnit = engine.outputNode.audioUnit else {
-            status = LocalizedMessage("无法打开 CoreAudio 输出单元")
+            status = LocalizedMessage("audio.output.core_audio_open_failed")
             AppLogger.shared.write("AUDIO CONFIGURE failed reason=no_output_unit target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}")
             return false
         }
@@ -229,7 +229,7 @@ final class VirtualAudioOutput {
             UInt32(MemoryLayout<AudioDeviceID>.size)
         )
         guard result == noErr else {
-            status = LocalizedMessage("无法选择音频设备（错误 %@）", arguments: [String(result)])
+            status = LocalizedMessage("audio.output.select_failed", arguments: [String(result)])
             AppLogger.shared.write(
                 "AUDIO CONFIGURE failed reason=set_current_device " +
                     "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} error=\(result)"
@@ -243,7 +243,7 @@ final class VirtualAudioOutput {
             guard AudioPlayerNodeSafety.play(player) else {
                 player.stop()
                 engine.stop()
-                status = LocalizedMessage("所选语音输出设备不可用")
+                status = LocalizedMessage("audio.output.selected_unavailable")
                 AppLogger.shared.write(
                     "AUDIO ERROR player_start_exception " +
                         "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
@@ -254,12 +254,12 @@ final class VirtualAudioOutput {
             self.player = player
             selectedDevice = device
             observeConfigurationChanges(for: engine)
-            status = LocalizedMessage("语音输出：%@", arguments: [device.name])
+            status = LocalizedMessage("audio.output.current_format", arguments: [device.name])
             AppLogger.shared.write("AUDIO READY target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} state={\(diagnosticState())}")
             return true
         } catch {
             status = LocalizedMessage(
-                "启动音频输出失败：%@",
+                "audio.output.start_failed",
                 arguments: [error.localizedDescription]
             )
             AppLogger.shared.write(

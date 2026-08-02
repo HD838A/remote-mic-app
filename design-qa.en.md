@@ -16,11 +16,14 @@
 - The settings UI uses a narrow sidebar, header, and layered content areas. The primary actions on all four pages remain available at the minimum window size.
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
 - It uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
+- The window keeps native traffic-light controls and a meaningful logical title while hiding the visible title and titlebar separator. Page backgrounds extend to the top, blank titlebar content remains draggable, and interactive content stays clear of the window controls.
 - Panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
 - The UI does not show a separate mute key that is absent from the physical remote.
-- About keeps the current version and update check together, displays every language option at once, presents localized version history in a sheet, and controls whether ordinary launches open the main window automatically.
+- Regular UI uses product language instead of remote model codes, Bluetooth voice protocol names, button protocol names, hexadecimal button numbers, or device-identifier terminology.
+- About keeps the current version and update check together, displays every language option at once, presents localized version history in a sheet, opens a glossary through the system Markdown app, and controls whether ordinary launches open the main window automatically.
+- All UI text uses stable semantic keys. Localized Markdown help falls back to English when the selected language has no matching document.
 
 ## Code locations
 
