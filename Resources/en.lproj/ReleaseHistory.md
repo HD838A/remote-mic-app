@@ -1,5 +1,11 @@
 # Version History
 
+## 1.6.2
+
+- Remembered an approved phone installation for future nearby connections, with a Settings action to clear trusted phones.
+- Improved pairing-code synchronization and visibility, including reconnecting after the iOS App restarts.
+- Fixed microphone startup failures that could occur even when iPhone microphone access was already enabled, while keeping technical errors out of user-facing messages.
+
 ## 1.6.1
 
 - Added nearby iPhone/iPad remote control and push-to-talk with pairing-code verification and encrypted transport.
