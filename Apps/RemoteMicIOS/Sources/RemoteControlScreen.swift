@@ -85,7 +85,7 @@ struct RemoteControlScreen: View {
                         Text("已连接")
                             .foregroundStyle(Color.green.opacity(0.88))
                     }
-                    Text("Andy 的 MacBook Air")
+                    Text("Mac 设备")
                         .foregroundStyle(RemotePalette.text.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
