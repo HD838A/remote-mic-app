@@ -103,7 +103,7 @@
 
 ## 许可与来源
 
-本项目软件代码采用 `GPL-3.0-only` 许可。App Logo 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本项目的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可；独立的 `Apps/RemoteMicIOS/` iOS 子项目代码采用 [Apache-2.0](Apps/RemoteMicIOS/LICENSE.md)。两个 App 的 Logo 和 App Icon 都是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 项目最初 fork 自 [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge)，现由本仓库独立维护。
 

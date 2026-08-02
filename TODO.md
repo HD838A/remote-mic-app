@@ -5,6 +5,15 @@
   - Windows 与 macOS 必须独立构建、签名、打包、验证和发布：Windows 当前决定只使用免费自签 Authenticode 证书与 EXE/MSI/ZIP 产物，不购买微软/公共 CA 签名，也不复用 Apple Developer ID、APP/PKG/DMG、公证或 Sparkle 流水线。自签版本仍会出现未知发布者或 SmartScreen 提示。
   - 总体方案见 [Windows 支持可行性研究](Research/WindowsSupport/README.md)。
   - fork、Release、CI、许可与最终排名见 [Windows 源码与 fork 对比](Research/WindowsSupport/candidate-comparison.md)。
+- [ ] 开发手机伴侣 App，让手机可以替代或补充蓝牙遥控器控制 Mac
+  - 当前结论：可行。Mac 端继续负责执行按键动作、打开应用和输出虚拟麦克风；手机端提供虚拟遥控按键和按住说话，不要求用户必须购买 RC003。
+  - 已新增同仓库独立 iOS 17+ SwiftUI 工程并完成核心遥控页面：方向、确定、返回、主页、菜单、TV、关机、音量和按住说话均具备按压状态、无障碍标签与统一震动反馈；当前连接状态为界面体验状态，Bonjour/TLS 配对、真实按键传输和麦克风音频链路仍待后续接入，因此本条保持未完成。
+  - TestFlight 发布准备已完成：iOS 工程固定使用 Team `L3QHLDRPAY`、Bundle ID `com.hd838a.RemoteMicIOS` 和 Automatic Signing，Debug Simulator Build 与无签名 Release Archive 均已通过；Xcode Cloud 工作流和首次内部 TestFlight 上传完成后再补充最终结果。
+  - 第一阶段优先支持 iPhone/iPad 前台使用：通过 Network framework、Bonjour、TLS 和一次性配对码发现并连接 Mac。启用 `includePeerToPeer` 后，附近设备可以使用点对点链路，不应把“连接同一个无线路由器”设为硬性前提。
+  - 按键协议只发送白名单虚拟按键和单击/双击/长按事件，由 Mac 根据本机配置映射到现有 `ButtonAction` / `KeyboardInjector`；禁止手机直接下发 shell、任意脚本或未授权键盘数据。
+  - 第二阶段增加手机麦克风按住说话：发送 16kHz 单声道 PCM 或 Opus 音频，由 Mac 接入现有 `VirtualAudioOutput` 和 MiRemoteV 2ch 链路。第一版保持 App 在前台，不承诺锁屏遥控、后台常驻或持续收音。
+  - 后续再评估 Android、桌面小组件/快捷指令、多台 Mac 切换和跨互联网远程控制；跨互联网需要独立的账号、端到端加密、设备撤销和中继服务，不与附近直连第一版混在一起。
+  - 架构选择、官方平台限制、实现阶段和验收标准见 [手机伴侣 App 可行性研究](Research/MobileCompanionApp/README.md)。
 - [x] 将最低支持版本降低到 macOS 14.0，仅支持 Apple Silicon Mac
   - macOS 14.0、14.4 和 15.0 的 `arm64` 编译探测结果完全一致：66 条可用性诊断全部集中在 `SettingsView.swift` 的 macOS 26 Liquid Glass API，没有额外核心功能编译错误。
   - MiRemoteV 2ch 已成功构建为 `arm64`、Mach-O `minos 14.0`；Sparkle 2.9.4 的 Apple Silicon Framework 最低版本为 macOS 11.0。

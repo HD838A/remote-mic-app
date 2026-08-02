@@ -3,6 +3,7 @@ dist/
 .swiftpm/
 *.xcuserstate
 .DS_Store
+.codex-screenshots/
 
 # Local credentials, signing identities, and notarization material.
 .env

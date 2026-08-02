@@ -19,6 +19,10 @@ Copyright (C) 2026 Remote Mic contributors
 
 本适配作品的软件代码按 `GPL-3.0-only` 发布。完整许可见 [LICENSE.md](LICENSE.md)，第三方来源和归属见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
+## iOS 子项目
+
+`Apps/RemoteMicIOS/` 是独立开发的 iOS 子项目，其软件代码按 [Apache-2.0](Apps/RemoteMicIOS/LICENSE.md) 发布，不属于根目录 `GPL-3.0-only` 软件代码授权范围。该例外不包含下述 App Logo 和 App Icon 品牌资产。
+
 ## App Logo
 
 以下 App Logo 是独立的专有品牌资产，不属于 `GPL-3.0-only` 授权范围：
@@ -26,6 +30,9 @@ Copyright (C) 2026 Remote Mic contributors
 - `Resources/AppIcon.png`；
 - `Resources/AppIcon.icns`；
 - 由上述文件生成或演绎的版本。
+- `Apps/RemoteMicIOS/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png`；
+- `Apps/RemoteMicIOS/Resources/Assets.xcassets/AppLogo.imageset/AppLogo.png`；
+- 由上述 iOS 文件生成或演绎的版本。
 
 允许在未经修改的无线麦官方源码和官方发行版本中原样分发。用于其他应用、Fork、修改版本、产品或品牌标识时，必须事先取得版权所有者的书面授权。完整条款见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。
 
