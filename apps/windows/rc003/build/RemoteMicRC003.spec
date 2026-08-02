@@ -8,6 +8,7 @@ SRC_ROOT = RC003_ROOT / "src"
 
 hiddenimports = [
     "ovb_rc003.app",
+    "ovb_rc003.action_executor",
     "ovb_rc003.atvv_protocol",
     "ovb_rc003.atvv_session",
     "ovb_rc003.audio_output",
@@ -17,8 +18,13 @@ hiddenimports = [
     "ovb_rc003.connection_supervisor",
     "ovb_rc003.device_profile",
     "ovb_rc003.identity",
+    "ovb_rc003.hid_identity",
+    "ovb_rc003.button_gesture",
+    "ovb_rc003.key_mapping",
+    "ovb_rc003.raw_input_windows",
     "ovb_rc003.settings_ui",
     "ovb_rc003.single_instance",
+    "ovb_rc003.win32_input",
     "numpy",
     "sounddevice",
     "winrt.windows.devices.bluetooth",
@@ -27,6 +33,9 @@ hiddenimports = [
     "winrt.windows.storage.streams",
     "winrt.windows.foundation",
     "winrt.windows.foundation.collections",
+    "PySide6.QtCore",
+    "PySide6.QtGui",
+    "PySide6.QtWidgets",
 ]
 
 a = Analysis(
@@ -38,7 +47,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["PySide6", "frida"],
+    excludes=["frida"],
     noarchive=False,
 )
 

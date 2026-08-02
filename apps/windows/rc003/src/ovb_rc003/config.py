@@ -1,12 +1,15 @@
-"""Windows RC003 客户端的最小、版本化配置。"""
+"""Windows RC003 客户端的版本化配置。"""
 
 from __future__ import annotations
 
 import json
 import os
 import tempfile
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping
+
+from . import key_mapping
 
 CONFIG_VERSION = 1
 DEFAULT_CONFIG = {
@@ -16,6 +19,8 @@ DEFAULT_CONFIG = {
     "gain_db": 10.0,
     "retry_delay": 2.0,
     "max_retry_delay": 30.0,
+    "custom_mapping_enabled": True,
+    "button_bindings": key_mapping.default_button_bindings(),
 }
 
 
@@ -65,6 +70,12 @@ def _validated(data: Mapping[str, Any]) -> dict[str, Any]:
     if retry_delay < 0.1 or max_retry_delay < retry_delay:
         raise ConfigError("重连时间配置无效")
 
+    custom_mapping_enabled = data.get("custom_mapping_enabled", True)
+    if not isinstance(custom_mapping_enabled, bool):
+        raise ConfigError("按键映射开关必须是布尔值")
+
+    button_bindings = _validated_button_bindings(data.get("button_bindings", {}))
+
     return {
         "version": CONFIG_VERSION,
         "output_endpoint_name": name.strip(),
@@ -72,20 +83,44 @@ def _validated(data: Mapping[str, Any]) -> dict[str, Any]:
         "gain_db": gain_db,
         "retry_delay": retry_delay,
         "max_retry_delay": max_retry_delay,
+        "custom_mapping_enabled": custom_mapping_enabled,
+        "button_bindings": button_bindings,
     }
+
+
+def _validated_button_bindings(raw: object) -> dict[str, dict[str, str]]:
+    defaults = key_mapping.default_button_bindings()
+    if not isinstance(raw, Mapping):
+        raw = {}
+    for button_id in key_mapping.BUTTON_IDS:
+        raw_gestures = raw.get(button_id, {})
+        if not isinstance(raw_gestures, Mapping):
+            continue
+        for trigger in key_mapping.TRIGGERS:
+            candidate = raw_gestures.get(trigger)
+            if key_mapping.is_valid_action(candidate):
+                defaults[button_id][trigger] = str(candidate)
+
+    # 麦克风键永远由 ATVV 语音生命周期接管，不能被配置文件改写。
+    defaults["mic"] = {
+        key_mapping.SINGLE_CLICK: "voice",
+        key_mapping.DOUBLE_CLICK: "disabled",
+        key_mapping.LONG_PRESS: "disabled",
+    }
+    return defaults
 
 
 def load_config(path: Path | None = None) -> dict[str, Any]:
     target = path or config_path()
     if not target.exists():
-        return dict(DEFAULT_CONFIG)
+        return deepcopy(DEFAULT_CONFIG)
     try:
         raw = json.loads(target.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ConfigError("配置文件无法读取或不是有效 JSON") from exc
     if not isinstance(raw, dict):
         raise ConfigError("配置文件根节点必须是对象")
-    merged = dict(DEFAULT_CONFIG)
+    merged = deepcopy(DEFAULT_CONFIG)
     merged.update(raw)
     return _validated(merged)
 

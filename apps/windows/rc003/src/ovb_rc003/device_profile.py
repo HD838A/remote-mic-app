@@ -34,9 +34,9 @@ HID_PRODUCT_ID = 0x32B8
 # physical buttons. The microphone button is normally expected to be signaled
 # over the ATVV GATT control channel, but real Windows RC003 hardware also
 # reports it as Keyboard F5 (usage 0x003E), so it is included here as a
-# host-trigger fallback. The first Windows microphone release does not consume
-# HID input, so these facts are retained only for later, separately reviewed
-# button support.
+# host-trigger fallback. The standard-permission Windows mapping layer consumes
+# these facts through Raw Input; the microphone usage itself remains reserved
+# for the ATVV voice lifecycle.
 HID_USAGE_PAGE = 0x07
 
 BUTTON_USAGE_IDS = {

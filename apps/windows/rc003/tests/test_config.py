@@ -12,6 +12,7 @@ class ConfigTests(unittest.TestCase):
             path = Path(temporary) / "config.json"
             first = config.load_config(path)
             first["gain_db"] = -10
+            first["button_bindings"]["ok"]["single_click"] = "escape"
 
             self.assertEqual(config.load_config(path), config.DEFAULT_CONFIG)
 
@@ -38,6 +39,29 @@ class ConfigTests(unittest.TestCase):
             config.save_config({**config.DEFAULT_CONFIG, "version": 999})
         with self.assertRaises(config.ConfigError):
             config.save_config({**config.DEFAULT_CONFIG, "gain_db": 25})
+
+    def test_mic_binding_is_always_restored_to_voice(self):
+        saved = config._validated(
+            {
+                **config.DEFAULT_CONFIG,
+                "button_bindings": {
+                    "mic": {
+                        "single_click": "open_chrome",
+                        "double_click": "escape",
+                        "long_press": "return",
+                    }
+                },
+            }
+        )
+
+        self.assertEqual(
+            saved["button_bindings"]["mic"],
+            {
+                "single_click": "voice",
+                "double_click": "disabled",
+                "long_press": "disabled",
+            },
+        )
 
 
 if __name__ == "__main__":

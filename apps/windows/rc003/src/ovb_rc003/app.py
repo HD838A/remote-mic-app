@@ -1,4 +1,4 @@
-"""只承载 RC003 BLE 麦克风链路的 Windows 桥接进程。"""
+"""承载 RC003 BLE 麦克风与标准权限按键映射的 Windows 桥接进程。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,102 @@ import logging
 import threading
 from typing import Any, Callable, Mapping, Optional
 
-from . import atvv_session, audio_output, audio_playback, ble_transport_winrt, identity
+from . import (
+    action_executor,
+    atvv_session,
+    audio_output,
+    audio_playback,
+    ble_transport_winrt,
+    button_gesture,
+    config,
+    identity,
+    key_mapping,
+    raw_input_windows,
+)
 from .connection_supervisor import ConnectionSupervisor
+
+
+class ButtonMappingRuntime:
+    """把 Raw Input 边沿转换为手势和 Windows 动作。"""
+
+    def __init__(
+        self,
+        settings: Mapping[str, Any],
+        *,
+        logger: logging.Logger,
+        listener_factory: Callable[..., Any] = raw_input_windows.RawInputListener,
+        execute_action_fn: Callable[[str], bool] = action_executor.execute_action,
+    ) -> None:
+        self._settings = dict(settings)
+        self._logger = logger
+        self._listener_factory = listener_factory
+        self._execute_action = execute_action_fn
+        self._listener: Any = None
+        self._dispatcher = button_gesture.ButtonGestureDispatcher(
+            action_for=self._action_for,
+            on_trigger=self._trigger,
+        )
+
+    def start(self) -> None:
+        if self._listener is not None:
+            return
+        try:
+            self._listener = self._listener_factory(self._on_button_edge)
+            self._listener.start()
+            self._logger.info("RC003 标准 Raw Input 按键映射已启动")
+        except Exception:  # noqa: BLE001 - microphone must remain usable
+            self._listener = None
+            self._logger.exception("按键映射启动失败；麦克风链路继续运行")
+
+    def stop(self) -> None:
+        listener = self._listener
+        self._listener = None
+        self._dispatcher.reset()
+        if listener is not None:
+            try:
+                listener.stop()
+            except Exception:  # noqa: BLE001
+                self._logger.exception("停止按键映射监听失败")
+
+    def _refresh_settings(self) -> None:
+        try:
+            self._settings = config.load_config()
+        except config.ConfigError:
+            self._logger.exception("重新读取按键映射配置失败，继续使用上次有效配置")
+
+    def _on_button_edge(self, button_id: str, pressed: bool) -> None:
+        # 语音键固定走 ATVV；Raw Input 中观察到的 F5 只用于诊断，不参与映射。
+        if button_id == "mic":
+            return
+        self._refresh_settings()
+        if not self._settings.get("custom_mapping_enabled", True):
+            self._dispatcher.reset()
+            return
+        if pressed:
+            self._dispatcher.press(button_id)
+        else:
+            self._dispatcher.release(button_id)
+
+    def _action_for(self, button_id: str, trigger: str) -> str:
+        return key_mapping.configured_action(self._settings, button_id, trigger)
+
+    def _trigger(self, button_id: str, trigger: str) -> None:
+        action = self._action_for(button_id, trigger)
+        try:
+            if not self._execute_action(action):
+                self._logger.warning(
+                    "按键动作不可用：button=%s trigger=%s action=%s",
+                    button_id,
+                    trigger,
+                    action,
+                )
+        except Exception:  # noqa: BLE001 - one mapping must not stop the bridge
+            self._logger.exception(
+                "执行按键动作失败：button=%s trigger=%s action=%s",
+                button_id,
+                trigger,
+                action,
+            )
 
 
 class RC003VoiceBridge:
@@ -19,12 +113,18 @@ class RC003VoiceBridge:
         settings: Mapping[str, Any],
         *,
         logger: Optional[logging.Logger] = None,
-        discover_candidates_fn: Callable[..., Any] = ble_transport_winrt.discover_candidates,
+        discover_candidates_fn: Callable[
+            ..., Any
+        ] = ble_transport_winrt.discover_candidates,
         session_factory: Callable[..., Any] = ble_transport_winrt.RC003BleSession,
         enumerate_output_fn: Callable[[], list[audio_output.AudioEndpoint]] = (
             audio_output.enumerate_output_endpoints
         ),
         playback_factory: Callable[..., Any] = audio_playback.EndpointPlaybackSink,
+        raw_input_listener_factory: Callable[
+            ..., Any
+        ] = raw_input_windows.RawInputListener,
+        execute_action_fn: Callable[[str], bool] = action_executor.execute_action,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
         self._settings = dict(settings)
@@ -37,6 +137,12 @@ class RC003VoiceBridge:
         self._ble_session: Any = None
         self._playback: Any = None
         self._playback_lock = threading.RLock()
+        self._button_mapping = ButtonMappingRuntime(
+            self._settings,
+            logger=self._logger,
+            listener_factory=raw_input_listener_factory,
+            execute_action_fn=execute_action_fn,
+        )
         self._supervisor = ConnectionSupervisor(
             connect=self._connect_once,
             cleanup=self._cleanup_once,
@@ -47,9 +153,14 @@ class RC003VoiceBridge:
         )
 
     async def run_forever(self) -> None:
-        await self._supervisor.run_forever()
+        self._button_mapping.start()
+        try:
+            await self._supervisor.run_forever()
+        finally:
+            self._button_mapping.stop()
 
     async def stop(self) -> None:
+        self._button_mapping.stop()
         await self._supervisor.stop()
 
     async def _connect_once(self) -> None:

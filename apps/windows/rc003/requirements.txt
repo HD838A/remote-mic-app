@@ -2,6 +2,9 @@
 numpy==2.4.3
 sounddevice==0.5.5
 
+# Windows 设置窗口使用 Qt for Python 的 Essentials 分发；最终用户无需另装 Qt。
+PySide6-Essentials==6.11.1; sys_platform == "win32"
+
 # WinRT BLE/GATT projections. These wheels are Windows-only; the marker keeps
 # protocol/unit tests installable on macOS without pretending BLE can run there.
 winrt-runtime==3.2.1; sys_platform == "win32"

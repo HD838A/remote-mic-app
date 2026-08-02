@@ -5,13 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "remote-mic-rc003"
 version = "0.1.0.dev0"
-description = "Minimal Xiaomi RC003 microphone bridge for Windows"
+description = "Xiaomi RC003 microphone and button-mapping bridge for Windows"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "GPL-3.0-only" }
 dependencies = [
   "numpy==2.4.3",
   "sounddevice==0.5.5",
+  "PySide6-Essentials==6.11.1; sys_platform == 'win32'",
   "winrt-runtime==3.2.1; sys_platform == 'win32'",
   "winrt-Windows.Devices.Bluetooth==3.2.1; sys_platform == 'win32'",
   "winrt-Windows.Devices.Bluetooth.GenericAttributeProfile==3.2.1; sys_platform == 'win32'",

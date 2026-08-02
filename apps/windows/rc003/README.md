@@ -1,6 +1,6 @@
 # Remote Mic · RC003（Windows）
 
-这是与 macOS App 完全独立打包的 Windows 最小版本。它只实现最重要的 RC003 麦克风链路：
+这是与 macOS App 完全独立打包的 Windows 版本。它同时实现 RC003 麦克风链路和普通权限按键映射：
 
 ```text
 RC003 WinRT BLE/GATT
@@ -9,9 +9,17 @@ RC003 WinRT BLE/GATT
 → 16 kHz PCM
 → 用户明确选择的 Windows 播放端点
 → 用户自行安装的 VB-CABLE CABLE Input（可选）
+
+RC003 HID
+→ Windows Raw Input
+→ 单击 / 双击 / 长按
+→ 用户映射
+→ SendInput 或打开应用
 ```
 
-不包含 DJI、Frida、WUDFHost 注入、输入法进程附加、按键注入或 VB-CABLE 安装包。
+设置窗口采用与 macOS 相同的信息架构：连接与语音、按键、权限、关于。麦克风键固定由 ATVV 语音生命周期接管，不能改成普通按键动作。
+
+不包含 DJI、Frida、WUDFHost 注入、输入法进程附加、内核驱动或 VB-CABLE 安装包。
 
 ## 系统与安装边界
 
@@ -21,6 +29,7 @@ RC003 WinRT BLE/GATT
 - 若要让输入法把 RC003 当作麦克风，用户需自行从 [VB-Audio 官网](https://vb-audio.com/Cable/) 安装 VB-CABLE；该第三方驱动通常需要 UAC 和重启。
 - Remote Mic 选择 `CABLE Input` 播放端点；输入法或语音应用选择 `CABLE Output` 录音端点。
 - Windows 产物是安装器 EXE 和 portable ZIP，不复用 macOS APP、PKG、DMG、Developer ID、公证或 Sparkle。
+- Raw Input 和 SendInput 不请求管理员权限；受 UIPI 限制，普通权限应用不能控制以管理员身份运行的目标应用。
 
 ## 运行
 
@@ -31,7 +40,7 @@ RemoteMicRC003.exe --list-output-devices
 RemoteMicRC003.exe --dry-run
 ```
 
-桥接模式使用 Windows 命名 Mutex，当前登录会话只能运行一个实例。配置和日志位于 `%LOCALAPPDATA%\RemoteMic\RC003`。
+桥接模式使用 Windows 命名 Mutex，当前登录会话只能运行一个实例。配置和日志位于 `%LOCALAPPDATA%\RemoteMic\RC003`。按键映射保存后，运行中的桥接会在下一次实体按键时读取新配置。
 
 ## 在没有 Windows 电脑时测试
 
@@ -77,8 +86,9 @@ export REMOTE_MIC_WINDOWS_PFX_PASSWORD='使用密码管理器生成的长随机�
 
 ## 已知缺口
 
-- 当前只在 Mac 上完成跨平台单元测试，尚未完成本项目自己的 Windows Runner 构建结果和真实 RC003 验收。
-- 第一版没有按键映射、自动更新、系统托盘、配置导入导出或测试音。
+- 新的 PySide6 四页设置窗口、Raw Input 和 SendInput 已完成 Mac 侧纯逻辑测试，但尚未取得这次改动对应的新 Windows Runner 打包结果。
+- 标准 Raw Input 能收到哪些 RC003 键取决于 Windows、蓝牙芯片和设备 HID 暴露方式；真实 13 键逐键验收尚未完成，系统已经消费的原始键也可能无法完全拦截。
+- 当前没有自动更新、系统托盘、配置导入导出或测试音。
 - VB-CABLE 方向配置错误时只会表现为目标应用没有声音，仍需在 Windows 真机完善诊断。
 - 免费自签不能获得公共 CA 的默认系统信任。
 

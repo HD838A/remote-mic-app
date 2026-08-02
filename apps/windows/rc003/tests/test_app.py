@@ -1,10 +1,10 @@
 import asyncio
 import logging
 import unittest
+from unittest import mock
 
-from ovb_rc003 import atvv_session, audio_output
-from ovb_rc003.app import RC003VoiceBridge
-
+from ovb_rc003 import atvv_session, audio_output, key_mapping
+from ovb_rc003.app import ButtonMappingRuntime, RC003VoiceBridge
 
 SETTINGS = {
     "output_endpoint_name": "CABLE Input",
@@ -50,6 +50,19 @@ class _Sink:
 
     def write(self, samples):
         self.writes.append(samples)
+
+
+class _RawListener:
+    def __init__(self, callback):
+        self.callback = callback
+        self.started = False
+        self.stopped = False
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        self.stopped = True
 
 
 def _bridge(loop, sink):
@@ -132,6 +145,38 @@ class PlaybackLifecycleTests(unittest.TestCase):
             self.assertEqual(sink.close_calls, 1)
         finally:
             loop.close()
+
+
+class ButtonMappingRuntimeTests(unittest.TestCase):
+    def test_standard_button_executes_mapping_and_mic_is_reserved(self):
+        settings = {
+            "custom_mapping_enabled": True,
+            "button_bindings": key_mapping.default_button_bindings(),
+        }
+        executed = []
+        listener_box = []
+
+        def listener_factory(callback):
+            listener = _RawListener(callback)
+            listener_box.append(listener)
+            return listener
+
+        runtime = ButtonMappingRuntime(
+            settings,
+            logger=logging.getLogger("test.button_mapping"),
+            listener_factory=listener_factory,
+            execute_action_fn=lambda action: executed.append(action) or True,
+        )
+        with mock.patch("ovb_rc003.app.config.load_config", return_value=settings):
+            runtime.start()
+            listener_box[0].callback("ok", True)
+            listener_box[0].callback("ok", False)
+            listener_box[0].callback("mic", True)
+            runtime.stop()
+
+        self.assertEqual(executed, ["return"])
+        self.assertTrue(listener_box[0].started)
+        self.assertTrue(listener_box[0].stopped)
 
 
 if __name__ == "__main__":

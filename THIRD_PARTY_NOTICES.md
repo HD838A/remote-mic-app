@@ -16,9 +16,9 @@ The Xiaomi RC003 ATVV UUIDs, microphone command behavior, IMA/DVI ADPCM decoding
 - Related fork: <https://github.com/miaomiaozii/windows-remote-mic-app>
 - License: GNU General Public License v3.0 only (`GPL-3.0-only`)
 
-The independent Windows client under `apps/windows/rc003` selectively ports the WinRT BLE/GATT transport, ATVV session, IMA/DVI ADPCM decoder, PortAudio playback, reconnection, identity, and single-instance logic. It does not include the PR's DJI support, Frida/WUDFHost injection, input-method attachment, Raw Input/SendInput mapping, Qt/QML UI, or VB-CABLE bundle.
+The independent Windows client under `apps/windows/rc003` selectively ports or reimplements the WinRT BLE/GATT transport, ATVV session, IMA/DVI ADPCM decoder, PortAudio playback, reconnection, identity, single-instance logic, Raw Input/SendInput mapping, gesture recognition, and a PySide6 Widgets settings UI. It does not include the PR's DJI support, Frida/WUDFHost injection, input-method attachment, full HID tap, or VB-CABLE bundle.
 
-Its pinned runtime/build dependencies include NumPy (BSD-3-Clause), python-sounddevice (MIT; Windows wheels use PortAudio), PyWinRT projections (MIT), PyInstaller (GPL-2.0-or-later with its bootloader exception), and Inno Setup (Inno Setup license). See each pinned package or tool distribution for its complete license text. VB-CABLE is not distributed by this repository; the app only links to the vendor website for optional user-managed installation.
+Its pinned runtime/build dependencies include NumPy (BSD-3-Clause), python-sounddevice (MIT; Windows wheels use PortAudio), PyWinRT projections (MIT), PySide6-Essentials / Qt for Python (LGPL-3.0/GPL-3.0 open-source edition, subject to the licenses shipped by that distribution), PyInstaller (GPL-2.0-or-later with its bootloader exception), and Inno Setup (Inno Setup license). See each pinned package or tool distribution for its complete license text. VB-CABLE is not distributed by this repository; the app only links to the vendor website for optional user-managed installation.
 
 ## BlackHole
 
