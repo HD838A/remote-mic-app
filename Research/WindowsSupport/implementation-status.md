@@ -4,7 +4,7 @@
 - 开发环境：macOS，不安装 Windows 模拟器或虚拟机
 - Windows 目标：Windows 10 1809+ / Windows 11 x64
 - 当前仓库：公开仓库 `HD838A/remote-mic-app`
-- 状态：上一版 Windows Runner unsigned 打包已通过；本次按键映射与 PySide6 界面尚待新 Runner 打包，真实 RC003 与免费自签 tag 验收待执行
+- 状态：按键映射与 PySide6 界面的 Windows Runner unsigned 打包已通过；真实 RC003 与免费自签 tag 验收待执行
 
 ## 最终技术选择
 
@@ -129,7 +129,7 @@ Release Runner 临时把证书导入当前用户证书库，签署主 EXE，并�
 
 在 macOS 上首次运行移植测试：149 项中 147 项通过，2 项仅因本机缺少 NumPy。随后在 `/tmp` 一次性虚拟环境安装固定依赖，并新增配置、应用资源清理、入口退出码和发布边界测试；最终 163 项测试全部通过。`compileall`、`--dry-run`、TOML/YAML/Spec 解析和 shell 语法检查也已通过。
 
-2026-08-02 的按键与界面修订新增映射配置、手势状态机、HID 路径/报告解析、桥接接线和 SendInput 纯逻辑测试；在新的 `/tmp` 一次性虚拟环境安装固定依赖后，180 项测试通过，其中 1 项 Windows x64 `INPUT` ABI 检查按平台跳过；`compileall`、Ruff 未定义名检查、AST、TOML 和 `git diff --check` 通过。另使用 Qt offscreen 成功实例化四个页面，验证麦克风映射锁定、自定义快捷键保存和窗口关闭清理。由于 Mac 不执行 Windows Raw Input、SendInput 或 PySide6 Windows 打包，这些结果仍不能替代新的 Windows Runner 和真机验收。
+2026-08-02 的按键与界面修订新增映射配置、手势状态机、HID 路径/报告解析、桥接接线和 SendInput 纯逻辑测试；在新的 `/tmp` 一次性虚拟环境安装固定依赖后，180 项测试通过，其中 1 项 Windows x64 `INPUT` ABI 检查按平台跳过；`compileall`、Ruff 未定义名检查、AST、TOML 和 `git diff --check` 通过。另使用 Qt offscreen 成功实例化四个页面，验证麦克风映射锁定、自定义快捷键保存和窗口关闭清理。Mac 侧结果用于提前发现跨平台逻辑问题，Windows ABI、EXE 启动和安装包则由下述真实 Windows Runner 验证。
 
 免费证书脚本已用临时密码实际执行：生成的证书为 3072-bit RSA、`CA:false`、仅含 Code Signing EKU，PFX 使用密码加密，所有产物均被 Git 忽略；验证后已删除该测试证书。Mac 上没有 SignTool，因此正式自签仍由后续 `windows-rc003-v*` tag 构建验证。
 
@@ -142,12 +142,20 @@ Release Runner 临时把证书导入当前用户证书库，签署主 EXE，并�
 
 下载后的 artifact `RemoteMicRC003-0.1.0-ci.2-unsigned-windows-x64` 约 44.4 MB，其中安装器约 18 MB、portable ZIP 约 25 MB。Mac 侧重新计算两个 SHA-256 均匹配；ZIP 内容扫描确认没有 Frida、VB-CABLE 安装器/驱动、WUDFHost、ImeService 或 DJI 文件。
 
-2026-08-02 新增的标准 Raw Input/SendInput 映射、手势状态机和 PySide6 四页界面已通过新增纯逻辑测试；上述旧 artifact 不包含这些功能，不能作为本次改动的打包证据，必须由新的 `windows-latest` run 重新构建和扫描。
+2026-08-02，[Actions run 30730044548](https://github.com/HD838A/remote-mic-app/actions/runs/30730044548) 在真实 `windows-latest` Runner 上完成包含标准 Raw Input/SendInput 映射、手势状态机和 PySide6 四页界面的新包：
+
+- 180 项测试全部通过，包括 Windows x64 `INPUT` ABI 检查；
+- PyInstaller 成功收集 PySide6，打包后的 EXE `--dry-run` 通过；
+- Inno Setup 安装器和 artifact 上传成功；普通分支按预期跳过自签；
+- artifact：`RemoteMicRC003-0.1.0-ci.3-unsigned-windows-x64`，总大小 92,279,362 bytes；
+- 安装器 `RemoteMicRC003Setup-0.1.0-ci.3-unsigned.exe` 为 36,991,853 bytes，SHA-256 `474835d3d6cfcda69aadd5a5fd4ea7187f722408eaf82b23d2729431ce7f46dd`；
+- portable `RemoteMicRC003-0.1.0-ci.3-unsigned-portable.zip` 为 56,011,724 bytes，SHA-256 `18a327fd5d8749ab34d779cdffcd39b6d6363da69e87f8e4c84d4cefe23bcc00`；
+- ZIP 完整性和 `SHA256SUMS.txt` 匹配，包含 `QtCore.pyd`、`QtGui.pyd`、`QtWidgets.pyd` 与 `qwindows.dll`；
+- 文件名扫描确认不包含 Frida、WUDFHost、ImeService、DJI、VB-CABLE 驱动/安装器、`vb_cable_bundle` 或 `doubao_rpc`。
 
 当前仍不能标记“Windows 版本完成”，因为尚缺：
 
 - 免费自签 `windows-rc003-v*` tag 的 SignTool、签名安装器/卸载器和证书指纹验证；
-- 本次 PySide6、Raw Input 和 SendInput 变更的 Windows Runner 构建、EXE 启动和 artifact 扫描；
 - 真实 Windows 机器上的安装、启动、停止和卸载体验；
 - 真实 RC003 + 用户自行安装的 VB-CABLE 端到端验收；
 - 真实 RC003 的逐键可检测性、原始动作泄漏、重复动作和 UIPI 边界验收。

@@ -86,7 +86,7 @@ export REMOTE_MIC_WINDOWS_PFX_PASSWORD='使用密码管理器生成的长随机�
 
 ## 已知缺口
 
-- 新的 PySide6 四页设置窗口、Raw Input 和 SendInput 已完成 Mac 侧纯逻辑测试，但尚未取得这次改动对应的新 Windows Runner 打包结果。
+- 包含 PySide6 四页设置窗口、Raw Input 和 SendInput 的 unsigned Windows 包已由 [Actions run 30730044548](https://github.com/HD838A/remote-mic-app/actions/runs/30730044548) 成功构建；安装器约 35 MB，portable ZIP 约 53 MB。真实 RC003 逐键体验仍需 Windows 真机验收。
 - 标准 Raw Input 能收到哪些 RC003 键取决于 Windows、蓝牙芯片和设备 HID 暴露方式；真实 13 键逐键验收尚未完成，系统已经消费的原始键也可能无法完全拦截。
 - 当前没有自动更新、系统托盘、配置导入导出或测试音。
 - VB-CABLE 方向配置错误时只会表现为目标应用没有声音，仍需在 Windows 真机完善诊断。
