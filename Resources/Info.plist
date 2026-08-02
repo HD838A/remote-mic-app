@@ -28,6 +28,12 @@
     <true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>Connect to the Xiaomi Bluetooth Remote 2 Pro to receive button and voice data.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Allow nearby iPhone and iPad devices to connect as a remote control and microphone.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_remotemic._tcp</string>
+    </array>
     <key>NSHumanReadableCopyright</key>
     <string>GPL-3.0-only</string>
     <key>NSPrincipalClass</key>

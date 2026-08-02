@@ -16,6 +16,8 @@ targets:
     sources:
       - path: Sources
       - path: Resources
+        excludes:
+          - Info.plist
         buildPhase: resources
     settings:
       base:
@@ -23,17 +25,8 @@ targets:
         CODE_SIGN_STYLE: Automatic
         PRODUCT_BUNDLE_IDENTIFIER: com.hd838a.RemoteMicIOS
         PRODUCT_NAME: RemoteMicIOS
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: "无线麦"
-        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "按住说话键时使用麦克风，把语音发送到已连接的 Mac。"
-        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "发现并连接附近运行无线麦的 Mac。"
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIRequiresFullScreen: YES
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Resources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: 0.1.0

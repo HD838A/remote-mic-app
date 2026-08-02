@@ -314,8 +314,8 @@ struct ConfirmButton: View {
         Button(action: action) {
             LightSurface {
                 VStack(spacing: 8) {
-                    Text("↵")
-                        .font(.system(size: 55, weight: .medium, design: .rounded))
+                    Image(systemName: "arrow.turn.down.left")
+                        .font(.system(size: 45, weight: .semibold))
                     Text("确定")
                         .font(.system(size: 25, weight: .bold))
                     Text("Return")

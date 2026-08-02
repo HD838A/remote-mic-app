@@ -21,10 +21,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
 
     private let audioOutput = VirtualAudioOutput()
+    private let phoneRemoteServer = PhoneRemoteServer()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
     private var testToneGeneration = 0
     private var voiceFunctionKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
+    private var bluetoothVoiceActive = false
+    private var phoneVoiceActive = false
     private lazy var bluetoothBridge = XiaomiBluetoothBridge(settings: settings, delegate: self)
     private lazy var hidMonitor: HIDRemoteMonitor = {
         let monitor = HIDRemoteMonitor(settings: settings)
@@ -58,12 +61,44 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
         }
+        phoneRemoteServer.onApprovalRequested = { [weak self] deviceName, pairingCode, completion in
+            guard let self else {
+                completion(false)
+                return
+            }
+            requestPhoneApproval(
+                deviceName: deviceName,
+                pairingCode: pairingCode,
+                completion: completion
+            )
+        }
+        phoneRemoteServer.onCommand = { [weak self] button, completion in
+            DispatchQueue.main.async {
+                completion(self?.performPhoneCommand(button) ?? false)
+            }
+        }
+        phoneRemoteServer.onVoiceStart = { [weak self] completion in
+            DispatchQueue.main.async {
+                completion(self?.startPhoneVoice() ?? false)
+            }
+        }
+        phoneRemoteServer.onVoiceStop = { [weak self] in
+            DispatchQueue.main.async {
+                self?.stopPhoneVoice()
+            }
+        }
+        phoneRemoteServer.onAudio = { [weak self] samples in
+            DispatchQueue.main.async {
+                self?.receivePhoneAudio(samples)
+            }
+        }
     }
 
     func startIfNeeded() {
         guard !started else { return }
         started = true
         startAudioSubsystem()
+        phoneRemoteServer.start()
         applyHIDSettings()
         applyVoiceFunctionMapping()
         terminationObserver = NotificationCenter.default.addObserver(
@@ -95,6 +130,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             logReason: "app_stop"
         )
         bluetoothBridge.stop()
+        phoneRemoteServer.stop()
+        bluetoothVoiceActive = false
+        phoneVoiceActive = false
         updateVoiceFunctionKeyState(streaming: false)
         hidMonitor.stop()
         isAudioOutputReady = false
@@ -476,19 +514,82 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func bluetoothBridgeDidStartVoice(_ bridge: XiaomiBluetoothBridge) {
+        bluetoothVoiceActive = true
+        beginVoiceSessionIfNeeded()
+    }
+
+    func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
+        bluetoothVoiceActive = false
+        endVoiceSessionIfNeeded()
+    }
+
+    func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16]) {
+        audioOutput.enqueue(samples: samples)
+    }
+
+    private func requestPhoneApproval(
+        deviceName: String,
+        pairingCode: String,
+        completion: @escaping (Bool) -> Void
+    ) {
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.messageText = "允许“\(deviceName)”控制这台 Mac？"
+            alert.informativeText = "请确认 iPhone 顶部显示的校验码也是 \(pairingCode)。允许后，这台手机可在当前连接期间发送加密的遥控按键和麦克风音频。"
+            alert.addButton(withTitle: "允许")
+            alert.addButton(withTitle: "拒绝")
+            completion(alert.runModal() == .alertFirstButtonReturn)
+        }
+    }
+
+    private func performPhoneCommand(_ button: RemoteButton) -> Bool {
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            _ = KeyboardInjector.requestAccessibilityAccess()
+            return false
+        }
+        let action = settings.action(for: button)
+        guard KeyboardInjector.send(action, shortcut: settings.shortcut(for: button)) else {
+            return false
+        }
+        settings.recordButtonPress()
+        AppLogger.shared.write(
+            "PHONE REMOTE button=\(button.rawValue) action=\(action.rawValue)"
+        )
+        return true
+    }
+
+    private func startPhoneVoice() -> Bool {
+        guard isAudioOutputReady else { return false }
+        phoneVoiceActive = true
+        beginVoiceSessionIfNeeded()
+        return true
+    }
+
+    private func stopPhoneVoice() {
+        phoneVoiceActive = false
+        endVoiceSessionIfNeeded()
+    }
+
+    private func receivePhoneAudio(_ samples: [Int16]) {
+        guard phoneVoiceActive else { return }
+        audioOutput.enqueue(samples: samples)
+    }
+
+    private func beginVoiceSessionIfNeeded() {
+        guard !isStreaming else { return }
         cancelTestToneIfNeeded(
             statusMessage: LocalizedMessage("audio.test_tone.blocked_voice_active"),
             logReason: "voice_start"
         )
-        if voiceSessionStartedAt == nil {
-            settings.recordButtonPress()
-            voiceSessionStartedAt = Date()
-        }
+        settings.recordButtonPress()
+        voiceSessionStartedAt = Date()
         updateVoiceFunctionKeyState(streaming: true)
         isStreaming = true
     }
 
-    func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
+    private func endVoiceSessionIfNeeded() {
+        guard !bluetoothVoiceActive, !phoneVoiceActive, isStreaming else { return }
         if let voiceSessionStartedAt {
             settings.recordVoiceDuration(Date().timeIntervalSince(voiceSessionStartedAt))
             self.voiceSessionStartedAt = nil
@@ -496,10 +597,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         updateVoiceFunctionKeyState(streaming: false)
         isStreaming = false
         audioOutput.endSession()
-    }
-
-    func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16]) {
-        audioOutput.enqueue(samples: samples)
     }
 
     private func applyVoiceFunctionMapping() {

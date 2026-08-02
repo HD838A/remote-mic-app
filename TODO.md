@@ -7,11 +7,13 @@
   - fork、Release、CI、许可与最终排名见 [Windows 源码与 fork 对比](Research/WindowsSupport/candidate-comparison.md)。
 - [ ] 开发手机伴侣 App，让手机可以替代或补充蓝牙遥控器控制 Mac
   - 当前结论：可行。Mac 端继续负责执行按键动作、打开应用和输出虚拟麦克风；手机端提供虚拟遥控按键和按住说话，不要求用户必须购买 RC003。
-  - 已新增同仓库独立 iOS 17+ SwiftUI 工程并完成核心遥控页面：方向、确定、返回、主页、菜单、TV、关机、音量和按住说话均具备按压状态、无障碍标签与统一震动反馈；当前连接状态为界面体验状态，Bonjour/TLS 配对、真实按键传输和麦克风音频链路仍待后续接入，因此本条保持未完成。
-  - TestFlight 发布准备已完成：iOS 工程固定使用 Team `L3QHLDRPAY`、Bundle ID `com.hd838a.RemoteMicIOS` 和 Automatic Signing，Debug Simulator Build 与无签名 Release Archive 均已通过；Xcode Cloud 工作流和首次内部 TestFlight 上传完成后再补充最终结果。
-  - 第一阶段优先支持 iPhone/iPad 前台使用：通过 Network framework、Bonjour、TLS 和一次性配对码发现并连接 Mac。启用 `includePeerToPeer` 后，附近设备可以使用点对点链路，不应把“连接同一个无线路由器”设为硬性前提。
-  - 按键协议只发送白名单虚拟按键和单击/双击/长按事件，由 Mac 根据本机配置映射到现有 `ButtonAction` / `KeyboardInjector`；禁止手机直接下发 shell、任意脚本或未授权键盘数据。
-  - 第二阶段增加手机麦克风按住说话：发送 16kHz 单声道 PCM 或 Opus 音频，由 Mac 接入现有 `VirtualAudioOutput` 和 MiRemoteV 2ch 链路。第一版保持 App 在前台，不承诺锁屏遥控、后台常驻或持续收音。
+  - 已新增同仓库独立 iOS 17+ SwiftUI 工程并完成核心遥控页面：方向、确定、返回、主页、菜单、TV、关机、音量和按住说话均具备按压状态、无障碍标签与增强震动反馈；页面已改为固定单屏布局，不再支持滚动。
+  - 已接入附近直连最小闭环：iOS 通过 Bonjour 发现 Mac 并显示真实设备名称；Mac 明确批准当前连接后，手机按键复用本机 `AppSettings` / `ButtonAction` / `KeyboardInjector` 执行，手机麦克风转换为 16kHz 单声道 PCM 并接入现有 `VirtualAudioOutput`。本地网络权限在发现时触发，麦克风权限只在首次按住说话时触发。
+  - 当前会话使用临时 Curve25519 密钥协商、双方六位校验码和 ChaChaPoly 加密；Mac 授权仅对当前连接有效。长期受信任设备、Keychain 持久密钥、设备撤销和跨互联网控制尚未实现，因此本条保持未完成。
+  - TestFlight 发布链路已跑通：iOS 工程固定使用 Team `L3QHLDRPAY`、Bundle ID `com.hd838a.RemoteMicIOS` 和 Automatic Signing，Xcode Cloud 已成功上传内部 TestFlight，且已完成真机安装体验。
+  - 第一阶段优先支持 iPhone/iPad 前台使用：通过 Network framework、Bonjour、临时密钥加密和双方校验码发现并连接 Mac。启用 `includePeerToPeer` 后，附近设备可以使用点对点链路，不应把“连接同一个无线路由器”设为硬性前提；长期设备信任再评估 TLS 身份与 Keychain 持久密钥。
+  - 按键协议当前只发送白名单虚拟按键单击事件，由 Mac 根据本机配置映射到现有 `ButtonAction` / `KeyboardInjector`；禁止手机直接下发 shell、任意脚本或未授权键盘数据。按住重复、双击和长按手势留待后续真机调节。
+  - 手机麦克风第一版已发送 16kHz 单声道 PCM，并由 Mac 接入现有 `VirtualAudioOutput` 和 MiRemoteV 2ch 链路；后续再根据弱网和延迟实测决定是否增加 Opus、抖动缓冲和音频中断恢复。第一版保持 App 在前台，不承诺锁屏遥控、后台常驻或持续收音。
   - 后续再评估 Android、桌面小组件/快捷指令、多台 Mac 切换和跨互联网远程控制；跨互联网需要独立的账号、端到端加密、设备撤销和中继服务，不与附近直连第一版混在一起。
   - 架构选择、官方平台限制、实现阶段和验收标准见 [手机伴侣 App 可行性研究](Research/MobileCompanionApp/README.md)。
 - [ ] 在左侧侧边栏新增“排行榜”，展示所有主动参与用户的全局使用排名

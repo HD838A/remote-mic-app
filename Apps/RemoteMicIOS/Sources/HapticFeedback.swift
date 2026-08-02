@@ -12,9 +12,9 @@ final class HapticFeedback {
     static let shared = HapticFeedback()
 
     private let supportsHaptics = CHHapticEngine.capabilitiesForHardware().supportsHaptics
-    private let standardGenerator = UIImpactFeedbackGenerator(style: .soft)
-    private let emphasizedGenerator = UIImpactFeedbackGenerator(style: .medium)
-    private let releaseGenerator = UISelectionFeedbackGenerator()
+    private let standardGenerator = UIImpactFeedbackGenerator(style: .medium)
+    private let emphasizedGenerator = UIImpactFeedbackGenerator(style: .heavy)
+    private let releaseGenerator = UIImpactFeedbackGenerator(style: .light)
 
     private init() {}
 
@@ -30,13 +30,13 @@ final class HapticFeedback {
 
         switch strength {
         case .standard:
-            standardGenerator.impactOccurred(intensity: 0.72)
+            standardGenerator.impactOccurred(intensity: 1)
             standardGenerator.prepare()
         case .emphasized:
-            emphasizedGenerator.impactOccurred(intensity: 0.9)
+            emphasizedGenerator.impactOccurred(intensity: 1)
             emphasizedGenerator.prepare()
         case .release:
-            releaseGenerator.selectionChanged()
+            releaseGenerator.impactOccurred(intensity: 0.8)
             releaseGenerator.prepare()
         }
     }

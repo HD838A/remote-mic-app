@@ -1,40 +1,52 @@
 import SwiftUI
 
 struct RemoteControlScreen: View {
-    @State private var isVoiceActive = false
-    @State private var lastCommand: RemoteCommand?
+    @EnvironmentObject private var connection: RemoteMacConnection
 
     var body: some View {
-        ZStack {
-            RemoteBackground()
+        GeometryReader { proxy in
+            let isCompact = proxy.size.height < 720
+            let spacing: CGFloat = isCompact ? 10 : 16
+            let dPadSize: CGFloat = isCompact ? 200 : 250
+            let middleButtonSize: CGFloat = isCompact ? 68 : 88
+            let primaryHeight: CGFloat = isCompact ? 126 : 160
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
+            ZStack {
+                RemoteBackground()
+
+                VStack(spacing: spacing) {
                     header
 
                     DPadView(perform: perform)
-                        .frame(maxWidth: 260)
+                        .frame(width: dPadSize, height: dPadSize)
 
-                    middleControls
+                    middleControls(buttonSize: middleButtonSize, spacing: spacing)
 
                     primaryControls
                         .padding(.top, 2)
+                        .frame(height: primaryHeight)
 
-                    Text("麦克风仅在按住时启用")
+                    Text(connection.guidanceText)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(RemotePalette.text.opacity(0.62))
-                        .padding(.top, 2)
-                        .padding(.bottom, 10)
+                        .foregroundStyle(
+                            connection.hasIssue
+                                ? Color.orange.opacity(0.92)
+                                : RemotePalette.text.opacity(0.62)
+                        )
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .padding(.top, isCompact ? 0 : 2)
                 }
                 .frame(maxWidth: 520)
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .frame(maxWidth: .infinity)
+                .padding(.vertical, isCompact ? 6 : 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .preferredColorScheme(.light)
         .task {
             HapticFeedback.shared.prepare()
+            connection.start()
         }
     }
 
@@ -57,7 +69,7 @@ struct RemoteControlScreen: View {
                 Spacer()
 
                 Button {
-                    perform(.chooseDevice)
+                    connection.restartDiscovery()
                 } label: {
                     LightSurface {
                         Image(systemName: "laptopcomputer")
@@ -80,12 +92,16 @@ struct RemoteControlScreen: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 7) {
                         Circle()
-                            .fill(Color.green)
+                            .fill(connection.isConnected ? Color.green : Color.orange)
                             .frame(width: 8, height: 8)
-                        Text("已连接")
-                            .foregroundStyle(Color.green.opacity(0.88))
+                        Text(connection.statusText)
+                            .foregroundStyle(
+                                connection.isConnected
+                                    ? Color.green.opacity(0.88)
+                                    : Color.orange.opacity(0.92)
+                            )
                     }
-                    Text("Mac 设备")
+                    Text(connection.macName)
                         .foregroundStyle(RemotePalette.text.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
@@ -96,64 +112,63 @@ struct RemoteControlScreen: View {
         .frame(height: 58)
     }
 
-    private var middleControls: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: 20),
-                GridItem(.flexible(), spacing: 20),
-                GridItem(.flexible())
-            ],
-            spacing: 16
-        ) {
-            MiddleControlButton(title: "返回", systemImage: "chevron.left") {
-                perform(.back)
+    private func middleControls(buttonSize: CGFloat, spacing: CGFloat) -> some View {
+        Grid(horizontalSpacing: spacing, verticalSpacing: spacing) {
+            GridRow {
+                middleButton("返回", image: "chevron.left", command: .back, size: buttonSize)
+                middleButton("主页", image: "house", command: .home, size: buttonSize)
+                middleButton("菜单", image: "line.3.horizontal", command: .menu, size: buttonSize)
             }
-            MiddleControlButton(title: "主页", systemImage: "house") {
-                perform(.home)
-            }
-            MiddleControlButton(title: "菜单", systemImage: "line.3.horizontal") {
-                perform(.menu)
-            }
-            MiddleControlButton(title: "TV", systemImage: "tv") {
-                perform(.television)
-            }
-            MiddleControlButton(title: "增大音量", systemImage: "speaker.plus.fill") {
-                perform(.volumeUp)
-            }
-            MiddleControlButton(title: "减小音量", systemImage: "speaker.minus.fill") {
-                perform(.volumeDown)
+            GridRow {
+                middleButton("TV", image: "tv", command: .television, size: buttonSize)
+                middleButton("增大音量", image: "speaker.plus.fill", command: .volumeUp, size: buttonSize)
+                middleButton("减小音量", image: "speaker.minus.fill", command: .volumeDown, size: buttonSize)
             }
         }
     }
 
+    private func middleButton(
+        _ title: String,
+        image: String,
+        command: RemoteCommand,
+        size: CGFloat
+    ) -> some View {
+        MiddleControlButton(title: title, systemImage: image) {
+            perform(command)
+        }
+        .frame(width: size, height: size)
+    }
+
     private var primaryControls: some View {
         HStack(spacing: 16) {
-            VoiceButton(isActive: isVoiceActive) { isPressed in
+            VoiceButton(isActive: connection.isVoiceActive) { isPressed in
                 setVoiceActive(isPressed)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 164)
 
             ConfirmButton {
                 perform(.confirm)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 164)
         }
     }
 
     private func setVoiceActive(_ active: Bool) {
-        guard isVoiceActive != active else { return }
-        isVoiceActive = active
-        perform(active ? .voiceStart : .voiceStop)
+        HapticFeedback.shared.trigger(active ? .emphasized : .release)
+        if active {
+            connection.beginVoice()
+        } else {
+            connection.endVoice()
+        }
     }
 
     private func perform(_ command: RemoteCommand) {
-        lastCommand = command
         HapticFeedback.shared.trigger(command.hapticStrength)
+        connection.send(command)
     }
 }
 
 #Preview("Remote Control") {
     RemoteControlScreen()
+        .environmentObject(RemoteMacConnection())
 }
