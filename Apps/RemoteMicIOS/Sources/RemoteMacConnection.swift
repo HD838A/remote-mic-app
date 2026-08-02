@@ -122,12 +122,15 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     func beginVoice() {
-        guard isConnected else { return }
         voiceRequestID &+= 1
         let requestID = voiceRequestID
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
+                guard await microphone.requestPermission() else {
+                    throw MicrophoneStreamer.StreamError.permissionDenied
+                }
+                guard voiceRequestID == requestID, isConnected else { return }
                 try await microphone.start()
                 guard voiceRequestID == requestID, isConnected else {
                     microphone.stop()
@@ -138,7 +141,11 @@ final class RemoteMacConnection: ObservableObject {
             } catch {
                 guard voiceRequestID == requestID else { return }
                 isVoiceActive = false
-                state = .connectedWithError("无法使用麦克风，请在系统设置中允许访问")
+                if isConnected {
+                    state = .connectedWithError("无法使用麦克风，请在系统设置中允许访问")
+                } else {
+                    state = .unavailable("无法使用麦克风，请在系统设置中允许访问")
+                }
             }
         }
     }

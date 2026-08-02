@@ -113,18 +113,24 @@ struct RemoteControlScreen: View {
     }
 
     private func middleControls(buttonSize: CGFloat, spacing: CGFloat) -> some View {
-        Grid(horizontalSpacing: spacing, verticalSpacing: spacing) {
-            GridRow {
+        VStack(spacing: spacing) {
+            HStack(spacing: 0) {
                 middleButton("返回", image: "chevron.left", command: .back, size: buttonSize)
-                middleButton("主页", image: "house", command: .home, size: buttonSize)
+                Spacer(minLength: spacing)
                 middleButton("菜单", image: "line.3.horizontal", command: .menu, size: buttonSize)
-            }
-            GridRow {
-                middleButton("TV", image: "tv", command: .television, size: buttonSize)
+                Spacer(minLength: spacing)
                 middleButton("增大音量", image: "speaker.plus.fill", command: .volumeUp, size: buttonSize)
+            }
+
+            HStack(spacing: 0) {
+                middleButton("主页", image: "house", command: .home, size: buttonSize)
+                Spacer(minLength: spacing)
+                middleButton("TV", image: "tv", command: .television, size: buttonSize)
+                Spacer(minLength: spacing)
                 middleButton("减小音量", image: "speaker.minus.fill", command: .volumeDown, size: buttonSize)
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func middleButton(

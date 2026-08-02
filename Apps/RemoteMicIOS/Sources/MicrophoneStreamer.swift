@@ -20,9 +20,14 @@ final class MicrophoneStreamer {
     var onSamples: (([Int16]) -> Void)?
 
     @MainActor
+    func requestPermission() async -> Bool {
+        await AVAudioApplication.requestRecordPermission()
+    }
+
+    @MainActor
     func start() async throws {
         guard !isRunning else { return }
-        guard await AVAudioApplication.requestRecordPermission() else {
+        guard await requestPermission() else {
             throw StreamError.permissionDenied
         }
 

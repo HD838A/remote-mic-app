@@ -1,5 +1,10 @@
 # Version History
 
+## 1.6.1 (Pre-release)
+
+- Added nearby iPhone/iPad remote control and push-to-talk with pairing-code verification and encrypted transport.
+- Reused the Mac's current button mappings and routed phone microphone audio into the existing virtual audio output.
+
 ## 1.6.0 (Pre-release)
 
 - Migrated all interface copy to stable semantic localization keys, with English fallback and dynamic language-resource validation.

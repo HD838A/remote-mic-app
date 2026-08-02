@@ -7,10 +7,10 @@
   - fork、Release、CI、许可与最终排名见 [Windows 源码与 fork 对比](Research/WindowsSupport/candidate-comparison.md)。
 - [ ] 开发手机伴侣 App，让手机可以替代或补充蓝牙遥控器控制 Mac
   - 当前结论：可行。Mac 端继续负责执行按键动作、打开应用和输出虚拟麦克风；手机端提供虚拟遥控按键和按住说话，不要求用户必须购买 RC003。
-  - 已新增同仓库独立 iOS 17+ SwiftUI 工程并完成核心遥控页面：方向、确定、返回、主页、菜单、TV、关机、音量和按住说话均具备按压状态、无障碍标签与增强震动反馈；页面已改为固定单屏布局，不再支持滚动。
+  - 已新增同仓库独立 iOS 17+ SwiftUI 工程并完成核心遥控页面：方向、确定、返回、菜单、音量加、主页、TV、音量减、关机和按住说话均具备按压状态、无障碍标签与增强震动反馈；六枚中部按键与底部主按钮左右边缘对齐，页面为固定单屏布局且不支持滚动。
   - 已接入附近直连最小闭环：iOS 通过 Bonjour 发现 Mac 并显示真实设备名称；Mac 明确批准当前连接后，手机按键复用本机 `AppSettings` / `ButtonAction` / `KeyboardInjector` 执行，手机麦克风转换为 16kHz 单声道 PCM 并接入现有 `VirtualAudioOutput`。本地网络权限在发现时触发，麦克风权限只在首次按住说话时触发。
   - 当前会话使用临时 Curve25519 密钥协商、双方六位校验码和 ChaChaPoly 加密；Mac 授权仅对当前连接有效。长期受信任设备、Keychain 持久密钥、设备撤销和跨互联网控制尚未实现，因此本条保持未完成。
-  - TestFlight 发布链路已跑通：iOS 工程固定使用 Team `L3QHLDRPAY`、Bundle ID `com.hd838a.RemoteMicIOS` 和 Automatic Signing，Xcode Cloud 已成功上传内部 TestFlight，且已完成真机安装体验。
+  - TestFlight 发布链路已跑通：iOS 工程固定使用 Team `L3QHLDRPAY`、Bundle ID `com.hd838a.RemoteMicIOS` 和 Automatic Signing，Xcode Cloud 已成功上传内部 TestFlight，且已完成真机安装体验。首次按住说话会主动请求麦克风权限，即使 Mac 尚未连接也不会静默忽略授权入口。
   - 第一阶段优先支持 iPhone/iPad 前台使用：通过 Network framework、Bonjour、临时密钥加密和双方校验码发现并连接 Mac。启用 `includePeerToPeer` 后，附近设备可以使用点对点链路，不应把“连接同一个无线路由器”设为硬性前提；长期设备信任再评估 TLS 身份与 Keychain 持久密钥。
   - 按键协议当前只发送白名单虚拟按键单击事件，由 Mac 根据本机配置映射到现有 `ButtonAction` / `KeyboardInjector`；禁止手机直接下发 shell、任意脚本或未授权键盘数据。按住重复、双击和长按手势留待后续真机调节。
   - 手机麦克风第一版已发送 16kHz 单声道 PCM，并由 Mac 接入现有 `VirtualAudioOutput` 和 MiRemoteV 2ch 链路；后续再根据弱网和延迟实测决定是否增加 Opus、抖动缓冲和音频中断恢复。第一版保持 App 在前台，不承诺锁屏遥控、后台常驻或持续收音。
@@ -57,6 +57,8 @@
   - 可行性、零开发验证步骤、实现分层和验收标准见 [免按键持续语音控制可行性研究](Research/AlwaysListeningVoiceControl/README.md)。
   - RC003 主动开麦的协议证据、未知项和真机实验方案见 [RC003 无按键持续收音研究](Research/RC003ContinuousAudio/README.md)。
 - [ ] 解决组合快捷键配置问题，例如配置 Command + Space 唤起 Spotlight
+  - 小红书网友提供的临时方法：系统快捷键的处理优先级更高，导致 App 录制时收不到组合键。先在“系统设置 → 键盘 → 键盘快捷键”中暂时取消对应的系统快捷键，再回到无线麦完成快捷键录制，最后把系统快捷键配置恢复，即可正常保存和使用。
+  - 该反馈说明问题可能主要发生在“录制快捷键”阶段，而不是后续合成按键的执行阶段；目前仅记录思路，尚未在本项目真机复现和验证，暂不修改代码或标记完成。
 - [ ] 支持苹果遥控器，方便海外用户购买和使用
   - 已完成 SiriRemoteForge、Wand、siri-remote-steamos、SiriRemoteVibe 及其他相关开源项目的可行性研究；当前总体首选 SiriRemoteForge，建议按“按键 → 触摸/滚动 → 麦克风高级组件”分阶段验证。
   - 详细结论见 [SiriRemoteForge 与“无线麦”集成评估](Research/SiriRemoteForge/README.md)。
