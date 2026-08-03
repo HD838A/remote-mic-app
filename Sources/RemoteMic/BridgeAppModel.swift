@@ -545,7 +545,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "允许“\(deviceName)”连接无线麦？"
-            alert.informativeText = "这台 iPhone 将连接“无线麦”App，代替实体遥控器发送按键和按住说话音频。请确认 iPhone 上显示的 6 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
+            alert.informativeText = "这台 iPhone 将连接“无线麦”App，代替实体遥控器发送按键和按住说话音频。请确认 iPhone 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
             let codeLabel = NSTextField(labelWithString: pairingCode.map(String.init).joined(separator: " "))
             codeLabel.frame = NSRect(x: 0, y: 0, width: 300, height: 44)
             codeLabel.alignment = .center

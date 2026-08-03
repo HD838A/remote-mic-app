@@ -429,7 +429,7 @@ final class RemoteMacConnection: ObservableObject {
         let value = key.withUnsafeBytes { bytes in
             bytes.prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         }
-        return String(format: "%06d", value % 1_000_000)
+        return String(format: "%02d", value % 100)
     }
 
     private static func identityProof(for sessionPublicKey: Data) -> Data {

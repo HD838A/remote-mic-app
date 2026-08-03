@@ -1,5 +1,9 @@
 # Version History
 
+## 1.6.3
+
+- Changed the first-connection verification code shown on iPhone and Mac from six digits to two digits, with matching values on both devices.
+
 ## 1.6.2
 
 - Remembered an approved phone installation for future nearby connections, with a Settings action to clear trusted phones.
