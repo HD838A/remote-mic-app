@@ -32,11 +32,17 @@ struct RemoteBackground: View {
 }
 
 struct TactileButtonStyle: ButtonStyle {
+    var showsPressedVisuals = true
+    var onPressChanged: ((Bool) -> Void)? = nil
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.975 : 1)
-            .brightness(configuration.isPressed ? -0.045 : 0)
+            .scaleEffect(showsPressedVisuals && configuration.isPressed ? 0.975 : 1)
+            .brightness(showsPressedVisuals && configuration.isPressed ? -0.045 : 0)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, isPressed in
+                onPressChanged?(isPressed)
+            }
     }
 }
 
@@ -108,6 +114,8 @@ struct LightSurface<Content: View>: View {
 
 struct DPadView: View {
     let perform: (RemoteCommand) -> Void
+    let confirmPressed: () -> Void
+    let confirm: () -> Void
 
     var body: some View {
         GeometryReader { proxy in
@@ -169,7 +177,7 @@ struct DPadView: View {
                 }
 
                 Button {
-                    perform(.confirm)
+                    confirm()
                 } label: {
                     Circle()
                         .fill(
@@ -190,7 +198,11 @@ struct DPadView: View {
                         }
                         .frame(width: diameter * 0.39, height: diameter * 0.39)
                 }
-                .buttonStyle(TactileButtonStyle())
+                .buttonStyle(TactileButtonStyle { isPressed in
+                    if isPressed {
+                        confirmPressed()
+                    }
+                })
                 .accessibilityLabel("确定")
             }
             .frame(width: diameter, height: diameter)
@@ -372,55 +384,47 @@ struct VoiceButton: View {
     var body: some View {
         let visualActive = isActive || isTrackingPress
 
-        ZStack {
-            AppIconRoundedRectangle()
-                .fill(
-                    LinearGradient(
-                        colors: visualActive
-                            ? [Color(red: 0.23, green: 0.58, blue: 0.83), Color(red: 0.09, green: 0.37, blue: 0.68)]
-                            : [RemotePalette.blueTop, RemotePalette.blueBottom],
-                        startPoint: .top,
-                        endPoint: .bottom
+        Button {} label: {
+            ZStack {
+                AppIconRoundedRectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: visualActive
+                                ? [Color(red: 0.23, green: 0.58, blue: 0.83), Color(red: 0.09, green: 0.37, blue: 0.68)]
+                                : [RemotePalette.blueTop, RemotePalette.blueBottom],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
-            AppIconRoundedRectangle()
-                .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                .padding(1)
-            AppIconRoundedRectangle()
-                .stroke(Color.black.opacity(0.25), lineWidth: 1.4)
+                AppIconRoundedRectangle()
+                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                    .padding(1)
+                AppIconRoundedRectangle()
+                    .stroke(Color.black.opacity(0.25), lineWidth: 1.4)
 
-            VStack(spacing: 10) {
-                Image(systemName: visualActive ? "waveform" : "mic.fill")
-                    .font(.system(size: 45, weight: .medium))
-                Text(visualActive ? "正在说话" : "按住说话")
-                    .font(.system(size: 24, weight: .bold))
-                Text("松手停止")
-                    .font(.system(size: 15, weight: .medium))
-                    .opacity(0.9)
+                VStack(spacing: 10) {
+                    Image(systemName: visualActive ? "waveform" : "mic.fill")
+                        .font(.system(size: 45, weight: .medium))
+                    Text(visualActive ? "正在说话" : "按住说话")
+                        .font(.system(size: 24, weight: .bold))
+                    Text("松手停止")
+                        .font(.system(size: 15, weight: .medium))
+                        .opacity(0.9)
+                }
+                .foregroundStyle(.white)
             }
-            .foregroundStyle(.white)
         }
         .shadow(color: .black.opacity(visualActive ? 0.11 : 0.18), radius: visualActive ? 2 : 5, x: 0, y: visualActive ? 1 : 4)
         .scaleEffect(visualActive ? 0.98 : 1)
         .contentShape(AppIconRoundedRectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard !isTrackingPress else { return }
-                    isTrackingPress = true
-                    onPressChanged(true)
-                }
-                .onEnded { _ in
-                    guard isTrackingPress else { return }
-                    isTrackingPress = false
-                    onPressChanged(false)
-                }
-        )
+        .buttonStyle(TactileButtonStyle(showsPressedVisuals: false) { isPressed in
+            guard isTrackingPress != isPressed else { return }
+            isTrackingPress = isPressed
+            onPressChanged(isPressed)
+        })
         .animation(.easeOut(duration: 0.1), value: visualActive)
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel("按住说话")
         .accessibilityValue(isActive ? "正在录音" : isTrackingPress ? "正在准备" : "未录音")
-        .accessibilityAddTraits(.isButton)
         .accessibilityAction {
             onPressChanged(!isActive)
         }
@@ -428,6 +432,7 @@ struct VoiceButton: View {
 }
 
 struct ConfirmButton: View {
+    let onPress: () -> Void
     let action: () -> Void
 
     var body: some View {
@@ -445,7 +450,11 @@ struct ConfirmButton: View {
                 .foregroundStyle(RemotePalette.text)
             }
         }
-        .buttonStyle(TactileButtonStyle())
+        .buttonStyle(TactileButtonStyle { isPressed in
+            if isPressed {
+                onPress()
+            }
+        })
         .accessibilityLabel("确定，Return")
     }
 }

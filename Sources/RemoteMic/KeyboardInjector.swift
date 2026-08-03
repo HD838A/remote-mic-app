@@ -13,6 +13,7 @@ enum KeyboardInjector {
     typealias ApplicationFocuser = (URL, PresetApplication, pid_t, UInt64) -> Void
     typealias CmuxCommandRunner = (URL, [String], TimeInterval) -> CmuxCommandResult
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
+    typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
 
     struct AccessibilityTextCandidate: Equatable {
         let role: String
@@ -62,6 +63,7 @@ enum KeyboardInjector {
 
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
+    static let functionKeyCode: CGKeyCode = 63
     private static let focusRequests = ApplicationFocusRequestGate()
     private static let focusQueue = DispatchQueue(
         label: "RemoteMic.application-focus",
@@ -85,6 +87,20 @@ enum KeyboardInjector {
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
         ] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
+    }
+
+    @discardableResult
+    static func setFunctionKeyPressed(
+        _ isPressed: Bool,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postKeyState
+    ) -> Bool {
+        guard accessibilityTrusted() else { return false }
+        return keyStatePoster(
+            functionKeyCode,
+            isPressed,
+            isPressed ? .maskSecondaryFn : []
+        )
     }
 
     @discardableResult
@@ -904,6 +920,20 @@ enum KeyboardInjector {
         up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+    }
+
+    private static func postKeyState(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags
+    ) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
+        else { return false }
+        event.flags = flags
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
+        return true
     }
 
     private static func postSystemKey(type: Int32) {

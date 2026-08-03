@@ -17,7 +17,11 @@ struct RemoteControlScreen: View {
                 VStack(spacing: spacing) {
                     header
 
-                    DPadView(perform: perform)
+                    DPadView(
+                        perform: perform,
+                        confirmPressed: confirmPressed,
+                        confirm: confirm
+                    )
                         .frame(width: dPadSize, height: dPadSize)
 
                     middleControls(buttonSize: middleButtonSize, spacing: spacing)
@@ -164,9 +168,7 @@ struct RemoteControlScreen: View {
             }
             .frame(maxWidth: .infinity)
 
-            ConfirmButton {
-                perform(.confirm)
-            }
+            ConfirmButton(onPress: confirmPressed, action: confirm)
             .frame(maxWidth: .infinity)
         }
     }
@@ -178,6 +180,14 @@ struct RemoteControlScreen: View {
         } else {
             connection.endVoice()
         }
+    }
+
+    private func confirmPressed() {
+        HapticFeedback.shared.trigger(.emphasized)
+    }
+
+    private func confirm() {
+        connection.send(.confirm)
     }
 
     private func perform(_ command: RemoteCommand) {

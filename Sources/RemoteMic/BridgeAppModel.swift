@@ -25,7 +25,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private let phoneRemoteServer = PhoneRemoteServer()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
     private var testToneGeneration = 0
-    private var voiceFunctionKeyLatch = VoiceFunctionKeyLatch()
+    private var phoneVoiceFunctionKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
     private var bluetoothVoiceActive = false
     private var phoneVoiceActive = false
@@ -142,7 +142,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isPhoneRemoteConnectionEnabled = false
         bluetoothVoiceActive = false
         phoneVoiceActive = false
-        updateVoiceFunctionKeyState(streaming: false)
+        updatePhoneVoiceFunctionKeyState(streaming: false)
         hidMonitor.stop()
         isAudioOutputReady = false
         if shouldStopAudioOnPreparationQueue {
@@ -603,7 +603,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func startPhoneVoice() -> Bool {
-        guard isAudioOutputReady else { return false }
+        guard isAudioOutputReady,
+              updatePhoneVoiceFunctionKeyState(streaming: true)
+        else { return false }
         phoneVoiceActive = true
         beginVoiceSessionIfNeeded()
         return true
@@ -611,6 +613,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func stopPhoneVoice() {
         phoneVoiceActive = false
+        updatePhoneVoiceFunctionKeyState(streaming: false)
         endVoiceSessionIfNeeded()
     }
 
@@ -627,7 +630,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         settings.recordButtonPress()
         voiceSessionStartedAt = Date()
-        updateVoiceFunctionKeyState(streaming: true)
         isStreaming = true
     }
 
@@ -637,7 +639,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             settings.recordVoiceDuration(Date().timeIntervalSince(voiceSessionStartedAt))
             self.voiceSessionStartedAt = nil
         }
-        updateVoiceFunctionKeyState(streaming: false)
         isStreaming = false
         audioOutput.endSession()
     }
@@ -651,16 +652,26 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
     }
 
-    private func updateVoiceFunctionKeyState(streaming: Bool) {
-        guard let transition = voiceFunctionKeyLatch.transition(streaming: streaming) else { return }
+    @discardableResult
+    private func updatePhoneVoiceFunctionKeyState(streaming: Bool) -> Bool {
+        guard let transition = phoneVoiceFunctionKeyLatch.transition(streaming: streaming) else {
+            return true
+        }
         let shouldHold = transition == .press
+        guard KeyboardInjector.setFunctionKeyPressed(shouldHold) else {
+            phoneVoiceFunctionKeyLatch.rollback(transition)
+            AppLogger.shared.write(
+                "PHONE VOICE FN \(shouldHold ? "DOWN" : "UP") failed"
+            )
+            return false
+        }
         isVoiceTriggerEnabled = !shouldHold
         voiceShortcutStatus = LocalizedMessage(
             shouldHold ? "voice_button.status.fn_pressed" : "voice_button.status.fn_released"
         )
         AppLogger.shared.write(
-            "VOICE FN HARDWARE \(shouldHold ? "DOWN" : "UP") " +
-                "mapping=\(voiceFunctionMapper.isApplied)"
+            "PHONE VOICE FN \(shouldHold ? "DOWN" : "UP")"
         )
+        return true
     }
 }

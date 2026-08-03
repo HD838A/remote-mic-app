@@ -133,6 +133,45 @@ struct RemoteButtonsTests {
         #expect(posted == nil)
     }
 
+    @Test func phoneVoicePostsFunctionKeyDownAndUp() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        #expect(KeyboardInjector.setFunctionKeyPressed(
+            true,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(KeyboardInjector.setFunctionKeyPressed(
+            false,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == KeyboardInjector.functionKeyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2 == .maskSecondaryFn)
+        #expect(posted[1].0 == KeyboardInjector.functionKeyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2.isEmpty)
+    }
+
+    @Test func phoneVoiceFunctionKeyRequiresAccessibility() {
+        var didPost = false
+        #expect(!KeyboardInjector.setFunctionKeyPressed(
+            true,
+            accessibilityTrusted: { false },
+            keyStatePoster: { _, _, _ in
+                didPost = true
+                return true
+            }
+        ))
+        #expect(!didPost)
+    }
+
     @Test func unconfiguredCustomShortcutDoesNotReportPermissionFailure() {
         #expect(KeyboardInjector.send(
             .customShortcut,
