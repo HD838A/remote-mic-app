@@ -1,5 +1,11 @@
 # Version History
 
+## 1.6.8 (Pre-release)
+
+- Added an install-free Mobile Web remote with one-time QR codes and explicit approval on the Mac.
+- Added white-listed remote buttons, synchronized custom titles, and push-to-talk audio through the existing virtual microphone path.
+- Added short-lived relay sessions, encrypted transport, rate limits, and a privacy boundary that does not store voice content.
+
 ## 1.6.7 (Pre-release)
 
 - Fixed an issue where a stale Mac session could block a new iPhone connection after a long disconnect, requiring the Mac App to restart before reconnecting.

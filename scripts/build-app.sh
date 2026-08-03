@@ -45,6 +45,11 @@ install_name_tool -add_rpath @executable_path/../Frameworks \
   "$APP_DIR/Contents/MacOS/$APP_NAME"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
+if [[ -n "${REMOTE_WEB_RELAY_URL:-}" ]]; then
+  plutil -remove RemoteWebRelayURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+  plutil -insert RemoteWebRelayURL -string "$REMOTE_WEB_RELAY_URL" \
+    "$APP_DIR/Contents/Info.plist"
+fi
 mkdir -p "$APP_DIR/Contents/Frameworks"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/Sparkle.framework"

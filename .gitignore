@@ -27,3 +27,7 @@ docs/
 
 # Local promotion copy is kept outside the public source release.
 marketing/
+
+# Mobile Web deployment inventory and infrastructure details stay local.
+/Apps/MobileWeb/.private/
+/Apps/MobileWeb/**/node_modules/

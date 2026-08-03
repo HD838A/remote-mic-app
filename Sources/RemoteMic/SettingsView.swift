@@ -80,6 +80,7 @@ struct SettingsView: View {
     @State private var configurationStatus: ConfigurationStatus?
     @State private var isReleaseHistoryPresented = false
     @State private var isClearTrustedPhonesConfirmationPresented = false
+    @State private var isWebRemoteSessionPresented = false
     @Namespace private var navigationGlassNamespace
 
     init(
@@ -127,6 +128,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $isReleaseHistoryPresented) {
             ReleaseHistorySheet()
+        }
+        .sheet(isPresented: $isWebRemoteSessionPresented) {
+            WebRemoteSessionView(model: model)
+                .environmentObject(localization)
         }
         .alert(
             localization.text("connection.trusted_devices.clear_confirm.title"),
@@ -212,6 +217,7 @@ struct SettingsView: View {
                 }
 
                 trustedPhoneDevicesPanel
+                webRemotePanel
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -252,6 +258,36 @@ struct SettingsView: View {
                 }
                 .compatibilityButtonStyle(.standard)
                 .disabled(settings.trustedPhoneIdentityFingerprints.isEmpty)
+            }
+        }
+    }
+
+    private var webRemotePanel: some View {
+        GlassPanel {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("connection.web.title")
+                        .font(.headline)
+                    Text("connection.web.help")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 16)
+                Text(webRemoteStatusText)
+                    .foregroundStyle(webRemoteStatusTint)
+                    .lineLimit(1)
+                Button(
+                    model.webRemoteState.isEnabled
+                        ? "connection.web.show_qr"
+                        : "connection.web.connect"
+                ) {
+                    if !model.webRemoteState.isEnabled {
+                        model.enableWebRemoteConnection()
+                    }
+                    isWebRemoteSessionPresented = true
+                }
+                .compatibilityButtonStyle(.prominent)
             }
         }
     }
@@ -1205,6 +1241,36 @@ struct SettingsView: View {
 
     private var connectionBadge: String {
         localization.text(model.isConnected ? "common.status.connected" : "common.status.connecting")
+    }
+
+    private var webRemoteStatusText: String {
+        switch model.webRemoteState {
+        case .disabled:
+            return localization.text("connection.web.disabled")
+        case .unavailable:
+            return localization.text("connection.web.unavailable")
+        case .connecting:
+            return localization.text("connection.web.connecting")
+        case .waitingForPhone:
+            return localization.text("connection.web.waiting_scan")
+        case .awaitingApproval:
+            return localization.text("connection.web.waiting_approval")
+        case .connected:
+            return localization.text("connection.web.connected")
+        case .failed:
+            return localization.text("connection.web.failed")
+        }
+    }
+
+    private var webRemoteStatusTint: Color {
+        switch model.webRemoteState {
+        case .connected:
+            return .green
+        case .failed, .unavailable:
+            return .orange
+        default:
+            return .secondary
+        }
     }
 
     private var connectionTint: Color {

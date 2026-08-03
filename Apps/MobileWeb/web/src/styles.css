@@ -1,0 +1,217 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+  color: #182027;
+  background: #cfd4d8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; min-height: 100%; margin: 0; }
+body { min-height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+button { font: inherit; color: inherit; -webkit-user-select: none; user-select: none; }
+button:focus-visible { outline: 3px solid rgba(31, 118, 181, 0.58); outline-offset: 3px; }
+button:disabled { opacity: 0.52; }
+
+.remote-shell {
+  width: 100%;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: #cfd4d8;
+}
+
+.remote-surface {
+  position: relative;
+  width: min(100%, 520px);
+  height: 100dvh;
+  min-height: 620px;
+  max-height: 980px;
+  display: grid;
+  grid-template-rows: 58px minmax(190px, 1fr) auto minmax(112px, 0.62fr) auto;
+  gap: clamp(8px, 1.5dvh, 16px);
+  padding: max(8px, env(safe-area-inset-top)) 20px max(8px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05), rgba(19,31,41,0.035)),
+    url("/aluminum-background.png");
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28);
+}
+
+.remote-header {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-button,
+.informational {
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(70, 79, 86, 0.22);
+  border-radius: 17px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, rgba(249,250,250,0.92), rgba(185,191,195,0.86));
+  box-shadow: 0 5px 10px rgba(54, 62, 68, 0.17), inset 0 1px 1px rgba(255,255,255,0.92);
+}
+
+.header-button { cursor: pointer; }
+.header-button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 5px rgba(54,62,68,0.18), inset 0 2px 5px rgba(49,58,65,0.12); }
+.header-button svg, .informational svg { width: 25px; height: 25px; }
+.header-button .custom-title { position: absolute; margin-top: 38px; font-size: 7px; max-width: 44px; }
+
+.connection-status {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.status-line { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 650; }
+.status-line i { width: 8px; height: 8px; border-radius: 50%; background: #d58a2b; box-shadow: 0 0 0 3px rgba(213,138,43,0.10); }
+.status-line.healthy { color: #26784b; }
+.status-line.healthy i { background: #35a264; box-shadow: 0 0 0 3px rgba(53,162,100,0.12); }
+.status-line.pending { color: #a6631f; }
+.mac-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(30,40,48,0.62); font-size: 12px; font-weight: 520; }
+.pairing .status-label { font-size: 10px; font-weight: 650; color: rgba(30,40,48,0.58); }
+.pairing strong { color: #c9711c; font: 750 22px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.03em; }
+
+.dpad {
+  position: relative;
+  width: min(64vw, 250px);
+  aspect-ratio: 1;
+  align-self: center;
+  justify-self: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #525a60 0%, #31383d 58%, #20262a 100%);
+  box-shadow: 0 12px 18px rgba(42,49,54,0.30), inset 0 1px 2px rgba(255,255,255,0.20), inset 0 -4px 8px rgba(0,0,0,0.28);
+}
+
+.dpad::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.13);
+  pointer-events: none;
+}
+
+.dpad-direction {
+  position: absolute;
+  width: 43%;
+  height: 43%;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.92);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.dpad-direction svg { width: 34px; height: 34px; }
+.dpad-direction.up { top: 0; left: 28.5%; border-radius: 50% 50% 20% 20%; }
+.dpad-direction.right { right: 0; top: 28.5%; border-radius: 20% 50% 50% 20%; }
+.dpad-direction.down { bottom: 0; left: 28.5%; border-radius: 20% 20% 50% 50%; }
+.dpad-direction.left { left: 0; top: 28.5%; border-radius: 50% 20% 20% 50%; }
+.dpad-direction:active:not(:disabled) { background: rgba(0,0,0,0.18); transform: translateY(1px); }
+
+.dpad-center {
+  position: absolute;
+  inset: 31%;
+  z-index: 2;
+  border-radius: 50%;
+  border: 1px solid rgba(6,10,12,0.78);
+  background: linear-gradient(145deg, #535b61, #2b3237);
+  color: rgba(255,255,255,0.94);
+  box-shadow: 0 4px 7px rgba(0,0,0,0.34), inset 0 1px 1px rgba(255,255,255,0.18);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dpad-center:active:not(:disabled) { transform: translateY(2px) scale(0.98); box-shadow: 0 1px 3px rgba(0,0,0,0.34), inset 0 2px 4px rgba(0,0,0,0.18); }
+
+.middle-controls {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  justify-items: center;
+  gap: clamp(8px, 1.4dvh, 15px) clamp(14px, 6vw, 38px);
+  padding: 0 8px;
+}
+
+.round-button {
+  width: clamp(66px, 20vw, 88px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(68,76,82,0.25);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: linear-gradient(145deg, rgba(248,249,249,0.94), rgba(171,178,183,0.88));
+  box-shadow: 0 6px 10px rgba(57,64,70,0.20), inset 0 1px 2px rgba(255,255,255,0.96);
+  cursor: pointer;
+}
+.round-button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 4px rgba(57,64,70,0.20), inset 0 2px 5px rgba(48,57,63,0.13); }
+.round-icon { height: 27px; display: grid; place-items: center; }
+.round-icon svg { width: 24px; height: 24px; }
+.round-label { width: 75%; min-height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; line-height: 1.2; font-weight: 680; }
+
+.primary-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 110px; }
+.primary-button {
+  position: relative;
+  min-width: 0;
+  border: 1px solid rgba(55,63,69,0.30);
+  border-radius: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 720;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  touch-action: none;
+}
+.primary-button svg { width: 34px; height: 34px; }
+.voice-button { color: #eef1f2; background: linear-gradient(150deg, #555d63, #2f363b); box-shadow: 0 8px 13px rgba(42,49,54,0.27), inset 0 1px 1px rgba(255,255,255,0.18); }
+.voice-button.requested { transform: translateY(3px); box-shadow: 0 3px 6px rgba(42,49,54,0.27), inset 0 3px 7px rgba(0,0,0,0.23); }
+.voice-button.recording { background: linear-gradient(150deg, #8b4d4c, #5a2f31); color: #fff6f4; }
+.confirm-button { background: linear-gradient(145deg, rgba(246,247,247,0.95), rgba(164,171,176,0.90)); box-shadow: 0 8px 13px rgba(50,58,64,0.22), inset 0 1px 2px rgba(255,255,255,0.96); }
+.confirm-button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 3px 6px rgba(50,58,64,0.22), inset 0 3px 7px rgba(45,54,60,0.15); }
+.custom-title { max-width: 82%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-weight: 650; }
+
+.guidance { min-height: 18px; margin: 0; align-self: center; color: rgba(31,41,49,0.59); font-size: 12px; font-weight: 560; line-height: 1.35; text-align: center; }
+.guidance.issue { color: #a35f20; }
+
+@media (max-height: 719px) {
+  .remote-surface { grid-template-rows: 54px minmax(180px, 1fr) auto 108px auto; gap: 8px; padding-top: max(6px, env(safe-area-inset-top)); padding-bottom: max(5px, env(safe-area-inset-bottom)); }
+  .header-button, .informational { width: 50px; height: 50px; border-radius: 16px; }
+  .remote-header { grid-template-columns: 50px minmax(0,1fr) 50px; }
+  .dpad { width: min(57vw, 205px); }
+  .round-button { width: clamp(62px, 18vw, 70px); }
+  .primary-button { border-radius: 26px; gap: 5px; }
+  .primary-button svg { width: 30px; height: 30px; }
+  .guidance { font-size: 11px; }
+}
+
+@media (min-width: 521px) {
+  .remote-surface { border-radius: 28px; height: min(900px, calc(100dvh - 28px)); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button { transition: transform 80ms ease, box-shadow 80ms ease, background-color 120ms ease; }
+  .status-line i { transition: background-color 160ms ease, box-shadow 160ms ease; }
+}
