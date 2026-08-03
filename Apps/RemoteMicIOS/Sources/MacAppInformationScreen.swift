@@ -18,12 +18,12 @@ struct MacAppInformationScreen: View {
     var body: some View {
         GeometryReader { proxy in
             let isCompact = proxy.size.height < 780
-            let spacing: CGFloat = isCompact ? 7 : 10
+            let sectionSpacing: CGFloat = 10
 
             ZStack {
                 RemoteBackground()
 
-                VStack(spacing: spacing) {
+                VStack(spacing: sectionSpacing) {
                     navigationBar
                         .frame(height: 44)
 
@@ -50,6 +50,7 @@ struct MacAppInformationScreen: View {
         }
         .preferredColorScheme(.light)
         .toolbar(.hidden, for: .navigationBar)
+        .simultaneousGesture(edgeBackGesture)
         .onDisappear {
             copyResetTask?.cancel()
         }
@@ -57,7 +58,7 @@ struct MacAppInformationScreen: View {
 
     private var navigationBar: some View {
         ZStack {
-            Text("Mac App")
+            Text("无线麦")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(RemotePalette.text)
 
@@ -65,7 +66,7 @@ struct MacAppInformationScreen: View {
                 Button {
                     dismiss()
                 } label: {
-                    LightSurface {
+                    InformationLightSurface(cornerRadius: 10) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 21, weight: .semibold))
                             .foregroundStyle(RemotePalette.text.opacity(0.9))
@@ -81,7 +82,7 @@ struct MacAppInformationScreen: View {
                     HapticFeedback.shared.trigger(.emphasized)
                     connection.restartDiscovery()
                 } label: {
-                    LightSurface {
+                    InformationLightSurface(cornerRadius: 10) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(RemotePalette.text.opacity(0.9))
@@ -140,7 +141,7 @@ struct MacAppInformationScreen: View {
     }
 
     private var connectionDetails: some View {
-        LightSurface {
+        InformationLightSurface(cornerRadius: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("连接详情")
                     .font(.system(size: 16, weight: .bold))
@@ -161,12 +162,12 @@ struct MacAppInformationScreen: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .padding(.vertical, 10)
         }
     }
 
     private var connectionChecks: some View {
-        LightSurface {
+        InformationLightSurface(cornerRadius: 14) {
             VStack(spacing: 8) {
                 HStack {
                     Text("连接检查")
@@ -185,11 +186,11 @@ struct MacAppInformationScreen: View {
                             .padding(.horizontal, 12)
                             .frame(height: 32)
                             .background(
-                                AppIconRoundedRectangle()
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .fill(Color.white.opacity(0.26))
                             )
                             .overlay {
-                                AppIconRoundedRectangle()
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .stroke(Color.black.opacity(0.18), lineWidth: 1)
                             }
                     }
@@ -224,7 +225,7 @@ struct MacAppInformationScreen: View {
     }
 
     private var remoteRecommendation: some View {
-        LightSurface {
+        InformationLightSurface(cornerRadius: 14) {
             HStack(spacing: 12) {
                 Image(systemName: "av.remote.fill")
                     .font(.system(size: 34, weight: .medium))
@@ -245,11 +246,11 @@ struct MacAppInformationScreen: View {
                             .padding(.horizontal, 7)
                             .frame(height: 23)
                             .background(
-                                AppIconRoundedRectangle()
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .fill(Color.white.opacity(0.22))
                             )
                             .overlay {
-                                AppIconRoundedRectangle()
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .stroke(Color.black.opacity(0.14), lineWidth: 1)
                             }
                     }
@@ -269,7 +270,7 @@ struct MacAppInformationScreen: View {
     }
 
     private var downloadSection: some View {
-        LightSurface {
+        InformationLightSurface(cornerRadius: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("下载 Mac App")
@@ -297,11 +298,11 @@ struct MacAppInformationScreen: View {
                     .padding(.horizontal, 11)
                     .frame(maxWidth: .infinity, minHeight: 38, maxHeight: 38, alignment: .leading)
                     .background(
-                        AppIconRoundedRectangle()
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(Color.white.opacity(0.26))
                     )
                     .overlay {
-                        AppIconRoundedRectangle()
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(Color.black.opacity(0.17), lineWidth: 1)
                     }
                 }
@@ -314,7 +315,7 @@ struct MacAppInformationScreen: View {
                         subject: Text("无线麦 Mac App"),
                         message: Text("无线麦 Mac App 最新版下载链接")
                     ) {
-                        GraphiteSurface {
+                        InformationGraphiteSurface(cornerRadius: 10) {
                             HStack(spacing: 7) {
                                 Image(systemName: "airplayaudio")
                                     .font(.system(size: 18, weight: .semibold))
@@ -332,7 +333,7 @@ struct MacAppInformationScreen: View {
                     Button {
                         copyDownloadLink()
                     } label: {
-                        LightSurface {
+                        InformationLightSurface(cornerRadius: 10) {
                             HStack(spacing: 7) {
                                 Image(systemName: didCopyLink ? "checkmark" : "doc.on.doc")
                                     .font(.system(size: 17, weight: .semibold))
@@ -360,8 +361,19 @@ struct MacAppInformationScreen: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .padding(.vertical, 10)
         }
+    }
+
+    private var edgeBackGesture: some Gesture {
+        DragGesture(minimumDistance: 16, coordinateSpace: .global)
+            .onEnded { value in
+                guard value.startLocation.x <= 24,
+                      value.translation.width >= 80,
+                      abs(value.translation.height) <= 60
+                else { return }
+                dismiss()
+            }
     }
 
     private func detailItem(_ title: String, value: String) -> some View {
@@ -486,6 +498,66 @@ struct MacAppInformationScreen: View {
             guard !Task.isCancelled else { return }
             didCopyLink = false
         }
+    }
+}
+
+private struct InformationLightSurface<Content: View>: View {
+    let cornerRadius: CGFloat
+    @ViewBuilder let content: Content
+
+    init(cornerRadius: CGFloat = 16, @ViewBuilder content: () -> Content) {
+        self.cornerRadius = cornerRadius
+        self.content = content()
+    }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [RemotePalette.lightTop, RemotePalette.lightBottom],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(Color.white.opacity(0.75), lineWidth: 1)
+                .padding(1)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(Color.black.opacity(0.23), lineWidth: 1.3)
+            content
+        }
+        .shadow(color: .black.opacity(0.16), radius: 4, x: 0, y: 3)
+    }
+}
+
+private struct InformationGraphiteSurface<Content: View>: View {
+    let cornerRadius: CGFloat
+    @ViewBuilder let content: Content
+
+    init(cornerRadius: CGFloat = 10, @ViewBuilder content: () -> Content) {
+        self.cornerRadius = cornerRadius
+        self.content = content()
+    }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [RemotePalette.graphiteTop, RemotePalette.graphiteBottom],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(Color.white.opacity(0.24), lineWidth: 1)
+                .padding(1)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(RemotePalette.graphiteEdge, lineWidth: 1.5)
+            content
+        }
+        .shadow(color: .black.opacity(0.19), radius: 4, x: 0, y: 3)
     }
 }
 
