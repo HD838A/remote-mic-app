@@ -10,6 +10,7 @@
 		1689F8A2D589CABA82047AE2 /* RemoteControlComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D3CB04898A74D008EB5C938 /* RemoteControlComponents.swift */; };
 		32BE424431F83EA8AA9618D1 /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11DF672421B64C7B416FC13 /* HapticFeedback.swift */; };
 		47FFE4A4BDD2390F9E942693 /* RemoteWireMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BBEDCD3D0B3E3EAF8F3CC8C /* RemoteWireMessage.swift */; };
+		4934DF6A4A865632E8E0B729 /* MacAppInformationScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */; };
 		5A6D4557F456D963BFEBEE1F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10FF5AE6F95095F6F4BCE6D1 /* Assets.xcassets */; };
 		92AB4E7240E956061E267651 /* RemoteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */; };
 		BD841ADFC754C46205404AD4 /* RemoteControlScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4AEACAAB5860345FD8568A /* RemoteControlScreen.swift */; };
@@ -23,6 +24,7 @@
 		2AAB8DDB974CD61E81680948 /* RemoteMicIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RemoteMicIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2BBEDCD3D0B3E3EAF8F3CC8C /* RemoteWireMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWireMessage.swift; sourceTree = "<group>"; };
 		4D3CB04898A74D008EB5C938 /* RemoteControlComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControlComponents.swift; sourceTree = "<group>"; };
+		4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppInformationScreen.swift; sourceTree = "<group>"; };
 		5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneStreamer.swift; sourceTree = "<group>"; };
 		A11DF672421B64C7B416FC13 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
 		D811C8889E87C89B9D23014E /* RemoteMacConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMacConnection.swift; sourceTree = "<group>"; };
@@ -61,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				A11DF672421B64C7B416FC13 /* HapticFeedback.swift */,
+				4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */,
 				5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */,
 				F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */,
 				4D3CB04898A74D008EB5C938 /* RemoteControlComponents.swift */,
@@ -140,6 +143,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				32BE424431F83EA8AA9618D1 /* HapticFeedback.swift in Sources */,
+				4934DF6A4A865632E8E0B729 /* MacAppInformationScreen.swift in Sources */,
 				C05D0F17F0D1E9B99C1C392E /* MicrophoneStreamer.swift in Sources */,
 				92AB4E7240E956061E267651 /* RemoteCommand.swift in Sources */,
 				1689F8A2D589CABA82047AE2 /* RemoteControlComponents.swift in Sources */,
@@ -230,7 +234,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.8.2;
+				MARKETING_VERSION = 0.8.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hd838a.RemoteMicIOS;
 				PRODUCT_NAME = RemoteMicIOS;
 				SDKROOT = iphoneos;
@@ -252,7 +256,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.8.2;
+				MARKETING_VERSION = 0.8.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hd838a.RemoteMicIOS;
 				PRODUCT_NAME = RemoteMicIOS;
 				SDKROOT = iphoneos;

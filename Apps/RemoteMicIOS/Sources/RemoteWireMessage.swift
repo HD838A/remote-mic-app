@@ -10,5 +10,6 @@ struct RemoteWireMessage: Codable {
     var identityPublicKey: String?
     var identitySignature: String?
     var buttonTitles: [String: String]?
+    var appVersion: String?
     var payload: String?
 }

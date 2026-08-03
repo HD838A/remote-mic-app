@@ -12,6 +12,7 @@ struct PhoneRemoteWireMessage: Codable {
     var identityPublicKey: String?
     var identitySignature: String?
     var buttonTitles: [String: String]?
+    var appVersion: String?
     var payload: String?
 }
 
@@ -143,6 +144,7 @@ final class PhoneRemoteServer {
             connection: connection,
             queue: queue,
             macName: Self.macName,
+            appVersion: Self.appVersion,
             buttonTitles: buttonTitles
         )
         let identifier = ObjectIdentifier(client)
@@ -204,12 +206,17 @@ final class PhoneRemoteServer {
     private static var macName: String {
         Host.current().localizedName ?? ProcessInfo.processInfo.hostName
     }
+
+    private static var appVersion: String? {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    }
 }
 
 private final class Client {
     private let connection: NWConnection
     private let queue: DispatchQueue
     private let macName: String
+    private let appVersion: String?
     private var receiveBuffer = Data()
     private var isApproved = false
     private var isVoiceActive = false
@@ -238,11 +245,13 @@ private final class Client {
         connection: NWConnection,
         queue: DispatchQueue,
         macName: String,
+        appVersion: String?,
         buttonTitles: [String: String]
     ) {
         self.connection = connection
         self.queue = queue
         self.macName = macName
+        self.appVersion = appVersion
         self.buttonTitles = buttonTitles
     }
 
@@ -404,7 +413,8 @@ private final class Client {
         sendSecure(PhoneRemoteWireMessage(
             type: "ready",
             deviceName: macName,
-            buttonTitles: buttonTitles
+            buttonTitles: buttonTitles,
+            appVersion: appVersion
         )) { [weak self] in
             self?.onApproved?()
         }

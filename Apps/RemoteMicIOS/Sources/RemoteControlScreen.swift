@@ -3,6 +3,7 @@ import SwiftUI
 struct RemoteControlScreen: View {
     @EnvironmentObject private var connection: RemoteMacConnection
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showsMacAppInformation = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -57,6 +58,10 @@ struct RemoteControlScreen: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, !connection.isConnected { connection.restartDiscovery() }
         }
+        .navigationDestination(isPresented: $showsMacAppInformation) {
+            MacAppInformationScreen()
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private var header: some View {
@@ -96,6 +101,7 @@ struct RemoteControlScreen: View {
 
                 Button {
                     connection.restartDiscovery()
+                    showsMacAppInformation = true
                 } label: {
                     LightSurface {
                         Image(systemName: "laptopcomputer")
@@ -105,7 +111,7 @@ struct RemoteControlScreen: View {
                     .frame(width: 54, height: 54)
                 }
                 .buttonStyle(TactileButtonStyle())
-                .accessibilityLabel("选择 Mac")
+                .accessibilityLabel("重新连接并查看 Mac App")
             }
 
             VStack(alignment: .center, spacing: 3) {
@@ -148,7 +154,7 @@ struct RemoteControlScreen: View {
             HStack(spacing: 0) {
                 middleButton("返回", image: "chevron.left", command: .back, size: buttonSize)
                 Spacer(minLength: spacing)
-                middleButton("TV", image: "tv", command: .television, size: buttonSize)
+                middleButton("菜单", image: "line.3.horizontal", command: .menu, size: buttonSize)
                 Spacer(minLength: spacing)
                 middleButton("增大音量", image: "speaker.plus.fill", command: .volumeUp, size: buttonSize)
             }
@@ -156,7 +162,7 @@ struct RemoteControlScreen: View {
             HStack(spacing: 0) {
                 middleButton("主页", image: "house", command: .home, size: buttonSize)
                 Spacer(minLength: spacing)
-                middleButton("菜单", image: "line.3.horizontal", command: .menu, size: buttonSize)
+                middleButton("TV", image: "tv", command: .television, size: buttonSize)
                 Spacer(minLength: spacing)
                 middleButton("减小音量", image: "speaker.minus.fill", command: .volumeDown, size: buttonSize)
             }

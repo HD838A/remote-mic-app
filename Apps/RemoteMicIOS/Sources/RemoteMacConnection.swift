@@ -21,6 +21,9 @@ final class RemoteMacConnection: ObservableObject {
     @Published private(set) var macName = "正在查找 Mac"
     @Published private(set) var isVoiceActive = false
     @Published private(set) var buttonTitles: [String: String] = [:]
+    @Published private(set) var macAppVersion: String?
+    @Published private(set) var lastConnectedAt: Date?
+    @Published private(set) var isNearbyNetworkReady = false
 
     private let queue = DispatchQueue(label: "RemoteMicIOS.network", qos: .userInitiated)
     private let microphone = MicrophoneStreamer()
@@ -31,7 +34,6 @@ final class RemoteMacConnection: ObservableObject {
     )
     private var browser: NWBrowser?
     private var connection: NWConnection?
-    private var isBrowserReady = false
     private var pendingEndpoint: NWEndpoint?
     private var receiveBuffer = Data()
     private var voiceRequestID: UInt64 = 0
@@ -125,9 +127,10 @@ final class RemoteMacConnection: ObservableObject {
         sessionKey = nil
         pairingCode = nil
         buttonTitles = [:]
+        macAppVersion = nil
         browser?.cancel()
         browser = nil
-        isBrowserReady = false
+        isNearbyNetworkReady = false
         pendingEndpoint = nil
         receiveBuffer.removeAll(keepingCapacity: true)
         start()
@@ -199,7 +202,7 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     private func connect(to endpoint: NWEndpoint) {
-        guard isBrowserReady else {
+        guard isNearbyNetworkReady else {
             pendingEndpoint = endpoint
             return
         }
@@ -327,6 +330,8 @@ final class RemoteMacConnection: ObservableObject {
         case "ready":
             macName = message.deviceName ?? macName
             buttonTitles = message.buttonTitles ?? [:]
+            macAppVersion = message.appVersion
+            lastConnectedAt = Date()
             state = .connected
         case "buttonTitles":
             buttonTitles = message.buttonTitles ?? [:]
@@ -380,7 +385,7 @@ final class RemoteMacConnection: ObservableObject {
     private func handleBrowserState(_ browserState: NWBrowser.State) {
         switch browserState {
         case .ready:
-            isBrowserReady = true
+            isNearbyNetworkReady = true
             if connection == nil {
                 state = .searching
                 macName = "正在查找 Mac"
@@ -389,20 +394,20 @@ final class RemoteMacConnection: ObservableObject {
                 }
             }
         case let .waiting(error):
-            isBrowserReady = false
+            isNearbyNetworkReady = false
             logger.notice("Bonjour browser is waiting: \(String(describing: error), privacy: .public)")
             if connection == nil {
                 state = .awaitingLocalNetworkPermission
                 macName = "等待访问本地网络"
             }
         case let .failed(error):
-            isBrowserReady = false
+            isNearbyNetworkReady = false
             logger.error("Bonjour browser failed: \(String(describing: error), privacy: .public)")
             browser?.cancel()
             browser = nil
             handleFailure("无法发现附近的 Mac，请检查本地网络权限后重试")
         case .cancelled:
-            isBrowserReady = false
+            isNearbyNetworkReady = false
         default:
             break
         }
@@ -414,7 +419,7 @@ final class RemoteMacConnection: ObservableObject {
             return
         }
         pendingEndpoint = endpoint
-        if isBrowserReady {
+        if isNearbyNetworkReady {
             connect(to: endpoint)
         }
     }
@@ -427,6 +432,7 @@ final class RemoteMacConnection: ObservableObject {
         sessionKey = nil
         pairingCode = nil
         buttonTitles = [:]
+        macAppVersion = nil
         pendingEndpoint = nil
         receiveBuffer.removeAll(keepingCapacity: true)
         state = .unavailable(detail)

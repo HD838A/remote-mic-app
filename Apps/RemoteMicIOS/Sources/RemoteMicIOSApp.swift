@@ -6,8 +6,10 @@ struct RemoteMicIOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RemoteControlScreen()
-                .environmentObject(connection)
+            NavigationStack {
+                RemoteControlScreen()
+            }
+            .environmentObject(connection)
         }
     }
 }
