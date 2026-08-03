@@ -26,6 +26,7 @@ interface ConnectionContext {
   commandCount: number;
   audioWindowStartedAt: number;
   audioCount: number;
+  resumable: boolean;
 }
 
 interface Session {
@@ -36,6 +37,7 @@ interface Session {
   expiresAt: number;
   mac: ConnectionContext;
   web?: ConnectionContext;
+  webDisconnectedAt?: number;
   approved: boolean;
   macName: string;
   appVersion?: string;
@@ -49,6 +51,7 @@ export interface RelayOptions {
   pendingSessionTTLMS?: number;
   maximumSessionTTLMS?: number;
   maximumSessions?: number;
+  webReconnectGraceMS?: number;
 }
 
 export interface RelayServer {
@@ -67,6 +70,7 @@ export function createRelayServer(options: RelayOptions): RelayServer {
   const pendingSessionTTLMS = options.pendingSessionTTLMS ?? 5 * 60 * 1000;
   const maximumSessionTTLMS = options.maximumSessionTTLMS ?? 2 * 60 * 60 * 1000;
   const maximumSessions = options.maximumSessions ?? 100;
+  const webReconnectGraceMS = options.webReconnectGraceMS ?? 60_000;
   const sessions = new Map<string, Session>();
   const contexts = new Set<ConnectionContext>();
 
@@ -108,6 +112,7 @@ export function createRelayServer(options: RelayOptions): RelayServer {
       commandCount: 0,
       audioWindowStartedAt: Date.now(),
       audioCount: 0,
+      resumable: true,
     };
     contexts.add(context);
 
@@ -131,7 +136,7 @@ export function createRelayServer(options: RelayOptions): RelayServer {
     });
     socket.on("close", () => {
       contexts.delete(context);
-      closeContextSession(context, sessions, "连接已断开");
+      closeContextSession(context, sessions, "连接已断开", webReconnectGraceMS);
     });
     socket.on("error", () => {
       socket.close();
@@ -143,6 +148,9 @@ export function createRelayServer(options: RelayOptions): RelayServer {
     for (const session of sessions.values()) {
       if (now >= session.expiresAt) {
         destroySession(session, sessions, "会话已过期");
+      } else if (session.webDisconnectedAt !== undefined
+          && now - session.webDisconnectedAt >= webReconnectGraceMS) {
+        destroySession(session, sessions, "手机连接恢复超时");
       }
     }
     for (const context of contexts) {
@@ -337,6 +345,24 @@ function joinSession(
   session.web = context;
   session.deviceName = message.deviceName;
   session.expiresAt = Date.now() + maximumSessionTTLMS;
+  const resumed = session.approved && session.webDisconnectedAt !== undefined;
+  delete session.webDisconnectedAt;
+  if (resumed) {
+    send(context, {
+      type: "sessionReady",
+      protocolVersion,
+      macName: session.macName,
+      ...(session.appVersion ? { appVersion: session.appVersion } : {}),
+      buttonTitles: session.buttonTitles,
+    });
+    send(session.mac, {
+      type: "sessionReady",
+      protocolVersion,
+      deviceName: session.deviceName,
+    });
+    logEvent(session, "resumed");
+    return;
+  }
   send(context, {
     type: "sessionPendingApproval",
     protocolVersion,
@@ -377,9 +403,23 @@ function closeContextSession(
   context: ConnectionContext,
   sessions: Map<string, Session>,
   reason: string,
+  webReconnectGraceMS: number,
 ): void {
   const session = context.sessionId ? sessions.get(context.sessionId) : undefined;
-  if (session) destroySession(session, sessions, reason, context);
+  if (!session) return;
+  if (context.role === "web"
+      && context.resumable
+      && session.approved
+      && session.web === context
+      && session.mac.socket.readyState === WebSocket.OPEN) {
+    delete session.web;
+    session.webDisconnectedAt = Date.now();
+    session.expiresAt = Math.max(session.expiresAt, Date.now() + webReconnectGraceMS);
+    send(session.mac, { type: "voiceStop", protocolVersion });
+    logEvent(session, "web_disconnected");
+    return;
+  }
+  destroySession(session, sessions, reason, context);
 }
 
 function destroySession(
@@ -403,6 +443,7 @@ function rejectInvalidState(context: ConnectionContext): void {
 }
 
 function rejectConnection(context: ConnectionContext, code: string, detail: string): void {
+  context.resumable = false;
   send(context, errorMessage(code, detail, false));
   context.socket.close(1008, "policy violation");
 }

@@ -19,9 +19,9 @@ import {
 } from "./icons";
 
 const initialState: ConnectionState = {
-  phase: "connecting",
-  statusText: "正在连接",
-  guidanceText: "正在加入临时会话",
+  phase: "readyToConnect",
+  statusText: "等待连接",
+  guidanceText: "点击“连接 Mac”后才会建立网络连接",
   buttonTitles: {},
   voiceRequested: false,
   voiceReady: false,
@@ -33,7 +33,7 @@ export default function App(): ReactElement {
 
   useEffect(() => {
     const unsubscribe = connection.subscribe(setState);
-    connection.connect();
+    connection.prepare();
     const stopVoice = () => connection.endVoice();
     const onVisibilityChange = () => {
       if (document.visibilityState !== "visible") stopVoice();
@@ -87,9 +87,15 @@ export default function App(): ReactElement {
           </ControlButton>
         </div>
 
-        <p className={`guidance ${state.phase === "failed" || state.phase === "closed" ? "issue" : ""}`} aria-live="polite">
-          {state.guidanceText}
-        </p>
+        {state.phase === "readyToConnect" || state.phase === "failed" ? (
+          <button type="button" className="connect-button" onClick={() => connection.connect()}>
+            {state.phase === "failed" ? "重试连接" : "连接 Mac"}
+          </button>
+        ) : (
+          <p className={`guidance ${state.phase === "closed" ? "issue" : ""}`} aria-live="polite">
+            {state.guidanceText}
+          </p>
+        )}
       </section>
     </main>
   );

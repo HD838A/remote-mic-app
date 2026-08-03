@@ -1,5 +1,11 @@
 # Version History
 
+## 1.6.9 (Pre-release)
+
+- Requires an explicit **Connect Mac** click after scanning before a remote session is opened; microphone access still starts only while push-to-talk is held.
+- Automatically resumes an approved web session after a brief network interruption instead of immediately requiring a new QR code.
+- Improves phone speech with browser voice processing, weak-network buffering, and tail draining so releasing push-to-talk does not discard queued audio.
+
 ## 1.6.8 (Pre-release)
 
 - Added an install-free Mobile Web remote with one-time QR codes and explicit approval on the Mac.

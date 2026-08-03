@@ -20,6 +20,12 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
     private var pairingCode: String?
     private var pendingApproval = false
     private var isVoiceActive = false
+    private var voiceStopPending = false
+    private var audioJitterBuffer = WebRemoteAudioJitterBuffer(
+        startFrameCount: 12,
+        maximumFrameCount: 40
+    )
+    private var audioTimer: DispatchSourceTimer?
     private var stopped = true
 
     var onStateChange: ((WebRemoteSessionState) -> Void)?
@@ -154,7 +160,7 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
             guard isVoiceActive,
                   let frame = WebRemoteAudioFrame.decode(data)
             else { return }
-            onAudio?(frame.samples)
+            audioJitterBuffer.append(sequence: frame.sequence, samples: frame.samples)
         @unknown default:
             break
         }
@@ -228,6 +234,9 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
                     guard let self, !self.stopped else { return }
                     if succeeded {
                         self.isVoiceActive = true
+                        self.voiceStopPending = false
+                        self.audioJitterBuffer.reset()
+                        self.startAudioTimer()
                         self.send(WebRemoteWireMessage(type: "voiceReady"))
                     } else {
                         self.sendOperationError("voice_unavailable", "Mac 的语音输出当前不可用")
@@ -235,7 +244,7 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
                 }
             }
         case "voiceStop":
-            stopVoiceIfNeeded()
+            finishVoiceAfterBufferedAudio()
         case "heartbeat":
             send(WebRemoteWireMessage(
                 type: "heartbeat",
@@ -278,9 +287,38 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
         }
     }
 
+    private func finishVoiceAfterBufferedAudio() {
+        guard isVoiceActive else { return }
+        guard audioJitterBuffer.hasPendingFrames else {
+            stopVoiceIfNeeded()
+            return
+        }
+        voiceStopPending = true
+    }
+
+    private func startAudioTimer() {
+        audioTimer?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + .milliseconds(20), repeating: .milliseconds(20), leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in
+            guard let self, self.isVoiceActive else { return }
+            if let samples = self.audioJitterBuffer.nextFrame(finishing: self.voiceStopPending) {
+                self.onAudio?(samples)
+            } else if self.voiceStopPending {
+                self.stopVoiceIfNeeded()
+            }
+        }
+        audioTimer = timer
+        timer.resume()
+    }
+
     private func stopVoiceIfNeeded() {
         guard isVoiceActive else { return }
         isVoiceActive = false
+        voiceStopPending = false
+        audioTimer?.cancel()
+        audioTimer = nil
+        audioJitterBuffer.reset()
         onVoiceStop?()
     }
 

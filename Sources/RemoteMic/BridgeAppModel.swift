@@ -747,9 +747,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func stopPhoneVoice(source: MobileVoiceSource) {
         guard activeMobileVoiceSource == source else { return }
-        activeMobileVoiceSource = nil
-        updatePhoneVoiceFunctionKeyState(streaming: false)
-        endVoiceSessionIfNeeded()
+        audioOutput.endSessionAfterDraining { [weak self] in
+            guard let self, self.activeMobileVoiceSource == source else { return }
+            self.activeMobileVoiceSource = nil
+            self.updatePhoneVoiceFunctionKeyState(streaming: false)
+            self.endVoiceSessionIfNeeded()
+        }
     }
 
     private func receivePhoneAudio(_ samples: [Int16], source: MobileVoiceSource) {

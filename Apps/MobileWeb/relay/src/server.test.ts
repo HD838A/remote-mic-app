@@ -134,12 +134,45 @@ describe("relay session", () => {
     session.web.close();
     session.mac.close();
   });
+
+  it("lets an approved web peer resume briefly without scanning or approving again", async () => {
+    const session = await createPendingSession();
+    openServers.push(session.relay);
+    session.mac.send(JSON.stringify({ type: "sessionApprove", protocolVersion }));
+    expect((await nextJSON(session.mac)).type).toBe("sessionReady");
+    expect((await nextJSON(session.web)).type).toBe("sessionReady");
+
+    const stopped = nextJSON(session.mac);
+    const closed = waitForClose(session.web);
+    session.web.terminate();
+    await closed;
+    expect((await stopped).type).toBe("voiceStop");
+
+    const resumed = await connect(`${session.baseURL}/ws`, "http://127.0.0.1");
+    resumed.send(JSON.stringify({
+      type: "sessionJoin",
+      protocolVersion,
+      sessionId: session.sessionId,
+      token: session.token,
+      deviceName: "Test Phone",
+    }));
+    expect((await nextJSON(resumed)).type).toBe("sessionReady");
+    expect((await nextJSON(session.mac)).type).toBe("sessionReady");
+
+    resumed.send(JSON.stringify({ type: "command", protocolVersion, command: "home" }));
+    expect(await nextJSON(session.mac)).toMatchObject({ type: "command", command: "home" });
+    resumed.close();
+    session.mac.close();
+  });
 });
 
 async function createPendingSession(): Promise<{
   relay: RelayServer;
+  baseURL: string;
   mac: WebSocket;
   web: WebSocket;
+  sessionId: string;
+  token: string;
 }> {
   const { relay, baseURL } = await startRelay();
   const mac = await connect(`${baseURL}/ws`);
@@ -165,7 +198,7 @@ async function createPendingSession(): Promise<{
   }));
   expect((await nextJSON(web)).type).toBe("sessionPendingApproval");
   expect((await nextJSON(mac)).type).toBe("sessionPendingApproval");
-  return { relay, mac, web };
+  return { relay, baseURL, mac, web, sessionId: created.sessionId, token };
 }
 
 async function startRelay(): Promise<{ relay: RelayServer; baseURL: string }> {
@@ -232,4 +265,8 @@ function collectJSON(socket: WebSocket, count: number): Promise<WireMessage[]> {
     };
     socket.on("message", handleMessage);
   });
+}
+
+function waitForClose(socket: WebSocket): Promise<void> {
+  return new Promise((resolveClose) => socket.once("close", () => resolveClose()));
 }

@@ -175,6 +175,10 @@ final class VirtualAudioOutput {
     private var engineConfigurationGeneration: UInt64 = 0
     private var rejectedWriteCount = 0
     private var lastRejectedWriteLogDate = Date.distantPast
+    private let playbackLock = NSLock()
+    private var pendingVoiceBufferCount = 0
+    private var drainCompletion: (() -> Void)?
+    private var drainGeneration: UInt64 = 0
     private let sourceFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
@@ -327,7 +331,17 @@ final class VirtualAudioOutput {
             AppLogger.shared.write("AUDIO WRITE resumed rejected_count=\(rejectedWriteCount) state={\(basicDiagnosticState())}")
             rejectedWriteCount = 0
         }
-        player.scheduleBuffer(buffer)
+        playbackLock.lock()
+        pendingVoiceBufferCount += 1
+        playbackLock.unlock()
+        player.scheduleBuffer(
+            buffer,
+            at: nil,
+            options: [],
+            completionCallbackType: .dataPlayedBack
+        ) { [weak self] _ in
+            self?.scheduledVoiceBufferDidFinish()
+        }
         return true
     }
 
@@ -335,7 +349,35 @@ final class VirtualAudioOutput {
         flushPlayer()
     }
 
+    func endSessionAfterDraining(
+        maximumDelay: TimeInterval = 0.75,
+        completion: @escaping () -> Void
+    ) {
+        playbackLock.lock()
+        drainGeneration &+= 1
+        let generation = drainGeneration
+        let shouldCompleteImmediately = pendingVoiceBufferCount == 0
+        if !shouldCompleteImmediately {
+            drainCompletion = completion
+        }
+        playbackLock.unlock()
+
+        if shouldCompleteImmediately {
+            flushPlayer()
+            completion()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + maximumDelay) { [weak self] in
+            self?.finishDrainIfNeeded(generation: generation, completion: completion)
+        }
+    }
+
     private func flushPlayer() {
+        playbackLock.lock()
+        pendingVoiceBufferCount = 0
+        drainCompletion = nil
+        drainGeneration &+= 1
+        playbackLock.unlock()
         guard let player, engine?.isRunning == true else { return }
         player.stop()
         player.reset()
@@ -348,12 +390,48 @@ final class VirtualAudioOutput {
     }
 
     func stop() {
+        playbackLock.lock()
+        pendingVoiceBufferCount = 0
+        drainCompletion = nil
+        drainGeneration &+= 1
+        playbackLock.unlock()
         removeEngineConfigurationObserver()
         player?.stop()
         engine?.stop()
         player = nil
         engine = nil
         selectedDevice = nil
+    }
+
+    private func scheduledVoiceBufferDidFinish() {
+        var completion: (() -> Void)?
+        playbackLock.lock()
+        pendingVoiceBufferCount = max(0, pendingVoiceBufferCount - 1)
+        if pendingVoiceBufferCount == 0 {
+            completion = drainCompletion
+            drainCompletion = nil
+            drainGeneration &+= 1
+        }
+        playbackLock.unlock()
+        guard let completion else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.flushPlayer()
+            completion()
+        }
+    }
+
+    private func finishDrainIfNeeded(generation: UInt64, completion: @escaping () -> Void) {
+        playbackLock.lock()
+        let shouldFinish = generation == drainGeneration && drainCompletion != nil
+        if shouldFinish {
+            drainCompletion = nil
+            pendingVoiceBufferCount = 0
+            drainGeneration &+= 1
+        }
+        playbackLock.unlock()
+        guard shouldFinish else { return }
+        flushPlayer()
+        completion()
     }
 
     private func observeConfigurationChanges(for engine: AVAudioEngine) {

@@ -38,4 +38,20 @@ struct WebRemoteProtocolTests {
         #expect(WebRemoteAudioFrame.decode(Data([2, 0, 0, 0, 1, 0, 0])) == nil)
         #expect(WebRemoteAudioFrame.decode(Data([1, 0, 0, 0, 1, 0])) == nil)
     }
+
+    @Test func jitterBufferWaitsForInitialFramesAndPlaysInSequence() throws {
+        var buffer = WebRemoteAudioJitterBuffer(startFrameCount: 2, maximumFrameCount: 4)
+        buffer.append(sequence: 10, samples: [10])
+        #expect(buffer.nextFrame(finishing: false) == nil)
+        buffer.append(sequence: 11, samples: [11])
+        #expect(buffer.nextFrame(finishing: false) == [10])
+        #expect(buffer.nextFrame(finishing: false) == [11])
+    }
+
+    @Test func jitterBufferDrainsShortVoiceWhenFinishing() {
+        var buffer = WebRemoteAudioJitterBuffer(startFrameCount: 8, maximumFrameCount: 40)
+        buffer.append(sequence: 1, samples: [1, 2])
+        #expect(buffer.nextFrame(finishing: true) == [1, 2])
+        #expect(buffer.hasPendingFrames == false)
+    }
 }
