@@ -171,6 +171,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write("PHONE REMOTE enabled_by_user")
     }
 
+    func updatePhoneRemoteButtonTitles(
+        bindings: [RemoteButton: ButtonAction],
+        shortcuts: [RemoteButton: CustomKeyboardShortcut],
+        localization: LocalizationStore
+    ) {
+        let middleButtons: [RemoteButton] = [
+            .back, .tv, .volumeUp, .home, .menu, .volumeDown,
+        ]
+        var titles: [String: String] = [:]
+        for button in middleButtons {
+            let action = bindings[button] ?? .disabled
+            guard action != AppSettings.defaultBindings[button] else { continue }
+            let fullTitle = action == .customShortcut
+                ? shortcuts[button]?.displayName(using: localization)
+                    ?? action.displayName(using: localization)
+                : action.displayName(using: localization)
+            titles[button.rawValue] = String(fullTitle.prefix(10))
+        }
+        phoneRemoteServer.updateButtonTitles(titles)
+    }
+
     func refreshAudioDevices() {
         audioDeviceRefreshGeneration &+= 1
         let generation = audioDeviceRefreshGeneration

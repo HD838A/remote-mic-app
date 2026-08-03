@@ -1,5 +1,11 @@
 # Version History
 
+## 1.6.5 (Pre-release)
+
+- Fixed press-and-release feedback for iPhone push-to-talk while preserving the existing Fn/Globe-key trigger and virtual-microphone output path.
+- Fixed the iPhone middle controls to Back / TV / Volume Up on the first row and Home / Menu / Volume Down on the second row.
+- Synced concise, bounded action titles to the corresponding iPhone buttons when the Mac uses non-default button mappings.
+
 ## 1.6.4
 
 - Made phone remote control an optional, on-demand backup. Nearby phone connections now remain off at Mac launch and start only after the user clicks Connect Phone.

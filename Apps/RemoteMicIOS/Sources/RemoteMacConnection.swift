@@ -20,6 +20,7 @@ final class RemoteMacConnection: ObservableObject {
     @Published private(set) var state: State = .searching
     @Published private(set) var macName = "正在查找 Mac"
     @Published private(set) var isVoiceActive = false
+    @Published private(set) var buttonTitles: [String: String] = [:]
 
     private let queue = DispatchQueue(label: "RemoteMicIOS.network", qos: .userInitiated)
     private let microphone = MicrophoneStreamer()
@@ -122,6 +123,7 @@ final class RemoteMacConnection: ObservableObject {
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
+        buttonTitles = [:]
         browser?.cancel()
         browser = nil
         isBrowserReady = false
@@ -136,6 +138,11 @@ final class RemoteMacConnection: ObservableObject {
             state = .connected
         }
         send(RemoteWireMessage(type: "command", command: commandName))
+    }
+
+    func buttonTitle(for command: RemoteCommand) -> String? {
+        guard let commandName = command.wireName else { return nil }
+        return buttonTitles[commandName]
     }
 
     func beginVoice() {
@@ -312,7 +319,10 @@ final class RemoteMacConnection: ObservableObject {
         switch message.type {
         case "ready":
             macName = message.deviceName ?? macName
+            buttonTitles = message.buttonTitles ?? [:]
             state = .connected
+        case "buttonTitles":
+            buttonTitles = message.buttonTitles ?? [:]
         case "denied":
             handleFailure("Mac 拒绝了本次连接")
         case "error":
@@ -409,6 +419,7 @@ final class RemoteMacConnection: ObservableObject {
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
+        buttonTitles = [:]
         pendingEndpoint = nil
         receiveBuffer.removeAll(keepingCapacity: true)
         state = .unavailable(detail)

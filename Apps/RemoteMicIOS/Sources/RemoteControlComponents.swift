@@ -359,14 +359,28 @@ private struct DPadDividers: Shape {
 struct MiddleControlButton: View {
     let title: String
     let systemImage: String
+    let customTitle: String?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             GraphiteSurface {
-                Image(systemName: systemImage)
-                    .font(.system(size: 32, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.94))
+                VStack(spacing: 3) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: customTitle == nil ? 32 : 27, weight: .medium))
+
+                    if let customTitle {
+                        Text(customTitle)
+                            .font(.system(size: 10, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .allowsTightening(true)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .foregroundStyle(.white.opacity(0.94))
+                .padding(.horizontal, 7)
             }
             .aspectRatio(1, contentMode: .fit)
         }

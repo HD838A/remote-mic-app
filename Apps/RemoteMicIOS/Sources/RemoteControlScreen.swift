@@ -128,19 +128,20 @@ struct RemoteControlScreen: View {
     }
 
     private func middleControls(buttonSize: CGFloat, spacing: CGFloat) -> some View {
+        // 已确认的产品布局；未经明确需求变更，不得调整这两行按钮的顺序。
         VStack(spacing: spacing) {
             HStack(spacing: 0) {
                 middleButton("返回", image: "chevron.left", command: .back, size: buttonSize)
                 Spacer(minLength: spacing)
-                middleButton("主页", image: "house", command: .home, size: buttonSize)
-                Spacer(minLength: spacing)
-                middleButton("菜单", image: "line.3.horizontal", command: .menu, size: buttonSize)
-            }
-
-            HStack(spacing: 0) {
                 middleButton("TV", image: "tv", command: .television, size: buttonSize)
                 Spacer(minLength: spacing)
                 middleButton("增大音量", image: "speaker.plus.fill", command: .volumeUp, size: buttonSize)
+            }
+
+            HStack(spacing: 0) {
+                middleButton("主页", image: "house", command: .home, size: buttonSize)
+                Spacer(minLength: spacing)
+                middleButton("菜单", image: "line.3.horizontal", command: .menu, size: buttonSize)
                 Spacer(minLength: spacing)
                 middleButton("减小音量", image: "speaker.minus.fill", command: .volumeDown, size: buttonSize)
             }
@@ -155,7 +156,11 @@ struct RemoteControlScreen: View {
         command: RemoteCommand,
         size: CGFloat
     ) -> some View {
-        MiddleControlButton(title: title, systemImage: image) {
+        MiddleControlButton(
+            title: title,
+            systemImage: image,
+            customTitle: connection.buttonTitle(for: command)
+        ) {
             perform(command)
         }
         .frame(width: size, height: size)

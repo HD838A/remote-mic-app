@@ -11,6 +11,7 @@ struct PhoneRemoteWireMessage: Codable {
     var publicKey: String?
     var identityPublicKey: String?
     var identitySignature: String?
+    var buttonTitles: [String: String]?
     var payload: String?
 }
 
@@ -58,6 +59,7 @@ final class PhoneRemoteServer {
     private let queue = DispatchQueue(label: "RemoteMic.phoneRemote", qos: .userInitiated)
     private var listener: NWListener?
     private var clients: [ObjectIdentifier: Client] = [:]
+    private var buttonTitles: [String: String] = [:]
 
     var onApprovalRequested: ApprovalHandler?
     var onApprovalCancelled: (() -> Void)?
@@ -81,6 +83,14 @@ final class PhoneRemoteServer {
             let activeClients = Array(clients.values)
             clients.removeAll()
             activeClients.forEach { $0.cancel() }
+        }
+    }
+
+    func updateButtonTitles(_ titles: [String: String]) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            buttonTitles = titles
+            clients.values.forEach { $0.updateButtonTitles(titles) }
         }
     }
 
@@ -122,7 +132,12 @@ final class PhoneRemoteServer {
             }
             currentClient.cancel()
         }
-        let client = Client(connection: connection, queue: queue, macName: Self.macName)
+        let client = Client(
+            connection: connection,
+            queue: queue,
+            macName: Self.macName,
+            buttonTitles: buttonTitles
+        )
         let identifier = ObjectIdentifier(client)
         clients[identifier] = client
         client.isIdentityTrusted = { [weak self] fingerprint in
@@ -188,6 +203,7 @@ private final class Client {
     private var waitsForPairingReady = false
     private var pendingDisplayName: String?
     private var pendingPairingCode: String?
+    private var buttonTitles: [String: String]
 
     var isIdentityTrusted: ((String) -> Bool)?
     var onApprovalRequested: ((String, String, String?) -> Void)?
@@ -200,10 +216,16 @@ private final class Client {
     var canBeReplaced: Bool { !isApproved }
     var hasPendingApproval: Bool { requestedApproval && !isApproved }
 
-    init(connection: NWConnection, queue: DispatchQueue, macName: String) {
+    init(
+        connection: NWConnection,
+        queue: DispatchQueue,
+        macName: String,
+        buttonTitles: [String: String]
+    ) {
         self.connection = connection
         self.queue = queue
         self.macName = macName
+        self.buttonTitles = buttonTitles
     }
 
     func start() {
@@ -229,7 +251,7 @@ private final class Client {
         guard requestedApproval, !isApproved else { return }
         if allowed {
             isApproved = true
-            sendSecure(PhoneRemoteWireMessage(type: "ready", deviceName: macName))
+            sendReady()
             AppLogger.shared.write("PHONE REMOTE approved")
         } else {
             sendSecure(PhoneRemoteWireMessage(type: "denied")) { [weak self] in
@@ -237,6 +259,12 @@ private final class Client {
             }
             AppLogger.shared.write("PHONE REMOTE denied")
         }
+    }
+
+    func updateButtonTitles(_ titles: [String: String]) {
+        buttonTitles = titles
+        guard isApproved else { return }
+        sendSecure(PhoneRemoteWireMessage(type: "buttonTitles", buttonTitles: titles))
     }
 
     private func receiveNext() {
@@ -347,11 +375,19 @@ private final class Client {
         if let identityFingerprint,
            isIdentityTrusted?(identityFingerprint) == true {
             isApproved = true
-            sendSecure(PhoneRemoteWireMessage(type: "ready", deviceName: macName))
+            sendReady()
             AppLogger.shared.write("PHONE REMOTE trusted_identity_approved")
             return
         }
         onApprovalRequested?(displayName, pairingCode, identityFingerprint)
+    }
+
+    private func sendReady() {
+        sendSecure(PhoneRemoteWireMessage(
+            type: "ready",
+            deviceName: macName,
+            buttonTitles: buttonTitles
+        ))
     }
 
     private func handleSecure(_ message: PhoneRemoteWireMessage) {

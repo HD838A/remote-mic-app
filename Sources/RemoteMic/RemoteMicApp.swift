@@ -52,6 +52,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         configureStatusItem()
         observeModel()
         observeLocalization()
+        observePhoneRemoteButtonTitles()
         model.startIfNeeded()
         refreshMenuStatus()
 
@@ -219,6 +220,24 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 self.rebuildStatusMenu()
             }
             .store(in: &subscriptions)
+    }
+
+    private func observePhoneRemoteButtonTitles() {
+        Publishers.CombineLatest3(
+            model.settings.$buttonBindings,
+            model.settings.$buttonShortcuts,
+            localization.$locale
+        )
+        .receive(on: RunLoop.main)
+        .sink { [weak self] bindings, shortcuts, _ in
+            guard let self else { return }
+            model.updatePhoneRemoteButtonTitles(
+                bindings: bindings,
+                shortcuts: shortcuts,
+                localization: localization
+            )
+        }
+        .store(in: &subscriptions)
     }
 
     private func refreshMenuStatus() {
