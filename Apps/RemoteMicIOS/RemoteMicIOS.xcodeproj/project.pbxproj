@@ -12,6 +12,7 @@
 		47FFE4A4BDD2390F9E942693 /* RemoteWireMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BBEDCD3D0B3E3EAF8F3CC8C /* RemoteWireMessage.swift */; };
 		4934DF6A4A865632E8E0B729 /* MacAppInformationScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */; };
 		5A6D4557F456D963BFEBEE1F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10FF5AE6F95095F6F4BCE6D1 /* Assets.xcassets */; };
+		66FEEC0B3ADF24AC9137C763 /* RemoteMacConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */; };
 		92AB4E7240E956061E267651 /* RemoteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */; };
 		BD841ADFC754C46205404AD4 /* RemoteControlScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4AEACAAB5860345FD8568A /* RemoteControlScreen.swift */; };
 		C05D0F17F0D1E9B99C1C392E /* MicrophoneStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */; };
@@ -19,10 +20,21 @@
 		FDEAE0D30E6D4692A7AD31EE /* RemoteMacConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D811C8889E87C89B9D23014E /* RemoteMacConnection.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		6980D774978A29FF5A9B6A35 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3C57CD7EC4DB6DA81F3C967F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5E29E6232E39C0C0547C2E6C;
+			remoteInfo = RemoteMicIOS;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		10FF5AE6F95095F6F4BCE6D1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2AAB8DDB974CD61E81680948 /* RemoteMicIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RemoteMicIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2BBEDCD3D0B3E3EAF8F3CC8C /* RemoteWireMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWireMessage.swift; sourceTree = "<group>"; };
+		40FA43331E1B420D3923D5F0 /* RemoteMicIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RemoteMicIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D3CB04898A74D008EB5C938 /* RemoteControlComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControlComponents.swift; sourceTree = "<group>"; };
 		4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppInformationScreen.swift; sourceTree = "<group>"; };
 		5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneStreamer.swift; sourceTree = "<group>"; };
@@ -30,6 +42,7 @@
 		D811C8889E87C89B9D23014E /* RemoteMacConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMacConnection.swift; sourceTree = "<group>"; };
 		D9A0FBE379FB6F7DA113757E /* RemoteMicIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMicIOSApp.swift; sourceTree = "<group>"; };
 		DC4AEACAAB5860345FD8568A /* RemoteControlScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControlScreen.swift; sourceTree = "<group>"; };
+		E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMacConnectionTests.swift; sourceTree = "<group>"; };
 		F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCommand.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -39,6 +52,7 @@
 			children = (
 				4C6A75E7FE30066B04F83EE4 /* Resources */,
 				D363190083A74A9A403313EC /* Sources */,
+				6899D85F4100C07BCA1318D7 /* Tests */,
 				A9DA3E96B7D762382600862C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -51,10 +65,19 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		6899D85F4100C07BCA1318D7 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
 		A9DA3E96B7D762382600862C /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				2AAB8DDB974CD61E81680948 /* RemoteMicIOS.app */,
+				40FA43331E1B420D3923D5F0 /* RemoteMicIOSTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -94,6 +117,22 @@
 			productReference = 2AAB8DDB974CD61E81680948 /* RemoteMicIOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		FBD9C37C6489B3EEE1F61744 /* RemoteMicIOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 59904CE1D27692E66351DB9E /* Build configuration list for PBXNativeTarget "RemoteMicIOSTests" */;
+			buildPhases = (
+				BA208620E1771470D5E86A6A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				470F090FF08BAC0CCF9FAC50 /* PBXTargetDependency */,
+			);
+			name = RemoteMicIOSTests;
+			productName = RemoteMicIOSTests;
+			productReference = 40FA43331E1B420D3923D5F0 /* RemoteMicIOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -122,6 +161,7 @@
 			projectRoot = "";
 			targets = (
 				5E29E6232E39C0C0547C2E6C /* RemoteMicIOS */,
+				FBD9C37C6489B3EEE1F61744 /* RemoteMicIOSTests */,
 			);
 		};
 /* End PBXProject section */
@@ -138,6 +178,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		BA208620E1771470D5E86A6A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				66FEEC0B3ADF24AC9137C763 /* RemoteMacConnectionTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FDE1B8A28E9E6FB58353F205 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -155,6 +203,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		470F090FF08BAC0CCF9FAC50 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5E29E6232E39C0C0547C2E6C /* RemoteMicIOS */;
+			targetProxy = 6980D774978A29FF5A9B6A35 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		021B3B4923555A7C9679E486 /* Debug */ = {
@@ -219,6 +275,23 @@
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
+		};
+		247A6BA535E90C64CA346CBD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hd838a.RemoteMicIOSTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RemoteMicIOS.app/RemoteMicIOS";
+			};
+			name = Release;
 		};
 		5B5163E2E95D4B83E877F997 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -320,6 +393,23 @@
 			};
 			name = Release;
 		};
+		FA04F184A29FA09548AEF80F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hd838a.RemoteMicIOSTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RemoteMicIOS.app/RemoteMicIOS";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -328,6 +418,15 @@
 			buildConfigurations = (
 				021B3B4923555A7C9679E486 /* Debug */,
 				D7146FCB01252C19EFC00E6C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		59904CE1D27692E66351DB9E /* Build configuration list for PBXNativeTarget "RemoteMicIOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA04F184A29FA09548AEF80F /* Debug */,
+				247A6BA535E90C64CA346CBD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

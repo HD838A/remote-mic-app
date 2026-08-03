@@ -39,7 +39,19 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FBD9C37C6489B3EEE1F61744"
+               BuildableName = "RemoteMicIOSTests.xctest"
+               BlueprintName = "RemoteMicIOSTests"
+               ReferencedContainer = "container:RemoteMicIOS.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

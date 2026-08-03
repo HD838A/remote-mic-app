@@ -15,6 +15,13 @@ final class RemoteMacConnection: ObservableObject {
         case connected
         case connectedWithError(String)
         case unavailable(String)
+
+        var shouldRestartDiscoveryOnActivation: Bool {
+            switch self {
+            case .awaitingLocalNetworkPermission, .unavailable: return true
+            default: return false
+            }
+        }
     }
 
     @Published private(set) var state: State = .searching
@@ -342,7 +349,7 @@ final class RemoteMacConnection: ObservableObject {
             if let detail = message.detail {
                 logger.error("Mac reported an operation error: \(detail, privacy: .public)")
             }
-            state = .connectedWithError("Mac 暂时无法执行这个操作，请稍后重试")
+            state = .connectedWithError(Self.userFacingOperationError(message.detail))
         default:
             break
         }
@@ -437,6 +444,17 @@ final class RemoteMacConnection: ObservableObject {
         receiveBuffer.removeAll(keepingCapacity: true)
         state = .unavailable(detail)
         macName = "未找到可用的 Mac"
+    }
+
+    nonisolated static func userFacingOperationError(_ detail: String?) -> String {
+        switch detail {
+        case "Mac 需要辅助功能权限，或该按键当前不可用。":
+            return "请在 Mac 的“系统设置 > 隐私与安全性 > 辅助功能”中允许无线麦，或检查该按键配置"
+        case "Mac 的语音输出当前不可用。":
+            return "Mac 的语音输出当前不可用，请检查辅助功能权限和虚拟麦克风后重试"
+        default:
+            return "Mac 暂时无法执行这个操作，请稍后重试"
+        }
     }
 
     private func decrypt(_ envelope: RemoteWireMessage) -> RemoteWireMessage? {

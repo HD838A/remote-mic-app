@@ -56,7 +56,9 @@ struct RemoteControlScreen: View {
             connection.start()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, !connection.isConnected { connection.restartDiscovery() }
+            if phase == .active, connection.state.shouldRestartDiscoveryOnActivation {
+                connection.restartDiscovery()
+            }
         }
         .navigationDestination(isPresented: $showsMacAppInformation) {
             MacAppInformationScreen()

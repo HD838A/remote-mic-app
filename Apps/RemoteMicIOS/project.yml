@@ -31,6 +31,17 @@ targets:
         CURRENT_PROJECT_VERSION: 2
         MARKETING_VERSION: 0.8.3
         TARGETED_DEVICE_FAMILY: "1,2"
+  RemoteMicIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: RemoteMicIOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.hd838a.RemoteMicIOSTests
 
 schemes:
   RemoteMicIOS:
@@ -39,5 +50,8 @@ schemes:
         RemoteMicIOS: all
     run:
       config: Debug
+    test:
+      targets:
+        - RemoteMicIOSTests
     archive:
       config: Release
