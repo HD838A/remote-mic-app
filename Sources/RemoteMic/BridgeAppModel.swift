@@ -18,6 +18,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
     @Published private(set) var isAudioOutputReady = false
+    @Published private(set) var isPhoneRemoteConnectionEnabled = false
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
 
     private let audioOutput = VirtualAudioOutput()
@@ -106,7 +107,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard !started else { return }
         started = true
         startAudioSubsystem()
-        phoneRemoteServer.start()
         applyHIDSettings()
         applyVoiceFunctionMapping()
         terminationObserver = NotificationCenter.default.addObserver(
@@ -139,6 +139,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         bluetoothBridge.stop()
         phoneRemoteServer.stop()
+        isPhoneRemoteConnectionEnabled = false
         bluetoothVoiceActive = false
         phoneVoiceActive = false
         updateVoiceFunctionKeyState(streaming: false)
@@ -161,6 +162,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func reconnect() {
         bluetoothBridge.reconnectNow()
+    }
+
+    func enablePhoneRemoteConnection() {
+        guard started, !isPhoneRemoteConnectionEnabled else { return }
+        isPhoneRemoteConnectionEnabled = true
+        phoneRemoteServer.start()
+        AppLogger.shared.write("PHONE REMOTE enabled_by_user")
     }
 
     func refreshAudioDevices() {

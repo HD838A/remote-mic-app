@@ -238,6 +238,15 @@ struct SettingsView: View {
                     ).text(using: localization)
                 )
                 .foregroundStyle(.secondary)
+                Button(
+                    model.isPhoneRemoteConnectionEnabled
+                        ? "connection.phone.enabled"
+                        : "connection.phone.connect"
+                ) {
+                    model.enablePhoneRemoteConnection()
+                }
+                .compatibilityButtonStyle(.prominent)
+                .disabled(model.isPhoneRemoteConnectionEnabled)
                 Button("connection.trusted_devices.clear") {
                     isClearTrustedPhonesConfirmationPresented = true
                 }

@@ -1,5 +1,9 @@
 # Version History
 
+## 1.6.4
+
+- Made phone remote control an optional, on-demand backup. Nearby phone connections now remain off at Mac launch and start only after the user clicks Connect Phone.
+
 ## 1.6.3
 
 - Changed the first-connection verification code shown on iPhone and Mac from six digits to two digits, with matching values on both devices.

@@ -142,8 +142,10 @@
 "connection.status.voice_trigger" = "语音触发";
 "connection.action.reconnect" = "立即重新连接";
 "connection.trusted_devices.title" = "受信任的手机";
-"connection.trusted_devices.help" = "首次允许后会自动连接。清除记录后，所有手机都需要重新确认授权。";
+"connection.trusted_devices.help" = "手机遥控是备用功能。每次启动后需主动点击“连接手机”，才会开启附近连接；清除记录后，所有手机都需要重新确认授权。";
 "connection.trusted_devices.count" = "%1$@ 台";
+"connection.phone.connect" = "连接手机";
+"connection.phone.enabled" = "正在等待手机";
 "connection.trusted_devices.clear" = "清除受信任设备";
 "connection.trusted_devices.clear_confirm.title" = "清除所有受信任设备？";
 "connection.trusted_devices.clear_confirm.message" = "当前连接不会中断，下次连接时需要重新确认授权。";
