@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RemoteControlScreen: View {
     @EnvironmentObject private var connection: RemoteMacConnection
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         GeometryReader { proxy in
@@ -53,6 +54,9 @@ struct RemoteControlScreen: View {
             HapticFeedback.shared.prepare()
             connection.start()
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, !connection.isConnected { connection.restartDiscovery() }
+        }
     }
 
     private var header: some View {
@@ -62,20 +66,21 @@ struct RemoteControlScreen: View {
                     perform(.power)
                 } label: {
                     LightSurface {
-                        VStack(spacing: 2) {
+                        VStack(spacing: 1) {
                             Image(systemName: "power")
                                 .font(.system(
                                     size: connection.buttonTitle(for: .power) == nil ? 25 : 20,
                                     weight: .semibold
                                 ))
+                                .frame(height: connection.buttonTitle(for: .power) == nil ? 25 : 21)
                             if let customTitle = connection.buttonTitle(for: .power) {
                                 Text(customTitle)
-                                    .font(.system(size: 8, weight: .semibold))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.5)
+                                    .font(.system(size: 7, weight: .semibold))
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.72)
                                     .allowsTightening(true)
                                     .multilineTextAlignment(.center)
-                                    .frame(maxWidth: .infinity)
+                                    .frame(width: 44, height: 16, alignment: .center)
                             }
                         }
                         .foregroundStyle(RemotePalette.text.opacity(0.86))

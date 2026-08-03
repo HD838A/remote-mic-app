@@ -399,9 +399,10 @@ struct MiddleControlButton: View {
     var body: some View {
         Button(action: action) {
             GraphiteSurface {
-                VStack(spacing: 3) {
+                VStack(spacing: 4) {
                     Image(systemName: systemImage)
                         .font(.system(size: customTitle == nil ? 32 : 27, weight: .medium))
+                        .frame(height: 34, alignment: .center)
 
                     if let customTitle {
                         Text(customTitle)
@@ -411,7 +412,7 @@ struct MiddleControlButton: View {
                             .allowsTightening(true)
                             .truncationMode(.tail)
                             .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
+                            .frame(maxWidth: .infinity, minHeight: 12, maxHeight: 12, alignment: .center)
                     }
                 }
                 .foregroundStyle(.white.opacity(0.94))
