@@ -22,13 +22,34 @@ final class MicrophoneStreamer {
 
     @MainActor
     func requestPermission() async -> Bool {
-        await AVAudioApplication.requestRecordPermission()
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            return true
+        case .denied:
+            return false
+        case .undetermined:
+            return await AVAudioApplication.requestRecordPermission()
+        @unknown default:
+            return false
+        }
     }
 
     @MainActor
-    func start() async throws {
+    func prepareIfAuthorized() {
+        guard AVAudioApplication.shared.recordPermission == .granted else { return }
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.record, mode: .measurement)
+            try preparePipeline()
+        } catch {
+            resetPipeline()
+        }
+    }
+
+    @MainActor
+    func start() throws {
         guard !isRunning else { return }
-        guard await requestPermission() else {
+        guard AVAudioApplication.shared.recordPermission == .granted else {
             throw StreamError.permissionDenied
         }
 
@@ -36,36 +57,12 @@ final class MicrophoneStreamer {
         do {
             try session.setCategory(.record, mode: .measurement)
             try session.setActive(true)
-
-            let input = engine.inputNode
-            let inputFormat = input.outputFormat(forBus: 0)
-            guard inputFormat.sampleRate > 0,
-                  inputFormat.channelCount > 0,
-                  let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
-            else {
-                throw StreamError.formatUnavailable
-            }
-            converterLock.withLock {
-                self.converter = converter
-            }
-
-            input.installTap(onBus: 0, bufferSize: 960, format: inputFormat) { [weak self] buffer, _ in
-                self?.convertAndPublish(buffer)
-            }
-            tapInstalled = true
+            try preparePipeline()
             engine.prepare()
             try engine.start()
             isRunning = true
         } catch {
-            if tapInstalled {
-                engine.inputNode.removeTap(onBus: 0)
-                tapInstalled = false
-            }
-            engine.stop()
-            engine.reset()
-            converterLock.withLock {
-                self.converter = nil
-            }
+            resetPipeline()
             try? session.setActive(false, options: .notifyOthersOnDeactivation)
             throw error
         }
@@ -73,8 +70,41 @@ final class MicrophoneStreamer {
 
     @MainActor
     func stop() {
+        guard isRunning else { return }
+        engine.stop()
+        isRunning = false
+        try? AVAudioSession.sharedInstance().setActive(
+            false,
+            options: .notifyOthersOnDeactivation
+        )
+    }
+
+    @MainActor
+    private func preparePipeline() throws {
         let hasConverter = converterLock.withLock { converter != nil }
-        guard isRunning || hasConverter || tapInstalled else { return }
+        guard !tapInstalled || !hasConverter else { return }
+
+        let input = engine.inputNode
+        let inputFormat = input.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0,
+              inputFormat.channelCount > 0,
+              let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+        else {
+            throw StreamError.formatUnavailable
+        }
+        converterLock.withLock {
+            self.converter = converter
+        }
+
+        input.installTap(onBus: 0, bufferSize: 480, format: inputFormat) { [weak self] buffer, _ in
+            self?.convertAndPublish(buffer)
+        }
+        tapInstalled = true
+        engine.prepare()
+    }
+
+    @MainActor
+    private func resetPipeline() {
         if tapInstalled {
             engine.inputNode.removeTap(onBus: 0)
             tapInstalled = false
@@ -85,10 +115,6 @@ final class MicrophoneStreamer {
             converter = nil
         }
         isRunning = false
-        try? AVAudioSession.sharedInstance().setActive(
-            false,
-            options: .notifyOthersOnDeactivation
-        )
     }
 
     private func convertAndPublish(_ inputBuffer: AVAudioPCMBuffer) {

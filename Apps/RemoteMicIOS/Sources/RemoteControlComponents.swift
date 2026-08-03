@@ -1,13 +1,15 @@
 import SwiftUI
 
 enum RemotePalette {
-    static let backgroundTop = Color(red: 0.965, green: 0.968, blue: 0.974)
-    static let backgroundBottom = Color(red: 0.91, green: 0.92, blue: 0.935)
+    static let backgroundTop = Color(red: 0.84, green: 0.85, blue: 0.86)
+    static let backgroundBottom = Color(red: 0.69, green: 0.71, blue: 0.73)
     static let graphiteTop = Color(red: 0.35, green: 0.37, blue: 0.40)
     static let graphiteBottom = Color(red: 0.25, green: 0.27, blue: 0.30)
     static let graphiteEdge = Color.black.opacity(0.36)
-    static let blueTop = Color(red: 0.27, green: 0.50, blue: 0.76)
-    static let blueBottom = Color(red: 0.12, green: 0.35, blue: 0.63)
+    static let voiceTop = Color(red: 0.34, green: 0.41, blue: 0.44)
+    static let voiceBottom = Color(red: 0.21, green: 0.28, blue: 0.31)
+    static let voiceActiveTop = Color(red: 0.42, green: 0.52, blue: 0.53)
+    static let voiceActiveBottom = Color(red: 0.25, green: 0.35, blue: 0.36)
     static let lightTop = Color(red: 0.95, green: 0.96, blue: 0.98)
     static let lightBottom = Color(red: 0.77, green: 0.79, blue: 0.82)
     static let text = Color(red: 0.18, green: 0.19, blue: 0.21)
@@ -15,17 +17,19 @@ enum RemotePalette {
 
 struct RemoteBackground: View {
     var body: some View {
-        LinearGradient(
-            colors: [RemotePalette.backgroundTop, RemotePalette.backgroundBottom],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .overlay {
-            LinearGradient(
-                colors: [.white.opacity(0.34), .clear, .black.opacity(0.025)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+        GeometryReader { proxy in
+            Image("AluminumBackground")
+                .resizable()
+                .scaledToFill()
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .overlay {
+                    LinearGradient(
+                        colors: [.white.opacity(0.08), .clear, .black.opacity(0.04)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
         }
         .ignoresSafeArea()
     }
@@ -116,6 +120,7 @@ struct DPadView: View {
     let perform: (RemoteCommand) -> Void
     let confirmPressed: () -> Void
     let confirm: () -> Void
+    let customTitle: (RemoteCommand) -> String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -150,28 +155,32 @@ struct DPadView: View {
                 DPadDirectionControl(
                     symbol: "chevron.up",
                     direction: .up,
-                    directionalOffset: directionalOffset
+                    directionalOffset: directionalOffset,
+                    customTitle: customTitle(.up)
                 ) {
                     perform(.up)
                 }
                 DPadDirectionControl(
                     symbol: "chevron.down",
                     direction: .down,
-                    directionalOffset: directionalOffset
+                    directionalOffset: directionalOffset,
+                    customTitle: customTitle(.down)
                 ) {
                     perform(.down)
                 }
                 DPadDirectionControl(
                     symbol: "chevron.left",
                     direction: .left,
-                    directionalOffset: directionalOffset
+                    directionalOffset: directionalOffset,
+                    customTitle: customTitle(.left)
                 ) {
                     perform(.left)
                 }
                 DPadDirectionControl(
                     symbol: "chevron.right",
                     direction: .right,
-                    directionalOffset: directionalOffset
+                    directionalOffset: directionalOffset,
+                    customTitle: customTitle(.right)
                 ) {
                     perform(.right)
                 }
@@ -195,6 +204,18 @@ struct DPadView: View {
                             Circle()
                                 .stroke(Color.white.opacity(0.18), lineWidth: 1)
                                 .padding(2)
+                        }
+                        .overlay {
+                            if let customTitle = customTitle(.confirm) {
+                                Text(customTitle)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.94))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.5)
+                                    .allowsTightening(true)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, diameter * 0.035)
+                            }
                         }
                         .frame(width: diameter * 0.39, height: diameter * 0.39)
                 }
@@ -251,6 +272,7 @@ private struct DPadDirectionControl: View {
     let symbol: String
     let direction: DPadDirection
     let directionalOffset: CGFloat
+    let customTitle: String?
     let action: () -> Void
 
     @State private var isPressed = false
@@ -262,8 +284,20 @@ private struct DPadDirectionControl: View {
             DPadSectorShape(direction: direction)
                 .fill(Color.black.opacity(isPressed ? 0.13 : 0))
 
-            Image(systemName: symbol)
-                .font(.system(size: 30, weight: .semibold))
+            VStack(spacing: 1) {
+                Image(systemName: symbol)
+                    .font(.system(size: customTitle == nil ? 30 : 25, weight: .semibold))
+
+                if let customTitle {
+                    Text(customTitle)
+                        .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .allowsTightening(true)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 62)
+                }
+            }
                 .foregroundStyle(.white.opacity(isPressed ? 0.88 : 0.94))
                 .offset(
                     x: iconOffset.width,
@@ -376,11 +410,13 @@ struct MiddleControlButton: View {
                             .minimumScaleFactor(0.5)
                             .allowsTightening(true)
                             .truncationMode(.tail)
+                            .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
                     }
                 }
                 .foregroundStyle(.white.opacity(0.94))
                 .padding(.horizontal, 7)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
             .aspectRatio(1, contentMode: .fit)
         }
@@ -404,14 +440,17 @@ struct VoiceButton: View {
                     .fill(
                         LinearGradient(
                             colors: visualActive
-                                ? [Color(red: 0.23, green: 0.58, blue: 0.83), Color(red: 0.09, green: 0.37, blue: 0.68)]
-                                : [RemotePalette.blueTop, RemotePalette.blueBottom],
+                                ? [RemotePalette.voiceActiveTop, RemotePalette.voiceActiveBottom]
+                                : [RemotePalette.voiceTop, RemotePalette.voiceBottom],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
                 AppIconRoundedRectangle()
-                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                    .stroke(
+                        Color.white.opacity(visualActive ? 0.78 : 0.45),
+                        lineWidth: visualActive ? 1.8 : 1
+                    )
                     .padding(1)
                 AppIconRoundedRectangle()
                     .stroke(Color.black.opacity(0.25), lineWidth: 1.4)
@@ -419,6 +458,7 @@ struct VoiceButton: View {
                 VStack(spacing: 10) {
                     Image(systemName: visualActive ? "waveform" : "mic.fill")
                         .font(.system(size: 45, weight: .medium))
+                        .scaleEffect(visualActive ? 1.12 : 1)
                     Text(visualActive ? "正在说话" : "按住说话")
                         .font(.system(size: 24, weight: .bold))
                     Text("松手停止")
@@ -428,15 +468,16 @@ struct VoiceButton: View {
                 .foregroundStyle(.white)
             }
         }
-        .shadow(color: .black.opacity(visualActive ? 0.11 : 0.18), radius: visualActive ? 2 : 5, x: 0, y: visualActive ? 1 : 4)
-        .scaleEffect(visualActive ? 0.98 : 1)
+        .shadow(color: .black.opacity(visualActive ? 0.08 : 0.18), radius: visualActive ? 1 : 5, x: 0, y: visualActive ? 1 : 4)
+        .scaleEffect(visualActive ? 0.955 : 1)
+        .offset(y: visualActive ? 3 : 0)
         .contentShape(AppIconRoundedRectangle())
         .buttonStyle(TactileButtonStyle(showsPressedVisuals: false) { isPressed in
             guard isTrackingPress != isPressed else { return }
             isTrackingPress = isPressed
             onPressChanged(isPressed)
         })
-        .animation(.easeOut(duration: 0.1), value: visualActive)
+        .animation(.spring(response: 0.18, dampingFraction: 0.72), value: visualActive)
         .accessibilityLabel("按住说话")
         .accessibilityValue(isActive ? "正在录音" : isTrackingPress ? "正在准备" : "未录音")
         .accessibilityAction {
@@ -446,6 +487,7 @@ struct VoiceButton: View {
 }
 
 struct ConfirmButton: View {
+    let customTitle: String?
     let onPress: () -> Void
     let action: () -> Void
 
@@ -457,8 +499,12 @@ struct ConfirmButton: View {
                         .font(.system(size: 45, weight: .semibold))
                     Text("确定")
                         .font(.system(size: 25, weight: .bold))
-                    Text("Return")
+                    Text(customTitle ?? "Return")
                         .font(.system(size: 15, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
+                        .allowsTightening(true)
+                        .multilineTextAlignment(.center)
                         .opacity(0.78)
                 }
                 .foregroundStyle(RemotePalette.text)

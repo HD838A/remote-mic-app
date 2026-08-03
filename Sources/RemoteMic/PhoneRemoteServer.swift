@@ -56,6 +56,13 @@ enum PhoneRemoteIdentityVerifier {
 final class PhoneRemoteServer {
     typealias ApprovalHandler = (String, String, String?, @escaping (Bool) -> Void) -> Void
 
+    static func shouldReplaceExistingClient(
+        existingIsApproved: Bool,
+        newIsApproved: Bool
+    ) -> Bool {
+        newIsApproved || !existingIsApproved
+    }
+
     private let queue = DispatchQueue(label: "RemoteMic.phoneRemote", qos: .userInitiated)
     private var listener: NWListener?
     private var clients: [ObjectIdentifier: Client] = [:]
@@ -125,13 +132,13 @@ final class PhoneRemoteServer {
     }
 
     private func accept(_ connection: NWConnection) {
-        if let currentClient = clients.values.first {
-            guard currentClient.canBeReplaced else {
-                connection.cancel()
-                return
-            }
-            currentClient.cancel()
+        let pendingClients = clients.values.filter {
+            Self.shouldReplaceExistingClient(
+                existingIsApproved: $0.hasApprovedSession,
+                newIsApproved: false
+            )
         }
+        pendingClients.forEach { $0.cancel() }
         let client = Client(
             connection: connection,
             queue: queue,
@@ -140,6 +147,16 @@ final class PhoneRemoteServer {
         )
         let identifier = ObjectIdentifier(client)
         clients[identifier] = client
+        client.onApproved = { [weak self, weak client] in
+            guard let self, let client else { return }
+            let supersededClients = clients.values.filter {
+                $0 !== client && Self.shouldReplaceExistingClient(
+                    existingIsApproved: $0.hasApprovedSession,
+                    newIsApproved: true
+                )
+            }
+            supersededClients.forEach { $0.cancel() }
+        }
         client.isIdentityTrusted = { [weak self] fingerprint in
             self?.isIdentityTrusted?(fingerprint) ?? false
         }
@@ -211,9 +228,10 @@ private final class Client {
     var onVoiceStart: ((@escaping (Bool) -> Void) -> Void)?
     var onVoiceStop: (() -> Void)?
     var onAudio: (([Int16]) -> Void)?
+    var onApproved: (() -> Void)?
     var onClosed: (() -> Void)?
 
-    var canBeReplaced: Bool { !isApproved }
+    var hasApprovedSession: Bool { isApproved }
     var hasPendingApproval: Bool { requestedApproval && !isApproved }
 
     init(
@@ -387,7 +405,9 @@ private final class Client {
             type: "ready",
             deviceName: macName,
             buttonTitles: buttonTitles
-        ))
+        )) { [weak self] in
+            self?.onApproved?()
+        }
     }
 
     private func handleSecure(_ message: PhoneRemoteWireMessage) {

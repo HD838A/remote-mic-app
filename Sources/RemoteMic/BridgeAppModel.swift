@@ -176,11 +176,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         shortcuts: [RemoteButton: CustomKeyboardShortcut],
         localization: LocalizationStore
     ) {
-        let middleButtons: [RemoteButton] = [
-            .back, .tv, .volumeUp, .home, .menu, .volumeDown,
-        ]
         var titles: [String: String] = [:]
-        for button in middleButtons {
+        for button in RemoteButton.allCases {
             let action = bindings[button] ?? .disabled
             guard action != AppSettings.defaultBindings[button] else { continue }
             let fullTitle = action == .customShortcut

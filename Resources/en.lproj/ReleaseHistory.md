@@ -1,5 +1,11 @@
 # Version History
 
+## 1.6.7 (Pre-release)
+
+- Fixed an issue where a stale Mac session could block a new iPhone connection after a long disconnect, requiring the Mac App to restart before reconnecting.
+- Updated the iPhone remote with a light brushed-aluminum background, centered connection status, no top logo, and concise custom titles across every configurable button.
+- Strengthened push-to-talk press visuals and two-stage haptics, while warming and reusing the recording pipeline to reduce first-phrase delay.
+
 ## 1.6.6 (Pre-release)
 
 - Added an off-by-default **Check for pre-release updates** toggle to About. When enabled, Sparkle's automatic and manual checks include the latest GitHub pre-release candidate.

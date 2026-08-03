@@ -20,7 +20,8 @@ struct RemoteControlScreen: View {
                     DPadView(
                         perform: perform,
                         confirmPressed: confirmPressed,
-                        confirm: confirm
+                        confirm: confirm,
+                        customTitle: connection.buttonTitle(for:)
                     )
                         .frame(width: dPadSize, height: dPadSize)
 
@@ -61,9 +62,25 @@ struct RemoteControlScreen: View {
                     perform(.power)
                 } label: {
                     LightSurface {
-                        Image(systemName: "power")
-                            .font(.system(size: 25, weight: .semibold))
-                            .foregroundStyle(RemotePalette.text.opacity(0.86))
+                        VStack(spacing: 2) {
+                            Image(systemName: "power")
+                                .font(.system(
+                                    size: connection.buttonTitle(for: .power) == nil ? 25 : 20,
+                                    weight: .semibold
+                                ))
+                            if let customTitle = connection.buttonTitle(for: .power) {
+                                Text(customTitle)
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.5)
+                                    .allowsTightening(true)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .foregroundStyle(RemotePalette.text.opacity(0.86))
+                        .padding(.horizontal, 5)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(width: 54, height: 54)
                 }
@@ -78,7 +95,7 @@ struct RemoteControlScreen: View {
                     LightSurface {
                         Image(systemName: "laptopcomputer")
                             .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(Color.blue)
+                            .foregroundStyle(RemotePalette.text.opacity(0.86))
                     }
                     .frame(width: 54, height: 54)
                 }
@@ -86,43 +103,36 @@ struct RemoteControlScreen: View {
                 .accessibilityLabel("选择 Mac")
             }
 
-            HStack(spacing: 10) {
-                Image("AppLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 54, height: 54)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    if let pairingCode = connection.displayedPairingCode {
-                        Text("校验码")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(RemotePalette.text.opacity(0.62))
-                        Text(pairingCode.map(String.init).joined(separator: " "))
-                            .font(.system(size: 22, weight: .bold, design: .monospaced))
-                            .foregroundStyle(Color.orange.opacity(0.95))
-                            .accessibilityLabel("校验码 \(pairingCode)")
-                    } else {
-                        HStack(spacing: 7) {
-                            Circle()
-                                .fill(connection.isConnected ? Color.green : Color.orange)
-                                .frame(width: 8, height: 8)
-                            Text(connection.statusText)
-                                .foregroundStyle(
-                                    connection.isConnected
-                                        ? Color.green.opacity(0.88)
-                                        : Color.orange.opacity(0.92)
-                                )
-                        }
-                        Text(connection.macName)
-                            .foregroundStyle(RemotePalette.text.opacity(0.72))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
+            VStack(alignment: .center, spacing: 3) {
+                if let pairingCode = connection.displayedPairingCode {
+                    Text("校验码")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(RemotePalette.text.opacity(0.62))
+                    Text(pairingCode.map(String.init).joined(separator: " "))
+                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color.orange.opacity(0.95))
+                        .accessibilityLabel("校验码 \(pairingCode)")
+                } else {
+                    HStack(spacing: 7) {
+                        Circle()
+                            .fill(connection.isConnected ? Color.green : Color.orange)
+                            .frame(width: 8, height: 8)
+                        Text(connection.statusText)
+                            .foregroundStyle(
+                                connection.isConnected
+                                    ? Color.green.opacity(0.88)
+                                    : Color.orange.opacity(0.92)
+                            )
                     }
+                    Text(connection.macName)
+                        .foregroundStyle(RemotePalette.text.opacity(0.72))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
                 }
-                .font(.system(size: 14, weight: .medium))
             }
-            .offset(x: -20)
+            .font(.system(size: 14, weight: .medium))
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 210)
         }
         .frame(height: 58)
     }
@@ -172,8 +182,17 @@ struct RemoteControlScreen: View {
                 setVoiceActive(isPressed)
             }
             .frame(maxWidth: .infinity)
+            .onChange(of: connection.isVoiceActive) { _, isActive in
+                if isActive {
+                    HapticFeedback.shared.trigger(.recordingReady)
+                }
+            }
 
-            ConfirmButton(onPress: confirmPressed, action: confirm)
+            ConfirmButton(
+                customTitle: connection.buttonTitle(for: .confirm),
+                onPress: confirmPressed,
+                action: confirm
+            )
             .frame(maxWidth: .infinity)
         }
     }

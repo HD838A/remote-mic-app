@@ -90,6 +90,7 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     func start() {
+        microphone.prepareIfAuthorized()
         guard browser == nil else { return }
         state = .searching
         macName = "正在查找 Mac"
@@ -150,20 +151,26 @@ final class RemoteMacConnection: ObservableObject {
         let requestID = voiceRequestID
         Task { @MainActor [weak self] in
             guard let self else { return }
+            var didSendVoiceStart = false
             do {
                 guard await microphone.requestPermission() else {
                     throw MicrophoneStreamer.StreamError.permissionDenied
                 }
                 guard voiceRequestID == requestID, isConnected else { return }
-                try await microphone.start()
+                send(RemoteWireMessage(type: "voiceStart"))
+                didSendVoiceStart = true
+                try microphone.start()
                 guard voiceRequestID == requestID, isConnected else {
                     microphone.stop()
+                    send(RemoteWireMessage(type: "voiceStop"))
                     return
                 }
                 isVoiceActive = true
-                send(RemoteWireMessage(type: "voiceStart"))
             } catch {
                 guard voiceRequestID == requestID else { return }
+                if didSendVoiceStart {
+                    send(RemoteWireMessage(type: "voiceStop"))
+                }
                 isVoiceActive = false
                 logger.error("Microphone start failed: \(String(describing: error), privacy: .public)")
                 let message: String
