@@ -39,7 +39,11 @@ Xcode Cloud 工作流使用以下固定配置：
 
 日常开发不直接在 `release/testflight` 上进行。只有经过确认的提交进入该分支并 Push 后，才会触发 TestFlight 构建。
 
+自动化发布任务以 `release/testflight` Push 成功为交接边界。Push 后不等待或轮询 Xcode Cloud、App Store Connect 和 TestFlight 的异步处理状态；只有在当前任务明确要求监控时才继续检查。构建完成和测试组可安装状态由发布人员稍后在 App Store Connect 中确认。
+
 Xcode Cloud 使用 Apple 管理的云端分发签名和描述文件。macOS 发布所使用的 Developer ID Application、Developer ID Installer、notarytool profile、Sparkle 私钥、P12 和本地临时 Keychain 均不用于此 iOS 工作流，也不得提交到仓库。
+
+本地验证按改动范围执行：纯 iOS UI 修改不运行完整 Mac 测试；共享协议或 Mac 代码变化时才补充相关 Mac 测试。涉及布局变化时至少使用 iPhone 12 尺寸确认单屏完整显示；页面和状态未变化时不重复生成相同截图。
 
 ## 本地构建
 
