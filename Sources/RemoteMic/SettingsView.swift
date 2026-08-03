@@ -979,6 +979,15 @@ struct SettingsView: View {
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         }
                                         .compatibilityButtonStyle(.prominent)
+
+                                        Toggle(
+                                            "about.version.check_prerelease",
+                                            isOn: $settings.checksForPreReleaseUpdates
+                                        )
+
+                                        Text("about.version.check_prerelease_help")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
                                     }
 
                                     Divider()

@@ -22,7 +22,7 @@
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
 - The UI does not show a separate mute key that is absent from the physical remote.
 - Regular UI uses product language instead of remote model codes, Bluetooth voice protocol names, button protocol names, hexadecimal button numbers, or device-identifier terminology.
-- About keeps the current version and update check together, displays every language option at once, presents localized version history in a sheet, opens a glossary through the system Markdown app, and controls whether ordinary launches open the main window automatically.
+- About keeps the current version, update check, and an off-by-default pre-release update toggle together, displays every language option at once, presents localized version history in a sheet, opens a glossary through the system Markdown app, and controls whether ordinary launches open the main window automatically.
 - All UI text uses stable semantic keys. Localized Markdown help falls back to English when the selected language has no matching document.
 
 ## Code locations

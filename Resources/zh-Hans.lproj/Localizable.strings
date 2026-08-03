@@ -237,13 +237,15 @@
 "about.usage.voice_duration" = "语音时长";
 "about.usage.details" = "统计仅保存在这台 Mac 上，配置导出不会包含这些数据。按键次数包含应用识别的普通按键与语音键。";
 "about.configuration.title" = "个性化配置";
-"about.configuration.description" = "迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示与启动设置。";
+"about.configuration.description" = "迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示、启动与更新通道设置。";
 "about.configuration.export" = "导出配置…";
 "about.configuration.import" = "导入配置…";
 "about.preferences.title" = "应用偏好";
 "about.support.title" = "更新与支持";
 "about.version.title" = "版本与更新";
 "about.version.current" = "当前版本";
+"about.version.check_prerelease" = "检查预发布版本";
+"about.version.check_prerelease_help" = "默认关闭。开启后，自动检查和手动检查都会包含尚未正式发布的候选版本。";
 "about.version.history" = "版本历史";
 "help.glossary.open" = "术语表";
 "about.support.github" = "GitHub";
@@ -253,6 +255,8 @@
 "about.preferences.open_main_window_help" = "关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。";
 "update.completed.title" = "无线麦已更新";
 "update.completed.message" = "已成功更新到版本 %1$@。";
+"update.prerelease.feed_unavailable.title" = "暂时无法检查预发布版本";
+"update.prerelease.feed_unavailable.message" = "无法取得最新候选版本信息，请检查网络后重试。稳定版更新源不受影响。";
 "usage.duration.hours_minutes" = "%1$@ 小时 %2$@ 分钟";
 "usage.duration.minutes_seconds" = "%1$@ 分钟 %2$@ 秒";
 "usage.duration.seconds" = "%1$@ 秒";

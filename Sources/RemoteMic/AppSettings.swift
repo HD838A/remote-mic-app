@@ -17,6 +17,7 @@ private struct PersonalizedConfiguration: Codable {
     let applicationLanguage: AppLanguage
     let showDockIcon: Bool
     let openMainWindowAtLaunch: Bool?
+    let checksForPreReleaseUpdates: Bool?
 }
 
 final class AppSettings: ObservableObject {
@@ -32,6 +33,7 @@ final class AppSettings: ObservableObject {
         static let applicationLanguage = "applicationLanguage"
         static let showDockIcon = "showDockIcon"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
+        static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
         static let totalVoiceDuration = "usage.totalVoiceDuration"
@@ -74,6 +76,12 @@ final class AppSettings: ObservableObject {
 
     @Published var openMainWindowAtLaunch: Bool {
         didSet { defaults.set(openMainWindowAtLaunch, forKey: Keys.openMainWindowAtLaunch) }
+    }
+
+    @Published var checksForPreReleaseUpdates: Bool {
+        didSet {
+            defaults.set(checksForPreReleaseUpdates, forKey: Keys.checksForPreReleaseUpdates)
+        }
     }
 
     @Published private(set) var totalButtonPressCount: UInt64 {
@@ -168,6 +176,7 @@ final class AppSettings: ObservableObject {
         openMainWindowAtLaunch = defaults.object(forKey: Keys.openMainWindowAtLaunch) == nil
             ? true
             : defaults.bool(forKey: Keys.openMainWindowAtLaunch)
+        checksForPreReleaseUpdates = defaults.bool(forKey: Keys.checksForPreReleaseUpdates)
         totalButtonPressCount = (
             defaults.object(forKey: Keys.totalButtonPressCount) as? NSNumber
         )?.uint64Value ?? 0
@@ -315,7 +324,8 @@ final class AppSettings: ObservableObject {
             ),
             applicationLanguage: applicationLanguage,
             showDockIcon: showDockIcon,
-            openMainWindowAtLaunch: openMainWindowAtLaunch
+            openMainWindowAtLaunch: openMainWindowAtLaunch,
+            checksForPreReleaseUpdates: checksForPreReleaseUpdates
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -364,6 +374,9 @@ final class AppSettings: ObservableObject {
         showDockIcon = configuration.showDockIcon
         if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {
             self.openMainWindowAtLaunch = openMainWindowAtLaunch
+        }
+        if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
+            self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
     }
 

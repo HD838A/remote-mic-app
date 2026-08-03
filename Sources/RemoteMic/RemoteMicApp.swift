@@ -19,7 +19,34 @@ enum RemoteMicApp {
 }
 
 @MainActor
-private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
+    SPUUpdaterDelegate
+{
+    private struct GitHubRelease: Decodable {
+        struct Asset: Decodable {
+            let name: String
+            let browserDownloadURL: URL
+
+            private enum CodingKeys: String, CodingKey {
+                case name
+                case browserDownloadURL = "browser_download_url"
+            }
+        }
+
+        let draft: Bool
+        let assets: [Asset]
+    }
+
+    private enum UpdateFeedError: Error {
+        case invalidResponse
+        case feedNotFound
+    }
+
+    private static let releasesURL = URL(
+        string: "https://api.github.com/repos/HD838A/remote-mic-app/releases?per_page=30"
+    )!
+    private static let preReleaseFeedRefreshInterval: TimeInterval = 6 * 60 * 60
+
     private let model = BridgeAppModel()
     private lazy var localization = LocalizationStore(settings: model.settings)
     private var statusItem: NSStatusItem?
@@ -27,9 +54,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var settingsWindowController: NSWindowController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
+    private var preReleaseFeedURL: URL?
+    private var updateFeedRefreshTask: Task<Void, Never>?
+    private var updateFeedRefreshTimer: Timer?
+    private var updaterStarted = false
     private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
-        updaterDelegate: nil,
+        updaterDelegate: self,
         userDriverDelegate: nil
     )
 
@@ -47,7 +78,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             currentBuild: currentBuild,
             sparkleHadLaunchedBefore: UserDefaults.standard.bool(forKey: "SUHasLaunchedBefore")
         )
-        _ = updaterController
+        observeUpdatePreferences()
+        configureUpdater()
         installTerminationSignalHandlers()
         configureStatusItem()
         observeModel()
@@ -69,6 +101,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     func applicationWillTerminate(_ notification: Notification) {
         model.stop()
+        updateFeedRefreshTask?.cancel()
+        updateFeedRefreshTimer?.invalidate()
         terminationSignalSources.forEach { $0.cancel() }
         terminationSignalSources.removeAll()
     }
@@ -240,6 +274,115 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         .store(in: &subscriptions)
     }
 
+    private func observeUpdatePreferences() {
+        model.settings.$checksForPreReleaseUpdates
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isEnabled in
+                guard let self else { return }
+                updateFeedRefreshTask?.cancel()
+                preReleaseFeedURL = nil
+                configurePreReleaseFeedRefreshTimer(isEnabled: isEnabled)
+                startUpdaterIfNeeded()
+                if isEnabled {
+                    refreshPreReleaseFeed(resetUpdateCycleWhenChanged: true)
+                } else {
+                    updaterController.updater.resetUpdateCycleAfterShortDelay()
+                }
+            }
+            .store(in: &subscriptions)
+    }
+
+    private func configureUpdater() {
+        let checksForPreReleaseUpdates = model.settings.checksForPreReleaseUpdates
+        configurePreReleaseFeedRefreshTimer(isEnabled: checksForPreReleaseUpdates)
+        guard checksForPreReleaseUpdates else {
+            startUpdaterIfNeeded()
+            return
+        }
+        refreshPreReleaseFeed(startUpdaterAfterRefresh: true)
+    }
+
+    private func startUpdaterIfNeeded() {
+        guard !updaterStarted else { return }
+        _ = updaterController
+        updaterStarted = true
+    }
+
+    private func configurePreReleaseFeedRefreshTimer(isEnabled: Bool) {
+        updateFeedRefreshTimer?.invalidate()
+        updateFeedRefreshTimer = nil
+        guard isEnabled else { return }
+        updateFeedRefreshTimer = Timer.scheduledTimer(
+            withTimeInterval: Self.preReleaseFeedRefreshInterval,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshPreReleaseFeed(resetUpdateCycleWhenChanged: true)
+            }
+        }
+    }
+
+    private func refreshPreReleaseFeed(
+        startUpdaterAfterRefresh: Bool = false,
+        resetUpdateCycleWhenChanged: Bool = false
+    ) {
+        updateFeedRefreshTask?.cancel()
+        updateFeedRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let resolvedURL = try await Self.latestReleaseFeedURL()
+                guard !Task.isCancelled, model.settings.checksForPreReleaseUpdates else { return }
+                let feedChanged = preReleaseFeedURL != resolvedURL
+                preReleaseFeedURL = resolvedURL
+                AppLogger.shared.write("UPDATE FEED prerelease_enabled=true resolved=true")
+                if startUpdaterAfterRefresh {
+                    startUpdaterIfNeeded()
+                } else if feedChanged, resetUpdateCycleWhenChanged {
+                    updaterController.updater.resetUpdateCycleAfterShortDelay()
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                AppLogger.shared.write(
+                    "UPDATE FEED prerelease_enabled=true resolved=false error=\(error.localizedDescription)"
+                )
+                if startUpdaterAfterRefresh {
+                    startUpdaterIfNeeded()
+                }
+            }
+        }
+    }
+
+    private static func latestReleaseFeedURL() async throws -> URL {
+        var request = URLRequest(url: releasesURL)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 15
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        request.setValue("RemoteMic", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
+            throw UpdateFeedError.invalidResponse
+        }
+        let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
+        guard let feedURL = releases.lazy
+            .filter({ !$0.draft })
+            .flatMap(\.assets)
+            .first(where: { $0.name == "appcast.xml" })?
+            .browserDownloadURL
+        else {
+            throw UpdateFeedError.feedNotFound
+        }
+        return feedURL
+    }
+
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        guard model.settings.checksForPreReleaseUpdates else { return nil }
+        return preReleaseFeedURL?.absoluteString
+    }
+
     private func refreshMenuStatus() {
         connectionItem.title = model.connectionStatus.text(using: localization)
         audioItem.title = model.isStreaming
@@ -355,7 +498,43 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     @objc private func checkForUpdates() {
-        updaterController.checkForUpdates(nil)
+        updateFeedRefreshTask?.cancel()
+        updateFeedRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            if model.settings.checksForPreReleaseUpdates {
+                do {
+                    preReleaseFeedURL = try await Self.latestReleaseFeedURL()
+                    guard !Task.isCancelled,
+                          model.settings.checksForPreReleaseUpdates
+                    else { return }
+                    AppLogger.shared.write("UPDATE CHECK prerelease_enabled=true resolved=true")
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    AppLogger.shared.write(
+                        "UPDATE CHECK prerelease_enabled=true resolved=false error=\(error.localizedDescription)"
+                    )
+                    guard preReleaseFeedURL != nil else {
+                        startUpdaterIfNeeded()
+                        showPreReleaseFeedUnavailableAlert()
+                        return
+                    }
+                }
+            } else {
+                preReleaseFeedURL = nil
+            }
+            startUpdaterIfNeeded()
+            updaterController.checkForUpdates(nil)
+        }
+    }
+
+    private func showPreReleaseFeedUnavailableAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = localization.text("update.prerelease.feed_unavailable.title")
+        alert.informativeText = localization.text("update.prerelease.feed_unavailable.message")
+        alert.addButton(withTitle: localization.text("common.action.ok"))
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     private func showUpdateCompletedAlert() {

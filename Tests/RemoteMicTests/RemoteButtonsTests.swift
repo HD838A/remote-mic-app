@@ -698,14 +698,17 @@ struct RemoteButtonsTests {
         ) == .invalid)
     }
 
-    @Test func mainWindowLaunchPreferencePersistsAndImportsCompatibly() throws {
+    @Test func updateAndLaunchPreferencesPersistAndImportCompatibly() throws {
         let sourceSuiteName = "RemoteMicTests.\(UUID().uuidString)"
         let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
         let sourceSettings = AppSettings(defaults: sourceDefaults)
         #expect(sourceSettings.openMainWindowAtLaunch)
+        #expect(!sourceSettings.checksForPreReleaseUpdates)
         sourceSettings.openMainWindowAtLaunch = false
+        sourceSettings.checksForPreReleaseUpdates = true
         #expect(!AppSettings(defaults: sourceDefaults).openMainWindowAtLaunch)
+        #expect(AppSettings(defaults: sourceDefaults).checksForPreReleaseUpdates)
 
         let exportedData = try sourceSettings.exportedConfigurationData()
         let targetSuiteName = "RemoteMicTests.\(UUID().uuidString)"
@@ -714,16 +717,20 @@ struct RemoteButtonsTests {
         let targetSettings = AppSettings(defaults: targetDefaults)
         try targetSettings.importConfiguration(from: exportedData)
         #expect(!targetSettings.openMainWindowAtLaunch)
+        #expect(targetSettings.checksForPreReleaseUpdates)
 
         var legacyObject = try #require(
             JSONSerialization.jsonObject(with: exportedData) as? [String: Any]
         )
         legacyObject.removeValue(forKey: "openMainWindowAtLaunch")
+        legacyObject.removeValue(forKey: "checksForPreReleaseUpdates")
         targetSettings.openMainWindowAtLaunch = true
+        targetSettings.checksForPreReleaseUpdates = false
         try targetSettings.importConfiguration(
             from: try JSONSerialization.data(withJSONObject: legacyObject)
         )
         #expect(targetSettings.openMainWindowAtLaunch)
+        #expect(!targetSettings.checksForPreReleaseUpdates)
     }
 
     @Test func completedUpdateDetectionCoversBuildIncreaseAndExistingInstallMigration() throws {

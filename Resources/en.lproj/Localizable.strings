@@ -237,13 +237,15 @@
 "about.usage.voice_duration" = "Voice Duration";
 "about.usage.details" = "Usage totals stay on this Mac and are excluded from configuration exports. Button presses include ordinary buttons recognized by the app and the voice button.";
 "about.configuration.title" = "Personalized Configuration";
-"about.configuration.description" = "Move gain, audio device, button mapping, shortcuts, language, Dock display, and launch settings.";
+"about.configuration.description" = "Move gain, audio device, button mapping, shortcuts, language, Dock display, launch, and update channel settings.";
 "about.configuration.export" = "Export Configuration…";
 "about.configuration.import" = "Import Configuration…";
 "about.preferences.title" = "App Preferences";
 "about.support.title" = "Updates & Support";
 "about.version.title" = "Version & Updates";
 "about.version.current" = "Current Version";
+"about.version.check_prerelease" = "Check for pre-release updates";
+"about.version.check_prerelease_help" = "Off by default. When enabled, automatic and manual checks also include release candidates.";
 "about.version.history" = "Version History";
 "help.glossary.open" = "Glossary";
 "about.support.github" = "GitHub";
@@ -253,6 +255,8 @@
 "about.preferences.open_main_window_help" = "When disabled, ordinary launches stay in the menu bar; the main window still appears after an update.";
 "update.completed.title" = "Remote Mic Updated";
 "update.completed.message" = "Successfully updated to version %1$@.";
+"update.prerelease.feed_unavailable.title" = "Unable to Check Pre-release Updates";
+"update.prerelease.feed_unavailable.message" = "The latest candidate information is unavailable. Check your network and try again. Stable updates are unaffected.";
 "usage.duration.hours_minutes" = "%1$@ hr %2$@ min";
 "usage.duration.minutes_seconds" = "%1$@ min %2$@ sec";
 "usage.duration.seconds" = "%1$@ sec";

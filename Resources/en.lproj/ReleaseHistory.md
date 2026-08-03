@@ -1,5 +1,10 @@
 # Version History
 
+## 1.6.6 (Pre-release)
+
+- Added an off-by-default **Check for pre-release updates** toggle to About. When enabled, Sparkle's automatic and manual checks include the latest GitHub pre-release candidate.
+- Refreshes the opt-in candidate feed before manual checks and periodically while the app remains running, without affecting the stable update feed when candidate metadata is unavailable.
+
 ## 1.6.5 (Pre-release)
 
 - Fixed press-and-release feedback for iPhone push-to-talk while preserving the existing Fn/Globe-key trigger and virtual-microphone output path.
