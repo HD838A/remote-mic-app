@@ -41,6 +41,8 @@ private struct DailyUsageStatistics: Codable {
 }
 
 final class AppSettings: ObservableObject {
+    static let continuousRecordingExperimentAvailable = false
+
     private enum Keys {
         static let gainDB = "gainDB"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
@@ -555,6 +557,7 @@ final class AppSettings: ObservableObject {
         enabled: Bool,
         backup: ConfiguredButtonAction?
     ) {
+        let enabled = enabled && Self.continuousRecordingExperimentAvailable
         if enabled {
             let current = configuredAction(for: .power, trigger: .singleClick)
             continuousRecordingPowerBindingBackup = Self.safeContinuousRecordingBackup(

@@ -39,17 +39,43 @@ enum RemoteVoiceFunctionMappingPolicy {
         destination: 0x0000_00FF_0000_0003
     )
 
-    static func applying(to existing: [HIDUsageMapping]) -> [HIDUsageMapping] {
-        existing.filter { $0.source != remoteVoiceKey.source } + [remoteVoiceKey]
+    // RC003 exposes its power button as keyboard Power (usage 0x66).
+    // Remap it to harmless F20 before macOS can turn it into a sleep event.
+    static let suppressedRemotePowerKey = HIDUsageMapping(
+        source: 0x0000_0007_0000_0066,
+        destination: 0x0000_0007_0000_006F
+    )
+
+    static func applying(
+        to existing: [HIDUsageMapping],
+        powerMapping: HIDUsageMapping? = nil
+    ) -> [HIDUsageMapping] {
+        var desired = existing.filter {
+            $0.source != remoteVoiceKey.source &&
+                $0.source != suppressedRemotePowerKey.source
+        } + [remoteVoiceKey]
+        if let powerMapping {
+            desired.append(powerMapping)
+        }
+        return desired
     }
 
     static func restoring(
         originalVoiceMapping: HIDUsageMapping?,
+        originalPowerMapping: HIDUsageMapping?,
         in current: [HIDUsageMapping]
     ) -> [HIDUsageMapping] {
-        let withoutVoiceKey = current.filter { $0.source != remoteVoiceKey.source }
-        guard let originalVoiceMapping else { return withoutVoiceKey }
-        return withoutVoiceKey + [originalVoiceMapping]
+        var restored = current.filter {
+            $0.source != remoteVoiceKey.source &&
+                $0.source != suppressedRemotePowerKey.source
+        }
+        if let originalVoiceMapping {
+            restored.append(originalVoiceMapping)
+        }
+        if let originalPowerMapping {
+            restored.append(originalPowerMapping)
+        }
+        return restored
     }
 }
 
@@ -58,15 +84,17 @@ final class RemoteVoiceFunctionMapper {
     private static let productID = 0x32B8
     private static let mappingProperty = "UserKeyMapping" as CFString
 
-    private struct OriginalVoiceMapping {
-        let mapping: HIDUsageMapping?
+    private struct OriginalMappings {
+        let voice: HIDUsageMapping?
+        let power: HIDUsageMapping?
     }
 
-    private var originalMappings: [UInt64: OriginalVoiceMapping] = [:]
+    private var originalMappings: [UInt64: OriginalMappings] = [:]
     private(set) var isApplied = false
+    private(set) var isPowerKeySuppressed = false
 
     @discardableResult
-    func apply() -> Bool {
+    func apply(suppressPowerKey: Bool = false) -> Bool {
         let client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
         let services = IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient] ?? []
         var matchedCount = 0
@@ -77,13 +105,24 @@ final class RemoteVoiceFunctionMapper {
             guard let registryID = Self.registryID(service) else { continue }
             let current = Self.readMappings(service)
             if originalMappings[registryID] == nil {
-                originalMappings[registryID] = OriginalVoiceMapping(
-                    mapping: current.first {
+                let currentPower = current.first {
+                    $0.source == RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey.source
+                }
+                originalMappings[registryID] = OriginalMappings(
+                    voice: current.first {
                         $0.source == RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.source
-                    }
+                    },
+                    power: currentPower == RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
+                        ? nil
+                        : currentPower
                 )
             }
-            let desired = RemoteVoiceFunctionMappingPolicy.applying(to: current)
+            let desired = RemoteVoiceFunctionMappingPolicy.applying(
+                to: current,
+                powerMapping: suppressPowerKey
+                    ? RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
+                    : originalMappings[registryID]?.power
+            )
             if IOHIDServiceClientSetProperty(
                 service,
                 Self.mappingProperty,
@@ -94,8 +133,10 @@ final class RemoteVoiceFunctionMapper {
         }
 
         isApplied = appliedCount > 0
+        isPowerKeySuppressed = suppressPowerKey && matchedCount > 0 && appliedCount == matchedCount
         AppLogger.shared.write(
-            "VOICE FN MAPPING applied=\(isApplied) matched=\(matchedCount)"
+            "VOICE FN MAPPING applied=\(isApplied) power_suppressed=\(isPowerKeySuppressed) " +
+                "matched=\(matchedCount)"
         )
         return isApplied
     }
@@ -115,7 +156,8 @@ final class RemoteVoiceFunctionMapper {
                   let original = originalMappings[registryID]
             else { continue }
             let restored = RemoteVoiceFunctionMappingPolicy.restoring(
-                originalVoiceMapping: original.mapping,
+                originalVoiceMapping: original.voice,
+                originalPowerMapping: original.power,
                 in: Self.readMappings(service)
             )
             if IOHIDServiceClientSetProperty(
@@ -129,6 +171,7 @@ final class RemoteVoiceFunctionMapper {
 
         originalMappings.removeAll()
         isApplied = false
+        isPowerKeySuppressed = false
         AppLogger.shared.write("VOICE FN MAPPING restored=\(restoredCount)")
     }
 

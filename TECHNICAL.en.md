@@ -83,7 +83,7 @@ Install scripts verify architecture, minimum system version, and code signature,
 
 Custom mapping is off by default. When enabled, Input Monitoring and Accessibility are both required; otherwise HID handling fails closed.
 
-HIDRemoteMonitor first tries to open RC003 exclusively. If macOS rejects exclusive access, it falls back to nonexclusive monitoring. KeyboardEventSuppressor then suppresses matching native system events for 180 milliseconds after an RC003 raw report. Synthesized events carry a separate marker and are not suppressed again.
+HIDRemoteMonitor first tries to open RC003 exclusively. If macOS rejects exclusive access, it falls back to nonexclusive monitoring. KeyboardEventSuppressor then suppresses matching native system events for 180 milliseconds after an RC003 raw report. Because a system Power event can trigger sleep before the Session Event Tap, enabling custom mapping first applies a device-specific `Keyboard Power → F20` mapping to RC003; HID handling fails closed if that mapping cannot be applied. Synthesized events carry a separate marker and are not suppressed again.
 
 | Remote button | Default action |
 | --- | --- |
@@ -101,9 +101,9 @@ Direction, Back, and volume buttons can hold-repeat. Normal physical button acti
 
 ## Voice-button Fn mapping
 
-The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. RemoteVoiceFunctionMapper matches only RC003 vendor/product IDs and maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03.
+The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. RemoteVoiceFunctionMapper matches only RC003 vendor/product IDs and maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03. While custom button mapping is enabled, the same component maps RC003 Keyboard Power usage 0x66 to F20 usage 0x6F.
 
-The mapping is applied at app launch or Bluetooth ready. VoiceFunctionKeyLatch guarantees one press and one release for every voice session. On exit, the app restores the source usage's prior mapping while preserving unrelated mappings changed during runtime.
+The mapping is applied at app launch, settings changes, or Bluetooth ready. VoiceFunctionKeyLatch guarantees one press and one release for every voice session. On exit or when custom mapping is disabled, the app restores the managed source usages' prior mappings while preserving unrelated mappings changed during runtime.
 
 ## Menu bar and window
 

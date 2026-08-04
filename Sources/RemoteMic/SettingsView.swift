@@ -482,17 +482,6 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        Divider()
-                            .padding(.vertical, 2)
-
-                        Toggle("button_mapping.continuous_recording_experiment.enabled", isOn: Binding(
-                            get: { settings.experimentalContinuousRecordingEnabled },
-                            set: { model.setExperimentalContinuousRecordingEnabled($0) }
-                        ))
-                        Text("button_mapping.continuous_recording_experiment.help")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 12)
                     StatusPill(

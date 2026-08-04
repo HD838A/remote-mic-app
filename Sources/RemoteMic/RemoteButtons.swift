@@ -86,7 +86,7 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         case .down: return .keyboard(keyCode: 125)
         case .up: return .keyboard(keyCode: 126)
         case .menu: return .keyboard(keyCode: 110)
-        case .power: return .systemKey(type: 6)
+        case .power: return .keyboard(keyCode: 90)
         case .volumeUp: return .systemKey(type: 0)
         case .volumeDown: return .systemKey(type: 1)
         case .back: return nil
@@ -460,9 +460,10 @@ enum HIDPermissionGate {
     static func canMonitor(
         mappingEnabled: Bool,
         inputMonitoringGranted: Bool,
-        accessibilityGranted: Bool
+        accessibilityGranted: Bool,
+        powerKeySuppressed: Bool
     ) -> Bool {
-        mappingEnabled && inputMonitoringGranted && accessibilityGranted
+        mappingEnabled && inputMonitoringGranted && accessibilityGranted && powerKeySuppressed
     }
 
     static func nextPermissionRequest(

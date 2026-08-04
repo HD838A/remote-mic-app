@@ -168,7 +168,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         started = true
         startAudioSubsystem()
         applyHIDSettings()
-        applyVoiceFunctionMapping()
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -577,7 +576,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             stopLongRecording(reason: "feature_disabled")
         }
         requestNextHIDPermissionIfNeeded()
-        hidMonitor.start()
+        let powerKeySuppressed = applyVoiceFunctionMapping()
+        hidMonitor.start(powerKeySuppressed: powerKeySuppressed)
         hidStatus = hidMonitor.status
     }
 
@@ -647,7 +647,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return false
         }()
         if case .ready = state {
-            applyVoiceFunctionMapping()
+            applyHIDSettings()
         } else if longRecordingRequested {
             finishLongRecording(reason: "bluetooth_not_ready")
         }
@@ -977,13 +977,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioOutput.endSession()
     }
 
-    private func applyVoiceFunctionMapping() {
-        let applied = voiceFunctionMapper.apply()
-        guard !isStreaming else { return }
-        isVoiceTriggerEnabled = applied
-        voiceShortcutStatus = LocalizedMessage(
-            applied ? "voice_button.status.fn_enabled" : "voice_button.status.waiting"
+    @discardableResult
+    private func applyVoiceFunctionMapping() -> Bool {
+        let applied = voiceFunctionMapper.apply(
+            suppressPowerKey: settings.customMappingEnabled
         )
+        if !isStreaming {
+            isVoiceTriggerEnabled = applied
+            voiceShortcutStatus = LocalizedMessage(
+                applied ? "voice_button.status.fn_enabled" : "voice_button.status.waiting"
+            )
+        }
+        return !settings.customMappingEnabled || voiceFunctionMapper.isPowerKeySuppressed
     }
 
     @discardableResult

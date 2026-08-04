@@ -82,7 +82,7 @@ ATVV 通道为：
 
 自定义按键映射默认关闭。启用后必须同时具备输入监控和辅助功能权限，否则 HID 处理失败关闭。
 
-`HIDRemoteMonitor` 首先尝试独占打开 RC003。若 macOS 拒绝独占，则退回非独占监听，并由 `KeyboardEventSuppressor` 在收到 RC003 原始报告后的 180 毫秒窗口内抑制匹配的原生系统事件。合成事件带有独立标记，不会被再次抑制。
+`HIDRemoteMonitor` 首先尝试独占打开 RC003。若 macOS 拒绝独占，则退回非独占监听，并由 `KeyboardEventSuppressor` 在收到 RC003 原始报告后的 180 毫秒窗口内抑制匹配的原生系统事件。由于系统 Power 事件可能在 Session Event Tap 之前触发睡眠，自定义映射启用时会先对 RC003 单独应用 `Keyboard Power → F20` 的设备级映射；映射失败时 HID 处理失败关闭。合成事件带有独立标记，不会被再次抑制。
 
 默认映射为：
 
@@ -102,9 +102,9 @@ ATVV 通道为：
 
 ## 语音键 Fn 映射
 
-RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`RemoteVoiceFunctionMapper` 只匹配 RC003 的 Vendor ID/Product ID，并把该 usage 映射为 Apple vendor top-case Fn/Globe（usage page `0xFF`、usage `0x03`）。
+RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`RemoteVoiceFunctionMapper` 只匹配 RC003 的 Vendor ID/Product ID，并把该 usage 映射为 Apple vendor top-case Fn/Globe（usage page `0xFF`、usage `0x03`）；自定义按键映射启用时，同一组件还会把 RC003 的 Keyboard Power（usage `0x66`）映射为 F20（usage `0x6F`）。
 
-应用启动或蓝牙 ready 时应用映射；语音流开始和结束通过 `VoiceFunctionKeyLatch` 保证每个会话只产生一次按下和一次释放。应用退出时恢复启动前该 source usage 的映射，同时保留运行期间其他来源的映射变化。
+应用启动、设置变化或蓝牙 ready 时应用映射；语音流开始和结束通过 `VoiceFunctionKeyLatch` 保证每个会话只产生一次按下和一次释放。应用退出或关闭自定义按键映射时恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
 
 ## 菜单栏与窗口
 

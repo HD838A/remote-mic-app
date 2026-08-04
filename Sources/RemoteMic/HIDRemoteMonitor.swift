@@ -74,7 +74,7 @@ final class HIDRemoteMonitor {
         IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
     }
 
-    func start() {
+    func start(powerKeySuppressed: Bool) {
         stop()
         guard settings.customMappingEnabled else {
             updateStatus(LocalizedMessage("button_mapping.status.system_managed"))
@@ -88,12 +88,16 @@ final class HIDRemoteMonitor {
         guard HIDPermissionGate.canMonitor(
             mappingEnabled: settings.customMappingEnabled,
             inputMonitoringGranted: inputGranted,
-            accessibilityGranted: accessibilityGranted
+            accessibilityGranted: accessibilityGranted,
+            powerKeySuppressed: powerKeySuppressed
         ) else {
             if !inputGranted {
                 updateStatus(LocalizedMessage("button_mapping.permission.input_monitoring_required"))
-            } else {
+            } else if !accessibilityGranted {
                 updateStatus(LocalizedMessage("button_mapping.permission.accessibility_required"))
+            } else {
+                updateStatus(LocalizedMessage("button_mapping.error.power_suppression_failed"))
+                AppLogger.shared.write("HID START rejected power_suppressed=false")
             }
             return
         }
@@ -228,10 +232,10 @@ final class HIDRemoteMonitor {
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
-            onButtonPressed?(button)
             if !activeDeviceIsSeized {
                 eventSuppressor.arm(button: button, edge: .down)
             }
+            onButtonPressed?(button)
 
             let recognizesDoubleClick = settings.configuredAction(
                 for: button,

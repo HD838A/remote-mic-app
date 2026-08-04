@@ -591,7 +591,7 @@ struct RemoteButtonsTests {
         #expect(AppSettings.defaultBindings[.tv] == .appSwitcher)
     }
 
-    @Test func powerDefaultRemainsEscapeUntilExperimentIsEnabled() {
+    @Test func powerDefaultRemainsEscapeWhileExperimentIsUnavailable() {
         #expect(AppSettings.defaultBindings[.power] == .escape)
     }
 
@@ -603,6 +603,18 @@ struct RemoteButtonsTests {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
         #expect(!source.contains("DispatchQueue.main.async"))
+    }
+
+    @Test func powerSuppressionIsArmedBeforeButtonCallbacksAndMonitoring() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let monitor = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
+        let model = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"), encoding: .utf8)
+        let arm = try #require(monitor.range(of: "eventSuppressor.arm(button: button, edge: .down)"))
+        let callback = try #require(monitor.range(of: "onButtonPressed?(button)"))
+        let map = try #require(model.range(of: "let powerKeySuppressed = applyVoiceFunctionMapping()"))
+        let start = try #require(model.range(of: "hidMonitor.start(powerKeySuppressed: powerKeySuppressed)"))
+        #expect(arm.lowerBound < callback.lowerBound)
+        #expect(map.lowerBound < start.lowerBound)
     }
 
     @Test func parsesRC003ReportOneUsages() {
@@ -648,17 +660,26 @@ struct RemoteButtonsTests {
         #expect(!HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: false,
-            accessibilityGranted: true
+            accessibilityGranted: true,
+            powerKeySuppressed: true
         ))
         #expect(!HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
-            accessibilityGranted: false
+            accessibilityGranted: false,
+            powerKeySuppressed: true
+        ))
+        #expect(!HIDPermissionGate.canMonitor(
+            mappingEnabled: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: true,
+            powerKeySuppressed: false
         ))
         #expect(HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
-            accessibilityGranted: true
+            accessibilityGranted: true,
+            powerKeySuppressed: true
         ))
     }
 
@@ -698,7 +719,7 @@ struct RemoteButtonsTests {
         #expect(settings.action(for: .up) == .arrowUp)
     }
 
-    @Test func continuousRecordingExperimentBacksUpAndRestoresPowerShortcut() throws {
+    @Test func unavailableContinuousRecordingExperimentDoesNotReplacePowerShortcut() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -712,37 +733,32 @@ struct RemoteButtonsTests {
         settings.setShortcut(shortcut, for: .power, trigger: .singleClick)
 
         settings.setExperimentalContinuousRecordingEnabled(true)
-        #expect(settings.experimentalContinuousRecordingEnabled)
-        #expect(settings.customMappingEnabled)
-        #expect(settings.action(for: .power) == .toggleLongRecording)
-        #expect(settings.shortcut(for: .power) == nil)
-
-        settings.setExperimentalContinuousRecordingEnabled(true)
-        settings.setExperimentalContinuousRecordingEnabled(false)
         #expect(!settings.experimentalContinuousRecordingEnabled)
-        #expect(settings.customMappingEnabled)
         #expect(settings.action(for: .power) == .customShortcut)
         #expect(settings.shortcut(for: .power) == shortcut)
-
-        settings.setExperimentalContinuousRecordingEnabled(true)
-        settings.resetBindings()
-        #expect(settings.action(for: .power) == .toggleLongRecording)
-        settings.setExperimentalContinuousRecordingEnabled(false)
-        #expect(settings.action(for: .power) == .escape)
+        #expect(!settings.customMappingEnabled)
     }
 
-    @Test func continuousRecordingExperimentPersistsAndMigratesStalePowerBinding() throws {
+    @Test func unavailableContinuousRecordingExperimentRestoresStalePowerBinding() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let settings = AppSettings(defaults: defaults)
-        settings.setAction(.showDesktop, for: .power, trigger: .singleClick)
-        settings.setExperimentalContinuousRecordingEnabled(true)
-
+        defaults.set(true, forKey: "experimentalContinuousRecordingEnabled")
+        defaults.set(
+            try JSONEncoder().encode([
+                RemoteButton.power.rawValue: ButtonAction.toggleLongRecording,
+            ]),
+            forKey: "buttonBindings"
+        )
+        defaults.set(
+            try JSONEncoder().encode(ConfiguredButtonAction(
+                action: .showDesktop,
+                shortcut: nil
+            )),
+            forKey: "continuousRecordingPowerBindingBackup"
+        )
         let restored = AppSettings(defaults: defaults)
-        #expect(restored.experimentalContinuousRecordingEnabled)
-        #expect(restored.action(for: .power) == .toggleLongRecording)
-        restored.setExperimentalContinuousRecordingEnabled(false)
+        #expect(!restored.experimentalContinuousRecordingEnabled)
         #expect(restored.action(for: .power) == .showDesktop)
 
         defaults.removePersistentDomain(forName: suiteName)
@@ -757,7 +773,7 @@ struct RemoteButtonsTests {
         #expect(migrated.action(for: .power) == .escape)
     }
 
-    @Test func continuousRecordingExperimentRoundTripsThroughConfiguration() throws {
+    @Test func importedContinuousRecordingExperimentIsDisabledAndRestoresBackup() throws {
         let sourceSuiteName = "RemoteMicTests.\(UUID().uuidString)"
         let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
@@ -769,18 +785,27 @@ struct RemoteButtonsTests {
         )
         source.setAction(.customShortcut, for: .power, trigger: .singleClick)
         source.setShortcut(shortcut, for: .power, trigger: .singleClick)
-        source.setExperimentalContinuousRecordingEnabled(true)
-        let exported = try source.exportedConfigurationData()
+        var configuration = try #require(
+            JSONSerialization.jsonObject(with: source.exportedConfigurationData()) as? [String: Any]
+        )
+        var bindings = try #require(configuration["buttonBindings"] as? [String: Any])
+        bindings[RemoteButton.power.rawValue] = ButtonAction.toggleLongRecording.rawValue
+        configuration["buttonBindings"] = bindings
+        configuration["experimentalContinuousRecordingEnabled"] = true
+        configuration["continuousRecordingPowerBindingBackup"] = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(ConfiguredButtonAction(
+                action: .customShortcut,
+                shortcut: shortcut
+            ))
+        )
+        let exported = try JSONSerialization.data(withJSONObject: configuration)
 
         let targetSuiteName = "RemoteMicTests.\(UUID().uuidString)"
         let targetDefaults = try #require(UserDefaults(suiteName: targetSuiteName))
         defer { targetDefaults.removePersistentDomain(forName: targetSuiteName) }
         let target = AppSettings(defaults: targetDefaults)
         try target.importConfiguration(from: exported)
-        #expect(target.experimentalContinuousRecordingEnabled)
-        #expect(target.customMappingEnabled)
-        #expect(target.action(for: .power) == .toggleLongRecording)
-        target.setExperimentalContinuousRecordingEnabled(false)
+        #expect(!target.experimentalContinuousRecordingEnabled)
         #expect(target.action(for: .power) == .customShortcut)
         #expect(target.shortcut(for: .power) == shortcut)
 
@@ -1044,6 +1069,7 @@ struct RemoteButtonsTests {
     @Test func nativeEventDescriptorsCoverPotentialDuplicateEvents() {
         #expect(RemoteButton.up.nativeEvent == .keyboard(keyCode: 126))
         #expect(RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36))
+        #expect(RemoteButton.power.nativeEvent == .keyboard(keyCode: 90))
         #expect(RemoteButton.menu.nativeEvent == .keyboard(keyCode: KeyboardInjector.contextualMenuKeyCode))
         #expect(RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0))
         #expect(RemoteButton.back.nativeEvent == nil)

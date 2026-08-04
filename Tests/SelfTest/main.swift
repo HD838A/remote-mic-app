@@ -213,6 +213,7 @@ check(
 check(
     RemoteButton.up.nativeEvent == .keyboard(keyCode: 126) &&
         RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36) &&
+        RemoteButton.power.nativeEvent == .keyboard(keyCode: 90) &&
         RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0) &&
         RemoteButton.back.nativeEvent == nil,
     "native duplicate-event descriptors"
@@ -221,19 +222,44 @@ check(
     !HIDPermissionGate.canMonitor(
         mappingEnabled: true,
         inputMonitoringGranted: false,
-        accessibilityGranted: true
+        accessibilityGranted: true,
+        powerKeySuppressed: true
     ) &&
         !HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
-            accessibilityGranted: false
+            accessibilityGranted: false,
+            powerKeySuppressed: true
+        ) &&
+        !HIDPermissionGate.canMonitor(
+            mappingEnabled: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: true,
+            powerKeySuppressed: false
         ) &&
         HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
-            accessibilityGranted: true
+            accessibilityGranted: true,
+            powerKeySuppressed: true
         ),
     "HID permission gate fails closed"
+)
+
+let unrelatedKeyMapping = HIDUsageMapping(
+    source: 0x0000_0007_0000_0004,
+    destination: 0x0000_0007_0000_0005
+)
+check(
+    RemoteVoiceFunctionMappingPolicy.applying(
+        to: [unrelatedKeyMapping],
+        powerMapping: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
+    ) == [
+        unrelatedKeyMapping,
+        RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+        RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
+    ],
+    "RC003 power is remapped to harmless F20"
 )
 
 check(
@@ -318,10 +344,12 @@ let changedUnrelatedMapping = HIDUsageMapping(
 check(
     RemoteVoiceFunctionMappingPolicy.restoring(
         originalVoiceMapping: staleVoiceMapping,
+        originalPowerMapping: nil,
         in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
     ) == [changedUnrelatedMapping, staleVoiceMapping] &&
         RemoteVoiceFunctionMappingPolicy.restoring(
             originalVoiceMapping: nil,
+            originalPowerMapping: nil,
             in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
         ) == [changedUnrelatedMapping],
     "RC003 hardware voice mapping restore preserves unrelated runtime changes"
@@ -387,15 +415,10 @@ if let defaults = UserDefaults(suiteName: suiteName) {
     )
     settings.setExperimentalContinuousRecordingEnabled(true)
     check(
-        settings.experimentalContinuousRecordingEnabled &&
-            settings.action(for: .power) == .toggleLongRecording &&
+        !settings.experimentalContinuousRecordingEnabled &&
+            settings.action(for: .power) == .escape &&
             settings.customMappingEnabled,
-        "continuous recording experiment opts in and binds power"
-    )
-    settings.setExperimentalContinuousRecordingEnabled(false)
-    check(
-        settings.action(for: .power) == .escape,
-        "continuous recording experiment restores power binding"
+        "unavailable continuous recording experiment cannot replace power binding"
     )
     defaults.removePersistentDomain(forName: suiteName)
 } else {
