@@ -3,7 +3,6 @@ import type { RemoteCommandName } from "@remote-mic/mobile-web-protocol";
 import { RemoteConnection, type ConnectionState } from "./connection";
 import {
   BackIcon,
-  CheckIcon,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -13,10 +12,12 @@ import {
   MenuIcon,
   MicrophoneIcon,
   PowerIcon,
+  ReturnIcon,
   TVIcon,
   VolumeDownIcon,
   VolumeUpIcon,
 } from "./icons";
+import { triggerHaptic, type WebHaptic } from "./haptics";
 
 const initialState: ConnectionState = {
   phase: "readyToConnect",
@@ -53,10 +54,10 @@ export default function App(): ReactElement {
   const connected = state.phase === "connected";
   const perform = (command: RemoteCommandName) => connection.sendCommand(command);
   return (
-    <main className="remote-shell">
+    <main className="remote-shell" onContextMenu={(event) => event.preventDefault()}>
       <section className="remote-surface" aria-label="无线麦手机遥控器">
         <header className="remote-header">
-          <ControlButton className="header-button" label="关机" disabled={!connected} onPress={() => perform("power")}>
+          <ControlButton className="header-button" label="关机" haptic="emphasized" disabled={!connected} onPress={() => perform("power")}>
             <PowerIcon />
             <CustomTitle value={state.buttonTitles.power} />
           </ControlButton>
@@ -81,14 +82,15 @@ export default function App(): ReactElement {
 
         <div className="primary-controls">
           <VoiceButton state={state} connection={connection} />
-          <ControlButton className="primary-button confirm-button" label="确定" disabled={!connected} onPress={() => perform("ok")}>
-            <CheckIcon />
-            <CustomTitle value={state.buttonTitles.ok} />
+          <ControlButton className="primary-button confirm-button" label="确定" haptic="emphasized" disabled={!connected} onPress={() => perform("ok")}>
+            <ReturnIcon />
+            <span className="primary-title">确定</span>
+            <span className="primary-subtitle">{state.buttonTitles.ok ?? "Return"}</span>
           </ControlButton>
         </div>
 
         {state.phase === "readyToConnect" || state.phase === "failed" ? (
-          <button type="button" className="connect-button" onClick={() => connection.connect()}>
+          <button type="button" className="connect-button" onPointerDown={() => triggerHaptic("light")} onClick={() => connection.connect()}>
             {state.phase === "failed" ? "重试连接" : "连接 Mac"}
           </button>
         ) : (
@@ -97,7 +99,40 @@ export default function App(): ReactElement {
           </p>
         )}
       </section>
+      <MacAppGuide />
     </main>
+  );
+}
+
+function MacAppGuide(): ReactElement {
+  return (
+    <aside className="mac-app-guide" aria-labelledby="mac-app-guide-title">
+      <div className="guide-heading">
+        <img src="/app-logo.png" alt="无线麦 App Logo" draggable={false} />
+        <div>
+          <h2 id="mac-app-guide-title">在 Mac 上安装无线麦</h2>
+          <p>Apple Silicon · macOS 14 或更高版本</p>
+        </div>
+      </div>
+      <a
+        className="download-link"
+        href="https://github.com/HD838A/remote-mic-app/releases/latest"
+        target="_blank"
+        rel="noreferrer"
+        onPointerDown={() => triggerHaptic("light")}
+      >
+        下载最新版 Mac App
+      </a>
+      <div className="connection-tutorial" aria-label="连接教程">
+        <h3>连接教程</h3>
+        <ol>
+          <li>打开 Mac 上的“无线麦”，选择“连接网页版”。</li>
+          <li>用手机扫描 Mac 显示的二维码，然后点击网页上的“连接 Mac”。</li>
+          <li>核对校验码并在 Mac 允许连接。成功后两小时内无需再次扫码。</li>
+        </ol>
+      </div>
+      <p className="privacy-note">语音仅在按住麦克风时传输，不记录语音内容。</p>
+    </aside>
   );
 }
 
@@ -105,6 +140,7 @@ function ConnectionStatus({ state }: { state: ConnectionState }): ReactElement {
   if (state.pairingCode) {
     return (
       <div className="connection-status pairing" aria-live="polite">
+        <BrandMark />
         <span className="status-label">校验码</span>
         <strong>{state.pairingCode.split("").join(" ")}</strong>
         <span className="mac-name">{state.macName ?? "等待 Mac 确认"}</span>
@@ -114,12 +150,22 @@ function ConnectionStatus({ state }: { state: ConnectionState }): ReactElement {
   const healthy = state.phase === "connected";
   return (
     <div className="connection-status" aria-live="polite">
+      <BrandMark />
       <span className={`status-line ${healthy ? "healthy" : "pending"}`}>
         <i aria-hidden="true" />
         {state.statusText}
       </span>
       <span className="mac-name">{state.macName ?? "无线麦 Mac"}</span>
     </div>
+  );
+}
+
+function BrandMark(): ReactElement {
+  return (
+    <span className="brand-mark" aria-label="无线麦">
+      <img src="/app-logo.png" alt="" draggable={false} />
+      <span>无线麦</span>
+    </span>
   );
 }
 
@@ -170,10 +216,12 @@ function VoiceButton({ state, connection }: { state: ConnectionState; connection
   const disabled = state.phase !== "connected";
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (disabled) return;
+    triggerHaptic("emphasized");
     event.currentTarget.setPointerCapture(event.pointerId);
     void connection.beginVoice();
   };
   const stop = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!disabled) triggerHaptic("release");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -193,7 +241,8 @@ function VoiceButton({ state, connection }: { state: ConnectionState; connection
       onContextMenu={(event) => event.preventDefault()}
     >
       <MicrophoneIcon />
-      <span>{state.voiceReady ? "正在说话" : "按住说话"}</span>
+      <span className="primary-title">{state.voiceReady ? "正在说话" : "按住说话"}</span>
+      <span className="primary-subtitle">松手停止</span>
     </button>
   );
 }
@@ -202,17 +251,19 @@ function ControlButton({
   className,
   label,
   disabled = false,
+  haptic = "light",
   onPress,
   children,
 }: {
   className: string;
   label: string;
   disabled?: boolean;
+  haptic?: WebHaptic;
   onPress: () => void;
   children: ReactNode;
 }): ReactElement {
   return (
-    <button type="button" className={className} aria-label={label} disabled={disabled} onClick={onPress}>
+    <button type="button" className={className} aria-label={label} disabled={disabled} onPointerDown={() => triggerHaptic(haptic)} onClick={onPress}>
       {children}
     </button>
   );

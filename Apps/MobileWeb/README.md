@@ -8,6 +8,7 @@ Mobile Web 是无线麦的浏览器遥控入口。手机通过 HTTPS/WSS 加入�
 - `web/`：React + Vite 手机单屏遥控器；
 - `relay/`：只保存内存会话的 Node WebSocket 中继；
 - `Dockerfile`：不包含真实域名或 VPS 信息的通用生产镜像；
+- `DESIGN.md`：网页版独立视觉、交互与兼容规范；
 - `PLAN.md`：完整实施和验收计划。
 
 真实公网入口、VPS、SSH、DNS 和生产环境变量只保存在 Git 忽略的 `.private/` 或独立私有运维配置中。

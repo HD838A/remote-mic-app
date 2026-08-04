@@ -32,9 +32,26 @@ export interface ConnectionState {
 
 type Listener = (state: ConnectionState) => void;
 
+interface SessionCredentials {
+  sessionId: string;
+  token: string;
+  remembered: boolean;
+}
+
+interface RememberedCredentials {
+  version: 1;
+  sessionId: string;
+  token: string;
+  savedAt: number;
+  macName?: string;
+}
+
+const rememberedSessionKey = "remote-mic-remembered-session:v1";
+const rememberedSessionMaxAgeMS = 2 * 60 * 60 * 1000;
+
 export class RemoteConnection {
   private socket: WebSocket | undefined;
-  private credentials: { sessionId: string; token: string } | undefined;
+  private credentials: SessionCredentials | undefined;
   private listener: Listener | undefined;
   private microphone = new MicrophoneCapture();
   private sequence = 0;
@@ -70,10 +87,14 @@ export class RemoteConnection {
       });
       return;
     }
+    const macName = rememberedMacName();
     this.update({
       phase: "readyToConnect",
       statusText: "等待连接",
-      guidanceText: "点击“连接 Mac”后才会建立网络连接",
+      guidanceText: this.credentials.remembered
+        ? "已记住上次连接，点击“连接 Mac”即可继续"
+        : "点击“连接 Mac”后才会建立网络连接",
+      ...(macName ? { macName } : {}),
     });
   }
 
@@ -147,7 +168,6 @@ export class RemoteConnection {
     this.shouldReconnect = false;
     this.stopReconnectTimer();
     this.voiceRequestID += 1;
-    this.send({ type: "sessionClose", protocolVersion, reason: "网页已退出" });
     this.socket?.close(1000, "web disconnected");
     this.socket = undefined;
     this.stopHeartbeat();
@@ -208,6 +228,7 @@ export class RemoteConnection {
         break;
       case "sessionReady":
         this.reconnectDeadline = 0;
+        rememberSessionCredentials(this.credentials, message.macName);
         this.update({
           phase: "connected",
           statusText: "已连接",
@@ -233,6 +254,8 @@ export class RemoteConnection {
         }
         if (message.recoverable) {
           if (!this.state.voiceRequested) this.update({ guidanceText: message.detail });
+        } else if (message.code === "join_failed" || message.code === "session_missing") {
+          this.invalidateRememberedSession(message.detail);
         } else {
           this.fail(message.detail);
         }
@@ -272,6 +295,19 @@ export class RemoteConnection {
     this.socket?.close(1008, "failed");
   }
 
+  private invalidateRememberedSession(detail: string): void {
+    this.shouldReconnect = false;
+    this.stopReconnectTimer();
+    clearSessionCredentials(this.credentials?.sessionId);
+    this.credentials = undefined;
+    this.update({
+      phase: "missingSession",
+      statusText: "需要重新扫码",
+      guidanceText: `${detail}，请在 Mac 重新生成二维码`,
+    });
+    this.socket?.close(1008, "session unavailable");
+  }
+
   private update(update: Partial<ConnectionState>): void {
     this.state = { ...this.state, ...update };
     this.listener?.(this.state);
@@ -288,29 +324,80 @@ export class RemoteConnection {
   }
 }
 
-function sessionCredentials(): { sessionId: string; token: string } | undefined {
+function sessionCredentials(): SessionCredentials | undefined {
   const url = new URL(window.location.href);
   const sessionId = url.searchParams.get("session");
   const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
   const token = hash.get("token");
-  if (!sessionId) return undefined;
-  const storageKey = sessionStorageKey(sessionId);
-  if (token) {
-    const credentials = { sessionId, token };
-    window.sessionStorage.setItem(storageKey, JSON.stringify(credentials));
+  if (sessionId && token) {
+    const credentials = { sessionId, token, remembered: false };
+    storeSessionCredentials(credentials);
     history.replaceState(null, "", `${url.pathname}?session=${encodeURIComponent(sessionId)}#ready`);
     return credentials;
   }
-  const stored = window.sessionStorage.getItem(storageKey);
-  if (!stored) return undefined;
+
+  const remembered = readRememberedCredentials();
+  if (remembered && (!sessionId || remembered.sessionId === sessionId)) {
+    return { sessionId: remembered.sessionId, token: remembered.token, remembered: true };
+  }
+  if (!sessionId) return undefined;
+
   try {
+    const stored = window.sessionStorage.getItem(sessionStorageKey(sessionId));
+    if (!stored) return undefined;
     const credentials = JSON.parse(stored) as { sessionId?: unknown; token?: unknown };
     return credentials.sessionId === sessionId && typeof credentials.token === "string"
-      ? { sessionId, token: credentials.token }
+      ? { sessionId, token: credentials.token, remembered: false }
       : undefined;
   } catch {
     return undefined;
   }
+}
+
+function storeSessionCredentials(credentials: SessionCredentials): void {
+  try {
+    window.sessionStorage.setItem(sessionStorageKey(credentials.sessionId), JSON.stringify(credentials));
+  } catch {
+    // Storage can be unavailable in private browsing; the current in-memory session still works.
+  }
+}
+
+function rememberSessionCredentials(credentials?: SessionCredentials, macName?: string): void {
+  if (!credentials) return;
+  try {
+    const remembered: RememberedCredentials = {
+      version: 1,
+      sessionId: credentials.sessionId,
+      token: credentials.token,
+      savedAt: Date.now(),
+      ...(macName ? { macName } : {}),
+    };
+    window.localStorage.setItem(rememberedSessionKey, JSON.stringify(remembered));
+  } catch {
+    // Remembering the session is an optional convenience.
+  }
+}
+
+function readRememberedCredentials(): RememberedCredentials | undefined {
+  try {
+    const stored = window.localStorage.getItem(rememberedSessionKey);
+    if (!stored) return undefined;
+    const value = JSON.parse(stored) as Partial<RememberedCredentials>;
+    const valid = value.version === 1
+      && typeof value.sessionId === "string"
+      && typeof value.token === "string"
+      && typeof value.savedAt === "number"
+      && Date.now() - value.savedAt < rememberedSessionMaxAgeMS;
+    if (valid) return value as RememberedCredentials;
+    window.localStorage.removeItem(rememberedSessionKey);
+  } catch {
+    try { window.localStorage.removeItem(rememberedSessionKey); } catch { /* optional storage */ }
+  }
+  return undefined;
+}
+
+function rememberedMacName(): string | undefined {
+  return readRememberedCredentials()?.macName;
 }
 
 function sessionStorageKey(sessionId: string): string {
@@ -318,7 +405,17 @@ function sessionStorageKey(sessionId: string): string {
 }
 
 function clearSessionCredentials(sessionId?: string): void {
-  if (sessionId) window.sessionStorage.removeItem(sessionStorageKey(sessionId));
+  try {
+    if (sessionId) window.sessionStorage.removeItem(sessionStorageKey(sessionId));
+  } catch {
+    // Storage cleanup is best effort.
+  }
+  try {
+    const remembered = readRememberedCredentials();
+    if (!sessionId || remembered?.sessionId === sessionId) window.localStorage.removeItem(rememberedSessionKey);
+  } catch {
+    // Storage cleanup is best effort.
+  }
 }
 
 function webSocketURL(): string {

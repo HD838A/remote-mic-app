@@ -70,7 +70,7 @@ export function createRelayServer(options: RelayOptions): RelayServer {
   const pendingSessionTTLMS = options.pendingSessionTTLMS ?? 5 * 60 * 1000;
   const maximumSessionTTLMS = options.maximumSessionTTLMS ?? 2 * 60 * 60 * 1000;
   const maximumSessions = options.maximumSessions ?? 100;
-  const webReconnectGraceMS = options.webReconnectGraceMS ?? 60_000;
+  const webReconnectGraceMS = options.webReconnectGraceMS ?? maximumSessionTTLMS;
   const sessions = new Map<string, Session>();
   const contexts = new Set<ConnectionContext>();
 

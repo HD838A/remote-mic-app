@@ -135,7 +135,7 @@ describe("relay session", () => {
     session.mac.close();
   });
 
-  it("lets an approved web peer resume briefly without scanning or approving again", async () => {
+  it("lets an approved web peer resume its remembered session without scanning or approving again", async () => {
     const session = await createPendingSession();
     openServers.push(session.relay);
     session.mac.send(JSON.stringify({ type: "sessionApprove", protocolVersion }));
