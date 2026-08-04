@@ -125,8 +125,7 @@ function MacAppGuide(): ReactElement {
         下载最新版 Mac App
       </a>
       <nav className="official-sites" aria-label="官方网站">
-        <a href="https://8586ai.com/" target="_blank" rel="noreferrer">中文官网</a>
-        <a href="https://8586ai.com/en/" target="_blank" rel="noreferrer">English Website</a>
+        <a href="https://8586ai.com/" target="_blank" rel="noreferrer">官方网站</a>
       </nav>
       <div className="connection-tutorial" aria-label="连接教程">
         <h3>连接教程</h3>
@@ -145,7 +144,6 @@ function ConnectionStatus({ state }: { state: ConnectionState }): ReactElement {
   if (state.pairingCode) {
     return (
       <div className="connection-status pairing" aria-live="polite">
-        <BrandMark />
         <span className="status-label">校验码</span>
         <strong>{state.pairingCode.split("").join(" ")}</strong>
         <span className="mac-name">{state.macName ?? "等待 Mac 确认"}</span>
@@ -155,22 +153,12 @@ function ConnectionStatus({ state }: { state: ConnectionState }): ReactElement {
   const healthy = state.phase === "connected";
   return (
     <div className="connection-status" aria-live="polite">
-      <BrandMark />
       <span className={`status-line ${healthy ? "healthy" : "pending"}`}>
         <i aria-hidden="true" />
         {state.statusText}
       </span>
       <span className="mac-name">{state.macName ?? "无线麦 Mac"}</span>
     </div>
-  );
-}
-
-function BrandMark(): ReactElement {
-  return (
-    <span className="brand-mark" aria-label="无线麦">
-      <img src={appLogoURL} alt="" draggable={false} width="18" height="18" decoding="sync" />
-      <span>无线麦</span>
-    </span>
   );
 }
 

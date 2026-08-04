@@ -34,7 +34,13 @@ body { min-height: 100svh; overflow-x: hidden; overscroll-behavior-x: none; -web
 button { font: inherit; color: inherit; }
 img { -webkit-user-drag: none; }
 button:focus-visible { outline: 3px solid rgba(31, 118, 181, 0.58); outline-offset: 3px; }
-button:disabled { opacity: 0.52; }
+button:disabled { opacity: 1; cursor: default; }
+button:disabled svg,
+button:disabled .custom-title,
+button:disabled .round-label,
+button:disabled .primary-title,
+button:disabled .primary-subtitle,
+button.dpad-center:disabled > span { opacity: 0.52; }
 
 .remote-shell {
   width: 100%;
@@ -88,7 +94,7 @@ button:disabled { opacity: 0.52; }
   text-decoration: none;
 }
 .download-link:active { transform: translateY(2px); }
-.official-sites { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.official-sites { margin-top: 8px; }
 .official-sites a { min-height: 34px; border: 1px solid rgba(55,63,69,0.18); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: rgba(31,41,49,0.78); background: rgba(255,255,255,0.25); font-size: 11px; font-weight: 650; text-decoration: none; }
 .official-sites a:active { background: rgba(255,255,255,0.42); }
 .connection-tutorial { margin-top: 14px; }
@@ -130,9 +136,6 @@ button:disabled { opacity: 0.52; }
   gap: 2px;
   text-align: center;
 }
-
-.brand-mark { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 18px; font-size: 11px; font-weight: 720; color: rgba(24,32,39,0.82); }
-.brand-mark img { width: 18px; height: 18px; border-radius: 5px; box-shadow: 0 1px 2px rgba(45,53,59,0.15); }
 
 .status-line { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; }
 .status-line i { width: 8px; height: 8px; border-radius: 50%; background: #d58a2b; box-shadow: 0 0 0 3px rgba(213,138,43,0.10); }
@@ -207,18 +210,18 @@ button:disabled { opacity: 0.52; }
 }
 
 .round-button {
-  width: clamp(66px, 20vw, 88px);
-  aspect-ratio: 1;
+  width: clamp(70px, 21vw, 88px);
+  height: clamp(66px, 19.5vw, 82px);
   border: 1.5px solid rgba(0,0,0,0.36);
-  border-radius: 50%;
+  border-radius: clamp(20px, 6vw, 26px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
   color: rgba(255,255,255,0.94);
-  background: linear-gradient(180deg, var(--graphite-top), var(--graphite-bottom));
-  box-shadow: 0 6px 10px rgba(57,64,70,0.22), inset 0 1px 1px rgba(255,255,255,0.24);
+  background: linear-gradient(145deg, var(--graphite-top), var(--graphite-bottom));
+  box-shadow: 0 7px 11px rgba(42,49,54,0.27), inset 0 1px 1px rgba(255,255,255,0.22), inset 0 -2px 5px rgba(0,0,0,0.20);
   cursor: pointer;
 }
 .round-button:active:not(:disabled) { transform: translateY(3px) scale(0.975); box-shadow: 0 2px 4px rgba(57,64,70,0.20), inset 0 2px 5px rgba(0,0,0,0.20); }
@@ -226,7 +229,7 @@ button:disabled { opacity: 0.52; }
 .round-icon svg { width: 24px; height: 24px; }
 .round-label { width: 88%; overflow-wrap: anywhere; white-space: normal; font-size: clamp(8px, 2.2vw, 10px); line-height: 1.08; font-weight: 680; text-align: center; }
 
-.primary-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 122px; }
+.primary-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 122px; padding-bottom: 8px; }
 .primary-button {
   position: relative;
   min-width: 0;
@@ -241,7 +244,7 @@ button:disabled { opacity: 0.52; }
   font-weight: 720;
   letter-spacing: 0.01em;
   cursor: pointer;
-  touch-action: none;
+  touch-action: pan-y;
 }
 .primary-button svg { width: 36px; height: 36px; }
 .primary-title { font-size: 16px; font-weight: 760; line-height: 1.05; }
@@ -275,7 +278,8 @@ button:disabled { opacity: 0.52; }
   .header-button, .informational { width: 50px; height: 50px; border-radius: 16px; }
   .remote-header { grid-template-columns: 50px minmax(0,1fr) 50px; }
   .dpad { width: min(57vw, 205px); }
-  .round-button { width: clamp(62px, 18vw, 70px); }
+  .round-button { width: clamp(64px, 18.5vw, 72px); height: clamp(60px, 17.5vw, 68px); border-radius: 20px; }
+  .primary-controls { padding-bottom: 6px; }
   .primary-button { border-radius: 26px; gap: 3px; }
   .primary-button svg { width: 30px; height: 30px; }
   .primary-title { font-size: 14px; }
