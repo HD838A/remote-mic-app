@@ -2,6 +2,8 @@
 
 [简体中文](README.md)
 
+Official website: [8586ai.com](https://8586ai.com/en/)
+
 ![Remote Mic — a voice remote for Vibe Coding](Screenshots/Remote-Mic-Introduce-1.png)
 
 Remote Mic is a macOS app that turns a Xiaomi Bluetooth Remote 2 Pro into a wireless voice remote for your Mac. It provides both a standard Dock entry and a persistent menu bar entry.

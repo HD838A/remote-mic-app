@@ -2,6 +2,8 @@
 
 [English](README.en.md)
 
+官方网站：[8586ai.com](https://8586ai.com/)
+
 ![无线麦——为 Vibe Coding 而生的语音遥控器](Screenshots/Remote-Mic-Introduce-1.png)
 
 无线麦是一款 macOS 应用，可以把小米蓝牙遥控器 2 Pro 变成 Mac 的无线语音遥控器。它同时提供常规 Dock 入口和常驻菜单栏入口。
