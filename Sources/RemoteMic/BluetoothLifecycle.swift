@@ -86,6 +86,8 @@ enum BluetoothLifecyclePhase: Equatable {
 }
 
 enum ATVVSessionGate {
+    static let cancelledOpenSuppressionInterval: TimeInterval = 2
+
     static func canOpenMicrophone(
         phase: BluetoothLifecyclePhase,
         generation: UInt64,
@@ -95,5 +97,21 @@ enum ATVVSessionGate {
         phase.acceptsProtocolData(generation: generation) &&
             capabilitiesConfirmed &&
             ATVVProtocol.supportsAudio(sampleRate: sampleRate)
+    }
+
+    static func cancelledOpenDate(
+        microphoneOpened: Bool,
+        streaming: Bool,
+        now: Date = Date()
+    ) -> Date? {
+        microphoneOpened && !streaming ? now : nil
+    }
+
+    static func shouldIgnoreStreamAfterCancelledOpen(
+        cancelledAt: Date?,
+        now: Date = Date()
+    ) -> Bool {
+        guard let cancelledAt else { return false }
+        return now < cancelledAt.addingTimeInterval(cancelledOpenSuppressionInterval)
     }
 }

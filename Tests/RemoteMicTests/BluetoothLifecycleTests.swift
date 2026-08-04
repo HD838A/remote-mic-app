@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import RemoteMic
 
@@ -51,6 +52,40 @@ struct BluetoothLifecycleTests {
             generation: 1,
             capabilitiesConfirmed: true,
             sampleRate: 16_000
+        ))
+    }
+
+    @Test func directRemoteStreamIsAllowedUnlessAHostOpenWasJustCancelled() {
+        let now = Date(timeIntervalSince1970: 1_000)
+
+        #expect(ATVVSessionGate.cancelledOpenDate(
+            microphoneOpened: false,
+            streaming: false,
+            now: now
+        ) == nil)
+        #expect(ATVVSessionGate.cancelledOpenDate(
+            microphoneOpened: true,
+            streaming: true,
+            now: now
+        ) == nil)
+
+        let cancelledAt = ATVVSessionGate.cancelledOpenDate(
+            microphoneOpened: true,
+            streaming: false,
+            now: now
+        )
+        #expect(cancelledAt == now)
+        #expect(ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
+            cancelledAt: cancelledAt,
+            now: now.addingTimeInterval(1)
+        ))
+        #expect(!ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
+            cancelledAt: nil,
+            now: now
+        ))
+        #expect(!ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
+            cancelledAt: cancelledAt,
+            now: now.addingTimeInterval(2)
         ))
     }
 

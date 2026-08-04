@@ -125,6 +125,23 @@ check(
         ),
     "ATVV READY microphone hard gate"
 )
+let cancelledOpenTime = Date(timeIntervalSince1970: 1_000)
+check(
+    ATVVSessionGate.cancelledOpenDate(
+        microphoneOpened: false,
+        streaming: false,
+        now: cancelledOpenTime
+    ) == nil &&
+        ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
+            cancelledAt: cancelledOpenTime,
+            now: cancelledOpenTime.addingTimeInterval(1)
+        ) &&
+        !ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
+            cancelledAt: cancelledOpenTime,
+            now: cancelledOpenTime.addingTimeInterval(2)
+        ),
+    "ATVV cancelled host-open suppression window"
+)
 
 let decoder = IMAADPCMDecoder()
 check(decoder.decode(Data([0x11])) == [1, 2], "ADPCM nibble order")

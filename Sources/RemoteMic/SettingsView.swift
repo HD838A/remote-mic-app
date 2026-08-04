@@ -461,7 +461,8 @@ struct SettingsView: View {
     }
 
     private var mappingPage: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
             PageHeader(
                 title: localization.text("button_mapping.page.title"),
                 subtitle: localization.text("button_mapping.page.subtitle")
@@ -556,9 +557,11 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            .frame(maxHeight: .infinity)
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(22)
+        .compatibilityScrollEdgeEffect()
     }
 
     @ViewBuilder

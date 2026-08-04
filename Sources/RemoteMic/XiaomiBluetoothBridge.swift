@@ -124,6 +124,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private var pendingSync: (predictor: Int, stepIndex: Int)?
     private var streaming = false
     private var microphoneOpened = false
+    private var cancelledMicrophoneOpenAt: Date?
     private var sessionID: UInt8 = 0
     private var lastStopAt: Date?
 
@@ -220,6 +221,7 @@ final class XiaomiBluetoothBridge: NSObject {
             AppLogger.shared.write("ATVV MIC_OPEN host_request_write_failed")
             return false
         }
+        cancelledMicrophoneOpenAt = nil
         microphoneOpened = true
         AppLogger.shared.write("ATVV MIC_OPEN host_request")
         return true
@@ -245,11 +247,16 @@ final class XiaomiBluetoothBridge: NSObject {
     @discardableResult
     func requestMicrophoneClose() -> Bool {
         guard microphoneOpened || streaming else { return true }
+        let cancelledOpenAt = ATVVSessionGate.cancelledOpenDate(
+            microphoneOpened: microphoneOpened,
+            streaming: streaming
+        )
         let didWrite = write(ATVVProtocol.microphoneClose(
             version: capabilities.version,
             sessionID: sessionID
         ))
         microphoneOpened = false
+        cancelledMicrophoneOpenAt = cancelledOpenAt
         AppLogger.shared.write(
             "ATVV MIC_CLOSE request session=\(sessionID) written=\(didWrite)"
         )
@@ -381,6 +388,7 @@ final class XiaomiBluetoothBridge: NSObject {
             delegate?.bluetoothBridgeDidStopVoice(self)
         }
         microphoneOpened = false
+        cancelledMicrophoneOpenAt = nil
         sessionID = 0
         accumulator.reset()
         pendingSync = nil
@@ -529,7 +537,9 @@ final class XiaomiBluetoothBridge: NSObject {
                 return
             }
             let receivedSessionID = bytes.count >= 4 ? bytes[3] : 0
-            guard microphoneOpened else {
+            if ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
+                cancelledAt: cancelledMicrophoneOpenAt
+            ) {
                 write(ATVVProtocol.microphoneClose(
                     version: capabilities.version,
                     sessionID: receivedSessionID
@@ -539,6 +549,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 )
                 return
             }
+            cancelledMicrophoneOpenAt = nil
             sessionID = receivedSessionID
             startStreaming()
         case 0x00:
@@ -590,10 +601,13 @@ final class XiaomiBluetoothBridge: NSObject {
             AppLogger.shared.write("ATVV AUDIO ignored_not_ready")
             return
         }
-        guard microphoneOpened || streaming else {
-            AppLogger.shared.write("ATVV AUDIO ignored_without_open_request")
+        if ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
+            cancelledAt: cancelledMicrophoneOpenAt
+        ) {
+            AppLogger.shared.write("ATVV AUDIO ignored_cancelled_open")
             return
         }
+        cancelledMicrophoneOpenAt = nil
         if !streaming {
             if let lastStopAt, Date().timeIntervalSince(lastStopAt) < 0.3 {
                 return
