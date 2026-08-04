@@ -57,7 +57,7 @@ button:disabled { opacity: 0.52; }
   padding: max(8px, env(safe-area-inset-top)) 20px max(8px, env(safe-area-inset-bottom));
   overflow: hidden;
   background: var(--page-background);
-  contain: layout paint style;
+  contain: layout style;
 }
 
 .mac-app-guide {

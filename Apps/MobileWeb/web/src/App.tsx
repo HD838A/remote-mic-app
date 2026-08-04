@@ -18,7 +18,7 @@ import {
   VolumeUpIcon,
 } from "./icons";
 import { triggerHaptic, type WebHaptic } from "./haptics";
-import appLogoURL from "./assets/app-logo.png";
+import appLogoURL from "./assets/app-logo.png?inline";
 
 const initialState: ConnectionState = {
   phase: "readyToConnect",
@@ -168,7 +168,7 @@ function ConnectionStatus({ state }: { state: ConnectionState }): ReactElement {
 function BrandMark(): ReactElement {
   return (
     <span className="brand-mark" aria-label="无线麦">
-      <img src={appLogoURL} alt="" draggable={false} width="18" height="18" />
+      <img src={appLogoURL} alt="" draggable={false} width="18" height="18" decoding="sync" />
       <span>无线麦</span>
     </span>
   );
