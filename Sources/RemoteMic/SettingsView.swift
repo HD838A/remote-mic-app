@@ -1,4 +1,5 @@
 import AppKit
+import Charts
 import Combine
 import CoreBluetooth
 import SwiftUI
@@ -7,6 +8,7 @@ import UniformTypeIdentifiers
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
     case mapping
+    case statistics
     case permissions
     case about
 
@@ -16,6 +18,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .connection: return "settings.section.connection"
         case .mapping: return "settings.section.buttons"
+        case .statistics: return "settings.section.statistics"
         case .permissions: return "settings.section.permissions"
         case .about: return "settings.section.about"
         }
@@ -25,6 +28,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .connection: return "link"
         case .mapping: return "keyboard"
+        case .statistics: return "chart.bar.xaxis"
         case .permissions: return "shield.lefthalf.filled"
         case .about: return "info.circle"
         }
@@ -82,7 +86,14 @@ struct SettingsView: View {
     @State private var isReleaseHistoryPresented = false
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
+    @State private var isWebRemoteInvitePresented = false
+    @State private var isWebRemoteInviteInvalidPresented = false
+    @State private var isWebRemoteInviteAuthorized = false
+    @State private var isTestFlightLinkCopied = false
+    @State private var webRemoteInviteCode = ""
     @Namespace private var navigationGlassNamespace
+
+    private static let requiredWebRemoteInviteCode = "8586"
 
     init(
         model: BridgeAppModel,
@@ -106,7 +117,7 @@ struct SettingsView: View {
         .navigationSplitViewStyle(.balanced)
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
-        .frame(minWidth: 760, minHeight: 600)
+        .frame(minWidth: 820, minHeight: 650)
         .onAppear(perform: refreshPermissionStates)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
@@ -148,6 +159,107 @@ struct SettingsView: View {
         } message: {
             Text("connection.trusted_devices.clear_confirm.message")
         }
+        .sheet(isPresented: $isWebRemoteInvitePresented) {
+            webRemoteInviteSheet
+        }
+        .alert(
+            localization.text("connection.web.invite.invalid_title"),
+            isPresented: $isWebRemoteInviteInvalidPresented
+        ) {
+            Button(localization.text("common.action.ok")) {}
+        } message: {
+            Text("connection.web.invite.invalid_message")
+        }
+    }
+
+    private var webRemoteInviteSheet: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "iphone")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 52, height: 52)
+                        .background(Color.accentColor.opacity(0.14), in: Circle())
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("connection.web.invite.ios_eyebrow")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.accentColor)
+                        Text("connection.web.invite.ios_title")
+                            .font(.title3.weight(.semibold))
+                        Text("connection.web.invite.ios_description")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Link(destination: AppLinks.testFlightPublicBeta) {
+                        Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
+                    }
+                    .compatibilityButtonStyle(.prominent)
+
+                    Button {
+                        copyTestFlightPublicBetaLink()
+                    } label: {
+                        Label(
+                            localization.text(
+                                isTestFlightLinkCopied
+                                    ? "common.status.copied"
+                                    : "common.action.copy_link"
+                            ),
+                            systemImage: isTestFlightLinkCopied ? "checkmark" : "doc.on.doc"
+                        )
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+            }
+            .padding(18)
+            .background(
+                Color.accentColor.opacity(0.10),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.28), lineWidth: 1)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("connection.web.invite.title")
+                    .font(.headline)
+                Text("connection.web.invite.description")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextField(
+                localization.text("connection.web.invite.placeholder"),
+                text: $webRemoteInviteCode
+            )
+            .textFieldStyle(.roundedBorder)
+            .onSubmit(validateWebRemoteInviteCode)
+
+            HStack {
+                Spacer()
+                Button("common.action.cancel") {
+                    webRemoteInviteCode = ""
+                    isWebRemoteInvitePresented = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button("connection.web.invite.unlock") {
+                    validateWebRemoteInviteCode()
+                }
+                .compatibilityButtonStyle(.prominent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 540)
     }
 
     private var sidebar: some View {
@@ -193,6 +305,8 @@ struct SettingsView: View {
             connectionPage
         case .mapping:
             mappingPage
+        case .statistics:
+            statisticsPage
         case .permissions:
             permissionsPage
         case .about:
@@ -201,11 +315,10 @@ struct SettingsView: View {
     }
 
     private var connectionPage: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
-                    title: localization.text("connection.page.title"),
-                    subtitle: localization.text("connection.page.subtitle")
+                    title: localization.text("connection.page.title")
                 )
 
                 CompatibilityGlassContainer(spacing: 14) {
@@ -283,10 +396,7 @@ struct SettingsView: View {
                         ? "connection.web.show_qr"
                         : "connection.web.connect"
                 ) {
-                    if !model.webRemoteState.isEnabled {
-                        model.enableWebRemoteConnection()
-                    }
-                    isWebRemoteSessionPresented = true
+                    requestWebRemoteSession()
                 }
                 .compatibilityButtonStyle(.prominent)
             }
@@ -461,11 +571,10 @@ struct SettingsView: View {
     }
 
     private var mappingPage: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
             PageHeader(
-                title: localization.text("button_mapping.page.title"),
-                subtitle: localization.text("button_mapping.page.subtitle")
+                title: localization.text("button_mapping.page.title")
             )
 
             GlassPanel {
@@ -769,11 +878,10 @@ struct SettingsView: View {
     }
 
     private var permissionsPage: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
-                    title: localization.text("permissions.page.title"),
-                    subtitle: localization.text("permissions.page.subtitle")
+                    title: localization.text("permissions.page.title")
                 )
 
                 CompatibilityGlassContainer(spacing: 14) {
@@ -857,12 +965,141 @@ struct SettingsView: View {
         .compatibilityScrollEdgeEffect()
     }
 
-    private var aboutPage: some View {
-        ScrollView {
+    private var statisticsPage: some View {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(
-                    title: localization.text("menu.about"),
-                    subtitle: localization.text("about.page.hero_subtitle")
+                    title: localization.text("statistics.page.title")
+                )
+
+                CompatibilityGlassContainer(spacing: 14) {
+                    VStack(spacing: 14) {
+                        HStack(spacing: 14) {
+                            HStack(spacing: 8) {
+                                ForEach(UsageStatisticsPeriod.allCases) { period in
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.16)) {
+                                            selectedUsagePeriod = period
+                                        }
+                                    } label: {
+                                        Text(localization.text(usagePeriodLocalizationKey(period)))
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .frame(width: 92, height: 38)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(
+                                        selectedUsagePeriod == period ? Color.white : Color.primary
+                                    )
+                                    .background(
+                                        selectedUsagePeriod == period
+                                            ? Color.accentColor
+                                            : Color(nsColor: .controlBackgroundColor),
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    )
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(
+                                                selectedUsagePeriod == period
+                                                    ? Color.accentColor
+                                                    : Color(nsColor: .separatorColor).opacity(0.65),
+                                                lineWidth: 1
+                                            )
+                                    }
+                                    .accessibilityAddTraits(
+                                        selectedUsagePeriod == period ? .isSelected : []
+                                    )
+                                }
+                            }
+
+                            Spacer(minLength: 20)
+
+                            StatusPill(
+                                text: localization.text("about.privacy.local_only"),
+                                tint: .green
+                            )
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        statisticsPeriodContent
+                    }
+                }
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .compatibilityScrollEdgeEffect()
+    }
+
+    @ViewBuilder
+    private var statisticsPeriodContent: some View {
+        switch selectedUsagePeriod {
+        case .today:
+            HStack(alignment: .top, spacing: 14) {
+                UsageBarChart(
+                    title: localization.text("statistics.metric.button_count"),
+                    subtitle: localization.text("statistics.chart.last_seven_days"),
+                    systemImage: "button.programmable",
+                    points: dailyUsageChartPoints,
+                    metric: .buttonPressCount,
+                    tint: .blue
+                )
+                UsageBarChart(
+                    title: localization.text("statistics.metric.voice_duration"),
+                    subtitle: localization.text("statistics.chart.last_seven_days"),
+                    systemImage: "waveform",
+                    points: dailyUsageChartPoints,
+                    metric: .voiceDuration,
+                    tint: .orange
+                )
+            }
+
+        case .thisWeek:
+            HStack(alignment: .top, spacing: 14) {
+                UsageBarChart(
+                    title: localization.text("statistics.metric.button_count"),
+                    subtitle: localization.text("statistics.chart.last_eight_weeks"),
+                    systemImage: "button.programmable",
+                    points: weeklyUsageChartPoints,
+                    metric: .buttonPressCount,
+                    tint: .blue
+                )
+                UsageBarChart(
+                    title: localization.text("statistics.metric.voice_duration"),
+                    subtitle: localization.text("statistics.chart.last_eight_weeks"),
+                    systemImage: "waveform",
+                    points: weeklyUsageChartPoints,
+                    metric: .voiceDuration,
+                    tint: .orange
+                )
+            }
+
+        case .total:
+            GlassPanel {
+                HStack(spacing: 14) {
+                    UsageStatisticCard(
+                        systemImage: "button.programmable",
+                        title: localization.text("statistics.metric.button_count"),
+                        value: buttonPressCountText(for: .total),
+                        tint: .blue
+                    )
+                    UsageStatisticCard(
+                        systemImage: "waveform",
+                        title: localization.text("statistics.metric.voice_duration"),
+                        value: voiceDurationText(for: .total),
+                        tint: .orange
+                    )
+                }
+            }
+            .frame(minHeight: 330, alignment: .top)
+        }
+    }
+
+    private var aboutPage: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                PageHeader(
+                    title: localization.text("menu.about")
                 )
 
                 CompatibilityGlassContainer(spacing: 14) {
@@ -884,6 +1121,20 @@ struct SettingsView: View {
                                         text: localization.text("about.privacy.local_only"),
                                         tint: .green
                                     )
+
+                                    HStack(spacing: 10) {
+                                        Link(destination: localization.localizedWebsiteURL) {
+                                            Label("about.support.website", systemImage: "globe")
+                                        }
+                                        .compatibilityButtonStyle(.prominent)
+
+                                        Link(
+                                            destination: AppLinks.githubRepository
+                                        ) {
+                                            Label("about.support.github", systemImage: "link")
+                                        }
+                                        .compatibilityButtonStyle(.standard)
+                                    }
                                 }
 
                                 Spacer(minLength: 20)
@@ -896,51 +1147,6 @@ struct SettingsView: View {
                                         tint: Color.accentColor.opacity(0.12),
                                         in: Circle()
                                     )
-                            }
-                        }
-
-                        GlassPanel {
-                            VStack(alignment: .leading, spacing: 14) {
-                                HStack(alignment: .firstTextBaseline) {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("about.usage.title")
-                                            .font(.headline)
-                                        Text("about.usage.description")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "lock.shield.fill")
-                                        .foregroundStyle(.green)
-                                }
-
-                                Picker("", selection: $selectedUsagePeriod) {
-                                    ForEach(UsageStatisticsPeriod.allCases) { period in
-                                        Text(localization.text(usagePeriodLocalizationKey(period)))
-                                            .tag(period)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                .labelsHidden()
-
-                                HStack(spacing: 12) {
-                                    UsageStatisticCard(
-                                        systemImage: "button.programmable",
-                                        title: localization.text("about.usage.button_count"),
-                                        value: buttonPressCountText,
-                                        tint: .blue
-                                    )
-                                    UsageStatisticCard(
-                                        systemImage: "waveform",
-                                        title: localization.text("about.usage.voice_duration"),
-                                        value: voiceDurationText,
-                                        tint: .orange
-                                    )
-                                }
-
-                                Text("about.usage.details")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                             }
                         }
 
@@ -1037,9 +1243,6 @@ struct SettingsView: View {
                                         .font(.headline)
 
                                     VStack(alignment: .leading, spacing: 10) {
-                                        Text("about.version.current")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
                                         Text(versionText)
                                             .font(.title3.weight(.semibold).monospacedDigit())
 
@@ -1074,34 +1277,6 @@ struct SettingsView: View {
 
                                     Button(action: openGlossary) {
                                         Label("help.glossary.open", systemImage: "book.closed")
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .compatibilityButtonStyle(.standard)
-
-                                    Link(
-                                        destination: URL(string: "https://github.com/HD838A/remote-mic-app")!
-                                    ) {
-                                        Label("about.support.github", systemImage: "link")
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .compatibilityButtonStyle(.standard)
-
-                                    Link(destination: URL(string: "https://8586ai.com/")!) {
-                                        Label("about.support.website_chinese", systemImage: "globe.asia.australia")
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .compatibilityButtonStyle(.standard)
-
-                                    Link(destination: URL(string: "https://8586ai.com/en/")!) {
-                                        Label("about.support.website_english", systemImage: "globe")
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .compatibilityButtonStyle(.standard)
-
-                                    Button {
-                                        NSApp.terminate(nil)
-                                    } label: {
-                                        Label("common.action.quit", systemImage: "power")
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .compatibilityButtonStyle(.standard)
@@ -1149,14 +1324,15 @@ struct SettingsView: View {
         NSWorkspace.shared.open(url)
     }
 
-    private var buttonPressCountText: String {
-        localizedNumber(selectedUsageStatistics.buttonPressCount)
+    private func buttonPressCountText(for period: UsageStatisticsPeriod) -> String {
+        localizedNumber(settings.usageStatistics(for: period).buttonPressCount)
     }
 
-    private var voiceDurationText: String {
+    private func voiceDurationText(for period: UsageStatisticsPeriod) -> String {
+        let statistics = settings.usageStatistics(for: period)
         let totalSeconds = max(
             0,
-            Int(min(selectedUsageStatistics.voiceDuration.rounded(), Double(Int.max)))
+            Int(min(statistics.voiceDuration.rounded(), Double(Int.max)))
         )
         let hours = totalSeconds / 3_600
         let minutes = totalSeconds % 3_600 / 60
@@ -1182,15 +1358,67 @@ struct SettingsView: View {
         )
     }
 
-    private var selectedUsageStatistics: UsageStatistics {
-        settings.usageStatistics(for: selectedUsagePeriod)
+    private var dailyUsageChartPoints: [UsageChartPoint] {
+        usageChartPoints(
+            from: settings.dailyUsageStatistics(days: 7),
+            dateFormatTemplate: "EEE"
+        )
+    }
+
+    private var weeklyUsageChartPoints: [UsageChartPoint] {
+        usageChartPoints(
+            from: settings.weeklyUsageStatistics(weeks: 8),
+            dateFormatTemplate: "Md"
+        )
+    }
+
+    private func usageChartPoints(
+        from buckets: [UsageStatisticsBucket],
+        dateFormatTemplate: String
+    ) -> [UsageChartPoint] {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.setLocalizedDateFormatFromTemplate(dateFormatTemplate)
+        return buckets.map { bucket in
+            UsageChartPoint(
+                date: bucket.startDate,
+                label: formatter.string(from: bucket.startDate),
+                buttonPressCount: Double(bucket.statistics.buttonPressCount),
+                buttonPressCountLabel: localizedNumber(bucket.statistics.buttonPressCount),
+                voiceDuration: max(0, bucket.statistics.voiceDuration),
+                voiceDurationLabel: compactDurationText(bucket.statistics.voiceDuration)
+            )
+        }
+    }
+
+    private func compactDurationText(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(min(duration.rounded(), Double(Int.max))))
+        if totalSeconds >= 3_600 {
+            return String(
+                format: localization.text("usage.duration.compact_hours"),
+                locale: localization.locale,
+                arguments: [localizedNumber(UInt64(totalSeconds / 3_600))]
+            )
+        }
+        if totalSeconds >= 60 {
+            return String(
+                format: localization.text("usage.duration.compact_minutes"),
+                locale: localization.locale,
+                arguments: [localizedNumber(UInt64(totalSeconds / 60))]
+            )
+        }
+        return String(
+            format: localization.text("usage.duration.compact_seconds"),
+            locale: localization.locale,
+            arguments: [localizedNumber(UInt64(totalSeconds))]
+        )
     }
 
     private func usagePeriodLocalizationKey(_ period: UsageStatisticsPeriod) -> String {
         switch period {
-        case .today: return "about.usage.period.today"
-        case .thisWeek: return "about.usage.period.this_week"
-        case .total: return "about.usage.period.total"
+        case .today: return "statistics.period.today"
+        case .thisWeek: return "statistics.period.this_week"
+        case .total: return "statistics.period.total"
         }
     }
 
@@ -1333,6 +1561,50 @@ struct SettingsView: View {
         }
     }
 
+    private func requestWebRemoteSession() {
+        guard isWebRemoteInviteAuthorized else {
+            webRemoteInviteCode = ""
+            isTestFlightLinkCopied = false
+            isWebRemoteInvitePresented = true
+            return
+        }
+        openWebRemoteSession()
+    }
+
+    private func validateWebRemoteInviteCode() {
+        guard webRemoteInviteCode.trimmingCharacters(in: .whitespacesAndNewlines) ==
+                Self.requiredWebRemoteInviteCode
+        else {
+            webRemoteInviteCode = ""
+            isWebRemoteInvitePresented = false
+            DispatchQueue.main.async {
+                isWebRemoteInviteInvalidPresented = true
+            }
+            return
+        }
+        webRemoteInviteCode = ""
+        isWebRemoteInviteAuthorized = true
+        isWebRemoteInvitePresented = false
+        DispatchQueue.main.async {
+            openWebRemoteSession()
+        }
+    }
+
+    private func copyTestFlightPublicBetaLink() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        isTestFlightLinkCopied = pasteboard.writeObjects([
+            AppLinks.testFlightPublicBeta.absoluteString as NSString
+        ])
+    }
+
+    private func openWebRemoteSession() {
+        if !model.webRemoteState.isEnabled {
+            model.enableWebRemoteConnection()
+        }
+        isWebRemoteSessionPresented = true
+    }
+
     private var connectionTint: Color {
         model.isConnected ? .green : .orange
     }
@@ -1369,7 +1641,7 @@ private struct ReleaseHistorySheet: View {
 
             Divider()
 
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: false) {
                 if let sections = releaseHistorySections {
                     LazyVStack(alignment: .leading, spacing: 24) {
                         ForEach(sections) { section in
@@ -1727,16 +1999,10 @@ private struct SidebarGlassModifier: ViewModifier {
 
 private struct PageHeader: View {
     let title: String
-    let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 25, weight: .semibold))
-            Text(subtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
+        Text(title)
+            .font(.system(size: 25, weight: .semibold))
     }
 }
 
@@ -1799,6 +2065,89 @@ private struct UsageStatisticCard: View {
             tint: tint.opacity(0.08),
             in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
+    }
+}
+
+private struct UsageChartPoint: Identifiable {
+    let date: Date
+    let label: String
+    let buttonPressCount: Double
+    let buttonPressCountLabel: String
+    let voiceDuration: Double
+    let voiceDurationLabel: String
+
+    var id: Date { date }
+}
+
+private enum UsageChartMetric {
+    case buttonPressCount
+    case voiceDuration
+
+    func value(for point: UsageChartPoint) -> Double {
+        switch self {
+        case .buttonPressCount: return point.buttonPressCount
+        case .voiceDuration: return point.voiceDuration
+        }
+    }
+
+    func label(for point: UsageChartPoint) -> String {
+        switch self {
+        case .buttonPressCount: return point.buttonPressCountLabel
+        case .voiceDuration: return point.voiceDurationLabel
+        }
+    }
+}
+
+private struct UsageBarChart: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let points: [UsageChartPoint]
+    let metric: UsageChartMetric
+    let tint: Color
+
+    private var maximumValue: Double {
+        max(1, points.map { metric.value(for: $0) }.max() ?? 0) * 1.25
+    }
+
+    var body: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 10) {
+                    Image(systemName: systemImage)
+                        .font(.headline)
+                        .foregroundStyle(tint)
+                        .frame(width: 32, height: 32)
+                        .compatibilityTintedGlass(tint: tint.opacity(0.14), in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.headline)
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Chart(points) { point in
+                    BarMark(
+                        x: .value(subtitle, point.label),
+                        y: .value(title, metric.value(for: point))
+                    )
+                    .foregroundStyle(tint.gradient)
+                    .cornerRadius(5)
+                    .annotation(position: .top, spacing: 4) {
+                        Text(metric.label(for: point))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .chartYScale(domain: 0...maximumValue)
+                .chartYAxis(.hidden)
+                .frame(height: 250)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 

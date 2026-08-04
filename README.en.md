@@ -6,6 +6,8 @@ Chinese website: [8586ai.com](https://8586ai.com/)
 
 English website: [8586ai.com/en](https://8586ai.com/en/)
 
+iOS app beta: [Join the TestFlight public beta](https://testflight.apple.com/join/J8k8fb7v)
+
 ![Remote Mic — a voice remote for Vibe Coding](Screenshots/Remote-Mic-Introduce-1.png)
 
 Remote Mic is a macOS app that turns a Xiaomi Bluetooth Remote 2 Pro into a wireless voice remote for your Mac. It provides both a standard Dock entry and a persistent menu bar entry.
@@ -48,7 +50,7 @@ Remote Mic appears in the Dock and remains in the menu bar after launch:
 - Left-click the icon to open Settings.
 - Right-click the icon to show status, reconnect, logs, About, version, update, GitHub, language, and Quit actions.
 
-Remote Mic opens its main window by default on ordinary launches. The **About** page at the bottom of the Settings sidebar provides version, update, version history, glossary, GitHub, language, Quit, Dock display, and launch controls. Turn off **Open main window at launch** to keep ordinary launches in the menu bar; an update relaunch still opens the main window unconditionally. Turn off **Show app icon in the Dock** to keep Remote Mic available only from its menu bar entry; the Dock icon can be restored from the same page.
+Remote Mic opens its main window by default on ordinary launches. The **About** page at the bottom of the Settings sidebar provides version, update, version history, glossary, GitHub, language, Dock display, and launch controls. Turn off **Open main window at launch** to keep ordinary launches in the menu bar; an update relaunch still opens the main window unconditionally. Turn off **Show app icon in the Dock** to keep Remote Mic available only from its menu bar entry; the Dock icon can be restored from the same page.
 
 **App Language** displays **System Default**, **简体中文**, and **English** together. The settings window, status text, menu, and built-in help follow the selection. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
 

@@ -120,6 +120,10 @@ final class LocalizationStore: ObservableObject {
         )
     }
 
+    var localizedWebsiteURL: URL {
+        AppLinks.website(for: locale)
+    }
+
     private func bundle(for localizationIdentifier: String) -> Bundle? {
         guard let path = resourceBundle.path(
             forResource: localizationIdentifier,

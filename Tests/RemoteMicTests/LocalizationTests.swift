@@ -15,12 +15,65 @@ struct LocalizationTests {
         localization.select(.english)
         #expect(localization.language == .english)
         #expect(localization.locale.identifier == "en")
+        #expect(localization.localizedWebsiteURL.absoluteString == "https://8586ai.com/en/")
         #expect(AppSettings(defaults: defaults).applicationLanguage == .english)
 
         localization.select(.simplifiedChinese)
         #expect(localization.language == .simplifiedChinese)
         #expect(localization.locale.identifier == "zh-Hans")
+        #expect(localization.localizedWebsiteURL.absoluteString == "https://8586ai.com/")
         #expect(AppSettings(defaults: defaults).applicationLanguage == .simplifiedChinese)
+    }
+
+    @Test func appLinksProvideThePublicTestFlightBetaEverywhere() throws {
+        let expectedURL = "https://testflight.apple.com/join/J8k8fb7v"
+        #expect(AppLinks.testFlightPublicBeta.absoluteString == expectedURL)
+
+        for readmeName in ["README.md", "README.en.md"] {
+            let readme = try String(
+                contentsOf: repositoryRoot.appendingPathComponent(readmeName),
+                encoding: .utf8
+            )
+            #expect(readme.contains(expectedURL))
+        }
+
+        let expression = try NSRegularExpression(
+            pattern: #"https://testflight\.apple\.com/join/[A-Za-z0-9]+"#
+        )
+        let allowedExtensions = Set([
+            "json", "md", "plist", "sh", "strings", "swift", "ts", "tsx", "yaml", "yml"
+        ])
+        let ignoredDirectories = Set([".build", ".git", ".swiftpm", "dist"])
+        let enumerator = try #require(
+            FileManager.default.enumerator(
+                at: repositoryRoot,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        )
+        var referencedURLs: Set<String> = []
+
+        while let fileURL = enumerator.nextObject() as? URL {
+            let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
+            if resourceValues.isDirectory == true {
+                if ignoredDirectories.contains(fileURL.lastPathComponent) {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+            guard allowedExtensions.contains(fileURL.pathExtension.lowercased()),
+                  let contents = try? String(contentsOf: fileURL, encoding: .utf8)
+            else {
+                continue
+            }
+            let range = NSRange(contents.startIndex..., in: contents)
+            for match in expression.matches(in: contents, range: range) {
+                guard let matchRange = Range(match.range, in: contents) else { continue }
+                referencedURLs.insert(String(contents[matchRange]))
+            }
+        }
+
+        #expect(referencedURLs == [expectedURL])
     }
 
     @Test func localizationFilesUseSemanticCompleteKeysAndMatchingFormats() throws {

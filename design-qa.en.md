@@ -4,8 +4,9 @@
 
 ## Review scope
 
-- Settings window: minimum size 800×650 and freely resizable
-- Pages: Connection & Voice, Button Mapping, Permissions & Privacy, and About
+- Settings window: default and minimum size 860×700, freely resizable
+- Pages: Connection & Voice, Button Mapping, Statistics, Permissions & Privacy, and About
+- Each page header shows only its primary title, without a redundant subtitle.
 - Repository screenshots:
   - [Connection & Voice](Screenshots/connection-and-voice.png)
   - [Button Mapping](Screenshots/key-mapping.png)
@@ -13,7 +14,7 @@
 
 ## Current implementation
 
-- The settings UI uses a narrow sidebar, header, and layered content areas. The primary actions on all four pages remain available at the minimum window size.
+- The settings UI uses a narrow sidebar, header, and layered content areas. The primary actions on all five pages remain available at the minimum window size. Pages remain scrollable without showing scroll bars.
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
 - It uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
 - The window keeps native traffic-light controls and a meaningful logical title while hiding the visible title and titlebar separator. Page backgrounds extend to the top, blank titlebar content remains draggable, and interactive content stays clear of the window controls.
@@ -22,7 +23,9 @@
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
 - The UI does not show a separate mute key that is absent from the physical remote.
 - Regular UI uses product language instead of remote model codes, Bluetooth voice protocol names, button protocol names, hexadecimal button numbers, or device-identifier terminology.
-- About keeps the current version, update check, and an off-by-default pre-release update toggle together, displays every language option at once, presents localized version history in a sheet, opens a glossary through the system Markdown app, and controls whether ordinary launches open the main window automatically.
+- Statistics uses a prominent large Day / Week / All selector aligned to the left, shows daily bars for the latest seven days, weekly bars for the latest eight weeks, and only all-time button and voice totals in the All view while preserving expansion space.
+- The Web Remote invite sheet prominently recommends the iOS app, hides the raw TestFlight URL, and provides actions to open the beta page or copy its link.
+- About keeps the version number, update check, and an off-by-default pre-release update toggle together, displays every language option at once, presents localized version history in a sheet, opens a glossary through the system Markdown app, and controls whether ordinary launches open the main window automatically. It does not include a Quit button.
 - All UI text uses stable semantic keys. Localized Markdown help falls back to English when the selected language has no matching document.
 
 ## Code locations

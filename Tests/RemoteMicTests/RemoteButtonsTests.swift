@@ -947,6 +947,30 @@ struct RemoteButtonsTests {
         #expect(settings.usageStatistics(for: .total, at: nextMonday, calendar: calendar) ==
             UsageStatistics(buttonPressCount: 4, voiceDuration: 480))
 
+        let dailyBuckets = settings.dailyUsageStatistics(
+            endingAt: nextMonday,
+            days: 8,
+            calendar: calendar
+        )
+        #expect(dailyBuckets.count == 8)
+        #expect(dailyBuckets.first?.statistics ==
+            UsageStatistics(buttonPressCount: 2, voiceDuration: 60))
+        #expect(dailyBuckets[6].statistics ==
+            UsageStatistics(buttonPressCount: 1, voiceDuration: 120))
+        #expect(dailyBuckets.last?.statistics ==
+            UsageStatistics(buttonPressCount: 1, voiceDuration: 300))
+
+        let weeklyBuckets = settings.weeklyUsageStatistics(
+            endingAt: nextMonday,
+            weeks: 2,
+            calendar: calendar
+        )
+        #expect(weeklyBuckets.count == 2)
+        #expect(weeklyBuckets[0].statistics ==
+            UsageStatistics(buttonPressCount: 3, voiceDuration: 180))
+        #expect(weeklyBuckets[1].statistics ==
+            UsageStatistics(buttonPressCount: 1, voiceDuration: 300))
+
         let restored = AppSettings(defaults: defaults)
         #expect(restored.usageStatistics(for: .thisWeek, at: sunday, calendar: calendar) ==
             UsageStatistics(buttonPressCount: 3, voiceDuration: 180))

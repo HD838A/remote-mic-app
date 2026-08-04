@@ -1,5 +1,11 @@
 # Version History
 
+## 1.6.11 (Pre-release)
+
+- Added a dedicated Statistics page with seven-day and eight-week bar charts plus a simplified all-time totals view.
+- Refined the window and About styling, increased the default window size, hid scroll indicators and redundant page subtitles, and highlighted the website and GitHub links.
+- Added a session-only invite code for the Mobile Web remote. Its invite sheet now recommends the iOS app first and provides TestFlight open and copy actions.
+
 ## 1.6.9 (Pre-release)
 
 - Requires an explicit **Connect Mac** click after scanning before a remote session is opened; microphone access still starts only while push-to-talk is held.

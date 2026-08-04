@@ -10,6 +10,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/BluetoothLifecycle.swift" \
   "$ROOT/Sources/RemoteMic/RemoteButtons.swift" \
   "$ROOT/Sources/RemoteMic/AppSettings.swift" \
+  "$ROOT/Sources/RemoteMic/AppLinks.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFunctionKeyLatch.swift" \
   "$ROOT/Sources/RemoteMic/RemoteVoiceFunctionMapper.swift" \

@@ -35,6 +35,13 @@ struct UsageStatistics: Equatable {
     let voiceDuration: TimeInterval
 }
 
+struct UsageStatisticsBucket: Equatable, Identifiable {
+    let startDate: Date
+    let statistics: UsageStatistics
+
+    var id: Date { startDate }
+}
+
 private struct DailyUsageStatistics: Codable {
     var buttonPressCount: UInt64 = 0
     var voiceDuration: TimeInterval = 0
@@ -377,29 +384,60 @@ final class AppSettings: ObservableObject {
             guard let week = Self.weekInterval(containing: date, calendar: calendar) else {
                 return UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
             }
-            return dailyStatistics.reduce(
-                into: UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
-            ) { result, entry in
-                guard
-                    let day = Self.date(fromDayKey: entry.key, calendar: calendar),
-                    day >= week.start,
-                    day < week.end
-                else { return }
-                result = UsageStatistics(
-                    buttonPressCount: Self.addingCount(
-                        entry.value.buttonPressCount,
-                        to: result.buttonPressCount
-                    ),
-                    voiceDuration: Self.addingDuration(
-                        entry.value.voiceDuration,
-                        to: result.voiceDuration
-                    )
-                )
-            }
+            return usageStatistics(in: week, calendar: calendar)
         case .total:
             return UsageStatistics(
                 buttonPressCount: totalButtonPressCount,
                 voiceDuration: totalVoiceDuration
+            )
+        }
+    }
+
+    func dailyUsageStatistics(
+        endingAt date: Date = Date(),
+        days: Int = 7,
+        calendar: Calendar = .current
+    ) -> [UsageStatisticsBucket] {
+        guard days > 0 else { return [] }
+        let today = calendar.startOfDay(for: date)
+        return (0..<days).reversed().compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else {
+                return nil
+            }
+            return UsageStatisticsBucket(
+                startDate: day,
+                statistics: Self.usageStatistics(
+                    from: dailyStatistics[Self.dayKey(for: day, calendar: calendar)]
+                )
+            )
+        }
+    }
+
+    func weeklyUsageStatistics(
+        endingAt date: Date = Date(),
+        weeks: Int = 8,
+        calendar: Calendar = .current
+    ) -> [UsageStatisticsBucket] {
+        guard
+            weeks > 0,
+            let currentWeek = Self.weekInterval(containing: date, calendar: calendar)
+        else { return [] }
+
+        return (0..<weeks).reversed().compactMap { offset in
+            guard
+                let start = calendar.date(
+                    byAdding: .day,
+                    value: -(offset * 7),
+                    to: currentWeek.start
+                ),
+                let end = calendar.date(byAdding: .day, value: 7, to: start)
+            else { return nil }
+            return UsageStatisticsBucket(
+                startDate: start,
+                statistics: usageStatistics(
+                    in: DateInterval(start: start, end: end),
+                    calendar: calendar
+                )
             )
         }
     }
@@ -624,6 +662,31 @@ final class AppSettings: ObservableObject {
             buttonPressCount: daily?.buttonPressCount ?? 0,
             voiceDuration: max(0, daily?.voiceDuration ?? 0)
         )
+    }
+
+    private func usageStatistics(
+        in interval: DateInterval,
+        calendar: Calendar
+    ) -> UsageStatistics {
+        dailyStatistics.reduce(
+            into: UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
+        ) { result, entry in
+            guard
+                let day = Self.date(fromDayKey: entry.key, calendar: calendar),
+                day >= interval.start,
+                day < interval.end
+            else { return }
+            result = UsageStatistics(
+                buttonPressCount: Self.addingCount(
+                    entry.value.buttonPressCount,
+                    to: result.buttonPressCount
+                ),
+                voiceDuration: Self.addingDuration(
+                    entry.value.voiceDuration,
+                    to: result.voiceDuration
+                )
+            )
+        }
     }
 
     private static func addingCount(_ value: UInt64, to total: UInt64) -> UInt64 {

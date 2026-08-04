@@ -176,8 +176,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(versionMenuItem())
         menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
         menu.addItem(menuItem("about.support.github", action: #selector(openGitHub)))
-        menu.addItem(menuItem("about.support.website_chinese", action: #selector(openChineseWebsite)))
-        menu.addItem(menuItem("about.support.website_english", action: #selector(openEnglishWebsite)))
+        menu.addItem(menuItem("about.support.website", action: #selector(openWebsite)))
         menu.addItem(.separator())
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
@@ -454,7 +453,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             .environmentObject(localization)
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 650),
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 700),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -466,7 +465,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.isMovableByWindowBackground = true
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 800, height: 650)
+        window.minSize = NSSize(width: 860, height: 700)
         window.setFrameAutosaveName("RemoteMicSettings")
         window.center()
         return NSWindowController(window: window)
@@ -566,18 +565,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     @objc private func openGitHub() {
-        guard let url = URL(string: "https://github.com/HD838A/remote-mic-app") else { return }
-        NSWorkspace.shared.open(url)
+        NSWorkspace.shared.open(AppLinks.githubRepository)
     }
 
-    @objc private func openChineseWebsite() {
-        guard let url = URL(string: "https://8586ai.com/") else { return }
-        NSWorkspace.shared.open(url)
-    }
-
-    @objc private func openEnglishWebsite() {
-        guard let url = URL(string: "https://8586ai.com/en/") else { return }
-        NSWorkspace.shared.open(url)
+    @objc private func openWebsite() {
+        NSWorkspace.shared.open(localization.localizedWebsiteURL)
     }
 
     @objc private func quit() {
