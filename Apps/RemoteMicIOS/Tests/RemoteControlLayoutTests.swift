@@ -54,6 +54,14 @@ final class RemoteControlLayoutTests: XCTestCase {
             MacAppInformationScreen.websiteURL(for: .english).absoluteString,
             "https://8586ai.com/en/"
         )
+        XCTAssertEqual(
+            MacAppInformationScreen.websiteDisplayText(for: .chinese),
+            "https://8586ai.com"
+        )
+        XCTAssertEqual(
+            MacAppInformationScreen.websiteDisplayText(for: .english),
+            "https://8586ai.com/en"
+        )
     }
 
     func testPublicTestFlightLinkRemainsStable() {

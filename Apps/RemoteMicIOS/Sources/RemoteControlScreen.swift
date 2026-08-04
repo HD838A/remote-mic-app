@@ -38,6 +38,7 @@ struct RemoteControlScreen: View {
 
                 VStack(spacing: spacing) {
                     header
+                        .offset(y: -7)
 
                     DPadView(
                         perform: perform,
@@ -66,7 +67,7 @@ struct RemoteControlScreen: View {
                 }
                 .frame(maxWidth: 520)
                 .padding(.horizontal, 20)
-                .padding(.vertical, isCompact ? 6 : 12)
+                .padding(.vertical, isCompact ? 2 : 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             }

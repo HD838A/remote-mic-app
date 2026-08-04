@@ -15,6 +15,11 @@ struct MacAppInformationScreen: View {
         language == .chinese ? chineseWebsiteURL : englishWebsiteURL
     }
 
+    static func websiteDisplayText(for language: AppLanguage) -> String {
+        websiteURL(for: language).absoluteString
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
     @EnvironmentObject private var connection: RemoteMacConnection
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguage) private var language
@@ -298,11 +303,7 @@ struct MacAppInformationScreen: View {
                     HStack(spacing: 7) {
                         Image(systemName: "link")
                             .font(.system(size: 15, weight: .semibold))
-                        Text(
-                            websiteURL.absoluteString
-                                .replacingOccurrences(of: "https://", with: "")
-                                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                        )
+                        Text(Self.websiteDisplayText(for: language))
                             .font(.system(size: 10.5, weight: .medium, design: .rounded))
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
@@ -433,14 +434,18 @@ struct MacAppInformationScreen: View {
                     Image(systemName: didCopyTestFlightLink ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 12, weight: .semibold))
 
+                    Text(language.text("TestFlight 公测"))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .fixedSize(horizontal: true, vertical: false)
+
                     Text(Self.testFlightURL.absoluteString)
-                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                        .minimumScaleFactor(0.86)
                 }
                 .foregroundStyle(RemotePalette.text.opacity(0.72))
                 .padding(.horizontal, 10)
-                .frame(maxWidth: 310, minHeight: 18, maxHeight: 18)
+                .frame(maxWidth: .infinity, minHeight: 18, maxHeight: 18)
             }
             .buttonStyle(TactileButtonStyle())
             .accessibilityLabel(

@@ -71,6 +71,7 @@
 "复制官网链接" = "Copy website link";
 "语音仅在按住时传输，不会上传。" = "Audio is sent only while held and is never uploaded.";
 "切换到%@" = "Switch to %@";
+"TestFlight 公测" = "TestFlight Beta:";
 "复制 TestFlight 公测链接" = "Copy TestFlight public beta link";
 "TestFlight 公测链接已复制" = "TestFlight public beta link copied";
 "App 已打开" = "App Open";
