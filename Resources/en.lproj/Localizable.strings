@@ -282,6 +282,8 @@
 "about.version.history" = "Version History";
 "help.glossary.open" = "Glossary";
 "about.support.github" = "GitHub";
+"about.support.website_chinese" = "Chinese Website";
+"about.support.website_english" = "English Website";
 "common.action.close" = "Close";
 "about.version.history_load_failed" = "Version history could not be loaded.";
 "about.preferences.open_main_window_at_launch" = "Open main window at launch";

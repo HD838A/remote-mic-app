@@ -30,7 +30,7 @@ html, body, #root {
   margin: 0;
   background: var(--page-background);
 }
-body { min-height: 100dvh; overflow-x: hidden; overscroll-behavior-x: none; }
+body { min-height: 100svh; overflow-x: hidden; overscroll-behavior-x: none; -webkit-overflow-scrolling: touch; }
 button { font: inherit; color: inherit; }
 img { -webkit-user-drag: none; }
 button:focus-visible { outline: 3px solid rgba(31, 118, 181, 0.58); outline-offset: 3px; }
@@ -38,7 +38,7 @@ button:disabled { opacity: 0.52; }
 
 .remote-shell {
   width: 100%;
-  min-height: 100dvh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -48,15 +48,16 @@ button:disabled { opacity: 0.52; }
 .remote-surface {
   position: relative;
   width: min(100%, 520px);
-  height: 100dvh;
+  height: 100svh;
   min-height: 620px;
   max-height: 980px;
   display: grid;
   grid-template-rows: 68px minmax(190px, 1fr) auto minmax(124px, 0.62fr) auto;
-  gap: clamp(8px, 1.5dvh, 16px);
+  gap: clamp(8px, 1.5svh, 16px);
   padding: max(8px, env(safe-area-inset-top)) 20px max(8px, env(safe-area-inset-bottom));
   overflow: hidden;
   background: var(--page-background);
+  contain: layout paint style;
 }
 
 .mac-app-guide {
@@ -87,6 +88,9 @@ button:disabled { opacity: 0.52; }
   text-decoration: none;
 }
 .download-link:active { transform: translateY(2px); }
+.official-sites { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.official-sites a { min-height: 34px; border: 1px solid rgba(55,63,69,0.18); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: rgba(31,41,49,0.78); background: rgba(255,255,255,0.25); font-size: 11px; font-weight: 650; text-decoration: none; }
+.official-sites a:active { background: rgba(255,255,255,0.42); }
 .connection-tutorial { margin-top: 14px; }
 .connection-tutorial h3 { margin: 0 0 7px; font-size: 14px; }
 .connection-tutorial ol { margin: 0; padding-left: 22px; color: rgba(31,41,49,0.74); font-size: 12px; font-weight: 540; line-height: 1.55; }
@@ -198,7 +202,7 @@ button:disabled { opacity: 0.52; }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   justify-items: center;
-  gap: clamp(8px, 1.4dvh, 15px) clamp(14px, 6vw, 38px);
+  gap: clamp(8px, 1.4svh, 15px) clamp(14px, 6vw, 38px);
   padding: 0 8px;
 }
 
@@ -280,7 +284,7 @@ button:disabled { opacity: 0.52; }
 }
 
 @media (min-width: 521px) {
-  .remote-surface { border-radius: 28px; height: min(900px, calc(100dvh - 28px)); }
+  .remote-surface { border-radius: 28px; height: min(900px, calc(100svh - 28px)); }
 }
 
 @media (prefers-reduced-motion: no-preference) {

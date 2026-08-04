@@ -67,6 +67,13 @@ struct RemoteControlScreen: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, isCompact ? 6 : 12)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if proxy.safeAreaInsets.top >= 44 {
+                    CutoutEasterEgg()
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 2)
+                        .zIndex(1)
+                }
             }
         }
         .preferredColorScheme(.light)

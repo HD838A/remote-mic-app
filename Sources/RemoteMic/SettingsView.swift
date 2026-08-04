@@ -1094,6 +1094,18 @@ struct SettingsView: View {
                                     }
                                     .compatibilityButtonStyle(.standard)
 
+                                    Link(destination: URL(string: "https://8586ai.com/")!) {
+                                        Label("about.support.website_chinese", systemImage: "globe.asia.australia")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .compatibilityButtonStyle(.standard)
+
+                                    Link(destination: URL(string: "https://8586ai.com/en/")!) {
+                                        Label("about.support.website_english", systemImage: "globe")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .compatibilityButtonStyle(.standard)
+
                                     Button {
                                         NSApp.terminate(nil)
                                     } label: {

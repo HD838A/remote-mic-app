@@ -2,7 +2,9 @@
 
 [English](README.en.md)
 
-官方网站：[8586ai.com](https://8586ai.com/)
+中文官网：[8586ai.com](https://8586ai.com/)
+
+英文官网：[8586ai.com/en](https://8586ai.com/en/)
 
 ![无线麦——为 Vibe Coding 而生的语音遥控器](Screenshots/Remote-Mic-Introduce-1.png)
 

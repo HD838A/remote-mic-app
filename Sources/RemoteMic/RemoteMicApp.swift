@@ -176,6 +176,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(versionMenuItem())
         menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
         menu.addItem(menuItem("about.support.github", action: #selector(openGitHub)))
+        menu.addItem(menuItem("about.support.website_chinese", action: #selector(openChineseWebsite)))
+        menu.addItem(menuItem("about.support.website_english", action: #selector(openEnglishWebsite)))
         menu.addItem(.separator())
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
@@ -565,6 +567,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func openGitHub() {
         guard let url = URL(string: "https://github.com/HD838A/remote-mic-app") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func openChineseWebsite() {
+        guard let url = URL(string: "https://8586ai.com/") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func openEnglishWebsite() {
+        guard let url = URL(string: "https://8586ai.com/en/") else { return }
         NSWorkspace.shared.open(url)
     }
 

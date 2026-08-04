@@ -18,6 +18,7 @@ import {
   VolumeUpIcon,
 } from "./icons";
 import { triggerHaptic, type WebHaptic } from "./haptics";
+import appLogoURL from "./assets/app-logo.png";
 
 const initialState: ConnectionState = {
   phase: "readyToConnect",
@@ -108,7 +109,7 @@ function MacAppGuide(): ReactElement {
   return (
     <aside className="mac-app-guide" aria-labelledby="mac-app-guide-title">
       <div className="guide-heading">
-        <img src="/app-logo.png" alt="无线麦 App Logo" draggable={false} />
+        <img src={appLogoURL} alt="无线麦 App Logo" draggable={false} width="42" height="42" decoding="async" />
         <div>
           <h2 id="mac-app-guide-title">在 Mac 上安装无线麦</h2>
           <p>Apple Silicon · macOS 14 或更高版本</p>
@@ -123,6 +124,10 @@ function MacAppGuide(): ReactElement {
       >
         下载最新版 Mac App
       </a>
+      <nav className="official-sites" aria-label="官方网站">
+        <a href="https://8586ai.com/" target="_blank" rel="noreferrer">中文官网</a>
+        <a href="https://8586ai.com/en/" target="_blank" rel="noreferrer">English Website</a>
+      </nav>
       <div className="connection-tutorial" aria-label="连接教程">
         <h3>连接教程</h3>
         <ol>
@@ -163,7 +168,7 @@ function ConnectionStatus({ state }: { state: ConnectionState }): ReactElement {
 function BrandMark(): ReactElement {
   return (
     <span className="brand-mark" aria-label="无线麦">
-      <img src="/app-logo.png" alt="" draggable={false} />
+      <img src={appLogoURL} alt="" draggable={false} width="18" height="18" />
       <span>无线麦</span>
     </span>
   );

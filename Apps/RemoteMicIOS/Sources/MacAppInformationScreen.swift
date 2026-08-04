@@ -9,6 +9,8 @@ struct MacAppInformationScreen: View {
     }
 
     private static let downloadURL = "https://github.com/HD838A/remote-mic-app/releases/latest"
+    private static let chineseWebsiteURL = URL(string: "https://8586ai.com/")!
+    private static let englishWebsiteURL = URL(string: "https://8586ai.com/en/")!
 
     @EnvironmentObject private var connection: RemoteMacConnection
     @Environment(\.dismiss) private var dismiss
@@ -279,6 +281,13 @@ struct MacAppInformationScreen: View {
                     Text("Apple Silicon · macOS 14 或更高版本")
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(RemotePalette.text.opacity(0.62))
+
+                    HStack(spacing: 10) {
+                        Link("中文官网", destination: Self.chineseWebsiteURL)
+                        Link("English", destination: Self.englishWebsiteURL)
+                    }
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(RemotePalette.text.opacity(0.78))
                 }
 
                 ShareLink(

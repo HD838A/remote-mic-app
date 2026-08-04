@@ -282,6 +282,8 @@
 "about.version.history" = "版本历史";
 "help.glossary.open" = "术语表";
 "about.support.github" = "GitHub";
+"about.support.website_chinese" = "中文官网";
+"about.support.website_english" = "英文官网";
 "common.action.close" = "关闭";
 "about.version.history_load_failed" = "无法加载版本历史。";
 "about.preferences.open_main_window_at_launch" = "启动时自动打开主面板";

@@ -2,7 +2,9 @@
 
 [简体中文](README.md)
 
-Official website: [8586ai.com](https://8586ai.com/en/)
+Chinese website: [8586ai.com](https://8586ai.com/)
+
+English website: [8586ai.com/en](https://8586ai.com/en/)
 
 ![Remote Mic — a voice remote for Vibe Coding](Screenshots/Remote-Mic-Introduce-1.png)
 

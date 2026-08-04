@@ -6,25 +6,15 @@ struct RemoteMicIOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            GeometryReader { proxy in
-                ZStack(alignment: .top) {
-                    NavigationStack {
-                        RemoteControlScreen()
-                    }
-
-                    if proxy.safeAreaInsets.top >= 44 {
-                        CutoutEasterEgg()
-                            .padding(.top, 2)
-                            .zIndex(1)
-                    }
-                }
+            NavigationStack {
+                RemoteControlScreen()
             }
             .environmentObject(connection)
         }
     }
 }
 
-private struct CutoutEasterEgg: View {
+struct CutoutEasterEgg: View {
     var body: some View {
         HStack(spacing: 3) {
             Image("AppLogo")
