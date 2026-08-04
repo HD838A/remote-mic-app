@@ -14,7 +14,7 @@ struct RemoteMicIOSApp: App {
 
                     if proxy.safeAreaInsets.top >= 44 {
                         CutoutEasterEgg()
-                            .offset(y: -proxy.safeAreaInsets.top + 9)
+                            .padding(.top, 2)
                             .zIndex(1)
                     }
                 }
@@ -31,13 +31,13 @@ private struct CutoutEasterEgg: View {
                 .resizable()
                 .scaledToFit()
                 .clipShape(AppIconRoundedRectangle())
-                .frame(width: 14, height: 14)
+                .frame(width: 20, height: 20)
 
             Text("无线麦")
-                .font(.system(size: 8, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(RemotePalette.text)
         }
-        .frame(height: 20)
+        .frame(height: 24)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
