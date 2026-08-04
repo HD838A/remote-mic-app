@@ -243,6 +243,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let version = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String
+        webRemoteState = .connecting
         webRemoteClient.start(
             relayURL: relayURL,
             macName: Host.current().localizedName ?? "Mac",

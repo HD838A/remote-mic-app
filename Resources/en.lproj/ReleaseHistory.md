@@ -1,5 +1,11 @@
 # Version History
 
+## 1.7.0
+
+- Fixed production builds that omitted the Mobile Web relay endpoint; release builds and final App verification now fail when the endpoint is missing.
+- Clarified that the iOS TestFlight beta does not require an invite code, and fixed duplicate Return submission and unreliable QR-sheet transitions.
+- Removed the unnecessary statistics-period animation and simplified the local-data messaging on About.
+
 ## 1.6.11 (Pre-release)
 
 - Added a dedicated Statistics page with seven-day and eight-week bar charts plus a simplified all-time totals view.

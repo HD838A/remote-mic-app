@@ -11,6 +11,7 @@ APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 SPARKLE_FRAMEWORK="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
+REQUIRE_WEB_REMOTE_CONFIGURATION="${REQUIRE_WEB_REMOTE_CONFIGURATION:-0}"
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
@@ -22,6 +23,10 @@ cd "$ROOT"
 case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
   *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_WEB_REMOTE_CONFIGURATION" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_WEB_REMOTE_CONFIGURATION must be 0 or 1"; exit 1 ;;
 esac
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; then
   print -u2 "Developer ID Application signing is required"
@@ -49,6 +54,14 @@ if [[ -n "${REMOTE_WEB_RELAY_URL:-}" ]]; then
   plutil -remove RemoteWebRelayURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
   plutil -insert RemoteWebRelayURL -string "$REMOTE_WEB_RELAY_URL" \
     "$APP_DIR/Contents/Info.plist"
+fi
+if [[ "$REQUIRE_WEB_REMOTE_CONFIGURATION" == "1" ]]; then
+  RELAY_URL="$(plutil -extract RemoteWebRelayURL raw -o - \
+    "$APP_DIR/Contents/Info.plist" 2>/dev/null || true)"
+  if [[ "$RELAY_URL" != wss://?*/ws ]]; then
+    print -u2 "A production wss:// relay URL ending in /ws is required"
+    exit 1
+  fi
 fi
 mkdir -p "$APP_DIR/Contents/Frameworks"
 ditto --norsrc --noextattr --noqtn --noacl \

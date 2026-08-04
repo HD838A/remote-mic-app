@@ -133,6 +133,11 @@ test -n "$(plutil -extract SUPublicEDKey raw -o - "$PLIST")"
 
 codesign --verify --deep --strict "$APP"
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
+  RELAY_URL="$(plutil -extract RemoteWebRelayURL raw -o - "$PLIST" 2>/dev/null || true)"
+  if [[ "$RELAY_URL" != wss://?*/ws ]]; then
+    print -u2 "Developer ID app is missing a production Web Remote relay URL"
+    exit 1
+  fi
   SIGNATURE_DETAILS="$(codesign -dvvv "$APP" 2>&1)"
   print -r -- "$SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:'
   print -r -- "$SIGNATURE_DETAILS" | rg -q "^TeamIdentifier=$EXPECTED_DEVELOPER_TEAM_ID$"

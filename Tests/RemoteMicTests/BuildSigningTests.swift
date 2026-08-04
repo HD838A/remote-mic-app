@@ -33,4 +33,30 @@ struct BuildSigningTests {
         )
         #expect(!adHocSigningSource.contains("--options runtime"))
     }
+
+    @Test func productionReleaseRequiresAndVerifiesWebRemoteConfiguration() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let notarizeSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/notarize-release.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(buildSource.contains("REQUIRE_WEB_REMOTE_CONFIGURATION"))
+        #expect(buildSource.contains("A production wss:// relay URL ending in /ws is required"))
+        #expect(notarizeSource.contains("Apps/MobileWeb/.private/production.env"))
+        #expect(notarizeSource.contains("export REQUIRE_WEB_REMOTE_CONFIGURATION=1"))
+        #expect(notarizeSource.contains("export REMOTE_WEB_RELAY_URL"))
+        #expect(verifySource.contains("Developer ID app is missing a production Web Remote relay URL"))
+    }
 }

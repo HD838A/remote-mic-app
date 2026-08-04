@@ -157,7 +157,7 @@
 "connection.web.invite.description" = "The Mobile Web connection opens after the code is verified.";
 "connection.web.invite.ios_eyebrow" = "iOS · TestFlight Beta";
 "connection.web.invite.ios_title" = "For the best experience, use the iOS app";
-"connection.web.invite.ios_description" = "Install the Remote Mic iOS beta for a more convenient and complete phone remote experience.";
+"connection.web.invite.ios_description" = "The iOS beta does not require an invite code. Install the Remote Mic iOS beta for a more convenient and complete phone remote experience.";
 "connection.web.invite.testflight_open" = "Open TestFlight Beta";
 "connection.web.invite.placeholder" = "Invite code";
 "connection.web.invite.unlock" = "Open Connection";

@@ -22,6 +22,7 @@ SPARKLE_PRIVATE_KEY_FILE="${SPARKLE_PRIVATE_KEY_FILE:?Set SPARKLE_PRIVATE_KEY_FI
 NOTARY_PROFILE="${NOTARY_PROFILE:-RemoteMic-notary}"
 NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
+PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
 DOWNLOAD_PREFIX="https://github.com/HD838A/remote-mic-app/releases/download/$RELEASE_TAG/"
 RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG"
 GENERATE_APPCAST="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
@@ -49,6 +50,14 @@ if [[ "$INSTALLER_SIGNING_IDENTITY" != "Developer ID Installer: "* ]]; then
 fi
 if [[ ! -r "$SPARKLE_PRIVATE_KEY_FILE" ]]; then
   print -u2 "SPARKLE_PRIVATE_KEY_FILE is not readable"
+  exit 1
+fi
+if [[ -z "${REMOTE_WEB_RELAY_URL:-}" && -r "$PRIVATE_PRODUCTION_ENV" ]]; then
+  REMOTE_WEB_RELAY_URL="$(/usr/bin/sed -n 's/^REMOTE_WEB_RELAY_URL=//p' \
+    "$PRIVATE_PRODUCTION_ENV" | /usr/bin/tail -n 1)"
+fi
+if [[ "${REMOTE_WEB_RELAY_URL:-}" != wss://?*/ws ]]; then
+  print -u2 "REMOTE_WEB_RELAY_URL must be a production wss:// URL ending in /ws"
   exit 1
 fi
 for command in codesign ditto security xcrun; do
@@ -103,6 +112,8 @@ export CODE_SIGN_IDENTITY
 export INSTALLER_SIGNING_IDENTITY
 export EXPECTED_DEVELOPER_TEAM_ID
 export REQUIRE_DEVELOPER_ID_SIGNING=1
+export REQUIRE_WEB_REMOTE_CONFIGURATION=1
+export REMOTE_WEB_RELAY_URL
 export REQUIRE_NOTARIZATION=0
 
 "$ROOT/scripts/build-app.sh"

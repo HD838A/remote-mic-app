@@ -157,7 +157,7 @@
 "connection.web.invite.description" = "验证成功后才会打开手机网页版连接。";
 "connection.web.invite.ios_eyebrow" = "iOS · TestFlight 公测";
 "connection.web.invite.ios_title" = "推荐使用 iOS App 体验";
-"connection.web.invite.ios_description" = "安装无线麦 iOS 公测版，获得更方便、完整的手机遥控体验。";
+"connection.web.invite.ios_description" = "iOS 公测不需要邀请码。安装无线麦 iOS 公测版，即可获得更方便、完整的手机遥控体验。";
 "connection.web.invite.testflight_open" = "打开 TestFlight 公测";
 "connection.web.invite.placeholder" = "邀请码";
 "connection.web.invite.unlock" = "打开连接";

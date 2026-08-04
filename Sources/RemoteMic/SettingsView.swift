@@ -160,7 +160,12 @@ struct SettingsView: View {
             Text("connection.trusted_devices.clear_confirm.message")
         }
         .sheet(isPresented: $isWebRemoteInvitePresented) {
-            webRemoteInviteSheet
+            if isWebRemoteInviteAuthorized {
+                WebRemoteSessionView(model: model)
+                    .environmentObject(localization)
+            } else {
+                webRemoteInviteSheet
+            }
         }
         .alert(
             localization.text("connection.web.invite.invalid_title"),
@@ -241,7 +246,6 @@ struct SettingsView: View {
                 text: $webRemoteInviteCode
             )
             .textFieldStyle(.roundedBorder)
-            .onSubmit(validateWebRemoteInviteCode)
 
             HStack {
                 Spacer()
@@ -978,9 +982,7 @@ struct SettingsView: View {
                             HStack(spacing: 8) {
                                 ForEach(UsageStatisticsPeriod.allCases) { period in
                                     Button {
-                                        withAnimation(.easeInOut(duration: 0.16)) {
-                                            selectedUsagePeriod = period
-                                        }
+                                        selectedUsagePeriod = period
                                     } label: {
                                         Text(localization.text(usagePeriodLocalizationKey(period)))
                                             .font(.system(size: 15, weight: .semibold))
@@ -1117,11 +1119,6 @@ struct SettingsView: View {
                                     Text("about.page.hero_description")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
-                                    StatusPill(
-                                        text: localization.text("about.privacy.local_only"),
-                                        tint: .green
-                                    )
-
                                     HStack(spacing: 10) {
                                         Link(destination: localization.localizedWebsiteURL) {
                                             Label("about.support.website", systemImage: "globe")
@@ -1583,11 +1580,14 @@ struct SettingsView: View {
             return
         }
         webRemoteInviteCode = ""
-        isWebRemoteInviteAuthorized = true
-        isWebRemoteInvitePresented = false
-        DispatchQueue.main.async {
-            openWebRemoteSession()
+        if !model.webRemoteState.isEnabled {
+            model.enableWebRemoteConnection()
         }
+        guard model.webRemoteState.isEnabled else {
+            isWebRemoteInvitePresented = false
+            return
+        }
+        isWebRemoteInviteAuthorized = true
     }
 
     private func copyTestFlightPublicBetaLink() {
@@ -1602,6 +1602,7 @@ struct SettingsView: View {
         if !model.webRemoteState.isEnabled {
             model.enableWebRemoteConnection()
         }
+        guard model.webRemoteState.isEnabled else { return }
         isWebRemoteSessionPresented = true
     }
 

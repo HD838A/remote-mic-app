@@ -21,6 +21,13 @@ struct WebRemoteProtocolTests {
         #expect(url.host == "environment.example")
     }
 
+    @Test func missingProductionConfigurationDoesNotCreateARelayURL() {
+        #expect(WebRemoteConfiguration.relayURL(
+            environment: [:],
+            infoDictionary: [:]
+        ) == nil)
+    }
+
     @Test func audioFrameDecodesSequenceAndLittleEndianSamples() throws {
         let data = Data([
             WebRemoteAudioFrame.type,
