@@ -12,6 +12,8 @@ Remote Mic is a macOS app that turns a Xiaomi Bluetooth Remote 2 Pro into a wire
 
 Hold the remote voice button to speak. The direction, OK, Back, Home, Menu, TV, Power, and volume buttons can control macOS or launch commonly used apps.
 
+Remote Mic is built natively with SwiftUI. While running in the background, it uses less than 0.5% CPU and around 50 MB of memory—lighter than a single Chrome tab.
+
 ![Connection and Voice settings](Screenshots/connection-and-voice.png)
 
 ## Requirements
