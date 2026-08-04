@@ -733,6 +733,75 @@ struct RemoteButtonsTests {
         #expect(!targetSettings.checksForPreReleaseUpdates)
     }
 
+    @Test func localUsageStatisticsSeparatesTodayWeekAndTotalAndPersists() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        calendar.firstWeekday = 2
+        calendar.minimumDaysInFirstWeek = 4
+        let monday = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 3,
+            hour: 10
+        )))
+        let sunday = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 9,
+            hour: 18
+        )))
+        let nextMonday = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 10,
+            hour: 9
+        )))
+
+        let settings = AppSettings(defaults: defaults)
+        settings.recordButtonPress(at: monday, calendar: calendar)
+        settings.recordButtonPress(at: monday, calendar: calendar)
+        settings.recordVoiceDuration(60, at: monday, calendar: calendar)
+        settings.recordButtonPress(at: sunday, calendar: calendar)
+        settings.recordVoiceDuration(120, at: sunday, calendar: calendar)
+        settings.recordButtonPress(at: nextMonday, calendar: calendar)
+        settings.recordVoiceDuration(300, at: nextMonday, calendar: calendar)
+
+        #expect(settings.usageStatistics(for: .today, at: sunday, calendar: calendar) ==
+            UsageStatistics(buttonPressCount: 1, voiceDuration: 120))
+        #expect(settings.usageStatistics(for: .thisWeek, at: sunday, calendar: calendar) ==
+            UsageStatistics(buttonPressCount: 3, voiceDuration: 180))
+        #expect(settings.usageStatistics(for: .today, at: nextMonday, calendar: calendar) ==
+            UsageStatistics(buttonPressCount: 1, voiceDuration: 300))
+        #expect(settings.usageStatistics(for: .thisWeek, at: nextMonday, calendar: calendar) ==
+            UsageStatistics(buttonPressCount: 1, voiceDuration: 300))
+        #expect(settings.usageStatistics(for: .total, at: nextMonday, calendar: calendar) ==
+            UsageStatistics(buttonPressCount: 4, voiceDuration: 480))
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.usageStatistics(for: .thisWeek, at: sunday, calendar: calendar) ==
+            UsageStatistics(buttonPressCount: 3, voiceDuration: 180))
+        #expect(restored.usageStatistics(for: .total, at: nextMonday, calendar: calendar) ==
+            UsageStatistics(buttonPressCount: 4, voiceDuration: 480))
+    }
+
+    @Test func legacyUsageTotalsRemainAvailableWithoutInventingDailyHistory() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(NSNumber(value: UInt64(42)), forKey: "usage.totalButtonPressCount")
+        defaults.set(180.0, forKey: "usage.totalVoiceDuration")
+
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.usageStatistics(for: .today) ==
+            UsageStatistics(buttonPressCount: 0, voiceDuration: 0))
+        #expect(settings.usageStatistics(for: .total) ==
+            UsageStatistics(buttonPressCount: 42, voiceDuration: 180))
+    }
+
     @Test func completedUpdateDetectionCoversBuildIncreaseAndExistingInstallMigration() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

@@ -73,6 +73,7 @@ struct SettingsView: View {
 
     @State private var selectedSection: SettingsSection = .connection
     @State private var selectedRemoteButton: RemoteButton = .ok
+    @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
     @State private var shortcutEditingTarget: ShortcutEditingTarget?
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -887,6 +888,15 @@ struct SettingsView: View {
                                         .foregroundStyle(.green)
                                 }
 
+                                Picker("", selection: $selectedUsagePeriod) {
+                                    ForEach(UsageStatisticsPeriod.allCases) { period in
+                                        Text(localization.text(usagePeriodLocalizationKey(period)))
+                                            .tag(period)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .labelsHidden()
+
                                 HStack(spacing: 12) {
                                     UsageStatisticCard(
                                         systemImage: "button.programmable",
@@ -1102,13 +1112,13 @@ struct SettingsView: View {
     }
 
     private var buttonPressCountText: String {
-        localizedNumber(settings.totalButtonPressCount)
+        localizedNumber(selectedUsageStatistics.buttonPressCount)
     }
 
     private var voiceDurationText: String {
         let totalSeconds = max(
             0,
-            Int(min(settings.totalVoiceDuration.rounded(), Double(Int.max)))
+            Int(min(selectedUsageStatistics.voiceDuration.rounded(), Double(Int.max)))
         )
         let hours = totalSeconds / 3_600
         let minutes = totalSeconds % 3_600 / 60
@@ -1132,6 +1142,18 @@ struct SettingsView: View {
             locale: localization.locale,
             arguments: [localizedNumber(UInt64(seconds))]
         )
+    }
+
+    private var selectedUsageStatistics: UsageStatistics {
+        settings.usageStatistics(for: selectedUsagePeriod)
+    }
+
+    private func usagePeriodLocalizationKey(_ period: UsageStatisticsPeriod) -> String {
+        switch period {
+        case .today: return "about.usage.period.today"
+        case .thisWeek: return "about.usage.period.this_week"
+        case .total: return "about.usage.period.total"
+        }
     }
 
     private func localizedNumber(_ value: UInt64) -> String {

@@ -20,6 +20,24 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
 }
 
+enum UsageStatisticsPeriod: String, CaseIterable, Identifiable {
+    case today
+    case thisWeek
+    case total
+
+    var id: String { rawValue }
+}
+
+struct UsageStatistics: Equatable {
+    let buttonPressCount: UInt64
+    let voiceDuration: TimeInterval
+}
+
+private struct DailyUsageStatistics: Codable {
+    var buttonPressCount: UInt64 = 0
+    var voiceDuration: TimeInterval = 0
+}
+
 final class AppSettings: ObservableObject {
     private enum Keys {
         static let gainDB = "gainDB"
@@ -37,6 +55,7 @@ final class AppSettings: ObservableObject {
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
         static let totalVoiceDuration = "usage.totalVoiceDuration"
+        static let dailyStatistics = "usage.dailyStatistics"
         static let trustedPhoneIdentityFingerprints = "security.trustedPhoneIdentityFingerprints"
     }
 
@@ -92,6 +111,14 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var totalVoiceDuration: TimeInterval {
         didSet { defaults.set(totalVoiceDuration, forKey: Keys.totalVoiceDuration) }
+    }
+
+    @Published private var dailyStatistics: [String: DailyUsageStatistics] {
+        didSet {
+            if let data = try? JSONEncoder().encode(dailyStatistics) {
+                defaults.set(data, forKey: Keys.dailyStatistics)
+            }
+        }
     }
 
     @Published private(set) var trustedPhoneIdentityFingerprints: Set<String> {
@@ -183,6 +210,9 @@ final class AppSettings: ObservableObject {
         totalVoiceDuration = defaults.object(forKey: Keys.totalVoiceDuration) == nil
             ? 0
             : max(0, defaults.double(forKey: Keys.totalVoiceDuration))
+        dailyStatistics = defaults.data(forKey: Keys.dailyStatistics)
+            .flatMap { try? JSONDecoder().decode([String: DailyUsageStatistics].self, from: $0) }
+            ?? [:]
         trustedPhoneIdentityFingerprints = Set(
             defaults.stringArray(forKey: Keys.trustedPhoneIdentityFingerprints) ?? []
         )
@@ -263,14 +293,72 @@ final class AppSettings: ObservableObject {
         secondaryButtonBindings = [:]
     }
 
-    func recordButtonPress() {
-        guard totalButtonPressCount < .max else { return }
-        totalButtonPressCount += 1
+    func recordButtonPress(at date: Date = Date(), calendar: Calendar = .current) {
+        if totalButtonPressCount < .max {
+            totalButtonPressCount += 1
+        }
+
+        let key = Self.dayKey(for: date, calendar: calendar)
+        var statistics = dailyStatistics[key] ?? DailyUsageStatistics()
+        if statistics.buttonPressCount < .max {
+            statistics.buttonPressCount += 1
+            dailyStatistics[key] = statistics
+        }
     }
 
-    func recordVoiceDuration(_ duration: TimeInterval) {
+    func recordVoiceDuration(
+        _ duration: TimeInterval,
+        at date: Date = Date(),
+        calendar: Calendar = .current
+    ) {
         guard duration.isFinite, duration > 0 else { return }
-        totalVoiceDuration += duration
+        totalVoiceDuration = Self.addingDuration(duration, to: totalVoiceDuration)
+
+        let key = Self.dayKey(for: date, calendar: calendar)
+        var statistics = dailyStatistics[key] ?? DailyUsageStatistics()
+        statistics.voiceDuration = Self.addingDuration(duration, to: statistics.voiceDuration)
+        dailyStatistics[key] = statistics
+    }
+
+    func usageStatistics(
+        for period: UsageStatisticsPeriod,
+        at date: Date = Date(),
+        calendar: Calendar = .current
+    ) -> UsageStatistics {
+        switch period {
+        case .today:
+            return Self.usageStatistics(
+                from: dailyStatistics[Self.dayKey(for: date, calendar: calendar)]
+            )
+        case .thisWeek:
+            guard let week = Self.weekInterval(containing: date, calendar: calendar) else {
+                return UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
+            }
+            return dailyStatistics.reduce(
+                into: UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
+            ) { result, entry in
+                guard
+                    let day = Self.date(fromDayKey: entry.key, calendar: calendar),
+                    day >= week.start,
+                    day < week.end
+                else { return }
+                result = UsageStatistics(
+                    buttonPressCount: Self.addingCount(
+                        entry.value.buttonPressCount,
+                        to: result.buttonPressCount
+                    ),
+                    voiceDuration: Self.addingDuration(
+                        entry.value.voiceDuration,
+                        to: result.voiceDuration
+                    )
+                )
+            }
+        case .total:
+            return UsageStatistics(
+                buttonPressCount: totalButtonPressCount,
+                voiceDuration: totalVoiceDuration
+            )
+        }
     }
 
     func isPhoneIdentityTrusted(_ fingerprint: String) -> Bool {
@@ -404,6 +492,58 @@ final class AppSettings: ObservableObject {
         if let data = try? JSONEncoder().encode(raw) {
             defaults.set(data, forKey: Keys.secondaryButtonBindings)
         }
+    }
+
+    private static func dayKey(for date: Date, calendar: Calendar) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            components.year ?? 0,
+            components.month ?? 0,
+            components.day ?? 0
+        )
+    }
+
+    private static func date(fromDayKey key: String, calendar: Calendar) -> Date? {
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
+    private static func weekInterval(
+        containing date: Date,
+        calendar: Calendar
+    ) -> DateInterval? {
+        let startOfDay = calendar.startOfDay(for: date)
+        let weekday = calendar.component(.weekday, from: startOfDay)
+        let daysSinceWeekStart = (weekday - calendar.firstWeekday + 7) % 7
+        guard
+            let start = calendar.date(byAdding: .day, value: -daysSinceWeekStart, to: startOfDay),
+            let end = calendar.date(byAdding: .day, value: 7, to: start)
+        else { return nil }
+        return DateInterval(start: start, end: end)
+    }
+
+    private static func usageStatistics(
+        from daily: DailyUsageStatistics?
+    ) -> UsageStatistics {
+        UsageStatistics(
+            buttonPressCount: daily?.buttonPressCount ?? 0,
+            voiceDuration: max(0, daily?.voiceDuration ?? 0)
+        )
+    }
+
+    private static func addingCount(_ value: UInt64, to total: UInt64) -> UInt64 {
+        let (result, overflow) = total.addingReportingOverflow(value)
+        return overflow ? .max : result
+    }
+
+    private static func addingDuration(
+        _ duration: TimeInterval,
+        to total: TimeInterval
+    ) -> TimeInterval {
+        let result = max(0, total) + max(0, duration)
+        return result.isFinite ? result : .greatestFiniteMagnitude
     }
 
     static let defaultBindings: [RemoteButton: ButtonAction] = [

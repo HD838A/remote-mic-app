@@ -260,7 +260,10 @@
 "about.usage.description" = "只记录使用量，不记录、保存或分析任何语音内容。";
 "about.usage.button_count" = "按键次数";
 "about.usage.voice_duration" = "语音时长";
-"about.usage.details" = "统计仅保存在这台 Mac 上，配置导出不会包含这些数据。按键次数包含应用识别的普通按键与语音键。";
+"about.usage.period.today" = "今日";
+"about.usage.period.this_week" = "本周";
+"about.usage.period.total" = "累计";
+"about.usage.details" = "统计仅保存在这台 Mac 上，配置导出不会包含这些数据。按键次数包含应用识别的普通按键与语音键；跨日语音计入结束当天。";
 "about.configuration.title" = "个性化配置";
 "about.configuration.description" = "迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示、启动与更新通道设置。";
 "about.configuration.export" = "导出配置…";

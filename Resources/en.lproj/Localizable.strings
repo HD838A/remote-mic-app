@@ -257,10 +257,13 @@
 "about.page.hero_description" = "Turn your remote into an always-ready voice and shortcut controller for your Mac.";
 "about.privacy.local_only" = "Data stays on this Mac";
 "about.usage.title" = "Local Usage";
-"about.usage.description" = "Only usage totals are counted. Voice content is never recorded, stored, or analyzed.";
+"about.usage.description" = "Only usage amounts are counted. Voice content is never recorded, stored, or analyzed.";
 "about.usage.button_count" = "Button Presses";
 "about.usage.voice_duration" = "Voice Duration";
-"about.usage.details" = "Usage totals stay on this Mac and are excluded from configuration exports. Button presses include ordinary buttons recognized by the app and the voice button.";
+"about.usage.period.today" = "Today";
+"about.usage.period.this_week" = "This Week";
+"about.usage.period.total" = "All Time";
+"about.usage.details" = "Usage stays on this Mac and is excluded from configuration exports. Button presses include ordinary buttons recognized by the app and the voice button; voice sessions crossing midnight count toward the day they end.";
 "about.configuration.title" = "Personalized Configuration";
 "about.configuration.description" = "Move gain, audio device, button mapping, shortcuts, language, Dock display, launch, and update channel settings.";
 "about.configuration.export" = "Export Configuration…";
