@@ -39,7 +39,9 @@ check(
     ATVVProtocol.microphoneOpen(version: 0x0100, codec: 2) == Data([0x0C, 0x00]) &&
         ATVVProtocol.microphoneOpen(version: 1, codec: 2) == Data([0x0C, 0x00, 0x02]) &&
         ATVVProtocol.microphoneClose(version: 0x0100, sessionID: 7) == Data([0x0D, 0x07]) &&
-        ATVVProtocol.microphoneClose(version: 1, sessionID: 7) == Data([0x0D]),
+        ATVVProtocol.microphoneClose(version: 1, sessionID: 7) == Data([0x0D]) &&
+        ATVVProtocol.microphoneExtend(version: 0x0100, sessionID: 7) == Data([0x0E, 0x07]) &&
+        ATVVProtocol.microphoneExtend(version: 1, sessionID: 7) == nil,
     "ATVV microphone commands"
 )
 check(
@@ -361,8 +363,22 @@ if let defaults = UserDefaults(suiteName: suiteName) {
     check(
         settings.action(for: .back) == .disabled &&
             settings.action(for: .up) == .arrowUp &&
+            settings.action(for: .power) == .escape &&
+            !settings.experimentalContinuousRecordingEnabled &&
             settings.customMappingEnabled,
         "saved bindings and legacy mapping toggle migrate"
+    )
+    settings.setExperimentalContinuousRecordingEnabled(true)
+    check(
+        settings.experimentalContinuousRecordingEnabled &&
+            settings.action(for: .power) == .toggleLongRecording &&
+            settings.customMappingEnabled,
+        "continuous recording experiment opts in and binds power"
+    )
+    settings.setExperimentalContinuousRecordingEnabled(false)
+    check(
+        settings.action(for: .power) == .escape,
+        "continuous recording experiment restores power binding"
     )
     defaults.removePersistentDomain(forName: suiteName)
 } else {

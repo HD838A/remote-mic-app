@@ -119,6 +119,10 @@ enum KeyboardInjector {
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) }
     ) -> Bool {
         guard action != .disabled else { return true }
+        if action.isAppInternal {
+            AppLogger.shared.write("INTERNAL ACTION ignored_by_keyboard action=\(action.rawValue)")
+            return true
+        }
         if let application = action.presetApplication {
             let focusRequestID = focusRequests.begin()
             open(
@@ -171,6 +175,8 @@ enum KeyboardInjector {
             if let shortcut {
                 keyPoster(CGKeyCode(shortcut.keyCode), shortcut.cgEventFlags)
             }
+        case .toggleLongRecording:
+            break
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor, .openXcode,
              .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari, .openZed:
             break

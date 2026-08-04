@@ -111,6 +111,7 @@
 "action.system_mute" = "Mute System Audio";
 "action.play_pause" = "Play / Pause";
 "action.custom_shortcut" = "Custom Shortcut";
+"action.toggle_long_recording" = "Toggle Continuous Recording";
 "action.open_remote_mic" = "Open Remote Mic";
 "action.open_codex" = "Open Codex";
 "action.open_claude" = "Open Claude";
@@ -192,12 +193,16 @@
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Customize remote button actions while preserving voice input and Fn functions";
 "button_mapping.toggle.enabled" = "Enable Custom Button Controls";
+"button_mapping.continuous_recording_experiment.enabled" = "Continuous Recording Experiment";
+"button_mapping.continuous_recording_experiment.help" = "For Xiaomi Bluetooth Remote 2 Pro feature validation only. Each session is limited to 1 minute and may increase remote battery usage.";
+"button_mapping.continuous_recording_experiment.power_managed" = "Managed by the continuous recording experiment";
 "common.status.enabled" = "Enabled";
 "common.status.disabled" = "Disabled";
 "common.action.restore_defaults" = "Restore Defaults";
 "button_mapping.actions.title" = "Button Actions";
 "button_mapping.actions.help" = "Click or press a physical button on the left to select it. Changes save automatically.";
 "common.suffix.not_installed" = " (Not installed)";
+"common.suffix.experimental_disabled" = " (Experiment disabled)";
 "shortcut.action.record" = "Click to Record a Shortcut";
 "shortcut.record.help" = "Record the keyboard shortcut to send to the current app";
 "trigger.other_actions" = "Other %1$@ Actions";

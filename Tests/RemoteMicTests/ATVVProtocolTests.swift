@@ -33,6 +33,8 @@ struct ATVVProtocolTests {
         #expect(ATVVProtocol.microphoneOpen(version: 0x0001, codec: 0x02) == Data([0x0C, 0x00, 0x02]))
         #expect(ATVVProtocol.microphoneClose(version: 0x0100, sessionID: 7) == Data([0x0D, 0x07]))
         #expect(ATVVProtocol.microphoneClose(version: 0x0001, sessionID: 7) == Data([0x0D]))
+        #expect(ATVVProtocol.microphoneExtend(version: 0x0100, sessionID: 7) == Data([0x0E, 0x07]))
+        #expect(ATVVProtocol.microphoneExtend(version: 0x0001, sessionID: 7) == nil)
     }
 
     @Test func audioRateGateOnlyAccepts16kHz() {

@@ -45,7 +45,8 @@ struct RemoteButtonsTests {
         ))
         #expect(ButtonAction.pickerActions(
             installedBundleIdentifiers: PresetApplication.installedBundleIdentifiers,
-            current: .escape
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false
         ).contains(.openRemoteMic))
         #expect(
             ButtonAction.openRemoteMic.displayName(using: localization) ==
@@ -57,14 +58,16 @@ struct RemoteButtonsTests {
         let installed = Set([PresetApplication.codex.bundleIdentifier])
         let normalSelection = ButtonAction.pickerActions(
             installedBundleIdentifiers: installed,
-            current: .escape
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false
         )
         #expect(normalSelection.contains(.openCodex))
         #expect(!normalSelection.contains(.openClaude))
 
         let missingSelection = ButtonAction.pickerActions(
             installedBundleIdentifiers: installed,
-            current: .openClaude
+            current: .openClaude,
+            experimentalContinuousRecordingEnabled: false
         )
         #expect(missingSelection.contains(.openClaude))
         #expect(!missingSelection.contains(.openXcode))
@@ -74,6 +77,42 @@ struct RemoteButtonsTests {
         let applicationActions = ButtonAction.allCases.filter { $0.presetApplication != nil }
         #expect(applicationActions.count == PresetApplication.allCases.count)
         #expect(applicationActions.allSatisfy { !$0.allowsRepeat })
+    }
+
+    @Test func continuousRecordingIsInternalAndNeverRepeats() {
+        #expect(ButtonAction.toggleLongRecording.isAppInternal)
+        #expect(!ButtonAction.toggleLongRecording.allowsRepeat)
+        #expect(!ButtonAction.escape.isAppInternal)
+        #expect(!ButtonAction.toggleLongRecording.isEnabled(
+            experimentalContinuousRecordingEnabled: false
+        ))
+        #expect(ButtonAction.toggleLongRecording.isEnabled(
+            experimentalContinuousRecordingEnabled: true
+        ))
+    }
+
+    @Test func pickerRequiresContinuousRecordingExperimentButPreservesLegacySelection() {
+        let installed = Set<String>()
+        let disabled = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installed,
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false
+        )
+        #expect(!disabled.contains(.toggleLongRecording))
+
+        let enabled = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installed,
+            current: .escape,
+            experimentalContinuousRecordingEnabled: true
+        )
+        #expect(enabled.contains(.toggleLongRecording))
+
+        let legacySelection = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installed,
+            current: .toggleLongRecording,
+            experimentalContinuousRecordingEnabled: false
+        )
+        #expect(legacySelection.contains(.toggleLongRecording))
     }
 
     @Test func buttonActionsKeepRawValueCodableCompatibility() throws {
@@ -552,6 +591,10 @@ struct RemoteButtonsTests {
         #expect(AppSettings.defaultBindings[.tv] == .appSwitcher)
     }
 
+    @Test func powerDefaultRemainsEscapeUntilExperimentIsEnabled() {
+        #expect(AppSettings.defaultBindings[.power] == .escape)
+    }
+
     @Test func mapsActiveUsagesToButtonsForUIFeedback() {
         #expect(RemoteButton.buttons(for: [0x52, 0x65, 0xFFFF]) == Set<RemoteButton>([.up, .menu]))
     }
@@ -653,6 +696,104 @@ struct RemoteButtonsTests {
 
         #expect(settings.action(for: .back) == .disabled)
         #expect(settings.action(for: .up) == .arrowUp)
+    }
+
+    @Test func continuousRecordingExperimentBacksUpAndRestoresPowerShortcut() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 40,
+            modifierFlags: [.command],
+            keyLabel: "K"
+        )
+        settings.setAction(.customShortcut, for: .power, trigger: .singleClick)
+        settings.setShortcut(shortcut, for: .power, trigger: .singleClick)
+
+        settings.setExperimentalContinuousRecordingEnabled(true)
+        #expect(settings.experimentalContinuousRecordingEnabled)
+        #expect(settings.customMappingEnabled)
+        #expect(settings.action(for: .power) == .toggleLongRecording)
+        #expect(settings.shortcut(for: .power) == nil)
+
+        settings.setExperimentalContinuousRecordingEnabled(true)
+        settings.setExperimentalContinuousRecordingEnabled(false)
+        #expect(!settings.experimentalContinuousRecordingEnabled)
+        #expect(settings.customMappingEnabled)
+        #expect(settings.action(for: .power) == .customShortcut)
+        #expect(settings.shortcut(for: .power) == shortcut)
+
+        settings.setExperimentalContinuousRecordingEnabled(true)
+        settings.resetBindings()
+        #expect(settings.action(for: .power) == .toggleLongRecording)
+        settings.setExperimentalContinuousRecordingEnabled(false)
+        #expect(settings.action(for: .power) == .escape)
+    }
+
+    @Test func continuousRecordingExperimentPersistsAndMigratesStalePowerBinding() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.setAction(.showDesktop, for: .power, trigger: .singleClick)
+        settings.setExperimentalContinuousRecordingEnabled(true)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.experimentalContinuousRecordingEnabled)
+        #expect(restored.action(for: .power) == .toggleLongRecording)
+        restored.setExperimentalContinuousRecordingEnabled(false)
+        #expect(restored.action(for: .power) == .showDesktop)
+
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(
+            try JSONEncoder().encode([
+                RemoteButton.power.rawValue: ButtonAction.toggleLongRecording,
+            ]),
+            forKey: "buttonBindings"
+        )
+        let migrated = AppSettings(defaults: defaults)
+        #expect(!migrated.experimentalContinuousRecordingEnabled)
+        #expect(migrated.action(for: .power) == .escape)
+    }
+
+    @Test func continuousRecordingExperimentRoundTripsThroughConfiguration() throws {
+        let sourceSuiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
+        let source = AppSettings(defaults: sourceDefaults)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 8,
+            modifierFlags: [.control, .option],
+            keyLabel: "C"
+        )
+        source.setAction(.customShortcut, for: .power, trigger: .singleClick)
+        source.setShortcut(shortcut, for: .power, trigger: .singleClick)
+        source.setExperimentalContinuousRecordingEnabled(true)
+        let exported = try source.exportedConfigurationData()
+
+        let targetSuiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuiteName))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuiteName) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.experimentalContinuousRecordingEnabled)
+        #expect(target.customMappingEnabled)
+        #expect(target.action(for: .power) == .toggleLongRecording)
+        target.setExperimentalContinuousRecordingEnabled(false)
+        #expect(target.action(for: .power) == .customShortcut)
+        #expect(target.shortcut(for: .power) == shortcut)
+
+        var legacyObject = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "experimentalContinuousRecordingEnabled")
+        legacyObject.removeValue(forKey: "continuousRecordingPowerBindingBackup")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(!target.experimentalContinuousRecordingEnabled)
+        #expect(target.action(for: .power) == .escape)
     }
 
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {

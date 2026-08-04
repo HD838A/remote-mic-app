@@ -469,7 +469,7 @@ struct SettingsView: View {
 
             GlassPanel {
                 HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Toggle("button_mapping.toggle.enabled", isOn: Binding(
                             get: { settings.customMappingEnabled },
                             set: { enabled in
@@ -480,6 +480,18 @@ struct SettingsView: View {
                         Text(model.hidStatus.text(using: localization))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+
+                        Divider()
+                            .padding(.vertical, 2)
+
+                        Toggle("button_mapping.continuous_recording_experiment.enabled", isOn: Binding(
+                            get: { settings.experimentalContinuousRecordingEnabled },
+                            set: { model.setExperimentalContinuousRecordingEnabled($0) }
+                        ))
+                        Text("button_mapping.continuous_recording_experiment.help")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 12)
                     StatusPill(
@@ -583,20 +595,35 @@ struct SettingsView: View {
                 )) {
                     ForEach(ButtonAction.pickerActions(
                         installedBundleIdentifiers: installedBundleIdentifiers,
-                        current: currentAction
+                        current: currentAction,
+                        experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
                     )) { action in
-                        let unavailable = action.presetApplication.map {
+                        let unavailableApplication = action.presetApplication.map {
                             !installedBundleIdentifiers.contains($0.bundleIdentifier)
                         } ?? false
+                        let unavailableExperiment = action == .toggleLongRecording &&
+                            !settings.experimentalContinuousRecordingEnabled
                         Text(
                             action.displayName(using: localization) +
-                                (unavailable ? localization.text("common.suffix.not_installed") : "")
+                                (unavailableApplication
+                                    ? localization.text("common.suffix.not_installed")
+                                    : unavailableExperiment
+                                        ? localization.text("common.suffix.experimental_disabled")
+                                        : "")
                         )
                         .tag(action)
                     }
                 }
                 .labelsHidden()
                 .frame(width: 112)
+                .disabled(button == .power && settings.experimentalContinuousRecordingEnabled)
+            }
+
+            if button == .power && settings.experimentalContinuousRecordingEnabled {
+                Text("button_mapping.continuous_recording_experiment.power_managed")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
             if currentAction == .customShortcut {
@@ -699,14 +726,21 @@ struct SettingsView: View {
             )) {
                 ForEach(ButtonAction.pickerActions(
                     installedBundleIdentifiers: installedBundleIdentifiers,
-                    current: configured.action
+                    current: configured.action,
+                    experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
                 )) { action in
-                    let unavailable = action.presetApplication.map {
+                    let unavailableApplication = action.presetApplication.map {
                         !installedBundleIdentifiers.contains($0.bundleIdentifier)
                     } ?? false
+                    let unavailableExperiment = action == .toggleLongRecording &&
+                        !settings.experimentalContinuousRecordingEnabled
                     Text(
                         action.displayName(using: localization) +
-                            (unavailable ? localization.text("common.suffix.not_installed") : "")
+                            (unavailableApplication
+                                ? localization.text("common.suffix.not_installed")
+                                : unavailableExperiment
+                                    ? localization.text("common.suffix.experimental_disabled")
+                                    : "")
                     )
                     .tag(action)
                 }

@@ -25,6 +25,11 @@ enum ATVVProtocol {
         }
         return Data([0x0D])
     }
+
+    static func microphoneExtend(version: UInt16, sessionID: UInt8) -> Data? {
+        guard version >= 0x0100 else { return nil }
+        return Data([0x0E, sessionID])
+    }
 }
 
 struct ATVVCapabilities: Equatable {

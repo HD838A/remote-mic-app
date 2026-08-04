@@ -55,6 +55,7 @@ final class HIDRemoteMonitor {
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((Set<RemoteButton>) -> Void)?
     var onButtonPressed: ((RemoteButton) -> Void)?
+    var onInternalAction: ((ButtonAction) -> Void)?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -362,6 +363,13 @@ final class HIDRemoteMonitor {
             return false
         }
         let configured = settings.configuredAction(for: button, trigger: trigger)
+        if configured.action.isAppInternal {
+            onInternalAction?(configured.action)
+            AppLogger.shared.write(
+                "HID BUTTON button=\(button.rawValue) trigger=\(trigger.rawValue) action=\(configured.action.rawValue)"
+            )
+            return true
+        }
         guard KeyboardInjector.send(configured.action, shortcut: configured.shortcut) else {
             stop()
             updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))

@@ -338,6 +338,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeMute
     case playPause
     case customShortcut
+    case toggleLongRecording
     case openRemoteMic
     case openCodex
     case openClaude
@@ -372,6 +373,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .volumeMute: return localization.text("action.system_mute")
         case .playPause: return localization.text("action.play_pause")
         case .customShortcut: return localization.text("action.custom_shortcut")
+        case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
         case .openCodex: return localization.text("action.open_codex")
         case .openClaude: return localization.text("action.open_claude")
@@ -408,14 +410,28 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     }
 
     var allowsRepeat: Bool {
-        presetApplication == nil
+        presetApplication == nil && !isAppInternal
+    }
+
+    var isAppInternal: Bool {
+        self == .toggleLongRecording
+    }
+
+    func isEnabled(experimentalContinuousRecordingEnabled: Bool) -> Bool {
+        self != .toggleLongRecording || experimentalContinuousRecordingEnabled
     }
 
     static func pickerActions(
         installedBundleIdentifiers: Set<String>,
-        current: ButtonAction
+        current: ButtonAction,
+        experimentalContinuousRecordingEnabled: Bool
     ) -> [ButtonAction] {
         allCases.filter { action in
+            guard action.isEnabled(
+                experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled
+            ) else {
+                return action == current
+            }
             guard let application = action.presetApplication else { return true }
             return installedBundleIdentifiers.contains(application.bundleIdentifier) || action == current
         }

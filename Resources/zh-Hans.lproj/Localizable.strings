@@ -111,6 +111,7 @@
 "action.system_mute" = "系统静音";
 "action.play_pause" = "播放 / 暂停";
 "action.custom_shortcut" = "自定义快捷键";
+"action.toggle_long_recording" = "切换持续录音";
 "action.open_remote_mic" = "打开无线麦";
 "action.open_codex" = "打开 Codex";
 "action.open_claude" = "打开 Claude";
@@ -192,12 +193,16 @@
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "自定义遥控器按键功能，并保留语音输入与 Fn 功能";
 "button_mapping.toggle.enabled" = "启用自定义按键功能";
+"button_mapping.continuous_recording_experiment.enabled" = "持续录音实验功能";
+"button_mapping.continuous_recording_experiment.help" = "仅用于小米蓝牙遥控器 2 Pro 功能验证；单次最长 1 分钟，持续使用可能增加遥控器耗电。";
+"button_mapping.continuous_recording_experiment.power_managed" = "由持续录音实验功能管理";
 "common.status.enabled" = "已启用";
 "common.status.disabled" = "未启用";
 "common.action.restore_defaults" = "恢复默认";
 "button_mapping.actions.title" = "按键动作";
 "button_mapping.actions.help" = "点击或按下左侧实体按键定位；修改后自动保存。";
 "common.suffix.not_installed" = "（未安装）";
+"common.suffix.experimental_disabled" = "（实验功能未启用）";
 "shortcut.action.record" = "点击录入快捷键";
 "shortcut.record.help" = "录入要发送给当前应用的键盘快捷键";
 "trigger.other_actions" = "%1$@其他触发";

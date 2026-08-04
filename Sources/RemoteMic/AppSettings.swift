@@ -18,6 +18,8 @@ private struct PersonalizedConfiguration: Codable {
     let showDockIcon: Bool
     let openMainWindowAtLaunch: Bool?
     let checksForPreReleaseUpdates: Bool?
+    let experimentalContinuousRecordingEnabled: Bool?
+    let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
 enum UsageStatisticsPeriod: String, CaseIterable, Identifiable {
@@ -52,6 +54,8 @@ final class AppSettings: ObservableObject {
         static let showDockIcon = "showDockIcon"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
+        static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
+        static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
         static let totalVoiceDuration = "usage.totalVoiceDuration"
@@ -101,6 +105,19 @@ final class AppSettings: ObservableObject {
         didSet {
             defaults.set(checksForPreReleaseUpdates, forKey: Keys.checksForPreReleaseUpdates)
         }
+    }
+
+    @Published private(set) var experimentalContinuousRecordingEnabled: Bool {
+        didSet {
+            defaults.set(
+                experimentalContinuousRecordingEnabled,
+                forKey: Keys.experimentalContinuousRecordingEnabled
+            )
+        }
+    }
+
+    private var continuousRecordingPowerBindingBackup: ConfiguredButtonAction? {
+        didSet { saveContinuousRecordingPowerBindingBackup() }
     }
 
     @Published private(set) var totalButtonPressCount: UInt64 {
@@ -204,6 +221,12 @@ final class AppSettings: ObservableObject {
             ? true
             : defaults.bool(forKey: Keys.openMainWindowAtLaunch)
         checksForPreReleaseUpdates = defaults.bool(forKey: Keys.checksForPreReleaseUpdates)
+        experimentalContinuousRecordingEnabled = defaults.bool(
+            forKey: Keys.experimentalContinuousRecordingEnabled
+        )
+        continuousRecordingPowerBindingBackup = defaults
+            .data(forKey: Keys.continuousRecordingPowerBindingBackup)
+            .flatMap { try? JSONDecoder().decode(ConfiguredButtonAction.self, from: $0) }
         totalButtonPressCount = (
             defaults.object(forKey: Keys.totalButtonPressCount) as? NSNumber
         )?.uint64Value ?? 0
@@ -215,6 +238,10 @@ final class AppSettings: ObservableObject {
             ?? [:]
         trustedPhoneIdentityFingerprints = Set(
             defaults.stringArray(forKey: Keys.trustedPhoneIdentityFingerprints) ?? []
+        )
+        applyContinuousRecordingExperimentState(
+            enabled: experimentalContinuousRecordingEnabled,
+            backup: continuousRecordingPowerBindingBackup
         )
     }
 
@@ -287,10 +314,24 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    func setExperimentalContinuousRecordingEnabled(_ enabled: Bool) {
+        let backup = enabled
+            ? continuousRecordingPowerBindingBackup ?? configuredAction(for: .power, trigger: .singleClick)
+            : continuousRecordingPowerBindingBackup
+        applyContinuousRecordingExperimentState(enabled: enabled, backup: backup)
+    }
+
     func resetBindings() {
         buttonBindings = Self.defaultBindings
         buttonShortcuts = [:]
         secondaryButtonBindings = [:]
+        if experimentalContinuousRecordingEnabled {
+            continuousRecordingPowerBindingBackup = ConfiguredButtonAction(
+                action: .escape,
+                shortcut: nil
+            )
+            setAction(.toggleLongRecording, for: .power, trigger: .singleClick)
+        }
     }
 
     func recordButtonPress(at date: Date = Date(), calendar: Calendar = .current) {
@@ -413,7 +454,9 @@ final class AppSettings: ObservableObject {
             applicationLanguage: applicationLanguage,
             showDockIcon: showDockIcon,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
-            checksForPreReleaseUpdates: checksForPreReleaseUpdates
+            checksForPreReleaseUpdates: checksForPreReleaseUpdates,
+            experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
+            continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -466,6 +509,10 @@ final class AppSettings: ObservableObject {
         if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
+        applyContinuousRecordingExperimentState(
+            enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
+            backup: configuration.continuousRecordingPowerBindingBackup
+        )
     }
 
     private func saveBindings() {
@@ -492,6 +539,49 @@ final class AppSettings: ObservableObject {
         if let data = try? JSONEncoder().encode(raw) {
             defaults.set(data, forKey: Keys.secondaryButtonBindings)
         }
+    }
+
+    private func saveContinuousRecordingPowerBindingBackup() {
+        guard let continuousRecordingPowerBindingBackup else {
+            defaults.removeObject(forKey: Keys.continuousRecordingPowerBindingBackup)
+            return
+        }
+        if let data = try? JSONEncoder().encode(continuousRecordingPowerBindingBackup) {
+            defaults.set(data, forKey: Keys.continuousRecordingPowerBindingBackup)
+        }
+    }
+
+    private func applyContinuousRecordingExperimentState(
+        enabled: Bool,
+        backup: ConfiguredButtonAction?
+    ) {
+        if enabled {
+            let current = configuredAction(for: .power, trigger: .singleClick)
+            continuousRecordingPowerBindingBackup = Self.safeContinuousRecordingBackup(
+                backup ?? current
+            )
+            experimentalContinuousRecordingEnabled = true
+            customMappingEnabled = true
+            setAction(.toggleLongRecording, for: .power, trigger: .singleClick)
+            return
+        }
+
+        experimentalContinuousRecordingEnabled = false
+        if backup != nil || action(for: .power) == .toggleLongRecording {
+            let restored = Self.safeContinuousRecordingBackup(
+                backup ?? ConfiguredButtonAction(action: .escape, shortcut: nil)
+            )
+            setAction(restored.action, for: .power, trigger: .singleClick)
+            setShortcut(restored.shortcut, for: .power, trigger: .singleClick)
+        }
+        continuousRecordingPowerBindingBackup = nil
+    }
+
+    private static func safeContinuousRecordingBackup(
+        _ binding: ConfiguredButtonAction
+    ) -> ConfiguredButtonAction {
+        guard binding.action == .toggleLongRecording else { return binding }
+        return ConfiguredButtonAction(action: .escape, shortcut: nil)
     }
 
     private static func dayKey(for date: Date, calendar: Calendar) -> String {

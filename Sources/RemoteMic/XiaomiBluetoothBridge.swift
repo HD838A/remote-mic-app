@@ -198,6 +198,64 @@ final class XiaomiBluetoothBridge: NSObject {
         }
     }
 
+    @discardableResult
+    func requestMicrophoneOpen() -> Bool {
+        guard let generation = currentGeneration(),
+              ATVVSessionGate.canOpenMicrophone(
+                  phase: lifecycle,
+                  generation: generation,
+                  capabilitiesConfirmed: capabilitiesConfirmed,
+                  sampleRate: capabilities.sampleRate
+              ),
+              !microphoneOpened,
+              !streaming
+        else {
+            AppLogger.shared.write("ATVV MIC_OPEN host_request_rejected")
+            return false
+        }
+        guard write(ATVVProtocol.microphoneOpen(
+            version: capabilities.version,
+            codec: capabilities.selectedCodec
+        )) else {
+            AppLogger.shared.write("ATVV MIC_OPEN host_request_write_failed")
+            return false
+        }
+        microphoneOpened = true
+        AppLogger.shared.write("ATVV MIC_OPEN host_request")
+        return true
+    }
+
+    @discardableResult
+    func requestMicrophoneExtend() -> Bool {
+        guard microphoneOpened,
+              streaming,
+              let command = ATVVProtocol.microphoneExtend(
+                  version: capabilities.version,
+                  sessionID: sessionID
+              ),
+              write(command)
+        else {
+            AppLogger.shared.write("ATVV MIC_EXTEND rejected session=\(sessionID)")
+            return false
+        }
+        AppLogger.shared.write("ATVV MIC_EXTEND request session=\(sessionID)")
+        return true
+    }
+
+    @discardableResult
+    func requestMicrophoneClose() -> Bool {
+        guard microphoneOpened || streaming else { return true }
+        let didWrite = write(ATVVProtocol.microphoneClose(
+            version: capabilities.version,
+            sessionID: sessionID
+        ))
+        microphoneOpened = false
+        AppLogger.shared.write(
+            "ATVV MIC_CLOSE request session=\(sessionID) written=\(didWrite)"
+        )
+        return didWrite
+    }
+
     private func discoverOrScan(using central: CBCentralManager, generation: UInt64) {
         guard shouldRun,
               self.central === central,
@@ -373,21 +431,18 @@ final class XiaomiBluetoothBridge: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
-    private func write(_ data: Data) {
-        guard let peripheral, let transmitCharacteristic else { return }
+    @discardableResult
+    private func write(_ data: Data) -> Bool {
+        guard let peripheral, let transmitCharacteristic else { return false }
         let type: CBCharacteristicWriteType = transmitCharacteristic.properties.contains(.writeWithoutResponse)
             ? .withoutResponse
             : .withResponse
         peripheral.writeValue(data, for: transmitCharacteristic, type: type)
+        return true
     }
 
     private func closeMicrophoneIfNeeded() {
-        guard microphoneOpened else { return }
-        write(ATVVProtocol.microphoneClose(
-            version: capabilities.version,
-            sessionID: sessionID
-        ))
-        microphoneOpened = false
+        _ = requestMicrophoneClose()
     }
 
     private func requestCapabilitiesIfPossible() {
@@ -443,21 +498,11 @@ final class XiaomiBluetoothBridge: NSObject {
                 AppLogger.shared.write("BLE READY name=\(peripheral.name ?? "MI RC")")
             }
         case 0x08:
-            guard ATVVSessionGate.canOpenMicrophone(
-                phase: lifecycle,
-                generation: generation,
-                capabilitiesConfirmed: capabilitiesConfirmed,
-                sampleRate: capabilities.sampleRate
-            ) else {
-                AppLogger.shared.write("ATVV MIC_OPEN ignored_not_ready")
+            guard requestMicrophoneOpen() else {
+                AppLogger.shared.write("ATVV MIC_OPEN remote_request_ignored")
                 return
             }
-            write(ATVVProtocol.microphoneOpen(
-                version: capabilities.version,
-                codec: capabilities.selectedCodec
-            ))
-            microphoneOpened = true
-            AppLogger.shared.write("ATVV MIC_OPEN request")
+            AppLogger.shared.write("ATVV MIC_OPEN remote_request")
         case 0x04:
             guard ATVVSessionGate.canOpenMicrophone(
                 phase: lifecycle,
@@ -483,7 +528,18 @@ final class XiaomiBluetoothBridge: NSObject {
                 rejectUnsupportedAudio(LocalizedMessage("connection.error.unsupported_8khz_codec"))
                 return
             }
-            sessionID = bytes.count >= 4 ? bytes[3] : 0
+            let receivedSessionID = bytes.count >= 4 ? bytes[3] : 0
+            guard microphoneOpened else {
+                write(ATVVProtocol.microphoneClose(
+                    version: capabilities.version,
+                    sessionID: receivedSessionID
+                ))
+                AppLogger.shared.write(
+                    "ATVV STREAM_START ignored_cancelled session=\(receivedSessionID)"
+                )
+                return
+            }
+            sessionID = receivedSessionID
             startStreaming()
         case 0x00:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
@@ -514,6 +570,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private func stopStreaming() {
         guard streaming else { return }
         streaming = false
+        microphoneOpened = false
         accumulator.reset()
         pendingSync = nil
         lastStopAt = Date()
@@ -531,6 +588,10 @@ final class XiaomiBluetoothBridge: NSObject {
               )
         else {
             AppLogger.shared.write("ATVV AUDIO ignored_not_ready")
+            return
+        }
+        guard microphoneOpened || streaming else {
+            AppLogger.shared.write("ATVV AUDIO ignored_without_open_request")
             return
         }
         if !streaming {
