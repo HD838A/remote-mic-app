@@ -7,13 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		03314770AC71969D6524FE42 /* RemoteCommandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E74D3E4698E212D83418451D /* RemoteCommandTests.swift */; };
 		1689F8A2D589CABA82047AE2 /* RemoteControlComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D3CB04898A74D008EB5C938 /* RemoteControlComponents.swift */; };
 		32BE424431F83EA8AA9618D1 /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11DF672421B64C7B416FC13 /* HapticFeedback.swift */; };
+		3E346D8B95118A020D6B2161 /* RemoteControlLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0620D6DAFE0DDD62AC07843D /* RemoteControlLayoutTests.swift */; };
 		47FFE4A4BDD2390F9E942693 /* RemoteWireMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BBEDCD3D0B3E3EAF8F3CC8C /* RemoteWireMessage.swift */; };
 		4934DF6A4A865632E8E0B729 /* MacAppInformationScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */; };
 		5A6D4557F456D963BFEBEE1F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10FF5AE6F95095F6F4BCE6D1 /* Assets.xcassets */; };
 		66FEEC0B3ADF24AC9137C763 /* RemoteMacConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */; };
 		92AB4E7240E956061E267651 /* RemoteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */; };
+		AA5C600980EB909F79DF274B /* RemoteWireMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A2C433BC8EB255334245A4 /* RemoteWireMessageTests.swift */; };
 		BD841ADFC754C46205404AD4 /* RemoteControlScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4AEACAAB5860345FD8568A /* RemoteControlScreen.swift */; };
 		C05D0F17F0D1E9B99C1C392E /* MicrophoneStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */; };
 		E135C47EB581785134FF26C3 /* RemoteMicIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A0FBE379FB6F7DA113757E /* RemoteMicIOSApp.swift */; };
@@ -31,10 +34,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0620D6DAFE0DDD62AC07843D /* RemoteControlLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControlLayoutTests.swift; sourceTree = "<group>"; };
 		10FF5AE6F95095F6F4BCE6D1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2AAB8DDB974CD61E81680948 /* RemoteMicIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RemoteMicIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2BBEDCD3D0B3E3EAF8F3CC8C /* RemoteWireMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWireMessage.swift; sourceTree = "<group>"; };
 		40FA43331E1B420D3923D5F0 /* RemoteMicIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RemoteMicIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		41A2C433BC8EB255334245A4 /* RemoteWireMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWireMessageTests.swift; sourceTree = "<group>"; };
 		4D3CB04898A74D008EB5C938 /* RemoteControlComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControlComponents.swift; sourceTree = "<group>"; };
 		4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppInformationScreen.swift; sourceTree = "<group>"; };
 		5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneStreamer.swift; sourceTree = "<group>"; };
@@ -43,6 +48,7 @@
 		D9A0FBE379FB6F7DA113757E /* RemoteMicIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMicIOSApp.swift; sourceTree = "<group>"; };
 		DC4AEACAAB5860345FD8568A /* RemoteControlScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControlScreen.swift; sourceTree = "<group>"; };
 		E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMacConnectionTests.swift; sourceTree = "<group>"; };
+		E74D3E4698E212D83418451D /* RemoteCommandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCommandTests.swift; sourceTree = "<group>"; };
 		F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCommand.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -68,7 +74,10 @@
 		6899D85F4100C07BCA1318D7 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				E74D3E4698E212D83418451D /* RemoteCommandTests.swift */,
+				0620D6DAFE0DDD62AC07843D /* RemoteControlLayoutTests.swift */,
 				E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */,
+				41A2C433BC8EB255334245A4 /* RemoteWireMessageTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -182,7 +191,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				03314770AC71969D6524FE42 /* RemoteCommandTests.swift in Sources */,
+				3E346D8B95118A020D6B2161 /* RemoteControlLayoutTests.swift in Sources */,
 				66FEEC0B3ADF24AC9137C763 /* RemoteMacConnectionTests.swift in Sources */,
+				AA5C600980EB909F79DF274B /* RemoteWireMessageTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

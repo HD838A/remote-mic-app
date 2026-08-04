@@ -152,6 +152,13 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     func buttonTitle(for command: RemoteCommand) -> String? {
+        Self.buttonTitle(for: command, in: buttonTitles)
+    }
+
+    nonisolated static func buttonTitle(
+        for command: RemoteCommand,
+        in buttonTitles: [String: String]
+    ) -> String? {
         guard let commandName = command.wireName else { return nil }
         return buttonTitles[commandName]
     }
@@ -467,7 +474,7 @@ final class RemoteMacConnection: ObservableObject {
         return try? JSONDecoder().decode(RemoteWireMessage.self, from: cleartext)
     }
 
-    private static func pairingCode(for key: SymmetricKey) -> String {
+    nonisolated static func pairingCode(for key: SymmetricKey) -> String {
         let value = key.withUnsafeBytes { bytes in
             bytes.prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         }
@@ -535,7 +542,7 @@ private enum InstallationIdentity {
     }
 }
 
-private extension RemoteCommand {
+extension RemoteCommand {
     var wireName: String? {
         switch self {
         case .power: return "power"

@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 @testable import RemoteMicIOS
 
@@ -25,5 +26,24 @@ final class RemoteMacConnectionTests: XCTestCase {
             RemoteMacConnection.userFacingOperationError("unexpected"),
             "Mac 暂时无法执行这个操作，请稍后重试"
         )
+        XCTAssertEqual(
+            RemoteMacConnection.userFacingOperationError(nil),
+            "Mac 暂时无法执行这个操作，请稍后重试"
+        )
+    }
+
+    func testPairingCodeAlwaysUsesExactlyTwoDigits() {
+        XCTAssertEqual(
+            RemoteMacConnection.pairingCode(for: SymmetricKey(data: Data(repeating: 0, count: 32))),
+            "00"
+        )
+
+        var seven = Data(repeating: 0, count: 32)
+        seven[3] = 7
+        XCTAssertEqual(RemoteMacConnection.pairingCode(for: SymmetricKey(data: seven)), "07")
+
+        var fortyTwo = Data(repeating: 0, count: 32)
+        fortyTwo[3] = 42
+        XCTAssertEqual(RemoteMacConnection.pairingCode(for: SymmetricKey(data: fortyTwo)), "42")
     }
 }

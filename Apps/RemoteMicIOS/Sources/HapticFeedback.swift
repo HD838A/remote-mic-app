@@ -3,7 +3,7 @@ import UIKit
 
 @MainActor
 final class HapticFeedback {
-    enum Strength {
+    enum Strength: Equatable {
         case standard
         case emphasized
         case recordingReady

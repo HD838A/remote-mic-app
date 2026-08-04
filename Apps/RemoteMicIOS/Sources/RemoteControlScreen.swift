@@ -1,6 +1,25 @@
 import SwiftUI
 
 struct RemoteControlScreen: View {
+    struct MiddleControl: Equatable {
+        let title: String
+        let systemImage: String
+        let command: RemoteCommand
+    }
+
+    static let middleControlRows = [
+        [
+            MiddleControl(title: "返回", systemImage: "chevron.left", command: .back),
+            MiddleControl(title: "菜单", systemImage: "line.3.horizontal", command: .menu),
+            MiddleControl(title: "增大音量", systemImage: "speaker.plus.fill", command: .volumeUp),
+        ],
+        [
+            MiddleControl(title: "主页", systemImage: "house", command: .home),
+            MiddleControl(title: "TV", systemImage: "tv", command: .television),
+            MiddleControl(title: "减小音量", systemImage: "speaker.minus.fill", command: .volumeDown),
+        ],
+    ]
+
     @EnvironmentObject private var connection: RemoteMacConnection
     @Environment(\.scenePhase) private var scenePhase
     @State private var showsMacAppInformation = false
@@ -153,20 +172,20 @@ struct RemoteControlScreen: View {
     private func middleControls(buttonSize: CGFloat, spacing: CGFloat) -> some View {
         // 已确认的产品布局；未经明确需求变更，不得调整这两行按钮的顺序。
         VStack(spacing: spacing) {
-            HStack(spacing: 0) {
-                middleButton("返回", image: "chevron.left", command: .back, size: buttonSize)
-                Spacer(minLength: spacing)
-                middleButton("菜单", image: "line.3.horizontal", command: .menu, size: buttonSize)
-                Spacer(minLength: spacing)
-                middleButton("增大音量", image: "speaker.plus.fill", command: .volumeUp, size: buttonSize)
-            }
-
-            HStack(spacing: 0) {
-                middleButton("主页", image: "house", command: .home, size: buttonSize)
-                Spacer(minLength: spacing)
-                middleButton("TV", image: "tv", command: .television, size: buttonSize)
-                Spacer(minLength: spacing)
-                middleButton("减小音量", image: "speaker.minus.fill", command: .volumeDown, size: buttonSize)
+            ForEach(Array(Self.middleControlRows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 0) {
+                    ForEach(Array(row.enumerated()), id: \.offset) { index, control in
+                        middleButton(
+                            control.title,
+                            image: control.systemImage,
+                            command: control.command,
+                            size: buttonSize
+                        )
+                        if index < row.count - 1 {
+                            Spacer(minLength: spacing)
+                        }
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity)
