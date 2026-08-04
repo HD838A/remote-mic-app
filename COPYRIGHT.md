@@ -21,7 +21,7 @@ Copyright (C) 2026 Remote Mic contributors
 
 ## iOS 子项目
 
-`Apps/RemoteMicIOS/` 是独立开发的 iOS 子项目，其软件代码按 [Apache-2.0](Apps/RemoteMicIOS/LICENSE.md) 发布，不属于根目录 `GPL-3.0-only` 软件代码授权范围。该例外不包含下述 App Logo 和 App Icon 品牌资产。
+`Apps/RemoteMicIOS/` 是独立开发的 iOS 子项目，其软件代码同样按 [GPL-3.0-only](Apps/RemoteMicIOS/LICENSE.md) 发布。该软件代码许可不包含下述 App Logo 和 App Icon 品牌资产。
 
 ## App Logo
 

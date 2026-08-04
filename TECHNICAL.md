@@ -212,4 +212,4 @@ Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应
 
 ## 许可与来源
 
-macOS App、驱动及相关软件代码按 `GPL-3.0-only` 发布；独立的 `Apps/RemoteMicIOS/` iOS 子项目代码按 [Apache-2.0](Apps/RemoteMicIOS/LICENSE.md) 发布。两个 App 的 Logo 与 App Icon 均按独立的 [Logo 许可](LOGO-LICENSE.md) 管理。ATVV 与 RC003 行为参考 `xxb26553663-star/remote-bridge-hub`，豆包兼容驱动基于固定版本 BlackHole 构建；完整归属与限制见 [COPYRIGHT.md](COPYRIGHT.md) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+macOS App、驱动及相关软件代码按 `GPL-3.0-only` 发布；`Apps/RemoteMicIOS/` iOS 子项目代码同样按 [GPL-3.0-only](Apps/RemoteMicIOS/LICENSE.md) 发布。两个 App 的 Logo 与 App Icon 均按独立的 [Logo 许可](LOGO-LICENSE.md) 管理。ATVV 与 RC003 行为参考 `xxb26553663-star/remote-bridge-hub`，豆包兼容驱动基于固定版本 BlackHole 构建；完整归属与限制见 [COPYRIGHT.md](COPYRIGHT.md) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

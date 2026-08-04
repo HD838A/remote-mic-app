@@ -24,6 +24,7 @@ dist/
 
 # Local project-control records are not part of the public source release.
 docs/
+/Research/
 
 # Local promotion copy is kept outside the public source release.
 marketing/

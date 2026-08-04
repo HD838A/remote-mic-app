@@ -61,9 +61,9 @@ xcodebuild \
 
 ## 许可
 
-`Apps/RemoteMicIOS/` 中的软件代码独立采用 [Apache License 2.0](LICENSE.md)。
+`Apps/RemoteMicIOS/` 中的软件代码采用 [GNU General Public License v3.0 only（GPL-3.0-only）](LICENSE.md)。
 
-以下品牌资产不属于 Apache-2.0 授权范围，继续受仓库根目录的 Logo 专有许可约束：
+以下品牌资产不属于 GPL-3.0-only 授权范围，继续受仓库根目录的 Logo 专有许可约束：
 
 - `Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png`
 - `Resources/Assets.xcassets/AppLogo.imageset/AppLogo.png`

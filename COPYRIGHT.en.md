@@ -21,7 +21,7 @@ The software code in this adaptation is released under GPL-3.0-only. See [LICENS
 
 ## iOS Subproject
 
-`Apps/RemoteMicIOS/` is an independently developed iOS subproject. Its software code is released under [Apache-2.0](Apps/RemoteMicIOS/LICENSE.md) and is outside the scope of the repository-root GPL-3.0-only software license. This exception does not include the app-logo and app-icon brand assets listed below.
+`Apps/RemoteMicIOS/` is an independently developed iOS subproject. Its software code is also released under [GPL-3.0-only](Apps/RemoteMicIOS/LICENSE.md). This software-code license does not cover the app-logo and app-icon brand assets listed below.
 
 ## App Logo
 

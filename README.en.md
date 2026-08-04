@@ -101,7 +101,7 @@ For development, build, protocol, test, and release details, see the [Technical 
 
 ## License and sources
 
-The macOS app, driver, and related software code are GPL-3.0-only. The independent `Apps/RemoteMicIOS/` iOS subproject is licensed under [Apache-2.0](Apps/RemoteMicIOS/LICENSE.md). The logos and app icons for both apps are proprietary brand assets that require a separate grant; see [LOGO-LICENSE.en.md](LOGO-LICENSE.en.md). Full copyright and third-party information is available in [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The macOS app, driver, and related software code are GPL-3.0-only. The `Apps/RemoteMicIOS/` iOS subproject is also licensed under [GPL-3.0-only](Apps/RemoteMicIOS/LICENSE.md). The logos and app icons for both apps are proprietary brand assets that require a separate grant; see [LOGO-LICENSE.en.md](LOGO-LICENSE.en.md). Full copyright and third-party information is available in [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 The project was originally forked from [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge) and is now maintained independently in this repository.
 

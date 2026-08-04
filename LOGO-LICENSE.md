@@ -13,7 +13,7 @@ Copyright (C) 2026 HD838A. All rights reserved.
 - `Apps/RemoteMicIOS/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png`；
 - `Apps/RemoteMicIOS/Resources/Assets.xcassets/AppLogo.imageset/AppLogo.png`。
 
-上述品牌资产不适用本项目 macOS 软件代码的 `GPL-3.0-only` 许可，也不适用 iOS 子项目代码的 `Apache-2.0` 许可。菜单栏状态图标、程序代码和其他未在本节列出的资源不属于本许可的保护范围。
+上述品牌资产不适用 macOS 或 iOS 软件代码的 `GPL-3.0-only` 许可。菜单栏状态图标、程序代码和其他未在本节列出的资源不属于本许可的保护范围。
 
 ## 允许的使用
 
@@ -44,4 +44,4 @@ Fork 和修改后的发行版本必须将上述品牌资产替换为其有权使
 
 ## 软件许可
 
-除本许可明确列出的 App Logo、App Icon 和另行标明的第三方材料外，macOS App、驱动及相关软件代码按 `GPL-3.0-only` 发布，详见 [LICENSE.md](LICENSE.md)；独立的 iOS 子项目代码按 `Apache-2.0` 发布，详见 [Apps/RemoteMicIOS/LICENSE.md](Apps/RemoteMicIOS/LICENSE.md)。
+除本许可明确列出的 App Logo、App Icon 和另行标明的第三方材料外，macOS App、驱动及相关软件代码按 `GPL-3.0-only` 发布，详见 [LICENSE.md](LICENSE.md)；iOS 子项目代码同样按 `GPL-3.0-only` 发布，详见 [Apps/RemoteMicIOS/LICENSE.md](Apps/RemoteMicIOS/LICENSE.md)。
