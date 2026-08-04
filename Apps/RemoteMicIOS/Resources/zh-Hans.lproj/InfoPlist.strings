@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "无线麦";
+"NSLocalNetworkUsageDescription" = "允许访问本地网络，用于发现并连接附近运行无线麦的 Mac。";
+"NSMicrophoneUsageDescription" = "按住说话键时使用麦克风，把语音发送到已连接的 Mac。";

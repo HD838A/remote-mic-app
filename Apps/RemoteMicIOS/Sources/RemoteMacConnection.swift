@@ -68,6 +68,13 @@ final class RemoteMacConnection: ObservableObject {
         }
     }
 
+    func statusText(for language: AppLanguage) -> String {
+        if case .awaitingApproval = state, let pairingCode {
+            return language.format("确认码 %@", pairingCode)
+        }
+        return language.text(statusText)
+    }
+
     var isConnected: Bool {
         switch state {
         case .connected, .connectedWithError: return true
@@ -89,6 +96,14 @@ final class RemoteMacConnection: ObservableObject {
         default:
             return "麦克风仅在按住时启用"
         }
+    }
+
+    func guidanceText(for language: AppLanguage) -> String {
+        language.text(guidanceText)
+    }
+
+    func macName(for language: AppLanguage) -> String {
+        language.text(macName)
     }
 
     var hasIssue: Bool {

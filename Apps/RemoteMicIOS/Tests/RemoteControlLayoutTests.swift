@@ -29,4 +29,47 @@ final class RemoteControlLayoutTests: XCTestCase {
             ]
         )
     }
+
+    func testLanguageDefaultsToPreferredSystemLanguageUntilUserSelectsOne() {
+        XCTAssertEqual(
+            AppLanguage.resolve(storedValue: nil, preferredLanguages: ["zh-Hans-CN"]),
+            .chinese
+        )
+        XCTAssertEqual(
+            AppLanguage.resolve(storedValue: "", preferredLanguages: ["en-US"]),
+            .english
+        )
+        XCTAssertEqual(
+            AppLanguage.resolve(storedValue: AppLanguage.english.rawValue, preferredLanguages: ["zh-Hans-CN"]),
+            .english
+        )
+    }
+
+    func testWebsiteFollowsSelectedAppLanguage() {
+        XCTAssertEqual(
+            MacAppInformationScreen.websiteURL(for: .chinese).absoluteString,
+            "https://8586ai.com/"
+        )
+        XCTAssertEqual(
+            MacAppInformationScreen.websiteURL(for: .english).absoluteString,
+            "https://8586ai.com/en/"
+        )
+    }
+
+    func testPublicTestFlightLinkRemainsStable() {
+        XCTAssertEqual(MacAppInformationScreen.testFlightURL.scheme, "https")
+        XCTAssertEqual(MacAppInformationScreen.testFlightURL.host, "testflight.apple.com")
+        XCTAssertEqual(MacAppInformationScreen.testFlightURL.path, "/join/J8k8fb7v")
+    }
+
+    func testEnglishLocalizationContainsCoreRemoteCopy() {
+        XCTAssertEqual(
+            AppLanguage.english.text("按住说话"),
+            "Hold to Talk"
+        )
+        XCTAssertEqual(
+            AppLanguage.english.text("连接详情"),
+            "Connection Details"
+        )
+    }
 }

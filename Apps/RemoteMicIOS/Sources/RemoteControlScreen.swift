@@ -22,6 +22,7 @@ struct RemoteControlScreen: View {
 
     @EnvironmentObject private var connection: RemoteMacConnection
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appLanguage) private var language
     @State private var showsMacAppInformation = false
 
     var body: some View {
@@ -52,7 +53,7 @@ struct RemoteControlScreen: View {
                         .padding(.top, 2)
                         .frame(height: primaryHeight)
 
-                    Text(connection.guidanceText)
+                    Text(connection.guidanceText(for: language))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(
                             connection.hasIssue
@@ -68,11 +69,11 @@ struct RemoteControlScreen: View {
                 .padding(.vertical, isCompact ? 6 : 12)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+            }
+            .overlay(alignment: .top) {
                 if proxy.safeAreaInsets.top >= 44 {
                     CutoutEasterEgg()
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 2)
-                        .zIndex(1)
+                        .offset(y: -proxy.safeAreaInsets.top + 12)
                 }
             }
         }
@@ -123,7 +124,7 @@ struct RemoteControlScreen: View {
                     .frame(width: 54, height: 54)
                 }
                 .buttonStyle(TactileButtonStyle())
-                .accessibilityLabel("关机")
+                .accessibilityLabel(language.text("关机"))
 
                 Spacer()
 
@@ -139,31 +140,31 @@ struct RemoteControlScreen: View {
                     .frame(width: 54, height: 54)
                 }
                 .buttonStyle(TactileButtonStyle())
-                .accessibilityLabel("重新连接并查看 Mac App")
+                .accessibilityLabel(language.text("重新连接并查看 Mac App"))
             }
 
             VStack(alignment: .center, spacing: 3) {
                 if let pairingCode = connection.displayedPairingCode {
-                    Text("校验码")
+                    Text(language.text("校验码"))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(RemotePalette.text.opacity(0.62))
                     Text(pairingCode.map(String.init).joined(separator: " "))
                         .font(.system(size: 22, weight: .bold, design: .monospaced))
                         .foregroundStyle(Color.orange.opacity(0.95))
-                        .accessibilityLabel("校验码 \(pairingCode)")
+                        .accessibilityLabel(language.format("校验码 %@", pairingCode))
                 } else {
                     HStack(spacing: 7) {
                         Circle()
                             .fill(connection.isConnected ? Color.green : Color.orange)
                             .frame(width: 8, height: 8)
-                        Text(connection.statusText)
+                        Text(connection.statusText(for: language))
                             .foregroundStyle(
                                 connection.isConnected
                                     ? Color.green.opacity(0.88)
                                     : Color.orange.opacity(0.92)
                             )
                     }
-                    Text(connection.macName)
+                    Text(connection.macName(for: language))
                         .foregroundStyle(RemotePalette.text.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)

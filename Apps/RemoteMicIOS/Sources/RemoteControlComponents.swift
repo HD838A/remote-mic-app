@@ -121,6 +121,7 @@ struct DPadView: View {
     let confirmPressed: () -> Void
     let confirm: () -> Void
     let customTitle: (RemoteCommand) -> String?
+    @Environment(\.appLanguage) private var language
 
     var body: some View {
         GeometryReader { proxy in
@@ -224,7 +225,7 @@ struct DPadView: View {
                         confirmPressed()
                     }
                 })
-                .accessibilityLabel("确定")
+                .accessibilityLabel(language.text("确定"))
             }
             .frame(width: diameter, height: diameter)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -276,6 +277,7 @@ private struct DPadDirectionControl: View {
     let action: () -> Void
 
     @State private var isPressed = false
+    @Environment(\.appLanguage) private var language
 
     var body: some View {
         let iconOffset = direction.iconOffset(distance: directionalOffset)
@@ -318,7 +320,7 @@ private struct DPadDirectionControl: View {
         )
         .animation(.easeOut(duration: 0.08), value: isPressed)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(direction.accessibilityLabel)
+        .accessibilityLabel(language.text(direction.accessibilityLabel))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
             action()
@@ -395,6 +397,7 @@ struct MiddleControlButton: View {
     let systemImage: String
     let customTitle: String?
     let action: () -> Void
+    @Environment(\.appLanguage) private var language
 
     var body: some View {
         Button(action: action) {
@@ -422,7 +425,7 @@ struct MiddleControlButton: View {
             .aspectRatio(1, contentMode: .fit)
         }
         .buttonStyle(TactileButtonStyle())
-        .accessibilityLabel(title)
+        .accessibilityLabel(language.text(title))
     }
 }
 
@@ -431,6 +434,7 @@ struct VoiceButton: View {
     let onPressChanged: (Bool) -> Void
 
     @State private var isTrackingPress = false
+    @Environment(\.appLanguage) private var language
 
     var body: some View {
         let visualActive = isActive || isTrackingPress
@@ -460,9 +464,9 @@ struct VoiceButton: View {
                     Image(systemName: visualActive ? "waveform" : "mic.fill")
                         .font(.system(size: 45, weight: .medium))
                         .scaleEffect(visualActive ? 1.12 : 1)
-                    Text(visualActive ? "正在说话" : "按住说话")
+                    Text(language.text(visualActive ? "正在说话" : "按住说话"))
                         .font(.system(size: 24, weight: .bold))
-                    Text("松手停止")
+                    Text(language.text("松手停止"))
                         .font(.system(size: 15, weight: .medium))
                         .opacity(0.9)
                 }
@@ -479,8 +483,8 @@ struct VoiceButton: View {
             onPressChanged(isPressed)
         })
         .animation(.spring(response: 0.18, dampingFraction: 0.72), value: visualActive)
-        .accessibilityLabel("按住说话")
-        .accessibilityValue(isActive ? "正在录音" : isTrackingPress ? "正在准备" : "未录音")
+        .accessibilityLabel(language.text("按住说话"))
+        .accessibilityValue(language.text(isActive ? "正在录音" : isTrackingPress ? "正在准备" : "未录音"))
         .accessibilityAction {
             onPressChanged(!isActive)
         }
@@ -491,6 +495,7 @@ struct ConfirmButton: View {
     let customTitle: String?
     let onPress: () -> Void
     let action: () -> Void
+    @Environment(\.appLanguage) private var language
 
     var body: some View {
         Button(action: action) {
@@ -498,7 +503,7 @@ struct ConfirmButton: View {
                 VStack(spacing: 8) {
                     Image(systemName: "arrow.turn.down.left")
                         .font(.system(size: 45, weight: .semibold))
-                    Text("确定")
+                    Text(language.text("确定"))
                         .font(.system(size: 25, weight: .bold))
                     Text(customTitle ?? "Return")
                         .font(.system(size: 15, weight: .medium))
@@ -516,6 +521,6 @@ struct ConfirmButton: View {
                 onPress()
             }
         })
-        .accessibilityLabel("确定，Return")
+        .accessibilityLabel(language.text("确定，Return"))
     }
 }
