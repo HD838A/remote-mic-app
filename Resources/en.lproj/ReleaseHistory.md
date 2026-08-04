@@ -1,5 +1,9 @@
 # Version History
 
+## 1.7.1
+
+- Fixed weekly charts not reconciling with all-time totals. They now show the recent seven weeks plus an Earlier bucket for legacy and older history without inventing dates, and voice labels use precise clock durations that add up to the all-time value.
+
 ## 1.7.0
 
 - Fixed production builds that omitted the Mobile Web relay endpoint; release builds and final App verification now fail when the endpoint is missing.

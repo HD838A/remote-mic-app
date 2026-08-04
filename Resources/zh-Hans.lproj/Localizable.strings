@@ -285,7 +285,8 @@
 "statistics.period.this_week" = "周";
 "statistics.period.total" = "全部";
 "statistics.chart.last_seven_days" = "最近 7 天";
-"statistics.chart.last_eight_weeks" = "最近 8 周";
+"statistics.chart.weekly_history" = "最近 7 周与更早累计";
+"statistics.chart.earlier" = "更早";
 "about.configuration.title" = "个性化配置";
 "about.configuration.description" = "迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示、启动与更新通道设置。";
 "about.configuration.export" = "导出配置…";

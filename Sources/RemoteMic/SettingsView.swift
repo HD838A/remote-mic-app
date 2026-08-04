@@ -1060,7 +1060,7 @@ struct SettingsView: View {
             HStack(alignment: .top, spacing: 14) {
                 UsageBarChart(
                     title: localization.text("statistics.metric.button_count"),
-                    subtitle: localization.text("statistics.chart.last_eight_weeks"),
+                    subtitle: localization.text("statistics.chart.weekly_history"),
                     systemImage: "button.programmable",
                     points: weeklyUsageChartPoints,
                     metric: .buttonPressCount,
@@ -1068,7 +1068,7 @@ struct SettingsView: View {
                 )
                 UsageBarChart(
                     title: localization.text("statistics.metric.voice_duration"),
-                    subtitle: localization.text("statistics.chart.last_eight_weeks"),
+                    subtitle: localization.text("statistics.chart.weekly_history"),
                     systemImage: "waveform",
                     points: weeklyUsageChartPoints,
                     metric: .voiceDuration,
@@ -1363,9 +1363,45 @@ struct SettingsView: View {
     }
 
     private var weeklyUsageChartPoints: [UsageChartPoint] {
-        usageChartPoints(
-            from: settings.weeklyUsageStatistics(weeks: 8),
-            dateFormatTemplate: "Md"
+        let series = settings.weeklyUsageStatisticsSeries(recentWeeks: 7)
+        let statistics = [series.earlierStatistics] + series.weeklyBuckets.map(\.statistics)
+        let displayedVoiceSeconds = UsageStatisticsPresentation.apportionedWholeSeconds(
+            statistics.map(\.voiceDuration),
+            totalDuration: settings.usageStatistics(for: .total).voiceDuration
+        )
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.setLocalizedDateFormatFromTemplate("Md")
+        let dates = [Date.distantPast] + series.weeklyBuckets.map(\.startDate)
+        let labels = [localization.text("statistics.chart.earlier")] +
+            series.weeklyBuckets.map { formatter.string(from: $0.startDate) }
+        return statistics.indices.map { index in
+            usageChartPoint(
+                date: dates[index],
+                label: labels[index],
+                statistics: statistics[index],
+                displayedVoiceSeconds: displayedVoiceSeconds[index]
+            )
+        }
+    }
+
+    private func usageChartPoint(
+        date: Date,
+        label: String,
+        statistics: UsageStatistics,
+        displayedVoiceSeconds: Int? = nil
+    ) -> UsageChartPoint {
+        UsageChartPoint(
+            date: date,
+            label: label,
+            buttonPressCount: Double(statistics.buttonPressCount),
+            buttonPressCountLabel: localizedNumber(statistics.buttonPressCount),
+            voiceDuration: max(0, statistics.voiceDuration),
+            voiceDurationLabel: chartDurationText(
+                seconds: displayedVoiceSeconds ?? UsageStatisticsPresentation.wholeSeconds(
+                    statistics.voiceDuration
+                )
+            )
         )
     }
 
@@ -1377,37 +1413,32 @@ struct SettingsView: View {
         formatter.locale = localization.locale
         formatter.setLocalizedDateFormatFromTemplate(dateFormatTemplate)
         return buckets.map { bucket in
-            UsageChartPoint(
+            usageChartPoint(
                 date: bucket.startDate,
                 label: formatter.string(from: bucket.startDate),
-                buttonPressCount: Double(bucket.statistics.buttonPressCount),
-                buttonPressCountLabel: localizedNumber(bucket.statistics.buttonPressCount),
-                voiceDuration: max(0, bucket.statistics.voiceDuration),
-                voiceDurationLabel: compactDurationText(bucket.statistics.voiceDuration)
+                statistics: bucket.statistics
             )
         }
     }
 
-    private func compactDurationText(_ duration: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(min(duration.rounded(), Double(Int.max))))
-        if totalSeconds >= 3_600 {
+    private func chartDurationText(seconds totalSeconds: Int) -> String {
+        let hours = totalSeconds / 3_600
+        let minutes = totalSeconds % 3_600 / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
             return String(
-                format: localization.text("usage.duration.compact_hours"),
+                format: "%d:%02d:%02d",
                 locale: localization.locale,
-                arguments: [localizedNumber(UInt64(totalSeconds / 3_600))]
-            )
-        }
-        if totalSeconds >= 60 {
-            return String(
-                format: localization.text("usage.duration.compact_minutes"),
-                locale: localization.locale,
-                arguments: [localizedNumber(UInt64(totalSeconds / 60))]
+                hours,
+                minutes,
+                seconds
             )
         }
         return String(
-            format: localization.text("usage.duration.compact_seconds"),
+            format: "%d:%02d",
             locale: localization.locale,
-            arguments: [localizedNumber(UInt64(totalSeconds))]
+            minutes,
+            seconds
         )
     }
 
@@ -1622,6 +1653,53 @@ struct SettingsView: View {
         bluetoothAuthorization = CBManager.authorization
         inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
         accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    }
+}
+
+enum UsageStatisticsPresentation {
+    static func wholeSeconds(_ duration: TimeInterval) -> Int {
+        guard !duration.isNaN, duration > 0 else { return 0 }
+        guard duration.isFinite else { return .max }
+        let roundedDuration = duration.rounded()
+        guard roundedDuration < Double(Int.max) else { return .max }
+        return Int(roundedDuration)
+    }
+
+    static func apportionedWholeSeconds(
+        _ durations: [TimeInterval],
+        totalDuration: TimeInterval
+    ) -> [Int] {
+        guard !durations.isEmpty else { return [] }
+        let sanitizedDurations = durations.map { duration in
+            duration.isFinite ? max(0, duration) : 0
+        }
+        var result = sanitizedDurations.map(flooredWholeSeconds)
+        let targetTotal = wholeSeconds(totalDuration)
+        let currentTotal = result.reduce(0) { partialResult, value in
+            let (sum, overflow) = partialResult.addingReportingOverflow(value)
+            return overflow ? .max : sum
+        }
+        let secondsToDistribute = min(
+            result.count,
+            max(0, targetTotal - currentTotal)
+        )
+        let indicesByRemainder = sanitizedDurations.indices.sorted { lhs, rhs in
+            let lhsRemainder = sanitizedDurations[lhs] - sanitizedDurations[lhs].rounded(.down)
+            let rhsRemainder = sanitizedDurations[rhs] - sanitizedDurations[rhs].rounded(.down)
+            if lhsRemainder == rhsRemainder { return lhs < rhs }
+            return lhsRemainder > rhsRemainder
+        }
+        for index in indicesByRemainder.prefix(secondsToDistribute) {
+            result[index] += 1
+        }
+        return result
+    }
+
+    private static func flooredWholeSeconds(_ duration: TimeInterval) -> Int {
+        guard duration > 0 else { return 0 }
+        let roundedDuration = duration.rounded(.down)
+        guard roundedDuration < Double(Int.max) else { return .max }
+        return Int(roundedDuration)
     }
 }
 

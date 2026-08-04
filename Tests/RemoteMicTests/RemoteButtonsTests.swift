@@ -992,6 +992,79 @@ struct RemoteButtonsTests {
             UsageStatistics(buttonPressCount: 42, voiceDuration: 180))
     }
 
+    @Test func weeklyUsageSeriesReconcilesLegacyAndOlderHistoryWithTotal() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(NSNumber(value: UInt64(42)), forKey: "usage.totalButtonPressCount")
+        defaults.set(180.0, forKey: "usage.totalVoiceDuration")
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        calendar.firstWeekday = 2
+        let today = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 5,
+            hour: 12
+        )))
+        let olderDate = try #require(calendar.date(byAdding: .day, value: -56, to: today))
+
+        let settings = AppSettings(defaults: defaults)
+        settings.recordButtonPress(at: olderDate, calendar: calendar)
+        settings.recordVoiceDuration(30, at: olderDate, calendar: calendar)
+        settings.recordButtonPress(at: today, calendar: calendar)
+        settings.recordButtonPress(at: today, calendar: calendar)
+        settings.recordVoiceDuration(60, at: today, calendar: calendar)
+
+        let series = settings.weeklyUsageStatisticsSeries(
+            endingAt: today,
+            recentWeeks: 7,
+            calendar: calendar
+        )
+        let weeklyStatistics = series.weeklyBuckets.reduce(
+            into: UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
+        ) { result, bucket in
+            result = UsageStatistics(
+                buttonPressCount: result.buttonPressCount + bucket.statistics.buttonPressCount,
+                voiceDuration: result.voiceDuration + bucket.statistics.voiceDuration
+            )
+        }
+        let totalStatistics = settings.usageStatistics(
+            for: .total,
+            at: today,
+            calendar: calendar
+        )
+
+        #expect(series.weeklyBuckets.count == 7)
+        #expect(series.earlierStatistics ==
+            UsageStatistics(buttonPressCount: 43, voiceDuration: 210))
+        #expect(weeklyStatistics ==
+            UsageStatistics(buttonPressCount: 2, voiceDuration: 60))
+        #expect(series.earlierStatistics.buttonPressCount + weeklyStatistics.buttonPressCount ==
+            totalStatistics.buttonPressCount)
+        #expect(series.earlierStatistics.voiceDuration + weeklyStatistics.voiceDuration ==
+            totalStatistics.voiceDuration)
+    }
+
+    @Test func weeklyVoiceLabelsApportionWholeSecondsToMatchTheDisplayedTotal() {
+        let durations = [316.465, 0, 0, 0, 0, 0, 0, 868.257]
+        let displayedSeconds = UsageStatisticsPresentation.apportionedWholeSeconds(
+            durations,
+            totalDuration: durations.reduce(0, +)
+        )
+
+        #expect(displayedSeconds == [317, 0, 0, 0, 0, 0, 0, 868])
+        #expect(displayedSeconds.reduce(0, +) ==
+            UsageStatisticsPresentation.wholeSeconds(durations.reduce(0, +)))
+        #expect(UsageStatisticsPresentation.apportionedWholeSeconds(
+            [0.6, 0.6],
+            totalDuration: 1.2
+        ).reduce(0, +) == 1)
+        #expect(UsageStatisticsPresentation.wholeSeconds(.nan) == 0)
+        #expect(UsageStatisticsPresentation.wholeSeconds(.infinity) == .max)
+    }
+
     @Test func completedUpdateDetectionCoversBuildIncreaseAndExistingInstallMigration() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

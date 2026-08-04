@@ -42,6 +42,11 @@ struct UsageStatisticsBucket: Equatable, Identifiable {
     var id: Date { startDate }
 }
 
+struct WeeklyUsageStatisticsSeries: Equatable {
+    let earlierStatistics: UsageStatistics
+    let weeklyBuckets: [UsageStatisticsBucket]
+}
+
 private struct DailyUsageStatistics: Codable {
     var buttonPressCount: UInt64 = 0
     var voiceDuration: TimeInterval = 0
@@ -440,6 +445,46 @@ final class AppSettings: ObservableObject {
                 )
             )
         }
+    }
+
+    func weeklyUsageStatisticsSeries(
+        endingAt date: Date = Date(),
+        recentWeeks: Int = 7,
+        calendar: Calendar = .current
+    ) -> WeeklyUsageStatisticsSeries {
+        let weeklyBuckets = weeklyUsageStatistics(
+            endingAt: date,
+            weeks: recentWeeks,
+            calendar: calendar
+        )
+        let representedStatistics = weeklyBuckets.reduce(
+            into: UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
+        ) { result, bucket in
+            result = UsageStatistics(
+                buttonPressCount: Self.addingCount(
+                    bucket.statistics.buttonPressCount,
+                    to: result.buttonPressCount
+                ),
+                voiceDuration: Self.addingDuration(
+                    bucket.statistics.voiceDuration,
+                    to: result.voiceDuration
+                )
+            )
+        }
+        let totalStatistics = usageStatistics(for: .total, at: date, calendar: calendar)
+        return WeeklyUsageStatisticsSeries(
+            earlierStatistics: UsageStatistics(
+                buttonPressCount: totalStatistics.buttonPressCount >=
+                    representedStatistics.buttonPressCount
+                    ? totalStatistics.buttonPressCount - representedStatistics.buttonPressCount
+                    : 0,
+                voiceDuration: max(
+                    0,
+                    totalStatistics.voiceDuration - representedStatistics.voiceDuration
+                )
+            ),
+            weeklyBuckets: weeklyBuckets
+        )
     }
 
     func isPhoneIdentityTrusted(_ fingerprint: String) -> Bool {

@@ -285,7 +285,8 @@
 "statistics.period.this_week" = "Week";
 "statistics.period.total" = "All";
 "statistics.chart.last_seven_days" = "Last 7 Days";
-"statistics.chart.last_eight_weeks" = "Last 8 Weeks";
+"statistics.chart.weekly_history" = "Recent 7 Weeks + Earlier";
+"statistics.chart.earlier" = "Earlier";
 "about.configuration.title" = "Personalized Configuration";
 "about.configuration.description" = "Move gain, audio device, button mapping, shortcuts, language, Dock display, launch, and update channel settings.";
 "about.configuration.export" = "Export Configuration…";
