@@ -10,7 +10,17 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { width: 100%; min-height: 100%; margin: 0; }
+html, body, #root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  background-color: #cfd4d8;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05), rgba(19,31,41,0.035)),
+    url("/aluminum-background.png");
+  background-size: cover;
+  background-position: center;
+}
 body { min-height: 100dvh; overflow: hidden; overscroll-behavior: none; }
 button { font: inherit; color: inherit; -webkit-user-select: none; user-select: none; }
 button:focus-visible { outline: 3px solid rgba(31, 118, 181, 0.58); outline-offset: 3px; }
@@ -21,7 +31,12 @@ button:disabled { opacity: 0.52; }
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  background: #cfd4d8;
+  background-color: #cfd4d8;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05), rgba(19,31,41,0.035)),
+    url("/aluminum-background.png");
+  background-size: cover;
+  background-position: center;
 }
 
 .remote-surface {
@@ -62,10 +77,10 @@ button:disabled { opacity: 0.52; }
   box-shadow: 0 5px 10px rgba(54, 62, 68, 0.17), inset 0 1px 1px rgba(255,255,255,0.92);
 }
 
-.header-button { cursor: pointer; }
+.header-button { position: relative; cursor: pointer; }
 .header-button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 5px rgba(54,62,68,0.18), inset 0 2px 5px rgba(49,58,65,0.12); }
 .header-button svg, .informational svg { width: 25px; height: 25px; }
-.header-button .custom-title { position: absolute; margin-top: 38px; font-size: 7px; max-width: 44px; }
+.header-button .custom-title { position: absolute; right: 3px; bottom: 4px; left: 3px; max-width: none; font-size: 7px; line-height: 1.05; }
 
 .connection-status {
   min-width: 0;
@@ -166,7 +181,7 @@ button:disabled { opacity: 0.52; }
 .round-button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 4px rgba(57,64,70,0.20), inset 0 2px 5px rgba(48,57,63,0.13); }
 .round-icon { height: 27px; display: grid; place-items: center; }
 .round-icon svg { width: 24px; height: 24px; }
-.round-label { width: 75%; min-height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; line-height: 1.2; font-weight: 680; }
+.round-label { width: 88%; overflow-wrap: anywhere; white-space: normal; font-size: clamp(8px, 2.2vw, 10px); line-height: 1.08; font-weight: 680; text-align: center; }
 
 .primary-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 110px; }
 .primary-button {
@@ -191,7 +206,7 @@ button:disabled { opacity: 0.52; }
 .voice-button.recording { background: linear-gradient(150deg, #8b4d4c, #5a2f31); color: #fff6f4; }
 .confirm-button { background: linear-gradient(145deg, rgba(246,247,247,0.95), rgba(164,171,176,0.90)); box-shadow: 0 8px 13px rgba(50,58,64,0.22), inset 0 1px 2px rgba(255,255,255,0.96); }
 .confirm-button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 3px 6px rgba(50,58,64,0.22), inset 0 3px 7px rgba(45,54,60,0.15); }
-.custom-title { max-width: 82%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-weight: 650; }
+.custom-title { max-width: 90%; overflow-wrap: anywhere; white-space: normal; font-size: 9px; line-height: 1.08; font-weight: 650; text-align: center; }
 
 .guidance { min-height: 18px; margin: 0; align-self: center; color: rgba(31,41,49,0.59); font-size: 12px; font-weight: 560; line-height: 1.35; text-align: center; }
 .guidance.issue { color: #a35f20; }
