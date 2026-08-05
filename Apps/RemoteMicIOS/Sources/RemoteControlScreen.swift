@@ -84,7 +84,7 @@ struct RemoteControlScreen: View {
             DiagnosticsLogger.shared.record("remote_screen_task")
             connection.start()
         }
-        .onChange(of: scenePhase) { _, phase in
+        .remoteOnChange(of: scenePhase) { phase in
             DiagnosticsLogger.shared.record("scene_phase", fields: [
                 "phase": Self.diagnosticScenePhaseName(phase)
             ])
@@ -238,7 +238,7 @@ struct RemoteControlScreen: View {
                 setVoiceActive(isPressed)
             }
             .frame(maxWidth: .infinity)
-            .onChange(of: connection.isVoiceActive) { _, isActive in
+            .remoteOnChange(of: connection.isVoiceActive) { isActive in
                 if isActive {
                     HapticFeedback.shared.trigger(.recordingReady)
                 }

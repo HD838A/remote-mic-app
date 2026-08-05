@@ -16,6 +16,7 @@
 		4934DF6A4A865632E8E0B729 /* MacAppInformationScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */; };
 		5A6D4557F456D963BFEBEE1F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10FF5AE6F95095F6F4BCE6D1 /* Assets.xcassets */; };
 		66FEEC0B3ADF24AC9137C763 /* RemoteMacConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */; };
+		90FB5E2968DE2FD5493EDBF8 /* MicrophoneStreamerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA57C21ADD67E4D7B02D041 /* MicrophoneStreamerTests.swift */; };
 		92AB4E7240E956061E267651 /* RemoteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */; };
 		9F5E13DE214E9B175161CED6 /* DiagnosticsLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C52FD4B2B1271A5E26D3F61 /* DiagnosticsLogger.swift */; };
 		AA5C600980EB909F79DF274B /* RemoteWireMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A2C433BC8EB255334245A4 /* RemoteWireMessageTests.swift */; };
@@ -62,6 +63,7 @@
 		E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMacConnectionTests.swift; sourceTree = "<group>"; };
 		E74D3E4698E212D83418451D /* RemoteCommandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCommandTests.swift; sourceTree = "<group>"; };
 		F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCommand.swift; sourceTree = "<group>"; };
+		FEA57C21ADD67E4D7B02D041 /* MicrophoneStreamerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneStreamerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -89,6 +91,7 @@
 			isa = PBXGroup;
 			children = (
 				3593F1600A6C7FBC0D036917 /* DiagnosticsLoggerTests.swift */,
+				FEA57C21ADD67E4D7B02D041 /* MicrophoneStreamerTests.swift */,
 				E74D3E4698E212D83418451D /* RemoteCommandTests.swift */,
 				0620D6DAFE0DDD62AC07843D /* RemoteControlLayoutTests.swift */,
 				E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */,
@@ -212,6 +215,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DADE826A0695A8EA845FAD23 /* DiagnosticsLoggerTests.swift in Sources */,
+				90FB5E2968DE2FD5493EDBF8 /* MicrophoneStreamerTests.swift in Sources */,
 				03314770AC71969D6524FE42 /* RemoteCommandTests.swift in Sources */,
 				3E346D8B95118A020D6B2161 /* RemoteControlLayoutTests.swift in Sources */,
 				66FEEC0B3ADF24AC9137C763 /* RemoteMacConnectionTests.swift in Sources */,
@@ -320,7 +324,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -438,7 +442,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

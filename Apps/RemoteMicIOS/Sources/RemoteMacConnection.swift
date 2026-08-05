@@ -300,7 +300,7 @@ final class RemoteMacConnection: ObservableObject {
         let requestID = voiceRequestID
         diagnostics.record("voice_request", fields: [
             "connected": isConnected ? "true" : "false",
-            "permission": Self.microphonePermissionName(AVAudioApplication.shared.recordPermission),
+            "permission": microphone.permissionStatus.rawValue,
         ])
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -309,7 +309,7 @@ final class RemoteMacConnection: ObservableObject {
                 let permitted = await microphone.requestPermission()
                 diagnostics.record("microphone_permission", fields: [
                     "granted": permitted ? "true" : "false",
-                    "status": Self.microphonePermissionName(AVAudioApplication.shared.recordPermission),
+                    "status": microphone.permissionStatus.rawValue,
                 ])
                 guard permitted else {
                     throw MicrophoneStreamer.StreamError.permissionDenied
@@ -1066,17 +1066,6 @@ final class RemoteMacConnection: ObservableObject {
         case .unix: return "unix"
         case .url: return "url"
         case .opaque: return "opaque"
-        @unknown default: return "unknown"
-        }
-    }
-
-    nonisolated static func microphonePermissionName(
-        _ permission: AVAudioApplication.recordPermission
-    ) -> String {
-        switch permission {
-        case .granted: return "granted"
-        case .denied: return "denied"
-        case .undetermined: return "undetermined"
         @unknown default: return "unknown"
         }
     }

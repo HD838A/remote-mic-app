@@ -2,6 +2,13 @@ import AVFoundation
 import Foundation
 
 final class MicrophoneStreamer {
+    enum PermissionStatus: String, Equatable {
+        case granted
+        case denied
+        case undetermined
+        case unknown
+    }
+
     enum StreamError: Error {
         case permissionDenied
         case formatUnavailable
@@ -21,22 +28,37 @@ final class MicrophoneStreamer {
     var onSamples: (([Int16]) -> Void)?
 
     @MainActor
+    var permissionStatus: PermissionStatus {
+        if #available(iOS 17.0, *) {
+            return Self.permissionStatus(AVAudioApplication.shared.recordPermission)
+        }
+        return Self.permissionStatus(AVAudioSession.sharedInstance().recordPermission)
+    }
+
+    @MainActor
     func requestPermission() async -> Bool {
-        switch AVAudioApplication.shared.recordPermission {
+        switch permissionStatus {
         case .granted:
             return true
         case .denied:
             return false
         case .undetermined:
-            return await AVAudioApplication.requestRecordPermission()
-        @unknown default:
+            if #available(iOS 17.0, *) {
+                return await AVAudioApplication.requestRecordPermission()
+            }
+            return await withCheckedContinuation { continuation in
+                AVAudioSession.sharedInstance().requestRecordPermission {
+                    continuation.resume(returning: $0)
+                }
+            }
+        case .unknown:
             return false
         }
     }
 
     @MainActor
     func prepareIfAuthorized() {
-        guard AVAudioApplication.shared.recordPermission == .granted else { return }
+        guard permissionStatus == .granted else { return }
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.record, mode: .measurement)
@@ -49,7 +71,7 @@ final class MicrophoneStreamer {
     @MainActor
     func start() throws {
         guard !isRunning else { return }
-        guard AVAudioApplication.shared.recordPermission == .granted else {
+        guard permissionStatus == .granted else {
             throw StreamError.permissionDenied
         }
 
@@ -115,6 +137,29 @@ final class MicrophoneStreamer {
             converter = nil
         }
         isRunning = false
+    }
+
+    static func permissionStatus(
+        _ permission: AVAudioSession.RecordPermission
+    ) -> PermissionStatus {
+        switch permission {
+        case .granted: return .granted
+        case .denied: return .denied
+        case .undetermined: return .undetermined
+        @unknown default: return .unknown
+        }
+    }
+
+    @available(iOS 17.0, *)
+    static func permissionStatus(
+        _ permission: AVAudioApplication.recordPermission
+    ) -> PermissionStatus {
+        switch permission {
+        case .granted: return .granted
+        case .denied: return .denied
+        case .undetermined: return .undetermined
+        @unknown default: return .unknown
+        }
     }
 
     private func convertAndPublish(_ inputBuffer: AVAudioPCMBuffer) {

@@ -1,5 +1,21 @@
 import SwiftUI
 
+extension View {
+    @ViewBuilder
+    func remoteOnChange<Value: Equatable>(
+        of value: Value,
+        perform action: @escaping (Value) -> Void
+    ) -> some View {
+        if #available(iOS 17.0, *) {
+            onChange(of: value) { _, newValue in
+                action(newValue)
+            }
+        } else {
+            onChange(of: value, perform: action)
+        }
+    }
+}
+
 enum RemotePalette {
     static let backgroundTop = Color(red: 0.84, green: 0.85, blue: 0.86)
     static let backgroundBottom = Color(red: 0.69, green: 0.71, blue: 0.73)
@@ -44,7 +60,7 @@ struct TactileButtonStyle: ButtonStyle {
             .scaleEffect(showsPressedVisuals && configuration.isPressed ? 0.975 : 1)
             .brightness(showsPressedVisuals && configuration.isPressed ? -0.045 : 0)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { _, isPressed in
+            .remoteOnChange(of: configuration.isPressed) { isPressed in
                 onPressChanged?(isPressed)
             }
     }

@@ -1,11 +1,11 @@
 # Remote Mic iOS
 
-`RemoteMicIOS` 是独立的 iOS 17+ SwiftUI 伴侣 App。它拥有独立的 App Store Connect 应用记录、发布流程和软件许可证。
+`RemoteMicIOS` 是独立的 iOS 16+ SwiftUI 伴侣 App。它拥有独立的 App Store Connect 应用记录、发布流程和软件许可证。
 
 ## 工程与发布
 
 - Scheme：`RemoteMicIOS`
-- 最低系统：iOS 17.0
+- 最低系统：iOS 16.0
 - 签名：Automatic Signing / Apple cloud-managed signing
 
 开发者团队和应用标识由发布配置维护，不在公开说明文档中列出。iOS 与 macOS App 拥有独立的应用记录，不组成 App Store Universal Purchase。

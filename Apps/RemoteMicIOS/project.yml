@@ -3,7 +3,7 @@ name: RemoteMicIOS
 options:
   createIntermediateGroups: true
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "16.0"
 
 settings:
   base:
