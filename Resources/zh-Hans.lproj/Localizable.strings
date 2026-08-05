@@ -287,6 +287,9 @@
 "statistics.chart.last_seven_days" = "最近 7 天";
 "statistics.chart.weekly_history" = "最近 7 周与更早累计";
 "statistics.chart.earlier" = "更早";
+"statistics.voice_ranking.title" = "单次语音时长排行";
+"statistics.voice_ranking.description" = "仅保存在本机，显示从此版本开始记录的最长 10 次语音。";
+"statistics.voice_ranking.empty" = "完成一次语音输入后，这里会显示本机排行。";
 "about.configuration.title" = "个性化配置";
 "about.configuration.description" = "迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示、启动与更新通道设置。";
 "about.configuration.export" = "导出配置…";

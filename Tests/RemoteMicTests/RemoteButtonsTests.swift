@@ -992,6 +992,32 @@ struct RemoteButtonsTests {
             UsageStatistics(buttonPressCount: 42, voiceDuration: 180))
     }
 
+    @Test func localVoiceSessionRankingKeepsTheLongestTenAndPersists() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let baseDate = Date(timeIntervalSince1970: 1_800_000_000)
+
+        let settings = AppSettings(defaults: defaults)
+        for duration in 1...12 {
+            settings.recordVoiceDuration(
+                TimeInterval(duration),
+                at: baseDate.addingTimeInterval(TimeInterval(duration))
+            )
+        }
+        settings.recordVoiceDuration(.nan, at: baseDate)
+        settings.recordVoiceDuration(0, at: baseDate)
+
+        #expect(settings.voiceSessionRanking.count == 10)
+        #expect(settings.voiceSessionRanking.map(\.duration) == [
+            12, 11, 10, 9, 8, 7, 6, 5, 4, 3,
+        ])
+        #expect(settings.voiceSessionRanking.first?.endedAt == baseDate.addingTimeInterval(12))
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.voiceSessionRanking == settings.voiceSessionRanking)
+    }
+
     @Test func weeklyUsageSeriesReconcilesLegacyAndOlderHistoryWithTotal() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

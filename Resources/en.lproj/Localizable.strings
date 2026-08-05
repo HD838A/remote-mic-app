@@ -287,6 +287,9 @@
 "statistics.chart.last_seven_days" = "Last 7 Days";
 "statistics.chart.weekly_history" = "Recent 7 Weeks + Earlier";
 "statistics.chart.earlier" = "Earlier";
+"statistics.voice_ranking.title" = "Single Voice Session Ranking";
+"statistics.voice_ranking.description" = "Stored only on this Mac, showing the 10 longest sessions recorded from this version onward.";
+"statistics.voice_ranking.empty" = "Complete a voice session to start your local ranking.";
 "about.configuration.title" = "Personalized Configuration";
 "about.configuration.description" = "Move gain, audio device, button mapping, shortcuts, language, Dock display, launch, and update channel settings.";
 "about.configuration.export" = "Export Configuration…";

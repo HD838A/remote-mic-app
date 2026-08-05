@@ -1024,6 +1024,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                         statisticsPeriodContent
+                        voiceSessionRankingCard
                     }
                 }
             }
@@ -1031,6 +1032,66 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .compatibilityScrollEdgeEffect()
+    }
+
+    private var voiceSessionRankingCard: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "trophy.fill")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                        .frame(width: 32, height: 32)
+                        .compatibilityTintedGlass(tint: Color.orange.opacity(0.14), in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("statistics.voice_ranking.title")
+                            .font(.headline)
+                        Text("statistics.voice_ranking.description")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if settings.voiceSessionRanking.isEmpty {
+                    Text("statistics.voice_ranking.empty")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(settings.voiceSessionRanking.enumerated()), id: \.element.id) {
+                            index, record in
+                            HStack(spacing: 12) {
+                                Text("#\(index + 1)")
+                                    .font(.system(.body, design: .rounded).weight(.semibold))
+                                    .foregroundStyle(index < 3 ? Color.orange : Color.secondary)
+                                    .monospacedDigit()
+                                    .frame(width: 36, alignment: .leading)
+
+                                Text(chartDurationText(
+                                    seconds: UsageStatisticsPresentation.wholeSeconds(
+                                        record.duration
+                                    )
+                                ))
+                                .font(.system(.body, design: .rounded).weight(.semibold))
+                                .monospacedDigit()
+
+                                Spacer(minLength: 12)
+
+                                Text(voiceSessionDateText(record.endedAt))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 9)
+
+                            if index < settings.voiceSessionRanking.count - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -1440,6 +1501,14 @@ struct SettingsView: View {
             minutes,
             seconds
         )
+    }
+
+    private func voiceSessionDateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 
     private func usagePeriodLocalizationKey(_ period: UsageStatisticsPeriod) -> String {

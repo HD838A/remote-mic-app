@@ -47,6 +47,12 @@ struct WeeklyUsageStatisticsSeries: Equatable {
     let weeklyBuckets: [UsageStatisticsBucket]
 }
 
+struct VoiceSessionUsageRecord: Codable, Equatable, Identifiable {
+    let id: UUID
+    let endedAt: Date
+    let duration: TimeInterval
+}
+
 private struct DailyUsageStatistics: Codable {
     var buttonPressCount: UInt64 = 0
     var voiceDuration: TimeInterval = 0
@@ -74,6 +80,7 @@ final class AppSettings: ObservableObject {
         static let totalButtonPressCount = "usage.totalButtonPressCount"
         static let totalVoiceDuration = "usage.totalVoiceDuration"
         static let dailyStatistics = "usage.dailyStatistics"
+        static let voiceSessionRanking = "usage.voiceSessionRanking"
         static let trustedPhoneIdentityFingerprints = "security.trustedPhoneIdentityFingerprints"
     }
 
@@ -148,6 +155,14 @@ final class AppSettings: ObservableObject {
         didSet {
             if let data = try? JSONEncoder().encode(dailyStatistics) {
                 defaults.set(data, forKey: Keys.dailyStatistics)
+            }
+        }
+    }
+
+    @Published private(set) var voiceSessionRanking: [VoiceSessionUsageRecord] {
+        didSet {
+            if let data = try? JSONEncoder().encode(voiceSessionRanking) {
+                defaults.set(data, forKey: Keys.voiceSessionRanking)
             }
         }
     }
@@ -250,6 +265,11 @@ final class AppSettings: ObservableObject {
         dailyStatistics = defaults.data(forKey: Keys.dailyStatistics)
             .flatMap { try? JSONDecoder().decode([String: DailyUsageStatistics].self, from: $0) }
             ?? [:]
+        voiceSessionRanking = Self.normalizedVoiceSessionRanking(
+            defaults.data(forKey: Keys.voiceSessionRanking)
+                .flatMap { try? JSONDecoder().decode([VoiceSessionUsageRecord].self, from: $0) }
+                ?? []
+        )
         trustedPhoneIdentityFingerprints = Set(
             defaults.stringArray(forKey: Keys.trustedPhoneIdentityFingerprints) ?? []
         )
@@ -373,6 +393,14 @@ final class AppSettings: ObservableObject {
         var statistics = dailyStatistics[key] ?? DailyUsageStatistics()
         statistics.voiceDuration = Self.addingDuration(duration, to: statistics.voiceDuration)
         dailyStatistics[key] = statistics
+
+        voiceSessionRanking = Self.normalizedVoiceSessionRanking(
+            voiceSessionRanking + [VoiceSessionUsageRecord(
+                id: UUID(),
+                endedAt: date,
+                duration: duration
+            )]
+        )
     }
 
     func usageStatistics(
@@ -745,6 +773,22 @@ final class AppSettings: ObservableObject {
     ) -> TimeInterval {
         let result = max(0, total) + max(0, duration)
         return result.isFinite ? result : .greatestFiniteMagnitude
+    }
+
+    private static func normalizedVoiceSessionRanking(
+        _ records: [VoiceSessionUsageRecord]
+    ) -> [VoiceSessionUsageRecord] {
+        Array(
+            records
+                .filter { $0.duration.isFinite && $0.duration > 0 }
+                .sorted {
+                    if $0.duration == $1.duration {
+                        return $0.endedAt > $1.endedAt
+                    }
+                    return $0.duration > $1.duration
+                }
+                .prefix(10)
+        )
     }
 
     static let defaultBindings: [RemoteButton: ButtonAction] = [
