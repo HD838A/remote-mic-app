@@ -62,9 +62,11 @@ final class DiagnosticsLogger {
             let timestamp = Self.fileTimestamp(now())
             let version = Self.appVersionText.replacingOccurrences(of: " ", with: "-")
             let shareURL = fileManager.temporaryDirectory.appendingPathComponent(
-                "RemoteMicIOS-Diagnostics-\(version)-\(timestamp).txt"
+                "RemoteMicIOS-Diagnostics-\(version)-\(timestamp).log"
             )
-            var data = Data("RemoteMic iOS Diagnostics\n\n".utf8)
+            let header = "RemoteMic iOS Diagnostics format=2\n" +
+                "privacy=no_audio,no_commands,no_device_names,no_ip,no_pairing_code,no_keys\n\n"
+            var data = Data(header.utf8)
             for url in logURLsInChronologicalOrder() {
                 guard let logData = try? Data(contentsOf: url) else { continue }
                 data.append(logData)
@@ -88,6 +90,60 @@ final class DiagnosticsLogger {
         }
     }
 
+    static func errorCode(_ error: Error) -> String {
+        let value = error as NSError
+        return "\(sanitize(value.domain)).\(value.code)"
+    }
+
+    static func networkPathFields(_ path: NWPath) -> [String: String] {
+        let usedTypes = NWInterface.InterfaceType.diagnosticCases.compactMap { type in
+            path.usesInterfaceType(type) ? interfaceTypeName(type) : nil
+        }
+        let availableInterfaces = path.availableInterfaces
+            .map { "\(interfaceTypeName($0.type)):\(sanitize($0.name))" }
+            .sorted()
+
+        return [
+            "available_interfaces": availableInterfaces.isEmpty ? "none" : availableInterfaces.joined(separator: ","),
+            "constrained": path.isConstrained ? "true" : "false",
+            "dns": path.supportsDNS ? "true" : "false",
+            "expensive": path.isExpensive ? "true" : "false",
+            "ipv4": path.supportsIPv4 ? "true" : "false",
+            "ipv6": path.supportsIPv6 ? "true" : "false",
+            "status": networkPathStatusName(path.status),
+            "used_interfaces": usedTypes.isEmpty ? "none" : usedTypes.joined(separator: ","),
+        ]
+    }
+
+    static func interfaceFields(_ interfaces: [NWInterface]) -> [String: String] {
+        let names = interfaces
+            .map { "\(interfaceTypeName($0.type)):\(sanitize($0.name))" }
+            .sorted()
+        return [
+            "interfaces": names.isEmpty ? "none" : names.joined(separator: ",")
+        ]
+    }
+
+    static func interfaceTypeName(_ type: NWInterface.InterfaceType) -> String {
+        switch type {
+        case .wifi: return "wifi"
+        case .cellular: return "cellular"
+        case .wiredEthernet: return "wired"
+        case .loopback: return "loopback"
+        case .other: return "other"
+        @unknown default: return "unknown"
+        }
+    }
+
+    static func networkPathStatusName(_ status: NWPath.Status) -> String {
+        switch status {
+        case .satisfied: return "satisfied"
+        case .unsatisfied: return "unsatisfied"
+        case .requiresConnection: return "requires_connection"
+        @unknown default: return "unknown"
+        }
+    }
+
     static var appVersionText: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
@@ -98,9 +154,15 @@ final class DiagnosticsLogger {
     }
 
     private static var environmentFields: [String: String] {
-        [
+        let bonjourServices = Bundle.main.object(forInfoDictionaryKey: "NSBonjourServices") as? [String] ?? []
+        let hasLocalNetworkUsageDescription = (
+            Bundle.main.object(forInfoDictionaryKey: "NSLocalNetworkUsageDescription") as? String
+        )?.isEmpty == false
+        return [
             "app": appVersionText,
+            "bonjour_declared": bonjourServices.contains("_remotemic._tcp") ? "true" : "false",
             "device": deviceModelIdentifier,
+            "local_network_usage_declared": hasLocalNetworkUsageDescription ? "true" : "false",
             "os": UIDevice.current.systemVersion,
         ]
     }
@@ -189,4 +251,14 @@ final class DiagnosticsLogger {
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return formatter.string(from: date)
     }
+}
+
+private extension NWInterface.InterfaceType {
+    static let diagnosticCases: [NWInterface.InterfaceType] = [
+        .wifi,
+        .cellular,
+        .wiredEthernet,
+        .loopback,
+        .other,
+    ]
 }

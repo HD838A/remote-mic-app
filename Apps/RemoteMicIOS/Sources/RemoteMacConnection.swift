@@ -1,3 +1,4 @@
+import AVFoundation
 import CryptoKit
 import Foundation
 import Network
@@ -40,6 +41,7 @@ final class RemoteMacConnection: ObservableObject {
         category: "NearbyConnection"
     )
     private let diagnostics = DiagnosticsLogger.shared
+    private let networkPathMonitor = NWPathMonitor()
     private var browser: NWBrowser?
     private var connection: NWConnection?
     private var discoveryRetryTask: Task<Void, Never>?
@@ -50,12 +52,17 @@ final class RemoteMacConnection: ObservableObject {
     private var privateKey: Curve25519.KeyAgreement.PrivateKey?
     private var sessionKey: SymmetricKey?
     private var pairingCode: String?
+    private var browserGeneration = 0
+    private var browserStartedAt: Date?
+    private var connectionGeneration = 0
+    private var connectionStartedAt: Date?
 
     init() {
         identityPrivateKey = InstallationIdentity.loadOrCreate()
         diagnostics.record("connection_initialized", fields: [
             "identity_available": identityPrivateKey == nil ? "false" : "true"
         ])
+        startNetworkPathMonitoring()
         microphone.onSamples = { [weak self] samples in
             self?.sendAudio(samples)
         }
@@ -127,9 +134,15 @@ final class RemoteMacConnection: ObservableObject {
         }
         state = .searching
         macName = "正在查找 Mac"
+        browserGeneration += 1
+        let generation = browserGeneration
+        browserStartedAt = Date()
         diagnostics.record("discovery_start", fields: [
             "attempt": String(discoveryRetryAttempt),
+            "browser": String(generation),
+            "domain": "default",
             "peer_to_peer": "true",
+            "service": "_remotemic._tcp",
         ])
 
         let parameters = NWParameters.tcp
@@ -141,13 +154,13 @@ final class RemoteMacConnection: ObservableObject {
         browser.stateUpdateHandler = { [weak self, weak browser] state in
             DispatchQueue.main.async {
                 guard let self, browser === self.browser else { return }
-                self.handleBrowserState(state)
+                self.handleBrowserState(state, generation: generation)
             }
         }
         browser.browseResultsChangedHandler = { [weak self, weak browser] results, changes in
             DispatchQueue.main.async {
                 guard let self, browser === self.browser else { return }
-                self.handleBrowseResults(results, changeCount: changes.count)
+                self.handleBrowseResults(results, changes: changes, generation: generation)
             }
         }
         self.browser = browser
@@ -157,6 +170,7 @@ final class RemoteMacConnection: ObservableObject {
 
     func restartDiscovery(reason: String = "manual") {
         diagnostics.record("discovery_restart", fields: [
+            "browser": String(browserGeneration),
             "reason": reason,
             "state": diagnosticStateName,
         ])
@@ -164,15 +178,29 @@ final class RemoteMacConnection: ObservableObject {
         discoveryRetryTask = nil
         discoveryRetryAttempt = 0
         endVoice()
+        if connection != nil {
+            diagnostics.record("connection_cancel_requested", fields: [
+                "connection": String(connectionGeneration),
+                "reason": reason,
+            ])
+        }
         connection?.cancel()
         connection = nil
+        connectionStartedAt = nil
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
         buttonTitles = [:]
         macAppVersion = nil
+        if browser != nil {
+            diagnostics.record("browser_cancel_requested", fields: [
+                "browser": String(browserGeneration),
+                "reason": reason,
+            ])
+        }
         browser?.cancel()
         browser = nil
+        browserStartedAt = nil
         isNearbyNetworkReady = false
         pendingEndpoint = nil
         receiveBuffer.removeAll(keepingCapacity: true)
@@ -202,29 +230,45 @@ final class RemoteMacConnection: ObservableObject {
     func beginVoice() {
         voiceRequestID &+= 1
         let requestID = voiceRequestID
+        diagnostics.record("voice_request", fields: [
+            "connected": isConnected ? "true" : "false",
+            "permission": Self.microphonePermissionName(AVAudioApplication.shared.recordPermission),
+        ])
         Task { @MainActor [weak self] in
             guard let self else { return }
             var didSendVoiceStart = false
             do {
-                guard await microphone.requestPermission() else {
+                let permitted = await microphone.requestPermission()
+                diagnostics.record("microphone_permission", fields: [
+                    "granted": permitted ? "true" : "false",
+                    "status": Self.microphonePermissionName(AVAudioApplication.shared.recordPermission),
+                ])
+                guard permitted else {
                     throw MicrophoneStreamer.StreamError.permissionDenied
                 }
                 guard voiceRequestID == requestID, isConnected else { return }
                 send(RemoteWireMessage(type: "voiceStart"))
                 didSendVoiceStart = true
+                diagnostics.record("voice_state", fields: ["state": "start_sent"])
                 try microphone.start()
                 guard voiceRequestID == requestID, isConnected else {
                     microphone.stop()
                     send(RemoteWireMessage(type: "voiceStop"))
+                    diagnostics.record("voice_state", fields: ["state": "cancelled_after_start"])
                     return
                 }
                 isVoiceActive = true
+                diagnostics.record("voice_state", fields: ["state": "recording"])
             } catch {
                 guard voiceRequestID == requestID else { return }
                 if didSendVoiceStart {
                     send(RemoteWireMessage(type: "voiceStop"))
                 }
                 isVoiceActive = false
+                diagnostics.record("voice_state", fields: [
+                    "error": DiagnosticsLogger.errorCode(error),
+                    "state": "failed",
+                ])
                 logger.error("Microphone start failed: \(String(describing: error), privacy: .public)")
                 let message: String
                 if case MicrophoneStreamer.StreamError.permissionDenied = error {
@@ -248,6 +292,7 @@ final class RemoteMacConnection: ObservableObject {
         isVoiceActive = false
         if wasActive {
             send(RemoteWireMessage(type: "voiceStop"))
+            diagnostics.record("voice_state", fields: ["state": "stopped"])
         }
     }
 
@@ -265,8 +310,13 @@ final class RemoteMacConnection: ObservableObject {
         discoveryRetryTask = nil
         pendingEndpoint = nil
         state = .connecting
+        connectionGeneration += 1
+        let generation = connectionGeneration
+        connectionStartedAt = Date()
         diagnostics.record("connection_start", fields: [
-            "endpoint": Self.endpointCategory(endpoint)
+            "connection": String(generation),
+            "endpoint": Self.endpointCategory(endpoint),
+            "peer_to_peer": "true",
         ])
         if case let .service(name, _, _, _) = endpoint {
             macName = name
@@ -278,17 +328,59 @@ final class RemoteMacConnection: ObservableObject {
         self.connection = connection
         connection.stateUpdateHandler = { [weak self, weak connection] state in
             DispatchQueue.main.async {
-                self?.handleConnectionState(state, connection: connection)
+                self?.handleConnectionState(
+                    state,
+                    connection: connection,
+                    generation: generation
+                )
+            }
+        }
+        connection.pathUpdateHandler = { [weak self, weak connection] path in
+            DispatchQueue.main.async {
+                guard let self, connection === self.connection else { return }
+                var fields = DiagnosticsLogger.networkPathFields(path)
+                fields["connection"] = String(generation)
+                self.diagnostics.record("connection_path", fields: fields)
+            }
+        }
+        connection.viabilityUpdateHandler = { [weak self, weak connection] viable in
+            DispatchQueue.main.async {
+                guard let self, connection === self.connection else { return }
+                self.diagnostics.record("connection_viability", fields: [
+                    "connection": String(generation),
+                    "viable": viable ? "true" : "false",
+                ])
+            }
+        }
+        connection.betterPathUpdateHandler = { [weak self, weak connection] available in
+            DispatchQueue.main.async {
+                guard let self, connection === self.connection else { return }
+                self.diagnostics.record("connection_better_path", fields: [
+                    "available": available ? "true" : "false",
+                    "connection": String(generation),
+                ])
             }
         }
         connection.start(queue: queue)
     }
 
-    private func handleConnectionState(_ connectionState: NWConnection.State, connection: NWConnection?) {
+    private func handleConnectionState(
+        _ connectionState: NWConnection.State,
+        connection: NWConnection?,
+        generation: Int
+    ) {
         guard connection === self.connection else { return }
+        let commonFields = [
+            "connection": String(generation),
+            "elapsed_ms": elapsedMilliseconds(since: connectionStartedAt),
+        ]
         switch connectionState {
         case .ready:
-            diagnostics.record("connection_state", fields: ["state": "ready"])
+            diagnostics.record(
+                "connection_state",
+                fields: commonFields.merging(["state": "ready"]) { _, new in new }
+            )
+            diagnostics.record("session_state", fields: ["state": "hello_preparing"])
             guard let identityPrivateKey else {
                 handleFailure("无法准备安全连接，请重新安装 App 后重试")
                 return
@@ -309,26 +401,39 @@ final class RemoteMacConnection: ObservableObject {
                 identityPublicKey: identityPrivateKey.publicKey.rawRepresentation.base64EncodedString(),
                 identitySignature: identitySignature.rawRepresentation.base64EncodedString()
             ))
+            diagnostics.record("session_state", fields: ["state": "hello_sent"])
             receiveNext()
         case let .failed(error):
-            diagnostics.record("connection_state", fields: [
-                "error": DiagnosticsLogger.networkErrorCode(error),
-                "state": "failed",
-            ])
+            diagnostics.record(
+                "connection_state",
+                fields: commonFields.merging([
+                    "error": DiagnosticsLogger.networkErrorCode(error),
+                    "state": "failed",
+                ]) { _, new in new }
+            )
             logger.error("Connection failed: \(String(describing: error), privacy: .public)")
             handleFailure("连接 Mac 失败，请确认两台设备在附近并重试")
         case .cancelled:
-            diagnostics.record("connection_state", fields: ["state": "cancelled"])
+            diagnostics.record(
+                "connection_state",
+                fields: commonFields.merging(["state": "cancelled"]) { _, new in new }
+            )
             if self.connection != nil {
                 handleFailure("与 Mac 的连接已断开，请重新连接")
             }
         case .preparing:
-            diagnostics.record("connection_state", fields: ["state": "preparing"])
+            diagnostics.record(
+                "connection_state",
+                fields: commonFields.merging(["state": "preparing"]) { _, new in new }
+            )
         case let .waiting(error):
-            diagnostics.record("connection_state", fields: [
-                "error": DiagnosticsLogger.networkErrorCode(error),
-                "state": "waiting",
-            ])
+            diagnostics.record(
+                "connection_state",
+                fields: commonFields.merging([
+                    "error": DiagnosticsLogger.networkErrorCode(error),
+                    "state": "waiting",
+                ]) { _, new in new }
+            )
         default:
             break
         }
@@ -340,9 +445,16 @@ final class RemoteMacConnection: ObservableObject {
                 guard let self else { return }
                 if let data { self.consume(data) }
                 if isComplete || error != nil {
+                    var fields = [
+                        "complete": isComplete ? "true" : "false",
+                        "connection": String(self.connectionGeneration),
+                        "data_bytes": String(data?.count ?? 0),
+                    ]
                     if let error {
+                        fields["error"] = DiagnosticsLogger.networkErrorCode(error)
                         self.logger.error("Receive failed: \(String(describing: error), privacy: .public)")
                     }
+                    self.diagnostics.record("receive_terminal", fields: fields)
                     self.handleFailure("与 Mac 的连接已断开，请重新连接")
                 } else {
                     self.receiveNext()
@@ -365,12 +477,16 @@ final class RemoteMacConnection: ObservableObject {
 
     private func handleEnvelope(_ message: RemoteWireMessage) {
         if message.type == "serverKey" {
+            diagnostics.record("session_state", fields: ["state": "server_key_received"])
             establishSession(with: message)
             return
         }
         guard message.type == "secure",
               let message = decrypt(message)
-        else { return }
+        else {
+            diagnostics.record("session_state", fields: ["state": "message_rejected"])
+            return
+        }
         handleSecure(message)
     }
 
@@ -381,6 +497,7 @@ final class RemoteMacConnection: ObservableObject {
               let publicKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: data),
               let sharedSecret = try? privateKey.sharedSecretFromKeyAgreement(with: publicKey)
         else {
+            diagnostics.record("session_state", fields: ["state": "key_agreement_failed"])
             handleFailure("无法建立安全连接")
             return
         }
@@ -409,11 +526,13 @@ final class RemoteMacConnection: ObservableObject {
             diagnostics.record("session_state", fields: ["state": "connected"])
         case "buttonTitles":
             buttonTitles = message.buttonTitles ?? [:]
+            diagnostics.record("session_state", fields: ["state": "button_titles_received"])
         case "denied":
             diagnostics.record("session_state", fields: ["state": "denied"])
             handleFailure("Mac 拒绝了本次连接")
         case "error":
             endVoice()
+            diagnostics.record("session_state", fields: ["state": "operation_error_received"])
             if let detail = message.detail {
                 logger.error("Mac reported an operation error: \(detail, privacy: .public)")
             }
@@ -451,16 +570,33 @@ final class RemoteMacConnection: ObservableObject {
             guard let error else { return }
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.diagnostics.record("send_failed", fields: [
+                    "connection": String(self.connectionGeneration),
+                    "error": DiagnosticsLogger.networkErrorCode(error),
+                    "message_type": message.type,
+                ])
                 self.logger.error("Send failed: \(String(describing: error), privacy: .public)")
                 self.handleFailure("发送失败，请重新连接 Mac 后重试")
             }
         })
     }
 
-    private func handleBrowserState(_ browserState: NWBrowser.State) {
+    private func handleBrowserState(_ browserState: NWBrowser.State, generation: Int) {
+        let commonFields = [
+            "browser": String(generation),
+            "elapsed_ms": elapsedMilliseconds(since: browserStartedAt),
+        ]
         switch browserState {
+        case .setup:
+            diagnostics.record(
+                "browser_state",
+                fields: commonFields.merging(["state": "setup"]) { _, new in new }
+            )
         case .ready:
-            diagnostics.record("browser_state", fields: ["state": "ready"])
+            diagnostics.record(
+                "browser_state",
+                fields: commonFields.merging(["state": "ready"]) { _, new in new }
+            )
             isNearbyNetworkReady = true
             if connection == nil {
                 state = .searching
@@ -470,10 +606,13 @@ final class RemoteMacConnection: ObservableObject {
                 }
             }
         case let .waiting(error):
-            diagnostics.record("browser_state", fields: [
-                "error": DiagnosticsLogger.networkErrorCode(error),
-                "state": "waiting",
-            ])
+            diagnostics.record(
+                "browser_state",
+                fields: commonFields.merging([
+                    "error": DiagnosticsLogger.networkErrorCode(error),
+                    "state": "waiting",
+                ]) { _, new in new }
+            )
             discoveryRetryTask?.cancel()
             discoveryRetryTask = nil
             isNearbyNetworkReady = false
@@ -483,30 +622,84 @@ final class RemoteMacConnection: ObservableObject {
                 macName = "等待访问本地网络"
             }
         case let .failed(error):
-            diagnostics.record("browser_state", fields: [
-                "error": DiagnosticsLogger.networkErrorCode(error),
-                "state": "failed",
-            ])
+            diagnostics.record(
+                "browser_state",
+                fields: commonFields.merging([
+                    "error": DiagnosticsLogger.networkErrorCode(error),
+                    "state": "failed",
+                ]) { _, new in new }
+            )
             discoveryRetryTask?.cancel()
             discoveryRetryTask = nil
             isNearbyNetworkReady = false
             logger.error("Bonjour browser failed: \(String(describing: error), privacy: .public)")
+            diagnostics.record("browser_cancel_requested", fields: [
+                "browser": String(generation),
+                "reason": "failed",
+            ])
             browser?.cancel()
             browser = nil
+            browserStartedAt = nil
             handleFailure("无法发现附近的 Mac，请检查本地网络权限后重试")
         case .cancelled:
-            diagnostics.record("browser_state", fields: ["state": "cancelled"])
+            diagnostics.record(
+                "browser_state",
+                fields: commonFields.merging(["state": "cancelled"]) { _, new in new }
+            )
             isNearbyNetworkReady = false
-        default:
-            break
+        @unknown default:
+            diagnostics.record(
+                "browser_state",
+                fields: commonFields.merging(["state": "unknown"]) { _, new in new }
+            )
         }
     }
 
-    private func handleBrowseResults(_ results: Set<NWBrowser.Result>, changeCount: Int) {
-        diagnostics.record("browser_results", fields: [
-            "changes": String(changeCount),
+    private func handleBrowseResults(
+        _ results: Set<NWBrowser.Result>,
+        changes: Set<NWBrowser.Result.Change>,
+        generation: Int
+    ) {
+        var added = 0
+        var removed = 0
+        var changed = 0
+        var identical = 0
+        var unknown = 0
+        for change in changes {
+            switch change {
+            case .added:
+                added += 1
+            case .removed:
+                removed += 1
+            case .changed:
+                changed += 1
+            case .identical:
+                identical += 1
+            @unknown default:
+                unknown += 1
+            }
+        }
+        var endpointCounts: [String: Int] = [:]
+        for result in results {
+            endpointCounts[Self.endpointCategory(result.endpoint), default: 0] += 1
+        }
+        let endpointSummary = endpointCounts.keys.sorted().map {
+            "\($0):\(endpointCounts[$0] ?? 0)"
+        }.joined(separator: ",")
+        let interfaces = results.flatMap(\.interfaces)
+        var fields = DiagnosticsLogger.interfaceFields(interfaces)
+        fields.merge([
+            "added": String(added),
+            "browser": String(generation),
+            "changed": String(changed),
             "count": String(results.count),
-        ])
+            "elapsed_ms": elapsedMilliseconds(since: browserStartedAt),
+            "endpoints": endpointSummary.isEmpty ? "none" : endpointSummary,
+            "identical": String(identical),
+            "removed": String(removed),
+            "unknown": String(unknown),
+        ]) { _, new in new }
+        diagnostics.record("browser_results", fields: fields)
         guard let endpoint = results.first?.endpoint else {
             pendingEndpoint = nil
             return
@@ -520,12 +713,23 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     private func handleFailure(_ detail: String) {
-        diagnostics.record("connection_failure", fields: ["state": diagnosticStateName])
+        diagnostics.record("connection_failure", fields: [
+            "connection": String(connectionGeneration),
+            "elapsed_ms": elapsedMilliseconds(since: connectionStartedAt),
+            "state": diagnosticStateName,
+        ])
         discoveryRetryTask?.cancel()
         discoveryRetryTask = nil
         endVoice()
+        if connection != nil {
+            diagnostics.record("connection_cancel_requested", fields: [
+                "connection": String(connectionGeneration),
+                "reason": "failure",
+            ])
+        }
         connection?.cancel()
         connection = nil
+        connectionStartedAt = nil
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
@@ -542,7 +746,19 @@ final class RemoteMacConnection: ObservableObject {
         guard let delay = Self.discoveryRetryDelaySeconds(
             attempt: discoveryRetryAttempt,
             state: state
-        ) else { return }
+        ) else {
+            diagnostics.record("discovery_retry_exhausted", fields: [
+                "attempt": String(discoveryRetryAttempt),
+                "browser": String(browserGeneration),
+                "state": diagnosticStateName,
+            ])
+            return
+        }
+        diagnostics.record("discovery_retry_scheduled", fields: [
+            "attempt": String(discoveryRetryAttempt + 1),
+            "browser": String(browserGeneration),
+            "delay_ms": String(Int(delay * 1_000)),
+        ])
         discoveryRetryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             guard let self, !Task.isCancelled,
@@ -551,10 +767,16 @@ final class RemoteMacConnection: ObservableObject {
             else { return }
             discoveryRetryAttempt += 1
             diagnostics.record("discovery_retry", fields: [
-                "attempt": String(discoveryRetryAttempt)
+                "attempt": String(discoveryRetryAttempt),
+                "browser": String(browserGeneration),
+            ])
+            diagnostics.record("browser_cancel_requested", fields: [
+                "browser": String(browserGeneration),
+                "reason": "retry",
             ])
             browser?.cancel()
             browser = nil
+            browserStartedAt = nil
             isNearbyNetworkReady = false
             pendingEndpoint = nil
             start()
@@ -568,6 +790,23 @@ final class RemoteMacConnection: ObservableObject {
         case 1: return 5
         default: return nil
         }
+    }
+
+    private func startNetworkPathMonitoring() {
+        diagnostics.record("network_path_monitor", fields: ["state": "started"])
+        let diagnostics = diagnostics
+        networkPathMonitor.pathUpdateHandler = { path in
+            diagnostics.record(
+                "network_path",
+                fields: DiagnosticsLogger.networkPathFields(path)
+            )
+        }
+        networkPathMonitor.start(queue: queue)
+    }
+
+    private func elapsedMilliseconds(since start: Date?) -> String {
+        guard let start else { return "unknown" }
+        return String(max(0, Int(Date().timeIntervalSince(start) * 1_000)))
     }
 
     private var diagnosticStateName: String {
@@ -589,6 +828,17 @@ final class RemoteMacConnection: ObservableObject {
         case .unix: return "unix"
         case .url: return "url"
         case .opaque: return "opaque"
+        @unknown default: return "unknown"
+        }
+    }
+
+    nonisolated static func microphonePermissionName(
+        _ permission: AVAudioApplication.recordPermission
+    ) -> String {
+        switch permission {
+        case .granted: return "granted"
+        case .denied: return "denied"
+        case .undetermined: return "undetermined"
         @unknown default: return "unknown"
         }
     }

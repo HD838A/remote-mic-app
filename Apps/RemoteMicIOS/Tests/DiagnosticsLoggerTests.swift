@@ -19,6 +19,9 @@ final class DiagnosticsLoggerTests: XCTestCase {
 
         let url = try XCTUnwrap(logger.makeShareFile())
         let text = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(url.pathExtension, "log")
+        XCTAssertTrue(text.contains("RemoteMic iOS Diagnostics format=2"))
+        XCTAssertTrue(text.contains("privacy=no_audio,no_commands,no_device_names,no_ip,no_pairing_code,no_keys"))
         XCTAssertTrue(text.contains("browser_state state=ready forged_event"))
         XCTAssertTrue(text.contains("browser_results count=0"))
         XCTAssertLessThan(
@@ -54,6 +57,23 @@ final class DiagnosticsLoggerTests: XCTestCase {
         XCTAssertEqual(
             DiagnosticsLogger.networkErrorCode(.posix(.ECONNREFUSED)),
             "posix.\(POSIXErrorCode.ECONNREFUSED.rawValue)"
+        )
+    }
+
+    func testInterfaceTypesUseStableNonSensitiveNames() {
+        XCTAssertEqual(DiagnosticsLogger.interfaceTypeName(.wifi), "wifi")
+        XCTAssertEqual(DiagnosticsLogger.interfaceTypeName(.cellular), "cellular")
+        XCTAssertEqual(DiagnosticsLogger.interfaceTypeName(.wiredEthernet), "wired")
+        XCTAssertEqual(DiagnosticsLogger.interfaceTypeName(.loopback), "loopback")
+        XCTAssertEqual(DiagnosticsLogger.interfaceTypeName(.other), "other")
+    }
+
+    func testNetworkPathStatusesUseStableNames() {
+        XCTAssertEqual(DiagnosticsLogger.networkPathStatusName(.satisfied), "satisfied")
+        XCTAssertEqual(DiagnosticsLogger.networkPathStatusName(.unsatisfied), "unsatisfied")
+        XCTAssertEqual(
+            DiagnosticsLogger.networkPathStatusName(.requiresConnection),
+            "requires_connection"
         )
     }
 }
