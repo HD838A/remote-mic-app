@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import RemoteMic
 
@@ -109,6 +110,24 @@ struct VoiceFnTapSessionControllerTests {
         harness.controller.shutdown()
         #expect(harness.controller.phase == .idle)
         #expect(harness.functionKeyEvents.suffix(2) == [true, false])
+    }
+
+    @Test func shutdownDuringStopTapDoesNotToggleTheTargetBackOn() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+
+        #expect(harness.controller.stopVoice())
+        harness.completeNextDrain()
+        #expect(harness.controller.phase == .stopping(1))
+        #expect(harness.functionKeyEvents == [true, false, true])
+
+        harness.controller.shutdown()
+
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        harness.scheduler.runAll()
+        #expect(harness.functionKeyEvents == [true, false, true, false])
     }
 
     @Test func rapidConsecutiveSessionsDoNotInterleaveAndKeepSecondPreRoll() {

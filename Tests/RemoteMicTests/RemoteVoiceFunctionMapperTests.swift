@@ -111,6 +111,34 @@ struct RemoteVoiceFunctionMapperTests {
         #expect(!mapper.isVoiceKeyNeutralized)
         #expect(missingID.writeCount == 0)
     }
+
+    @Test func failedRollbackKeepsTheOriginalMappingForLaterRestore() {
+        let original = [HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 5)]
+        var firstMappings = original
+        var firstWriteResults = [true, false, true]
+        let first = RemoteVoiceMappingService(
+            registryID: 1,
+            readMappings: { firstMappings },
+            setMappings: { mappings in
+                guard !firstWriteResults.isEmpty else { return false }
+                guard firstWriteResults.removeFirst() else { return false }
+                firstMappings = mappings
+                return true
+            }
+        )
+        let second = MappingServiceBox(registryID: 2, mappings: original, acceptsWrites: false)
+        let mapper = RemoteVoiceFunctionMapper { [first, second.service] }
+
+        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(firstMappings == [
+            original[0],
+            RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey,
+        ])
+
+        mapper.restore()
+
+        #expect(firstMappings == original)
+    }
 }
 
 private final class MappingServiceBox {

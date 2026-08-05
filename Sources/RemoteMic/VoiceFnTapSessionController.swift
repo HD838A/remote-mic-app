@@ -191,13 +191,17 @@ final class VoiceFnTapSessionController {
         pendingVoice = nil
         generation &+= 1
         cancelScheduledTasks()
-        let completedInFlightStartTap = releaseFunctionKeyIfNeeded()
+        let completedInFlightTap = releaseFunctionKeyIfNeeded()
         let needsStopTap: Bool
         switch phase {
-        case .active, .draining, .stopping:
+        case .active, .draining:
             needsStopTap = true
+        case .stopping:
+            // Releasing the in-flight key-down above completes the stop tap.
+            // Posting another tap here would toggle the target back on.
+            needsStopTap = false
         case .starting:
-            needsStopTap = completedInFlightStartTap
+            needsStopTap = completedInFlightTap
         case .idle:
             needsStopTap = false
         }
@@ -361,7 +365,7 @@ final class VoiceFnTapSessionController {
     private func releaseFunctionKeyIfNeeded() -> Bool {
         guard functionKeyIsPressed else { return false }
         let success = setFunctionKeyPressed(false)
-        functionKeyIsPressed = false
+        functionKeyIsPressed = !success
         return success
     }
 

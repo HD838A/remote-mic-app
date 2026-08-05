@@ -611,8 +611,20 @@ struct RemoteButtonsTests {
         let model = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"), encoding: .utf8)
         let arm = try #require(monitor.range(of: "eventSuppressor.arm(button: button, edge: .down)"))
         let callback = try #require(monitor.range(of: "onButtonPressed?(button)"))
-        let map = try #require(model.range(of: "let powerKeySuppressed = applyVoiceFunctionMapping()"))
-        let start = try #require(model.range(of: "hidMonitor.start(powerKeySuppressed: powerKeySuppressed)"))
+        let applySettingsStart = try #require(model.range(of: "func applyHIDSettings()"))
+        let applySettingsEnd = try #require(
+            model.range(
+                of: "func setExperimentalContinuousRecordingEnabled",
+                range: applySettingsStart.upperBound..<model.endIndex
+            )
+        )
+        let applySettings = model[applySettingsStart.lowerBound..<applySettingsEnd.lowerBound]
+        let map = try #require(
+            applySettings.range(of: "powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)")
+        )
+        let start = try #require(
+            applySettings.range(of: "hidMonitor.start(powerKeySuppressed: powerKeySuppressed)")
+        )
         #expect(arm.lowerBound < callback.lowerBound)
         #expect(map.lowerBound < start.lowerBound)
     }
@@ -839,7 +851,7 @@ struct RemoteButtonsTests {
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
         let source = AppSettings(defaults: sourceDefaults)
         source.voiceFnTapModeEnabled = true
-        let exported = source.exportedConfigurationData()
+        let exported = try source.exportedConfigurationData()
         let object = try #require(
             JSONSerialization.jsonObject(with: exported) as? [String: Any]
         )

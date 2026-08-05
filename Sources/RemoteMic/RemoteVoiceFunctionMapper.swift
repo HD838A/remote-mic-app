@@ -236,13 +236,18 @@ final class RemoteVoiceFunctionMapper {
         matchedCount: Int
     ) {
         var rollbackCount = 0
+        var registryIDsNeedingRestore = Set<UInt64>()
         for index in appliedIndices {
             guard let snapshot = snapshots[index] else { continue }
             if services[index].setMappings(snapshot) {
                 rollbackCount += 1
+            } else if let registryID = services[index].registryID {
+                registryIDsNeedingRestore.insert(registryID)
             }
         }
-        newlyStoredRegistryIDs.forEach { originalMappings.removeValue(forKey: $0) }
+        newlyStoredRegistryIDs
+            .subtracting(registryIDsNeedingRestore)
+            .forEach { originalMappings.removeValue(forKey: $0) }
         resetAppliedState()
         AppLogger.shared.write(
             "VOICE FN MAPPING rollback matched=\(matchedCount) applied=\(appliedIndices.count) " +
