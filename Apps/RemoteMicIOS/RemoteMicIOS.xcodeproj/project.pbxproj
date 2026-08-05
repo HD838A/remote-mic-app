@@ -17,10 +17,12 @@
 		5A6D4557F456D963BFEBEE1F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10FF5AE6F95095F6F4BCE6D1 /* Assets.xcassets */; };
 		66FEEC0B3ADF24AC9137C763 /* RemoteMacConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */; };
 		92AB4E7240E956061E267651 /* RemoteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06B7C33AA9DFAB059130BC8 /* RemoteCommand.swift */; };
+		9F5E13DE214E9B175161CED6 /* DiagnosticsLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C52FD4B2B1271A5E26D3F61 /* DiagnosticsLogger.swift */; };
 		AA5C600980EB909F79DF274B /* RemoteWireMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A2C433BC8EB255334245A4 /* RemoteWireMessageTests.swift */; };
 		BD841ADFC754C46205404AD4 /* RemoteControlScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4AEACAAB5860345FD8568A /* RemoteControlScreen.swift */; };
 		C05D0F17F0D1E9B99C1C392E /* MicrophoneStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */; };
 		D6D15628D3EBDD756FF2CB89 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = E52A91312AD4D5B46C94342F /* InfoPlist.strings */; };
+		DADE826A0695A8EA845FAD23 /* DiagnosticsLoggerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3593F1600A6C7FBC0D036917 /* DiagnosticsLoggerTests.swift */; };
 		E135C47EB581785134FF26C3 /* RemoteMicIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A0FBE379FB6F7DA113757E /* RemoteMicIOSApp.swift */; };
 		E3FD3381B67ACA362D06D90B /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 551C97336CA57FE01F6F1EAC /* AppLanguage.swift */; };
 		FDEAE0D30E6D4692A7AD31EE /* RemoteMacConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D811C8889E87C89B9D23014E /* RemoteMacConnection.swift */; };
@@ -41,12 +43,14 @@
 		10FF5AE6F95095F6F4BCE6D1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2AAB8DDB974CD61E81680948 /* RemoteMicIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RemoteMicIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2BBEDCD3D0B3E3EAF8F3CC8C /* RemoteWireMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWireMessage.swift; sourceTree = "<group>"; };
+		3593F1600A6C7FBC0D036917 /* DiagnosticsLoggerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsLoggerTests.swift; sourceTree = "<group>"; };
 		40FA43331E1B420D3923D5F0 /* RemoteMicIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RemoteMicIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		41A2C433BC8EB255334245A4 /* RemoteWireMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWireMessageTests.swift; sourceTree = "<group>"; };
 		4D3CB04898A74D008EB5C938 /* RemoteControlComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControlComponents.swift; sourceTree = "<group>"; };
 		4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppInformationScreen.swift; sourceTree = "<group>"; };
 		5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneStreamer.swift; sourceTree = "<group>"; };
 		551C97336CA57FE01F6F1EAC /* AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
+		9C52FD4B2B1271A5E26D3F61 /* DiagnosticsLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsLogger.swift; sourceTree = "<group>"; };
 		9C86CCCC1D0E7ACEE94DF28D /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A11DF672421B64C7B416FC13 /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedback.swift; sourceTree = "<group>"; };
 		C11D3DA172CDBD76FFA6B658 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
@@ -84,6 +88,7 @@
 		6899D85F4100C07BCA1318D7 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				3593F1600A6C7FBC0D036917 /* DiagnosticsLoggerTests.swift */,
 				E74D3E4698E212D83418451D /* RemoteCommandTests.swift */,
 				0620D6DAFE0DDD62AC07843D /* RemoteControlLayoutTests.swift */,
 				E4C013854B23FF74F36867E2 /* RemoteMacConnectionTests.swift */,
@@ -105,6 +110,7 @@
 			isa = PBXGroup;
 			children = (
 				551C97336CA57FE01F6F1EAC /* AppLanguage.swift */,
+				9C52FD4B2B1271A5E26D3F61 /* DiagnosticsLogger.swift */,
 				A11DF672421B64C7B416FC13 /* HapticFeedback.swift */,
 				4F9C6E672E7AFD9B15D7C098 /* MacAppInformationScreen.swift */,
 				5234B82F7AFA70C946876B12 /* MicrophoneStreamer.swift */,
@@ -205,6 +211,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DADE826A0695A8EA845FAD23 /* DiagnosticsLoggerTests.swift in Sources */,
 				03314770AC71969D6524FE42 /* RemoteCommandTests.swift in Sources */,
 				3E346D8B95118A020D6B2161 /* RemoteControlLayoutTests.swift in Sources */,
 				66FEEC0B3ADF24AC9137C763 /* RemoteMacConnectionTests.swift in Sources */,
@@ -217,6 +224,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E3FD3381B67ACA362D06D90B /* AppLanguage.swift in Sources */,
+				9F5E13DE214E9B175161CED6 /* DiagnosticsLogger.swift in Sources */,
 				32BE424431F83EA8AA9618D1 /* HapticFeedback.swift in Sources */,
 				4934DF6A4A865632E8E0B729 /* MacAppInformationScreen.swift in Sources */,
 				C05D0F17F0D1E9B99C1C392E /* MicrophoneStreamer.swift in Sources */,

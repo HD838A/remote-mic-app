@@ -81,11 +81,15 @@ struct RemoteControlScreen: View {
         .preferredColorScheme(.light)
         .task {
             HapticFeedback.shared.prepare()
+            DiagnosticsLogger.shared.record("remote_screen_task")
             connection.start()
         }
         .onChange(of: scenePhase) { _, phase in
+            DiagnosticsLogger.shared.record("scene_phase", fields: [
+                "phase": Self.diagnosticScenePhaseName(phase)
+            ])
             if phase == .active, connection.state.shouldRestartDiscoveryOnActivation {
-                connection.restartDiscovery()
+                connection.restartDiscovery(reason: "scene_active")
             }
         }
         .navigationDestination(isPresented: $showsMacAppInformation) {
@@ -130,7 +134,7 @@ struct RemoteControlScreen: View {
                 Spacer()
 
                 Button {
-                    connection.restartDiscovery()
+                    connection.restartDiscovery(reason: "open_mac_information")
                     showsMacAppInformation = true
                 } label: {
                     LightSurface {
@@ -176,6 +180,15 @@ struct RemoteControlScreen: View {
             .frame(maxWidth: 210)
         }
         .frame(height: 58)
+    }
+
+    private static func diagnosticScenePhaseName(_ phase: ScenePhase) -> String {
+        switch phase {
+        case .active: return "active"
+        case .inactive: return "inactive"
+        case .background: return "background"
+        @unknown default: return "unknown"
+        }
     }
 
     private func middleControls(buttonSize: CGFloat, spacing: CGFloat) -> some View {

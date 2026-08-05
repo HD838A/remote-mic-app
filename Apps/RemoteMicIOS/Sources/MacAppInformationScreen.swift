@@ -30,6 +30,8 @@ struct MacAppInformationScreen: View {
     @State private var copyResetTask: Task<Void, Never>?
     @State private var testFlightCopyResetTask: Task<Void, Never>?
     @State private var appVersionCopyResetTask: Task<Void, Never>?
+    @State private var diagnosticsShareFile: DiagnosticsShareFile?
+    @State private var diagnosticsShareURLForCleanup: URL?
 
     var body: some View {
         GeometryReader { proxy in
@@ -39,31 +41,39 @@ struct MacAppInformationScreen: View {
             ZStack {
                 RemoteBackground()
 
-                VStack(spacing: pageSpacing) {
+                VStack(spacing: 0) {
                     navigationBar
                         .frame(height: 58)
+                        .padding(.horizontal, pageSpacing)
+                        .padding(.top, isCompact ? 2 : 8)
 
-                    identityHeader
-                        .frame(height: isCompact ? 64 : 74)
+                    ScrollView {
+                        VStack(spacing: pageSpacing) {
+                            identityHeader
+                                .frame(height: isCompact ? 64 : 74)
 
-                    connectionDetails
-                        .frame(height: isCompact ? 118 : 132)
+                            connectionDetails
+                                .frame(height: isCompact ? 118 : 132)
 
-                    connectionChecks
-                        .frame(height: isCompact ? 92 : 100)
+                            connectionChecks
+                                .frame(height: isCompact ? 92 : 100)
 
-                    remoteRecommendation
-                        .frame(height: isCompact ? 82 : 94)
+                            remoteRecommendation
+                                .frame(height: isCompact ? 82 : 94)
 
-                    downloadSection
-                        .frame(height: isCompact ? 180 : 202)
+                            downloadSection
+                                .frame(height: isCompact ? 180 : 202)
 
-                    bottomControls
-                        .frame(height: 62)
+                            bottomControls
+                        }
+                        .frame(maxWidth: 520)
+                        .padding(.horizontal, pageSpacing)
+                        .padding(.top, pageSpacing)
+                        .padding(.bottom, max(pageSpacing, proxy.safeAreaInsets.bottom + 8))
+                        .frame(maxWidth: .infinity)
+                    }
+                    .scrollIndicators(.hidden)
                 }
-                .frame(maxWidth: 520, maxHeight: .infinity, alignment: .top)
-                .padding(.horizontal, pageSpacing)
-                .padding(.vertical, isCompact ? 2 : 8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
@@ -75,30 +85,16 @@ struct MacAppInformationScreen: View {
             testFlightCopyResetTask?.cancel()
             appVersionCopyResetTask?.cancel()
         }
+        .sheet(item: $diagnosticsShareFile, onDismiss: removeSharedDiagnosticsFile) { file in
+            DiagnosticsActivityView(items: [file.url])
+        }
     }
 
     private var navigationBar: some View {
         ZStack {
-            VStack(spacing: 1) {
-                Text(language.text("无线麦"))
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(RemotePalette.text)
-
-                Button {
-                    copyAppVersion()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: didCopyAppVersion ? "checkmark" : "doc.on.doc")
-                        Text("iOS \(appVersionText)")
-                    }
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(RemotePalette.text.opacity(0.58))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    language.text(didCopyAppVersion ? "App 版本号已复制" : "复制 App 版本号")
-                )
-            }
+            Text(language.text("无线麦"))
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(RemotePalette.text)
 
             HStack {
                 Button {
@@ -118,7 +114,7 @@ struct MacAppInformationScreen: View {
 
                 Button {
                     HapticFeedback.shared.trigger(.emphasized)
-                    connection.restartDiscovery()
+                    connection.restartDiscovery(reason: "navigation_refresh")
                 } label: {
                     LightSurface {
                         Image(systemName: "arrow.clockwise")
@@ -216,7 +212,7 @@ struct MacAppInformationScreen: View {
 
                     Button {
                         HapticFeedback.shared.trigger(.emphasized)
-                        connection.restartDiscovery()
+                        connection.restartDiscovery(reason: "connection_check")
                     } label: {
                         Text(language.text("重新检查"))
                             .font(.system(size: 12, weight: .semibold))
@@ -442,11 +438,10 @@ struct MacAppInformationScreen: View {
             .padding(3)
         }
         .frame(maxWidth: 190)
-        .frame(maxWidth: .infinity)
     }
 
     private var bottomControls: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 10) {
             Button {
                 copyTestFlightLink()
             } label: {
@@ -474,6 +469,49 @@ struct MacAppInformationScreen: View {
 
             languageSwitcher
                 .frame(height: 38)
+
+            HStack(spacing: 10) {
+                Button {
+                    copyAppVersion()
+                } label: {
+                    InformationLightSurface(cornerRadius: 12) {
+                        HStack(spacing: 5) {
+                            Image(systemName: didCopyAppVersion ? "checkmark" : "doc.on.doc")
+                            Text("iOS \(appVersionText)")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(RemotePalette.text.opacity(0.76))
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .buttonStyle(TactileButtonStyle())
+                .accessibilityLabel(
+                    language.text(didCopyAppVersion ? "App 版本号已复制" : "复制 App 版本号")
+                )
+
+                Button {
+                    shareDiagnostics()
+                } label: {
+                    InformationLightSurface(cornerRadius: 12) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.arrow.up")
+                            Text(language.text("分享诊断日志"))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(RemotePalette.text.opacity(0.76))
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .buttonStyle(TactileButtonStyle())
+                .accessibilityLabel(language.text("分享诊断日志"))
+            }
+            .frame(height: 42)
         }
         .frame(maxWidth: .infinity)
     }
@@ -647,6 +685,36 @@ struct MacAppInformationScreen: View {
             didCopyAppVersion = false
         }
     }
+
+    private func shareDiagnostics() {
+        DiagnosticsLogger.shared.record("diagnostics_share_requested")
+        guard let url = DiagnosticsLogger.shared.makeShareFile() else { return }
+        HapticFeedback.shared.trigger(.emphasized)
+        diagnosticsShareURLForCleanup = url
+        diagnosticsShareFile = DiagnosticsShareFile(url: url)
+    }
+
+    private func removeSharedDiagnosticsFile() {
+        guard let url = diagnosticsShareURLForCleanup else { return }
+        DiagnosticsLogger.shared.removeShareFile(at: url)
+        diagnosticsShareURLForCleanup = nil
+        diagnosticsShareFile = nil
+    }
+}
+
+private struct DiagnosticsShareFile: Identifiable {
+    let url: URL
+    var id: String { url.path }
+}
+
+private struct DiagnosticsActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 private struct InformationLightSurface<Content: View>: View {
