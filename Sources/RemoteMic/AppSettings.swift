@@ -232,6 +232,7 @@ final class AppSettings: ObservableObject {
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
+        static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
@@ -290,6 +291,15 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 experimentalContinuousRecordingEnabled,
                 forKey: Keys.experimentalContinuousRecordingEnabled
+            )
+        }
+    }
+
+    @Published var voiceFnTapModeEnabled: Bool {
+        didSet {
+            defaults.set(
+                voiceFnTapModeEnabled,
+                forKey: Keys.voiceFnTapModeEnabled
             )
         }
     }
@@ -409,6 +419,9 @@ final class AppSettings: ObservableObject {
         checksForPreReleaseUpdates = defaults.bool(forKey: Keys.checksForPreReleaseUpdates)
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
+        )
+        voiceFnTapModeEnabled = defaults.bool(
+            forKey: Keys.voiceFnTapModeEnabled
         )
         continuousRecordingPowerBindingBackup = defaults
             .data(forKey: Keys.continuousRecordingPowerBindingBackup)

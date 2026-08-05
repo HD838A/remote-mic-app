@@ -337,6 +337,16 @@ check(
     RemoteVoiceFunctionMappingPolicy.applying(to: hardwareVoiceMappings) == hardwareVoiceMappings,
     "RC003 hardware voice mapping is idempotent"
 )
+check(
+    RemoteVoiceFunctionMappingPolicy.applying(
+        to: [unrelatedMapping],
+        voiceMapping: RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
+    ) == [
+        unrelatedMapping,
+        RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey,
+    ],
+    "RC003 neutralized voice key drops the F5 event for tap-style voice tools"
+)
 let changedUnrelatedMapping = HIDUsageMapping(
     source: unrelatedMapping.source,
     destination: 0x0000_0007_0000_0006

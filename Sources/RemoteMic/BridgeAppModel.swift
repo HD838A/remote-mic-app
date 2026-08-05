@@ -13,6 +13,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingCloseTimeout: TimeInterval = 2
     private static let longRecordingKeepAliveInterval: TimeInterval = 10
     private static let longRecordingMaximumDuration: TimeInterval = 60
+    private static let voiceFnTapDuration: TimeInterval = 0.12
+    private static let voiceFnTapStopDelay: TimeInterval = 0.35
 
     let settings = AppSettings()
 
@@ -595,6 +597,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         applyHIDSettings()
     }
 
+    func setVoiceFnTapModeEnabled(_ enabled: Bool) {
+        settings.voiceFnTapModeEnabled = enabled
+        applyHIDSettings()
+    }
+
     private func requestNextHIDPermissionIfNeeded() {
         let request = HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: settings.customMappingEnabled,
@@ -665,6 +672,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             scheduleLongRecordingTimers(generation: longRecordingGeneration)
             AppLogger.shared.write("LONG RECORDING started")
         }
+        if settings.voiceFnTapModeEnabled {
+            postVoiceFunctionKeyTap(phase: "start", delay: 0.15)
+        }
         beginVoiceSessionIfNeeded()
     }
 
@@ -677,7 +687,23 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             longRecordingCloseTimer = nil
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
+        if settings.voiceFnTapModeEnabled {
+            // 延迟注入结束点按，让末尾音频先进入回环设备，避免最后一个字被切掉
+            postVoiceFunctionKeyTap(phase: "stop", delay: Self.voiceFnTapStopDelay)
+        }
         endVoiceSessionIfNeeded()
+    }
+
+    private func postVoiceFunctionKeyTap(phase: String, delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let down = KeyboardInjector.setFunctionKeyPressed(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.voiceFnTapDuration) {
+                let up = KeyboardInjector.setFunctionKeyPressed(false)
+                AppLogger.shared.write(
+                    "VOICE FN TAP phase=\(phase) down=\(down) up=\(up) access=\(KeyboardInjector.isAccessibilityTrusted)"
+                )
+            }
+        }
     }
 
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16]) {
@@ -1010,7 +1036,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @discardableResult
     private func applyVoiceFunctionMapping() -> Bool {
         let applied = voiceFunctionMapper.apply(
-            suppressPowerKey: settings.customMappingEnabled
+            suppressPowerKey: settings.customMappingEnabled,
+            neutralizeVoiceKey: settings.voiceFnTapModeEnabled
         )
         if !isStreaming {
             isVoiceTriggerEnabled = applied

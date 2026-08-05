@@ -142,6 +142,8 @@
 "connection.status.voice_active" = "语音中";
 "common.status.ready" = "已就绪";
 "connection.status.voice_trigger" = "语音触发";
+"connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";
+"connection.voice_fn_tap.hint" = "适配点按式语音输入（如 Typeless）：按下语音键注入一次 Fn 开始，松开再注入一次结束，音频在按住期间照常传输。需要辅助功能权限；开启后语音键不再直接发 Fn。";
 "connection.action.reconnect" = "立即重新连接";
 "connection.trusted_devices.title" = "受信任的手机";
 "connection.trusted_devices.help" = "手机遥控是备用功能。每次启动后需主动点击“连接手机”，才会开启附近连接；清除记录后，所有手机都需要重新确认授权。";
