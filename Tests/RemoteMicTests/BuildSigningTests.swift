@@ -59,4 +59,19 @@ struct BuildSigningTests {
         #expect(notarizeSource.contains("export REMOTE_WEB_RELAY_URL"))
         #expect(verifySource.contains("Developer ID app is missing a production Web Remote relay URL"))
     }
+
+    @Test func unavailablePreReleaseFeedDoesNotPresentACustomErrorAlert() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("resolved=false fallback=stable"))
+        #expect(source.contains("user_alert=false"))
+        #expect(!source.contains("showPreReleaseFeedUnavailableAlert"))
+    }
 }

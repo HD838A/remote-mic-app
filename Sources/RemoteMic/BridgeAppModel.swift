@@ -39,6 +39,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var testToneGeneration = 0
     private var phoneVoiceFunctionKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
+    private var voiceSessionUsageSource: UsageEventSource?
     private var bluetoothVoiceActive = false
     private var activeMobileVoiceSource: MobileVoiceSource?
     private var longRecordingRequested = false
@@ -59,8 +60,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         monitor.onActiveButtons = { [weak self] buttons in
             self?.activeRemoteButtons = buttons
         }
-        monitor.onButtonPressed = { [weak self] _ in
-            self?.settings.recordButtonPress()
+        monitor.onButtonPressed = { [weak self] button in
+            self?.settings.recordButtonPress(
+                control: .remoteButton(button),
+                source: .bluetoothRemote
+            )
         }
         monitor.onInternalAction = { [weak self] action in
             self?.performInternalAction(action)
@@ -106,7 +110,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         phoneRemoteServer.onCommand = { [weak self] button, completion in
             DispatchQueue.main.async {
-                completion(self?.performPhoneCommand(button) ?? false)
+                completion(self?.performPhoneCommand(button, source: .nearbyPhone) ?? false)
             }
         }
         phoneRemoteServer.onVoiceStart = { [weak self] completion in
@@ -143,7 +147,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         webRemoteClient.onCommand = { [weak self] button, completion in
             DispatchQueue.main.async {
-                completion(self?.performPhoneCommand(button) ?? false)
+                completion(self?.performPhoneCommand(button, source: .webRemote) ?? false)
             }
         }
         webRemoteClient.onVoiceStart = { [weak self] completion in
@@ -204,6 +208,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         webRemoteState = .disabled
         bluetoothVoiceActive = false
         activeMobileVoiceSource = nil
+        voiceSessionUsageSource = nil
         updatePhoneVoiceFunctionKeyState(streaming: false)
         hidMonitor.stop()
         isAudioOutputReady = false
@@ -763,11 +768,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
-    private func performPhoneCommand(_ button: RemoteButton) -> Bool {
+    private func performPhoneCommand(
+        _ button: RemoteButton,
+        source: UsageEventSource
+    ) -> Bool {
         let action = settings.action(for: button)
         if action.isAppInternal {
             let handled = performInternalAction(action)
-            if handled { settings.recordButtonPress() }
+            if handled {
+                settings.recordButtonPress(control: .remoteButton(button), source: source)
+            }
             AppLogger.shared.write(
                 "PHONE REMOTE button=\(button.rawValue) action=\(action.rawValue) handled=\(handled)"
             )
@@ -780,7 +790,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard KeyboardInjector.send(action, shortcut: settings.shortcut(for: button)) else {
             return false
         }
-        settings.recordButtonPress()
+        settings.recordButtonPress(control: .remoteButton(button), source: source)
         AppLogger.shared.write(
             "PHONE REMOTE button=\(button.rawValue) action=\(action.rawValue)"
         )
@@ -963,19 +973,38 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             statusMessage: LocalizedMessage("audio.test_tone.blocked_voice_active"),
             logReason: "voice_start"
         )
-        settings.recordButtonPress()
-        voiceSessionStartedAt = Date()
+        let startedAt = Date()
+        let source = currentVoiceUsageSource
+        settings.recordButtonPress(control: .voice, source: source, at: startedAt)
+        voiceSessionStartedAt = startedAt
+        voiceSessionUsageSource = source
         isStreaming = true
     }
 
     private func endVoiceSessionIfNeeded() {
         guard !bluetoothVoiceActive, activeMobileVoiceSource == nil, isStreaming else { return }
         if let voiceSessionStartedAt {
-            settings.recordVoiceDuration(Date().timeIntervalSince(voiceSessionStartedAt))
+            let endedAt = Date()
+            settings.recordVoiceDuration(
+                endedAt.timeIntervalSince(voiceSessionStartedAt),
+                startedAt: voiceSessionStartedAt,
+                source: voiceSessionUsageSource ?? .unknown,
+                at: endedAt
+            )
             self.voiceSessionStartedAt = nil
         }
+        voiceSessionUsageSource = nil
         isStreaming = false
         audioOutput.endSession()
+    }
+
+    private var currentVoiceUsageSource: UsageEventSource {
+        if bluetoothVoiceActive { return .bluetoothRemote }
+        switch activeMobileVoiceSource {
+        case .nearby: return .nearbyPhone
+        case .web: return .webRemote
+        case nil: return .unknown
+        }
     }
 
     @discardableResult

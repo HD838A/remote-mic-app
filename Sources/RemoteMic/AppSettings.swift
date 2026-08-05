@@ -47,15 +47,172 @@ struct WeeklyUsageStatisticsSeries: Equatable {
     let weeklyBuckets: [UsageStatisticsBucket]
 }
 
+enum UsageEventSource: String, Codable, CaseIterable {
+    case bluetoothRemote = "bluetooth_remote"
+    case nearbyPhone = "nearby_phone"
+    case webRemote = "web_remote"
+    case unknown
+}
+
+enum UsageControl {
+    case remoteButton(RemoteButton)
+    case voice
+
+    var identifier: String {
+        switch self {
+        case let .remoteButton(button): return "button.\(button.rawValue)"
+        case .voice: return "voice"
+        }
+    }
+}
+
+struct UsageStatisticsMetadata: Equatable {
+    var firstActivityAt: Date?
+    var lastActivityAt: Date?
+    var buttonPressCountBySource: [UsageEventSource: UInt64] = [:]
+    var buttonPressCountByControl: [String: UInt64] = [:]
+    var buttonPressCountByHour: [Int: UInt64] = [:]
+    var voiceSessionCount: UInt64 = 0
+    var voiceSessionCountBySource: [UsageEventSource: UInt64] = [:]
+    var voiceSessionCountByEndHour: [Int: UInt64] = [:]
+    var voiceDurationBySource: [UsageEventSource: TimeInterval] = [:]
+    var voiceDurationByEndHour: [Int: TimeInterval] = [:]
+    var longestVoiceSessionDuration: TimeInterval = 0
+    var longestVoiceSessionDurationBySource: [UsageEventSource: TimeInterval] = [:]
+    var timeZoneIdentifiers: Set<String> = []
+    var calendarIdentifiers: Set<String> = []
+    var schemaVersions: Set<Int> = []
+}
+
 struct VoiceSessionUsageRecord: Codable, Equatable, Identifiable {
     let id: UUID
+    let startedAt: Date?
     let endedAt: Date
     let duration: TimeInterval
+    let source: UsageEventSource?
+}
+
+private struct DailyUsageMetadata: Codable {
+    var schemaVersion = 0
+    var firstActivityAt: Date?
+    var lastActivityAt: Date?
+    var buttonPressCountBySource: [String: UInt64] = [:]
+    var buttonPressCountByControl: [String: UInt64] = [:]
+    var buttonPressCountByHour: [Int: UInt64] = [:]
+    var voiceSessionCount: UInt64 = 0
+    var voiceSessionCountBySource: [String: UInt64] = [:]
+    var voiceSessionCountByEndHour: [Int: UInt64] = [:]
+    var voiceDurationBySource: [String: TimeInterval] = [:]
+    var voiceDurationByEndHour: [Int: TimeInterval] = [:]
+    var longestVoiceSessionDuration: TimeInterval = 0
+    var longestVoiceSessionDurationBySource: [String: TimeInterval] = [:]
+    var timeZoneIdentifiers: Set<String> = []
+    var calendarIdentifiers: Set<String> = []
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case firstActivityAt
+        case lastActivityAt
+        case buttonPressCountBySource
+        case buttonPressCountByControl
+        case buttonPressCountByHour
+        case voiceSessionCount
+        case voiceSessionCountBySource
+        case voiceSessionCountByEndHour
+        case voiceDurationBySource
+        case voiceDurationByEndHour
+        case longestVoiceSessionDuration
+        case longestVoiceSessionDurationBySource
+        case timeZoneIdentifiers
+        case calendarIdentifiers
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        firstActivityAt = try container.decodeIfPresent(Date.self, forKey: .firstActivityAt)
+        lastActivityAt = try container.decodeIfPresent(Date.self, forKey: .lastActivityAt)
+        buttonPressCountBySource = try container.decodeIfPresent(
+            [String: UInt64].self,
+            forKey: .buttonPressCountBySource
+        ) ?? [:]
+        buttonPressCountByControl = try container.decodeIfPresent(
+            [String: UInt64].self,
+            forKey: .buttonPressCountByControl
+        ) ?? [:]
+        buttonPressCountByHour = try container.decodeIfPresent(
+            [Int: UInt64].self,
+            forKey: .buttonPressCountByHour
+        ) ?? [:]
+        voiceSessionCount = try container.decodeIfPresent(
+            UInt64.self,
+            forKey: .voiceSessionCount
+        ) ?? 0
+        voiceSessionCountBySource = try container.decodeIfPresent(
+            [String: UInt64].self,
+            forKey: .voiceSessionCountBySource
+        ) ?? [:]
+        voiceSessionCountByEndHour = try container.decodeIfPresent(
+            [Int: UInt64].self,
+            forKey: .voiceSessionCountByEndHour
+        ) ?? [:]
+        voiceDurationBySource = try container.decodeIfPresent(
+            [String: TimeInterval].self,
+            forKey: .voiceDurationBySource
+        ) ?? [:]
+        voiceDurationByEndHour = try container.decodeIfPresent(
+            [Int: TimeInterval].self,
+            forKey: .voiceDurationByEndHour
+        ) ?? [:]
+        longestVoiceSessionDuration = try container.decodeIfPresent(
+            TimeInterval.self,
+            forKey: .longestVoiceSessionDuration
+        ) ?? 0
+        longestVoiceSessionDurationBySource = try container.decodeIfPresent(
+            [String: TimeInterval].self,
+            forKey: .longestVoiceSessionDurationBySource
+        ) ?? [:]
+        timeZoneIdentifiers = try container.decodeIfPresent(
+            Set<String>.self,
+            forKey: .timeZoneIdentifiers
+        ) ?? []
+        calendarIdentifiers = try container.decodeIfPresent(
+            Set<String>.self,
+            forKey: .calendarIdentifiers
+        ) ?? []
+    }
 }
 
 private struct DailyUsageStatistics: Codable {
     var buttonPressCount: UInt64 = 0
     var voiceDuration: TimeInterval = 0
+    var metadata = DailyUsageMetadata()
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case buttonPressCount
+        case voiceDuration
+        case metadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        buttonPressCount = try container.decodeIfPresent(
+            UInt64.self,
+            forKey: .buttonPressCount
+        ) ?? 0
+        voiceDuration = try container.decodeIfPresent(
+            TimeInterval.self,
+            forKey: .voiceDuration
+        ) ?? 0
+        metadata = try container.decodeIfPresent(
+            DailyUsageMetadata.self,
+            forKey: .metadata
+        ) ?? DailyUsageMetadata()
+    }
 }
 
 final class AppSettings: ObservableObject {
@@ -368,7 +525,12 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    func recordButtonPress(at date: Date = Date(), calendar: Calendar = .current) {
+    func recordButtonPress(
+        control: UsageControl? = nil,
+        source: UsageEventSource = .unknown,
+        at date: Date = Date(),
+        calendar: Calendar = .current
+    ) {
         if totalButtonPressCount < .max {
             totalButtonPressCount += 1
         }
@@ -377,12 +539,33 @@ final class AppSettings: ObservableObject {
         var statistics = dailyStatistics[key] ?? DailyUsageStatistics()
         if statistics.buttonPressCount < .max {
             statistics.buttonPressCount += 1
-            dailyStatistics[key] = statistics
         }
+        Self.recordActivityProvenance(
+            in: &statistics.metadata,
+            startingAt: date,
+            endingAt: date,
+            calendar: calendar
+        )
+        Self.addCount(1, for: source.rawValue, to: &statistics.metadata.buttonPressCountBySource)
+        if let control {
+            Self.addCount(
+                1,
+                for: control.identifier,
+                to: &statistics.metadata.buttonPressCountByControl
+            )
+        }
+        Self.addCount(
+            1,
+            for: calendar.component(.hour, from: date),
+            to: &statistics.metadata.buttonPressCountByHour
+        )
+        dailyStatistics[key] = statistics
     }
 
     func recordVoiceDuration(
         _ duration: TimeInterval,
+        startedAt: Date? = nil,
+        source: UsageEventSource = .unknown,
         at date: Date = Date(),
         calendar: Calendar = .current
     ) {
@@ -392,13 +575,54 @@ final class AppSettings: ObservableObject {
         let key = Self.dayKey(for: date, calendar: calendar)
         var statistics = dailyStatistics[key] ?? DailyUsageStatistics()
         statistics.voiceDuration = Self.addingDuration(duration, to: statistics.voiceDuration)
+        Self.recordActivityProvenance(
+            in: &statistics.metadata,
+            startingAt: startedAt ?? date,
+            endingAt: date,
+            calendar: calendar
+        )
+        statistics.metadata.voiceSessionCount = Self.addingCount(
+            1,
+            to: statistics.metadata.voiceSessionCount
+        )
+        Self.addCount(
+            1,
+            for: source.rawValue,
+            to: &statistics.metadata.voiceSessionCountBySource
+        )
+        let endHour = calendar.component(.hour, from: date)
+        Self.addCount(
+            1,
+            for: endHour,
+            to: &statistics.metadata.voiceSessionCountByEndHour
+        )
+        Self.addDuration(
+            duration,
+            for: source.rawValue,
+            to: &statistics.metadata.voiceDurationBySource
+        )
+        Self.addDuration(
+            duration,
+            for: endHour,
+            to: &statistics.metadata.voiceDurationByEndHour
+        )
+        statistics.metadata.longestVoiceSessionDuration = max(
+            statistics.metadata.longestVoiceSessionDuration,
+            duration
+        )
+        statistics.metadata.longestVoiceSessionDurationBySource[source.rawValue] = max(
+            statistics.metadata.longestVoiceSessionDurationBySource[source.rawValue] ?? 0,
+            duration
+        )
         dailyStatistics[key] = statistics
 
         voiceSessionRanking = Self.normalizedVoiceSessionRanking(
             voiceSessionRanking + [VoiceSessionUsageRecord(
                 id: UUID(),
+                startedAt: startedAt,
                 endedAt: date,
-                duration: duration
+                duration: duration,
+                source: source
             )]
         )
     }
@@ -485,34 +709,35 @@ final class AppSettings: ObservableObject {
             weeks: recentWeeks,
             calendar: calendar
         )
-        let representedStatistics = weeklyBuckets.reduce(
-            into: UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
-        ) { result, bucket in
-            result = UsageStatistics(
-                buttonPressCount: Self.addingCount(
-                    bucket.statistics.buttonPressCount,
-                    to: result.buttonPressCount
-                ),
-                voiceDuration: Self.addingDuration(
-                    bucket.statistics.voiceDuration,
-                    to: result.voiceDuration
-                )
-            )
-        }
-        let totalStatistics = usageStatistics(for: .total, at: date, calendar: calendar)
+        let earlierStatistics = weeklyBuckets.first.map { firstBucket in
+            usageStatistics(before: firstBucket.startDate, calendar: calendar)
+        } ?? UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
         return WeeklyUsageStatisticsSeries(
-            earlierStatistics: UsageStatistics(
-                buttonPressCount: totalStatistics.buttonPressCount >=
-                    representedStatistics.buttonPressCount
-                    ? totalStatistics.buttonPressCount - representedStatistics.buttonPressCount
-                    : 0,
-                voiceDuration: max(
-                    0,
-                    totalStatistics.voiceDuration - representedStatistics.voiceDuration
-                )
-            ),
+            earlierStatistics: earlierStatistics,
             weeklyBuckets: weeklyBuckets
         )
+    }
+
+    func usageMetadata(
+        for period: UsageStatisticsPeriod,
+        at date: Date = Date(),
+        calendar: Calendar = .current
+    ) -> UsageStatisticsMetadata {
+        switch period {
+        case .today:
+            return Self.usageMetadata(
+                from: dailyStatistics[Self.dayKey(for: date, calendar: calendar)]
+            )
+        case .thisWeek:
+            guard let week = Self.weekInterval(containing: date, calendar: calendar) else {
+                return UsageStatisticsMetadata()
+            }
+            return usageMetadata(in: week, calendar: calendar)
+        case .total:
+            return dailyStatistics.values.reduce(into: UsageStatisticsMetadata()) { result, statistics in
+                Self.merge(Self.usageMetadata(from: statistics), into: &result)
+            }
+        }
     }
 
     func isPhoneIdentityTrusted(_ fingerprint: String) -> Bool {
@@ -760,6 +985,177 @@ final class AppSettings: ObservableObject {
                 )
             )
         }
+    }
+
+    private func usageStatistics(
+        before date: Date,
+        calendar: Calendar
+    ) -> UsageStatistics {
+        dailyStatistics.reduce(
+            into: UsageStatistics(buttonPressCount: 0, voiceDuration: 0)
+        ) { result, entry in
+            guard
+                let day = Self.date(fromDayKey: entry.key, calendar: calendar),
+                day < date
+            else { return }
+            result = UsageStatistics(
+                buttonPressCount: Self.addingCount(
+                    entry.value.buttonPressCount,
+                    to: result.buttonPressCount
+                ),
+                voiceDuration: Self.addingDuration(
+                    entry.value.voiceDuration,
+                    to: result.voiceDuration
+                )
+            )
+        }
+    }
+
+    private static func recordActivityProvenance(
+        in metadata: inout DailyUsageMetadata,
+        startingAt: Date,
+        endingAt: Date,
+        calendar: Calendar
+    ) {
+        let firstDate = min(startingAt, endingAt)
+        let lastDate = max(startingAt, endingAt)
+        metadata.schemaVersion = 1
+        metadata.firstActivityAt = metadata.firstActivityAt.map { min($0, firstDate) } ?? firstDate
+        metadata.lastActivityAt = metadata.lastActivityAt.map { max($0, lastDate) } ?? lastDate
+        metadata.timeZoneIdentifiers.insert(calendar.timeZone.identifier)
+        metadata.calendarIdentifiers.insert(String(describing: calendar.identifier))
+    }
+
+    private static func usageMetadata(
+        from daily: DailyUsageStatistics?
+    ) -> UsageStatisticsMetadata {
+        guard let metadata = daily?.metadata else { return UsageStatisticsMetadata() }
+        var result = UsageStatisticsMetadata(
+            firstActivityAt: metadata.firstActivityAt,
+            lastActivityAt: metadata.lastActivityAt,
+            buttonPressCountByControl: metadata.buttonPressCountByControl,
+            buttonPressCountByHour: metadata.buttonPressCountByHour,
+            voiceSessionCount: metadata.voiceSessionCount,
+            voiceSessionCountByEndHour: metadata.voiceSessionCountByEndHour,
+            voiceDurationByEndHour: metadata.voiceDurationByEndHour,
+            longestVoiceSessionDuration: max(0, metadata.longestVoiceSessionDuration),
+            timeZoneIdentifiers: metadata.timeZoneIdentifiers,
+            calendarIdentifiers: metadata.calendarIdentifiers,
+            schemaVersions: metadata.schemaVersion > 0 ? [metadata.schemaVersion] : []
+        )
+        for (rawSource, count) in metadata.buttonPressCountBySource {
+            addCount(
+                count,
+                for: UsageEventSource(rawValue: rawSource) ?? .unknown,
+                to: &result.buttonPressCountBySource
+            )
+        }
+        for (rawSource, count) in metadata.voiceSessionCountBySource {
+            addCount(
+                count,
+                for: UsageEventSource(rawValue: rawSource) ?? .unknown,
+                to: &result.voiceSessionCountBySource
+            )
+        }
+        for (rawSource, duration) in metadata.voiceDurationBySource {
+            addDuration(
+                duration,
+                for: UsageEventSource(rawValue: rawSource) ?? .unknown,
+                to: &result.voiceDurationBySource
+            )
+        }
+        for (rawSource, duration) in metadata.longestVoiceSessionDurationBySource {
+            let source = UsageEventSource(rawValue: rawSource) ?? .unknown
+            result.longestVoiceSessionDurationBySource[source] = max(
+                result.longestVoiceSessionDurationBySource[source] ?? 0,
+                max(0, duration)
+            )
+        }
+        return result
+    }
+
+    private func usageMetadata(
+        in interval: DateInterval,
+        calendar: Calendar
+    ) -> UsageStatisticsMetadata {
+        dailyStatistics.reduce(into: UsageStatisticsMetadata()) { result, entry in
+            guard
+                let day = Self.date(fromDayKey: entry.key, calendar: calendar),
+                day >= interval.start,
+                day < interval.end
+            else { return }
+            Self.merge(Self.usageMetadata(from: entry.value), into: &result)
+        }
+    }
+
+    private static func merge(
+        _ metadata: UsageStatisticsMetadata,
+        into result: inout UsageStatisticsMetadata
+    ) {
+        if let firstActivityAt = metadata.firstActivityAt {
+            result.firstActivityAt = result.firstActivityAt.map {
+                min($0, firstActivityAt)
+            } ?? firstActivityAt
+        }
+        if let lastActivityAt = metadata.lastActivityAt {
+            result.lastActivityAt = result.lastActivityAt.map {
+                max($0, lastActivityAt)
+            } ?? lastActivityAt
+        }
+        for (source, count) in metadata.buttonPressCountBySource {
+            addCount(count, for: source, to: &result.buttonPressCountBySource)
+        }
+        for (control, count) in metadata.buttonPressCountByControl {
+            addCount(count, for: control, to: &result.buttonPressCountByControl)
+        }
+        for (hour, count) in metadata.buttonPressCountByHour {
+            addCount(count, for: hour, to: &result.buttonPressCountByHour)
+        }
+        result.voiceSessionCount = addingCount(
+            metadata.voiceSessionCount,
+            to: result.voiceSessionCount
+        )
+        for (source, count) in metadata.voiceSessionCountBySource {
+            addCount(count, for: source, to: &result.voiceSessionCountBySource)
+        }
+        for (hour, count) in metadata.voiceSessionCountByEndHour {
+            addCount(count, for: hour, to: &result.voiceSessionCountByEndHour)
+        }
+        for (source, duration) in metadata.voiceDurationBySource {
+            addDuration(duration, for: source, to: &result.voiceDurationBySource)
+        }
+        for (hour, duration) in metadata.voiceDurationByEndHour {
+            addDuration(duration, for: hour, to: &result.voiceDurationByEndHour)
+        }
+        result.longestVoiceSessionDuration = max(
+            result.longestVoiceSessionDuration,
+            metadata.longestVoiceSessionDuration
+        )
+        for (source, duration) in metadata.longestVoiceSessionDurationBySource {
+            result.longestVoiceSessionDurationBySource[source] = max(
+                result.longestVoiceSessionDurationBySource[source] ?? 0,
+                duration
+            )
+        }
+        result.timeZoneIdentifiers.formUnion(metadata.timeZoneIdentifiers)
+        result.calendarIdentifiers.formUnion(metadata.calendarIdentifiers)
+        result.schemaVersions.formUnion(metadata.schemaVersions)
+    }
+
+    private static func addCount<Key: Hashable>(
+        _ value: UInt64,
+        for key: Key,
+        to values: inout [Key: UInt64]
+    ) {
+        values[key] = addingCount(value, to: values[key] ?? 0)
+    }
+
+    private static func addDuration<Key: Hashable>(
+        _ duration: TimeInterval,
+        for key: Key,
+        to values: inout [Key: TimeInterval]
+    ) {
+        values[key] = addingDuration(duration, to: values[key] ?? 0)
     }
 
     private static func addingCount(_ value: UInt64, to total: UInt64) -> UInt64 {

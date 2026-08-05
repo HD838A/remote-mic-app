@@ -1425,17 +1425,25 @@ struct SettingsView: View {
 
     private var weeklyUsageChartPoints: [UsageChartPoint] {
         let series = settings.weeklyUsageStatisticsSeries(recentWeeks: 7)
-        let statistics = [series.earlierStatistics] + series.weeklyBuckets.map(\.statistics)
+        let hasEarlierStatistics = series.earlierStatistics.buttonPressCount > 0 ||
+            series.earlierStatistics.voiceDuration > 0
+        let statistics = (hasEarlierStatistics ? [series.earlierStatistics] : []) +
+            series.weeklyBuckets.map(\.statistics)
+        let visibleVoiceDuration = statistics.reduce(0) { result, statistics in
+            result + max(0, statistics.voiceDuration)
+        }
         let displayedVoiceSeconds = UsageStatisticsPresentation.apportionedWholeSeconds(
             statistics.map(\.voiceDuration),
-            totalDuration: settings.usageStatistics(for: .total).voiceDuration
+            totalDuration: visibleVoiceDuration
         )
         let formatter = DateFormatter()
         formatter.locale = localization.locale
         formatter.setLocalizedDateFormatFromTemplate("Md")
-        let dates = [Date.distantPast] + series.weeklyBuckets.map(\.startDate)
-        let labels = [localization.text("statistics.chart.earlier")] +
-            series.weeklyBuckets.map { formatter.string(from: $0.startDate) }
+        let dates = (hasEarlierStatistics ? [Date.distantPast] : []) +
+            series.weeklyBuckets.map(\.startDate)
+        let labels = (hasEarlierStatistics
+            ? [localization.text("statistics.chart.earlier")]
+            : []) + series.weeklyBuckets.map { formatter.string(from: $0.startDate) }
         return statistics.indices.map { index in
             usageChartPoint(
                 date: dates[index],

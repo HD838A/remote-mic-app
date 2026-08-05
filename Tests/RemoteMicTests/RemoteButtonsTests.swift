@@ -1018,7 +1018,134 @@ struct RemoteButtonsTests {
         #expect(restored.voiceSessionRanking == settings.voiceSessionRanking)
     }
 
-    @Test func weeklyUsageSeriesReconcilesLegacyAndOlderHistoryWithTotal() throws {
+    @Test func localUsageMetadataPersistsSourcesControlsHoursAndVoiceSessions() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let firstButton = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 5,
+            hour: 9,
+            minute: 15
+        )))
+        let voiceStartedAt = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 5,
+            hour: 14
+        )))
+        let voiceEndedAt = try #require(
+            calendar.date(byAdding: .second, value: 120, to: voiceStartedAt)
+        )
+
+        let settings = AppSettings(defaults: defaults)
+        settings.recordButtonPress(
+            control: .remoteButton(.ok),
+            source: .bluetoothRemote,
+            at: firstButton,
+            calendar: calendar
+        )
+        settings.recordButtonPress(
+            control: .remoteButton(.menu),
+            source: .webRemote,
+            at: voiceStartedAt,
+            calendar: calendar
+        )
+        settings.recordButtonPress(
+            control: .voice,
+            source: .nearbyPhone,
+            at: voiceStartedAt,
+            calendar: calendar
+        )
+        settings.recordVoiceDuration(
+            120,
+            startedAt: voiceStartedAt,
+            source: .nearbyPhone,
+            at: voiceEndedAt,
+            calendar: calendar
+        )
+
+        let metadata = settings.usageMetadata(
+            for: .today,
+            at: voiceEndedAt,
+            calendar: calendar
+        )
+        #expect(metadata.firstActivityAt == firstButton)
+        #expect(metadata.lastActivityAt == voiceEndedAt)
+        #expect(metadata.buttonPressCountBySource[.bluetoothRemote] == 1)
+        #expect(metadata.buttonPressCountBySource[.webRemote] == 1)
+        #expect(metadata.buttonPressCountBySource[.nearbyPhone] == 1)
+        #expect(metadata.buttonPressCountByControl["button.ok"] == 1)
+        #expect(metadata.buttonPressCountByControl["button.menu"] == 1)
+        #expect(metadata.buttonPressCountByControl["voice"] == 1)
+        #expect(metadata.buttonPressCountByHour[9] == 1)
+        #expect(metadata.buttonPressCountByHour[14] == 2)
+        #expect(metadata.voiceSessionCount == 1)
+        #expect(metadata.voiceSessionCountBySource[.nearbyPhone] == 1)
+        #expect(metadata.voiceSessionCountByEndHour[14] == 1)
+        #expect(metadata.voiceDurationBySource[.nearbyPhone] == 120)
+        #expect(metadata.voiceDurationByEndHour[14] == 120)
+        #expect(metadata.longestVoiceSessionDuration == 120)
+        #expect(metadata.longestVoiceSessionDurationBySource[.nearbyPhone] == 120)
+        #expect(metadata.timeZoneIdentifiers == [calendar.timeZone.identifier])
+        #expect(metadata.calendarIdentifiers == [String(describing: calendar.identifier)])
+        #expect(metadata.schemaVersions == [1])
+        #expect(settings.voiceSessionRanking.first?.startedAt == voiceStartedAt)
+        #expect(settings.voiceSessionRanking.first?.source == .nearbyPhone)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.usageMetadata(for: .total, calendar: calendar) == metadata)
+        #expect(restored.voiceSessionRanking == settings.voiceSessionRanking)
+    }
+
+    @Test func legacyUsageJSONLoadsWithoutFabricatingNewMetadata() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let recordID = UUID()
+        let endedAt = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        defaults.set(
+            try JSONSerialization.data(withJSONObject: [
+                "2026-08-05": [
+                    "buttonPressCount": 3,
+                    "voiceDuration": 45,
+                ],
+            ]),
+            forKey: "usage.dailyStatistics"
+        )
+        defaults.set(
+            try JSONSerialization.data(withJSONObject: [[
+                "id": recordID.uuidString,
+                "endedAt": endedAt.timeIntervalSinceReferenceDate,
+                "duration": 45,
+            ]]),
+            forKey: "usage.voiceSessionRanking"
+        )
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let day = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 5,
+            hour: 12
+        )))
+        let settings = AppSettings(defaults: defaults)
+
+        #expect(settings.usageStatistics(for: .today, at: day, calendar: calendar) ==
+            UsageStatistics(buttonPressCount: 3, voiceDuration: 45))
+        #expect(settings.usageMetadata(for: .today, at: day, calendar: calendar) ==
+            UsageStatisticsMetadata())
+        #expect(settings.voiceSessionRanking.first?.id == recordID)
+        #expect(settings.voiceSessionRanking.first?.startedAt == nil)
+        #expect(settings.voiceSessionRanking.first?.source == nil)
+    }
+
+    @Test func weeklyUsageSeriesOnlyIncludesDatedHistory() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -1064,13 +1191,12 @@ struct RemoteButtonsTests {
 
         #expect(series.weeklyBuckets.count == 7)
         #expect(series.earlierStatistics ==
-            UsageStatistics(buttonPressCount: 43, voiceDuration: 210))
+            UsageStatistics(buttonPressCount: 1, voiceDuration: 30))
         #expect(weeklyStatistics ==
             UsageStatistics(buttonPressCount: 2, voiceDuration: 60))
-        #expect(series.earlierStatistics.buttonPressCount + weeklyStatistics.buttonPressCount ==
-            totalStatistics.buttonPressCount)
-        #expect(series.earlierStatistics.voiceDuration + weeklyStatistics.voiceDuration ==
-            totalStatistics.voiceDuration)
+        #expect(totalStatistics == UsageStatistics(buttonPressCount: 45, voiceDuration: 270))
+        #expect(series.earlierStatistics.buttonPressCount + weeklyStatistics.buttonPressCount == 3)
+        #expect(series.earlierStatistics.voiceDuration + weeklyStatistics.voiceDuration == 90)
     }
 
     @Test func weeklyVoiceLabelsApportionWholeSecondsToMatchTheDisplayedTotal() {

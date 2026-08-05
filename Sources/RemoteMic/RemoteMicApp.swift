@@ -547,9 +547,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                     updateFeedSelection.useStableFeed()
                     AppLogger.shared.write(
                         "UPDATE CHECK prerelease_enabled=true resolved=false fallback=stable "
+                            + "user_alert=false "
                             + "error=\(error.localizedDescription)"
                     )
-                    showPreReleaseFeedUnavailableAlert()
                 }
             } else {
                 updateFeedSelection.useStableFeed()
@@ -557,16 +557,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             startUpdaterIfNeeded()
             updaterController.checkForUpdates(nil)
         }
-    }
-
-    private func showPreReleaseFeedUnavailableAlert() {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = localization.text("update.prerelease.feed_unavailable.title")
-        alert.informativeText = localization.text("update.prerelease.feed_unavailable.message")
-        alert.addButton(withTitle: localization.text("common.action.ok"))
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
     }
 
     private func showUpdateCompletedAlert() {
