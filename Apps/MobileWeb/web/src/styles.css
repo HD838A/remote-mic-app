@@ -94,9 +94,12 @@ button.dpad-center:disabled > span { opacity: 0.52; }
   text-decoration: none;
 }
 .download-link:active { transform: translateY(2px); }
-.official-sites { margin-top: 8px; }
-.official-sites a { min-height: 34px; border: 1px solid rgba(55,63,69,0.18); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: rgba(31,41,49,0.78); background: rgba(255,255,255,0.25); font-size: 11px; font-weight: 650; text-decoration: none; }
-.official-sites a:active { background: rgba(255,255,255,0.42); }
+.resource-links { margin-top: 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.resource-links a,
+.resource-links button { min-width: 0; min-height: 36px; padding: 0 5px; border: 1px solid rgba(55,63,69,0.18); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: rgba(31,41,49,0.78); background: rgba(255,255,255,0.25); font-size: 11px; font-weight: 650; line-height: 1.15; text-align: center; text-decoration: none; cursor: pointer; }
+.resource-links a:active,
+.resource-links button:active { background: rgba(255,255,255,0.42); transform: translateY(1px); }
+.remote-recommendation { margin: 10px 2px 0; color: rgba(31,41,49,0.69); font-size: 11px; font-weight: 600; line-height: 1.45; text-align: center; }
 .connection-tutorial { margin-top: 14px; }
 .connection-tutorial h3 { margin: 0 0 7px; font-size: 14px; }
 .connection-tutorial ol { margin: 0; padding-left: 22px; color: rgba(31,41,49,0.74); font-size: 12px; font-weight: 540; line-height: 1.55; }

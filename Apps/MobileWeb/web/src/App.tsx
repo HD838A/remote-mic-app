@@ -20,6 +20,8 @@ import {
 import { triggerHaptic, type WebHaptic } from "./haptics";
 import appLogoURL from "./assets/app-logo.png?inline";
 
+const iosBetaURL = "https://testflight.apple.com/join/J8k8fb7v";
+
 const initialState: ConnectionState = {
   phase: "readyToConnect",
   statusText: "等待连接",
@@ -106,6 +108,17 @@ export default function App(): ReactElement {
 }
 
 function MacAppGuide(): ReactElement {
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const copyIOSBetaLink = async () => {
+    triggerHaptic("light");
+    try {
+      await navigator.clipboard.writeText(iosBetaURL);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  };
+
   return (
     <aside className="mac-app-guide" aria-labelledby="mac-app-guide-title">
       <div className="guide-heading">
@@ -124,9 +137,14 @@ function MacAppGuide(): ReactElement {
       >
         下载最新版 Mac App
       </a>
-      <nav className="official-sites" aria-label="官方网站">
+      <nav className="resource-links" aria-label="产品链接">
         <a href="https://8586ai.com/" target="_blank" rel="noreferrer">官方网站</a>
+        <a href={iosBetaURL} target="_blank" rel="noreferrer" onPointerDown={() => triggerHaptic("light")}>iOS 公测</a>
+        <button type="button" onClick={() => void copyIOSBetaLink()}>
+          {copyStatus === "copied" ? "已复制" : copyStatus === "failed" ? "复制失败" : "复制链接"}
+        </button>
       </nav>
+      <p className="remote-recommendation" aria-live="polite">日常使用更推荐实体遥控器，网页版和 iOS 公测适合体验与备用。</p>
       <div className="connection-tutorial" aria-label="连接教程">
         <h3>连接教程</h3>
         <ol>
