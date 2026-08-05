@@ -16,7 +16,10 @@ Hold the remote voice button to speak. The direction, OK, Back, Home, Menu, TV, 
 
 Remote Mic is built natively with SwiftUI. While running in the background, it uses less than 0.5% CPU and around 50 MB of memory—lighter than a single Chrome tab.
 
-![Connection and Voice settings](Screenshots/connection-and-voice.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Screenshots/connection-and-voice-dark-en.png">
+  <img alt="Connection and Voice settings" src="Screenshots/connection-and-voice-en.png">
+</picture>
 
 ## Requirements
 
@@ -70,7 +73,10 @@ If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRe
 
 ## Customize remote buttons
 
-![Button mapping settings](Screenshots/key-mapping.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Screenshots/key-mapping-dark-en.png">
+  <img alt="Button mapping settings" src="Screenshots/key-mapping-en.png">
+</picture>
 
 Open **Button Mapping** and enable custom mapping to change direction, OK, Back, Home, Menu, TV, Power, and volume buttons.
 
@@ -82,6 +88,15 @@ Each ordinary button supports a single-click action and optional double-click an
 - Buttons with a configured double-click or long-press do not hold-repeat, preventing multiple actions from firing at once.
 
 The voice button is always reserved for voice input and Fn functions and does not participate in ordinary button mapping.
+
+## Usage statistics
+
+The **Statistics** page shows remote button presses, voice duration, and the longest individual voice sessions for the selected day, week, or all-time range. All statistics stay on this Mac and are never uploaded.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Screenshots/statistics-dark-en.png">
+  <img alt="Remote Mic usage statistics" src="Screenshots/statistics-en.png">
+</picture>
 
 ## Permissions and privacy
 

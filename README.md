@@ -16,7 +16,10 @@ iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8
 
 无线麦使用 SwiftUI 原生开发，常驻运行时 CPU 占用率低于 0.5%，内存占用约 50 MB，比一个 Chrome 标签页还要轻量。
 
-![连接与语音设置页](Screenshots/connection-and-voice.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Screenshots/connection-and-voice-dark-zh.png">
+  <img alt="连接与语音设置页" src="Screenshots/connection-and-voice-zh.png">
+</picture>
 
 ## 使用要求
 
@@ -72,7 +75,10 @@ iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8
 
 ## 自定义遥控器按键
 
-![按键映射设置页](Screenshots/key-mapping.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Screenshots/key-mapping-dark-zh.png">
+  <img alt="按键映射设置页" src="Screenshots/key-mapping-zh.png">
+</picture>
 
 打开“按键映射”页面并启用自定义映射后，可以修改方向、确定、返回、主页、菜单、TV、电源和音量键的功能。
 
@@ -84,6 +90,15 @@ iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8
 - 设置了双击或长按的实体键不会再按住重复，避免多个动作同时触发。
 
 语音键始终用于语音输入与 Fn 功能，不参与普通按键映射。
+
+## 使用统计
+
+“统计”页面可以按日、周或全部范围查看遥控器按键次数、语音时长，以及从当前版本开始记录的最长单次语音排行。所有统计数据仅保存在本机，不会上传。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Screenshots/statistics-dark-zh.png">
+  <img alt="无线麦使用统计页" src="Screenshots/statistics-zh.png">
+</picture>
 
 ## 权限与隐私
 
