@@ -88,4 +88,51 @@ struct RemoteVoiceFunctionMapperTests {
             ) == [changedUnrelated]
         )
     }
+
+    @Test func neutralizationRequiresEveryTargetAndRollsBackPartialSuccess() {
+        let original = [HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 5)]
+        let first = MappingServiceBox(registryID: 1, mappings: original)
+        let second = MappingServiceBox(registryID: 2, mappings: original, acceptsWrites: false)
+        let mapper = RemoteVoiceFunctionMapper { [first.service, second.service] }
+
+        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.isVoiceKeyNeutralized)
+        #expect(first.mappings == original)
+        #expect(first.writeCount == 2)
+        #expect(second.writeCount == 1)
+    }
+
+    @Test func neutralizationFailsWhenThereIsNoCompleteTargetService() {
+        let missingID = MappingServiceBox(registryID: nil, mappings: [])
+        let mapper = RemoteVoiceFunctionMapper { [missingID.service] }
+
+        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.isApplied)
+        #expect(!mapper.isVoiceKeyNeutralized)
+        #expect(missingID.writeCount == 0)
+    }
+}
+
+private final class MappingServiceBox {
+    let registryID: UInt64?
+    var mappings: [HIDUsageMapping]
+    var acceptsWrites: Bool
+    var writeCount = 0
+
+    init(registryID: UInt64?, mappings: [HIDUsageMapping], acceptsWrites: Bool = true) {
+        self.registryID = registryID
+        self.mappings = mappings
+        self.acceptsWrites = acceptsWrites
+    }
+
+    lazy var service = RemoteVoiceMappingService(
+        registryID: registryID,
+        readMappings: { [unowned self] in mappings },
+        setMappings: { [unowned self] mappings in
+            writeCount += 1
+            guard acceptsWrites else { return false }
+            self.mappings = mappings
+            return true
+        }
+    )
 }

@@ -13,6 +13,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/AppLinks.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFunctionKeyLatch.swift" \
+  "$ROOT/Sources/RemoteMic/VoiceFnTapSessionController.swift" \
   "$ROOT/Sources/RemoteMic/RemoteVoiceFunctionMapper.swift" \
   "$ROOT/Sources/RemoteMic/AppLogger.swift" \
   "$ROOT/Sources/RemoteMic/TestTone.swift" \

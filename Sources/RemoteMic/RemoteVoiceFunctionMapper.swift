@@ -87,7 +87,15 @@ enum RemoteVoiceFunctionMappingPolicy {
     }
 }
 
+struct RemoteVoiceMappingService {
+    let registryID: UInt64?
+    let readMappings: () -> [HIDUsageMapping]
+    let setMappings: ([HIDUsageMapping]) -> Bool
+}
+
 final class RemoteVoiceFunctionMapper {
+    typealias ServiceProvider = () -> [RemoteVoiceMappingService]
+
     private static let vendorID = 0x2717
     private static let productID = 0x32B8
     private static let mappingProperty = "UserKeyMapping" as CFString
@@ -97,24 +105,51 @@ final class RemoteVoiceFunctionMapper {
         let power: HIDUsageMapping?
     }
 
+    private let serviceProvider: ServiceProvider
     private var originalMappings: [UInt64: OriginalMappings] = [:]
     private(set) var isApplied = false
     private(set) var isPowerKeySuppressed = false
+    private(set) var isVoiceKeyNeutralized = false
+
+    init(serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices) {
+        self.serviceProvider = serviceProvider
+    }
 
     @discardableResult
     func apply(
         suppressPowerKey: Bool = false,
         neutralizeVoiceKey: Bool = false
     ) -> Bool {
-        let client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
-        let services = IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient] ?? []
-        var matchedCount = 0
-        var appliedCount = 0
+        let services = serviceProvider()
+        let matchedCount = services.count
+        guard matchedCount > 0 else {
+            resetAppliedState()
+            AppLogger.shared.write(
+                "VOICE FN MAPPING applied=false neutralized=false power_suppressed=false matched=0"
+            )
+            return false
+        }
 
-        for service in services where Self.isTarget(service) {
-            matchedCount += 1
-            guard let registryID = Self.registryID(service) else { continue }
-            let current = Self.readMappings(service)
+        var snapshots: [Int: [HIDUsageMapping]] = [:]
+        var appliedIndices: [Int] = []
+        var newlyStoredRegistryIDs = Set<UInt64>()
+
+        for (index, service) in services.enumerated() {
+            guard let registryID = service.registryID else {
+                if neutralizeVoiceKey {
+                    rollback(
+                        services: services,
+                        snapshots: snapshots,
+                        appliedIndices: appliedIndices,
+                        newlyStoredRegistryIDs: newlyStoredRegistryIDs,
+                        matchedCount: matchedCount
+                    )
+                    return false
+                }
+                continue
+            }
+            let current = service.readMappings()
+            snapshots[index] = current
             if originalMappings[registryID] == nil {
                 let currentPower = current.first {
                     $0.source == RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey.source
@@ -127,6 +162,7 @@ final class RemoteVoiceFunctionMapper {
                         ? nil
                         : currentPower
                 )
+                newlyStoredRegistryIDs.insert(registryID)
             }
             let desired = RemoteVoiceFunctionMappingPolicy.applying(
                 to: current,
@@ -137,56 +173,105 @@ final class RemoteVoiceFunctionMapper {
                     ? RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
                     : originalMappings[registryID]?.power
             )
-            if IOHIDServiceClientSetProperty(
-                service,
-                Self.mappingProperty,
-                desired.map(\.property) as CFArray
-            ) {
-                appliedCount += 1
+            guard service.setMappings(desired) else {
+                if neutralizeVoiceKey {
+                    rollback(
+                        services: services,
+                        snapshots: snapshots,
+                        appliedIndices: appliedIndices,
+                        newlyStoredRegistryIDs: newlyStoredRegistryIDs,
+                        matchedCount: matchedCount
+                    )
+                    return false
+                }
+                continue
             }
+            appliedIndices.append(index)
         }
 
-        isApplied = appliedCount > 0
-        isPowerKeySuppressed = suppressPowerKey && matchedCount > 0 && appliedCount == matchedCount
+        let appliedCount = appliedIndices.count
+        let allTargetsApplied = appliedCount == matchedCount
+        isApplied = neutralizeVoiceKey ? allTargetsApplied : appliedCount > 0
+        isVoiceKeyNeutralized = neutralizeVoiceKey && allTargetsApplied
+        isPowerKeySuppressed = suppressPowerKey && allTargetsApplied
         AppLogger.shared.write(
-            "VOICE FN MAPPING applied=\(isApplied) power_suppressed=\(isPowerKeySuppressed) " +
-                "matched=\(matchedCount)"
+            "VOICE FN MAPPING applied=\(isApplied) neutralized=\(isVoiceKeyNeutralized) " +
+                "power_suppressed=\(isPowerKeySuppressed) matched=\(matchedCount) applied=\(appliedCount)"
         )
         return isApplied
     }
 
     func restore() {
         guard !originalMappings.isEmpty else {
-            isApplied = false
+            resetAppliedState()
             return
         }
 
-        let client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
-        let services = IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient] ?? []
+        let services = serviceProvider()
         var restoredCount = 0
-
-        for service in services where Self.isTarget(service) {
-            guard let registryID = Self.registryID(service),
+        for service in services {
+            guard let registryID = service.registryID,
                   let original = originalMappings[registryID]
             else { continue }
             let restored = RemoteVoiceFunctionMappingPolicy.restoring(
                 originalVoiceMapping: original.voice,
                 originalPowerMapping: original.power,
-                in: Self.readMappings(service)
+                in: service.readMappings()
             )
-            if IOHIDServiceClientSetProperty(
-                service,
-                Self.mappingProperty,
-                restored.map(\.property) as CFArray
-            ) {
+            if service.setMappings(restored) {
                 restoredCount += 1
             }
         }
 
         originalMappings.removeAll()
+        resetAppliedState()
+        AppLogger.shared.write("VOICE FN MAPPING restored=\(restoredCount)")
+    }
+
+    private func rollback(
+        services: [RemoteVoiceMappingService],
+        snapshots: [Int: [HIDUsageMapping]],
+        appliedIndices: [Int],
+        newlyStoredRegistryIDs: Set<UInt64>,
+        matchedCount: Int
+    ) {
+        var rollbackCount = 0
+        for index in appliedIndices {
+            guard let snapshot = snapshots[index] else { continue }
+            if services[index].setMappings(snapshot) {
+                rollbackCount += 1
+            }
+        }
+        newlyStoredRegistryIDs.forEach { originalMappings.removeValue(forKey: $0) }
+        resetAppliedState()
+        AppLogger.shared.write(
+            "VOICE FN MAPPING rollback matched=\(matchedCount) applied=\(appliedIndices.count) " +
+                "restored=\(rollbackCount)"
+        )
+    }
+
+    private func resetAppliedState() {
         isApplied = false
         isPowerKeySuppressed = false
-        AppLogger.shared.write("VOICE FN MAPPING restored=\(restoredCount)")
+        isVoiceKeyNeutralized = false
+    }
+
+    private static func systemServices() -> [RemoteVoiceMappingService] {
+        let client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
+        let services = IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient] ?? []
+        return services.filter(isTarget).map { service in
+            RemoteVoiceMappingService(
+                registryID: registryID(service),
+                readMappings: { readMappings(service) },
+                setMappings: { mappings in
+                    IOHIDServiceClientSetProperty(
+                        service,
+                        mappingProperty,
+                        mappings.map(\.property) as CFArray
+                    )
+                }
+            )
+        }
     }
 
     private static func isTarget(_ service: IOHIDServiceClient) -> Bool {

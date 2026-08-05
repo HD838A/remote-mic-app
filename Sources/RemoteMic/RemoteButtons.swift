@@ -468,11 +468,12 @@ enum HIDPermissionGate {
 
     static func nextPermissionRequest(
         mappingEnabled: Bool,
+        voiceFnTapModeEnabled: Bool = false,
         inputMonitoringGranted: Bool,
         accessibilityGranted: Bool
     ) -> HIDPermissionRequest {
-        guard mappingEnabled else { return .none }
-        if !inputMonitoringGranted { return .inputMonitoring }
+        guard mappingEnabled || voiceFnTapModeEnabled else { return .none }
+        if mappingEnabled, !inputMonitoringGranted { return .inputMonitoring }
         if !accessibilityGranted { return .accessibility }
         return .none
     }

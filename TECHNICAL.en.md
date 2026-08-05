@@ -101,9 +101,11 @@ Direction, Back, and volume buttons can hold-repeat. Normal physical button acti
 
 ## Voice-button Fn mapping
 
-The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. RemoteVoiceFunctionMapper matches only RC003 vendor/product IDs and maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03. While custom button mapping is enabled, the same component maps RC003 Keyboard Power usage 0x66 to F20 usage 0x6F.
+The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. `RemoteVoiceFunctionMapper` matches only RC003 vendor/product IDs and, by default, maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03. While custom button mapping is enabled, the same component maps RC003 Keyboard Power usage 0x66 to F20 usage 0x6F.
 
-The mapping is applied at app launch, settings changes, or Bluetooth ready. VoiceFunctionKeyLatch guarantees one press and one release for every voice session. On exit or when custom mapping is disabled, the app restores the managed source usages' prior mappings while preserving unrelated mappings changed during runtime.
+The opt-in Typeless compatibility mode first requires Accessibility permission, then transactionally maps F5 to usage 0 on every matching RC003 service. Missing targets or any partial failure roll back all changes, disable the setting, and restore the default Fn mapping. Once enabled, `VoiceFnTapSessionController` buffers pre-roll at physical voice-stream start and writes it to the loopback device only after the opening Fn tap succeeds. On release it waits for `VirtualAudioOutput.endSessionAfterDraining` before sending the matching closing Fn tap. Generations and cancellable tasks isolate rapid consecutive sessions and clean up on disable, disconnect, reconnect, or app exit; a failed opening tap never produces a closing tap.
+
+This mode only adapts the trigger semantics seen by the target app. The RC003 must still be physically held to capture audio; it does not provide continuous recording or independent transcription. Configuration import/export includes optional `voiceFnTapModeEnabled`, with missing legacy fields treated as off. On exit, the app restores the managed source usages' prior mappings while preserving unrelated runtime changes.
 
 ## Menu bar and window
 
@@ -130,7 +132,7 @@ Development verification:
     ./scripts/build-app.sh
     ./scripts/verify-app.sh
 
-scripts/test.sh runs 36 protocol and policy self-tests and compiles the full app. The current Swift Testing suite contains 76 tests covering ATVV, Bluetooth lifecycle, audio-device policy, button mapping, permissions, language-selection persistence and immediate locale updates, Fn mapping, and test tone behavior.
+`scripts/test.sh` runs protocol and policy self-tests and compiles the full app. Swift Testing covers ATVV, Bluetooth lifecycle, audio-device policy, button mapping, permissions, configuration compatibility, Fn mapping, the Typeless session lifecycle, pre-roll, audio draining, and test-tone behavior.
 
 Build and launch:
 

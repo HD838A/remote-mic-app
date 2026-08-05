@@ -19,6 +19,7 @@ private struct PersonalizedConfiguration: Codable {
     let openMainWindowAtLaunch: Bool?
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
+    let voiceFnTapModeEnabled: Bool?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -807,6 +808,7 @@ final class AppSettings: ObservableObject {
             openMainWindowAtLaunch: openMainWindowAtLaunch,
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
+            voiceFnTapModeEnabled: voiceFnTapModeEnabled,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -860,6 +862,7 @@ final class AppSettings: ObservableObject {
         if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
+        voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup

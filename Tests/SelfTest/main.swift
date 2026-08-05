@@ -282,7 +282,13 @@ check(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true
-        ) == .none,
+        ) == .none &&
+        HIDPermissionGate.nextPermissionRequest(
+            mappingEnabled: false,
+            voiceFnTapModeEnabled: true,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ) == .accessibility,
     "HID permission requests are sequential and opt-in"
 )
 
@@ -346,6 +352,33 @@ check(
         RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey,
     ],
     "RC003 neutralized voice key drops the F5 event for tap-style voice tools"
+)
+var transactionalFirstMappings = [unrelatedMapping]
+var transactionalFirstWrites = 0
+let transactionalMapper = RemoteVoiceFunctionMapper {
+    [
+        RemoteVoiceMappingService(
+            registryID: 1,
+            readMappings: { transactionalFirstMappings },
+            setMappings: { mappings in
+                transactionalFirstWrites += 1
+                transactionalFirstMappings = mappings
+                return true
+            }
+        ),
+        RemoteVoiceMappingService(
+            registryID: 2,
+            readMappings: { [unrelatedMapping] },
+            setMappings: { _ in false }
+        ),
+    ]
+}
+check(
+    !transactionalMapper.apply(neutralizeVoiceKey: true) &&
+        !transactionalMapper.isVoiceKeyNeutralized &&
+        transactionalFirstMappings == [unrelatedMapping] &&
+        transactionalFirstWrites == 2,
+    "RC003 neutralization rolls back partial HID mapping success"
 )
 let changedUnrelatedMapping = HIDUsageMapping(
     source: unrelatedMapping.source,
@@ -434,6 +467,41 @@ if let defaults = UserDefaults(suiteName: suiteName) {
 } else {
     check(false, "saved bindings merge with defaults")
 }
+
+var fnTapScheduledOperations: [() -> Void] = []
+var fnTapEvents: [Bool] = []
+var fnTapAudio: [[Int16]] = []
+var fnTapDrainCompletion: (() -> Void)?
+let fnTapController = VoiceFnTapSessionController(
+    schedule: { _, operation in
+        fnTapScheduledOperations.append(operation)
+        return VoiceFnTapScheduledTask {}
+    },
+    setFunctionKeyPressed: { pressed in
+        fnTapEvents.append(pressed)
+        return true
+    },
+    enqueueAudio: { fnTapAudio.append($0) },
+    drainAudio: { fnTapDrainCompletion = $0 },
+    onFailure: { _ in }
+)
+fnTapController.setEnabled(true)
+let fnTapStarted = fnTapController.startVoice()
+let fnTapBuffered = fnTapController.receive([1, 2, 3])
+let preRollStayedBuffered = fnTapAudio.isEmpty
+fnTapScheduledOperations.removeFirst()()
+fnTapScheduledOperations.removeFirst()()
+let preRollFlushedAfterStart = fnTapAudio == [[1, 2, 3]]
+let fnTapStopped = fnTapController.stopVoice()
+let stopWaitedForDrain = fnTapEvents == [true, false]
+fnTapDrainCompletion?()
+fnTapScheduledOperations.removeFirst()()
+check(
+    fnTapStarted && fnTapBuffered && preRollStayedBuffered && preRollFlushedAfterStart &&
+        fnTapStopped && stopWaitedForDrain && fnTapEvents == [true, false, true, false] &&
+        fnTapController.phase == .idle,
+    "Typeless Fn tap session buffers pre-roll and stops after drain"
+)
 
 print("RESULT passed=\(passed) failed=\(failed)")
 if failed > 0 {

@@ -704,6 +704,18 @@ struct RemoteButtonsTests {
             inputMonitoringGranted: true,
             accessibilityGranted: true
         ) == .none)
+        #expect(HIDPermissionGate.nextPermissionRequest(
+            mappingEnabled: false,
+            voiceFnTapModeEnabled: true,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ) == .accessibility)
+        #expect(HIDPermissionGate.nextPermissionRequest(
+            mappingEnabled: false,
+            voiceFnTapModeEnabled: true,
+            inputMonitoringGranted: false,
+            accessibilityGranted: true
+        ) == .none)
     }
 
     @Test func savedBindingsMergeWithDefaults() throws {
@@ -819,6 +831,34 @@ struct RemoteButtonsTests {
         )
         #expect(!target.experimentalContinuousRecordingEnabled)
         #expect(target.action(for: .power) == .escape)
+    }
+
+    @Test func voiceFnTapModeExportsAndLegacyImportDisablesIt() throws {
+        let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.voiceFnTapModeEnabled = true
+        let exported = source.exportedConfigurationData()
+        let object = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        #expect(object["voiceFnTapModeEnabled"] as? Bool == true)
+
+        let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.voiceFnTapModeEnabled)
+
+        var legacyObject = object
+        legacyObject.removeValue(forKey: "voiceFnTapModeEnabled")
+        target.voiceFnTapModeEnabled = true
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(!target.voiceFnTapModeEnabled)
     }
 
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {
