@@ -1,5 +1,11 @@
 # Version History
 
+## 1.7.5
+
+- Silently falls back to the stable update feed when no pre-release exists or the candidate lookup times out or is temporarily unavailable, without showing an error alert.
+- Corrected daily and weekly history attribution: usage without a known date remains available only in All Time and is no longer guessed to be earlier activity.
+- Added richer on-device aggregate metadata for future statistics views, including input source, control or voice entry point, hourly distribution, voice-session counts and duration, longest session, and first/last activity times; device identifiers, user text, and audio are not stored.
+
 ## 1.7.4
 
 - Clarified the on-device voice-session ranking description so its storage scope and displayed results are easier to understand.
