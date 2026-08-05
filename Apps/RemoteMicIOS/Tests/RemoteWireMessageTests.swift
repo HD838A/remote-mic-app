@@ -14,7 +14,9 @@ final class RemoteWireMessageTests: XCTestCase {
             identitySignature: "signature",
             buttonTitles: ["menu": "自定义菜单", "ok": "确定"],
             appVersion: "1.0.0",
-            payload: "payload"
+            payload: "payload",
+            capabilities: [RemoteWireMessage.buttonEventsCapability],
+            buttonPhase: "press"
         )
 
         let data = try JSONEncoder().encode(original)
@@ -31,6 +33,8 @@ final class RemoteWireMessageTests: XCTestCase {
         XCTAssertEqual(decoded.buttonTitles, original.buttonTitles)
         XCTAssertEqual(decoded.appVersion, original.appVersion)
         XCTAssertEqual(decoded.payload, original.payload)
+        XCTAssertEqual(decoded.capabilities, original.capabilities)
+        XCTAssertEqual(decoded.buttonPhase, original.buttonPhase)
     }
 
     func testMinimalMessageRemainsBackwardCompatible() throws {
@@ -48,5 +52,7 @@ final class RemoteWireMessageTests: XCTestCase {
         XCTAssertNil(decoded.buttonTitles)
         XCTAssertNil(decoded.appVersion)
         XCTAssertNil(decoded.payload)
+        XCTAssertNil(decoded.capabilities)
+        XCTAssertNil(decoded.buttonPhase)
     }
 }

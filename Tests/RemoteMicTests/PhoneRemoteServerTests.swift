@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import RemoteMic
 
@@ -16,5 +17,22 @@ struct PhoneRemoteServerTests {
             existingIsApproved: true,
             newIsApproved: true
         ))
+    }
+
+    @Test func buttonEventCapabilityAndPhaseRoundTrip() throws {
+        let original = PhoneRemoteWireMessage(
+            type: "buttonEvent",
+            command: RemoteButton.power.rawValue,
+            capabilities: [PhoneRemoteWireMessage.buttonEventsCapability],
+            buttonPhase: RemoteButtonPhase.press.rawValue
+        )
+
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(PhoneRemoteWireMessage.self, from: data)
+
+        #expect(decoded.type == "buttonEvent")
+        #expect(decoded.command == RemoteButton.power.rawValue)
+        #expect(decoded.capabilities == [PhoneRemoteWireMessage.buttonEventsCapability])
+        #expect(decoded.buttonPhase == RemoteButtonPhase.press.rawValue)
     }
 }

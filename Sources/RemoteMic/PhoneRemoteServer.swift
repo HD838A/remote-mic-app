@@ -3,6 +3,8 @@ import Foundation
 import Network
 
 struct PhoneRemoteWireMessage: Codable {
+    static let buttonEventsCapability = "buttonEventsV1"
+
     let type: String
     var deviceName: String?
     var command: String?
@@ -14,6 +16,8 @@ struct PhoneRemoteWireMessage: Codable {
     var buttonTitles: [String: String]?
     var appVersion: String?
     var payload: String?
+    var capabilities: [String]?
+    var buttonPhase: String?
 }
 
 enum PhoneRemoteIdentityVerification: Equatable {
@@ -73,6 +77,8 @@ final class PhoneRemoteServer {
     var onApprovalCancelled: (() -> Void)?
     var isIdentityTrusted: ((String) -> Bool)?
     var onCommand: ((RemoteButton, @escaping (Bool) -> Void) -> Void)?
+    var onButtonEvent: ((RemoteButton, RemoteButtonPhase, @escaping (Bool) -> Void) -> Void)?
+    var onButtonEventsReset: (() -> Void)?
     var onVoiceStart: ((@escaping (Bool) -> Void) -> Void)?
     var onVoiceStop: (() -> Void)?
     var onAudio: (([Int16]) -> Void)?
@@ -181,6 +187,13 @@ final class PhoneRemoteServer {
             }
             handler(button, completion)
         }
+        client.onButtonEvent = { [weak self] button, phase, completion in
+            guard let handler = self?.onButtonEvent else {
+                completion(false)
+                return
+            }
+            handler(button, phase, completion)
+        }
         client.onVoiceStart = { [weak self] completion in
             guard let handler = self?.onVoiceStart else {
                 completion(false)
@@ -195,6 +208,9 @@ final class PhoneRemoteServer {
             self?.onAudio?(samples)
         }
         client.onClosed = { [weak self, weak client] in
+            if client?.hasApprovedSession == true {
+                self?.onButtonEventsReset?()
+            }
             if client?.hasPendingApproval == true {
                 self?.onApprovalCancelled?()
             }
@@ -232,6 +248,7 @@ private final class Client {
     var isIdentityTrusted: ((String) -> Bool)?
     var onApprovalRequested: ((String, String, String?) -> Void)?
     var onCommand: ((RemoteButton, @escaping (Bool) -> Void) -> Void)?
+    var onButtonEvent: ((RemoteButton, RemoteButtonPhase, @escaping (Bool) -> Void) -> Void)?
     var onVoiceStart: ((@escaping (Bool) -> Void) -> Void)?
     var onVoiceStop: (() -> Void)?
     var onAudio: (([Int16]) -> Void)?
@@ -414,7 +431,8 @@ private final class Client {
             type: "ready",
             deviceName: macName,
             buttonTitles: buttonTitles,
-            appVersion: appVersion
+            appVersion: appVersion,
+            capabilities: [PhoneRemoteWireMessage.buttonEventsCapability]
         )) { [weak self] in
             self?.onApproved?()
         }
@@ -430,6 +448,23 @@ private final class Client {
                 return
             }
             onCommand?(button) { [weak self] succeeded in
+                guard let self else { return }
+                queue.async {
+                    if !succeeded {
+                        self.sendCommandError()
+                    }
+                }
+            }
+        case "buttonEvent":
+            guard let raw = message.command,
+                  let button = RemoteButton(rawValue: raw),
+                  let rawPhase = message.buttonPhase,
+                  let phase = RemoteButtonPhase(rawValue: rawPhase)
+            else {
+                sendCommandError()
+                return
+            }
+            onButtonEvent?(button, phase) { [weak self] succeeded in
                 guard let self else { return }
                 queue.async {
                     if !succeeded {

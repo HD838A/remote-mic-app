@@ -67,6 +67,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var phoneApprovalAlert: NSAlert?
     private var webApprovalAlert: NSAlert?
     private var remoteButtonTitles: [String: String] = [:]
+    private var phoneButtonGestureRecognizer = RemoteButtonGestureRecognizer()
+    private var phoneDoubleClickTimers: [RemoteButton: DispatchSourceTimer] = [:]
+    private var phoneLongPressTimers: [RemoteButton: DispatchSourceTimer] = [:]
     private lazy var bluetoothBridge = XiaomiBluetoothBridge(settings: settings, delegate: self)
     private lazy var hidMonitor: HIDRemoteMonitor = {
         let monitor = HIDRemoteMonitor(settings: settings)
@@ -127,6 +130,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         phoneRemoteServer.onCommand = { [weak self] button, completion in
             DispatchQueue.main.async {
                 completion(self?.performPhoneCommand(button, source: .nearbyPhone) ?? false)
+            }
+        }
+        phoneRemoteServer.onButtonEvent = { [weak self] button, phase, completion in
+            DispatchQueue.main.async {
+                completion(self?.handlePhoneButtonEvent(button, phase: phase) ?? false)
+            }
+        }
+        phoneRemoteServer.onButtonEventsReset = { [weak self] in
+            DispatchQueue.main.async {
+                self?.resetPhoneButtonGestures()
             }
         }
         phoneRemoteServer.onVoiceStart = { [weak self] completion in
@@ -870,14 +883,117 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ button: RemoteButton,
         source: UsageEventSource
     ) -> Bool {
-        let action = settings.action(for: button)
-        if action.isAppInternal {
-            let handled = performInternalAction(action)
+        performPhoneConfiguredAction(for: button, trigger: .singleClick, source: source)
+    }
+
+    private func handlePhoneButtonEvent(
+        _ button: RemoteButton,
+        phase: RemoteButtonPhase
+    ) -> Bool {
+        let recognizesDoubleClick = settings.configuredAction(
+            for: button,
+            trigger: .doubleClick
+        ).action != .disabled
+        let recognizesLongPress = settings.configuredAction(
+            for: button,
+            trigger: .longPress
+        ).action != .disabled
+
+        if phase == .press,
+           !recognizesDoubleClick,
+           !recognizesLongPress,
+           !phoneButtonGestureRecognizer.isTracking(button) {
+            return performPhoneConfiguredAction(
+                for: button,
+                trigger: .singleClick,
+                source: .nearbyPhone
+            )
+        }
+
+        return processPhoneGestureCommands(phoneButtonGestureRecognizer.handle(
+            phase,
+            button: button,
+            recognizesDoubleClick: recognizesDoubleClick,
+            recognizesLongPress: recognizesLongPress
+        ))
+    }
+
+    private func processPhoneGestureCommands(
+        _ commands: [RemoteButtonGestureRecognizer.Command]
+    ) -> Bool {
+        for command in commands {
+            switch command {
+            case let .scheduleDoubleClickTimeout(button):
+                schedulePhoneDoubleClickTimeout(for: button)
+            case let .cancelDoubleClickTimeout(button):
+                phoneDoubleClickTimers.removeValue(forKey: button)?.cancel()
+            case let .scheduleLongPressTimeout(button):
+                schedulePhoneLongPressTimeout(for: button)
+            case let .cancelLongPressTimeout(button):
+                phoneLongPressTimers.removeValue(forKey: button)?.cancel()
+            case let .trigger(button, trigger):
+                guard performPhoneConfiguredAction(
+                    for: button,
+                    trigger: trigger,
+                    source: .nearbyPhone
+                ) else { return false }
+            }
+        }
+        return true
+    }
+
+    private func schedulePhoneDoubleClickTimeout(for button: RemoteButton) {
+        phoneDoubleClickTimers.removeValue(forKey: button)?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + .milliseconds(300))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            phoneDoubleClickTimers.removeValue(forKey: button)
+            _ = processPhoneGestureCommands(
+                phoneButtonGestureRecognizer.doubleClickTimedOut(button)
+            )
+        }
+        phoneDoubleClickTimers[button] = timer
+        timer.resume()
+    }
+
+    private func schedulePhoneLongPressTimeout(for button: RemoteButton) {
+        phoneLongPressTimers.removeValue(forKey: button)?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + .milliseconds(550))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            phoneLongPressTimers.removeValue(forKey: button)
+            _ = processPhoneGestureCommands(
+                phoneButtonGestureRecognizer.longPressTimedOut(button)
+            )
+        }
+        phoneLongPressTimers[button] = timer
+        timer.resume()
+    }
+
+    private func resetPhoneButtonGestures() {
+        phoneDoubleClickTimers.values.forEach { $0.cancel() }
+        phoneDoubleClickTimers.removeAll()
+        phoneLongPressTimers.values.forEach { $0.cancel() }
+        phoneLongPressTimers.removeAll()
+        phoneButtonGestureRecognizer.reset()
+    }
+
+    private func performPhoneConfiguredAction(
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        source: UsageEventSource
+    ) -> Bool {
+        let configured = settings.configuredAction(for: button, trigger: trigger)
+        if configured.action.isAppInternal {
+            let handled = performInternalAction(configured.action)
             if handled {
                 settings.recordButtonPress(control: .remoteButton(button), source: source)
             }
             AppLogger.shared.write(
-                "PHONE REMOTE button=\(button.rawValue) action=\(action.rawValue) handled=\(handled)"
+                "PHONE REMOTE button=\(button.rawValue) trigger=\(trigger.rawValue) " +
+                    "action=\(configured.action.rawValue) handled=\(handled)"
             )
             return handled
         }
@@ -885,12 +1001,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             _ = KeyboardInjector.requestAccessibilityAccess()
             return false
         }
-        guard KeyboardInjector.send(action, shortcut: settings.shortcut(for: button)) else {
+        guard KeyboardInjector.send(
+            configured.action,
+            shortcut: configured.shortcut
+        ) else {
             return false
         }
         settings.recordButtonPress(control: .remoteButton(button), source: source)
         AppLogger.shared.write(
-            "PHONE REMOTE button=\(button.rawValue) action=\(action.rawValue)"
+            "PHONE REMOTE button=\(button.rawValue) trigger=\(trigger.rawValue) " +
+                "action=\(configured.action.rawValue)"
         )
         return true
     }

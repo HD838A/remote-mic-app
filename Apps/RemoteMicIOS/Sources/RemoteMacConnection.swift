@@ -33,6 +33,11 @@ final class RemoteMacConnection: ObservableObject {
         case serverSnapshot([String: String])
     }
 
+    enum ButtonPhase: String, Equatable {
+        case press
+        case release
+    }
+
     enum State: Equatable {
         case searching
         case awaitingLocalNetworkPermission
@@ -86,6 +91,7 @@ final class RemoteMacConnection: ObservableObject {
     private var connectionGeneration = 0
     private var connectionStartedAt: Date?
     private var isAppActive = true
+    private var supportsButtonEvents = false
 
     init() {
         identityPrivateKey = InstallationIdentity.loadOrCreate()
@@ -256,6 +262,7 @@ final class RemoteMacConnection: ObservableObject {
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
+        supportsButtonEvents = false
         applyButtonTitleCacheEvent(.connectionReset)
         if !preservesConnectedPresentation {
             macAppVersion = nil
@@ -281,6 +288,37 @@ final class RemoteMacConnection: ObservableObject {
             state = .connected
         }
         send(RemoteWireMessage(type: "command", command: commandName))
+    }
+
+    func sendButtonEvent(_ command: RemoteCommand, phase: ButtonPhase) {
+        guard isConnected,
+              let message = Self.buttonMessage(
+                  for: command,
+                  phase: phase,
+                  supportsButtonEvents: supportsButtonEvents
+              )
+        else { return }
+        if case .connectedWithError = state {
+            state = .connected
+        }
+        send(message)
+    }
+
+    nonisolated static func buttonMessage(
+        for command: RemoteCommand,
+        phase: ButtonPhase,
+        supportsButtonEvents: Bool
+    ) -> RemoteWireMessage? {
+        guard let commandName = command.wireName else { return nil }
+        if supportsButtonEvents {
+            return RemoteWireMessage(
+                type: "buttonEvent",
+                command: commandName,
+                buttonPhase: phase.rawValue
+            )
+        }
+        guard phase == .release else { return nil }
+        return RemoteWireMessage(type: "command", command: commandName)
     }
 
     func buttonTitle(for command: RemoteCommand) -> String? {
@@ -592,6 +630,9 @@ final class RemoteMacConnection: ObservableObject {
             macName = message.deviceName ?? macName
             applyButtonTitleCacheEvent(.serverSnapshot(message.buttonTitles ?? [:]))
             macAppVersion = message.appVersion
+            supportsButtonEvents = message.capabilities?.contains(
+                RemoteWireMessage.buttonEventsCapability
+            ) == true
             lastConnectedAt = Date()
             state = .connected
             endConnectedPresentationPreservation(reason: "connected")
@@ -849,6 +890,7 @@ final class RemoteMacConnection: ObservableObject {
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
+        supportsButtonEvents = false
         applyButtonTitleCacheEvent(.connectionReset)
         if !preservesConnectedPresentation {
             macAppVersion = nil

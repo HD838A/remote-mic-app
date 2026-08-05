@@ -1,3 +1,8 @@
+enum RemoteButtonPhase: String, Codable {
+    case press
+    case release
+}
+
 struct RemoteButtonGestureRecognizer {
     enum Command: Equatable {
         case scheduleDoubleClickTimeout(RemoteButton)
@@ -20,6 +25,24 @@ struct RemoteButtonGestureRecognizer {
 
     func isTracking(_ button: RemoteButton) -> Bool {
         states[button] != nil
+    }
+
+    mutating func handle(
+        _ phase: RemoteButtonPhase,
+        button: RemoteButton,
+        recognizesDoubleClick: Bool,
+        recognizesLongPress: Bool
+    ) -> [Command] {
+        switch phase {
+        case .press:
+            return press(
+                button,
+                recognizesDoubleClick: recognizesDoubleClick,
+                recognizesLongPress: recognizesLongPress
+            )
+        case .release:
+            return release(button)
+        }
     }
 
     mutating func press(

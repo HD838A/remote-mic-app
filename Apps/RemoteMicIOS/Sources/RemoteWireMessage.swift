@@ -1,6 +1,8 @@
 import Foundation
 
 struct RemoteWireMessage: Codable {
+    static let buttonEventsCapability = "buttonEventsV1"
+
     let type: String
     var deviceName: String?
     var command: String?
@@ -12,4 +14,6 @@ struct RemoteWireMessage: Codable {
     var buttonTitles: [String: String]?
     var appVersion: String?
     var payload: String?
+    var capabilities: [String]?
+    var buttonPhase: String?
 }

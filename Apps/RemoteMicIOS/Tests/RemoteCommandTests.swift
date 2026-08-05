@@ -58,6 +58,49 @@ final class RemoteCommandTests: XCTestCase {
         XCTAssertNil(RemoteMacConnection.buttonTitle(for: .voiceStart, in: titles))
     }
 
+    func testEveryConfigurableButtonSendsPressAndReleaseEventsToSupportedMacs() throws {
+        let commands: [RemoteCommand] = [
+            .power, .up, .down, .left, .right, .confirm,
+            .back, .home, .menu, .television, .volumeUp, .volumeDown,
+        ]
+
+        for command in commands {
+            let press = try XCTUnwrap(RemoteMacConnection.buttonMessage(
+                for: command,
+                phase: .press,
+                supportsButtonEvents: true
+            ))
+            let release = try XCTUnwrap(RemoteMacConnection.buttonMessage(
+                for: command,
+                phase: .release,
+                supportsButtonEvents: true
+            ))
+
+            XCTAssertEqual(press.type, "buttonEvent")
+            XCTAssertEqual(press.command, command.wireName)
+            XCTAssertEqual(press.buttonPhase, "press")
+            XCTAssertEqual(release.type, "buttonEvent")
+            XCTAssertEqual(release.command, command.wireName)
+            XCTAssertEqual(release.buttonPhase, "release")
+        }
+    }
+
+    func testLegacyMacReceivesOneSingleClickCommandOnRelease() throws {
+        XCTAssertNil(RemoteMacConnection.buttonMessage(
+            for: .power,
+            phase: .press,
+            supportsButtonEvents: false
+        ))
+        let release = try XCTUnwrap(RemoteMacConnection.buttonMessage(
+            for: .power,
+            phase: .release,
+            supportsButtonEvents: false
+        ))
+        XCTAssertEqual(release.type, "command")
+        XCTAssertEqual(release.command, "power")
+        XCTAssertNil(release.buttonPhase)
+    }
+
     @MainActor
     func testPrimaryPressCommandsUseEmphasizedHaptics() {
         XCTAssertEqual(RemoteCommand.confirm.hapticStrength, .emphasized)

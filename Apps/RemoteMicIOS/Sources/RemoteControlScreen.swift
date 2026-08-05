@@ -41,9 +41,7 @@ struct RemoteControlScreen: View {
                         .offset(y: -7)
 
                     DPadView(
-                        perform: perform,
-                        confirmPressed: confirmPressed,
-                        confirm: confirm,
+                        onButtonStateChanged: remoteButtonStateChanged,
                         customTitle: connection.buttonTitle(for:)
                     )
                         .frame(width: dPadSize, height: dPadSize)
@@ -103,9 +101,7 @@ struct RemoteControlScreen: View {
     private var header: some View {
         ZStack {
             HStack {
-                Button {
-                    perform(.power)
-                } label: {
+                Button {} label: {
                     LightSurface {
                         VStack(spacing: 1) {
                             Image(systemName: "power")
@@ -130,8 +126,13 @@ struct RemoteControlScreen: View {
                     }
                     .frame(width: 54, height: 54)
                 }
-                .buttonStyle(TactileButtonStyle())
+                .buttonStyle(TactileButtonStyle { isPressed in
+                    remoteButtonStateChanged(.power, isPressed: isPressed)
+                })
                 .accessibilityLabel(language.text("关机"))
+                .accessibilityAction {
+                    activateRemoteButton(.power)
+                }
 
                 Spacer()
 
@@ -226,8 +227,8 @@ struct RemoteControlScreen: View {
             title: title,
             systemImage: image,
             customTitle: connection.buttonTitle(for: command)
-        ) {
-            perform(command)
+        ) { isPressed in
+            remoteButtonStateChanged(command, isPressed: isPressed)
         }
         .frame(width: size, height: size)
     }
@@ -246,8 +247,9 @@ struct RemoteControlScreen: View {
 
             ConfirmButton(
                 customTitle: connection.buttonTitle(for: .confirm),
-                onPress: confirmPressed,
-                action: confirm
+                onPressChanged: { isPressed in
+                    remoteButtonStateChanged(.confirm, isPressed: isPressed)
+                }
             )
             .frame(maxWidth: .infinity)
         }
@@ -262,17 +264,22 @@ struct RemoteControlScreen: View {
         }
     }
 
-    private func confirmPressed() {
-        HapticFeedback.shared.trigger(.emphasized)
+    private func remoteButtonStateChanged(
+        _ command: RemoteCommand,
+        isPressed: Bool
+    ) {
+        if isPressed {
+            HapticFeedback.shared.trigger(command.hapticStrength)
+        }
+        connection.sendButtonEvent(
+            command,
+            phase: isPressed ? .press : .release
+        )
     }
 
-    private func confirm() {
-        connection.send(.confirm)
-    }
-
-    private func perform(_ command: RemoteCommand) {
-        HapticFeedback.shared.trigger(command.hapticStrength)
-        connection.send(command)
+    private func activateRemoteButton(_ command: RemoteCommand) {
+        remoteButtonStateChanged(command, isPressed: true)
+        remoteButtonStateChanged(command, isPressed: false)
     }
 }
 

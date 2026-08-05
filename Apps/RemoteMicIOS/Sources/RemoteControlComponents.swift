@@ -133,9 +133,7 @@ struct LightSurface<Content: View>: View {
 }
 
 struct DPadView: View {
-    let perform: (RemoteCommand) -> Void
-    let confirmPressed: () -> Void
-    let confirm: () -> Void
+    let onButtonStateChanged: (RemoteCommand, Bool) -> Void
     let customTitle: (RemoteCommand) -> String?
     @Environment(\.appLanguage) private var language
 
@@ -174,37 +172,35 @@ struct DPadView: View {
                     direction: .up,
                     directionalOffset: directionalOffset,
                     customTitle: customTitle(.up)
-                ) {
-                    perform(.up)
+                ) { isPressed in
+                    onButtonStateChanged(.up, isPressed)
                 }
                 DPadDirectionControl(
                     symbol: "chevron.down",
                     direction: .down,
                     directionalOffset: directionalOffset,
                     customTitle: customTitle(.down)
-                ) {
-                    perform(.down)
+                ) { isPressed in
+                    onButtonStateChanged(.down, isPressed)
                 }
                 DPadDirectionControl(
                     symbol: "chevron.left",
                     direction: .left,
                     directionalOffset: directionalOffset,
                     customTitle: customTitle(.left)
-                ) {
-                    perform(.left)
+                ) { isPressed in
+                    onButtonStateChanged(.left, isPressed)
                 }
                 DPadDirectionControl(
                     symbol: "chevron.right",
                     direction: .right,
                     directionalOffset: directionalOffset,
                     customTitle: customTitle(.right)
-                ) {
-                    perform(.right)
+                ) { isPressed in
+                    onButtonStateChanged(.right, isPressed)
                 }
 
-                Button {
-                    confirm()
-                } label: {
+                Button {} label: {
                     Circle()
                         .fill(
                             LinearGradient(
@@ -237,11 +233,13 @@ struct DPadView: View {
                         .frame(width: diameter * 0.39, height: diameter * 0.39)
                 }
                 .buttonStyle(TactileButtonStyle { isPressed in
-                    if isPressed {
-                        confirmPressed()
-                    }
+                    onButtonStateChanged(.confirm, isPressed)
                 })
                 .accessibilityLabel(language.text("确定"))
+                .accessibilityAction {
+                    onButtonStateChanged(.confirm, true)
+                    onButtonStateChanged(.confirm, false)
+                }
             }
             .frame(width: diameter, height: diameter)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -290,7 +288,7 @@ private struct DPadDirectionControl: View {
     let direction: DPadDirection
     let directionalOffset: CGFloat
     let customTitle: String?
-    let action: () -> Void
+    let onPressChanged: (Bool) -> Void
 
     @State private var isPressed = false
     @Environment(\.appLanguage) private var language
@@ -328,10 +326,11 @@ private struct DPadDirectionControl: View {
                 .onChanged { _ in
                     guard !isPressed else { return }
                     isPressed = true
-                    action()
+                    onPressChanged(true)
                 }
                 .onEnded { _ in
                     isPressed = false
+                    onPressChanged(false)
                 }
         )
         .animation(.easeOut(duration: 0.08), value: isPressed)
@@ -339,7 +338,8 @@ private struct DPadDirectionControl: View {
         .accessibilityLabel(language.text(direction.accessibilityLabel))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
-            action()
+            onPressChanged(true)
+            onPressChanged(false)
         }
     }
 }
@@ -412,11 +412,11 @@ struct MiddleControlButton: View {
     let title: String
     let systemImage: String
     let customTitle: String?
-    let action: () -> Void
+    let onPressChanged: (Bool) -> Void
     @Environment(\.appLanguage) private var language
 
     var body: some View {
-        Button(action: action) {
+        Button {} label: {
             GraphiteSurface {
                 VStack(spacing: 4) {
                     Image(systemName: systemImage)
@@ -440,8 +440,12 @@ struct MiddleControlButton: View {
             }
             .aspectRatio(1, contentMode: .fit)
         }
-        .buttonStyle(TactileButtonStyle())
+        .buttonStyle(TactileButtonStyle(onPressChanged: onPressChanged))
         .accessibilityLabel(language.text(title))
+        .accessibilityAction {
+            onPressChanged(true)
+            onPressChanged(false)
+        }
     }
 }
 
@@ -509,12 +513,11 @@ struct VoiceButton: View {
 
 struct ConfirmButton: View {
     let customTitle: String?
-    let onPress: () -> Void
-    let action: () -> Void
+    let onPressChanged: (Bool) -> Void
     @Environment(\.appLanguage) private var language
 
     var body: some View {
-        Button(action: action) {
+        Button {} label: {
             LightSurface {
                 VStack(spacing: 8) {
                     Image(systemName: "arrow.turn.down.left")
@@ -532,11 +535,11 @@ struct ConfirmButton: View {
                 .foregroundStyle(RemotePalette.text)
             }
         }
-        .buttonStyle(TactileButtonStyle { isPressed in
-            if isPressed {
-                onPress()
-            }
-        })
+        .buttonStyle(TactileButtonStyle(onPressChanged: onPressChanged))
         .accessibilityLabel(language.text("确定，Return"))
+        .accessibilityAction {
+            onPressChanged(true)
+            onPressChanged(false)
+        }
     }
 }

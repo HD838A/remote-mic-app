@@ -118,4 +118,57 @@ struct RemoteButtonGestureRecognizerTests {
         #expect(!recognizer.isTracking(.right))
         #expect(recognizer.release(.left).isEmpty)
     }
+
+    @Test func phoneButtonPhasesRecognizeDoubleClickForEveryButton() {
+        for button in RemoteButton.allCases {
+            var recognizer = RemoteButtonGestureRecognizer()
+
+            #expect(recognizer.handle(
+                .press,
+                button: button,
+                recognizesDoubleClick: true,
+                recognizesLongPress: false
+            ).isEmpty)
+            #expect(recognizer.handle(
+                .release,
+                button: button,
+                recognizesDoubleClick: true,
+                recognizesLongPress: false
+            ) == [.scheduleDoubleClickTimeout(button)])
+            #expect(recognizer.handle(
+                .press,
+                button: button,
+                recognizesDoubleClick: true,
+                recognizesLongPress: false
+            ) == [.cancelDoubleClickTimeout(button)])
+            #expect(recognizer.handle(
+                .release,
+                button: button,
+                recognizesDoubleClick: true,
+                recognizesLongPress: false
+            ) == [.trigger(button, .doubleClick)])
+        }
+    }
+
+    @Test func phoneButtonPhasesRecognizeLongPressForEveryButton() {
+        for button in RemoteButton.allCases {
+            var recognizer = RemoteButtonGestureRecognizer()
+
+            #expect(recognizer.handle(
+                .press,
+                button: button,
+                recognizesDoubleClick: false,
+                recognizesLongPress: true
+            ) == [.scheduleLongPressTimeout(button)])
+            #expect(recognizer.longPressTimedOut(button) == [
+                .trigger(button, .longPress),
+            ])
+            #expect(recognizer.handle(
+                .release,
+                button: button,
+                recognizesDoubleClick: false,
+                recognizesLongPress: true
+            ) == [.cancelLongPressTimeout(button)])
+        }
+    }
 }
