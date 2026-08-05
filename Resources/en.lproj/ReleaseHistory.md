@@ -1,5 +1,10 @@
 # Version History
 
+## 1.7.3
+
+- Fixed update-channel fallback so enabling pre-release checks can never prevent stable updates from being detected when the candidate feed is unavailable or stale.
+- Added a private, on-device Top 10 list of the longest voice sessions recorded from this version onward; no usage data is uploaded.
+
 ## 1.7.2
 
 - Replaced the remote-control product image with a clearer, consistent rendering across the connection and button-mapping pages while preserving interactive button alignment.
