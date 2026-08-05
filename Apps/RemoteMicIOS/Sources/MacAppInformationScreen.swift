@@ -567,14 +567,14 @@ struct MacAppInformationScreen: View {
             ),
             CheckItem(
                 id: "approval",
-                title: language.text(connection.isConnected ? "iPhone 已授权" : "等待授权"),
-                isReady: connection.isConnected
+                title: language.text(connection.isPresentedAsConnected ? "iPhone 已授权" : "等待授权"),
+                isReady: connection.isPresentedAsConnected
             )
         ]
     }
 
     private var statusColor: Color {
-        switch connection.state {
+        switch connection.presentationState {
         case .connected:
             return .green
         case .connectedWithError, .awaitingLocalNetworkPermission, .unavailable:
@@ -585,7 +585,7 @@ struct MacAppInformationScreen: View {
     }
 
     private var macAppSummary: String {
-        switch connection.state {
+        switch connection.presentationState {
         case .connected, .connectedWithError:
             return language.text("无线麦 Mac App 正在运行")
         case .connecting:
@@ -602,10 +602,10 @@ struct MacAppInformationScreen: View {
     }
 
     private var macAppDetail: String {
-        if let version = connection.macAppVersion, connection.isConnected {
+        if let version = connection.macAppVersion, connection.isPresentedAsConnected {
             return version
         }
-        switch connection.state {
+        switch connection.presentationState {
         case .connected, .connectedWithError:
             return language.text("正在运行")
         case .connecting, .awaitingApproval:
@@ -616,11 +616,11 @@ struct MacAppInformationScreen: View {
     }
 
     private var connectionMethod: String {
-        language.text(connection.isConnected ? "附近安全连接" : "等待连接")
+        language.text(connection.isPresentedAsConnected ? "附近安全连接" : "等待连接")
     }
 
     private var pairingStatus: String {
-        switch connection.state {
+        switch connection.presentationState {
         case .connected, .connectedWithError:
             return language.text("已信任")
         case .awaitingApproval:
@@ -631,7 +631,7 @@ struct MacAppInformationScreen: View {
     }
 
     private var lastConnectionText: String {
-        if connection.isConnected {
+        if connection.isPresentedAsConnected {
             return language.text("刚刚")
         }
         guard let lastConnectedAt = connection.lastConnectedAt else {
@@ -642,7 +642,7 @@ struct MacAppInformationScreen: View {
     }
 
     private var hasDiscoveredMac: Bool {
-        switch connection.state {
+        switch connection.presentationState {
         case .connecting, .awaitingApproval, .connected, .connectedWithError:
             return true
         case .searching, .awaitingLocalNetworkPermission, .unavailable:

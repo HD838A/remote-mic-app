@@ -88,8 +88,10 @@ struct RemoteControlScreen: View {
             DiagnosticsLogger.shared.record("scene_phase", fields: [
                 "phase": Self.diagnosticScenePhaseName(phase)
             ])
-            if phase == .active, connection.state.shouldRestartDiscoveryOnActivation {
-                connection.restartDiscovery(reason: "scene_active")
+            if phase == .active {
+                connection.sceneDidBecomeActive()
+            } else {
+                connection.sceneDidBecomeInactive()
             }
         }
         .navigationDestination(isPresented: $showsMacAppInformation) {
@@ -160,11 +162,11 @@ struct RemoteControlScreen: View {
                 } else {
                     HStack(spacing: 7) {
                         Circle()
-                            .fill(connection.isConnected ? Color.green : Color.orange)
+                            .fill(connection.isPresentedAsConnected ? Color.green : Color.orange)
                             .frame(width: 8, height: 8)
                         Text(connection.statusText(for: language))
                             .foregroundStyle(
-                                connection.isConnected
+                                connection.isPresentedAsConnected
                                     ? Color.green.opacity(0.88)
                                     : Color.orange.opacity(0.92)
                             )

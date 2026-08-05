@@ -13,6 +13,56 @@ final class RemoteMacConnectionTests: XCTestCase {
         XCTAssertTrue(RemoteMacConnection.State.unavailable("错误").shouldRestartDiscoveryOnActivation)
     }
 
+    func testForegroundRecoveryKeepsTheLastConnectedPresentationStable() {
+        let transientStates: [RemoteMacConnection.State] = [
+            .searching,
+            .connecting,
+            .awaitingApproval,
+            .unavailable("连接已断开"),
+        ]
+        for state in transientStates {
+            XCTAssertEqual(
+                RemoteMacConnection.presentationState(
+                    actual: state,
+                    preservingConnected: true
+                ),
+                .connected
+            )
+            XCTAssertEqual(
+                RemoteMacConnection.presentationState(
+                    actual: state,
+                    preservingConnected: false
+                ),
+                state
+            )
+        }
+    }
+
+    func testButtonTitlesSurviveConnectionResetUntilTheServerSnapshotArrives() {
+        let cachedTitles = ["menu": "自定义菜单", "ok": "提交"]
+        XCTAssertEqual(
+            RemoteMacConnection.updatedButtonTitles(
+                current: cachedTitles,
+                event: .connectionReset
+            ),
+            cachedTitles
+        )
+        XCTAssertEqual(
+            RemoteMacConnection.updatedButtonTitles(
+                current: cachedTitles,
+                event: .serverSnapshot(["menu": "新菜单"])
+            ),
+            ["menu": "新菜单"]
+        )
+        XCTAssertEqual(
+            RemoteMacConnection.updatedButtonTitles(
+                current: cachedTitles,
+                event: .serverSnapshot([:])
+            ),
+            [:]
+        )
+    }
+
     func testFreshDiscoveryStartsOnTheLocalNetwork() {
         XCTAssertEqual(RemoteMacConnection.discoveryModeForFreshStart(), .localNetwork)
         XCTAssertFalse(RemoteMacConnection.DiscoveryMode.localNetwork.includesPeerToPeer)

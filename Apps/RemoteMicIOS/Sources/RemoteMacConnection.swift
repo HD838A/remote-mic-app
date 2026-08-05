@@ -28,6 +28,11 @@ final class RemoteMacConnection: ObservableObject {
         let action: DiscoveryAction
     }
 
+    enum ButtonTitleCacheEvent: Equatable {
+        case connectionReset
+        case serverSnapshot([String: String])
+    }
+
     enum State: Equatable {
         case searching
         case awaitingLocalNetworkPermission
@@ -52,6 +57,7 @@ final class RemoteMacConnection: ObservableObject {
     @Published private(set) var macAppVersion: String?
     @Published private(set) var lastConnectedAt: Date?
     @Published private(set) var isNearbyNetworkReady = false
+    @Published private(set) var preservesConnectedPresentation = false
 
     private let queue = DispatchQueue(label: "RemoteMicIOS.network", qos: .userInitiated)
     private let microphone = MicrophoneStreamer()
@@ -65,6 +71,7 @@ final class RemoteMacConnection: ObservableObject {
     private var browser: NWBrowser?
     private var connection: NWConnection?
     private var discoveryRetryTask: Task<Void, Never>?
+    private var presentationReleaseTask: Task<Void, Never>?
     private var discoveryRetryAttempt = 0
     private var discoveryMode = DiscoveryMode.localNetwork
     private var hasDiscoveryResult = false
@@ -78,6 +85,7 @@ final class RemoteMacConnection: ObservableObject {
     private var browserStartedAt: Date?
     private var connectionGeneration = 0
     private var connectionStartedAt: Date?
+    private var isAppActive = true
 
     init() {
         identityPrivateKey = InstallationIdentity.loadOrCreate()
@@ -91,7 +99,7 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     var statusText: String {
-        switch state {
+        switch presentationState {
         case .searching: return "正在查找"
         case .awaitingLocalNetworkPermission: return "等待网络授权"
         case .connecting: return "正在连接"
@@ -104,7 +112,7 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     func statusText(for language: AppLanguage) -> String {
-        if case .awaitingApproval = state, let pairingCode {
+        if let pairingCode = displayedPairingCode {
             return language.format("确认码 %@", pairingCode)
         }
         return language.text(statusText)
@@ -117,13 +125,25 @@ final class RemoteMacConnection: ObservableObject {
         }
     }
 
+    var isPresentedAsConnected: Bool {
+        switch presentationState {
+        case .connected, .connectedWithError: return true
+        default: return false
+        }
+    }
+
+    var presentationState: State {
+        Self.presentationState(actual: state, preservingConnected: preservesConnectedPresentation)
+    }
+
     var displayedPairingCode: String? {
+        guard !preservesConnectedPresentation else { return nil }
         guard case .awaitingApproval = state else { return nil }
         return pairingCode
     }
 
     var guidanceText: String {
-        switch state {
+        switch presentationState {
         case let .connectedWithError(detail), let .unavailable(detail):
             return detail
         case .awaitingLocalNetworkPermission:
@@ -142,7 +162,7 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     var hasIssue: Bool {
-        switch state {
+        switch presentationState {
         case .awaitingLocalNetworkPermission, .connectedWithError, .unavailable: return true
         default: return false
         }
@@ -158,9 +178,27 @@ final class RemoteMacConnection: ObservableObject {
         startBrowser()
     }
 
+    func sceneDidBecomeInactive() {
+        isAppActive = false
+        guard state == .connected, !preservesConnectedPresentation else { return }
+        preservesConnectedPresentation = true
+        diagnostics.record("connection_presentation", fields: ["state": "preserved"])
+    }
+
+    func sceneDidBecomeActive() {
+        isAppActive = true
+        if state.shouldRestartDiscoveryOnActivation {
+            restartDiscovery(reason: "scene_active")
+        } else if isConnected {
+            endConnectedPresentationPreservation(reason: "connection_still_active")
+        }
+    }
+
     private func startBrowser() {
         state = .searching
-        macName = "正在查找 Mac"
+        if !preservesConnectedPresentation {
+            macName = "正在查找 Mac"
+        }
         browserGeneration += 1
         let generation = browserGeneration
         browserStartedAt = Date()
@@ -218,8 +256,10 @@ final class RemoteMacConnection: ObservableObject {
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
-        buttonTitles = [:]
-        macAppVersion = nil
+        applyButtonTitleCacheEvent(.connectionReset)
+        if !preservesConnectedPresentation {
+            macAppVersion = nil
+        }
         if browser != nil {
             diagnostics.record("browser_cancel_requested", fields: [
                 "browser": String(browserGeneration),
@@ -347,7 +387,8 @@ final class RemoteMacConnection: ObservableObject {
             "mode": discoveryMode.rawValue,
             "peer_to_peer": discoveryMode.includesPeerToPeer ? "true" : "false",
         ])
-        if case let .service(name, _, _, _) = endpoint {
+        if case let .service(name, _, _, _) = endpoint,
+           !preservesConnectedPresentation {
             macName = name
         }
 
@@ -540,6 +581,7 @@ final class RemoteMacConnection: ObservableObject {
         self.privateKey = nil
         pairingCode = Self.pairingCode(for: key)
         state = .awaitingApproval
+        scheduleApprovalPresentationRelease()
         diagnostics.record("session_state", fields: ["state": "awaiting_approval"])
         send(RemoteWireMessage(type: "pairingReady"))
     }
@@ -548,16 +590,18 @@ final class RemoteMacConnection: ObservableObject {
         switch message.type {
         case "ready":
             macName = message.deviceName ?? macName
-            buttonTitles = message.buttonTitles ?? [:]
+            applyButtonTitleCacheEvent(.serverSnapshot(message.buttonTitles ?? [:]))
             macAppVersion = message.appVersion
             lastConnectedAt = Date()
             state = .connected
+            endConnectedPresentationPreservation(reason: "connected")
             diagnostics.record("session_state", fields: ["state": "connected"])
         case "buttonTitles":
-            buttonTitles = message.buttonTitles ?? [:]
+            applyButtonTitleCacheEvent(.serverSnapshot(message.buttonTitles ?? [:]))
             diagnostics.record("session_state", fields: ["state": "button_titles_received"])
         case "denied":
             diagnostics.record("session_state", fields: ["state": "denied"])
+            endConnectedPresentationPreservation(reason: "approval_denied")
             handleFailure("Mac 拒绝了本次连接")
         case "error":
             endVoice()
@@ -650,7 +694,12 @@ final class RemoteMacConnection: ObservableObject {
             logger.notice("Bonjour browser is waiting: \(String(describing: error), privacy: .public)")
             if connection == nil {
                 state = .awaitingLocalNetworkPermission
-                macName = "等待访问本地网络"
+                if isAppActive {
+                    endConnectedPresentationPreservation(reason: "local_network_permission")
+                }
+                if !preservesConnectedPresentation {
+                    macName = "等待访问本地网络"
+                }
             }
         case let .failed(error):
             diagnostics.record(
@@ -750,6 +799,35 @@ final class RemoteMacConnection: ObservableObject {
         }
     }
 
+    private func applyButtonTitleCacheEvent(_ event: ButtonTitleCacheEvent) {
+        let updatedTitles = Self.updatedButtonTitles(current: buttonTitles, event: event)
+        guard updatedTitles != buttonTitles else { return }
+        buttonTitles = updatedTitles
+    }
+
+    private func scheduleApprovalPresentationRelease() {
+        presentationReleaseTask?.cancel()
+        guard preservesConnectedPresentation else { return }
+        presentationReleaseTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let self, !Task.isCancelled,
+                  case .awaitingApproval = state
+            else { return }
+            endConnectedPresentationPreservation(reason: "approval_required")
+        }
+    }
+
+    private func endConnectedPresentationPreservation(reason: String) {
+        presentationReleaseTask?.cancel()
+        presentationReleaseTask = nil
+        guard preservesConnectedPresentation else { return }
+        preservesConnectedPresentation = false
+        diagnostics.record("connection_presentation", fields: [
+            "reason": reason,
+            "state": "released",
+        ])
+    }
+
     private func handleFailure(_ detail: String) {
         diagnostics.record("connection_failure", fields: [
             "connection": String(connectionGeneration),
@@ -771,12 +849,19 @@ final class RemoteMacConnection: ObservableObject {
         privateKey = nil
         sessionKey = nil
         pairingCode = nil
-        buttonTitles = [:]
-        macAppVersion = nil
+        applyButtonTitleCacheEvent(.connectionReset)
+        if !preservesConnectedPresentation {
+            macAppVersion = nil
+        }
         pendingEndpoint = nil
         receiveBuffer.removeAll(keepingCapacity: true)
         state = .unavailable(detail)
-        macName = "未找到可用的 Mac"
+        if isAppActive {
+            endConnectedPresentationPreservation(reason: "active_connection_failure")
+        }
+        if !preservesConnectedPresentation {
+            macName = "未找到可用的 Mac"
+        }
     }
 
     private func scheduleDiscoveryRetry() {
@@ -880,6 +965,7 @@ final class RemoteMacConnection: ObservableObject {
         isNearbyNetworkReady = false
         pendingEndpoint = nil
         state = .unavailable(Self.discoveryRecoveryGuidance)
+        endConnectedPresentationPreservation(reason: "discovery_failed")
         macName = "未找到可用的 Mac"
     }
 
@@ -891,6 +977,25 @@ final class RemoteMacConnection: ObservableObject {
 
     nonisolated static func discoveryModeForFreshStart() -> DiscoveryMode {
         .localNetwork
+    }
+
+    nonisolated static func presentationState(
+        actual state: State,
+        preservingConnected: Bool
+    ) -> State {
+        preservingConnected ? .connected : state
+    }
+
+    nonisolated static func updatedButtonTitles(
+        current: [String: String],
+        event: ButtonTitleCacheEvent
+    ) -> [String: String] {
+        switch event {
+        case .connectionReset:
+            return current
+        case let .serverSnapshot(titles):
+            return titles
+        }
     }
 
     nonisolated static func nextDiscoveryStep(

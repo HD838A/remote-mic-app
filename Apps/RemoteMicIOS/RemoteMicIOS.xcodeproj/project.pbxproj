@@ -363,7 +363,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.8.8;
+				MARKETING_VERSION = 0.8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hd838a.RemoteMicIOS;
 				PRODUCT_NAME = RemoteMicIOS;
 				SDKROOT = iphoneos;
@@ -385,7 +385,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.8.8;
+				MARKETING_VERSION = 0.8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hd838a.RemoteMicIOS;
 				PRODUCT_NAME = RemoteMicIOS;
 				SDKROOT = iphoneos;
