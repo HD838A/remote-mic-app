@@ -90,5 +90,9 @@ final class RemoteControlLayoutTests: XCTestCase {
             AppLanguage.english.text("连接详情"),
             "Connection Details"
         )
+        XCTAssertEqual(
+            AppLanguage.english.text(RemoteMacConnection.discoveryRecoveryGuidance),
+            "Nearby device discovery on this iPhone is temporarily unavailable. Turn Wi-Fi off and back on. If it still cannot connect, restart the iPhone."
+        )
     }
 }

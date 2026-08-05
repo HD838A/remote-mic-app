@@ -13,24 +13,98 @@ final class RemoteMacConnectionTests: XCTestCase {
         XCTAssertTrue(RemoteMacConnection.State.unavailable("错误").shouldRestartDiscoveryOnActivation)
     }
 
-    func testDiscoveryRetryOnlyRebuildsAStuckSearchWithAnUpperLimit() {
+    func testFreshDiscoveryStartsOnTheLocalNetwork() {
+        XCTAssertEqual(RemoteMacConnection.discoveryModeForFreshStart(), .localNetwork)
+        XCTAssertFalse(RemoteMacConnection.DiscoveryMode.localNetwork.includesPeerToPeer)
+        XCTAssertTrue(RemoteMacConnection.DiscoveryMode.peerToPeer.includesPeerToPeer)
+    }
+
+    func testLocalNetworkFallsBackToPeerToPeerAfterThreeSecondsWithoutResults() {
         XCTAssertEqual(
-            RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 0, state: .searching),
-            2
-        )
-        XCTAssertEqual(
-            RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 1, state: .searching),
-            5
-        )
-        XCTAssertNil(RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 2, state: .searching))
-        XCTAssertNil(RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 0, state: .connecting))
-        XCTAssertNil(RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 0, state: .awaitingApproval))
-        XCTAssertNil(RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 0, state: .connected))
-        XCTAssertNil(
-            RemoteMacConnection.discoveryRetryDelaySeconds(
+            RemoteMacConnection.nextDiscoveryStep(
+                mode: .localNetwork,
                 attempt: 0,
-                state: .awaitingLocalNetworkPermission
+                state: .searching,
+                hasResult: false
+            ),
+            .init(delaySeconds: 3, action: .switchToPeerToPeer)
+        )
+    }
+
+    func testDiscoveryResultPreventsModeFallback() {
+        XCTAssertNil(
+            RemoteMacConnection.nextDiscoveryStep(
+                mode: .localNetwork,
+                attempt: 0,
+                state: .searching,
+                hasResult: true
             )
+        )
+    }
+
+    func testActiveConnectionStatesDoNotChangeDiscoveryMode() {
+        let states: [RemoteMacConnection.State] = [
+            .connecting,
+            .awaitingApproval,
+            .connected,
+            .connectedWithError("错误"),
+            .awaitingLocalNetworkPermission,
+            .unavailable("错误"),
+        ]
+        for state in states {
+            XCTAssertNil(
+                RemoteMacConnection.nextDiscoveryStep(
+                    mode: .localNetwork,
+                    attempt: 0,
+                    state: state,
+                    hasResult: false
+                )
+            )
+        }
+    }
+
+    func testPeerToPeerDiscoveryRetriesWithAnUpperLimitThenShowsRecoveryGuidance() {
+        XCTAssertEqual(
+            RemoteMacConnection.nextDiscoveryStep(
+                mode: .peerToPeer,
+                attempt: 0,
+                state: .searching,
+                hasResult: false
+            ),
+            .init(delaySeconds: 2, action: .retryPeerToPeer)
+        )
+        XCTAssertEqual(
+            RemoteMacConnection.nextDiscoveryStep(
+                mode: .peerToPeer,
+                attempt: 1,
+                state: .searching,
+                hasResult: false
+            ),
+            .init(delaySeconds: 5, action: .retryPeerToPeer)
+        )
+        XCTAssertEqual(
+            RemoteMacConnection.nextDiscoveryStep(
+                mode: .peerToPeer,
+                attempt: 2,
+                state: .searching,
+                hasResult: false
+            ),
+            .init(delaySeconds: 5, action: .showRecoveryGuidance)
+        )
+        XCTAssertNil(
+            RemoteMacConnection.nextDiscoveryStep(
+                mode: .peerToPeer,
+                attempt: 3,
+                state: .searching,
+                hasResult: false
+            )
+        )
+    }
+
+    func testDiscoveryRecoveryGuidanceExplainsWifiAndRestartSteps() {
+        XCTAssertEqual(
+            RemoteMacConnection.discoveryRecoveryGuidance,
+            "iPhone 的附近设备发现暂时异常。请关闭并重新打开 Wi-Fi；仍无法连接时，请重启 iPhone。"
         )
     }
 

@@ -42,6 +42,7 @@
 "Mac 拒绝了本次连接" = "The Mac declined this connection";
 "发送失败，请重新连接 Mac 后重试" = "Sending failed. Reconnect to the Mac and try again.";
 "无法发现附近的 Mac，请检查本地网络权限后重试" = "A nearby Mac could not be found. Check Local Network access and try again.";
+"iPhone 的附近设备发现暂时异常。请关闭并重新打开 Wi-Fi；仍无法连接时，请重启 iPhone。" = "Nearby device discovery on this iPhone is temporarily unavailable. Turn Wi-Fi off and back on. If it still cannot connect, restart the iPhone.";
 "请在 Mac 的“系统设置 > 隐私与安全性 > 辅助功能”中允许无线麦，或检查该按键配置" = "On the Mac, allow Remote Mic in System Settings > Privacy & Security > Accessibility, or check the button setting.";
 "Mac 的语音输出当前不可用，请检查辅助功能权限和虚拟麦克风后重试" = "Voice output is unavailable on the Mac. Check Accessibility and virtual microphone settings, then try again.";
 "Mac 暂时无法执行这个操作，请稍后重试" = "The Mac cannot perform this action right now. Try again shortly.";

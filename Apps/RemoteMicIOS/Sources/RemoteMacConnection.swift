@@ -8,6 +8,26 @@ import UIKit
 
 @MainActor
 final class RemoteMacConnection: ObservableObject {
+    enum DiscoveryMode: String, Equatable {
+        case localNetwork = "local_network"
+        case peerToPeer = "peer_to_peer"
+
+        var includesPeerToPeer: Bool {
+            self == .peerToPeer
+        }
+    }
+
+    enum DiscoveryAction: Equatable {
+        case switchToPeerToPeer
+        case retryPeerToPeer
+        case showRecoveryGuidance
+    }
+
+    struct ScheduledDiscoveryStep: Equatable {
+        let delaySeconds: Double
+        let action: DiscoveryAction
+    }
+
     enum State: Equatable {
         case searching
         case awaitingLocalNetworkPermission
@@ -46,6 +66,8 @@ final class RemoteMacConnection: ObservableObject {
     private var connection: NWConnection?
     private var discoveryRetryTask: Task<Void, Never>?
     private var discoveryRetryAttempt = 0
+    private var discoveryMode = DiscoveryMode.localNetwork
+    private var hasDiscoveryResult = false
     private var pendingEndpoint: NWEndpoint?
     private var receiveBuffer = Data()
     private var voiceRequestID: UInt64 = 0
@@ -132,6 +154,11 @@ final class RemoteMacConnection: ObservableObject {
             diagnostics.record("discovery_start_skipped", fields: ["reason": "browser_exists"])
             return
         }
+        resetDiscoveryStrategy()
+        startBrowser()
+    }
+
+    private func startBrowser() {
         state = .searching
         macName = "正在查找 Mac"
         browserGeneration += 1
@@ -141,12 +168,13 @@ final class RemoteMacConnection: ObservableObject {
             "attempt": String(discoveryRetryAttempt),
             "browser": String(generation),
             "domain": "default",
-            "peer_to_peer": "true",
+            "mode": discoveryMode.rawValue,
+            "peer_to_peer": discoveryMode.includesPeerToPeer ? "true" : "false",
             "service": "_remotemic._tcp",
         ])
 
         let parameters = NWParameters.tcp
-        parameters.includePeerToPeer = true
+        parameters.includePeerToPeer = discoveryMode.includesPeerToPeer
         let browser = NWBrowser(
             for: .bonjour(type: "_remotemic._tcp", domain: nil),
             using: parameters
@@ -176,7 +204,7 @@ final class RemoteMacConnection: ObservableObject {
         ])
         discoveryRetryTask?.cancel()
         discoveryRetryTask = nil
-        discoveryRetryAttempt = 0
+        resetDiscoveryStrategy()
         endVoice()
         if connection != nil {
             diagnostics.record("connection_cancel_requested", fields: [
@@ -204,7 +232,7 @@ final class RemoteMacConnection: ObservableObject {
         isNearbyNetworkReady = false
         pendingEndpoint = nil
         receiveBuffer.removeAll(keepingCapacity: true)
-        start()
+        startBrowser()
     }
 
     func send(_ command: RemoteCommand) {
@@ -316,14 +344,15 @@ final class RemoteMacConnection: ObservableObject {
         diagnostics.record("connection_start", fields: [
             "connection": String(generation),
             "endpoint": Self.endpointCategory(endpoint),
-            "peer_to_peer": "true",
+            "mode": discoveryMode.rawValue,
+            "peer_to_peer": discoveryMode.includesPeerToPeer ? "true" : "false",
         ])
         if case let .service(name, _, _, _) = endpoint {
             macName = name
         }
 
         let parameters = NWParameters.tcp
-        parameters.includePeerToPeer = true
+        parameters.includePeerToPeer = discoveryMode.includesPeerToPeer
         let connection = NWConnection(to: endpoint, using: parameters)
         self.connection = connection
         connection.stateUpdateHandler = { [weak self, weak connection] state in
@@ -585,6 +614,8 @@ final class RemoteMacConnection: ObservableObject {
         let commonFields = [
             "browser": String(generation),
             "elapsed_ms": elapsedMilliseconds(since: browserStartedAt),
+            "mode": discoveryMode.rawValue,
+            "peer_to_peer": discoveryMode.includesPeerToPeer ? "true" : "false",
         ]
         switch browserState {
         case .setup:
@@ -640,7 +671,11 @@ final class RemoteMacConnection: ObservableObject {
             browser?.cancel()
             browser = nil
             browserStartedAt = nil
-            handleFailure("无法发现附近的 Mac，请检查本地网络权限后重试")
+            if discoveryMode == .localNetwork {
+                switchToPeerToPeer(reason: "local_browser_failed")
+            } else {
+                finishDiscoveryWithRecoveryGuidance(reason: "peer_browser_failed")
+            }
         case .cancelled:
             diagnostics.record(
                 "browser_state",
@@ -696,6 +731,8 @@ final class RemoteMacConnection: ObservableObject {
             "elapsed_ms": elapsedMilliseconds(since: browserStartedAt),
             "endpoints": endpointSummary.isEmpty ? "none" : endpointSummary,
             "identical": String(identical),
+            "mode": discoveryMode.rawValue,
+            "peer_to_peer": discoveryMode.includesPeerToPeer ? "true" : "false",
             "removed": String(removed),
             "unknown": String(unknown),
         ]) { _, new in new }
@@ -704,6 +741,7 @@ final class RemoteMacConnection: ObservableObject {
             pendingEndpoint = nil
             return
         }
+        hasDiscoveryResult = true
         discoveryRetryTask?.cancel()
         discoveryRetryTask = nil
         pendingEndpoint = endpoint
@@ -743,52 +781,147 @@ final class RemoteMacConnection: ObservableObject {
 
     private func scheduleDiscoveryRetry() {
         discoveryRetryTask?.cancel()
-        guard let delay = Self.discoveryRetryDelaySeconds(
+        guard let step = Self.nextDiscoveryStep(
+            mode: discoveryMode,
             attempt: discoveryRetryAttempt,
-            state: state
+            state: state,
+            hasResult: hasDiscoveryResult
         ) else {
             diagnostics.record("discovery_retry_exhausted", fields: [
                 "attempt": String(discoveryRetryAttempt),
                 "browser": String(browserGeneration),
+                "mode": discoveryMode.rawValue,
                 "state": diagnosticStateName,
             ])
             return
         }
-        diagnostics.record("discovery_retry_scheduled", fields: [
+        let scheduledGeneration = browserGeneration
+        let scheduledMode = discoveryMode
+        diagnostics.record("discovery_step_scheduled", fields: [
+            "action": Self.discoveryActionName(step.action),
             "attempt": String(discoveryRetryAttempt + 1),
             "browser": String(browserGeneration),
-            "delay_ms": String(Int(delay * 1_000)),
+            "delay_ms": String(Int(step.delaySeconds * 1_000)),
+            "mode": discoveryMode.rawValue,
         ])
         discoveryRetryTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(delay))
+            try? await Task.sleep(for: .seconds(step.delaySeconds))
             guard let self, !Task.isCancelled,
                   connection == nil,
-                  state == .searching
+                  state == .searching,
+                  browserGeneration == scheduledGeneration,
+                  discoveryMode == scheduledMode,
+                  !hasDiscoveryResult
             else { return }
-            discoveryRetryAttempt += 1
-            diagnostics.record("discovery_retry", fields: [
-                "attempt": String(discoveryRetryAttempt),
-                "browser": String(browserGeneration),
-            ])
-            diagnostics.record("browser_cancel_requested", fields: [
-                "browser": String(browserGeneration),
-                "reason": "retry",
-            ])
-            browser?.cancel()
-            browser = nil
-            browserStartedAt = nil
-            isNearbyNetworkReady = false
-            pendingEndpoint = nil
-            start()
+            performDiscoveryAction(step.action)
         }
     }
 
-    nonisolated static func discoveryRetryDelaySeconds(attempt: Int, state: State) -> Double? {
-        guard case .searching = state else { return nil }
-        switch attempt {
-        case 0: return 2
-        case 1: return 5
-        default: return nil
+    private func performDiscoveryAction(_ action: DiscoveryAction) {
+        diagnostics.record("discovery_step", fields: [
+            "action": Self.discoveryActionName(action),
+            "attempt": String(discoveryRetryAttempt),
+            "browser": String(browserGeneration),
+            "elapsed_ms": elapsedMilliseconds(since: browserStartedAt),
+            "mode": discoveryMode.rawValue,
+        ])
+        switch action {
+        case .switchToPeerToPeer:
+            switchToPeerToPeer(reason: "local_no_results")
+        case .retryPeerToPeer:
+            discoveryRetryAttempt += 1
+            rebuildBrowser(reason: "peer_retry")
+        case .showRecoveryGuidance:
+            finishDiscoveryWithRecoveryGuidance(reason: "all_modes_no_results")
+        }
+    }
+
+    private func switchToPeerToPeer(reason: String) {
+        diagnostics.record("discovery_mode_changed", fields: [
+            "from": discoveryMode.rawValue,
+            "reason": reason,
+            "to": DiscoveryMode.peerToPeer.rawValue,
+        ])
+        discoveryMode = .peerToPeer
+        discoveryRetryAttempt = 0
+        hasDiscoveryResult = false
+        rebuildBrowser(reason: reason)
+    }
+
+    private func rebuildBrowser(reason: String) {
+        diagnostics.record("browser_cancel_requested", fields: [
+            "browser": String(browserGeneration),
+            "reason": reason,
+        ])
+        browser?.cancel()
+        browser = nil
+        browserStartedAt = nil
+        isNearbyNetworkReady = false
+        pendingEndpoint = nil
+        startBrowser()
+    }
+
+    private func finishDiscoveryWithRecoveryGuidance(reason: String) {
+        diagnostics.record("discovery_failed", fields: [
+            "attempt": String(discoveryRetryAttempt),
+            "browser": String(browserGeneration),
+            "mode": discoveryMode.rawValue,
+            "reason": reason,
+        ])
+        diagnostics.record("browser_cancel_requested", fields: [
+            "browser": String(browserGeneration),
+            "reason": "discovery_failed",
+        ])
+        discoveryRetryTask?.cancel()
+        discoveryRetryTask = nil
+        browser?.cancel()
+        browser = nil
+        browserStartedAt = nil
+        isNearbyNetworkReady = false
+        pendingEndpoint = nil
+        state = .unavailable(Self.discoveryRecoveryGuidance)
+        macName = "未找到可用的 Mac"
+    }
+
+    private func resetDiscoveryStrategy() {
+        discoveryMode = Self.discoveryModeForFreshStart()
+        discoveryRetryAttempt = 0
+        hasDiscoveryResult = false
+    }
+
+    nonisolated static func discoveryModeForFreshStart() -> DiscoveryMode {
+        .localNetwork
+    }
+
+    nonisolated static func nextDiscoveryStep(
+        mode: DiscoveryMode,
+        attempt: Int,
+        state: State,
+        hasResult: Bool
+    ) -> ScheduledDiscoveryStep? {
+        guard case .searching = state, !hasResult else { return nil }
+        switch (mode, attempt) {
+        case (.localNetwork, 0):
+            return ScheduledDiscoveryStep(delaySeconds: 3, action: .switchToPeerToPeer)
+        case (.peerToPeer, 0):
+            return ScheduledDiscoveryStep(delaySeconds: 2, action: .retryPeerToPeer)
+        case (.peerToPeer, 1):
+            return ScheduledDiscoveryStep(delaySeconds: 5, action: .retryPeerToPeer)
+        case (.peerToPeer, 2):
+            return ScheduledDiscoveryStep(delaySeconds: 5, action: .showRecoveryGuidance)
+        default:
+            return nil
+        }
+    }
+
+    nonisolated static let discoveryRecoveryGuidance =
+        "iPhone 的附近设备发现暂时异常。请关闭并重新打开 Wi-Fi；仍无法连接时，请重启 iPhone。"
+
+    nonisolated static func discoveryActionName(_ action: DiscoveryAction) -> String {
+        switch action {
+        case .switchToPeerToPeer: return "switch_to_peer_to_peer"
+        case .retryPeerToPeer: return "retry_peer_to_peer"
+        case .showRecoveryGuidance: return "show_recovery_guidance"
         }
     }
 
