@@ -19,6 +19,7 @@ private struct PersonalizedConfiguration: Codable {
     let openMainWindowAtLaunch: Bool?
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
+    let voiceFnTapModeEnabled: Bool?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -232,6 +233,7 @@ final class AppSettings: ObservableObject {
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
+        static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
@@ -290,6 +292,15 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 experimentalContinuousRecordingEnabled,
                 forKey: Keys.experimentalContinuousRecordingEnabled
+            )
+        }
+    }
+
+    @Published var voiceFnTapModeEnabled: Bool {
+        didSet {
+            defaults.set(
+                voiceFnTapModeEnabled,
+                forKey: Keys.voiceFnTapModeEnabled
             )
         }
     }
@@ -409,6 +420,9 @@ final class AppSettings: ObservableObject {
         checksForPreReleaseUpdates = defaults.bool(forKey: Keys.checksForPreReleaseUpdates)
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
+        )
+        voiceFnTapModeEnabled = defaults.bool(
+            forKey: Keys.voiceFnTapModeEnabled
         )
         continuousRecordingPowerBindingBackup = defaults
             .data(forKey: Keys.continuousRecordingPowerBindingBackup)
@@ -794,6 +808,7 @@ final class AppSettings: ObservableObject {
             openMainWindowAtLaunch: openMainWindowAtLaunch,
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
+            voiceFnTapModeEnabled: voiceFnTapModeEnabled,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -847,6 +862,7 @@ final class AppSettings: ObservableObject {
         if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
+        voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup

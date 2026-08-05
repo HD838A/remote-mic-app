@@ -447,6 +447,14 @@ struct SettingsView: View {
                     )
                 }
 
+                Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
+                    get: { settings.voiceFnTapModeEnabled },
+                    set: { model.setVoiceFnTapModeEnabled($0) }
+                ))
+                Text("connection.voice_fn_tap.hint")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Button {
                     model.reconnect()
                 } label: {

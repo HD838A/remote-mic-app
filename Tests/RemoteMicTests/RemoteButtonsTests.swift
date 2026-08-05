@@ -611,8 +611,20 @@ struct RemoteButtonsTests {
         let model = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"), encoding: .utf8)
         let arm = try #require(monitor.range(of: "eventSuppressor.arm(button: button, edge: .down)"))
         let callback = try #require(monitor.range(of: "onButtonPressed?(button)"))
-        let map = try #require(model.range(of: "let powerKeySuppressed = applyVoiceFunctionMapping()"))
-        let start = try #require(model.range(of: "hidMonitor.start(powerKeySuppressed: powerKeySuppressed)"))
+        let applySettingsStart = try #require(model.range(of: "func applyHIDSettings()"))
+        let applySettingsEnd = try #require(
+            model.range(
+                of: "func setExperimentalContinuousRecordingEnabled",
+                range: applySettingsStart.upperBound..<model.endIndex
+            )
+        )
+        let applySettings = model[applySettingsStart.lowerBound..<applySettingsEnd.lowerBound]
+        let map = try #require(
+            applySettings.range(of: "powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)")
+        )
+        let start = try #require(
+            applySettings.range(of: "hidMonitor.start(powerKeySuppressed: powerKeySuppressed)")
+        )
         #expect(arm.lowerBound < callback.lowerBound)
         #expect(map.lowerBound < start.lowerBound)
     }
@@ -702,6 +714,18 @@ struct RemoteButtonsTests {
         #expect(HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: true,
             inputMonitoringGranted: true,
+            accessibilityGranted: true
+        ) == .none)
+        #expect(HIDPermissionGate.nextPermissionRequest(
+            mappingEnabled: false,
+            voiceFnTapModeEnabled: true,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ) == .accessibility)
+        #expect(HIDPermissionGate.nextPermissionRequest(
+            mappingEnabled: false,
+            voiceFnTapModeEnabled: true,
+            inputMonitoringGranted: false,
             accessibilityGranted: true
         ) == .none)
     }
@@ -819,6 +843,34 @@ struct RemoteButtonsTests {
         )
         #expect(!target.experimentalContinuousRecordingEnabled)
         #expect(target.action(for: .power) == .escape)
+    }
+
+    @Test func voiceFnTapModeExportsAndLegacyImportDisablesIt() throws {
+        let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.voiceFnTapModeEnabled = true
+        let exported = try source.exportedConfigurationData()
+        let object = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        #expect(object["voiceFnTapModeEnabled"] as? Bool == true)
+
+        let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.voiceFnTapModeEnabled)
+
+        var legacyObject = object
+        legacyObject.removeValue(forKey: "voiceFnTapModeEnabled")
+        target.voiceFnTapModeEnabled = true
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(!target.voiceFnTapModeEnabled)
     }
 
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {
