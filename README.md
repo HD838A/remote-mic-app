@@ -32,6 +32,8 @@ iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8
 
 发布的安装包会在 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 提供，文件名为 `Remote-Mic-<版本>.dmg`。
 
+Windows 与 Mac 单独构建和发布。当前仅提供面向小米 RC003 的 [Windows RC003 Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，它是未签名、尚未由主项目维护者独立真机复验的社区预览版，不进入 Mac 的 Sparkle 更新序列。下载前请阅读 Release 中的权限、杀毒软件和虚拟音频设备提示，并使用 `SHA256SUMS.txt` 校验文件。
+
 打开 DMG 后有两种安装方式：
 
 1. 推荐：双击 Install Remote Mic.pkg。它会同时安装 Remote Mic 和 `MiRemoteV 2ch` 兼容麦克风，适合豆包输入法及其他语音输入应用。
