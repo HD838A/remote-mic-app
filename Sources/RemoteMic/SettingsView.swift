@@ -2314,7 +2314,7 @@ private struct RC003Photo: View {
             if let photo = RC003ImageResource.image {
                 Image(nsImage: photo)
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .aspectRatio(contentMode: .fill)
             } else {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(.quaternary)

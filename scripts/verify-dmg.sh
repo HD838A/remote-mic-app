@@ -95,8 +95,8 @@ SIGNATURE="$(awk -F= '
 ' "$SIGNATURE_DETAILS")"
 test -n "$SIGNATURE"
 
-test "$(sips -g pixelWidth "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "508"
-test "$(sips -g pixelHeight "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "1030"
+test "$(sips -g pixelWidth "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "1024"
+test "$(sips -g pixelHeight "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "1536"
 
 if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' \
   "$APP/Contents"; then

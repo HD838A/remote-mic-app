@@ -1,5 +1,9 @@
 # Version History
 
+## 1.7.2
+
+- Replaced the remote-control product image with a clearer, consistent rendering across the connection and button-mapping pages while preserving interactive button alignment.
+
 ## 1.7.1
 
 - Fixed weekly charts not reconciling with all-time totals. They now show the recent seven weeks plus an Earlier bucket for legacy and older history without inventing dates, and voice labels use precise clock durations that add up to the all-time value.
