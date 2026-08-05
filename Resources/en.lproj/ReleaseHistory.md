@@ -1,5 +1,9 @@
 # Version History
 
+## 1.7.4
+
+- Clarified the on-device voice-session ranking description so its storage scope and displayed results are easier to understand.
+
 ## 1.7.3
 
 - Fixed update-channel fallback so enabling pre-release checks can never prevent stable updates from being detected when the candidate feed is unavailable or stale.
