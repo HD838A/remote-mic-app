@@ -1,0 +1,75 @@
+name: iOS CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-ci.yml"
+      - "Apps/RemoteMicIOS/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-ci.yml"
+      - "Apps/RemoteMicIOS/**"
+
+concurrency:
+  group: ios-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test iOS app
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install XcodeGen
+        run: command -v xcodegen >/dev/null || brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: Apps/RemoteMicIOS
+        run: xcodegen generate
+
+      - name: Verify generated project is current
+        run: git diff --exit-code -- Apps/RemoteMicIOS/RemoteMicIOS.xcodeproj/project.pbxproj
+
+      - name: Select iPhone simulator
+        run: |
+          simulator_id="$(xcrun simctl list devices available --json | ruby -rjson -e '
+            devices = JSON.parse(STDIN.read).fetch("devices").values.flatten
+            phone = devices.find { |device| device["isAvailable"] && device["name"].start_with?("iPhone") }
+            abort "No available iPhone simulator" unless phone
+            puts phone.fetch("udid")
+          ')"
+          echo "SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+
+      - name: Build iOS app
+        working-directory: Apps/RemoteMicIOS
+        run: |
+          xcodebuild build \
+            -project RemoteMicIOS.xcodeproj \
+            -scheme RemoteMicIOS \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run iOS unit tests
+        working-directory: Apps/RemoteMicIOS
+        run: |
+          xcodebuild test \
+            -project RemoteMicIOS.xcodeproj \
+            -scheme RemoteMicIOS \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO
