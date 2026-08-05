@@ -13,6 +13,27 @@ final class RemoteMacConnectionTests: XCTestCase {
         XCTAssertTrue(RemoteMacConnection.State.unavailable("错误").shouldRestartDiscoveryOnActivation)
     }
 
+    func testDiscoveryRetryOnlyRebuildsAStuckSearchWithAnUpperLimit() {
+        XCTAssertEqual(
+            RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 0, state: .searching),
+            2
+        )
+        XCTAssertEqual(
+            RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 1, state: .searching),
+            5
+        )
+        XCTAssertNil(RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 2, state: .searching))
+        XCTAssertNil(RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 0, state: .connecting))
+        XCTAssertNil(RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 0, state: .awaitingApproval))
+        XCTAssertNil(RemoteMacConnection.discoveryRetryDelaySeconds(attempt: 0, state: .connected))
+        XCTAssertNil(
+            RemoteMacConnection.discoveryRetryDelaySeconds(
+                attempt: 0,
+                state: .awaitingLocalNetworkPermission
+            )
+        )
+    }
+
     func testKnownMacOperationErrorsBecomeActionableMessages() {
         XCTAssertEqual(
             RemoteMacConnection.userFacingOperationError("Mac 需要辅助功能权限，或该按键当前不可用。"),

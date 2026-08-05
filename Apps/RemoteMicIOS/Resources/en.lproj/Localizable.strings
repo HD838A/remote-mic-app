@@ -74,6 +74,8 @@
 "TestFlight 公测" = "TestFlight Beta:";
 "复制 TestFlight 公测链接" = "Copy TestFlight public beta link";
 "TestFlight 公测链接已复制" = "TestFlight public beta link copied";
+"复制 App 版本号" = "Copy App version";
+"App 版本号已复制" = "App version copied";
 "App 已打开" = "App Open";
 "等待 App" = "Waiting for App";
 "网络可用" = "Network Ready";

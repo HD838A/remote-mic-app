@@ -70,6 +70,17 @@ final class RemoteControlLayoutTests: XCTestCase {
         XCTAssertEqual(MacAppInformationScreen.testFlightURL.path, "/join/J8k8fb7v")
     }
 
+    func testAppVersionTextIncludesMarketingVersionAndBuildNumber() {
+        XCTAssertEqual(
+            MacAppInformationScreen.appVersionText(marketingVersion: "0.8.8", buildNumber: "16"),
+            "0.8.8 (16)"
+        )
+        XCTAssertEqual(
+            MacAppInformationScreen.appVersionText(marketingVersion: "0.8.8", buildNumber: nil),
+            "0.8.8"
+        )
+    }
+
     func testEnglishLocalizationContainsCoreRemoteCopy() {
         XCTAssertEqual(
             AppLanguage.english.text("按住说话"),

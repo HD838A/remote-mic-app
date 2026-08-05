@@ -26,8 +26,10 @@ struct MacAppInformationScreen: View {
     @AppStorage(AppLanguage.storageKey) private var storedLanguage = ""
     @State private var didCopyLink = false
     @State private var didCopyTestFlightLink = false
+    @State private var didCopyAppVersion = false
     @State private var copyResetTask: Task<Void, Never>?
     @State private var testFlightCopyResetTask: Task<Void, Never>?
+    @State private var appVersionCopyResetTask: Task<Void, Never>?
 
     var body: some View {
         GeometryReader { proxy in
@@ -71,14 +73,32 @@ struct MacAppInformationScreen: View {
         .onDisappear {
             copyResetTask?.cancel()
             testFlightCopyResetTask?.cancel()
+            appVersionCopyResetTask?.cancel()
         }
     }
 
     private var navigationBar: some View {
         ZStack {
-            Text(language.text("无线麦"))
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(RemotePalette.text)
+            VStack(spacing: 1) {
+                Text(language.text("无线麦"))
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(RemotePalette.text)
+
+                Button {
+                    copyAppVersion()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: didCopyAppVersion ? "checkmark" : "doc.on.doc")
+                        Text("iOS \(appVersionText)")
+                    }
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(RemotePalette.text.opacity(0.58))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    language.text(didCopyAppVersion ? "App 版本号已复制" : "复制 App 版本号")
+                )
+            }
 
             HStack {
                 Button {
@@ -462,6 +482,24 @@ struct MacAppInformationScreen: View {
         Self.websiteURL(for: language)
     }
 
+    static func appVersionText(marketingVersion: String?, buildNumber: String?) -> String {
+        let version = marketingVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let build = buildNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (version?.isEmpty == false ? version : nil, build?.isEmpty == false ? build : nil) {
+        case let (version?, build?): return "\(version) (\(build))"
+        case let (version?, nil): return version
+        case let (nil, build?): return build
+        case (nil, nil): return "—"
+        }
+    }
+
+    private var appVersionText: String {
+        Self.appVersionText(
+            marketingVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            buildNumber: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        )
+    }
+
     private func detailItem(_ title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
@@ -595,6 +633,18 @@ struct MacAppInformationScreen: View {
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
             didCopyTestFlightLink = false
+        }
+    }
+
+    private func copyAppVersion() {
+        UIPasteboard.general.string = appVersionText
+        HapticFeedback.shared.trigger(.emphasized)
+        didCopyAppVersion = true
+        appVersionCopyResetTask?.cancel()
+        appVersionCopyResetTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            didCopyAppVersion = false
         }
     }
 }

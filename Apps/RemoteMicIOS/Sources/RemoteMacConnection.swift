@@ -41,6 +41,8 @@ final class RemoteMacConnection: ObservableObject {
     )
     private var browser: NWBrowser?
     private var connection: NWConnection?
+    private var discoveryRetryTask: Task<Void, Never>?
+    private var discoveryRetryAttempt = 0
     private var pendingEndpoint: NWEndpoint?
     private var receiveBuffer = Data()
     private var voiceRequestID: UInt64 = 0
@@ -139,9 +141,13 @@ final class RemoteMacConnection: ObservableObject {
         }
         self.browser = browser
         browser.start(queue: queue)
+        scheduleDiscoveryRetry()
     }
 
     func restartDiscovery() {
+        discoveryRetryTask?.cancel()
+        discoveryRetryTask = nil
+        discoveryRetryAttempt = 0
         endVoice()
         connection?.cancel()
         connection = nil
@@ -236,6 +242,8 @@ final class RemoteMacConnection: ObservableObject {
             return
         }
         guard connection == nil else { return }
+        discoveryRetryTask?.cancel()
+        discoveryRetryTask = nil
         pendingEndpoint = nil
         state = .connecting
         if case let .service(name, _, _, _) = endpoint {
@@ -423,6 +431,8 @@ final class RemoteMacConnection: ObservableObject {
                 }
             }
         case let .waiting(error):
+            discoveryRetryTask?.cancel()
+            discoveryRetryTask = nil
             isNearbyNetworkReady = false
             logger.notice("Bonjour browser is waiting: \(String(describing: error), privacy: .public)")
             if connection == nil {
@@ -430,6 +440,8 @@ final class RemoteMacConnection: ObservableObject {
                 macName = "等待访问本地网络"
             }
         case let .failed(error):
+            discoveryRetryTask?.cancel()
+            discoveryRetryTask = nil
             isNearbyNetworkReady = false
             logger.error("Bonjour browser failed: \(String(describing: error), privacy: .public)")
             browser?.cancel()
@@ -447,6 +459,8 @@ final class RemoteMacConnection: ObservableObject {
             pendingEndpoint = nil
             return
         }
+        discoveryRetryTask?.cancel()
+        discoveryRetryTask = nil
         pendingEndpoint = endpoint
         if isNearbyNetworkReady {
             connect(to: endpoint)
@@ -454,6 +468,8 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     private func handleFailure(_ detail: String) {
+        discoveryRetryTask?.cancel()
+        discoveryRetryTask = nil
         endVoice()
         connection?.cancel()
         connection = nil
@@ -466,6 +482,36 @@ final class RemoteMacConnection: ObservableObject {
         receiveBuffer.removeAll(keepingCapacity: true)
         state = .unavailable(detail)
         macName = "未找到可用的 Mac"
+    }
+
+    private func scheduleDiscoveryRetry() {
+        discoveryRetryTask?.cancel()
+        guard let delay = Self.discoveryRetryDelaySeconds(
+            attempt: discoveryRetryAttempt,
+            state: state
+        ) else { return }
+        discoveryRetryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled,
+                  connection == nil,
+                  state == .searching
+            else { return }
+            discoveryRetryAttempt += 1
+            browser?.cancel()
+            browser = nil
+            isNearbyNetworkReady = false
+            pendingEndpoint = nil
+            start()
+        }
+    }
+
+    nonisolated static func discoveryRetryDelaySeconds(attempt: Int, state: State) -> Double? {
+        guard case .searching = state else { return nil }
+        switch attempt {
+        case 0: return 2
+        case 1: return 5
+        default: return nil
+        }
     }
 
     nonisolated static func userFacingOperationError(_ detail: String?) -> String {
