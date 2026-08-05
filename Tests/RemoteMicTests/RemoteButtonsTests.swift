@@ -1142,6 +1142,25 @@ struct RemoteButtonsTests {
         #expect(restored.shortcut(for: .tv) == nil)
     }
 
+    @Test func preReleaseUpdateFeedAlwaysFallsBackToStableFeed() throws {
+        let stableFeed = "https://example.com/releases/latest/download/appcast.xml"
+        let preReleaseFeed = try #require(
+            URL(string: "https://example.com/releases/download/v1.7.3/appcast.xml")
+        )
+        var selection = UpdateFeedSelection(stableFeedURLString: stableFeed)
+
+        selection.usePreReleaseFeed(preReleaseFeed)
+        #expect(
+            selection.feedURLString(checksForPreReleaseUpdates: true)
+                == preReleaseFeed.absoluteString
+        )
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: false) == stableFeed)
+
+        selection.useStableFeed()
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: true) == stableFeed)
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: false) == stableFeed)
+    }
+
     @Test func secondaryTriggerActionsPersistAndResetWithoutChangingSingleClick() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

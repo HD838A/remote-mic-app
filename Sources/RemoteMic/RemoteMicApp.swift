@@ -4,6 +4,30 @@ import Darwin
 import Sparkle
 import SwiftUI
 
+struct UpdateFeedSelection {
+    let stableFeedURLString: String?
+    private(set) var preReleaseFeedURL: URL?
+
+    init(stableFeedURLString: String?) {
+        self.stableFeedURLString = stableFeedURLString
+    }
+
+    mutating func usePreReleaseFeed(_ url: URL) {
+        preReleaseFeedURL = url
+    }
+
+    mutating func useStableFeed() {
+        preReleaseFeedURL = nil
+    }
+
+    func feedURLString(checksForPreReleaseUpdates: Bool) -> String? {
+        if checksForPreReleaseUpdates, let preReleaseFeedURL {
+            return preReleaseFeedURL.absoluteString
+        }
+        return stableFeedURLString
+    }
+}
+
 @main
 enum RemoteMicApp {
     @MainActor
@@ -54,7 +78,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var settingsWindowController: NSWindowController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
-    private var preReleaseFeedURL: URL?
+    private var updateFeedSelection = UpdateFeedSelection(
+        stableFeedURLString: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
+    )
     private var updateFeedRefreshTask: Task<Void, Never>?
     private var updateFeedRefreshTimer: Timer?
     private var updaterStarted = false
@@ -283,7 +309,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             .sink { [weak self] isEnabled in
                 guard let self else { return }
                 updateFeedRefreshTask?.cancel()
-                preReleaseFeedURL = nil
+                updateFeedSelection.useStableFeed()
                 configurePreReleaseFeedRefreshTimer(isEnabled: isEnabled)
                 startUpdaterIfNeeded()
                 if isEnabled {
@@ -335,8 +361,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             do {
                 let resolvedURL = try await Self.latestReleaseFeedURL()
                 guard !Task.isCancelled, model.settings.checksForPreReleaseUpdates else { return }
-                let feedChanged = preReleaseFeedURL != resolvedURL
-                preReleaseFeedURL = resolvedURL
+                let feedChanged = updateFeedSelection.preReleaseFeedURL != resolvedURL
+                updateFeedSelection.usePreReleaseFeed(resolvedURL)
                 AppLogger.shared.write("UPDATE FEED prerelease_enabled=true resolved=true")
                 if startUpdaterAfterRefresh {
                     startUpdaterIfNeeded()
@@ -345,11 +371,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 }
             } catch {
                 guard !Task.isCancelled else { return }
+                let feedChanged = updateFeedSelection.preReleaseFeedURL != nil
+                updateFeedSelection.useStableFeed()
                 AppLogger.shared.write(
-                    "UPDATE FEED prerelease_enabled=true resolved=false error=\(error.localizedDescription)"
+                    "UPDATE FEED prerelease_enabled=true resolved=false fallback=stable "
+                        + "error=\(error.localizedDescription)"
                 )
                 if startUpdaterAfterRefresh {
                     startUpdaterIfNeeded()
+                } else if feedChanged, resetUpdateCycleWhenChanged {
+                    updaterController.updater.resetUpdateCycleAfterShortDelay()
                 }
             }
         }
@@ -380,8 +411,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {
-        guard model.settings.checksForPreReleaseUpdates else { return nil }
-        return preReleaseFeedURL?.absoluteString
+        updateFeedSelection.feedURLString(
+            checksForPreReleaseUpdates: model.settings.checksForPreReleaseUpdates
+        )
     }
 
     private func refreshMenuStatus() {
@@ -504,24 +536,23 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             guard let self else { return }
             if model.settings.checksForPreReleaseUpdates {
                 do {
-                    preReleaseFeedURL = try await Self.latestReleaseFeedURL()
+                    let resolvedURL = try await Self.latestReleaseFeedURL()
                     guard !Task.isCancelled,
                           model.settings.checksForPreReleaseUpdates
                     else { return }
+                    updateFeedSelection.usePreReleaseFeed(resolvedURL)
                     AppLogger.shared.write("UPDATE CHECK prerelease_enabled=true resolved=true")
                 } catch {
                     guard !Task.isCancelled else { return }
+                    updateFeedSelection.useStableFeed()
                     AppLogger.shared.write(
-                        "UPDATE CHECK prerelease_enabled=true resolved=false error=\(error.localizedDescription)"
+                        "UPDATE CHECK prerelease_enabled=true resolved=false fallback=stable "
+                            + "error=\(error.localizedDescription)"
                     )
-                    guard preReleaseFeedURL != nil else {
-                        startUpdaterIfNeeded()
-                        showPreReleaseFeedUnavailableAlert()
-                        return
-                    }
+                    showPreReleaseFeedUnavailableAlert()
                 }
             } else {
-                preReleaseFeedURL = nil
+                updateFeedSelection.useStableFeed()
             }
             startUpdaterIfNeeded()
             updaterController.checkForUpdates(nil)
