@@ -1,5 +1,11 @@
 # Version History
 
+## 1.7.6 (Pre-release)
+
+- Fixed all configurable Mobile Web buttons being limited to single-click actions. The updated Web remote and Mac now support the same custom single-click, double-click, and long-press actions as the physical remote.
+- Keeps Web and nearby iPhone/iPad gesture state independent so simultaneous connections cannot interfere; the updated Web remote still falls back to a single click with older Mac versions.
+- Added a GitHub CI workflow scoped to the Mobile Web project for TypeScript checks, tests, and production builds.
+
 ## 1.7.5
 
 - Silently falls back to the stable update feed when no pre-release exists or the candidate lookup times out or is temporarily unavailable, without showing an error alert.
