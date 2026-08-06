@@ -8,6 +8,11 @@ private enum MobileVoiceSource {
     case web
 }
 
+private struct MobileButtonGestureKey: Hashable {
+    let source: UsageEventSource
+    let button: RemoteButton
+}
+
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
@@ -67,9 +72,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var phoneApprovalAlert: NSAlert?
     private var webApprovalAlert: NSAlert?
     private var remoteButtonTitles: [String: String] = [:]
-    private var phoneButtonGestureRecognizer = RemoteButtonGestureRecognizer()
-    private var phoneDoubleClickTimers: [RemoteButton: DispatchSourceTimer] = [:]
-    private var phoneLongPressTimers: [RemoteButton: DispatchSourceTimer] = [:]
+    private var mobileButtonGestureRecognizers: [UsageEventSource: RemoteButtonGestureRecognizer] = [:]
+    private var mobileDoubleClickTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
+    private var mobileLongPressTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
     private lazy var bluetoothBridge = XiaomiBluetoothBridge(settings: settings, delegate: self)
     private lazy var hidMonitor: HIDRemoteMonitor = {
         let monitor = HIDRemoteMonitor(settings: settings)
@@ -134,12 +139,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         phoneRemoteServer.onButtonEvent = { [weak self] button, phase, completion in
             DispatchQueue.main.async {
-                completion(self?.handlePhoneButtonEvent(button, phase: phase) ?? false)
+                completion(self?.handleMobileButtonEvent(
+                    button,
+                    phase: phase,
+                    source: .nearbyPhone
+                ) ?? false)
             }
         }
         phoneRemoteServer.onButtonEventsReset = { [weak self] in
             DispatchQueue.main.async {
-                self?.resetPhoneButtonGestures()
+                self?.resetMobileButtonGestures(source: .nearbyPhone)
             }
         }
         phoneRemoteServer.onVoiceStart = { [weak self] completion in
@@ -177,6 +186,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         webRemoteClient.onCommand = { [weak self] button, completion in
             DispatchQueue.main.async {
                 completion(self?.performPhoneCommand(button, source: .webRemote) ?? false)
+            }
+        }
+        webRemoteClient.onButtonEvent = { [weak self] button, phase, completion in
+            DispatchQueue.main.async {
+                completion(self?.handleMobileButtonEvent(
+                    button,
+                    phase: phase,
+                    source: .webRemote
+                ) ?? false)
+            }
+        }
+        webRemoteClient.onButtonEventsReset = { [weak self] in
+            DispatchQueue.main.async {
+                self?.resetMobileButtonGestures(source: .webRemote)
             }
         }
         webRemoteClient.onVoiceStart = { [weak self] completion in
@@ -883,12 +906,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ button: RemoteButton,
         source: UsageEventSource
     ) -> Bool {
-        performPhoneConfiguredAction(for: button, trigger: .singleClick, source: source)
+        performMobileConfiguredAction(for: button, trigger: .singleClick, source: source)
     }
 
-    private func handlePhoneButtonEvent(
+    private func handleMobileButtonEvent(
         _ button: RemoteButton,
-        phase: RemoteButtonPhase
+        phase: RemoteButtonPhase,
+        source: UsageEventSource
     ) -> Bool {
         let recognizesDoubleClick = settings.configuredAction(
             for: button,
@@ -899,88 +923,112 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             trigger: .longPress
         ).action != .disabled
 
+        var recognizer = mobileButtonGestureRecognizers[source] ?? RemoteButtonGestureRecognizer()
         if phase == .press,
            !recognizesDoubleClick,
            !recognizesLongPress,
-           !phoneButtonGestureRecognizer.isTracking(button) {
-            return performPhoneConfiguredAction(
+           !recognizer.isTracking(button) {
+            return performMobileConfiguredAction(
                 for: button,
                 trigger: .singleClick,
-                source: .nearbyPhone
+                source: source
             )
         }
 
-        return processPhoneGestureCommands(phoneButtonGestureRecognizer.handle(
+        let commands = recognizer.handle(
             phase,
             button: button,
             recognizesDoubleClick: recognizesDoubleClick,
             recognizesLongPress: recognizesLongPress
-        ))
+        )
+        mobileButtonGestureRecognizers[source] = recognizer
+        return processMobileGestureCommands(commands, source: source)
     }
 
-    private func processPhoneGestureCommands(
-        _ commands: [RemoteButtonGestureRecognizer.Command]
+    private func processMobileGestureCommands(
+        _ commands: [RemoteButtonGestureRecognizer.Command],
+        source: UsageEventSource
     ) -> Bool {
         for command in commands {
             switch command {
             case let .scheduleDoubleClickTimeout(button):
-                schedulePhoneDoubleClickTimeout(for: button)
+                scheduleMobileDoubleClickTimeout(for: button, source: source)
             case let .cancelDoubleClickTimeout(button):
-                phoneDoubleClickTimers.removeValue(forKey: button)?.cancel()
+                mobileDoubleClickTimers.removeValue(forKey: .init(
+                    source: source,
+                    button: button
+                ))?.cancel()
             case let .scheduleLongPressTimeout(button):
-                schedulePhoneLongPressTimeout(for: button)
+                scheduleMobileLongPressTimeout(for: button, source: source)
             case let .cancelLongPressTimeout(button):
-                phoneLongPressTimers.removeValue(forKey: button)?.cancel()
+                mobileLongPressTimers.removeValue(forKey: .init(
+                    source: source,
+                    button: button
+                ))?.cancel()
             case let .trigger(button, trigger):
-                guard performPhoneConfiguredAction(
+                guard performMobileConfiguredAction(
                     for: button,
                     trigger: trigger,
-                    source: .nearbyPhone
+                    source: source
                 ) else { return false }
             }
         }
         return true
     }
 
-    private func schedulePhoneDoubleClickTimeout(for button: RemoteButton) {
-        phoneDoubleClickTimers.removeValue(forKey: button)?.cancel()
+    private func scheduleMobileDoubleClickTimeout(
+        for button: RemoteButton,
+        source: UsageEventSource
+    ) {
+        let key = MobileButtonGestureKey(source: source, button: button)
+        mobileDoubleClickTimers.removeValue(forKey: key)?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(300))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            phoneDoubleClickTimers.removeValue(forKey: button)
-            _ = processPhoneGestureCommands(
-                phoneButtonGestureRecognizer.doubleClickTimedOut(button)
-            )
+            mobileDoubleClickTimers.removeValue(forKey: key)
+            guard var recognizer = mobileButtonGestureRecognizers[source] else { return }
+            let commands = recognizer.doubleClickTimedOut(button)
+            mobileButtonGestureRecognizers[source] = recognizer
+            _ = processMobileGestureCommands(commands, source: source)
         }
-        phoneDoubleClickTimers[button] = timer
+        mobileDoubleClickTimers[key] = timer
         timer.resume()
     }
 
-    private func schedulePhoneLongPressTimeout(for button: RemoteButton) {
-        phoneLongPressTimers.removeValue(forKey: button)?.cancel()
+    private func scheduleMobileLongPressTimeout(
+        for button: RemoteButton,
+        source: UsageEventSource
+    ) {
+        let key = MobileButtonGestureKey(source: source, button: button)
+        mobileLongPressTimers.removeValue(forKey: key)?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(550))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            phoneLongPressTimers.removeValue(forKey: button)
-            _ = processPhoneGestureCommands(
-                phoneButtonGestureRecognizer.longPressTimedOut(button)
-            )
+            mobileLongPressTimers.removeValue(forKey: key)
+            guard var recognizer = mobileButtonGestureRecognizers[source] else { return }
+            let commands = recognizer.longPressTimedOut(button)
+            mobileButtonGestureRecognizers[source] = recognizer
+            _ = processMobileGestureCommands(commands, source: source)
         }
-        phoneLongPressTimers[button] = timer
+        mobileLongPressTimers[key] = timer
         timer.resume()
     }
 
-    private func resetPhoneButtonGestures() {
-        phoneDoubleClickTimers.values.forEach { $0.cancel() }
-        phoneDoubleClickTimers.removeAll()
-        phoneLongPressTimers.values.forEach { $0.cancel() }
-        phoneLongPressTimers.removeAll()
-        phoneButtonGestureRecognizer.reset()
+    private func resetMobileButtonGestures(source: UsageEventSource) {
+        let doubleClickKeys = mobileDoubleClickTimers.keys.filter { $0.source == source }
+        doubleClickKeys.forEach {
+            mobileDoubleClickTimers.removeValue(forKey: $0)?.cancel()
+        }
+        let longPressKeys = mobileLongPressTimers.keys.filter { $0.source == source }
+        longPressKeys.forEach {
+            mobileLongPressTimers.removeValue(forKey: $0)?.cancel()
+        }
+        mobileButtonGestureRecognizers.removeValue(forKey: source)
     }
 
-    private func performPhoneConfiguredAction(
+    private func performMobileConfiguredAction(
         for button: RemoteButton,
         trigger: ButtonTrigger,
         source: UsageEventSource

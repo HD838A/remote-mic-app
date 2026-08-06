@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode } from "react";
-import type { RemoteCommandName } from "@remote-mic/mobile-web-protocol";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode } from "react";
+import type { ButtonPhase, RemoteCommandName } from "@remote-mic/mobile-web-protocol";
 import { RemoteConnection, type ConnectionState } from "./connection";
 import {
   BackIcon,
@@ -38,29 +38,34 @@ export default function App(): ReactElement {
   useEffect(() => {
     const unsubscribe = connection.subscribe(setState);
     connection.prepare();
-    const stopVoice = () => connection.endVoice();
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== "visible") stopVoice();
+    const stopInteractions = () => {
+      connection.releaseAllButtons();
+      connection.endVoice();
     };
-    window.addEventListener("blur", stopVoice);
-    window.addEventListener("pagehide", stopVoice);
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") stopInteractions();
+    };
+    window.addEventListener("blur", stopInteractions);
+    window.addEventListener("pagehide", stopInteractions);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       unsubscribe();
-      window.removeEventListener("blur", stopVoice);
-      window.removeEventListener("pagehide", stopVoice);
+      window.removeEventListener("blur", stopInteractions);
+      window.removeEventListener("pagehide", stopInteractions);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       connection.disconnect();
     };
   }, [connection]);
 
   const connected = state.phase === "connected";
-  const perform = (command: RemoteCommandName) => connection.sendCommand(command);
+  const perform = (command: RemoteCommandName, phase: ButtonPhase) => {
+    connection.sendButtonEvent(command, phase);
+  };
   return (
     <main className="remote-shell" onContextMenu={(event) => event.preventDefault()}>
       <section className="remote-surface" aria-label="无线麦手机遥控器">
         <header className="remote-header">
-          <ControlButton className="header-button" label="关机" haptic="emphasized" disabled={!connected} onPress={() => perform("power")}>
+          <ControlButton className="header-button" label="关机" haptic="emphasized" disabled={!connected} onPressChanged={(phase) => perform("power", phase)}>
             <PowerIcon />
             <CustomTitle value={state.buttonTitles.power} />
           </ControlButton>
@@ -75,17 +80,17 @@ export default function App(): ReactElement {
         <DPad disabled={!connected} perform={perform} confirmTitle={state.buttonTitles.ok} />
 
         <div className="middle-controls" aria-label="常用遥控按键">
-          <RoundButton label="返回" title={state.buttonTitles.back} icon={<BackIcon />} disabled={!connected} onPress={() => perform("back")} />
-          <RoundButton label="菜单" title={state.buttonTitles.menu} icon={<MenuIcon />} disabled={!connected} onPress={() => perform("menu")} />
-          <RoundButton label="音量+" title={state.buttonTitles.volume_up} icon={<VolumeUpIcon />} disabled={!connected} onPress={() => perform("volume_up")} />
-          <RoundButton label="主页" title={state.buttonTitles.home} icon={<HomeIcon />} disabled={!connected} onPress={() => perform("home")} />
-          <RoundButton label="TV" title={state.buttonTitles.tv} icon={<TVIcon />} disabled={!connected} onPress={() => perform("tv")} />
-          <RoundButton label="音量-" title={state.buttonTitles.volume_down} icon={<VolumeDownIcon />} disabled={!connected} onPress={() => perform("volume_down")} />
+          <RoundButton label="返回" title={state.buttonTitles.back} icon={<BackIcon />} disabled={!connected} onPressChanged={(phase) => perform("back", phase)} />
+          <RoundButton label="菜单" title={state.buttonTitles.menu} icon={<MenuIcon />} disabled={!connected} onPressChanged={(phase) => perform("menu", phase)} />
+          <RoundButton label="音量+" title={state.buttonTitles.volume_up} icon={<VolumeUpIcon />} disabled={!connected} onPressChanged={(phase) => perform("volume_up", phase)} />
+          <RoundButton label="主页" title={state.buttonTitles.home} icon={<HomeIcon />} disabled={!connected} onPressChanged={(phase) => perform("home", phase)} />
+          <RoundButton label="TV" title={state.buttonTitles.tv} icon={<TVIcon />} disabled={!connected} onPressChanged={(phase) => perform("tv", phase)} />
+          <RoundButton label="音量-" title={state.buttonTitles.volume_down} icon={<VolumeDownIcon />} disabled={!connected} onPressChanged={(phase) => perform("volume_down", phase)} />
         </div>
 
         <div className="primary-controls">
           <VoiceButton state={state} connection={connection} />
-          <ControlButton className="primary-button confirm-button" label="确定" haptic="emphasized" disabled={!connected} onPress={() => perform("ok")}>
+          <ControlButton className="primary-button confirm-button" label="确定" haptic="emphasized" disabled={!connected} onPressChanged={(phase) => perform("ok", phase)}>
             <ReturnIcon />
             <span className="primary-title">确定</span>
             <span className="primary-subtitle">{state.buttonTitles.ok ?? "Return"}</span>
@@ -186,16 +191,16 @@ function DPad({
   confirmTitle,
 }: {
   disabled: boolean;
-  perform: (command: RemoteCommandName) => void;
+  perform: (command: RemoteCommandName, phase: ButtonPhase) => void;
   confirmTitle?: string | undefined;
 }): ReactElement {
   return (
     <div className="dpad" aria-label="方向控制">
-      <ControlButton className="dpad-direction up" label="向上" disabled={disabled} onPress={() => perform("up")}><ChevronUp /></ControlButton>
-      <ControlButton className="dpad-direction right" label="向右" disabled={disabled} onPress={() => perform("right")}><ChevronRight /></ControlButton>
-      <ControlButton className="dpad-direction down" label="向下" disabled={disabled} onPress={() => perform("down")}><ChevronDown /></ControlButton>
-      <ControlButton className="dpad-direction left" label="向左" disabled={disabled} onPress={() => perform("left")}><ChevronLeft /></ControlButton>
-      <ControlButton className="dpad-center" label="确定" disabled={disabled} onPress={() => perform("ok")}>
+      <ControlButton className="dpad-direction up" label="向上" disabled={disabled} onPressChanged={(phase) => perform("up", phase)}><ChevronUp /></ControlButton>
+      <ControlButton className="dpad-direction right" label="向右" disabled={disabled} onPressChanged={(phase) => perform("right", phase)}><ChevronRight /></ControlButton>
+      <ControlButton className="dpad-direction down" label="向下" disabled={disabled} onPressChanged={(phase) => perform("down", phase)}><ChevronDown /></ControlButton>
+      <ControlButton className="dpad-direction left" label="向左" disabled={disabled} onPressChanged={(phase) => perform("left", phase)}><ChevronLeft /></ControlButton>
+      <ControlButton className="dpad-center" label="确定" disabled={disabled} onPressChanged={(phase) => perform("ok", phase)}>
         <span>{confirmTitle ?? "OK"}</span>
       </ControlButton>
     </div>
@@ -207,16 +212,16 @@ function RoundButton({
   title,
   icon,
   disabled,
-  onPress,
+  onPressChanged,
 }: {
   label: string;
   title?: string | undefined;
   icon: ReactNode;
   disabled: boolean;
-  onPress: () => void;
+  onPressChanged: (phase: ButtonPhase) => void;
 }): ReactElement {
   return (
-    <ControlButton className="round-button" label={label} disabled={disabled} onPress={onPress}>
+    <ControlButton className="round-button" label={label} disabled={disabled} onPressChanged={onPressChanged}>
       <span className="round-icon">{icon}</span>
       <span className="round-label">{title ?? label}</span>
     </ControlButton>
@@ -263,18 +268,52 @@ function ControlButton({
   label,
   disabled = false,
   haptic = "light",
-  onPress,
+  onPressChanged,
   children,
 }: {
   className: string;
   label: string;
   disabled?: boolean;
   haptic?: WebHaptic;
-  onPress: () => void;
+  onPressChanged: (phase: ButtonPhase) => void;
   children: ReactNode;
 }): ReactElement {
+  const activePointer = useRef<number | undefined>(undefined);
+  const finishPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (activePointer.current !== event.pointerId) return;
+    activePointer.current = undefined;
+    onPressChanged("release");
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
   return (
-    <button type="button" className={className} aria-label={label} disabled={disabled} onPointerDown={() => triggerHaptic(haptic)} onClick={onPress}>
+    <button
+      type="button"
+      className={className}
+      aria-label={label}
+      disabled={disabled}
+      onPointerDown={(event) => {
+        if (activePointer.current !== undefined) return;
+        activePointer.current = event.pointerId;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        triggerHaptic(haptic);
+        onPressChanged("press");
+      }}
+      onPointerUp={finishPointer}
+      onPointerCancel={finishPointer}
+      onLostPointerCapture={(event) => {
+        if (activePointer.current !== event.pointerId) return;
+        activePointer.current = undefined;
+        onPressChanged("release");
+      }}
+      onClick={(event) => {
+        if (event.detail !== 0) return;
+        triggerHaptic(haptic);
+        onPressChanged("press");
+        onPressChanged("release");
+      }}
+    >
       {children}
     </button>
   );

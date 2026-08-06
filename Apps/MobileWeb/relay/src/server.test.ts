@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket, type RawData } from "ws";
-import { encodeAudioFrame, parseWireMessage, protocolVersion, type WireMessage } from "@remote-mic/mobile-web-protocol";
+import {
+  buttonEventsCapability,
+  encodeAudioFrame,
+  parseWireMessage,
+  protocolVersion,
+  type WireMessage,
+} from "@remote-mic/mobile-web-protocol";
 import { createRelayServer, type RelayServer } from "./server.js";
 
 const openServers: RelayServer[] = [];
@@ -40,6 +46,7 @@ describe("relay session", () => {
       macName: "Test Mac",
       appVersion: "1.0",
       buttonTitles: { home: "打开 Codex" },
+      capabilities: [buttonEventsCapability],
     }));
     const created = await nextJSON(mac);
     expect(created.type).toBe("sessionCreated");
@@ -62,10 +69,26 @@ describe("relay session", () => {
     mac.send(JSON.stringify({ type: "sessionApprove", protocolVersion }));
     expect((await nextJSON(mac)).type).toBe("sessionReady");
     const ready = await nextJSON(web);
-    expect(ready).toMatchObject({ type: "sessionReady", macName: "Test Mac" });
+    expect(ready).toMatchObject({
+      type: "sessionReady",
+      macName: "Test Mac",
+      capabilities: [buttonEventsCapability],
+    });
 
     web.send(JSON.stringify({ type: "command", protocolVersion, command: "home" }));
     expect(await nextJSON(mac)).toMatchObject({ type: "command", command: "home" });
+
+    web.send(JSON.stringify({
+      type: "buttonEvent",
+      protocolVersion,
+      command: "power",
+      buttonPhase: "press",
+    }));
+    expect(await nextJSON(mac)).toMatchObject({
+      type: "buttonEvent",
+      command: "power",
+      buttonPhase: "press",
+    });
 
     const binary = Buffer.from(encodeAudioFrame(3, new Int16Array([1, 2, 3])));
     web.send(binary);

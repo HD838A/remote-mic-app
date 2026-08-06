@@ -48,7 +48,7 @@ struct WeeklyUsageStatisticsSeries: Equatable {
     let weeklyBuckets: [UsageStatisticsBucket]
 }
 
-enum UsageEventSource: String, Codable, CaseIterable {
+enum UsageEventSource: String, Codable, CaseIterable, Hashable {
     case bluetoothRemote = "bluetooth_remote"
     case nearbyPhone = "nearby_phone"
     case webRemote = "web_remote"

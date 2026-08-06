@@ -1,5 +1,6 @@
 export const protocolVersion = 1 as const;
 export const audioFrameType = 1 as const;
+export const buttonEventsCapability = "buttonEventsV1" as const;
 
 export const remoteCommands = [
   "power",
@@ -18,6 +19,8 @@ export const remoteCommands = [
 
 export type RemoteCommandName = (typeof remoteCommands)[number];
 export type ButtonTitles = Partial<Record<RemoteCommandName, string>>;
+export type RemoteCapability = typeof buttonEventsCapability;
+export type ButtonPhase = "press" | "release";
 
 export interface SessionCreateMessage {
   type: "sessionCreate";
@@ -25,6 +28,7 @@ export interface SessionCreateMessage {
   macName: string;
   appVersion?: string;
   buttonTitles: ButtonTitles;
+  capabilities?: RemoteCapability[];
 }
 
 export interface SessionJoinMessage {
@@ -70,6 +74,7 @@ export interface SessionReadyMessage {
   macName?: string;
   appVersion?: string;
   buttonTitles?: ButtonTitles;
+  capabilities?: RemoteCapability[];
 }
 
 export interface ButtonTitlesMessage {
@@ -82,6 +87,13 @@ export interface CommandMessage {
   type: "command";
   protocolVersion: typeof protocolVersion;
   command: RemoteCommandName;
+}
+
+export interface ButtonEventMessage {
+  type: "buttonEvent";
+  protocolVersion: typeof protocolVersion;
+  command: RemoteCommandName;
+  buttonPhase: ButtonPhase;
 }
 
 export interface VoiceStartMessage {
@@ -129,6 +141,7 @@ export type WireMessage =
   | SessionReadyMessage
   | ButtonTitlesMessage
   | CommandMessage
+  | ButtonEventMessage
   | VoiceStartMessage
   | VoiceReadyMessage
   | VoiceStopMessage
@@ -154,7 +167,9 @@ export function parseWireMessage(value: string): WireMessage | undefined {
 
   switch (parsed.type) {
     case "sessionCreate":
-      return isNonEmptyString(parsed.macName, 80) && isButtonTitles(parsed.buttonTitles)
+      return isNonEmptyString(parsed.macName, 80)
+        && isButtonTitles(parsed.buttonTitles)
+        && isCapabilities(parsed.capabilities)
         ? (parsed as unknown as SessionCreateMessage)
         : undefined;
     case "sessionJoin":
@@ -181,7 +196,8 @@ export function parseWireMessage(value: string): WireMessage | undefined {
     case "voiceStop":
       return parsed as unknown as WireMessage;
     case "sessionReady":
-      return parsed.buttonTitles === undefined || isButtonTitles(parsed.buttonTitles)
+      return (parsed.buttonTitles === undefined || isButtonTitles(parsed.buttonTitles))
+        && isCapabilities(parsed.capabilities)
         ? (parsed as unknown as SessionReadyMessage)
         : undefined;
     case "buttonTitles":
@@ -191,6 +207,11 @@ export function parseWireMessage(value: string): WireMessage | undefined {
     case "command":
       return isRemoteCommandName(parsed.command)
         ? (parsed as unknown as CommandMessage)
+        : undefined;
+    case "buttonEvent":
+      return isRemoteCommandName(parsed.command)
+        && (parsed.buttonPhase === "press" || parsed.buttonPhase === "release")
+        ? (parsed as unknown as ButtonEventMessage)
         : undefined;
     case "heartbeat":
       return typeof parsed.timestamp === "number" && Number.isFinite(parsed.timestamp)
@@ -209,6 +230,11 @@ export function parseWireMessage(value: string): WireMessage | undefined {
     default:
       return undefined;
   }
+}
+
+function isCapabilities(value: unknown): value is RemoteCapability[] | undefined {
+  return value === undefined
+    || (Array.isArray(value) && value.every((item) => item === buttonEventsCapability));
 }
 
 export function encodeAudioFrame(sequence: number, samples: Int16Array): ArrayBuffer {

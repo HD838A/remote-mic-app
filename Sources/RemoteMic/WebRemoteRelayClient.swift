@@ -32,6 +32,8 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
     var onApprovalRequested: ApprovalHandler?
     var onApprovalCancelled: (() -> Void)?
     var onCommand: ((RemoteButton, @escaping (Bool) -> Void) -> Void)?
+    var onButtonEvent: ((RemoteButton, RemoteButtonPhase, @escaping (Bool) -> Void) -> Void)?
+    var onButtonEventsReset: (() -> Void)?
     var onVoiceStart: ((@escaping (Bool) -> Void) -> Void)?
     var onVoiceStop: (() -> Void)?
     var onAudio: (([Int16]) -> Void)?
@@ -101,7 +103,8 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
                 type: "sessionCreate",
                 macName: macName,
                 appVersion: appVersion,
-                buttonTitles: buttonTitles
+                buttonTitles: buttonTitles,
+                capabilities: [WebRemoteWireMessage.buttonEventsCapability]
             ))
             receiveNext()
         }
@@ -224,6 +227,24 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
                     )
                 }
             }
+        case "buttonEvent":
+            guard let rawCommand = message.command,
+                  let button = RemoteButton(rawValue: rawCommand),
+                  let rawPhase = message.buttonPhase,
+                  let phase = RemoteButtonPhase(rawValue: rawPhase)
+            else {
+                sendOperationError("invalid_button_event", "网页发送了不支持的按键事件")
+                return
+            }
+            onButtonEvent?(button, phase) { [weak self] succeeded in
+                guard !succeeded else { return }
+                self?.queue.async {
+                    self?.sendOperationError(
+                        "command_unavailable",
+                        "Mac 需要辅助功能权限，或该按键当前不可用"
+                    )
+                }
+            }
         case "voiceStart":
             guard !isVoiceActive, let onVoiceStart else {
                 sendOperationError("voice_unavailable", "Mac 的语音输出当前不可用")
@@ -324,6 +345,7 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
 
     private func failOnQueue(_ detail: String) {
         guard !stopped else { return }
+        onButtonEventsReset?()
         stopVoiceIfNeeded()
         if pendingApproval {
             pendingApproval = false
@@ -338,6 +360,7 @@ final class WebRemoteRelayClient: NSObject, URLSessionWebSocketDelegate, @unchec
     }
 
     private func stopOnQueue(notify: Bool) {
+        if !stopped { onButtonEventsReset?() }
         stopVoiceIfNeeded()
         if pendingApproval {
             pendingApproval = false

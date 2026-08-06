@@ -4,6 +4,23 @@ import Testing
 
 @Suite("Mobile Web remote protocol")
 struct WebRemoteProtocolTests {
+    @Test func buttonEventCapabilityAndPhaseRoundTrip() throws {
+        let original = WebRemoteWireMessage(
+            type: "buttonEvent",
+            command: RemoteButton.power.rawValue,
+            capabilities: [WebRemoteWireMessage.buttonEventsCapability],
+            buttonPhase: RemoteButtonPhase.press.rawValue
+        )
+
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(WebRemoteWireMessage.self, from: data)
+
+        #expect(decoded.type == "buttonEvent")
+        #expect(decoded.command == RemoteButton.power.rawValue)
+        #expect(decoded.capabilities == [WebRemoteWireMessage.buttonEventsCapability])
+        #expect(decoded.buttonPhase == RemoteButtonPhase.press.rawValue)
+    }
+
     @Test func productionRelayRequiresSecureWebSocketAndFixedPath() throws {
         #expect(WebRemoteConfiguration.validatedRelayURL("wss://example.com/ws") != nil)
         #expect(WebRemoteConfiguration.validatedRelayURL("https://example.com/ws") == nil)

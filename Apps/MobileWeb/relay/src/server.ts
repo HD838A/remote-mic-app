@@ -43,6 +43,7 @@ interface Session {
   appVersion?: string;
   deviceName?: string;
   buttonTitles: ButtonTitles;
+  capabilities?: SessionCreateMessage["capabilities"];
 }
 
 export interface RelayOptions {
@@ -237,6 +238,7 @@ function handleJSON(
         macName: session.macName,
         ...(session.appVersion ? { appVersion: session.appVersion } : {}),
         buttonTitles: session.buttonTitles,
+        ...(session.capabilities ? { capabilities: session.capabilities } : {}),
       });
       logEvent(session, "approved");
       break;
@@ -251,6 +253,7 @@ function handleJSON(
       if (session.approved && session.web) send(session.web, message);
       break;
     case "command":
+    case "buttonEvent":
       if (context.role !== "web" || !session.approved) return rejectInvalidState(context);
       if (!allowRate(context, "command", commandLimitPerSecond)) {
         return rejectConnection(context, "rate_limited", "按键消息过于频繁");
@@ -308,6 +311,7 @@ function createSession(
     macName: message.macName,
     ...(message.appVersion ? { appVersion: message.appVersion } : {}),
     buttonTitles: message.buttonTitles,
+    ...(message.capabilities ? { capabilities: message.capabilities } : {}),
   };
   sessions.set(id, session);
   context.role = "mac";
@@ -354,6 +358,7 @@ function joinSession(
       macName: session.macName,
       ...(session.appVersion ? { appVersion: session.appVersion } : {}),
       buttonTitles: session.buttonTitles,
+      ...(session.capabilities ? { capabilities: session.capabilities } : {}),
     });
     send(session.mac, {
       type: "sessionReady",

@@ -1,8 +1,10 @@
 import {
+  buttonEventsCapability,
   encodeAudioFrame,
   parseWireMessage,
   protocolVersion,
   type ButtonTitles,
+  type ButtonPhase,
   type RemoteCommandName,
   type WireMessage,
 } from "@remote-mic/mobile-web-protocol";
@@ -60,6 +62,8 @@ export class RemoteConnection {
   private reconnectTimer: number | undefined;
   private reconnectDeadline = 0;
   private shouldReconnect = false;
+  private supportsButtonEvents = false;
+  private pressedButtons = new Set<RemoteCommandName>();
   private state: ConnectionState = {
     phase: "connecting",
     statusText: "正在连接",
@@ -140,6 +144,8 @@ export class RemoteConnection {
       if (this.socket !== socket) return;
       this.socket = undefined;
       this.stopHeartbeat();
+      this.supportsButtonEvents = false;
+      this.pressedButtons.clear();
       void this.stopVoiceCapture();
       if (this.shouldReconnect) {
         if (this.reconnectDeadline === 0) this.reconnectDeadline = Date.now() + 60_000;
@@ -171,12 +177,35 @@ export class RemoteConnection {
     this.socket?.close(1000, "web disconnected");
     this.socket = undefined;
     this.stopHeartbeat();
+    this.supportsButtonEvents = false;
+    this.pressedButtons.clear();
     void this.stopVoiceCapture();
   }
 
   sendCommand(command: RemoteCommandName): void {
     if (this.state.phase !== "connected") return;
     this.send({ type: "command", protocolVersion, command });
+  }
+
+  sendButtonEvent(command: RemoteCommandName, buttonPhase: ButtonPhase): void {
+    if (this.state.phase !== "connected") return;
+    if (buttonPhase === "press") {
+      this.pressedButtons.add(command);
+    } else {
+      this.pressedButtons.delete(command);
+    }
+    if (this.supportsButtonEvents) {
+      this.send({ type: "buttonEvent", protocolVersion, command, buttonPhase });
+    } else if (buttonPhase === "release") {
+      this.sendCommand(command);
+    }
+  }
+
+  releaseAllButtons(): void {
+    for (const command of [...this.pressedButtons]) {
+      this.sendButtonEvent(command, "release");
+    }
+    this.pressedButtons.clear();
   }
 
   async beginVoice(): Promise<void> {
@@ -229,6 +258,7 @@ export class RemoteConnection {
       case "sessionReady":
         this.reconnectDeadline = 0;
         rememberSessionCredentials(this.credentials, message.macName);
+        this.supportsButtonEvents = message.capabilities?.includes(buttonEventsCapability) === true;
         this.update({
           phase: "connected",
           statusText: "已连接",

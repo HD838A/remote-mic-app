@@ -1,6 +1,6 @@
 # Remote Mic Mobile Web
 
-Mobile Web 是无线麦的浏览器遥控入口。手机通过 HTTPS/WSS 加入一次性会话，Mac 用户明确允许后，网页才能发送白名单按键和按住说话音频。
+Mobile Web 是无线麦的浏览器遥控入口。手机通过 HTTPS/WSS 加入一次性会话，Mac 用户明确允许后，网页才能发送白名单按键和按住说话音频。连接支持按钮事件能力的 Mac 后，全部可配置按键与实体遥控器一致支持单击、双击和长按；旧版 Mac 自动回退到单击命令。
 
 当前目录包含：
 
@@ -36,6 +36,8 @@ npm run test
 ```
 
 自动化验证覆盖协议解析、一次性会话、批准前禁止转发、关闭清理、消息限流、PCM 音频帧和浏览器采样转换。真实发布前仍需使用实体 iPhone/Android 验证麦克风权限、前后台切换和实际语音听感。
+
+GitHub Actions 的 `Web CI` 仅监听 `Apps/MobileWeb/**` 和工作流自身，执行依赖安装、TypeScript 检查、Web/Relay 测试与生产构建，不处理 iOS 或 Mac 构建发布。
 
 ## 隐私边界
 

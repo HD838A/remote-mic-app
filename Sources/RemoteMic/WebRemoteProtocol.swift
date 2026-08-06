@@ -2,6 +2,7 @@ import Foundation
 
 struct WebRemoteWireMessage: Codable {
     static let currentProtocolVersion = 1
+    static let buttonEventsCapability = "buttonEventsV1"
 
     let type: String
     var protocolVersion: Int = currentProtocolVersion
@@ -19,6 +20,8 @@ struct WebRemoteWireMessage: Codable {
     var detail: String?
     var recoverable: Bool?
     var reason: String?
+    var capabilities: [String]?
+    var buttonPhase: String?
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -37,6 +40,8 @@ struct WebRemoteWireMessage: Codable {
         case detail
         case recoverable
         case reason
+        case capabilities
+        case buttonPhase
     }
 }
 
