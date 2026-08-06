@@ -89,8 +89,21 @@ enum RemoteVoiceFunctionMappingPolicy {
 
 struct RemoteVoiceMappingService {
     let registryID: UInt64?
+    private let retainedOwner: AnyObject?
     let readMappings: () -> [HIDUsageMapping]
     let setMappings: ([HIDUsageMapping]) -> Bool
+
+    init(
+        registryID: UInt64?,
+        retainedOwner: AnyObject? = nil,
+        readMappings: @escaping () -> [HIDUsageMapping],
+        setMappings: @escaping ([HIDUsageMapping]) -> Bool
+    ) {
+        self.registryID = registryID
+        self.retainedOwner = retainedOwner
+        self.readMappings = readMappings
+        self.setMappings = setMappings
+    }
 }
 
 final class RemoteVoiceFunctionMapper {
@@ -267,6 +280,7 @@ final class RemoteVoiceFunctionMapper {
         return services.filter(isTarget).map { service in
             RemoteVoiceMappingService(
                 registryID: registryID(service),
+                retainedOwner: client,
                 readMappings: { readMappings(service) },
                 setMappings: { mappings in
                     IOHIDServiceClientSetProperty(

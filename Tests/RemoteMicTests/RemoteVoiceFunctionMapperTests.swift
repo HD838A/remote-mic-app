@@ -139,6 +139,36 @@ struct RemoteVoiceFunctionMapperTests {
 
         #expect(firstMappings == original)
     }
+
+    @Test func mappingServiceRetainsItsHIDClientOwnerForItsLifetime() {
+        var owner: MappingServiceOwner? = MappingServiceOwner()
+        let ownerReference = WeakMappingServiceOwnerReference(owner)
+        var service: RemoteVoiceMappingService? = RemoteVoiceMappingService(
+            registryID: 1,
+            retainedOwner: owner,
+            readMappings: { [] },
+            setMappings: { _ in true }
+        )
+
+        owner = nil
+
+        #expect(service?.registryID == 1)
+        #expect(ownerReference.value != nil)
+
+        service = nil
+
+        #expect(ownerReference.value == nil)
+    }
+}
+
+private final class MappingServiceOwner {}
+
+private final class WeakMappingServiceOwnerReference {
+    weak var value: MappingServiceOwner?
+
+    init(_ value: MappingServiceOwner?) {
+        self.value = value
+    }
 }
 
 private final class MappingServiceBox {
