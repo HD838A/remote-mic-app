@@ -1,6 +1,12 @@
 # Version History
 
-## 1.7.6 (Pre-release)
+## 1.7.7 (Pre-release)
+
+- Fixed `1.7.6` quitting immediately at launch on some macOS 26 Macs with the Xiaomi Bluetooth voice remote connected by retaining the owning system client throughout HID mapping reads and writes.
+- Configurable Mobile Web and nearby iPhone/iPad buttons now support the same single-click, double-click, and long-press actions as the physical remote while keeping gesture state isolated between connection types.
+- Added a hard launch gate for the final ZIP and PKG artifacts: both must pass two launches, a normal quit, and crash-report checks on an interactive Mac with the remote connected before publication.
+
+## 1.7.6 (Withdrawn pre-release)
 
 - Fixed all configurable Mobile Web buttons being limited to single-click actions. The updated Web remote and Mac now support the same custom single-click, double-click, and long-press actions as the physical remote.
 - Keeps Web and nearby iPhone/iPad gesture state independent so simultaneous connections cannot interfere; the updated Web remote still falls back to a single click with older Mac versions.
