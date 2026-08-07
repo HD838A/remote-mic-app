@@ -22,8 +22,9 @@ UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION.zip"
 APPCAST="$OUTPUT_DIR/appcast.xml"
 DOWNLOAD_PREFIX="https://github.com/$REPOSITORY/releases/download/$RELEASE_TAG/"
 
-if [[ "$#" -ne 1 || ( "$MODE" != "prerelease" && "$MODE" != "promote" ) ]]; then
-  print -u2 "usage: $0 prerelease|promote"
+if [[ "$#" -ne 1 || \
+      ( "$MODE" != "prerelease" && "$MODE" != "promote" && "$MODE" != "release" ) ]]; then
+  print -u2 "usage: $0 prerelease|promote|release"
   exit 1
 fi
 case "$DRY_RUN" in
@@ -190,7 +191,7 @@ verify_local_artifacts
 stage_assets
 
 if [[ "$DRY_RUN" == "1" ]]; then
-  if [[ "$MODE" == "prerelease" ]]; then
+  if [[ "$MODE" == "prerelease" || "$MODE" == "release" ]]; then
     generate_release_notes
     print "RELEASE NOTES:"
     /bin/cat "$RELEASE_NOTES"
@@ -204,7 +205,7 @@ fi
 
 verify_source_identity
 
-if [[ "$MODE" == "prerelease" ]]; then
+if [[ "$MODE" == "prerelease" || "$MODE" == "release" ]]; then
   if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
     print -u2 "release $RELEASE_TAG already exists"
     exit 1
@@ -232,23 +233,29 @@ if [[ "$MODE" == "prerelease" ]]; then
   test "$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)" = "$LATEST_BEFORE"
   download_and_compare
   print "PRE-RELEASE PUBLISH PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
-else
+
+  if [[ "$MODE" == "prerelease" ]]; then
+    exit 0
+  fi
+fi
+
+if [[ "$MODE" == "promote" ]]; then
   RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
     --jq '[.draft, .prerelease] | @tsv')"
   test "$RELEASE_STATE" = $'false\ttrue'
   download_and_compare
-
-  gh release edit "$RELEASE_TAG" \
-    --repo "$REPOSITORY" \
-    --prerelease=false \
-    --latest
-
-  RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
-    --jq '[.draft, .prerelease] | @tsv')"
-  test "$RELEASE_STATE" = $'false\tfalse'
-  test "$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)" = "$RELEASE_TAG"
-  curl -fsSL "https://github.com/$REPOSITORY/releases/latest/download/appcast.xml" \
-    -o "$WORK_DIR/latest-appcast.xml"
-  cmp -s "$STAGING_DIR/appcast.xml" "$WORK_DIR/latest-appcast.xml"
-  print "RELEASE PROMOTION PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
 fi
+
+gh release edit "$RELEASE_TAG" \
+  --repo "$REPOSITORY" \
+  --prerelease=false \
+  --latest
+
+RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+  --jq '[.draft, .prerelease] | @tsv')"
+test "$RELEASE_STATE" = $'false\tfalse'
+test "$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)" = "$RELEASE_TAG"
+curl -fsSL "https://github.com/$REPOSITORY/releases/latest/download/appcast.xml" \
+  -o "$WORK_DIR/latest-appcast.xml"
+cmp -s "$STAGING_DIR/appcast.xml" "$WORK_DIR/latest-appcast.xml"
+print "RELEASE PROMOTION PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"

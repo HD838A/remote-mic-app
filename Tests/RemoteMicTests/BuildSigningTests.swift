@@ -74,4 +74,40 @@ struct BuildSigningTests {
         #expect(source.contains("user_alert=false"))
         #expect(!source.contains("showPreReleaseFeedUnavailableAlert"))
     }
+
+    @Test func fastReleaseKeepsMandatorySafetyGates() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let fastReleaseSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/fast-release.sh"),
+            encoding: .utf8
+        )
+        let notarizeSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/notarize-release.sh"),
+            encoding: .utf8
+        )
+        let publishSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/publish-release.sh"),
+            encoding: .utf8
+        )
+
+        #expect(fastReleaseSource.contains("fast release requires a clean committed worktree"))
+        #expect(fastReleaseSource.contains("fast release is restricted to main"))
+        #expect(fastReleaseSource.contains("fast release rejected non-document/resource change"))
+        #expect(fastReleaseSource.contains("fast release rejected a possible plaintext credential"))
+        #expect(fastReleaseSource.contains("fast release requires a $VERSION entry"))
+        #expect(fastReleaseSource.contains("xcrun swift test"))
+        #expect(fastReleaseSource.contains("validate-notary-secrets-repo.sh"))
+        #expect(fastReleaseSource.contains("ALLOW_ISOLATED_RELEASE_KEYCHAIN=1"))
+        #expect(fastReleaseSource.contains("PARALLEL_PACKAGE_NOTARIZATION=1"))
+        #expect(fastReleaseSource.contains("publish-release.sh\" release"))
+        #expect(notarizeSource.contains("wait \"$install_notary_pid\""))
+        #expect(notarizeSource.contains("wait \"$uninstall_notary_pid\""))
+        #expect(publishSource.contains("prerelease|promote|release"))
+        let candidateIndex = try #require(publishSource.range(of: "gh release create"))
+        let promotionIndex = try #require(publishSource.range(of: "gh release edit"))
+        #expect(candidateIndex.lowerBound < promotionIndex.lowerBound)
+    }
 }

@@ -22,6 +22,7 @@ SPARKLE_PRIVATE_KEY_FILE="${SPARKLE_PRIVATE_KEY_FILE:?Set SPARKLE_PRIVATE_KEY_FI
 NOTARY_PROFILE="${NOTARY_PROFILE:-RemoteMic-notary}"
 NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
+PARALLEL_PACKAGE_NOTARIZATION="${PARALLEL_PACKAGE_NOTARIZATION:-0}"
 PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
 DOWNLOAD_PREFIX="https://github.com/HD838A/remote-mic-app/releases/download/$RELEASE_TAG/"
 RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG"
@@ -36,6 +37,10 @@ if [[ "$EXPECTED_DEVELOPER_TEAM_ID" != "L3QHLDRPAY" ]]; then
   print -u2 "refusing to release for an unexpected Apple Developer Team"
   exit 1
 fi
+case "$PARALLEL_PACKAGE_NOTARIZATION" in
+  0|1) ;;
+  *) print -u2 "PARALLEL_PACKAGE_NOTARIZATION must be 0 or 1"; exit 1 ;;
+esac
 if ! print -r -- "$RELEASE_TAG" | rg -q '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
   print -u2 "RELEASE_TAG must be a version tag such as v1.5.0 or v1.5.0-rc.1"
   exit 1
@@ -127,11 +132,26 @@ REQUIRE_NOTARIZATION=1 "$ROOT/scripts/verify-app.sh" "$APP"
 "$ROOT/scripts/build-doubao-driver.sh"
 "$ROOT/scripts/build-doubao-driver-pkg.sh"
 
-notarize "$INSTALL_PACKAGE"
+if [[ "$PARALLEL_PACKAGE_NOTARIZATION" == "1" ]]; then
+  package_notary_failed=0
+  notarize "$INSTALL_PACKAGE" &
+  install_notary_pid=$!
+  notarize "$UNINSTALL_PACKAGE" &
+  uninstall_notary_pid=$!
+  wait "$install_notary_pid" || package_notary_failed=1
+  wait "$uninstall_notary_pid" || package_notary_failed=1
+  if (( package_notary_failed != 0 )); then
+    print -u2 "parallel package notarization failed"
+    exit 1
+  fi
+else
+  notarize "$INSTALL_PACKAGE"
+  notarize "$UNINSTALL_PACKAGE"
+fi
+
 staple_and_validate "$INSTALL_PACKAGE"
 REQUIRE_NOTARIZATION=1 "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
 
-notarize "$UNINSTALL_PACKAGE"
 staple_and_validate "$UNINSTALL_PACKAGE"
 REQUIRE_NOTARIZATION=1 "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
 

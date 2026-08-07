@@ -181,6 +181,8 @@ Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应
 
 `scripts/publish-release.sh prerelease` 只接受干净、已推送且由同一远端 Tag 指向的源提交，发布 ZIP、两个 PKG、DMG、校验文件和 appcast，并确认 pre-release 未改变 latest release。脚本随后从公开 Release 回下载六个资产并逐字节比较。测试机应使用 Sparkle CLI 的单次 `--feed-url <候选版本 appcast URL>` 覆盖完成候选探测或更新，不写入持久化的 `SUFeedURL` 偏好；实际安装候选版本时需要处于已解锁的图形会话。
 
+仅修改本地化文案或内置文档的低风险版本，在完成版本号、发布历史和 commit 后可使用 `ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 ./scripts/fast-release.sh`。它会运行完整 Swift 测试、Push `main`、使用一次性 Keychain 签名，并行提交两个 PKG 公证，再用 `publish-release.sh release` 在同一进程中完成 pre-release、公开资产逐字节校验和正式晋升。快速命令只允许明确的文档和资源白名单，且 `Info.plist` 只能改变显示版本与 build number；发现 Swift、蓝牙、音频、安装器或发布流水线改动时会拒绝执行，必须走完整候选验收流程。
+
 候选版本通过干净安装、运行和 Sparkle 端到端更新测试后，运行 `scripts/publish-release.sh promote` 将相同 Tag 和相同资产晋升为正式版。晋升后必须再次确认 latest appcast 与候选版本 appcast 逐字节一致。失败的候选版本不得覆盖资产或晋升；应递增显示版本和 `CFBundleVersion`，重新构建、签名、公证并发布新的 pre-release。
 
 ### 发布故障复盘与强制检查
