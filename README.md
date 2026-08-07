@@ -2,9 +2,9 @@
 
 [English](README.en.md)
 
-中文官网：[8586ai.com](https://8586ai.com/)
+[<img src="Screenshots/community-entry-qrcode.png" alt="无线麦 APP 社群固定入口" width="220">](https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb)
 
-英文官网：[8586ai.com/en](https://8586ai.com/en/)
+微信扫码或点击二维码，打开「无线麦 APP」固定加群入口。
 
 iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8k8fb7v)
 
@@ -139,3 +139,8 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与 RC003 默
 项目最初 fork 自 [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge)，现由本仓库独立维护。
 
 `MiRemoteV 2ch` 的设备命名及让豆包枚举设备的 USB transport 兼容方案参考自 [VincentKingHsu/MiRemoteVoice](https://github.com/VincentKingHsu/MiRemoteVoice) `v1.0.0-beta.1`（MIT）；该项目的兼容驱动同样基于 BlackHole。本项目不复用 MiRemoteVoice 的二进制替换脚本，而是从 [ExistentialAudio/BlackHole](https://github.com/ExistentialAudio/BlackHole) `v0.7.1`（固定提交 `e2b22aaaba4e507a097131704bf96dabc004d9cf`）源码独立派生构建 `MiRemoteV2ch.driver`，适用 `GPL-3.0`。它使用独立标识，可与已安装的 BlackHole 并存，不覆盖或删除其文件。
+
+## 官网
+
+- 中文官网：[8586ai.com](https://8586ai.com/)
+- English website：[8586ai.com/en](https://8586ai.com/en/)
