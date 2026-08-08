@@ -445,3 +445,134 @@ iOS 页面没有监听从后台返回 active 的生命周期；后台期间连�
 - 前台 active 只在 `.awaitingLocalNetworkPermission` 或 `.unavailable` 时完整重启发现；不再取消冷启动搜索、正在连接或等待 Mac 授权。
 - 对 Mac `1.6.7` 的两条已知 operation error 使用白名单映射，分别提示检查 Mac 辅助功能/按键配置，或辅助功能/虚拟麦克风；未知错误保留通用提示。
 - 不修改网络协议、长期信任、Mac 服务端和 iOS 遥控器布局。
+
+# RC001-MS 语音遥控器适配
+
+## Observations
+
+- 目标设备明确为 Xiaomi Bluetooth Remote Control 2（RC001-MS），不是 RC003-MS Pro，也不是无法连接 Mac 的第三方兼容版。
+- RC001-MS 已能与当前 Mac 配对并保持连接；除语音键外的普通按键可被 macOS 或现有 App 识别。
+- 当前 `RC003NameMatcher` 明确拒绝 `Xiaomi Bluetooth Remote 2`，因此 RC001 不会按名称进入现有 CoreBluetooth 语音链路。
+- 当前蓝牙桥接只发现 RC003 已知的 ATVV Service，并只订阅固定的 control/audio Characteristic；无法观测未知 RC001 Voice Service。
+- 当前自定义 HID 监听固定匹配 RC003 的 VID `0x2717` / PID `0x32B8`；MIC 没有普通 keyCode 不能据此判定 RC001 没有语音能力。
+- 当前没有 RC001 的 Service UUID、Characteristic UUID、控制包、音频包或 codec 真机证据，不能直接复制或发明 profile。
+
+## Hypotheses
+
+### H1: RC001 与 RC003 使用相同 ATVV UUID、包格式和 codec，只是被设备名称白名单拒绝（ROOT HYPOTHESIS）
+
+- Supports: 两者属于同系列语音遥控器；RC001 的普通 HID 链路已成立；现有扫描本来就会接受广播相同 ATVV Service 的设备。
+- Conflicts: 型号不同，尚无 RC001 GATT dump；设备也可能不在广播中暴露 Voice Service UUID。
+- Test: 只给精确名称白名单增加 `Xiaomi Bluetooth Remote 2`，保持全部 RC003 协议常量不变，观察是否能完成能力协商并收到 MIC 的 `STREAM_START / AUDIO / STREAM_STOP`。
+
+### H2: RC001 使用相同 ATVV 协议和 codec，但 Voice Service 或 Characteristic UUID 不同
+
+- Supports: 同系列设备可能复用控制包和 IMA-ADPCM，仅更换 GATT profile。
+- Conflicts: 没有 RC001 Service Discovery 数据。
+- Test: 若 H1 失败，完整发现 RC001 的所有 Service/Characteristic，订阅 notify/indicate，并与 RC003 UUID 和包前缀做 diff。
+
+### H3: RC001 的语音数据通过 HID over GATT 或 vendor-specific HID Report 传输
+
+- Supports: MIC 没有普通 Keyboard/Consumer keyCode；语音遥控器可以通过 HID Report 承载控制和音频。
+- Conflicts: 同系列 RC003 已使用自定义 ATVV GATT，RC001 采用完全不同 transport 的成本更高。
+- Test: 导出 RC001 HID Report Map，并在 MIC down、讲话、MIC up 三阶段记录 report ID、长度和频率。
+
+### H4: RC001 暴露相近 Voice GATT，但需要不同的初始化写入或通知顺序才开始传输
+
+- Supports: 部分语音遥控器需要先协商能力或由主机写控制特征；普通 HID 可用不代表 Voice Session 已初始化。
+- Conflicts: 当前还不知道 RC001 是否暴露任何相近 Voice Service。
+- Test: 先比较完整特征属性和 MIC 操作时的被动通知，再对已证实的可写控制特征做单变量初始化实验。
+
+## Experiments
+
+### E1: 仅放行 RC001 精确蓝牙名称
+
+- Change: 在现有 RC003 精确名称集合中临时加入 `xiaomi bluetooth remote 2`，不修改 Service UUID、Characteristic UUID、协议命令或解码器。
+- Confirms H1: App 完成 `ATVV CAPS`，按住 MIC 出现 `STREAM START`、连续 `AUDIO`，松开出现 `STREAM STOP`。
+- Rejects H1: RC001 被发现后提示 Voice Service 缺失、能力协商失败，或 MIC 全程没有控制/音频数据。
+- Result: inconclusive。开发 App 通过 `saved_identifier` 连接到名称为“小米蓝牙语音遥控器”的既有设备，没有经过新增的英文名称分支；该设备完成 RC003 ATVV v1.0 / codec 2 / 120-byte frame 能力协商，但仅凭共用显示名称无法证明它是 RC001。
+- Cleanup: 已撤销临时英文名称白名单；没有把实验性设备识别留在正式代码。
+- System identity check: 当前唯一连接的“小米蓝牙语音遥控器”由 macOS 报告为 VID `0x2717` / PID `0x32B8`，与现有 RC003 专用 HID 匹配值一致；未连接设备列表中没有 RC001。因此已有 ATVV 成功日志只能作为 RC003 基准，不能用于确认 RC001。
+
+### E2: RC001 全 Service 发现诊断包
+
+- Change: 临时接受精确英文名 `xiaomi bluetooth remote 2`，把连接后的 Service Discovery 从固定 ATVV UUID 改为全部服务，并仅记录 Service UUID 列表；总实验改动不超过 5 行。
+- Confirms H1: RC001 服务列表包含现有 `AB5E0001-...` ATVV Service，随后恢复固定发现即可继续验证同协议能力协商。
+- Rejects H1: RC001 成功连接但服务列表不包含现有 ATVV Service；下一实验转为逐服务发现 Characteristic。
+- Preconditions: RC003 断电或移出连接范围，RC001 已在 macOS 蓝牙设置中连接并保持唤醒。
+- Build status: 临时诊断包已通过 production 构建并正在运行；源码中的 3 行实验探针已撤销，因此工作区未残留 RC001 猜测性实现。当前包先连接到仍在线的 RC003，并成功记录其基准 Service：`180F, 180A, AB5E0001-..., 8A7A0001-..., 01BF, FE59`。
+- Pending evidence: 需要 RC003 离线并让 RC001 出现在当前 Mac 上，才能记录 RC001 Service 列表并完成本实验结论。
+
+### E3: RC001 / RC003 同时连接时定向选择第二只遥控器
+
+- Observation: RC003 为充电设备，无法直接断电；在 macOS 主动断开后会自动重连。RC001 与 RC003 可以同时连接同一台 Mac。
+- Change: 临时诊断包跳过已保存的 RC003 Peripheral Identifier，并在已连接设备和扫描结果中排除该标识，只连接另一只符合精确名称或 ATVV 服务特征的遥控器；继续完整发现 Service 并记录 UUID。实验代码保持 5 行。
+- Expected: RC003 保持在线但不会被诊断桥接选中；RC001 连接后成为唯一可选的非缓存候选。
+- Identity gate: 收到 RC001 数据前，先使用 macOS 系统报告核对第二只设备的名称、VID/PID 与连接状态，不把共用名称作为唯一身份依据。
+- Build status: 双设备诊断包已完成 production 构建并运行，5 行探针随后已从源码撤销。RC001 尚未连接时，诊断包仍找到一个具备相同 ATVV 服务的已连接外围设备；在系统出现第二只设备前，该结果继续按 RC003 处理，不用于 RC001 结论。
+- Next action: RC001 连接后先读取两只设备的系统身份，再重启诊断包并根据真实名称、VID/PID 和非 RC003 候选收集数据。
+
+## Root Cause
+
+RC001-MS 与 RC003-MS 使用相同的 macOS HID 身份和 ATVV v1.0 语音协议，但正式代码与测试把名称识别器限定并命名为 RC003，且明确拒绝 RC001 的英文产品名；协议层本身不需要修改。
+
+## Fix
+
+- 将 RC003 专用名称匹配器泛化为小米语音遥控器匹配器，精确接受 `Xiaomi Bluetooth Remote 2` 与现有 RC003 名称，不增加模糊匹配。
+- RC001 与 RC003 继续共享现有 ATVV Service、能力协商、16kHz IMA-ADPCM 解码和 PCM 输出，不新增 transport/profile/decoder。
+- 更新中英文设备标题、README、单元测试和 Self Test，公开说明支持 2 / 2 Pro。
+- 保持当前单语音源行为；两只同时连接时只选择其中一只，不在本次适配中增加多设备切换 UI。
+
+# RC001 / RC003 型号与充电状态识别
+
+## Observations
+
+- 两只真机均报告相同名称、制造商 `MIOM`、VID/PID `0x2717 / 0x32B8`、固件 `2671`、HID Version `164`、ATVV v1.0 能力和完全相同的 HID Report Descriptor。
+- IORegistry 能读取两只不同的序列号和物理设备唯一标识；这些值可以稳定区分实体设备，但当前单样本无法证明其中包含型号编码。系统 `Product` 字段为空。
+- 两只设备都暴露 Battery Service `180F` 和 Device Information Service `180A`。当前 App 只请求 Battery Level `2A19`，分别读取到 `42%` 与 `100%`。
+- `system_profiler` 与 IORegistry 没有为这两只遥控器显示充电中、电源类型或 Battery Status Flags；不能仅凭 `100%` 判断 RC003 正在充电或属于充电型号。
+
+## Hypotheses
+
+### H1: Device Information Service 包含不同 Model Number / Hardware Revision
+
+- Supports: 两只设备存在不同序列号，且都暴露标准 `180A`。
+- Conflicts: macOS 缓存中的 `Product` 为空，制造商、固件和 HID 版本完全一致。
+- Test: 只读发现 `180A` 全部 Characteristic，并读取 `2A24 / 2A27 / 2A50`。
+
+### H2: Battery Service 暴露标准充电状态（ROOT HYPOTHESIS）
+
+- Supports: 两只设备均暴露标准 `180F`；Bluetooth BAS 可选 `2A1A` 或新版 `2BED` 表示电源/充电状态。
+- Conflicts: macOS 当前只呈现电量百分比，没有充电标志。
+- Test: 临时发现 `180F` 的全部 Characteristic；存在 `2A1A / 2BED` 时再只读其值，并对 RC003 插拔充电线。
+
+### H3: 广播 Manufacturer Data 或 vendor Service 隐含型号/电源状态
+
+- Supports: 两只设备还有厂商 Service，理论上可能包含内部 SKU 或电源状态。
+- Conflicts: 已确认的 Service、协议和 HID 身份完全一致，且未发现公开字段定义。
+- Test: 在两只设备重新广播时对比脱敏后的 Manufacturer Data、Service Data 和只读 Characteristic UUID/长度，不猜测未知位含义。
+
+## Experiments
+
+### E4: Battery Service 全 Characteristic 发现
+
+- Change: 临时把 `180F` 的 Characteristic 发现从仅 `2A19` 改为全部，并记录 UUID 列表；不写设备、不改变 ATVV 流程，实验后撤销。
+- Confirms H2: 任一设备出现 `2A1A` 或 `2BED`。
+- Rejects H2: 两只设备的 `180F` 都只有 `2A19`。
+- Result: confirmed。一只设备只有 `2A19`；另一只设备暴露 `2A19, 2BED`，其中 `2BED` 当前值为 `00 61 00`。按 Bluetooth SIG BAS v1.1 解码：电池存在、未连接有线/无线外部电源、充电状态为 `Discharging: Inactive`、充电类型为 Unknown/Not Charging。
+- Interpretation: 后续 `2A24` 直接确认暴露 `2BED` 的设备是 RC003；RC001 的 Battery Service 只有 `2A19`。`2BED` 可以作为 RC003 的附加能力，但型号识别应优先使用明确的 Model Number，不依赖电池特征猜测。
+
+### E5: Device Information Service 型号字段
+
+- Change: 临时发现 `180A` 全部可读 Characteristic，记录 UUID 和文本/十六进制值；不写设备，实验后撤销。
+- Confirms H1: 两只设备的 `2A24` Model Number、`2A27` Hardware Revision 或 `2A50` PnP ID 存在稳定型号差异。
+- Rejects H1: 型号/硬件/PnP 字段缺失、为空或两只完全相同。
+- Result: confirmed。两只设备的 `2A24` 分别明确返回 ASCII `RC001` 与 `RC003`；`2A27` 均为 `V2.0`，`2A50` PnP ID 均相同。Model Number 是当前最可靠且语义明确的自动型号来源。
+- Cleanup: 已撤销全部 Service/Characteristic 探针，生产代码恢复为只发现 ATVV 与 Battery Level；临时日志未记录蓝牙地址或原始设备唯一标识。
+
+## Conclusion
+
+- 自动型号识别可行：连接后读取标准 Device Information Service `180A` 的 Model Number `2A24`，严格接受 `RC001` / `RC003`；正式界面直接显示识别结果，不再让用户手动选择型号或输入名称，未知值只显示通用遥控器名称。
+- RC003 充电状态读取可行：读取 Battery Level Status `2BED`，解析电池存在、外部电源、充电/放电状态、充电等级、充电类型和故障位；RC001 不暴露该特征，只显示电量。
+- 当前 RC003 的 `2BED = 00 61 00` 表示未连接外部电源且未处于主动充电。仍需一次插入/拔出充电线验证“正在充电/已接电源”是否实时准确更新，以及该 Characteristic 是否支持 notify。
+- 生产代码现已把 `180A / 2A24` 与 `180F / 2BED` 作为不影响 ATVV 初始化的可选读取能力；设备卡可显示自动型号、电量与当前电源状态。插拔充电线的实时变化仍属于待完成真机验收，不能仅凭构建或单元测试声明通过。

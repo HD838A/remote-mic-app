@@ -45,7 +45,7 @@ Windows 与 Mac 单独构建和发布。当前仅提供面向小米 RC003 的 [W
 
 1. 在“系统设置 → 蓝牙”中打开蓝牙。
 2. 同时长按遥控器的“主页”和“菜单”键，使遥控器进入配对状态。
-3. 在 Mac 上连接名称为 `MI RC`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”的设备。
+3. 在 Mac 上连接名称为 `MI RC`、`Xiaomi Bluetooth Remote 2`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”的设备。
 4. 启动 Remote Mic，按提示允许蓝牙权限。
 5. 如果需要自定义普通按键，再允许“输入监控”和“辅助功能”。授权后请完全退出并重新打开应用。
 

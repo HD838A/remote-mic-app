@@ -485,7 +485,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             .environmentObject(localization)
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 860, height: 700),
+            contentRect: NSRect(x: 0, y: 0, width: 1080, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -497,7 +497,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.isMovableByWindowBackground = true
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 860, height: 700)
+        window.minSize = NSSize(width: 1000, height: 720)
         window.setFrameAutosaveName("RemoteMicSettings")
         window.center()
         return NSWindowController(window: window)

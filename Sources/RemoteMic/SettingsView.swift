@@ -129,7 +129,7 @@ struct SettingsView: View {
         .navigationSplitViewStyle(.balanced)
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
-        .frame(minWidth: 820, minHeight: 650)
+        .frame(minWidth: 960, minHeight: 680)
         .onAppear(perform: refreshPermissionStates)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
@@ -330,30 +330,45 @@ struct SettingsView: View {
         }
     }
 
-    private var connectionPage: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                PageHeader(
-                    title: localization.text("connection.page.title")
-                )
+    private func settingsPage<Header: View, Content: View>(
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(spacing: 0) {
+            header()
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                CompatibilityGlassContainer(spacing: 14) {
-                    HStack(alignment: .top, spacing: 14) {
-                        connectionDevicePanel
-                            .frame(width: 210)
-                        VStack(spacing: 14) {
-                            audioSettingsPanel
-                            audioCompatibilityPanel
-                            phoneConnectionsPanel
-                        }
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
+            Divider()
+
+            ScrollView(.vertical, showsIndicators: false) {
+                content()
+                    .padding(22)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .compatibilityScrollEdgeEffect()
+        }
+    }
+
+    private var connectionPage: some View {
+        settingsPage {
+            PageHeader(title: localization.text("connection.page.title"))
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    connectionDevicePanel
+                        .frame(width: 230)
+                    VStack(spacing: 14) {
+                        audioSettingsPanel
+                        audioCompatibilityPanel
+                        phoneConnectionsPanel
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .compatibilityScrollEdgeEffect()
     }
 
     private var phoneConnectionsPanel: some View {
@@ -484,8 +499,10 @@ struct SettingsView: View {
     private var connectionDevicePanel: some View {
         GlassPanel {
             VStack(spacing: 16) {
+                remoteDeviceSelector(vertical: true)
+
                 VStack(spacing: 6) {
-                    Text("connection.device.name")
+                    Text(selectedRemoteDisplayName)
                         .font(.headline)
                         .multilineTextAlignment(.center)
                     StatusPill(text: connectionBadge, tint: connectionTint)
@@ -515,6 +532,8 @@ struct SettingsView: View {
                         tint: .blue
                     )
                 }
+
+                remoteDeviceBindingPanel
 
                 Button {
                     model.reconnect()
@@ -662,94 +681,274 @@ struct SettingsView: View {
     }
 
     private var mappingPage: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .center, spacing: 14) {
-                    PageHeader(title: localization.text("button_mapping.page.title"))
-                    Spacer()
-                    Toggle("button_mapping.toggle.enabled", isOn: Binding(
-                        get: { settings.customMappingEnabled },
-                        set: { enabled in
-                            settings.customMappingEnabled = enabled
-                            model.applyHIDSettings()
-                        }
-                    ))
-                    StatusPill(
-                        text: localization.text(settings.customMappingEnabled ? "common.status.enabled" : "common.status.disabled"),
-                        tint: settings.customMappingEnabled ? .green : .secondary
-                    )
-                }
+        settingsPage {
+            HStack(alignment: .center, spacing: 14) {
+                PageHeader(title: localization.text("button_mapping.page.title"))
+                Spacer()
+                remoteDeviceSelector()
+                    .frame(width: 364)
+                Toggle("button_mapping.toggle.enabled", isOn: Binding(
+                    get: { settings.customMappingEnabled },
+                    set: { enabled in
+                        settings.customMappingEnabled = enabled
+                        model.applyHIDSettings()
+                    }
+                ))
+                StatusPill(
+                    text: localization.text(settings.customMappingEnabled ? "common.status.enabled" : "common.status.disabled"),
+                    tint: settings.customMappingEnabled ? .green : .secondary
+                )
+            }
+        } content: {
+            CompatibilityGlassContainer(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    GlassPanel {
+                        VStack(spacing: 10) {
+                            RemoteControlDiagram(
+                                selectedButton: $selectedRemoteButton,
+                                activeButtons: model.activeRemoteButtons,
+                                voiceActive: model.isStreaming
+                            )
 
-                Text(model.hidStatus.text(using: localization))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                            Label(
+                                model.hidStatus.text(using: localization),
+                                systemImage: "keyboard"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                CompatibilityGlassContainer(spacing: 12) {
-                    HStack(alignment: .top, spacing: 12) {
-                        GlassPanel {
-                            VStack(spacing: 10) {
-                                RemoteControlDiagram(
-                                    selectedButton: $selectedRemoteButton,
-                                    activeButtons: model.activeRemoteButtons,
-                                    voiceActive: model.isStreaming
-                                )
-
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
-                                        get: { settings.voiceFnTapModeEnabled },
-                                        set: { model.setVoiceFnTapModeEnabled($0) }
-                                    ))
-                                    .font(.caption)
-                                    Text("connection.voice_fn_tap.hint_short")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .onReceive(model.$activeRemoteButtons) { buttons in
-                                selectedRemoteButton = MappingSelectionPolicy.selection(
-                                    current: selectedRemoteButton,
-                                    activeButtons: buttons,
-                                    isLocked: isMappingSelectionLocked
-                                )
-                            }
-                        }
-                        .frame(width: 145)
-
-                        GlassPanel {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("button_mapping.all_buttons.title")
-                                    .font(.headline)
-                                Text("button_mapping.all_buttons.help")
+                            VStack(alignment: .leading, spacing: 5) {
+                                Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
+                                    get: { settings.voiceFnTapModeEnabled },
+                                    set: { model.setVoiceFnTapModeEnabled($0) }
+                                ))
+                                .font(.caption)
+                                Text("connection.voice_fn_tap.hint_short")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .onReceive(model.$activeRemoteButtons) { buttons in
+                            selectedRemoteButton = MappingSelectionPolicy.selection(
+                                current: selectedRemoteButton,
+                                activeButtons: buttons,
+                                isLocked: isMappingSelectionLocked
+                            )
+                        }
+                    }
+                    .frame(width: 155)
 
-                                HStack(spacing: 4) {
-                                    ForEach(ButtonTrigger.allCases) { trigger in
-                                        Text(trigger.displayName(using: localization))
-                                            .font(.system(size: 9, weight: .semibold))
-                                            .foregroundStyle(.secondary)
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                }
+                    GlassPanel {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("button_mapping.all_buttons.title")
+                                .font(.headline)
+                            Text("button_mapping.all_buttons.help")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
 
-                                ForEach(RemoteButton.allCases) { button in
-                                    mappingSummaryRow(button)
+                            HStack(spacing: 4) {
+                                ForEach(ButtonTrigger.allCases) { trigger in
+                                    Text(trigger.displayName(using: localization))
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity)
                                 }
                             }
-                        }
-                        .frame(width: 235)
 
-                        mappingInspector
-                            .frame(maxWidth: .infinity)
+                            ForEach(RemoteButton.allCases) { button in
+                                mappingSummaryRow(button)
+                            }
+                        }
+                    }
+                    .frame(width: 245)
+
+                    mappingInspector
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func remoteDeviceSelector(vertical: Bool = false) -> some View {
+        if vertical {
+            VStack(spacing: 8) {
+                ForEach(settings.remoteDeviceProfiles) { profile in
+                    remoteDeviceCard(profile, fillsWidth: true)
+                }
+            }
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(settings.remoteDeviceProfiles) { profile in
+                        remoteDeviceCard(profile)
                     }
                 }
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .compatibilityScrollEdgeEffect()
+    }
+
+    private func remoteDeviceCard(
+        _ profile: RemoteDeviceProfile,
+        fillsWidth: Bool = false
+    ) -> some View {
+        let selected = settings.selectedRemoteProfileID == profile.id
+        let connected = model.isRemoteConnected(profile.id)
+        let batteryLevel = model.batteryLevel(for: profile.id)
+        let power = remotePowerPresentation(for: profile)
+        return Button {
+            model.selectRemoteProfile(profile.id)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(remoteDisplayName(profile))
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.accentColor)
+                            .help(localization.text("remote.device.current"))
+                    }
+                }
+                HStack(spacing: 8) {
+                    Label(
+                        localization.text(connected ? "common.status.connected" : "remote.device.disconnected"),
+                        systemImage: "circle.fill"
+                    )
+                    .foregroundStyle(connected ? Color.green : Color.secondary)
+                    Label(
+                        batteryLevel.map { "\($0)%" } ?? "—",
+                        systemImage: batterySymbol(for: batteryLevel)
+                    )
+                    .foregroundStyle(batteryColor(for: batteryLevel))
+                    .help(
+                        batteryLevel == nil
+                            ? localization.text("remote.device.battery_unavailable")
+                            : ""
+                    )
+                }
+                .font(.caption2)
+
+                HStack(spacing: 8) {
+                    Label(power.text, systemImage: power.symbol)
+                        .foregroundStyle(power.tint)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Label(
+                        localization.text(
+                            profile.hidFingerprint == nil
+                                ? "remote.device.unbound"
+                                : "remote.device.bound_short"
+                        ),
+                        systemImage: profile.hidFingerprint == nil
+                            ? "keyboard"
+                            : "keyboard.badge.checkmark"
+                    )
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                }
+                .font(.caption2)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(width: fillsWidth ? nil : 174, alignment: .leading)
+            .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
+            .background(
+                selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func batterySymbol(for level: Int?) -> String {
+        guard let level else { return "battery.0percent" }
+        switch level {
+        case 76...: return "battery.100percent"
+        case 51...: return "battery.75percent"
+        case 26...: return "battery.50percent"
+        case 11...: return "battery.25percent"
+        default: return "battery.0percent"
+        }
+    }
+
+    private func batteryColor(for level: Int?) -> Color {
+        guard let level else { return .secondary }
+        if level <= 10 { return .red }
+        if level <= 25 { return .orange }
+        return .secondary
+    }
+
+    private func remotePowerPresentation(
+        for profile: RemoteDeviceProfile
+    ) -> (text: String, symbol: String, tint: Color) {
+        switch model.powerState(for: profile.id) {
+        case .charging:
+            return (localization.text("remote.device.power.charging"), "bolt.fill", .green)
+        case .externalPower:
+            return (localization.text("remote.device.power.external"), "powerplug.fill", .green)
+        case .onBattery:
+            return (localization.text("remote.device.power.battery"), "battery.75percent", .secondary)
+        case .unknown:
+            return (localization.text("remote.device.power.unknown"), "questionmark.circle", .secondary)
+        case nil:
+            switch profile.model {
+            case .rc001:
+                return (localization.text("remote.device.power.battery"), "battery.75percent", .secondary)
+            case .rc003:
+                return (localization.text("remote.device.power.rechargeable"), "bolt.circle", .secondary)
+            case .unknown:
+                return (localization.text("remote.device.power.unknown"), "questionmark.circle", .secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var remoteDeviceBindingPanel: some View {
+        if let profile = settings.selectedRemoteProfile {
+            VStack(alignment: .leading, spacing: 9) {
+                if profile.hidFingerprint == nil {
+                    Button(
+                        model.pendingHIDBindingProfileID == profile.id
+                            ? "remote.device.binding_waiting"
+                            : "remote.device.bind_button"
+                    ) {
+                        model.beginHIDBinding(for: profile.id)
+                    }
+                    .compatibilityButtonStyle(.standard)
+                } else {
+                    Label("remote.device.bound", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+                Text("remote.device.bind_help")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var selectedRemoteDisplayName: String {
+        settings.selectedRemoteProfile.map(remoteDisplayName) ?? localization.text("remote.device.model.unknown")
+    }
+
+    private func remoteDisplayName(_ profile: RemoteDeviceProfile) -> String {
+        let base = localization.text(profile.displayNameFallbackKey)
+        let peers = settings.remoteDeviceProfiles.filter { $0.model == profile.model }
+        guard peers.count > 1,
+              let index = peers.firstIndex(where: { $0.id == profile.id })
+        else { return base }
+        return "\(base) \(index + 1)"
     }
 
     private func mappingSummaryRow(_ button: RemoteButton) -> some View {
@@ -966,156 +1165,138 @@ struct SettingsView: View {
     }
 
     private var permissionsPage: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                PageHeader(
-                    title: localization.text("permissions.page.title")
-                )
+        settingsPage {
+            PageHeader(title: localization.text("permissions.page.title"))
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                GlassPanel {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("permissions.required.title")
+                            .font(.headline)
+                            .padding(.bottom, 8)
 
-                CompatibilityGlassContainer(spacing: 14) {
-                    GlassPanel {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("permissions.required.title")
-                                .font(.headline)
-                                .padding(.bottom, 8)
-
-                            permissionRow(
-                                index: 1,
-                                symbol: "antenna.radiowaves.left.and.right",
-                                title: localization.text("permission.bluetooth.title"),
-                                detail: localization.text("permission.bluetooth.description"),
-                                state: bluetoothPermissionState,
-                                actionTitle: localization.text("permission.bluetooth.open_settings")
-                            ) {
-                                if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
-                                    NSWorkspace.shared.open(url)
-                                }
-                            }
-
-                            Divider().padding(.leading, 62)
-
-                            permissionRow(
-                                index: 2,
-                                symbol: "keyboard",
-                                title: localization.text("permission.input_monitoring.title"),
-                                detail: localization.text("permission.input_monitoring.description"),
-                                state: inputMonitoringGranted ? .granted : .pending,
-                                actionTitle: localization.text("permission.action.request")
-                            ) {
-                                model.requestInputMonitoringPermission()
-                            }
-
-                            Divider().padding(.leading, 62)
-
-                            permissionRow(
-                                index: 3,
-                                symbol: "accessibility",
-                                title: localization.text("permission.accessibility.title"),
-                                detail: localization.text("permission.accessibility.description"),
-                                state: accessibilityGranted ? .granted : .pending,
-                                actionTitle: localization.text("permission.action.request")
-                            ) {
-                                model.requestAccessibilityPermission()
+                        permissionRow(
+                            index: 1,
+                            symbol: "antenna.radiowaves.left.and.right",
+                            title: localization.text("permission.bluetooth.title"),
+                            detail: localization.text("permission.bluetooth.description"),
+                            state: bluetoothPermissionState,
+                            actionTitle: localization.text("permission.bluetooth.open_settings")
+                        ) {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
+                                NSWorkspace.shared.open(url)
                             }
                         }
-                    }
 
-                    GlassPanel {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("diagnostics.title")
-                                .font(.headline)
-                            HStack(spacing: 12) {
-                                Image(systemName: "doc.text.magnifyingglass")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34, height: 34)
-                                    .compatibilityTintedGlass(
-                                        tint: Color.accentColor.opacity(0.14),
-                                        in: Circle()
-                                    )
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("diagnostics.logs.title")
-                                    Text("diagnostics.logs.privacy")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
-                                    .compatibilityButtonStyle(.standard)
+                        Divider().padding(.leading, 62)
+
+                        permissionRow(
+                            index: 2,
+                            symbol: "keyboard",
+                            title: localization.text("permission.input_monitoring.title"),
+                            detail: localization.text("permission.input_monitoring.description"),
+                            state: inputMonitoringGranted ? .granted : .pending,
+                            actionTitle: localization.text("permission.action.request")
+                        ) {
+                            model.requestInputMonitoringPermission()
+                        }
+
+                        Divider().padding(.leading, 62)
+
+                        permissionRow(
+                            index: 3,
+                            symbol: "accessibility",
+                            title: localization.text("permission.accessibility.title"),
+                            detail: localization.text("permission.accessibility.description"),
+                            state: accessibilityGranted ? .granted : .pending,
+                            actionTitle: localization.text("permission.action.request")
+                        ) {
+                            model.requestAccessibilityPermission()
+                        }
+                    }
+                }
+
+                GlassPanel {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("diagnostics.title")
+                            .font(.headline)
+                        HStack(spacing: 12) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                                .font(.title3)
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 34, height: 34)
+                                .compatibilityTintedGlass(
+                                    tint: Color.accentColor.opacity(0.14),
+                                    in: Circle()
+                                )
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("diagnostics.logs.title")
+                                Text("diagnostics.logs.privacy")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
+                            Spacer()
+                            Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
+                                .compatibilityButtonStyle(.standard)
                         }
                     }
                 }
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .compatibilityScrollEdgeEffect()
     }
 
     private var statisticsPage: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                PageHeader(
-                    title: localization.text("statistics.page.title")
-                )
-
-                CompatibilityGlassContainer(spacing: 14) {
-                    VStack(spacing: 14) {
-                        HStack(spacing: 14) {
-                            HStack(spacing: 8) {
-                                ForEach(UsageStatisticsPeriod.allCases) { period in
-                                    Button {
-                                        selectedUsagePeriod = period
-                                    } label: {
-                                        Text(localization.text(usagePeriodLocalizationKey(period)))
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .frame(width: 92, height: 38)
-                                            .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(
-                                        selectedUsagePeriod == period ? Color.white : Color.primary
-                                    )
-                                    .background(
-                                        selectedUsagePeriod == period
-                                            ? Color.accentColor
-                                            : Color(nsColor: .controlBackgroundColor),
-                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    )
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .stroke(
-                                                selectedUsagePeriod == period
-                                                    ? Color.accentColor
-                                                    : Color(nsColor: .separatorColor).opacity(0.65),
-                                                lineWidth: 1
-                                            )
-                                    }
-                                    .accessibilityAddTraits(
-                                        selectedUsagePeriod == period ? .isSelected : []
-                                    )
-                                }
-                            }
-
-                            Spacer(minLength: 20)
-
-                            StatusPill(
-                                text: localization.text("about.privacy.local_only"),
-                                tint: .green
-                            )
+        settingsPage {
+            HStack(spacing: 14) {
+                PageHeader(title: localization.text("statistics.page.title"))
+                Spacer(minLength: 20)
+                HStack(spacing: 8) {
+                    ForEach(UsageStatisticsPeriod.allCases) { period in
+                        Button {
+                            selectedUsagePeriod = period
+                        } label: {
+                            Text(localization.text(usagePeriodLocalizationKey(period)))
+                                .font(.system(size: 15, weight: .semibold))
+                                .frame(width: 92, height: 38)
+                                .contentShape(Rectangle())
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                        statisticsPeriodContent
-                        voiceSessionRankingCard
+                        .buttonStyle(.plain)
+                        .foregroundStyle(
+                            selectedUsagePeriod == period ? Color.white : Color.primary
+                        )
+                        .background(
+                            selectedUsagePeriod == period
+                                ? Color.accentColor
+                                : Color(nsColor: .controlBackgroundColor),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(
+                                    selectedUsagePeriod == period
+                                        ? Color.accentColor
+                                        : Color(nsColor: .separatorColor).opacity(0.65),
+                                    lineWidth: 1
+                                )
+                        }
+                        .accessibilityAddTraits(
+                            selectedUsagePeriod == period ? .isSelected : []
+                        )
                     }
                 }
+                StatusPill(
+                    text: localization.text("about.privacy.local_only"),
+                    tint: .green
+                )
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                VStack(spacing: 14) {
+                    statisticsPeriodContent
+                    voiceSessionRankingCard
+                }
+            }
         }
-        .compatibilityScrollEdgeEffect()
     }
 
     private var voiceSessionRankingCard: some View {
@@ -1243,14 +1424,11 @@ struct SettingsView: View {
     }
 
     private var aboutPage: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                PageHeader(
-                    title: localization.text("menu.about")
-                )
-
-                CompatibilityGlassContainer(spacing: 14) {
-                    VStack(spacing: 14) {
+        settingsPage {
+            PageHeader(title: localization.text("menu.about"))
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                VStack(spacing: 14) {
                         GlassPanel {
                             HStack(spacing: 20) {
                                 Image(nsImage: NSApp.applicationIconImage)
@@ -1426,13 +1604,9 @@ struct SettingsView: View {
                             }
                             .frame(width: 280, alignment: .top)
                         }
-                    }
                 }
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .compatibilityScrollEdgeEffect()
     }
 
     private var versionText: String {

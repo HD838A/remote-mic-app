@@ -29,6 +29,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isConnected = false
     @Published private(set) var isVoiceTriggerEnabled = false
     @Published private(set) var activeRemoteButtons = Set<RemoteButton>()
+    @Published private(set) var pendingHIDBindingProfileID: UUID?
+    @Published private(set) var connectedRemoteProfileIDs = Set<UUID>()
+    @Published private(set) var remoteBatteryLevels: [UUID: Int] = [:]
+    @Published private(set) var remotePowerStates: [UUID: RemotePowerState] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
@@ -75,26 +79,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var mobileButtonGestureRecognizers: [UsageEventSource: RemoteButtonGestureRecognizer] = [:]
     private var mobileDoubleClickTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
     private var mobileLongPressTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
-    private lazy var bluetoothBridge = XiaomiBluetoothBridge(settings: settings, delegate: self)
-    private lazy var hidMonitor: HIDRemoteMonitor = {
-        let monitor = HIDRemoteMonitor(settings: settings)
-        monitor.onStatus = { [weak self] value in
-            self?.hidStatus = value
-        }
-        monitor.onActiveButtons = { [weak self] buttons in
-            self?.activeRemoteButtons = buttons
-        }
-        monitor.onButtonPressed = { [weak self] button in
-            self?.settings.recordButtonPress(
-                control: .remoteButton(button),
-                source: .bluetoothRemote
-            )
-        }
-        monitor.onInternalAction = { [weak self] action in
-            self?.performInternalAction(action)
-        }
-        return monitor
-    }()
+    private var bluetoothBridges: [UUID: XiaomiBluetoothBridge] = [:]
+    private var bluetoothBridgeStates: [ObjectIdentifier: BluetoothBridgeState] = [:]
+    private var discoveryBluetoothBridge: XiaomiBluetoothBridge?
+    private var activeBluetoothVoiceDeviceIdentifier: UUID?
+    private let hidEventSuppressor = KeyboardEventSuppressor()
+    private var hidMonitors: [String: HIDRemoteMonitor] = [:]
+    private var discoveryHIDMonitor: HIDRemoteMonitor?
+    private var hidPowerKeySuppressed = false
     private var started = false
     private var terminationObserver: NSObjectProtocol?
     private let audioPreparationQueue = DispatchQueue(label: "RemoteMic.audioPreparation", qos: .userInitiated)
@@ -254,7 +246,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         stopLongRecording(reason: "app_stop")
         voiceFnTapSession.shutdown()
-        bluetoothBridge.stop()
+        bluetoothBridges.values.forEach { $0.stop() }
+        discoveryBluetoothBridge?.stop()
+        bluetoothBridges.removeAll()
+        bluetoothBridgeStates.removeAll()
+        discoveryBluetoothBridge = nil
+        activeBluetoothVoiceDeviceIdentifier = nil
         phoneRemoteServer.stop()
         webRemoteClient.stop()
         isPhoneRemoteConnectionEnabled = false
@@ -263,7 +260,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         activeMobileVoiceSource = nil
         voiceSessionUsageSource = nil
         updatePhoneVoiceFunctionKeyState(streaming: false)
-        hidMonitor.stop()
+        stopHIDMonitors()
         isAudioOutputReady = false
         if shouldStopAudioOnPreparationQueue {
             audioPreparationQueue.async { [weak self] in
@@ -281,7 +278,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func reconnect() {
-        bluetoothBridge.reconnectNow()
+        if let selectedBluetoothBridge {
+            selectedBluetoothBridge.reconnectNow()
+        } else {
+            bluetoothBridges.values.forEach { $0.reconnectNow() }
+            discoveryBluetoothBridge?.reconnectNow()
+        }
     }
 
     func enablePhoneRemoteConnection() {
@@ -389,7 +391,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self.isAudioOutputReady = isAudioOutputReady
                 self.testToneStatus = testToneStatus
                 self.startObservingAudioHardware()
-                self.bluetoothBridge.start()
+                self.startBluetoothConnections()
                 AppLogger.shared.write(
                     "AUDIO REBIND finished reason=startup success=\(configured) status=\(audioStatus.key) " +
                         "state={\(outputState)}"
@@ -660,8 +662,122 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             voiceFnTapSession.setEnabled(false)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
         }
-        hidMonitor.start(powerKeySuppressed: powerKeySuppressed)
-        hidStatus = hidMonitor.status
+        startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+    }
+
+    func beginHIDBinding(for profileID: UUID) {
+        pendingHIDBindingProfileID = profileID
+        selectRemoteProfile(profileID)
+        hidStatus = LocalizedMessage("button_mapping.status.press_button_to_bind")
+    }
+
+    func cancelHIDBinding() {
+        pendingHIDBindingProfileID = nil
+    }
+
+    private func startHIDMonitors(powerKeySuppressed: Bool) {
+        stopHIDMonitors()
+        hidPowerKeySuppressed = powerKeySuppressed
+        guard settings.customMappingEnabled else {
+            hidStatus = LocalizedMessage("button_mapping.status.system_managed")
+            return
+        }
+        _ = hidEventSuppressor.start()
+        for profile in settings.remoteDeviceProfiles {
+            guard let fingerprint = profile.hidFingerprint else { continue }
+            let monitor = makeHIDMonitor(
+                profileID: profile.id,
+                targetFingerprint: fingerprint
+            )
+            hidMonitors[fingerprint] = monitor
+            monitor.start(powerKeySuppressed: powerKeySuppressed)
+        }
+        startHIDDiscoveryIfNeeded()
+    }
+
+    private func stopHIDMonitors() {
+        hidMonitors.values.forEach { $0.stop() }
+        discoveryHIDMonitor?.stop()
+        hidMonitors.removeAll()
+        discoveryHIDMonitor = nil
+        hidEventSuppressor.stop()
+        activeRemoteButtons = []
+    }
+
+    private func startHIDDiscoveryIfNeeded() {
+        guard settings.customMappingEnabled, discoveryHIDMonitor == nil else { return }
+        let monitor = makeHIDMonitor(
+            profileID: nil,
+            targetFingerprint: nil,
+            excludedFingerprints: { [weak self] in
+                guard let self else { return [] }
+                return Set(self.hidMonitors.keys)
+            }
+        )
+        discoveryHIDMonitor = monitor
+        monitor.start(powerKeySuppressed: hidPowerKeySuppressed)
+    }
+
+    private func makeHIDMonitor(
+        profileID: UUID?,
+        targetFingerprint: String?,
+        excludedFingerprints: @escaping () -> Set<String> = { [] }
+    ) -> HIDRemoteMonitor {
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            targetFingerprint: targetFingerprint,
+            excludedFingerprints: excludedFingerprints,
+            eventSuppressor: hidEventSuppressor,
+            ownsEventSuppressor: false
+        )
+        monitor.onStatus = { [weak self, weak monitor] value in
+            guard let self, let monitor else { return }
+            if monitor.profileID == self.settings.selectedRemoteProfileID || monitor.profileID == nil {
+                self.hidStatus = value
+            }
+        }
+        monitor.onActiveButtons = { [weak self] profileID, buttons in
+            guard let self, profileID == self.settings.selectedRemoteProfileID else { return }
+            self.activeRemoteButtons = buttons
+        }
+        monitor.onButtonPressed = { [weak self, weak monitor] profileID, fingerprint, button in
+            guard let self, let monitor else {
+                return profileID.map { ($0, true) }
+            }
+            let resolvedProfileID = profileID
+                ?? self.settings.profileID(forHIDFingerprint: fingerprint)
+                ?? self.pendingHIDBindingProfileID
+            guard let resolvedProfileID else {
+                self.hidStatus = LocalizedMessage("button_mapping.status.select_device_to_bind")
+                return nil
+            }
+            let isNewBinding = self.settings.profileID(forHIDFingerprint: fingerprint) == nil
+            if isNewBinding {
+                self.settings.bindHIDFingerprint(fingerprint, to: resolvedProfileID)
+                monitor.assignProfileID(resolvedProfileID)
+                self.hidMonitors[fingerprint] = monitor
+                if self.discoveryHIDMonitor === monitor {
+                    self.discoveryHIDMonitor = nil
+                    self.startHIDDiscoveryIfNeeded()
+                }
+                self.pendingHIDBindingProfileID = nil
+            }
+            self.selectRemoteProfile(resolvedProfileID)
+            if !isNewBinding {
+                self.settings.recordButtonPress(
+                    control: .remoteButton(button),
+                    source: .bluetoothRemote
+                )
+            }
+            return (resolvedProfileID, !isNewBinding)
+        }
+        monitor.onInternalAction = { [weak self] profileID, action in
+            guard let self else { return }
+            if let profileID { self.selectRemoteProfile(profileID) }
+            self.performInternalAction(action)
+        }
+        return monitor
     }
 
     func setExperimentalContinuousRecordingEnabled(_ enabled: Bool) {
@@ -696,14 +812,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             settings.voiceFnTapModeEnabled = false
             voiceFnTapSession.setEnabled(false)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
-            hidMonitor.start(powerKeySuppressed: powerKeySuppressed)
-            hidStatus = hidMonitor.status
+            startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
             return
         }
         settings.voiceFnTapModeEnabled = true
         voiceFnTapSession.setEnabled(true)
-        hidMonitor.start(powerKeySuppressed: powerKeySuppressed)
-        hidStatus = hidMonitor.status
+        startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
     }
 
     private func handleVoiceFnTapFailure(_ failure: VoiceFnTapFailure) {
@@ -764,32 +878,152 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         NSWorkspace.shared.open(url)
     }
 
+    private var selectedBluetoothBridge: XiaomiBluetoothBridge? {
+        guard let identifier = settings.selectedRemoteProfile?.bluetoothIdentifier else { return nil }
+        return bluetoothBridges[identifier]
+    }
+
+    private func startBluetoothConnections() {
+        let identifiers = Set(settings.remoteDeviceProfiles.compactMap(\.bluetoothIdentifier))
+        for identifier in identifiers where bluetoothBridges[identifier] == nil {
+            let bridge = XiaomiBluetoothBridge(
+                settings: settings,
+                delegate: self,
+                targetIdentifier: identifier
+            )
+            bluetoothBridges[identifier] = bridge
+            bridge.start()
+        }
+        startBluetoothDiscoveryIfNeeded()
+    }
+
+    private func startBluetoothDiscoveryIfNeeded() {
+        guard started, discoveryBluetoothBridge == nil else { return }
+        let bridge = XiaomiBluetoothBridge(
+            settings: settings,
+            delegate: self,
+            excludedIdentifiers: { [weak self] in
+                guard let self else { return [] }
+                return Set(self.bluetoothBridges.keys)
+            }
+        )
+        discoveryBluetoothBridge = bridge
+        bridge.start()
+    }
+
+    private func registerBluetoothBridgeIfNeeded(_ bridge: XiaomiBluetoothBridge) -> UUID? {
+        guard let identifier = bluetoothIdentifier(for: bridge) else { return nil }
+        let profileID = settings.profileID(forBluetoothIdentifier: identifier)
+            ?? settings.registerBluetoothRemote(identifier: identifier)
+        if discoveryBluetoothBridge === bridge {
+            discoveryBluetoothBridge = nil
+            bluetoothBridges[identifier] = bridge
+            startBluetoothDiscoveryIfNeeded()
+        } else if bluetoothBridges[identifier] == nil {
+            bluetoothBridges[identifier] = bridge
+        }
+        return profileID
+    }
+
+    private func bluetoothIdentifier(for bridge: XiaomiBluetoothBridge) -> UUID? {
+        bridge.deviceIdentifier ?? bluetoothBridges.first(where: { $0.value === bridge })?.key
+    }
+
+    private func remoteProfileID(for bridge: XiaomiBluetoothBridge) -> UUID? {
+        guard let identifier = bluetoothIdentifier(for: bridge) else { return nil }
+        return settings.profileID(forBluetoothIdentifier: identifier)
+            ?? settings.registerBluetoothRemote(identifier: identifier)
+    }
+
+    func selectRemoteProfile(_ profileID: UUID) {
+        settings.selectRemoteProfile(profileID)
+        refreshBluetoothPresentation()
+    }
+
+    private func activateRemoteProfile(for bridge: XiaomiBluetoothBridge) -> UUID? {
+        guard let profileID = registerBluetoothBridgeIfNeeded(bridge) else { return nil }
+        selectRemoteProfile(profileID)
+        return profileID
+    }
+
+    private func refreshBluetoothPresentation() {
+        let allStates = bluetoothBridgeStates.values
+        connectedRemoteProfileIDs = Set(bluetoothBridges.compactMap { identifier, bridge in
+            guard let profileID = settings.profileID(forBluetoothIdentifier: identifier),
+                  let state = bluetoothBridgeStates[ObjectIdentifier(bridge)],
+                  case .ready = state
+            else { return nil }
+            return profileID
+        })
+        isConnected = allStates.contains { state in
+            if case .ready = state { return true }
+            return false
+        }
+        if let selectedBluetoothBridge,
+           let state = bluetoothBridgeStates[ObjectIdentifier(selectedBluetoothBridge)] {
+            connectionStatus = state.message
+        } else if let ready = allStates.first(where: { state in
+            if case .ready = state { return true }
+            return false
+        }) {
+            connectionStatus = ready.message
+        } else if let state = allStates.first {
+            connectionStatus = state.message
+        } else {
+            connectionStatus = LocalizedMessage("connection.status.searching")
+        }
+    }
+
     func bluetoothBridge(
         _ bridge: XiaomiBluetoothBridge,
         didChange state: BluetoothBridgeState
     ) {
-        connectionStatus = state.message
-        isConnected = {
-            if case .ready = state { return true }
+        let hadReadyBridge = bluetoothBridgeStates.values.contains { existingState in
+            if case .ready = existingState { return true }
             return false
-        }()
+        }
+        bluetoothBridgeStates[ObjectIdentifier(bridge)] = state
         if case .ready = state {
+            _ = registerBluetoothBridgeIfNeeded(bridge)
             voiceFnTapSession.resume()
-            applyHIDSettings()
+            if !hadReadyBridge {
+                applyHIDSettings()
+            }
         } else {
-            let voiceWasActive = bluetoothVoiceActive
-            bluetoothVoiceActive = false
-            voiceFnTapSession.suspend()
+            let identifier = bluetoothIdentifier(for: bridge)
+            if let identifier,
+               let profileID = settings.profileID(forBluetoothIdentifier: identifier) {
+                remoteBatteryLevels.removeValue(forKey: profileID)
+                remotePowerStates.removeValue(forKey: profileID)
+            }
+            let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
+                bluetoothVoiceActive = false
+                activeBluetoothVoiceDeviceIdentifier = nil
                 endVoiceSessionIfNeeded(flushAudio: false)
             }
             if longRecordingRequested {
                 finishLongRecording(reason: "bluetooth_not_ready")
             }
         }
+        refreshBluetoothPresentation()
+        if isConnected {
+            voiceFnTapSession.resume()
+        } else {
+            voiceFnTapSession.suspend()
+        }
     }
 
     func bluetoothBridgeDidStartVoice(_ bridge: XiaomiBluetoothBridge) {
+        guard let identifier = bridge.deviceIdentifier else { return }
+        _ = activateRemoteProfile(for: bridge)
+        if let activeBluetoothVoiceDeviceIdentifier,
+           activeBluetoothVoiceDeviceIdentifier != identifier {
+            _ = bridge.requestMicrophoneClose()
+            AppLogger.shared.write("ATVV STREAM rejected_busy")
+            return
+        }
+        activeBluetoothVoiceDeviceIdentifier = identifier
         bluetoothVoiceActive = true
         if longRecordingRequested {
             scheduleLongRecordingTimers(generation: longRecordingGeneration)
@@ -800,6 +1034,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
+        guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
+        activeBluetoothVoiceDeviceIdentifier = nil
         bluetoothVoiceActive = false
         if longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
@@ -813,9 +1049,51 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16]) {
+        guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
         if !voiceFnTapSession.receive(samples) {
             audioOutput.enqueue(samples: samples)
         }
+    }
+
+    func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdateBatteryLevel level: Int?) {
+        guard let profileID = remoteProfileID(for: bridge) else { return }
+        if let level {
+            remoteBatteryLevels[profileID] = min(100, max(0, level))
+        } else {
+            remoteBatteryLevels.removeValue(forKey: profileID)
+        }
+    }
+
+    func bluetoothBridge(
+        _ bridge: XiaomiBluetoothBridge,
+        didIdentifyRemoteModel model: XiaomiRemoteModel
+    ) {
+        guard let profileID = remoteProfileID(for: bridge) else { return }
+        settings.updateRemoteProfileModel(profileID, model: model)
+    }
+
+    func bluetoothBridge(
+        _ bridge: XiaomiBluetoothBridge,
+        didUpdatePowerState state: RemotePowerState?
+    ) {
+        guard let profileID = remoteProfileID(for: bridge) else { return }
+        if let state {
+            remotePowerStates[profileID] = state
+        } else {
+            remotePowerStates.removeValue(forKey: profileID)
+        }
+    }
+
+    func batteryLevel(for profileID: UUID) -> Int? {
+        remoteBatteryLevels[profileID]
+    }
+
+    func powerState(for profileID: UUID) -> RemotePowerState? {
+        remotePowerStates[profileID]
+    }
+
+    func isRemoteConnected(_ profileID: UUID) -> Bool {
+        connectedRemoteProfileIDs.contains(profileID)
     }
 
     private func requestPhoneApproval(
@@ -1095,7 +1373,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         longRecordingGeneration &+= 1
         let generation = longRecordingGeneration
         longRecordingRequested = true
-        guard bluetoothBridge.requestMicrophoneOpen() else {
+        guard let selectedBluetoothBridge,
+              selectedBluetoothBridge.requestMicrophoneOpen()
+        else {
             finishLongRecording(reason: "open_rejected")
             return false
         }
@@ -1137,7 +1417,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                   self.longRecordingGeneration == generation,
                   self.bluetoothVoiceActive
             else { return }
-            guard self.bluetoothBridge.requestMicrophoneExtend() else {
+            guard self.selectedBluetoothBridge?.requestMicrophoneExtend() == true else {
                 self.stopLongRecording(reason: "extend_failed")
                 return
             }
@@ -1163,7 +1443,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         longRecordingRequested = false
         longRecordingGeneration &+= 1
         cancelLongRecordingTimers()
-        let closeWritten = bluetoothBridge.requestMicrophoneClose()
+        let closeWritten = selectedBluetoothBridge?.requestMicrophoneClose() ?? false
         if bluetoothVoiceActive {
             scheduleLongRecordingCloseTimeout(generation: longRecordingGeneration)
         }
@@ -1184,7 +1464,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             else { return }
             self.longRecordingCloseTimer = nil
             AppLogger.shared.write("LONG RECORDING close_timeout reconnecting=true")
-            self.bluetoothBridge.reconnectNow()
+            self.selectedBluetoothBridge?.reconnectNow()
         }
         longRecordingCloseTimer = timer
         timer.resume()

@@ -51,25 +51,26 @@ check(
 )
 
 check(
-    RC003NameMatcher.matches("MI RC") &&
-        RC003NameMatcher.matches("mi rc") &&
-        RC003NameMatcher.matches("  MI RC  ") &&
-        RC003NameMatcher.matches("Xiaomi Bluetooth Remote 2 Pro") &&
-        RC003NameMatcher.matches("xiaomi bluetooth remote 2 pro") &&
-        RC003NameMatcher.matches("小米蓝牙语音遥控器") &&
-        RC003NameMatcher.matches(" 小米蓝牙语音遥控器 "),
-    "RC003 name matcher accepts approved candidate names"
+    XiaomiVoiceRemoteNameMatcher.matches("MI RC") &&
+        XiaomiVoiceRemoteNameMatcher.matches("mi rc") &&
+        XiaomiVoiceRemoteNameMatcher.matches("  MI RC  ") &&
+        XiaomiVoiceRemoteNameMatcher.matches("Xiaomi Bluetooth Remote 2") &&
+        XiaomiVoiceRemoteNameMatcher.matches("xiaomi bluetooth remote 2") &&
+        XiaomiVoiceRemoteNameMatcher.matches("Xiaomi Bluetooth Remote 2 Pro") &&
+        XiaomiVoiceRemoteNameMatcher.matches("xiaomi bluetooth remote 2 pro") &&
+        XiaomiVoiceRemoteNameMatcher.matches("小米蓝牙语音遥控器") &&
+        XiaomiVoiceRemoteNameMatcher.matches(" 小米蓝牙语音遥控器 "),
+    "Xiaomi voice remote matcher accepts approved candidate names"
 )
 check(
-    !RC003NameMatcher.matches(nil) &&
-        !RC003NameMatcher.matches("") &&
-        !RC003NameMatcher.matches("   ") &&
-        !RC003NameMatcher.matches("Mi Mouse") &&
-        !RC003NameMatcher.matches("小米蓝牙遥控器") &&
-        !RC003NameMatcher.matches("Xiaomi Bluetooth Remote 2") &&
-        !RC003NameMatcher.matches("MI RC2") &&
-        !RC003NameMatcher.matches("小米"),
-    "RC003 name matcher rejects blank, nil, and similar non-target names"
+    !XiaomiVoiceRemoteNameMatcher.matches(nil) &&
+        !XiaomiVoiceRemoteNameMatcher.matches("") &&
+        !XiaomiVoiceRemoteNameMatcher.matches("   ") &&
+        !XiaomiVoiceRemoteNameMatcher.matches("Mi Mouse") &&
+        !XiaomiVoiceRemoteNameMatcher.matches("小米蓝牙遥控器") &&
+        !XiaomiVoiceRemoteNameMatcher.matches("MI RC2") &&
+        !XiaomiVoiceRemoteNameMatcher.matches("小米"),
+    "Xiaomi voice remote matcher rejects blank, nil, and similar non-target names"
 )
 
 let generationOne: UInt64 = 1

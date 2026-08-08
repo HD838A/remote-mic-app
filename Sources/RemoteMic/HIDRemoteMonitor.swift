@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import IOKit.hid
 import IOKit.hidsystem
@@ -41,9 +42,14 @@ private func hidInputReport(
 
 final class HIDRemoteMonitor {
     private let settings: AppSettings
-    private let eventSuppressor = KeyboardEventSuppressor()
+    private let eventSuppressor: KeyboardEventSuppressor
+    private let ownsEventSuppressor: Bool
+    private let targetFingerprint: String?
+    private let excludedFingerprints: () -> Set<String>
     private var manager: IOHIDManager?
     private var activeDevice: IOHIDDevice?
+    private(set) var deviceFingerprint: String?
+    private(set) var profileID: UUID?
     private var activeDeviceIsSeized = false
     private var activeUsages = Set<UInt16>()
     private var repeatTimers: [UInt16: DispatchSourceTimer] = [:]
@@ -53,12 +59,28 @@ final class HIDRemoteMonitor {
     private var permissionMonitor: DispatchSourceTimer?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
-    var onActiveButtons: ((Set<RemoteButton>) -> Void)?
-    var onButtonPressed: ((RemoteButton) -> Void)?
-    var onInternalAction: ((ButtonAction) -> Void)?
+    var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
+    var onButtonPressed: ((UUID?, String, RemoteButton) -> (profileID: UUID, shouldPerformAction: Bool)?)?
+    var onInternalAction: ((UUID?, ButtonAction) -> Void)?
 
-    init(settings: AppSettings) {
+    init(
+        settings: AppSettings,
+        profileID: UUID? = nil,
+        targetFingerprint: String? = nil,
+        excludedFingerprints: @escaping () -> Set<String> = { [] },
+        eventSuppressor: KeyboardEventSuppressor = KeyboardEventSuppressor(),
+        ownsEventSuppressor: Bool = true
+    ) {
         self.settings = settings
+        self.profileID = profileID
+        self.targetFingerprint = targetFingerprint
+        self.excludedFingerprints = excludedFingerprints
+        self.eventSuppressor = eventSuppressor
+        self.ownsEventSuppressor = ownsEventSuppressor
+    }
+
+    func assignProfileID(_ profileID: UUID) {
+        self.profileID = profileID
     }
 
     static var inputMonitoringAccess: IOHIDAccessType {
@@ -146,11 +168,12 @@ final class HIDRemoteMonitor {
         repeatTimers.removeAll()
         resetGestureRecognition()
         activeUsages.removeAll()
-        onActiveButtons?([])
-        eventSuppressor.stop()
+        onActiveButtons?(profileID, [])
+        if ownsEventSuppressor { eventSuppressor.stop() }
         if let activeDevice {
             IOHIDDeviceClose(activeDevice, IOOptionBits(kIOHIDOptionsTypeNone))
             self.activeDevice = nil
+            deviceFingerprint = nil
             activeDeviceIsSeized = false
         }
         guard let manager else { return }
@@ -168,13 +191,18 @@ final class HIDRemoteMonitor {
             updateStatus(LocalizedMessage("button_mapping.error.device_open_failed"))
             return
         }
-        guard activeDevice == nil else { return }
+        guard activeDevice == nil,
+              let fingerprint = Self.fingerprint(for: device),
+              targetFingerprint == nil || targetFingerprint == fingerprint,
+              !excludedFingerprints().contains(fingerprint)
+        else { return }
         let seizeResult = IOHIDDeviceOpen(
             device,
             IOOptionBits(kIOHIDOptionsTypeSeizeDevice)
         )
         if seizeResult == kIOReturnSuccess {
             activeDevice = device
+            deviceFingerprint = fingerprint
             activeDeviceIsSeized = true
             updateStatus(LocalizedMessage("button_mapping.status.connected"))
             AppLogger.shared.write("HID CONNECTED mode=seized")
@@ -191,6 +219,7 @@ final class HIDRemoteMonitor {
         }
 
         activeDevice = device
+        deviceFingerprint = fingerprint
         activeDeviceIsSeized = false
         updateStatus(
             LocalizedMessage(
@@ -206,9 +235,10 @@ final class HIDRemoteMonitor {
         guard let activeDevice, CFEqual(activeDevice, device) else { return }
         IOHIDDeviceClose(activeDevice, IOOptionBits(kIOHIDOptionsTypeNone))
         self.activeDevice = nil
+        deviceFingerprint = nil
         activeDeviceIsSeized = false
         activeUsages.removeAll()
-        onActiveButtons?([])
+        onActiveButtons?(profileID, [])
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
         resetGestureRecognition()
@@ -228,22 +258,32 @@ final class HIDRemoteMonitor {
         let pressed = usages.subtracting(activeUsages)
         let released = activeUsages.subtracting(usages)
         activeUsages = usages
-        onActiveButtons?(RemoteButton.buttons(for: usages))
+        onActiveButtons?(profileID, RemoteButton.buttons(for: usages))
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
             if !activeDeviceIsSeized {
                 eventSuppressor.arm(button: button, edge: .down)
             }
-            onButtonPressed?(button)
+            var shouldPerformAction = true
+            if let deviceFingerprint,
+               let routing = onButtonPressed?(profileID, deviceFingerprint, button) {
+                if profileID == nil {
+                    profileID = routing.profileID
+                }
+                shouldPerformAction = routing.shouldPerformAction
+            }
+            guard let profileID, shouldPerformAction else { continue }
 
             let recognizesDoubleClick = settings.configuredAction(
                 for: button,
-                trigger: .doubleClick
+                trigger: .doubleClick,
+                profileID: profileID
             ).action != .disabled
             let recognizesLongPress = settings.configuredAction(
                 for: button,
-                trigger: .longPress
+                trigger: .longPress,
+                profileID: profileID
             ).action != .disabled
             if recognizesDoubleClick || recognizesLongPress || gestureRecognizer.isTracking(button) {
                 let commands = gestureRecognizer.press(
@@ -257,7 +297,7 @@ final class HIDRemoteMonitor {
                 startRepeatIfNeeded(
                     usage: usage,
                     button: button,
-                    action: settings.action(for: button)
+                    action: settings.action(for: button, profileID: profileID)
                 )
             }
         }
@@ -283,7 +323,7 @@ final class HIDRemoteMonitor {
         ]
         guard
             repeatable.contains(button),
-            !settings.hasSecondaryAction(for: button),
+            !settings.hasSecondaryAction(for: button, profileID: profileID),
             action != .disabled,
             action.allowsRepeat
         else { return }
@@ -293,7 +333,7 @@ final class HIDRemoteMonitor {
         timer.schedule(deadline: .now() + .milliseconds(350), repeating: interval)
         timer.setEventHandler { [weak self] in
             guard let self, self.activeUsages.contains(usage) else { return }
-            if self.settings.hasSecondaryAction(for: button) {
+            if self.settings.hasSecondaryAction(for: button, profileID: self.profileID) {
                 self.repeatTimers.removeValue(forKey: usage)?.cancel()
                 return
             }
@@ -304,7 +344,10 @@ final class HIDRemoteMonitor {
             if !self.activeDeviceIsSeized {
                 self.eventSuppressor.arm(button: button, edge: .down)
             }
-            if !KeyboardInjector.send(action, shortcut: self.settings.shortcut(for: button)) {
+            if !KeyboardInjector.send(
+                action,
+                shortcut: self.settings.shortcut(for: button, profileID: self.profileID)
+            ) {
                 self.releaseForRevokedPermissions()
             }
         }
@@ -366,9 +409,13 @@ final class HIDRemoteMonitor {
             releaseForRevokedPermissions()
             return false
         }
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = settings.configuredAction(
+            for: button,
+            trigger: trigger,
+            profileID: profileID
+        )
         if configured.action.isAppInternal {
-            onInternalAction?(configured.action)
+            onInternalAction?(profileID, configured.action)
             AppLogger.shared.write(
                 "HID BUTTON button=\(button.rawValue) trigger=\(trigger.rawValue) action=\(configured.action.rawValue)"
             )
@@ -415,6 +462,22 @@ final class HIDRemoteMonitor {
         stop()
         updateStatus(LocalizedMessage("button_mapping.permission.system_expired"))
         AppLogger.shared.write("HID RELEASED permission_revoked")
+    }
+
+    static func fingerprint(for device: IOHIDDevice) -> String? {
+        let keys = ["PhysicalDeviceUniqueID", kIOHIDSerialNumberKey, "DeviceAddress"]
+        for key in keys {
+            guard let value = IOHIDDeviceGetProperty(device, key as CFString) as? String,
+                  !value.isEmpty
+            else { continue }
+            return SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+        }
+        guard let location = IOHIDDeviceGetProperty(device, kIOHIDLocationIDKey as CFString) as? NSNumber else {
+            return nil
+        }
+        return SHA256.hash(data: Data("location:\(location.uint64Value)".utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private func updateStatus(_ value: LocalizedMessage) {

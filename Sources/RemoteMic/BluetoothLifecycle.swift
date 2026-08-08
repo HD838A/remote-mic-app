@@ -1,8 +1,9 @@
 import Foundation
 
-enum RC003NameMatcher {
+enum XiaomiVoiceRemoteNameMatcher {
     private static let approvedNames: Set<String> = [
         "mi rc",
+        "xiaomi bluetooth remote 2",
         "xiaomi bluetooth remote 2 pro",
         "小米蓝牙语音遥控器",
     ]

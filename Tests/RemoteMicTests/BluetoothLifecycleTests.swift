@@ -90,23 +90,24 @@ struct BluetoothLifecycleTests {
     }
 
     @Test func nameMatcherAcceptsApprovedCandidateNames() {
-        #expect(RC003NameMatcher.matches("MI RC"))
-        #expect(RC003NameMatcher.matches("mi rc"))
-        #expect(RC003NameMatcher.matches("  MI RC  "))
-        #expect(RC003NameMatcher.matches("Xiaomi Bluetooth Remote 2 Pro"))
-        #expect(RC003NameMatcher.matches("xiaomi bluetooth remote 2 pro"))
-        #expect(RC003NameMatcher.matches("小米蓝牙语音遥控器"))
-        #expect(RC003NameMatcher.matches(" 小米蓝牙语音遥控器 "))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches("MI RC"))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches("mi rc"))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches("  MI RC  "))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches("Xiaomi Bluetooth Remote 2"))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches("xiaomi bluetooth remote 2"))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches("Xiaomi Bluetooth Remote 2 Pro"))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches("xiaomi bluetooth remote 2 pro"))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches("小米蓝牙语音遥控器"))
+        #expect(XiaomiVoiceRemoteNameMatcher.matches(" 小米蓝牙语音遥控器 "))
     }
 
     @Test func nameMatcherRejectsBlankNilAndSimilarNonTargetNames() {
-        #expect(!RC003NameMatcher.matches(nil))
-        #expect(!RC003NameMatcher.matches(""))
-        #expect(!RC003NameMatcher.matches("   "))
-        #expect(!RC003NameMatcher.matches("Mi Mouse"))
-        #expect(!RC003NameMatcher.matches("小米蓝牙遥控器"))
-        #expect(!RC003NameMatcher.matches("Xiaomi Bluetooth Remote 2"))
-        #expect(!RC003NameMatcher.matches("MI RC2"))
-        #expect(!RC003NameMatcher.matches("小米"))
+        #expect(!XiaomiVoiceRemoteNameMatcher.matches(nil))
+        #expect(!XiaomiVoiceRemoteNameMatcher.matches(""))
+        #expect(!XiaomiVoiceRemoteNameMatcher.matches("   "))
+        #expect(!XiaomiVoiceRemoteNameMatcher.matches("Mi Mouse"))
+        #expect(!XiaomiVoiceRemoteNameMatcher.matches("小米蓝牙遥控器"))
+        #expect(!XiaomiVoiceRemoteNameMatcher.matches("MI RC2"))
+        #expect(!XiaomiVoiceRemoteNameMatcher.matches("小米"))
     }
 }

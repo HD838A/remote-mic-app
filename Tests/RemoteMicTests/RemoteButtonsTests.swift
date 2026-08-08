@@ -610,7 +610,7 @@ struct RemoteButtonsTests {
         let monitor = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
         let model = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"), encoding: .utf8)
         let arm = try #require(monitor.range(of: "eventSuppressor.arm(button: button, edge: .down)"))
-        let callback = try #require(monitor.range(of: "onButtonPressed?(button)"))
+        let callback = try #require(monitor.range(of: "onButtonPressed?(profileID, deviceFingerprint, button)"))
         let applySettingsStart = try #require(model.range(of: "func applyHIDSettings()"))
         let applySettingsEnd = try #require(
             model.range(
@@ -623,7 +623,7 @@ struct RemoteButtonsTests {
             applySettings.range(of: "powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)")
         )
         let start = try #require(
-            applySettings.range(of: "hidMonitor.start(powerKeySuppressed: powerKeySuppressed)")
+            applySettings.range(of: "startHIDMonitors(powerKeySuppressed: powerKeySuppressed)")
         )
         #expect(arm.lowerBound < callback.lowerBound)
         #expect(map.lowerBound < start.lowerBound)
@@ -741,6 +741,70 @@ struct RemoteButtonsTests {
 
         #expect(settings.action(for: .back) == .disabled)
         #expect(settings.action(for: .up) == .arrowUp)
+    }
+
+    @Test func legacyBindingsMigrateIntoFirstPhysicalRemoteProfile() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let legacyIdentifier = UUID()
+        defaults.set(legacyIdentifier.uuidString, forKey: "peripheralIdentifier")
+        defaults.set(
+            try JSONEncoder().encode([RemoteButton.menu.rawValue: ButtonAction.openCodex]),
+            forKey: "buttonBindings"
+        )
+
+        let settings = AppSettings(defaults: defaults)
+        let profile = try #require(settings.selectedRemoteProfile)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(profile.bluetoothIdentifier == legacyIdentifier)
+        #expect(settings.action(for: .menu) == .openCodex)
+    }
+
+    @Test func physicalRemoteProfilesPersistIndependentMappingsAndBindings() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let firstBluetoothID = UUID()
+        let secondBluetoothID = UUID()
+        let firstProfileID = settings.registerBluetoothRemote(identifier: firstBluetoothID)
+        settings.updateRemoteProfile(firstProfileID, model: .rc001, customName: "办公")
+        settings.bindHIDFingerprint("hid-one", to: firstProfileID)
+        settings.selectRemoteProfile(firstProfileID)
+        settings.setAction(.openCodex, for: .menu)
+
+        let secondProfileID = settings.registerBluetoothRemote(identifier: secondBluetoothID)
+        settings.updateRemoteProfile(secondProfileID, model: .rc003, customName: "剪辑")
+        settings.bindHIDFingerprint("hid-two", to: secondProfileID)
+        settings.selectRemoteProfile(secondProfileID)
+        settings.setAction(.showDesktop, for: .menu)
+
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: firstProfileID
+        ).action == .openCodex)
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: secondProfileID
+        ).action == .showDesktop)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.remoteDeviceProfiles.count == 2)
+        #expect(restored.profileID(forBluetoothIdentifier: firstBluetoothID) == firstProfileID)
+        #expect(restored.profileID(forHIDFingerprint: "hid-two") == secondProfileID)
+        #expect(restored.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: firstProfileID
+        ).action == .openCodex)
+        #expect(restored.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: secondProfileID
+        ).action == .showDesktop)
     }
 
     @Test func unavailableContinuousRecordingExperimentDoesNotReplacePowerShortcut() throws {
@@ -1393,5 +1457,21 @@ struct RemoteButtonsTests {
         #expect(RemoteButton.menu.nativeEvent == .keyboard(keyCode: KeyboardInjector.contextualMenuKeyCode))
         #expect(RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0))
         #expect(RemoteButton.back.nativeEvent == nil)
+    }
+
+    @Test func remoteModelNumberIdentificationIsStrictAndCaseInsensitive() {
+        #expect(XiaomiRemoteModel.identified(by: "RC001") == .rc001)
+        #expect(XiaomiRemoteModel.identified(by: " rc003\n") == .rc003)
+        #expect(XiaomiRemoteModel.identified(by: "RC002") == nil)
+        #expect(XiaomiRemoteModel.identified(by: "2BED") == nil)
+    }
+
+    @Test func batteryLevelStatusDecodesUserFacingPowerStates() {
+        #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x61, 0x00])) == .onBattery)
+        #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x21, 0x00])) == .charging)
+        #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x63, 0x00])) == .externalPower)
+        #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x65, 0x00])) == .unknown)
+        #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x00, 0x00])) == .unknown)
+        #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x61])) == nil)
     }
 }
