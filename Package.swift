@@ -1,5 +1,23 @@
 // swift-tools-version: 6.2
+import Foundation
 import PackageDescription
+
+var packageDependencies: [Package.Dependency] = [
+    .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
+]
+var remoteMicTestDependencies: [Target.Dependency] = ["RemoteMic"]
+
+if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
+    "REMOTE_MIC_HARDWARE_SIMULATION_PATH"
+], !hardwareSimulationPath.isEmpty {
+    packageDependencies.append(.package(path: hardwareSimulationPath))
+    remoteMicTestDependencies.append(
+        .product(name: "HardwareSimulation", package: "hardware-simulation")
+    )
+    remoteMicTestDependencies.append(
+        .product(name: "XiaomiVoiceRemoteSimulation", package: "hardware-simulation")
+    )
+}
 
 let package = Package(
     name: "RemoteMic",
@@ -10,9 +28,7 @@ let package = Package(
             targets: ["RemoteMic"]
         )
     ],
-    dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
-    ],
+    dependencies: packageDependencies,
     targets: [
         .executableTarget(
             name: "RemoteMic",
@@ -29,7 +45,7 @@ let package = Package(
         ),
         .testTarget(
             name: "RemoteMicTests",
-            dependencies: ["RemoteMic"],
+            dependencies: remoteMicTestDependencies,
             path: "Tests/RemoteMicTests"
         ),
     ],
