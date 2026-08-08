@@ -67,6 +67,17 @@ private struct ConfigurationStatus {
     let systemImage: String
 }
 
+enum MappingSelectionPolicy {
+    static func selection(
+        current: RemoteButton,
+        activeButtons: Set<RemoteButton>,
+        isLocked: Bool
+    ) -> RemoteButton {
+        guard !isLocked else { return current }
+        return RemoteButton.allCases.first(where: activeButtons.contains) ?? current
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
@@ -77,6 +88,7 @@ struct SettingsView: View {
 
     @State private var selectedSection: SettingsSection = .connection
     @State private var selectedRemoteButton: RemoteButton = .ok
+    @State private var isMappingSelectionLocked = true
     @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
     @State private var shortcutEditingTarget: ShortcutEditingTarget?
     @State private var bluetoothAuthorization = CBManager.authorization
@@ -328,14 +340,15 @@ struct SettingsView: View {
                 CompatibilityGlassContainer(spacing: 14) {
                     HStack(alignment: .top, spacing: 14) {
                         connectionDevicePanel
-                            .frame(width: 196)
-                        audioSettingsPanel
+                            .frame(width: 210)
+                        VStack(spacing: 14) {
+                            audioSettingsPanel
+                            audioCompatibilityPanel
+                            phoneConnectionsPanel
+                        }
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
-
-                trustedPhoneDevicesPanel
-                webRemotePanel
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -343,117 +356,165 @@ struct SettingsView: View {
         .compatibilityScrollEdgeEffect()
     }
 
-    private var trustedPhoneDevicesPanel: some View {
+    private var phoneConnectionsPanel: some View {
         GlassPanel {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("connection.trusted_devices.title")
-                        .font(.headline)
-                    Text("connection.trusted_devices.help")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 16)
-                Text(
-                    LocalizedMessage(
-                        "connection.trusted_devices.count",
-                        arguments: [String(settings.trustedPhoneIdentityFingerprints.count)]
-                    ).text(using: localization)
-                )
-                .foregroundStyle(.secondary)
-                Button(
-                    model.isPhoneRemoteConnectionEnabled
-                        ? "connection.phone.enabled"
-                        : "connection.phone.connect"
-                ) {
-                    model.enablePhoneRemoteConnection()
-                }
-                .compatibilityButtonStyle(.prominent)
-                .disabled(model.isPhoneRemoteConnectionEnabled)
-                Button("connection.trusted_devices.clear") {
-                    isClearTrustedPhonesConfirmationPresented = true
-                }
-                .compatibilityButtonStyle(.standard)
-                .disabled(settings.trustedPhoneIdentityFingerprints.isEmpty)
-            }
-        }
-    }
+            VStack(alignment: .leading, spacing: 14) {
+                Text("connection.phone.section_title")
+                    .font(.headline)
 
-    private var webRemotePanel: some View {
-        GlassPanel {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("connection.web.title")
-                        .font(.headline)
-                    Text("connection.web.help")
-                        .font(.caption)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "iphone")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 34)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text("connection.phone.ios_title")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("connection.phone.no_invite_badge")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.green)
+                            }
+                            Text("connection.phone.ios_help")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        StatusPill(
+                            text: localization.text(
+                                model.isPhoneRemoteConnectionEnabled
+                                    ? "connection.phone.enabled"
+                                    : "connection.phone.not_enabled"
+                            ),
+                            tint: model.isPhoneRemoteConnectionEnabled ? .green : .secondary
+                        )
+                    }
+
+                    HStack(spacing: 8) {
+                        Button(
+                            model.isPhoneRemoteConnectionEnabled
+                                ? "connection.phone.enabled"
+                                : "connection.phone.connect"
+                        ) {
+                            model.enablePhoneRemoteConnection()
+                        }
+                        .compatibilityButtonStyle(.prominent)
+                        .disabled(model.isPhoneRemoteConnectionEnabled)
+
+                        Link(destination: AppLinks.testFlightPublicBeta) {
+                            Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
+                        }
+                        .compatibilityButtonStyle(.standard)
+
+                        Button {
+                            copyTestFlightPublicBetaLink()
+                        } label: {
+                            Label(
+                                localization.text(
+                                    isTestFlightLinkCopied
+                                        ? "common.status.copied"
+                                        : "common.action.copy_link"
+                                ),
+                                systemImage: isTestFlightLinkCopied ? "checkmark" : "doc.on.doc"
+                            )
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                }
+
+                Divider()
+
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 21, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 34)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("connection.web.title")
+                            .font(.subheadline.weight(.semibold))
+                        Text("connection.web.help_short")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 8)
+                    Text(webRemoteStatusText)
+                        .font(.caption)
+                        .foregroundStyle(webRemoteStatusTint)
+                        .lineLimit(1)
+                    Button(
+                        model.webRemoteState.isEnabled
+                            ? "connection.web.show_qr"
+                            : "connection.web.connect"
+                    ) {
+                        requestWebRemoteSession()
+                    }
+                    .compatibilityButtonStyle(.standard)
                 }
-                Spacer(minLength: 16)
-                Text(webRemoteStatusText)
-                    .foregroundStyle(webRemoteStatusTint)
-                    .lineLimit(1)
-                Button(
-                    model.webRemoteState.isEnabled
-                        ? "connection.web.show_qr"
-                        : "connection.web.connect"
-                ) {
-                    requestWebRemoteSession()
+
+                Divider()
+
+                HStack(spacing: 10) {
+                    Label(
+                        LocalizedMessage(
+                            "connection.trusted_devices.count_long",
+                            arguments: [String(settings.trustedPhoneIdentityFingerprints.count)]
+                        ).text(using: localization),
+                        systemImage: "checkmark.shield"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("connection.trusted_devices.clear") {
+                        isClearTrustedPhonesConfirmationPresented = true
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(settings.trustedPhoneIdentityFingerprints.isEmpty)
                 }
-                .compatibilityButtonStyle(.prominent)
             }
         }
     }
 
     private var connectionDevicePanel: some View {
         GlassPanel {
-            VStack(spacing: 14) {
-                VStack(spacing: 2) {
+            VStack(spacing: 16) {
+                VStack(spacing: 6) {
                     Text("connection.device.name")
                         .font(.headline)
-                    Text("connection.device.type")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    StatusPill(text: connectionBadge, tint: connectionTint)
                 }
 
                 RC003Photo()
-                    .frame(width: 70, height: 142)
+                    .frame(width: 82, height: 166)
 
-                VStack(spacing: 12) {
-                    DeviceStatusStep(
+                VStack(alignment: .leading, spacing: 9) {
+                    connectionStatusLine(
                         symbol: "antenna.radiowaves.left.and.right",
-                        title: localization.text("connection.status.bluetooth_title"),
-                        detail: model.connectionStatus.text(using: localization),
-                        badge: connectionBadge,
+                        text: model.connectionStatus.text(using: localization),
                         tint: connectionTint
                     )
-                    DeviceStatusStep(
+                    connectionStatusLine(
                         symbol: "waveform",
-                        title: localization.text("connection.status.voice_title"),
-                        detail: localization.text(
-                            model.isStreaming ? "connection.status.voice_streaming" : "connection.status.waiting_voice_button"
+                        text: localization.text(
+                            model.isStreaming
+                                ? "connection.status.voice_streaming"
+                                : "connection.status.voice_ready"
                         ),
-                        badge: localization.text(model.isStreaming ? "connection.status.voice_active" : "common.status.ready"),
                         tint: model.isStreaming ? .orange : .blue
                     )
-                    DeviceStatusStep(
+                    connectionStatusLine(
                         symbol: "mic.fill",
-                        title: localization.text("connection.status.voice_trigger"),
-                        detail: model.voiceShortcutStatus.text(using: localization),
-                        badge: voiceTriggerBadge,
+                        text: model.voiceShortcutStatus.text(using: localization),
                         tint: .blue
                     )
                 }
-
-                Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
-                    get: { settings.voiceFnTapModeEnabled },
-                    set: { model.setVoiceFnTapModeEnabled($0) }
-                ))
-                Text("connection.voice_fn_tap.hint")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 Button {
                     model.reconnect()
@@ -464,19 +525,33 @@ struct SettingsView: View {
                     .compatibilityButtonStyle(.prominent)
                     .buttonBorderShape(.roundedRectangle(radius: 10))
                     .frame(maxWidth: .infinity)
+
             }
         }
+    }
+
+    private func connectionStatusLine(symbol: String, text: String, tint: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbol)
+                .foregroundStyle(tint)
+                .frame(width: 18)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var audioSettingsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 13) {
-                Text("audio.section.title")
+                Text("audio.voice_output.section_title")
                     .font(.headline)
 
                 HStack(spacing: 14) {
                     Text("audio.output.title")
-                        .frame(width: 72, alignment: .leading)
+                        .frame(width: 92, alignment: .leading)
                     Picker("", selection: Binding(
                         get: { settings.selectedAudioDeviceUID },
                         set: { value in
@@ -496,7 +571,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 14) {
                         Text("audio.gain.title")
-                            .frame(width: 72, alignment: .leading)
+                            .frame(width: 92, alignment: .leading)
                         Slider(value: Binding(
                             get: { settings.gainDB },
                             set: { settings.gainDB = $0 }
@@ -509,13 +584,13 @@ struct SettingsView: View {
                     Text("audio.gain.help")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.leading, 86)
+                        .padding(.leading, 106)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HStack(alignment: .firstTextBaseline) {
                     Text("audio.status.title")
-                        .frame(width: 72, alignment: .leading)
+                        .frame(width: 92, alignment: .leading)
                     Spacer(minLength: 10)
                     Text(model.audioStatus.text(using: localization))
                         .foregroundStyle(.secondary)
@@ -527,9 +602,8 @@ struct SettingsView: View {
                         model.refreshAudioDevices()
                     } label: {
                         Text("audio.action.refresh_devices")
-                            .foregroundStyle(.white)
                     }
-                        .compatibilityButtonStyle(.prominent)
+                        .compatibilityButtonStyle(.standard)
                     Link("audio.action.learn_virtual_microphones", destination: URL(string: "https://existential.audio/blackhole/")!)
                         .compatibilityButtonStyle(.standard)
                     Button("audio.action.send_test_tone") { model.sendTestTone() }
@@ -547,34 +621,39 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
+            }
+        }
+    }
 
-                Divider()
-
+    private var audioCompatibilityPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("audio.compatibility.title")
+                        Text("audio.compatibility.section_title")
                             .font(.headline)
                         Text("audio.compatibility.microphone_label")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 16)
                     Text(model.doubaoAudioStatus.text(using: localization))
-                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(model.hasDoubaoAudioDevice ? .green : .orange)
                         .multilineTextAlignment(.trailing)
                 }
 
                 HStack(spacing: 10) {
                     Button("audio.compatibility.select_microphone") { model.selectDoubaoAudioDevice() }
-                        .compatibilityButtonStyle(.standard)
+                        .compatibilityButtonStyle(.prominent)
                         .disabled(!model.hasDoubaoAudioDevice)
                     Button("audio.compatibility.open_install_guide") {
                         model.openDoubaoDriverInstructions(using: localization)
                     }
-                        .compatibilityButtonStyle(.standard)
+                    .compatibilityButtonStyle(.standard)
                 }
 
-                Text("audio.compatibility.help")
+                Text("audio.compatibility.help_plain")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -585,88 +664,87 @@ struct SettingsView: View {
     private var mappingPage: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
-            PageHeader(
-                title: localization.text("button_mapping.page.title")
-            )
-
-            GlassPanel {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Toggle("button_mapping.toggle.enabled", isOn: Binding(
-                            get: { settings.customMappingEnabled },
-                            set: { enabled in
-                                settings.customMappingEnabled = enabled
-                                model.applyHIDSettings()
-                            }
-                        ))
-                        Text(model.hidStatus.text(using: localization))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                    }
-                    Spacer(minLength: 12)
+                HStack(alignment: .center, spacing: 14) {
+                    PageHeader(title: localization.text("button_mapping.page.title"))
+                    Spacer()
+                    Toggle("button_mapping.toggle.enabled", isOn: Binding(
+                        get: { settings.customMappingEnabled },
+                        set: { enabled in
+                            settings.customMappingEnabled = enabled
+                            model.applyHIDSettings()
+                        }
+                    ))
                     StatusPill(
                         text: localization.text(settings.customMappingEnabled ? "common.status.enabled" : "common.status.disabled"),
                         tint: settings.customMappingEnabled ? .green : .secondary
                     )
-                    Button("common.action.restore_defaults") {
-                        settings.resetBindings()
-                        selectedRemoteButton = .ok
-                    }
-                    .compatibilityButtonStyle(.standard)
                 }
-            }
 
-            CompatibilityGlassContainer(spacing: 14) {
-                HStack(alignment: .top, spacing: 14) {
-                    GlassPanel {
-                        RemoteControlDiagram(
-                            selectedButton: $selectedRemoteButton,
-                            activeButtons: model.activeRemoteButtons,
-                            voiceActive: model.isStreaming
-                        )
-                        .onReceive(model.$activeRemoteButtons) { buttons in
-                            if let button = RemoteButton.allCases.first(where: { buttons.contains($0) }) {
-                                selectedRemoteButton = button
+                Text(model.hidStatus.text(using: localization))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                CompatibilityGlassContainer(spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
+                        GlassPanel {
+                            VStack(spacing: 10) {
+                                RemoteControlDiagram(
+                                    selectedButton: $selectedRemoteButton,
+                                    activeButtons: model.activeRemoteButtons,
+                                    voiceActive: model.isStreaming
+                                )
+
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
+                                        get: { settings.voiceFnTapModeEnabled },
+                                        set: { model.setVoiceFnTapModeEnabled($0) }
+                                    ))
+                                    .font(.caption)
+                                    Text("connection.voice_fn_tap.hint_short")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .onReceive(model.$activeRemoteButtons) { buttons in
+                                selectedRemoteButton = MappingSelectionPolicy.selection(
+                                    current: selectedRemoteButton,
+                                    activeButtons: buttons,
+                                    isLocked: isMappingSelectionLocked
+                                )
                             }
                         }
-                    }
-                    .frame(width: 206)
+                        .frame(width: 145)
 
-                    GlassPanel {
-                        VStack(alignment: .leading, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("button_mapping.actions.title")
+                        GlassPanel {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("button_mapping.all_buttons.title")
                                     .font(.headline)
-                                Text("button_mapping.actions.help")
+                                Text("button_mapping.all_buttons.help")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                            }
 
-                            let buttons = RemoteButton.allCases
-                            let midpoint = (buttons.count + 1) / 2
-
-                            HStack(alignment: .top, spacing: 8) {
-                                ForEach(0..<2, id: \.self) { column in
-                                    VStack(spacing: 4) {
-                                        let range = column == 0
-                                            ? buttons.prefix(midpoint)
-                                            : buttons.suffix(from: midpoint)
-                                        ForEach(range) { button in
-                                            mappingRow(button)
-                                        }
+                                HStack(spacing: 4) {
+                                    ForEach(ButtonTrigger.allCases) { trigger in
+                                        Text(trigger.displayName(using: localization))
+                                            .font(.system(size: 9, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity)
                                     }
-                                    .frame(maxWidth: .infinity)
+                                }
+
+                                ForEach(RemoteButton.allCases) { button in
+                                    mappingSummaryRow(button)
                                 }
                             }
-
-                            Divider()
-                            secondaryActionsPanel(for: selectedRemoteButton)
                         }
+                        .frame(width: 235)
+
+                        mappingInspector
+                            .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
                 }
-            }
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -674,41 +752,107 @@ struct SettingsView: View {
         .compatibilityScrollEdgeEffect()
     }
 
-    @ViewBuilder
-    private func mappingRow(_ button: RemoteButton) -> some View {
+    private func mappingSummaryRow(_ button: RemoteButton) -> some View {
         let selected = selectedRemoteButton == button
-        let currentAction = settings.action(for: button)
-        let currentShortcut = settings.shortcut(for: button)
-        let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
-        let content = VStack(spacing: 4) {
-            HStack(spacing: 8) {
-                Button {
-                    selectedRemoteButton = button
-                } label: {
+        return Button {
+            selectedRemoteButton = button
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 7) {
+                    Image(systemName: buttonSymbol(button))
+                        .frame(width: 16)
                     Text(button.displayName(using: localization))
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 4)
                 }
-                .buttonStyle(.plain)
-                .help(button.displayName(using: localization))
 
-                Picker("", selection: Binding(
-                    get: { currentAction },
+                HStack(spacing: 4) {
+                    ForEach(ButtonTrigger.allCases) { trigger in
+                        Text(mappingActionSummary(for: button, trigger: trigger))
+                            .font(.system(size: 9, weight: trigger == .singleClick ? .semibold : .regular))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selected ? Color.accentColor : Color.primary)
+        .background(
+            selected ? Color.accentColor.opacity(0.10) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var mappingInspector: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(selectedRemoteButton.displayName(using: localization))
+                    .font(.title3.weight(.semibold))
+                Text("button_mapping.inspector.help")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
+                    .font(.caption)
+                    .toggleStyle(.switch)
+                    .help(localization.text("button_mapping.selection_lock_help"))
+
+                ForEach(ButtonTrigger.allCases) { trigger in
+                    mappingTriggerEditor(selectedRemoteButton, trigger: trigger)
+                }
+
+                Button("common.action.restore_defaults") {
+                    settings.resetBindings()
+                    selectedRemoteButton = .ok
+                }
+                .compatibilityButtonStyle(.standard)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+    }
+
+    private func mappingTriggerEditor(
+        _ button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> some View {
+        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(trigger.displayName(using: localization))
+                    .font(.headline)
+                Spacer()
+                if trigger != .singleClick && configured.action == .disabled {
+                    Text("button_mapping.action.not_set")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Picker("", selection: Binding(
+                    get: { configured.action },
                     set: { action in
-                        settings.setAction(action, for: button)
-                        selectedRemoteButton = button
+                        settings.setAction(action, for: button, trigger: trigger)
                         if action == .customShortcut {
                             shortcutEditingTarget = ShortcutEditingTarget(
                                 button: button,
-                                trigger: .singleClick
+                                trigger: trigger
                             )
                         }
                     }
                 )) {
                     ForEach(ButtonAction.pickerActions(
                         installedBundleIdentifiers: installedBundleIdentifiers,
-                        current: currentAction,
+                        current: configured.action,
                         experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
                     )) { action in
                         let unavailableApplication = action.presetApplication.map {
@@ -728,138 +872,12 @@ struct SettingsView: View {
                     }
                 }
                 .labelsHidden()
-                .frame(width: 112)
-                .disabled(button == .power && settings.experimentalContinuousRecordingEnabled)
-            }
-
-            if button == .power && settings.experimentalContinuousRecordingEnabled {
-                Text("button_mapping.continuous_recording_experiment.power_managed")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-
-            if currentAction == .customShortcut {
-                Button {
-                    selectedRemoteButton = button
-                    shortcutEditingTarget = ShortcutEditingTarget(
-                        button: button,
-                        trigger: .singleClick
-                    )
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "keyboard")
-                        Text(
-                            currentShortcut?.displayName(using: localization) ??
-                                localization.text("shortcut.action.record")
-                        )
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        Image(systemName: "pencil")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(currentShortcut == nil ? Color.orange : Color.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .frame(maxWidth: .infinity)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
-                }
-                .buttonStyle(.plain)
-                .help(localization.text("shortcut.record.help"))
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-
-        if selected {
-            content.compatibilityTintedGlass(
-                tint: Color.accentColor.opacity(0.10),
-                in: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                interactive: true
-            )
-        } else {
-            VStack(spacing: 0) {
-                content
-                Divider()
-                    .padding(.leading, 8)
-            }
-        }
-    }
-
-    private func secondaryActionsPanel(for button: RemoteButton) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text(
-                    String(
-                        format: localization.text("trigger.other_actions"),
-                        locale: localization.locale,
-                        arguments: [button.displayName(using: localization)]
-                    )
+                .frame(maxWidth: .infinity)
+                .disabled(
+                    button == .power &&
+                        trigger == .singleClick &&
+                        settings.experimentalContinuousRecordingEnabled
                 )
-                    .font(.caption.weight(.semibold))
-                Spacer()
-                if settings.hasSecondaryAction(for: button) {
-                    Text("trigger.hold_repeat_disabled")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.orange)
-                }
-            }
-
-            secondaryActionRow(button, trigger: .doubleClick)
-            secondaryActionRow(button, trigger: .longPress)
-
-            Text("trigger.timing.help")
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func secondaryActionRow(
-        _ button: RemoteButton,
-        trigger: ButtonTrigger
-    ) -> some View {
-        let configured = settings.configuredAction(for: button, trigger: trigger)
-        let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
-        return HStack(spacing: 8) {
-            Text(trigger.displayName(using: localization))
-                .font(.caption)
-                .frame(width: 38, alignment: .leading)
-
-            Picker("", selection: Binding(
-                get: { configured.action },
-                set: { action in
-                    settings.setAction(action, for: button, trigger: trigger)
-                    if action == .customShortcut {
-                        shortcutEditingTarget = ShortcutEditingTarget(
-                            button: button,
-                            trigger: trigger
-                        )
-                    }
-                }
-            )) {
-                ForEach(ButtonAction.pickerActions(
-                    installedBundleIdentifiers: installedBundleIdentifiers,
-                    current: configured.action,
-                    experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
-                )) { action in
-                    let unavailableApplication = action.presetApplication.map {
-                        !installedBundleIdentifiers.contains($0.bundleIdentifier)
-                    } ?? false
-                    let unavailableExperiment = action == .toggleLongRecording &&
-                        !settings.experimentalContinuousRecordingEnabled
-                    Text(
-                        action.displayName(using: localization) +
-                            (unavailableApplication
-                                ? localization.text("common.suffix.not_installed")
-                                : unavailableExperiment
-                                    ? localization.text("common.suffix.experimental_disabled")
-                                    : "")
-                    )
-                    .tag(action)
-                }
-            }
-            .labelsHidden()
-            .frame(width: 150)
 
             if configured.action == .customShortcut {
                 Button {
@@ -880,12 +898,70 @@ struct SettingsView: View {
                     .foregroundStyle(configured.shortcut == nil ? Color.orange : Color.primary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
+                    .frame(maxWidth: .infinity)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
             }
 
-            Spacer(minLength: 0)
+            if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
+                Text("button_mapping.continuous_recording_experiment.power_managed")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            } else if trigger == .doubleClick && configured.action != .disabled {
+                Text("button_mapping.double_click.effect")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            } else if trigger == .longPress && configured.action != .disabled {
+                Text("button_mapping.long_press.effect")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            } else if trigger == .singleClick {
+                Text("button_mapping.single_click.help")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
+        let configured = settings.configuredAction(for: button, trigger: trigger)
+        guard configured.action != .disabled else {
+            return localization.text("button_mapping.action.not_set")
+        }
+        if configured.action == .customShortcut, let shortcut = configured.shortcut {
+            return shortcut.displayName(using: localization)
+        }
+        switch configured.action {
+        case .arrowUp: return "↑"
+        case .arrowDown: return "↓"
+        case .arrowLeft: return "←"
+        case .arrowRight: return "→"
+        case .deleteBackward: return "⌫"
+        case .volumeUp: return "+"
+        case .volumeDown: return "−"
+        case .volumeMute: return "Mute"
+        default: break
+        }
+        return configured.action.displayName(using: localization)
+    }
+
+    private func buttonSymbol(_ button: RemoteButton) -> String {
+        switch button {
+        case .power: return "power"
+        case .up: return "chevron.up"
+        case .left: return "chevron.left"
+        case .ok: return "circle.circle"
+        case .right: return "chevron.right"
+        case .down: return "chevron.down"
+        case .back: return "arrow.uturn.backward"
+        case .volumeUp: return "speaker.plus"
+        case .home: return "house"
+        case .volumeDown: return "speaker.minus"
+        case .menu: return "line.3.horizontal"
+        case .tv: return "tv"
         }
     }
 
