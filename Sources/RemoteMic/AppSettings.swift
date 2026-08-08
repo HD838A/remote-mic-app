@@ -591,18 +591,45 @@ final class AppSettings: ObservableObject {
             return existing.id
         }
         if let index = remoteDeviceProfiles.firstIndex(where: {
-            $0.bluetoothIdentifier == nil && $0.hidFingerprint == nil && $0.model == .unknown
+            $0.bluetoothIdentifier == nil && $0.model == .unknown
         }) {
             remoteDeviceProfiles[index].bluetoothIdentifier = identifier
             return remoteDeviceProfiles[index].id
         }
         let profile = RemoteDeviceProfile(
             bluetoothIdentifier: identifier,
-            mappings: RemoteDeviceMappings(
+            mappings: mappingsForNewRemote()
+        )
+        remoteDeviceProfiles.append(profile)
+        return profile.id
+    }
+
+    @discardableResult
+    func registerHIDRemote(fingerprint: String) -> UUID {
+        if let existing = remoteDeviceProfiles.first(where: { $0.hidFingerprint == fingerprint }) {
+            return existing.id
+        }
+        let selectedUnboundIndex = remoteDeviceProfiles.firstIndex(where: {
+            $0.id == selectedRemoteProfileID && $0.hidFingerprint == nil
+        })
+        if let index = selectedUnboundIndex ?? remoteDeviceProfiles.firstIndex(where: { $0.hidFingerprint == nil }) {
+            let defaultMappings = RemoteDeviceMappings(
                 buttonBindings: Self.defaultBindings,
                 buttonShortcuts: [:],
                 secondaryButtonBindings: [:]
             )
+            if remoteDeviceProfiles[index].mappings == defaultMappings,
+               let configured = remoteDeviceProfiles.first(where: {
+                   $0.id != remoteDeviceProfiles[index].id && $0.mappings != defaultMappings
+               }) {
+                remoteDeviceProfiles[index].mappings = configured.mappings
+            }
+            remoteDeviceProfiles[index].hidFingerprint = fingerprint
+            return remoteDeviceProfiles[index].id
+        }
+        let profile = RemoteDeviceProfile(
+            hidFingerprint: fingerprint,
+            mappings: mappingsForNewRemote()
         )
         remoteDeviceProfiles.append(profile)
         return profile.id
@@ -622,6 +649,14 @@ final class AppSettings: ObservableObject {
             remoteDeviceProfiles[candidate].hidFingerprint = nil
         }
         remoteDeviceProfiles[index].hidFingerprint = fingerprint
+    }
+
+    private func mappingsForNewRemote() -> RemoteDeviceMappings {
+        selectedRemoteProfile?.mappings ?? RemoteDeviceMappings(
+            buttonBindings: buttonBindings,
+            buttonShortcuts: buttonShortcuts,
+            secondaryButtonBindings: secondaryButtonBindings
+        )
     }
 
     func updateRemoteProfile(

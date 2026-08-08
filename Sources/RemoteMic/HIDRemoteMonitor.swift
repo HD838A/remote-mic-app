@@ -34,10 +34,11 @@ private func hidInputReport(
     report: UnsafeMutablePointer<UInt8>,
     reportLength: CFIndex
 ) {
-    guard let context, result == kIOReturnSuccess, reportLength > 0 else { return }
+    guard let context, let sender, result == kIOReturnSuccess, reportLength > 0 else { return }
     let monitor = Unmanaged<HIDRemoteMonitor>.fromOpaque(context).takeUnretainedValue()
+    let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
     let data = Data(bytes: report, count: reportLength)
-    monitor.handleReport(reportID: reportID, data: data)
+    monitor.handleReport(from: device, reportID: reportID, data: data)
 }
 
 final class HIDRemoteMonitor {
@@ -53,6 +54,8 @@ final class HIDRemoteMonitor {
     private var activeDeviceIsSeized = false
     private var activeUsages = Set<UInt16>()
     private var repeatTimers: [UInt16: DispatchSourceTimer] = [:]
+    private var nonRepeatablePressedButtons = Set<RemoteButton>()
+    private var nonRepeatableReleaseTimers: [RemoteButton: DispatchSourceTimer] = [:]
     private var gestureRecognizer = RemoteButtonGestureRecognizer()
     private var doubleClickTimers: [RemoteButton: DispatchSourceTimer] = [:]
     private var longPressTimers: [RemoteButton: DispatchSourceTimer] = [:]
@@ -166,6 +169,9 @@ final class HIDRemoteMonitor {
         permissionMonitor = nil
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
+        nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
+        nonRepeatableReleaseTimers.removeAll()
+        nonRepeatablePressedButtons.removeAll()
         resetGestureRecognition()
         activeUsages.removeAll()
         onActiveButtons?(profileID, [])
@@ -246,8 +252,12 @@ final class HIDRemoteMonitor {
         AppLogger.shared.write("HID DISCONNECTED")
     }
 
-    fileprivate func handleReport(reportID: UInt32, data: Data) {
+    fileprivate func handleReport(from device: IOHIDDevice, reportID: UInt32, data: Data) {
         guard manager != nil, settings.customMappingEnabled else { return }
+        guard Self.acceptsReport(
+            reportingFingerprint: Self.fingerprint(for: device),
+            activeFingerprint: deviceFingerprint
+        ) else { return }
         guard runtimePermissionsAreValid() else {
             releaseForRevokedPermissions()
             return
@@ -293,11 +303,13 @@ final class HIDRemoteMonitor {
                 )
                 guard processGestureCommands(commands) else { return }
             } else {
+                let action = settings.action(for: button, profileID: profileID)
+                guard shouldAcceptRawPress(button: button, action: action) else { continue }
                 guard performConfiguredAction(for: button, trigger: .singleClick) else { return }
                 startRepeatIfNeeded(
                     usage: usage,
                     button: button,
-                    action: settings.action(for: button, profileID: profileID)
+                    action: action
                 )
             }
         }
@@ -308,9 +320,41 @@ final class HIDRemoteMonitor {
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
             if let button = RemoteButton.usageMap[usage] {
+                scheduleNonRepeatableRelease(for: button)
                 guard processGestureCommands(gestureRecognizer.release(button)) else { return }
             }
         }
+    }
+
+    static func acceptsReport(reportingFingerprint: String?, activeFingerprint: String?) -> Bool {
+        guard let reportingFingerprint, let activeFingerprint else { return false }
+        return reportingFingerprint == activeFingerprint
+    }
+
+    func shouldAcceptRawPress(
+        button: RemoteButton,
+        action: ButtonAction
+    ) -> Bool {
+        guard !action.allowsRepeat else { return true }
+        nonRepeatableReleaseTimers.removeValue(forKey: button)?.cancel()
+        return nonRepeatablePressedButtons.insert(button).inserted
+    }
+
+    private func scheduleNonRepeatableRelease(for button: RemoteButton) {
+        guard nonRepeatablePressedButtons.contains(button) else { return }
+        nonRepeatableReleaseTimers.removeValue(forKey: button)?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + .milliseconds(600))
+        timer.setEventHandler { [weak self] in
+            self?.finishNonRepeatablePress(button)
+        }
+        nonRepeatableReleaseTimers[button] = timer
+        timer.resume()
+    }
+
+    func finishNonRepeatablePress(_ button: RemoteButton) {
+        nonRepeatableReleaseTimers.removeValue(forKey: button)?.cancel()
+        nonRepeatablePressedButtons.remove(button)
     }
 
     private func startRepeatIfNeeded(

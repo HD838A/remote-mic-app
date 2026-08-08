@@ -90,6 +90,7 @@ struct SettingsView: View {
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var isMappingSelectionLocked = true
     @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
+    @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var shortcutEditingTarget: ShortcutEditingTarget?
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -103,8 +104,6 @@ struct SettingsView: View {
     @State private var isWebRemoteInviteAuthorized = false
     @State private var isTestFlightLinkCopied = false
     @State private var webRemoteInviteCode = ""
-    @Namespace private var navigationGlassNamespace
-
     private static let requiredWebRemoteInviteCode = "8586"
 
     init(
@@ -119,17 +118,15 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        HStack(spacing: 0) {
             sidebar
-                .toolbar(removing: .sidebarToggle)
-                .navigationSplitViewColumnWidth(min: 96, ideal: 108, max: 120)
-        } detail: {
+                .frame(width: 108)
+            Divider()
             selectedPage
         }
-        .navigationSplitViewStyle(.balanced)
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
-        .frame(minWidth: 960, minHeight: 680)
+        .frame(minWidth: 980, minHeight: 732)
         .onAppear(perform: refreshPermissionStates)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
@@ -149,6 +146,15 @@ struct SettingsView: View {
                     trigger: target.trigger
                 )
             }
+        }
+        .popover(item: $mappingEditingTarget) { target in
+            VStack(alignment: .leading, spacing: 12) {
+                Text(target.button.displayName(using: localization))
+                    .font(.title3.weight(.semibold))
+                mappingTriggerEditor(target.button, trigger: target.trigger)
+            }
+            .padding(16)
+            .frame(width: 320)
         }
         .sheet(isPresented: $isReleaseHistoryPresented) {
             ReleaseHistorySheet()
@@ -279,15 +285,16 @@ struct SettingsView: View {
     }
 
     private var sidebar: some View {
-        CompatibilityGlassContainer(spacing: 10) {
-            VStack(spacing: 10) {
-                ForEach(SettingsSection.allCases) { section in
-                    sidebarButton(section)
-                }
-                Spacer(minLength: 0)
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(height: 56)
+                .accessibilityHidden(true)
+            ForEach(SettingsSection.allCases) { section in
+                sidebarButton(section)
             }
-            .padding(10)
+            Spacer(minLength: 0)
         }
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     private func sidebarButton(_ section: SettingsSection) -> some View {
@@ -305,12 +312,9 @@ struct SettingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .modifier(
-            SidebarGlassModifier(
-                isSelected: selectedSection == section,
-                namespace: navigationGlassNamespace
-            )
-        )
+        .focusEffectDisabled()
+        .foregroundStyle(selectedSection == section ? Color.accentColor : Color.secondary)
+        .background(selectedSection == section ? Color.accentColor.opacity(0.10) : Color.clear)
         .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
     }
 
@@ -533,8 +537,6 @@ struct SettingsView: View {
                     )
                 }
 
-                remoteDeviceBindingPanel
-
                 Button {
                     model.reconnect()
                 } label: {
@@ -686,7 +688,7 @@ struct SettingsView: View {
                 PageHeader(title: localization.text("button_mapping.page.title"))
                 Spacer()
                 remoteDeviceSelector()
-                    .frame(width: 364)
+                    .frame(width: 400)
                 Toggle("button_mapping.toggle.enabled", isOn: Binding(
                     get: { settings.customMappingEnabled },
                     set: { enabled in
@@ -700,75 +702,68 @@ struct SettingsView: View {
                 )
             }
         } content: {
-            CompatibilityGlassContainer(spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    GlassPanel {
-                        VStack(spacing: 10) {
-                            RemoteControlDiagram(
-                                selectedButton: $selectedRemoteButton,
-                                activeButtons: model.activeRemoteButtons,
-                                voiceActive: model.isStreaming
-                            )
-
-                            Label(
-                                model.hidStatus.text(using: localization),
-                                systemImage: "keyboard"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                            VStack(alignment: .leading, spacing: 5) {
-                                Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
-                                    get: { settings.voiceFnTapModeEnabled },
-                                    set: { model.setVoiceFnTapModeEnabled($0) }
-                                ))
-                                .font(.caption)
-                                Text("connection.voice_fn_tap.hint_short")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .onReceive(model.$activeRemoteButtons) { buttons in
-                            selectedRemoteButton = MappingSelectionPolicy.selection(
-                                current: selectedRemoteButton,
-                                activeButtons: buttons,
-                                isLocked: isMappingSelectionLocked
-                            )
-                        }
+            VStack(spacing: 12) {
+                RemoteMappingCanvas(
+                    selectedButton: $selectedRemoteButton,
+                    activeButtons: model.activeRemoteButtons,
+                    voiceActive: model.isStreaming,
+                    actionSummary: mappingActionSummary,
+                    onEdit: { button, trigger in
+                        selectedRemoteButton = button
+                        mappingEditingTarget = ShortcutEditingTarget(
+                            button: button,
+                            trigger: trigger
+                        )
                     }
-                    .frame(width: 155)
-
-                    GlassPanel {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("button_mapping.all_buttons.title")
-                                .font(.headline)
-                            Text("button_mapping.all_buttons.help")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            HStack(spacing: 4) {
-                                ForEach(ButtonTrigger.allCases) { trigger in
-                                    Text(trigger.displayName(using: localization))
-                                        .font(.system(size: 9, weight: .semibold))
-                                        .foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity)
-                                }
-                            }
-
-                            ForEach(RemoteButton.allCases) { button in
-                                mappingSummaryRow(button)
-                            }
-                        }
-                    }
-                    .frame(width: 245)
-
-                    mappingInspector
-                        .frame(maxWidth: .infinity)
+                )
+                .onReceive(model.$activeRemoteButtons) { buttons in
+                    selectedRemoteButton = MappingSelectionPolicy.selection(
+                        current: selectedRemoteButton,
+                        activeButtons: buttons,
+                        isLocked: isMappingSelectionLocked
+                    )
                 }
+
+                mappingFooter
+            }
+        }
+    }
+
+    private var mappingFooter: some View {
+        GlassPanel {
+            HStack(spacing: 16) {
+                Label(
+                    model.hidStatus.text(using: localization),
+                    systemImage: "keyboard"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+                Divider().frame(height: 28)
+
+                Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
+                    .font(.caption)
+                    .toggleStyle(.switch)
+                    .help(localization.text("button_mapping.selection_lock_help"))
+
+                Divider().frame(height: 28)
+
+                Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
+                    get: { settings.voiceFnTapModeEnabled },
+                    set: { model.setVoiceFnTapModeEnabled($0) }
+                ))
+                .font(.caption)
+                .toggleStyle(.switch)
+                .help(localization.text("connection.voice_fn_tap.hint"))
+
+                Spacer(minLength: 0)
+
+                Button("common.action.restore_defaults") {
+                    settings.resetBindings()
+                    selectedRemoteButton = .ok
+                }
+                .compatibilityButtonStyle(.standard)
             }
         }
     }
@@ -782,11 +777,9 @@ struct SettingsView: View {
                 }
             }
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(settings.remoteDeviceProfiles) { profile in
-                        remoteDeviceCard(profile)
-                    }
+            HStack(spacing: 8) {
+                ForEach(settings.remoteDeviceProfiles) { profile in
+                    remoteDeviceCard(profile)
                 }
             }
         }
@@ -803,7 +796,7 @@ struct SettingsView: View {
         return Button {
             model.selectRemoteProfile(profile.id)
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(remoteDisplayName(profile))
                         .font(.caption.weight(.semibold))
@@ -815,7 +808,7 @@ struct SettingsView: View {
                             .help(localization.text("remote.device.current"))
                     }
                 }
-                HStack(spacing: 8) {
+                HStack(spacing: 7) {
                     Label(
                         localization.text(connected ? "common.status.connected" : "remote.device.disconnected"),
                         systemImage: "circle.fill"
@@ -831,32 +824,17 @@ struct SettingsView: View {
                             ? localization.text("remote.device.battery_unavailable")
                             : ""
                     )
-                }
-                .font(.caption2)
-
-                HStack(spacing: 8) {
-                    Label(power.text, systemImage: power.symbol)
-                        .foregroundStyle(power.tint)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Label(
-                        localization.text(
-                            profile.hidFingerprint == nil
-                                ? "remote.device.unbound"
-                                : "remote.device.bound_short"
-                        ),
-                        systemImage: profile.hidFingerprint == nil
-                            ? "keyboard"
-                            : "keyboard.badge.checkmark"
-                    )
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    if power.showsBesideBatteryLevel {
+                        Label(power.text, systemImage: power.symbol)
+                            .foregroundStyle(power.tint)
+                            .lineLimit(1)
+                    }
                 }
                 .font(.caption2)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .frame(width: fillsWidth ? nil : 174, alignment: .leading)
+            .frame(width: fillsWidth ? nil : 196, alignment: .leading)
             .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
             .background(
                 selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
@@ -891,49 +869,24 @@ struct SettingsView: View {
 
     private func remotePowerPresentation(
         for profile: RemoteDeviceProfile
-    ) -> (text: String, symbol: String, tint: Color) {
+    ) -> (text: String, symbol: String, tint: Color, showsBesideBatteryLevel: Bool) {
         switch model.powerState(for: profile.id) {
         case .charging:
-            return (localization.text("remote.device.power.charging"), "bolt.fill", .green)
+            return (localization.text("remote.device.power.charging"), "bolt.fill", .green, true)
         case .externalPower:
-            return (localization.text("remote.device.power.external"), "powerplug.fill", .green)
+            return (localization.text("remote.device.power.external"), "powerplug.fill", .green, true)
         case .onBattery:
-            return (localization.text("remote.device.power.battery"), "battery.75percent", .secondary)
+            return (localization.text("remote.device.power.battery"), "battery.75percent", .secondary, false)
         case .unknown:
-            return (localization.text("remote.device.power.unknown"), "questionmark.circle", .secondary)
+            return (localization.text("remote.device.power.unknown"), "questionmark.circle", .secondary, true)
         case nil:
             switch profile.model {
             case .rc001:
-                return (localization.text("remote.device.power.battery"), "battery.75percent", .secondary)
+                return (localization.text("remote.device.power.battery"), "battery.75percent", .secondary, false)
             case .rc003:
-                return (localization.text("remote.device.power.rechargeable"), "bolt.circle", .secondary)
+                return (localization.text("remote.device.power.rechargeable"), "bolt.circle", .secondary, true)
             case .unknown:
-                return (localization.text("remote.device.power.unknown"), "questionmark.circle", .secondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var remoteDeviceBindingPanel: some View {
-        if let profile = settings.selectedRemoteProfile {
-            VStack(alignment: .leading, spacing: 9) {
-                if profile.hidFingerprint == nil {
-                    Button(
-                        model.pendingHIDBindingProfileID == profile.id
-                            ? "remote.device.binding_waiting"
-                            : "remote.device.bind_button"
-                    ) {
-                        model.beginHIDBinding(for: profile.id)
-                    }
-                    .compatibilityButtonStyle(.standard)
-                } else {
-                    Label("remote.device.bound", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                }
-                Text("remote.device.bind_help")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                return (localization.text("remote.device.power.unknown"), "questionmark.circle", .secondary, true)
             }
         }
     }
@@ -949,74 +902,6 @@ struct SettingsView: View {
               let index = peers.firstIndex(where: { $0.id == profile.id })
         else { return base }
         return "\(base) \(index + 1)"
-    }
-
-    private func mappingSummaryRow(_ button: RemoteButton) -> some View {
-        let selected = selectedRemoteButton == button
-        return Button {
-            selectedRemoteButton = button
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 7) {
-                    Image(systemName: buttonSymbol(button))
-                        .frame(width: 16)
-                    Text(button.displayName(using: localization))
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                }
-
-                HStack(spacing: 4) {
-                    ForEach(ButtonTrigger.allCases) { trigger in
-                        Text(mappingActionSummary(for: button, trigger: trigger))
-                            .font(.system(size: 9, weight: trigger == .singleClick ? .semibold : .regular))
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 3)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-                    }
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(selected ? Color.accentColor : Color.primary)
-        .background(
-            selected ? Color.accentColor.opacity(0.10) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    private var mappingInspector: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(selectedRemoteButton.displayName(using: localization))
-                    .font(.title3.weight(.semibold))
-                Text("button_mapping.inspector.help")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
-                    .font(.caption)
-                    .toggleStyle(.switch)
-                    .help(localization.text("button_mapping.selection_lock_help"))
-
-                ForEach(ButtonTrigger.allCases) { trigger in
-                    mappingTriggerEditor(selectedRemoteButton, trigger: trigger)
-                }
-
-                Button("common.action.restore_defaults") {
-                    settings.resetBindings()
-                    selectedRemoteButton = .ok
-                }
-                .compatibilityButtonStyle(.standard)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-        }
     }
 
     private func mappingTriggerEditor(
@@ -1042,6 +927,7 @@ struct SettingsView: View {
                     set: { action in
                         settings.setAction(action, for: button, trigger: trigger)
                         if action == .customShortcut {
+                            mappingEditingTarget = nil
                             shortcutEditingTarget = ShortcutEditingTarget(
                                 button: button,
                                 trigger: trigger
@@ -1080,6 +966,7 @@ struct SettingsView: View {
 
             if configured.action == .customShortcut {
                 Button {
+                    mappingEditingTarget = nil
                     shortcutEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -1145,23 +1032,6 @@ struct SettingsView: View {
         default: break
         }
         return configured.action.displayName(using: localization)
-    }
-
-    private func buttonSymbol(_ button: RemoteButton) -> String {
-        switch button {
-        case .power: return "power"
-        case .up: return "chevron.up"
-        case .left: return "chevron.left"
-        case .ok: return "circle.circle"
-        case .right: return "chevron.right"
-        case .down: return "chevron.down"
-        case .back: return "arrow.uturn.backward"
-        case .volumeUp: return "speaker.plus"
-        case .home: return "house"
-        case .volumeDown: return "speaker.minus"
-        case .menu: return "line.3.horizontal"
-        case .tv: return "tv"
-        }
     }
 
     private var permissionsPage: some View {
@@ -2381,36 +2251,6 @@ private extension View {
     }
 }
 
-private struct SidebarGlassModifier: ViewModifier {
-    let isSelected: Bool
-    let namespace: Namespace.ID
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isSelected {
-            if #available(macOS 26.0, *) {
-                content
-                    .foregroundStyle(Color.accentColor)
-                    .glassEffect(
-                        .clear.tint(Color.accentColor.opacity(0.08)).interactive(),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    )
-                    .glassEffectID("settings-navigation-selection", in: namespace)
-            } else {
-                content
-                    .foregroundStyle(Color.accentColor)
-                    .background(
-                        Color.accentColor.opacity(0.10),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    )
-            }
-        } else {
-            content
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
 private struct PageHeader: View {
     let title: String
 
@@ -2660,94 +2500,5 @@ private struct RC003Photo: View {
                     }
             }
         }
-    }
-}
-
-private struct RemoteControlDiagram: View {
-    @EnvironmentObject private var localization: LocalizationStore
-    @Binding var selectedButton: RemoteButton
-    let activeButtons: Set<RemoteButton>
-    let voiceActive: Bool
-
-    private let canvasSize = CGSize(width: 174, height: 352)
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                RC003Photo()
-                    .frame(width: canvasSize.width, height: canvasSize.height)
-
-                hotspot(.power, x: 0.386, y: 0.099, width: 0.15, height: 0.072)
-                voiceHotspot(x: 0.630, y: 0.099, width: 0.15, height: 0.072)
-
-                hotspot(.up, x: 0.502, y: 0.179, width: 0.18, height: 0.065)
-                hotspot(.left, x: 0.362, y: 0.246, width: 0.15, height: 0.080)
-                hotspot(.ok, x: 0.502, y: 0.246, width: 0.19, height: 0.095)
-                hotspot(.right, x: 0.638, y: 0.246, width: 0.15, height: 0.080)
-                hotspot(.down, x: 0.502, y: 0.317, width: 0.18, height: 0.065)
-
-                hotspot(.back, x: 0.406, y: 0.389, width: 0.17, height: 0.080)
-                hotspot(.volumeUp, x: 0.604, y: 0.390, width: 0.16, height: 0.080)
-                hotspot(.home, x: 0.406, y: 0.479, width: 0.17, height: 0.080)
-                hotspot(.volumeDown, x: 0.604, y: 0.480, width: 0.16, height: 0.080)
-                hotspot(.menu, x: 0.406, y: 0.569, width: 0.17, height: 0.080)
-                hotspot(.tv, x: 0.604, y: 0.569, width: 0.17, height: 0.080)
-            }
-            .frame(width: canvasSize.width, height: canvasSize.height)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            Text("remote.mapping.instructions")
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-
-    private func hotspot(
-        _ button: RemoteButton,
-        x: CGFloat,
-        y: CGFloat,
-        width: CGFloat,
-        height: CGFloat
-    ) -> some View {
-        let active = activeButtons.contains(button)
-        return Button {
-            selectedButton = button
-        } label: {
-            RoundedRectangle(cornerRadius: 999, style: .continuous)
-                .fill(active ? Color.orange.opacity(0.30) : selectedButton == button ? Color.accentColor.opacity(0.24) : Color.clear)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 999, style: .continuous)
-                        .stroke(
-                            active ? Color.orange : selectedButton == button ? Color.accentColor : Color.clear,
-                            lineWidth: 2
-                        )
-                }
-                .contentShape(RoundedRectangle(cornerRadius: 999, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .frame(width: canvasSize.width * width, height: canvasSize.height * height)
-        .position(x: canvasSize.width * x, y: canvasSize.height * y)
-        .help(button.displayName(using: localization))
-        .accessibilityLabel(Text(button.displayName(using: localization)))
-    }
-
-    private func voiceHotspot(
-        x: CGFloat,
-        y: CGFloat,
-        width: CGFloat,
-        height: CGFloat
-    ) -> some View {
-        Circle()
-            .fill(voiceActive ? Color.orange.opacity(0.28) : Color.clear)
-            .overlay {
-                Circle().stroke(voiceActive ? Color.orange : Color.clear, lineWidth: 2)
-            }
-            .contentShape(Circle())
-            .frame(width: canvasSize.width * width, height: canvasSize.height * height)
-            .position(x: canvasSize.width * x, y: canvasSize.height * y)
-            .help(localization.text("remote.voice_button.help"))
-            .accessibilityElement()
-            .accessibilityLabel(Text(localization.text("remote.voice_button.accessibility_label")))
     }
 }

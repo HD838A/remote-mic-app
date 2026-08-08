@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import RemoteMic
 
@@ -22,15 +23,65 @@ struct SettingsPageRegressionTests {
         ) == .home)
     }
 
+    @Test func remoteMappingLayoutCoversEveryRealButtonWithExactConnectorAnchors() {
+        let placements = RemoteMappingLayout.buttonPlacements
+        #expect(placements.count == RemoteButton.allCases.count)
+        #expect(Set(placements.map(\.button)) == Set(RemoteButton.allCases))
+
+        let expectedAnchors: [RemoteButton: UnitPoint] = [
+            .power: UnitPoint(x: 0.386, y: 0.099),
+            .up: UnitPoint(x: 0.502, y: 0.179),
+            .left: UnitPoint(x: 0.362, y: 0.246),
+            .ok: UnitPoint(x: 0.502, y: 0.246),
+            .right: UnitPoint(x: 0.638, y: 0.246),
+            .down: UnitPoint(x: 0.502, y: 0.317),
+            .back: UnitPoint(x: 0.406, y: 0.389),
+            .volumeUp: UnitPoint(x: 0.604, y: 0.390),
+            .home: UnitPoint(x: 0.406, y: 0.479),
+            .volumeDown: UnitPoint(x: 0.604, y: 0.480),
+            .menu: UnitPoint(x: 0.406, y: 0.569),
+            .tv: UnitPoint(x: 0.604, y: 0.569),
+        ]
+        for placement in placements {
+            let expected = expectedAnchors[placement.button]
+            #expect(placement.anchor.x == expected?.x)
+            #expect(placement.anchor.y == expected?.y)
+            #expect((0...1).contains(placement.targetY))
+        }
+
+        let canvasWidth: CGFloat = 866
+        let cardWidth: CGFloat = 250
+        let leftEnd = RemoteMappingLayout.cardEdgePoint(
+            side: .left,
+            targetY: 0.5,
+            canvasWidth: canvasWidth,
+            cardWidth: cardWidth
+        )
+        let rightEnd = RemoteMappingLayout.cardEdgePoint(
+            side: .right,
+            targetY: 0.5,
+            canvasWidth: canvasWidth,
+            cardWidth: cardWidth
+        )
+        #expect(leftEnd == CGPoint(x: cardWidth, y: RemoteMappingLayout.canvasHeight / 2))
+        #expect(rightEnd == CGPoint(x: canvasWidth - cardWidth, y: RemoteMappingLayout.canvasHeight / 2))
+        #expect(RemoteMappingLayout.voiceAnchor == UnitPoint(x: 0.630, y: 0.099))
+    }
+
     @Test func redesignedPagesKeepEveryExistingUserAction() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let source = try String(
+        let settingsSource = try String(
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
             encoding: .utf8
         )
+        let mappingCanvasSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMappingCanvas.swift"),
+            encoding: .utf8
+        )
+        let source = settingsSource + mappingCanvasSource
 
         for requiredAction in [
             "model.reconnect()",
@@ -54,6 +105,11 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("AppLinks.testFlightPublicBeta"))
         #expect(source.contains("ButtonTrigger.allCases"))
         #expect(source.contains("isMappingSelectionLocked"))
+        #expect(!source.contains("ScrollView(.horizontal, showsIndicators: false)"))
+        #expect(!source.contains("remoteDeviceBindingPanel"))
+        #expect(!source.contains("SidebarGlassModifier"))
+        #expect(source.contains(".focusEffectDisabled()"))
+        #expect(source.contains(".frame(height: 56)"))
 
         let voiceFnToggle = "Toggle(\"connection.voice_fn_tap.enabled\""
         #expect(source.components(separatedBy: voiceFnToggle).count == 2)

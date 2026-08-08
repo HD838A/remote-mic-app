@@ -29,7 +29,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isConnected = false
     @Published private(set) var isVoiceTriggerEnabled = false
     @Published private(set) var activeRemoteButtons = Set<RemoteButton>()
-    @Published private(set) var pendingHIDBindingProfileID: UUID?
     @Published private(set) var connectedRemoteProfileIDs = Set<UUID>()
     @Published private(set) var remoteBatteryLevels: [UUID: Int] = [:]
     @Published private(set) var remotePowerStates: [UUID: RemotePowerState] = [:]
@@ -66,6 +65,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var voiceSessionStartedAt: Date?
     private var voiceSessionUsageSource: UsageEventSource?
     private var bluetoothVoiceActive = false
+    private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
     private var activeMobileVoiceSource: MobileVoiceSource?
     private var longRecordingRequested = false
     private var longRecordingGeneration: UInt64 = 0
@@ -665,16 +665,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
     }
 
-    func beginHIDBinding(for profileID: UUID) {
-        pendingHIDBindingProfileID = profileID
-        selectRemoteProfile(profileID)
-        hidStatus = LocalizedMessage("button_mapping.status.press_button_to_bind")
-    }
-
-    func cancelHIDBinding() {
-        pendingHIDBindingProfileID = nil
-    }
-
     private func startHIDMonitors(powerKeySuppressed: Bool) {
         stopHIDMonitors()
         hidPowerKeySuppressed = powerKeySuppressed
@@ -745,32 +735,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             guard let self, let monitor else {
                 return profileID.map { ($0, true) }
             }
-            let resolvedProfileID = profileID
+            let existingProfileID = profileID
                 ?? self.settings.profileID(forHIDFingerprint: fingerprint)
-                ?? self.pendingHIDBindingProfileID
-            guard let resolvedProfileID else {
-                self.hidStatus = LocalizedMessage("button_mapping.status.select_device_to_bind")
-                return nil
-            }
-            let isNewBinding = self.settings.profileID(forHIDFingerprint: fingerprint) == nil
+            let resolvedProfileID = existingProfileID
+                ?? self.settings.registerHIDRemote(fingerprint: fingerprint)
+            let isNewBinding = existingProfileID == nil
             if isNewBinding {
-                self.settings.bindHIDFingerprint(fingerprint, to: resolvedProfileID)
                 monitor.assignProfileID(resolvedProfileID)
                 self.hidMonitors[fingerprint] = monitor
                 if self.discoveryHIDMonitor === monitor {
                     self.discoveryHIDMonitor = nil
                     self.startHIDDiscoveryIfNeeded()
                 }
-                self.pendingHIDBindingProfileID = nil
             }
             self.selectRemoteProfile(resolvedProfileID)
-            if !isNewBinding {
-                self.settings.recordButtonPress(
-                    control: .remoteButton(button),
-                    source: .bluetoothRemote
-                )
-            }
-            return (resolvedProfileID, !isNewBinding)
+            self.settings.recordButtonPress(
+                control: .remoteButton(button),
+                source: .bluetoothRemote
+            )
+            return (resolvedProfileID, true)
         }
         monitor.onInternalAction = { [weak self] profileID, action in
             guard let self else { return }
@@ -1016,7 +999,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func bluetoothBridgeDidStartVoice(_ bridge: XiaomiBluetoothBridge) {
         guard let identifier = bridge.deviceIdentifier else { return }
-        _ = activateRemoteProfile(for: bridge)
+        let profileID = activateRemoteProfile(for: bridge)
         if let activeBluetoothVoiceDeviceIdentifier,
            activeBluetoothVoiceDeviceIdentifier != identifier {
             _ = bridge.requestMicrophoneClose()
@@ -1024,7 +1007,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         activeBluetoothVoiceDeviceIdentifier = identifier
+        loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = true
+        let model = profileID
+            .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
+            ?? .unknown
+        AppLogger.shared.write("ATVV STREAM accepted model=\(model.rawValue)")
         if longRecordingRequested {
             scheduleLongRecordingTimers(generation: longRecordingGeneration)
             AppLogger.shared.write("LONG RECORDING started")
@@ -1036,6 +1024,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
         guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
         activeBluetoothVoiceDeviceIdentifier = nil
+        loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = false
         if longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
@@ -1049,9 +1038,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16]) {
-        guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
-        if !voiceFnTapSession.receive(samples) {
-            audioOutput.enqueue(samples: samples)
+        guard let identifier = bridge.deviceIdentifier,
+              identifier == activeBluetoothVoiceDeviceIdentifier
+        else { return }
+        let handledByFnTapMode = voiceFnTapSession.receive(samples)
+        let enqueued = handledByFnTapMode || audioOutput.enqueue(samples: samples)
+        if loggedBluetoothVoiceAudioDeviceIdentifier != identifier {
+            loggedBluetoothVoiceAudioDeviceIdentifier = identifier
+            let model = settings.profileID(forBluetoothIdentifier: identifier)
+                .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
+                ?? .unknown
+            AppLogger.shared.write(
+                "ATVV AUDIO routed model=\(model.rawValue) route=\(handledByFnTapMode ? "fn_tap" : "virtual_audio") accepted=\(enqueued)"
+            )
         }
     }
 
