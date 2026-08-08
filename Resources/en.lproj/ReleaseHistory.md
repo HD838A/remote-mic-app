@@ -1,5 +1,11 @@
 # Version History
 
+## 1.7.8 (Pre-release)
+
+- Redesigned Connection & Voice around the physical remote, voice output, compatible microphone, and phone connections while retaining reconnect, device selection, TestFlight, Mobile Web, and trusted-device controls.
+- Redesigned Button Mapping to show every button's single-click, double-click, and long-press settings at a glance, with an option to lock the button currently being edited.
+- Moved Simulate Fn Tap on Voice Key below the remote image so the microphone button's fixed behavior and related setting stay together, without changing configuration or runtime behavior.
+
 ## 1.7.7 (Pre-release)
 
 - Fixed `1.7.6` quitting immediately at launch on some macOS 26 Macs with the Xiaomi Bluetooth voice remote connected by retaining the owning system client throughout HID mapping reads and writes.
