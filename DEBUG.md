@@ -576,3 +576,186 @@ RC001-MS 与 RC003-MS 使用相同的 macOS HID 身份和 ATVV v1.0 语音协议
 - RC003 充电状态读取可行：读取 Battery Level Status `2BED`，解析电池存在、外部电源、充电/放电状态、充电等级、充电类型和故障位；RC001 不暴露该特征，只显示电量。
 - 当前 RC003 的 `2BED = 00 61 00` 表示未连接外部电源且未处于主动充电。仍需一次插入/拔出充电线验证“正在充电/已接电源”是否实时准确更新，以及该 Characteristic 是否支持 notify。
 - 生产代码现已把 `180A / 2A24` 与 `180F / 2BED` 作为不影响 ATVV 初始化的可选读取能力；设备卡可显示自动型号、电量与当前电源状态。插拔充电线的实时变化仍属于待完成真机验收，不能仅凭构建或单元测试声明通过。
+
+# Multi-Remote Automatic HID Routing and RC003 Voice Regression
+
+## Observations
+
+- Environment: macOS 26.5.2, two simultaneously connected Xiaomi remotes (RC001 and RC003), current development build based on commit `0da5b7e`.
+- Both remote cards show an unbound state and neither remote's custom shortcuts execute.
+- `BridgeAppModel.startHIDMonitors` starts dedicated monitors only for profiles that already have a `hidFingerprint`, then starts exactly one discovery monitor.
+- One `HIDRemoteMonitor` accepts only one `activeDevice`, so the single discovery monitor cannot listen to a second unbound physical remote.
+- An unbound discovery event resolves only through an existing fingerprint or `pendingHIDBindingProfileID`; without manual binding it returns `nil`, and the first button event is not executed.
+- `AppSettings.registerBluetoothRemote` initializes an additional profile with default mappings instead of copying the currently selected remote's mappings.
+- Runtime logs show RC003 is identified, reaches BLE ready, and produces repeated `STREAM_START -> AUDIO -> STREAM_STOP` sessions. There are no `rejected_busy`, `ignored_not_ready`, or `ignored_cancelled` records around those sessions, so the ATVV transport itself is not yet proven broken.
+
+## Hypotheses
+
+### H1: A single discovery monitor can occupy only the first unbound HID device (ROOT HYPOTHESIS)
+
+- Supports: two profiles have no fingerprint; only one discovery monitor is created; `HIDRemoteMonitor.deviceDidMatch` rejects all later devices after `activeDevice` becomes non-nil.
+- Conflicts: none in the current implementation.
+- Test: statically trace monitor creation and device acceptance; a second unbound device has no possible monitor instance that can accept it.
+
+### H2: Unbound button events are intentionally swallowed while waiting for manual profile selection
+
+- Supports: `onButtonPressed` returns `nil` when no profile, saved fingerprint, or pending binding exists; a newly bound event returns `shouldPerformAction = false`.
+- Conflicts: none; this exactly matches the missing shortcut symptom even for the first discovered device.
+- Test: invoke the resolution policy with an unbound fingerprint and no pending profile; it produces no profile and cannot execute an action.
+
+### H3: New profiles lose the previous remote's shortcuts because they start from defaults
+
+- Supports: `registerBluetoothRemote` constructs new `RemoteDeviceMappings` from `defaultBindings` and empty shortcut dictionaries.
+- Conflicts: migrated first-profile mappings are retained, so this affects additional remotes rather than the initial migration.
+- Test: register a second Bluetooth identifier after configuring the first profile and compare both profiles' mappings.
+
+### H4: RC003 voice transport works, but device/profile activation or downstream audio routing is not visible to the user
+
+- Supports: logs show RC003 identification and valid ATVV stream/audio activity; the UI switches profiles from BLE voice activity independently of HID routing.
+- Conflicts: current logs do not tag stream acceptance and first decoded audio with the remote model, so the user's RC003 press cannot be conclusively paired with downstream enqueue behavior.
+- Test: add one start log tagged only with model/profile class and one first-audio routing log per session, then separately press RC001 and RC003.
+
+## Experiments
+
+- H1 confirmed by static control-flow experiment: with two unbound fingerprints, `startHIDMonitors` creates zero dedicated monitors plus one discovery monitor; after its first `deviceDidMatch`, `activeDevice == nil` is false for the second device. No second callback path can accept it.
+- H2 confirmed by direct branch inspection: with `profileID == nil`, no stored fingerprint, and no pending manual binding, `resolvedProfileID` is nil; the event returns without running its configured action.
+- H3 confirmed by constructor comparison: the second profile receives default bindings and empty shortcut dictionaries, regardless of the selected profile's current mappings.
+- H4 remains under live verification. The production fix will add low-noise per-session device-model routing logs without changing ATVV protocol behavior.
+
+## Root Cause
+
+The multi-remote HID implementation still depended on a single-device manual-binding discovery path, so it could neither assign nor monitor two unbound physical remotes, and newly created Bluetooth profiles did not inherit the user's existing mappings.
+
+## Fix
+
+- Replace the manual binding dependency with deterministic automatic assignment of each newly discovered HID fingerprint to an unbound remote profile.
+- Start another discovery monitor after each automatic assignment so every connected physical HID remote receives its own monitor.
+- Execute the first button event after automatic assignment instead of consuming it.
+- Initialize a newly discovered Bluetooth profile from the currently selected profile's full mappings, then persist independent copies.
+- Remove binding UI/status from user-facing remote cards and compact the selector layout.
+- Add device-model-tagged voice start/first-audio logs to distinguish RC001 and RC003 during real-device verification without changing audio protocol behavior.
+
+## Validation
+
+- 140 Swift tests passed, including additional-profile mapping copy, two automatic HID assignments, independent editing, and first-button execution coverage.
+- 42 low-level self tests passed.
+- Production app build and bundle verification passed; the local development app was launched from `dist/Remote Mic.app`.
+- At the 1000 x 720 minimum window size, Connection, Mapping, Statistics, Permissions, and About were opened successfully. The sidebar is full-bleed, the two mapping-page remote cards fit without horizontal scrolling, and remote cards use two rows.
+- RC003 live voice acceptance and downstream route remain pending one user-triggered voice session; the new log records model and route once per session without recording identifiers or audio content.
+
+# Custom Shortcut Repeat and Sidebar Focus Regression
+
+## Observations
+
+- Both physical remote profiles have distinct persisted HID fingerprints and both map the Up button to the same `Command + Return` custom shortcut.
+- During the reported test, one held Up-button interval produced dozens of `HID BUTTON ... action=customShortcut` records at roughly 100 ms intervals.
+- `ButtonAction.allowsRepeat` currently permits every non-application, non-internal action to repeat, including arbitrary custom keyboard shortcuts.
+- Codex Steer needs one `Command + Return`; repeated injection floods the target. When Remote Mic itself is frontmost, the same unsupported shortcut produces the system error sound repeatedly.
+- The sidebar button keeps the standard macOS keyboard focus ring after clicking, and its first selected background occupies the title/header band.
+
+## Hypotheses
+
+### H1: Custom shortcuts incorrectly inherit directional-key auto-repeat (ROOT HYPOTHESIS)
+
+- Supports: the runtime log shows repeated custom-shortcut execution every ~100 ms, matching `HIDRemoteMonitor.startRepeatIfNeeded`.
+- Conflicts: none.
+- Test: make `.customShortcut.allowsRepeat` false and verify application-independent arrow/volume/delete actions remain repeatable.
+
+### H2: Two HID profiles share one physical fingerprint and alternate the selected card
+
+- Supports: the user sees the selected remote state move while testing both remotes.
+- Conflicts: persisted profiles contain two distinct HID fingerprints; logs do not prove one physical report is routed to two profile IDs.
+- Test: inspect persisted profile fingerprints and add profile-tagged logging only if selection still alternates after removing shortcut repeat.
+
+### H3: The blue sidebar border is the macOS focus effect, not the selected-state styling
+
+- Supports: the source no longer draws a border; the screenshot shows the blue outline only around the currently focused first navigation button.
+- Conflicts: none.
+- Test: disable the visual focus effect while preserving the existing selected background.
+
+## Experiments
+
+- H1 confirmed: the log cadence matches the 100 ms repeat timer and continues for the duration of the held Up button.
+- H2 rejected as the current root cause: RC001 and RC003 have distinct stored HID fingerprints and identical intentional shortcut mappings.
+- H3 confirmed by source/screenshot comparison: no explicit stroke remains in `sidebarButton`; the outline is supplied by the system focus effect.
+
+## Root Cause
+
+Arbitrary custom keyboard shortcuts were treated as repeatable directional actions, causing a held Up button to inject `Command + Return` continuously, while the sidebar retained a system focus ring and placed its first selection inside the title band.
+
+## Fix
+
+- Make custom shortcuts non-repeatable while retaining repeat for real navigation, volume, and delete actions.
+- Disable the sidebar button focus effect and reserve the title/header band above the first navigation item.
+- Match the settings window's default and minimum size to the user-provided 2042 x 1544 Retina screenshot (approximately 1020 x 772 points).
+- Do not implement the mapping-page layout redesign until the user confirms the generated mockup.
+
+# Post-fix Multi-Remote HID Report Routing Regression
+
+## Observations
+
+- The rebuilt development app launched at `16:44` from `dist/Remote Mic.app`; its binary is newer than the modified sources, so the reproduced behavior is not caused by an old process or stale bundle.
+- After launch, one Up-button test at `16:54` still produced about eighteen `up / singleClick / customShortcut` records over roughly three seconds even though `ButtonAction.customShortcut.allowsRepeat` is false.
+- Every `HIDRemoteMonitor` creates an `IOHIDManager` matching both Xiaomi HID devices. The manager input-report callback ignores its `sender` and forwards every matched-device report to that monitor.
+- `hidutil` reports exactly two matching HID devices, one per connected remote. Two dedicated monitors are running, so an unfiltered report can be processed under both remote profiles and repeatedly change the selected profile.
+- The connected remote also continues emitting physical reports while Up is held. Disabling the app-owned repeat timer therefore cannot by itself make a custom shortcut single-fire.
+
+## Hypotheses
+
+### H1: Each monitor processes reports from both physical remotes (ROOT HYPOTHESIS)
+
+- Supports: each manager matches both devices; the report callback discards the sending device; two monitors are active; ordinary button actions also appear in duplicate pairs.
+- Conflicts: none in the current callback implementation.
+- Test: require the report sender fingerprint to equal the monitor's active-device fingerprint, then verify one physical press is routed through only one profile.
+
+### H2: Hardware repeat reports bypass the `allowsRepeat` policy
+
+- Supports: repeated custom-shortcut records continue after the app timer was disabled and span the duration of a held button.
+- Conflicts: this alone does not explain profile switching or duplicate pairs from a short press.
+- Test: apply the non-repeatable policy to rapid raw press cycles and verify a held custom shortcut fires once while arrow and volume actions remain repeatable.
+
+### H3: The user is running a stale app bundle
+
+- Supports: `/Applications/Remote Mic.app` and the development bundle have different versions.
+- Conflicts: the active process path is the development bundle, and its launch and binary timestamps follow the source modification time.
+- Test: compare the active executable path and launch timestamp with the source and bundle timestamps.
+
+## Experiments
+
+- H3 rejected: process inspection resolves the active executable to the newly built `dist/Remote Mic.app` launched at `16:44`.
+- H1 confirmed by control-flow inspection: `IOHIDManagerRegisterInputReportCallback` supplies the reporting device as `sender`, but the callback does not use it; every monitor therefore accepts reports from every matching Xiaomi HID device.
+- H2 confirmed by the post-launch runtime log: `customShortcut.allowsRepeat == false`, yet raw Up events continue for several seconds, proving they do not originate from `startRepeatIfNeeded`.
+- A 5-second physical hold captured the exact lifecycle: initial press, a false release after `2714ms`, another press `449ms` later, and the final real release after the user let go. This rejects a fixed press-to-press cooldown and confirms that non-repeatable actions need release stabilization.
+
+## Root Cause
+
+The per-profile HID managers did not filter input reports by their active physical device, and non-repeatable actions were protected only from the app's synthetic repeat timer rather than rapid hardware report cycles.
+
+## Fix
+
+- Route each report only to the monitor whose active-device fingerprint matches the callback sender.
+- Latch actions whose repeat policy is disabled after their first raw press. A release must remain stable for `600ms` before the latch clears, so the observed `449ms` false-release gap cannot retrigger the shortcut; repeatable navigation, volume, and delete actions remain unchanged.
+
+## Validation
+
+- 144 Swift tests passed, including report-to-device routing, raw custom-shortcut repeat suppression, and centered mapping-layout regressions.
+- 42 low-level self tests passed.
+- The Production app build, ad-hoc signature verification, process replacement, and launch verification passed; the active process is the newly built `dist/Remote Mic.app`.
+- A continuous Up-button hold produced one custom-shortcut execution. The earlier two-execution sample included a confirmed physical release and second press, so it represents two real presses rather than a held-button repeat.
+
+# Centered Remote Mapping Layout
+
+## Fix
+
+- Place the physical remote at the horizontal center and arrange all 12 configurable button cards beside their corresponding hardware controls.
+- Draw each connector from the existing calibrated hardware hotspot to the adjacent card edge, with a visible start dot and endpoint arrow.
+- Show the real single-click, double-click, and long-press configuration inside every card; keep the microphone key as a fixed voice/Fn card.
+- Keep the remote selector, mapping enable control, selection lock, voice Fn-tap mode, and restore-default action visible without requiring page scrolling at the `1020 x 772` minimum window.
+
+## Validation
+
+- The focused mapping regression suite passed all 3 tests, including exact coverage of every real remote button and connector anchor.
+- All 144 Swift tests and all 42 low-level self tests passed.
+- The Production app built, signed, verified, and launched from `dist/Remote Mic.app`.
+- Connection, Mapping, Statistics, Permissions, and About were each opened at the minimum window size without clipped headers or primary controls.
+- The mapping page displayed the centered remote, all 12 configurable cards, the fixed microphone card, both footer switches, and Restore Defaults on one screen; clicking Up / Single Click opened the matching editor.

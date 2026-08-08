@@ -253,6 +253,9 @@
 "button_mapping.inspector.help" = "Set the three ways this button can be triggered.";
 "button_mapping.selection_lock" = "Lock Current Button";
 "button_mapping.selection_lock_help" = "When enabled, pressing the physical remote will not switch the button being edited.";
+"button_mapping.voice_button.title" = "Voice Button";
+"button_mapping.voice_button.fixed" = "Fixed";
+"button_mapping.voice_button.detail" = "Hold to talk. Voice input and Fn behavior are not customizable.";
 "button_mapping.action.not_set" = "Not Set";
 "button_mapping.single_click.help" = "Runs after one press. It waits briefly when a double-click action is set.";
 "button_mapping.double_click.effect" = "Single-click waits briefly to distinguish a double-click, and hold-to-repeat is disabled.";

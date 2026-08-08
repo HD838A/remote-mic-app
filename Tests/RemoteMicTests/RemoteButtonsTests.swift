@@ -79,6 +79,42 @@ struct RemoteButtonsTests {
         #expect(applicationActions.allSatisfy { !$0.allowsRepeat })
     }
 
+    @Test func customShortcutsNeverRepeatWhileNavigationActionsStillCan() {
+        #expect(!ButtonAction.customShortcut.allowsRepeat)
+        #expect(ButtonAction.arrowUp.allowsRepeat)
+        #expect(ButtonAction.volumeDown.allowsRepeat)
+        #expect(ButtonAction.deleteBackward.allowsRepeat)
+    }
+
+    @Test func hidReportsRouteOnlyToTheirActivePhysicalRemote() {
+        #expect(HIDRemoteMonitor.acceptsReport(
+            reportingFingerprint: "remote-a",
+            activeFingerprint: "remote-a"
+        ))
+        #expect(!HIDRemoteMonitor.acceptsReport(
+            reportingFingerprint: "remote-a",
+            activeFingerprint: "remote-b"
+        ))
+        #expect(!HIDRemoteMonitor.acceptsReport(
+            reportingFingerprint: nil,
+            activeFingerprint: "remote-a"
+        ))
+    }
+
+    @Test func rawHardwareRepeatStaysLatchedUntilAStableRelease() throws {
+        let suiteName = "RemoteButtonsTests.rawHardwareRepeat.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let monitor = HIDRemoteMonitor(settings: AppSettings(defaults: defaults))
+
+        #expect(monitor.shouldAcceptRawPress(button: .up, action: .customShortcut))
+        #expect(!monitor.shouldAcceptRawPress(button: .up, action: .customShortcut))
+        monitor.finishNonRepeatablePress(.up)
+        #expect(monitor.shouldAcceptRawPress(button: .up, action: .customShortcut))
+        #expect(monitor.shouldAcceptRawPress(button: .up, action: .arrowUp))
+        #expect(monitor.shouldAcceptRawPress(button: .up, action: .arrowUp))
+    }
+
     @Test func continuousRecordingIsInternalAndNeverRepeats() {
         #expect(ButtonAction.toggleLongRecording.isAppInternal)
         #expect(!ButtonAction.toggleLongRecording.allowsRepeat)
@@ -805,6 +841,83 @@ struct RemoteButtonsTests {
             trigger: .singleClick,
             profileID: secondProfileID
         ).action == .showDesktop)
+    }
+
+    @Test func additionalBluetoothRemoteCopiesCurrentMappingsBeforeIndependentEditing() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let firstProfileID = settings.registerBluetoothRemote(identifier: UUID())
+        settings.selectRemoteProfile(firstProfileID)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 40,
+            modifierFlags: [.command, .shift],
+            keyLabel: "K"
+        )
+        settings.setAction(.customShortcut, for: .menu)
+        settings.setShortcut(shortcut, for: .menu)
+        settings.setAction(.showDesktop, for: .tv, trigger: .doubleClick)
+
+        let secondProfileID = settings.registerBluetoothRemote(identifier: UUID())
+
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: secondProfileID
+        ).shortcut == shortcut)
+        #expect(settings.configuredAction(
+            for: .tv,
+            trigger: .doubleClick,
+            profileID: secondProfileID
+        ).action == .showDesktop)
+
+        settings.selectRemoteProfile(secondProfileID)
+        settings.setAction(.openCodex, for: .menu)
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: firstProfileID
+        ).action == .customShortcut)
+    }
+
+    @Test func HIDRemotesAreAutomaticallyAssignedAndKeepIndependentProfiles() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.setAction(.openCodex, for: .menu)
+
+        let firstProfileID = settings.registerHIDRemote(fingerprint: "hid-one")
+        let secondProfileID = settings.registerHIDRemote(fingerprint: "hid-two")
+
+        #expect(firstProfileID != secondProfileID)
+        #expect(settings.profileID(forHIDFingerprint: "hid-one") == firstProfileID)
+        #expect(settings.profileID(forHIDFingerprint: "hid-two") == secondProfileID)
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: secondProfileID
+        ).action == .openCodex)
+
+        settings.selectRemoteProfile(secondProfileID)
+        settings.setAction(.showDesktop, for: .menu)
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: firstProfileID
+        ).action == .openCodex)
+    }
+
+    @Test func automaticHIDAssignmentDoesNotConsumeTheFirstButtonPress() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("settings.registerHIDRemote(fingerprint: fingerprint)"))
+        #expect(source.contains("return (resolvedProfileID, true)"))
+        #expect(!source.contains("pendingHIDBindingProfileID"))
     }
 
     @Test func unavailableContinuousRecordingExperimentDoesNotReplacePowerShortcut() throws {

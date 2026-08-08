@@ -410,7 +410,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     }
 
     var allowsRepeat: Bool {
-        presetApplication == nil && !isAppInternal
+        self != .customShortcut && presetApplication == nil && !isAppInternal
     }
 
     var isAppInternal: Bool {
