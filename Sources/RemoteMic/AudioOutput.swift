@@ -177,6 +177,7 @@ final class VirtualAudioOutput {
     private var lastRejectedWriteLogDate = Date.distantPast
     private let playbackLock = NSLock()
     private var pendingVoiceBufferCount = 0
+    private var pendingDrainLogContexts: [String] = []
     private var drainCompletion: (() -> Void)?
     private var drainGeneration: UInt64 = 0
     private let sourceFormat = AVAudioFormat(
@@ -189,6 +190,12 @@ final class VirtualAudioOutput {
     private(set) var selectedDevice: AudioDeviceInfo?
     private(set) var status = LocalizedMessage("audio.output.none_selected")
     var onConfigurationChange: (() -> Void)?
+
+    var pendingVoiceBufferCountForDiagnostics: Int {
+        playbackLock.lock()
+        defer { playbackLock.unlock() }
+        return pendingVoiceBufferCount
+    }
 
     @discardableResult
     func configure(deviceUID: String) -> Bool {
@@ -372,12 +379,29 @@ final class VirtualAudioOutput {
         }
     }
 
+    func logWhenPendingVoiceAudioDrains(context: String) {
+        playbackLock.lock()
+        let alreadyDrained = pendingVoiceBufferCount == 0
+        if !alreadyDrained {
+            pendingDrainLogContexts.append(context)
+        }
+        playbackLock.unlock()
+        if alreadyDrained {
+            AppLogger.shared.write("AUDIO PLAYBACK drained \(context) pending_buffers=0")
+        }
+    }
+
     private func flushPlayer() {
         playbackLock.lock()
+        let interruptedContexts = pendingVoiceBufferCount > 0 ? pendingDrainLogContexts : []
         pendingVoiceBufferCount = 0
+        pendingDrainLogContexts.removeAll()
         drainCompletion = nil
         drainGeneration &+= 1
         playbackLock.unlock()
+        for context in interruptedContexts {
+            AppLogger.shared.write("AUDIO PLAYBACK interrupted \(context)")
+        }
         guard let player, engine?.isRunning == true else { return }
         player.stop()
         player.reset()
@@ -391,10 +415,15 @@ final class VirtualAudioOutput {
 
     func stop() {
         playbackLock.lock()
+        let interruptedContexts = pendingVoiceBufferCount > 0 ? pendingDrainLogContexts : []
         pendingVoiceBufferCount = 0
+        pendingDrainLogContexts.removeAll()
         drainCompletion = nil
         drainGeneration &+= 1
         playbackLock.unlock()
+        for context in interruptedContexts {
+            AppLogger.shared.write("AUDIO PLAYBACK interrupted \(context)")
+        }
         removeEngineConfigurationObserver()
         player?.stop()
         engine?.stop()
@@ -405,14 +434,20 @@ final class VirtualAudioOutput {
 
     private func scheduledVoiceBufferDidFinish() {
         var completion: (() -> Void)?
+        var drainedContexts: [String] = []
         playbackLock.lock()
         pendingVoiceBufferCount = max(0, pendingVoiceBufferCount - 1)
         if pendingVoiceBufferCount == 0 {
+            drainedContexts = pendingDrainLogContexts
+            pendingDrainLogContexts.removeAll()
             completion = drainCompletion
             drainCompletion = nil
             drainGeneration &+= 1
         }
         playbackLock.unlock()
+        for context in drainedContexts {
+            AppLogger.shared.write("AUDIO PLAYBACK drained \(context) pending_buffers=0")
+        }
         guard let completion else { return }
         DispatchQueue.main.async { [weak self] in
             self?.flushPlayer()

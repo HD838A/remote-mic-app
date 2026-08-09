@@ -37,6 +37,7 @@ struct TestToneTests {
     @Test func audioOutputFailsClosedWithoutAConfiguredDevice() {
         let output = VirtualAudioOutput()
         #expect(!output.isReadyForTestTone)
+        #expect(output.pendingVoiceBufferCountForDiagnostics == 0)
         #expect(!output.enqueue(samples: [1, 2, 3]))
 
         var completionCalled = false

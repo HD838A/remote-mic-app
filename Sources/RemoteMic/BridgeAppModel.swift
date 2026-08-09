@@ -90,6 +90,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var bluetoothBridgeStates: [ObjectIdentifier: BluetoothBridgeState] = [:]
     private var discoveryBluetoothBridge: XiaomiBluetoothBridge?
     private var activeBluetoothVoiceDeviceIdentifier: UUID?
+    private var bluetoothVoiceTraceCounter: UInt64 = 0
+    private var activeBluetoothVoiceTraceID: UInt64?
+    private var bluetoothVoiceTraceStartedAt: Date?
+    private var bluetoothVoiceTraceModel: XiaomiRemoteModel = .unknown
+    private var bluetoothVoiceDecodedBatchCount = 0
+    private var bluetoothVoiceDecodedSampleCount = 0
+    private var bluetoothVoiceEnqueueFailureCount = 0
+    private var bluetoothVoiceTraceRoute = "none"
     private let hidEventSuppressor = KeyboardEventSuppressor()
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
@@ -1019,7 +1027,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let model = profileID
             .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
             ?? .unknown
-        AppLogger.shared.write("ATVV STREAM accepted model=\(model.rawValue)")
+        bluetoothVoiceTraceCounter &+= 1
+        activeBluetoothVoiceTraceID = bluetoothVoiceTraceCounter
+        bluetoothVoiceTraceStartedAt = Date()
+        bluetoothVoiceTraceModel = model
+        bluetoothVoiceDecodedBatchCount = 0
+        bluetoothVoiceDecodedSampleCount = 0
+        bluetoothVoiceEnqueueFailureCount = 0
+        bluetoothVoiceTraceRoute = "none"
+        AppLogger.shared.write(
+            "ATVV STREAM accepted trace=\(bluetoothVoiceTraceCounter) model=\(model.rawValue)"
+        )
         if longRecordingRequested {
             scheduleLongRecordingTimers(generation: longRecordingGeneration)
             AppLogger.shared.write("LONG RECORDING started")
@@ -1041,9 +1059,28 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
         let handledByFnTapMode = voiceFnTapSession.stopVoice()
-        endVoiceSessionIfNeeded(flushAudio: BluetoothVoiceStopPolicy.shouldFlushAudio(
+        let shouldFlushAudio = BluetoothVoiceStopPolicy.shouldFlushAudio(
             handledByFnTapMode: handledByFnTapMode
-        ))
+        )
+        let traceID = activeBluetoothVoiceTraceID ?? 0
+        let durationMilliseconds = bluetoothVoiceTraceStartedAt.map {
+            max(0, Int(Date().timeIntervalSince($0) * 1_000))
+        } ?? 0
+        let pendingBuffers = audioOutput.pendingVoiceBufferCountForDiagnostics
+        AppLogger.shared.write(
+            "ATVV STREAM summary trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue) " +
+                "duration_ms=\(durationMilliseconds) batches=\(bluetoothVoiceDecodedBatchCount) " +
+                "samples=\(bluetoothVoiceDecodedSampleCount) " +
+                "enqueue_failures=\(bluetoothVoiceEnqueueFailureCount) " +
+                "route=\(bluetoothVoiceTraceRoute) pending_buffers=\(pendingBuffers) " +
+                "flush=\(shouldFlushAudio)"
+        )
+        audioOutput.logWhenPendingVoiceAudioDrains(
+            context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
+        )
+        activeBluetoothVoiceTraceID = nil
+        bluetoothVoiceTraceStartedAt = nil
+        endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
     }
 
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16]) {
@@ -1052,13 +1089,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         else { return }
         let handledByFnTapMode = voiceFnTapSession.receive(samples)
         let enqueued = handledByFnTapMode || audioOutput.enqueue(samples: samples)
+        bluetoothVoiceDecodedBatchCount += 1
+        bluetoothVoiceDecodedSampleCount += samples.count
+        if !enqueued {
+            bluetoothVoiceEnqueueFailureCount += 1
+        }
+        bluetoothVoiceTraceRoute = handledByFnTapMode ? "fn_tap" : "virtual_audio"
         if loggedBluetoothVoiceAudioDeviceIdentifier != identifier {
             loggedBluetoothVoiceAudioDeviceIdentifier = identifier
             let model = settings.profileID(forBluetoothIdentifier: identifier)
                 .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
                 ?? .unknown
             AppLogger.shared.write(
-                "ATVV AUDIO routed model=\(model.rawValue) route=\(handledByFnTapMode ? "fn_tap" : "virtual_audio") accepted=\(enqueued)"
+                "ATVV AUDIO routed trace=\(activeBluetoothVoiceTraceID ?? 0) " +
+                    "model=\(model.rawValue) route=\(bluetoothVoiceTraceRoute) " +
+                    "accepted=\(enqueued) first_batch_samples=\(samples.count) " +
+                    "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
             )
         }
     }

@@ -12,7 +12,7 @@ enum SimulatedVoiceRemoteModel: CaseIterable {
     var scenario: HardwareScenario {
         get throws {
             switch self {
-            case .rc001: XiaomiVoiceRemoteFixture.rc001ShortVoiceScenario()
+            case .rc001: try XiaomiVoiceRemoteFixture.rc001ShortVoiceScenario()
             case .rc003: try XiaomiVoiceRemoteFixture.directStreamScenario()
             }
         }
