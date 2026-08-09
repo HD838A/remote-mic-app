@@ -21,7 +21,7 @@ iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8
 
 ![无线麦——为 Vibe Coding 而生的语音遥控器](Screenshots/Remote-Mic-Introduce-1.png)
 
-无线麦是一款 macOS 应用，可以把小米蓝牙遥控器 2 Pro 变成 Mac 的无线语音遥控器。它同时提供常规 Dock 入口和常驻菜单栏入口。
+无线麦是一款 macOS 应用，可以把小米蓝牙遥控器 2 或 2 Pro 变成 Mac 的无线语音遥控器。它同时提供常规 Dock 入口和常驻菜单栏入口。
 
 按住遥控器的语音键即可说话；遥控器上的方向、确定、返回、主页、菜单、TV 和音量键也可以用来控制 Mac，或设置为打开常用应用。
 
@@ -36,7 +36,7 @@ iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8
 
 - Apple Silicon Mac；
 - macOS 14 或更高版本；
-- 小米蓝牙遥控器 2 Pro；
+- 小米蓝牙遥控器 2 或 2 Pro；
 - 使用语音输入时，需要安装随安装包提供的兼容麦克风，或在 Mac 上已有 BlackHole 2ch 等回环音频设备。
 
 ## 下载与安装

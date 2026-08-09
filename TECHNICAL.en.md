@@ -8,7 +8,7 @@ This document is for developers, auditors, and release engineers. It describes t
 
 - Operating system: macOS 14 or later
 - Architecture: Apple Silicon arm64
-- Target remote: Xiaomi Bluetooth Remote 2 Pro / RC003
+- Target remotes: Xiaomi Bluetooth Remote 2 / RC001 and Xiaomi Bluetooth Remote 2 Pro / RC003
 - HID identity: Vendor ID 0x2717, Product ID 0x32B8
 - Swift tools version: 6.2; the current release Mac uses Swift 6.3, with source compiled in Swift 5 language mode
 - Release signing: local development builds retain ad-hoc signing with a fixed designated requirement. Starting with v1.3.0, official releases use Developer ID Application and Developer ID Installer signing; the app and driver use the Hardened Runtime and trusted timestamps, while the app, both PKGs, and the DMG are notarized by Apple and stapled.
@@ -44,7 +44,7 @@ The bundle contains en.lproj and zh-Hans.lproj with Localizable.strings, InfoPli
 
 Candidates are accepted only if either condition is met:
 
-- Their trimmed system name is MI RC, Xiaomi Bluetooth Remote 2 Pro, or 小米蓝牙语音遥控器. English-name comparison is case-insensitive.
+- Their trimmed system name is MI RC, Xiaomi Bluetooth Remote 2, Xiaomi Bluetooth Remote 2 Pro, or 小米蓝牙语音遥控器. English-name comparison is case-insensitive.
 - Their advertisement includes the ATVV service UUID.
 
 The app does not fuzzy-match every Bluetooth device whose name contains Xiaomi. A successful connection stores the macOS peripheral UUID for priority recovery. Initialization or connection failure clears the stale cache and scans again after three seconds. A user-initiated reconnect uses an approximately 0.1-second delay.

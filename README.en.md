@@ -10,7 +10,7 @@ iOS app beta: [Join the TestFlight public beta](https://testflight.apple.com/joi
 
 ![Remote Mic — a voice remote for Vibe Coding](Screenshots/Remote-Mic-Introduce-1.png)
 
-Remote Mic is a macOS app that turns a Xiaomi Bluetooth Remote 2 Pro into a wireless voice remote for your Mac. It provides both a standard Dock entry and a persistent menu bar entry.
+Remote Mic is a macOS app that turns a Xiaomi Bluetooth Remote 2 or 2 Pro into a wireless voice remote for your Mac. It provides both a standard Dock entry and a persistent menu bar entry.
 
 Hold the remote voice button to speak. The direction, OK, Back, Home, Menu, TV, Power, and volume buttons can control macOS or launch commonly used apps.
 
@@ -25,7 +25,7 @@ Remote Mic is built natively with SwiftUI. While running in the background, it u
 
 - Apple Silicon Mac
 - macOS 14 or later
-- Xiaomi Bluetooth Remote 2 Pro
+- Xiaomi Bluetooth Remote 2 or 2 Pro
 - For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
 
 ## Download and install
@@ -43,7 +43,7 @@ Starting with v1.3.0, official release packages are signed with an Apple Develop
 
 1. Turn on Bluetooth in System Settings.
 2. Hold the remote Home and Menu buttons together to enter pairing mode.
-3. Pair the device named MI RC, Xiaomi Bluetooth Remote 2 Pro, or 小米蓝牙语音遥控器.
+3. Pair the device named MI RC, Xiaomi Bluetooth Remote 2, Xiaomi Bluetooth Remote 2 Pro, or 小米蓝牙语音遥控器.
 4. Launch Remote Mic and grant Bluetooth access when asked.
 5. To customize ordinary buttons, also grant Input Monitoring and Accessibility. Restarting the app is required only after changing those macOS permissions.
 

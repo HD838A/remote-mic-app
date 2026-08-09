@@ -8,7 +8,7 @@
 
 - 运行系统：macOS 14 或更高版本；
 - 架构：Apple Silicon `arm64`；
-- 目标遥控器：小米蓝牙遥控器 2 Pro / RC003；
+- 目标遥控器：小米蓝牙遥控器 2 / RC001 与小米蓝牙遥控器 2 Pro / RC003；
 - HID 标识：Vendor ID `0x2717`、Product ID `0x32B8`；
 - Swift tools version：6.2；发布机当前使用 Swift 6.3，源码以 Swift 5 语言模式编译；
 - 发布签名：本地开发构建保持带固定 designated requirement 的 ad-hoc 签名。自 v1.3.0 起的正式发布使用 Developer ID Application 与 Developer ID Installer 签名；应用和驱动启用 Hardened Runtime 与可信时间戳，应用、两个 PKG 和 DMG 都经过 Apple 公证并 stapled。
@@ -41,7 +41,7 @@
 
 应用只接受以下任一条件命中的候选设备：
 
-- 系统名称去除首尾空白后等于 `MI RC`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”；英文名称比较不区分大小写；
+- 系统名称去除首尾空白后等于 `MI RC`、`Xiaomi Bluetooth Remote 2`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”；英文名称比较不区分大小写；
 - 广播中包含 ATVV service UUID。
 
 应用不会对所有名称中带有“小米”的蓝牙设备做模糊匹配。连接成功后会保存 macOS 提供的外设 UUID，以便下次优先恢复；初始化或连接失败后清除失效缓存，并在 3 秒后重新扫描。用户主动重新连接时使用约 0.1 秒延迟。

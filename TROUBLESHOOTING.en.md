@@ -8,7 +8,7 @@ Confirm that your Mac is Apple Silicon and runs macOS 14 or later.
 
 1. Confirm that the remote is paired in **System Settings → Bluetooth**.
 2. Hold the remote Home and Menu buttons together to put it back in pairing mode.
-3. Confirm that its name is MI RC, Xiaomi Bluetooth Remote 2 Pro, or 小米蓝牙语音遥控器.
+3. Confirm that its name is MI RC, Xiaomi Bluetooth Remote 2, Xiaomi Bluetooth Remote 2 Pro, or 小米蓝牙语音遥控器.
 4. Left-click the Remote Mic menu bar icon and choose **Reconnect Now**.
 5. If the status does not change, quit and relaunch Remote Mic, then confirm that Bluetooth access is still granted.
 
@@ -63,7 +63,7 @@ The Fn function applies only to the supported Xiaomi Bluetooth remote; it never 
 
 1. Confirm that Bluetooth status shows a successful connection.
 2. Quit and relaunch Remote Mic so the device mapping can be applied again.
-3. Confirm that the remote is a Xiaomi Bluetooth Remote 2 Pro.
+3. Confirm that the remote is a Xiaomi Bluetooth Remote 2 or 2 Pro.
 4. Inspect **Voice Trigger** under **Connection & Voice**.
 
 Remote Mic restores the remote voice-button setting that existed before launch when it quits.
