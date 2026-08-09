@@ -13,6 +13,13 @@ private struct MobileButtonGestureKey: Hashable {
     let button: RemoteButton
 }
 
+enum BluetoothVoiceStopPolicy {
+    /// Remote stop ends capture but must not discard PCM already scheduled for playback.
+    static func shouldFlushAudio(handledByFnTapMode _: Bool) -> Bool {
+        false
+    }
+}
+
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
@@ -1034,7 +1041,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
         let handledByFnTapMode = voiceFnTapSession.stopVoice()
-        endVoiceSessionIfNeeded(flushAudio: !handledByFnTapMode)
+        endVoiceSessionIfNeeded(flushAudio: BluetoothVoiceStopPolicy.shouldFlushAudio(
+            handledByFnTapMode: handledByFnTapMode
+        ))
     }
 
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16]) {

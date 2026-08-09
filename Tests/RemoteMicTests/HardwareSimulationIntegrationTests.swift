@@ -5,13 +5,30 @@ import Testing
 import XiaomiVoiceRemoteSimulation
 @testable import RemoteMic
 
+enum SimulatedVoiceRemoteModel: CaseIterable {
+    case rc001
+    case rc003
+
+    var scenario: HardwareScenario {
+        get throws {
+            switch self {
+            case .rc001: XiaomiVoiceRemoteFixture.rc001ShortVoiceScenario()
+            case .rc003: try XiaomiVoiceRemoteFixture.directStreamScenario()
+            }
+        }
+    }
+}
+
 @Suite("Hardware simulation integration")
 struct HardwareSimulationIntegrationTests {
-    @Test func simulatedDirectStreamDrivesProductionATVVDecoder() throws {
+    @Test(arguments: SimulatedVoiceRemoteModel.allCases)
+    func simulatedDirectStreamsPreserveDecodedAudioThroughRemoteStop(
+        _ model: SimulatedVoiceRemoteModel
+    ) throws {
         let profile = try XiaomiVoiceRemoteFixture.profile()
         let catalog = try HardwareCatalog(profiles: [profile])
         let runner = try HardwareScenarioRunner(
-            scenario: try XiaomiVoiceRemoteFixture.directStreamScenario(),
+            scenario: try model.scenario,
             catalog: catalog
         )
 
@@ -20,6 +37,7 @@ struct HardwareSimulationIntegrationTests {
         let decoder = IMAADPCMDecoder()
         var streaming = false
         var decodedSamples: [Int16] = []
+        var queuedSamples: [Int16] = []
 
         while let signal = runner.nextSignal() {
             if signal.kind == XiaomiVoiceRemoteSignalKind.notificationState,
@@ -48,6 +66,9 @@ struct HardwareSimulationIntegrationTests {
                     decoder.reset()
                 case 0x00:
                     streaming = false
+                    if BluetoothVoiceStopPolicy.shouldFlushAudio(handledByFnTapMode: false) {
+                        queuedSamples.removeAll()
+                    }
                 default:
                     break
                 }
@@ -55,10 +76,12 @@ struct HardwareSimulationIntegrationTests {
                 let activeCapabilities = try #require(capabilities)
                 #expect(streaming)
                 for frame in accumulator.append(value.value, frameSize: activeCapabilities.frameSize) {
-                    decodedSamples.append(contentsOf: PCMPostprocessor.process(
+                    let samples = PCMPostprocessor.process(
                         decoder.decode(frame),
                         gainDB: 0
-                    ))
+                    )
+                    decodedSamples.append(contentsOf: samples)
+                    queuedSamples.append(contentsOf: samples)
                 }
             }
         }
@@ -67,6 +90,7 @@ struct HardwareSimulationIntegrationTests {
         #expect(capabilities?.frameSize == 120)
         #expect(decodedSamples.count == 240)
         #expect(decodedSamples.prefix(3) == [1, 2, 3])
+        #expect(queuedSamples == decodedSamples)
         #expect(!streaming)
         #expect(accumulator.pending.isEmpty)
     }
