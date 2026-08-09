@@ -23,7 +23,7 @@ struct SettingsPageRegressionTests {
         ) == .home)
     }
 
-    @Test func remoteMappingLayoutCoversEveryRealButtonWithExactConnectorAnchors() {
+    @Test func remoteMappingLayoutCoversEveryRealButtonWithExactConnectorAnchors() throws {
         let placements = RemoteMappingLayout.buttonPlacements
         #expect(placements.count == RemoteButton.allCases.count)
         #expect(Set(placements.map(\.button)) == Set(RemoteButton.allCases))
@@ -66,6 +66,43 @@ struct SettingsPageRegressionTests {
         #expect(leftEnd == CGPoint(x: cardWidth, y: RemoteMappingLayout.canvasHeight / 2))
         #expect(rightEnd == CGPoint(x: canvasWidth - cardWidth, y: RemoteMappingLayout.canvasHeight / 2))
         #expect(RemoteMappingLayout.voiceAnchor == UnitPoint(x: 0.630, y: 0.099))
+        #expect(RemoteMappingLayout.cardWidth(for: canvasWidth) == 285)
+
+        let menuPlacement = try #require(placements.first { $0.button == .menu })
+        let tvPlacement = try #require(placements.first { $0.button == .tv })
+        let homePlacement = try #require(placements.first { $0.button == .home })
+        let volumeDownPlacement = try #require(placements.first { $0.button == .volumeDown })
+        #expect(menuPlacement.side == .left)
+        #expect(tvPlacement.side == .right)
+        #expect(homePlacement.side == .left)
+        #expect(volumeDownPlacement.side == .right)
+
+        for side in [RemoteMappingSide.left, .right] {
+            let orderedAnchors = placements
+                .filter { $0.side == side }
+                .sorted { $0.targetY < $1.targetY }
+                .map(\.anchor.y)
+            #expect(zip(orderedAnchors, orderedAnchors.dropFirst()).allSatisfy { $0 <= $1 })
+        }
+
+        let start = CGPoint(x: canvasWidth / 2, y: 100)
+        let leftEndPoint = CGPoint(x: 285, y: 160)
+        let leftControls = RemoteMappingLayout.connectionControlPoints(
+            start: start,
+            end: leftEndPoint,
+            side: .left
+        )
+        #expect(leftControls.start.x < start.x)
+        #expect(leftControls.end.x > leftEndPoint.x)
+
+        let rightEndPoint = CGPoint(x: canvasWidth - 285, y: 160)
+        let rightControls = RemoteMappingLayout.connectionControlPoints(
+            start: start,
+            end: rightEndPoint,
+            side: .right
+        )
+        #expect(rightControls.start.x > start.x)
+        #expect(rightControls.end.x < rightEndPoint.x)
     }
 
     @Test func redesignedPagesKeepEveryExistingUserAction() throws {
@@ -110,6 +147,9 @@ struct SettingsPageRegressionTests {
         #expect(!source.contains("SidebarGlassModifier"))
         #expect(source.contains(".focusEffectDisabled()"))
         #expect(source.contains(".frame(height: 56)"))
+        #expect(source.contains(".ignoresSafeArea(.container, edges: .top)"))
+        #expect(source.contains("showsAnchor: activeButtons.contains(placement.button)"))
+        #expect(source.range(of: "MappingRemotePhoto()")!.lowerBound < source.range(of: "connectionLines(metrics: metrics)")!.lowerBound)
 
         let voiceFnToggle = "Toggle(\"connection.voice_fn_tap.enabled\""
         #expect(source.components(separatedBy: voiceFnToggle).count == 2)

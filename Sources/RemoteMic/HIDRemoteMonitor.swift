@@ -1,3 +1,4 @@
+import AppKit
 import CryptoKit
 import Foundation
 import IOKit.hid
@@ -333,11 +334,26 @@ final class HIDRemoteMonitor {
 
     func shouldAcceptRawPress(
         button: RemoteButton,
-        action: ButtonAction
+        action: ButtonAction,
+        frontmostBundleIdentifier: String? = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     ) -> Bool {
-        guard !action.allowsRepeat else { return true }
+        guard !Self.shouldRepeat(
+            action: action,
+            frontmostBundleIdentifier: frontmostBundleIdentifier
+        ) else { return true }
         nonRepeatableReleaseTimers.removeValue(forKey: button)?.cancel()
         return nonRepeatablePressedButtons.insert(button).inserted
+    }
+
+    static func shouldRepeat(
+        action: ButtonAction,
+        frontmostBundleIdentifier: String?
+    ) -> Bool {
+        guard action.allowsRepeat else { return false }
+        guard frontmostBundleIdentifier == PresetApplication.remoteMic.bundleIdentifier else {
+            return true
+        }
+        return ![.arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward].contains(action)
     }
 
     private func scheduleNonRepeatableRelease(for button: RemoteButton) {
@@ -369,7 +385,10 @@ final class HIDRemoteMonitor {
             repeatable.contains(button),
             !settings.hasSecondaryAction(for: button, profileID: profileID),
             action != .disabled,
-            action.allowsRepeat
+            Self.shouldRepeat(
+                action: action,
+                frontmostBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            )
         else { return }
 
         let timer = DispatchSource.makeTimerSource(queue: .main)
@@ -377,7 +396,11 @@ final class HIDRemoteMonitor {
         timer.schedule(deadline: .now() + .milliseconds(350), repeating: interval)
         timer.setEventHandler { [weak self] in
             guard let self, self.activeUsages.contains(usage) else { return }
-            if self.settings.hasSecondaryAction(for: button, profileID: self.profileID) {
+            if self.settings.hasSecondaryAction(for: button, profileID: self.profileID) ||
+                !Self.shouldRepeat(
+                    action: action,
+                    frontmostBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                ) {
                 self.repeatTimers.removeValue(forKey: usage)?.cancel()
                 return
             }

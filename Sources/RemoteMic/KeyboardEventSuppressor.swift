@@ -28,6 +28,7 @@ final class KeyboardEventSuppressor {
 
     private let lock = NSLock()
     private var pendingEvents: [PendingEvent] = []
+    private var heldEventCounts: [RemoteNativeEvent: Int] = [:]
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
@@ -70,6 +71,7 @@ final class KeyboardEventSuppressor {
     func stop() {
         lock.lock()
         pendingEvents.removeAll()
+        heldEventCounts.removeAll()
         lock.unlock()
         if let runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
@@ -87,18 +89,29 @@ final class KeyboardEventSuppressor {
         let now = ProcessInfo.processInfo.systemUptime
         lock.lock()
         pendingEvents.removeAll { $0.expiresAt <= now }
-        pendingEvents.append(PendingEvent(
-            event: nativeEvent,
-            edge: edge,
-            expiresAt: now + 0.18
-        ))
+        switch edge {
+        case .down:
+            heldEventCounts[nativeEvent, default: 0] += 1
+        case .up:
+            let remaining = (heldEventCounts[nativeEvent] ?? 0) - 1
+            if remaining > 0 {
+                heldEventCounts[nativeEvent] = remaining
+            } else {
+                heldEventCounts.removeValue(forKey: nativeEvent)
+            }
+            pendingEvents.append(PendingEvent(
+                event: nativeEvent,
+                edge: edge,
+                expiresAt: now + 0.18
+            ))
+        }
         if pendingEvents.count > 32 {
             pendingEvents.removeFirst(pendingEvents.count - 32)
         }
         lock.unlock()
     }
 
-    fileprivate func handle(type: CGEventType, event: CGEvent) -> Bool {
+    func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let eventTap {
                 CGEvent.tapEnable(tap: eventTap, enable: true)
@@ -113,6 +126,10 @@ final class KeyboardEventSuppressor {
         let now = ProcessInfo.processInfo.systemUptime
         lock.lock()
         pendingEvents.removeAll { $0.expiresAt <= now }
+        if descriptor.edge == .down, (heldEventCounts[descriptor.event] ?? 0) > 0 {
+            lock.unlock()
+            return true
+        }
         guard let matchIndex = pendingEvents.firstIndex(where: {
             $0.event == descriptor.event && $0.edge == descriptor.edge
         }) else {

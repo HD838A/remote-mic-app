@@ -759,3 +759,161 @@ The per-profile HID managers did not filter input reports by their active physic
 - The Production app built, signed, verified, and launched from `dist/Remote Mic.app`.
 - Connection, Mapping, Statistics, Permissions, and About were each opened at the minimum window size without clipped headers or primary controls.
 - The mapping page displayed the centered remote, all 12 configurable cards, the fixed microphone card, both footer switches, and Restore Defaults on one screen; clicking Up / Single Click opened the matching editor.
+
+# Held Remote Key Leaks Native Auto-repeat
+
+## Observations
+
+- With Remote Mic frontmost, holding the physical Up button produces a continuous macOS error sound even though Up is configured as the non-repeatable `Command + Return` custom shortcut.
+- The latest matching runtime sample contains exactly one `HID BUTTON button=up trigger=singleClick action=customShortcut` record for the held interval, so the configured shortcut is not being executed repeatedly.
+- Both Xiaomi HID devices are opened in monitored fallback mode because exclusive seize returns `-536870207`; native keyboard events therefore still enter the macOS event stream.
+- `KeyboardEventSuppressor` arms one pending Down event and removes it after the first matching `keyDown`. Additional macOS auto-repeat `keyDown` events generated before the physical release have no pending match and pass to the frontmost app.
+
+## Hypotheses
+
+### H1: Only the first native key-down is suppressed; macOS auto-repeat leaks to Remote Mic (ROOT HYPOTHESIS)
+
+- Supports: the action log fires once while the sound repeats; the device is not seized; the suppressor removes the sole Down token on its first match.
+- Conflicts: none.
+- Test: keep the native Down descriptor active until the matching HID release, then verify multiple `keyDown` events are suppressed while a post-release `keyDown` passes normally.
+
+### H2: The custom shortcut injector still repeats
+
+- Supports: each injected `Command + Return` could produce an error sound when Remote Mic is frontmost.
+- Conflicts: the runtime action log contains one execution, `customShortcut.allowsRepeat` is false, and the raw-press latch regression passes.
+- Test: compare action-log count with the audible interval; repeated injection requires repeated action records.
+
+### H3: Both physical-remote monitors process the same report
+
+- Supports: this caused an earlier duplicate-action regression.
+- Conflicts: sender fingerprint filtering is active and the current held interval has one action record rather than paired records.
+- Test: verify the reporting and active fingerprints match before report processing and retain the existing routing regression.
+
+## Experiments
+
+- H2 rejected by the latest runtime sample: one configured-action record cannot explain a continuous series of sounds from repeated shortcut injection.
+- H3 rejected for this symptom: per-device report routing is covered by the current implementation and the observed action is not duplicated.
+- H1 confirmed by event-filter control flow: the first native Down match removes its pending token, while all later repeat Downs arrive before any new `arm(.down)` call and are explicitly allowed through.
+
+## Root Cause
+
+The monitored HID fallback suppressed only the first native key-down event, allowing macOS-generated auto-repeat key-down events to reach the frontmost Remote Mic window and repeatedly play the system error sound.
+
+## Fix
+
+- Keep a reference count for each held native remote-key descriptor and suppress every matching key-down until all physical remotes holding that key have released it.
+- Continue suppressing each final native key-up once, then immediately restore normal keyboard behavior for later physical-keyboard input.
+- Preserve the synthetic-event marker bypass so actions intentionally injected by Remote Mic are never swallowed by its own event filter.
+
+## Validation
+
+- A focused regression verifies that repeated native Up key-down events remain suppressed throughout a hold, including when two remotes hold the same key, and that a new Up key-down passes after both releases.
+- All 145 Swift tests and all 42 low-level self tests passed.
+- The Production app built, signed, verified, and launched from `dist/Remote Mic.app`; final audible acceptance still requires one physical Up-button hold with Remote Mic frontmost.
+
+# Mapping Connector Overlap and Excessive Side Gaps
+
+## Observations
+
+- Orthogonal connectors reused the same elbow X coordinate for buttons sharing an anchor column, creating visibly overlapping vertical segments.
+- The 250-point setting cards left roughly 96 points between each card edge and the centered remote at the minimum window width, making the middle look empty while card contents remained compressed.
+
+## Fix
+
+- Replace shared-elbow polylines with cubic curves whose control points leave the exact hardware hotspot and approach the exact card edge from the correct side.
+- Increase the card width to 285 points at the minimum layout and enlarge the remote proportionally from `174 x 352` to `184 x 372`, shortening the connectors without changing any hotspot coordinates or card order.
+
+## Validation
+
+- Layout regressions verify all original start/end anchors, left/right curve control direction, and the 285-point minimum-layout card width.
+- Visual inspection at `1020 x 772` confirmed that connectors no longer share full segments, the lower-button curves fan out separately, all content remains on one screen, and the footer controls remain fully visible.
+
+# Menu and TV Connector Crossing Follow-up
+
+## Observations
+
+- The initial curve conversion still placed the physical Menu button, located on the lower-left of the remote, in the right card column beside TV.
+- Its hidden segment crossed behind the remote and emerged near the physical TV button, making the Menu and TV connectors appear swapped and intersecting.
+
+## Fix
+
+- Move Menu to the bottom of the left card column and keep TV at the bottom of the right card column.
+- Move the central OK card to the right column and redistribute both columns so hardware-anchor height and card-target height remain monotonic on each side.
+
+## Validation
+
+- The layout regression now requires Menu on the left, TV on the right, and non-decreasing hardware-anchor heights for every card column.
+- The focused 3-test mapping suite and Production build passed.
+- Visual inspection at `1020 x 772` confirmed that Menu connects directly left, TV connects directly right, and neither line crosses another connector.
+
+# Home and Volume-down Connector Crossing Follow-up
+
+## Observations
+
+- Home is the lower-left physical button while Volume Down is the matching lower-right button, but both cards were placed in the right column.
+- Routing Home across the remote into the right column caused its curve to intersect the Volume Down path and made the card placement feel physically incorrect.
+
+## Fix
+
+- Move Home to the left card column and keep Volume Down in the right card column.
+- Move the central Down card to the right column to preserve balanced column counts and monotonic connector ordering.
+
+## Validation
+
+- The layout regression now explicitly requires Home on the left and Volume Down on the right, in addition to the existing per-column monotonic anchor check.
+- The focused 3-test mapping suite and Production build passed.
+- Visual inspection at `1020 x 772` in the current light appearance confirmed separate Home and Volume Down paths with no new connector crossing.
+
+# Frontmost Remote Mic Navigation Repeat Error Sound
+
+## Observations
+
+- The Up button no longer produces a continuous error sound after native auto-repeat suppression was changed to remain active for the full hold.
+- With Remote Mic frontmost, holding Left, Right, Down, or Back still produces a continuous system error sound; these buttons are configured as `arrowLeft`, `arrowRight`, `arrowDown`, and `deleteBackward`.
+- The runtime log contains repeated `HID BUTTON` executions for held Left, Right, and Down reports, proving that hardware press/release cycles can re-enter the configured-action path for actions whose repeat policy remains enabled.
+- `startRepeatIfNeeded` also starts a 100 ms navigation timer, or a 50 ms Back timer, after the first press. Its timer calls `KeyboardInjector.send` directly and therefore does not add another `HID BUTTON` log entry.
+- Back has no native event descriptor, so its continuous sound cannot come from leaked native HID keyboard events; it must come from repeated configured delete injection.
+
+## Hypotheses
+
+### H1: App-owned repeat and repeatable raw HID cycles continuously inject focus-dependent navigation actions into Remote Mic (ROOT HYPOTHESIS)
+
+- Supports: all four failing actions allow repeat; the timer is unconditionally started after a qualifying press; the log independently proves raw Left/Right/Down re-entry; Back has no native event path.
+- Conflicts: none.
+- Test: compare the four failing action types with the timer/raw-repeat guards and the Back native-event boundary.
+
+### H2: Native macOS auto-repeat suppression still fails for every direction key
+
+- Supports: Left, Right, and Down each expose native keyboard descriptors.
+- Conflicts: Up uses the same suppression path and is fixed; Back exposes no native descriptor but still fails.
+- Test: require a native descriptor for the symptom; Back falsifies this as the common root cause.
+
+### H3: Two physical-device monitors still process the same held report
+
+- Supports: duplicated routing previously caused repeated actions and remote-selection jumping.
+- Conflicts: per-device sender fingerprint filtering is active; the current failure is action-specific and includes the App-owned timer path.
+- Test: retain the existing fingerprint-routing regression and inspect whether the repeat occurs without a second monitor callback.
+
+## Experiments
+
+- H2 rejected as the shared cause: `RemoteButton.back.nativeEvent == nil`, yet holding Back still continuously sounds.
+- H3 rejected as necessary for reproduction: one accepted press is sufficient for `startRepeatIfNeeded` to inject Delete every 50 ms while the key remains active.
+- H1 confirmed by control-flow and runtime evidence: each failing action both permits App-owned repeat and, for observed direction keys, accepts repeated raw hardware press cycles; Up no longer fails because its custom shortcut is non-repeatable.
+
+## Root Cause
+
+Focus-dependent navigation and delete actions remain repeatable while Remote Mic itself is frontmost, so both the App timer and repeatable raw HID cycles continuously inject keys that the settings UI cannot handle and macOS responds with the system error sound.
+
+## Fix
+
+- Treat arrow and backward-delete actions as non-repeatable only while Remote Mic is the frontmost application.
+- Apply the same effective-repeat policy to both raw HID press acceptance and App-owned repeat-timer startup.
+- Preserve repeat in other applications and preserve system-volume repeat even when Remote Mic is frontmost.
+
+## Validation
+
+- The focused regression proves that arrow and delete actions do not repeat with `com.hd838a.RemoteMic` frontmost, still repeat with Codex frontmost, and system volume remains repeatable in Remote Mic.
+- All 146 Swift tests and all 42 low-level self tests passed.
+- The Production app built, received its development ad-hoc signature, passed bundle verification, and launched from `dist/Remote Mic.app` through the project run script.
+- Actual inspection at `1020 x 772` confirmed that the sidebar separator reaches the title-bar top and the mapping page remains fully visible without layout regression.
+- The connector layer now visibly begins at each calibrated physical-button hotspot. Static hotspots remain hidden; the active marker is rendered only from `activeButtons` or the live voice state and still requires a physical-button acceptance check.
