@@ -240,6 +240,9 @@
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Customize remote button actions while preserving voice input and Fn functions";
 "button_mapping.toggle.enabled" = "Enable Custom Button Controls";
+"button_mapping.permission_prompt.title" = "Button Permissions Required";
+"button_mapping.permission_prompt.message" = "Custom button controls require Input Monitoring and Accessibility. Open the Permissions page to finish setup.";
+"button_mapping.permission_prompt.open" = "Open Permissions";
 "button_mapping.continuous_recording_experiment.enabled" = "Continuous Recording Experiment";
 "button_mapping.continuous_recording_experiment.help" = "For Xiaomi Bluetooth Remote 2 Pro feature validation only. Each session is limited to 1 minute and may increase remote battery usage.";
 "button_mapping.continuous_recording_experiment.power_managed" = "Managed by the continuous recording experiment";
@@ -253,6 +256,7 @@
 "button_mapping.inspector.help" = "Set the three ways this button can be triggered.";
 "button_mapping.selection_lock" = "Lock Current Button";
 "button_mapping.selection_lock_help" = "When enabled, pressing the physical remote will not switch the button being edited.";
+"button_mapping.selection_lock_hint_short" = "Keep the current item selected while using the remote.";
 "button_mapping.voice_button.title" = "Voice Button";
 "button_mapping.voice_button.fixed" = "Fixed";
 "button_mapping.voice_button.detail" = "Hold to talk. Voice input and Fn behavior are not customizable.";

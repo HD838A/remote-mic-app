@@ -240,6 +240,9 @@
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "自定义遥控器按键功能，并保留语音输入与 Fn 功能";
 "button_mapping.toggle.enabled" = "启用自定义按键功能";
+"button_mapping.permission_prompt.title" = "需要开启按键权限";
+"button_mapping.permission_prompt.message" = "自定义按键需要“输入监控”和“辅助功能”权限，请前往权限页面完成设置。";
+"button_mapping.permission_prompt.open" = "前往权限页面";
 "button_mapping.continuous_recording_experiment.enabled" = "持续录音实验功能";
 "button_mapping.continuous_recording_experiment.help" = "仅用于小米蓝牙遥控器 2 Pro 功能验证；单次最长 1 分钟，持续使用可能增加遥控器耗电。";
 "button_mapping.continuous_recording_experiment.power_managed" = "由持续录音实验功能管理";
@@ -253,6 +256,7 @@
 "button_mapping.inspector.help" = "分别设置这个按键的三种触发方式。";
 "button_mapping.selection_lock" = "锁定当前按键";
 "button_mapping.selection_lock_help" = "开启后，操作实体遥控器不会切换正在编辑的按键。";
+"button_mapping.selection_lock_hint_short" = "按遥控器时保持当前编辑项。";
 "button_mapping.voice_button.title" = "语音键";
 "button_mapping.voice_button.fixed" = "固定";
 "button_mapping.voice_button.detail" = "按住说话；语音输入与 Fn 功能不参与自定义映射。";

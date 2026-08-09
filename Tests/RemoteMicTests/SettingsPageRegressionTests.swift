@@ -23,6 +23,29 @@ struct SettingsPageRegressionTests {
         ) == .home)
     }
 
+    @Test func customMappingPromptsOnlyWhenAnEnabledPermissionIsMissing() {
+        #expect(MappingPermissionPolicy.requiresPrompt(
+            enabled: true,
+            inputMonitoringGranted: false,
+            accessibilityGranted: true
+        ))
+        #expect(MappingPermissionPolicy.requiresPrompt(
+            enabled: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: false
+        ))
+        #expect(!MappingPermissionPolicy.requiresPrompt(
+            enabled: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: true
+        ))
+        #expect(!MappingPermissionPolicy.requiresPrompt(
+            enabled: false,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ))
+    }
+
     @Test func remoteMappingLayoutCoversEveryRealButtonWithExactConnectorAnchors() throws {
         let placements = RemoteMappingLayout.buttonPlacements
         #expect(placements.count == RemoteButton.allCases.count)
@@ -103,6 +126,9 @@ struct SettingsPageRegressionTests {
         )
         #expect(rightControls.start.x > start.x)
         #expect(rightControls.end.x < rightEndPoint.x)
+
+        #expect(RemoteMappingLayout.arrowTip(cardEdge: leftEndPoint, side: .left).x == leftEndPoint.x + 7)
+        #expect(RemoteMappingLayout.arrowTip(cardEdge: rightEndPoint, side: .right).x == rightEndPoint.x - 7)
     }
 
     @Test func redesignedPagesKeepEveryExistingUserAction() throws {
@@ -149,6 +175,10 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(".frame(height: 56)"))
         #expect(source.contains(".ignoresSafeArea(.container, edges: .top)"))
         #expect(source.contains("showsAnchor: activeButtons.contains(placement.button)"))
+        #expect(source.contains(".toggleStyle(.switch)"))
+        #expect(source.contains("button_mapping.permission_prompt.open"))
+        #expect(source.contains("button_mapping.selection_lock_hint_short"))
+        #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.range(of: "MappingRemotePhoto()")!.lowerBound < source.range(of: "connectionLines(metrics: metrics)")!.lowerBound)
 
         let voiceFnToggle = "Toggle(\"connection.voice_fn_tap.enabled\""

@@ -18,6 +18,7 @@ struct RemoteMappingPlacement: Identifiable {
 enum RemoteMappingLayout {
     static let canvasHeight: CGFloat = 430
     static let remoteSize = CGSize(width: 184, height: 372)
+    static let arrowCardGap: CGFloat = 7
 
     static let buttonPlacements: [RemoteMappingPlacement] = [
         RemoteMappingPlacement(button: .power, side: .left, anchor: UnitPoint(x: 0.386, y: 0.099), targetY: 0.08),
@@ -75,6 +76,14 @@ enum RemoteMappingLayout {
         return (
             CGPoint(x: start.x + direction * distance, y: start.y),
             CGPoint(x: end.x - direction * endpointDistance, y: end.y)
+        )
+    }
+
+    static func arrowTip(cardEdge: CGPoint, side: RemoteMappingSide) -> CGPoint {
+        let direction: CGFloat = side == .left ? -1 : 1
+        return CGPoint(
+            x: cardEdge.x - direction * arrowCardGap,
+            y: cardEdge.y
         )
     }
 }
@@ -154,14 +163,15 @@ struct RemoteMappingCanvas: View {
         selected: Bool,
         showsAnchor: Bool
     ) {
+        let arrowTip = RemoteMappingLayout.arrowTip(cardEdge: end, side: side)
         let controls = RemoteMappingLayout.connectionControlPoints(
             start: start,
-            end: end,
+            end: arrowTip,
             side: side
         )
         var path = Path()
         path.move(to: start)
-        path.addCurve(to: end, control1: controls.start, control2: controls.end)
+        path.addCurve(to: arrowTip, control1: controls.start, control2: controls.end)
 
         let color = selected ? Color.accentColor : Color.secondary.opacity(0.42)
         context.stroke(
@@ -182,9 +192,9 @@ struct RemoteMappingCanvas: View {
 
         let direction: CGFloat = side == .left ? -1 : 1
         var arrow = Path()
-        arrow.move(to: end)
-        arrow.addLine(to: CGPoint(x: end.x - direction * 6, y: end.y - 4))
-        arrow.addLine(to: CGPoint(x: end.x - direction * 6, y: end.y + 4))
+        arrow.move(to: arrowTip)
+        arrow.addLine(to: CGPoint(x: arrowTip.x - direction * 6, y: arrowTip.y - 4))
+        arrow.addLine(to: CGPoint(x: arrowTip.x - direction * 6, y: arrowTip.y + 4))
         arrow.closeSubpath()
         context.fill(arrow, with: .color(color))
     }

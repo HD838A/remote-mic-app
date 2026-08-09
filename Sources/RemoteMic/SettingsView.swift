@@ -78,6 +78,16 @@ enum MappingSelectionPolicy {
     }
 }
 
+enum MappingPermissionPolicy {
+    static func requiresPrompt(
+        enabled: Bool,
+        inputMonitoringGranted: Bool,
+        accessibilityGranted: Bool
+    ) -> Bool {
+        enabled && (!inputMonitoringGranted || !accessibilityGranted)
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
@@ -103,6 +113,8 @@ struct SettingsView: View {
     @State private var isWebRemoteInviteInvalidPresented = false
     @State private var isWebRemoteInviteAuthorized = false
     @State private var isTestFlightLinkCopied = false
+    @State private var isMappingPermissionAlertPresented = false
+    @State private var isWaitingForMappingPermissions = false
     @State private var webRemoteInviteCode = ""
     private static let requiredWebRemoteInviteCode = "8586"
 
@@ -133,6 +145,7 @@ struct SettingsView: View {
         .onAppear(perform: refreshPermissionStates)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
+            resumeCustomMappingIfPermissionsGranted()
         }
         .sheet(item: $shortcutEditingTarget) { target in
             ShortcutEditorSheet(
@@ -195,6 +208,22 @@ struct SettingsView: View {
             Button(localization.text("common.action.ok")) {}
         } message: {
             Text("connection.web.invite.invalid_message")
+        }
+        .alert(
+            localization.text("button_mapping.permission_prompt.title"),
+            isPresented: $isMappingPermissionAlertPresented
+        ) {
+            Button("button_mapping.permission_prompt.open") {
+                isWaitingForMappingPermissions = true
+                selectedSection = .permissions
+                model.applyHIDSettings()
+            }
+            Button("common.action.cancel", role: .cancel) {
+                settings.customMappingEnabled = false
+                model.applyHIDSettings()
+            }
+        } message: {
+            Text("button_mapping.permission_prompt.message")
         }
     }
 
@@ -689,20 +718,15 @@ struct SettingsView: View {
         settingsPage {
             HStack(alignment: .center, spacing: 14) {
                 PageHeader(title: localization.text("button_mapping.page.title"))
+                Toggle("button_mapping.toggle.enabled", isOn: Binding(
+                    get: { settings.customMappingEnabled },
+                    set: setCustomMappingEnabled
+                ))
+                .font(.subheadline.weight(.medium))
+                .toggleStyle(.switch)
                 Spacer()
                 remoteDeviceSelector()
                     .frame(width: 400)
-                Toggle("button_mapping.toggle.enabled", isOn: Binding(
-                    get: { settings.customMappingEnabled },
-                    set: { enabled in
-                        settings.customMappingEnabled = enabled
-                        model.applyHIDSettings()
-                    }
-                ))
-                StatusPill(
-                    text: localization.text(settings.customMappingEnabled ? "common.status.enabled" : "common.status.disabled"),
-                    tint: settings.customMappingEnabled ? .green : .secondary
-                )
             }
         } content: {
             VStack(spacing: 12) {
@@ -745,19 +769,31 @@ struct SettingsView: View {
 
                 Divider().frame(height: 28)
 
-                Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
-                    .font(.caption)
-                    .toggleStyle(.switch)
-                    .help(localization.text("button_mapping.selection_lock_help"))
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
+                        .font(.caption)
+                        .toggleStyle(.switch)
+                    Text("button_mapping.selection_lock_hint_short")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                .help(localization.text("button_mapping.selection_lock_help"))
 
                 Divider().frame(height: 28)
 
-                Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
-                    get: { settings.voiceFnTapModeEnabled },
-                    set: { model.setVoiceFnTapModeEnabled($0) }
-                ))
-                .font(.caption)
-                .toggleStyle(.switch)
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
+                        get: { settings.voiceFnTapModeEnabled },
+                        set: { model.setVoiceFnTapModeEnabled($0) }
+                    ))
+                    .font(.caption)
+                    .toggleStyle(.switch)
+                    Text("connection.voice_fn_tap.hint_short")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
                 .help(localization.text("connection.voice_fn_tap.hint"))
 
                 Spacer(minLength: 0)
@@ -1861,6 +1897,31 @@ struct SettingsView: View {
         bluetoothAuthorization = CBManager.authorization
         inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
         accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    }
+
+    private func setCustomMappingEnabled(_ enabled: Bool) {
+        refreshPermissionStates()
+        settings.customMappingEnabled = enabled
+        guard MappingPermissionPolicy.requiresPrompt(
+            enabled: enabled,
+            inputMonitoringGranted: inputMonitoringGranted,
+            accessibilityGranted: accessibilityGranted
+        ) else {
+            isWaitingForMappingPermissions = false
+            model.applyHIDSettings()
+            return
+        }
+        isMappingPermissionAlertPresented = true
+    }
+
+    private func resumeCustomMappingIfPermissionsGranted() {
+        guard
+            isWaitingForMappingPermissions,
+            inputMonitoringGranted,
+            accessibilityGranted
+        else { return }
+        isWaitingForMappingPermissions = false
+        model.applyHIDSettings()
     }
 }
 
