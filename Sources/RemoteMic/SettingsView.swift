@@ -116,6 +116,10 @@ struct SettingsView: View {
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
     @State private var webRemoteInviteCode = ""
+    @State private var deepSeekAPIKeyDraft = ""
+    @State private var programmingTermCanonicalDraft = ""
+    @State private var programmingTermAliasesDraft = ""
+    @State private var programmingTermKind: ProgrammingTermKind = .projectName
     private static let requiredWebRemoteInviteCode = "8586"
 
     init(
@@ -399,10 +403,152 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         audioSettingsPanel
                         audioCompatibilityPanel
+                        postDictationPanel
                         phoneConnectionsPanel
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+            }
+        }
+    }
+
+    private var postDictationPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("post_dictation.title")
+                            .font(.headline)
+                        Text("post_dictation.description")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    Toggle("", isOn: Binding(
+                        get: { settings.deepSeekPostDictationEnabled },
+                        set: { model.setDeepSeekPostDictationEnabled($0) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+
+                Text("post_dictation.privacy")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                HStack(spacing: 8) {
+                    SecureField("post_dictation.key.placeholder", text: $deepSeekAPIKeyDraft)
+                        .textFieldStyle(.roundedBorder)
+                    Button("post_dictation.key.save") {
+                        model.saveDeepSeekAPIKey(deepSeekAPIKeyDraft)
+                        deepSeekAPIKeyDraft = ""
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(deepSeekAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("post_dictation.key.delete", role: .destructive) {
+                        model.deleteDeepSeekAPIKey()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(!model.isDeepSeekAPIKeyConfigured)
+                    Button("post_dictation.key.test") {
+                        model.testDeepSeekConnection()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(!model.isDeepSeekAPIKeyConfigured || model.postDictationState == .requesting)
+                }
+
+                HStack(spacing: 8) {
+                    StatusPill(
+                        text: localization.text(
+                            model.isDeepSeekAPIKeyConfigured
+                                ? "post_dictation.key.configured"
+                                : "post_dictation.key.not_configured"
+                        ),
+                        tint: model.isDeepSeekAPIKeyConfigured ? .green : .secondary
+                    )
+                    Text(model.postDictationStatus.text(using: localization))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer(minLength: 4)
+                    Button("post_dictation.result.copy") {
+                        model.copyPostDictationResult()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(model.copyablePostDictationResult == nil)
+                }
+
+                Divider()
+
+                Text("post_dictation.terms.title")
+                    .font(.subheadline.weight(.semibold))
+                Text("post_dictation.terms.description")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    TextField("post_dictation.terms.canonical", text: $programmingTermCanonicalDraft)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("post_dictation.terms.aliases", text: $programmingTermAliasesDraft)
+                        .textFieldStyle(.roundedBorder)
+                    Picker("", selection: $programmingTermKind) {
+                        ForEach(ProgrammingTermKind.allCases) { kind in
+                            Text(localization.text(kind.localizationKey))
+                                .tag(kind)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
+                    Button("post_dictation.terms.add") {
+                        model.addProgrammingTerm(
+                            canonicalText: programmingTermCanonicalDraft,
+                            aliases: programmingTermAliasesDraft.components(
+                                separatedBy: CharacterSet(charactersIn: ",，\n")
+                            ),
+                            kind: programmingTermKind
+                        )
+                        programmingTermCanonicalDraft = ""
+                        programmingTermAliasesDraft = ""
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(
+                        programmingTermCanonicalDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || programmingTermAliasesDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                }
+
+                ForEach(model.programmingTerms) { term in
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: Binding(
+                            get: { term.isEnabled },
+                            set: { model.setProgrammingTermEnabled($0, id: term.id) }
+                        ))
+                        .labelsHidden()
+                        Text(term.canonicalText)
+                            .font(.caption.monospaced())
+                            .lineLimit(1)
+                        Text(term.spokenAliases.joined(separator: " / "))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Button(role: .destructive) {
+                            model.removeProgrammingTerm(id: term.id)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+
+                Text("post_dictation.automatic_list.disabled")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }
