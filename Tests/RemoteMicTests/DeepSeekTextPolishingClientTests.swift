@@ -27,7 +27,7 @@ struct DeepSeekTextPolishingClientTests {
         let body = try #require(
             JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
         )
-        #expect(body["model"] as? String == "deepseek-chat")
+        #expect(body["model"] as? String == "deepseek-v4-flash")
         #expect(body["stream"] as? Bool == false)
         #expect((body["response_format"] as? [String: String])?["type"] == "json_object")
         let messages = try #require(body["messages"] as? [[String: Any]])

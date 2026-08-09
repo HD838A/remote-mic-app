@@ -154,6 +154,12 @@ struct SettingsPageRegressionTests {
             "model.selectDoubaoAudioDevice()",
             "model.openDoubaoDriverInstructions(using: localization)",
             "model.setVoiceFnTapModeEnabled",
+            "model.setDeepSeekPostDictationEnabled",
+            "model.saveDeepSeekAPIKey",
+            "model.deleteDeepSeekAPIKey()",
+            "model.testDeepSeekConnection()",
+            "model.addProgrammingTerm(",
+            "model.removeProgrammingTerm",
             "model.enablePhoneRemoteConnection()",
             "copyTestFlightPublicBetaLink()",
             "requestWebRemoteSession()",
@@ -179,6 +185,16 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("button_mapping.permission_prompt.open"))
         #expect(source.contains("button_mapping.selection_lock_hint_short"))
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
+        #expect(source.contains("case postDictation"))
+        #expect(source.contains("case .postDictation:"))
+        #expect(source.contains("postDictationPage"))
+        #expect(source.contains("settings.section.ai_polish"))
+        #expect(source.contains("post_dictation.status.section_title"))
+        #expect(source.contains("DeepSeek V4 Flash"))
+        let connectionPageStart = try #require(source.range(of: "private var connectionPage"))
+        let postDictationPageStart = try #require(source.range(of: "private var postDictationPage"))
+        let connectionPageSource = source[connectionPageStart.lowerBound..<postDictationPageStart.lowerBound]
+        #expect(!connectionPageSource.contains("postDictationPanel"))
         #expect(source.range(of: "MappingRemotePhoto()")!.lowerBound < source.range(of: "connectionLines(metrics: metrics)")!.lowerBound)
 
         let voiceFnToggle = "Toggle(\"connection.voice_fn_tap.enabled\""

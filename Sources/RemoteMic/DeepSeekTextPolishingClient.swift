@@ -69,7 +69,7 @@ enum DeepSeekTextPolishingError: Error, Equatable {
 }
 
 struct DeepSeekTextPolishingClient {
-    static let model = "deepseek-chat"
+    static let model = "deepseek-v4-flash"
     static let promptVersion = "post_dictation_polish_v1"
     static let endpoint = URL(string: "https://api.deepseek.com/chat/completions")!
     static let maximumTermCount = 50

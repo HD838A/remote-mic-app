@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
+    case postDictation
     case mapping
     case statistics
     case permissions
@@ -17,6 +18,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var title: LocalizedStringKey {
         switch self {
         case .connection: return "settings.section.connection"
+        case .postDictation: return "settings.section.ai_polish"
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
         case .permissions: return "settings.section.permissions"
@@ -27,6 +29,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .connection: return "link"
+        case .postDictation: return "sparkles"
         case .mapping: return "keyboard"
         case .statistics: return "chart.bar.xaxis"
         case .permissions: return "shield.lefthalf.filled"
@@ -359,6 +362,8 @@ struct SettingsView: View {
         switch selectedSection {
         case .connection:
             connectionPage
+        case .postDictation:
+            postDictationPage
         case .mapping:
             mappingPage
         case .statistics:
@@ -403,7 +408,6 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         audioSettingsPanel
                         audioCompatibilityPanel
-                        postDictationPanel
                         phoneConnectionsPanel
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -412,33 +416,118 @@ struct SettingsView: View {
         }
     }
 
-    private var postDictationPanel: some View {
+    private var postDictationPage: some View {
+        settingsPage {
+            PageHeader(title: localization.text("post_dictation.page.title"))
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                VStack(spacing: 14) {
+                    postDictationOverviewPanel
+                    postDictationCredentialPanel
+                    postDictationTermsPanel
+                    HStack(alignment: .top, spacing: 14) {
+                        postDictationPrivacyPanel
+                        postDictationFormattingPanel
+                    }
+                }
+                .frame(maxWidth: 880, alignment: .topLeading)
+            }
+        }
+    }
+
+    private var postDictationOverviewPanel: some View {
         GlassPanel {
-            VStack(alignment: .leading, spacing: 13) {
-                HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: postDictationStatusImage)
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(postDictationStatusTint)
+                        .frame(width: 38)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("post_dictation.title")
+                        Text("post_dictation.status.section_title")
                             .font(.headline)
-                        Text("post_dictation.description")
+                        Text(
+                            settings.deepSeekPostDictationEnabled
+                                ? model.postDictationStatus.text(using: localization)
+                                : localization.text("post_dictation.status.disabled")
+                        )
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 12)
-                    Toggle("", isOn: Binding(
+                    StatusPill(
+                        text: localization.text(
+                            settings.deepSeekPostDictationEnabled
+                                ? "post_dictation.status.feature_enabled"
+                                : "post_dictation.status.feature_disabled"
+                        ),
+                        tint: settings.deepSeekPostDictationEnabled ? .green : .secondary
+                    )
+                    Toggle("post_dictation.enabled", isOn: Binding(
                         get: { settings.deepSeekPostDictationEnabled },
                         set: { model.setDeepSeekPostDictationEnabled($0) }
                     ))
-                    .labelsHidden()
                     .toggleStyle(.switch)
                 }
 
-                Text("post_dictation.privacy")
-                    .font(.caption2)
+                Divider()
+
+                HStack(spacing: 10) {
+                    Label("post_dictation.workflow.doubao", systemImage: "waveform")
+                    Image(systemName: "chevron.right")
+                    Label("post_dictation.workflow.stability", systemImage: "timer")
+                    Image(systemName: "chevron.right")
+                    Label("post_dictation.workflow.deepseek", systemImage: "sparkles")
+                    Image(systemName: "chevron.right")
+                    Label("post_dictation.workflow.replacement", systemImage: "text.cursor")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+                Text("post_dictation.description")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Divider()
+                HStack(spacing: 8) {
+                    Text("post_dictation.model.title")
+                        .font(.caption.weight(.semibold))
+                    Text("DeepSeek V4 Flash")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("post_dictation.result.copy") {
+                        model.copyPostDictationResult()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(model.copyablePostDictationResult == nil)
+                }
+            }
+        }
+    }
+
+    private var postDictationCredentialPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("post_dictation.key.section_title")
+                            .font(.headline)
+                        Text("post_dictation.key.description")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 12)
+                    StatusPill(
+                        text: localization.text(
+                            model.isDeepSeekAPIKeyConfigured
+                                ? "post_dictation.key.configured"
+                                : "post_dictation.key.not_configured"
+                        ),
+                        tint: model.isDeepSeekAPIKeyConfigured ? .green : .secondary
+                    )
+                }
 
                 HStack(spacing: 8) {
                     SecureField("post_dictation.key.placeholder", text: $deepSeekAPIKeyDraft)
@@ -460,34 +549,17 @@ struct SettingsView: View {
                     .compatibilityButtonStyle(.standard)
                     .disabled(!model.isDeepSeekAPIKeyConfigured || model.postDictationState == .requesting)
                 }
+            }
+        }
+    }
 
-                HStack(spacing: 8) {
-                    StatusPill(
-                        text: localization.text(
-                            model.isDeepSeekAPIKeyConfigured
-                                ? "post_dictation.key.configured"
-                                : "post_dictation.key.not_configured"
-                        ),
-                        tint: model.isDeepSeekAPIKeyConfigured ? .green : .secondary
-                    )
-                    Text(model.postDictationStatus.text(using: localization))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Spacer(minLength: 4)
-                    Button("post_dictation.result.copy") {
-                        model.copyPostDictationResult()
-                    }
-                    .compatibilityButtonStyle(.standard)
-                    .disabled(model.copyablePostDictationResult == nil)
-                }
-
-                Divider()
-
+    private var postDictationTermsPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 13) {
                 Text("post_dictation.terms.title")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.headline)
                 Text("post_dictation.terms.description")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -545,11 +617,70 @@ struct SettingsView: View {
                         .buttonStyle(.borderless)
                     }
                 }
+            }
+        }
+    }
 
+    private var postDictationPrivacyPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 11) {
+                Text("post_dictation.privacy.title")
+                    .font(.headline)
+                Label("post_dictation.privacy.sent", systemImage: "arrow.up.circle")
+                Label("post_dictation.privacy.not_sent", systemImage: "hand.raised")
+                Label("post_dictation.privacy.failure", systemImage: "checkmark.shield")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var postDictationFormattingPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 11) {
+                Text("post_dictation.formatting.title")
+                    .font(.headline)
+                HStack {
+                    Text("post_dictation.formatting.automatic_list")
+                    Spacer(minLength: 8)
+                    StatusPill(
+                        text: localization.text("post_dictation.formatting.disabled"),
+                        tint: .secondary
+                    )
+                }
                 Text("post_dictation.automatic_list.disabled")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var postDictationStatusTint: Color {
+        guard settings.deepSeekPostDictationEnabled else { return .secondary }
+        switch model.postDictationState {
+        case .idle: return .blue
+        case .waitingForText, .waitingForStability: return .orange
+        case .requesting: return .purple
+        case .completed: return .green
+        case .skipped: return .orange
+        case .failed: return .red
+        }
+    }
+
+    private var postDictationStatusImage: String {
+        guard settings.deepSeekPostDictationEnabled else { return "pause.circle" }
+        switch model.postDictationState {
+        case .idle: return "checkmark.circle"
+        case .waitingForText: return "text.cursor"
+        case .waitingForStability: return "timer"
+        case .requesting: return "sparkles"
+        case .completed: return "checkmark.circle.fill"
+        case .skipped: return "forward.end.circle"
+        case .failed: return "exclamationmark.triangle"
         }
     }
 

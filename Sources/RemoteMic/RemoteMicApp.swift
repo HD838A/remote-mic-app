@@ -76,6 +76,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
+    private var postDictationHUDController: PostDictationHUDController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
     private var updateFeedSelection = UpdateFeedSelection(
@@ -126,6 +127,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        postDictationHUDController?.hideImmediately()
         model.stop()
         updateFeedRefreshTask?.cancel()
         updateFeedRefreshTimer?.invalidate()
@@ -269,6 +271,31 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             self?.refreshMenuStatus()
         }
         .store(in: &subscriptions)
+
+        Publishers.CombineLatest(
+            model.$postDictationState,
+            model.$postDictationStatus
+        )
+        .map { state, status in
+            PostDictationHUDPresentation.shouldShow(state: state, statusKey: status.key)
+        }
+        .removeDuplicates()
+        .receive(on: RunLoop.main)
+        .sink { [weak self] isVisible in
+            self?.setPostDictationHUDVisible(isVisible)
+        }
+        .store(in: &subscriptions)
+    }
+
+    private func setPostDictationHUDVisible(_ isVisible: Bool) {
+        if isVisible {
+            let controller = postDictationHUDController
+                ?? PostDictationHUDController(localization: localization)
+            postDictationHUDController = controller
+            controller.setVisible(true)
+        } else {
+            postDictationHUDController?.setVisible(false)
+        }
     }
 
     private func observeLocalization() {
