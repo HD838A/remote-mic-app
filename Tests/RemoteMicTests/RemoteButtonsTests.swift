@@ -77,6 +77,7 @@ struct RemoteButtonsTests {
         let applicationActions = ButtonAction.allCases.filter { $0.presetApplication != nil }
         #expect(applicationActions.count == PresetApplication.allCases.count)
         #expect(applicationActions.allSatisfy { !$0.allowsRepeat })
+        #expect(!ButtonAction.openCustomApplication.allowsRepeat)
     }
 
     @Test func customShortcutsNeverRepeatWhileNavigationActionsStillCan() {
@@ -218,6 +219,12 @@ struct RemoteButtonsTests {
             let encoded = try JSONEncoder().encode(action)
             #expect(try JSONDecoder().decode(ButtonAction.self, from: encoded) == action)
         }
+
+        let legacyConfigured = try JSONDecoder().decode(
+            ConfiguredButtonAction.self,
+            from: Data(#"{"action":"openCodex","shortcut":null}"#.utf8)
+        )
+        #expect(legacyConfigured.applicationProfileID == nil)
     }
 
     @Test func customShortcutNormalizesDisplaysAndConvertsModifiers() throws {
@@ -312,6 +319,121 @@ struct RemoteButtonsTests {
 
     @Test func missingApplicationIsHandledWithoutPermissionFailure() {
         #expect(KeyboardInjector.send(.openCodex, applicationURL: { _ in nil }))
+        #expect(KeyboardInjector.send(.openCustomApplication))
+    }
+
+    @Test func customApplicationLaunchUsesTheSelectedProfileAndFocusStrategy() {
+        let profile = CustomApplicationProfile(
+            displayName: "Example Agent",
+            bundleIdentifier: "com.example.agent",
+            applicationPath: "/Applications/Example Agent.app",
+            focusStrategy: .recordedAccessibility,
+            accessibilityTarget: AccessibilityFocusTarget(
+                role: "AXTextArea",
+                identifier: "composer",
+                title: "",
+                description: "Message input",
+                help: "",
+                placeholder: "Ask anything",
+                context: "conversation composer",
+                windowTitle: "Example Agent",
+                normalizedFrame: nil
+            )
+        )
+        let applicationURL = URL(fileURLWithPath: profile.applicationPath)
+        var openedProfile: CustomApplicationProfile?
+        var focusedProfile: CustomApplicationProfile?
+        var focusedPID: pid_t?
+
+        #expect(KeyboardInjector.send(
+            .openCustomApplication,
+            applicationProfile: profile,
+            customApplicationURL: { _ in applicationURL },
+            customApplicationOpener: { _, application, completion in
+                openedProfile = application
+                completion(4_242, nil)
+            },
+            customApplicationFocuser: { application, processIdentifier, _ in
+                focusedProfile = application
+                focusedPID = processIdentifier
+            }
+        ))
+        #expect(openedProfile == profile)
+        #expect(focusedProfile == profile)
+        #expect(focusedPID == 4_242)
+    }
+
+    @Test func recordedAccessibilityMatchingPrefersRecordedSemanticsAndRejectsSensitiveFields() {
+        let target = AccessibilityFocusTarget(
+            role: "AXTextArea",
+            identifier: "prompt-editor",
+            title: "",
+            description: "Message input",
+            help: "",
+            placeholder: "Ask anything",
+            context: "conversation composer",
+            windowTitle: "Agent",
+            normalizedFrame: NormalizedAccessibilityFrame(
+                x: 0.2,
+                y: 0.7,
+                width: 0.7,
+                height: 0.15
+            )
+        )
+        let exact = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextArea",
+            identifier: "prompt-editor",
+            title: "",
+            description: "Message input",
+            help: "",
+            placeholder: "Ask anything",
+            context: "conversation composer",
+            frame: CGRect(x: 200, y: 560, width: 700, height: 120),
+            enabled: true
+        )
+        let unrelated = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextArea",
+            identifier: "notes",
+            title: "Notes",
+            description: "",
+            help: "",
+            placeholder: "Write notes",
+            context: "sidebar notes",
+            frame: CGRect(x: 20, y: 80, width: 240, height: 500),
+            enabled: true
+        )
+        let password = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextArea",
+            identifier: "prompt-editor",
+            title: "Password",
+            description: "Message input",
+            help: "",
+            placeholder: "Ask anything",
+            context: "secret token",
+            frame: exact.frame,
+            enabled: true
+        )
+        let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let exactScore = KeyboardInjector.recordedAccessibilityCandidateScore(
+            exact,
+            target: target,
+            windowTitle: "Agent",
+            windowFrame: windowFrame
+        )
+        let unrelatedScore = KeyboardInjector.recordedAccessibilityCandidateScore(
+            unrelated,
+            target: target,
+            windowTitle: "Agent",
+            windowFrame: windowFrame
+        )
+        #expect(exactScore != nil)
+        #expect(exactScore ?? 0 > unrelatedScore ?? 0)
+        #expect(KeyboardInjector.recordedAccessibilityCandidateScore(
+            password,
+            target: target,
+            windowTitle: "Agent",
+            windowFrame: windowFrame
+        ) == nil)
     }
 
     @Test func applicationLaunchFailureIsHandledWithoutPermissionFailure() {
@@ -1551,6 +1673,66 @@ struct RemoteButtonsTests {
         restored.resetBindings()
         #expect(restored.action(for: .tv) == .appSwitcher)
         #expect(restored.shortcut(for: .tv) == nil)
+    }
+
+    @Test func customApplicationProfilesPersistPerRemoteAndRoundTripConfiguration() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let target = AccessibilityFocusTarget(
+            role: "AXTextArea",
+            identifier: "composer",
+            title: "",
+            description: "Message input",
+            help: "",
+            placeholder: "Ask anything",
+            context: "conversation composer",
+            windowTitle: "Agent",
+            normalizedFrame: nil
+        )
+        let profile = CustomApplicationProfile(
+            displayName: "Example Agent",
+            bundleIdentifier: "com.example.agent",
+            applicationPath: "/Applications/Example Agent.app",
+            focusStrategy: .recordedAccessibility,
+            accessibilityTarget: target
+        )
+
+        let settings = AppSettings(defaults: defaults)
+        settings.addCustomApplicationProfile(profile)
+        settings.setAction(.openCustomApplication, for: .menu, trigger: .singleClick)
+        settings.setApplicationProfileID(profile.id, for: .menu, trigger: .singleClick)
+        settings.setAction(.openCustomApplication, for: .tv, trigger: .doubleClick)
+        settings.setApplicationProfileID(profile.id, for: .tv, trigger: .doubleClick)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.customApplicationProfile(id: profile.id) == profile)
+        #expect(restored.configuredAction(
+            for: .menu,
+            trigger: .singleClick
+        ).applicationProfileID == profile.id)
+        #expect(restored.configuredAction(
+            for: .tv,
+            trigger: .doubleClick
+        ).applicationProfileID == profile.id)
+
+        let importedSuiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let importedDefaults = try #require(UserDefaults(suiteName: importedSuiteName))
+        defer { importedDefaults.removePersistentDomain(forName: importedSuiteName) }
+        let imported = AppSettings(defaults: importedDefaults)
+        try imported.importConfiguration(from: restored.exportedConfigurationData())
+        #expect(imported.customApplicationProfile(id: profile.id) == profile)
+        #expect(imported.configuredAction(
+            for: .menu,
+            trigger: .singleClick
+        ).applicationProfileID == profile.id)
+
+        restored.resetBindings()
+        #expect(restored.configuredAction(
+            for: .menu,
+            trigger: .singleClick
+        ).applicationProfileID == nil)
+        #expect(restored.customApplicationProfile(id: profile.id) == profile)
     }
 
     @Test func preReleaseUpdateFeedAlwaysFallsBackToStableFeed() throws {

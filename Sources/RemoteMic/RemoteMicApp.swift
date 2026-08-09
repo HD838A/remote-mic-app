@@ -284,17 +284,24 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func observePhoneRemoteButtonTitles() {
-        Publishers.CombineLatest3(
-            model.settings.$buttonBindings,
-            model.settings.$buttonShortcuts,
+        Publishers.CombineLatest(
+            Publishers.CombineLatest4(
+                model.settings.$buttonBindings,
+                model.settings.$buttonShortcuts,
+                model.settings.$buttonApplicationProfileIDs,
+                model.settings.$customApplicationProfiles
+            ),
             localization.$locale
         )
         .receive(on: RunLoop.main)
-        .sink { [weak self] bindings, shortcuts, _ in
+        .sink { [weak self] values, _ in
             guard let self else { return }
+            let (bindings, shortcuts, applicationProfileIDs, customApplicationProfiles) = values
             model.updatePhoneRemoteButtonTitles(
                 bindings: bindings,
                 shortcuts: shortcuts,
+                applicationProfileIDs: applicationProfileIDs,
+                customApplicationProfiles: customApplicationProfiles,
                 localization: localization
             )
         }

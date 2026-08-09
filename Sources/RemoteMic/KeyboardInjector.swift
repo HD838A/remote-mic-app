@@ -11,6 +11,12 @@ enum KeyboardInjector {
         @escaping (pid_t?, Error?) -> Void
     ) -> Void
     typealias ApplicationFocuser = (URL, PresetApplication, pid_t, UInt64) -> Void
+    typealias CustomApplicationOpener = (
+        URL,
+        CustomApplicationProfile,
+        @escaping (pid_t?, Error?) -> Void
+    ) -> Void
+    typealias CustomApplicationFocuser = (CustomApplicationProfile, pid_t, UInt64) -> Void
     typealias CmuxCommandRunner = (URL, [String], TimeInterval) -> CmuxCommandResult
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
@@ -107,6 +113,7 @@ enum KeyboardInjector {
     static func send(
         _ action: ButtonAction,
         shortcut: CustomKeyboardShortcut? = nil,
+        applicationProfile: CustomApplicationProfile? = nil,
         applicationURL: (String) -> URL? = {
             if $0 == PresetApplication.remoteMic.bundleIdentifier {
                 return Bundle.main.bundleURL
@@ -115,6 +122,9 @@ enum KeyboardInjector {
         },
         applicationOpener: ApplicationOpener = openApplication,
         applicationFocuser: @escaping ApplicationFocuser = focusApplication,
+        customApplicationURL: (CustomApplicationProfile) -> URL? = resolveCustomApplicationURL,
+        customApplicationOpener: CustomApplicationOpener = openCustomApplication,
+        customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) }
     ) -> Bool {
@@ -131,6 +141,21 @@ enum KeyboardInjector {
                 applicationURL: applicationURL,
                 applicationOpener: applicationOpener,
                 applicationFocuser: applicationFocuser
+            )
+            return true
+        }
+        if action == .openCustomApplication {
+            guard let applicationProfile else {
+                AppLogger.shared.write("APP ACTION custom unavailable reason=profile_missing")
+                return true
+            }
+            let focusRequestID = focusRequests.begin()
+            open(
+                applicationProfile,
+                focusRequestID: focusRequestID,
+                applicationURL: customApplicationURL,
+                applicationOpener: customApplicationOpener,
+                applicationFocuser: customApplicationFocuser
             )
             return true
         }
@@ -175,6 +200,8 @@ enum KeyboardInjector {
             if let shortcut {
                 keyPoster(CGKeyCode(shortcut.keyCode), shortcut.cgEventFlags)
             }
+        case .openCustomApplication:
+            break
         case .toggleLongRecording:
             break
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor, .openXcode,
@@ -220,6 +247,137 @@ enum KeyboardInjector {
         configuration.createsNewApplicationInstance = false
         NSWorkspace.shared.openApplication(at: url, configuration: configuration) { runningApplication, error in
             completion(runningApplication?.processIdentifier, error)
+        }
+    }
+
+    private static func open(
+        _ application: CustomApplicationProfile,
+        focusRequestID: UInt64,
+        applicationURL: (CustomApplicationProfile) -> URL?,
+        applicationOpener: CustomApplicationOpener,
+        applicationFocuser: @escaping CustomApplicationFocuser
+    ) {
+        guard let url = applicationURL(application) else {
+            AppLogger.shared.write(
+                "APP ACTION unavailable bundle=\(application.bundleIdentifier) custom=true"
+            )
+            return
+        }
+
+        applicationOpener(url, application) { processIdentifier, error in
+            if let error {
+                AppLogger.shared.write(
+                    "APP ACTION failed bundle=\(application.bundleIdentifier) custom=true " +
+                        "error=\(error.localizedDescription)"
+                )
+                return
+            }
+            AppLogger.shared.write(
+                "APP ACTION opened bundle=\(application.bundleIdentifier) custom=true"
+            )
+            guard application.focusStrategy != .none, let processIdentifier else { return }
+            applicationFocuser(application, processIdentifier, focusRequestID)
+        }
+    }
+
+    private static func resolveCustomApplicationURL(
+        _ application: CustomApplicationProfile
+    ) -> URL? {
+        let savedURL = URL(fileURLWithPath: application.applicationPath)
+        if Bundle(url: savedURL)?.bundleIdentifier == application.bundleIdentifier {
+            return savedURL
+        }
+        return NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: application.bundleIdentifier
+        )
+    }
+
+    private static func openCustomApplication(
+        at url: URL,
+        application: CustomApplicationProfile,
+        completion: @escaping (pid_t?, Error?) -> Void
+    ) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { runningApplication, error in
+            completion(runningApplication?.processIdentifier, error)
+        }
+    }
+
+    private static func focusCustomApplication(
+        application: CustomApplicationProfile,
+        processIdentifier: pid_t,
+        requestID: UInt64
+    ) {
+        scheduleCustomApplicationFocus(
+            application: application,
+            processIdentifier: processIdentifier,
+            requestID: requestID,
+            attempt: 0
+        )
+    }
+
+    private static func scheduleCustomApplicationFocus(
+        application: CustomApplicationProfile,
+        processIdentifier: pid_t,
+        requestID: UInt64,
+        attempt: Int
+    ) {
+        let maximumAttempts = 8
+        let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(0) : .milliseconds(200)
+        focusQueue.asyncAfter(deadline: .now() + delay) {
+            guard focusRequests.isCurrent(requestID) else { return }
+            if applicationIsFrontmost(processIdentifier) {
+                guard isAccessibilityTrusted else {
+                    AppLogger.shared.write(
+                        "APP FOCUS skipped bundle=\(application.bundleIdentifier) " +
+                            "method=custom reason=not_trusted"
+                    )
+                    return
+                }
+                switch application.focusStrategy {
+                case .none:
+                    return
+                case .keyboardShortcut:
+                    if let shortcut = application.focusShortcut {
+                        postKey(code: CGKeyCode(shortcut.keyCode), flags: shortcut.cgEventFlags)
+                        AppLogger.shared.write(
+                            "APP FOCUS succeeded bundle=\(application.bundleIdentifier) " +
+                                "method=custom_shortcut"
+                        )
+                        return
+                    }
+                case .recordedAccessibility:
+                    if let target = application.accessibilityTarget,
+                       focusRecordedAccessibilityTarget(
+                           target,
+                           processIdentifier: processIdentifier
+                       )
+                    {
+                        AppLogger.shared.write(
+                            "APP FOCUS succeeded bundle=\(application.bundleIdentifier) " +
+                                "method=custom_accessibility"
+                        )
+                        return
+                    }
+                }
+            }
+
+            let nextAttempt = attempt + 1
+            if nextAttempt < maximumAttempts {
+                scheduleCustomApplicationFocus(
+                    application: application,
+                    processIdentifier: processIdentifier,
+                    requestID: requestID,
+                    attempt: nextAttempt
+                )
+            } else if focusRequests.isCurrent(requestID) {
+                AppLogger.shared.write(
+                    "APP FOCUS failed bundle=\(application.bundleIdentifier) " +
+                        "method=custom reason=target_not_focused"
+                )
+            }
         }
     }
 
@@ -381,6 +539,216 @@ enum KeyboardInjector {
             }
         }
         return false
+    }
+
+    static func captureFocusedAccessibilityTarget(
+        bundleIdentifier: String
+    ) -> AccessibilityFocusTarget? {
+        guard isAccessibilityTrusted else { return nil }
+        let systemWideElement = AXUIElementCreateSystemWide()
+        guard let focusedElement = axElement(
+            systemWideElement,
+            attribute: kAXFocusedUIElementAttribute
+        ) else { return nil }
+
+        var processIdentifier: pid_t = 0
+        guard AXUIElementGetPid(focusedElement, &processIdentifier) == .success,
+              NSRunningApplication(processIdentifier: processIdentifier)?.bundleIdentifier == bundleIdentifier
+        else { return nil }
+
+        let role = axString(focusedElement, attribute: kAXRoleAttribute)
+        guard role == "AXTextArea" || role == "AXTextField",
+              axBool(focusedElement, attribute: kAXEnabledAttribute) ?? true
+        else { return nil }
+
+        var contextParts: [String] = []
+        var current = axElement(focusedElement, attribute: kAXParentAttribute)
+        var window = axElement(focusedElement, attribute: kAXWindowAttribute)
+        var ancestorCount = 0
+        while let element = current, ancestorCount < 8 {
+            let semanticText = axSemanticText(element)
+            if !semanticText.isEmpty {
+                contextParts.append(semanticText)
+            }
+            if axString(element, attribute: kAXRoleAttribute) == "AXWindow" {
+                window = window ?? element
+                break
+            }
+            current = axElement(element, attribute: kAXParentAttribute)
+            ancestorCount += 1
+        }
+
+        let context = String(contextParts.joined(separator: " ").suffix(512))
+        let target = AccessibilityFocusTarget(
+            role: role,
+            identifier: axString(focusedElement, attribute: kAXIdentifierAttribute),
+            title: axString(focusedElement, attribute: kAXTitleAttribute),
+            description: axString(focusedElement, attribute: kAXDescriptionAttribute),
+            help: axString(focusedElement, attribute: kAXHelpAttribute),
+            placeholder: axString(focusedElement, attribute: kAXPlaceholderValueAttribute),
+            context: context,
+            windowTitle: window.map { axString($0, attribute: kAXTitleAttribute) } ?? "",
+            normalizedFrame: normalizedAccessibilityFrame(
+                elementFrame: axFrame(focusedElement),
+                windowFrame: window.flatMap(axFrame)
+            )
+        )
+        let semanticText = [
+            target.identifier,
+            target.title,
+            target.description,
+            target.help,
+            target.placeholder,
+            target.context,
+        ].joined(separator: " ")
+        guard !containsSensitiveAccessibilityTerms(semanticText),
+              !semanticText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return target
+    }
+
+    private static func focusRecordedAccessibilityTarget(
+        _ target: AccessibilityFocusTarget,
+        processIdentifier: pid_t
+    ) -> Bool {
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        var ranked: [(element: AXUIElement, score: Int)] = []
+        for window in applicationWindows(applicationElement) {
+            let windowFrame = axFrame(window)
+            let windowTitle = axString(window, attribute: kAXTitleAttribute)
+            for candidate in accessibilityTextCandidates(in: window) {
+                guard let score = recordedAccessibilityCandidateScore(
+                    candidate.snapshot,
+                    target: target,
+                    windowTitle: windowTitle,
+                    windowFrame: windowFrame
+                ) else { continue }
+                ranked.append((candidate.element, score))
+            }
+        }
+        ranked.sort { $0.score > $1.score }
+        guard let best = ranked.first,
+              ranked.dropFirst().first.map({ best.score - $0.score >= 40 }) ?? true
+        else { return false }
+        return focusAccessibilityElement(
+            best.element,
+            applicationElement: applicationElement,
+            requiresApplicationFocusedElement: true
+        )
+    }
+
+    static func recordedAccessibilityCandidateScore(
+        _ candidate: AccessibilityTextCandidate,
+        target: AccessibilityFocusTarget,
+        windowTitle: String,
+        windowFrame: CGRect?
+    ) -> Int? {
+        guard candidate.enabled, candidate.role == target.role else { return nil }
+        let semanticText = [
+            candidate.identifier,
+            candidate.title,
+            candidate.description,
+            candidate.help,
+            candidate.placeholder,
+            candidate.context,
+        ].joined(separator: " ")
+        guard !containsSensitiveAccessibilityTerms(semanticText) else { return nil }
+
+        var score = 0
+        var strongMatches = 0
+        if semanticValuesMatch(candidate.identifier, target.identifier) {
+            score += 500
+            strongMatches += 1
+        }
+        if semanticValuesMatch(candidate.placeholder, target.placeholder) {
+            score += 220
+            strongMatches += 1
+        }
+        if semanticValuesMatch(candidate.title, target.title) {
+            score += 140
+            strongMatches += 1
+        }
+        if semanticValuesMatch(candidate.description, target.description) {
+            score += 140
+            strongMatches += 1
+        }
+        if semanticValuesMatch(candidate.help, target.help) {
+            score += 100
+            strongMatches += 1
+        }
+        if semanticValuesMatch(windowTitle, target.windowTitle) {
+            score += 100
+        }
+
+        let contextSimilarity = accessibilityContextSimilarity(candidate.context, target.context)
+        score += Int(contextSimilarity * 180)
+        if contextSimilarity >= 0.5 {
+            strongMatches += 1
+        }
+
+        if let targetFrame = target.normalizedFrame,
+           let candidateFrame = normalizedAccessibilityFrame(
+               elementFrame: candidate.frame,
+               windowFrame: windowFrame
+           )
+        {
+            let distance = abs(targetFrame.x - candidateFrame.x) +
+                abs(targetFrame.y - candidateFrame.y) +
+                abs(targetFrame.width - candidateFrame.width) +
+                abs(targetFrame.height - candidateFrame.height)
+            score += max(0, 120 - Int(distance * 120))
+        }
+
+        guard strongMatches > 0 else { return nil }
+        return score >= 180 ? score : nil
+    }
+
+    private static func normalizedAccessibilityFrame(
+        elementFrame: CGRect?,
+        windowFrame: CGRect?
+    ) -> NormalizedAccessibilityFrame? {
+        guard let elementFrame, let windowFrame,
+              windowFrame.width > 0, windowFrame.height > 0
+        else { return nil }
+        return NormalizedAccessibilityFrame(
+            x: (elementFrame.minX - windowFrame.minX) / windowFrame.width,
+            y: (elementFrame.minY - windowFrame.minY) / windowFrame.height,
+            width: elementFrame.width / windowFrame.width,
+            height: elementFrame.height / windowFrame.height
+        )
+    }
+
+    private static func semanticValuesMatch(_ lhs: String, _ rhs: String) -> Bool {
+        let lhs = lhs.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let rhs = rhs.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !lhs.isEmpty, !rhs.isEmpty else { return false }
+        if lhs == rhs { return true }
+        return min(lhs.count, rhs.count) >= 4 && (lhs.contains(rhs) || rhs.contains(lhs))
+    }
+
+    private static func accessibilityContextSimilarity(_ lhs: String, _ rhs: String) -> Double {
+        let left = accessibilityTokens(lhs)
+        let right = accessibilityTokens(rhs)
+        guard !left.isEmpty, !right.isEmpty else { return 0 }
+        return Double(left.intersection(right).count) / Double(max(left.count, right.count))
+    }
+
+    private static func accessibilityTokens(_ value: String) -> Set<String> {
+        Set(
+            value.lowercased().components(
+                separatedBy: CharacterSet.alphanumerics.inverted
+            ).filter { $0.count >= 2 }
+        )
+    }
+
+    private static func containsSensitiveAccessibilityTerms(_ value: String) -> Bool {
+        let value = value.lowercased()
+        let terms = [
+            "password", "passcode", "secret", "api key", "apikey", "token", "credit card",
+            "search", "find", "filter", "address bar", "settings", "preferences",
+            "密码", "口令", "密钥", "令牌", "银行卡", "搜索", "查找", "筛选", "设置", "偏好",
+        ]
+        return terms.contains(where: value.contains)
     }
 
     private static func applicationWindows(_ applicationElement: AXUIElement) -> [AXUIElement] {

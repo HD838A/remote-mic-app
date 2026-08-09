@@ -57,11 +57,13 @@ enum RemotePowerState: Equatable {
 struct RemoteDeviceMappings: Codable, Equatable {
     var buttonBindings: [String: ButtonAction]
     var buttonShortcuts: [String: CustomKeyboardShortcut]
+    var buttonApplicationProfileIDs: [String: UUID]?
     var secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
 
     init(
         buttonBindings: [RemoteButton: ButtonAction],
         buttonShortcuts: [RemoteButton: CustomKeyboardShortcut],
+        buttonApplicationProfileIDs: [RemoteButton: UUID] = [:],
         secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]]
     ) {
         self.buttonBindings = Dictionary(
@@ -70,6 +72,10 @@ struct RemoteDeviceMappings: Codable, Equatable {
         self.buttonShortcuts = Dictionary(
             uniqueKeysWithValues: buttonShortcuts.map { ($0.key.rawValue, $0.value) }
         )
+        let applicationProfileIDs = Dictionary(
+            uniqueKeysWithValues: buttonApplicationProfileIDs.map { ($0.key.rawValue, $0.value) }
+        )
+        self.buttonApplicationProfileIDs = applicationProfileIDs.isEmpty ? nil : applicationProfileIDs
         self.secondaryButtonBindings = Dictionary(
             uniqueKeysWithValues: secondaryButtonBindings.map { button, bindings in
                 (
@@ -88,6 +94,12 @@ struct RemoteDeviceMappings: Codable, Equatable {
 
     var parsedButtonShortcuts: [RemoteButton: CustomKeyboardShortcut] {
         Dictionary(uniqueKeysWithValues: buttonShortcuts.compactMap { key, value in
+            RemoteButton(rawValue: key).map { ($0, value) }
+        })
+    }
+
+    var parsedButtonApplicationProfileIDs: [RemoteButton: UUID] {
+        Dictionary(uniqueKeysWithValues: (buttonApplicationProfileIDs ?? [:]).compactMap { key, value in
             RemoteButton(rawValue: key).map { ($0, value) }
         })
     }

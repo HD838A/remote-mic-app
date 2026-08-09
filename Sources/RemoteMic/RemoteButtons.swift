@@ -241,8 +241,82 @@ enum ButtonTrigger: String, CaseIterable, Codable, Identifiable {
 struct ConfiguredButtonAction: Codable, Equatable {
     var action: ButtonAction
     var shortcut: CustomKeyboardShortcut?
+    var applicationProfileID: UUID?
+
+    init(
+        action: ButtonAction,
+        shortcut: CustomKeyboardShortcut?,
+        applicationProfileID: UUID? = nil
+    ) {
+        self.action = action
+        self.shortcut = shortcut
+        self.applicationProfileID = applicationProfileID
+    }
 
     static let disabled = ConfiguredButtonAction(action: .disabled, shortcut: nil)
+}
+
+enum CustomApplicationFocusStrategy: String, Codable, CaseIterable, Identifiable {
+    case none
+    case keyboardShortcut
+    case recordedAccessibility
+
+    var id: String { rawValue }
+
+    func displayName(using localization: LocalizationStore) -> String {
+        switch self {
+        case .none: return localization.text("custom_application.focus.none")
+        case .keyboardShortcut: return localization.text("custom_application.focus.shortcut")
+        case .recordedAccessibility: return localization.text("custom_application.focus.recorded")
+        }
+    }
+}
+
+struct NormalizedAccessibilityFrame: Codable, Equatable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+}
+
+struct AccessibilityFocusTarget: Codable, Equatable {
+    let role: String
+    let identifier: String
+    let title: String
+    let description: String
+    let help: String
+    let placeholder: String
+    let context: String
+    let windowTitle: String
+    let normalizedFrame: NormalizedAccessibilityFrame?
+}
+
+struct CustomApplicationProfile: Codable, Equatable, Identifiable {
+    let id: UUID
+    var displayName: String
+    var bundleIdentifier: String
+    var applicationPath: String
+    var focusStrategy: CustomApplicationFocusStrategy
+    var focusShortcut: CustomKeyboardShortcut?
+    var accessibilityTarget: AccessibilityFocusTarget?
+
+    init(
+        id: UUID = UUID(),
+        displayName: String,
+        bundleIdentifier: String,
+        applicationPath: String,
+        focusStrategy: CustomApplicationFocusStrategy = .none,
+        focusShortcut: CustomKeyboardShortcut? = nil,
+        accessibilityTarget: AccessibilityFocusTarget? = nil
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.bundleIdentifier = bundleIdentifier
+        self.applicationPath = applicationPath
+        self.focusStrategy = focusStrategy
+        self.focusShortcut = focusShortcut
+        self.accessibilityTarget = accessibilityTarget
+    }
 }
 
 enum ApplicationFocusStrategy: Equatable {
@@ -338,6 +412,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeMute
     case playPause
     case customShortcut
+    case openCustomApplication
     case toggleLongRecording
     case openRemoteMic
     case openCodex
@@ -373,6 +448,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .volumeMute: return localization.text("action.system_mute")
         case .playPause: return localization.text("action.play_pause")
         case .customShortcut: return localization.text("action.custom_shortcut")
+        case .openCustomApplication: return localization.text("action.open_custom_application")
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
         case .openCodex: return localization.text("action.open_codex")
@@ -410,7 +486,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     }
 
     var allowsRepeat: Bool {
-        self != .customShortcut && presetApplication == nil && !isAppInternal
+        self != .customShortcut && self != .openCustomApplication && presetApplication == nil && !isAppInternal
     }
 
     var isAppInternal: Bool {

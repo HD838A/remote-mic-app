@@ -82,13 +82,11 @@ final class HIDRemoteMonitor {
         runtimePermissions: @escaping () -> Bool = {
             HIDRemoteMonitor.isInputMonitoringGranted && KeyboardInjector.isAccessibilityTrusted
         },
-        actionPerformer: @escaping (
+        actionPerformer: ((
             RemoteButton,
             ButtonTrigger,
             ConfiguredButtonAction
-        ) -> Bool = { _, _, configured in
-            KeyboardInjector.send(configured.action, shortcut: configured.shortcut)
-        },
+        ) -> Bool)? = nil,
         frontmostBundleIdentifier: @escaping () -> String? = {
             NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         }
@@ -101,7 +99,15 @@ final class HIDRemoteMonitor {
         self.ownsEventSuppressor = ownsEventSuppressor
         self.scheduler = scheduler
         self.runtimePermissions = runtimePermissions
-        self.actionPerformer = actionPerformer
+        self.actionPerformer = actionPerformer ?? { _, _, configured in
+            KeyboardInjector.send(
+                configured.action,
+                shortcut: configured.shortcut,
+                applicationProfile: settings.customApplicationProfile(
+                    id: configured.applicationProfileID
+                )
+            )
+        }
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
     }
 

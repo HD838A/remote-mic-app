@@ -160,6 +160,10 @@ struct SettingsPageRegressionTests {
             "settings.clearTrustedPhoneIdentities()",
             "settings.setAction(action, for: button, trigger: trigger)",
             "settings.setShortcut(",
+            "chooseCustomApplication(for:",
+            "recordCustomApplicationInput(profileID:",
+            "settings.setApplicationProfileID(",
+            ".openCustomApplication",
             "settings.resetBindings()",
         ] {
             #expect(source.contains(requiredAction), Comment(rawValue: requiredAction))
