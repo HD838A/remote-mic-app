@@ -121,7 +121,10 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             sidebar
                 .frame(width: 108)
-            Divider()
+            Color(nsColor: .separatorColor)
+                .frame(width: 1)
+                .frame(maxHeight: .infinity)
+                .ignoresSafeArea(.container, edges: .top)
             selectedPage
         }
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())

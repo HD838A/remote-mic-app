@@ -94,7 +94,7 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum RemoteNativeEvent: Equatable {
+enum RemoteNativeEvent: Hashable {
     case keyboard(keyCode: UInt16)
     case systemKey(type: Int32)
 }

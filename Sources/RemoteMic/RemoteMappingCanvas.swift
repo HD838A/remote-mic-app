@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-enum RemoteMappingSide {
+enum RemoteMappingSide: Equatable {
     case left
     case right
 }
@@ -17,20 +17,20 @@ struct RemoteMappingPlacement: Identifiable {
 
 enum RemoteMappingLayout {
     static let canvasHeight: CGFloat = 430
-    static let remoteSize = CGSize(width: 174, height: 352)
+    static let remoteSize = CGSize(width: 184, height: 372)
 
     static let buttonPlacements: [RemoteMappingPlacement] = [
         RemoteMappingPlacement(button: .power, side: .left, anchor: UnitPoint(x: 0.386, y: 0.099), targetY: 0.08),
         RemoteMappingPlacement(button: .up, side: .left, anchor: UnitPoint(x: 0.502, y: 0.179), targetY: 0.23),
         RemoteMappingPlacement(button: .left, side: .left, anchor: UnitPoint(x: 0.362, y: 0.246), targetY: 0.38),
-        RemoteMappingPlacement(button: .ok, side: .left, anchor: UnitPoint(x: 0.502, y: 0.246), targetY: 0.53),
-        RemoteMappingPlacement(button: .down, side: .left, anchor: UnitPoint(x: 0.502, y: 0.317), targetY: 0.68),
-        RemoteMappingPlacement(button: .back, side: .left, anchor: UnitPoint(x: 0.406, y: 0.389), targetY: 0.83),
+        RemoteMappingPlacement(button: .back, side: .left, anchor: UnitPoint(x: 0.406, y: 0.389), targetY: 0.53),
+        RemoteMappingPlacement(button: .home, side: .left, anchor: UnitPoint(x: 0.406, y: 0.479), targetY: 0.68),
+        RemoteMappingPlacement(button: .menu, side: .left, anchor: UnitPoint(x: 0.406, y: 0.569), targetY: 0.83),
         RemoteMappingPlacement(button: .right, side: .right, anchor: UnitPoint(x: 0.638, y: 0.246), targetY: 0.215),
-        RemoteMappingPlacement(button: .volumeUp, side: .right, anchor: UnitPoint(x: 0.604, y: 0.390), targetY: 0.36),
-        RemoteMappingPlacement(button: .home, side: .right, anchor: UnitPoint(x: 0.406, y: 0.479), targetY: 0.505),
-        RemoteMappingPlacement(button: .volumeDown, side: .right, anchor: UnitPoint(x: 0.604, y: 0.480), targetY: 0.65),
-        RemoteMappingPlacement(button: .menu, side: .right, anchor: UnitPoint(x: 0.406, y: 0.569), targetY: 0.795),
+        RemoteMappingPlacement(button: .ok, side: .right, anchor: UnitPoint(x: 0.502, y: 0.246), targetY: 0.36),
+        RemoteMappingPlacement(button: .down, side: .right, anchor: UnitPoint(x: 0.502, y: 0.317), targetY: 0.505),
+        RemoteMappingPlacement(button: .volumeUp, side: .right, anchor: UnitPoint(x: 0.604, y: 0.390), targetY: 0.65),
+        RemoteMappingPlacement(button: .volumeDown, side: .right, anchor: UnitPoint(x: 0.604, y: 0.480), targetY: 0.795),
         RemoteMappingPlacement(button: .tv, side: .right, anchor: UnitPoint(x: 0.604, y: 0.569), targetY: 0.94),
     ]
 
@@ -59,6 +59,24 @@ enum RemoteMappingLayout {
             y: canvasHeight * targetY
         )
     }
+
+    static func cardWidth(for canvasWidth: CGFloat) -> CGFloat {
+        min(285, max(250, (canvasWidth - 240) / 2))
+    }
+
+    static func connectionControlPoints(
+        start: CGPoint,
+        end: CGPoint,
+        side: RemoteMappingSide
+    ) -> (start: CGPoint, end: CGPoint) {
+        let direction: CGFloat = side == .left ? -1 : 1
+        let distance = min(70, max(34, abs(end.x - start.x) * 0.58))
+        let endpointDistance = min(42, max(24, distance * 0.6))
+        return (
+            CGPoint(x: start.x + direction * distance, y: start.y),
+            CGPoint(x: end.x - direction * endpointDistance, y: end.y)
+        )
+    }
 }
 
 struct RemoteMappingCanvas: View {
@@ -74,8 +92,6 @@ struct RemoteMappingCanvas: View {
         GeometryReader { geometry in
             let metrics = Metrics(width: geometry.size.width)
             ZStack {
-                connectionLines(metrics: metrics)
-
                 MappingRemotePhoto()
                     .frame(
                         width: RemoteMappingLayout.remoteSize.width,
@@ -83,6 +99,8 @@ struct RemoteMappingCanvas: View {
                     )
                     .position(x: metrics.remoteCenterX, y: RemoteMappingLayout.canvasHeight / 2)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                connectionLines(metrics: metrics)
 
                 ForEach(RemoteMappingLayout.buttonPlacements) { placement in
                     mappingCard(placement.button)
@@ -112,7 +130,8 @@ struct RemoteMappingCanvas: View {
                     start: metrics.remotePoint(for: placement.anchor),
                     end: metrics.cardEdgePoint(side: placement.side, targetY: placement.targetY),
                     side: placement.side,
-                    selected: selectedButton == placement.button
+                    selected: selectedButton == placement.button,
+                    showsAnchor: activeButtons.contains(placement.button)
                 )
             }
             drawConnection(
@@ -120,7 +139,8 @@ struct RemoteMappingCanvas: View {
                 start: metrics.remotePoint(for: RemoteMappingLayout.voiceAnchor),
                 end: metrics.cardEdgePoint(side: .right, targetY: RemoteMappingLayout.voiceTargetY),
                 side: .right,
-                selected: voiceActive
+                selected: voiceActive,
+                showsAnchor: voiceActive
             )
         }
         .allowsHitTesting(false)
@@ -131,14 +151,17 @@ struct RemoteMappingCanvas: View {
         start: CGPoint,
         end: CGPoint,
         side: RemoteMappingSide,
-        selected: Bool
+        selected: Bool,
+        showsAnchor: Bool
     ) {
-        let elbowX = start.x + (side == .left ? -28 : 28)
+        let controls = RemoteMappingLayout.connectionControlPoints(
+            start: start,
+            end: end,
+            side: side
+        )
         var path = Path()
         path.move(to: start)
-        path.addLine(to: CGPoint(x: elbowX, y: start.y))
-        path.addLine(to: CGPoint(x: elbowX, y: end.y))
-        path.addLine(to: end)
+        path.addCurve(to: end, control1: controls.start, control2: controls.end)
 
         let color = selected ? Color.accentColor : Color.secondary.opacity(0.42)
         context.stroke(
@@ -150,10 +173,12 @@ struct RemoteMappingCanvas: View {
                 lineJoin: .round
             )
         )
-        context.fill(
-            Path(ellipseIn: CGRect(x: start.x - 2.5, y: start.y - 2.5, width: 5, height: 5)),
-            with: .color(color)
-        )
+        if showsAnchor {
+            context.fill(
+                Path(ellipseIn: CGRect(x: start.x - 4, y: start.y - 4, width: 8, height: 8)),
+                with: .color(Color.orange)
+            )
+        }
 
         let direction: CGFloat = side == .left ? -1 : 1
         var arrow = Path()
@@ -289,7 +314,7 @@ struct RemoteMappingCanvas: View {
 
         init(width: CGFloat) {
             self.width = width
-            cardWidth = min(250, max(218, (width - 270) / 2))
+            cardWidth = RemoteMappingLayout.cardWidth(for: width)
         }
 
         var remoteCenterX: CGFloat { width / 2 }

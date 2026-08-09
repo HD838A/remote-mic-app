@@ -107,12 +107,68 @@ struct RemoteButtonsTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let monitor = HIDRemoteMonitor(settings: AppSettings(defaults: defaults))
 
-        #expect(monitor.shouldAcceptRawPress(button: .up, action: .customShortcut))
-        #expect(!monitor.shouldAcceptRawPress(button: .up, action: .customShortcut))
+        let otherApp = PresetApplication.codex.bundleIdentifier
+        #expect(monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(!monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            frontmostBundleIdentifier: otherApp
+        ))
         monitor.finishNonRepeatablePress(.up)
-        #expect(monitor.shouldAcceptRawPress(button: .up, action: .customShortcut))
-        #expect(monitor.shouldAcceptRawPress(button: .up, action: .arrowUp))
-        #expect(monitor.shouldAcceptRawPress(button: .up, action: .arrowUp))
+        #expect(monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .arrowUp,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .arrowUp,
+            frontmostBundleIdentifier: otherApp
+        ))
+    }
+
+    @Test func navigationRepeatStopsOnlyWhileRemoteMicIsFrontmost() throws {
+        let remoteMic = PresetApplication.remoteMic.bundleIdentifier
+        for action in [
+            ButtonAction.arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward,
+        ] {
+            #expect(!HIDRemoteMonitor.shouldRepeat(
+                action: action,
+                frontmostBundleIdentifier: remoteMic
+            ))
+            #expect(HIDRemoteMonitor.shouldRepeat(
+                action: action,
+                frontmostBundleIdentifier: PresetApplication.codex.bundleIdentifier
+            ))
+        }
+        #expect(HIDRemoteMonitor.shouldRepeat(
+            action: .volumeDown,
+            frontmostBundleIdentifier: remoteMic
+        ))
+
+        let suiteName = "RemoteButtonsTests.frontmostRepeat.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let monitor = HIDRemoteMonitor(settings: AppSettings(defaults: defaults))
+        #expect(monitor.shouldAcceptRawPress(
+            button: .left,
+            action: .arrowLeft,
+            frontmostBundleIdentifier: remoteMic
+        ))
+        #expect(!monitor.shouldAcceptRawPress(
+            button: .left,
+            action: .arrowLeft,
+            frontmostBundleIdentifier: remoteMic
+        ))
     }
 
     @Test func continuousRecordingIsInternalAndNeverRepeats() {
@@ -1570,6 +1626,33 @@ struct RemoteButtonsTests {
         #expect(RemoteButton.menu.nativeEvent == .keyboard(keyCode: KeyboardInjector.contextualMenuKeyCode))
         #expect(RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0))
         #expect(RemoteButton.back.nativeEvent == nil)
+    }
+
+    @Test func nativeKeyAutoRepeatIsSuppressedUntilEveryRemoteReleases() throws {
+        let suppressor = KeyboardEventSuppressor()
+        let down = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 126,
+            keyDown: true
+        ))
+        let up = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 126,
+            keyDown: false
+        ))
+
+        suppressor.arm(button: .up, edge: .down)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        #expect(suppressor.handle(type: .keyDown, event: down))
+
+        suppressor.arm(button: .up, edge: .down)
+        suppressor.arm(button: .up, edge: .up)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        #expect(suppressor.handle(type: .keyUp, event: up))
+
+        suppressor.arm(button: .up, edge: .up)
+        #expect(suppressor.handle(type: .keyUp, event: up))
+        #expect(!suppressor.handle(type: .keyDown, event: down))
     }
 
     @Test func remoteModelNumberIdentificationIsStrictAndCaseInsensitive() {
