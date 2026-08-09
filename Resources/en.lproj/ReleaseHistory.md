@@ -1,16 +1,29 @@
 # Version History
 
+## 1.8.1 (Pre-release)
+
+- Fixed short voice input from Xiaomi Remote 2 sometimes disappearing entirely or losing its ending after the voice key was released. Queued audio is now allowed to finish playing when the remote stops streaming.
+- Improved voice reliability while Xiaomi Remote 2 and Xiaomi Remote 2 Pro are connected together, including alternating use through both the virtual microphone and Simulate Fn Tap modes.
+
+## 1.8.0 (Pre-release)
+
+- Supports multiple Xiaomi Remote 2 and Xiaomi Remote 2 Pro devices at the same time. Each remote keeps independent shortcuts, a newly added remote copies the current settings, and physical activity automatically selects the matching device.
+- Shows the remote model, battery level, and available charging or power status. Button Mapping now centers the physical remote and displays every single-click, double-click, and long-press action on one screen.
+- Connectors originate at the real hardware hotspots and reveal the pressed position. Refined curves, arrow spacing, the main enable switch, and concise explanations make the mapping easier to understand.
+- Fixed cross-device button routing, unexpected selection changes, and continuous actions or system error sounds when holding custom shortcuts, navigation buttons, or Delete.
+- When custom button controls are enabled without the required permissions, the app now explains what is missing, opens the Permissions page, and applies the setting after authorization.
+
+## 1.7.8 (Pre-release)
+
+- Redesigned Connection & Voice around the physical remote, voice output, compatible microphone, and phone connections while retaining reconnect, device selection, TestFlight, Mobile Web, and trusted-device controls.
+- Redesigned Button Mapping to show every button's single-click, double-click, and long-press settings at a glance, with an option to lock the button currently being edited.
+- Moved Simulate Fn Tap on Voice Key below the remote image so the microphone button's fixed behavior and related setting stay together, without changing configuration or runtime behavior.
+
 ## 1.7.7 (Pre-release)
 
 - Fixed `1.7.6` quitting immediately at launch on some macOS 26 Macs with the Xiaomi Bluetooth voice remote connected by retaining the owning system client throughout HID mapping reads and writes.
 - Configurable Mobile Web and nearby iPhone/iPad buttons now support the same single-click, double-click, and long-press actions as the physical remote while keeping gesture state isolated between connection types.
 - Added a hard launch gate for the final ZIP and PKG artifacts: both must pass two launches, a normal quit, and crash-report checks on an interactive Mac with the remote connected before publication.
-
-## 1.7.6 (Withdrawn pre-release)
-
-- Fixed all configurable Mobile Web buttons being limited to single-click actions. The updated Web remote and Mac now support the same custom single-click, double-click, and long-press actions as the physical remote.
-- Keeps Web and nearby iPhone/iPad gesture state independent so simultaneous connections cannot interfere; the updated Web remote still falls back to a single click with older Mac versions.
-- Added a GitHub CI workflow scoped to the Mobile Web project for TypeScript checks, tests, and production builds.
 
 ## 1.7.5
 

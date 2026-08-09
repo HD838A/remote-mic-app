@@ -100,34 +100,14 @@ stage_assets() {
 }
 
 generate_release_notes() {
-  local previous_tag generated_notes target_commit
-  local api_arguments
-
-  target_commit="$(git rev-parse "$RELEASE_TAG^{commit}")"
-  previous_tag="$(git describe --tags --abbrev=0 "$RELEASE_TAG^" 2>/dev/null || true)"
-  api_arguments=(
-    "repos/$REPOSITORY/releases/generate-notes"
-    -X POST
-    -f "tag_name=$RELEASE_TAG"
-    -f "target_commitish=$target_commit"
-  )
-  if [[ -n "$previous_tag" ]]; then
-    api_arguments+=(-f "previous_tag_name=$previous_tag")
-  fi
-  generated_notes="$(gh api "${api_arguments[@]}" --jq .body)"
-
   {
     print "## 更新内容"
     print
-    if [[ -n "$previous_tag" ]]; then
-      git log --format='- %s (`%h`)' "$previous_tag..$RELEASE_TAG"
-    else
-      git log -1 --format='- %s (`%h`)' "$RELEASE_TAG"
-    fi
-    if [[ -n "$generated_notes" ]]; then
-      print
-      print -r -- "$generated_notes"
-    fi
+    /usr/bin/awk -v version="$VERSION" '
+      index($0, "## " version) == 1 { active = 1; next }
+      active && /^## / { exit }
+      active { print }
+    ' "$ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md"
   } > "$RELEASE_NOTES"
 
   rg -q '^- ' "$RELEASE_NOTES"
