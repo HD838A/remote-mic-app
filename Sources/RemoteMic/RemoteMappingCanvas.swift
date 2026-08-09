@@ -16,8 +16,8 @@ struct RemoteMappingPlacement: Identifiable {
 }
 
 enum RemoteMappingLayout {
-    static let canvasHeight: CGFloat = 430
-    static let remoteSize = CGSize(width: 184, height: 372)
+    static let canvasHeight: CGFloat = 570
+    static let remoteSize = CGSize(width: 202, height: 410)
     static let arrowCardGap: CGFloat = 7
 
     static let buttonPlacements: [RemoteMappingPlacement] = [
@@ -62,7 +62,7 @@ enum RemoteMappingLayout {
     }
 
     static func cardWidth(for canvasWidth: CGFloat) -> CGFloat {
-        min(285, max(250, (canvasWidth - 240) / 2))
+        min(300, max(270, (canvasWidth - 260) / 2))
     }
 
     static func connectionControlPoints(
@@ -207,7 +207,7 @@ struct RemoteMappingCanvas: View {
                 Image(systemName: symbol(for: button))
                     .frame(width: 14)
                 Text(button.displayName(using: localization))
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -220,15 +220,15 @@ struct RemoteMappingCanvas: View {
                     } label: {
                         VStack(spacing: 1) {
                             Text(trigger.displayName(using: localization))
-                                .font(.system(size: 8, weight: .medium))
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.secondary)
                             Text(actionSummary(button, trigger))
-                                .font(.system(size: 9, weight: trigger == .singleClick ? .semibold : .regular))
+                                .font(.system(size: 12, weight: trigger == .singleClick ? .semibold : .regular))
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.7)
+                                .truncationMode(.tail)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 3)
+                        .padding(.vertical, 5)
                         .background(.quaternary, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
                     }
                     .buttonStyle(.plain)
@@ -270,10 +270,10 @@ struct RemoteMappingCanvas: View {
                 Image(systemName: "mic.fill")
                     .frame(width: 14)
                 Text("button_mapping.voice_button.title")
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 0)
                 Text("button_mapping.voice_button.fixed")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(voiceActive ? Color.orange : Color.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -283,7 +283,7 @@ struct RemoteMappingCanvas: View {
                     )
             }
             Text("button_mapping.voice_button.detail")
-                .font(.system(size: 9))
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
@@ -320,7 +320,7 @@ struct RemoteMappingCanvas: View {
     private struct Metrics {
         let width: CGFloat
         let cardWidth: CGFloat
-        let cardHeight: CGFloat = 54
+        let cardHeight: CGFloat = 72
 
         init(width: CGFloat) {
             self.width = width

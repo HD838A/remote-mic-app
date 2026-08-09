@@ -172,6 +172,16 @@ enum KeyboardInjector {
             keyPoster(53, [])
         case .returnKey:
             keyPoster(36, [])
+        case .commandReturn:
+            keyPoster(36, .maskCommand)
+        case .shiftReturn:
+            keyPoster(36, .maskShift)
+        case .commandCopy:
+            keyPoster(8, .maskCommand)
+        case .commandPaste:
+            keyPoster(9, .maskCommand)
+        case .commandQuit:
+            keyPoster(12, .maskCommand)
         case .arrowUp:
             keyPoster(126, [])
         case .arrowDown:
@@ -196,6 +206,10 @@ enum KeyboardInjector {
             postSystemKey(type: 7)
         case .playPause:
             postSystemKey(type: 16)
+        case .previousCommandLeft:
+            keyPoster(123, .maskCommand)
+        case .nextCommandRight:
+            keyPoster(124, .maskCommand)
         case .customShortcut:
             if let shortcut {
                 keyPoster(CGKeyCode(shortcut.keyCode), shortcut.cgEventFlags)

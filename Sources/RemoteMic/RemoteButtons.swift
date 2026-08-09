@@ -395,10 +395,33 @@ enum PresetApplication: String, CaseIterable, Identifiable {
     }
 }
 
+enum ButtonActionCategory: String, CaseIterable, Identifiable {
+    case basicKeys
+    case systemAndMedia
+    case custom
+    case applications
+
+    var id: String { rawValue }
+
+    var localizationKey: String {
+        switch self {
+        case .basicKeys: return "button_mapping.action_group.basic_keys"
+        case .systemAndMedia: return "button_mapping.action_group.system_and_media"
+        case .custom: return "button_mapping.action_group.custom"
+        case .applications: return "button_mapping.action_group.applications"
+        }
+    }
+}
+
 enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case disabled
     case escape
     case returnKey
+    case commandReturn
+    case shiftReturn
+    case commandCopy
+    case commandPaste
+    case commandQuit
     case arrowUp
     case arrowDown
     case arrowLeft
@@ -411,6 +434,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeDown
     case volumeMute
     case playPause
+    case previousCommandLeft
+    case nextCommandRight
     case customShortcut
     case openCustomApplication
     case toggleLongRecording
@@ -435,6 +460,11 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .disabled: return localization.text("action.disabled")
         case .escape: return "Escape"
         case .returnKey: return "Return"
+        case .commandReturn: return "Command-Return"
+        case .shiftReturn: return "Shift-Return"
+        case .commandCopy: return "Command-C"
+        case .commandPaste: return "Command-V"
+        case .commandQuit: return "Command-Q"
         case .arrowUp: return localization.text("action.arrow_up")
         case .arrowDown: return localization.text("action.arrow_down")
         case .arrowLeft: return localization.text("action.arrow_left")
@@ -447,6 +477,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .volumeDown: return localization.text("action.system_volume_down")
         case .volumeMute: return localization.text("action.system_mute")
         case .playPause: return localization.text("action.play_pause")
+        case .previousCommandLeft: return localization.text("action.previous_command_left")
+        case .nextCommandRight: return localization.text("action.next_command_right")
         case .customShortcut: return localization.text("action.custom_shortcut")
         case .openCustomApplication: return localization.text("action.open_custom_application")
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
@@ -485,8 +517,37 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    var category: ButtonActionCategory {
+        if presetApplication != nil { return .applications }
+        switch self {
+        case .disabled, .escape, .returnKey, .commandReturn, .shiftReturn, .commandCopy,
+             .commandPaste, .commandQuit, .arrowUp, .arrowDown, .arrowLeft, .arrowRight,
+             .deleteBackward:
+            return .basicKeys
+        case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
+             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
+            return .systemAndMedia
+        case .customShortcut, .openCustomApplication:
+            return .custom
+        case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
+             .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
+             .openZed:
+            return .applications
+        }
+    }
+
     var allowsRepeat: Bool {
-        self != .customShortcut && self != .openCustomApplication && presetApplication == nil && !isAppInternal
+        ![
+            .customShortcut,
+            .openCustomApplication,
+            .commandReturn,
+            .shiftReturn,
+            .commandCopy,
+            .commandPaste,
+            .commandQuit,
+            .previousCommandLeft,
+            .nextCommandRight,
+        ].contains(self) && presetApplication == nil && !isAppInternal
     }
 
     var isAppInternal: Bool {

@@ -111,6 +111,8 @@
 "action.system_volume_down" = "System Volume -";
 "action.system_mute" = "Mute System Audio";
 "action.play_pause" = "Play / Pause";
+"action.previous_command_left" = "Previous (⌘←)";
+"action.next_command_right" = "Next (⌘→)";
 "action.custom_shortcut" = "Custom Shortcut";
 "action.open_custom_application" = "Open Custom App";
 "action.toggle_long_recording" = "Toggle Continuous Recording";
@@ -127,6 +129,11 @@
 "action.open_chrome" = "Open Chrome";
 "action.open_safari" = "Open Safari";
 "action.open_zed" = "Open Zed";
+"button_mapping.action_group.basic_keys" = "Basic Keys";
+"button_mapping.action_group.system_and_media" = "System & Media";
+"button_mapping.action_group.custom" = "Custom Actions";
+"button_mapping.action_group.applications" = "Open an App";
+"button_mapping.action.disable_switch" = "Disable Button";
 "custom_application.target" = "Target app";
 "custom_application.not_configured" = "No app selected";
 "custom_application.add" = "Add App";
@@ -139,6 +146,12 @@
 "custom_application.shortcut.editor_instructions" = "Press the shortcut this app uses to focus its input field. Remote Mic activates the app before sending it.";
 "custom_application.accessibility.record" = "Record Target Input Field";
 "custom_application.accessibility.not_recorded" = "No target input field has been recorded";
+"custom_application.accessibility.recorded" = "Target input field recorded";
+"custom_application.accessibility.learn" = "Learn Input Field";
+"custom_application.accessibility.learn_help" = "This immediately opens the target app. Click the intended input field within three seconds. Remote Mic stores Accessibility characteristics only and never reads the input text.";
+"custom_application.accessibility.learning" = "Waiting for you to click the target input field…";
+"custom_application.accessibility.learn_succeeded" = "The input field was learned. You can now test opening and focusing it.";
+"custom_application.accessibility.learn_failed" = "No usable input field was detected. Check the clicked control and Accessibility permission, then try again.";
 "custom_application.test" = "Test Open and Focus";
 "custom_application.picker.title" = "Choose an App to Open";
 "custom_application.accessibility.record_title" = "Record Target Input Field";

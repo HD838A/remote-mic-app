@@ -219,11 +219,23 @@ final class HIDRemoteMonitor {
             updateStatus(LocalizedMessage("button_mapping.error.device_open_failed"))
             return
         }
+        guard let fingerprint = Self.fingerprint(for: device) else { return }
+        if profileID == nil, targetFingerprint == nil, deviceFingerprint == nil {
+            return
+        }
         guard activeDevice == nil,
-              let fingerprint = Self.fingerprint(for: device),
               targetFingerprint == nil || targetFingerprint == fingerprint,
               !excludedFingerprints().contains(fingerprint)
         else { return }
+        _ = activateDevice(device, fingerprint: fingerprint, allowManagerFallback: false)
+    }
+
+    @discardableResult
+    private func activateDevice(
+        _ device: IOHIDDevice,
+        fingerprint: String,
+        allowManagerFallback: Bool
+    ) -> Bool {
         let seizeResult = IOHIDDeviceOpen(
             device,
             IOOptionBits(kIOHIDOptionsTypeSeizeDevice)
@@ -234,16 +246,16 @@ final class HIDRemoteMonitor {
             activeDeviceIsSeized = true
             updateStatus(LocalizedMessage("button_mapping.status.connected"))
             AppLogger.shared.write("HID CONNECTED mode=seized")
-            return
+            return true
         }
 
         let monitorResult = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
-        guard monitorResult == kIOReturnSuccess else {
+        guard monitorResult == kIOReturnSuccess || allowManagerFallback else {
             updateStatus(LocalizedMessage("button_mapping.error.device_read_failed", arguments: [String(monitorResult)]))
             AppLogger.shared.write(
                 "HID DEVICE OPEN FAILED seize=\(seizeResult) monitor=\(monitorResult)"
             )
-            return
+            return false
         }
 
         activeDevice = device
@@ -256,7 +268,14 @@ final class HIDRemoteMonitor {
                     : "button_mapping.status.connected_system_actions_may_remain"
             )
         )
-        AppLogger.shared.write("HID CONNECTED mode=monitored seize_error=\(seizeResult)")
+        if monitorResult == kIOReturnSuccess {
+            AppLogger.shared.write("HID CONNECTED mode=monitored seize_error=\(seizeResult)")
+        } else {
+            AppLogger.shared.write(
+                "HID CONNECTED mode=manager_report seize_error=\(seizeResult) monitor_error=\(monitorResult)"
+            )
+        }
+        return true
     }
 
     fileprivate func deviceDidRemove(device: IOHIDDevice) {
@@ -272,10 +291,19 @@ final class HIDRemoteMonitor {
 
     fileprivate func handleReport(from device: IOHIDDevice, reportID: UInt32, data: Data) {
         guard manager != nil, settings.customMappingEnabled else { return }
-        guard Self.acceptsReport(
+        guard let fingerprint = Self.resolvedFingerprintForReport(
             reportingFingerprint: Self.fingerprint(for: device),
-            activeFingerprint: deviceFingerprint
+            activeFingerprint: deviceFingerprint,
+            targetFingerprint: targetFingerprint,
+            excludedFingerprints: excludedFingerprints()
         ) else { return }
+        if deviceFingerprint == nil {
+            guard activateDevice(
+                device,
+                fingerprint: fingerprint,
+                allowManagerFallback: true
+            ) else { return }
+        }
         guard runtimePermissionsAreValid() else {
             releaseForRevokedPermissions()
             return
@@ -380,6 +408,23 @@ final class HIDRemoteMonitor {
     static func acceptsReport(reportingFingerprint: String?, activeFingerprint: String?) -> Bool {
         guard let reportingFingerprint, let activeFingerprint else { return false }
         return reportingFingerprint == activeFingerprint
+    }
+
+    static func resolvedFingerprintForReport(
+        reportingFingerprint: String?,
+        activeFingerprint: String?,
+        targetFingerprint: String?,
+        excludedFingerprints: Set<String>
+    ) -> String? {
+        guard let reportingFingerprint else { return nil }
+        if let activeFingerprint {
+            return reportingFingerprint == activeFingerprint ? activeFingerprint : nil
+        }
+        guard !excludedFingerprints.contains(reportingFingerprint) else { return nil }
+        if let targetFingerprint {
+            return reportingFingerprint == targetFingerprint ? targetFingerprint : nil
+        }
+        return reportingFingerprint
     }
 
     func shouldAcceptRawPress(

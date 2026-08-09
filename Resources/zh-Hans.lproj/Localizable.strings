@@ -111,6 +111,8 @@
 "action.system_volume_down" = "系统音量 -";
 "action.system_mute" = "系统静音";
 "action.play_pause" = "播放 / 暂停";
+"action.previous_command_left" = "上一首（⌘←）";
+"action.next_command_right" = "下一首（⌘→）";
 "action.custom_shortcut" = "自定义快捷键";
 "action.open_custom_application" = "打开自定义 APP";
 "action.toggle_long_recording" = "切换持续录音";
@@ -127,6 +129,11 @@
 "action.open_chrome" = "打开 Chrome";
 "action.open_safari" = "打开 Safari";
 "action.open_zed" = "打开 Zed";
+"button_mapping.action_group.basic_keys" = "基础按键";
+"button_mapping.action_group.system_and_media" = "系统与媒体";
+"button_mapping.action_group.custom" = "自定义动作";
+"button_mapping.action_group.applications" = "打开具体 APP";
+"button_mapping.action.disable_switch" = "禁用按键";
 "custom_application.target" = "目标 APP";
 "custom_application.not_configured" = "尚未选择 APP";
 "custom_application.add" = "添加 APP";
@@ -139,6 +146,12 @@
 "custom_application.shortcut.editor_instructions" = "请按下该 APP 用于聚焦输入框的快捷键。执行时会先激活 APP，再发送此快捷键。";
 "custom_application.accessibility.record" = "记录目标输入框";
 "custom_application.accessibility.not_recorded" = "尚未记录目标输入框";
+"custom_application.accessibility.recorded" = "已记录目标输入框";
+"custom_application.accessibility.learn" = "开始学习输入框";
+"custom_application.accessibility.learn_help" = "点击后会立即打开目标 APP。请在 3 秒内点击需要聚焦的输入框；无线麦只记录辅助功能特征，不读取输入内容。";
+"custom_application.accessibility.learning" = "正在等待你点击目标输入框……";
+"custom_application.accessibility.learn_succeeded" = "输入框学习成功，可以直接测试打开与聚焦。";
+"custom_application.accessibility.learn_failed" = "没有识别到可用输入框，请确认点击位置和辅助功能权限后重试。";
 "custom_application.test" = "测试打开与聚焦";
 "custom_application.picker.title" = "选择要打开的 APP";
 "custom_application.accessibility.record_title" = "记录目标输入框";

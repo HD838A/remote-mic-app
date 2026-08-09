@@ -552,9 +552,6 @@ final class AppSettings: ObservableObject {
 
     func setAction(_ action: ButtonAction, for button: RemoteButton) {
         buttonBindings[button] = action
-        if action != .openCustomApplication {
-            buttonApplicationProfileIDs[button] = nil
-        }
     }
 
     func shortcut(for button: RemoteButton) -> CustomKeyboardShortcut? {
@@ -751,24 +748,17 @@ final class AppSettings: ObservableObject {
     func setAction(_ action: ButtonAction, for button: RemoteButton, trigger: ButtonTrigger) {
         guard trigger != .singleClick else {
             setAction(action, for: button)
-            if action != .customShortcut { setShortcut(nil, for: button) }
             return
         }
 
         var bindings = secondaryButtonBindings[button] ?? [:]
-        if action == .disabled {
-            bindings.removeValue(forKey: trigger)
-        } else {
-            let shortcut = action == .customShortcut ? bindings[trigger]?.shortcut : nil
-            let applicationProfileID = action == .openCustomApplication
-                ? bindings[trigger]?.applicationProfileID
-                : nil
-            bindings[trigger] = ConfiguredButtonAction(
-                action: action,
-                shortcut: shortcut,
-                applicationProfileID: applicationProfileID
-            )
-        }
+        let shortcut = bindings[trigger]?.shortcut
+        let applicationProfileID = bindings[trigger]?.applicationProfileID
+        bindings[trigger] = ConfiguredButtonAction(
+            action: action,
+            shortcut: shortcut,
+            applicationProfileID: applicationProfileID
+        )
         secondaryButtonBindings[button] = bindings.isEmpty ? nil : bindings
     }
 
