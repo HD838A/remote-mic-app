@@ -46,6 +46,10 @@ final class HIDRemoteMonitor {
     private let settings: AppSettings
     private let eventSuppressor: KeyboardEventSuppressor
     private let ownsEventSuppressor: Bool
+    private let scheduler: HIDRemoteScheduling
+    private let runtimePermissions: () -> Bool
+    private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
+    private let frontmostBundleIdentifier: () -> String?
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
     private var manager: IOHIDManager?
@@ -54,13 +58,13 @@ final class HIDRemoteMonitor {
     private(set) var profileID: UUID?
     private var activeDeviceIsSeized = false
     private var activeUsages = Set<UInt16>()
-    private var repeatTimers: [UInt16: DispatchSourceTimer] = [:]
+    private var repeatTimers: [UInt16: HIDRemoteScheduledTask] = [:]
     private var nonRepeatablePressedButtons = Set<RemoteButton>()
-    private var nonRepeatableReleaseTimers: [RemoteButton: DispatchSourceTimer] = [:]
+    private var nonRepeatableReleaseTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     private var gestureRecognizer = RemoteButtonGestureRecognizer()
-    private var doubleClickTimers: [RemoteButton: DispatchSourceTimer] = [:]
-    private var longPressTimers: [RemoteButton: DispatchSourceTimer] = [:]
-    private var permissionMonitor: DispatchSourceTimer?
+    private var doubleClickTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
+    private var longPressTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
+    private var permissionMonitor: HIDRemoteScheduledTask?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
@@ -73,7 +77,21 @@ final class HIDRemoteMonitor {
         targetFingerprint: String? = nil,
         excludedFingerprints: @escaping () -> Set<String> = { [] },
         eventSuppressor: KeyboardEventSuppressor = KeyboardEventSuppressor(),
-        ownsEventSuppressor: Bool = true
+        ownsEventSuppressor: Bool = true,
+        scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler(),
+        runtimePermissions: @escaping () -> Bool = {
+            HIDRemoteMonitor.isInputMonitoringGranted && KeyboardInjector.isAccessibilityTrusted
+        },
+        actionPerformer: @escaping (
+            RemoteButton,
+            ButtonTrigger,
+            ConfiguredButtonAction
+        ) -> Bool = { _, _, configured in
+            KeyboardInjector.send(configured.action, shortcut: configured.shortcut)
+        },
+        frontmostBundleIdentifier: @escaping () -> String? = {
+            NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        }
     ) {
         self.settings = settings
         self.profileID = profileID
@@ -81,6 +99,10 @@ final class HIDRemoteMonitor {
         self.excludedFingerprints = excludedFingerprints
         self.eventSuppressor = eventSuppressor
         self.ownsEventSuppressor = ownsEventSuppressor
+        self.scheduler = scheduler
+        self.runtimePermissions = runtimePermissions
+        self.actionPerformer = actionPerformer
+        self.frontmostBundleIdentifier = frontmostBundleIdentifier
     }
 
     func assignProfileID(_ profileID: UUID) {
@@ -168,14 +190,7 @@ final class HIDRemoteMonitor {
     func stop() {
         permissionMonitor?.cancel()
         permissionMonitor = nil
-        repeatTimers.values.forEach { $0.cancel() }
-        repeatTimers.removeAll()
-        nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
-        nonRepeatableReleaseTimers.removeAll()
-        nonRepeatablePressedButtons.removeAll()
-        resetGestureRecognition()
-        activeUsages.removeAll()
-        onActiveButtons?(profileID, [])
+        resetInputState()
         if ownsEventSuppressor { eventSuppressor.stop() }
         if let activeDevice {
             IOHIDDeviceClose(activeDevice, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -244,11 +259,7 @@ final class HIDRemoteMonitor {
         self.activeDevice = nil
         deviceFingerprint = nil
         activeDeviceIsSeized = false
-        activeUsages.removeAll()
-        onActiveButtons?(profileID, [])
-        repeatTimers.values.forEach { $0.cancel() }
-        repeatTimers.removeAll()
-        resetGestureRecognition()
+        resetInputState()
         updateStatus(LocalizedMessage("button_mapping.status.disconnected"))
         AppLogger.shared.write("HID DISCONNECTED")
     }
@@ -266,6 +277,35 @@ final class HIDRemoteMonitor {
         guard let usages = RemoteHIDReportParser.usages(reportID: reportID, data: data) else {
             return
         }
+        process(usages: usages)
+    }
+
+    func connectSimulatedDevice(
+        fingerprint: String,
+        profileID: UUID,
+        isSeized: Bool = true
+    ) {
+        resetInputState()
+        deviceFingerprint = fingerprint
+        self.profileID = profileID
+        activeDeviceIsSeized = isSeized
+    }
+
+    func handleSimulatedReport(reportID: UInt32, data: Data) {
+        guard settings.customMappingEnabled, runtimePermissionsAreValid() else { return }
+        guard let usages = RemoteHIDReportParser.usages(reportID: reportID, data: data) else {
+            return
+        }
+        process(usages: usages)
+    }
+
+    func disconnectSimulatedDevice() {
+        deviceFingerprint = nil
+        activeDeviceIsSeized = false
+        resetInputState()
+    }
+
+    private func process(usages: Set<UInt16>) {
         let pressed = usages.subtracting(activeUsages)
         let released = activeUsages.subtracting(usages)
         activeUsages = usages
@@ -305,7 +345,11 @@ final class HIDRemoteMonitor {
                 guard processGestureCommands(commands) else { return }
             } else {
                 let action = settings.action(for: button, profileID: profileID)
-                guard shouldAcceptRawPress(button: button, action: action) else { continue }
+                guard shouldAcceptRawPress(
+                    button: button,
+                    action: action,
+                    frontmostBundleIdentifier: frontmostBundleIdentifier()
+                ) else { continue }
                 guard performConfiguredAction(for: button, trigger: .singleClick) else { return }
                 startRepeatIfNeeded(
                     usage: usage,
@@ -359,13 +403,13 @@ final class HIDRemoteMonitor {
     private func scheduleNonRepeatableRelease(for button: RemoteButton) {
         guard nonRepeatablePressedButtons.contains(button) else { return }
         nonRepeatableReleaseTimers.removeValue(forKey: button)?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + .milliseconds(600))
-        timer.setEventHandler { [weak self] in
+        let timer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.stableReleaseMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
             self?.finishNonRepeatablePress(button)
         }
         nonRepeatableReleaseTimers[button] = timer
-        timer.resume()
     }
 
     func finishNonRepeatablePress(_ button: RemoteButton) {
@@ -378,28 +422,25 @@ final class HIDRemoteMonitor {
         button: RemoteButton,
         action: ButtonAction
     ) {
-        let repeatable: Set<RemoteButton> = [
-            .up, .down, .left, .right, .back, .volumeUp, .volumeDown,
-        ]
+        guard let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: button) else { return }
         guard
-            repeatable.contains(button),
             !settings.hasSecondaryAction(for: button, profileID: profileID),
             action != .disabled,
             Self.shouldRepeat(
                 action: action,
-                frontmostBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                frontmostBundleIdentifier: frontmostBundleIdentifier()
             )
         else { return }
 
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        let interval: DispatchTimeInterval = button == .back ? .milliseconds(50) : .milliseconds(100)
-        timer.schedule(deadline: .now() + .milliseconds(350), repeating: interval)
-        timer.setEventHandler { [weak self] in
+        let timer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.repeatStartMilliseconds,
+            repeatingEveryMilliseconds: interval
+        ) { [weak self] in
             guard let self, self.activeUsages.contains(usage) else { return }
             if self.settings.hasSecondaryAction(for: button, profileID: self.profileID) ||
                 !Self.shouldRepeat(
                     action: action,
-                    frontmostBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                    frontmostBundleIdentifier: self.frontmostBundleIdentifier()
                 ) {
                 self.repeatTimers.removeValue(forKey: usage)?.cancel()
                 return
@@ -411,15 +452,15 @@ final class HIDRemoteMonitor {
             if !self.activeDeviceIsSeized {
                 self.eventSuppressor.arm(button: button, edge: .down)
             }
-            if !KeyboardInjector.send(
-                action,
+            let configured = ConfiguredButtonAction(
+                action: action,
                 shortcut: self.settings.shortcut(for: button, profileID: self.profileID)
-            ) {
+            )
+            if !self.actionPerformer(button, .singleClick, configured) {
                 self.releaseForRevokedPermissions()
             }
         }
         repeatTimers[usage] = timer
-        timer.resume()
     }
 
     private func processGestureCommands(
@@ -444,28 +485,28 @@ final class HIDRemoteMonitor {
 
     private func scheduleDoubleClickTimeout(for button: RemoteButton) {
         doubleClickTimers.removeValue(forKey: button)?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + .milliseconds(300))
-        timer.setEventHandler { [weak self] in
+        let timer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.doubleClickMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
             guard let self else { return }
             self.doubleClickTimers.removeValue(forKey: button)
             _ = self.processGestureCommands(self.gestureRecognizer.doubleClickTimedOut(button))
         }
         doubleClickTimers[button] = timer
-        timer.resume()
     }
 
     private func scheduleLongPressTimeout(for button: RemoteButton) {
         longPressTimers.removeValue(forKey: button)?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + .milliseconds(550))
-        timer.setEventHandler { [weak self] in
+        let timer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.longPressMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
             guard let self else { return }
             self.longPressTimers.removeValue(forKey: button)
             _ = self.processGestureCommands(self.gestureRecognizer.longPressTimedOut(button))
         }
         longPressTimers[button] = timer
-        timer.resume()
     }
 
     private func performConfiguredAction(
@@ -488,7 +529,7 @@ final class HIDRemoteMonitor {
             )
             return true
         }
-        guard KeyboardInjector.send(configured.action, shortcut: configured.shortcut) else {
+        guard actionPerformer(button, trigger, configured) else {
             stop()
             updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
             return false
@@ -507,22 +548,32 @@ final class HIDRemoteMonitor {
         gestureRecognizer.reset()
     }
 
+    private func resetInputState() {
+        repeatTimers.values.forEach { $0.cancel() }
+        repeatTimers.removeAll()
+        nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
+        nonRepeatableReleaseTimers.removeAll()
+        nonRepeatablePressedButtons.removeAll()
+        resetGestureRecognition()
+        activeUsages.removeAll()
+        onActiveButtons?(profileID, [])
+    }
+
     private func runtimePermissionsAreValid() -> Bool {
-        Self.inputMonitoringAccess == kIOHIDAccessTypeGranted &&
-            KeyboardInjector.isAccessibilityTrusted
+        runtimePermissions()
     }
 
     private func startPermissionMonitor() {
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + .seconds(1), repeating: .seconds(1))
-        timer.setEventHandler { [weak self] in
+        let timer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.permissionPollMilliseconds,
+            repeatingEveryMilliseconds: HIDRemoteTiming.permissionPollMilliseconds
+        ) { [weak self] in
             guard let self, self.manager != nil else { return }
             if !self.runtimePermissionsAreValid() {
                 self.releaseForRevokedPermissions()
             }
         }
         permissionMonitor = timer
-        timer.resume()
     }
 
     private func releaseForRevokedPermissions() {
