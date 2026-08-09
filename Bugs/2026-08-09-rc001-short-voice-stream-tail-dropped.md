@@ -1,7 +1,7 @@
 # RC001 Short Voice Stream Tail Dropped on STREAM_STOP
 
 - 时间：2026-08-09
-- 状态：已修复，模拟回归通过
+- 状态：已修复，模拟与真机回归通过
 - 影响范围：macOS 1.8.0 预览版；RC001 语音，RC003 共享停止路径
 - 功能点：ATVV 短语音播放收尾
 - 简单描述：RC001 音频虽成功解码入队，但远端停止时播放器立即清空队列，使短语音整段或尾部丢失。
@@ -65,7 +65,7 @@ RC001 的短语音帧虽已成功解码并入队，但 `STREAM_STOP` 在播放�
 - 修复前诊断测试稳定失败：240 个有效 sample 在当前停止策略下变为 0。
 - `hardware-simulation`：17 项测试通过。
 - `HardwareSimulationIntegrationTests`：RC001 与 RC003 两种直接流及其余硬件集成测试共 11 项通过。
-- 自动化验证覆盖协议事件、生产解码和停止策略；RC001 实际扬声/虚拟麦克风输出仍建议在安装预览包后补一次真机听感确认。
+- 自动化验证覆盖协议事件、生产解码和停止策略；随后完成 RC001、RC003、双设备交替和 Fn 点按路线真机验收，未发现尾帧丢失、串流或停止残留。
 
 ## 实际测试过程与边界
 
@@ -73,4 +73,14 @@ RC001 的短语音帧虽已成功解码并入队，但 `STREAM_STOP` 在播放�
 2. **模拟器自身验证**：运行 `swift test`，确认 RC001 场景确实在最后音频分片 30 ms 后发送停止，并保留 RC003 既有直接流；17 项测试通过。
 3. **修复后跨项目验证**：运行 `hardware-simulation/scripts/test-remote-mic.sh /path/to/open-voice-bridge`，同时将 RC001 与 RC003 事件送入 Mac 生产解码和停止策略；两种设备停止后均保留全部 240 个 sample，硬件集成共 11 项通过。
 4. **主项目回归**：运行 `swift test`、`scripts/test.sh`、`scripts/build-app.sh` 和 `scripts/verify-app.sh`；分别通过 147 项 Swift Testing、42 项 Self Test、Release 构建和 App 结构验证。
-5. **未执行的范围**：本次没有人工按下真实 RC001 的语音键，也没有在豆包等真实接收端听取新构建的声音。因此结论是“模拟硬件和生产代码路径回归通过”，不是“RC001 真机体验已经验收”。
+5. **真机验收**：使用同时连接的 RC001 与 RC003，在真实语音接收端完成短语音、普通语音、快速连续输入、双设备交替，以及“语音键模拟 Fn 点按”关闭和开启两条路线。用户确认实际触发、输入、开头、尾音和停止体验正常。
+6. **验收边界**：模拟硬件证明协议、生产解码和停止策略可稳定回归；真机补充证明真实蓝牙、虚拟音频设备、系统权限、第三方语音工具和最终听感。本次两类证据均已完成，但不代表以后修改共享音频或蓝牙路径时可以永久免除对应真机门禁。
+
+## 真机验收记录
+
+- 每次遥控器语音会话使用独立 trace 编号，记录型号、时长、解码批次、sample 总数、入队失败数、输出路线、停止时待播放缓冲数和 flush 决策。
+- 停止后的待播放缓冲会继续记录为 `AUDIO PLAYBACK drained`；若被音频重配、停止或其他 flush 打断，则记录 `AUDIO PLAYBACK interrupted`，不记录原始音频或用户语音内容。
+- `scripts/voice-acceptance.sh prepare` 会构建并启动待验收 App，为本轮保存起始行号和时间；每个操作前使用 `mark` 写入 UTC 步骤标记，`snapshot` 或 `finish` 会截取本轮 runtime log 和统一日志到 `.build/voice-acceptance/`。
+- 2026-08-09 本轮共完成 30 个真实会话：RC001 20 次、RC003 10 次；普通 `virtual_audio` 路线 17 次、`fn_tap` 路线 13 次。
+- 30 次会话均为 `enqueue_failures=0`，全部最终记录 `AUDIO PLAYBACK drained pending_buffers=0`，没有 `AUDIO PLAYBACK interrupted`。RC001 → RC003 → RC001 → RC003 交替顺序与真实操作一致。
+- 本轮机器本地证据保存在 `.build/voice-acceptance/20260809T075921Z/`；该目录不提交仓库，保留步骤时间线、运行日志、统一日志和构建启动记录。

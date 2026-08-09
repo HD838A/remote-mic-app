@@ -16,6 +16,13 @@
 
 每份 Bug 文档还必须明确实际执行过的测试、测试结果，以及模拟器、自动化和真机验证之间的边界。
 
+## 硬件模拟与真机验收边界
+
+- 硬件模拟作为日常回归主路径：固定回放控制事件、音频分片、停止时序、设备交替、异常包和 HID 手势，并直接驱动生产协议解析、解码、路由及停止策略。模拟用例必须能先复现旧 Bug，再证明修复后通过。
+- 真机验收只负责模拟器无法证明的系统边界：真实蓝牙发现与订阅、固件实际时序、CoreBluetooth 与 HID 共存、权限、音频设备绑定、第三方语音工具触发，以及最终听感和文字输入体验。
+- 真机语音按步骤写入 UTC 开始/结束标记；每个会话记录 trace、设备型号、时长、解码量、入队失败、输出路线和最终缓冲状态，但不记录用户语音内容。发现问题后只分析对应步骤区间，并继续遵循“复现 → 日志 → 代码 → 修复 → 重验”。
+- 普通改动优先运行模拟回归；修改共享蓝牙协议、音频、HID、设备识别、Fn 模拟或系统权限时，发布预览版前仍需对受影响路线执行最小真机门禁，不能用构建、签名或模拟测试代替。
+
 ## 索引
 
 | 时间 | Bug | 状态 |
@@ -48,7 +55,7 @@
 | 2026-08-09 | [Menu and TV Connector Crossing Follow-up](./2026-08-09-menu-tv-connector-crossing.md) | UI 缺陷已修复 |
 | 2026-08-09 | [Multi-Remote Automatic HID Routing and RC003 Voice Regression](./2026-08-09-multi-remote-hid-routing-and-rc003-voice.md) | 已修复 |
 | 2026-08-09 | [Post-fix Multi-Remote HID Report Routing Regression](./2026-08-09-post-fix-multi-remote-hid-routing.md) | 已修复 |
-| 2026-08-09 | [RC001 Short Voice Stream Tail Dropped on STREAM_STOP](./2026-08-09-rc001-short-voice-stream-tail-dropped.md) | 已修复，模拟回归通过 |
+| 2026-08-09 | [RC001 Short Voice Stream Tail Dropped on STREAM_STOP](./2026-08-09-rc001-short-voice-stream-tail-dropped.md) | 已修复，模拟与真机回归通过 |
 
 ## 记录模板
 
