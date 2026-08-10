@@ -241,8 +241,82 @@ enum ButtonTrigger: String, CaseIterable, Codable, Identifiable {
 struct ConfiguredButtonAction: Codable, Equatable {
     var action: ButtonAction
     var shortcut: CustomKeyboardShortcut?
+    var applicationProfileID: UUID?
+
+    init(
+        action: ButtonAction,
+        shortcut: CustomKeyboardShortcut?,
+        applicationProfileID: UUID? = nil
+    ) {
+        self.action = action
+        self.shortcut = shortcut
+        self.applicationProfileID = applicationProfileID
+    }
 
     static let disabled = ConfiguredButtonAction(action: .disabled, shortcut: nil)
+}
+
+enum CustomApplicationFocusStrategy: String, Codable, CaseIterable, Identifiable {
+    case none
+    case keyboardShortcut
+    case recordedAccessibility
+
+    var id: String { rawValue }
+
+    func displayName(using localization: LocalizationStore) -> String {
+        switch self {
+        case .none: return localization.text("custom_application.focus.none")
+        case .keyboardShortcut: return localization.text("custom_application.focus.shortcut")
+        case .recordedAccessibility: return localization.text("custom_application.focus.recorded")
+        }
+    }
+}
+
+struct NormalizedAccessibilityFrame: Codable, Equatable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+}
+
+struct AccessibilityFocusTarget: Codable, Equatable {
+    let role: String
+    let identifier: String
+    let title: String
+    let description: String
+    let help: String
+    let placeholder: String
+    let context: String
+    let windowTitle: String
+    let normalizedFrame: NormalizedAccessibilityFrame?
+}
+
+struct CustomApplicationProfile: Codable, Equatable, Identifiable {
+    let id: UUID
+    var displayName: String
+    var bundleIdentifier: String
+    var applicationPath: String
+    var focusStrategy: CustomApplicationFocusStrategy
+    var focusShortcut: CustomKeyboardShortcut?
+    var accessibilityTarget: AccessibilityFocusTarget?
+
+    init(
+        id: UUID = UUID(),
+        displayName: String,
+        bundleIdentifier: String,
+        applicationPath: String,
+        focusStrategy: CustomApplicationFocusStrategy = .none,
+        focusShortcut: CustomKeyboardShortcut? = nil,
+        accessibilityTarget: AccessibilityFocusTarget? = nil
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.bundleIdentifier = bundleIdentifier
+        self.applicationPath = applicationPath
+        self.focusStrategy = focusStrategy
+        self.focusShortcut = focusShortcut
+        self.accessibilityTarget = accessibilityTarget
+    }
 }
 
 enum ApplicationFocusStrategy: Equatable {
@@ -321,10 +395,40 @@ enum PresetApplication: String, CaseIterable, Identifiable {
     }
 }
 
+enum ButtonActionCategory: String, CaseIterable, Identifiable {
+    case basicKeys
+    case systemAndMedia
+    case custom
+    case applications
+
+    var id: String { rawValue }
+
+    var localizationKey: String {
+        switch self {
+        case .basicKeys: return "button_mapping.action_group.basic_keys"
+        case .systemAndMedia: return "button_mapping.action_group.system_and_media"
+        case .custom: return "button_mapping.action_group.custom"
+        case .applications: return "button_mapping.action_group.applications"
+        }
+    }
+}
+
 enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case disabled
     case escape
     case returnKey
+    case commandReturn
+    case shiftReturn
+    case commandCopy
+    case commandPaste
+    case commandClose
+    case commandQuit
+    case commandCut
+    case commandSelectAll
+    case commandUndo
+    case commandRedo
+    case commandFind
+    case commandSave
     case arrowUp
     case arrowDown
     case arrowLeft
@@ -337,7 +441,10 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeDown
     case volumeMute
     case playPause
+    case previousCommandLeft
+    case nextCommandRight
     case customShortcut
+    case openCustomApplication
     case toggleLongRecording
     case openRemoteMic
     case openCodex
@@ -360,6 +467,18 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .disabled: return localization.text("action.disabled")
         case .escape: return "Escape"
         case .returnKey: return "Return"
+        case .commandReturn: return "Command-Return"
+        case .shiftReturn: return "Shift-Return"
+        case .commandCopy: return "Command-C"
+        case .commandPaste: return "Command-V"
+        case .commandClose: return "Command-W"
+        case .commandQuit: return "Command-Q"
+        case .commandCut: return "Command-X"
+        case .commandSelectAll: return "Command-A"
+        case .commandUndo: return "Command-Z"
+        case .commandRedo: return "Command-Shift-Z"
+        case .commandFind: return "Command-F"
+        case .commandSave: return "Command-S"
         case .arrowUp: return localization.text("action.arrow_up")
         case .arrowDown: return localization.text("action.arrow_down")
         case .arrowLeft: return localization.text("action.arrow_left")
@@ -372,7 +491,10 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .volumeDown: return localization.text("action.system_volume_down")
         case .volumeMute: return localization.text("action.system_mute")
         case .playPause: return localization.text("action.play_pause")
+        case .previousCommandLeft: return localization.text("action.previous_command_left")
+        case .nextCommandRight: return localization.text("action.next_command_right")
         case .customShortcut: return localization.text("action.custom_shortcut")
+        case .openCustomApplication: return localization.text("action.open_custom_application")
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
         case .openCodex: return localization.text("action.open_codex")
@@ -409,8 +531,45 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    var category: ButtonActionCategory {
+        if presetApplication != nil { return .applications }
+        switch self {
+        case .disabled, .escape, .returnKey, .commandReturn, .shiftReturn, .commandCopy,
+             .commandPaste, .commandClose, .commandQuit, .commandCut, .commandSelectAll,
+             .commandUndo, .commandRedo, .commandFind, .commandSave, .arrowUp, .arrowDown,
+             .arrowLeft, .arrowRight, .deleteBackward:
+            return .basicKeys
+        case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
+             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
+            return .systemAndMedia
+        case .customShortcut, .openCustomApplication:
+            return .custom
+        case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
+             .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
+             .openZed:
+            return .applications
+        }
+    }
+
     var allowsRepeat: Bool {
-        self != .customShortcut && presetApplication == nil && !isAppInternal
+        ![
+            .customShortcut,
+            .openCustomApplication,
+            .commandReturn,
+            .shiftReturn,
+            .commandCopy,
+            .commandPaste,
+            .commandClose,
+            .commandQuit,
+            .commandCut,
+            .commandSelectAll,
+            .commandUndo,
+            .commandRedo,
+            .commandFind,
+            .commandSave,
+            .previousCommandLeft,
+            .nextCommandRight,
+        ].contains(self) && presetApplication == nil && !isAppInternal
     }
 
     var isAppInternal: Bool {

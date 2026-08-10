@@ -104,6 +104,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var hidPowerKeySuppressed = false
     private var started = false
     private var terminationObserver: NSObjectProtocol?
+    private var completedUpdateHIDRecoveryWorkItem: DispatchWorkItem?
     private let audioPreparationQueue = DispatchQueue(label: "RemoteMic.audioPreparation", qos: .userInitiated)
     private var audioStartupGeneration: UInt64 = 0
     private var audioDeviceRefreshGeneration: UInt64 = 0
@@ -247,6 +248,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func stop() {
         guard started else { return }
         started = false
+        completedUpdateHIDRecoveryWorkItem?.cancel()
+        completedUpdateHIDRecoveryWorkItem = nil
         audioStartupGeneration &+= 1
         audioDeviceRefreshGeneration &+= 1
         let shouldStopAudioOnPreparationQueue = audioStartupPending
@@ -290,6 +293,28 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self.terminationObserver = nil
         }
         AppLogger.shared.write("APP STOP")
+    }
+
+    static func shouldRecoverHIDAfterCompletedUpdate(
+        completedUpdate: Bool,
+        customMappingEnabled: Bool
+    ) -> Bool {
+        completedUpdate && customMappingEnabled
+    }
+
+    func recoverHIDAfterCompletedUpdate(delay: TimeInterval = 2) {
+        guard started, settings.customMappingEnabled else { return }
+        completedUpdateHIDRecoveryWorkItem?.cancel()
+        stopHIDMonitors()
+        AppLogger.shared.write("HID UPDATE RECOVERY scheduled delay_ms=\(Int(delay * 1_000))")
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.started, self.settings.customMappingEnabled else { return }
+            self.completedUpdateHIDRecoveryWorkItem = nil
+            self.applyHIDSettings()
+            AppLogger.shared.write("HID UPDATE RECOVERY applied")
+        }
+        completedUpdateHIDRecoveryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     func reconnect() {
@@ -336,16 +361,26 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func updatePhoneRemoteButtonTitles(
         bindings: [RemoteButton: ButtonAction],
         shortcuts: [RemoteButton: CustomKeyboardShortcut],
+        applicationProfileIDs: [RemoteButton: UUID] = [:],
+        customApplicationProfiles: [CustomApplicationProfile] = [],
         localization: LocalizationStore
     ) {
         var titles: [String: String] = [:]
         for button in RemoteButton.allCases {
             let action = bindings[button] ?? .disabled
             guard action != AppSettings.defaultBindings[button] else { continue }
-            let fullTitle = action == .customShortcut
-                ? shortcuts[button]?.displayName(using: localization)
+            let fullTitle: String
+            if action == .customShortcut {
+                fullTitle = shortcuts[button]?.displayName(using: localization)
                     ?? action.displayName(using: localization)
-                : action.displayName(using: localization)
+            } else if action == .openCustomApplication,
+                      let profileID = applicationProfileIDs[button],
+                      let profile = customApplicationProfiles.first(where: { $0.id == profileID })
+            {
+                fullTitle = profile.displayName
+            } else {
+                fullTitle = action.displayName(using: localization)
+            }
             titles[button.rawValue] = String(fullTitle.prefix(10))
         }
         remoteButtonTitles = titles
@@ -1383,7 +1418,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         guard KeyboardInjector.send(
             configured.action,
-            shortcut: configured.shortcut
+            shortcut: configured.shortcut,
+            applicationProfile: settings.customApplicationProfile(
+                id: configured.applicationProfileID
+            )
         ) else {
             return false
         }

@@ -88,6 +88,8 @@ Open **Button Mapping** and enable custom mapping to change direction, OK, Back,
 
 Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, launching installed apps, and recording any custom keyboard shortcut.
 
+**Open Custom App** lets you select any local `.app`, then either open it only, send its focus shortcut after activation, or record a target input field once and focus it automatically. Re-record the target if an app update changes its interface. Remote Mic does not use fixed screen coordinates or save text from the input field.
+
 - Without double-click or long-press configuration, single-click keeps its immediate response and hold-to-repeat behavior.
 - A double-click waits about 0.3 seconds so the app can distinguish a single click.
 - A long press triggers after about 0.55 seconds and suppresses the single-click action.
