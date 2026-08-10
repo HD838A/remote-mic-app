@@ -2,7 +2,8 @@
 
 ## 适用范围
 
-- 分支：`codex/fix-window-background-drag`
+- 适用版本：macOS Preview `1.8.6 (67)` 及包含同一修复的后续版本
+- 来源分支：`codex/fix-window-background-drag`，已合入发布候选分支
 - 平台：macOS 14 及以上
 - 目标：确认设置页面内容不会带动整个窗口横向移动，同时保留顶部专用空白区域拖动窗口的能力。
 

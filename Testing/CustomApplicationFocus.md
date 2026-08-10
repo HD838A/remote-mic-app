@@ -2,6 +2,7 @@
 
 ## 适用范围
 
+- 适用版本：macOS Preview `1.8.6 (67)` 及包含同一修复的后续版本
 - 功能分支：`codex/shortcut-capture-conflicts`
 - 功能状态：第一阶段开发验证中
 - 测试目标：验证遥控器普通按键可以打开任意 macOS `.app`，并按配置只激活 APP、发送聚焦快捷键，或聚焦用户记录的 Accessibility 输入框。
