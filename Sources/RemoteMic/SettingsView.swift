@@ -61,6 +61,16 @@ private struct ShortcutEditingTarget: Identifiable, Equatable {
     var id: String { "\(button.rawValue)-\(trigger.rawValue)" }
 }
 
+private struct ShortcutCaptureFeedback: Equatable {
+    enum Result: Equatable {
+        case succeeded
+        case failed(ShortcutCaptureStartFailure)
+    }
+
+    let contextID: String
+    let result: Result
+}
+
 private enum CustomApplicationLearningState: Equatable {
     case recording
     case succeeded
@@ -140,6 +150,7 @@ struct SettingsView: View {
     @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
+    @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -1221,44 +1232,85 @@ struct SettingsView: View {
         configured: ConfiguredButtonAction
     ) -> some View {
         let target = ShortcutEditingTarget(button: button, trigger: trigger)
+        let contextID = target.id
         VStack(alignment: .leading, spacing: 10) {
-            Text("shortcut.editor.instructions")
+            Text("shortcut.editor.click_first_help")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
-                Text(
-                    configured.shortcut?.displayName(using: localization) ??
-                        localization.text("shortcut.editor.waiting")
-                )
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(configured.shortcut == nil ? Color.orange : Color.primary)
-                .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
-                .padding(.horizontal, 12)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
-
-                Button(shortcutCaptureTarget == target ? "shortcut.editor.waiting" : "shortcut.action.record") {
-                    shortcutCaptureTarget = target
-                }
-                .compatibilityButtonStyle(.prominent)
-
-                Button("common.action.clear") {
-                    settings.setShortcut(nil, for: button, trigger: trigger)
-                    shortcutCaptureTarget = nil
-                }
-                .compatibilityButtonStyle(.standard)
-                .disabled(configured.shortcut == nil)
-            }
-
             if shortcutCaptureTarget == target {
-                Label("shortcut.editor.instructions", systemImage: "keyboard")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-                ShortcutCaptureView { shortcut in
-                    settings.setShortcut(shortcut, for: button, trigger: trigger)
-                    shortcutCaptureTarget = nil
+                HStack(spacing: 10) {
+                    Label("shortcut.editor.recording_prompt", systemImage: "keyboard.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 10)
+
+                    Button("common.action.cancel") {
+                        shortcutCaptureTarget = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
                 }
+                .padding(12)
+                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+
+                ShortcutCaptureView(
+                    onCapture: { shortcut in
+                        settings.setShortcut(shortcut, for: button, trigger: trigger)
+                        AppLogger.shared.write("SHORTCUT CAPTURE completed target=button")
+                        shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                            contextID: contextID,
+                            result: .succeeded
+                        )
+                        shortcutCaptureTarget = nil
+                    },
+                    onFailure: { failure in
+                        AppLogger.shared.write("SHORTCUT CAPTURE failed reason=\(failure)")
+                        shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                            contextID: contextID,
+                            result: .failed(failure)
+                        )
+                        shortcutCaptureTarget = nil
+                        if failure == .accessibilityPermissionRequired {
+                            _ = KeyboardInjector.requestAccessibilityAccess()
+                        }
+                    }
+                )
                 .frame(height: 1)
+            } else {
+                HStack(spacing: 10) {
+                    Label {
+                        Text(
+                            configured.shortcut?.displayName(using: localization) ??
+                                localization.text("shortcut.editor.not_recorded")
+                        )
+                    } icon: {
+                        Image(systemName: configured.shortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
+                            .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.green)
+                    }
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.primary)
+                    .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+
+                    Button(configured.shortcut == nil ? "shortcut.action.record" : "shortcut.action.record_again") {
+                        applicationShortcutCaptureProfileID = nil
+                        shortcutCaptureFeedback = nil
+                        shortcutCaptureTarget = target
+                    }
+                    .compatibilityButtonStyle(.prominent)
+
+                    Button("common.action.clear") {
+                        settings.setShortcut(nil, for: button, trigger: trigger)
+                        shortcutCaptureFeedback = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(configured.shortcut == nil)
+                }
+
+                shortcutCaptureFeedbackView(contextID: contextID)
             }
         }
         .padding(12)
@@ -1399,52 +1451,112 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func inlineApplicationShortcutEditor(_ profile: CustomApplicationProfile) -> some View {
+        let contextID = "application-\(profile.id.uuidString)"
         VStack(alignment: .leading, spacing: 10) {
             Text("custom_application.shortcut.editor_instructions")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
-                Text(
-                    profile.focusShortcut?.displayName(using: localization) ??
-                        localization.text("shortcut.editor.waiting")
-                )
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(profile.focusShortcut == nil ? Color.orange : Color.primary)
-                .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
-                .padding(.horizontal, 12)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
-
-                Button(
-                    applicationShortcutCaptureProfileID == profile.id
-                        ? "shortcut.editor.waiting"
-                        : "shortcut.action.record"
-                ) {
-                    applicationShortcutCaptureProfileID = profile.id
-                }
-                .compatibilityButtonStyle(.prominent)
-
-                Button("common.action.clear") {
-                    var updated = profile
-                    updated.focusShortcut = nil
-                    settings.updateCustomApplicationProfile(updated)
-                    applicationShortcutCaptureProfileID = nil
-                }
-                .compatibilityButtonStyle(.standard)
-                .disabled(profile.focusShortcut == nil)
-            }
-
             if applicationShortcutCaptureProfileID == profile.id {
-                Label("shortcut.editor.instructions", systemImage: "keyboard")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-                ShortcutCaptureView { shortcut in
-                    guard var updated = settings.customApplicationProfile(id: profile.id) else { return }
-                    updated.focusShortcut = shortcut
-                    settings.updateCustomApplicationProfile(updated)
-                    applicationShortcutCaptureProfileID = nil
+                HStack(spacing: 10) {
+                    Label("shortcut.editor.recording_prompt", systemImage: "keyboard.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 10)
+
+                    Button("common.action.cancel") {
+                        applicationShortcutCaptureProfileID = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
                 }
+                .padding(12)
+                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+
+                ShortcutCaptureView(
+                    onCapture: { shortcut in
+                        guard var updated = settings.customApplicationProfile(id: profile.id) else { return }
+                        updated.focusShortcut = shortcut
+                        settings.updateCustomApplicationProfile(updated)
+                        AppLogger.shared.write("SHORTCUT CAPTURE completed target=application_focus")
+                        shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                            contextID: contextID,
+                            result: .succeeded
+                        )
+                        applicationShortcutCaptureProfileID = nil
+                    },
+                    onFailure: { failure in
+                        AppLogger.shared.write("SHORTCUT CAPTURE failed reason=\(failure)")
+                        shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                            contextID: contextID,
+                            result: .failed(failure)
+                        )
+                        applicationShortcutCaptureProfileID = nil
+                        if failure == .accessibilityPermissionRequired {
+                            _ = KeyboardInjector.requestAccessibilityAccess()
+                        }
+                    }
+                )
                 .frame(height: 1)
+            } else {
+                HStack(spacing: 10) {
+                    Label {
+                        Text(
+                            profile.focusShortcut?.displayName(using: localization) ??
+                                localization.text("shortcut.editor.not_recorded")
+                        )
+                    } icon: {
+                        Image(systemName: profile.focusShortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
+                            .foregroundStyle(profile.focusShortcut == nil ? Color.secondary : Color.green)
+                    }
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(profile.focusShortcut == nil ? Color.secondary : Color.primary)
+                    .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+
+                    Button(profile.focusShortcut == nil ? "shortcut.action.record" : "shortcut.action.record_again") {
+                        shortcutCaptureTarget = nil
+                        shortcutCaptureFeedback = nil
+                        applicationShortcutCaptureProfileID = profile.id
+                    }
+                    .compatibilityButtonStyle(.prominent)
+
+                    Button("common.action.clear") {
+                        var updated = profile
+                        updated.focusShortcut = nil
+                        settings.updateCustomApplicationProfile(updated)
+                        shortcutCaptureFeedback = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(profile.focusShortcut == nil)
+                }
+
+                shortcutCaptureFeedbackView(contextID: contextID)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func shortcutCaptureFeedbackView(contextID: String) -> some View {
+        if shortcutCaptureFeedback?.contextID == contextID,
+           let result = shortcutCaptureFeedback?.result {
+            switch result {
+            case .succeeded:
+                Label("shortcut.editor.success", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.green)
+            case .failed(.accessibilityPermissionRequired):
+                Label("shortcut.editor.permission_required", systemImage: "lock.trianglebadge.exclamationmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .failed(.eventTapUnavailable):
+                Label("shortcut.editor.capture_unavailable", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -2714,64 +2826,60 @@ private struct ReleaseHistorySection: Identifiable {
 
 private struct ShortcutCaptureView: NSViewRepresentable {
     let onCapture: (CustomKeyboardShortcut) -> Void
+    let onFailure: (ShortcutCaptureStartFailure) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onCapture: onCapture)
+        Coordinator(onCapture: onCapture, onFailure: onFailure)
     }
 
-    func makeNSView(context: Context) -> ShortcutCaptureNSView {
-        let view = ShortcutCaptureNSView()
-        context.coordinator.view = view
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
         context.coordinator.startMonitoring()
         return view
     }
 
-    func updateNSView(_ nsView: ShortcutCaptureNSView, context: Context) {
+    func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.onCapture = onCapture
+        context.coordinator.onFailure = onFailure
     }
 
-    static func dismantleNSView(_ nsView: ShortcutCaptureNSView, coordinator: Coordinator) {
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         coordinator.stopMonitoring()
     }
 
     final class Coordinator {
         var onCapture: (CustomKeyboardShortcut) -> Void
-        weak var view: NSView?
-        private var monitor: Any?
+        var onFailure: (ShortcutCaptureStartFailure) -> Void
+        private var monitor: ShortcutCaptureMonitor?
 
-        init(onCapture: @escaping (CustomKeyboardShortcut) -> Void) {
+        init(
+            onCapture: @escaping (CustomKeyboardShortcut) -> Void,
+            onFailure: @escaping (ShortcutCaptureStartFailure) -> Void
+        ) {
             self.onCapture = onCapture
+            self.onFailure = onFailure
         }
 
         func startMonitoring() {
             guard monitor == nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard let self, event.window === self.view?.window else { return event }
-                self.onCapture(CustomKeyboardShortcut(event: event))
-                return nil
+            let capture = onCapture
+            let monitor = ShortcutCaptureMonitor(onCapture: capture)
+            self.monitor = monitor
+            if case let .failure(failure) = monitor.start() {
+                self.monitor = nil
+                DispatchQueue.main.async { [weak self] in
+                    self?.onFailure(failure)
+                }
             }
         }
 
         func stopMonitoring() {
-            guard let monitor else { return }
-            NSEvent.removeMonitor(monitor)
-            self.monitor = nil
+            monitor?.stop()
+            monitor = nil
         }
 
         deinit {
             stopMonitoring()
-        }
-    }
-}
-
-private final class ShortcutCaptureNSView: NSView {
-    override var acceptsFirstResponder: Bool { true }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.window?.makeFirstResponder(self)
         }
     }
 }

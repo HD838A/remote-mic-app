@@ -9,6 +9,7 @@
 | [关于页版本中心](./about-update-center/) | 验证中 | 集中展示版本、更新内容、版本历史与正式/预发布更新通道。 |
 | [常用 macOS 快捷键](./common-mac-shortcuts/) | 已完成 | 常用固定快捷键与无线麦标准退出、关窗行为。 |
 | [延长语音录音与 iOS 点按录音](./extended-voice-recording/) | 等待人工验收 | 遥控器会话使用 `MIC_EXTEND` 尝试延长到 3 分钟；iOS 同时支持点按切换与按住说话。 |
+| [系统占用快捷键录入](./reserved-shortcut-capture/) | 等待人工验收 | 点击录入后短暂捕获被系统或其他 APP 占用的组合键，并显示明确成功或失败反馈。 |
 
 ## 新功能模板
 
