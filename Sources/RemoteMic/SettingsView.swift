@@ -125,9 +125,11 @@ enum MappingPermissionPolicy {
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject private var updateInformation: UpdateInformationStore
     @EnvironmentObject private var localization: LocalizationStore
 
     private let checkForUpdates: () -> Void
+    private let refreshUpdateInformation: () -> Void
     private let setDockIconVisible: (Bool) -> Void
 
     @State private var selectedSection: SettingsSection = .connection
@@ -157,12 +159,16 @@ struct SettingsView: View {
 
     init(
         model: BridgeAppModel,
+        updateInformation: UpdateInformationStore,
         checkForUpdates: @escaping () -> Void = {},
+        refreshUpdateInformation: @escaping () -> Void = {},
         setDockIconVisible: @escaping (Bool) -> Void = { _ in }
     ) {
         self.model = model
         settings = model.settings
+        self.updateInformation = updateInformation
         self.checkForUpdates = checkForUpdates
+        self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
     }
 
@@ -1852,215 +1858,345 @@ struct SettingsView: View {
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
                 VStack(spacing: 14) {
-                        GlassPanel {
-                            HStack(spacing: 20) {
-                                Image(nsImage: NSApp.applicationIconImage)
-                                    .resizable()
-                                    .frame(width: 88, height: 88)
-                                    .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                    HStack(spacing: 18) {
+                        Image(nsImage: NSApp.applicationIconImage)
+                            .resizable()
+                            .frame(width: 72, height: 72)
+                            .shadow(color: .black.opacity(0.14), radius: 10, y: 5)
 
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("app.name")
-                                        .font(.system(size: 28, weight: .semibold))
-                                    Text("about.page.hero_description")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                    HStack(spacing: 10) {
-                                        Link(destination: localization.localizedWebsiteURL) {
-                                            Label("about.support.website", systemImage: "globe")
-                                        }
-                                        .compatibilityButtonStyle(.prominent)
-
-                                        Link(
-                                            destination: AppLinks.githubRepository
-                                        ) {
-                                            Label("about.support.github", systemImage: "link")
-                                        }
-                                        .compatibilityButtonStyle(.standard)
-                                    }
-                                }
-
-                                Spacer(minLength: 20)
-
-                                Image(systemName: "waveform.and.mic")
-                                    .font(.system(size: 42, weight: .medium))
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 76, height: 76)
-                                    .compatibilityTintedGlass(
-                                        tint: Color.accentColor.opacity(0.12),
-                                        in: Circle()
-                                    )
-                            }
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("app.name")
+                                .font(.system(size: 28, weight: .semibold))
+                            Text("about.page.hero_description")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
 
-                        GlassPanel {
-                            VStack(alignment: .leading, spacing: 14) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("about.configuration.title")
-                                            .font(.headline)
-                                        Text("about.configuration.description")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "arrow.left.arrow.right.circle.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(Color.accentColor)
-                                }
+                        Spacer(minLength: 20)
 
-                                HStack(spacing: 10) {
-                                    Button(action: exportConfiguration) {
-                                        Label("about.configuration.export", systemImage: "square.and.arrow.up")
-                                    }
-                                    .compatibilityButtonStyle(.prominent)
-
-                                    Button(action: importConfiguration) {
-                                        Label("about.configuration.import", systemImage: "square.and.arrow.down")
-                                    }
-                                    .compatibilityButtonStyle(.standard)
-
-                                    Spacer()
-
-                                    if let configurationStatus {
-                                        Label(
-                                            configurationStatus.message.text(using: localization),
-                                            systemImage: configurationStatus.systemImage
-                                        )
-                                        .font(.caption)
-                                        .foregroundStyle(configurationStatus.tint)
-                                    }
-                                }
-                            }
+                        Link(destination: localization.localizedWebsiteURL) {
+                            Label("about.support.website", systemImage: "globe")
+                                .frame(minWidth: 104)
                         }
+                        .compatibilityButtonStyle(.prominent)
 
-                        HStack(alignment: .top, spacing: 14) {
-                            GlassPanel {
+                        Link(destination: AppLinks.githubRepository) {
+                            Label("about.support.github", systemImage: "link")
+                                .frame(minWidth: 104)
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                    .padding(.horizontal, 6)
+
+                    GlassPanel {
+                        VStack(spacing: 16) {
+                            HStack(alignment: .top, spacing: 24) {
                                 VStack(alignment: .leading, spacing: 14) {
-                                    Text("about.preferences.title")
-                                        .font(.headline)
-
-                                    Toggle("about.preferences.show_dock_icon", isOn: Binding(
-                                        get: { settings.showDockIcon },
-                                        set: { setDockIconVisible($0) }
-                                    ))
-
-                                    Text("about.preferences.show_dock_icon_help")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    Divider()
-
-                                    Toggle(
-                                        "about.preferences.open_main_window_at_launch",
-                                        isOn: $settings.openMainWindowAtLaunch
-                                    )
-
-                                    Text("about.preferences.open_main_window_help")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    Divider()
-
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("about.preferences.language")
-                                            .font(.subheadline.weight(.medium))
-                                        Picker("about.preferences.language", selection: Binding(
-                                            get: { localization.language },
-                                            set: { localization.select($0) }
-                                        )) {
-                                            ForEach(AppLanguage.allCases) { language in
-                                                Text(languageTitle(language)).tag(language)
-                                            }
-                                        }
-                                        .labelsHidden()
-                                        .pickerStyle(.segmented)
-                                    }
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .top)
-
-                            GlassPanel {
-                                VStack(alignment: .leading, spacing: 12) {
                                     Text("about.version.title")
                                         .font(.headline)
 
-                                    VStack(alignment: .leading, spacing: 10) {
-                                        Text(versionText)
-                                            .font(.title3.weight(.semibold).monospacedDigit())
-
-                                        Button(action: checkForUpdates) {
-                                            Label(
-                                                "menu.check_for_updates",
-                                                systemImage: "arrow.triangle.2.circlepath"
-                                            )
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        }
-                                        .compatibilityButtonStyle(.prominent)
-
-                                        Toggle(
-                                            "about.version.check_prerelease",
-                                            isOn: $settings.checksForPreReleaseUpdates
-                                        )
-
-                                        Text("about.version.check_prerelease_help")
-                                            .font(.caption)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("about.version.current")
+                                            .font(.subheadline)
                                             .foregroundStyle(.secondary)
+                                        Text(currentVersion)
+                                            .font(.system(size: 28, weight: .semibold))
+                                            .monospacedDigit()
                                     }
 
-                                    Divider()
+                                    if case let .available(update) = updateInformation.state {
+                                        HStack(spacing: 8) {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text("about.version.latest")
+                                                    .font(.subheadline)
+                                                    .foregroundStyle(.secondary)
+                                                Text(update.displayVersion)
+                                                    .font(.system(size: 28, weight: .semibold))
+                                                    .monospacedDigit()
+                                            }
+                                            StatusPill(
+                                                text: localization.text("about.version.available"),
+                                                tint: .green
+                                            )
+                                        }
 
-                                    Button {
-                                        isReleaseHistoryPresented = true
-                                    } label: {
-                                        Label("about.version.history", systemImage: "clock.arrow.circlepath")
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .compatibilityButtonStyle(.standard)
+                                        HStack(spacing: 10) {
+                                            Button(action: checkForUpdates) {
+                                                Text(String(
+                                                    format: localization.text("about.version.update_to"),
+                                                    locale: localization.locale,
+                                                    arguments: [update.displayVersion]
+                                                ))
+                                                .frame(maxWidth: .infinity)
+                                            }
+                                            .compatibilityButtonStyle(.prominent)
 
-                                    Button(action: openGlossary) {
-                                        Label("help.glossary.open", systemImage: "book.closed")
-                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            Button(
+                                                "about.version.recheck",
+                                                action: refreshUpdateInformation
+                                            )
+                                            .compatibilityButtonStyle(.standard)
+                                        }
+                                    } else {
+                                        HStack(spacing: 10) {
+                                            Button(action: checkForUpdates) {
+                                                Label(
+                                                    "menu.check_for_updates",
+                                                    systemImage: "arrow.triangle.2.circlepath"
+                                                )
+                                                .frame(maxWidth: .infinity)
+                                            }
+                                            .compatibilityButtonStyle(.prominent)
+
+                                            Button(
+                                                "about.version.recheck",
+                                                action: refreshUpdateInformation
+                                            )
+                                            .compatibilityButtonStyle(.standard)
+                                        }
                                     }
-                                    .compatibilityButtonStyle(.standard)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 12) {
+                                    updateInformationContent
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            Divider()
+
+                            HStack(spacing: 20) {
+                                Button {
+                                    isReleaseHistoryPresented = true
+                                } label: {
+                                    Label("about.version.history", systemImage: "clock.arrow.circlepath")
+                                }
+                                .compatibilityButtonStyle(.standard)
+
+                                Spacer()
+
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Toggle(
+                                        "about.version.check_prerelease",
+                                        isOn: $settings.checksForPreReleaseUpdates
+                                    )
+                                    .toggleStyle(.switch)
+                                    Text("about.version.check_prerelease_help_short")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
-                            .frame(width: 280, alignment: .top)
                         }
+                    }
+
+                    GlassPanel {
+                        VStack(spacing: 0) {
+                            HStack(spacing: 14) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.configuration.export")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.configuration.export_description")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("about.configuration.export", action: exportConfiguration)
+                                    .compatibilityButtonStyle(.standard)
+                                    .frame(width: 92)
+                            }
+                            .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "square.and.arrow.down")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.configuration.import")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.configuration.import_description")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("about.configuration.import", action: importConfiguration)
+                                    .compatibilityButtonStyle(.standard)
+                                    .frame(width: 92)
+                            }
+                            .padding(.vertical, 10)
+
+                            if let configurationStatus {
+                                Divider()
+                                Label(
+                                    configurationStatus.message.text(using: localization),
+                                    systemImage: configurationStatus.systemImage
+                                )
+                                .font(.caption)
+                                .foregroundStyle(configurationStatus.tint)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                            }
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "dock.rectangle")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.show_dock_icon")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.show_dock_icon_help")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { settings.showDockIcon },
+                                    set: { setDockIconVisible($0) }
+                                ))
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                            }
+                            .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "macwindow")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.open_main_window_at_launch")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.open_main_window_help")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Toggle("", isOn: $settings.openMainWindowAtLaunch)
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+                            }
+                            .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "globe")
+                                    .font(.title3)
+                                    .foregroundStyle(.green)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.language")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.language_description")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 20)
+                                Picker("about.preferences.language", selection: Binding(
+                                    get: { localization.language },
+                                    set: { localization.select($0) }
+                                )) {
+                                    ForEach(AppLanguage.allCases) { language in
+                                        Text(languageTitle(language)).tag(language)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.segmented)
+                                .frame(width: 400)
+                            }
+                            .padding(.vertical, 10)
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear(perform: refreshUpdateInformation)
+    }
+
+    @ViewBuilder
+    private var updateInformationContent: some View {
+        switch updateInformation.state {
+        case .idle:
+            Text("about.version.information_title")
+                .font(.headline)
+            Text("about.version.information_idle")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        case .checking:
+            Text("about.version.information_title")
+                .font(.headline)
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("about.version.checking")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        case .upToDate:
+            Label("about.version.up_to_date", systemImage: "checkmark.circle.fill")
+                .font(.headline)
+                .foregroundStyle(.green)
+            Text("about.version.up_to_date_description")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        case .unavailable:
+            Label("about.version.information_unavailable", systemImage: "wifi.exclamationmark")
+                .font(.headline)
+                .foregroundStyle(.orange)
+            Text("about.version.information_unavailable_description")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        case let .available(update):
+            Text(String(
+                format: localization.text("about.version.release_notes_title"),
+                locale: localization.locale,
+                arguments: [update.displayVersion]
+            ))
+            .font(.headline)
+
+            if update.releaseNotes.isEmpty {
+                Text("about.version.release_notes_unavailable")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(update.releaseNotes.enumerated()), id: \.offset) { index, note in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("\(index + 1)")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 24, height: 24)
+                            .background(Color.accentColor.opacity(0.13), in: Circle())
+                        Text(note)
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
     }
 
-    private var versionText: String {
-        let version = Bundle.main.object(
+    private var currentVersion: String {
+        Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? localization.text("common.value.unknown")
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        guard let build else {
-            return String(
-                format: localization.text("app.version"),
-                locale: localization.locale,
-                arguments: [version]
-            )
-        }
-        return String(
-            format: localization.text("app.version_with_build"),
-            locale: localization.locale,
-            arguments: [version, build]
-        )
     }
 
     private func languageTitle(_ language: AppLanguage) -> String {
         language == .system ? localization.text("language.system") : language.nativeDisplayName
-    }
-
-    private func openGlossary() {
-        guard let url = localization.localizedURL(
-            forResource: "Glossary",
-            withExtension: "md"
-        ) else { return }
-        NSWorkspace.shared.open(url)
     }
 
     private func buttonPressCountText(for period: UsageStatisticsPeriod) -> String {

@@ -1,5 +1,11 @@
 # Version History
 
+## 1.8.6 (Pre-release)
+
+- Redesigned About to keep the current version, available update, update check, version history, and pre-release channel together.
+- When a new version is available, About now shows localized release notes before the update starts.
+- Switching between stable and pre-release updates refreshes the result immediately, while an unavailable candidate feed still falls back silently to stable updates.
+
 ## 1.8.5 (Pre-release)
 
 - Physical remote voice sessions are now renewed periodically to try to continue beyond the roughly one-minute limit, with an initial maximum of three minutes.
