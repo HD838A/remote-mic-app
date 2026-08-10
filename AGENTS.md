@@ -42,6 +42,16 @@
 - 发布前必须 fetch 远端，并从明确批准且已经 Push 的目标提交创建隔离 worktree；发布提交、版本、Tag、制品和远端分支必须解析到同一个提交。
 - 不得为了整理发布工作区而合并、rebase、force-push、清空或广泛提交原工作区中的其他改动。发布完成后仍要保留未验收功能所在的原分支。
 
+## macOS 预览候选分支
+
+- 功能和修复必须先通过 PR 合入 `main`；不得直接在预览候选分支开发产品功能。
+- 每个候选版本使用一次性的 `release/pre-vX.Y.Z` 分支，并从最新 `origin/main` 创建。
+- 候选分支只允许修改版本号、Build、中英文版本历史和必要的测试手册目标版本；Push 后由 GitHub Actions 自动校验来源、运行完整 Mac 测试并生成临时 CI App 包。
+- 公开 Pre-release 仍必须使用 Developer ID 签名、公证、Sparkle 签名和公开资产复核；GitHub CI 的 ad-hoc App 不能当作公开安装包。
+- 候选 Tag、远端候选分支和发布资产必须指向同一提交；候选分支在正式晋升完成前不得删除或 force-push。
+- 正式版必须由用户明确指定具体版本。候选提交先合入 `main`，再晋升同一 Tag 和同一批资产，禁止从 `main` 重新构建正式包。
+- 完整流程与 Release Notes 规则见 [`RELEASING.md`](RELEASING.md)。
+
 ## macOS Feature Flag 与预览版回归门禁
 
 - Feature Flag 默认关闭不等于风险已隔离。只要实验功能改动了共享蓝牙协议、状态机、音频、HID、持久化或页面容器，必须验证开关缺失/默认关闭、明确关闭、开启、使用后再关闭四种状态。

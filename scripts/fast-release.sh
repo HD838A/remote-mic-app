@@ -62,44 +62,21 @@ BRANCH="$(git symbolic-ref --quiet --short HEAD)" || {
   print -u2 "fast release requires a branch, not detached HEAD"
   exit 1
 }
-if [[ "$BRANCH" != "main" ]]; then
-  print -u2 "fast release is restricted to main"
+if [[ "$BRANCH" != "release/pre-v$VERSION" ]]; then
+  print -u2 "fast release requires release/pre-v$VERSION"
   exit 1
 fi
 
 git fetch origin main --tags
-if ! git merge-base --is-ancestor origin/main HEAD; then
-  print -u2 "local main does not contain the current origin/main"
-  exit 1
-fi
-
-LATEST_TAG="$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)"
-if ! git rev-parse "$LATEST_TAG^{commit}" >/dev/null 2>&1; then
-  print -u2 "latest release tag is unavailable locally: $LATEST_TAG"
-  exit 1
-fi
-if [[ "$LATEST_TAG" == "$RELEASE_TAG" ]]; then
-  print -u2 "Resources/Info.plist must be bumped beyond $LATEST_TAG"
-  exit 1
-fi
+"$ROOT/scripts/verify-preview-branch.sh"
 if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
   print -u2 "release $RELEASE_TAG already exists"
   exit 1
 fi
 
-LATEST_APPCAST="$WORK_DIR/latest-appcast.xml"
-curl -fsSL "https://github.com/$REPOSITORY/releases/latest/download/appcast.xml" \
-  -o "$LATEST_APPCAST"
-LATEST_BUILD="$(/usr/bin/sed -n 's:.*<sparkle:version>\([0-9][0-9]*\)</sparkle:version>.*:\1:p' \
-  "$LATEST_APPCAST" | /usr/bin/head -n 1)"
-if [[ ! "$LATEST_BUILD" =~ '^[0-9]+$' ]] || (( BUILD <= LATEST_BUILD )); then
-  print -u2 "CFBundleVersion must be greater than the latest release build $LATEST_BUILD"
-  exit 1
-fi
-
-CHANGED_FILES=("${(@f)$(git diff --name-only "$LATEST_TAG^{commit}"..HEAD)}")
+CHANGED_FILES=("${(@f)$(git diff --name-only origin/main..HEAD)}")
 if [[ -z "${CHANGED_FILES[1]:-}" ]]; then
-  print -u2 "no changes exist after $LATEST_TAG"
+  print -u2 "no release metadata changes exist after origin/main"
   exit 1
 fi
 for changed_file in "${CHANGED_FILES[@]}"; do
@@ -123,8 +100,8 @@ for changed_file in "${CHANGED_FILES[@]}"; do
   esac
 done
 
-git diff --check "$LATEST_TAG^{commit}"..HEAD
-if git diff "$LATEST_TAG^{commit}"..HEAD | \
+git diff --check origin/main..HEAD
+if git diff origin/main..HEAD | \
    rg -n '^\+.*(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|MATCH_PASSWORD=|APPLE_APPLICATION_SPECIFIC_PASSWORD=|AuthKey_[A-Z0-9]+\.p8)'; then
   print -u2 "fast release rejected a possible plaintext credential in the release diff"
   exit 1
@@ -141,7 +118,7 @@ done
 
 OLD_PLIST="$WORK_DIR/previous-Info.plist"
 CURRENT_PLIST="$WORK_DIR/current-Info.plist"
-git show "$LATEST_TAG:Resources/Info.plist" > "$OLD_PLIST"
+git show "origin/main:Resources/Info.plist" > "$OLD_PLIST"
 /bin/cp "$PLIST" "$CURRENT_PLIST"
 for plist_copy in "$OLD_PLIST" "$CURRENT_PLIST"; do
   /usr/bin/plutil -remove CFBundleShortVersionString "$plist_copy"
@@ -154,7 +131,6 @@ fi
 
 "$SECRETS_VALIDATOR" "$SECRETS_REPO"
 xcrun swift test
-git push origin main
 
 SPARKLE_PRIVATE_KEY_FILE="$SPARKLE_KEY" \
 PARALLEL_PACKAGE_NOTARIZATION=1 \
@@ -183,6 +159,6 @@ fi
 
 SPARKLE_PRIVATE_KEY_FILE="$SPARKLE_KEY" \
 EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_TEAM_ID" \
-  "$ROOT/scripts/publish-release.sh" release
+  "$ROOT/scripts/publish-release.sh" prerelease
 
-print "FAST RELEASE PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
+print "FAST PRE-RELEASE PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"

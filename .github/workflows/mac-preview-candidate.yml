@@ -1,0 +1,61 @@
+name: macOS Preview Candidate
+
+on:
+  push:
+    branches:
+      - "release/pre-v*"
+  workflow_dispatch:
+
+concurrency:
+  group: mac-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-package:
+    name: Validate and package preview candidate
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate candidate branch provenance
+        run: ./scripts/verify-preview-branch.sh
+
+      - name: Run Swift tests
+        run: swift test
+
+      - name: Run project self-test
+        run: ./scripts/test.sh
+
+      - name: Build release configuration
+        run: swift build -c release
+
+      - name: Build ad-hoc candidate App
+        run: ./scripts/build-app.sh
+
+      - name: Verify candidate App structure
+        run: ./scripts/verify-app.sh "dist/Remote Mic.app"
+
+      - name: Package CI candidate
+        run: |
+          version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - Resources/Info.plist)"
+          /usr/bin/ditto -c -k --keepParent \
+            "dist/Remote Mic.app" \
+            "dist/Remote-Mic-$version-ci.zip"
+
+      - name: Upload CI candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-preview-${{ github.sha }}
+          path: dist/Remote-Mic-*-ci.zip
+          if-no-files-found: error
+          retention-days: 14

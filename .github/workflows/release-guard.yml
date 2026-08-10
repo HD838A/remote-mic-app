@@ -1,0 +1,37 @@
+name: Release Guard
+
+on:
+  release:
+    types: [published, released, edited]
+
+concurrency:
+  group: release-guard-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+jobs:
+  reconcile:
+    if: github.event.release.draft == false
+    runs-on: macos-15
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Reconcile release provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_RELEASE_ACTORS: HD838A
+        run: |
+          ./scripts/reconcile-release-event.sh \
+            "${{ github.event.release.tag_name }}" \
+            "${{ github.actor }}"
