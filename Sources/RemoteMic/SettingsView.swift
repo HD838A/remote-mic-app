@@ -337,7 +337,7 @@ struct SettingsView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            Color.clear
+            WindowDragArea()
                 .frame(height: 56)
                 .accessibilityHidden(true)
             ForEach(SettingsSection.allCases) { section in
@@ -2856,6 +2856,20 @@ private struct ReleaseHistorySection: Identifiable {
     let entries: [String]
 
     var id: String { title }
+}
+
+private final class WindowDragNSView: NSView {
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
+}
+
+private struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowDragNSView {
+        WindowDragNSView()
+    }
+
+    func updateNSView(_ nsView: WindowDragNSView, context: Context) {}
 }
 
 private struct ShortcutCaptureView: NSViewRepresentable {

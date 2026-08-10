@@ -5,6 +5,26 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(appSource.contains("window.isMovableByWindowBackground = false"))
+        #expect(!appSource.contains("window.isMovableByWindowBackground = true"))
+        #expect(settingsSource.contains("WindowDragArea()"))
+        #expect(settingsSource.contains("window?.performDrag(with: event)"))
+    }
+
     @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
         #expect(MappingSelectionPolicy.selection(
             current: .home,
