@@ -342,6 +342,7 @@
 "menu.open_settings" = "Open Settings…";
 "menu.show_logs" = "Show Logs";
 "menu.about" = "About Remote Mic";
+"menu.file" = "File";
 "menu.check_for_updates" = "Check for Updates…";
 "common.action.quit" = "Quit";
 "menu.language" = "Language";

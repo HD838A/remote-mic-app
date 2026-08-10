@@ -342,6 +342,7 @@
 "menu.open_settings" = "打开设置…";
 "menu.show_logs" = "显示日志";
 "menu.about" = "关于无线麦";
+"menu.file" = "文件";
 "menu.check_for_updates" = "检查更新…";
 "common.action.quit" = "退出";
 "menu.language" = "语言";

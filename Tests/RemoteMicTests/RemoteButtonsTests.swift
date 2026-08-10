@@ -114,6 +114,8 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.escape.category == .basicKeys)
         #expect(ButtonAction.commandReturn.category == .basicKeys)
         #expect(ButtonAction.commandCopy.category == .basicKeys)
+        #expect(ButtonAction.commandClose.category == .basicKeys)
+        #expect(ButtonAction.commandUndo.category == .basicKeys)
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
@@ -129,7 +131,14 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.shiftReturn.allowsRepeat)
         #expect(!ButtonAction.commandCopy.allowsRepeat)
         #expect(!ButtonAction.commandPaste.allowsRepeat)
+        #expect(!ButtonAction.commandClose.allowsRepeat)
         #expect(!ButtonAction.commandQuit.allowsRepeat)
+        #expect(!ButtonAction.commandCut.allowsRepeat)
+        #expect(!ButtonAction.commandSelectAll.allowsRepeat)
+        #expect(!ButtonAction.commandUndo.allowsRepeat)
+        #expect(!ButtonAction.commandRedo.allowsRepeat)
+        #expect(!ButtonAction.commandFind.allowsRepeat)
+        #expect(!ButtonAction.commandSave.allowsRepeat)
         #expect(!ButtonAction.previousCommandLeft.allowsRepeat)
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
@@ -327,7 +336,14 @@ struct RemoteButtonsTests {
             (.shiftReturn, 36, .maskShift),
             (.commandCopy, 8, .maskCommand),
             (.commandPaste, 9, .maskCommand),
+            (.commandClose, 13, .maskCommand),
             (.commandQuit, 12, .maskCommand),
+            (.commandCut, 7, .maskCommand),
+            (.commandSelectAll, 0, .maskCommand),
+            (.commandUndo, 6, .maskCommand),
+            (.commandRedo, 6, [.maskCommand, .maskShift]),
+            (.commandFind, 3, .maskCommand),
+            (.commandSave, 1, .maskCommand),
             (.previousCommandLeft, 123, .maskCommand),
             (.nextCommandRight, 124, .maskCommand),
         ]

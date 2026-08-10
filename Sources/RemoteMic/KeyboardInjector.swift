@@ -180,8 +180,22 @@ enum KeyboardInjector {
             keyPoster(8, .maskCommand)
         case .commandPaste:
             keyPoster(9, .maskCommand)
+        case .commandClose:
+            keyPoster(13, .maskCommand)
         case .commandQuit:
             keyPoster(12, .maskCommand)
+        case .commandCut:
+            keyPoster(7, .maskCommand)
+        case .commandSelectAll:
+            keyPoster(0, .maskCommand)
+        case .commandUndo:
+            keyPoster(6, .maskCommand)
+        case .commandRedo:
+            keyPoster(6, [.maskCommand, .maskShift])
+        case .commandFind:
+            keyPoster(3, .maskCommand)
+        case .commandSave:
+            keyPoster(1, .maskCommand)
         case .arrowUp:
             keyPoster(126, [])
         case .arrowDown:

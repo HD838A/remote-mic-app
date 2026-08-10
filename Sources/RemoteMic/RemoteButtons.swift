@@ -421,7 +421,14 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case shiftReturn
     case commandCopy
     case commandPaste
+    case commandClose
     case commandQuit
+    case commandCut
+    case commandSelectAll
+    case commandUndo
+    case commandRedo
+    case commandFind
+    case commandSave
     case arrowUp
     case arrowDown
     case arrowLeft
@@ -464,7 +471,14 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .shiftReturn: return "Shift-Return"
         case .commandCopy: return "Command-C"
         case .commandPaste: return "Command-V"
+        case .commandClose: return "Command-W"
         case .commandQuit: return "Command-Q"
+        case .commandCut: return "Command-X"
+        case .commandSelectAll: return "Command-A"
+        case .commandUndo: return "Command-Z"
+        case .commandRedo: return "Command-Shift-Z"
+        case .commandFind: return "Command-F"
+        case .commandSave: return "Command-S"
         case .arrowUp: return localization.text("action.arrow_up")
         case .arrowDown: return localization.text("action.arrow_down")
         case .arrowLeft: return localization.text("action.arrow_left")
@@ -521,8 +535,9 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         if presetApplication != nil { return .applications }
         switch self {
         case .disabled, .escape, .returnKey, .commandReturn, .shiftReturn, .commandCopy,
-             .commandPaste, .commandQuit, .arrowUp, .arrowDown, .arrowLeft, .arrowRight,
-             .deleteBackward:
+             .commandPaste, .commandClose, .commandQuit, .commandCut, .commandSelectAll,
+             .commandUndo, .commandRedo, .commandFind, .commandSave, .arrowUp, .arrowDown,
+             .arrowLeft, .arrowRight, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
@@ -544,7 +559,14 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .shiftReturn,
             .commandCopy,
             .commandPaste,
+            .commandClose,
             .commandQuit,
+            .commandCut,
+            .commandSelectAll,
+            .commandUndo,
+            .commandRedo,
+            .commandFind,
+            .commandSave,
             .previousCommandLeft,
             .nextCommandRight,
         ].contains(self) && presetApplication == nil && !isAppInternal
