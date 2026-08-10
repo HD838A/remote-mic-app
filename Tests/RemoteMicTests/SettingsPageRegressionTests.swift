@@ -89,7 +89,7 @@ struct SettingsPageRegressionTests {
         #expect(leftEnd == CGPoint(x: cardWidth, y: RemoteMappingLayout.canvasHeight / 2))
         #expect(rightEnd == CGPoint(x: canvasWidth - cardWidth, y: RemoteMappingLayout.canvasHeight / 2))
         #expect(RemoteMappingLayout.voiceAnchor == UnitPoint(x: 0.630, y: 0.099))
-        #expect(RemoteMappingLayout.cardWidth(for: canvasWidth) == 285)
+        #expect(RemoteMappingLayout.cardWidth(for: canvasWidth) == 300)
 
         let menuPlacement = try #require(placements.first { $0.button == .menu })
         let tvPlacement = try #require(placements.first { $0.button == .tv })
@@ -167,6 +167,10 @@ struct SettingsPageRegressionTests {
             "settings.clearTrustedPhoneIdentities()",
             "settings.setAction(action, for: button, trigger: trigger)",
             "settings.setShortcut(",
+            "chooseCustomApplication(for:",
+            "recordCustomApplicationInput(profileID:",
+            "settings.setApplicationProfileID(",
+            ".openCustomApplication",
             "settings.resetBindings()",
         ] {
             #expect(source.contains(requiredAction), Comment(rawValue: requiredAction))
@@ -196,6 +200,21 @@ struct SettingsPageRegressionTests {
         let postDictationPageStart = try #require(source.range(of: "private var postDictationPage"))
         let connectionPageSource = source[connectionPageStart.lowerBound..<postDictationPageStart.lowerBound]
         #expect(!connectionPageSource.contains("postDictationPanel"))
+        #expect(source.contains("ButtonActionCategory.allCases"))
+        #expect(source.contains("LazyVGrid("))
+        #expect(source.contains("button_mapping.action.disable_switch"))
+        #expect(source.contains(").filter { $0 != .disabled }"))
+        #expect(source.contains("DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded)"))
+        #expect(source.contains("isPresetApplicationActionsExpanded = false"))
+        #expect(source.contains("custom_application.accessibility.learn_help"))
+        #expect(!source.contains(".popover(item: $mappingEditingTarget)"))
+        #expect(!source.contains(".sheet(item: $shortcutEditingTarget)"))
+        #expect(!source.contains("ApplicationShortcutEditorSheet"))
+        #expect(!mappingCanvasSource.contains("size: 8"))
+        #expect(!mappingCanvasSource.contains("size: 9"))
+        #expect(!mappingCanvasSource.contains("size: 10"))
+        #expect(!mappingCanvasSource.contains("size: 11"))
+        #expect(!mappingCanvasSource.contains("minimumScaleFactor"))
         #expect(source.range(of: "MappingRemotePhoto()")!.lowerBound < source.range(of: "connectionLines(metrics: metrics)")!.lowerBound)
 
         let voiceFnToggle = "Toggle(\"connection.voice_fn_tap.enabled\""

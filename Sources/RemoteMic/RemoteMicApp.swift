@@ -79,6 +79,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var postDictationHUDController: PostDictationHUDController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
+    private var applicationShortcutMonitor: Any?
     private var updateFeedSelection = UpdateFeedSelection(
         stableFeedURLString: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
     )
@@ -109,11 +110,18 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         observeUpdatePreferences()
         configureUpdater()
         installTerminationSignalHandlers()
+        installApplicationKeyboardShortcuts()
         configureStatusItem()
         observeModel()
         observeLocalization()
         observePhoneRemoteButtonTitles()
         model.startIfNeeded()
+        if BridgeAppModel.shouldRecoverHIDAfterCompletedUpdate(
+            completedUpdate: completedUpdate,
+            customMappingEnabled: model.settings.customMappingEnabled
+        ) {
+            model.recoverHIDAfterCompletedUpdate()
+        }
         refreshMenuStatus()
 
         if completedUpdate || model.settings.openMainWindowAtLaunch {
@@ -134,6 +142,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         updateFeedRefreshTimer?.invalidate()
         terminationSignalSources.forEach { $0.cancel() }
         terminationSignalSources.removeAll()
+        if let applicationShortcutMonitor {
+            NSEvent.removeMonitor(applicationShortcutMonitor)
+            self.applicationShortcutMonitor = nil
+        }
     }
 
     func applicationShouldHandleReopen(
@@ -200,6 +212,19 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         applicationMenuItem.submenu = applicationMenu
         mainMenu.addItem(applicationMenuItem)
 
+        let fileMenuItem = NSMenuItem()
+        let fileMenu = NSMenu(title: localization.text("menu.file"))
+        let closeItem = NSMenuItem(
+            title: localization.text("common.action.close"),
+            action: #selector(closeKeyWindow),
+            keyEquivalent: "w"
+        )
+        closeItem.keyEquivalentModifierMask = .command
+        closeItem.target = self
+        fileMenu.addItem(closeItem)
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
+
         let editMenuItem = NSMenuItem(title: localization.text("menu.edit"), action: nil, keyEquivalent: "")
         let editMenu = NSMenu(title: localization.text("menu.edit"))
         editMenu.addItem(firstResponderMenuItem("edit.undo", action: Selector(("undo:")), key: "z"))
@@ -249,6 +274,26 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
         refreshMenuStatus()
+    }
+
+    private func installApplicationKeyboardShortcuts() {
+        applicationShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+            [weak self] event in
+            let relevantModifiers = event.modifierFlags.intersection([
+                .command, .control, .option, .shift,
+            ])
+            guard relevantModifiers == .command else { return event }
+            switch event.charactersIgnoringModifiers?.lowercased() {
+            case "q":
+                self?.quit()
+                return nil
+            case "w":
+                self?.closeKeyWindow()
+                return nil
+            default:
+                return event
+            }
+        }
     }
 
     private func menuItem(_ title: String, action: Selector) -> NSMenuItem {
@@ -352,17 +397,24 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func observePhoneRemoteButtonTitles() {
-        Publishers.CombineLatest3(
-            model.settings.$buttonBindings,
-            model.settings.$buttonShortcuts,
+        Publishers.CombineLatest(
+            Publishers.CombineLatest4(
+                model.settings.$buttonBindings,
+                model.settings.$buttonShortcuts,
+                model.settings.$buttonApplicationProfileIDs,
+                model.settings.$customApplicationProfiles
+            ),
             localization.$locale
         )
         .receive(on: RunLoop.main)
-        .sink { [weak self] bindings, shortcuts, _ in
+        .sink { [weak self] values, _ in
             guard let self else { return }
+            let (bindings, shortcuts, applicationProfileIDs, customApplicationProfiles) = values
             model.updatePhoneRemoteButtonTitles(
                 bindings: bindings,
                 shortcuts: shortcuts,
+                applicationProfileIDs: applicationProfileIDs,
+                customApplicationProfiles: customApplicationProfiles,
                 localization: localization
             )
         }
@@ -659,6 +711,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func openWebsite() {
         NSWorkspace.shared.open(localization.localizedWebsiteURL)
+    }
+
+    @objc private func closeKeyWindow() {
+        NSApp.keyWindow?.performClose(nil)
     }
 
     @objc private func quit() {

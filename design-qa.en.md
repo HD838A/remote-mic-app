@@ -28,6 +28,13 @@
 - About keeps the version number, update check, and an off-by-default pre-release update toggle together, displays every language option at once, presents localized version history in a sheet, opens a glossary through the system Markdown app, and controls whether ordinary launches open the main window automatically. It does not include a Quit button.
 - All UI text uses stable semantic keys. Localized Markdown help falls back to English when the selected language has no matching document.
 
+## Mandatory interaction and typography rules
+
+- Chinese UI text must render at 12pt or larger. Do not use 8–11pt Chinese text or allow `minimumScaleFactor` to reduce Chinese below 12pt. When space is constrained, increase control height, adjust the layout, wrap text, or truncate secondary content instead.
+- Avoid drop-down lists whenever practical, especially a single long list that mixes basic keys, system actions, custom actions, and individual apps. Group larger option sets semantically and prefer in-page button grids, segmented choices, or clearly separated lists.
+- Flatten flows into the main page instead of relying on popovers, sheets, or consecutive confirmation dialogs. Related configuration should share one large surface where the current target, available actions, secondary settings, learning state, and test action remain visible together.
+- Keep system dialogs only for file selection, required permission authorization, and irreversible destructive actions. Ordinary instructions, learning progress, success, and failure feedback should appear inline.
+
 ## Code locations
 
 - Window creation and minimum size: Sources/RemoteMic/RemoteMicApp.swift

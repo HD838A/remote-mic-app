@@ -1,5 +1,21 @@
 # Version History
 
+## 1.8.4 (Pre-release)
+
+- Added Command-W, Command-X, Command-A, Command-Z, Command-Shift-Z, Command-F, and Command-S to Basic Keys, so common window, editing, search, and save actions can be mapped directly to remote buttons.
+- Remote Mic now supports the standard Command-Q shortcut to quit and Command-W to close the Settings window while keeping the menu-bar app running.
+
+## 1.8.3 (Pre-release)
+
+- Fixed custom button controls remaining visibly enabled but inactive after a Sparkle upgrade until the toggle was turned off and on. The app now waits for the previous process to release HID access and rebuilds button monitoring automatically after an update.
+
+## 1.8.2 (Pre-release)
+
+- Buttons can now open any installed Mac app and automatically focus it through an app shortcut or a learned Accessibility input field. Recorded shortcuts, apps, and input targets remain available after switching actions or temporarily disabling a trigger, and are preserved by configuration export and import.
+- Reorganized Button Mapping with grouped in-page actions, a collapsible app section, and inline shortcut capture and input-field learning. Chinese text is larger, and Disable Button is now a prominent standalone switch.
+- Added Command-Return, Shift-Return, Command-C, Command-V, Command-Q, Command-Left Arrow, and Command-Right Arrow preset actions.
+- Fixed an issue where macOS device enumeration order could make single-click and double-click actions stop responding on one of multiple remotes that had not yet completed button binding.
+
 ## 1.8.1 (Pre-release)
 
 - Fixed short voice input from Xiaomi Remote 2 sometimes disappearing entirely or losing its ending after the voice key was released. Queued audio is now allowed to finish playing when the remote stops streaming.

@@ -57,11 +57,45 @@ private enum PermissionVisualState {
     }
 }
 
-private struct ShortcutEditingTarget: Identifiable {
+private struct ShortcutEditingTarget: Identifiable, Equatable {
     let button: RemoteButton
     let trigger: ButtonTrigger
 
     var id: String { "\(button.rawValue)-\(trigger.rawValue)" }
+}
+
+private enum CustomApplicationLearningState: Equatable {
+    case recording
+    case succeeded
+    case failed
+    case applicationMissing
+    case openFailed
+
+    var messageKey: String {
+        switch self {
+        case .recording: return "custom_application.accessibility.learning"
+        case .succeeded: return "custom_application.accessibility.learn_succeeded"
+        case .failed: return "custom_application.accessibility.learn_failed"
+        case .applicationMissing: return "custom_application.error.not_installed"
+        case .openFailed: return "custom_application.error.open_failed"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .recording: return .orange
+        case .succeeded: return .green
+        case .failed, .applicationMissing, .openFailed: return .red
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .recording: return "timer"
+        case .succeeded: return "checkmark.circle.fill"
+        case .failed, .applicationMissing, .openFailed: return "exclamationmark.triangle.fill"
+        }
+    }
 }
 
 private struct ConfigurationStatus {
@@ -104,7 +138,10 @@ struct SettingsView: View {
     @State private var isMappingSelectionLocked = true
     @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
     @State private var mappingEditingTarget: ShortcutEditingTarget?
-    @State private var shortcutEditingTarget: ShortcutEditingTarget?
+    @State private var isPresetApplicationActionsExpanded = false
+    @State private var shortcutCaptureTarget: ShortcutEditingTarget?
+    @State private var applicationShortcutCaptureProfileID: UUID?
+    @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
@@ -153,31 +190,6 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             resumeCustomMappingIfPermissionsGranted()
-        }
-        .sheet(item: $shortcutEditingTarget) { target in
-            ShortcutEditorSheet(
-                button: target.button,
-                trigger: target.trigger,
-                currentShortcut: settings.configuredAction(
-                    for: target.button,
-                    trigger: target.trigger
-                ).shortcut
-            ) { shortcut in
-                settings.setShortcut(
-                    shortcut,
-                    for: target.button,
-                    trigger: target.trigger
-                )
-            }
-        }
-        .popover(item: $mappingEditingTarget) { target in
-            VStack(alignment: .leading, spacing: 12) {
-                Text(target.button.displayName(using: localization))
-                    .font(.title3.weight(.semibold))
-                mappingTriggerEditor(target.button, trigger: target.trigger)
-            }
-            .padding(16)
-            .frame(width: 320)
         }
         .sheet(isPresented: $isReleaseHistoryPresented) {
             ReleaseHistorySheet()
@@ -997,43 +1009,128 @@ struct SettingsView: View {
     }
 
     private var mappingPage: some View {
-        settingsPage {
+        VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 14) {
                 PageHeader(title: localization.text("button_mapping.page.title"))
                 Toggle("button_mapping.toggle.enabled", isOn: Binding(
                     get: { settings.customMappingEnabled },
                     set: setCustomMappingEnabled
                 ))
-                .font(.subheadline.weight(.medium))
+                .font(.system(size: 14, weight: .medium))
                 .toggleStyle(.switch)
                 Spacer()
                 remoteDeviceSelector()
                     .frame(width: 400)
             }
-        } content: {
-            VStack(spacing: 12) {
-                RemoteMappingCanvas(
-                    selectedButton: $selectedRemoteButton,
-                    activeButtons: model.activeRemoteButtons,
-                    voiceActive: model.isStreaming,
-                    actionSummary: mappingActionSummary,
-                    onEdit: { button, trigger in
-                        selectedRemoteButton = button
-                        mappingEditingTarget = ShortcutEditingTarget(
-                            button: button,
-                            trigger: trigger
+            .padding(.horizontal, 22)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Divider()
+
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        RemoteMappingCanvas(
+                            selectedButton: $selectedRemoteButton,
+                            activeButtons: model.activeRemoteButtons,
+                            voiceActive: model.isStreaming,
+                            actionSummary: mappingActionSummary,
+                            onEdit: { button, trigger in
+                                selectedRemoteButton = button
+                                isPresetApplicationActionsExpanded = false
+                                mappingEditingTarget = ShortcutEditingTarget(
+                                    button: button,
+                                    trigger: trigger
+                                )
+                            }
                         )
+                        .onReceive(model.$activeRemoteButtons) { buttons in
+                            selectedRemoteButton = MappingSelectionPolicy.selection(
+                                current: selectedRemoteButton,
+                                activeButtons: buttons,
+                                isLocked: isMappingSelectionLocked
+                            )
+                        }
+
+                        if let target = mappingEditingTarget {
+                            mappingEditorPanel(target)
+                                .id("mapping-action-editor")
+                        }
+
+                        mappingFooter
                     }
-                )
-                .onReceive(model.$activeRemoteButtons) { buttons in
-                    selectedRemoteButton = MappingSelectionPolicy.selection(
-                        current: selectedRemoteButton,
-                        activeButtons: buttons,
-                        isLocked: isMappingSelectionLocked
+                    .padding(22)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .compatibilityScrollEdgeEffect()
+                .onChange(of: mappingEditingTarget?.id) { _, targetID in
+                    guard targetID != nil else { return }
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo("mapping-action-editor", anchor: .top)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func mappingEditorPanel(_ target: ShortcutEditingTarget) -> some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(target.button.displayName(using: localization))
+                        .font(.system(size: 18, weight: .semibold))
+                    Text(target.trigger.displayName(using: localization))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                    Spacer()
+                    Toggle(
+                        "button_mapping.action.disable_switch",
+                        isOn: Binding(
+                            get: {
+                                settings.configuredAction(
+                                    for: target.button,
+                                    trigger: target.trigger
+                                ).action == .disabled
+                            },
+                            set: { disabled in
+                                settings.setAction(
+                                    disabled ? .disabled : .escape,
+                                    for: target.button,
+                                    trigger: target.trigger
+                                )
+                                shortcutCaptureTarget = nil
+                                applicationShortcutCaptureProfileID = nil
+                            }
+                        )
                     )
+                    .font(.system(size: 15, weight: .semibold))
+                    .toggleStyle(.switch)
+                    .controlSize(.large)
+                    .tint(.red)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.red.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
+                    .disabled(
+                        target.button == .power &&
+                            target.trigger == .singleClick &&
+                            settings.experimentalContinuousRecordingEnabled
+                    )
+                    Button("common.action.close") {
+                        mappingEditingTarget = nil
+                        shortcutCaptureTarget = nil
+                        applicationShortcutCaptureProfileID = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
                 }
 
-                mappingFooter
+                mappingTriggerEditor(target.button, trigger: target.trigger)
             }
         }
     }
@@ -1045,7 +1142,7 @@ struct SettingsView: View {
                     model.hidStatus.text(using: localization),
                     systemImage: "keyboard"
                 )
-                .font(.caption)
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 
@@ -1053,10 +1150,10 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
-                        .font(.caption)
+                        .font(.system(size: 12, weight: .medium))
                         .toggleStyle(.switch)
                     Text("button_mapping.selection_lock_hint_short")
-                        .font(.caption2)
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -1069,10 +1166,10 @@ struct SettingsView: View {
                         get: { settings.voiceFnTapModeEnabled },
                         set: { model.setVoiceFnTapModeEnabled($0) }
                     ))
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .medium))
                     .toggleStyle(.switch)
                     Text("connection.voice_fn_tap.hint_short")
-                        .font(.caption2)
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -1120,7 +1217,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(remoteDisplayName(profile))
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     if selected {
@@ -1151,7 +1248,7 @@ struct SettingsView: View {
                             .lineLimit(1)
                     }
                 }
-                .font(.caption2)
+                .font(.system(size: 12))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1231,41 +1328,132 @@ struct SettingsView: View {
     ) -> some View {
         let configured = settings.configuredAction(for: button, trigger: trigger)
         let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(trigger.displayName(using: localization))
-                    .font(.headline)
-                Spacer()
-                if trigger != .singleClick && configured.action == .disabled {
-                    Text("button_mapping.action.not_set")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        let actions = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installedBundleIdentifiers,
+            current: configured.action,
+            experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
+        ).filter { $0 != .disabled }
+        let isManagedPowerAction = button == .power &&
+            trigger == .singleClick &&
+            settings.experimentalContinuousRecordingEnabled
+        return VStack(alignment: .leading, spacing: 16) {
+            ForEach(ButtonActionCategory.allCases) { category in
+                let groupedActions = actions.filter { $0.category == category }
+                if !groupedActions.isEmpty {
+                    mappingActionGroup(
+                        category: category,
+                        actions: groupedActions,
+                        selectedAction: configured.action,
+                        installedBundleIdentifiers: installedBundleIdentifiers,
+                        isManagedPowerAction: isManagedPowerAction,
+                        onSelect: { action in
+                            settings.setAction(action, for: button, trigger: trigger)
+                            shortcutCaptureTarget = nil
+                            applicationShortcutCaptureProfileID = nil
+                        }
+                    )
                 }
             }
 
-            Picker("", selection: Binding(
-                    get: { configured.action },
-                    set: { action in
-                        settings.setAction(action, for: button, trigger: trigger)
-                        if action == .customShortcut {
-                            mappingEditingTarget = nil
-                            shortcutEditingTarget = ShortcutEditingTarget(
-                                button: button,
-                                trigger: trigger
-                            )
-                        }
-                    }
-                )) {
-                    ForEach(ButtonAction.pickerActions(
-                        installedBundleIdentifiers: installedBundleIdentifiers,
-                        current: configured.action,
-                        experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
-                    )) { action in
-                        let unavailableApplication = action.presetApplication.map {
-                            !installedBundleIdentifiers.contains($0.bundleIdentifier)
-                        } ?? false
-                        let unavailableExperiment = action == .toggleLongRecording &&
-                            !settings.experimentalContinuousRecordingEnabled
+            if configured.action == .customShortcut {
+                inlineShortcutEditor(
+                    button: button,
+                    trigger: trigger,
+                    configured: configured
+                )
+            }
+
+            if configured.action == .openCustomApplication {
+                customApplicationEditor(
+                    button: button,
+                    trigger: trigger,
+                    configured: configured
+                )
+            }
+
+            if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
+                Text("button_mapping.continuous_recording_experiment.power_managed")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+            } else if trigger == .doubleClick && configured.action != .disabled {
+                Text("button_mapping.double_click.effect")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+            } else if trigger == .longPress && configured.action != .disabled {
+                Text("button_mapping.long_press.effect")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+            } else if trigger == .singleClick {
+                Text("button_mapping.single_click.help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mappingActionGroup(
+        category: ButtonActionCategory,
+        actions: [ButtonAction],
+        selectedAction: ButtonAction,
+        installedBundleIdentifiers: Set<String>,
+        isManagedPowerAction: Bool,
+        onSelect: @escaping (ButtonAction) -> Void
+    ) -> some View {
+        if category == .applications {
+            DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded) {
+                mappingActionGrid(
+                    actions: actions,
+                    selectedAction: selectedAction,
+                    installedBundleIdentifiers: installedBundleIdentifiers,
+                    isManagedPowerAction: isManagedPowerAction,
+                    onSelect: onSelect
+                )
+                .padding(.top, 8)
+            } label: {
+                Text(localization.text(category.localizationKey))
+                    .font(.system(size: 14, weight: .semibold))
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(localization.text(category.localizationKey))
+                    .font(.system(size: 14, weight: .semibold))
+
+                mappingActionGrid(
+                    actions: actions,
+                    selectedAction: selectedAction,
+                    installedBundleIdentifiers: installedBundleIdentifiers,
+                    isManagedPowerAction: isManagedPowerAction,
+                    onSelect: onSelect
+                )
+            }
+        }
+    }
+
+    private func mappingActionGrid(
+        actions: [ButtonAction],
+        selectedAction: ButtonAction,
+        installedBundleIdentifiers: Set<String>,
+        isManagedPowerAction: Bool,
+        onSelect: @escaping (ButtonAction) -> Void
+    ) -> some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            ForEach(actions) { action in
+                let unavailableApplication = action.presetApplication.map {
+                    !installedBundleIdentifiers.contains($0.bundleIdentifier)
+                } ?? false
+                let unavailableExperiment = action == .toggleLongRecording &&
+                    !settings.experimentalContinuousRecordingEnabled
+                Button {
+                    onSelect(action)
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: selectedAction == action ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selectedAction == action ? Color.accentColor : Color.secondary)
                         Text(
                             action.displayName(using: localization) +
                                 (unavailableApplication
@@ -1274,63 +1462,385 @@ struct SettingsView: View {
                                         ? localization.text("common.suffix.experimental_disabled")
                                         : "")
                         )
-                        .tag(action)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        Spacer(minLength: 0)
                     }
-                }
-                .labelsHidden()
-                .frame(maxWidth: .infinity)
-                .disabled(
-                    button == .power &&
-                        trigger == .singleClick &&
-                        settings.experimentalContinuousRecordingEnabled
-                )
-
-            if configured.action == .customShortcut {
-                Button {
-                    mappingEditingTarget = nil
-                    shortcutEditingTarget = ShortcutEditingTarget(
-                        button: button,
-                        trigger: trigger
+                    .font(.system(size: 13, weight: selectedAction == action ? .semibold : .regular))
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                    .background(
+                        selectedAction == action
+                            ? Color.accentColor.opacity(0.13)
+                            : Color.primary.opacity(0.045),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
                     )
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(
-                            configured.shortcut?.displayName(using: localization) ??
-                                localization.text("shortcut.action.click_to_record")
-                        )
-                            .lineLimit(1)
-                        Image(systemName: "pencil")
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(
+                                selectedAction == action
+                                    ? Color.accentColor.opacity(0.55)
+                                    : Color.secondary.opacity(0.16)
+                            )
                     }
-                    .font(.caption)
-                    .foregroundStyle(configured.shortcut == nil ? Color.orange : Color.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .frame(maxWidth: .infinity)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
+                .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func inlineShortcutEditor(
+        button: RemoteButton,
+        trigger: ButtonTrigger,
+        configured: ConfiguredButtonAction
+    ) -> some View {
+        let target = ShortcutEditingTarget(button: button, trigger: trigger)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("shortcut.editor.instructions")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                Text(
+                    configured.shortcut?.displayName(using: localization) ??
+                        localization.text("shortcut.editor.waiting")
+                )
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(configured.shortcut == nil ? Color.orange : Color.primary)
+                .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                .padding(.horizontal, 12)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+
+                Button(shortcutCaptureTarget == target ? "shortcut.editor.waiting" : "shortcut.action.record") {
+                    shortcutCaptureTarget = target
+                }
+                .compatibilityButtonStyle(.prominent)
+
+                Button("common.action.clear") {
+                    settings.setShortcut(nil, for: button, trigger: trigger)
+                    shortcutCaptureTarget = nil
+                }
+                .compatibilityButtonStyle(.standard)
+                .disabled(configured.shortcut == nil)
             }
 
-            if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
-                Text("button_mapping.continuous_recording_experiment.power_managed")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            } else if trigger == .doubleClick && configured.action != .disabled {
-                Text("button_mapping.double_click.effect")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            } else if trigger == .longPress && configured.action != .disabled {
-                Text("button_mapping.long_press.effect")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            } else if trigger == .singleClick {
-                Text("button_mapping.single_click.help")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if shortcutCaptureTarget == target {
+                Label("shortcut.editor.instructions", systemImage: "keyboard")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                ShortcutCaptureView { shortcut in
+                    settings.setShortcut(shortcut, for: button, trigger: trigger)
+                    shortcutCaptureTarget = nil
+                }
+                .frame(height: 1)
             }
         }
         .padding(12)
-        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private func customApplicationEditor(
+        button: RemoteButton,
+        trigger: ButtonTrigger,
+        configured: ConfiguredButtonAction
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("custom_application.target")
+                .font(.system(size: 14, weight: .semibold))
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(settings.customApplicationProfiles) { profile in
+                    profileSelectionButton(
+                        profile,
+                        selected: configured.applicationProfileID == profile.id
+                    ) {
+                        settings.setApplicationProfileID(profile.id, for: button, trigger: trigger)
+                    }
+                }
+
+                Button {
+                    chooseCustomApplication(for: button, trigger: trigger)
+                } label: {
+                    Label("custom_application.add", systemImage: "plus")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                }
+                .compatibilityButtonStyle(.standard)
+            }
+
+            if let profile = settings.customApplicationProfile(id: configured.applicationProfileID) {
+                Divider()
+
+                Text("custom_application.focus_strategy")
+                    .font(.system(size: 14, weight: .semibold))
+
+                HStack(spacing: 8) {
+                    ForEach(CustomApplicationFocusStrategy.allCases) { strategy in
+                        Button {
+                            var updated = profile
+                            updated.focusStrategy = strategy
+                            settings.updateCustomApplicationProfile(updated)
+                            applicationShortcutCaptureProfileID = nil
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: profile.focusStrategy == strategy ? "checkmark.circle.fill" : "circle")
+                                Text(strategy.displayName(using: localization))
+                                    .lineLimit(1)
+                            }
+                            .font(.system(size: 13, weight: profile.focusStrategy == strategy ? .semibold : .regular))
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(profile.focusStrategy == strategy ? Color.accentColor : Color.primary)
+                        .background(
+                            profile.focusStrategy == strategy
+                                ? Color.accentColor.opacity(0.12)
+                                : Color.primary.opacity(0.04),
+                            in: RoundedRectangle(cornerRadius: 8)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(
+                                    profile.focusStrategy == strategy
+                                        ? Color.accentColor.opacity(0.5)
+                                        : Color.secondary.opacity(0.16)
+                                )
+                        }
+                    }
+                }
+
+                if profile.focusStrategy == .keyboardShortcut {
+                    inlineApplicationShortcutEditor(profile)
+                }
+
+                if profile.focusStrategy == .recordedAccessibility {
+                    accessibilityLearningEditor(profile)
+                }
+
+                HStack {
+                    Spacer()
+                    Button("custom_application.test") {
+                        _ = KeyboardInjector.send(
+                            .openCustomApplication,
+                            applicationProfile: profile
+                        )
+                    }
+                    .compatibilityButtonStyle(.prominent)
+                }
+            } else {
+                Text("custom_application.not_configured")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func profileSelectionButton(
+        _ profile: CustomApplicationProfile,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "app")
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                Text(profile.displayName)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+            .background(
+                selected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(selected ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.16))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func inlineApplicationShortcutEditor(_ profile: CustomApplicationProfile) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("custom_application.shortcut.editor_instructions")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                Text(
+                    profile.focusShortcut?.displayName(using: localization) ??
+                        localization.text("shortcut.editor.waiting")
+                )
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(profile.focusShortcut == nil ? Color.orange : Color.primary)
+                .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                .padding(.horizontal, 12)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+
+                Button(
+                    applicationShortcutCaptureProfileID == profile.id
+                        ? "shortcut.editor.waiting"
+                        : "shortcut.action.record"
+                ) {
+                    applicationShortcutCaptureProfileID = profile.id
+                }
+                .compatibilityButtonStyle(.prominent)
+
+                Button("common.action.clear") {
+                    var updated = profile
+                    updated.focusShortcut = nil
+                    settings.updateCustomApplicationProfile(updated)
+                    applicationShortcutCaptureProfileID = nil
+                }
+                .compatibilityButtonStyle(.standard)
+                .disabled(profile.focusShortcut == nil)
+            }
+
+            if applicationShortcutCaptureProfileID == profile.id {
+                Label("shortcut.editor.instructions", systemImage: "keyboard")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                ShortcutCaptureView { shortcut in
+                    guard var updated = settings.customApplicationProfile(id: profile.id) else { return }
+                    updated.focusShortcut = shortcut
+                    settings.updateCustomApplicationProfile(updated)
+                    applicationShortcutCaptureProfileID = nil
+                }
+                .frame(height: 1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func accessibilityLearningEditor(_ profile: CustomApplicationProfile) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("custom_application.accessibility.learn_help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                Button("custom_application.accessibility.learn") {
+                    recordCustomApplicationInput(profileID: profile.id)
+                }
+                .compatibilityButtonStyle(.prominent)
+                .disabled(customApplicationLearningStates[profile.id] == .recording)
+
+                Text(
+                    profile.accessibilityTarget == nil
+                        ? localization.text("custom_application.accessibility.not_recorded")
+                        : localization.text("custom_application.accessibility.recorded")
+                )
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(profile.accessibilityTarget == nil ? Color.orange : Color.green)
+            }
+
+            if let learningState = customApplicationLearningStates[profile.id] {
+                Label(
+                    localization.text(learningState.messageKey),
+                    systemImage: learningState.systemImage
+                )
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(learningState.tint)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func chooseCustomApplication(
+        for button: RemoteButton,
+        trigger: ButtonTrigger
+    ) {
+        let panel = NSOpenPanel()
+        panel.title = localization.text("custom_application.picker.title")
+        panel.prompt = localization.text("common.action.choose")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.resolvesAliases = true
+        guard panel.runModal() == .OK, let url = panel.url,
+              let bundle = Bundle(url: url),
+              let bundleIdentifier = bundle.bundleIdentifier,
+              !bundleIdentifier.isEmpty
+        else { return }
+
+        let existing = settings.customApplicationProfiles.first {
+            $0.bundleIdentifier == bundleIdentifier
+        }
+        let profileID: UUID
+        if let existing {
+            var updated = existing
+            updated.applicationPath = url.path
+            settings.updateCustomApplicationProfile(updated)
+            profileID = existing.id
+        } else {
+            let displayName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+                ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+                ?? url.deletingPathExtension().lastPathComponent
+            profileID = settings.addCustomApplicationProfile(
+                CustomApplicationProfile(
+                    displayName: displayName,
+                    bundleIdentifier: bundleIdentifier,
+                    applicationPath: url.path
+                )
+            )
+        }
+        settings.setApplicationProfileID(profileID, for: button, trigger: trigger)
+    }
+
+    private func recordCustomApplicationInput(profileID: UUID) {
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            model.requestAccessibilityPermission()
+            return
+        }
+        guard let profile = settings.customApplicationProfile(id: profileID) else { return }
+        customApplicationLearningStates[profileID] = .recording
+        let savedURL = URL(fileURLWithPath: profile.applicationPath)
+        let applicationURL = Bundle(url: savedURL)?.bundleIdentifier == profile.bundleIdentifier
+            ? savedURL
+            : NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier)
+        guard let applicationURL else {
+            customApplicationLearningStates[profileID] = .applicationMissing
+            return
+        }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { _, error in
+            guard error == nil else {
+                DispatchQueue.main.async {
+                    customApplicationLearningStates[profileID] = .openFailed
+                }
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                let target = KeyboardInjector.captureFocusedAccessibilityTarget(
+                    bundleIdentifier: profile.bundleIdentifier
+                )
+                if let target, var updated = settings.customApplicationProfile(id: profileID) {
+                    updated.accessibilityTarget = target
+                    updated.focusStrategy = .recordedAccessibility
+                    settings.updateCustomApplicationProfile(updated)
+                }
+                customApplicationLearningStates[profileID] = target == nil ? .failed : .succeeded
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
     }
 
     private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
@@ -1340,6 +1850,10 @@ struct SettingsView: View {
         }
         if configured.action == .customShortcut, let shortcut = configured.shortcut {
             return shortcut.displayName(using: localization)
+        }
+        if configured.action == .openCustomApplication {
+            return settings.customApplicationProfile(id: configured.applicationProfileID)?.displayName
+                ?? localization.text("custom_application.not_configured")
         }
         switch configured.action {
         case .arrowUp: return "↑"
@@ -2342,85 +2856,6 @@ private struct ReleaseHistorySection: Identifiable {
     let entries: [String]
 
     var id: String { title }
-}
-
-private struct ShortcutEditorSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var localization: LocalizationStore
-
-    let button: RemoteButton
-    let trigger: ButtonTrigger
-    let currentShortcut: CustomKeyboardShortcut?
-    let onSave: (CustomKeyboardShortcut?) -> Void
-
-    @State private var shortcut: CustomKeyboardShortcut?
-
-    init(
-        button: RemoteButton,
-        trigger: ButtonTrigger,
-        currentShortcut: CustomKeyboardShortcut?,
-        onSave: @escaping (CustomKeyboardShortcut?) -> Void
-    ) {
-        self.button = button
-        self.trigger = trigger
-        self.currentShortcut = currentShortcut
-        self.onSave = onSave
-        _shortcut = State(initialValue: currentShortcut)
-    }
-
-    var body: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 5) {
-                Text(
-                    String(
-                        format: localization.text("shortcut.editor.title"),
-                        locale: localization.locale,
-                        arguments: [
-                            button.displayName(using: localization),
-                            trigger.displayName(using: localization),
-                        ]
-                    )
-                )
-                    .font(.title3.weight(.semibold))
-                Text("shortcut.editor.instructions")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            Text(
-                shortcut?.displayName(using: localization) ??
-                    localization.text("shortcut.editor.waiting")
-            )
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
-                .foregroundStyle(shortcut == nil ? Color.secondary : Color.primary)
-                .frame(maxWidth: .infinity, minHeight: 62)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-
-            ShortcutCaptureView { shortcut = $0 }
-                .frame(height: 1)
-
-            HStack {
-                Button("common.action.clear") {
-                    onSave(nil)
-                    dismiss()
-                }
-                .disabled(currentShortcut == nil)
-
-                Spacer()
-
-                Button("common.action.cancel") { dismiss() }
-                Button("common.action.save") {
-                    onSave(shortcut)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(shortcut == nil)
-            }
-        }
-        .padding(24)
-        .frame(width: 400)
-    }
 }
 
 private struct ShortcutCaptureView: NSViewRepresentable {

@@ -13,7 +13,9 @@ private struct PersonalizedConfiguration: Codable {
     let customMappingEnabled: Bool
     let buttonBindings: [String: ButtonAction]
     let buttonShortcuts: [String: CustomKeyboardShortcut]
+    let buttonApplicationProfileIDs: [String: UUID]?
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
+    let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let showDockIcon: Bool
     let openMainWindowAtLaunch: Bool?
@@ -226,7 +228,9 @@ final class AppSettings: ObservableObject {
         static let legacyExclusiveHID = "exclusiveHID"
         static let buttonBindings = "buttonBindings"
         static let buttonShortcuts = "buttonShortcuts"
+        static let buttonApplicationProfileIDs = "buttonApplicationProfileIDs"
         static let secondaryButtonBindings = "secondaryButtonBindings"
+        static let customApplicationProfiles = "customApplicationProfiles"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
         static let selectedRemoteProfileID = "selectedRemoteProfileID"
@@ -274,11 +278,22 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published var buttonApplicationProfileIDs: [RemoteButton: UUID] {
+        didSet {
+            saveButtonApplicationProfileIDs()
+            saveSelectedRemoteProfileMappings()
+        }
+    }
+
     @Published var secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] {
         didSet {
             saveSecondaryBindings()
             saveSelectedRemoteProfileMappings()
         }
+    }
+
+    @Published private(set) var customApplicationProfiles: [CustomApplicationProfile] {
+        didSet { saveCustomApplicationProfiles() }
     }
 
     @Published private(set) var remoteDeviceProfiles: [RemoteDeviceProfile] {
@@ -424,6 +439,19 @@ final class AppSettings: ObservableObject {
         }
 
         if
+            let data = defaults.data(forKey: Keys.buttonApplicationProfileIDs),
+            let decoded = try? JSONDecoder().decode([String: UUID].self, from: data)
+        {
+            buttonApplicationProfileIDs = Dictionary(
+                uniqueKeysWithValues: decoded.compactMap { key, value in
+                    RemoteButton(rawValue: key).map { ($0, value) }
+                }
+            )
+        } else {
+            buttonApplicationProfileIDs = [:]
+        }
+
+        if
             let data = defaults.data(forKey: Keys.secondaryButtonBindings),
             let decoded = try? JSONDecoder().decode(
                 [String: [String: ConfiguredButtonAction]].self,
@@ -440,6 +468,11 @@ final class AppSettings: ObservableObject {
         } else {
             secondaryButtonBindings = [:]
         }
+
+        customApplicationProfiles = defaults
+            .data(forKey: Keys.customApplicationProfiles)
+            .flatMap { try? JSONDecoder().decode([CustomApplicationProfile].self, from: $0) }
+            ?? []
 
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
@@ -483,6 +516,7 @@ final class AppSettings: ObservableObject {
         let legacyMappings = RemoteDeviceMappings(
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
+            buttonApplicationProfileIDs: buttonApplicationProfileIDs,
             secondaryButtonBindings: secondaryButtonBindings
         )
         if
@@ -501,6 +535,7 @@ final class AppSettings: ObservableObject {
                     _, saved in saved
                 }
                 buttonShortcuts = selected.mappings.parsedButtonShortcuts
+                buttonApplicationProfileIDs = selected.mappings.parsedButtonApplicationProfileIDs
                 secondaryButtonBindings = selected.mappings.parsedSecondaryButtonBindings
             }
         } else {
@@ -547,6 +582,35 @@ final class AppSettings: ObservableObject {
         buttonShortcuts[button] = shortcut
     }
 
+    func applicationProfileID(for button: RemoteButton) -> UUID? {
+        buttonApplicationProfileIDs[button]
+    }
+
+    func applicationProfileID(for button: RemoteButton, profileID: UUID?) -> UUID? {
+        guard let profileID, profileID != selectedRemoteProfileID,
+              let profile = remoteDeviceProfiles.first(where: { $0.id == profileID })
+        else { return applicationProfileID(for: button) }
+        return profile.mappings.parsedButtonApplicationProfileIDs[button]
+    }
+
+    func customApplicationProfile(id: UUID?) -> CustomApplicationProfile? {
+        guard let id else { return nil }
+        return customApplicationProfiles.first(where: { $0.id == id })
+    }
+
+    @discardableResult
+    func addCustomApplicationProfile(_ profile: CustomApplicationProfile) -> UUID {
+        customApplicationProfiles.append(profile)
+        return profile.id
+    }
+
+    func updateCustomApplicationProfile(_ profile: CustomApplicationProfile) {
+        guard let index = customApplicationProfiles.firstIndex(where: { $0.id == profile.id }) else {
+            return
+        }
+        customApplicationProfiles[index] = profile
+    }
+
     func configuredAction(
         for button: RemoteButton,
         trigger: ButtonTrigger
@@ -554,7 +618,8 @@ final class AppSettings: ObservableObject {
         if trigger == .singleClick {
             return ConfiguredButtonAction(
                 action: action(for: button),
-                shortcut: shortcut(for: button)
+                shortcut: shortcut(for: button),
+                applicationProfileID: applicationProfileID(for: button)
             )
         }
         return secondaryButtonBindings[button]?[trigger] ?? .disabled
@@ -573,7 +638,8 @@ final class AppSettings: ObservableObject {
         if trigger == .singleClick {
             return ConfiguredButtonAction(
                 action: bindings[button] ?? Self.defaultBindings[button] ?? .disabled,
-                shortcut: shortcuts[button]
+                shortcut: shortcuts[button],
+                applicationProfileID: profile.mappings.parsedButtonApplicationProfileIDs[button]
             )
         }
         return profile.mappings.parsedSecondaryButtonBindings[button]?[trigger] ?? .disabled
@@ -594,6 +660,7 @@ final class AppSettings: ObservableObject {
             _, saved in saved
         }
         buttonShortcuts = profile.mappings.parsedButtonShortcuts
+        buttonApplicationProfileIDs = profile.mappings.parsedButtonApplicationProfileIDs
         secondaryButtonBindings = profile.mappings.parsedSecondaryButtonBindings
         isLoadingRemoteProfile = false
     }
@@ -668,6 +735,7 @@ final class AppSettings: ObservableObject {
         selectedRemoteProfile?.mappings ?? RemoteDeviceMappings(
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
+            buttonApplicationProfileIDs: buttonApplicationProfileIDs,
             secondaryButtonBindings: secondaryButtonBindings
         )
     }
@@ -693,18 +761,35 @@ final class AppSettings: ObservableObject {
     func setAction(_ action: ButtonAction, for button: RemoteButton, trigger: ButtonTrigger) {
         guard trigger != .singleClick else {
             setAction(action, for: button)
-            if action != .customShortcut { setShortcut(nil, for: button) }
             return
         }
 
         var bindings = secondaryButtonBindings[button] ?? [:]
-        if action == .disabled {
-            bindings.removeValue(forKey: trigger)
-        } else {
-            let shortcut = action == .customShortcut ? bindings[trigger]?.shortcut : nil
-            bindings[trigger] = ConfiguredButtonAction(action: action, shortcut: shortcut)
-        }
+        let shortcut = bindings[trigger]?.shortcut
+        let applicationProfileID = bindings[trigger]?.applicationProfileID
+        bindings[trigger] = ConfiguredButtonAction(
+            action: action,
+            shortcut: shortcut,
+            applicationProfileID: applicationProfileID
+        )
         secondaryButtonBindings[button] = bindings.isEmpty ? nil : bindings
+    }
+
+    func setApplicationProfileID(
+        _ applicationProfileID: UUID?,
+        for button: RemoteButton,
+        trigger: ButtonTrigger
+    ) {
+        guard trigger != .singleClick else {
+            buttonApplicationProfileIDs[button] = applicationProfileID
+            return
+        }
+        guard var bindings = secondaryButtonBindings[button], var binding = bindings[trigger] else {
+            return
+        }
+        binding.applicationProfileID = applicationProfileID
+        bindings[trigger] = binding
+        secondaryButtonBindings[button] = bindings
     }
 
     func setShortcut(
@@ -746,6 +831,7 @@ final class AppSettings: ObservableObject {
     func resetBindings() {
         buttonBindings = Self.defaultBindings
         buttonShortcuts = [:]
+        buttonApplicationProfileIDs = [:]
         secondaryButtonBindings = [:]
         if experimentalContinuousRecordingEnabled {
             continuousRecordingPowerBindingBackup = ConfiguredButtonAction(
@@ -1012,6 +1098,9 @@ final class AppSettings: ObservableObject {
             buttonShortcuts: Dictionary(
                 uniqueKeysWithValues: buttonShortcuts.map { ($0.key.rawValue, $0.value) }
             ),
+            buttonApplicationProfileIDs: Dictionary(
+                uniqueKeysWithValues: buttonApplicationProfileIDs.map { ($0.key.rawValue, $0.value) }
+            ),
             secondaryButtonBindings: Dictionary(
                 uniqueKeysWithValues: secondaryButtonBindings.map { button, bindings in
                     (
@@ -1020,6 +1109,7 @@ final class AppSettings: ObservableObject {
                     )
                 }
             ),
+            customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             showDockIcon: showDockIcon,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
@@ -1052,6 +1142,11 @@ final class AppSettings: ObservableObject {
                 RemoteButton(rawValue: key).map { ($0, value) }
             }
         )
+        let importedApplicationProfileIDs = Dictionary(
+            uniqueKeysWithValues: (configuration.buttonApplicationProfileIDs ?? [:]).compactMap { key, value in
+                RemoteButton(rawValue: key).map { ($0, value) }
+            }
+        )
         let importedSecondaryBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] =
             Dictionary(
                 uniqueKeysWithValues: configuration.secondaryButtonBindings.compactMap { buttonKey, bindings in
@@ -1070,7 +1165,9 @@ final class AppSettings: ObservableObject {
         customMappingEnabled = configuration.customMappingEnabled
         buttonBindings = Self.defaultBindings.merging(importedBindings) { _, imported in imported }
         buttonShortcuts = importedShortcuts
+        buttonApplicationProfileIDs = importedApplicationProfileIDs
         secondaryButtonBindings = importedSecondaryBindings
+        customApplicationProfiles = configuration.customApplicationProfiles ?? []
         applicationLanguage = configuration.applicationLanguage
         showDockIcon = configuration.showDockIcon
         if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {
@@ -1100,6 +1197,15 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    private func saveButtonApplicationProfileIDs() {
+        let raw = Dictionary(
+            uniqueKeysWithValues: buttonApplicationProfileIDs.map { ($0.key.rawValue, $0.value) }
+        )
+        if let data = try? JSONEncoder().encode(raw) {
+            defaults.set(data, forKey: Keys.buttonApplicationProfileIDs)
+        }
+    }
+
     private func saveSecondaryBindings() {
         let raw = Dictionary(uniqueKeysWithValues: secondaryButtonBindings.map { button, bindings in
             (
@@ -1120,8 +1226,14 @@ final class AppSettings: ObservableObject {
         remoteDeviceProfiles[index].mappings = RemoteDeviceMappings(
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
+            buttonApplicationProfileIDs: buttonApplicationProfileIDs,
             secondaryButtonBindings: secondaryButtonBindings
         )
+    }
+
+    private func saveCustomApplicationProfiles() {
+        guard let data = try? JSONEncoder().encode(customApplicationProfiles) else { return }
+        defaults.set(data, forKey: Keys.customApplicationProfiles)
     }
 
     private func saveRemoteDeviceProfiles() {
@@ -1162,6 +1274,11 @@ final class AppSettings: ObservableObject {
             )
             setAction(restored.action, for: .power, trigger: .singleClick)
             setShortcut(restored.shortcut, for: .power, trigger: .singleClick)
+            setApplicationProfileID(
+                restored.applicationProfileID,
+                for: .power,
+                trigger: .singleClick
+            )
         }
         continuousRecordingPowerBindingBackup = nil
     }

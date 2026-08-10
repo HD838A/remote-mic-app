@@ -40,6 +40,7 @@ feature/
 | --- | --- | --- |
 | [DeepSeek 语音结束后整理 MVP](./deepseek-post-dictation-mvp/) | 等待人工验收 | 豆包输入法上屏稳定后，非流式调用 DeepSeek，只安全替换本次语音文字。 |
 | [延长语音录音与 iOS 点按录音](./extended-voice-recording/) | 等待人工验收 | 遥控器会话使用 `MIC_EXTEND` 尝试延长到 3 分钟；iOS 同时支持点按切换与按住说话。 |
+| [常用 macOS 快捷键](./common-mac-shortcuts/) | 已完成 | 提供常用固定快捷键，并统一无线麦的退出与关窗行为。 |
 
 ## 新功能模板
 
