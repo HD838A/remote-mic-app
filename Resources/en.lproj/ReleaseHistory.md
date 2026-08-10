@@ -2,9 +2,9 @@
 
 ## 1.8.6 (Pre-release)
 
-- Redesigned About to keep the current version, available update, update check, version history, and pre-release channel together.
-- When a new version is available, About now shows localized release notes before the update starts.
-- Switching between stable and pre-release updates refreshes the result immediately, while an unavailable candidate feed still falls back silently to stable updates.
+- Fixed holding the remote's Left or Right button not continuously moving the text cursor in input fields of other apps. Matching arrow mappings now use macOS native key repeat.
+- Shortcut capture now starts only after clicking Record Shortcut and can record combinations already reserved by macOS or another app, such as Command-Space, with clear success feedback.
+- Fixed dragging the gain slider or settings-page content moving the entire window. Only the dedicated top area remains draggable.
 
 ## 1.8.5 (Pre-release)
 
