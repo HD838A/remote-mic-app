@@ -1,5 +1,9 @@
 # Version History
 
+## 1.8.3 (Pre-release)
+
+- Fixed custom button controls remaining visibly enabled but inactive after a Sparkle upgrade until the toggle was turned off and on. The app now waits for the previous process to release HID access and rebuilds button monitoring automatically after an update.
+
 ## 1.8.2 (Pre-release)
 
 - Buttons can now open any installed Mac app and automatically focus it through an app shortcut or a learned Accessibility input field. Recorded shortcuts, apps, and input targets remain available after switching actions or temporarily disabling a trigger, and are preserved by configuration export and import.

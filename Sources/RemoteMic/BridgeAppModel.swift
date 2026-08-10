@@ -104,6 +104,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var hidPowerKeySuppressed = false
     private var started = false
     private var terminationObserver: NSObjectProtocol?
+    private var completedUpdateHIDRecoveryWorkItem: DispatchWorkItem?
     private let audioPreparationQueue = DispatchQueue(label: "RemoteMic.audioPreparation", qos: .userInitiated)
     private var audioStartupGeneration: UInt64 = 0
     private var audioDeviceRefreshGeneration: UInt64 = 0
@@ -247,6 +248,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func stop() {
         guard started else { return }
         started = false
+        completedUpdateHIDRecoveryWorkItem?.cancel()
+        completedUpdateHIDRecoveryWorkItem = nil
         audioStartupGeneration &+= 1
         audioDeviceRefreshGeneration &+= 1
         let shouldStopAudioOnPreparationQueue = audioStartupPending
@@ -290,6 +293,28 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self.terminationObserver = nil
         }
         AppLogger.shared.write("APP STOP")
+    }
+
+    static func shouldRecoverHIDAfterCompletedUpdate(
+        completedUpdate: Bool,
+        customMappingEnabled: Bool
+    ) -> Bool {
+        completedUpdate && customMappingEnabled
+    }
+
+    func recoverHIDAfterCompletedUpdate(delay: TimeInterval = 2) {
+        guard started, settings.customMappingEnabled else { return }
+        completedUpdateHIDRecoveryWorkItem?.cancel()
+        stopHIDMonitors()
+        AppLogger.shared.write("HID UPDATE RECOVERY scheduled delay_ms=\(Int(delay * 1_000))")
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.started, self.settings.customMappingEnabled else { return }
+            self.completedUpdateHIDRecoveryWorkItem = nil
+            self.applyHIDSettings()
+            AppLogger.shared.write("HID UPDATE RECOVERY applied")
+        }
+        completedUpdateHIDRecoveryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     func reconnect() {

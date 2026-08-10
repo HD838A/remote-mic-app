@@ -1725,6 +1725,49 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func completedUpdateRecoversOnlyPersistentlyEnabledHIDMappingAfterStartup() throws {
+        #expect(BridgeAppModel.shouldRecoverHIDAfterCompletedUpdate(
+            completedUpdate: true,
+            customMappingEnabled: true
+        ))
+        #expect(!BridgeAppModel.shouldRecoverHIDAfterCompletedUpdate(
+            completedUpdate: false,
+            customMappingEnabled: true
+        ))
+        #expect(!BridgeAppModel.shouldRecoverHIDAfterCompletedUpdate(
+            completedUpdate: true,
+            customMappingEnabled: false
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let start = try #require(appSource.range(of: "model.startIfNeeded()"))
+        let recovery = try #require(appSource.range(of: "model.recoverHIDAfterCompletedUpdate()"))
+        #expect(start.lowerBound < recovery.lowerBound)
+
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let recoveryStart = try #require(modelSource.range(of: "func recoverHIDAfterCompletedUpdate"))
+        let recoveryEnd = try #require(modelSource.range(
+            of: "func reconnect()",
+            range: recoveryStart.upperBound..<modelSource.endIndex
+        ))
+        let recoverySource = modelSource[recoveryStart.lowerBound..<recoveryEnd.lowerBound]
+        let stop = try #require(recoverySource.range(of: "stopHIDMonitors()"))
+        let delayedRestart = try #require(recoverySource.range(of: "DispatchQueue.main.asyncAfter"))
+        let apply = try #require(recoverySource.range(of: "self.applyHIDSettings()"))
+        #expect(stop.lowerBound < apply.lowerBound)
+        #expect(apply.lowerBound < delayedRestart.lowerBound)
+    }
+
     @Test func customShortcutsPersistAndResetWithBindings() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

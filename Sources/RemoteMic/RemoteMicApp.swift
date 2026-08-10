@@ -112,6 +112,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         observeLocalization()
         observePhoneRemoteButtonTitles()
         model.startIfNeeded()
+        if BridgeAppModel.shouldRecoverHIDAfterCompletedUpdate(
+            completedUpdate: completedUpdate,
+            customMappingEnabled: model.settings.customMappingEnabled
+        ) {
+            model.recoverHIDAfterCompletedUpdate()
+        }
         refreshMenuStatus()
 
         if completedUpdate || model.settings.openMainWindowAtLaunch {
