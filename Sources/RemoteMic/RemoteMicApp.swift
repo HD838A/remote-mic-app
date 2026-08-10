@@ -567,7 +567,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 1020, height: 772)
