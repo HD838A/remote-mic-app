@@ -58,6 +58,7 @@ final class HIDRemoteMonitor {
     private(set) var profileID: UUID?
     private var activeDeviceIsSeized = false
     private var activeUsages = Set<UInt16>()
+    private var nativePassthroughUsages = Set<UInt16>()
     private var repeatTimers: [UInt16: HIDRemoteScheduledTask] = [:]
     private var nonRepeatablePressedButtons = Set<RemoteButton>()
     private var nonRepeatableReleaseTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
@@ -347,7 +348,25 @@ final class HIDRemoteMonitor {
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
-            if !activeDeviceIsSeized {
+            let preflightProfileID = profileID
+            let preflightRecognizesDoubleClick = settings.configuredAction(
+                for: button,
+                trigger: .doubleClick,
+                profileID: preflightProfileID
+            ).action != .disabled
+            let preflightRecognizesLongPress = settings.configuredAction(
+                for: button,
+                trigger: .longPress,
+                profileID: preflightProfileID
+            ).action != .disabled
+            let preflightAction = settings.action(for: button, profileID: preflightProfileID)
+            let usesNativePassthrough = preflightProfileID != nil && shouldUseNativePassthrough(
+                button: button,
+                action: preflightAction,
+                recognizesDoubleClick: preflightRecognizesDoubleClick,
+                recognizesLongPress: preflightRecognizesLongPress
+            )
+            if !activeDeviceIsSeized, !usesNativePassthrough {
                 eventSuppressor.arm(button: button, edge: .down)
             }
             var shouldPerformAction = true
@@ -358,7 +377,12 @@ final class HIDRemoteMonitor {
                 }
                 shouldPerformAction = routing.shouldPerformAction
             }
-            guard let profileID, shouldPerformAction else { continue }
+            guard let profileID, shouldPerformAction else {
+                if !activeDeviceIsSeized, usesNativePassthrough {
+                    eventSuppressor.arm(button: button, edge: .down)
+                }
+                continue
+            }
 
             let recognizesDoubleClick = settings.configuredAction(
                 for: button,
@@ -370,6 +394,14 @@ final class HIDRemoteMonitor {
                 trigger: .longPress,
                 profileID: profileID
             ).action != .disabled
+            let action = settings.action(for: button, profileID: profileID)
+            if usesNativePassthrough {
+                nativePassthroughUsages.insert(usage)
+                AppLogger.shared.write(
+                    "HID NATIVE PASSTHROUGH button=\(button.rawValue) action=\(action.rawValue)"
+                )
+                continue
+            }
             if recognizesDoubleClick || recognizesLongPress || gestureRecognizer.isTracking(button) {
                 let commands = gestureRecognizer.press(
                     button,
@@ -378,7 +410,6 @@ final class HIDRemoteMonitor {
                 )
                 guard processGestureCommands(commands) else { return }
             } else {
-                let action = settings.action(for: button, profileID: profileID)
                 guard shouldAcceptRawPress(
                     button: button,
                     action: action,
@@ -394,7 +425,9 @@ final class HIDRemoteMonitor {
         }
 
         for usage in released {
-            if !activeDeviceIsSeized, let button = RemoteButton.usageMap[usage] {
+            let usedNativePassthrough = nativePassthroughUsages.remove(usage) != nil
+            if !activeDeviceIsSeized, !usedNativePassthrough,
+               let button = RemoteButton.usageMap[usage] {
                 eventSuppressor.arm(button: button, edge: .up)
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
@@ -451,6 +484,21 @@ final class HIDRemoteMonitor {
         return ![.arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward].contains(action)
     }
 
+    private func shouldUseNativePassthrough(
+        button: RemoteButton,
+        action: ButtonAction,
+        recognizesDoubleClick: Bool,
+        recognizesLongPress: Bool
+    ) -> Bool {
+        guard !activeDeviceIsSeized,
+              !recognizesDoubleClick,
+              !recognizesLongPress,
+              frontmostBundleIdentifier() != PresetApplication.remoteMic.bundleIdentifier
+        else { return false }
+        return (button == .left && action == .arrowLeft) ||
+            (button == .right && action == .arrowRight)
+    }
+
     private func scheduleNonRepeatableRelease(for button: RemoteButton) {
         guard nonRepeatablePressedButtons.contains(button) else { return }
         nonRepeatableReleaseTimers.removeValue(forKey: button)?.cancel()
@@ -499,9 +547,6 @@ final class HIDRemoteMonitor {
             guard self.runtimePermissionsAreValid() else {
                 self.releaseForRevokedPermissions()
                 return
-            }
-            if !self.activeDeviceIsSeized {
-                self.eventSuppressor.arm(button: button, edge: .down)
             }
             let configured = ConfiguredButtonAction(
                 action: action,
@@ -602,6 +647,7 @@ final class HIDRemoteMonitor {
     private func resetInputState() {
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
+        nativePassthroughUsages.removeAll()
         nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
         nonRepeatableReleaseTimers.removeAll()
         nonRepeatablePressedButtons.removeAll()

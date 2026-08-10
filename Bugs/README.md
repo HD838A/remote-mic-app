@@ -59,6 +59,8 @@
 | 2026-08-10 | [Unbound Multi-Remote Button Actions Are Ignored](./2026-08-10-unbound-multi-remote-actions-ignored.md) | 已修复，双遥控器真机复验通过 |
 | 2026-08-10 | [Upgrade Leaves Custom Button Mapping Inactive](./2026-08-10-upgrade-custom-mapping-not-activated.md) | 已修复，签名升级验证通过；待实体按键确认 |
 | 2026-08-10 | [RC003 普通语音会话约一分钟停止](./2026-08-10-rc003-one-minute-voice-session-timeout.md) | 候选修复完成，等待真机验证 |
+| 2026-08-10 | [已占用组合键无法录入](./2026-08-10-reserved-shortcut-capture.md) | 候选修复完成，等待真实系统热键验证 |
+| 2026-08-10 | [左右键按住不能连续移动](./2026-08-10-left-right-hold-repeat.md) | 候选修复完成，硬件模拟通过，等待真机验证 |
 
 ## 记录模板
 
