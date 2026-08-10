@@ -1,5 +1,10 @@
 # Version History
 
+## 1.8.4 (Pre-release)
+
+- Added Command-W, Command-X, Command-A, Command-Z, Command-Shift-Z, Command-F, and Command-S to Basic Keys, so common window, editing, search, and save actions can be mapped directly to remote buttons.
+- Remote Mic now supports the standard Command-Q shortcut to quit and Command-W to close the Settings window while keeping the menu-bar app running.
+
 ## 1.8.3 (Pre-release)
 
 - Fixed custom button controls remaining visibly enabled but inactive after a Sparkle upgrade until the toggle was turned off and on. The app now waits for the previous process to release HID access and rebuilds button monitoring automatically after an update.
