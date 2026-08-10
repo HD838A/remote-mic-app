@@ -100,6 +100,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        configureMainMenu()
         let currentBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
         let completedUpdate = model.settings.recordLaunchAndDetectCompletedUpdate(
             currentBuild: currentBuild,
@@ -182,6 +183,45 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         statusItem = item
         rebuildStatusMenu()
+    }
+
+    private func configureMainMenu() {
+        let mainMenu = NSMenu()
+
+        let applicationMenuItem = NSMenuItem()
+        let applicationMenu = NSMenu()
+        let quitItem = NSMenuItem(
+            title: localization.text("common.action.quit"),
+            action: #selector(quit),
+            keyEquivalent: "q"
+        )
+        quitItem.target = self
+        applicationMenu.addItem(quitItem)
+        applicationMenuItem.submenu = applicationMenu
+        mainMenu.addItem(applicationMenuItem)
+
+        let editMenuItem = NSMenuItem(title: localization.text("menu.edit"), action: nil, keyEquivalent: "")
+        let editMenu = NSMenu(title: localization.text("menu.edit"))
+        editMenu.addItem(firstResponderMenuItem("edit.undo", action: Selector(("undo:")), key: "z"))
+        let redoItem = firstResponderMenuItem("edit.redo", action: Selector(("redo:")), key: "z")
+        redoItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(redoItem)
+        editMenu.addItem(.separator())
+        editMenu.addItem(firstResponderMenuItem("edit.cut", action: #selector(NSText.cut(_:)), key: "x"))
+        editMenu.addItem(firstResponderMenuItem("edit.copy", action: #selector(NSText.copy(_:)), key: "c"))
+        editMenu.addItem(firstResponderMenuItem("edit.paste", action: #selector(NSText.paste(_:)), key: "v"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(
+            firstResponderMenuItem("edit.select_all", action: #selector(NSText.selectAll(_:)), key: "a")
+        )
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    private func firstResponderMenuItem(_ titleKey: String, action: Selector, key: String) -> NSMenuItem {
+        NSMenuItem(title: localization.text(titleKey), action: action, keyEquivalent: key)
     }
 
     private func rebuildStatusMenu() {
@@ -305,6 +345,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 guard let self else { return }
                 self.statusItem?.button?.toolTip = self.localization.text("app.name")
                 self.settingsWindowController?.window?.title = self.localization.text("app.name")
+                self.configureMainMenu()
                 self.rebuildStatusMenu()
             }
             .store(in: &subscriptions)

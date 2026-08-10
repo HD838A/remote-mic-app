@@ -156,6 +156,7 @@ struct SettingsPageRegressionTests {
             "model.setVoiceFnTapModeEnabled",
             "model.setDeepSeekPostDictationEnabled",
             "model.saveDeepSeekAPIKey",
+            "model.deepSeekAPIKeyPreview",
             "model.deleteDeepSeekAPIKey()",
             "model.testDeepSeekConnection()",
             "model.addProgrammingTerm(",

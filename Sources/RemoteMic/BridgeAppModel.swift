@@ -49,6 +49,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var postDictationStatus = LocalizedMessage("post_dictation.status.ready")
     @Published private(set) var postDictationState: PostDictationPolishState = .idle
     @Published private(set) var isDeepSeekAPIKeyConfigured = false
+    @Published private(set) var deepSeekAPIKeyPreview: String?
     @Published private(set) var programmingTerms: [ProgrammingTerm] = []
     @Published private(set) var copyablePostDictationResult: String?
 
@@ -143,7 +144,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     init() {
-        isDeepSeekAPIKeyConfigured = ((try? deepSeekCredentialStore.loadAPIKey()) ?? nil) != nil
+        let deepSeekAPIKey = (try? deepSeekCredentialStore.loadAPIKey()) ?? nil
+        isDeepSeekAPIKeyConfigured = deepSeekAPIKey != nil
+        deepSeekAPIKeyPreview = deepSeekAPIKey.map(DeepSeekCredentialStore.maskedPreview)
         programmingTerms = programmingTermStore.terms
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
@@ -839,15 +842,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
-    func saveDeepSeekAPIKey(_ apiKey: String) {
+    @discardableResult
+    func saveDeepSeekAPIKey(_ apiKey: String) -> Bool {
         do {
             try deepSeekCredentialStore.saveAPIKey(apiKey)
             isDeepSeekAPIKeyConfigured = true
+            deepSeekAPIKeyPreview = DeepSeekCredentialStore.maskedPreview(for: apiKey)
             postDictationState = .idle
             postDictationStatus = LocalizedMessage("post_dictation.status.key_saved")
+            return true
         } catch {
             postDictationState = .failed
             postDictationStatus = LocalizedMessage("post_dictation.status.key_save_failed")
+            return false
         }
     }
 
@@ -855,6 +862,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         do {
             try deepSeekCredentialStore.deleteAPIKey()
             isDeepSeekAPIKeyConfigured = false
+            deepSeekAPIKeyPreview = nil
             settings.deepSeekPostDictationEnabled = false
             postDictationCoordinator.cancel(resetStatus: false)
             postDictationState = .idle

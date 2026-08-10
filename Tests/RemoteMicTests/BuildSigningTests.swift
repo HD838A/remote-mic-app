@@ -34,6 +34,24 @@ struct BuildSigningTests {
         #expect(!adHocSigningSource.contains("--options runtime"))
     }
 
+    @Test func deepSeekCredentialsKeepAKeychainFallbackOutsideUserDefaults() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let credentialSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/DeepSeekCredentialStore.swift"
+            ),
+            encoding: .utf8
+        )
+        #expect(credentialSource.contains("kSecUseDataProtectionKeychain"))
+        #expect(credentialSource.contains("errSecMissingEntitlement"))
+        #expect(credentialSource.contains("kSecUseKeychain"))
+        #expect(credentialSource.contains("RemoteMic.keychain-db"))
+        #expect(!credentialSource.contains("UserDefaults"))
+    }
+
     @Test func productionReleaseRequiresAndVerifiesWebRemoteConfiguration() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

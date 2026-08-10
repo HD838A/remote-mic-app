@@ -372,6 +372,13 @@
 "menu.check_for_updates" = "检查更新…";
 "common.action.quit" = "退出";
 "menu.language" = "语言";
+"menu.edit" = "编辑";
+"edit.undo" = "撤销";
+"edit.redo" = "重做";
+"edit.cut" = "剪切";
+"edit.copy" = "复制";
+"edit.paste" = "粘贴";
+"edit.select_all" = "全选";
 "language.system" = "跟随系统";
 "common.value.unknown" = "未知";
 "app.version_with_build" = "版本 %1$@ (%2$@)";

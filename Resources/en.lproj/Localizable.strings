@@ -372,6 +372,13 @@
 "menu.check_for_updates" = "Check for Updates…";
 "common.action.quit" = "Quit";
 "menu.language" = "Language";
+"menu.edit" = "Edit";
+"edit.undo" = "Undo";
+"edit.redo" = "Redo";
+"edit.cut" = "Cut";
+"edit.copy" = "Copy";
+"edit.paste" = "Paste";
+"edit.select_all" = "Select All";
 "language.system" = "System Default";
 "common.value.unknown" = "Unknown";
 "app.version_with_build" = "Version %1$@ (%2$@)";

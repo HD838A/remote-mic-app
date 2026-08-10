@@ -530,11 +530,16 @@ struct SettingsView: View {
                 }
 
                 HStack(spacing: 8) {
-                    SecureField("post_dictation.key.placeholder", text: $deepSeekAPIKeyDraft)
+                    SecureField(
+                        model.deepSeekAPIKeyPreview
+                            ?? localization.text("post_dictation.key.placeholder"),
+                        text: $deepSeekAPIKeyDraft
+                    )
                         .textFieldStyle(.roundedBorder)
                     Button("post_dictation.key.save") {
-                        model.saveDeepSeekAPIKey(deepSeekAPIKeyDraft)
-                        deepSeekAPIKeyDraft = ""
+                        if model.saveDeepSeekAPIKey(deepSeekAPIKeyDraft) {
+                            deepSeekAPIKeyDraft = ""
+                        }
                     }
                     .compatibilityButtonStyle(.standard)
                     .disabled(deepSeekAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
