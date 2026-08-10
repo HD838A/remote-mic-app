@@ -83,8 +83,8 @@ final class RemoteControlLayoutTests: XCTestCase {
 
     func testEnglishLocalizationContainsCoreRemoteCopy() {
         XCTAssertEqual(
-            AppLanguage.english.text("按住说话"),
-            "Hold to Talk"
+            AppLanguage.english.text("开始录音"),
+            "Start Recording"
         )
         XCTAssertEqual(
             AppLanguage.english.text("连接详情"),
@@ -94,5 +94,22 @@ final class RemoteControlLayoutTests: XCTestCase {
             AppLanguage.english.text(RemoteMacConnection.discoveryRecoveryGuidance),
             "Nearby device discovery on this iPhone is temporarily unavailable. Turn Wi-Fi off and back on. If it still cannot connect, restart the iPhone."
         )
+    }
+
+    func testVoiceButtonSupportsTapToggleAndHoldToTalk() {
+        var tap = VoiceButtonInteractionState()
+        XCTAssertEqual(tap.press(at: 10, isVoiceRequested: false), .start)
+        XCTAssertEqual(tap.release(at: 10.1), .none)
+        XCTAssertTrue(tap.isLatched)
+        XCTAssertEqual(tap.press(at: 11, isVoiceRequested: true), .stop)
+        XCTAssertEqual(tap.release(at: 11.1), .none)
+
+        var hold = VoiceButtonInteractionState()
+        XCTAssertEqual(hold.press(at: 20, isVoiceRequested: false), .start)
+        XCTAssertEqual(
+            hold.release(at: 20 + VoiceButtonInteractionState.holdThreshold),
+            .stop
+        )
+        XCTAssertFalse(hold.isLatched)
     }
 }
