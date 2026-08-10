@@ -1,3 +1,3 @@
 "CFBundleDisplayName" = "Remote Mic";
 "NSLocalNetworkUsageDescription" = "Allow Local Network access to find and connect to a nearby Mac running Remote Mic.";
-"NSMicrophoneUsageDescription" = "Use the microphone while holding the talk button to send audio to the connected Mac.";
+"NSMicrophoneUsageDescription" = "Use the microphone while recording to send audio to the connected Mac.";

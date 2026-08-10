@@ -23,8 +23,6 @@ enum BluetoothVoiceStopPolicy {
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
-    private static let longRecordingKeepAliveInterval: TimeInterval = 10
-    private static let longRecordingMaximumDuration: TimeInterval = 60
 
     let settings = AppSettings()
 
@@ -67,6 +65,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.handleVoiceFnTapFailure(failure)
         }
     )
+    private let bluetoothVoiceLeaseController = BluetoothVoiceSessionLeaseController()
     private var testToneGeneration = 0
     private var phoneVoiceFunctionKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
@@ -78,8 +77,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var longRecordingGeneration: UInt64 = 0
     private var longRecordingOpenTimer: DispatchSourceTimer?
     private var longRecordingCloseTimer: DispatchSourceTimer?
-    private var longRecordingKeepAliveTimer: DispatchSourceTimer?
-    private var longRecordingLimitTimer: DispatchSourceTimer?
     private var phoneApprovalAlert: NSAlert?
     private var webApprovalAlert: NSAlert?
     private var remoteButtonTitles: [String: String] = [:]
@@ -263,6 +260,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             logReason: "app_stop"
         )
         stopLongRecording(reason: "app_stop")
+        bluetoothVoiceLeaseController.stop()
         voiceFnTapSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
@@ -1031,6 +1029,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
+                bluetoothVoiceLeaseController.stop()
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
                 endVoiceSessionIfNeeded(flushAudio: false)
@@ -1073,8 +1072,29 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write(
             "ATVV STREAM accepted trace=\(bluetoothVoiceTraceCounter) model=\(model.rawValue)"
         )
+        bluetoothVoiceLeaseController.start(
+            isActive: { [weak self, weak bridge] in
+                guard let self, let bridge else { return false }
+                return self.bluetoothVoiceActive &&
+                    self.activeBluetoothVoiceDeviceIdentifier == identifier &&
+                    self.bluetoothBridges[identifier] === bridge
+            },
+            requestExtend: { [weak bridge] in
+                bridge?.requestMicrophoneExtend() ?? false
+            },
+            requestClose: { [weak bridge] in
+                bridge?.requestMicrophoneClose() ?? false
+            },
+            reconnect: { [weak bridge] in
+                bridge?.reconnectNow()
+            },
+            log: { message in
+                AppLogger.shared.write(message)
+            }
+        )
         if longRecordingRequested {
-            scheduleLongRecordingTimers(generation: longRecordingGeneration)
+            longRecordingOpenTimer?.cancel()
+            longRecordingOpenTimer = nil
             AppLogger.shared.write("LONG RECORDING started")
         }
         _ = voiceFnTapSession.startVoice()
@@ -1083,6 +1103,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
         guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
+        bluetoothVoiceLeaseController.stop()
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = false
@@ -1492,44 +1513,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         timer.resume()
     }
 
-    private func scheduleLongRecordingTimers(generation: UInt64) {
-        longRecordingOpenTimer?.cancel()
-        longRecordingOpenTimer = nil
-        longRecordingKeepAliveTimer?.cancel()
-        longRecordingLimitTimer?.cancel()
-
-        let keepAlive = DispatchSource.makeTimerSource(queue: .main)
-        keepAlive.schedule(
-            deadline: .now() + Self.longRecordingKeepAliveInterval,
-            repeating: Self.longRecordingKeepAliveInterval
-        )
-        keepAlive.setEventHandler { [weak self] in
-            guard let self,
-                  self.longRecordingRequested,
-                  self.longRecordingGeneration == generation,
-                  self.bluetoothVoiceActive
-            else { return }
-            guard self.selectedBluetoothBridge?.requestMicrophoneExtend() == true else {
-                self.stopLongRecording(reason: "extend_failed")
-                return
-            }
-        }
-        longRecordingKeepAliveTimer = keepAlive
-        keepAlive.resume()
-
-        let limit = DispatchSource.makeTimerSource(queue: .main)
-        limit.schedule(deadline: .now() + Self.longRecordingMaximumDuration)
-        limit.setEventHandler { [weak self] in
-            guard let self,
-                  self.longRecordingRequested,
-                  self.longRecordingGeneration == generation
-            else { return }
-            self.stopLongRecording(reason: "one_minute_limit")
-        }
-        longRecordingLimitTimer = limit
-        limit.resume()
-    }
-
     private func stopLongRecording(reason: String) {
         guard longRecordingRequested else { return }
         longRecordingRequested = false
@@ -1574,10 +1557,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         longRecordingOpenTimer = nil
         longRecordingCloseTimer?.cancel()
         longRecordingCloseTimer = nil
-        longRecordingKeepAliveTimer?.cancel()
-        longRecordingKeepAliveTimer = nil
-        longRecordingLimitTimer?.cancel()
-        longRecordingLimitTimer = nil
     }
 
     private func startPhoneVoice(source: MobileVoiceSource) -> Bool {

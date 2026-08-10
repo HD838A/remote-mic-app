@@ -384,7 +384,7 @@ struct MacAppInformationScreen: View {
                 HStack(spacing: 7) {
                     Image(systemName: "shield.lefthalf.filled")
                         .font(.system(size: 14, weight: .semibold))
-                    Text(language.text("语音仅在按住时传输，不会上传。"))
+                    Text(language.text("语音仅在录音期间传输，不会上传。"))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundStyle(RemotePalette.text.opacity(0.58))

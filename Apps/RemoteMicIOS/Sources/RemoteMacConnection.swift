@@ -57,6 +57,7 @@ final class RemoteMacConnection: ObservableObject {
 
     @Published private(set) var state: State = .searching
     @Published private(set) var macName = "正在查找 Mac"
+    @Published private(set) var isVoiceRequested = false
     @Published private(set) var isVoiceActive = false
     @Published private(set) var buttonTitles: [String: String] = [:]
     @Published private(set) var macAppVersion: String?
@@ -155,7 +156,7 @@ final class RemoteMacConnection: ObservableObject {
         case .awaitingLocalNetworkPermission:
             return "请允许访问本地网络，以发现附近的 Mac"
         default:
-            return "麦克风仅在按住时启用"
+            return "点按开始录音，再次点按停止；也可以按住说话"
         }
     }
 
@@ -186,6 +187,9 @@ final class RemoteMacConnection: ObservableObject {
 
     func sceneDidBecomeInactive() {
         isAppActive = false
+        if isVoiceRequested, microphone.permissionStatus != .undetermined {
+            endVoice()
+        }
         guard state == .connected, !preservesConnectedPresentation else { return }
         preservesConnectedPresentation = true
         diagnostics.record("connection_presentation", fields: ["state": "preserved"])
@@ -334,8 +338,10 @@ final class RemoteMacConnection: ObservableObject {
     }
 
     func beginVoice() {
+        guard !isVoiceRequested else { return }
         voiceRequestID &+= 1
         let requestID = voiceRequestID
+        isVoiceRequested = true
         diagnostics.record("voice_request", fields: [
             "connected": isConnected ? "true" : "false",
             "permission": microphone.permissionStatus.rawValue,
@@ -352,7 +358,12 @@ final class RemoteMacConnection: ObservableObject {
                 guard permitted else {
                     throw MicrophoneStreamer.StreamError.permissionDenied
                 }
-                guard voiceRequestID == requestID, isConnected else { return }
+                guard voiceRequestID == requestID, isConnected else {
+                    if voiceRequestID == requestID {
+                        isVoiceRequested = false
+                    }
+                    return
+                }
                 send(RemoteWireMessage(type: "voiceStart"))
                 didSendVoiceStart = true
                 diagnostics.record("voice_state", fields: ["state": "start_sent"])
@@ -360,6 +371,9 @@ final class RemoteMacConnection: ObservableObject {
                 guard voiceRequestID == requestID, isConnected else {
                     microphone.stop()
                     send(RemoteWireMessage(type: "voiceStop"))
+                    if voiceRequestID == requestID {
+                        isVoiceRequested = false
+                    }
                     diagnostics.record("voice_state", fields: ["state": "cancelled_after_start"])
                     return
                 }
@@ -370,6 +384,7 @@ final class RemoteMacConnection: ObservableObject {
                 if didSendVoiceStart {
                     send(RemoteWireMessage(type: "voiceStop"))
                 }
+                isVoiceRequested = false
                 isVoiceActive = false
                 diagnostics.record("voice_state", fields: [
                     "error": DiagnosticsLogger.errorCode(error),
@@ -394,6 +409,7 @@ final class RemoteMacConnection: ObservableObject {
     func endVoice() {
         voiceRequestID &+= 1
         let wasActive = isVoiceActive
+        isVoiceRequested = false
         microphone.stop()
         isVoiceActive = false
         if wasActive {

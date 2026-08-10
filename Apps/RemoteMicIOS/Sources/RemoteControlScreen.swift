@@ -235,7 +235,10 @@ struct RemoteControlScreen: View {
 
     private var primaryControls: some View {
         HStack(spacing: 16) {
-            VoiceButton(isActive: connection.isVoiceActive) { isPressed in
+            VoiceButton(
+                isRequested: connection.isVoiceRequested,
+                isRecording: connection.isVoiceActive
+            ) { isPressed in
                 setVoiceActive(isPressed)
             }
             .frame(maxWidth: .infinity)

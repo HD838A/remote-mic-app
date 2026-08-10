@@ -449,15 +449,71 @@ struct MiddleControlButton: View {
     }
 }
 
+struct VoiceButtonInteractionState: Equatable {
+    enum Phase: Equatable {
+        case idle
+        case pressing(startedAt: TimeInterval)
+        case latched
+        case stopping
+    }
+
+    enum Action: Equatable {
+        case none
+        case start
+        case stop
+    }
+
+    static let holdThreshold: TimeInterval = 0.35
+
+    private(set) var phase: Phase = .idle
+
+    var isLatched: Bool {
+        phase == .latched
+    }
+
+    mutating func press(at time: TimeInterval, isVoiceRequested: Bool) -> Action {
+        if isVoiceRequested {
+            phase = .stopping
+            return .stop
+        }
+        phase = .pressing(startedAt: time)
+        return .start
+    }
+
+    mutating func release(at time: TimeInterval) -> Action {
+        switch phase {
+        case let .pressing(startedAt):
+            if time - startedAt >= Self.holdThreshold {
+                phase = .idle
+                return .stop
+            }
+            phase = .latched
+            return .none
+        case .stopping:
+            phase = .idle
+            return .none
+        case .idle, .latched:
+            return .none
+        }
+    }
+
+    mutating func reset() {
+        phase = .idle
+    }
+}
+
 struct VoiceButton: View {
-    let isActive: Bool
+    let isRequested: Bool
+    let isRecording: Bool
     let onPressChanged: (Bool) -> Void
 
     @State private var isTrackingPress = false
+    @State private var interaction = VoiceButtonInteractionState()
     @Environment(\.appLanguage) private var language
 
     var body: some View {
-        let visualActive = isActive || isTrackingPress
+        let visualActive = isRequested || isTrackingPress
+        let usesTapToStop = interaction.isLatched || (isRequested && !isTrackingPress)
 
         Button {} label: {
             ZStack {
@@ -484,9 +540,13 @@ struct VoiceButton: View {
                     Image(systemName: visualActive ? "waveform" : "mic.fill")
                         .font(.system(size: 45, weight: .medium))
                         .scaleEffect(visualActive ? 1.12 : 1)
-                    Text(language.text(visualActive ? "正在说话" : "按住说话"))
+                    Text(language.text(primaryTitle))
                         .font(.system(size: 24, weight: .bold))
-                    Text(language.text("松手停止"))
+                    Text(language.text(
+                        isTrackingPress
+                            ? "松手停止"
+                            : usesTapToStop ? "再次点按停止" : "点按或按住"
+                    ))
                         .font(.system(size: 15, weight: .medium))
                         .opacity(0.9)
                 }
@@ -500,14 +560,36 @@ struct VoiceButton: View {
         .buttonStyle(TactileButtonStyle(showsPressedVisuals: false) { isPressed in
             guard isTrackingPress != isPressed else { return }
             isTrackingPress = isPressed
-            onPressChanged(isPressed)
+            let time = ProcessInfo.processInfo.systemUptime
+            let action = isPressed
+                ? interaction.press(at: time, isVoiceRequested: isRequested)
+                : interaction.release(at: time)
+            switch action {
+            case .start: onPressChanged(true)
+            case .stop: onPressChanged(false)
+            case .none: break
+            }
         })
         .animation(.spring(response: 0.18, dampingFraction: 0.72), value: visualActive)
-        .accessibilityLabel(language.text("按住说话"))
-        .accessibilityValue(language.text(isActive ? "正在录音" : isTrackingPress ? "正在准备" : "未录音"))
-        .accessibilityAction {
-            onPressChanged(!isActive)
+        .remoteOnChange(of: isRequested) { requested in
+            if !requested && !isTrackingPress {
+                interaction.reset()
+            }
         }
+        .accessibilityLabel(language.text("录音"))
+        .accessibilityValue(language.text(
+            isRecording ? "正在录音" : isRequested || isTrackingPress ? "正在准备" : "未录音"
+        ))
+        .accessibilityAction {
+            onPressChanged(!isRequested)
+        }
+    }
+
+    private var primaryTitle: String {
+        if isTrackingPress { return "正在说话" }
+        if isRecording { return "正在录音" }
+        if isRequested { return "正在准备" }
+        return "开始录音"
     }
 }
 
