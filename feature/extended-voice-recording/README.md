@@ -3,6 +3,7 @@
 - 状态：等待人工验收
 - 平台：macOS、iOS
 - 对应任务：根目录 [`TODO.md`](../../TODO.md) 中“普通遥控器语音键突破一分钟录音限制”和手机伴侣 App 语音交互
+- 人工测试手册：[`Testing/ExtendedVoiceRecording.md`](../../Testing/ExtendedVoiceRecording.md)
 
 ## 为什么开发
 
