@@ -20,6 +20,8 @@ DMG="$OUTPUT_DIR/Remote-Mic-$VERSION.dmg"
 DMG_CHECKSUM="$DMG.sha256"
 UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION.zip"
 APPCAST="$OUTPUT_DIR/appcast.xml"
+ZH_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.zh.txt"
+EN_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.en.txt"
 DOWNLOAD_PREFIX="https://github.com/$REPOSITORY/releases/download/$RELEASE_TAG/"
 
 if [[ "$#" -ne 1 || \
@@ -69,6 +71,8 @@ verify_local_artifacts() {
   test -f "$DMG_CHECKSUM"
   test -f "$UPDATE_ZIP"
   test -f "$APPCAST"
+  test -f "$ZH_RELEASE_NOTES"
+  test -f "$EN_RELEASE_NOTES"
 
   export EXPECTED_DEVELOPER_TEAM_ID REQUIRE_DEVELOPER_ID_SIGNING=1 REQUIRE_NOTARIZATION=1
   "$ROOT/scripts/verify-app.sh" "$APP"
@@ -77,6 +81,8 @@ verify_local_artifacts() {
   "$ROOT/scripts/verify-dmg.sh" "$DMG"
 
   rg -Fq "url=\"$DOWNLOAD_PREFIX${UPDATE_ZIP:t}\"" "$APPCAST"
+  rg -Fq "$DOWNLOAD_PREFIX${ZH_RELEASE_NOTES:t}" "$APPCAST"
+  rg -Fq "$DOWNLOAD_PREFIX${EN_RELEASE_NOTES:t}" "$APPCAST"
   rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
   rg -Fq "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$APPCAST"
 }
@@ -90,6 +96,10 @@ stage_assets() {
   /usr/bin/ditto --norsrc --noqtn --noacl "$DMG_CHECKSUM" "$STAGING_DIR/${DMG_CHECKSUM:t}"
   /usr/bin/ditto --norsrc --noqtn --noacl "$UPDATE_ZIP" "$STAGING_DIR/${UPDATE_ZIP:t}"
   /usr/bin/ditto --norsrc --noqtn --noacl "$APPCAST" "$STAGING_DIR/appcast.xml"
+  /usr/bin/ditto --norsrc --noqtn --noacl \
+    "$ZH_RELEASE_NOTES" "$STAGING_DIR/${ZH_RELEASE_NOTES:t}"
+  /usr/bin/ditto --norsrc --noqtn --noacl \
+    "$EN_RELEASE_NOTES" "$STAGING_DIR/${EN_RELEASE_NOTES:t}"
 
   cmp -s "$INSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Installer.pkg"
   cmp -s "$UNINSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Uninstaller.pkg"
@@ -97,6 +107,8 @@ stage_assets() {
   cmp -s "$DMG_CHECKSUM" "$STAGING_DIR/${DMG_CHECKSUM:t}"
   cmp -s "$UPDATE_ZIP" "$STAGING_DIR/${UPDATE_ZIP:t}"
   cmp -s "$APPCAST" "$STAGING_DIR/appcast.xml"
+  cmp -s "$ZH_RELEASE_NOTES" "$STAGING_DIR/${ZH_RELEASE_NOTES:t}"
+  cmp -s "$EN_RELEASE_NOTES" "$STAGING_DIR/${EN_RELEASE_NOTES:t}"
 }
 
 generate_release_notes() {
@@ -161,7 +173,7 @@ download_and_compare() {
     test -f "$downloaded"
     cmp -s "$expected" "$downloaded"
   done
-  test "$(find "$DOWNLOAD_DIR" -type f | wc -l | tr -d ' ')" = "6"
+  test "$(find "$DOWNLOAD_DIR" -type f | wc -l | tr -d ' ')" = "8"
 
   curl -fsSL "${DOWNLOAD_PREFIX}appcast.xml" -o "$WORK_DIR/tag-appcast.xml"
   cmp -s "$STAGING_DIR/appcast.xml" "$WORK_DIR/tag-appcast.xml"
@@ -200,6 +212,8 @@ if [[ "$MODE" == "prerelease" || "$MODE" == "release" ]]; then
     "$STAGING_DIR/${DMG:t}" \
     "$STAGING_DIR/${DMG_CHECKSUM:t}" \
     "$STAGING_DIR/appcast.xml" \
+    "$STAGING_DIR/${ZH_RELEASE_NOTES:t}" \
+    "$STAGING_DIR/${EN_RELEASE_NOTES:t}" \
     --repo "$REPOSITORY" \
     --verify-tag \
     --prerelease \

@@ -110,4 +110,30 @@ struct BuildSigningTests {
         let promotionIndex = try #require(publishSource.range(of: "gh release edit"))
         #expect(candidateIndex.lowerBound < promotionIndex.lowerBound)
     }
+
+    @Test func releasePublishesLocalizedUpdateNotesWithImmutableURLs() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let notarizeSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/notarize-release.sh"),
+            encoding: .utf8
+        )
+        let publishSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/publish-release.sh"),
+            encoding: .utf8
+        )
+
+        for requiredText in [
+            "Remote-Mic-$VERSION.zh.txt",
+            "Remote-Mic-$VERSION.en.txt",
+            "--release-notes-url-prefix \"$DOWNLOAD_PREFIX\"",
+        ] {
+            #expect(notarizeSource.contains(requiredText))
+        }
+        #expect(publishSource.contains("$STAGING_DIR/${ZH_RELEASE_NOTES:t}"))
+        #expect(publishSource.contains("$STAGING_DIR/${EN_RELEASE_NOTES:t}"))
+        #expect(publishSource.contains("= \"8\""))
+    }
 }

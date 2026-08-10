@@ -15,6 +15,8 @@ UNINSTALL_PACKAGE="$OUTPUT_DIR/Uninstall Remote Mic.pkg"
 DMG="$OUTPUT_DIR/Remote-Mic-$VERSION.dmg"
 UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION.zip"
 APPCAST="$OUTPUT_DIR/appcast.xml"
+ZH_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.zh.txt"
+EN_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.en.txt"
 ZIP_BASENAME="${UPDATE_ZIP:t}"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:?Set CODE_SIGN_IDENTITY to a Developer ID Application identity}"
 INSTALLER_SIGNING_IDENTITY="${INSTALLER_SIGNING_IDENTITY:?Set INSTALLER_SIGNING_IDENTITY to a Developer ID Installer identity}"
@@ -90,6 +92,8 @@ fi
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-notarize-release.XXXXXX)"
 APP_NOTARY_ZIP="$WORK_DIR/Remote-Mic-$VERSION-notarization.zip"
 SPARKLE_ARCHIVES="$WORK_DIR/sparkle-archives"
+ZH_NOTES_BASENAME="${ZH_RELEASE_NOTES:t}"
+EN_NOTES_BASENAME="${EN_RELEASE_NOTES:t}"
 
 cleanup() {
   case "$WORK_DIR" in
@@ -111,6 +115,17 @@ staple_and_validate() {
   local artifact="$1"
   xcrun stapler staple "$artifact"
   xcrun stapler validate "$artifact"
+}
+
+extract_release_notes() {
+  local source_file="$1"
+  local destination_file="$2"
+  /usr/bin/awk -v version="$VERSION" '
+    index($0, "## " version) == 1 { active = 1; next }
+    active && /^## / { exit }
+    active && /^- / { print }
+  ' "$source_file" > "$destination_file"
+  rg -q '^- ' "$destination_file"
 }
 
 export CODE_SIGN_IDENTITY
@@ -172,22 +187,35 @@ case "$APPCAST" in
   "$OUTPUT_DIR"/appcast.xml) ;;
   *) print -u2 "refusing to replace unexpected appcast path: $APPCAST"; exit 1 ;;
 esac
-/bin/rm -f -- "$UPDATE_ZIP" "$APPCAST"
+/bin/rm -f -- "$UPDATE_ZIP" "$APPCAST" "$ZH_RELEASE_NOTES" "$EN_RELEASE_NOTES"
 /usr/bin/ditto -c -k --keepParent "$APP" "$UPDATE_ZIP"
 /bin/mkdir -p "$SPARKLE_ARCHIVES"
 /usr/bin/ditto --norsrc --noqtn --noacl "$UPDATE_ZIP" "$SPARKLE_ARCHIVES/$ZIP_BASENAME"
+extract_release_notes \
+  "$ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md" \
+  "$SPARKLE_ARCHIVES/$ZH_NOTES_BASENAME"
+extract_release_notes \
+  "$ROOT/Resources/en.lproj/ReleaseHistory.md" \
+  "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME"
 "$GENERATE_APPCAST" \
   --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" \
   --download-url-prefix "$DOWNLOAD_PREFIX" \
+  --release-notes-url-prefix "$DOWNLOAD_PREFIX" \
   --link "$RELEASE_PAGE" \
   --versions "$BUILD" \
   --maximum-versions 1 \
   -o "$APPCAST" \
   "$SPARKLE_ARCHIVES"
+/usr/bin/ditto --norsrc --noqtn --noacl \
+  "$SPARKLE_ARCHIVES/$ZH_NOTES_BASENAME" "$ZH_RELEASE_NOTES"
+/usr/bin/ditto --norsrc --noqtn --noacl \
+  "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME" "$EN_RELEASE_NOTES"
 
 ENCLOSURE_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$APPCAST" | head -n 1)"
 test -n "$ENCLOSURE_SIGNATURE"
 rg -Fq "url=\"$DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
+rg -Fq "$DOWNLOAD_PREFIX$ZH_NOTES_BASENAME" "$APPCAST"
+rg -Fq "$DOWNLOAD_PREFIX$EN_NOTES_BASENAME" "$APPCAST"
 rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
 "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$UPDATE_ZIP" "$ENCLOSURE_SIGNATURE"
 "$SIGN_UPDATE" --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
@@ -201,3 +229,5 @@ print "INSTALL PACKAGE: $INSTALL_PACKAGE"
 print "UNINSTALL PACKAGE: $UNINSTALL_PACKAGE"
 print "SPARKLE ZIP: $UPDATE_ZIP"
 print "APPCAST: $APPCAST"
+print "ZH RELEASE NOTES: $ZH_RELEASE_NOTES"
+print "EN RELEASE NOTES: $EN_RELEASE_NOTES"
