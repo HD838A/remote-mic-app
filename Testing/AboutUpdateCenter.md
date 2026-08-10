@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 集成分支：`codex/integrate-about-1.8.7`
+- 候选分支：`codex/release-1.8.7`
 - 目标版本：macOS `1.8.7 (68)` Pre-release
 - 测试目标：验证关于页版本中心、正式/预发布更新通道、本地化更新内容和跨版本 Sparkle 安装。
 
