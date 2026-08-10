@@ -57,7 +57,7 @@
 | 2026-08-09 | [Post-fix Multi-Remote HID Report Routing Regression](./2026-08-09-post-fix-multi-remote-hid-routing.md) | 已修复 |
 | 2026-08-09 | [RC001 Short Voice Stream Tail Dropped on STREAM_STOP](./2026-08-09-rc001-short-voice-stream-tail-dropped.md) | 已修复，模拟与真机回归通过 |
 | 2026-08-10 | [Unbound Multi-Remote Button Actions Are Ignored](./2026-08-10-unbound-multi-remote-actions-ignored.md) | 已修复，双遥控器真机复验通过 |
-| 2026-08-10 | [Upgrade Leaves Custom Button Mapping Inactive](./2026-08-10-upgrade-custom-mapping-not-activated.md) | 已修复，待签名候选升级验证 |
+| 2026-08-10 | [Upgrade Leaves Custom Button Mapping Inactive](./2026-08-10-upgrade-custom-mapping-not-activated.md) | 已修复，签名升级验证通过；待实体按键确认 |
 
 ## 记录模板
 

@@ -1,7 +1,7 @@
 # Upgrade Leaves Custom Button Mapping Inactive
 
 - 时间：2026-08-10
-- 状态：已修复，待最终签名候选升级验证
+- 状态：已修复，签名候选升级验证通过；待用户实体按键确认
 - 影响范围：macOS 1.8.2；从旧预览版通过 Sparkle 升级且升级前已开启自定义按键
 - 功能点：更新后 HID 监听恢复
 - 简单描述：升级完成后开关仍显示开启，但实体遥控器动作不生效；手动关闭再开启后恢复。
@@ -73,4 +73,9 @@ App 只在新进程启动时立即调用一次 `applyHIDSettings()`，并把“I
 - 修复后启动状态回放：将上一启动 build 设为 62，启动 build 63 的本地 App；日志确认无需切换开关即按顺序产生 `HID UPDATE RECOVERY scheduled delay_ms=2000`、新的 `HID START` 和 `HID UPDATE RECOVERY applied`，启动 build 自动保存为 63。
 - 专项测试：`swift test --filter completedUpdateRecoversOnlyPersistentlyEnabledHIDMappingAfterStartup` 通过，覆盖只有“升级完成 + 开关开启”才恢复，并验证恢复发生在初次 `startIfNeeded()` 之后。
 - 完整自动化：`swift test` 157 项通过；`./scripts/test.sh` 42 项通过；Production App 构建及 `./scripts/verify-app.sh` 通过；`git diff --check` 通过。
-- 待完成：最终 Developer ID 签名、公证、ZIP/DMG/PKG 校验及签名候选 Sparkle 升级。当前自动化不能代替用户实体遥控器按键验收；发布 Preview 后仍需用户确认升级后的第一枚真实按键无需切换开关即可执行。
+- 最终签名候选：Developer ID App、安装 PKG、卸载 PKG 和 DMG 均通过 Apple 公证、staple、Gatekeeper 与项目校验；Sparkle ZIP 的 EdDSA 签名和 appcast 签名验证通过。
+- 精确签名升级：从 GitHub 官方 `Remote-Mic-1.8.2.zip` 解包 build 63，通过 Sparkle CLI 和最终 build 64 ZIP 执行真实原位更新。更新后的 App 保持 `customMappingEnabled = 1`，版本为 `1.8.3 (64)`，Developer ID 与公证验证通过；日志自动产生 `HID UPDATE RECOVERY scheduled delay_ms=2000`、新的 `HID START` 和 `HID UPDATE RECOVERY applied`，无需修改持久化开关。
+- 最终包启动门禁：最终 ZIP 与 DMG 内 App 各启动两次，每次运行至少 15 秒后正常退出；四次均记录 `APP START version=1.8.3` 和 `HID START mode=adaptive`，没有新增 RemoteMic 崩溃报告。
+- PKG 等价：安装 PKG 中的 App 与最终 ZIP App 的路径集合、文件字节、符号链接目标、文件类型和权限模式完全一致。
+- 发布前 dry-run：重新验证六个待上传资产、版本、build、签名、公证、DMG checksum、appcast 和中英文 Release History；生成的 Release Note 包含本 Bug 修复。
+- 边界：本机无法代替用户按实体遥控器；系统级 virtual HID 需要 Apple 专用 entitlement。Preview 发布后仍需用户确认升级后的第一枚真实按键无需切换开关即可执行，自动化与签名升级验证不冒充该项真机验收。
