@@ -1,5 +1,10 @@
 # Version History
 
+## 1.8.5 (Pre-release)
+
+- Physical remote voice sessions are now renewed periodically to try to continue beyond the roughly one-minute limit, with an initial maximum of three minutes.
+- Remote Mic for iPhone now supports tap to start and tap again to stop, while retaining hold-to-talk and release-to-stop.
+
 ## 1.8.4 (Pre-release)
 
 - Added Command-W, Command-X, Command-A, Command-Z, Command-Shift-Z, Command-F, and Command-S to Basic Keys, so common window, editing, search, and save actions can be mapped directly to remote buttons.

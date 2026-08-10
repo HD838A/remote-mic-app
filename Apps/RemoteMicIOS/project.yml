@@ -28,8 +28,8 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Resources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CURRENT_PROJECT_VERSION: 9
-        MARKETING_VERSION: 0.8.9
+        CURRENT_PROJECT_VERSION: 10
+        MARKETING_VERSION: 0.8.10
         TARGETED_DEVICE_FAMILY: "1,2"
   RemoteMicIOSTests:
     type: bundle.unit-test

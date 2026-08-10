@@ -35,7 +35,7 @@ Xcode Cloud 工作流使用以下固定配置：
 - Distribution Preparation：`App Store Connect`（构建可用于内部及外部 TestFlight）
 - Post-action：分发到 App Store Connect 内部测试组 `Internal Beta`
 - Build Number：由 Xcode Cloud 自动分配，不在仓库脚本中改写
-- 当前发布版本：`0.8.9`
+- 当前发布版本：`0.8.10`
 
 日常开发不直接在 `release/testflight` 上进行。只有经过确认的提交进入该分支并 Push 后，才会触发 TestFlight 构建。
 
