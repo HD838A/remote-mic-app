@@ -17,7 +17,7 @@
 - The settings UI uses a narrow sidebar, header, and layered content areas. The primary actions on all five pages remain available at the minimum window size. Pages remain scrollable without showing scroll bars.
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
 - It uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
-- The window keeps native traffic-light controls and a meaningful logical title while hiding the visible title and titlebar separator. Page backgrounds extend to the top, blank titlebar content remains draggable, and interactive content stays clear of the window controls.
+- The window keeps native traffic-light controls and a meaningful logical title while hiding the visible title and titlebar separator. Page backgrounds extend to the top, only the dedicated blank titlebar region remains draggable, page content and controls do not move the whole window, and interactive content stays clear of the window controls.
 - Panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
