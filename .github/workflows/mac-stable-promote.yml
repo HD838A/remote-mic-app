@@ -1,0 +1,82 @@
+name: macOS Stable Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing pre-release tag to promote, for example v1.8.8
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["macOS CI"]
+    types: [completed]
+
+concurrency:
+  group: mac-stable-promotion-${{ inputs.tag || github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       startsWith(github.event.workflow_run.head_branch, 'release/pre-v'))
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve and merge approved candidate
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          CANDIDATE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if [[ -n "$REQUESTED_TAG" ]]; then
+            tag="$REQUESTED_TAG"
+          else
+            pr_json="$(gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --head "$CANDIDATE_BRANCH" \
+              --base main \
+              --state all \
+              --json number,state,mergedAt,labels,headRefName \
+              --jq '[.[] | select(.headRefName == env.CANDIDATE_BRANCH and any(.labels[]; .name == "stable-promotion-approved"))][0]')"
+            if [[ -z "$pr_json" || "$pr_json" == "null" ]]; then
+              echo "no approved stable-promotion PR exists for $CANDIDATE_BRANCH" >&2
+              exit 1
+            fi
+            pr_number="$(jq -r '.number' <<< "$pr_json")"
+            pr_state="$(jq -r '.state' <<< "$pr_json")"
+            if [[ "$pr_state" == "OPEN" ]]; then
+              gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --merge
+            elif [[ "$(jq -r '.mergedAt // empty' <<< "$pr_json")" == "" ]]; then
+              echo "approved PR #$pr_number was closed without merging" >&2
+              exit 1
+            fi
+            tag="v${CANDIDATE_BRANCH#release/pre-v}"
+          fi
+          if [[ ! "$tag" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
+            echo "invalid stable promotion tag: $tag" >&2
+            exit 1
+          fi
+          git fetch origin main --tags
+          git merge --ff-only origin/main
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Promote unchanged candidate assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: ./scripts/publish-release.sh promote
