@@ -1,4 +1,5 @@
 #if canImport(HardwareSimulation) && canImport(XiaomiVoiceRemoteSimulation)
+import CoreGraphics
 import Foundation
 import HardwareSimulation
 import Testing
@@ -215,6 +216,104 @@ struct HardwareSimulationIntegrationTests {
         #expect(result.scheduler.pendingTaskCount == 0)
     }
 
+    @Test(arguments: [XiaomiVoiceRemoteButton.left, .right])
+    func leftAndRightRepeatTheirArrowActionsWithoutSecondaryGestures(
+        _ simulatedButton: XiaomiVoiceRemoteButton
+    ) throws {
+        let button = try #require(RemoteButton(rawValue: simulatedButton.rawValue))
+        let action: ButtonAction = button == .left ? .arrowLeft : .arrowRight
+        let result = try driveHIDScenario(
+            XiaomiVoiceRemoteFixture.hidRepeatScenario(button: simulatedButton)
+        ) { settings in
+            settings.setAction(action, for: button, trigger: .singleClick)
+            settings.setAction(.disabled, for: button, trigger: .doubleClick)
+            settings.setAction(.disabled, for: button, trigger: .longPress)
+        }
+        let interval = try #require(HIDRemoteTiming.repeatIntervalMilliseconds(for: button))
+        let firstRepeatAt = 10 + HIDRemoteTiming.repeatStartMilliseconds
+        let releaseAt: UInt64 = 760
+        let repeatCount = Int((releaseAt - firstRepeatAt) / interval) + 1
+
+        #expect(result.events.count == 1 + repeatCount)
+        #expect(result.events.allSatisfy {
+            $0 == HIDPerformedAction(
+                button: button,
+                trigger: .singleClick,
+                action: action
+            )
+        })
+        #expect(result.scheduler.pendingTaskCount == 0)
+    }
+
+    @Test(arguments: [XiaomiVoiceRemoteButton.left, .right])
+    func monitoredLeftAndRightUseNativeAutorepeatWhenTheirActionsMatch(
+        _ simulatedButton: XiaomiVoiceRemoteButton
+    ) throws {
+        let button = try #require(RemoteButton(rawValue: simulatedButton.rawValue))
+        let action: ButtonAction = button == .left ? .arrowLeft : .arrowRight
+        let result = try driveHIDScenario(
+            XiaomiVoiceRemoteFixture.hidRepeatScenario(button: simulatedButton),
+            isSeized: false
+        ) { settings in
+            settings.setAction(action, for: button, trigger: .singleClick)
+            settings.setAction(.disabled, for: button, trigger: .doubleClick)
+            settings.setAction(.disabled, for: button, trigger: .longPress)
+        }
+        let keyCode: CGKeyCode = button == .left ? 123 : 124
+        let nativeKeyDown = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: keyCode,
+            keyDown: true
+        ))
+
+        #expect(result.events.isEmpty)
+        #expect(!result.eventSuppressor.handle(type: .keyDown, event: nativeKeyDown))
+        #expect(result.scheduler.pendingTaskCount == 0)
+    }
+
+    @Test(arguments: [XiaomiVoiceRemoteButton.left, .right])
+    func monitoredDirectionsKeepCustomRepeatWithoutLeavingNativeKeysSuppressed(
+        _ simulatedButton: XiaomiVoiceRemoteButton
+    ) throws {
+        let button = try #require(RemoteButton(rawValue: simulatedButton.rawValue))
+        let result = try driveHIDScenario(
+            XiaomiVoiceRemoteFixture.hidRepeatScenario(button: simulatedButton),
+            isSeized: false
+        ) { settings in
+            settings.setAction(.volumeDown, for: button, trigger: .singleClick)
+            settings.setAction(.disabled, for: button, trigger: .doubleClick)
+            settings.setAction(.disabled, for: button, trigger: .longPress)
+        }
+        let keyCode: CGKeyCode = button == .left ? 123 : 124
+        let nativeKeyDown = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: keyCode,
+            keyDown: true
+        ))
+
+        #expect(result.events.count == 6)
+        #expect(result.events.allSatisfy { $0.action == .volumeDown })
+        #expect(!result.eventSuppressor.handle(type: .keyDown, event: nativeKeyDown))
+        #expect(result.scheduler.pendingTaskCount == 0)
+    }
+
+    @Test func monitoredLeftStillUsesAppPolicyWhenRemoteMicIsFrontmost() throws {
+        let result = try driveHIDScenario(
+            XiaomiVoiceRemoteFixture.hidRepeatScenario(button: .left),
+            isSeized: false,
+            frontmostBundleIdentifier: PresetApplication.remoteMic.bundleIdentifier
+        ) { settings in
+            settings.setAction(.arrowLeft, for: .left, trigger: .singleClick)
+            settings.setAction(.disabled, for: .left, trigger: .doubleClick)
+            settings.setAction(.disabled, for: .left, trigger: .longPress)
+        }
+
+        #expect(result.events == [
+            HIDPerformedAction(button: .left, trigger: .singleClick, action: .arrowLeft)
+        ])
+        #expect(result.scheduler.pendingTaskCount == 0)
+    }
+
     @Test func malformedReportsAreIgnoredAndDisconnectCancelsPendingGestures() throws {
         for scenario in XiaomiVoiceRemoteFixture.hidMalformedReportScenarios() {
             let result = try driveHIDScenario(scenario) { _ in }
@@ -412,6 +511,8 @@ struct HardwareSimulationIntegrationTests {
 
     private func driveHIDScenario(
         _ scenario: HardwareScenario,
+        isSeized: Bool = true,
+        frontmostBundleIdentifier: String = PresetApplication.codex.bundleIdentifier,
         configure: (AppSettings) -> Void
     ) throws -> HIDScenarioResult {
         let suiteName = "HardwareSimulationIntegrationTests.\(UUID().uuidString)"
@@ -423,9 +524,11 @@ struct HardwareSimulationIntegrationTests {
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = TestHIDRemoteScheduler()
         let recorder = HIDActionRecorder()
+        let eventSuppressor = KeyboardEventSuppressor()
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
+            eventSuppressor: eventSuppressor,
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
@@ -437,11 +540,12 @@ struct HardwareSimulationIntegrationTests {
                 ))
                 return true
             },
-            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier }
+            frontmostBundleIdentifier: { frontmostBundleIdentifier }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "fixture-device-1",
-            profileID: profileID
+            profileID: profileID,
+            isSeized: isSeized
         )
 
         let runner = try HardwareScenarioRunner(
@@ -457,7 +561,11 @@ struct HardwareSimulationIntegrationTests {
             }
         }
         scheduler.advance(toMilliseconds: scenario.durationMilliseconds ?? runner.currentTimeMilliseconds)
-        return HIDScenarioResult(events: recorder.events, scheduler: scheduler)
+        return HIDScenarioResult(
+            events: recorder.events,
+            scheduler: scheduler,
+            eventSuppressor: eventSuppressor
+        )
     }
 }
 
@@ -470,6 +578,7 @@ private struct HIDPerformedAction: Equatable {
 private struct HIDScenarioResult {
     let events: [HIDPerformedAction]
     let scheduler: TestHIDRemoteScheduler
+    let eventSuppressor: KeyboardEventSuppressor
 }
 
 private final class HIDActionRecorder {

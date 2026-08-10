@@ -1,5 +1,11 @@
 # Version History
 
+## 1.8.6 (Pre-release)
+
+- Fixed holding the remote's Left or Right button not continuously moving the text cursor in input fields of other apps. Matching arrow mappings now use macOS native key repeat.
+- Shortcut capture now starts only after clicking Record Shortcut and can record combinations already reserved by macOS or another app, such as Command-Space, with clear success feedback.
+- Fixed dragging the gain slider or settings-page content moving the entire window. Only the dedicated top area remains draggable.
+
 ## 1.8.5 (Pre-release)
 
 - Physical remote voice sessions are now renewed periodically to try to continue beyond the roughly one-minute limit, with an initial maximum of three minutes.

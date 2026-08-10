@@ -61,6 +61,16 @@ private struct ShortcutEditingTarget: Identifiable, Equatable {
     var id: String { "\(button.rawValue)-\(trigger.rawValue)" }
 }
 
+private struct ShortcutCaptureFeedback: Equatable {
+    enum Result: Equatable {
+        case succeeded
+        case failed(ShortcutCaptureStartFailure)
+    }
+
+    let contextID: String
+    let result: Result
+}
+
 private enum CustomApplicationLearningState: Equatable {
     case recording
     case succeeded
@@ -125,9 +135,11 @@ enum MappingPermissionPolicy {
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject private var updateInformation: UpdateInformationStore
     @EnvironmentObject private var localization: LocalizationStore
 
     private let checkForUpdates: () -> Void
+    private let refreshUpdateInformation: () -> Void
     private let setDockIconVisible: (Bool) -> Void
 
     @State private var selectedSection: SettingsSection = .connection
@@ -138,6 +150,7 @@ struct SettingsView: View {
     @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
+    @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -157,12 +170,16 @@ struct SettingsView: View {
 
     init(
         model: BridgeAppModel,
+        updateInformation: UpdateInformationStore,
         checkForUpdates: @escaping () -> Void = {},
+        refreshUpdateInformation: @escaping () -> Void = {},
         setDockIconVisible: @escaping (Bool) -> Void = { _ in }
     ) {
         self.model = model
         settings = model.settings
+        self.updateInformation = updateInformation
         self.checkForUpdates = checkForUpdates
+        self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
     }
 
@@ -330,7 +347,7 @@ struct SettingsView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            Color.clear
+            WindowDragArea()
                 .frame(height: 56)
                 .accessibilityHidden(true)
             ForEach(SettingsSection.allCases) { section in
@@ -1215,44 +1232,85 @@ struct SettingsView: View {
         configured: ConfiguredButtonAction
     ) -> some View {
         let target = ShortcutEditingTarget(button: button, trigger: trigger)
+        let contextID = target.id
         VStack(alignment: .leading, spacing: 10) {
-            Text("shortcut.editor.instructions")
+            Text("shortcut.editor.click_first_help")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
-                Text(
-                    configured.shortcut?.displayName(using: localization) ??
-                        localization.text("shortcut.editor.waiting")
-                )
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(configured.shortcut == nil ? Color.orange : Color.primary)
-                .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
-                .padding(.horizontal, 12)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
-
-                Button(shortcutCaptureTarget == target ? "shortcut.editor.waiting" : "shortcut.action.record") {
-                    shortcutCaptureTarget = target
-                }
-                .compatibilityButtonStyle(.prominent)
-
-                Button("common.action.clear") {
-                    settings.setShortcut(nil, for: button, trigger: trigger)
-                    shortcutCaptureTarget = nil
-                }
-                .compatibilityButtonStyle(.standard)
-                .disabled(configured.shortcut == nil)
-            }
-
             if shortcutCaptureTarget == target {
-                Label("shortcut.editor.instructions", systemImage: "keyboard")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-                ShortcutCaptureView { shortcut in
-                    settings.setShortcut(shortcut, for: button, trigger: trigger)
-                    shortcutCaptureTarget = nil
+                HStack(spacing: 10) {
+                    Label("shortcut.editor.recording_prompt", systemImage: "keyboard.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 10)
+
+                    Button("common.action.cancel") {
+                        shortcutCaptureTarget = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
                 }
+                .padding(12)
+                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+
+                ShortcutCaptureView(
+                    onCapture: { shortcut in
+                        settings.setShortcut(shortcut, for: button, trigger: trigger)
+                        AppLogger.shared.write("SHORTCUT CAPTURE completed target=button")
+                        shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                            contextID: contextID,
+                            result: .succeeded
+                        )
+                        shortcutCaptureTarget = nil
+                    },
+                    onFailure: { failure in
+                        AppLogger.shared.write("SHORTCUT CAPTURE failed reason=\(failure)")
+                        shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                            contextID: contextID,
+                            result: .failed(failure)
+                        )
+                        shortcutCaptureTarget = nil
+                        if failure == .accessibilityPermissionRequired {
+                            _ = KeyboardInjector.requestAccessibilityAccess()
+                        }
+                    }
+                )
                 .frame(height: 1)
+            } else {
+                HStack(spacing: 10) {
+                    Label {
+                        Text(
+                            configured.shortcut?.displayName(using: localization) ??
+                                localization.text("shortcut.editor.not_recorded")
+                        )
+                    } icon: {
+                        Image(systemName: configured.shortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
+                            .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.green)
+                    }
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.primary)
+                    .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+
+                    Button(configured.shortcut == nil ? "shortcut.action.record" : "shortcut.action.record_again") {
+                        applicationShortcutCaptureProfileID = nil
+                        shortcutCaptureFeedback = nil
+                        shortcutCaptureTarget = target
+                    }
+                    .compatibilityButtonStyle(.prominent)
+
+                    Button("common.action.clear") {
+                        settings.setShortcut(nil, for: button, trigger: trigger)
+                        shortcutCaptureFeedback = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(configured.shortcut == nil)
+                }
+
+                shortcutCaptureFeedbackView(contextID: contextID)
             }
         }
         .padding(12)
@@ -1393,52 +1451,112 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func inlineApplicationShortcutEditor(_ profile: CustomApplicationProfile) -> some View {
+        let contextID = "application-\(profile.id.uuidString)"
         VStack(alignment: .leading, spacing: 10) {
             Text("custom_application.shortcut.editor_instructions")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
-                Text(
-                    profile.focusShortcut?.displayName(using: localization) ??
-                        localization.text("shortcut.editor.waiting")
-                )
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(profile.focusShortcut == nil ? Color.orange : Color.primary)
-                .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
-                .padding(.horizontal, 12)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
-
-                Button(
-                    applicationShortcutCaptureProfileID == profile.id
-                        ? "shortcut.editor.waiting"
-                        : "shortcut.action.record"
-                ) {
-                    applicationShortcutCaptureProfileID = profile.id
-                }
-                .compatibilityButtonStyle(.prominent)
-
-                Button("common.action.clear") {
-                    var updated = profile
-                    updated.focusShortcut = nil
-                    settings.updateCustomApplicationProfile(updated)
-                    applicationShortcutCaptureProfileID = nil
-                }
-                .compatibilityButtonStyle(.standard)
-                .disabled(profile.focusShortcut == nil)
-            }
-
             if applicationShortcutCaptureProfileID == profile.id {
-                Label("shortcut.editor.instructions", systemImage: "keyboard")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-                ShortcutCaptureView { shortcut in
-                    guard var updated = settings.customApplicationProfile(id: profile.id) else { return }
-                    updated.focusShortcut = shortcut
-                    settings.updateCustomApplicationProfile(updated)
-                    applicationShortcutCaptureProfileID = nil
+                HStack(spacing: 10) {
+                    Label("shortcut.editor.recording_prompt", systemImage: "keyboard.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 10)
+
+                    Button("common.action.cancel") {
+                        applicationShortcutCaptureProfileID = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
                 }
+                .padding(12)
+                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+
+                ShortcutCaptureView(
+                    onCapture: { shortcut in
+                        guard var updated = settings.customApplicationProfile(id: profile.id) else { return }
+                        updated.focusShortcut = shortcut
+                        settings.updateCustomApplicationProfile(updated)
+                        AppLogger.shared.write("SHORTCUT CAPTURE completed target=application_focus")
+                        shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                            contextID: contextID,
+                            result: .succeeded
+                        )
+                        applicationShortcutCaptureProfileID = nil
+                    },
+                    onFailure: { failure in
+                        AppLogger.shared.write("SHORTCUT CAPTURE failed reason=\(failure)")
+                        shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                            contextID: contextID,
+                            result: .failed(failure)
+                        )
+                        applicationShortcutCaptureProfileID = nil
+                        if failure == .accessibilityPermissionRequired {
+                            _ = KeyboardInjector.requestAccessibilityAccess()
+                        }
+                    }
+                )
                 .frame(height: 1)
+            } else {
+                HStack(spacing: 10) {
+                    Label {
+                        Text(
+                            profile.focusShortcut?.displayName(using: localization) ??
+                                localization.text("shortcut.editor.not_recorded")
+                        )
+                    } icon: {
+                        Image(systemName: profile.focusShortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
+                            .foregroundStyle(profile.focusShortcut == nil ? Color.secondary : Color.green)
+                    }
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(profile.focusShortcut == nil ? Color.secondary : Color.primary)
+                    .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+
+                    Button(profile.focusShortcut == nil ? "shortcut.action.record" : "shortcut.action.record_again") {
+                        shortcutCaptureTarget = nil
+                        shortcutCaptureFeedback = nil
+                        applicationShortcutCaptureProfileID = profile.id
+                    }
+                    .compatibilityButtonStyle(.prominent)
+
+                    Button("common.action.clear") {
+                        var updated = profile
+                        updated.focusShortcut = nil
+                        settings.updateCustomApplicationProfile(updated)
+                        shortcutCaptureFeedback = nil
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(profile.focusShortcut == nil)
+                }
+
+                shortcutCaptureFeedbackView(contextID: contextID)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func shortcutCaptureFeedbackView(contextID: String) -> some View {
+        if shortcutCaptureFeedback?.contextID == contextID,
+           let result = shortcutCaptureFeedback?.result {
+            switch result {
+            case .succeeded:
+                Label("shortcut.editor.success", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.green)
+            case .failed(.accessibilityPermissionRequired):
+                Label("shortcut.editor.permission_required", systemImage: "lock.trianglebadge.exclamationmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .failed(.eventTapUnavailable):
+                Label("shortcut.editor.capture_unavailable", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -1852,215 +1970,345 @@ struct SettingsView: View {
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
                 VStack(spacing: 14) {
-                        GlassPanel {
-                            HStack(spacing: 20) {
-                                Image(nsImage: NSApp.applicationIconImage)
-                                    .resizable()
-                                    .frame(width: 88, height: 88)
-                                    .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                    HStack(spacing: 18) {
+                        Image(nsImage: NSApp.applicationIconImage)
+                            .resizable()
+                            .frame(width: 72, height: 72)
+                            .shadow(color: .black.opacity(0.14), radius: 10, y: 5)
 
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("app.name")
-                                        .font(.system(size: 28, weight: .semibold))
-                                    Text("about.page.hero_description")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                    HStack(spacing: 10) {
-                                        Link(destination: localization.localizedWebsiteURL) {
-                                            Label("about.support.website", systemImage: "globe")
-                                        }
-                                        .compatibilityButtonStyle(.prominent)
-
-                                        Link(
-                                            destination: AppLinks.githubRepository
-                                        ) {
-                                            Label("about.support.github", systemImage: "link")
-                                        }
-                                        .compatibilityButtonStyle(.standard)
-                                    }
-                                }
-
-                                Spacer(minLength: 20)
-
-                                Image(systemName: "waveform.and.mic")
-                                    .font(.system(size: 42, weight: .medium))
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 76, height: 76)
-                                    .compatibilityTintedGlass(
-                                        tint: Color.accentColor.opacity(0.12),
-                                        in: Circle()
-                                    )
-                            }
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("app.name")
+                                .font(.system(size: 28, weight: .semibold))
+                            Text("about.page.hero_description")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
 
-                        GlassPanel {
-                            VStack(alignment: .leading, spacing: 14) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("about.configuration.title")
-                                            .font(.headline)
-                                        Text("about.configuration.description")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "arrow.left.arrow.right.circle.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(Color.accentColor)
-                                }
+                        Spacer(minLength: 20)
 
-                                HStack(spacing: 10) {
-                                    Button(action: exportConfiguration) {
-                                        Label("about.configuration.export", systemImage: "square.and.arrow.up")
-                                    }
-                                    .compatibilityButtonStyle(.prominent)
-
-                                    Button(action: importConfiguration) {
-                                        Label("about.configuration.import", systemImage: "square.and.arrow.down")
-                                    }
-                                    .compatibilityButtonStyle(.standard)
-
-                                    Spacer()
-
-                                    if let configurationStatus {
-                                        Label(
-                                            configurationStatus.message.text(using: localization),
-                                            systemImage: configurationStatus.systemImage
-                                        )
-                                        .font(.caption)
-                                        .foregroundStyle(configurationStatus.tint)
-                                    }
-                                }
-                            }
+                        Link(destination: localization.localizedWebsiteURL) {
+                            Label("about.support.website", systemImage: "globe")
+                                .frame(minWidth: 104)
                         }
+                        .compatibilityButtonStyle(.prominent)
 
-                        HStack(alignment: .top, spacing: 14) {
-                            GlassPanel {
+                        Link(destination: AppLinks.githubRepository) {
+                            Label("about.support.github", systemImage: "link")
+                                .frame(minWidth: 104)
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                    .padding(.horizontal, 6)
+
+                    GlassPanel {
+                        VStack(spacing: 16) {
+                            HStack(alignment: .top, spacing: 24) {
                                 VStack(alignment: .leading, spacing: 14) {
-                                    Text("about.preferences.title")
-                                        .font(.headline)
-
-                                    Toggle("about.preferences.show_dock_icon", isOn: Binding(
-                                        get: { settings.showDockIcon },
-                                        set: { setDockIconVisible($0) }
-                                    ))
-
-                                    Text("about.preferences.show_dock_icon_help")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    Divider()
-
-                                    Toggle(
-                                        "about.preferences.open_main_window_at_launch",
-                                        isOn: $settings.openMainWindowAtLaunch
-                                    )
-
-                                    Text("about.preferences.open_main_window_help")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    Divider()
-
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("about.preferences.language")
-                                            .font(.subheadline.weight(.medium))
-                                        Picker("about.preferences.language", selection: Binding(
-                                            get: { localization.language },
-                                            set: { localization.select($0) }
-                                        )) {
-                                            ForEach(AppLanguage.allCases) { language in
-                                                Text(languageTitle(language)).tag(language)
-                                            }
-                                        }
-                                        .labelsHidden()
-                                        .pickerStyle(.segmented)
-                                    }
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .top)
-
-                            GlassPanel {
-                                VStack(alignment: .leading, spacing: 12) {
                                     Text("about.version.title")
                                         .font(.headline)
 
-                                    VStack(alignment: .leading, spacing: 10) {
-                                        Text(versionText)
-                                            .font(.title3.weight(.semibold).monospacedDigit())
-
-                                        Button(action: checkForUpdates) {
-                                            Label(
-                                                "menu.check_for_updates",
-                                                systemImage: "arrow.triangle.2.circlepath"
-                                            )
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        }
-                                        .compatibilityButtonStyle(.prominent)
-
-                                        Toggle(
-                                            "about.version.check_prerelease",
-                                            isOn: $settings.checksForPreReleaseUpdates
-                                        )
-
-                                        Text("about.version.check_prerelease_help")
-                                            .font(.caption)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("about.version.current")
+                                            .font(.subheadline)
                                             .foregroundStyle(.secondary)
+                                        Text(currentVersion)
+                                            .font(.system(size: 28, weight: .semibold))
+                                            .monospacedDigit()
                                     }
 
-                                    Divider()
+                                    if case let .available(update) = updateInformation.state {
+                                        HStack(spacing: 8) {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text("about.version.latest")
+                                                    .font(.subheadline)
+                                                    .foregroundStyle(.secondary)
+                                                Text(update.displayVersion)
+                                                    .font(.system(size: 28, weight: .semibold))
+                                                    .monospacedDigit()
+                                            }
+                                            StatusPill(
+                                                text: localization.text("about.version.available"),
+                                                tint: .green
+                                            )
+                                        }
 
-                                    Button {
-                                        isReleaseHistoryPresented = true
-                                    } label: {
-                                        Label("about.version.history", systemImage: "clock.arrow.circlepath")
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .compatibilityButtonStyle(.standard)
+                                        HStack(spacing: 10) {
+                                            Button(action: checkForUpdates) {
+                                                Text(String(
+                                                    format: localization.text("about.version.update_to"),
+                                                    locale: localization.locale,
+                                                    arguments: [update.displayVersion]
+                                                ))
+                                                .frame(maxWidth: .infinity)
+                                            }
+                                            .compatibilityButtonStyle(.prominent)
 
-                                    Button(action: openGlossary) {
-                                        Label("help.glossary.open", systemImage: "book.closed")
-                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            Button(
+                                                "about.version.recheck",
+                                                action: refreshUpdateInformation
+                                            )
+                                            .compatibilityButtonStyle(.standard)
+                                        }
+                                    } else {
+                                        HStack(spacing: 10) {
+                                            Button(action: checkForUpdates) {
+                                                Label(
+                                                    "menu.check_for_updates",
+                                                    systemImage: "arrow.triangle.2.circlepath"
+                                                )
+                                                .frame(maxWidth: .infinity)
+                                            }
+                                            .compatibilityButtonStyle(.prominent)
+
+                                            Button(
+                                                "about.version.recheck",
+                                                action: refreshUpdateInformation
+                                            )
+                                            .compatibilityButtonStyle(.standard)
+                                        }
                                     }
-                                    .compatibilityButtonStyle(.standard)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 12) {
+                                    updateInformationContent
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            Divider()
+
+                            HStack(spacing: 20) {
+                                Button {
+                                    isReleaseHistoryPresented = true
+                                } label: {
+                                    Label("about.version.history", systemImage: "clock.arrow.circlepath")
+                                }
+                                .compatibilityButtonStyle(.standard)
+
+                                Spacer()
+
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Toggle(
+                                        "about.version.check_prerelease",
+                                        isOn: $settings.checksForPreReleaseUpdates
+                                    )
+                                    .toggleStyle(.switch)
+                                    Text("about.version.check_prerelease_help_short")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
-                            .frame(width: 280, alignment: .top)
                         }
+                    }
+
+                    GlassPanel {
+                        VStack(spacing: 0) {
+                            HStack(spacing: 14) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.configuration.export")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.configuration.export_description")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("about.configuration.export", action: exportConfiguration)
+                                    .compatibilityButtonStyle(.standard)
+                                    .frame(width: 92)
+                            }
+                            .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "square.and.arrow.down")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.configuration.import")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.configuration.import_description")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("about.configuration.import", action: importConfiguration)
+                                    .compatibilityButtonStyle(.standard)
+                                    .frame(width: 92)
+                            }
+                            .padding(.vertical, 10)
+
+                            if let configurationStatus {
+                                Divider()
+                                Label(
+                                    configurationStatus.message.text(using: localization),
+                                    systemImage: configurationStatus.systemImage
+                                )
+                                .font(.caption)
+                                .foregroundStyle(configurationStatus.tint)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                            }
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "dock.rectangle")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.show_dock_icon")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.show_dock_icon_help")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { settings.showDockIcon },
+                                    set: { setDockIconVisible($0) }
+                                ))
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                            }
+                            .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "macwindow")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.open_main_window_at_launch")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.open_main_window_help")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Toggle("", isOn: $settings.openMainWindowAtLaunch)
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+                            }
+                            .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "globe")
+                                    .font(.title3)
+                                    .foregroundStyle(.green)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.language")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.language_description")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 20)
+                                Picker("about.preferences.language", selection: Binding(
+                                    get: { localization.language },
+                                    set: { localization.select($0) }
+                                )) {
+                                    ForEach(AppLanguage.allCases) { language in
+                                        Text(languageTitle(language)).tag(language)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.segmented)
+                                .frame(width: 400)
+                            }
+                            .padding(.vertical, 10)
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear(perform: refreshUpdateInformation)
+    }
+
+    @ViewBuilder
+    private var updateInformationContent: some View {
+        switch updateInformation.state {
+        case .idle:
+            Text("about.version.information_title")
+                .font(.headline)
+            Text("about.version.information_idle")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        case .checking:
+            Text("about.version.information_title")
+                .font(.headline)
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("about.version.checking")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        case .upToDate:
+            Label("about.version.up_to_date", systemImage: "checkmark.circle.fill")
+                .font(.headline)
+                .foregroundStyle(.green)
+            Text("about.version.up_to_date_description")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        case .unavailable:
+            Label("about.version.information_unavailable", systemImage: "wifi.exclamationmark")
+                .font(.headline)
+                .foregroundStyle(.orange)
+            Text("about.version.information_unavailable_description")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        case let .available(update):
+            Text(String(
+                format: localization.text("about.version.release_notes_title"),
+                locale: localization.locale,
+                arguments: [update.displayVersion]
+            ))
+            .font(.headline)
+
+            if update.releaseNotes.isEmpty {
+                Text("about.version.release_notes_unavailable")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(update.releaseNotes.enumerated()), id: \.offset) { index, note in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("\(index + 1)")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 24, height: 24)
+                            .background(Color.accentColor.opacity(0.13), in: Circle())
+                        Text(note)
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
     }
 
-    private var versionText: String {
-        let version = Bundle.main.object(
+    private var currentVersion: String {
+        Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? localization.text("common.value.unknown")
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        guard let build else {
-            return String(
-                format: localization.text("app.version"),
-                locale: localization.locale,
-                arguments: [version]
-            )
-        }
-        return String(
-            format: localization.text("app.version_with_build"),
-            locale: localization.locale,
-            arguments: [version, build]
-        )
     }
 
     private func languageTitle(_ language: AppLanguage) -> String {
         language == .system ? localization.text("language.system") : language.nativeDisplayName
-    }
-
-    private func openGlossary() {
-        guard let url = localization.localizedURL(
-            forResource: "Glossary",
-            withExtension: "md"
-        ) else { return }
-        NSWorkspace.shared.open(url)
     }
 
     private func buttonPressCountText(for period: UsageStatisticsPeriod) -> String {
@@ -2576,66 +2824,76 @@ private struct ReleaseHistorySection: Identifiable {
     var id: String { title }
 }
 
-private struct ShortcutCaptureView: NSViewRepresentable {
-    let onCapture: (CustomKeyboardShortcut) -> Void
+private final class WindowDragNSView: NSView {
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
+}
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onCapture: onCapture)
+private struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowDragNSView {
+        WindowDragNSView()
     }
 
-    func makeNSView(context: Context) -> ShortcutCaptureNSView {
-        let view = ShortcutCaptureNSView()
-        context.coordinator.view = view
+    func updateNSView(_ nsView: WindowDragNSView, context: Context) {}
+}
+
+private struct ShortcutCaptureView: NSViewRepresentable {
+    let onCapture: (CustomKeyboardShortcut) -> Void
+    let onFailure: (ShortcutCaptureStartFailure) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCapture: onCapture, onFailure: onFailure)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
         context.coordinator.startMonitoring()
         return view
     }
 
-    func updateNSView(_ nsView: ShortcutCaptureNSView, context: Context) {
+    func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.onCapture = onCapture
+        context.coordinator.onFailure = onFailure
     }
 
-    static func dismantleNSView(_ nsView: ShortcutCaptureNSView, coordinator: Coordinator) {
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         coordinator.stopMonitoring()
     }
 
     final class Coordinator {
         var onCapture: (CustomKeyboardShortcut) -> Void
-        weak var view: NSView?
-        private var monitor: Any?
+        var onFailure: (ShortcutCaptureStartFailure) -> Void
+        private var monitor: ShortcutCaptureMonitor?
 
-        init(onCapture: @escaping (CustomKeyboardShortcut) -> Void) {
+        init(
+            onCapture: @escaping (CustomKeyboardShortcut) -> Void,
+            onFailure: @escaping (ShortcutCaptureStartFailure) -> Void
+        ) {
             self.onCapture = onCapture
+            self.onFailure = onFailure
         }
 
         func startMonitoring() {
             guard monitor == nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard let self, event.window === self.view?.window else { return event }
-                self.onCapture(CustomKeyboardShortcut(event: event))
-                return nil
+            let capture = onCapture
+            let monitor = ShortcutCaptureMonitor(onCapture: capture)
+            self.monitor = monitor
+            if case let .failure(failure) = monitor.start() {
+                self.monitor = nil
+                DispatchQueue.main.async { [weak self] in
+                    self?.onFailure(failure)
+                }
             }
         }
 
         func stopMonitoring() {
-            guard let monitor else { return }
-            NSEvent.removeMonitor(monitor)
-            self.monitor = nil
+            monitor?.stop()
+            monitor = nil
         }
 
         deinit {
             stopMonitoring()
-        }
-    }
-}
-
-private final class ShortcutCaptureNSView: NSView {
-    override var acceptsFirstResponder: Bool { true }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.window?.makeFirstResponder(self)
         }
     }
 }

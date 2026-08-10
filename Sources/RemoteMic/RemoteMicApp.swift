@@ -46,24 +46,9 @@ enum RemoteMicApp {
 private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
     SPUUpdaterDelegate
 {
-    private struct GitHubRelease: Decodable {
-        struct Asset: Decodable {
-            let name: String
-            let browserDownloadURL: URL
-
-            private enum CodingKeys: String, CodingKey {
-                case name
-                case browserDownloadURL = "browser_download_url"
-            }
-        }
-
-        let draft: Bool
-        let assets: [Asset]
-    }
-
-    private enum UpdateFeedError: Error {
-        case invalidResponse
-        case feedNotFound
+    private enum UpdateCheckPurpose {
+        case information
+        case userInitiated
     }
 
     private static let releasesURL = URL(
@@ -72,6 +57,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private static let preReleaseFeedRefreshInterval: TimeInterval = 6 * 60 * 60
 
     private let model = BridgeAppModel()
+    private let updateInformation = UpdateInformationStore()
     private lazy var localization = LocalizationStore(settings: model.settings)
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu?
@@ -345,6 +331,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 self.settingsWindowController?.window?.title = self.localization.text("app.name")
                 self.configureApplicationMenu()
                 self.rebuildStatusMenu()
+                self.updateInformation.reloadReleaseNotes(
+                    localeIdentifier: self.localization.locale.identifier
+                )
             }
             .store(in: &subscriptions)
     }
@@ -383,13 +372,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 guard let self else { return }
                 updateFeedRefreshTask?.cancel()
                 updateFeedSelection.useStableFeed()
+                updateInformation.reset()
                 configurePreReleaseFeedRefreshTimer(isEnabled: isEnabled)
                 startUpdaterIfNeeded()
-                if isEnabled {
-                    refreshPreReleaseFeed(resetUpdateCycleWhenChanged: true)
-                } else {
-                    updaterController.updater.resetUpdateCycleAfterShortDelay()
-                }
+                updaterController.updater.resetUpdateCycleAfterShortDelay()
+                refreshUpdateInformation()
             }
             .store(in: &subscriptions)
     }
@@ -469,18 +456,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
-            throw UpdateFeedError.invalidResponse
+            throw UpdateFeedResolutionError.invalidResponse
         }
-        let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
-        guard let feedURL = releases.lazy
-            .filter({ !$0.draft })
-            .flatMap(\.assets)
-            .first(where: { $0.name == "appcast.xml" })?
-            .browserDownloadURL
-        else {
-            throw UpdateFeedError.feedNotFound
-        }
-        return feedURL
+        return try UpdateFeedResolver.latestAppcastURL(from: data)
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {
@@ -550,7 +528,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         let hostingController = NSHostingController(
             rootView: SettingsView(
                 model: model,
+                updateInformation: updateInformation,
                 checkForUpdates: { [weak self] in self?.checkForUpdates() },
+                refreshUpdateInformation: { [weak self] in
+                    self?.refreshUpdateInformation()
+                },
                 setDockIconVisible: { [weak self] isVisible in
                     self?.setDockIconVisible(isVisible)
                 }
@@ -567,7 +549,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 1020, height: 772)
@@ -604,6 +586,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     @objc private func checkForUpdates() {
+        performUpdateCheck(.userInitiated)
+    }
+
+    private func refreshUpdateInformation() {
+        performUpdateCheck(.information)
+    }
+
+    private func performUpdateCheck(_ purpose: UpdateCheckPurpose) {
         updateFeedRefreshTask?.cancel()
         updateFeedRefreshTask = Task { [weak self] in
             guard let self else { return }
@@ -628,7 +618,38 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 updateFeedSelection.useStableFeed()
             }
             startUpdaterIfNeeded()
-            updaterController.checkForUpdates(nil)
+            guard !updaterController.updater.sessionInProgress else { return }
+            switch purpose {
+            case .information:
+                updateInformation.beginChecking()
+                updaterController.updater.checkForUpdateInformation()
+            case .userInitiated:
+                updaterController.checkForUpdates(nil)
+            }
+        }
+    }
+
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        updateInformation.setAvailable(
+            displayVersion: item.displayVersionString,
+            buildVersion: item.versionString,
+            archiveURL: item.fileURL,
+            fallbackDescription: item.itemDescription,
+            localeIdentifier: localization.locale.identifier
+        )
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        updateInformation.setUpToDate()
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+        error: Error?
+    ) {
+        if error != nil, updateInformation.state == .checking {
+            updateInformation.setUnavailable()
         }
     }
 

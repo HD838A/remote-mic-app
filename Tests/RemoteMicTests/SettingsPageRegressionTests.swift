@@ -5,6 +5,26 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(appSource.contains("window.isMovableByWindowBackground = false"))
+        #expect(!appSource.contains("window.isMovableByWindowBackground = true"))
+        #expect(settingsSource.contains("WindowDragArea()"))
+        #expect(settingsSource.contains("window?.performDrag(with: event)"))
+    }
+
     @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
         #expect(MappingSelectionPolicy.selection(
             current: .home,
@@ -193,6 +213,10 @@ struct SettingsPageRegressionTests {
         #expect(!source.contains(".popover(item: $mappingEditingTarget)"))
         #expect(!source.contains(".sheet(item: $shortcutEditingTarget)"))
         #expect(!source.contains("ApplicationShortcutEditorSheet"))
+        #expect(source.contains("shortcut.editor.click_first_help"))
+        #expect(source.contains("shortcut.editor.recording_prompt"))
+        #expect(source.contains("shortcut.editor.success"))
+        #expect(!source.contains("NSEvent.addLocalMonitorForEvents(matching: .keyDown)"))
         #expect(!mappingCanvasSource.contains("size: 8"))
         #expect(!mappingCanvasSource.contains("size: 9"))
         #expect(!mappingCanvasSource.contains("size: 10"))
@@ -206,5 +230,26 @@ struct SettingsPageRegressionTests {
             source.range(of: voiceFnToggle)!.lowerBound >
                 source.range(of: "private var mappingPage")!.lowerBound
         )
+    }
+
+    @Test func aboutPageKeepsVersionFeaturesTogetherAndLanguagesVisible() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let aboutPage = try #require(source.components(separatedBy: "private var aboutPage").last)
+        #expect(aboutPage.contains("updateInformationContent"))
+        #expect(aboutPage.contains("about.version.history"))
+        #expect(aboutPage.contains("about.version.check_prerelease"))
+        #expect(aboutPage.contains("about.version.update_to"))
+        #expect(aboutPage.contains("ForEach(AppLanguage.allCases)"))
+        #expect(aboutPage.contains(".pickerStyle(.segmented)"))
+        #expect(!aboutPage.contains("help.glossary.open"))
+        #expect(!aboutPage.contains("openGlossary"))
     }
 }
