@@ -155,5 +155,5 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与 RC003 默
 
 ## 官网
 
-- 中文官网：[8586ai.com](https://8586ai.com/)
-- English website：[8586ai.com/en](https://8586ai.com/en/)
+- 中文官网：[sayall.app](https://sayall.app/)
+- English website：[sayall.app/en](https://sayall.app/en/)
