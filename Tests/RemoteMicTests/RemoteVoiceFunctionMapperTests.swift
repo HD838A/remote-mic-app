@@ -140,6 +140,34 @@ struct RemoteVoiceFunctionMapperTests {
         #expect(firstMappings == original)
     }
 
+    @Test func partialPowerSuppressionOnlyAllowsFullyMappedDeviceLocations() {
+        let first = MappingServiceBox(registryID: 1, locationID: 101, mappings: [])
+        let duplicateFailure = MappingServiceBox(
+            registryID: 2,
+            locationID: 101,
+            mappings: [],
+            acceptsWrites: false
+        )
+        let safe = MappingServiceBox(registryID: 3, locationID: 202, mappings: [])
+        let unknown = MappingServiceBox(registryID: 4, locationID: nil, mappings: [])
+        let mapper = RemoteVoiceFunctionMapper {
+            [first.service, duplicateFailure.service, safe.service, unknown.service]
+        }
+
+        #expect(mapper.apply(suppressPowerKey: true))
+        #expect(mapper.isPowerKeySuppressed)
+        #expect(mapper.powerSuppressedLocationIDs == Set([202]))
+    }
+
+    @Test func powerSuppressionWithoutADeviceLocationFailsClosed() {
+        let unknown = MappingServiceBox(registryID: 1, locationID: nil, mappings: [])
+        let mapper = RemoteVoiceFunctionMapper { [unknown.service] }
+
+        #expect(mapper.apply(suppressPowerKey: true))
+        #expect(!mapper.isPowerKeySuppressed)
+        #expect(mapper.powerSuppressedLocationIDs == nil)
+    }
+
     @Test func mappingServiceRetainsItsHIDClientOwnerForItsLifetime() {
         var owner: MappingServiceOwner? = MappingServiceOwner()
         let ownerReference = WeakMappingServiceOwnerReference(owner)
@@ -173,18 +201,26 @@ private final class WeakMappingServiceOwnerReference {
 
 private final class MappingServiceBox {
     let registryID: UInt64?
+    let locationID: UInt32?
     var mappings: [HIDUsageMapping]
     var acceptsWrites: Bool
     var writeCount = 0
 
-    init(registryID: UInt64?, mappings: [HIDUsageMapping], acceptsWrites: Bool = true) {
+    init(
+        registryID: UInt64?,
+        locationID: UInt32? = nil,
+        mappings: [HIDUsageMapping],
+        acceptsWrites: Bool = true
+    ) {
         self.registryID = registryID
+        self.locationID = locationID
         self.mappings = mappings
         self.acceptsWrites = acceptsWrites
     }
 
     lazy var service = RemoteVoiceMappingService(
         registryID: registryID,
+        locationID: locationID,
         readMappings: { [unowned self] in mappings },
         setMappings: { [unowned self] mappings in
             writeCount += 1

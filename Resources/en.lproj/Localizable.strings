@@ -176,8 +176,8 @@
 "connection.device.name" = "Xiaomi Bluetooth Remote 2 / 2 Pro";
 "remote.device.selector" = "Remote";
 "remote.device.model" = "Model";
-"remote.device.model.rc001" = "Xiaomi Remote 2";
-"remote.device.model.rc003" = "Xiaomi Remote 2 Pro";
+"remote.device.model.rc001" = "Xiaomi Bluetooth Remote 2";
+"remote.device.model.rc003" = "Xiaomi Bluetooth Remote 2 Pro";
 "remote.device.model.unknown" = "Xiaomi Remote";
 "remote.device.custom_name" = "Custom name";
 "remote.device.bind_button" = "Bind physical buttons";
@@ -189,7 +189,6 @@
 "remote.device.disconnected" = "Disconnected";
 "remote.device.battery_unavailable" = "Battery level is temporarily unavailable";
 "remote.device.power.battery" = "Battery power";
-"remote.device.power.rechargeable" = "Rechargeable";
 "remote.device.power.charging" = "Charging";
 "remote.device.power.external" = "External power";
 "remote.device.power.unknown" = "Power unknown";
@@ -353,6 +352,7 @@
 "menu.show_logs" = "Show Logs";
 "menu.about" = "About Remote Mic";
 "menu.file" = "File";
+"menu.open_log_folder" = "Open Log Folder";
 "menu.check_for_updates" = "Check for Updates…";
 "common.action.quit" = "Quit";
 "menu.language" = "Language";
@@ -481,6 +481,7 @@
 "onboarding.remote.button_received" = "Physical button received";
 "onboarding.remote.button_detail" = "Any button other than the voice key will work.";
 "onboarding.remote.reconnect" = "Search Again";
+"onboarding.remote.retry_input" = "Retry Button Detection";
 "onboarding.remote.open_bluetooth" = "Open Bluetooth Settings";
 "onboarding.audio.title" = "Choose the voice output device";
 "onboarding.audio.detail" = "Choose the audio loopback device used by your voice tool. MiRemoteV 2ch, BlackHole 2ch, and other available devices are supported.";
@@ -502,6 +503,8 @@
 "onboarding.controls.ready" = "Your everyday buttons are working";
 "onboarding.complete.title" = "Remote Mic is ready";
 "onboarding.complete.detail" = "You can now dictate with the remote and adjust connection, voice, and button settings from the main panel.";
+"onboarding.complete.runtime_changed" = "Your current setup has changed";
+"onboarding.complete.runtime_changed_detail" = "Go back and check permissions, the remote connection, or the voice output device. You can continue after it recovers.";
 "onboarding.complete.voice" = "The voice path passed a real audio and text check";
 "onboarding.complete.controls" = "The remote connection and normal buttons are confirmed";
 "onboarding.complete.settings" = "Every option remains adjustable in the main panel";

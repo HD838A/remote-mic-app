@@ -134,7 +134,12 @@ enum OnboardingFlowPolicy {
         case .controls:
             return capabilities.testedRemoteButtonCount >= 3
         case .complete:
-            return true
+            return capabilities.bluetoothGranted &&
+                capabilities.inputMonitoringGranted &&
+                capabilities.accessibilityGranted &&
+                capabilities.remoteConnected &&
+                capabilities.audioReady &&
+                capabilities.audioOutputSelected
         }
     }
 }

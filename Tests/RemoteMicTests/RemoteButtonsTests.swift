@@ -161,6 +161,25 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func partiallySuppressedHIDOnlyAcceptsSafeDeviceLocations() {
+        #expect(HIDRemoteMonitor.isLocationAllowed(
+            locationID: 202,
+            allowedLocationIDs: Set([202])
+        ))
+        #expect(!HIDRemoteMonitor.isLocationAllowed(
+            locationID: 101,
+            allowedLocationIDs: Set([202])
+        ))
+        #expect(!HIDRemoteMonitor.isLocationAllowed(
+            locationID: nil,
+            allowedLocationIDs: Set([202])
+        ))
+        #expect(HIDRemoteMonitor.isLocationAllowed(
+            locationID: nil,
+            allowedLocationIDs: nil
+        ))
+    }
+
     @Test func rawHardwareRepeatStaysLatchedUntilAStableRelease() throws {
         let suiteName = "RemoteButtonsTests.rawHardwareRepeat.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

@@ -8,6 +8,7 @@ struct OnboardingView: View {
     @ObservedObject private var settings: AppSettings
     @EnvironmentObject private var localization: LocalizationStore
     @Environment(\.colorScheme) private var colorScheme
+    private let completeRuntimeReadyOverride: Bool?
 
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -27,9 +28,13 @@ struct OnboardingView: View {
         in: .common
     ).autoconnect()
 
-    init(model: BridgeAppModel) {
+    init(
+        model: BridgeAppModel,
+        completeRuntimeReadyOverride: Bool? = nil
+    ) {
         self.model = model
         settings = model.settings
+        self.completeRuntimeReadyOverride = completeRuntimeReadyOverride
     }
 
     var body: some View {
@@ -55,6 +60,18 @@ struct OnboardingView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
+            switch settings.onboardingStep {
+            case .remote:
+                model.refreshRemoteDiscovery()
+                model.applyHIDSettings()
+            case .audio:
+                model.refreshAudioDevices()
+            case .complete:
+                model.refreshRemoteDiscovery()
+                model.refreshAudioDevices()
+            default:
+                break
+            }
         }
         .onReceive(model.$activeRemoteButtons) { buttons in
             guard !buttons.isEmpty else { return }
@@ -320,17 +337,42 @@ struct OnboardingView: View {
                         ? "onboarding.remote.button_waiting"
                         : "onboarding.remote.button_received"
                 ),
-                detail: localization.text("onboarding.remote.button_detail"),
+                detail: observedRemoteButtons.isEmpty
+                    ? model.hidStatus.text(using: localization)
+                    : localization.text("onboarding.remote.button_detail"),
                 isComplete: !observedRemoteButtons.isEmpty
             )
 
-            HStack(spacing: 10) {
-                Button("onboarding.remote.reconnect") { model.reconnect() }
-                    .buttonStyle(.bordered)
-                Button("onboarding.remote.open_bluetooth") { openBluetoothSettings() }
-                    .buttonStyle(.bordered)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    remoteReconnectButton
+                    remoteInputRetryButton
+                    openBluetoothSettingsButton
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        remoteReconnectButton
+                        remoteInputRetryButton
+                    }
+                    openBluetoothSettingsButton
+                }
             }
         }
+    }
+
+    private var remoteReconnectButton: some View {
+        Button("onboarding.remote.reconnect") { model.reconnect() }
+            .buttonStyle(.bordered)
+    }
+
+    private var remoteInputRetryButton: some View {
+        Button("onboarding.remote.retry_input") { model.applyHIDSettings() }
+            .buttonStyle(.bordered)
+    }
+
+    private var openBluetoothSettingsButton: some View {
+        Button("onboarding.remote.open_bluetooth") { openBluetoothSettings() }
+            .buttonStyle(.bordered)
     }
 
     private var audioContent: some View {
@@ -519,6 +561,15 @@ struct OnboardingView: View {
                 featureLine("gearshape", "onboarding.complete.settings")
             }
             .padding(.top, 8)
+
+            if !canContinue {
+                statusCard(
+                    icon: "exclamationmark.triangle.fill",
+                    title: localization.text("onboarding.complete.runtime_changed"),
+                    detail: localization.text("onboarding.complete.runtime_changed_detail"),
+                    isComplete: false
+                )
+            }
         }
     }
 
@@ -782,7 +833,11 @@ struct OnboardingView: View {
     }
 
     private var canContinue: Bool {
-        OnboardingFlowPolicy.canContinue(
+        if settings.onboardingStep == .complete,
+           let completeRuntimeReadyOverride {
+            return completeRuntimeReadyOverride
+        }
+        return OnboardingFlowPolicy.canContinue(
             from: settings.onboardingStep,
             voiceTool: settings.onboardingVoiceTool,
             capabilities: capabilities
@@ -869,6 +924,7 @@ struct OnboardingView: View {
         case .remote:
             observedRemoteButtons.removeAll()
             requestedRemoteConnectionRecovery = false
+            model.refreshRemoteDiscovery()
         case .audio:
             model.refreshAudioDevices()
         case .voiceTest:
@@ -881,9 +937,13 @@ struct OnboardingView: View {
             }
         case .controls:
             testedControlButtons.removeAll()
+        case .complete:
+            model.refreshRemoteDiscovery()
+            model.refreshAudioDevices()
         default:
             break
         }
+        AppLogger.shared.write("ONBOARDING STEP entered=\(step.rawValue)")
     }
 
     private func recoverRemoteConnectionIfNeeded() {

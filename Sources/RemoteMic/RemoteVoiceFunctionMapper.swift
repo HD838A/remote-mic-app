@@ -89,17 +89,20 @@ enum RemoteVoiceFunctionMappingPolicy {
 
 struct RemoteVoiceMappingService {
     let registryID: UInt64?
+    let locationID: UInt32?
     private let retainedOwner: AnyObject?
     let readMappings: () -> [HIDUsageMapping]
     let setMappings: ([HIDUsageMapping]) -> Bool
 
     init(
         registryID: UInt64?,
+        locationID: UInt32? = nil,
         retainedOwner: AnyObject? = nil,
         readMappings: @escaping () -> [HIDUsageMapping],
         setMappings: @escaping ([HIDUsageMapping]) -> Bool
     ) {
         self.registryID = registryID
+        self.locationID = locationID
         self.retainedOwner = retainedOwner
         self.readMappings = readMappings
         self.setMappings = setMappings
@@ -122,6 +125,7 @@ final class RemoteVoiceFunctionMapper {
     private var originalMappings: [UInt64: OriginalMappings] = [:]
     private(set) var isApplied = false
     private(set) var isPowerKeySuppressed = false
+    private(set) var powerSuppressedLocationIDs: Set<UInt32>?
     private(set) var isVoiceKeyNeutralized = false
 
     init(serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices) {
@@ -146,6 +150,11 @@ final class RemoteVoiceFunctionMapper {
         var snapshots: [Int: [HIDUsageMapping]] = [:]
         var appliedIndices: [Int] = []
         var newlyStoredRegistryIDs = Set<UInt64>()
+        let matchedCountsByLocation = services.reduce(into: [UInt32: Int]()) { counts, service in
+            guard let locationID = service.locationID else { return }
+            counts[locationID, default: 0] += 1
+        }
+        var appliedCountsByLocation: [UInt32: Int] = [:]
 
         for (index, service) in services.enumerated() {
             guard let registryID = service.registryID else {
@@ -200,16 +209,32 @@ final class RemoteVoiceFunctionMapper {
                 continue
             }
             appliedIndices.append(index)
+            if let locationID = service.locationID {
+                appliedCountsByLocation[locationID, default: 0] += 1
+            }
         }
 
         let appliedCount = appliedIndices.count
         let allTargetsApplied = appliedCount == matchedCount
+        let fullySuppressedLocations = Set(matchedCountsByLocation.compactMap { locationID, count in
+            appliedCountsByLocation[locationID] == count ? locationID : nil
+        })
         isApplied = neutralizeVoiceKey ? allTargetsApplied : appliedCount > 0
         isVoiceKeyNeutralized = neutralizeVoiceKey && allTargetsApplied
-        isPowerKeySuppressed = suppressPowerKey && allTargetsApplied
+        if suppressPowerKey, !fullySuppressedLocations.isEmpty {
+            isPowerKeySuppressed = true
+            powerSuppressedLocationIDs = fullySuppressedLocations
+        } else {
+            isPowerKeySuppressed = false
+            powerSuppressedLocationIDs = nil
+        }
+        let suppressionScope = isPowerKeySuppressed
+            ? "locations=\(powerSuppressedLocationIDs?.count ?? 0)"
+            : "none"
         AppLogger.shared.write(
             "VOICE FN MAPPING applied=\(isApplied) neutralized=\(isVoiceKeyNeutralized) " +
-                "power_suppressed=\(isPowerKeySuppressed) matched=\(matchedCount) applied=\(appliedCount)"
+                "power_suppressed=\(isPowerKeySuppressed) suppression_scope=\(suppressionScope) " +
+                "matched=\(matchedCount) applied=\(appliedCount)"
         )
         return isApplied
     }
@@ -271,6 +296,7 @@ final class RemoteVoiceFunctionMapper {
     private func resetAppliedState() {
         isApplied = false
         isPowerKeySuppressed = false
+        powerSuppressedLocationIDs = nil
         isVoiceKeyNeutralized = false
     }
 
@@ -280,6 +306,7 @@ final class RemoteVoiceFunctionMapper {
         return services.filter(isTarget).map { service in
             RemoteVoiceMappingService(
                 registryID: registryID(service),
+                locationID: locationID(service),
                 retainedOwner: client,
                 readMappings: { readMappings(service) },
                 setMappings: { mappings in
@@ -307,6 +334,13 @@ final class RemoteVoiceFunctionMapper {
 
     private static func registryID(_ service: IOHIDServiceClient) -> UInt64? {
         (IOHIDServiceClientGetRegistryID(service) as? NSNumber)?.uint64Value
+    }
+
+    private static func locationID(_ service: IOHIDServiceClient) -> UInt32? {
+        (IOHIDServiceClientCopyProperty(
+            service,
+            kIOHIDLocationIDKey as CFString
+        ) as? NSNumber)?.uint32Value
     }
 
     private static func readMappings(_ service: IOHIDServiceClient) -> [HIDUsageMapping] {

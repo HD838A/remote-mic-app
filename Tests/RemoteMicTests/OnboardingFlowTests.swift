@@ -106,6 +106,30 @@ struct OnboardingFlowTests {
             voiceTool: .typeless,
             capabilities: capabilities
         ))
+
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .complete,
+            voiceTool: .typeless,
+            capabilities: capabilities
+        ))
+        capabilities.remoteConnected = false
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .complete,
+            voiceTool: .typeless,
+            capabilities: capabilities
+        ))
+        capabilities.remoteConnected = true
+        capabilities.remoteButtonObserved = false
+        capabilities.voiceSessionStarted = false
+        capabilities.voiceSamplesReceived = false
+        capabilities.voiceSessionEnded = false
+        capabilities.transcriptionAppeared = false
+        capabilities.testedRemoteButtonCount = 0
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .complete,
+            voiceTool: .typeless,
+            capabilities: capabilities
+        ))
     }
 
     @Test func observedRemoteButtonRequestsOnlyOneRecoveryWhileBluetoothIsDisconnected() {
@@ -164,6 +188,107 @@ struct OnboardingFlowTests {
         #expect(reconnectSource.contains("guard started else { return }"))
         #expect(reconnectSource.contains("bluetoothBridges.isEmpty && discoveryBluetoothBridge == nil"))
         #expect(reconnectSource.contains("startBluetoothConnections()"))
+    }
+
+    @Test func returningFromBluetoothSettingsRefreshesDiscovery() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let activeStart = try #require(viewSource.range(
+            of: "NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)"
+        ))
+        let activeEnd = try #require(viewSource.range(
+            of: ".onReceive(model.$activeRemoteButtons)",
+            range: activeStart.upperBound..<viewSource.endIndex
+        ))
+        let activeSource = viewSource[activeStart.lowerBound..<activeEnd.lowerBound]
+        #expect(activeSource.contains("model.refreshRemoteDiscovery()"))
+        #expect(activeSource.contains("model.applyHIDSettings()"))
+
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let refreshStart = try #require(modelSource.range(of: "func refreshRemoteDiscovery()"))
+        let refreshEnd = try #require(modelSource.range(
+            of: "func enablePhoneRemoteConnection()",
+            range: refreshStart.upperBound..<modelSource.endIndex
+        ))
+        let refreshSource = modelSource[refreshStart.lowerBound..<refreshEnd.lowerBound]
+        #expect(refreshSource.contains("discoveryBluetoothBridge?.reconnectNow()"))
+    }
+
+    @Test func returningToAudioSetupRefreshesAvailableOutputs() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let activeStart = try #require(viewSource.range(
+            of: "NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)"
+        ))
+        let activeEnd = try #require(viewSource.range(
+            of: ".onReceive(model.$activeRemoteButtons)",
+            range: activeStart.upperBound..<viewSource.endIndex
+        ))
+        let activeSource = viewSource[activeStart.lowerBound..<activeEnd.lowerBound]
+        #expect(activeSource.contains("case .audio:"))
+        #expect(activeSource.contains("model.refreshAudioDevices()"))
+        #expect(activeSource.contains("case .complete:"))
+        #expect(activeSource.contains("model.refreshRemoteDiscovery()"))
+    }
+
+    @Test func remoteStepExposesHIDStatusAndAnExplicitRetry() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let remoteStart = try #require(viewSource.range(of: "private var remoteContent"))
+        let remoteEnd = try #require(viewSource.range(
+            of: "private var audioContent",
+            range: remoteStart.upperBound..<viewSource.endIndex
+        ))
+        let remoteSource = viewSource[remoteStart.lowerBound..<remoteEnd.lowerBound]
+        #expect(remoteSource.contains("model.hidStatus.text(using: localization)"))
+        #expect(remoteSource.contains("model.applyHIDSettings()"))
+        #expect(remoteSource.contains("ViewThatFits(in: .horizontal)"))
+    }
+
+    @Test func completionPageExplainsARegressedRuntimeCondition() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let completeStart = try #require(viewSource.range(of: "private var completeContent"))
+        let completeEnd = try #require(viewSource.range(
+            of: "private var rightPane",
+            range: completeStart.upperBound..<viewSource.endIndex
+        ))
+        let completeSource = viewSource[completeStart.lowerBound..<completeEnd.lowerBound]
+        #expect(completeSource.contains("if !canContinue"))
+        #expect(completeSource.contains("onboarding.complete.runtime_changed"))
+
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingScreenshotRenderer.swift"),
+            encoding: .utf8
+        )
+        #expect(rendererSource.contains("completeRuntimeReadyOverride: true"))
     }
 
     @Test func audioStepOffersEveryAvailableOutputInsteadOfRequiringMiRemote() throws {
