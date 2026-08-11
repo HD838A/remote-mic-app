@@ -4,7 +4,7 @@
 
 - Added a complete first-run setup guide that checks Bluetooth, Input Monitoring, and Accessibility permissions, then verifies the remote, compatible microphone, real voice input, and everyday buttons. Required checks cannot be skipped or bypassed to enter the main panel.
 - Existing users can run the setup guide again from About to recheck their environment and troubleshoot problems without clearing connections, button mappings, the compatible microphone, or other settings.
-- The setup guide uses a consistent two-pane design in light and dark modes, does not display a total step count, and resumes from the current page after relaunching.
+- The setup guide uses a consistent two-pane design in light and dark modes, does not display a total step count, and remains mandatory after relaunching until setup is complete.
 
 ## 1.8.6 (Pre-release)
 
