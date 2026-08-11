@@ -60,6 +60,7 @@
 | 2026-08-10 | [Unbound Multi-Remote Button Actions Are Ignored](./2026-08-10-unbound-multi-remote-actions-ignored.md) | 已修复，双遥控器真机复验通过 |
 | 2026-08-10 | [Upgrade Leaves Custom Button Mapping Inactive](./2026-08-10-upgrade-custom-mapping-not-activated.md) | 已修复，签名升级验证通过；待实体按键确认 |
 | 2026-08-10 | [增益滑块轨道拖动带动整个窗口](./2026-08-10-gain-slider-drags-window.md) | 已修复，等待可见界面复验 |
+| 2026-08-11 | [蓝牙断连后虚拟麦克风仍保持活动](./2026-08-11-bluetooth-disconnect-keeps-virtual-microphone-active.md) | 候选修复完成，等待真机与会议 App 验证 |
 
 ## 记录模板
 
