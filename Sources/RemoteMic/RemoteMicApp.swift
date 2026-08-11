@@ -259,6 +259,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         )
         closeItem.keyEquivalentModifierMask = .command
         closeItem.target = self
+        fileMenu.addItem(menuItem("menu.open_log_folder", action: #selector(showLog)))
+        fileMenu.addItem(.separator())
         fileMenu.addItem(closeItem)
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)

@@ -232,6 +232,72 @@ struct SettingsPageRegressionTests {
         )
     }
 
+    @Test func remoteCardsShowCompleteNamesWithoutDuplicateConnectionSummary() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+
+        #expect(chinese.contains(#""remote.device.model.rc001" = "小米蓝牙遥控器 2";"#))
+        #expect(chinese.contains(#""remote.device.model.rc003" = "小米蓝牙遥控器 2 Pro";"#))
+        #expect(english.contains(#""remote.device.model.rc001" = "Xiaomi Bluetooth Remote 2";"#))
+        #expect(english.contains(#""remote.device.model.rc003" = "Xiaomi Bluetooth Remote 2 Pro";"#))
+
+        let cardStart = try #require(settingsSource.range(of: "private func remoteDeviceCard"))
+        let cardEnd = try #require(settingsSource.range(
+            of: "private func batterySymbol",
+            range: cardStart.upperBound..<settingsSource.endIndex
+        ))
+        let cardSource = settingsSource[cardStart.lowerBound..<cardEnd.lowerBound]
+        #expect(cardSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(cardSource.contains("fillsWidth ? nil : 232"))
+        #expect(cardSource.contains("remoteBatteryLabel("))
+        #expect(cardSource.contains("powerState: model.powerState(for: profile.id)"))
+        #expect(cardSource.contains("Image(systemName: \"bolt.fill\")"))
+        #expect(!cardSource.contains("Label(power.text"))
+        #expect(!cardSource.contains("remote.device.power.rechargeable"))
+        for symbol in [
+            "battery.0percent",
+            "battery.25percent",
+            "battery.50percent",
+            "battery.75percent",
+            "battery.100percent",
+        ] {
+            #expect(settingsSource.contains(symbol))
+        }
+        #expect(settingsSource.contains("if level <= 10 { return .red }"))
+        #expect(settingsSource.contains("if level <= 25 { return .orange }"))
+
+        let panelStart = try #require(settingsSource.range(of: "private var connectionDevicePanel"))
+        let panelEnd = try #require(settingsSource.range(
+            of: "private var mappingPage",
+            range: panelStart.upperBound..<settingsSource.endIndex
+        ))
+        let panelSource = settingsSource[panelStart.lowerBound..<panelEnd.lowerBound]
+        #expect(!panelSource.contains("Text(selectedRemoteDisplayName)"))
+        #expect(!panelSource.contains("StatusPill(text: connectionBadge"))
+
+        #expect(appSource.contains(
+            "fileMenu.addItem(menuItem(\"menu.open_log_folder\", action: #selector(showLog)))"
+        ))
+    }
+
     @Test func aboutPageKeepsVersionFeaturesTogetherAndLanguagesVisible() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

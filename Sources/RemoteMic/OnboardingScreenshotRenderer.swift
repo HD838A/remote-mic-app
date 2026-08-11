@@ -93,7 +93,10 @@ enum OnboardingScreenshotRenderer {
 
         for (step, filename) in pages {
             settings.setOnboardingStep(step)
-            let rootView = OnboardingView(model: model)
+            let rootView = OnboardingView(
+                model: model,
+                completeRuntimeReadyOverride: true
+            )
                 .environmentObject(localization)
                 .frame(width: 1020, height: 772)
             let hostingController = NSHostingController(rootView: rootView)

@@ -9,7 +9,8 @@
 - `Sources/RemoteMic/OnboardingScreenshotRenderer.swift`：通过离屏 AppKit 窗口渲染生产向导，支持浅色、深色和系统外观，使用隔离偏好域。
 - `Sources/RemoteMic/RemoteMicApp.swift`：未完成时强制显示主窗口并延迟完整运行时启动；专用环境变量存在时进入无界面截图模式。
 - `Sources/RemoteMic/BridgeAppModel.swift`：在现有蓝牙语音开始与 PCM 解码回调旁公开当前会话样本计数；允许截图模式注入隔离设置，不保存音频；重连入口在 bridge 尚未创建时可启动蓝牙连接。
-- `Sources/RemoteMic/SettingsView.swift`：关于页增加“重新运行设置向导”。
+- `Sources/RemoteMic/RemoteVoiceFunctionMapper.swift`、`HIDRemoteMonitor.swift`：按 HID Location ID 限定电源键抑制成功的安全设备，部分失败时不再全局关闭普通按键，也不放宽锁屏保护。
+- `Sources/RemoteMic/SettingsView.swift`：关于页增加“重新运行设置向导”；设备卡显示完整名称并自适应状态布局，连接页删除重复信息。
 - `Resources/*/Localizable.strings`：中英文向导文案。
 - `Tests/RemoteMicTests/OnboardingFlowTests.swift`：步骤、门禁、持久化、完成版本和重新运行测试。
 - `scripts/test.sh`：把 Onboarding 流程类型加入项目自检的显式编译文件列表。
@@ -26,6 +27,20 @@
 7. 升级首次启动若 HID 普通按键先于 BLE Ready 到达，遥控器页只请求一次连接恢复；`reconnect()` 会在 bridge 尚未创建时补启动蓝牙，避免状态只能通过重启解除。
 8. Onboarding 迁移在覆盖 `launch.lastLaunchedBuild` 前读取旧 Build 和 Sparkle 启动证据；只有完全没有向导状态的旧安装才自动完成。迁移版本单独持久化，避免真正全新安装第二次启动时被刚写入的 Build 记录误判。
 9. 音频页不再复用只识别 MiRemoteV 2ch 的豆包兼容策略作为全局门禁，而是平铺生产 `audioDevices` 并调用现有 `applyAudioSettings`；所选 UID 消失或输出未就绪时不能继续。
+10. 从系统蓝牙设置返回遥控器页时刷新 discovery；电源键安全映射按 Location ID 形成允许集合，同一 Location 下任一 service 失败即不监听该设备，缺失 Location 也 fail-closed。
+11. 当前页回到前台时只刷新其生产依赖：遥控器页刷新 discovery 与 HID，音频页重新枚举输出。遥控器按键卡显示 `hidStatus` 并提供显式重试，避免所有失败都表现为无限等待。
+12. 完成页重新验证当前权限、BLE 和音频输出，但不依赖视图内存中的语音/按键临时标志；前者保证进入主界面时仍可用，后者避免完成页重建后无故卡死。
+
+## 全流程门禁审计结论
+
+| 步骤 | 状态来源 | 恢复方式 | 自动化边界 |
+| --- | --- | --- | --- |
+| 权限 | CoreBluetooth、IOHID、Accessibility API | 定时、回到前台、系统要求时重启并恢复原页 | 不能替代真实权限历史 |
+| 遥控器 | BLE Ready、普通 HID 按键、生产 `hidStatus` | 前台刷新 BLE/HID、重新查找、重新检测按键 | 不能替代新配对、双设备和电源键真机 |
+| 音频 | CoreAudio 输出列表、所选 UID、生产输出 Ready | 进入页面、回到前台、手动重新检查 | 不能替代真实驱动安装与第三方 App |
+| 语音 | STREAM_START、PCM、STREAM_STOP、输入框文字 | 再执行一次完整测试 | 文字上屏必须真机验收 |
+| 普通按键 | 三个不同 HID 按键 | 重新进入页面重新测试 | 模拟报告不等于实体遥控器 |
+| 完成 | 当前权限、BLE、音频仍有效 | 进入页刷新；恢复条件后自动解锁 | 不使用临时前序标志，避免重建卡死 |
 
 ## 设计、开发与测试复盘
 
@@ -42,6 +57,7 @@
 2. 欢迎和工具选择页不启动完整运行时，进入权限阶段后才启动既有蓝牙与音频服务，避免首次页面出现前连续触发系统权限。
 3. 重新运行向导只重置向导自己的状态，不清除连接、按键映射、语音输出设备、Dock、启动或更新偏好，确保它可以作为普通用户的自助排障入口。
 4. 截图入口直接实例化生产 `OnboardingView`，使用隔离 `UserDefaults` 和离屏 AppKit 窗口；不依赖屏幕录制、窗口是否可见或机器是否锁屏。
+   完成页截图只向生产视图注入“当前运行时已就绪”的截图夹具，不改变普通启动的最终门禁，避免静态截图把恢复错误态误当成标准完成态。
 5. 截图外观必须从 AppKit 窗口根部固定，再让 SwiftUI 环境继承；只修改某个子视图会出现左侧浅色、右侧深色或反向的分裂结果。
 
 ### 测试
@@ -53,7 +69,7 @@
 
 ## 影响与回归边界
 
-共享蓝牙协议、HID 报告解析、音频格式、设备选择规则和设置页容器尺寸均未改变。已完成用户启动时仍按原逻辑启动服务并根据偏好显示窗口；重新运行向导会暂时用向导替换同一主窗口内容。
+共享蓝牙协议、HID 报告解析、音频格式、设备选择规则和设置页容器尺寸均未改变。HID 启动安全门增加了设备级 Location 范围：只改变部分 UserKeyMapping 失败时的监听对象，不改变按键 usage、动作或持久化。已完成用户启动时仍按原逻辑启动服务并根据偏好显示窗口；重新运行向导会暂时用向导替换同一主窗口内容。
 
 2026-08-11 的升级恢复修复没有改变全局蓝牙与音频启动顺序，也不会在已连接、未收到实体按键或本页已经请求过恢复时重复重连。真实 Sparkle 升级首次启动和 RC003 仍需按测试手册验收。
 
@@ -61,16 +77,18 @@
 
 ## 自动化验证
 
-- `swift test --filter OnboardingFlowTests`：9 项通过，覆盖 HID 已到达但 BLE 未连接时的一次性恢复策略、按键事件与空 bridge 启动分支接线、旧安装/全新安装/中途续接/主动重跑迁移边界，以及 BlackHole 2ch 等替代音频设备的选择门禁。
-- `swift test --filter SettingsPageRegressionTests`：6 项通过。
+- `swift test --filter OnboardingFlowTests`：13 项通过，覆盖 HID 已到达但 BLE 未连接时的一次性恢复策略、按键事件与空 bridge 启动分支接线、从系统设置返回后的 BLE/HID 与音频刷新、HID 错误和重试入口、最终运行时重验、完成页截图夹具、旧安装/全新安装/中途续接/主动重跑迁移边界，以及 BlackHole 2ch 等替代音频设备的选择门禁。
+- `swift test --filter SettingsPageRegressionTests`：7 项通过。
 - `swift test --filter LocalizationTests`：5 项通过，中英文 key 和格式一致。
-- `swift test`：200 项、20 个 suite 全部通过，没有跳过用例。
+- `swift test`：208 项、20 个 suite 全部通过，没有跳过用例。
 - `scripts/test.sh`：42 项项目自检通过。
+- 私有硬件模拟：16 项通过，覆盖 RC001/RC003 语音、12 个原始按键、36 个手势、连发、异常报告、重连和双设备隔离。
 - `swift build -c release`：通过。
 - `scripts/build-app.sh`：通过；`codesign --verify --deep --strict` 通过。
 - 测试 App：`dist/Remote Mic.app`。
-- 实现截图：已完成。无需屏幕解锁，直接实例化生产 `OnboardingView`，通过离屏 AppKit 窗口缓存生成浅色、深色各 8 张真实实现截图，逐页确认原生窗口、实际 App 图标、RC003 图片、底部导航和实时检查区域无裁切；未使用设计稿替代实现证据。
+- 实现截图：已完成。无需屏幕解锁，直接实例化生产 `OnboardingView`，通过离屏 AppKit 窗口缓存生成浅色、深色各 8 张真实实现截图，逐页确认原生窗口、实际 App 图标、RC003 图片、新增恢复按钮、最终错误卡、标准完成态、底部导航和实时检查区域无裁切；未使用设计稿替代实现证据。
 - 深色模式右侧改为深蓝语义画布和自适应检查卡，与左侧同属深色体系；浅色继续使用浅蓝画布。两种外观均不存在黑白分栏。
+- 连接页生产 `SettingsView` 另以窗口合成方式检查浅色和深色：完整显示“小米蓝牙遥控器 2 / 2 Pro”，连接、电量和供电信息不截断，连接页没有重复名称或状态。
 - App 内保留隐藏截图入口：设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR` 后离屏输出全部页面，可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark|system` 指定外观；正常启动路径不显示入口。
 - 本机 Skill：`~/.codex/skills/remote-mic-onboarding-screenshots/`，默认一次生成并校验浅色和深色两套截图。
 

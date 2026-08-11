@@ -113,6 +113,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
     private var hidPowerKeySuppressed = false
+    private var hidAllowedLocationIDs: Set<UInt32>?
     private var started = false
     private var terminationObserver: NSObjectProtocol?
     private var completedUpdateHIDRecoveryWorkItem: DispatchWorkItem?
@@ -351,6 +352,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             bluetoothBridges.values.forEach { $0.reconnectNow() }
             discoveryBluetoothBridge?.reconnectNow()
         }
+    }
+
+    func refreshRemoteDiscovery() {
+        guard started else { return }
+        if discoveryBluetoothBridge == nil {
+            startBluetoothDiscoveryIfNeeded()
+        } else {
+            discoveryBluetoothBridge?.reconnectNow()
+        }
+        AppLogger.shared.write("BLE DISCOVERY refreshed_from_foreground")
     }
 
     func enablePhoneRemoteConnection() {
@@ -781,6 +792,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func startHIDMonitors(powerKeySuppressed: Bool) {
         stopHIDMonitors()
         hidPowerKeySuppressed = powerKeySuppressed
+        hidAllowedLocationIDs = settings.customMappingEnabled
+            ? voiceFunctionMapper.powerSuppressedLocationIDs
+            : nil
         guard settings.customMappingEnabled else {
             hidStatus = LocalizedMessage("button_mapping.status.system_managed")
             return
@@ -793,7 +807,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 targetFingerprint: fingerprint
             )
             hidMonitors[fingerprint] = monitor
-            monitor.start(powerKeySuppressed: powerKeySuppressed)
+            monitor.start(
+                powerKeySuppressed: powerKeySuppressed,
+                allowedLocationIDs: hidAllowedLocationIDs
+            )
         }
         startHIDDiscoveryIfNeeded()
     }
@@ -818,7 +835,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
         )
         discoveryHIDMonitor = monitor
-        monitor.start(powerKeySuppressed: hidPowerKeySuppressed)
+        monitor.start(
+            powerKeySuppressed: hidPowerKeySuppressed,
+            allowedLocationIDs: hidAllowedLocationIDs
+        )
     }
 
     private func makeHIDMonitor(

@@ -52,6 +52,7 @@ final class HIDRemoteMonitor {
     private let frontmostBundleIdentifier: () -> String?
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
+    private var allowedLocationIDs: Set<UInt32>?
     private var manager: IOHIDManager?
     private var activeDevice: IOHIDDevice?
     private(set) var deviceFingerprint: String?
@@ -129,8 +130,9 @@ final class HIDRemoteMonitor {
         IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
     }
 
-    func start(powerKeySuppressed: Bool) {
+    func start(powerKeySuppressed: Bool, allowedLocationIDs: Set<UInt32>? = nil) {
         stop()
+        self.allowedLocationIDs = allowedLocationIDs
         guard settings.customMappingEnabled else {
             updateStatus(LocalizedMessage("button_mapping.status.system_managed"))
             return
@@ -220,6 +222,13 @@ final class HIDRemoteMonitor {
             updateStatus(LocalizedMessage("button_mapping.error.device_open_failed"))
             return
         }
+        guard Self.isLocationAllowed(
+            locationID: Self.locationID(for: device),
+            allowedLocationIDs: allowedLocationIDs
+        ) else {
+            AppLogger.shared.write("HID DEVICE rejected unsafe_location")
+            return
+        }
         guard let fingerprint = Self.fingerprint(for: device) else { return }
         if profileID == nil, targetFingerprint == nil, deviceFingerprint == nil {
             return
@@ -292,6 +301,10 @@ final class HIDRemoteMonitor {
 
     fileprivate func handleReport(from device: IOHIDDevice, reportID: UInt32, data: Data) {
         guard manager != nil, settings.customMappingEnabled else { return }
+        guard Self.isLocationAllowed(
+            locationID: Self.locationID(for: device),
+            allowedLocationIDs: allowedLocationIDs
+        ) else { return }
         guard let fingerprint = Self.resolvedFingerprintForReport(
             reportingFingerprint: Self.fingerprint(for: device),
             activeFingerprint: deviceFingerprint,
@@ -693,6 +706,19 @@ final class HIDRemoteMonitor {
         return SHA256.hash(data: Data("location:\(location.uint64Value)".utf8))
             .map { String(format: "%02x", $0) }
             .joined()
+    }
+
+    static func locationID(for device: IOHIDDevice) -> UInt32? {
+        (IOHIDDeviceGetProperty(device, kIOHIDLocationIDKey as CFString) as? NSNumber)?.uint32Value
+    }
+
+    static func isLocationAllowed(
+        locationID: UInt32?,
+        allowedLocationIDs: Set<UInt32>?
+    ) -> Bool {
+        guard let allowedLocationIDs else { return true }
+        guard let locationID else { return false }
+        return allowedLocationIDs.contains(locationID)
     }
 
     private func updateStatus(_ value: LocalizedMessage) {

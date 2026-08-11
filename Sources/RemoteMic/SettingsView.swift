@@ -566,13 +566,6 @@ struct SettingsView: View {
             VStack(spacing: 16) {
                 remoteDeviceSelector(vertical: true)
 
-                VStack(spacing: 6) {
-                    Text(selectedRemoteDisplayName)
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                    StatusPill(text: connectionBadge, tint: connectionTint)
-                }
-
                 RC003Photo()
                     .frame(width: 82, height: 166)
 
@@ -945,7 +938,6 @@ struct SettingsView: View {
         let selected = settings.selectedRemoteProfileID == profile.id
         let connected = model.isRemoteConnected(profile.id)
         let batteryLevel = model.batteryLevel(for: profile.id)
-        let power = remotePowerPresentation(for: profile)
         return Button {
             model.selectRemoteProfile(profile.id)
         } label: {
@@ -961,33 +953,29 @@ struct SettingsView: View {
                             .help(localization.text("remote.device.current"))
                     }
                 }
-                HStack(spacing: 7) {
-                    Label(
-                        localization.text(connected ? "common.status.connected" : "remote.device.disconnected"),
-                        systemImage: "circle.fill"
-                    )
-                    .foregroundStyle(connected ? Color.green : Color.secondary)
-                    Label(
-                        batteryLevel.map { "\($0)%" } ?? "—",
-                        systemImage: batterySymbol(for: batteryLevel)
-                    )
-                    .foregroundStyle(batteryColor(for: batteryLevel))
-                    .help(
-                        batteryLevel == nil
-                            ? localization.text("remote.device.battery_unavailable")
-                            : ""
-                    )
-                    if power.showsBesideBatteryLevel {
-                        Label(power.text, systemImage: power.symbol)
-                            .foregroundStyle(power.tint)
-                            .lineLimit(1)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 7) {
+                        remoteConnectionLabel(connected: connected)
+                        remoteBatteryLabel(
+                            level: batteryLevel,
+                            powerState: model.powerState(for: profile.id)
+                        )
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 7) {
+                            remoteConnectionLabel(connected: connected)
+                            remoteBatteryLabel(
+                                level: batteryLevel,
+                                powerState: model.powerState(for: profile.id)
+                            )
+                        }
                     }
                 }
                 .font(.system(size: 12))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .frame(width: fillsWidth ? nil : 196, alignment: .leading)
+            .frame(width: fillsWidth ? nil : 232, alignment: .leading)
             .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
             .background(
                 selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
@@ -1000,6 +988,39 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func remoteConnectionLabel(connected: Bool) -> some View {
+        Label(
+            localization.text(connected ? "common.status.connected" : "remote.device.disconnected"),
+            systemImage: "circle.fill"
+        )
+        .foregroundStyle(connected ? Color.green : Color.secondary)
+    }
+
+    private func remoteBatteryLabel(
+        level: Int?,
+        powerState: RemotePowerState?
+    ) -> some View {
+        HStack(spacing: 4) {
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: batterySymbol(for: level))
+                    .font(.system(size: 13, weight: .medium))
+                if powerState == .charging || powerState == .externalPower {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(Color.green)
+                        .padding(2)
+                        .background(Color(nsColor: .windowBackgroundColor), in: Circle())
+                        .offset(x: 3, y: 3)
+                }
+            }
+            .frame(width: 20)
+
+            Text(level.map { "\($0)%" } ?? "—")
+        }
+        .foregroundStyle(batteryColor(for: level))
+        .help(remoteBatteryHelp(level: level, powerState: powerState))
     }
 
     private func batterySymbol(for level: Int?) -> String {
@@ -1020,32 +1041,26 @@ struct SettingsView: View {
         return .secondary
     }
 
-    private func remotePowerPresentation(
-        for profile: RemoteDeviceProfile
-    ) -> (text: String, symbol: String, tint: Color, showsBesideBatteryLevel: Bool) {
-        switch model.powerState(for: profile.id) {
+    private func remoteBatteryHelp(
+        level: Int?,
+        powerState: RemotePowerState?
+    ) -> String {
+        switch powerState {
         case .charging:
-            return (localization.text("remote.device.power.charging"), "bolt.fill", .green, true)
+            return localization.text("remote.device.power.charging")
         case .externalPower:
-            return (localization.text("remote.device.power.external"), "powerplug.fill", .green, true)
+            return localization.text("remote.device.power.external")
         case .onBattery:
-            return (localization.text("remote.device.power.battery"), "battery.75percent", .secondary, false)
+            return level == nil
+                ? localization.text("remote.device.battery_unavailable")
+                : localization.text("remote.device.power.battery")
         case .unknown:
-            return (localization.text("remote.device.power.unknown"), "questionmark.circle", .secondary, true)
+            return localization.text("remote.device.power.unknown")
         case nil:
-            switch profile.model {
-            case .rc001:
-                return (localization.text("remote.device.power.battery"), "battery.75percent", .secondary, false)
-            case .rc003:
-                return (localization.text("remote.device.power.rechargeable"), "bolt.circle", .secondary, true)
-            case .unknown:
-                return (localization.text("remote.device.power.unknown"), "questionmark.circle", .secondary, true)
-            }
+            return level == nil
+                ? localization.text("remote.device.battery_unavailable")
+                : localization.text("remote.device.power.battery")
         }
-    }
-
-    private var selectedRemoteDisplayName: String {
-        settings.selectedRemoteProfile.map(remoteDisplayName) ?? localization.text("remote.device.model.unknown")
     }
 
     private func remoteDisplayName(_ profile: RemoteDeviceProfile) -> String {

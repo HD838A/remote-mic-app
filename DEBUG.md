@@ -171,3 +171,121 @@ Added a shared destination-readiness coordinator, connected every external confi
 - 保留底层 `MIC_EXTEND` 协议能力，限定给未来已经成功主动 `MIC_OPEN` 的独立实验。
 - 本轮不修改 Typeless 停止或音频处理逻辑；需要现场日志或可重复模拟后再进入正式修复。
 - 撤回后验证：`swift test` 189 项、`scripts/test.sh` 42 项、`hardware-simulation/scripts/test-remote-mic.sh` 16 项全部通过；未执行新的真实 RC001/RC003 或 Typeless 真机验收。
+
+---
+
+# Onboarding 新配对遥控器 BLE / HID 生命周期调查
+
+## Observations
+
+- 用户提供的两张 Onboarding 截图分别确认：新遥控器已在系统蓝牙连接但页面仍显示查找；之后页面显示“小米遥控器已连接”，普通按键仍未被无线麦收到，但 macOS 系统音量键可以正常响应。
+- 真实现场日志为用户提供的 `runtime.log`，SHA-256 `1c97fb79a30e42d9b39c876cfde73b589bf5b272de887727982b84a8b38f2a5b`；此前读取的本机日志不作为现场证据。
+- `14:10:47Z` discovery 通过 `source=scan name=MI RC` 找到新设备，随后完成 `BLE MODEL identified=rc003`、`ATVV CAPS` 和 `BLE READY`，说明 BLE 协议链路可用。
+- 同一时段首次映射为 `matched=1 applied=0`，稍后稳定为 `matched=2 applied=1`；输入监控和辅助功能均为 `true`，但持续出现 `HID START rejected power_suppressed=false`。
+- App 在 `14:15:12Z`、`14:16:11Z` 和 `14:23:01Z` 重启后仍为 `matched=2 applied=1`，因此“重启会修好 HID”被现场日志否定。
+- `OnboardingView` 从系统蓝牙设置返回时只刷新权限，不刷新 discovery；目标 identifier 又持续连接超时，因此新系统连接设备可能要等新的扫描周期才出现。
+- `XiaomiBluetoothBridge` 的 discovery 模式每个新连接周期会先调用 `retrieveConnectedPeripherals(withServices:)`；因此重新开始 discovery 周期可以识别已经被系统连接、但可能不再广播的新遥控器。
+- `RemoteVoiceFunctionMapper` 原逻辑要求全部匹配 service 写入成功才把 `isPowerKeySuppressed` 设为 true；任一旧、失败或幽灵 service 都会让全部 HID monitor fail-closed。
+
+## Hypotheses
+
+### H1: 从系统蓝牙设置返回时没有刷新新设备发现（ROOT HYPOTHESIS）
+
+- Supports: 用户边界是重启后恢复；重启会重新创建 discovery bridge，而返回前台只刷新权限。discovery 新周期会查询系统已连接外设。
+- Supports: 现场日志显示旧 target identifier 长时间超时，最终由 `source=scan` 找到新设备；返回前台缺少 discovery 刷新。
+- Test: 源码接线回归要求 Onboarding 遥控器页恢复前台时调用仅刷新 discovery 的生产入口；旧实现失败，候选实现通过。
+
+### H2: 部分 UserKeyMapping 成功导致全局 HID fail-closed（ROOT HYPOTHESIS）
+
+- Supports: 现场连续记录 `matched=2 applied=1`、权限为 true、`HID START rejected`，与代码的全目标门禁完全一致。
+- Conflicts: 不能简单把“至少一个成功”视为全局安全，否则失败设备的 Power usage 仍可能触发锁屏。
+- Test: 两个 Location ID 中一个完整成功、一个部分失败时，只允许完整成功的 Location；缺失 Location 必须 fail-closed。旧实现无法表达该范围，候选测试通过。
+
+### H3: 输入监控或辅助功能权限在配对期间失效
+
+- Supports: 权限失效也会让 App 不处理 HID，而系统音量仍能响应。
+- Conflicts: 现场日志明确记录 `input=true accessibility=true`，已否定为本次根因。
+
+### H4: BLE 连接展示只跟随旧选中 profile
+
+- Supports: 重新配对会产生新的 CoreBluetooth identifier。
+- Conflicts: 当前 `refreshBluetoothPresentation()` 的 `isConnected` 检查所有 bridge 的 Ready 状态，不只检查选中 profile；如果新 discovery bridge 已 Ready，Onboarding 应显示连接。
+- Test: 只读代码核对已否定其作为第一张截图的主要原因。
+
+## Experiments
+
+- 最小系统实验确认：目标 `IOHIDServiceClient` registry ID 与 `IOHIDDevice` registry ID 不同，但两侧 `LocationID` 位模式一致；可用 `UInt32 LocationID` 把成功抑制的 event service 安全映射到实际监听设备。
+- 失败回归先确认旧实现缺少 `locationID`、安全范围和前台 discovery 接线；生产实现后定向测试通过。
+- UI 截断另见独立 Bug 文档；固定宽度和单行状态可直接由生产布局代码稳定复现。
+
+## Root Cause
+
+1. Onboarding 遥控器页从系统设置返回时没有刷新 discovery，新配对设备可能只存在于系统连接列表而不继续广播。
+2. 电源键抑制对多个 HID service 部分成功时，旧安全门只能“全部开启或全部关闭”；为避免危险 Power 事件，它关闭全部 monitor，导致安全设备的普通按键也完全失效。
+
+## Fix
+
+- 遥控器页恢复前台时刷新 discovery cycle。
+- mapper 记录每个 service 的 Location ID，只有同一 Location 下全部 service 都成功写入 Power→F20 映射时才进入安全集合。
+- HID monitor 只打开和处理安全 Location 集合内的设备；失败或缺失 Location 的设备继续 fail-closed。
+- 不修改 HID 报告格式、普通按键映射或 BLE/ATVV 协议。
+
+---
+
+# Onboarding 全流程恢复门禁审计
+
+## Observations
+
+- 现有流程对每一页分别检查能力，但原完成页无条件通过，因此权限、遥控器或音频在后续页面失效后仍可完成。
+- App 回到前台时原来只刷新权限；遥控器页后来补了 BLE discovery，但 HID 生产监听仍没有重建，音频页也不主动重新枚举设备。
+- 遥控器页只显示“等待实体按键”，没有显示 `hidStatus`；`HID START rejected`、权限变化或设备未打开对用户表现相同。
+- 语音和三个按键的通过标志是视图内存状态；若完成页也强依赖这些标志，窗口或 App 在完成页重建后会把它们清零并形成新的停滞。
+- 现有截图能证明布局，状态机测试能证明布尔门禁，二者都不能触发系统设置切回、CoreBluetooth 热插拔、IOHID service 部分失败和音频驱动变化的组合顺序。
+
+## Hypotheses
+
+### H1: 当前页从系统设置返回时没有刷新对应生产依赖（ROOT HYPOTHESIS）
+
+- Supports: 前台回调只统一刷新权限；遥控器与音频各自依赖 discovery、IOHIDManager 和 CoreAudio 枚举。
+- Test: 源码接线回归要求遥控器页同时调用 `refreshRemoteDiscovery`、`applyHIDSettings`，音频页调用 `refreshAudioDevices`。
+
+### H2: 底层多设备状态被压成单一 Bool，部分失败导致全局阻断（已由现场日志确认）
+
+- Supports: `matched=2 applied=1` 后持续 `HID START rejected power_suppressed=false`，权限为 true。
+- Test: 设备级 Location 安全集合只允许完整成功设备，失败或缺失 Location 继续拒绝。
+
+### H3: 完成页不重验运行时，流程结束时不保证 App 仍可用（ROOT HYPOTHESIS）
+
+- Supports: 原 `.complete` 直接返回 true，与权限、BLE、音频实时状态无关。
+- Test: 完整能力通过时允许完成；随后断开 BLE 或使音频未就绪时必须阻止完成。
+
+### H4: 最终页应要求所有前序临时标志仍为 true
+
+- Supports: 能最严格复用前面每个步骤的结果。
+- Conflicts: 标志只存在于 `OnboardingView`，窗口或 App 重建会清零；用户即使已完成实测也会在最终页被永久阻断。
+- Test: 当前权限、BLE 和音频仍有效，但临时语音/按键标志因视图重建清零时，完成页仍可继续。
+- 结论：否定；最终页只重验实时生产依赖，前序交互仍由原页面门禁负责。
+
+## Experiment
+
+- 先新增门禁和源码接线回归，旧实现分别在完成页断连、遥控器 HID 前台恢复、音频前台刷新和按键错误可见性上失败。
+- 实现当前页恢复和最终运行时重验后，同一组定向测试通过。
+
+## Root Cause
+
+测试模型只覆盖了每个组件的静态成功条件，没有把跨应用前后台、热插拔、多个底层对象部分成功和最终状态回退组合为一个用户旅程；生产页面也缺少针对 HID 失败的可见状态和重试入口。
+
+## Fix
+
+- 遥控器页回到前台时刷新 BLE discovery 和 HID 配置，显示生产 HID 状态并提供重新检测。
+- 音频页回到前台时重新枚举输出设备。
+- 完成页重新验证当前权限、BLE 和音频输出，并在进入时刷新 discovery 与音频列表。
+- 页面进入日志增加 `ONBOARDING STEP entered=<step>`。
+
+## Validation
+
+- 失败优先的 Onboarding 定向测试 13 项通过。
+- `swift test`：208 项、20 个 suite；`scripts/test.sh`：42 项；私有硬件模拟：16 项，均通过。
+- Release App 构建、深度签名校验和 `git diff --check` 通过。
+- 生产视图浅色、深色各 8 张已逐张检查；标准完成态与运行时退化错误态都已检查，无裁切或黑白分栏。
+- 未执行真实 RC001/RC003 新配对、系统权限历史、充电线状态、音频驱动安装或第三方语音工具验收。
