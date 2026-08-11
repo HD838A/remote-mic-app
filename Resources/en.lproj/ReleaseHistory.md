@@ -1,5 +1,11 @@
 # Version History
 
+## 1.8.8 (Pre-release)
+
+- Added a complete first-run setup guide that checks Bluetooth, Input Monitoring, and Accessibility permissions, then verifies the remote, compatible microphone, real voice input, and everyday buttons. Required checks cannot be skipped or bypassed to enter the main panel.
+- Existing users can run the setup guide again from About to recheck their environment and troubleshoot problems without clearing connections, button mappings, the compatible microphone, or other settings.
+- The setup guide uses a consistent two-pane design in light and dark modes, does not display a total step count, and resumes from the current page after relaunching.
+
 ## 1.8.6 (Pre-release)
 
 - Fixed holding the remote's Left or Right button not continuously moving the text cursor in input fields of other apps. Matching arrow mappings now use macOS native key repeat.
