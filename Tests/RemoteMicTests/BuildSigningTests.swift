@@ -116,6 +116,8 @@ struct BuildSigningTests {
         #expect(publishSource.contains("stable promotion is restricted to main"))
         #expect(publishSource.contains("candidate-provenance.json"))
         #expect(publishSource.contains("stable-promotion.json"))
+        #expect(publishSource.contains("verify_cdn_assets"))
+        #expect(publishSource.contains("https://download.sayall.app/mac/releases/$RELEASE_TAG/"))
         #expect(previewVerifierSource.contains("release/pre-vX.Y.Z"))
         #expect(previewVerifierSource.contains("preview candidate contains a non-release change"))
         #expect(previewVerifierSource.contains("git merge-base --is-ancestor \"$BASE_REF\" HEAD"))
@@ -222,7 +224,7 @@ struct BuildSigningTests {
         for requiredText in [
             "Remote-Mic-$VERSION.zh.txt",
             "Remote-Mic-$VERSION.en.txt",
-            "--release-notes-url-prefix \"$DOWNLOAD_PREFIX\"",
+            "--release-notes-url-prefix \"$CDN_DOWNLOAD_PREFIX\"",
         ] {
             #expect(notarizeSource.contains(requiredText))
         }
@@ -230,5 +232,8 @@ struct BuildSigningTests {
         #expect(publishSource.contains("$STAGING_DIR/${EN_RELEASE_NOTES:t}"))
         #expect(publishSource.contains(".payloadAssets | length == 8"))
         #expect(publishSource.contains("candidate-provenance.json"))
+        #expect(notarizeSource.contains("https://download.sayall.app/mac/releases/$RELEASE_TAG/"))
+        #expect(publishSource.contains("--range 0-1023"))
+        #expect(publishSource.contains("x-remote-mic-cdn: cloudflare"))
     }
 }

@@ -26,7 +26,7 @@ NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
 PARALLEL_PACKAGE_NOTARIZATION="${PARALLEL_PACKAGE_NOTARIZATION:-0}"
 PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
-DOWNLOAD_PREFIX="https://github.com/HD838A/remote-mic-app/releases/download/$RELEASE_TAG/"
+CDN_DOWNLOAD_PREFIX="https://download.sayall.app/mac/releases/$RELEASE_TAG/"
 RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG"
 GENERATE_APPCAST="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 SIGN_UPDATE="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
@@ -199,8 +199,8 @@ extract_release_notes \
   "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME"
 "$GENERATE_APPCAST" \
   --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" \
-  --download-url-prefix "$DOWNLOAD_PREFIX" \
-  --release-notes-url-prefix "$DOWNLOAD_PREFIX" \
+  --download-url-prefix "$CDN_DOWNLOAD_PREFIX" \
+  --release-notes-url-prefix "$CDN_DOWNLOAD_PREFIX" \
   --link "$RELEASE_PAGE" \
   --versions "$BUILD" \
   --maximum-versions 1 \
@@ -213,9 +213,9 @@ extract_release_notes \
 
 ENCLOSURE_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$APPCAST" | head -n 1)"
 test -n "$ENCLOSURE_SIGNATURE"
-rg -Fq "url=\"$DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
-rg -Fq "$DOWNLOAD_PREFIX$ZH_NOTES_BASENAME" "$APPCAST"
-rg -Fq "$DOWNLOAD_PREFIX$EN_NOTES_BASENAME" "$APPCAST"
+rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
+rg -Fq "$CDN_DOWNLOAD_PREFIX$ZH_NOTES_BASENAME" "$APPCAST"
+rg -Fq "$CDN_DOWNLOAD_PREFIX$EN_NOTES_BASENAME" "$APPCAST"
 rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
 "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$UPDATE_ZIP" "$ENCLOSURE_SIGNATURE"
 "$SIGN_UPDATE" --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"

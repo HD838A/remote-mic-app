@@ -54,7 +54,8 @@ if ! print -r -- "$RELEASE_TAG" | rg -q '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
   print -u2 "RELEASE_TAG must be a stable semantic version tag such as v1.8.8"
   exit 1
 fi
-DOWNLOAD_PREFIX="https://github.com/$REPOSITORY/releases/download/$RELEASE_TAG/"
+GITHUB_DOWNLOAD_PREFIX="https://github.com/$REPOSITORY/releases/download/$RELEASE_TAG/"
+CDN_DOWNLOAD_PREFIX="https://download.sayall.app/mac/releases/$RELEASE_TAG/"
 for command_name in cmp curl gh git jq plutil rg shasum stat; do
   command -v "$command_name" >/dev/null 2>&1 || {
     print -u2 "Missing required command: $command_name"
@@ -65,6 +66,7 @@ done
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-publish-release.XXXXXX)"
 STAGING_DIR="$WORK_DIR/upload"
 DOWNLOAD_DIR="$WORK_DIR/download"
+CDN_DOWNLOAD_DIR="$WORK_DIR/cdn-download"
 RELEASE_NOTES="$WORK_DIR/release-notes.md"
 CANDIDATE_PROVENANCE="$STAGING_DIR/candidate-provenance.json"
 STABLE_PROMOTION="$WORK_DIR/stable-promotion.json"
@@ -77,7 +79,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-/bin/mkdir -p "$STAGING_DIR" "$DOWNLOAD_DIR"
+/bin/mkdir -p "$STAGING_DIR" "$DOWNLOAD_DIR" "$CDN_DOWNLOAD_DIR"
 
 verify_local_artifacts() {
   test -d "$APP"
@@ -96,9 +98,9 @@ verify_local_artifacts() {
   "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
   "$ROOT/scripts/verify-dmg.sh" "$DMG"
 
-  rg -Fq "url=\"$DOWNLOAD_PREFIX${UPDATE_ZIP:t}\"" "$APPCAST"
-  rg -Fq "$DOWNLOAD_PREFIX${ZH_RELEASE_NOTES:t}" "$APPCAST"
-  rg -Fq "$DOWNLOAD_PREFIX${EN_RELEASE_NOTES:t}" "$APPCAST"
+  rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX${UPDATE_ZIP:t}\"" "$APPCAST"
+  rg -Fq "$CDN_DOWNLOAD_PREFIX${ZH_RELEASE_NOTES:t}" "$APPCAST"
+  rg -Fq "$CDN_DOWNLOAD_PREFIX${EN_RELEASE_NOTES:t}" "$APPCAST"
   rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
   rg -Fq "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$APPCAST"
 }
@@ -254,6 +256,53 @@ download_release_assets() {
   gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir "$DOWNLOAD_DIR"
 }
 
+verify_cdn_assets() {
+  local source_dir="$1"
+  local source_file asset_name downloaded_file expected_count
+  /bin/rm -rf -- "$CDN_DOWNLOAD_DIR"
+  /bin/mkdir -p "$CDN_DOWNLOAD_DIR"
+
+  expected_count=0
+  for source_file in "$source_dir"/*; do
+    asset_name="${source_file:t}"
+    downloaded_file="$CDN_DOWNLOAD_DIR/$asset_name"
+    curl --fail --silent --show-error --location \
+      --retry 5 --retry-all-errors \
+      "$CDN_DOWNLOAD_PREFIX$asset_name" \
+      --output "$downloaded_file"
+    /usr/bin/cmp -s "$source_file" "$downloaded_file"
+    expected_count=$((expected_count + 1))
+  done
+  test "$(/usr/bin/find "$CDN_DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "$expected_count"
+
+  local dmg_name="Remote-Mic-$VERSION.dmg"
+  local header_file="$WORK_DIR/cdn-dmg-headers.txt"
+  curl --fail --silent --show-error --head \
+    "$CDN_DOWNLOAD_PREFIX$dmg_name" > "$header_file"
+  rg -qi '^x-remote-mic-cdn: cloudflare' "$header_file"
+  rg -qi '^accept-ranges: bytes' "$header_file"
+
+  local range_file="$WORK_DIR/cdn-dmg-range.bin"
+  local expected_range="$WORK_DIR/local-dmg-range.bin"
+  local range_status
+  range_status="$(curl --fail --silent --show-error --location \
+    --range 0-1023 \
+    --output "$range_file" \
+    --write-out '%{http_code}' \
+    "$CDN_DOWNLOAD_PREFIX$dmg_name")"
+  test "$range_status" = "206"
+  /usr/bin/head -c 1024 "$source_dir/$dmg_name" > "$expected_range"
+  /usr/bin/cmp -s "$expected_range" "$range_file"
+}
+
+verify_stable_download_redirect() {
+  local redirect_result
+  redirect_result="$(curl --silent --show-error --head --output /dev/null \
+    --write-out '%{http_code}\t%{redirect_url}' \
+    'https://download.sayall.app/mac')"
+  test "$redirect_result" = $'302\t'"$CDN_DOWNLOAD_PREFIX""Remote-Mic-$VERSION.dmg"
+}
+
 verify_downloaded_candidate() {
   local provenance="$DOWNLOAD_DIR/candidate-provenance.json"
   test -f "$provenance"
@@ -308,9 +357,10 @@ download_and_compare_local_candidate() {
     /usr/bin/cmp -s "$expected" "$downloaded"
   done
   test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "9"
-  curl -fsSL "${DOWNLOAD_PREFIX}appcast.xml" -o "$WORK_DIR/tag-appcast.xml"
+  curl -fsSL "${GITHUB_DOWNLOAD_PREFIX}appcast.xml" -o "$WORK_DIR/tag-appcast.xml"
   /usr/bin/cmp -s "$STAGING_DIR/appcast.xml" "$WORK_DIR/tag-appcast.xml"
   verify_downloaded_candidate
+  verify_cdn_assets "$STAGING_DIR"
 }
 
 generate_stable_promotion() {
@@ -390,6 +440,7 @@ RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.d
 test "$RELEASE_STATE" = $'false\ttrue'
 download_release_assets
 verify_downloaded_candidate
+verify_cdn_assets "$DOWNLOAD_DIR"
 
 if [[ "$DRY_RUN" == "1" ]]; then
   print "PUBLISH DRY RUN PASS"
@@ -408,4 +459,5 @@ test "$RELEASE_STATE" = $'false\tfalse'
 test "$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)" = "$RELEASE_TAG"
 curl -fsSL "https://github.com/$REPOSITORY/releases/latest/download/appcast.xml" -o "$WORK_DIR/latest-appcast.xml"
 /usr/bin/cmp -s "$DOWNLOAD_DIR/appcast.xml" "$WORK_DIR/latest-appcast.xml"
+verify_stable_download_redirect
 print "RELEASE PROMOTION PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
