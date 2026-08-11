@@ -1,0 +1,88 @@
+name: macOS Intel Compatibility
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/intel-ventura-support
+
+concurrency:
+  group: mac-intel-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-package:
+    name: Validate Intel Ventura package
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      RELEASE_VARIANT: intel
+
+    steps:
+      - name: Check out Intel compatibility branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install required tools
+        run: command -v rg >/dev/null || brew install ripgrep
+
+      - name: Check patch formatting
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && \
+             [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            git diff --check "${{ github.event.before }}..HEAD"
+          else
+            git diff --check HEAD^..HEAD
+          fi
+
+      - name: Enforce extracted repository boundaries
+        run: ./scripts/check-repository-boundaries.sh
+
+      - name: Run Swift tests against macOS 13 package baseline
+        run: swift test
+
+      - name: Run core first-voice journey gate
+        run: |
+          swift test --filter VoiceInputDestinationCoordinatorTests
+          swift test --filter CoreVoiceInputJourneyTests
+
+      - name: Run project self-test
+        run: ./scripts/test.sh
+
+      - name: Cross-build x86_64 release for Ventura
+        run: swift build -c release --triple x86_64-apple-macosx13.0
+
+      - name: Build and verify Intel App
+        run: |
+          ./scripts/build-app.sh
+          ./scripts/verify-app.sh
+
+      - name: Build and verify Intel audio driver
+        run: |
+          ./scripts/build-doubao-driver.sh
+          ./scripts/verify-doubao-driver.sh
+
+      - name: Build and verify Intel installers
+        run: ./scripts/build-doubao-driver-pkg.sh
+
+      - name: Build and verify Intel disk image
+        run: |
+          BUILD_COMPONENTS=0 ./scripts/build-dmg.sh
+          ./scripts/verify-dmg.sh
+
+      - name: Upload ad-hoc Intel test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-mic-intel-ventura-${{ github.sha }}
+          path: |
+            dist/intel/Remote-Mic-*-Intel.dmg
+            dist/intel/Remote-Mic-*-Intel.dmg.sha256
+            dist/intel/Install Remote Mic Intel.pkg
+            dist/intel/Uninstall Remote Mic Intel.pkg
+          if-no-files-found: error
+          retention-days: 14

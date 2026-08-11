@@ -2,12 +2,13 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
+source "$ROOT/scripts/release-variant.sh"
 BLACKHOLE_TAG="v0.7.1"
 BLACKHOLE_COMMIT="e2b22aaaba4e507a097131704bf96dabc004d9cf"
-WORK_ROOT="$ROOT/.build/doubao-driver"
+WORK_ROOT="$ROOT/.build/doubao-driver$RELEASE_WORK_SUFFIX"
 SOURCE_ROOT="$WORK_ROOT/BlackHole"
 PATCH="$ROOT/third_party/blackhole/blackhole-device-usb.patch"
-OUTPUT="$ROOT/dist/MiRemoteV2ch.driver"
+OUTPUT="$RELEASE_OUTPUT_DIR/MiRemoteV2ch.driver"
 PRODUCT_NAME="MiRemoteV2ch"
 BUNDLE_ID="com.hd838a.MiRemoteV2ch"
 DEFINITIONS='$GCC_PREPROCESSOR_DEFINITIONS kDriver_Name=\"MiRemoteV\" kPlugIn_BundleID=\"com.hd838a.MiRemoteV2ch\" kNumber_Of_Channels=2'
@@ -32,11 +33,11 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; t
 fi
 
 case "$WORK_ROOT" in
-  "$ROOT"/.build/doubao-driver) ;;
+  "$ROOT"/.build/doubao-driver|"$ROOT"/.build/doubao-driver-intel) ;;
   *) print -u2 "refusing to clean unexpected work path: $WORK_ROOT"; exit 1 ;;
 esac
 case "$OUTPUT" in
-  "$ROOT"/dist/*.driver) ;;
+  "$ROOT"/dist/*.driver|"$ROOT"/dist/intel/*.driver) ;;
   *) print -u2 "refusing to replace unexpected output path: $OUTPUT"; exit 1 ;;
 esac
 
@@ -59,9 +60,9 @@ xcodebuild \
   -target BlackHole \
   -configuration Release \
   -sdk macosx \
-  ARCHS=arm64 \
+  ARCHS="$RELEASE_ARCH" \
   ONLY_ACTIVE_ARCH=NO \
-  MACOSX_DEPLOYMENT_TARGET=14.0 \
+  MACOSX_DEPLOYMENT_TARGET="$RELEASE_MIN_SYSTEM_VERSION" \
   CODE_SIGNING_ALLOWED=NO \
   PRODUCT_NAME="$PRODUCT_NAME" \
   PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
@@ -85,5 +86,6 @@ fi
 "$ROOT/scripts/verify-doubao-driver.sh" "$OUTPUT"
 
 print "Built: $OUTPUT"
+print "RELEASE VARIANT: $RELEASE_VARIANT"
 print "SIGNING IDENTITY: $SIGNING_IDENTITY"
 print "Next: $ROOT/scripts/build-doubao-driver-pkg.sh"

@@ -43,7 +43,7 @@ struct GitHubReleaseFeedRecord: Decodable, Equatable {
 }
 
 enum UpdateFeedResolver {
-    static func latestAppcastURL(from data: Data) throws -> URL {
+    static func latestAppcastURL(from data: Data, assetName: String = "appcast.xml") throws -> URL {
         let releases = try JSONDecoder().decode([GitHubReleaseFeedRecord].self, from: data)
         let orderedReleases = releases.enumerated().sorted { lhs, rhs in
             switch (lhs.element.publishedAt, rhs.element.publishedAt) {
@@ -57,7 +57,7 @@ enum UpdateFeedResolver {
             .map(\.element)
             .filter({ !$0.draft })
             .flatMap(\.assets)
-            .first(where: { $0.name == "appcast.xml" })?
+            .first(where: { $0.name == assetName })?
             .browserDownloadURL
         else {
             throw UpdateFeedResolutionError.feedNotFound

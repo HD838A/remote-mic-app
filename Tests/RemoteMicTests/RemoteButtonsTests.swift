@@ -2027,6 +2027,14 @@ struct RemoteButtonsTests {
         #expect(selection.feedURLString(checksForPreReleaseUpdates: false) == stableFeed)
     }
 
+    @Test func intelUpdateSelectionUsesTheIntelAppcastNameForPreReleaseResolution() {
+        let selection = UpdateFeedSelection(
+            stableFeedURLString: "https://example.com/releases/latest/download/appcast-intel.xml"
+        )
+
+        #expect(selection.appcastAssetName == "appcast-intel.xml")
+    }
+
     @Test func secondaryTriggerActionsPersistAndResetWithoutChangingSingleClick() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

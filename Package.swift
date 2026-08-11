@@ -6,6 +6,9 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
 ]
 var remoteMicTestDependencies: [Target.Dependency] = ["RemoteMic"]
+let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
+    ? .macOS(.v13)
+    : .macOS(.v14)
 
 if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
     "REMOTE_MIC_HARDWARE_SIMULATION_PATH"
@@ -21,7 +24,7 @@ if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
 
 let package = Package(
     name: "RemoteMic",
-    platforms: [.macOS(.v14)],
+    platforms: [macOSPlatform],
     products: [
         .executable(
             name: "RemoteMic",

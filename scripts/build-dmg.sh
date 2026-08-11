@@ -2,16 +2,17 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
-OUTPUT_DIR="$ROOT/dist"
+source "$ROOT/scripts/release-variant.sh"
+OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 DISPLAY_NAME="Remote Mic"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 PLIST="$ROOT/Resources/Info.plist"
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$PLIST")"
-DMG_BASENAME="Remote-Mic-$VERSION.dmg"
+DMG_BASENAME="Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.dmg"
 DMG="$OUTPUT_DIR/$DMG_BASENAME"
-INSTALL_PACKAGE="Install Remote Mic.pkg"
-UNINSTALL_PACKAGE="Uninstall Remote Mic.pkg"
+INSTALL_PACKAGE="$RELEASE_INSTALL_PACKAGE_NAME"
+UNINSTALL_PACKAGE="$RELEASE_UNINSTALL_PACKAGE_NAME"
 BUILD_COMPONENTS="${BUILD_COMPONENTS:-1}"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
@@ -63,7 +64,7 @@ ditto --norsrc --noqtn --noacl \
   "$OUTPUT_DIR/$UNINSTALL_PACKAGE" "$STAGING/$UNINSTALL_PACKAGE"
 
 hdiutil create \
-  -volname "$DISPLAY_NAME $VERSION" \
+  -volname "$DISPLAY_NAME $VERSION $RELEASE_LABEL" \
   -srcfolder "$STAGING" \
   -fs "HFS+" \
   -format UDZO \
@@ -82,3 +83,4 @@ fi
 print "DMG: $DMG"
 print "SHA256: $DMG.sha256"
 print "VERSION: $VERSION ($BUILD)"
+print "RELEASE VARIANT: $RELEASE_VARIANT"

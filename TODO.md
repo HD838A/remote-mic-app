@@ -70,10 +70,11 @@
 - [x] 在真实 macOS 14 Apple Silicon 机器完成运行时验收
   - 已在真实 macOS 14 Apple Silicon 机器完成运行时验收，确认实际运行正常。
   - 验收范围包括安装与卸载、降级界面、蓝牙配对与重连、HID、权限、ATVV 音频、MiRemoteV 2ch、Sparkle 更新、睡眠唤醒和音频路由变化；详细依据保存在独立的产品资料工作区。
-- [ ] 评估并支持 2017 Intel MacBook / MacBook Pro 的 macOS Ventura 13（暂未开发）
-  - 当前结论是技术上可以解决，不需要重写蓝牙、HID、音频或 App 主架构：主 App 已成功交叉编译为 `x86_64`；在临时 macOS 13 编译探测中发现 5 处集中于 Onboarding 和设置页的 SwiftUI 可用性错误；MiRemoteV 2ch 已成功构建为 `x86_64`、Mach-O `minos 13.0`；Sparkle 也包含 Intel slice。
-  - 当前正式包仍明确要求 macOS 14 + `arm64`，安装器会主动拒绝 Intel。正式支持需要补 macOS 13 UI 兼容、App/驱动/PKG/DMG/Sparkle 的 Intel 或 Universal 2 发布链，并在目标机器完成蓝牙配对、HID、ATVV 音频、权限、虚拟音频驱动、更新、睡眠和重连真机验收。
-  - 只为一台具体机器提供实验测试包属于中等工作量；长期正式支持 Intel Ventura 属于中等偏高到高，主要成本是第二套发布与持续回归矩阵。详细证据和方案保存在私有产品资料库 `projects/remote-mic-app/research/macos-13-intel-support/v1/README.md`。
+- [ ] 支持 2017 Intel MacBook / MacBook Pro 的 macOS Ventura 13（等待真机验收）
+  - 已完成 macOS 13 SwiftUI 可用性适配，并建立与 Apple Silicon 正式发行线隔离的长期 Intel 发行变体：Intel 仅构建 `x86_64`，输出到 `dist/intel`，使用带 `Intel` 的独立资产名和 `appcast-intel.xml`；默认发行仍保持 macOS 14、`arm64`、原资产名和 `appcast.xml`。
+  - Intel App、Sparkle 五个可执行文件、MiRemoteV 2ch、安装/卸载 PKG 和 DMG 已通过本机构建与静态验证；安装器会在删除已有 App 前检查系统与架构，普通用户机器上的脚本不依赖 Xcode 或 Command Line Tools。独立 CI 会持续交叉编译并上传 ad-hoc 测试产物。
+  - 预览版 Feed 解析已按当前稳定 Feed 的文件名选择资产，Intel 开启预览版更新时不会串到 Apple Silicon 的 `appcast.xml`。Apple Silicon 默认构建和发行产物仍需作为每次 Intel 改动的回归门禁。
+  - 尚缺真实 Intel Ventura 机器上的蓝牙配对、HID、ATVV 音频、权限、MiRemoteV/BlackHole、更新、睡眠和重连验收，因此本条暂不勾选。公开仓库中的验收边界见 `Testing/IntelVenturaCompatibility.md`，详细方案保存在私有产品资料库 `projects/remote-mic-app/research/macos-13-intel-support/v2/README.md`。
 - [ ] 优化 macOS 安装器，为普通用户只提供一个明确的安装入口
   - 当前 DMG 同时展示 `Remote Mic.app`、Applications 快捷方式、`Install Remote Mic.pkg` 和卸载 PKG，用户容易误以为 App 与 PKG 需要分别安装，或不知道应该选择哪一种。现有安装 PKG 实际已经同时安装 App 和 `MiRemoteV 2ch` 兼容麦克风，主要问题是发布入口重复而不是缺少合并安装能力。
   - 第一方案是让 DMG 只突出一个签名并公证的 `Install Remote Mic.pkg`，一次完成 App、兼容麦克风、权限正确性检查和安装后启动；不再在同一 DMG 根目录提供并列的 App 拖拽入口。只需要 App、已经安装其他回环设备的高级用户可通过单独的 ZIP 或明确的高级下载入口获取，不与普通安装流程并列。

@@ -152,6 +152,62 @@ struct BuildSigningTests {
         #expect(ciWorkflowSource.contains("workflow_dispatch:"))
     }
 
+    @Test func intelVenturaReleaseLineStaysIsolatedFromAppleSilicon() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let variantSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/release-variant.sh"),
+            encoding: .utf8
+        )
+        let workflowSource = try String(
+            contentsOf: root.appendingPathComponent(
+                ".github/workflows/mac-intel-compatibility.yml"
+            ),
+            encoding: .utf8
+        )
+        let preinstallSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "packaging/doubao-driver/install/preinstall"
+            ),
+            encoding: .utf8
+        )
+        let packageVerifierSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/verify-doubao-driver-pkg.sh"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(variantSource.contains("RELEASE_VARIANT=\"${RELEASE_VARIANT:-apple-silicon}\""))
+        #expect(variantSource.contains("arm64-apple-macosx14.0"))
+        #expect(variantSource.contains("x86_64-apple-macosx13.0"))
+        #expect(variantSource.contains("RELEASE_OUTPUT_DIR=\"$ROOT/dist/intel\""))
+        #expect(variantSource.contains("RELEASE_APPCAST_NAME=\"appcast-intel.xml\""))
+        #expect(variantSource.contains("RELEASE_ASSET_SUFFIX=\"-Intel\""))
+
+        #expect(workflowSource.contains("codex/intel-ventura-support"))
+        #expect(workflowSource.contains("RELEASE_VARIANT: intel"))
+        #expect(workflowSource.contains("x86_64-apple-macosx13.0"))
+        #expect(workflowSource.contains("./scripts/build-doubao-driver-pkg.sh"))
+        #expect(workflowSource.contains("./scripts/verify-dmg.sh"))
+        #expect(workflowSource.contains("actions/upload-artifact@v4"))
+        #expect(!workflowSource.contains("MATCH_PASSWORD"))
+        #expect(!workflowSource.contains("AuthKey_"))
+
+        let architectureCheck = try #require(
+            preinstallSource.range(of: "CURRENT_ARCHITECTURE")
+        )
+        let existingAppRemoval = try #require(
+            preinstallSource.range(of: "/bin/rm -rf -- \"$APP_DESTINATION\"")
+        )
+        #expect(architectureCheck.lowerBound < existingAppRemoval.lowerBound)
+        #expect(packageVerifierSource.contains(
+            "package scripts must not require Xcode or Command Line Tools"
+        ))
+    }
+
     @Test func stablePromotionRequiresMainAndCandidateProvenance() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

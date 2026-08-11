@@ -2,6 +2,8 @@
 set -euo pipefail
 
 TARGET_VOLUME="${3:-/}"
+SCRIPT_DIR="${0:A:h}"
+RELEASE_CONFIG="$SCRIPT_DIR/release-variant.plist"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
 APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
@@ -21,6 +23,24 @@ installer_message() {
     print "$2"
   fi
 }
+
+test -f "$RELEASE_CONFIG"
+EXPECTED_ARCHITECTURE="$(/usr/bin/plutil -extract ExpectedArchitecture raw -o - "$RELEASE_CONFIG")"
+MINIMUM_SYSTEM_MAJOR="$(/usr/bin/plutil -extract MinimumSystemMajor raw -o - "$RELEASE_CONFIG")"
+CURRENT_ARCHITECTURE="$(/usr/bin/uname -m)"
+CURRENT_SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
+if [[ "$CURRENT_ARCHITECTURE" != "$EXPECTED_ARCHITECTURE" ]]; then
+  installer_message \
+    "未安装：此安装包适用于 $EXPECTED_ARCHITECTURE Mac，当前机器是 $CURRENT_ARCHITECTURE。" \
+    "Installation stopped: this package is for $EXPECTED_ARCHITECTURE Macs, but this Mac is $CURRENT_ARCHITECTURE." >&2
+  exit 2
+fi
+if [[ "$CURRENT_SYSTEM_MAJOR" -lt "$MINIMUM_SYSTEM_MAJOR" ]]; then
+  installer_message \
+    "未安装：此安装包需要 macOS $MINIMUM_SYSTEM_MAJOR 或更高版本。" \
+    "Installation stopped: this package requires macOS $MINIMUM_SYSTEM_MAJOR or later." >&2
+  exit 2
+fi
 
 if [[ -e "$DESTINATION" ]]; then
   if [[ ! -f "$PLIST" ]] || \

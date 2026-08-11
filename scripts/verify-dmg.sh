@@ -2,16 +2,17 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
-OUTPUT_DIR="$ROOT/dist"
+source "$ROOT/scripts/release-variant.sh"
+OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 DISPLAY_NAME="Remote Mic"
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
-DMG="${1:-$OUTPUT_DIR/Remote-Mic-$VERSION.dmg}"
+DMG="${1:-$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.dmg}"
 CHECKSUM="$DMG.sha256"
 VERIFY_ROOT="$(mktemp -d /private/tmp/remote-mic-dmg-verify.XXXXXX)"
 MOUNT_POINT="$VERIFY_ROOT/mount"
-INSTALL_PACKAGE="$MOUNT_POINT/Install Remote Mic.pkg"
-UNINSTALL_PACKAGE="$MOUNT_POINT/Uninstall Remote Mic.pkg"
+INSTALL_PACKAGE="$MOUNT_POINT/$RELEASE_INSTALL_PACKAGE_NAME"
+UNINSTALL_PACKAGE="$MOUNT_POINT/$RELEASE_UNINSTALL_PACKAGE_NAME"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
@@ -70,9 +71,9 @@ ATTACHED=1
 APP="$MOUNT_POINT/$DISPLAY_NAME.app"
 EXPECTED_ROOT_ENTRIES="$(printf '%s\n' \
   Applications \
-  Install\ Remote\ Mic.pkg \
+  "$RELEASE_INSTALL_PACKAGE_NAME" \
   Remote\ Mic.app \
-  Uninstall\ Remote\ Mic.pkg | LC_ALL=C sort)"
+  "$RELEASE_UNINSTALL_PACKAGE_NAME" | LC_ALL=C sort)"
 ACTUAL_ROOT_ENTRIES="$(find "$MOUNT_POINT" -mindepth 1 -maxdepth 1 \
   -exec basename {} \; | LC_ALL=C sort)"
 
@@ -106,6 +107,7 @@ fi
 
 print "DMG VERIFY PASS: $DMG"
 print "VERSION: $VERSION ($BUILD)"
+print "RELEASE VARIANT: $RELEASE_VARIANT"
 print "SIGNATURE: $SIGNATURE"
 if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
   print "NOTARIZATION: stapled and accepted by Gatekeeper"

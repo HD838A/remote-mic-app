@@ -3,18 +3,19 @@ set -euo pipefail
 umask 022
 
 ROOT="${0:A:h:h}"
-OUTPUT_DIR="$ROOT/dist"
+source "$ROOT/scripts/release-variant.sh"
+OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 PLIST="$ROOT/Resources/Info.plist"
 DISPLAY_NAME="Remote Mic"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
 RELEASE_TAG="${RELEASE_TAG:-v$VERSION}"
 APP="$OUTPUT_DIR/$DISPLAY_NAME.app"
-INSTALL_PACKAGE="$OUTPUT_DIR/Install Remote Mic.pkg"
-UNINSTALL_PACKAGE="$OUTPUT_DIR/Uninstall Remote Mic.pkg"
-DMG="$OUTPUT_DIR/Remote-Mic-$VERSION.dmg"
-UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION.zip"
-APPCAST="$OUTPUT_DIR/appcast.xml"
+INSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_INSTALL_PACKAGE_NAME"
+UNINSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_UNINSTALL_PACKAGE_NAME"
+DMG="$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.dmg"
+UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.zip"
+APPCAST="$OUTPUT_DIR/$RELEASE_APPCAST_NAME"
 ZH_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.zh.txt"
 EN_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.en.txt"
 ZIP_BASENAME="${UPDATE_ZIP:t}"
@@ -26,8 +27,8 @@ NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
 PARALLEL_PACKAGE_NOTARIZATION="${PARALLEL_PACKAGE_NOTARIZATION:-0}"
 PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
-DOWNLOAD_PREFIX="https://github.com/HD838A/remote-mic-app/releases/download/$RELEASE_TAG/"
-RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG"
+DOWNLOAD_PREFIX="${RELEASE_DOWNLOAD_PREFIX:-https://github.com/HD838A/remote-mic-app/releases/download/$RELEASE_TAG/}"
+RELEASE_PAGE="${RELEASE_PAGE_URL:-https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG}"
 GENERATE_APPCAST="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 SIGN_UPDATE="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
 
@@ -90,7 +91,7 @@ if ! security find-identity -v -p basic | rg -Fq "\"$INSTALLER_SIGNING_IDENTITY\
 fi
 
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-notarize-release.XXXXXX)"
-APP_NOTARY_ZIP="$WORK_DIR/Remote-Mic-$VERSION-notarization.zip"
+APP_NOTARY_ZIP="$WORK_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX-notarization.zip"
 SPARKLE_ARCHIVES="$WORK_DIR/sparkle-archives"
 ZH_NOTES_BASENAME="${ZH_RELEASE_NOTES:t}"
 EN_NOTES_BASENAME="${EN_RELEASE_NOTES:t}"
@@ -184,7 +185,7 @@ case "$UPDATE_ZIP" in
   *) print -u2 "refusing to replace unexpected Sparkle archive: $UPDATE_ZIP"; exit 1 ;;
 esac
 case "$APPCAST" in
-  "$OUTPUT_DIR"/appcast.xml) ;;
+  "$OUTPUT_DIR"/appcast.xml|"$OUTPUT_DIR"/appcast-intel.xml) ;;
   *) print -u2 "refusing to replace unexpected appcast path: $APPCAST"; exit 1 ;;
 esac
 /bin/rm -f -- "$UPDATE_ZIP" "$APPCAST" "$ZH_RELEASE_NOTES" "$EN_RELEASE_NOTES"
@@ -222,6 +223,7 @@ rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
 "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
 
 print "NOTARIZED RELEASE READY"
+print "RELEASE VARIANT: $RELEASE_VARIANT"
 print "RELEASE TAG: $RELEASE_TAG"
 print "DMG: $DMG"
 print "SHA256: $DMG.sha256"
