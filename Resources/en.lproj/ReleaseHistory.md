@@ -2,6 +2,8 @@
 
 ## 1.8.10 (Pre-release)
 
+- Existing users no longer have to repeat the first-run setup after upgrading. New installations, unfinished setup, and a setup guide started again by the user still complete the required checks.
+- The setup guide no longer requires MiRemoteV 2ch. BlackHole 2ch and other installed audio devices can be selected and continued once their output is ready.
 - Fixed the setup guide continuing to show that it was searching for the remote after an upgrade even though a physical remote button had already been received. Bluetooth recovery now starts automatically.
 - Fixed the compatible microphone remaining active after the remote disconnected and potentially staying attached to meeting or voice-input apps. Disconnecting now ends the active voice session and releases the virtual audio device.
 - Removed the ineffective physical-remote recording renewal attempt to avoid unnecessary forced stops and reconnects. The roughly one-minute recording limit remains under investigation.
