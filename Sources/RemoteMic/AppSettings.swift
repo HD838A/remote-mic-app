@@ -241,6 +241,7 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let deepSeekPostDictationEnabled = "deepSeekPostDictationEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
@@ -340,6 +341,15 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
+            )
+        }
+    }
+
+    @Published var deepSeekPostDictationEnabled: Bool {
+        didSet {
+            defaults.set(
+                deepSeekPostDictationEnabled,
+                forKey: Keys.deepSeekPostDictationEnabled
             )
         }
     }
@@ -502,6 +512,9 @@ final class AppSettings: ObservableObject {
         )
         voiceFnTapModeEnabled = defaults.bool(
             forKey: Keys.voiceFnTapModeEnabled
+        )
+        deepSeekPostDictationEnabled = defaults.bool(
+            forKey: Keys.deepSeekPostDictationEnabled
         )
         continuousRecordingPowerBindingBackup = defaults
             .data(forKey: Keys.continuousRecordingPowerBindingBackup)

@@ -63,8 +63,16 @@ if [[ -z "${REMOTE_WEB_RELAY_URL:-}" && -r "$PRIVATE_PRODUCTION_ENV" ]]; then
   REMOTE_WEB_RELAY_URL="$(/usr/bin/sed -n 's/^REMOTE_WEB_RELAY_URL=//p' \
     "$PRIVATE_PRODUCTION_ENV" | /usr/bin/tail -n 1)"
 fi
+if [[ -z "${EARLY_ACCESS_SERVICE_URL:-}" && -r "$PRIVATE_PRODUCTION_ENV" ]]; then
+  EARLY_ACCESS_SERVICE_URL="$(/usr/bin/sed -n 's/^EARLY_ACCESS_SERVICE_URL=//p' \
+    "$PRIVATE_PRODUCTION_ENV" | /usr/bin/tail -n 1)"
+fi
 if [[ "${REMOTE_WEB_RELAY_URL:-}" != wss://?*/ws ]]; then
   print -u2 "REMOTE_WEB_RELAY_URL must be a production wss:// URL ending in /ws"
+  exit 1
+fi
+if ! print -r -- "${EARLY_ACCESS_SERVICE_URL:-}" | rg -q '^https://[^/?#]+/?$'; then
+  print -u2 "EARLY_ACCESS_SERVICE_URL must be a production root HTTPS URL"
   exit 1
 fi
 for command in codesign ditto security xcrun; do
@@ -133,7 +141,9 @@ export INSTALLER_SIGNING_IDENTITY
 export EXPECTED_DEVELOPER_TEAM_ID
 export REQUIRE_DEVELOPER_ID_SIGNING=1
 export REQUIRE_WEB_REMOTE_CONFIGURATION=1
+export REQUIRE_EARLY_ACCESS_CONFIGURATION=1
 export REMOTE_WEB_RELAY_URL
+export EARLY_ACCESS_SERVICE_URL
 export REQUIRE_NOTARIZATION=0
 
 "$ROOT/scripts/build-app.sh"

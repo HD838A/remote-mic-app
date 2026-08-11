@@ -78,9 +78,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
+    private var postDictationHUDController: PostDictationHUDController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
     private var applicationShortcutMonitor: Any?
+    private var workspaceWakeObserver: NSObjectProtocol?
     private var updateFeedSelection = UpdateFeedSelection(
         stableFeedURLString: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
     )
@@ -116,6 +118,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         observeModel()
         observeLocalization()
         observePhoneRemoteButtonTitles()
+        installWorkspaceWakeObserver()
+        model.refreshEarlyAccessIfNeeded()
         if OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: model.settings.isOnboardingComplete,
             step: model.settings.onboardingStep
@@ -147,6 +151,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        postDictationHUDController?.hideImmediately()
         model.stop()
         updateFeedRefreshTask?.cancel()
         updateFeedRefreshTimer?.invalidate()
@@ -156,6 +161,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             NSEvent.removeMonitor(applicationShortcutMonitor)
             self.applicationShortcutMonitor = nil
         }
+        if let workspaceWakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(workspaceWakeObserver)
+            self.workspaceWakeObserver = nil
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        model.refreshEarlyAccessIfNeeded()
     }
 
     func applicationShouldHandleReopen(
@@ -178,6 +191,18 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             }
             source.resume()
             terminationSignalSources.append(source)
+        }
+    }
+
+    private func installWorkspaceWakeObserver() {
+        workspaceWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.model.refreshEarlyAccessIfNeeded()
+            }
         }
     }
 
@@ -348,6 +373,31 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             self?.refreshMenuStatus()
         }
         .store(in: &subscriptions)
+
+        Publishers.CombineLatest(
+            model.$postDictationState,
+            model.$postDictationStatus
+        )
+        .map { state, status in
+            PostDictationHUDPresentation.shouldShow(state: state, statusKey: status.key)
+        }
+        .removeDuplicates()
+        .receive(on: RunLoop.main)
+        .sink { [weak self] isVisible in
+            self?.setPostDictationHUDVisible(isVisible)
+        }
+        .store(in: &subscriptions)
+    }
+
+    private func setPostDictationHUDVisible(_ isVisible: Bool) {
+        if isVisible {
+            let controller = postDictationHUDController
+                ?? PostDictationHUDController(localization: localization)
+            postDictationHUDController = controller
+            controller.setVisible(true)
+        } else {
+            postDictationHUDController?.setVisible(false)
+        }
     }
 
     private func observeLocalization() {
