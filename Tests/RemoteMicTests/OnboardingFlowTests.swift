@@ -72,7 +72,7 @@ struct OnboardingFlowTests {
             voiceTool: .typeless,
             capabilities: capabilities
         ))
-        capabilities.compatibleMicrophoneSelected = true
+        capabilities.audioOutputSelected = true
         #expect(OnboardingFlowPolicy.canContinue(
             from: .audio,
             voiceTool: .typeless,
@@ -105,6 +105,104 @@ struct OnboardingFlowTests {
             from: .controls,
             voiceTool: .typeless,
             capabilities: capabilities
+        ))
+    }
+
+    @Test func observedRemoteButtonRequestsOnlyOneRecoveryWhileBluetoothIsDisconnected() {
+        #expect(!OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: false,
+            remoteButtonObserved: false,
+            recoveryRequested: false
+        ))
+        #expect(!OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: true,
+            remoteButtonObserved: true,
+            recoveryRequested: false
+        ))
+        #expect(!OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: false,
+            remoteButtonObserved: true,
+            recoveryRequested: true
+        ))
+        #expect(OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: false,
+            remoteButtonObserved: true,
+            recoveryRequested: false
+        ))
+    }
+
+    @Test func remoteRecoveryIsWiredToButtonObservationAndCanStartMissingBluetoothBridge() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let buttonReceiveStart = try #require(viewSource.range(
+            of: ".onReceive(model.$lastRemoteButtonPress.compactMap { $0 })"
+        ))
+        let buttonReceiveEnd = try #require(viewSource.range(
+            of: ".onReceive(model.$isStreaming)",
+            range: buttonReceiveStart.upperBound..<viewSource.endIndex
+        ))
+        let buttonReceiveSource = viewSource[buttonReceiveStart.lowerBound..<buttonReceiveEnd.lowerBound]
+        #expect(buttonReceiveSource.contains("recoverRemoteConnectionIfNeeded()"))
+
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let reconnectStart = try #require(modelSource.range(of: "func reconnect()"))
+        let reconnectEnd = try #require(modelSource.range(
+            of: "func enablePhoneRemoteConnection()",
+            range: reconnectStart.upperBound..<modelSource.endIndex
+        ))
+        let reconnectSource = modelSource[reconnectStart.lowerBound..<reconnectEnd.lowerBound]
+        #expect(reconnectSource.contains("guard started else { return }"))
+        #expect(reconnectSource.contains("bluetoothBridges.isEmpty && discoveryBluetoothBridge == nil"))
+        #expect(reconnectSource.contains("startBluetoothConnections()"))
+    }
+
+    @Test func audioStepOffersEveryAvailableOutputInsteadOfRequiringMiRemote() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let audioStart = try #require(viewSource.range(of: "private var audioContent"))
+        let audioEnd = try #require(viewSource.range(
+            of: "private var voiceTestContent",
+            range: audioStart.upperBound..<viewSource.endIndex
+        ))
+        let audioSource = viewSource[audioStart.lowerBound..<audioEnd.lowerBound]
+
+        #expect(audioSource.contains("ForEach(model.audioDevices"))
+        #expect(!audioSource.contains("DoubaoAudioDevicePolicy.device"))
+        #expect(!audioSource.contains("Picker("))
+        #expect(audioSource.contains("settings.selectedAudioDeviceUID = device.uid"))
+        #expect(audioSource.contains("model.applyAudioSettings(reason: \"onboarding_audio_device_selected\")"))
+    }
+
+    @Test func availableBlackHoleCanSatisfyTheAudioSelectionGate() {
+        let availableUIDs = ["MiRemoteV2ch_UID", "BlackHole2ch_UID"]
+
+        #expect(OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+            selectedUID: "BlackHole2ch_UID",
+            availableUIDs: availableUIDs
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+            selectedUID: "missing",
+            availableUIDs: availableUIDs
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+            selectedUID: "",
+            availableUIDs: availableUIDs
         ))
     }
 
@@ -150,6 +248,77 @@ struct OnboardingFlowTests {
         #expect(!restarted.openMainWindowAtLaunch)
         #expect(restarted.checksForPreReleaseUpdates)
         #expect(restarted.action(for: .ok) == .escape)
+    }
+
+    @Test func existingInstallSkipsOnboardingWhileNewAndResumedFlowsRemainRequired() throws {
+        let legacySuiteName = "RemoteMicTests.Onboarding.Legacy.\(UUID().uuidString)"
+        let legacyDefaults = try #require(UserDefaults(suiteName: legacySuiteName))
+        defer { legacyDefaults.removePersistentDomain(forName: legacySuiteName) }
+        legacyDefaults.set("68", forKey: "launch.lastLaunchedBuild")
+
+        let legacySettings = AppSettings(defaults: legacyDefaults)
+        #expect(legacySettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(legacySettings.isOnboardingComplete)
+        #expect(legacySettings.onboardingStep == .complete)
+
+        let sparkleLegacySuiteName = "RemoteMicTests.Onboarding.SparkleLegacy.\(UUID().uuidString)"
+        let sparkleLegacyDefaults = try #require(UserDefaults(suiteName: sparkleLegacySuiteName))
+        defer { sparkleLegacyDefaults.removePersistentDomain(forName: sparkleLegacySuiteName) }
+
+        let sparkleLegacySettings = AppSettings(defaults: sparkleLegacyDefaults)
+        #expect(sparkleLegacySettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(sparkleLegacySettings.isOnboardingComplete)
+
+        let freshSuiteName = "RemoteMicTests.Onboarding.Fresh.\(UUID().uuidString)"
+        let freshDefaults = try #require(UserDefaults(suiteName: freshSuiteName))
+        defer { freshDefaults.removePersistentDomain(forName: freshSuiteName) }
+
+        let firstFreshLaunch = AppSettings(defaults: freshDefaults)
+        #expect(!firstFreshLaunch.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: false
+        ))
+        #expect(!firstFreshLaunch.isOnboardingComplete)
+
+        let secondFreshLaunch = AppSettings(defaults: freshDefaults)
+        #expect(secondFreshLaunch.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "103",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(!secondFreshLaunch.isOnboardingComplete)
+        #expect(secondFreshLaunch.onboardingStep == .welcome)
+
+        let resumedSuiteName = "RemoteMicTests.Onboarding.Resumed.\(UUID().uuidString)"
+        let resumedDefaults = try #require(UserDefaults(suiteName: resumedSuiteName))
+        defer { resumedDefaults.removePersistentDomain(forName: resumedSuiteName) }
+        resumedDefaults.set("101", forKey: "launch.lastLaunchedBuild")
+        resumedDefaults.set(OnboardingStep.audio.rawValue, forKey: "onboarding.step")
+        resumedDefaults.set(OnboardingVoiceTool.typeless.rawValue, forKey: "onboarding.voiceTool")
+
+        let resumedSettings = AppSettings(defaults: resumedDefaults)
+        #expect(resumedSettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(!resumedSettings.isOnboardingComplete)
+        #expect(resumedSettings.onboardingStep == .audio)
+        #expect(resumedSettings.onboardingVoiceTool == .typeless)
+
+        resumedSettings.completeOnboarding()
+        resumedSettings.restartOnboarding()
+        let restartedSettings = AppSettings(defaults: resumedDefaults)
+        _ = restartedSettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "103",
+            sparkleHadLaunchedBefore: true
+        )
+        #expect(!restartedSettings.isOnboardingComplete)
+        #expect(restartedSettings.onboardingStep == .welcome)
     }
 
     @Test func incompleteFlowAlwaysShowsItsWindowAndDelaysRuntimeUntilSetup() {

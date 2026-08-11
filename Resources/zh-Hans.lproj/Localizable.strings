@@ -24,6 +24,9 @@
 "voice_button.status.waiting" = "等待遥控器 Fn 硬件映射";
 "voice_button.status.fn_pressed" = "硬件 Fn 已按下；松开语音键即释放";
 "voice_button.status.fn_released" = "硬件 Fn 已释放";
+"voice_button.status.waiting_for_input" = "正在等待目标输入位置准备完成";
+"voice_button.status.input_ready" = "目标输入位置已准备完成";
+"voice_button.status.input_unavailable" = "目标输入位置未准备完成，已取消本次语音输入";
 "audio.compatibility.device_detected" = "已检测到 %1$@（豆包兼容）";
 "audio.compatibility.device_not_detected" = "未检测到 %1$@";
 "button_mapping.status.system_managed" = "按键由 macOS 原生处理";
@@ -266,7 +269,7 @@
 "audio.action.refresh_devices" = "刷新音频设备";
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";
 "audio.action.send_test_tone" = "发送 1 秒测试音";
-"audio.output.privacy_help" = "应用只把遥控器语音写到所选设备，不会修改系统默认输入或输出。";
+"audio.output.privacy_help" = "应用只把遥控器语音写到所选设备。最后一只遥控器断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
 "audio.compatibility.title" = "豆包输入法兼容";
 "audio.compatibility.section_title" = "语音输入与兼容";
 "audio.compatibility.microphone_label" = "兼容虚拟麦克风";
@@ -451,7 +454,7 @@
 "onboarding.action.continue" = "继续";
 "onboarding.action.open_app" = "打开无线麦";
 "onboarding.welcome.title" = "让遥控器成为随手可用的无线麦";
-"onboarding.welcome.detail" = "我们会一起完成权限、遥控器、兼容麦克风和真实语音检查，让你第一次使用时就知道每一部分都在正常工作。";
+"onboarding.welcome.detail" = "我们会一起完成权限、遥控器、语音输出设备和真实语音检查，让你第一次使用时就知道每一部分都在正常工作。";
 "onboarding.welcome.feature.voice" = "按住语音键，直接在常用工具里说话输入";
 "onboarding.welcome.feature.controls" = "用实体按键控制方向、音量和常用操作";
 "onboarding.welcome.feature.verify" = "每项设置都现场检查，出问题时直接告诉你原因";
@@ -460,11 +463,11 @@
 "onboarding.voice_tool.unselected.title" = "尚未选择";
 "onboarding.voice_tool.unselected.detail" = "尚未选择常用语音工具。";
 "onboarding.voice_tool.doubao.title" = "豆包输入法";
-"onboarding.voice_tool.doubao.detail" = "使用兼容麦克风，把遥控器声音送入豆包输入法。";
+"onboarding.voice_tool.doubao.detail" = "使用你选择的语音输出设备，把遥控器声音送入豆包输入法。";
 "onboarding.voice_tool.typeless.title" = "Typeless";
 "onboarding.voice_tool.typeless.detail" = "语音键会模拟 Fn 点按并传送遥控器声音。";
 "onboarding.voice_tool.other.title" = "其他语音工具";
-"onboarding.voice_tool.other.detail" = "使用兼容麦克风，在你常用的语音输入工具中测试。";
+"onboarding.voice_tool.other.detail" = "使用你选择的语音输出设备，在常用语音输入工具中测试。";
 "onboarding.permissions.title" = "允许无线麦连接和控制 Mac";
 "onboarding.permissions.detail" = "这三项权限分别用于连接遥控器、读取实体按键和执行你设置的操作。";
 "onboarding.permissions.bluetooth.detail" = "发现并连接已配对的蓝牙遥控器";
@@ -479,11 +482,12 @@
 "onboarding.remote.button_detail" = "语音键以外的任意按键都可以。";
 "onboarding.remote.reconnect" = "重新查找";
 "onboarding.remote.open_bluetooth" = "打开蓝牙设置";
-"onboarding.audio.title" = "准备兼容麦克风";
-"onboarding.audio.detail" = "无线麦会把遥控器声音输出到 MiRemoteV 2ch，让豆包、Typeless 和其他工具能够使用。";
-"onboarding.audio.device_detail" = "兼容麦克风只处理本机实时声音，不保存录音。";
-"onboarding.audio.selected" = "MiRemoteV 2ch 已选中";
-"onboarding.audio.select_required" = "请选择 MiRemoteV 2ch";
+"onboarding.audio.title" = "选择语音输出设备";
+"onboarding.audio.detail" = "请选择语音工具正在使用的音频回环设备。支持 MiRemoteV 2ch、BlackHole 2ch 和其他可用设备。";
+"onboarding.audio.device_detail" = "请先安装或启用一个可用的音频回环设备，然后重新检查。";
+"onboarding.audio.no_devices" = "未检测到可用的音频设备";
+"onboarding.audio.selected" = "已选择 %1$@";
+"onboarding.audio.select_required" = "请选择一个音频回环设备";
 "onboarding.audio.refresh" = "重新检查";
 "onboarding.voice_test.title" = "亲自说一句，确认真的能用";
 "onboarding.voice_test.detail" = "点一下下面的输入框，按住遥控器语音键说话，说完后松开。";
@@ -510,8 +514,8 @@
 "onboarding.side.controls" = "按键检查";
 "onboarding.side.remote_connected" = "遥控器已连接";
 "onboarding.side.button_received" = "实体按键已收到";
-"onboarding.side.device_found" = "MiRemoteV 2ch 已检测";
-"onboarding.side.device_selected" = "兼容麦克风已选中";
+"onboarding.side.device_found" = "可用音频设备已检测";
+"onboarding.side.device_selected" = "语音输出设备已选中";
 "onboarding.side.audio_ready" = "音频输出正常";
 "onboarding.side.voice_key" = "语音键已按下并松开";
 "onboarding.side.samples" = "遥控器声音已收到";
@@ -519,5 +523,5 @@
 "onboarding.side.three_buttons" = "常用按键已体验";
 "onboarding.side.mapping_enabled" = "自定义按键已启用";
 "about.preferences.restart_onboarding" = "重新运行设置向导";
-"about.preferences.restart_onboarding_help" = "重新检查权限、遥控器、兼容麦克风和语音输入；不会清除现有连接、按键映射或其他设置。";
+"about.preferences.restart_onboarding_help" = "重新检查权限、遥控器、语音输出设备和语音输入；不会清除现有连接、按键映射或其他设置。";
 "about.preferences.restart_onboarding_action" = "重新运行";
