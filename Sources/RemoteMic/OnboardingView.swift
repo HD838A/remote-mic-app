@@ -339,43 +339,74 @@ struct OnboardingView: View {
             Text("onboarding.audio.detail")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if model.audioDevices.isEmpty {
+                statusCard(
+                    icon: "waveform.badge.magnifyingglass",
+                    title: localization.text("onboarding.audio.no_devices"),
+                    detail: localization.text("onboarding.audio.device_detail"),
+                    isComplete: false
+                )
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(model.audioDevices, id: \.uid) { device in
+                        audioDeviceRow(device)
+                    }
+                }
+            }
 
             statusCard(
-                icon: model.hasDoubaoAudioDevice ? "checkmark.circle.fill" : "waveform.badge.magnifyingglass",
-                title: model.doubaoAudioStatus.text(using: localization),
-                detail: localization.text("onboarding.audio.device_detail"),
-                isComplete: model.hasDoubaoAudioDevice
-            )
-
-            statusCard(
-                icon: compatibleMicrophoneSelected && model.isAudioOutputReady
+                icon: audioOutputSelected && model.isAudioOutputReady
                     ? "checkmark.circle.fill"
                     : "speaker.wave.2",
-                title: localization.text(
-                    compatibleMicrophoneSelected
-                        ? "onboarding.audio.selected"
-                        : "onboarding.audio.select_required"
-                ),
+                title: selectedAudioDeviceTitle,
                 detail: model.audioStatus.text(using: localization),
-                isComplete: compatibleMicrophoneSelected && model.isAudioOutputReady
+                isComplete: audioOutputSelected && model.isAudioOutputReady
             )
 
             HStack(spacing: 10) {
-                if model.hasDoubaoAudioDevice {
-                    Button("audio.compatibility.select_microphone") {
-                        model.selectDoubaoAudioDevice()
-                    }
-                    .buttonStyle(.borderedProminent)
-                } else {
-                    Button("audio.compatibility.open_install_guide") {
-                        model.openDoubaoDriverInstructions(using: localization)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
                 Button("onboarding.audio.refresh") { model.refreshAudioDevices() }
                     .buttonStyle(.bordered)
+                Button("audio.compatibility.open_install_guide") {
+                    model.openDoubaoDriverInstructions(using: localization)
+                }
+                .buttonStyle(.bordered)
             }
         }
+    }
+
+    private func audioDeviceRow(_ device: AudioDeviceInfo) -> some View {
+        let isSelected = settings.selectedAudioDeviceUID == device.uid
+        return Button {
+            settings.selectedAudioDeviceUID = device.uid
+            model.applyAudioSettings(reason: "onboarding_audio_device_selected")
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                Text(device.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.09) : Color.primary.opacity(0.035),
+                in: RoundedRectangle(cornerRadius: 10)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        isSelected ? Color.accentColor.opacity(0.65) : Color.primary.opacity(0.08),
+                        lineWidth: 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var voiceTestContent: some View {
@@ -581,15 +612,15 @@ struct OnboardingView: View {
             }
         case .audio:
             sidePanel(titleKey: "onboarding.side.audio") {
-                sideCheck("onboarding.side.device_found", isComplete: model.hasDoubaoAudioDevice)
-                sideCheck("onboarding.side.device_selected", isComplete: compatibleMicrophoneSelected)
+                sideCheck("onboarding.side.device_found", isComplete: !model.audioDevices.isEmpty)
+                sideCheck("onboarding.side.device_selected", isComplete: audioOutputSelected)
                 sideCheck("onboarding.side.audio_ready", isComplete: model.isAudioOutputReady)
             }
         case .voiceTest:
             sidePanel(titleKey: "onboarding.side.voice_test") {
                 sideCheck("onboarding.side.voice_key", isComplete: voiceSessionStarted && voiceSessionEnded)
                 sideCheck("onboarding.side.samples", isComplete: voiceSamplesReceived)
-                sideCheck("onboarding.side.audio_ready", isComplete: compatibleMicrophoneSelected && model.isAudioOutputReady)
+                sideCheck("onboarding.side.audio_ready", isComplete: audioOutputSelected && model.isAudioOutputReady)
                 sideCheck("onboarding.side.transcript", isComplete: transcriptionAppeared)
             }
         case .controls:
@@ -741,7 +772,7 @@ struct OnboardingView: View {
             remoteConnected: model.isConnected,
             remoteButtonObserved: !observedRemoteButtons.isEmpty,
             audioReady: model.isAudioOutputReady,
-            compatibleMicrophoneSelected: compatibleMicrophoneSelected,
+            audioOutputSelected: audioOutputSelected,
             voiceSessionStarted: voiceSessionStarted,
             voiceSamplesReceived: voiceSamplesReceived,
             voiceSessionEnded: voiceSessionEnded,
@@ -758,9 +789,25 @@ struct OnboardingView: View {
         )
     }
 
-    private var compatibleMicrophoneSelected: Bool {
-        guard let device = DoubaoAudioDevicePolicy.device(in: model.audioDevices) else { return false }
-        return settings.selectedAudioDeviceUID == device.uid
+    private var selectedAudioDevice: AudioDeviceInfo? {
+        model.audioDevices.first { $0.uid == settings.selectedAudioDeviceUID }
+    }
+
+    private var audioOutputSelected: Bool {
+        OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+            selectedUID: settings.selectedAudioDeviceUID,
+            availableUIDs: model.audioDevices.lazy.map(\.uid)
+        )
+    }
+
+    private var selectedAudioDeviceTitle: String {
+        guard let selectedAudioDevice else {
+            return localization.text("onboarding.audio.select_required")
+        }
+        return LocalizedMessage(
+            "onboarding.audio.selected",
+            arguments: [selectedAudioDevice.name]
+        ).text(using: localization)
     }
 
     private var transcriptionAppeared: Bool {
@@ -777,7 +824,8 @@ struct OnboardingView: View {
 
     private var voiceTestEnvironmentText: String {
         let tool = localization.text(settings.onboardingVoiceTool.titleKey)
-        return "\(tool)  ·  \(DoubaoAudioDevicePolicy.deviceName)"
+        let device = selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required")
+        return "\(tool)  ·  \(device)"
     }
 
     private var voiceTestStatusText: String {

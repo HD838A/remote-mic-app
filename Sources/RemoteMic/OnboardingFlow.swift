@@ -82,12 +82,21 @@ struct OnboardingCapabilities: Equatable {
     var remoteConnected = false
     var remoteButtonObserved = false
     var audioReady = false
-    var compatibleMicrophoneSelected = false
+    var audioOutputSelected = false
     var voiceSessionStarted = false
     var voiceSamplesReceived = false
     var voiceSessionEnded = false
     var transcriptionAppeared = false
     var testedRemoteButtonCount = 0
+}
+
+enum OnboardingAudioSelectionPolicy {
+    static func isSelectedDeviceAvailable(
+        selectedUID: String,
+        availableUIDs: some Sequence<String>
+    ) -> Bool {
+        !selectedUID.isEmpty && availableUIDs.contains(selectedUID)
+    }
 }
 
 enum OnboardingFlowPolicy {
@@ -116,7 +125,7 @@ enum OnboardingFlowPolicy {
         case .remote:
             return capabilities.remoteConnected && capabilities.remoteButtonObserved
         case .audio:
-            return capabilities.audioReady && capabilities.compatibleMicrophoneSelected
+            return capabilities.audioReady && capabilities.audioOutputSelected
         case .voiceTest:
             return capabilities.voiceSessionStarted &&
                 capabilities.voiceSamplesReceived &&

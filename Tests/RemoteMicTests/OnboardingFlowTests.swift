@@ -72,7 +72,7 @@ struct OnboardingFlowTests {
             voiceTool: .typeless,
             capabilities: capabilities
         ))
-        capabilities.compatibleMicrophoneSelected = true
+        capabilities.audioOutputSelected = true
         #expect(OnboardingFlowPolicy.canContinue(
             from: .audio,
             voiceTool: .typeless,
@@ -164,6 +164,46 @@ struct OnboardingFlowTests {
         #expect(reconnectSource.contains("guard started else { return }"))
         #expect(reconnectSource.contains("bluetoothBridges.isEmpty && discoveryBluetoothBridge == nil"))
         #expect(reconnectSource.contains("startBluetoothConnections()"))
+    }
+
+    @Test func audioStepOffersEveryAvailableOutputInsteadOfRequiringMiRemote() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let audioStart = try #require(viewSource.range(of: "private var audioContent"))
+        let audioEnd = try #require(viewSource.range(
+            of: "private var voiceTestContent",
+            range: audioStart.upperBound..<viewSource.endIndex
+        ))
+        let audioSource = viewSource[audioStart.lowerBound..<audioEnd.lowerBound]
+
+        #expect(audioSource.contains("ForEach(model.audioDevices"))
+        #expect(!audioSource.contains("DoubaoAudioDevicePolicy.device"))
+        #expect(!audioSource.contains("Picker("))
+        #expect(audioSource.contains("settings.selectedAudioDeviceUID = device.uid"))
+        #expect(audioSource.contains("model.applyAudioSettings(reason: \"onboarding_audio_device_selected\")"))
+    }
+
+    @Test func availableBlackHoleCanSatisfyTheAudioSelectionGate() {
+        let availableUIDs = ["MiRemoteV2ch_UID", "BlackHole2ch_UID"]
+
+        #expect(OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+            selectedUID: "BlackHole2ch_UID",
+            availableUIDs: availableUIDs
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+            selectedUID: "missing",
+            availableUIDs: availableUIDs
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+            selectedUID: "",
+            availableUIDs: availableUIDs
+        ))
     }
 
     @Test func progressVoiceToolAndCompletionPersistAcrossLaunches() throws {

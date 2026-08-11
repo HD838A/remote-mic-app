@@ -75,7 +75,14 @@ enum OnboardingScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = .simplifiedChinese
         settings.setOnboardingVoiceTool(.typeless)
-        let model = BridgeAppModel(settings: settings)
+        let screenshotAudioDevices = [
+            AudioDeviceInfo(id: 1, uid: DoubaoAudioDevicePolicy.deviceUID, name: "MiRemoteV 2ch"),
+            AudioDeviceInfo(id: 2, uid: "BlackHole2ch_UID", name: "BlackHole 2ch"),
+        ]
+        let model = BridgeAppModel(
+            settings: settings,
+            initialAudioDevices: screenshotAudioDevices
+        )
         let localization = LocalizationStore(settings: settings)
 
         _ = NSApplication.shared
