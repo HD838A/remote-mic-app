@@ -4,6 +4,12 @@
   - 私有模拟器 V1 已覆盖小米遥控器 12 个原始按键、36 个短按/双击/长按场景、7 个长按连发场景，以及 BLE 分片、sync、异常、重连、旧回调和双设备隔离；模拟依赖仅在测试环境变量存在时加载，普通开源构建不依赖私有仓库。
   - 自动化只代表 L0–L2 进程内协议和状态响应通过；CoreBluetooth、IOHID/DriverKit、Power 系统行为、射频、音质和安装环境继续由系统级与 RC001/RC003 真机门禁负责。
 
+- [ ] 在最新 macOS 预览版以邀请制 Feature Flag 集成开发中的 AI 整理
+  - 普通用户默认看不到“AI 整理”；只有用户在“关于”页输入体验码并手动点击验证后，App 才允许首次资格网络请求。授权有效后显示独立页面，但本地功能开关仍默认关闭。
+  - 资格使用独立匿名设备 ID、Keychain 凭证和内置 Ed25519 公钥离线验证；资格服务不接收语音、转写文字、DeepSeek API Key 或整理结果。DeepSeek Key、术语表和资格凭证都不进入个性化配置导出。
+  - 门禁覆盖导航、设置交互、语音会话开始、DeepSeek 请求和结果写回；资格撤销、暂停、过期或版本阻止会立即关闭并取消 AI 整理，但保留本机 API Key、术语和所有稳定功能配置。
+  - 详细设计保存在私有产品资料库 `projects/remote-mic-app/research/invite-only-feature-access/v1/wireless-mic-integration-design.md`；公开实现档案见 [`feature/early-access-ai-polish/`](feature/early-access-ai-polish/)。完成四态、RC003 稳定基线、设置页尺寸、签名公证和公开下载字节复核后再标记完成。
+
 - [ ] Windows 版本
   - 当前范围只包含小米 RC003；已完成相关 forks、Windows 实现、权限/安装和虚拟麦克风路线研究。首选源码基线为 `miaomiaozii/windows-remote-mic-app`，但产品化仍需独立真机验收、免费自签流程和第三方组件审查。
   - 已在主仓库发布独立的 [Windows RC003 Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，镜像贡献者提交 `271ed794` 的未签名安装器、便携版、对应源码快照和 SHA-256 清单。该版本仅作为社区预览，不代表 PR #3 当前 HEAD 或正式产品化完成，Windows 源码仍未合入 `main`。

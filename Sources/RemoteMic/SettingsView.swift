@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
+    case postDictation
     case mapping
     case statistics
     case permissions
@@ -17,6 +18,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var title: LocalizedStringKey {
         switch self {
         case .connection: return "settings.section.connection"
+        case .postDictation: return "settings.section.ai_polish"
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
         case .permissions: return "settings.section.permissions"
@@ -27,6 +29,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .connection: return "link"
+        case .postDictation: return "sparkles"
         case .mapping: return "keyboard"
         case .statistics: return "chart.bar.xaxis"
         case .permissions: return "shield.lefthalf.filled"
@@ -135,6 +138,7 @@ enum MappingPermissionPolicy {
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject private var earlyAccess: EarlyAccessController
     @ObservedObject private var updateInformation: UpdateInformationStore
     @EnvironmentObject private var localization: LocalizationStore
 
@@ -166,6 +170,11 @@ struct SettingsView: View {
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
     @State private var webRemoteInviteCode = ""
+    @State private var earlyAccessCode = ""
+    @State private var deepSeekAPIKeyDraft = ""
+    @State private var programmingTermCanonicalDraft = ""
+    @State private var programmingTermAliasesDraft = ""
+    @State private var programmingTermKind: ProgrammingTermKind = .projectName
     private static let requiredWebRemoteInviteCode = "8586"
 
     init(
@@ -177,6 +186,7 @@ struct SettingsView: View {
     ) {
         self.model = model
         settings = model.settings
+        earlyAccess = model.earlyAccess
         self.updateInformation = updateInformation
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
@@ -200,6 +210,11 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             resumeCustomMappingIfPermissionsGranted()
+        }
+        .onReceive(earlyAccess.$hasEffectiveAccess.removeDuplicates()) { hasAccess in
+            if !hasAccess, selectedSection == .postDictation {
+                selectedSection = .about
+            }
         }
         .sheet(isPresented: $isReleaseHistoryPresented) {
             ReleaseHistorySheet()
@@ -350,12 +365,18 @@ struct SettingsView: View {
             WindowDragArea()
                 .frame(height: 56)
                 .accessibilityHidden(true)
-            ForEach(SettingsSection.allCases) { section in
+            ForEach(visibleSections) { section in
                 sidebarButton(section)
             }
             Spacer(minLength: 0)
         }
         .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private var visibleSections: [SettingsSection] {
+        SettingsSection.allCases.filter {
+            $0 != .postDictation || earlyAccess.hasEffectiveAccess
+        }
     }
 
     private func sidebarButton(_ section: SettingsSection) -> some View {
@@ -384,6 +405,12 @@ struct SettingsView: View {
         switch selectedSection {
         case .connection:
             connectionPage
+        case .postDictation:
+            if earlyAccess.hasEffectiveAccess {
+                postDictationPage
+            } else {
+                aboutPage
+            }
         case .mapping:
             mappingPage
         case .statistics:
@@ -433,6 +460,310 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
+        }
+    }
+
+    private var postDictationPage: some View {
+        settingsPage {
+            PageHeader(title: localization.text("post_dictation.page.title"))
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                VStack(spacing: 14) {
+                    postDictationAccessPanel
+                    postDictationOverviewPanel
+                    postDictationCredentialPanel
+                    postDictationTermsPanel
+                    HStack(alignment: .top, spacing: 14) {
+                        postDictationPrivacyPanel
+                        postDictationFormattingPanel
+                    }
+                }
+                .frame(maxWidth: 880, alignment: .topLeading)
+            }
+        }
+    }
+
+    private var postDictationAccessPanel: some View {
+        GlassPanel {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(.green)
+                    .frame(width: 38)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("early_access.ai.access_title")
+                        .font(.headline)
+                    Text("early_access.ai.access_description")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                StatusPill(
+                    text: localization.text("early_access.status.authorized"),
+                    tint: .green
+                )
+            }
+        }
+    }
+
+    private var postDictationOverviewPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: postDictationStatusImage)
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(postDictationStatusTint)
+                        .frame(width: 38)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("post_dictation.status.section_title")
+                            .font(.headline)
+                        Text(
+                            settings.deepSeekPostDictationEnabled
+                                ? model.postDictationStatus.text(using: localization)
+                                : localization.text("post_dictation.status.disabled")
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    StatusPill(
+                        text: localization.text(
+                            settings.deepSeekPostDictationEnabled
+                                ? "post_dictation.status.feature_enabled"
+                                : "post_dictation.status.feature_disabled"
+                        ),
+                        tint: settings.deepSeekPostDictationEnabled ? .green : .secondary
+                    )
+                    Toggle("post_dictation.enabled", isOn: Binding(
+                        get: { settings.deepSeekPostDictationEnabled },
+                        set: { model.setDeepSeekPostDictationEnabled($0) }
+                    ))
+                    .toggleStyle(.switch)
+                }
+
+                Divider()
+
+                HStack(spacing: 10) {
+                    Label("post_dictation.workflow.doubao", systemImage: "waveform")
+                    Image(systemName: "chevron.right")
+                    Label("post_dictation.workflow.stability", systemImage: "timer")
+                    Image(systemName: "chevron.right")
+                    Label("post_dictation.workflow.deepseek", systemImage: "sparkles")
+                    Image(systemName: "chevron.right")
+                    Label("post_dictation.workflow.replacement", systemImage: "text.cursor")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+                Text("post_dictation.description")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Text("post_dictation.model.title")
+                        .font(.caption.weight(.semibold))
+                    Text("DeepSeek V4 Flash")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("post_dictation.result.copy") {
+                        model.copyPostDictationResult()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(model.copyablePostDictationResult == nil)
+                }
+            }
+        }
+    }
+
+    private var postDictationCredentialPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("post_dictation.key.section_title")
+                            .font(.headline)
+                        Text("post_dictation.key.description")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 12)
+                    StatusPill(
+                        text: localization.text(
+                            model.isDeepSeekAPIKeyConfigured
+                                ? "post_dictation.key.configured"
+                                : "post_dictation.key.not_configured"
+                        ),
+                        tint: model.isDeepSeekAPIKeyConfigured ? .green : .secondary
+                    )
+                }
+
+                HStack(spacing: 8) {
+                    SecureField(
+                        model.deepSeekAPIKeyPreview
+                            ?? localization.text("post_dictation.key.placeholder"),
+                        text: $deepSeekAPIKeyDraft
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    Button("post_dictation.key.save") {
+                        if model.saveDeepSeekAPIKey(deepSeekAPIKeyDraft) {
+                            deepSeekAPIKeyDraft = ""
+                        }
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(deepSeekAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("post_dictation.key.delete", role: .destructive) {
+                        model.deleteDeepSeekAPIKey()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(!model.isDeepSeekAPIKeyConfigured)
+                    Button("post_dictation.key.test") {
+                        model.testDeepSeekConnection()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(!model.isDeepSeekAPIKeyConfigured || model.postDictationState == .requesting)
+                }
+            }
+        }
+    }
+
+    private var postDictationTermsPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 13) {
+                Text("post_dictation.terms.title")
+                    .font(.headline)
+                Text("post_dictation.terms.description")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    TextField("post_dictation.terms.canonical", text: $programmingTermCanonicalDraft)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("post_dictation.terms.aliases", text: $programmingTermAliasesDraft)
+                        .textFieldStyle(.roundedBorder)
+                    Button("post_dictation.terms.add") {
+                        model.addProgrammingTerm(
+                            canonicalText: programmingTermCanonicalDraft,
+                            aliases: programmingTermAliasesDraft.components(
+                                separatedBy: CharacterSet(charactersIn: ",，\n")
+                            ),
+                            kind: programmingTermKind
+                        )
+                        programmingTermCanonicalDraft = ""
+                        programmingTermAliasesDraft = ""
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(
+                        programmingTermCanonicalDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || programmingTermAliasesDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                }
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
+                    ForEach(ProgrammingTermKind.allCases) { kind in
+                        Button {
+                            programmingTermKind = kind
+                        } label: {
+                            Text(localization.text(kind.localizationKey))
+                                .font(.system(size: 12, weight: .medium))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .compatibilityButtonStyle(
+                            programmingTermKind == kind ? .prominent : .standard
+                        )
+                    }
+                }
+
+                ForEach(model.programmingTerms) { term in
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: Binding(
+                            get: { term.isEnabled },
+                            set: { model.setProgrammingTermEnabled($0, id: term.id) }
+                        ))
+                        .labelsHidden()
+                        Text(term.canonicalText)
+                            .font(.caption.monospaced())
+                            .lineLimit(1)
+                        Text(term.spokenAliases.joined(separator: " / "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Button(role: .destructive) {
+                            model.removeProgrammingTerm(id: term.id)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+        }
+    }
+
+    private var postDictationPrivacyPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 11) {
+                Text("post_dictation.privacy.title")
+                    .font(.headline)
+                Label("post_dictation.privacy.sent", systemImage: "arrow.up.circle")
+                Label("post_dictation.privacy.not_sent", systemImage: "hand.raised")
+                Label("post_dictation.privacy.failure", systemImage: "checkmark.shield")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var postDictationFormattingPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 11) {
+                Text("post_dictation.formatting.title")
+                    .font(.headline)
+                HStack {
+                    Text("post_dictation.formatting.automatic_list")
+                    Spacer(minLength: 8)
+                    StatusPill(
+                        text: localization.text("post_dictation.formatting.disabled"),
+                        tint: .secondary
+                    )
+                }
+                Text("post_dictation.automatic_list.disabled")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var postDictationStatusTint: Color {
+        guard settings.deepSeekPostDictationEnabled else { return .secondary }
+        switch model.postDictationState {
+        case .idle: return .blue
+        case .waitingForText, .waitingForStability: return .orange
+        case .requesting: return .purple
+        case .completed: return .green
+        case .skipped: return .orange
+        case .failed: return .red
+        }
+    }
+
+    private var postDictationStatusImage: String {
+        guard settings.deepSeekPostDictationEnabled else { return "pause.circle" }
+        switch model.postDictationState {
+        case .idle: return "checkmark.circle"
+        case .waitingForText: return "text.cursor"
+        case .waitingForStability: return "timer"
+        case .requesting: return "sparkles"
+        case .completed: return "checkmark.circle.fill"
+        case .skipped: return "forward.end.circle"
+        case .failed: return "exclamationmark.triangle"
         }
     }
 
@@ -2119,6 +2450,8 @@ struct SettingsView: View {
                         }
                     }
 
+                    earlyAccessPanel
+
                     GlassPanel {
                         VStack(spacing: 0) {
                             HStack(spacing: 14) {
@@ -2275,6 +2608,165 @@ struct SettingsView: View {
             }
         }
         .onAppear(perform: refreshUpdateInformation)
+    }
+
+    private var earlyAccessPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: earlyAccessStatusImage)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(earlyAccessStatusTint)
+                        .frame(width: 36)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("early_access.title")
+                            .font(.headline)
+                        Text(
+                            earlyAccess.hasEffectiveAccess
+                                ? "early_access.description.authorized"
+                                : "early_access.description.invited"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    StatusPill(
+                        text: localization.text(earlyAccessStatusKey),
+                        tint: earlyAccessStatusTint
+                    )
+                }
+
+                Divider()
+
+                if earlyAccess.isEnrolled {
+                    HStack(spacing: 10) {
+                        Button("early_access.action.recheck") {
+                            model.refreshEarlyAccessIfNeeded(force: true)
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .disabled(earlyAccess.state == .checking)
+
+                        Button("early_access.action.leave", role: .destructive) {
+                            model.releaseEarlyAccess()
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .disabled(earlyAccess.state == .checking)
+
+                        if earlyAccess.lastErrorCode != nil,
+                           earlyAccess.state == .serviceUnavailable
+                        {
+                            Button("early_access.action.clear_local", role: .destructive) {
+                                model.clearLocalEarlyAccessEnrollment()
+                            }
+                            .compatibilityButtonStyle(.standard)
+                        }
+
+                        Spacer(minLength: 8)
+                        if earlyAccess.state == .checking {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        TextField("early_access.code.placeholder", text: $earlyAccessCode)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(redeemEarlyAccessCode)
+                        Button("early_access.action.verify", action: redeemEarlyAccessCode)
+                            .compatibilityButtonStyle(.prominent)
+                            .disabled(
+                                earlyAccess.state == .checking
+                                    || earlyAccessCode.trimmingCharacters(
+                                        in: .whitespacesAndNewlines
+                                    ).isEmpty
+                            )
+                        if earlyAccess.state == .checking {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                }
+
+                HStack(alignment: .top, spacing: 10) {
+                    Label("early_access.privacy", systemImage: "hand.raised.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Text(currentVersion)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                if let requestID = earlyAccess.lastRequestID {
+                    HStack(spacing: 8) {
+                        Text(String(
+                            format: localization.text("early_access.request_id"),
+                            locale: localization.locale,
+                            arguments: [requestID]
+                        ))
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        Button("common.action.copy") {
+                            let pasteboard = NSPasteboard.general
+                            pasteboard.clearContents()
+                            pasteboard.setString(requestID, forType: .string)
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                }
+            }
+        }
+    }
+
+    private func redeemEarlyAccessCode() {
+        let code = earlyAccessCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty else { return }
+        model.redeemEarlyAccessCode(code)
+        earlyAccessCode = ""
+    }
+
+    private var earlyAccessStatusKey: String {
+        switch earlyAccess.state {
+        case .notEnrolled: return "early_access.status.not_enrolled"
+        case .checking: return "early_access.status.checking"
+        case .authorized: return "early_access.status.authorized"
+        case .expiringSoon: return "early_access.status.expiring"
+        case .offlineValid: return "early_access.status.offline_valid"
+        case .expired: return "early_access.status.expired"
+        case .revoked: return "early_access.status.revoked"
+        case .paused: return "early_access.status.paused"
+        case .versionBlocked: return "early_access.status.version_blocked"
+        case .invalidCode: return "early_access.status.invalid_code"
+        case .deviceLimitReached: return "early_access.status.device_limit"
+        case .invalid: return "early_access.status.invalid"
+        case .serviceUnavailable: return "early_access.status.unavailable"
+        }
+    }
+
+    private var earlyAccessStatusTint: Color {
+        switch earlyAccess.state {
+        case .authorized, .offlineValid: return .green
+        case .checking, .expiringSoon: return .orange
+        case .notEnrolled: return .secondary
+        case .expired, .revoked, .paused, .versionBlocked, .invalidCode,
+             .deviceLimitReached, .invalid, .serviceUnavailable:
+            return .red
+        }
+    }
+
+    private var earlyAccessStatusImage: String {
+        switch earlyAccess.state {
+        case .authorized, .offlineValid: return "checkmark.shield.fill"
+        case .checking: return "arrow.triangle.2.circlepath"
+        case .expiringSoon: return "clock.badge.exclamationmark"
+        case .notEnrolled: return "person.badge.key"
+        case .expired, .revoked, .paused, .versionBlocked, .invalidCode,
+             .deviceLimitReached, .invalid, .serviceUnavailable:
+            return "exclamationmark.shield.fill"
+        }
     }
 
     @ViewBuilder
