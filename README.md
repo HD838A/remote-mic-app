@@ -147,7 +147,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与 RC003 默
 
 ## 许可与来源
 
-本项目的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可；`Apps/RemoteMicIOS/` iOS 子项目代码同样采用 [GPL-3.0-only](Apps/RemoteMicIOS/LICENSE.md)。两个 App 的 Logo 和 App Icon 都是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本仓库中的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可。iOS App 已由独立私有仓库维护，并继续通过上方 TestFlight 公测入口分发。macOS App 的 Logo 和 App Icon 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 项目最初 fork 自 [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge)，现由本仓库独立维护。
 

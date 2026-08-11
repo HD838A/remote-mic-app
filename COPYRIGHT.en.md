@@ -19,10 +19,6 @@ This project adds:
 
 The software code in this adaptation is released under GPL-3.0-only. See [LICENSE.md](LICENSE.md) for the complete license and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party sources and attribution.
 
-## iOS Subproject
-
-`Apps/RemoteMicIOS/` is an independently developed iOS subproject. Its software code is also released under [GPL-3.0-only](Apps/RemoteMicIOS/LICENSE.md). This software-code license does not cover the app-logo and app-icon brand assets listed below.
-
 ## App Logo
 
 The following app-logo assets are separate proprietary brand assets and are not covered by GPL-3.0-only:
@@ -30,10 +26,6 @@ The following app-logo assets are separate proprietary brand assets and are not 
 - Resources/AppIcon.png
 - Resources/AppIcon.icns
 - versions generated from or derived from those files
-- Apps/RemoteMicIOS/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png
-- Apps/RemoteMicIOS/Resources/Assets.xcassets/AppLogo.imageset/AppLogo.png
-- versions generated from or derived from those iOS files
-
 They may be distributed unchanged as part of unmodified official Remote Mic source and official releases. Written authorization from the copyright owner is required for use as the icon, logo, or brand identity of another app, fork, modified version, product, or service. Read [LOGO-LICENSE.en.md](LOGO-LICENSE.en.md) for the complete terms.
 
 This notice does not cover menu-bar status icons, program code, or resources not explicitly listed above.

@@ -4,8 +4,8 @@
 
 - [`Sources/RemoteMic/BluetoothVoiceSessionLeaseController.swift`](../../Sources/RemoteMic/BluetoothVoiceSessionLeaseController.swift)：封装 10 秒保活、180 秒关闭和 2 秒停止确认超时，支持确定性测试调度。
 - [`Sources/RemoteMic/BridgeAppModel.swift`](../../Sources/RemoteMic/BridgeAppModel.swift)：只在已接受的物理蓝牙语音会话开始/停止、断连和 App 退出边界启动或取消租期控制；闭包固定捕获实际发声 bridge。
-- [`Apps/RemoteMicIOS/Sources/RemoteControlComponents.swift`](../../Apps/RemoteMicIOS/Sources/RemoteControlComponents.swift)：加入短点按锁定与长按松手两种手势状态。
-- [`Apps/RemoteMicIOS/Sources/RemoteMacConnection.swift`](../../Apps/RemoteMicIOS/Sources/RemoteMacConnection.swift)：区分“用户已经请求录音”和“麦克风真正开始”，使异步权限与启动期间也能正确停止。
+- 独立 iOS 仓库的 `Sources/RemoteControlComponents.swift`：加入短点按锁定与长按松手两种手势状态。
+- 独立 iOS 仓库的 `Sources/RemoteMacConnection.swift`：区分“用户已经请求录音”和“麦克风真正开始”，使异步权限与启动期间也能正确停止。
 - iOS 本地化和信息页：更新按钮提示及“仅在录音期间传输”的隐私说明。
 
 `ATVVProtocol.swift`、手机与 Mac 之间的 wire message、PCM 格式和虚拟音频输出没有变化。
