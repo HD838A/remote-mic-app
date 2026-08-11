@@ -62,7 +62,7 @@
 | 2026-08-10 | [已占用组合键无法录入](./2026-08-10-reserved-shortcut-capture.md) | 候选修复完成，等待真实系统热键验证 |
 | 2026-08-10 | [左右键按住不能连续移动](./2026-08-10-left-right-hold-repeat.md) | 候选修复完成，硬件模拟通过，等待真机验证 |
 | 2026-08-10 | [增益滑块轨道拖动带动整个窗口](./2026-08-10-gain-slider-drags-window.md) | 已修复，等待可见界面复验 |
-| 2026-08-11 | [预发布候选工作流依赖 Runner 未安装的 rg](./2026-08-11-preview-candidate-runner-missing-rg.md) | 修复完成，等待托管 Runner 复验 |
+| 2026-08-11 | [预发布候选工作流依赖 Runner 未安装的 rg](./2026-08-11-preview-candidate-runner-missing-rg.md) | 已修复 |
 
 ## 记录模板
 
