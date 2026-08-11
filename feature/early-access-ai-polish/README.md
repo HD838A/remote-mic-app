@@ -36,6 +36,30 @@ DeepSeek API Key 继续保存在独立 Keychain 项，术语继续保存在本�
 - `BridgeAppModel.swift`：把资格与本地开关、DeepSeek Key 组合为唯一运行条件，并在资格失效时统一取消。
 - `SettingsView.swift`：过滤导航、提供关于页内联体验面板和授权后的 AI 页面。
 
+## 内部开启与生产配置
+
+普通启动不会显示邀请码入口。内部测试人员必须完全退出 App 后，在“终端”运行：
+
+```bash
+open -na "Remote Mic" --args --show-invitation-enrollment
+```
+
+随后在“关于”页输入管理员发放的单设备体验码并点击验证。授权成功只会显示“AI 整理”页面，不会自动开启功能；测试人员还需在该页面保存自己的 DeepSeek API Key、完成连接测试，并手动开启本地开关。
+
+当前生产接入使用以下稳定配置：
+
+| 配置 | 值 |
+| --- | --- |
+| 服务根地址 | `https://config.sayall.app` |
+| App key | `remote-mic-macos` |
+| Feature key | `deepseek_post_dictation` |
+| 初始 cohort | `internal-5` |
+| 最低支持版本 | `1.8.12` |
+
+正式构建必须通过 `EARLY_ACCESS_SERVICE_URL` 注入服务根地址。`Scripts/notarize-release.sh` 会优先读取环境变量，否则读取未纳入 Git 的 `Apps/MobileWeb/.private/production.env`，并通过 `REQUIRE_EARLY_ACCESS_CONFIGURATION=1` 阻止遗漏配置的发布包。
+
+邀请码由 Early Access Platform 的受保护生产管理页生成：选择与上述 App/Feature 关联的 active cohort，设置生成数量、每码设备数和 ISO 8601 到期时间，生成后立即保存到受控的加密存储或权限为 `0600` 的本机文件。完整邀请码只返回一次，不得提交到本仓库、Release Notes、截图、日志或问题追踪系统。平台侧完整步骤见 `GetSayAll/early-access-platform` 的 `docs/invitation-operations.md`。
+
 ## 验证边界
 
 自动化覆盖首次不联网、普通启动不显示邀请入口、签名与 Claims、Keychain、离线缓存、明确撤销，以及“资格缺失 / 有资格但关闭 / 有资格且开启 / 使用后撤销”四态。完整人工步骤见 [`Testing/EarlyAccessAIPolish.md`](../../Testing/EarlyAccessAIPolish.md)。构建、签名、公证和自动化不能替代真实 RC003、豆包输入法、DeepSeek 和不同 AX 输入框验收。该实验不得出现在应用内版本历史、Sparkle 更新说明或 GitHub Release Notes 中。
