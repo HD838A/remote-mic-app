@@ -39,6 +39,9 @@ jobs:
             git diff --check "${{ github.event.before }}..HEAD"
           fi
 
+      - name: Enforce extracted repository boundaries
+        run: ./scripts/check-repository-boundaries.sh
+
       - name: Run Swift tests
         run: swift test
 
