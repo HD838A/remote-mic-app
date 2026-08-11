@@ -41,7 +41,7 @@ iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8
 
 ## 下载与安装
 
-发布的安装包会在 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 提供，文件名为 `Remote-Mic-<版本>.dmg`。
+最新正式版可通过 [Cloudflare CDN 固定入口](https://download.sayall.app/mac) 下载，文件名为 `Remote-Mic-<版本>.dmg`；[GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 继续提供版本页面和源文件备份。
 
 Windows 与 Mac 单独构建和发布。当前仅提供面向小米 RC003 的 [Windows RC003 Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，它是未签名、尚未由主项目维护者独立真机复验的社区预览版，不进入 Mac 的 Sparkle 更新序列。下载前请阅读 Release 中的权限、杀毒软件和虚拟音频设备提示，并使用 `SHA256SUMS.txt` 校验文件。
 

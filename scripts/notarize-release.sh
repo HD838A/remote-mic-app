@@ -26,7 +26,7 @@ NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
 PARALLEL_PACKAGE_NOTARIZATION="${PARALLEL_PACKAGE_NOTARIZATION:-0}"
 PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
-DOWNLOAD_PREFIX="https://github.com/HD838A/remote-mic-app/releases/download/$RELEASE_TAG/"
+CDN_DOWNLOAD_PREFIX="https://download.sayall.app/mac/releases/$RELEASE_TAG/"
 RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG"
 GENERATE_APPCAST="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 SIGN_UPDATE="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
@@ -63,8 +63,16 @@ if [[ -z "${REMOTE_WEB_RELAY_URL:-}" && -r "$PRIVATE_PRODUCTION_ENV" ]]; then
   REMOTE_WEB_RELAY_URL="$(/usr/bin/sed -n 's/^REMOTE_WEB_RELAY_URL=//p' \
     "$PRIVATE_PRODUCTION_ENV" | /usr/bin/tail -n 1)"
 fi
+if [[ -z "${EARLY_ACCESS_SERVICE_URL:-}" && -r "$PRIVATE_PRODUCTION_ENV" ]]; then
+  EARLY_ACCESS_SERVICE_URL="$(/usr/bin/sed -n 's/^EARLY_ACCESS_SERVICE_URL=//p' \
+    "$PRIVATE_PRODUCTION_ENV" | /usr/bin/tail -n 1)"
+fi
 if [[ "${REMOTE_WEB_RELAY_URL:-}" != wss://?*/ws ]]; then
   print -u2 "REMOTE_WEB_RELAY_URL must be a production wss:// URL ending in /ws"
+  exit 1
+fi
+if ! print -r -- "${EARLY_ACCESS_SERVICE_URL:-}" | rg -q '^https://[^/?#]+/?$'; then
+  print -u2 "EARLY_ACCESS_SERVICE_URL must be a production root HTTPS URL"
   exit 1
 fi
 for command in codesign ditto security xcrun; do
@@ -133,7 +141,9 @@ export INSTALLER_SIGNING_IDENTITY
 export EXPECTED_DEVELOPER_TEAM_ID
 export REQUIRE_DEVELOPER_ID_SIGNING=1
 export REQUIRE_WEB_REMOTE_CONFIGURATION=1
+export REQUIRE_EARLY_ACCESS_CONFIGURATION=1
 export REMOTE_WEB_RELAY_URL
+export EARLY_ACCESS_SERVICE_URL
 export REQUIRE_NOTARIZATION=0
 
 "$ROOT/scripts/build-app.sh"
@@ -199,8 +209,8 @@ extract_release_notes \
   "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME"
 "$GENERATE_APPCAST" \
   --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" \
-  --download-url-prefix "$DOWNLOAD_PREFIX" \
-  --release-notes-url-prefix "$DOWNLOAD_PREFIX" \
+  --download-url-prefix "$CDN_DOWNLOAD_PREFIX" \
+  --release-notes-url-prefix "$CDN_DOWNLOAD_PREFIX" \
   --link "$RELEASE_PAGE" \
   --versions "$BUILD" \
   --maximum-versions 1 \
@@ -213,9 +223,9 @@ extract_release_notes \
 
 ENCLOSURE_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$APPCAST" | head -n 1)"
 test -n "$ENCLOSURE_SIGNATURE"
-rg -Fq "url=\"$DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
-rg -Fq "$DOWNLOAD_PREFIX$ZH_NOTES_BASENAME" "$APPCAST"
-rg -Fq "$DOWNLOAD_PREFIX$EN_NOTES_BASENAME" "$APPCAST"
+rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
+rg -Fq "$CDN_DOWNLOAD_PREFIX$ZH_NOTES_BASENAME" "$APPCAST"
+rg -Fq "$CDN_DOWNLOAD_PREFIX$EN_NOTES_BASENAME" "$APPCAST"
 rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
 "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$UPDATE_ZIP" "$ENCLOSURE_SIGNATURE"
 "$SIGN_UPDATE" --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"

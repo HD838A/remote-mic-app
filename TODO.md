@@ -1,8 +1,20 @@
 # TODO
 
+- [ ] 使用 Cloudflare CDN 加速 Mac 下载
+  - 官网固定入口为 `https://download.sayall.app/mac`，只解析 GitHub 最新正式版并跳转到同域名的版本化 DMG，不把 Pre-release 作为默认下载。
+  - Sparkle 的稳定 feed 和预发布发现继续使用 GitHub，版本化 ZIP 与本地化更新说明改走 `download.sayall.app/mac/releases/<tag>/`；旧安装用户无需迁移 feed。
+  - GitHub Releases 继续保存全部签名、公证资产；发布后必须从 GitHub 与 CDN 分别下载并逐字节比较，同时验证 `HEAD`、`Range`、签名、公证和候选更新发现。完成公开 Worker、官网和 `1.8.12` Pre-release 验证后再勾选。
+  - 2026-08-12：Worker 与中英文官网已部署，当前正式版 `v1.8.3` 的 GitHub/CDN DMG 字节一致；候选 appcast、签名公证资产和正式版到候选更新仍由统一 Mac 预览版流程完成。
+
 - [x] 建立可选硬件信号模拟回归门禁
   - 私有模拟器 V1 已覆盖小米遥控器 12 个原始按键、36 个短按/双击/长按场景、7 个长按连发场景，以及 BLE 分片、sync、异常、重连、旧回调和双设备隔离；模拟依赖仅在测试环境变量存在时加载，普通开源构建不依赖私有仓库。
   - 自动化只代表 L0–L2 进程内协议和状态响应通过；CoreBluetooth、IOHID/DriverKit、Power 系统行为、射频、音质和安装环境继续由系统级与 RC001/RC003 真机门禁负责。
+
+- [ ] 在最新 macOS 预览版以邀请制 Feature Flag 集成开发中的 AI 整理
+  - 普通用户默认看不到“AI 整理”及邀请码入口；首次兑换面板仅通过内部测试启动参数显示，用户手动输入体验码并点击验证后，App 才允许首次资格网络请求。授权有效后显示独立页面，但本地功能开关仍默认关闭。
+  - 资格使用独立匿名设备 ID、Keychain 凭证和内置 Ed25519 公钥离线验证；资格服务不接收语音、转写文字、DeepSeek API Key 或整理结果。DeepSeek Key、术语表和资格凭证都不进入个性化配置导出。
+  - 门禁覆盖导航、设置交互、语音会话开始、DeepSeek 请求和结果写回；资格撤销、暂停、过期或版本阻止会立即关闭并取消 AI 整理，但保留本机 API Key、术语和所有稳定功能配置。
+  - 详细设计保存在私有产品资料库 `projects/remote-mic-app/research/invite-only-feature-access/v1/wireless-mic-integration-design.md`；公开实现档案见 [`feature/early-access-ai-polish/`](feature/early-access-ai-polish/)。完成四态、RC003 稳定基线、设置页尺寸、签名公证和公开下载字节复核后再标记完成。
 
 - [ ] Windows 版本
   - 当前范围只包含小米 RC003；已完成相关 forks、Windows 实现、权限/安装和虚拟麦克风路线研究。首选源码基线为 `miaomiaozii/windows-remote-mic-app`，但产品化仍需独立真机验收、免费自签流程和第三方组件审查。
