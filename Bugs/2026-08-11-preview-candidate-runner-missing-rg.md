@@ -1,11 +1,11 @@
 # 预发布候选工作流依赖 Runner 未安装的 rg
 
 - 时间：2026-08-11
-- 状态：修复完成，等待托管 Runner 复验
+- 状态：已修复
 - 影响范围：macOS 公开预发布候选分支的 GitHub Actions 校验
 - 功能点：预发布候选来源与发布说明门禁
 - 简单描述：候选分支在本地校验通过，但 GitHub macOS runner 因未安装 `rg` 而错误判定发布说明缺失。
-- 原始记录：[首次失败 run 31458426481](https://github.com/HD838A/remote-mic-app/actions/runs/31458426481)、[后续失败 run 31458857425](https://github.com/HD838A/remote-mic-app/actions/runs/31458857425)
+- 原始记录：[首次失败 run 31458426481](https://github.com/HD838A/remote-mic-app/actions/runs/31458426481)、[后续失败 run 31458857425](https://github.com/HD838A/remote-mic-app/actions/runs/31458857425)、[修复通过 run 31459320898](https://github.com/HD838A/remote-mic-app/actions/runs/31459320898)
 
 ## 复现
 
@@ -40,4 +40,4 @@ env PATH=/usr/bin:/bin:/usr/sbin:/sbin ./scripts/verify-preview-branch.sh
 - 在 `v1.8.8` 候选分支临时应用同一修复后，使用 `env PATH=/usr/bin:/bin:/usr/sbin:/sbin ./scripts/verify-preview-branch.sh` 重新执行原始复现，结果由退出码 1 变为退出码 0，并输出 `PREVIEW BRANCH PASS`。
 - 验证后已撤销候选分支上的临时改动，候选工作树保持干净；正式修复只提交到独立修复分支。
 
-第二次工作流已证明候选来源门禁修复在托管 runner 上有效，并确认新的失败点是工作流未准备 `verify-app.sh` 的既有依赖。仍需在增加工具安装步骤后，由 GitHub `macOS Preview Candidate` 完整跑通到 CI 候选包上传。该问题只涉及 CI 发布门禁，不涉及 App、蓝牙、音频、系统权限或真实硬件行为。
+修复后的 GitHub `macOS Preview Candidate` run 31459320898 已在托管 runner 上完整通过工具安装、候选来源校验、Swift 测试、项目自测、Release 构建、App 构建、App 结构验证、CI 候选包打包和上传。该问题只涉及 CI 发布门禁，不涉及 App、蓝牙、音频、系统权限或真实硬件行为。
