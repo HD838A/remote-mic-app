@@ -15,13 +15,6 @@
 - 豆包输入法可真实语音上屏；授权用例另需有效 DeepSeek API Key。
 - 不在截图、日志或问题报告中记录体验码、匿名设备 ID、刷新凭证、签名授权或 DeepSeek API Key。
 
-## 生产配置核对
-
-1. 确认测试 App 为 `1.8.12` 或更高版本，且 `Info.plist` 中的 `EarlyAccessServiceURL` 为生产 HTTPS 根地址 `https://config.sayall.app`。
-2. 确认 Early Access Platform 中 `remote-mic-macos` / `deepseek_post_dictation` / `internal-5` 均为 active，Flagship 默认关闭且只对批准的 macOS cohort 开启。
-3. 由管理员在受 Cloudflare Access 保护的管理页生成邀请码；常规测试设置为每码 `1` 台 Mac，并明确到期时间。邀请码生成后只保存到批准的安全位置，不进入仓库。
-4. 正式发布构建必须让 `Scripts/notarize-release.sh` 的 Early Access 配置门禁通过；若服务地址缺失或不是 HTTPS 根地址，构建必须失败。
-
 ## A. 首次请求与默认隐藏
 
 ### A1 未加入体验
@@ -38,14 +31,6 @@
 2. 只有在手动点击“验证并启用”后观察网络和界面。
 
 预期：点击后才出现一次兑换请求；成功后显示可复制请求编号和“资格有效”，侧边栏出现“AI 整理”；AI 本地开关仍为关闭。体验码或匿名凭证出现在日志中判定失败。
-
-### A3 本地功能开启
-
-1. 授权成功后打开“AI 整理”。
-2. 保存测试人员自己的 DeepSeek API Key 并执行连接测试。
-3. 手动开启 AI 整理本地开关。
-
-预期：缺少有效资格、DeepSeek API Key 或本地开关中的任意一项时均不得执行整理；获得资格本身不得自动开启本地开关。
 
 ## B. 四态门禁
 
