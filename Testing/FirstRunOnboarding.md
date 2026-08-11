@@ -2,9 +2,14 @@
 
 ## 适用范围
 
+<<<<<<< HEAD
 - 分支：`codex/fix-onboarding-update-ble-recovery`
+=======
+- 版本：Remote Mic `v1.8.8 (100)` Pre-release
+- 分支与标签：`release/pre-v1.8.8` / `v1.8.8`
+>>>>>>> af7e326 (docs: capture onboarding workflow lessons)
 - 平台：macOS 14 及以上
-- 功能状态：等待人工验收
+- 功能状态：公开预发布已完成自动化、签名、公证和更新发现验证，等待真实环境人工验收
 - 目标：确认首次启动必须通过完整设置向导，并通过真实权限、RC003、MiRemoteV 2ch、第三方语音工具和实体按键形成可用闭环。
 
 ## 测试前准备
