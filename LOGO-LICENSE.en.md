@@ -10,10 +10,8 @@ This license applies only to the following brand assets and versions generated f
 
 - Resources/AppIcon.png
 - Resources/AppIcon.icns
-- Apps/RemoteMicIOS/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png
-- Apps/RemoteMicIOS/Resources/Assets.xcassets/AppLogo.imageset/AppLogo.png
 
-These brand assets are not covered by the GPL-3.0-only license for the macOS or iOS software code. Menu-bar status icons, program code, and other resources not listed in this section are outside this license.
+These brand assets are not covered by the GPL-3.0-only license for the macOS software code. Menu-bar status icons, program code, and other resources not listed in this section are outside this license.
 
 ## Permitted use
 
@@ -44,4 +42,4 @@ This license applies to source or binary copies distributed with this file.
 
 ## Software license
 
-Except for the app logo and app icon assets expressly listed in this license and separately identified third-party materials, the macOS app, driver, and related software remain licensed under GPL-3.0-only; see [LICENSE.md](LICENSE.md). The iOS subproject is also licensed under GPL-3.0-only; see [Apps/RemoteMicIOS/LICENSE.md](Apps/RemoteMicIOS/LICENSE.md).
+Except for the app logo and app icon assets expressly listed in this license and separately identified third-party materials, the macOS app, driver, and related software remain licensed under GPL-3.0-only; see [LICENSE.md](LICENSE.md).

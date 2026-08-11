@@ -209,4 +209,4 @@ Release signing must also distinguish a certificate being listed from its privat
 
 ## License and sources
 
-The macOS app, driver, and related software are GPL-3.0-only; the `Apps/RemoteMicIOS/` iOS subproject is also licensed under [GPL-3.0-only](Apps/RemoteMicIOS/LICENSE.md). The logos and app icons for both apps are governed by the separate [Logo License](LOGO-LICENSE.en.md). ATVV and RC003 behavior refer to xxb26553663-star/remote-bridge-hub; the Doubao compatibility driver is built from a pinned BlackHole version. See [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full attribution and constraints.
+The macOS app, driver, and related software in this repository are GPL-3.0-only; the iOS app is now maintained in a separate private repository. The macOS app logo and app icon are governed by the separate [Logo License](LOGO-LICENSE.en.md). ATVV and RC003 behavior refer to xxb26553663-star/remote-bridge-hub; the Doubao compatibility driver is built from a pinned BlackHole version. See [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full attribution and constraints.
