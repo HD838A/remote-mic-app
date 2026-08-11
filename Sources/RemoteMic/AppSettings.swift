@@ -251,6 +251,7 @@ final class AppSettings: ObservableObject {
         static let onboardingCompletedVersion = "onboarding.completedVersion"
         static let onboardingStep = "onboarding.step"
         static let onboardingVoiceTool = "onboarding.voiceTool"
+        static let onboardingMigrationVersion = "onboarding.migrationVersion"
     }
 
     private let defaults: UserDefaults
@@ -1112,15 +1113,31 @@ final class AppSettings: ObservableObject {
         sparkleHadLaunchedBefore: Bool
     ) -> Bool {
         let previousBuild = defaults.string(forKey: Keys.lastLaunchedBuild)
-        defaults.set(currentBuild, forKey: Keys.lastLaunchedBuild)
+        let completedUpdate: Bool
         if
             let previousBuild,
             let previousBuildNumber = Int(previousBuild),
             let currentBuildNumber = Int(currentBuild)
         {
-            return currentBuildNumber > previousBuildNumber
+            completedUpdate = currentBuildNumber > previousBuildNumber
+        } else {
+            completedUpdate = previousBuild == nil && sparkleHadLaunchedBefore
         }
-        return previousBuild == nil && sparkleHadLaunchedBefore
+
+        if defaults.integer(forKey: Keys.onboardingMigrationVersion) < Self.currentOnboardingVersion {
+            let hasPersistedOnboardingState =
+                defaults.object(forKey: Keys.onboardingCompletedVersion) != nil ||
+                defaults.object(forKey: Keys.onboardingStep) != nil ||
+                defaults.object(forKey: Keys.onboardingVoiceTool) != nil
+            let isExistingInstall = previousBuild != nil || sparkleHadLaunchedBefore
+            if !isOnboardingComplete, !hasPersistedOnboardingState, isExistingInstall {
+                completeOnboarding()
+            }
+            defaults.set(Self.currentOnboardingVersion, forKey: Keys.onboardingMigrationVersion)
+        }
+
+        defaults.set(currentBuild, forKey: Keys.lastLaunchedBuild)
+        return completedUpdate
     }
 
     func exportedConfigurationData() throws -> Data {
