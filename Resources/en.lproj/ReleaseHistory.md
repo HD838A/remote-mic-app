@@ -1,5 +1,9 @@
 # Version History
 
+## 1.8.12 (Pre-release)
+
+- Improved the speed and reliability of Mac installer and automatic-update downloads. Existing versions can continue checking for updates, with GitHub downloads retained as a fallback.
+
 ## 1.8.11 (Pre-release)
 
 - Fixed newly paired remotes appearing connected in macOS while the setup guide kept searching until Remote Mic was restarted. Returning from Bluetooth Settings now restarts discovery and connects the new device automatically.
