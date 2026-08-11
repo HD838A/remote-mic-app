@@ -30,6 +30,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingCloseTimeout: TimeInterval = 2
 
     let settings: AppSettings
+    let earlyAccess: EarlyAccessController
 
     @Published private(set) var connectionStatus = LocalizedMessage("bluetooth.status.initializing")
     @Published private(set) var hidStatus = LocalizedMessage("button_mapping.status.disabled")
@@ -51,11 +52,38 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
+    @Published private(set) var postDictationStatus = LocalizedMessage("post_dictation.status.ready")
+    @Published private(set) var postDictationState: PostDictationPolishState = .idle
+    @Published private(set) var isDeepSeekAPIKeyConfigured = false
+    @Published private(set) var deepSeekAPIKeyPreview: String?
+    @Published private(set) var programmingTerms: [ProgrammingTerm] = []
+    @Published private(set) var copyablePostDictationResult: String?
 
     private let audioOutput = VirtualAudioOutput()
     private let phoneRemoteServer = PhoneRemoteServer()
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
+    private let deepSeekCredentialStore: DeepSeekCredentialStore
+    private var programmingTermStore: ProgrammingTermStore?
+    private lazy var postDictationCoordinator = PostDictationPolishCoordinator(
+        isEnabled: { [weak self] in
+            self?.canRunPostDictation == true
+        },
+        loadAPIKey: { [weak self] in
+            try self?.deepSeekCredentialStore.loadAPIKey()
+        },
+        enabledTerms: { [weak self] in
+            self?.programmingTerms.filter(\.isEnabled) ?? []
+        },
+        statusChanged: { [weak self] state, message in
+            self?.postDictationState = state
+            self?.postDictationStatus = message
+        },
+        resultChanged: { [weak self] result in
+            self?.copyablePostDictationResult = result
+        }
+    )
+    private var deepSeekConnectionTestTask: Task<Void, Never>?
     private lazy var voiceInputDestinationCoordinator = VoiceInputDestinationCoordinator(
         onStateChange: { [weak self] state in
             self?.handleVoiceInputDestinationState(state)
@@ -134,10 +162,24 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     init(
         settings: AppSettings = AppSettings(),
-        initialAudioDevices: [AudioDeviceInfo] = []
+        initialAudioDevices: [AudioDeviceInfo] = [],
+        earlyAccess: EarlyAccessController = EarlyAccessController(),
+        deepSeekCredentialStore: DeepSeekCredentialStore = DeepSeekCredentialStore(),
+        programmingTermStore: ProgrammingTermStore? = nil
     ) {
         self.settings = settings
+        self.earlyAccess = earlyAccess
+        self.deepSeekCredentialStore = deepSeekCredentialStore
+        self.programmingTermStore = programmingTermStore
         audioDevices = initialAudioDevices
+        if earlyAccess.hasEffectiveAccess {
+            loadPostDictationLocalData()
+        } else {
+            settings.deepSeekPostDictationEnabled = false
+        }
+        earlyAccess.onEffectiveAccessChanged = { [weak self] hasAccess in
+            self?.handleEarlyAccessChange(hasAccess: hasAccess)
+        }
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
         }
@@ -265,6 +307,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func stop() {
+        earlyAccess.stop()
+        if settings.deepSeekPostDictationEnabled || postDictationState == .requesting {
+            postDictationCoordinator.cancel()
+        }
         guard started else { return }
         started = false
         completedUpdateHIDRecoveryWorkItem?.cancel()
@@ -917,6 +963,201 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         voiceFnTapSession.setEnabled(false) { [weak self] in
             self?.applyHIDSettings()
         }
+    }
+
+    var canRunPostDictation: Bool {
+        earlyAccess.hasEffectiveAccess
+            && settings.deepSeekPostDictationEnabled
+            && isDeepSeekAPIKeyConfigured
+    }
+
+    func redeemEarlyAccessCode(_ code: String) {
+        earlyAccess.redeem(code: code)
+    }
+
+    func refreshEarlyAccessIfNeeded(force: Bool = false) {
+        earlyAccess.refreshIfNeeded(force: force)
+    }
+
+    func releaseEarlyAccess() {
+        earlyAccess.release()
+    }
+
+    func clearLocalEarlyAccessEnrollment() {
+        earlyAccess.clearLocalEnrollment()
+    }
+
+    func setDeepSeekPostDictationEnabled(_ enabled: Bool) {
+        guard earlyAccess.hasEffectiveAccess else {
+            settings.deepSeekPostDictationEnabled = false
+            postDictationState = .idle
+            postDictationStatus = LocalizedMessage("post_dictation.status.access_required")
+            return
+        }
+        settings.deepSeekPostDictationEnabled = enabled
+        if enabled {
+            postDictationStatus = isDeepSeekAPIKeyConfigured
+                ? LocalizedMessage("post_dictation.status.ready")
+                : LocalizedMessage("post_dictation.status.missing_key")
+            postDictationState = isDeepSeekAPIKeyConfigured ? .idle : .failed
+        } else {
+            postDictationCoordinator.cancel()
+        }
+    }
+
+    @discardableResult
+    func saveDeepSeekAPIKey(_ apiKey: String) -> Bool {
+        guard earlyAccess.hasEffectiveAccess else { return false }
+        do {
+            try deepSeekCredentialStore.saveAPIKey(apiKey)
+            isDeepSeekAPIKeyConfigured = true
+            deepSeekAPIKeyPreview = DeepSeekCredentialStore.maskedPreview(for: apiKey)
+            postDictationState = .idle
+            postDictationStatus = LocalizedMessage("post_dictation.status.key_saved")
+            return true
+        } catch {
+            postDictationState = .failed
+            postDictationStatus = LocalizedMessage("post_dictation.status.key_save_failed")
+            return false
+        }
+    }
+
+    func deleteDeepSeekAPIKey() {
+        guard earlyAccess.hasEffectiveAccess else { return }
+        do {
+            try deepSeekCredentialStore.deleteAPIKey()
+            isDeepSeekAPIKeyConfigured = false
+            deepSeekAPIKeyPreview = nil
+            settings.deepSeekPostDictationEnabled = false
+            postDictationCoordinator.cancel(resetStatus: false)
+            postDictationState = .idle
+            postDictationStatus = LocalizedMessage("post_dictation.status.key_deleted")
+        } catch {
+            postDictationState = .failed
+            postDictationStatus = LocalizedMessage("post_dictation.status.key_delete_failed")
+        }
+    }
+
+    func testDeepSeekConnection() {
+        guard earlyAccess.hasEffectiveAccess else {
+            postDictationState = .idle
+            postDictationStatus = LocalizedMessage("post_dictation.status.access_required")
+            return
+        }
+        guard let apiKey = try? deepSeekCredentialStore.loadAPIKey() else {
+            postDictationState = .failed
+            postDictationStatus = LocalizedMessage("post_dictation.status.missing_key")
+            return
+        }
+        deepSeekConnectionTestTask?.cancel()
+        postDictationState = .requesting
+        postDictationStatus = LocalizedMessage("post_dictation.status.testing")
+        let input = DeepSeekPolishInput(
+            applicationName: "RemoteMic",
+            bundleIdentifier: "com.hd838a.RemoteMic",
+            contextBefore: "",
+            contextAfter: "",
+            currentDictation: "这是一次连接测试，请保持原意。",
+            programmingTerms: []
+        )
+        deepSeekConnectionTestTask = Task { @MainActor [weak self] in
+            do {
+                _ = try await DeepSeekTextPolishingClient().polish(input: input, apiKey: apiKey)
+                try Task.checkCancellation()
+                guard self?.earlyAccess.hasEffectiveAccess == true else { return }
+                self?.postDictationState = .completed
+                self?.postDictationStatus = LocalizedMessage("post_dictation.status.test_succeeded")
+            } catch is CancellationError {
+                return
+            } catch {
+                guard self?.earlyAccess.hasEffectiveAccess == true else { return }
+                self?.postDictationState = .failed
+                self?.postDictationStatus = LocalizedMessage("post_dictation.status.test_failed")
+            }
+        }
+    }
+
+    func addProgrammingTerm(
+        canonicalText: String,
+        aliases: [String],
+        kind: ProgrammingTermKind
+    ) {
+        guard earlyAccess.hasEffectiveAccess else { return }
+        let canonical = canonicalText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAliases = aliases
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !canonical.isEmpty, !normalizedAliases.isEmpty else { return }
+        guard let programmingTermStore else { return }
+        do {
+            try programmingTermStore.add(ProgrammingTerm(
+                canonicalText: canonical,
+                spokenAliases: normalizedAliases,
+                kind: kind
+            ))
+            programmingTerms = programmingTermStore.terms
+        } catch {
+            postDictationState = .failed
+            postDictationStatus = LocalizedMessage("post_dictation.status.term_save_failed")
+        }
+    }
+
+    func removeProgrammingTerm(id: UUID) {
+        guard earlyAccess.hasEffectiveAccess else { return }
+        guard let programmingTermStore else { return }
+        do {
+            try programmingTermStore.remove(id: id)
+            programmingTerms = programmingTermStore.terms
+        } catch {
+            postDictationState = .failed
+            postDictationStatus = LocalizedMessage("post_dictation.status.term_save_failed")
+        }
+    }
+
+    func setProgrammingTermEnabled(_ enabled: Bool, id: UUID) {
+        guard earlyAccess.hasEffectiveAccess else { return }
+        guard let programmingTermStore else { return }
+        do {
+            try programmingTermStore.setEnabled(enabled, id: id)
+            programmingTerms = programmingTermStore.terms
+        } catch {
+            postDictationState = .failed
+            postDictationStatus = LocalizedMessage("post_dictation.status.term_save_failed")
+        }
+    }
+
+    func copyPostDictationResult() {
+        guard earlyAccess.hasEffectiveAccess, let copyablePostDictationResult else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(copyablePostDictationResult, forType: .string)
+        postDictationStatus = LocalizedMessage("post_dictation.status.result_copied")
+    }
+
+    private func handleEarlyAccessChange(hasAccess: Bool) {
+        settings.deepSeekPostDictationEnabled = false
+        deepSeekConnectionTestTask?.cancel()
+        deepSeekConnectionTestTask = nil
+        postDictationCoordinator.cancel(resetStatus: false)
+        copyablePostDictationResult = nil
+        postDictationState = .idle
+        if hasAccess {
+            loadPostDictationLocalData()
+        }
+        postDictationStatus = LocalizedMessage(
+            hasAccess
+                ? "post_dictation.status.ready"
+                : "post_dictation.status.access_required"
+        )
+    }
+
+    private func loadPostDictationLocalData() {
+        let apiKey = (try? deepSeekCredentialStore.loadAPIKey()) ?? nil
+        isDeepSeekAPIKeyConfigured = apiKey != nil
+        deepSeekAPIKeyPreview = apiKey.map(DeepSeekCredentialStore.maskedPreview)
+        let termStore = programmingTermStore ?? ProgrammingTermStore()
+        programmingTermStore = termStore
+        programmingTerms = termStore.terms
     }
 
     private func enableVoiceFnTapMode() {
@@ -1800,6 +2041,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func beginVoiceSessionIfNeeded() {
         guard !isStreaming else { return }
+        if canRunPostDictation {
+            postDictationCoordinator.startSession()
+        }
         cancelTestToneIfNeeded(
             statusMessage: LocalizedMessage("audio.test_tone.blocked_voice_active"),
             logReason: "voice_start"
@@ -1828,6 +2072,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isStreaming = false
         if flushAudio {
             audioOutput.endSession()
+        }
+        if canRunPostDictation {
+            postDictationCoordinator.finishSession()
         }
     }
 

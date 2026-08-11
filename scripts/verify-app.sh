@@ -138,6 +138,11 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
     print -u2 "Developer ID app is missing a production Web Remote relay URL"
     exit 1
   fi
+  EARLY_ACCESS_URL="$(plutil -extract EarlyAccessServiceURL raw -o - "$PLIST" 2>/dev/null || true)"
+  if ! print -r -- "$EARLY_ACCESS_URL" | rg -q '^https://[^/?#]+/?$'; then
+    print -u2 "Developer ID app is missing a production root HTTPS Early Access URL"
+    exit 1
+  fi
   SIGNATURE_DETAILS="$(codesign -dvvv "$APP" 2>&1)"
   print -r -- "$SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:'
   print -r -- "$SIGNATURE_DETAILS" | rg -q "^TeamIdentifier=$EXPECTED_DEVELOPER_TEAM_ID$"
