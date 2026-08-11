@@ -124,8 +124,8 @@ done
 for release_history in \
   Resources/zh-Hans.lproj/ReleaseHistory.md \
   Resources/en.lproj/ReleaseHistory.md; do
-  if ! print -l -- "${CHANGED_FILES[@]}" | rg -Fxq "$release_history" || \
-     ! rg -Fq "## $VERSION" "$release_history"; then
+  if ! print -l -- "${CHANGED_FILES[@]}" | /usr/bin/grep -Fxq "$release_history" || \
+     ! /usr/bin/grep -Fq "## $VERSION" "$release_history"; then
     print -u2 "preview candidate requires a $VERSION entry in $release_history"
     exit 1
   fi
@@ -133,7 +133,7 @@ done
 
 git diff --check "$BASE_REF"..HEAD
 if git diff "$BASE_REF"..HEAD | \
-   rg -n '^\+.*(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|MATCH_PASSWORD=|APPLE_APPLICATION_SPECIFIC_PASSWORD=|AuthKey_[A-Z0-9]+\.p8)'; then
+   /usr/bin/grep -En '^\+.*(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|MATCH_PASSWORD=|APPLE_APPLICATION_SPECIFIC_PASSWORD=|AuthKey_[A-Z0-9]+\.p8)'; then
   print -u2 "preview candidate contains a possible plaintext credential"
   exit 1
 fi
