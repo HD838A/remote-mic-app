@@ -8,7 +8,7 @@
 - `Sources/RemoteMic/OnboardingView.swift`：双栏页面、权限操作、设备与按键状态、真实语音文字测试和固定底部导航。
 - `Sources/RemoteMic/OnboardingScreenshotRenderer.swift`：通过离屏 AppKit 窗口渲染生产向导，支持浅色、深色和系统外观，使用隔离偏好域。
 - `Sources/RemoteMic/RemoteMicApp.swift`：未完成时强制显示主窗口并延迟完整运行时启动；专用环境变量存在时进入无界面截图模式。
-- `Sources/RemoteMic/BridgeAppModel.swift`：在现有蓝牙语音开始与 PCM 解码回调旁公开当前会话样本计数；允许截图模式注入隔离设置，不保存音频。
+- `Sources/RemoteMic/BridgeAppModel.swift`：在现有蓝牙语音开始与 PCM 解码回调旁公开当前会话样本计数；允许截图模式注入隔离设置，不保存音频；重连入口在 bridge 尚未创建时可启动蓝牙连接。
 - `Sources/RemoteMic/SettingsView.swift`：关于页增加“重新运行设置向导”。
 - `Resources/*/Localizable.strings`：中英文向导文案。
 - `Tests/RemoteMicTests/OnboardingFlowTests.swift`：步骤、门禁、持久化、完成版本和重新运行测试。
@@ -23,17 +23,20 @@
 4. 权限通过后启用现有自定义按键监控，以便向导接收真实 HID 按键；没有新建第二套按键监听器。
 5. 关闭窗口不是旁路。未完成时下次启动仍强制显示保存的当前页，主设置页只在写入当前流程版本后出现。
 6. 已安装用户可从“关于”页重新运行设置向导；该操作只重置向导完成版本、当前位置和语音工具选择，兼容麦克风、连接、按键映射及其他应用设置保持不变。
+7. 升级首次启动若 HID 普通按键先于 BLE Ready 到达，遥控器页只请求一次连接恢复；`reconnect()` 会在 bridge 尚未创建时补启动蓝牙，避免状态只能通过重启解除。
 
 ## 影响与回归边界
 
 共享蓝牙协议、HID 报告解析、音频格式、设备选择规则和设置页容器尺寸均未改变。已完成用户启动时仍按原逻辑启动服务并根据偏好显示窗口；重新运行向导会暂时用向导替换同一主窗口内容。
 
+2026-08-11 的升级恢复修复没有改变全局蓝牙与音频启动顺序，也不会在已连接、未收到实体按键或本页已经请求过恢复时重复重连。真实 Sparkle 升级首次启动和 RC003 仍需按测试手册验收。
+
 ## 自动化验证
 
-- `swift test --filter OnboardingFlowTests`：4 项通过，覆盖步骤、阶段、能力门禁、启动门禁、持久化、重新运行及现有用户配置保留。
+- `swift test --filter OnboardingFlowTests`：6 项通过，新增覆盖 HID 已到达但 BLE 未连接时的一次性恢复策略，以及按键事件与空 bridge 启动分支的生产代码接线。
 - `swift test --filter SettingsPageRegressionTests`：6 项通过。
 - `swift test --filter LocalizationTests`：5 项通过，中英文 key 和格式一致。
-- `swift test`：178 项、18 个 suite 全部通过，没有跳过用例。
+- `swift test`：194 项、20 个 suite 全部通过，没有跳过用例。
 - `scripts/test.sh`：42 项项目自检通过。
 - `swift build -c release`：通过。
 - `scripts/build-app.sh`：通过；`codesign --verify --deep --strict` 通过。

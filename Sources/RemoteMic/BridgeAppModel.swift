@@ -328,6 +328,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func reconnect() {
+        guard started else { return }
+        if bluetoothBridges.isEmpty && discoveryBluetoothBridge == nil {
+            AppLogger.shared.write("BLE RECONNECT starting_missing_bridges")
+            startBluetoothConnections()
+            return
+        }
         if let selectedBluetoothBridge {
             selectedBluetoothBridge.reconnectNow()
         } else {

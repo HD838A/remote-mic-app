@@ -108,6 +108,64 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func observedRemoteButtonRequestsOnlyOneRecoveryWhileBluetoothIsDisconnected() {
+        #expect(!OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: false,
+            remoteButtonObserved: false,
+            recoveryRequested: false
+        ))
+        #expect(!OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: true,
+            remoteButtonObserved: true,
+            recoveryRequested: false
+        ))
+        #expect(!OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: false,
+            remoteButtonObserved: true,
+            recoveryRequested: true
+        ))
+        #expect(OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: false,
+            remoteButtonObserved: true,
+            recoveryRequested: false
+        ))
+    }
+
+    @Test func remoteRecoveryIsWiredToButtonObservationAndCanStartMissingBluetoothBridge() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let buttonReceiveStart = try #require(viewSource.range(
+            of: ".onReceive(model.$lastRemoteButtonPress.compactMap { $0 })"
+        ))
+        let buttonReceiveEnd = try #require(viewSource.range(
+            of: ".onReceive(model.$isStreaming)",
+            range: buttonReceiveStart.upperBound..<viewSource.endIndex
+        ))
+        let buttonReceiveSource = viewSource[buttonReceiveStart.lowerBound..<buttonReceiveEnd.lowerBound]
+        #expect(buttonReceiveSource.contains("recoverRemoteConnectionIfNeeded()"))
+
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let reconnectStart = try #require(modelSource.range(of: "func reconnect()"))
+        let reconnectEnd = try #require(modelSource.range(
+            of: "func enablePhoneRemoteConnection()",
+            range: reconnectStart.upperBound..<modelSource.endIndex
+        ))
+        let reconnectSource = modelSource[reconnectStart.lowerBound..<reconnectEnd.lowerBound]
+        #expect(reconnectSource.contains("guard started else { return }"))
+        #expect(reconnectSource.contains("bluetoothBridges.isEmpty && discoveryBluetoothBridge == nil"))
+        #expect(reconnectSource.contains("startBluetoothConnections()"))
+    }
+
     @Test func progressVoiceToolAndCompletionPersistAcrossLaunches() throws {
         let suiteName = "RemoteMicTests.Onboarding.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
