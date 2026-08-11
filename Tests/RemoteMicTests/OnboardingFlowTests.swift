@@ -210,6 +210,77 @@ struct OnboardingFlowTests {
         #expect(restarted.action(for: .ok) == .escape)
     }
 
+    @Test func existingInstallSkipsOnboardingWhileNewAndResumedFlowsRemainRequired() throws {
+        let legacySuiteName = "RemoteMicTests.Onboarding.Legacy.\(UUID().uuidString)"
+        let legacyDefaults = try #require(UserDefaults(suiteName: legacySuiteName))
+        defer { legacyDefaults.removePersistentDomain(forName: legacySuiteName) }
+        legacyDefaults.set("68", forKey: "launch.lastLaunchedBuild")
+
+        let legacySettings = AppSettings(defaults: legacyDefaults)
+        #expect(legacySettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(legacySettings.isOnboardingComplete)
+        #expect(legacySettings.onboardingStep == .complete)
+
+        let sparkleLegacySuiteName = "RemoteMicTests.Onboarding.SparkleLegacy.\(UUID().uuidString)"
+        let sparkleLegacyDefaults = try #require(UserDefaults(suiteName: sparkleLegacySuiteName))
+        defer { sparkleLegacyDefaults.removePersistentDomain(forName: sparkleLegacySuiteName) }
+
+        let sparkleLegacySettings = AppSettings(defaults: sparkleLegacyDefaults)
+        #expect(sparkleLegacySettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(sparkleLegacySettings.isOnboardingComplete)
+
+        let freshSuiteName = "RemoteMicTests.Onboarding.Fresh.\(UUID().uuidString)"
+        let freshDefaults = try #require(UserDefaults(suiteName: freshSuiteName))
+        defer { freshDefaults.removePersistentDomain(forName: freshSuiteName) }
+
+        let firstFreshLaunch = AppSettings(defaults: freshDefaults)
+        #expect(!firstFreshLaunch.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: false
+        ))
+        #expect(!firstFreshLaunch.isOnboardingComplete)
+
+        let secondFreshLaunch = AppSettings(defaults: freshDefaults)
+        #expect(secondFreshLaunch.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "103",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(!secondFreshLaunch.isOnboardingComplete)
+        #expect(secondFreshLaunch.onboardingStep == .welcome)
+
+        let resumedSuiteName = "RemoteMicTests.Onboarding.Resumed.\(UUID().uuidString)"
+        let resumedDefaults = try #require(UserDefaults(suiteName: resumedSuiteName))
+        defer { resumedDefaults.removePersistentDomain(forName: resumedSuiteName) }
+        resumedDefaults.set("101", forKey: "launch.lastLaunchedBuild")
+        resumedDefaults.set(OnboardingStep.audio.rawValue, forKey: "onboarding.step")
+        resumedDefaults.set(OnboardingVoiceTool.typeless.rawValue, forKey: "onboarding.voiceTool")
+
+        let resumedSettings = AppSettings(defaults: resumedDefaults)
+        #expect(resumedSettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: true
+        ))
+        #expect(!resumedSettings.isOnboardingComplete)
+        #expect(resumedSettings.onboardingStep == .audio)
+        #expect(resumedSettings.onboardingVoiceTool == .typeless)
+
+        resumedSettings.completeOnboarding()
+        resumedSettings.restartOnboarding()
+        let restartedSettings = AppSettings(defaults: resumedDefaults)
+        _ = restartedSettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "103",
+            sparkleHadLaunchedBefore: true
+        )
+        #expect(!restartedSettings.isOnboardingComplete)
+        #expect(restartedSettings.onboardingStep == .welcome)
+    }
+
     @Test func incompleteFlowAlwaysShowsItsWindowAndDelaysRuntimeUntilSetup() {
         #expect(OnboardingLaunchPolicy.shouldShowMainWindow(
             isComplete: false,

@@ -3,7 +3,7 @@
 ## 精确接入点
 
 - `Sources/RemoteMic/OnboardingFlow.swift`：步骤、阶段、语音工具选择、实时能力和下一页门禁。
-- `Sources/RemoteMic/AppSettings.swift`：流程版本、当前位置、语音工具及完成/重新运行操作的持久化。
+- `Sources/RemoteMic/AppSettings.swift`：流程版本、当前位置、语音工具、完成/重新运行操作及旧安装一次性迁移的持久化。
 - `Sources/RemoteMic/RemoteMicRootView.swift`：在向导和既有设置页之间切换，并在进入硬件步骤时启动运行时。
 - `Sources/RemoteMic/OnboardingView.swift`：双栏页面、权限操作、设备与按键状态、真实语音文字测试和固定底部导航。
 - `Sources/RemoteMic/OnboardingScreenshotRenderer.swift`：通过离屏 AppKit 窗口渲染生产向导，支持浅色、深色和系统外观，使用隔离偏好域。
@@ -24,6 +24,7 @@
 5. 关闭窗口不是旁路。未完成时下次启动仍强制显示保存的当前页，主设置页只在写入当前流程版本后出现。
 6. 已安装用户可从“关于”页重新运行设置向导；该操作只重置向导完成版本、当前位置和语音工具选择，兼容麦克风、连接、按键映射及其他应用设置保持不变。
 7. 升级首次启动若 HID 普通按键先于 BLE Ready 到达，遥控器页只请求一次连接恢复；`reconnect()` 会在 bridge 尚未创建时补启动蓝牙，避免状态只能通过重启解除。
+8. Onboarding 迁移在覆盖 `launch.lastLaunchedBuild` 前读取旧 Build 和 Sparkle 启动证据；只有完全没有向导状态的旧安装才自动完成。迁移版本单独持久化，避免真正全新安装第二次启动时被刚写入的 Build 记录误判。
 
 ## 设计、开发与测试复盘
 
@@ -55,12 +56,14 @@
 
 2026-08-11 的升级恢复修复没有改变全局蓝牙与音频启动顺序，也不会在已连接、未收到实体按键或本页已经请求过恢复时重复重连。真实 Sparkle 升级首次启动和 RC003 仍需按测试手册验收。
 
+旧安装迁移只改变根视图选择，不修改蓝牙、HID、音频、权限、映射或用户配置。中途向导状态与主动重新运行状态优先，不会因存在更新记录而被自动完成。
+
 ## 自动化验证
 
-- `swift test --filter OnboardingFlowTests`：6 项通过，新增覆盖 HID 已到达但 BLE 未连接时的一次性恢复策略，以及按键事件与空 bridge 启动分支的生产代码接线。
+- `swift test --filter OnboardingFlowTests`：7 项通过，覆盖 HID 已到达但 BLE 未连接时的一次性恢复策略、按键事件与空 bridge 启动分支接线，以及旧安装/全新安装/中途续接/主动重跑迁移边界。
 - `swift test --filter SettingsPageRegressionTests`：6 项通过。
 - `swift test --filter LocalizationTests`：5 项通过，中英文 key 和格式一致。
-- `swift test`：194 项、20 个 suite 全部通过，没有跳过用例。
+- `swift test`：198 项、20 个 suite 全部通过，没有跳过用例。
 - `scripts/test.sh`：42 项项目自检通过。
 - `swift build -c release`：通过。
 - `scripts/build-app.sh`：通过；`codesign --verify --deep --strict` 通过。
