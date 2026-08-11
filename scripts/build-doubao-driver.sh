@@ -70,6 +70,7 @@ xcodebuild \
 
 ditto --norsrc --noextattr --noqtn --noacl \
   "$SOURCE_ROOT/build/Release/$PRODUCT_NAME.driver" "$OUTPUT"
+/usr/bin/strip -S "$OUTPUT/Contents/MacOS/$PRODUCT_NAME"
 if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   codesign --force --deep --sign - --timestamp=none "$OUTPUT"
 else

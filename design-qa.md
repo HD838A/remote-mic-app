@@ -5,6 +5,7 @@
 ## 审查范围
 
 - 设置窗口：默认及最小尺寸 1020×772，可自由缩放；
+- 首次使用 Onboarding：约 1020×772，不显示步骤编号、总数、百分比、“跳过”或“稍后继续”；
 - 页面：连接与语音、按键映射、统计、权限与隐私、关于；
 - 各页面顶部仅显示主标题，不显示重复说明页面内容的副标题；
 - 仓库截图：
@@ -14,6 +15,7 @@
 
 ## 当前实现
 
+- 未完成当前流程版本时，主窗口使用 Typeless 式双栏 Onboarding：顶部仅显示“准备 › 设置 › 试一下”，左侧一次完成一个任务，右侧显示遥控器和实时检查；必要能力未通过时主按钮禁用，完成前根视图不显示设置页；
 - 设置页使用窄侧栏、标题区和分层内容区，五个页面的主要操作在最小窗口下可访问；页面可以滚动但不显示滚动条；
 - 侧栏选择态和按键选择态使用低透明度语义蓝交互玻璃；
 - 使用系统字体、语义字号和系统颜色，跟随浅色、深色、降低透明度与增强对比度设置；
@@ -38,12 +40,15 @@
 ## 代码对应位置
 
 - 窗口创建与最小尺寸：`Sources/RemoteMic/RemoteMicApp.swift`；
+- Onboarding 根视图、布局和门禁：`Sources/RemoteMic/RemoteMicRootView.swift`、`Sources/RemoteMic/OnboardingView.swift`、`Sources/RemoteMic/OnboardingFlow.swift`；
 - 页面布局、材质和遥控器热点：`Sources/RemoteMic/SettingsView.swift`；
 - 实体按键活动状态：`Sources/RemoteMic/HIDRemoteMonitor.swift` 与 `Sources/RemoteMic/BridgeAppModel.swift`。
 
 ## 结论
 
 当前仓库截图对应 macOS 26 Liquid Glass 外观；同一页面结构在 macOS 14/15 自动切换到兼容样式。仓库未保留依赖本机临时目录的审查引用。
+
+首次 Onboarding 已通过编译、自动化和静态字号检查。锁屏状态下已直接实例化生产 `OnboardingView`，通过离屏 AppKit 窗口缓存分别生成并逐页检查浅色、深色各 8 张真实实现截图；`1020 × 772` 内容区、原生窗口框架、底部导航和右侧实时检查均无裁切。右侧插画与检查区跟随系统外观：浅色使用浅蓝画布，深色使用深蓝画布，左右区域不会形成黑白分栏。真实硬件验收仍按 `Testing/FirstRunOnboarding.md` 执行，不能用截图替代 RC003、系统权限、MiRemoteV 2ch 和第三方语音工具验证。
 
 ---
 
