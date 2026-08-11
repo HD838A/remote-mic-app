@@ -282,6 +282,8 @@ struct BuildSigningTests {
         ] {
             #expect(notarizeSource.contains(requiredText))
         }
+        #expect(notarizeSource.contains("GENERATE_SPARKLE_UPDATE=\"${GENERATE_SPARKLE_UPDATE:-1}\""))
+        #expect(notarizeSource.contains("SPARKLE UPDATE: skipped for private test package"))
         #expect(publishSource.contains("$STAGING_DIR/${ZH_RELEASE_NOTES:t}"))
         #expect(publishSource.contains("$STAGING_DIR/${EN_RELEASE_NOTES:t}"))
         #expect(publishSource.contains(".payloadAssets | length == 8"))
