@@ -30,7 +30,7 @@ Remote Mic is built natively with SwiftUI. While running in the background, it u
 
 ## Download and install
 
-Download releases from [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest). Each release is named Remote-Mic-<version>.dmg.
+Download the latest stable release through the [Cloudflare CDN entry](https://download.sayall.app/mac). Each release is named Remote-Mic-<version>.dmg; [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) remains the release page and source-file backup.
 
 The DMG provides two installation paths:
 
