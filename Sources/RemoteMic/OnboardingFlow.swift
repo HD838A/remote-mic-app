@@ -91,6 +91,14 @@ struct OnboardingCapabilities: Equatable {
 }
 
 enum OnboardingFlowPolicy {
+    static func shouldRequestRemoteReconnect(
+        remoteConnected: Bool,
+        remoteButtonObserved: Bool,
+        recoveryRequested: Bool
+    ) -> Bool {
+        !remoteConnected && remoteButtonObserved && !recoveryRequested
+    }
+
     static func canContinue(
         from step: OnboardingStep,
         voiceTool: OnboardingVoiceTool,

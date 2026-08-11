@@ -58,11 +58,13 @@
 | 2026-08-09 | [RC001 Short Voice Stream Tail Dropped on STREAM_STOP](./2026-08-09-rc001-short-voice-stream-tail-dropped.md) | 已修复，模拟与真机回归通过 |
 | 2026-08-10 | [Unbound Multi-Remote Button Actions Are Ignored](./2026-08-10-unbound-multi-remote-actions-ignored.md) | 已修复，双遥控器真机复验通过 |
 | 2026-08-10 | [Upgrade Leaves Custom Button Mapping Inactive](./2026-08-10-upgrade-custom-mapping-not-activated.md) | 已修复，签名升级验证通过；待实体按键确认 |
-| 2026-08-10 | [RC003 普通语音会话约一分钟停止](./2026-08-10-rc003-one-minute-voice-session-timeout.md) | 候选修复完成，等待真机验证 |
+| 2026-08-10 | [RC003 普通语音会话约一分钟停止](./2026-08-10-rc003-one-minute-voice-session-timeout.md) | `MIC_EXTEND` 候选方案已撤回，问题未解决 |
 | 2026-08-10 | [已占用组合键无法录入](./2026-08-10-reserved-shortcut-capture.md) | 候选修复完成，等待真实系统热键验证 |
 | 2026-08-10 | [左右键按住不能连续移动](./2026-08-10-left-right-hold-repeat.md) | 候选修复完成，硬件模拟通过，等待真机验证 |
 | 2026-08-10 | [增益滑块轨道拖动带动整个窗口](./2026-08-10-gain-slider-drags-window.md) | 已修复，等待可见界面复验 |
 | 2026-08-11 | [预发布候选工作流依赖 Runner 未安装的 rg](./2026-08-11-preview-candidate-runner-missing-rg.md) | 已修复 |
+| 2026-08-11 | [升级后 Onboarding 已收到实体按键但仍显示蓝牙未连接](./2026-08-11-onboarding-upgrade-hid-before-ble.md) | 候选修复完成，等待真实升级与 RC003 验收 |
+| 2026-08-11 | [蓝牙断连后虚拟麦克风仍保持活动](./2026-08-11-bluetooth-disconnect-keeps-virtual-microphone-active.md) | 候选修复完成，等待真机与会议 App 验证 |
 
 ## 记录模板
 

@@ -13,6 +13,7 @@ struct OnboardingView: View {
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
     @State private var observedRemoteButtons = Set<RemoteButton>()
+    @State private var requestedRemoteConnectionRecovery = false
     @State private var testedControlButtons = Set<RemoteButton>()
     @State private var voiceSessionStarted = false
     @State private var voiceSamplesReceived = false
@@ -59,6 +60,7 @@ struct OnboardingView: View {
             guard !buttons.isEmpty else { return }
             if settings.onboardingStep == .remote {
                 observedRemoteButtons.formUnion(buttons)
+                recoverRemoteConnectionIfNeeded()
             } else if settings.onboardingStep == .controls {
                 testedControlButtons.formUnion(buttons)
             }
@@ -66,6 +68,7 @@ struct OnboardingView: View {
         .onReceive(model.$lastRemoteButtonPress.compactMap { $0 }) { button in
             if settings.onboardingStep == .remote {
                 observedRemoteButtons.insert(button)
+                recoverRemoteConnectionIfNeeded()
             } else if settings.onboardingStep == .controls {
                 testedControlButtons.insert(button)
             }
@@ -817,6 +820,7 @@ struct OnboardingView: View {
         switch step {
         case .remote:
             observedRemoteButtons.removeAll()
+            requestedRemoteConnectionRecovery = false
         case .audio:
             model.refreshAudioDevices()
         case .voiceTest:
@@ -832,6 +836,16 @@ struct OnboardingView: View {
         default:
             break
         }
+    }
+
+    private func recoverRemoteConnectionIfNeeded() {
+        guard OnboardingFlowPolicy.shouldRequestRemoteReconnect(
+            remoteConnected: model.isConnected,
+            remoteButtonObserved: !observedRemoteButtons.isEmpty,
+            recoveryRequested: requestedRemoteConnectionRecovery
+        ) else { return }
+        requestedRemoteConnectionRecovery = true
+        model.reconnect()
     }
 
     private func continueFlow() {

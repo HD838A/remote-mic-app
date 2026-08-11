@@ -269,7 +269,7 @@
 "audio.action.refresh_devices" = "Refresh Devices";
 "audio.action.learn_virtual_microphones" = "Get BlackHole";
 "audio.action.send_test_tone" = "Play Test Sound";
-"audio.output.privacy_help" = "The app writes remote voice only to the selected device and never changes the system default input or output.";
+"audio.output.privacy_help" = "The app writes remote voice only to the selected device. When the last remote disconnects, a matching system default input temporarily falls back to a physical microphone and is restored on reconnect only if you have not changed it. The system default output is never changed.";
 "audio.compatibility.title" = "Doubao Input Compatibility";
 "audio.compatibility.section_title" = "Voice Input & Compatibility";
 "audio.compatibility.microphone_label" = "Compatible virtual microphone";
