@@ -1,5 +1,28 @@
 # Version History
 
+## 1.8.10 (Pre-release)
+
+- Fixed the setup guide continuing to show that it was searching for the remote after an upgrade even though a physical remote button had already been received. Bluetooth recovery now starts automatically.
+- Fixed the compatible microphone remaining active after the remote disconnected and potentially staying attached to meeting or voice-input apps. Disconnecting now ends the active voice session and releases the virtual audio device.
+- Removed the ineffective physical-remote recording renewal attempt to avoid unnecessary forced stops and reconnects. The roughly one-minute recording limit remains under investigation.
+
+## 1.8.9 (Pre-release)
+
+- Fixed the first Fn voice input sometimes doing nothing after a remote button launched or switched to an app. Remote Mic now waits for the target's editable input to be ready and preserves the beginning of speech during that wait.
+- If the target app closes, changes, takes too long, or focuses a sensitive field, the pending voice input is cancelled instead of being sent to the wrong window.
+
+## 1.8.8 (Pre-release)
+
+- Added a complete first-run setup guide that checks Bluetooth, Input Monitoring, and Accessibility permissions, then verifies the remote, compatible microphone, real voice input, and everyday buttons. Required checks cannot be skipped or bypassed to enter the main panel.
+- Existing users can run the setup guide again from About to recheck their environment and troubleshoot problems without clearing connections, button mappings, the compatible microphone, or other settings.
+- The setup guide uses a consistent two-pane design in light and dark modes, does not display a total step count, and remains mandatory after relaunching until setup is complete.
+
+## 1.8.7 (Pre-release)
+
+- Redesigned About to keep the current version, available update, update check, version history, and pre-release channel together.
+- When a new version is available, About now shows localized release notes before the update starts.
+- Switching between stable and pre-release updates refreshes the result immediately, while an unavailable candidate feed still falls back silently to stable updates.
+
 ## 1.8.6 (Pre-release)
 
 - Fixed holding the remote's Left or Right button not continuously moving the text cursor in input fields of other apps. Matching arrow mappings now use macOS native key repeat.
