@@ -3,17 +3,23 @@ import SwiftUI
 struct RemoteMicRootView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject private var settings: AppSettings
+    @ObservedObject private var updateInformation: UpdateInformationStore
     let checkForUpdates: () -> Void
+    let refreshUpdateInformation: () -> Void
     let setDockIconVisible: (Bool) -> Void
 
     init(
         model: BridgeAppModel,
+        updateInformation: UpdateInformationStore,
         checkForUpdates: @escaping () -> Void,
+        refreshUpdateInformation: @escaping () -> Void,
         setDockIconVisible: @escaping (Bool) -> Void
     ) {
         self.model = model
         settings = model.settings
+        self.updateInformation = updateInformation
         self.checkForUpdates = checkForUpdates
+        self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
     }
 
@@ -22,7 +28,9 @@ struct RemoteMicRootView: View {
             if settings.isOnboardingComplete {
                 SettingsView(
                     model: model,
+                    updateInformation: updateInformation,
                     checkForUpdates: checkForUpdates,
+                    refreshUpdateInformation: refreshUpdateInformation,
                     setDockIconVisible: setDockIconVisible
                 )
             } else {

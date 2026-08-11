@@ -12,6 +12,8 @@
 - `Sources/RemoteMic/SettingsView.swift`：关于页增加“重新运行设置向导”。
 - `Resources/*/Localizable.strings`：中英文向导文案。
 - `Tests/RemoteMicTests/OnboardingFlowTests.swift`：步骤、门禁、持久化、完成版本和重新运行测试。
+- `scripts/test.sh`：把 Onboarding 流程类型加入项目自检的显式编译文件列表。
+- `scripts/build-doubao-driver.sh`：驱动签名前移除调试符号，避免发布安装包包含本机构建路径。
 
 ## 关键设计
 
@@ -29,14 +31,14 @@
 ## 自动化验证
 
 - `swift test --filter OnboardingFlowTests`：4 项通过，覆盖步骤、阶段、能力门禁、启动门禁、持久化、重新运行及现有用户配置保留。
-- `swift test --filter SettingsPageRegressionTests`：5 项通过。
+- `swift test --filter SettingsPageRegressionTests`：6 项通过。
 - `swift test --filter LocalizationTests`：5 项通过，中英文 key 和格式一致。
-- `swift test --skip productionModelRejectsTestToneWithoutAReadyDevice`：179 项、21 个 suite 全部通过。未运行的单一既有用例会在 `BridgeAppModel` 初始化时阻塞于本机系统钥匙串 `SecItemCopyMatching`，进程采样已确认与 Onboarding 无关。
-- `swift build -c release`：通过；只有仓库既有 Keychain API 弃用警告。
+- `swift test`：178 项、18 个 suite 全部通过，没有跳过用例。
+- `scripts/test.sh`：42 项项目自检通过。
+- `swift build -c release`：通过。
 - `scripts/build-app.sh`：通过；`codesign --verify --deep --strict` 通过。
-- 最终测试 App 使用 `/usr/bin/open -n` 启动成功，进程检查通过；验证后已正常结束测试进程。
 - 测试 App：`dist/Remote Mic.app`。
-- 实现截图：已完成。锁屏状态下直接实例化生产 `OnboardingView`，通过离屏 AppKit 窗口缓存生成浅色、深色各 8 张真实实现截图，逐页确认原生窗口、实际 App 图标、RC003 图片、底部导航和实时检查区域无裁切；未使用设计稿替代实现证据。截图保存在本地忽略目录 `.codex-screenshots/onboarding-real-20260811-consistent/`。
+- 实现截图：已完成。无需屏幕解锁，直接实例化生产 `OnboardingView`，通过离屏 AppKit 窗口缓存生成浅色、深色各 8 张真实实现截图，逐页确认原生窗口、实际 App 图标、RC003 图片、底部导航和实时检查区域无裁切；未使用设计稿替代实现证据。
 - 深色模式右侧改为深蓝语义画布和自适应检查卡，与左侧同属深色体系；浅色继续使用浅蓝画布。两种外观均不存在黑白分栏。
 - App 内保留隐藏截图入口：设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR` 后离屏输出全部页面，可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark|system` 指定外观；正常启动路径不显示入口。
 - 本机 Skill：`~/.codex/skills/remote-mic-onboarding-screenshots/`，默认一次生成并校验浅色和深色两套截图。
