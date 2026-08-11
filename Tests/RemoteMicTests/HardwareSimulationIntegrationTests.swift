@@ -185,33 +185,6 @@ struct HardwareSimulationIntegrationTests {
         #expect(controller.phase == .idle)
     }
 
-    @Test func threeMinuteVoiceLeaseMatchesTheATVVReferenceModel() throws {
-        let configuration = BluetoothVoiceSessionLeaseController.Configuration.threeMinuteTrial
-        var lease = ATVVSessionLeaseReferenceModel()
-        let sessionID: UInt8 = 7
-        let expectedCommand = try #require(ATVVProtocol.microphoneExtend(
-            version: 0x0100,
-            sessionID: sessionID
-        ))
-
-        for elapsed in stride(
-            from: configuration.keepAliveInterval,
-            to: configuration.maximumDuration,
-            by: configuration.keepAliveInterval
-        ) {
-            let command = XiaomiVoiceRemoteFixture.microphoneExtendCommand(sessionID: sessionID)
-            #expect(command.payload["valueHex"]?.stringValue == expectedCommand.hexString)
-            let extended = lease.receiveMicrophoneExtend(
-                atMilliseconds: UInt64(elapsed * 1_000)
-            )
-            #expect(extended)
-        }
-
-        #expect(lease.extensionCount == 17)
-        #expect(lease.isActive(atMilliseconds: 180_000))
-        #expect(configuration.maximumDuration == 180)
-    }
-
     @Test func simulatedHIDReportsDriveProductionParser() throws {
         let catalog = try HardwareCatalog(profiles: [XiaomiVoiceRemoteFixture.profile()])
         let runner = try HardwareScenarioRunner(

@@ -80,7 +80,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.handleVoiceFnTapFailure(failure)
         }
     )
-    private let bluetoothVoiceLeaseController = BluetoothVoiceSessionLeaseController()
     private var testToneGeneration = 0
     private var phoneVoiceFunctionKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
@@ -278,7 +277,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             logReason: "app_stop"
         )
         stopLongRecording(reason: "app_stop")
-        bluetoothVoiceLeaseController.stop()
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
@@ -1096,7 +1094,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
-                bluetoothVoiceLeaseController.stop()
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
                 endVoiceSessionIfNeeded(flushAudio: false)
@@ -1145,26 +1142,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write(
             "ATVV STREAM accepted trace=\(bluetoothVoiceTraceCounter) model=\(model.rawValue)"
         )
-        bluetoothVoiceLeaseController.start(
-            isActive: { [weak self, weak bridge] in
-                guard let self, let bridge else { return false }
-                return self.bluetoothVoiceActive &&
-                    self.activeBluetoothVoiceDeviceIdentifier == identifier &&
-                    self.bluetoothBridges[identifier] === bridge
-            },
-            requestExtend: { [weak bridge] in
-                bridge?.requestMicrophoneExtend() ?? false
-            },
-            requestClose: { [weak bridge] in
-                bridge?.requestMicrophoneClose() ?? false
-            },
-            reconnect: { [weak bridge] in
-                bridge?.reconnectNow()
-            },
-            log: { message in
-                AppLogger.shared.write(message)
-            }
-        )
         if longRecordingRequested {
             longRecordingOpenTimer?.cancel()
             longRecordingOpenTimer = nil
@@ -1176,7 +1153,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
         guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
-        bluetoothVoiceLeaseController.stop()
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = false
