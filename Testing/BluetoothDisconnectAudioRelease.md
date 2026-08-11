@@ -2,7 +2,7 @@
 
 ## 适用版本或分支
 
-- 分支：`codex/fix-window-background-drag`
+- 版本与分支：Remote Mic `v1.8.10 (102)` Pre-release 候选 / `release/pre-v1.8.10`
 - 平台：macOS 14 及以上
 - 设备：RC001、RC003；双遥控器用例需两只已登记设备
 - 虚拟设备：`MiRemoteV 2ch`

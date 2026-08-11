@@ -1,5 +1,11 @@
 # Version History
 
+## 1.8.10 (Pre-release)
+
+- Fixed the setup guide continuing to show that it was searching for the remote after an upgrade even though a physical remote button had already been received. Bluetooth recovery now starts automatically.
+- Fixed the compatible microphone remaining active after the remote disconnected and potentially staying attached to meeting or voice-input apps. Disconnecting now ends the active voice session and releases the virtual audio device.
+- Removed the ineffective physical-remote recording renewal attempt to avoid unnecessary forced stops and reconnects. The roughly one-minute recording limit remains under investigation.
+
 ## 1.8.9 (Pre-release)
 
 - Fixed the first Fn voice input sometimes doing nothing after a remote button launched or switched to an app. Remote Mic now waits for the target's editable input to be ready and preserves the beginning of speech during that wait.
