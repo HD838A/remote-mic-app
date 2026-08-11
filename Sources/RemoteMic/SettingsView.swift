@@ -2231,6 +2231,29 @@ struct SettingsView: View {
                                 .frame(width: 400)
                             }
                             .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "arrow.counterclockwise.circle")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.restart_onboarding")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.restart_onboarding_help")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 20)
+                                Button("about.preferences.restart_onboarding_action") {
+                                    settings.restartOnboarding()
+                                }
+                                .compatibilityButtonStyle(.standard)
+                            }
+                            .padding(.vertical, 10)
                         }
                     }
                 }
