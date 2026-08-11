@@ -44,6 +44,9 @@ final class VoiceFnTapSessionController {
     typealias FunctionKeySetter = (Bool) -> Bool
     typealias AudioEnqueuer = ([Int16]) -> Void
     typealias AudioDrainer = (@escaping () -> Void) -> Void
+    typealias DestinationReadiness = (
+        @escaping (VoiceInputDestinationWaitResult) -> Void
+    ) -> VoiceInputDestinationWait
 
     private struct PendingVoice {
         var samples: [Int16] = []
@@ -54,6 +57,7 @@ final class VoiceFnTapSessionController {
     private let tapDuration: TimeInterval
     private let maximumPreRollSampleCount: Int
     private let schedule: Scheduler
+    private let destinationReadiness: DestinationReadiness
     private let setFunctionKeyPressed: FunctionKeySetter
     private let enqueueAudio: AudioEnqueuer
     private let drainAudio: AudioDrainer
@@ -78,8 +82,9 @@ final class VoiceFnTapSessionController {
     init(
         startDelay: TimeInterval = 0.15,
         tapDuration: TimeInterval = 0.12,
-        maximumPreRollSampleCount: Int = 16_000,
+        maximumPreRollSampleCount: Int = 80_000,
         schedule: @escaping Scheduler = VoiceFnTapScheduledTask.mainQueue,
+        destinationReadiness: @escaping DestinationReadiness = { _ in .immediate },
         setFunctionKeyPressed: @escaping FunctionKeySetter,
         enqueueAudio: @escaping AudioEnqueuer,
         drainAudio: @escaping AudioDrainer,
@@ -89,6 +94,7 @@ final class VoiceFnTapSessionController {
         self.tapDuration = tapDuration
         self.maximumPreRollSampleCount = maximumPreRollSampleCount
         self.schedule = schedule
+        self.destinationReadiness = destinationReadiness
         self.setFunctionKeyPressed = setFunctionKeyPressed
         self.enqueueAudio = enqueueAudio
         self.drainAudio = drainAudio
@@ -218,10 +224,45 @@ final class VoiceFnTapSessionController {
         phase = .starting(sessionGeneration)
         preRoll = preloaded?.samples ?? []
         remoteEnded = preloaded?.ended ?? false
-        let task = schedule(startDelay) { [weak self] in
+        switch destinationReadiness({ [weak self] result in
+            self?.destinationReadinessCompleted(result, generation: sessionGeneration)
+        }) {
+        case .immediate:
+            scheduleStartTap(generation: sessionGeneration, after: startDelay)
+        case .cancelled:
+            cancelSessionAwaitingDestination(generation: sessionGeneration)
+        case let .waiting(task):
+            scheduledTasks.append(task)
+        }
+    }
+
+    private func destinationReadinessCompleted(
+        _ result: VoiceInputDestinationWaitResult,
+        generation sessionGeneration: UInt64
+    ) {
+        guard phase == .starting(sessionGeneration), generation == sessionGeneration else { return }
+        switch result {
+        case .ready:
+            beginStartTap(generation: sessionGeneration)
+        case .cancelled:
+            cancelSessionAwaitingDestination(generation: sessionGeneration)
+        }
+    }
+
+    private func scheduleStartTap(generation sessionGeneration: UInt64, after delay: TimeInterval) {
+        let task = schedule(delay) { [weak self] in
             self?.beginStartTap(generation: sessionGeneration)
         }
         scheduledTasks.append(task)
+    }
+
+    private func cancelSessionAwaitingDestination(generation sessionGeneration: UInt64) {
+        guard phase == .starting(sessionGeneration), generation == sessionGeneration else { return }
+        let shouldSuppressAudioUntilRemoteStop = !remoteEnded
+        generation &+= 1
+        resetSessionState()
+        suppressAudioUntilRemoteStop = shouldSuppressAudioUntilRemoteStop
+        runIdleCompletions()
     }
 
     private func beginStartTap(generation sessionGeneration: UInt64) {

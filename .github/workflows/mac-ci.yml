@@ -42,6 +42,11 @@ jobs:
       - name: Run Swift tests
         run: swift test
 
+      - name: Run core first-voice journey gate
+        run: |
+          swift test --filter VoiceInputDestinationCoordinatorTests
+          swift test --filter CoreVoiceInputJourneyTests
+
       - name: Run project self-test
         run: ./scripts/test.sh
 
