@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | [关于页版本中心](./about-update-center/) | 验证中 | 集中展示版本、更新内容、版本历史与正式/预发布更新通道。 |
 | [常用 macOS 快捷键](./common-mac-shortcuts/) | 已完成 | 常用固定快捷键与无线麦标准退出、关窗行为。 |
+| [Mac 下载 Cloudflare CDN](./cloudflare-download-cdn/) | 等待预览版集成 | 官网固定入口与 Worker 已上线；版本化安装包和 Sparkle 更新资产通过 Cloudflare 缓存 GitHub Release 源文件，候选验证由统一 Mac 预览版完成。 |
 | [延长语音录音与 iOS 点按录音](./extended-voice-recording/) | 部分撤回，等待人工验收 | 普通遥控器 `MIC_EXTEND` 延长方案已撤回；iOS 支持点按切换与按住说话。 |
 | [系统占用快捷键录入](./reserved-shortcut-capture/) | 等待人工验收 | 点击录入后短暂捕获被系统或其他 APP 占用的组合键，并显示明确成功或失败反馈。 |
 | [首次使用设置向导](./first-run-onboarding/) | 等待人工验收 | 仅全新安装通过不可跳过的实时门禁完成权限、遥控器、兼容麦克风、真实语音文字和普通按键检查；旧安装升级自动迁移。 |
