@@ -51,7 +51,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private let phoneRemoteServer = PhoneRemoteServer()
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
+    private lazy var voiceInputDestinationCoordinator = VoiceInputDestinationCoordinator(
+        onStateChange: { [weak self] state in
+            self?.handleVoiceInputDestinationState(state)
+        }
+    )
     private lazy var voiceFnTapSession = VoiceFnTapSessionController(
+        destinationReadiness: { [weak self] completion in
+            self?.voiceInputDestinationCoordinator.waitUntilReady(completion: completion) ?? .immediate
+        },
         setFunctionKeyPressed: { KeyboardInjector.setFunctionKeyPressed($0) },
         enqueueAudio: { [weak self] samples in
             _ = self?.audioOutput.enqueue(samples: samples)
@@ -264,6 +272,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         stopLongRecording(reason: "app_stop")
         bluetoothVoiceLeaseController.stop()
+        voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
@@ -770,7 +779,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             targetFingerprint: targetFingerprint,
             excludedFingerprints: excludedFingerprints,
             eventSuppressor: hidEventSuppressor,
-            ownsEventSuppressor: false
+            ownsEventSuppressor: false,
+            actionPerformer: { [weak self] _, _, configured in
+                self?.performExternalConfiguredAction(configured) ?? false
+            }
         )
         monitor.onStatus = { [weak self, weak monitor] value in
             guard let self, let monitor else { return }
@@ -1443,13 +1455,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             _ = KeyboardInjector.requestAccessibilityAccess()
             return false
         }
-        guard KeyboardInjector.send(
-            configured.action,
-            shortcut: configured.shortcut,
-            applicationProfile: settings.customApplicationProfile(
-                id: configured.applicationProfileID
-            )
-        ) else {
+        guard performExternalConfiguredAction(configured) else {
             return false
         }
         settings.recordButtonPress(control: .remoteButton(button), source: source)
@@ -1458,6 +1464,39 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "action=\(configured.action.rawValue)"
         )
         return true
+    }
+
+    private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
+        let applicationProfile = settings.customApplicationProfile(
+            id: configured.applicationProfileID
+        )
+        let requestID = settings.voiceFnTapModeEnabled
+            ? VoiceInputDestinationIntent.resolve(
+                configured: configured,
+                applicationProfile: applicationProfile
+            ).map { voiceInputDestinationCoordinator.beginTargetSwitch(intent: $0) }
+            : nil
+        let handled = KeyboardInjector.send(
+            configured.action,
+            shortcut: configured.shortcut,
+            applicationProfile: applicationProfile
+        )
+        if !handled, let requestID {
+            voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
+        }
+        return handled
+    }
+
+    private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {
+        guard settings.voiceFnTapModeEnabled else { return }
+        switch state {
+        case .waiting:
+            voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
+        case .ready:
+            voiceShortcutStatus = LocalizedMessage("voice_button.status.input_ready")
+        case .cancelled:
+            voiceShortcutStatus = LocalizedMessage("voice_button.status.input_unavailable")
+        }
     }
 
     @discardableResult

@@ -96,6 +96,95 @@ struct HardwareSimulationIntegrationTests {
         #expect(accumulator.pending.isEmpty)
     }
 
+    @Test(arguments: SimulatedVoiceRemoteModel.allCases)
+    func firstSimulatedVoiceStreamWaitsForTheNewTargetAndReplaysCompletely(
+        _ model: SimulatedVoiceRemoteModel
+    ) throws {
+        let runner = try HardwareScenarioRunner(
+            scenario: try model.scenario,
+            catalog: HardwareCatalog(profiles: [try XiaomiVoiceRemoteFixture.profile()])
+        )
+        let scheduler = VoiceInputManualScheduler()
+        var destination = voiceInputTestSnapshot(
+            bundleIdentifier: "com.example.previous",
+            role: "AXWindow",
+            editable: false
+        )
+        var functionKeyEvents: [Bool] = []
+        var queuedSamples: [Int16] = []
+        var drainCompletions: [() -> Void] = []
+        let coordinator = VoiceInputDestinationCoordinator(
+            schedule: scheduler.schedule,
+            snapshot: { destination }
+        )
+        let controller = VoiceFnTapSessionController(
+            schedule: scheduler.schedule,
+            destinationReadiness: coordinator.waitUntilReady,
+            setFunctionKeyPressed: {
+                functionKeyEvents.append($0)
+                return true
+            },
+            enqueueAudio: { queuedSamples.append(contentsOf: $0) },
+            drainAudio: { drainCompletions.append($0) },
+            onFailure: { Issue.record("Fn tap unexpectedly failed: \($0.rawValue)") }
+        )
+        controller.setEnabled(true)
+        coordinator.beginTargetSwitch(
+            intent: .application(bundleIdentifier: "com.example.target")
+        )
+
+        var capabilities: ATVVCapabilities?
+        var accumulator = FrameAccumulator()
+        let decoder = IMAADPCMDecoder()
+        var decodedSamples: [Int16] = []
+        while let signal = runner.nextSignal() {
+            if signal.kind == XiaomiVoiceRemoteSignalKind.notificationState,
+               signal.payload["characteristicUUID"]?.stringValue == XiaomiVoiceRemoteFixture.controlUUID,
+               signal.payload["enabled"] == .bool(true) {
+                _ = try runner.receive(XiaomiVoiceRemoteFixture.getCapabilitiesCommand())
+                continue
+            }
+            guard let value = BLEGATTValue(signal: signal) else { continue }
+            if value.characteristicUUID == XiaomiVoiceRemoteFixture.controlUUID {
+                switch value.value.first {
+                case 0x0B:
+                    capabilities = ATVVCapabilities.parse(value.value)
+                case 0x04:
+                    accumulator.reset()
+                    decoder.reset()
+                    #expect(controller.startVoice())
+                case 0x00:
+                    #expect(controller.stopVoice())
+                default:
+                    break
+                }
+            } else if value.characteristicUUID == XiaomiVoiceRemoteFixture.audioUUID {
+                let activeCapabilities = try #require(capabilities)
+                for frame in accumulator.append(value.value, frameSize: activeCapabilities.frameSize) {
+                    let samples = PCMPostprocessor.process(decoder.decode(frame), gainDB: 0)
+                    decodedSamples.append(contentsOf: samples)
+                    #expect(controller.receive(samples))
+                }
+            }
+        }
+
+        #expect(decodedSamples.count == 240)
+        #expect(functionKeyEvents.isEmpty)
+        #expect(queuedSamples.isEmpty)
+
+        destination = voiceInputTestSnapshot(bundleIdentifier: "com.example.target")
+        scheduler.advance(by: 0.05)
+        scheduler.advance(by: 0.12)
+        #expect(functionKeyEvents == [true, false])
+        #expect(queuedSamples == decodedSamples)
+        #expect(drainCompletions.count == 1)
+
+        drainCompletions.removeFirst()()
+        scheduler.advance(by: 0.12)
+        #expect(functionKeyEvents == [true, false, true, false])
+        #expect(controller.phase == .idle)
+    }
+
     @Test func threeMinuteVoiceLeaseMatchesTheATVVReferenceModel() throws {
         let configuration = BluetoothVoiceSessionLeaseController.Configuration.threeMinuteTrial
         var lease = ATVVSessionLeaseReferenceModel()

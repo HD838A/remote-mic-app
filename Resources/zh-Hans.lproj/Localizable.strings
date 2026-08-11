@@ -24,6 +24,9 @@
 "voice_button.status.waiting" = "等待遥控器 Fn 硬件映射";
 "voice_button.status.fn_pressed" = "硬件 Fn 已按下；松开语音键即释放";
 "voice_button.status.fn_released" = "硬件 Fn 已释放";
+"voice_button.status.waiting_for_input" = "正在等待目标输入位置准备完成";
+"voice_button.status.input_ready" = "目标输入位置已准备完成";
+"voice_button.status.input_unavailable" = "目标输入位置未准备完成，已取消本次语音输入";
 "audio.compatibility.device_detected" = "已检测到 %1$@（豆包兼容）";
 "audio.compatibility.device_not_detected" = "未检测到 %1$@";
 "button_mapping.status.system_managed" = "按键由 macOS 原生处理";
