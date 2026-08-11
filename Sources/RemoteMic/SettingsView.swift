@@ -176,6 +176,7 @@ struct SettingsView: View {
     @State private var programmingTermAliasesDraft = ""
     @State private var programmingTermKind: ProgrammingTermKind = .projectName
     private static let requiredWebRemoteInviteCode = "8586"
+    private static let earlyAccessEnrollmentArgument = "--show-invitation-enrollment"
 
     init(
         model: BridgeAppModel,
@@ -2450,7 +2451,9 @@ struct SettingsView: View {
                         }
                     }
 
-                    earlyAccessPanel
+                    if shouldShowEarlyAccessPanel {
+                        earlyAccessPanel
+                    }
 
                     GlassPanel {
                         VStack(spacing: 0) {
@@ -2719,6 +2722,11 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var shouldShowEarlyAccessPanel: Bool {
+        earlyAccess.isEnrolled
+            || ProcessInfo.processInfo.arguments.contains(Self.earlyAccessEnrollmentArgument)
     }
 
     private func redeemEarlyAccessCode() {

@@ -11,7 +11,7 @@
   - 自动化只代表 L0–L2 进程内协议和状态响应通过；CoreBluetooth、IOHID/DriverKit、Power 系统行为、射频、音质和安装环境继续由系统级与 RC001/RC003 真机门禁负责。
 
 - [ ] 在最新 macOS 预览版以邀请制 Feature Flag 集成开发中的 AI 整理
-  - 普通用户默认看不到“AI 整理”；只有用户在“关于”页输入体验码并手动点击验证后，App 才允许首次资格网络请求。授权有效后显示独立页面，但本地功能开关仍默认关闭。
+  - 普通用户默认看不到“AI 整理”及邀请码入口；首次兑换面板仅通过内部测试启动参数显示，用户手动输入体验码并点击验证后，App 才允许首次资格网络请求。授权有效后显示独立页面，但本地功能开关仍默认关闭。
   - 资格使用独立匿名设备 ID、Keychain 凭证和内置 Ed25519 公钥离线验证；资格服务不接收语音、转写文字、DeepSeek API Key 或整理结果。DeepSeek Key、术语表和资格凭证都不进入个性化配置导出。
   - 门禁覆盖导航、设置交互、语音会话开始、DeepSeek 请求和结果写回；资格撤销、暂停、过期或版本阻止会立即关闭并取消 AI 整理，但保留本机 API Key、术语和所有稳定功能配置。
   - 详细设计保存在私有产品资料库 `projects/remote-mic-app/research/invite-only-feature-access/v1/wireless-mic-integration-design.md`；公开实现档案见 [`feature/early-access-ai-polish/`](feature/early-access-ai-polish/)。完成四态、RC003 稳定基线、设置页尺寸、签名公证和公开下载字节复核后再标记完成。

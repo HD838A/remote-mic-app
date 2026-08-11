@@ -318,4 +318,20 @@ struct SettingsPageRegressionTests {
         #expect(!aboutPage.contains("help.glossary.open"))
         #expect(!aboutPage.contains("openGlossary"))
     }
+
+    @Test func invitationOnlyAIPolishIsHiddenFromOrdinaryUsers() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("if shouldShowEarlyAccessPanel"))
+        #expect(source.contains("earlyAccess.isEnrolled"))
+        #expect(source.contains("--show-invitation-enrollment"))
+        #expect(!source.contains("\n                    earlyAccessPanel\n"))
+    }
 }
