@@ -220,6 +220,7 @@ private struct DailyUsageStatistics: Codable {
 
 final class AppSettings: ObservableObject {
     static let continuousRecordingExperimentAvailable = false
+    static let currentOnboardingVersion = 1
 
     private enum Keys {
         static let gainDB = "gainDB"
@@ -248,6 +249,9 @@ final class AppSettings: ObservableObject {
         static let dailyStatistics = "usage.dailyStatistics"
         static let voiceSessionRanking = "usage.voiceSessionRanking"
         static let trustedPhoneIdentityFingerprints = "security.trustedPhoneIdentityFingerprints"
+        static let onboardingCompletedVersion = "onboarding.completedVersion"
+        static let onboardingStep = "onboarding.step"
+        static let onboardingVoiceTool = "onboarding.voiceTool"
     }
 
     private let defaults: UserDefaults
@@ -390,6 +394,24 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published private(set) var onboardingCompletedVersion: Int {
+        didSet {
+            defaults.set(onboardingCompletedVersion, forKey: Keys.onboardingCompletedVersion)
+        }
+    }
+
+    @Published private(set) var onboardingStep: OnboardingStep {
+        didSet { defaults.set(onboardingStep.rawValue, forKey: Keys.onboardingStep) }
+    }
+
+    @Published private(set) var onboardingVoiceTool: OnboardingVoiceTool {
+        didSet { defaults.set(onboardingVoiceTool.rawValue, forKey: Keys.onboardingVoiceTool) }
+    }
+
+    var isOnboardingComplete: Bool {
+        onboardingCompletedVersion >= Self.currentOnboardingVersion
+    }
+
     var peripheralIdentifier: UUID? {
         get {
             guard let raw = defaults.string(forKey: Keys.peripheralIdentifier) else { return nil }
@@ -513,6 +535,13 @@ final class AppSettings: ObservableObject {
         trustedPhoneIdentityFingerprints = Set(
             defaults.stringArray(forKey: Keys.trustedPhoneIdentityFingerprints) ?? []
         )
+        onboardingCompletedVersion = defaults.integer(forKey: Keys.onboardingCompletedVersion)
+        onboardingStep = defaults.string(forKey: Keys.onboardingStep)
+            .flatMap(OnboardingStep.init(rawValue:))
+            ?? .welcome
+        onboardingVoiceTool = defaults.string(forKey: Keys.onboardingVoiceTool)
+            .flatMap(OnboardingVoiceTool.init(rawValue:))
+            ?? .unselected
         let legacyMappings = RemoteDeviceMappings(
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
@@ -550,6 +579,27 @@ final class AppSettings: ObservableObject {
             enabled: experimentalContinuousRecordingEnabled,
             backup: continuousRecordingPowerBindingBackup
         )
+    }
+
+    func setOnboardingStep(_ step: OnboardingStep) {
+        guard !isOnboardingComplete, onboardingStep != step else { return }
+        onboardingStep = step
+    }
+
+    func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
+        guard onboardingVoiceTool != voiceTool else { return }
+        onboardingVoiceTool = voiceTool
+    }
+
+    func completeOnboarding() {
+        onboardingStep = .complete
+        onboardingCompletedVersion = Self.currentOnboardingVersion
+    }
+
+    func restartOnboarding() {
+        onboardingVoiceTool = .unselected
+        onboardingStep = .welcome
+        onboardingCompletedVersion = 0
     }
 
     func action(for button: RemoteButton) -> ButtonAction {

@@ -32,6 +32,22 @@ struct UpdateFeedSelection {
 enum RemoteMicApp {
     @MainActor
     static func main() {
+        if let screenshotDirectory = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR"
+        ] {
+            do {
+                try OnboardingScreenshotRenderer.renderAll(
+                    to: URL(fileURLWithPath: screenshotDirectory, isDirectory: true),
+                    appearanceName: ProcessInfo.processInfo.environment[
+                        "REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE"
+                    ]
+                )
+            } catch {
+                fputs("Onboarding screenshot rendering failed: \(error)\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+            return
+        }
         let application = NSApplication.shared
         let delegate = RemoteMicAppDelegate()
         application.delegate = delegate
@@ -115,8 +131,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         observeModel()
         observeLocalization()
         observePhoneRemoteButtonTitles()
-        model.startIfNeeded()
-        if BridgeAppModel.shouldRecoverHIDAfterCompletedUpdate(
+        if OnboardingLaunchPolicy.shouldStartRuntime(
+            isComplete: model.settings.isOnboardingComplete,
+            step: model.settings.onboardingStep
+        ) {
+            model.startIfNeeded()
+        }
+        if model.settings.isOnboardingComplete,
+           BridgeAppModel.shouldRecoverHIDAfterCompletedUpdate(
             completedUpdate: completedUpdate,
             customMappingEnabled: model.settings.customMappingEnabled
         ) {
@@ -124,7 +146,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
         refreshMenuStatus()
 
-        if completedUpdate || model.settings.openMainWindowAtLaunch {
+        if OnboardingLaunchPolicy.shouldShowMainWindow(
+            isComplete: model.settings.isOnboardingComplete,
+            completedUpdate: completedUpdate,
+            openMainWindowAtLaunch: model.settings.openMainWindowAtLaunch
+        ) {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.showSettings()
@@ -595,7 +621,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     private func makeSettingsWindowController() -> NSWindowController {
         let hostingController = NSHostingController(
-            rootView: SettingsView(
+            rootView: RemoteMicRootView(
                 model: model,
                 checkForUpdates: { [weak self] in self?.checkForUpdates() },
                 setDockIconVisible: { [weak self] isVisible in

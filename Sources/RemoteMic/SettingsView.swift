@@ -2258,6 +2258,19 @@ struct SettingsView: View {
                                         .labelsHidden()
                                         .pickerStyle(.segmented)
                                     }
+
+                                    Divider()
+
+                                    Button {
+                                        settings.restartOnboarding()
+                                    } label: {
+                                        Label(
+                                            "about.preferences.restart_onboarding",
+                                            systemImage: "arrow.counterclockwise.circle"
+                                        )
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .compatibilityButtonStyle(.standard)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .top)
