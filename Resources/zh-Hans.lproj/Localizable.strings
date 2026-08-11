@@ -269,7 +269,7 @@
 "audio.action.refresh_devices" = "刷新音频设备";
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";
 "audio.action.send_test_tone" = "发送 1 秒测试音";
-"audio.output.privacy_help" = "应用只把遥控器语音写到所选设备，不会修改系统默认输入或输出。";
+"audio.output.privacy_help" = "应用只把遥控器语音写到所选设备。最后一只遥控器断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
 "audio.compatibility.title" = "豆包输入法兼容";
 "audio.compatibility.section_title" = "语音输入与兼容";
 "audio.compatibility.microphone_label" = "兼容虚拟麦克风";

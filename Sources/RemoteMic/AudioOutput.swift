@@ -21,11 +21,17 @@ enum CoreAudioDeviceCatalog {
 
     static func outputDevices() -> [AudioDeviceInfo] {
         withPropertyLock {
-            outputDevicesLocked()
+            devicesLocked(scope: kAudioDevicePropertyScopeOutput)
         }
     }
 
-    private static func outputDevicesLocked() -> [AudioDeviceInfo] {
+    static func inputDevices() -> [AudioDeviceInfo] {
+        withPropertyLock {
+            devicesLocked(scope: kAudioDevicePropertyScopeInput)
+        }
+    }
+
+    private static func devicesLocked(scope: AudioObjectPropertyScope) -> [AudioDeviceInfo] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -58,7 +64,7 @@ enum CoreAudioDeviceCatalog {
 
         var seenUIDs = Set<String>()
         return deviceIDs.compactMap { deviceID in
-            guard outputChannelCount(for: deviceID) > 0 else { return nil }
+            guard channelCount(for: deviceID, scope: scope) > 0 else { return nil }
             return deviceInfo(for: deviceID)
         }
         .filter { seenUIDs.insert($0.uid).inserted }
@@ -84,6 +90,43 @@ enum CoreAudioDeviceCatalog {
                 "default_output={\(deviceDiagnostic(output))} " +
                 "default_system_output={\(deviceDiagnostic(systemOutput))}"
         }
+    }
+
+    static func defaultInputDevice() -> AudioDeviceInfo? {
+        withPropertyLock {
+            defaultDevice(selector: kAudioHardwarePropertyDefaultInputDevice)
+        }
+    }
+
+    static func setDefaultInputDevice(_ device: AudioDeviceInfo) -> OSStatus {
+        withPropertyLock {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var deviceID = device.id
+            return AudioObjectSetPropertyData(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                0,
+                nil,
+                UInt32(MemoryLayout<AudioDeviceID>.size),
+                &deviceID
+            )
+        }
+    }
+
+    static func preferredFallbackInput(excludingUID excludedUID: String) -> AudioDeviceInfo? {
+        let devices = inputDevices()
+        let builtInDeviceIDs = Set(devices.compactMap { device in
+            transportType(for: device.id) == kAudioDeviceTransportTypeBuiltIn ? device.id : nil
+        })
+        return DefaultInputFallbackPolicy.preferredFallback(
+            in: devices,
+            excludingUID: excludedUID,
+            builtInDeviceIDs: builtInDeviceIDs
+        )
     }
 
     static func outputDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
@@ -136,10 +179,13 @@ enum CoreAudioDeviceCatalog {
         return value?.takeUnretainedValue() as String?
     }
 
-    private static func outputChannelCount(for deviceID: AudioDeviceID) -> Int {
+    private static func channelCount(
+        for deviceID: AudioDeviceID,
+        scope: AudioObjectPropertyScope
+    ) -> Int {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreamConfiguration,
-            mScope: kAudioDevicePropertyScopeOutput,
+            mScope: scope,
             mElement: kAudioObjectPropertyElementMain
         )
         var size: UInt32 = 0
@@ -161,10 +207,59 @@ enum CoreAudioDeviceCatalog {
         return bufferList.reduce(0) { $0 + Int($1.mNumberChannels) }
     }
 
+    private static func transportType(for deviceID: AudioDeviceID) -> AudioDevicePropertyID? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var transportType = AudioDevicePropertyID(0)
+        var size = UInt32(MemoryLayout<AudioDevicePropertyID>.size)
+        guard AudioObjectGetPropertyData(
+            deviceID,
+            &address,
+            0,
+            nil,
+            &size,
+            &transportType
+        ) == noErr else { return nil }
+        return transportType
+    }
+
     private static func withPropertyLock<T>(_ operation: () -> T) -> T {
         propertyLock.lock()
         defer { propertyLock.unlock() }
         return operation()
+    }
+}
+
+enum VirtualAudioConnectionLifecyclePolicy {
+    static func shouldBeActive(
+        readyBluetoothBridgeCount: Int,
+        mobileVoiceActive: Bool,
+        testToneActive: Bool
+    ) -> Bool {
+        readyBluetoothBridgeCount > 0 || mobileVoiceActive || testToneActive
+    }
+}
+
+enum DefaultInputFallbackPolicy {
+    static func preferredFallback(
+        in devices: [AudioDeviceInfo],
+        excludingUID excludedUID: String,
+        builtInDeviceIDs: Set<AudioDeviceID>
+    ) -> AudioDeviceInfo? {
+        let candidates = devices.filter { $0.uid != excludedUID }
+        return candidates.first { builtInDeviceIDs.contains($0.id) } ?? candidates.first
+    }
+
+    static func shouldRestoreVirtualInput(
+        managedVirtualUID: String,
+        selectedVirtualUID: String,
+        managedFallbackUID: String,
+        currentDefaultUID: String?
+    ) -> Bool {
+        managedVirtualUID == selectedVirtualUID && currentDefaultUID == managedFallbackUID
     }
 }
 
