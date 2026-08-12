@@ -59,7 +59,7 @@
 | 2026-08-10 | [RC003 普通语音会话约一分钟停止](./2026-08-10-rc003-one-minute-voice-session-timeout.md) | 候选修复完成，等待真机验证 |
 | 2026-08-10 | [Unbound Multi-Remote Button Actions Are Ignored](./2026-08-10-unbound-multi-remote-actions-ignored.md) | 已修复，双遥控器真机复验通过 |
 | 2026-08-10 | [Upgrade Leaves Custom Button Mapping Inactive](./2026-08-10-upgrade-custom-mapping-not-activated.md) | 已修复，签名升级验证通过；待实体按键确认 |
-| 2026-08-12 | [Remote Mic 运行期间 MacBook 实体方向键偶发失效](./2026-08-12-physical-arrow-keys-blocked.md) | 已确认代码风险，未修复 |
+| 2026-08-12 | [Remote Mic 运行期间 MacBook 实体方向键偶发失效](./2026-08-12-physical-arrow-keys-blocked.md) | 已修复，自动化通过，等待真机复验 |
 
 ## 记录模板
 
