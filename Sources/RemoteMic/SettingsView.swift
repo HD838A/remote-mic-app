@@ -484,7 +484,7 @@ struct SettingsView: View {
                                     .font(.subheadline.weight(.semibold))
                                 Text("connection.phone.no_invite_badge")
                                     .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(.secondary)
                             }
                             Text("connection.phone.ios_help")
                                 .font(.caption)
@@ -500,20 +500,21 @@ struct SettingsView: View {
                                     ? "connection.phone.enabled"
                                     : "connection.phone.not_enabled"
                             ),
-                            tint: model.isPhoneRemoteConnectionEnabled ? .green : .secondary
+                            tint: model.isPhoneRemoteConnectionEnabled ? .orange : .secondary
                         )
                     }
 
                     HStack(spacing: 8) {
                         Button(
                             model.isPhoneRemoteConnectionEnabled
-                                ? "connection.phone.enabled"
+                                ? "connection.phone.cancel_waiting"
                                 : "connection.phone.connect"
                         ) {
-                            model.enablePhoneRemoteConnection()
+                            model.togglePhoneRemoteConnection()
                         }
-                        .compatibilityButtonStyle(.prominent)
-                        .disabled(model.isPhoneRemoteConnectionEnabled)
+                        .compatibilityButtonStyle(
+                            model.isPhoneRemoteConnectionEnabled ? .standard : .prominent
+                        )
 
                         Link(destination: AppLinks.testFlightPublicBeta) {
                             Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")

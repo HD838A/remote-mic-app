@@ -219,6 +219,7 @@
 "connection.trusted_devices.count_long" = "%1$@ trusted devices";
 "connection.phone.connect" = "Connect Phone";
 "connection.phone.enabled" = "Waiting for Phone";
+"connection.phone.cancel_waiting" = "Stop Waiting";
 "connection.trusted_devices.clear" = "Clear Trusted Devices";
 "connection.trusted_devices.clear_confirm.title" = "Clear All Trusted Devices?";
 "connection.trusted_devices.clear_confirm.message" = "The current connection stays active. Approval is required again the next time a phone connects.";

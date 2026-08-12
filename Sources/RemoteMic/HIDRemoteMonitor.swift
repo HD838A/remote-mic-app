@@ -293,8 +293,8 @@ final class HIDRemoteMonitor {
         IOHIDDeviceClose(activeDevice, IOOptionBits(kIOHIDOptionsTypeNone))
         self.activeDevice = nil
         deviceFingerprint = nil
-        activeDeviceIsSeized = false
         resetInputState()
+        activeDeviceIsSeized = false
         updateStatus(LocalizedMessage("button_mapping.status.disconnected"))
         AppLogger.shared.write("HID DISCONNECTED")
     }
@@ -349,8 +349,8 @@ final class HIDRemoteMonitor {
 
     func disconnectSimulatedDevice() {
         deviceFingerprint = nil
-        activeDeviceIsSeized = false
         resetInputState()
+        activeDeviceIsSeized = false
     }
 
     private func process(usages: Set<UInt16>) {
@@ -658,6 +658,13 @@ final class HIDRemoteMonitor {
     }
 
     private func resetInputState() {
+        if !activeDeviceIsSeized {
+            for usage in activeUsages {
+                if let button = RemoteButton.usageMap[usage] {
+                    eventSuppressor.arm(button: button, edge: .up)
+                }
+            }
+        }
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
         nativePassthroughUsages.removeAll()
