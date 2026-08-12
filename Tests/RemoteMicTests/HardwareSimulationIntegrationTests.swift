@@ -454,6 +454,83 @@ struct HardwareSimulationIntegrationTests {
         #expect(scheduler.pendingTaskCount == 0)
     }
 
+    @Test func monitoredArrowRepeatAndDisconnectReleasePhysicalKeyboardSuppression() throws {
+        let suiteName = "HardwareSimulationIntegrationTests.physicalArrowRelease.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.arrowUp, for: .up)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = TestHIDRemoteScheduler()
+        let suppressor = KeyboardEventSuppressor()
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            eventSuppressor: suppressor,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier }
+        )
+        let down = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 126,
+            keyDown: true
+        ))
+        let up = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 126,
+            keyDown: false
+        ))
+        let press = XiaomiVoiceRemoteButton.up.report
+        let release = Data(repeating: 0, count: press.data.count)
+
+        monitor.connectSimulatedDevice(
+            fingerprint: "monitored-repeat",
+            profileID: profileID,
+            isSeized: false
+        )
+        monitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
+        scheduler.advance(toMilliseconds: 650)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        monitor.handleSimulatedReport(reportID: press.reportID, data: release)
+        #expect(suppressor.handle(type: .keyUp, event: up))
+        #expect(!suppressor.handle(type: .keyDown, event: down))
+
+        monitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
+        monitor.disconnectSimulatedDevice()
+        #expect(suppressor.handle(type: .keyUp, event: up))
+        #expect(!suppressor.handle(type: .keyDown, event: down))
+
+        let secondMonitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            eventSuppressor: suppressor,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in true }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "monitored-a",
+            profileID: profileID,
+            isSeized: false
+        )
+        secondMonitor.connectSimulatedDevice(
+            fingerprint: "monitored-b",
+            profileID: profileID,
+            isSeized: false
+        )
+        monitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
+        secondMonitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
+        monitor.disconnectSimulatedDevice()
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        secondMonitor.disconnectSimulatedDevice()
+        #expect(!suppressor.handle(type: .keyDown, event: down))
+    }
+
     @Test func simulatedMultiFrameRemainderDrivesProductionAccumulator() throws {
         let scenario = XiaomiVoiceRemoteFixture.bleScenario(.multipleFramesWithRemainder)
         let runner = try HardwareScenarioRunner(
