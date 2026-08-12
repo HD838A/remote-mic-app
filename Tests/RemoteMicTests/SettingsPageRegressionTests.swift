@@ -319,7 +319,7 @@ struct SettingsPageRegressionTests {
         #expect(!aboutPage.contains("openGlossary"))
     }
 
-    @Test func invitationOnlyAIPolishIsHiddenFromOrdinaryUsers() throws {
+    @Test func privateFeatureUIIsDelegatedAndHiddenByDefault() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -329,9 +329,11 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(source.contains("if shouldShowEarlyAccessPanel"))
-        #expect(source.contains("earlyAccess.isEnrolled"))
-        #expect(source.contains("--show-invitation-enrollment"))
-        #expect(!source.contains("\n                    earlyAccessPanel\n"))
+        #expect(source.contains("privateFeature.isFeatureVisible"))
+        #expect(source.contains("privateFeature.shouldShowEnrollment"))
+        #expect(source.contains("privateFeature.settingsView()"))
+        #expect(source.contains("privateFeature.enrollmentView()"))
+        #expect(!source.contains("deepSeek"))
+        #expect(!source.contains("postDictation"))
     }
 }

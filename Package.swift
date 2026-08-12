@@ -5,7 +5,23 @@ import PackageDescription
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
 ]
+var remoteMicDependencies: [Target.Dependency] = [
+    "AudioExceptionGuard",
+    .product(name: "Sparkle", package: "Sparkle"),
+]
 var remoteMicTestDependencies: [Target.Dependency] = ["RemoteMic"]
+
+if let privateFeaturePath = ProcessInfo.processInfo.environment[
+    "SAYALL_AI_PACKAGE_PATH"
+], !privateFeaturePath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: privateFeaturePath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: privateFeaturePath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllAI", package: packageIdentity)
+    )
+}
 
 if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
     "REMOTE_MIC_HARDWARE_SIMULATION_PATH"
@@ -32,10 +48,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "RemoteMic",
-            dependencies: [
-                "AudioExceptionGuard",
-                .product(name: "Sparkle", package: "Sparkle")
-            ],
+            dependencies: remoteMicDependencies,
             path: "Sources/RemoteMic"
         ),
         .target(

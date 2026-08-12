@@ -27,6 +27,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check out private feature package
+        uses: actions/checkout@v5
+        with:
+          repository: GetSayAll/sayall-ai
+          path: .private-dependencies/sayall-ai
+          ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Configure private feature package
+        run: |
+          echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
+          echo "REQUIRE_SAYALL_AI_PACKAGE=1" >> "$GITHUB_ENV"
+
       - name: Install required tools
         run: command -v rg >/dev/null || brew install ripgrep
 

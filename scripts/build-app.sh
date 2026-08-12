@@ -8,11 +8,12 @@ APP_NAME="RemoteMic"
 DISPLAY_NAME="Remote Mic"
 OUTPUT_DIR="$ROOT/dist"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
-SPARKLE_FRAMEWORK="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_WEB_REMOTE_CONFIGURATION="${REQUIRE_WEB_REMOTE_CONFIGURATION:-0}"
 REQUIRE_EARLY_ACCESS_CONFIGURATION="${REQUIRE_EARLY_ACCESS_CONFIGURATION:-0}"
+REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
+SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
@@ -33,13 +34,52 @@ case "$REQUIRE_EARLY_ACCESS_CONFIGURATION" in
   0|1) ;;
   *) print -u2 "REQUIRE_EARLY_ACCESS_CONFIGURATION must be 0 or 1"; exit 1 ;;
 esac
+case "$REQUIRE_SAYALL_AI_PACKAGE" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_AI_PACKAGE must be 0 or 1"; exit 1 ;;
+esac
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; then
   print -u2 "Developer ID Application signing is required"
   exit 1
 fi
 
-xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx14.0
-BIN_PATH="$(xcrun swift build -c "$CONFIGURATION" --triple arm64-apple-macosx14.0 --show-bin-path)/$APP_NAME"
+if [[ -z "$SAYALL_AI_PACKAGE_PATH" && -f "$ROOT/../sayall-ai/Package.swift" ]]; then
+  SAYALL_AI_PACKAGE_PATH="$ROOT/../sayall-ai"
+fi
+if [[ -n "$SAYALL_AI_PACKAGE_PATH" ]]; then
+  if [[ ! -f "$SAYALL_AI_PACKAGE_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_AI_PACKAGE_PATH must contain Package.swift"
+    exit 1
+  fi
+  SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:A}"
+  export SAYALL_AI_PACKAGE_PATH
+  SAYALL_AI_INCLUDED=true
+else
+  SAYALL_AI_INCLUDED=false
+fi
+if [[ "$REQUIRE_SAYALL_AI_PACKAGE" == "1" && "$SAYALL_AI_INCLUDED" != "true" ]]; then
+  print -u2 "A SayAllAI package is required for this build"
+  exit 1
+fi
+
+if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
+  DEFAULT_SCRATCH_PATH="$ROOT/.build-app-sayall-ai"
+else
+  DEFAULT_SCRATCH_PATH="$ROOT/.build-app-public"
+fi
+BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_SCRATCH_PATH}"
+SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+
+xcrun swift build \
+  --scratch-path "$BUILD_SCRATCH_PATH" \
+  -c "$CONFIGURATION" \
+  --triple arm64-apple-macosx14.0
+BIN_DIR="$(xcrun swift build \
+  --scratch-path "$BUILD_SCRATCH_PATH" \
+  -c "$CONFIGURATION" \
+  --triple arm64-apple-macosx14.0 \
+  --show-bin-path)"
+BIN_PATH="$BIN_DIR/$APP_NAME"
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app) ;;
@@ -55,6 +95,9 @@ install_name_tool -add_rpath @executable_path/../Frameworks \
   "$APP_DIR/Contents/MacOS/$APP_NAME"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllAIIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllAIIncluded -bool "$SAYALL_AI_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
 if [[ -n "${REMOTE_WEB_RELAY_URL:-}" ]]; then
   plutil -remove RemoteWebRelayURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
   plutil -insert RemoteWebRelayURL -string "$REMOTE_WEB_RELAY_URL" \
@@ -123,6 +166,16 @@ for localization_dir in "${LOCALIZATION_DIRS[@]}"; do
     "$localization_dir" \
     "$APP_DIR/Contents/Resources/$localization"
 done
+if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
+  SAYALL_AI_RESOURCE_BUNDLE="$BIN_DIR/SayAllAI_SayAllAI.bundle"
+  if [[ ! -d "$SAYALL_AI_RESOURCE_BUNDLE" ]]; then
+    print -u2 "SayAllAI resource bundle is missing from the Swift build"
+    exit 1
+  fi
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$SAYALL_AI_RESOURCE_BUNDLE" \
+    "$APP_DIR/Contents/Resources/SayAllAI_SayAllAI.bundle"
+fi
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
   codesign \
