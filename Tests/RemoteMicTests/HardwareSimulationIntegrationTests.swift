@@ -1,4 +1,5 @@
 #if canImport(HardwareSimulation) && canImport(XiaomiVoiceRemoteSimulation)
+import AppKit
 import CoreGraphics
 import Foundation
 import HardwareSimulation
@@ -454,13 +455,17 @@ struct HardwareSimulationIntegrationTests {
         #expect(scheduler.pendingTaskCount == 0)
     }
 
-    @Test func monitoredArrowRepeatAndDisconnectReleasePhysicalKeyboardSuppression() throws {
-        let suiteName = "HardwareSimulationIntegrationTests.physicalArrowRelease.\(UUID().uuidString)"
+    @Test(arguments: XiaomiVoiceRemoteButton.allCases.filter { $0 != .back })
+    func monitoredNativeButtonsReleaseSuppressionAfterReleaseAndDisconnect(
+        _ simulatedButton: XiaomiVoiceRemoteButton
+    ) throws {
+        let button = try #require(RemoteButton(rawValue: simulatedButton.rawValue))
+        let suiteName = "HardwareSimulationIntegrationTests.nativeRelease.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
-        settings.setAction(.arrowUp, for: .up)
+        settings.setAction(.volumeDown, for: button)
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = TestHIDRemoteScheduler()
         let suppressor = KeyboardEventSuppressor()
@@ -474,17 +479,9 @@ struct HardwareSimulationIntegrationTests {
             actionPerformer: { _, _, _ in true },
             frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier }
         )
-        let down = try #require(CGEvent(
-            keyboardEventSource: nil,
-            virtualKey: 126,
-            keyDown: true
-        ))
-        let up = try #require(CGEvent(
-            keyboardEventSource: nil,
-            virtualKey: 126,
-            keyDown: false
-        ))
-        let press = XiaomiVoiceRemoteButton.up.report
+        let down = try nativeEvent(for: button, edge: .down)
+        let up = try nativeEvent(for: button, edge: .up)
+        let press = simulatedButton.report
         let release = Data(repeating: 0, count: press.data.count)
 
         monitor.connectSimulatedDevice(
@@ -494,16 +491,43 @@ struct HardwareSimulationIntegrationTests {
         )
         monitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
         scheduler.advance(toMilliseconds: 650)
-        #expect(suppressor.handle(type: .keyDown, event: down))
+        #expect(suppressor.handle(type: down.type, event: down.event))
         monitor.handleSimulatedReport(reportID: press.reportID, data: release)
-        #expect(suppressor.handle(type: .keyUp, event: up))
-        #expect(!suppressor.handle(type: .keyDown, event: down))
+        #expect(suppressor.handle(type: up.type, event: up.event))
+        #expect(!suppressor.handle(type: down.type, event: down.event))
 
         monitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
         monitor.disconnectSimulatedDevice()
-        #expect(suppressor.handle(type: .keyUp, event: up))
-        #expect(!suppressor.handle(type: .keyDown, event: down))
+        #expect(suppressor.handle(type: up.type, event: up.event))
+        #expect(!suppressor.handle(type: down.type, event: down.event))
+    }
 
+    @Test(arguments: XiaomiVoiceRemoteButton.allCases.filter { $0 != .back })
+    func twoMonitoredRemotesReleaseOnlyTheirOwnNativeSuppression(
+        _ simulatedButton: XiaomiVoiceRemoteButton
+    ) throws {
+        let button = try #require(RemoteButton(rawValue: simulatedButton.rawValue))
+        let suiteName = "HardwareSimulationIntegrationTests.sharedNativeRelease.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.volumeDown, for: button)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = TestHIDRemoteScheduler()
+        let suppressor = KeyboardEventSuppressor()
+        let down = try nativeEvent(for: button, edge: .down)
+        let press = simulatedButton.report
+
+        let firstMonitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            eventSuppressor: suppressor,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in true }
+        )
         let secondMonitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
@@ -513,7 +537,8 @@ struct HardwareSimulationIntegrationTests {
             runtimePermissions: { true },
             actionPerformer: { _, _, _ in true }
         )
-        monitor.connectSimulatedDevice(
+
+        firstMonitor.connectSimulatedDevice(
             fingerprint: "monitored-a",
             profileID: profileID,
             isSeized: false
@@ -523,12 +548,51 @@ struct HardwareSimulationIntegrationTests {
             profileID: profileID,
             isSeized: false
         )
-        monitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
+        firstMonitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
         secondMonitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
-        monitor.disconnectSimulatedDevice()
-        #expect(suppressor.handle(type: .keyDown, event: down))
+        firstMonitor.disconnectSimulatedDevice()
+        #expect(suppressor.handle(type: down.type, event: down.event))
         secondMonitor.disconnectSimulatedDevice()
-        #expect(!suppressor.handle(type: .keyDown, event: down))
+        #expect(!suppressor.handle(type: down.type, event: down.event))
+    }
+
+    @Test func monitoredBackButtonNeverArmsNativeKeyboardSuppression() throws {
+        let suiteName = "HardwareSimulationIntegrationTests.backHasNoNativeEvent.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.deleteBackward, for: .back)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = TestHIDRemoteScheduler()
+        let suppressor = KeyboardEventSuppressor()
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            eventSuppressor: suppressor,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in true }
+        )
+        let deleteDown = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 51,
+            keyDown: true
+        ))
+        let press = XiaomiVoiceRemoteButton.back.report
+
+        #expect(RemoteButton.back.nativeEvent == nil)
+        monitor.connectSimulatedDevice(
+            fingerprint: "monitored-back",
+            profileID: profileID,
+            isSeized: false
+        )
+        monitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
+        scheduler.advance(toMilliseconds: 650)
+        #expect(!suppressor.handle(type: .keyDown, event: deleteDown))
+        monitor.disconnectSimulatedDevice()
+        #expect(!suppressor.handle(type: .keyDown, event: deleteDown))
     }
 
     @Test func simulatedMultiFrameRemainderDrivesProductionAccumulator() throws {
@@ -646,6 +710,37 @@ struct HardwareSimulationIntegrationTests {
             }
         }
         throw CocoaError(.fileReadCorruptFile)
+    }
+
+    private func nativeEvent(
+        for button: RemoteButton,
+        edge: RemoteEventEdge
+    ) throws -> (type: CGEventType, event: CGEvent) {
+        switch try #require(button.nativeEvent) {
+        case let .keyboard(keyCode):
+            let isDown = edge == .down
+            let event = try #require(CGEvent(
+                keyboardEventSource: nil,
+                virtualKey: CGKeyCode(keyCode),
+                keyDown: isDown
+            ))
+            return (isDown ? .keyDown : .keyUp, event)
+        case let .systemKey(systemKeyType):
+            let keyState: Int32 = edge == .down ? 0xA : 0xB
+            let data1 = Int((systemKeyType << 16) | (keyState << 8))
+            let event = try #require(NSEvent.otherEvent(
+                with: .systemDefined,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: 0,
+                context: nil,
+                subtype: 8,
+                data1: data1,
+                data2: -1
+            )?.cgEvent)
+            return (try #require(CGEventType(rawValue: 14)), event)
+        }
     }
 
     private func driveHIDScenario(
