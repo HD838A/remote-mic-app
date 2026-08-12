@@ -526,7 +526,8 @@ struct HardwareSimulationIntegrationTests {
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
-            actionPerformer: { _, _, _ in true }
+            actionPerformer: { _, _, _ in true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier }
         )
         let secondMonitor = HIDRemoteMonitor(
             settings: settings,
@@ -535,7 +536,8 @@ struct HardwareSimulationIntegrationTests {
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
-            actionPerformer: { _, _, _ in true }
+            actionPerformer: { _, _, _ in true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier }
         )
 
         firstMonitor.connectSimulatedDevice(
@@ -573,7 +575,8 @@ struct HardwareSimulationIntegrationTests {
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
-            actionPerformer: { _, _, _ in true }
+            actionPerformer: { _, _, _ in true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier }
         )
         let deleteDown = try #require(CGEvent(
             keyboardEventSource: nil,

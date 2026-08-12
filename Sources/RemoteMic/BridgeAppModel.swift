@@ -1324,7 +1324,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             alert.accessoryView = codeLabel
             alert.addButton(withTitle: "允许连接")
             alert.addButton(withTitle: "拒绝")
-            alert.addButton(withTitle: "停止等待")
+            alert.addButton(withTitle: LocalizedMessage("connection.phone.cancel_waiting").text(
+                using: LocalizationStore(settings: self.settings)
+            ))
             self.phoneApprovalAlert = alert
             let response = alert.runModal()
             guard self.phoneApprovalAlert === alert else {

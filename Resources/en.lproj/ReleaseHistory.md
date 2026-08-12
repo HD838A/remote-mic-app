@@ -1,5 +1,24 @@
 # Version History
 
+## 1.8.12 (Pre-release)
+
+- Improved the speed and reliability of Mac installer and automatic-update downloads. Existing versions can continue checking for updates, with GitHub downloads retained as a fallback.
+
+## 1.8.11 (Pre-release)
+
+- Fixed newly paired remotes appearing connected in macOS while the setup guide kept searching until Remote Mic was restarted. Returning from Bluetooth Settings now restarts discovery and connects the new device automatically.
+- Fixed ordinary remote buttons sometimes doing nothing while macOS system actions such as volume still worked. When only some low-level button services are usable, remotes that passed the safety checks can continue working.
+- The setup guide now shows the real button-monitoring status and provides a retry action, refreshes audio devices after returning to Remote Mic, and rechecks permissions, the remote, and audio output before opening the main panel.
+- Remote cards show the full Xiaomi Bluetooth Remote 2 and Xiaomi Bluetooth Remote 2 Pro names with clearer battery and charging icons. The File menu can now open the log folder directly.
+
+## 1.8.10 (Pre-release)
+
+- Existing users no longer have to repeat the first-run setup after upgrading. New installations, unfinished setup, and a setup guide started again by the user still complete the required checks.
+- The setup guide no longer requires MiRemoteV 2ch. BlackHole 2ch and other installed audio devices can be selected and continued once their output is ready.
+- Fixed the setup guide continuing to show that it was searching for the remote after an upgrade even though a physical remote button had already been received. Bluetooth recovery now starts automatically.
+- Fixed the compatible microphone remaining active after the remote disconnected and potentially staying attached to meeting or voice-input apps. Disconnecting now ends the active voice session and releases the virtual audio device.
+- Removed the ineffective physical-remote recording renewal attempt to avoid unnecessary forced stops and reconnects. The roughly one-minute recording limit remains under investigation.
+
 ## 1.8.9 (Pre-release)
 
 - Fixed the first Fn voice input sometimes doing nothing after a remote button launched or switched to an app. Remote Mic now waits for the target's editable input to be ready and preserves the beginning of speech during that wait.

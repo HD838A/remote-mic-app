@@ -33,7 +33,7 @@ struct SettingsPageRegressionTests {
         #expect(phoneEntrySource.contains("func disablePhoneRemoteConnection()"))
         #expect(phoneEntrySource.contains("phoneRemoteServer.stop()"))
         #expect(phoneEntrySource.contains("func togglePhoneRemoteConnection()"))
-        #expect(source.contains("alert.addButton(withTitle: \"停止等待\")"))
+        #expect(source.contains("LocalizedMessage(\"connection.phone.cancel_waiting\")"))
         #expect(source.contains("response == .alertThirdButtonReturn"))
         #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled else"))
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
