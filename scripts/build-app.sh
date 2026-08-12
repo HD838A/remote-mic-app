@@ -63,11 +63,14 @@ if [[ "$REQUIRE_SAYALL_AI_PACKAGE" == "1" && "$SAYALL_AI_INCLUDED" != "true" ]];
   exit 1
 fi
 
+VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
+BUILD="$(plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
 if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
-  DEFAULT_SCRATCH_PATH="$ROOT/.build-app-sayall-ai"
+  SCRATCH_FLAVOR="sayall-ai"
 else
-  DEFAULT_SCRATCH_PATH="$ROOT/.build-app-public"
+  SCRATCH_FLAVOR="public"
 fi
+DEFAULT_SCRATCH_PATH="/private/tmp/remote-mic-swiftpm/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
 BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_SCRATCH_PATH}"
 SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 
