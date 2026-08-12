@@ -1,5 +1,11 @@
 # Version History
 
+## 1.8.13 (Pre-release)
+
+- Added a separate Intel Mac package for macOS Ventura 13 or later. The Apple Silicon package continues to require macOS 14 or later.
+- Fixed physical keyboard arrow, volume, and other keys sometimes remaining blocked after a remote button was released or the remote disconnected.
+- Waiting for an iPhone connection can now be cancelled and restarted to switch devices without relaunching Remote Mic.
+
 ## 1.8.12 (Pre-release)
 
 - Improved the speed and reliability of Mac installer and automatic-update downloads. Existing versions can continue checking for updates, with GitHub downloads retained as a fallback.
