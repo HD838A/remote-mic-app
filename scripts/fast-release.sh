@@ -136,7 +136,7 @@ SPARKLE_PRIVATE_KEY_FILE="$SPARKLE_KEY" \
 PARALLEL_PACKAGE_NOTARIZATION=1 \
 EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_TEAM_ID" \
 ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 \
-  "$ISOLATED_KEYCHAIN_RUNNER" -- "$ROOT/scripts/notarize-release.sh"
+  "$ISOLATED_KEYCHAIN_RUNNER" -- "$ROOT/scripts/package-macos-release-variants.sh"
 
 HEAD_COMMIT="$(git rev-parse HEAD)"
 if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then

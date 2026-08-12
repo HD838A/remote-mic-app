@@ -2,13 +2,14 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
-OUTPUT_DIR="$ROOT/dist"
+source "$ROOT/scripts/release-variant.sh"
+OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 DRIVER="$OUTPUT_DIR/MiRemoteV2ch.driver"
 APP="$OUTPUT_DIR/Remote Mic.app"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
-INSTALL_PACKAGE="$OUTPUT_DIR/Install Remote Mic.pkg"
+INSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_INSTALL_PACKAGE_NAME"
 LEGACY_INSTALL_PACKAGE="$OUTPUT_DIR/安装豆包兼容麦克风.pkg"
-UNINSTALL_PACKAGE="$OUTPUT_DIR/Uninstall Remote Mic.pkg"
+UNINSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_UNINSTALL_PACKAGE_NAME"
 LEGACY_UNINSTALL_PACKAGE="$OUTPUT_DIR/卸载豆包兼容麦克风.pkg"
 INSTALLER_SIGNING_IDENTITY="${INSTALLER_SIGNING_IDENTITY:--}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
@@ -52,6 +53,8 @@ fi
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/install" "$INSTALL_SCRIPTS"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$RELEASE_CONFIG_PLIST" "$INSTALL_SCRIPTS/release-variant.plist"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
 /usr/bin/pkgbuild \
@@ -86,4 +89,5 @@ fi
 
 print "Built: $INSTALL_PACKAGE"
 print "Built: $UNINSTALL_PACKAGE"
+print "RELEASE VARIANT: $RELEASE_VARIANT"
 print "INSTALLER SIGNING IDENTITY: $INSTALLER_SIGNING_IDENTITY"

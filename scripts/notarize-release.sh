@@ -3,31 +3,33 @@ set -euo pipefail
 umask 022
 
 ROOT="${0:A:h:h}"
-OUTPUT_DIR="$ROOT/dist"
+source "$ROOT/scripts/release-variant.sh"
+OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 PLIST="$ROOT/Resources/Info.plist"
 DISPLAY_NAME="Remote Mic"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
 RELEASE_TAG="${RELEASE_TAG:-v$VERSION}"
 APP="$OUTPUT_DIR/$DISPLAY_NAME.app"
-INSTALL_PACKAGE="$OUTPUT_DIR/Install Remote Mic.pkg"
-UNINSTALL_PACKAGE="$OUTPUT_DIR/Uninstall Remote Mic.pkg"
-DMG="$OUTPUT_DIR/Remote-Mic-$VERSION.dmg"
-UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION.zip"
-APPCAST="$OUTPUT_DIR/appcast.xml"
+INSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_INSTALL_PACKAGE_NAME"
+UNINSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_UNINSTALL_PACKAGE_NAME"
+DMG="$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.dmg"
+UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.zip"
+APPCAST="$OUTPUT_DIR/$RELEASE_APPCAST_NAME"
 ZH_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.zh.txt"
 EN_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.en.txt"
 ZIP_BASENAME="${UPDATE_ZIP:t}"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:?Set CODE_SIGN_IDENTITY to a Developer ID Application identity}"
 INSTALLER_SIGNING_IDENTITY="${INSTALLER_SIGNING_IDENTITY:?Set INSTALLER_SIGNING_IDENTITY to a Developer ID Installer identity}"
-SPARKLE_PRIVATE_KEY_FILE="${SPARKLE_PRIVATE_KEY_FILE:?Set SPARKLE_PRIVATE_KEY_FILE to the restricted local EdDSA key file}"
+GENERATE_SPARKLE_UPDATE="${GENERATE_SPARKLE_UPDATE:-1}"
+SPARKLE_PRIVATE_KEY_FILE="${SPARKLE_PRIVATE_KEY_FILE:-}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-RemoteMic-notary}"
 NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
 PARALLEL_PACKAGE_NOTARIZATION="${PARALLEL_PACKAGE_NOTARIZATION:-0}"
 PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
-CDN_DOWNLOAD_PREFIX="https://download.sayall.app/mac/releases/$RELEASE_TAG/"
-RELEASE_PAGE="https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG"
+CDN_DOWNLOAD_PREFIX="${RELEASE_DOWNLOAD_PREFIX:-https://download.sayall.app/mac/releases/$RELEASE_TAG/}"
+RELEASE_PAGE="${RELEASE_PAGE_URL:-https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG}"
 GENERATE_APPCAST="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 SIGN_UPDATE="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
 
@@ -43,6 +45,10 @@ case "$PARALLEL_PACKAGE_NOTARIZATION" in
   0|1) ;;
   *) print -u2 "PARALLEL_PACKAGE_NOTARIZATION must be 0 or 1"; exit 1 ;;
 esac
+case "$GENERATE_SPARKLE_UPDATE" in
+  0|1) ;;
+  *) print -u2 "GENERATE_SPARKLE_UPDATE must be 0 or 1"; exit 1 ;;
+esac
 if ! print -r -- "$RELEASE_TAG" | rg -q '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
   print -u2 "RELEASE_TAG must be a version tag such as v1.5.0 or v1.5.0-rc.1"
   exit 1
@@ -55,7 +61,7 @@ if [[ "$INSTALLER_SIGNING_IDENTITY" != "Developer ID Installer: "* ]]; then
   print -u2 "INSTALLER_SIGNING_IDENTITY must name a Developer ID Installer identity"
   exit 1
 fi
-if [[ ! -r "$SPARKLE_PRIVATE_KEY_FILE" ]]; then
+if [[ "$GENERATE_SPARKLE_UPDATE" == "1" && ! -r "$SPARKLE_PRIVATE_KEY_FILE" ]]; then
   print -u2 "SPARKLE_PRIVATE_KEY_FILE is not readable"
   exit 1
 fi
@@ -81,8 +87,10 @@ for command in codesign ditto security xcrun; do
     exit 1
   }
 done
-test -x "$GENERATE_APPCAST"
-test -x "$SIGN_UPDATE"
+if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
+  test -x "$GENERATE_APPCAST"
+  test -x "$SIGN_UPDATE"
+fi
 NOTARY_KEYCHAIN_ARGS=()
 if [[ -n "$NOTARY_KEYCHAIN" ]]; then
   test -f "$NOTARY_KEYCHAIN"
@@ -98,7 +106,7 @@ if ! security find-identity -v -p basic | rg -Fq "\"$INSTALLER_SIGNING_IDENTITY\
 fi
 
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-notarize-release.XXXXXX)"
-APP_NOTARY_ZIP="$WORK_DIR/Remote-Mic-$VERSION-notarization.zip"
+APP_NOTARY_ZIP="$WORK_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX-notarization.zip"
 SPARKLE_ARCHIVES="$WORK_DIR/sparkle-archives"
 ZH_NOTES_BASENAME="${ZH_RELEASE_NOTES:t}"
 EN_NOTES_BASENAME="${EN_RELEASE_NOTES:t}"
@@ -190,55 +198,62 @@ staple_and_validate "$DMG"
 )
 REQUIRE_NOTARIZATION=1 "$ROOT/scripts/verify-dmg.sh" "$DMG"
 
-case "$UPDATE_ZIP" in
-  "$OUTPUT_DIR"/Remote-Mic-*.zip) ;;
-  *) print -u2 "refusing to replace unexpected Sparkle archive: $UPDATE_ZIP"; exit 1 ;;
-esac
-case "$APPCAST" in
-  "$OUTPUT_DIR"/appcast.xml) ;;
-  *) print -u2 "refusing to replace unexpected appcast path: $APPCAST"; exit 1 ;;
-esac
-/bin/rm -f -- "$UPDATE_ZIP" "$APPCAST" "$ZH_RELEASE_NOTES" "$EN_RELEASE_NOTES"
-/usr/bin/ditto -c -k --keepParent "$APP" "$UPDATE_ZIP"
-/bin/mkdir -p "$SPARKLE_ARCHIVES"
-/usr/bin/ditto --norsrc --noqtn --noacl "$UPDATE_ZIP" "$SPARKLE_ARCHIVES/$ZIP_BASENAME"
-extract_release_notes \
-  "$ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md" \
-  "$SPARKLE_ARCHIVES/$ZH_NOTES_BASENAME"
-extract_release_notes \
-  "$ROOT/Resources/en.lproj/ReleaseHistory.md" \
-  "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME"
-"$GENERATE_APPCAST" \
-  --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" \
-  --download-url-prefix "$CDN_DOWNLOAD_PREFIX" \
-  --release-notes-url-prefix "$CDN_DOWNLOAD_PREFIX" \
-  --link "$RELEASE_PAGE" \
-  --versions "$BUILD" \
-  --maximum-versions 1 \
-  -o "$APPCAST" \
-  "$SPARKLE_ARCHIVES"
-/usr/bin/ditto --norsrc --noqtn --noacl \
-  "$SPARKLE_ARCHIVES/$ZH_NOTES_BASENAME" "$ZH_RELEASE_NOTES"
-/usr/bin/ditto --norsrc --noqtn --noacl \
-  "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME" "$EN_RELEASE_NOTES"
+if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
+  case "$UPDATE_ZIP" in
+    "$OUTPUT_DIR"/Remote-Mic-*.zip) ;;
+    *) print -u2 "refusing to replace unexpected Sparkle archive: $UPDATE_ZIP"; exit 1 ;;
+  esac
+  case "$APPCAST" in
+    "$OUTPUT_DIR"/appcast.xml|"$OUTPUT_DIR"/appcast-intel.xml) ;;
+    *) print -u2 "refusing to replace unexpected appcast path: $APPCAST"; exit 1 ;;
+  esac
+  /bin/rm -f -- "$UPDATE_ZIP" "$APPCAST" "$ZH_RELEASE_NOTES" "$EN_RELEASE_NOTES"
+  /usr/bin/ditto -c -k --keepParent "$APP" "$UPDATE_ZIP"
+  /bin/mkdir -p "$SPARKLE_ARCHIVES"
+  /usr/bin/ditto --norsrc --noqtn --noacl "$UPDATE_ZIP" "$SPARKLE_ARCHIVES/$ZIP_BASENAME"
+  extract_release_notes \
+    "$ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md" \
+    "$SPARKLE_ARCHIVES/$ZH_NOTES_BASENAME"
+  extract_release_notes \
+    "$ROOT/Resources/en.lproj/ReleaseHistory.md" \
+    "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME"
+  "$GENERATE_APPCAST" \
+    --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" \
+    --download-url-prefix "$CDN_DOWNLOAD_PREFIX" \
+    --release-notes-url-prefix "$CDN_DOWNLOAD_PREFIX" \
+    --link "$RELEASE_PAGE" \
+    --versions "$BUILD" \
+    --maximum-versions 1 \
+    -o "$APPCAST" \
+    "$SPARKLE_ARCHIVES"
+  /usr/bin/ditto --norsrc --noqtn --noacl \
+    "$SPARKLE_ARCHIVES/$ZH_NOTES_BASENAME" "$ZH_RELEASE_NOTES"
+  /usr/bin/ditto --norsrc --noqtn --noacl \
+    "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME" "$EN_RELEASE_NOTES"
 
-ENCLOSURE_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$APPCAST" | head -n 1)"
-test -n "$ENCLOSURE_SIGNATURE"
-rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
-rg -Fq "$CDN_DOWNLOAD_PREFIX$ZH_NOTES_BASENAME" "$APPCAST"
-rg -Fq "$CDN_DOWNLOAD_PREFIX$EN_NOTES_BASENAME" "$APPCAST"
-rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
-"$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$UPDATE_ZIP" "$ENCLOSURE_SIGNATURE"
-"$SIGN_UPDATE" --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
-"$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
+  ENCLOSURE_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$APPCAST" | head -n 1)"
+  test -n "$ENCLOSURE_SIGNATURE"
+  rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
+  rg -Fq "$CDN_DOWNLOAD_PREFIX$ZH_NOTES_BASENAME" "$APPCAST"
+  rg -Fq "$CDN_DOWNLOAD_PREFIX$EN_NOTES_BASENAME" "$APPCAST"
+  rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
+  "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$UPDATE_ZIP" "$ENCLOSURE_SIGNATURE"
+  "$SIGN_UPDATE" --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
+  "$SIGN_UPDATE" --verify --ed-key-file "$SPARKLE_PRIVATE_KEY_FILE" "$APPCAST"
+fi
 
 print "NOTARIZED RELEASE READY"
+print "RELEASE VARIANT: $RELEASE_VARIANT"
 print "RELEASE TAG: $RELEASE_TAG"
 print "DMG: $DMG"
 print "SHA256: $DMG.sha256"
 print "INSTALL PACKAGE: $INSTALL_PACKAGE"
 print "UNINSTALL PACKAGE: $UNINSTALL_PACKAGE"
-print "SPARKLE ZIP: $UPDATE_ZIP"
-print "APPCAST: $APPCAST"
-print "ZH RELEASE NOTES: $ZH_RELEASE_NOTES"
-print "EN RELEASE NOTES: $EN_RELEASE_NOTES"
+if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
+  print "SPARKLE ZIP: $UPDATE_ZIP"
+  print "APPCAST: $APPCAST"
+  print "ZH RELEASE NOTES: $ZH_RELEASE_NOTES"
+  print "EN RELEASE NOTES: $EN_RELEASE_NOTES"
+else
+  print "SPARKLE UPDATE: skipped for private test package"
+fi

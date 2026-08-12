@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
-DRIVER="${1:-$ROOT/dist/MiRemoteV2ch.driver}"
+source "$ROOT/scripts/release-variant.sh"
+DRIVER="${1:-$RELEASE_OUTPUT_DIR/MiRemoteV2ch.driver}"
 PLIST="$DRIVER/Contents/Info.plist"
 BINARY="$DRIVER/Contents/MacOS/MiRemoteV2ch"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
@@ -30,9 +31,10 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
   print -r -- "$SIGNATURE_DETAILS" | rg -q '^CodeDirectory .*flags=.*runtime'
 fi
 ARCHS="$(lipo -archs "$BINARY")"
-test "$ARCHS" = "arm64"
-xcrun vtool -show-build "$BINARY" | rg -q 'minos 14\.0'
+test "$ARCHS" = "$RELEASE_ARCH"
+xcrun vtool -show-build "$BINARY" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
 strings "$BINARY" | rg -qx 'MiRemoteV %ich'
 strings "$BINARY" | rg -qx 'MiRemoteV%ich_UID'
 
 print "DOUBAO DRIVER VERIFY PASS: $DRIVER"
+print "RELEASE VARIANT: $RELEASE_VARIANT"

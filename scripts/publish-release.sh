@@ -24,6 +24,13 @@ UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION.zip"
 APPCAST="$OUTPUT_DIR/appcast.xml"
 ZH_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.zh.txt"
 EN_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION.en.txt"
+INTEL_OUTPUT_DIR="$OUTPUT_DIR/intel"
+INTEL_INSTALL_PACKAGE="$INTEL_OUTPUT_DIR/Install Remote Mic Intel.pkg"
+INTEL_UNINSTALL_PACKAGE="$INTEL_OUTPUT_DIR/Uninstall Remote Mic Intel.pkg"
+INTEL_DMG="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.dmg"
+INTEL_DMG_CHECKSUM="$INTEL_DMG.sha256"
+INTEL_UPDATE_ZIP="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.zip"
+INTEL_APPCAST="$INTEL_OUTPUT_DIR/appcast-intel.xml"
 
 if [[ "$#" -ne 1 || ( "$MODE" != "prerelease" && "$MODE" != "promote" ) ]]; then
   print -u2 "usage: $0 prerelease|promote"
@@ -91,18 +98,33 @@ verify_local_artifacts() {
   test -f "$APPCAST"
   test -f "$ZH_RELEASE_NOTES"
   test -f "$EN_RELEASE_NOTES"
+  test -f "$INTEL_INSTALL_PACKAGE"
+  test -f "$INTEL_UNINSTALL_PACKAGE"
+  test -f "$INTEL_DMG"
+  test -f "$INTEL_DMG_CHECKSUM"
+  test -f "$INTEL_UPDATE_ZIP"
+  test -f "$INTEL_APPCAST"
 
   export EXPECTED_DEVELOPER_TEAM_ID REQUIRE_DEVELOPER_ID_SIGNING=1 REQUIRE_NOTARIZATION=1
   "$ROOT/scripts/verify-app.sh" "$APP"
   "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
   "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
   "$ROOT/scripts/verify-dmg.sh" "$DMG"
+  RELEASE_VARIANT=intel "$ROOT/scripts/verify-app.sh" "$INTEL_OUTPUT_DIR/Remote Mic.app"
+  RELEASE_VARIANT=intel "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INTEL_INSTALL_PACKAGE" install
+  RELEASE_VARIANT=intel "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INTEL_UNINSTALL_PACKAGE" uninstall
+  RELEASE_VARIANT=intel "$ROOT/scripts/verify-dmg.sh" "$INTEL_DMG"
 
   rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX${UPDATE_ZIP:t}\"" "$APPCAST"
   rg -Fq "$CDN_DOWNLOAD_PREFIX${ZH_RELEASE_NOTES:t}" "$APPCAST"
   rg -Fq "$CDN_DOWNLOAD_PREFIX${EN_RELEASE_NOTES:t}" "$APPCAST"
   rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
   rg -Fq "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$APPCAST"
+  rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX${INTEL_UPDATE_ZIP:t}\"" "$INTEL_APPCAST"
+  rg -Fq "$CDN_DOWNLOAD_PREFIX${ZH_RELEASE_NOTES:t}" "$INTEL_APPCAST"
+  rg -Fq "$CDN_DOWNLOAD_PREFIX${EN_RELEASE_NOTES:t}" "$INTEL_APPCAST"
+  rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$INTEL_APPCAST"
+  rg -Fq "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$INTEL_APPCAST"
 }
 
 stage_assets() {
@@ -118,6 +140,16 @@ stage_assets() {
     "$ZH_RELEASE_NOTES" "$STAGING_DIR/${ZH_RELEASE_NOTES:t}"
   /usr/bin/ditto --norsrc --noqtn --noacl \
     "$EN_RELEASE_NOTES" "$STAGING_DIR/${EN_RELEASE_NOTES:t}"
+  /usr/bin/ditto --norsrc --noqtn --noacl "$INTEL_INSTALL_PACKAGE" \
+    "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Installer.pkg"
+  /usr/bin/ditto --norsrc --noqtn --noacl "$INTEL_UNINSTALL_PACKAGE" \
+    "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg"
+  /usr/bin/ditto --norsrc --noqtn --noacl "$INTEL_DMG" "$STAGING_DIR/${INTEL_DMG:t}"
+  /usr/bin/ditto --norsrc --noqtn --noacl \
+    "$INTEL_DMG_CHECKSUM" "$STAGING_DIR/${INTEL_DMG_CHECKSUM:t}"
+  /usr/bin/ditto --norsrc --noqtn --noacl \
+    "$INTEL_UPDATE_ZIP" "$STAGING_DIR/${INTEL_UPDATE_ZIP:t}"
+  /usr/bin/ditto --norsrc --noqtn --noacl "$INTEL_APPCAST" "$STAGING_DIR/appcast-intel.xml"
 
   /usr/bin/cmp -s "$INSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Installer.pkg"
   /usr/bin/cmp -s "$UNINSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Uninstaller.pkg"
@@ -127,6 +159,12 @@ stage_assets() {
   /usr/bin/cmp -s "$APPCAST" "$STAGING_DIR/appcast.xml"
   /usr/bin/cmp -s "$ZH_RELEASE_NOTES" "$STAGING_DIR/${ZH_RELEASE_NOTES:t}"
   /usr/bin/cmp -s "$EN_RELEASE_NOTES" "$STAGING_DIR/${EN_RELEASE_NOTES:t}"
+  /usr/bin/cmp -s "$INTEL_INSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Installer.pkg"
+  /usr/bin/cmp -s "$INTEL_UNINSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg"
+  /usr/bin/cmp -s "$INTEL_DMG" "$STAGING_DIR/${INTEL_DMG:t}"
+  /usr/bin/cmp -s "$INTEL_DMG_CHECKSUM" "$STAGING_DIR/${INTEL_DMG_CHECKSUM:t}"
+  /usr/bin/cmp -s "$INTEL_UPDATE_ZIP" "$STAGING_DIR/${INTEL_UPDATE_ZIP:t}"
+  /usr/bin/cmp -s "$INTEL_APPCAST" "$STAGING_DIR/appcast-intel.xml"
 }
 
 generate_release_notes() {
@@ -179,7 +217,7 @@ generate_candidate_provenance() {
       payloadAssets: .
     }' "$payload_json_file" > "$CANDIDATE_PROVENANCE"
 
-  test "$(jq '.payloadAssets | length' "$CANDIDATE_PROVENANCE")" = "8"
+  test "$(jq '.payloadAssets | length' "$CANDIDATE_PROVENANCE")" = "14"
 }
 
 verify_candidate_source() {
@@ -317,7 +355,7 @@ verify_downloaded_candidate() {
      .version == $version and .build == $build and
      .candidateBranch == ("release/pre-" + $tag) and
      (.tagCommit | test("^[0-9a-f]{40}$")) and
-     (.payloadAssets | length == 8)' "$provenance" >/dev/null
+     (.payloadAssets | length == 14)' "$provenance" >/dev/null
   if [[ "$VERSION" != "${RELEASE_TAG#v}" || ! "$BUILD" =~ '^[0-9]+$' ]]; then
     print -u2 "candidate provenance version/build does not match $RELEASE_TAG"
     exit 1
@@ -356,9 +394,11 @@ download_and_compare_local_candidate() {
     test -f "$downloaded"
     /usr/bin/cmp -s "$expected" "$downloaded"
   done
-  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "9"
+  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "15"
   curl -fsSL "${GITHUB_DOWNLOAD_PREFIX}appcast.xml" -o "$WORK_DIR/tag-appcast.xml"
   /usr/bin/cmp -s "$STAGING_DIR/appcast.xml" "$WORK_DIR/tag-appcast.xml"
+  curl -fsSL "${GITHUB_DOWNLOAD_PREFIX}appcast-intel.xml" -o "$WORK_DIR/tag-appcast-intel.xml"
+  /usr/bin/cmp -s "$STAGING_DIR/appcast-intel.xml" "$WORK_DIR/tag-appcast-intel.xml"
   verify_downloaded_candidate
   verify_cdn_assets "$STAGING_DIR"
 }
@@ -384,7 +424,7 @@ generate_stable_promotion() {
       actor: $actor,
       payloadAssets: .payloadAssets
     }' "$provenance" > "$STABLE_PROMOTION"
-  test "$(jq '.payloadAssets | length' "$STABLE_PROMOTION")" = "8"
+  test "$(jq '.payloadAssets | length' "$STABLE_PROMOTION")" = "14"
 }
 
 if [[ "$MODE" == "prerelease" ]]; then
@@ -419,6 +459,12 @@ if [[ "$MODE" == "prerelease" ]]; then
     "$STAGING_DIR/appcast.xml" \
     "$STAGING_DIR/${ZH_RELEASE_NOTES:t}" \
     "$STAGING_DIR/${EN_RELEASE_NOTES:t}" \
+    "$STAGING_DIR/${INTEL_UPDATE_ZIP:t}" \
+    "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Installer.pkg" \
+    "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg" \
+    "$STAGING_DIR/${INTEL_DMG:t}" \
+    "$STAGING_DIR/${INTEL_DMG_CHECKSUM:t}" \
+    "$STAGING_DIR/appcast-intel.xml" \
     "$CANDIDATE_PROVENANCE" \
     --repo "$REPOSITORY" \
     --verify-tag \
@@ -459,5 +505,7 @@ test "$RELEASE_STATE" = $'false\tfalse'
 test "$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)" = "$RELEASE_TAG"
 curl -fsSL "https://github.com/$REPOSITORY/releases/latest/download/appcast.xml" -o "$WORK_DIR/latest-appcast.xml"
 /usr/bin/cmp -s "$DOWNLOAD_DIR/appcast.xml" "$WORK_DIR/latest-appcast.xml"
+curl -fsSL "https://github.com/$REPOSITORY/releases/latest/download/appcast-intel.xml" -o "$WORK_DIR/latest-appcast-intel.xml"
+/usr/bin/cmp -s "$DOWNLOAD_DIR/appcast-intel.xml" "$WORK_DIR/latest-appcast-intel.xml"
 verify_stable_download_redirect
 print "RELEASE PROMOTION PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"

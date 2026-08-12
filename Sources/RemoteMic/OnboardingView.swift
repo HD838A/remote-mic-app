@@ -102,10 +102,10 @@ struct OnboardingView: View {
             guard settings.onboardingStep == .voiceTest, sampleCount > 0 else { return }
             voiceSamplesReceived = true
         }
-        .onChange(of: settings.onboardingStep) { _, step in
+        .onChange(of: settings.onboardingStep) { step in
             prepareForStep(step)
         }
-        .onChange(of: transcript) { _, value in
+        .onChange(of: transcript) { value in
             guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             transcriptFocused = true
         }

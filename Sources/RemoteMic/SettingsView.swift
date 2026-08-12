@@ -396,7 +396,7 @@ struct SettingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
+        .compatibilityFocusEffectDisabled()
         .foregroundStyle(selectedSection == section ? Color.accentColor : Color.secondary)
         .background(selectedSection == section ? Color.accentColor.opacity(0.10) : Color.clear)
         .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
@@ -627,7 +627,7 @@ struct SettingsView: View {
                         .foregroundStyle(.white)
                 }
                     .compatibilityButtonStyle(.prominent)
-                    .buttonBorderShape(.roundedRectangle(radius: 10))
+                    .compatibilityRoundedButtonBorderShape(radius: 10)
                     .frame(maxWidth: .infinity)
 
             }
@@ -822,7 +822,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .compatibilityScrollEdgeEffect()
-                .onChange(of: mappingEditingTarget?.id) { _, targetID in
+                .onChange(of: mappingEditingTarget?.id) { targetID in
                     guard targetID != nil else { return }
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
@@ -3029,6 +3029,30 @@ private struct CompatibilityScrollEdgeEffectModifier: ViewModifier {
     }
 }
 
+private struct CompatibilityFocusEffectDisabledModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
+        }
+    }
+}
+
+private struct CompatibilityRoundedButtonBorderShapeModifier: ViewModifier {
+    let radius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content.buttonBorderShape(.roundedRectangle(radius: radius))
+        } else {
+            content
+        }
+    }
+}
+
 private struct CompatibilityTintedGlassModifier<GlassShape: Shape>: ViewModifier {
     let tint: Color
     let shape: GlassShape
@@ -3062,6 +3086,14 @@ private extension View {
 
     func compatibilityScrollEdgeEffect() -> some View {
         modifier(CompatibilityScrollEdgeEffectModifier())
+    }
+
+    func compatibilityFocusEffectDisabled() -> some View {
+        modifier(CompatibilityFocusEffectDisabledModifier())
+    }
+
+    func compatibilityRoundedButtonBorderShape(radius: CGFloat) -> some View {
+        modifier(CompatibilityRoundedButtonBorderShapeModifier(radius: radius))
     }
 
     func compatibilityTintedGlass<GlassShape: Shape>(

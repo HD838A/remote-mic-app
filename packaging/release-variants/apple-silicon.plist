@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>ExpectedArchitecture</key>
+    <string>arm64</string>
+    <key>MinimumSystemMajor</key>
+    <integer>14</integer>
+    <key>MinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>ReleaseVariant</key>
+    <string>apple-silicon</string>
+</dict>
+</plist>
