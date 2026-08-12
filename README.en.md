@@ -23,18 +23,17 @@ Remote Mic is built natively with SwiftUI. While running in the background, it u
 
 ## Requirements
 
-- Apple Silicon Mac
-- macOS 14 or later
+- Apple Silicon Mac with macOS 14 or later, or Intel Mac with macOS 13 or later
 - Xiaomi Bluetooth Remote 2 Pro
 - For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
 
 ## Download and install
 
-Download the latest stable release through the [Cloudflare CDN entry](https://download.sayall.app/mac). Each release is named Remote-Mic-<version>.dmg; [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) remains the release page and source-file backup.
+Download the Apple Silicon release through the [Cloudflare CDN entry](https://download.sayall.app/mac). Intel Mac users must download `Remote-Mic-<version>-Intel.dmg` from [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) instead of using the Apple Silicon package.
 
 The DMG provides two installation paths:
 
-1. Recommended: double-click **Install Remote Mic.pkg**. It installs **Remote Mic.app** and the MiRemoteV 2ch compatible microphone for Doubao Input Method and other voice-input apps.
+1. Recommended: double-click **Install Remote Mic.pkg** on Apple Silicon, or **Install Remote Mic Intel.pkg** on Intel Macs. It installs **Remote Mic.app** and the MiRemoteV 2ch compatible microphone for Doubao Input Method and other voice-input apps.
 2. App only: drag **Remote Mic.app** to Applications. This requires a usable loopback audio device to already be installed.
 
 Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only from this project's GitHub Releases and verify the DMG with the `.sha256` file from the same release.

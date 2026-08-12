@@ -6,14 +6,14 @@ This document is for developers, auditors, and release engineers. It describes t
 
 ## Support boundary
 
-- Operating system: macOS 14 or later
-- Architecture: Apple Silicon arm64
+- Apple Silicon release line: arm64, macOS 14 or later
+- Intel release line: x86_64, macOS 13 or later
 - Target remote: Xiaomi Bluetooth Remote 2 Pro / RC003
 - HID identity: Vendor ID 0x2717, Product ID 0x32B8
 - Swift tools version: 6.2; the current release Mac uses Swift 6.3, with source compiled in Swift 5 language mode
 - Release signing: local development builds retain ad-hoc signing with a fixed designated requirement. Starting with v1.3.0, official releases use Developer ID Application and Developer ID Installer signing; the app and driver use the Hardened Runtime and trusted timestamps, while the app, both PKGs, and the DMG are notarized by Apple and stapled.
 
-Package.swift, Resources/Info.plist, build scripts, and verification scripts all pin the minimum system version to macOS 14.0 and verify that release binaries contain only arm64.
+The release lines use separate artifacts and update feeds: Apple Silicon keeps the default names and `appcast.xml`, while Intel uses names containing `Intel` and `appcast-intel.xml`. Build and verification scripts pin each architecture and minimum system version independently; no Universal package is produced.
 
 ## Localization
 
@@ -172,9 +172,9 @@ Official publishing uses scripts/notarize-release.sh. It accepts only the existi
 
 Candidate builds are published as GitHub pre-releases first. `notarize-release.sh` keeps the appcast release page on the fixed GitHub `RELEASE_TAG`, while the enclosure ZIP and localized update notes use immutable `download.sayall.app/mac/releases/<tag>/` Cloudflare CDN URLs. After GitHub assets become public, the publication script downloads the same assets through the CDN, compares them byte for byte, and verifies `HEAD` and `Range` behavior. The application's `SUFeedURL` remains fixed at GitHub `releases/latest/download/appcast.xml`, so existing installations do not need a feed migration. GitHub excludes drafts and pre-releases from the latest full release, so users who keep pre-release checks disabled continue to receive the production appcast. When a user explicitly enables pre-release checks on About, the app resolves the newest non-draft GitHub Release containing `appcast.xml` through the public Releases API and supplies that immutable asset URL to Sparkle as a dynamic feed. It refreshes before manual checks and periodically while the app remains running.
 
-`scripts/publish-release.sh prerelease` accepts only a clean, pushed source commit referenced by the same remote tag. It publishes the ZIP, both PKGs, DMG, checksum, and appcast, verifies that the pre-release did not change the latest full release, then downloads all six public assets and compares them byte for byte. A test Mac should use Sparkle CLI's one-shot `--feed-url <candidate appcast URL>` override for candidate discovery or installation without persisting an `SUFeedURL` preference. Installing the candidate requires an unlocked graphical session.
+`scripts/publish-release.sh prerelease` accepts only a clean, pushed source commit referenced by the same remote tag. It publishes separate Apple Silicon and Intel ZIPs, PKGs, DMGs, checksums, localized update notes, and appcasts, verifies that the pre-release did not change the latest full release, then downloads all 14 distributable assets and compares them byte for byte. A test Mac should use the architecture-matched Sparkle CLI one-shot `--feed-url <candidate appcast URL>` override for candidate discovery or installation without persisting an `SUFeedURL` preference. Installing the candidate requires an unlocked graphical session.
 
-For a low-risk release that changes only localization copy or bundled documentation, update the version, release history, and commit first, then run `ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 ./scripts/fast-release.sh`. It runs the full Swift test suite, pushes `main`, signs through the temporary Keychain workflow, submits both PKGs for notarization in parallel, and uses `publish-release.sh release` to create a pre-release, compare all public assets byte for byte, and promote those same assets in one process. The fast command accepts only an explicit documentation/resource allowlist and permits only display-version and build-number changes in `Info.plist`. Swift, Bluetooth, audio, installer, or release-pipeline changes are rejected and must use the complete candidate acceptance workflow.
+For a low-risk release that changes only localization copy or bundled documentation, update the version and release history on `release/pre-v<version>`, commit and push that candidate branch, then run `ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 ./scripts/fast-release.sh`. It runs the full Swift test suite, signs and notarizes separate Apple Silicon and Intel artifacts through the temporary Keychain workflow, publishes a pre-release, and compares every public asset byte for byte. Stable promotion remains a separate authorization after the unchanged candidate commit enters `main`, and it reuses the exact candidate bytes. The fast command accepts only an explicit documentation/resource allowlist and permits only display-version and build-number changes in `Info.plist`. Swift, Bluetooth, audio, installer, or release-pipeline changes are rejected and must use the complete candidate acceptance workflow.
 
 After the candidate passes clean installation, runtime, and end-to-end Sparkle update testing, run `scripts/publish-release.sh promote` to promote the same tag and the same assets to a full release. The promotion gate verifies that the latest appcast is byte-identical to the tested candidate appcast. Never replace or promote a failed candidate; increment both the display version and `CFBundleVersion`, then rebuild, sign, notarize, and publish a new pre-release.
 

@@ -26,6 +26,14 @@ struct UpdateFeedSelection {
         }
         return stableFeedURLString
     }
+
+    var appcastAssetName: String {
+        guard let stableFeedURLString,
+              let name = URL(string: stableFeedURLString)?.lastPathComponent,
+              !name.isEmpty
+        else { return "appcast.xml" }
+        return name
+    }
 }
 
 @main
@@ -486,7 +494,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         updateFeedRefreshTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let resolvedURL = try await Self.latestReleaseFeedURL()
+                let resolvedURL = try await Self.latestReleaseFeedURL(
+                    assetName: updateFeedSelection.appcastAssetName
+                )
                 guard !Task.isCancelled, model.settings.checksForPreReleaseUpdates else { return }
                 let feedChanged = updateFeedSelection.preReleaseFeedURL != resolvedURL
                 updateFeedSelection.usePreReleaseFeed(resolvedURL)
@@ -513,7 +523,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
     }
 
-    private static func latestReleaseFeedURL() async throws -> URL {
+    private static func latestReleaseFeedURL(assetName: String) async throws -> URL {
         var request = URLRequest(url: releasesURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15
@@ -525,7 +535,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
             throw UpdateFeedResolutionError.invalidResponse
         }
-        return try UpdateFeedResolver.latestAppcastURL(from: data)
+        return try UpdateFeedResolver.latestAppcastURL(from: data, assetName: assetName)
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {
@@ -666,7 +676,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             guard let self else { return }
             if model.settings.checksForPreReleaseUpdates {
                 do {
-                    let resolvedURL = try await Self.latestReleaseFeedURL()
+                    let resolvedURL = try await Self.latestReleaseFeedURL(
+                        assetName: updateFeedSelection.appcastAssetName
+                    )
                     guard !Task.isCancelled,
                           model.settings.checksForPreReleaseUpdates
                     else { return }

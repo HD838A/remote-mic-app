@@ -118,6 +118,12 @@ struct BuildSigningTests {
             contentsOf: root.appendingPathComponent("scripts/publish-release.sh"),
             encoding: .utf8
         )
+        let releaseVariantsSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/package-macos-release-variants.sh"
+            ),
+            encoding: .utf8
+        )
         let previewVerifierSource = try String(
             contentsOf: root.appendingPathComponent("scripts/verify-preview-branch.sh"),
             encoding: .utf8
@@ -133,6 +139,7 @@ struct BuildSigningTests {
         #expect(fastReleaseSource.contains("validate-notary-secrets-repo.sh"))
         #expect(fastReleaseSource.contains("ALLOW_ISOLATED_RELEASE_KEYCHAIN=1"))
         #expect(fastReleaseSource.contains("PARALLEL_PACKAGE_NOTARIZATION=1"))
+        #expect(fastReleaseSource.contains("package-macos-release-variants.sh"))
         #expect(fastReleaseSource.contains("publish-release.sh\" prerelease"))
         #expect(!fastReleaseSource.contains("git push origin main"))
         #expect(notarizeSource.contains("wait \"$install_notary_pid\""))
@@ -147,6 +154,8 @@ struct BuildSigningTests {
         #expect(previewVerifierSource.contains("release/pre-vX.Y.Z"))
         #expect(previewVerifierSource.contains("preview candidate contains a non-release change"))
         #expect(previewVerifierSource.contains("git merge-base --is-ancestor \"$BASE_REF\" HEAD"))
+        #expect(releaseVariantsSource.contains("RELEASE_VARIANT=apple-silicon"))
+        #expect(releaseVariantsSource.contains("RELEASE_VARIANT=intel"))
         let candidateIndex = try #require(publishSource.range(of: "gh release create"))
         let promotionIndex = try #require(publishSource.range(of: "gh release edit"))
         #expect(candidateIndex.lowerBound < promotionIndex.lowerBound)
@@ -166,8 +175,8 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("./scripts/verify-preview-branch.sh"))
         #expect(workflowSource.contains("swift test"))
         #expect(workflowSource.contains("./scripts/test.sh"))
-        #expect(workflowSource.contains("swift build -c release"))
-        #expect(workflowSource.contains("./scripts/build-app.sh"))
+        #expect(workflowSource.contains("./scripts/build-dmg.sh"))
+        #expect(workflowSource.contains("./scripts/verify-dmg.sh"))
         #expect(workflowSource.contains("GetSayAll/sayall-ai"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_AI_PACKAGE=1"))
         #expect(workflowSource.contains("actions/upload-artifact@v4"))
@@ -180,6 +189,58 @@ struct BuildSigningTests {
             encoding: .utf8
         )
         #expect(ciWorkflowSource.contains("workflow_dispatch:"))
+    }
+
+    @Test func intelVenturaReleaseLineStaysIsolatedFromAppleSilicon() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let variantSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/release-variant.sh"),
+            encoding: .utf8
+        )
+        let workflowSource = try String(
+            contentsOf: root.appendingPathComponent(
+                ".github/workflows/mac-ci.yml"
+            ),
+            encoding: .utf8
+        )
+        let preinstallSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "packaging/doubao-driver/install/preinstall"
+            ),
+            encoding: .utf8
+        )
+        let packageVerifierSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/verify-doubao-driver-pkg.sh"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(variantSource.contains("RELEASE_VARIANT=\"${RELEASE_VARIANT:-apple-silicon}\""))
+        #expect(variantSource.contains("arm64-apple-macosx14.0"))
+        #expect(variantSource.contains("x86_64-apple-macosx13.0"))
+        #expect(variantSource.contains("RELEASE_OUTPUT_DIR=\"$ROOT/dist/intel\""))
+        #expect(variantSource.contains("RELEASE_APPCAST_NAME=\"appcast-intel.xml\""))
+        #expect(variantSource.contains("RELEASE_ASSET_SUFFIX=\"-Intel\""))
+
+        #expect(workflowSource.contains("RELEASE_VARIANT: ${{ matrix.variant }}"))
+        #expect(workflowSource.contains("x86_64-apple-macosx13.0"))
+        #expect(workflowSource.contains("apple-silicon"))
+        #expect(workflowSource.contains("intel"))
+
+        let architectureCheck = try #require(
+            preinstallSource.range(of: "CURRENT_ARCHITECTURE")
+        )
+        let existingAppRemoval = try #require(
+            preinstallSource.range(of: "/bin/rm -rf -- \"$APP_DESTINATION\"")
+        )
+        #expect(architectureCheck.lowerBound < existingAppRemoval.lowerBound)
+        #expect(packageVerifierSource.contains(
+            "package scripts must not require Xcode or Command Line Tools"
+        ))
     }
 
     @Test func stablePromotionRequiresMainAndCandidateProvenance() throws {
@@ -256,12 +317,52 @@ struct BuildSigningTests {
         ] {
             #expect(notarizeSource.contains(requiredText))
         }
+        #expect(notarizeSource.contains("GENERATE_SPARKLE_UPDATE=\"${GENERATE_SPARKLE_UPDATE:-1}\""))
+        #expect(notarizeSource.contains("SPARKLE UPDATE: skipped for private test package"))
         #expect(publishSource.contains("$STAGING_DIR/${ZH_RELEASE_NOTES:t}"))
         #expect(publishSource.contains("$STAGING_DIR/${EN_RELEASE_NOTES:t}"))
-        #expect(publishSource.contains(".payloadAssets | length == 8"))
+        #expect(publishSource.contains(".payloadAssets | length == 14"))
         #expect(publishSource.contains("candidate-provenance.json"))
         #expect(notarizeSource.contains("https://download.sayall.app/mac/releases/$RELEASE_TAG/"))
+        #expect(publishSource.contains("appcast-intel.xml"))
         #expect(publishSource.contains("--range 0-1023"))
         #expect(publishSource.contains("x-remote-mic-cdn: cloudflare"))
+    }
+
+    @Test func protectedGitHubActionsReleasePackagesBothMacArchitectures() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let workflowSource = try String(
+            contentsOf: root.appendingPathComponent(".github/workflows/mac-release-package.yml"),
+            encoding: .utf8
+        )
+        let bootstrapSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/package-macos-release-in-actions.sh"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(workflowSource.contains("workflow_dispatch:"))
+        #expect(workflowSource.contains("environment: mac-release"))
+        #expect(workflowSource.contains("RELEASE_CREDENTIALS_DEPLOY_KEY"))
+        #expect(workflowSource.contains("APPLE_SIGNING_MATCH_DEPLOY_KEY"))
+        #expect(workflowSource.contains("RELEASE_AGE_IDENTITY"))
+        #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
+        #expect(workflowSource.contains("HD838A/apple-signing-match"))
+        #expect(workflowSource.contains("package-macos-release-in-actions.sh"))
+        #expect(bootstrapSource.contains("GITHUB_ACTIONS"))
+        #expect(bootstrapSource.contains("run-with-isolated-release-keychain.sh"))
+        #expect(bootstrapSource.contains("validate-notary-secrets-repo.sh"))
+        #expect(bootstrapSource.contains("validate-signing-repo.sh"))
+        #expect(bootstrapSource.contains("MATCH_GIT_URL=\"file://$MATCH_REPO\""))
+        #expect(bootstrapSource.contains("SPARKLE_PRIVATE_KEY_ENCRYPTED_FILE"))
+        #expect(!workflowSource.contains("CERTIFICATE_BASE64"))
+        #expect(!workflowSource.contains("NOTARY_API_KEY_BASE64"))
+        #expect(!workflowSource.contains("SPARKLE_PRIVATE_KEY_BASE64"))
+        #expect(!workflowSource.contains("pull_request:"))
+        #expect(!workflowSource.contains("push:"))
     }
 }

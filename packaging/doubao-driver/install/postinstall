@@ -2,6 +2,8 @@
 set -euo pipefail
 
 TARGET_VOLUME="${3:-/}"
+SCRIPT_DIR="${0:A:h}"
+RELEASE_CONFIG="$SCRIPT_DIR/release-variant.plist"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
 BINARY="$DESTINATION/Contents/MacOS/MiRemoteV2ch"
@@ -33,6 +35,11 @@ installer_message() {
   fi
 }
 
+test -f "$RELEASE_CONFIG"
+EXPECTED_ARCHITECTURE="$(/usr/bin/plutil -extract ExpectedArchitecture raw -o - "$RELEASE_CONFIG")"
+MINIMUM_SYSTEM_MAJOR="$(/usr/bin/plutil -extract MinimumSystemMajor raw -o - "$RELEASE_CONFIG")"
+MINIMUM_SYSTEM_VERSION="$(/usr/bin/plutil -extract MinimumSystemVersion raw -o - "$RELEASE_CONFIG")"
+
 test -d "$DESTINATION"
 test -f "$PLIST"
 test -x "$BINARY"
@@ -42,10 +49,11 @@ test -d "$APP_DESTINATION"
 test -f "$APP_PLIST"
 test -x "$APP_BINARY"
 test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST")" = "com.hd838a.RemoteMic"
-test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - "$APP_PLIST")" = "14.0"
-test "$(/usr/bin/uname -m)" = "arm64"
+test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - "$APP_PLIST")" = \
+  "$MINIMUM_SYSTEM_VERSION"
+test "$(/usr/bin/uname -m)" = "$EXPECTED_ARCHITECTURE"
 SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
-test "$SYSTEM_MAJOR" -ge 14
+test "$SYSTEM_MAJOR" -ge "$MINIMUM_SYSTEM_MAJOR"
 
 /usr/sbin/chown -R root:wheel "$DESTINATION"
 /usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \;

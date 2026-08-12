@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
+source "$ROOT/scripts/release-variant.sh"
 PACKAGE="${1:?usage: verify-doubao-driver-pkg.sh PACKAGE install|uninstall}"
 MODE="${2:?usage: verify-doubao-driver-pkg.sh PACKAGE install|uninstall}"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
@@ -10,6 +11,7 @@ REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remote-mic-driver-package-verify.XXXXXX)"
 EXPANDED="$WORK_DIR/expanded"
+FULL_EXPANDED="$WORK_DIR/full-expanded"
 PAYLOAD_FILES="$WORK_DIR/payload-files"
 
 cleanup() {
@@ -59,6 +61,13 @@ case "$MODE" in
     /usr/bin/grep -qx './Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch' "$PAYLOAD_FILES"
     test -x "$EXPANDED/Scripts/preinstall"
     test -x "$EXPANDED/Scripts/postinstall"
+    test -f "$EXPANDED/Scripts/release-variant.plist"
+    test "$(/usr/bin/plutil -extract ExpectedArchitecture raw -o - \
+      "$EXPANDED/Scripts/release-variant.plist")" = "$RELEASE_ARCH"
+    test "$(/usr/bin/plutil -extract MinimumSystemMajor raw -o - \
+      "$EXPANDED/Scripts/release-variant.plist")" = "$RELEASE_MIN_SYSTEM_MAJOR"
+    test "$(/usr/bin/plutil -extract MinimumSystemVersion raw -o - \
+      "$EXPANDED/Scripts/release-variant.plist")" = "$RELEASE_MIN_SYSTEM_VERSION"
     /usr/bin/grep -Fqx 'DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"' "$EXPANDED/Scripts/preinstall"
     /usr/bin/grep -Fqx 'APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"' "$EXPANDED/Scripts/preinstall"
     /usr/bin/grep -Fq '/usr/bin/pkill -x RemoteMic 2>/dev/null || true' "$EXPANDED/Scripts/preinstall"
@@ -79,10 +88,26 @@ case "$MODE" in
     /usr/bin/grep -Fqx '  /bin/chmod 755 "$app_executable"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx '  test -x "$app_executable"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx '/usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"' "$EXPANDED/Scripts/postinstall"
-    /usr/bin/grep -Fqx 'test "$(/usr/bin/uname -m)" = "arm64"' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'CURRENT_ARCHITECTURE="$(/usr/bin/uname -m)"' \
+      "$EXPANDED/Scripts/preinstall"
+    /usr/bin/grep -Fq 'if [[ "$CURRENT_ARCHITECTURE" != "$EXPECTED_ARCHITECTURE" ]]; then' \
+      "$EXPANDED/Scripts/preinstall"
+    /usr/bin/grep -Fq 'test "$(/usr/bin/uname -m)" = "$EXPECTED_ARCHITECTURE"' \
+      "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fqx '/usr/bin/killall coreaudiod' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fq '/bin/launchctl asuser "$CONSOLE_UID"' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fq '/usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"' "$EXPANDED/Scripts/postinstall"
+    /usr/sbin/pkgutil --expand-full "$PACKAGE" "$FULL_EXPANDED"
+    PAYLOAD_APP="$(/usr/bin/find "$FULL_EXPANDED" -type d -path '*/Applications/Remote Mic.app' -print -quit)"
+    PAYLOAD_DRIVER="$(/usr/bin/find "$FULL_EXPANDED" -type d -path '*/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver' -print -quit)"
+    test -n "$PAYLOAD_APP"
+    test -n "$PAYLOAD_DRIVER"
+    test "$(/usr/bin/lipo -archs "$PAYLOAD_APP/Contents/MacOS/RemoteMic")" = "$RELEASE_ARCH"
+    test "$(/usr/bin/lipo -archs "$PAYLOAD_DRIVER/Contents/MacOS/MiRemoteV2ch")" = "$RELEASE_ARCH"
+    test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - \
+      "$PAYLOAD_APP/Contents/Info.plist")" = "$RELEASE_MIN_SYSTEM_VERSION"
+    test "$(/usr/bin/plutil -extract SUFeedURL raw -o - \
+      "$PAYLOAD_APP/Contents/Info.plist")" = "$RELEASE_FEED_URL"
     ;;
   uninstall)
     /usr/bin/grep -Fq 'identifier="com.hd838a.MiRemoteV2ch.uninstaller"' "$EXPANDED/PackageInfo"
@@ -111,3 +136,4 @@ if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
   /usr/sbin/spctl -a -vv -t install "$PACKAGE"
 fi
 print "DOUBAO DRIVER PACKAGE VERIFY PASS: $PACKAGE ($MODE)"
+print "RELEASE VARIANT: $RELEASE_VARIANT"

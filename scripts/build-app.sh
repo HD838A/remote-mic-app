@@ -3,10 +3,11 @@ set -euo pipefail
 umask 022
 
 ROOT="${0:A:h:h}"
+source "$ROOT/scripts/release-variant.sh"
 CONFIGURATION="${CONFIGURATION:-release}"
 APP_NAME="RemoteMic"
 DISPLAY_NAME="Remote Mic"
-OUTPUT_DIR="$ROOT/dist"
+OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
@@ -73,16 +74,16 @@ SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframe
 xcrun swift build \
   --scratch-path "$BUILD_SCRATCH_PATH" \
   -c "$CONFIGURATION" \
-  --triple arm64-apple-macosx14.0
+  --triple "$RELEASE_TRIPLE"
 BIN_DIR="$(xcrun swift build \
   --scratch-path "$BUILD_SCRATCH_PATH" \
   -c "$CONFIGURATION" \
-  --triple arm64-apple-macosx14.0 \
+  --triple "$RELEASE_TRIPLE" \
   --show-bin-path)"
 BIN_PATH="$BIN_DIR/$APP_NAME"
 
 case "$APP_DIR" in
-  "$ROOT/dist/"*.app) ;;
+  "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;
   *) print -u2 "refusing to clean unexpected app path: $APP_DIR"; exit 1 ;;
 esac
 rm -rf -- "$APP_DIR"
@@ -98,6 +99,12 @@ ditto --norsrc --noextattr --noqtn --noacl \
 plutil -remove SayAllAIIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllAIIncluded -bool "$SAYALL_AI_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
+if [[ "$RELEASE_VARIANT" == "intel" ]]; then
+  plutil -replace LSMinimumSystemVersion -string "$RELEASE_MIN_SYSTEM_VERSION" \
+    "$APP_DIR/Contents/Info.plist"
+  plutil -replace SUFeedURL -string "$RELEASE_FEED_URL" \
+    "$APP_DIR/Contents/Info.plist"
+fi
 if [[ -n "${REMOTE_WEB_RELAY_URL:-}" ]]; then
   plutil -remove RemoteWebRelayURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
   plutil -insert RemoteWebRelayURL -string "$REMOTE_WEB_RELAY_URL" \
@@ -131,6 +138,19 @@ fi
 mkdir -p "$APP_DIR/Contents/Frameworks"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+if [[ "$RELEASE_VARIANT" == "intel" ]]; then
+  for sparkle_binary in \
+    "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" \
+    "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
+    "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater" \
+    "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
+    "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"; do
+    thin_binary="$sparkle_binary.thin"
+    /usr/bin/lipo "$sparkle_binary" -thin "$RELEASE_ARCH" -output "$thin_binary"
+    /bin/chmod 755 "$thin_binary"
+    /bin/mv "$thin_binary" "$sparkle_binary"
+  done
+fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/LICENSE.md" "$APP_DIR/Contents/Resources/LICENSE.md"
 for document in README TECHNICAL TROUBLESHOOTING COPYRIGHT LOGO-LICENSE; do
@@ -254,4 +274,5 @@ fi
 codesign --verify --deep --strict "$APP_DIR"
 
 print "$APP_DIR"
+print "RELEASE VARIANT: $RELEASE_VARIANT"
 print "SIGNING IDENTITY: $SIGNING_IDENTITY"

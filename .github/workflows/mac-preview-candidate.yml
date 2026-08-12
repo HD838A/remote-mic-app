@@ -15,11 +15,22 @@ permissions:
 
 jobs:
   validate-and-package:
-    name: Validate and package preview candidate
+    name: Validate and package preview candidate (${{ matrix.label }})
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: apple-silicon
+            label: Apple Silicon
+            artifact: mac-preview-apple-silicon
+          - variant: intel
+            label: Intel Ventura
+            artifact: mac-preview-intel
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      RELEASE_VARIANT: ${{ matrix.variant }}
 
     steps:
       - name: Check out candidate
@@ -57,26 +68,19 @@ jobs:
       - name: Run project self-test
         run: ./scripts/test.sh
 
-      - name: Build release configuration
-        run: swift build -c release
-
-      - name: Build ad-hoc candidate App
-        run: ./scripts/build-app.sh
-
-      - name: Verify candidate App structure
-        run: ./scripts/verify-app.sh "dist/Remote Mic.app"
-
-      - name: Package CI candidate
+      - name: Build and verify ad-hoc candidate DMG
         run: |
-          version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - Resources/Info.plist)"
-          /usr/bin/ditto -c -k --keepParent \
-            "dist/Remote Mic.app" \
-            "dist/Remote-Mic-$version-ci.zip"
+          ./scripts/build-dmg.sh
+          ./scripts/verify-dmg.sh
 
       - name: Upload CI candidate
         uses: actions/upload-artifact@v4
         with:
-          name: mac-preview-${{ github.sha }}
-          path: dist/Remote-Mic-*-ci.zip
+          name: ${{ matrix.artifact }}-${{ github.sha }}
+          path: |
+            ${{ matrix.variant == 'intel' && 'dist/intel/Remote-Mic-*-Intel.dmg' || 'dist/Remote-Mic-*.dmg' }}
+            ${{ matrix.variant == 'intel' && 'dist/intel/Remote-Mic-*-Intel.dmg.sha256' || 'dist/Remote-Mic-*.dmg.sha256' }}
+            ${{ matrix.variant == 'intel' && 'dist/intel/Install Remote Mic Intel.pkg' || 'dist/Install Remote Mic.pkg' }}
+            ${{ matrix.variant == 'intel' && 'dist/intel/Uninstall Remote Mic Intel.pkg' || 'dist/Uninstall Remote Mic.pkg' }}
           if-no-files-found: error
           retention-days: 14

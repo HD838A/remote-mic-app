@@ -16,11 +16,22 @@ permissions:
 
 jobs:
   test:
-    name: Swift tests and build
+    name: Swift tests and build (${{ matrix.label }})
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: apple-silicon
+            label: Apple Silicon
+            triple: arm64-apple-macosx14.0
+          - variant: intel
+            label: Intel Ventura
+            triple: x86_64-apple-macosx13.0
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      RELEASE_VARIANT: ${{ matrix.variant }}
 
     steps:
       - name: Check out repository
@@ -67,4 +78,4 @@ jobs:
         run: ./scripts/test.sh
 
       - name: Build release configuration
-        run: swift build -c release
+        run: swift build -c release --triple "${{ matrix.triple }}"

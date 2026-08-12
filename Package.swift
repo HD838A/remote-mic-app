@@ -10,6 +10,9 @@ var remoteMicDependencies: [Target.Dependency] = [
     .product(name: "Sparkle", package: "Sparkle"),
 ]
 var remoteMicTestDependencies: [Target.Dependency] = ["RemoteMic"]
+let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
+    ? .macOS(.v13)
+    : .macOS(.v14)
 
 if let privateFeaturePath = ProcessInfo.processInfo.environment[
     "SAYALL_AI_PACKAGE_PATH"
@@ -37,7 +40,7 @@ if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
 
 let package = Package(
     name: "RemoteMic",
-    platforms: [.macOS(.v14)],
+    platforms: [macOSPlatform],
     products: [
         .executable(
             name: "RemoteMic",

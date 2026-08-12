@@ -66,6 +66,34 @@ struct UpdateInformationTests {
         }
     }
 
+    @Test func releaseFeedResolverKeepsIntelPreReleaseChecksOnTheIntelFeed() throws {
+        let data = Data(#"""
+        [
+          {
+            "draft": false,
+            "published_at": "2026-08-12T01:00:00Z",
+            "assets": [
+              {
+                "name": "appcast.xml",
+                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.11/appcast.xml"
+              },
+              {
+                "name": "appcast-intel.xml",
+                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.11/appcast-intel.xml"
+              }
+            ]
+          }
+        ]
+        """#.utf8)
+
+        #expect(
+            try UpdateFeedResolver.latestAppcastURL(
+                from: data,
+                assetName: "appcast-intel.xml"
+            ).lastPathComponent == "appcast-intel.xml"
+        )
+    }
+
     @Test func localizedReleaseNotesUseImmutableReleaseAssetURLs() throws {
         let archiveURL = try #require(URL(
             string: "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/Remote-Mic-1.8.6.zip"
