@@ -118,7 +118,7 @@ jobs:
             dist/intel/Remote-Mic-*-Intel.dmg
             dist/intel/Remote-Mic-*-Intel.dmg.sha256
             dist/intel/Remote-Mic-*-Intel.zip
-            dist/intel/Remote-Mic-*.txt
+            dist/intel/Remote-Mic-*-Intel.*.txt
             dist/intel/Install Remote Mic Intel.pkg
             dist/intel/Uninstall Remote Mic Intel.pkg
             dist/intel/appcast-intel.xml
