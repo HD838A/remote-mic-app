@@ -78,7 +78,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
-    private var postDictationHUDController: PostDictationHUDController?
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
     private var applicationShortcutMonitor: Any?
@@ -119,7 +118,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         observeLocalization()
         observePhoneRemoteButtonTitles()
         installWorkspaceWakeObserver()
-        model.refreshEarlyAccessIfNeeded()
+        model.privateFeature.refreshAccessIfNeeded()
         if OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: model.settings.isOnboardingComplete,
             step: model.settings.onboardingStep
@@ -151,7 +150,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        postDictationHUDController?.hideImmediately()
+        model.privateFeature.hideHUDImmediately()
         model.stop()
         updateFeedRefreshTask?.cancel()
         updateFeedRefreshTimer?.invalidate()
@@ -168,7 +167,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        model.refreshEarlyAccessIfNeeded()
+        model.privateFeature.refreshAccessIfNeeded()
     }
 
     func applicationShouldHandleReopen(
@@ -201,7 +200,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.model.refreshEarlyAccessIfNeeded()
+                self?.model.privateFeature.refreshAccessIfNeeded()
             }
         }
     }
@@ -374,30 +373,17 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
         .store(in: &subscriptions)
 
-        Publishers.CombineLatest(
-            model.$postDictationState,
-            model.$postDictationStatus
-        )
-        .map { state, status in
-            PostDictationHUDPresentation.shouldShow(state: state, statusKey: status.key)
-        }
+        model.privateFeature.$hudShouldBeVisible
         .removeDuplicates()
         .receive(on: RunLoop.main)
         .sink { [weak self] isVisible in
-            self?.setPostDictationHUDVisible(isVisible)
+            self?.setPrivateFeatureHUDVisible(isVisible)
         }
         .store(in: &subscriptions)
     }
 
-    private func setPostDictationHUDVisible(_ isVisible: Bool) {
-        if isVisible {
-            let controller = postDictationHUDController
-                ?? PostDictationHUDController(localization: localization)
-            postDictationHUDController = controller
-            controller.setVisible(true)
-        } else {
-            postDictationHUDController?.setVisible(false)
-        }
+    private func setPrivateFeatureHUDVisible(_ isVisible: Bool) {
+        model.privateFeature.setHUDVisible(isVisible)
     }
 
     private func observeLocalization() {
@@ -407,6 +393,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 guard let self else { return }
                 self.statusItem?.button?.toolTip = self.localization.text("app.name")
                 self.settingsWindowController?.window?.title = self.localization.text("app.name")
+                self.model.privateFeature.updateLocaleIdentifier(
+                    self.localization.locale.identifier
+                )
                 self.configureApplicationMenu()
                 self.rebuildStatusMenu()
                 self.updateInformation.reloadReleaseNotes(

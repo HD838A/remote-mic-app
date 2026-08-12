@@ -1,9 +1,11 @@
 .build/
+.build-app-*/
 dist/
 .swiftpm/
 *.xcuserstate
 .DS_Store
 .codex-screenshots/
+.private-dependencies/
 
 # Local credentials, signing identities, and notarization material.
 .env

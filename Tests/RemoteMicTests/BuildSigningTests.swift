@@ -60,6 +60,32 @@ struct BuildSigningTests {
         #expect(verifySource.contains("Developer ID app is missing a production Web Remote relay URL"))
     }
 
+    @Test func productionReleaseRequiresAndVerifiesPrivateFeaturePackage() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let notarizeSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/notarize-release.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(buildSource.contains("SAYALL_AI_PACKAGE_PATH"))
+        #expect(buildSource.contains("A SayAllAI package is required for this build"))
+        #expect(buildSource.contains("SayAllAI_SayAllAI.bundle"))
+        #expect(buildSource.contains("SayAllAIIncluded"))
+        #expect(notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=1"))
+        #expect(verifySource.contains("App is missing the required SayAllAI package marker"))
+    }
+
     @Test func unavailablePreReleaseFeedDoesNotPresentACustomErrorAlert() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -142,6 +168,8 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("./scripts/test.sh"))
         #expect(workflowSource.contains("swift build -c release"))
         #expect(workflowSource.contains("./scripts/build-app.sh"))
+        #expect(workflowSource.contains("GetSayAll/sayall-ai"))
+        #expect(workflowSource.contains("REQUIRE_SAYALL_AI_PACKAGE=1"))
         #expect(workflowSource.contains("actions/upload-artifact@v4"))
         #expect(workflowSource.contains("contents: read"))
         #expect(!workflowSource.contains("MATCH_PASSWORD"))
