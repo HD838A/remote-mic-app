@@ -82,6 +82,8 @@ struct BuildSigningTests {
         #expect(buildSource.contains("A SayAllAI package is required for this build"))
         #expect(buildSource.contains("SayAllAI_SayAllAI.bundle"))
         #expect(buildSource.contains("SayAllAIIncluded"))
+        #expect(buildSource.contains("DEFAULT_SCRATCH_PATH=\"/private/tmp/remote-mic-swiftpm/"))
+        #expect(!buildSource.contains("DEFAULT_SCRATCH_PATH=\"$ROOT/.build-app-sayall-ai\""))
         #expect(notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=1"))
         #expect(verifySource.contains("App is missing the required SayAllAI package marker"))
     }
