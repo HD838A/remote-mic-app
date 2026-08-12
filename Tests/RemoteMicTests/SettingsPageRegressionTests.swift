@@ -5,6 +5,40 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func nearbyPhoneListenerCanBeStoppedByTheUser() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        let startup = try #require(source.range(of: "func startIfNeeded()"))
+        let stop = try #require(source.range(
+            of: "func stop()",
+            range: startup.upperBound..<source.endIndex
+        ))
+        let startupSource = source[startup.lowerBound..<stop.lowerBound]
+        #expect(!startupSource.contains("phoneRemoteServer.start()"))
+
+        let phoneEntry = try #require(source.range(of: "func enablePhoneRemoteConnection()"))
+        let webEntry = try #require(source.range(
+            of: "func enableWebRemoteConnection()",
+            range: phoneEntry.upperBound..<source.endIndex
+        ))
+        let phoneEntrySource = source[phoneEntry.lowerBound..<webEntry.lowerBound]
+        #expect(phoneEntrySource.contains("phoneRemoteServer.start()"))
+        #expect(phoneEntrySource.contains("func disablePhoneRemoteConnection()"))
+        #expect(phoneEntrySource.contains("phoneRemoteServer.stop()"))
+        #expect(phoneEntrySource.contains("func togglePhoneRemoteConnection()"))
+        #expect(source.contains("alert.addButton(withTitle: \"停止等待\")"))
+        #expect(source.contains("response == .alertThirdButtonReturn"))
+        #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled else"))
+        #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -174,7 +208,7 @@ struct SettingsPageRegressionTests {
             "model.selectDoubaoAudioDevice()",
             "model.openDoubaoDriverInstructions(using: localization)",
             "model.setVoiceFnTapModeEnabled",
-            "model.enablePhoneRemoteConnection()",
+            "model.togglePhoneRemoteConnection()",
             "copyTestFlightPublicBetaLink()",
             "requestWebRemoteSession()",
             "settings.clearTrustedPhoneIdentities()",
@@ -190,6 +224,18 @@ struct SettingsPageRegressionTests {
         }
 
         #expect(source.contains("AppLinks.testFlightPublicBeta"))
+        let phoneEntry = try #require(source.range(of: "connection.phone.ios_title"))
+        let webEntry = try #require(source.range(
+            of: "connection.web.title",
+            range: phoneEntry.upperBound..<source.endIndex
+        ))
+        let phoneEntrySource = source[phoneEntry.lowerBound..<webEntry.lowerBound]
+        #expect(phoneEntrySource.contains("connection.phone.cancel_waiting"))
+        #expect(phoneEntrySource.contains("model.togglePhoneRemoteConnection()"))
+        #expect(!phoneEntrySource.contains(".disabled(model.isPhoneRemoteConnectionEnabled)"))
+        #expect(!phoneEntrySource.contains(".foregroundStyle(.green)"))
+        #expect(!phoneEntrySource.contains("tint: model.isPhoneRemoteConnectionEnabled ? .green"))
+        #expect(phoneEntrySource.contains("tint: model.isPhoneRemoteConnectionEnabled ? .orange"))
         #expect(source.contains("ButtonTrigger.allCases"))
         #expect(source.contains("isMappingSelectionLocked"))
         #expect(!source.contains("ScrollView(.horizontal, showsIndicators: false)"))

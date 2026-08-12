@@ -151,7 +151,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.cancelPhoneApproval()
         }
         phoneRemoteServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
-            guard let self else {
+            guard let self, self.isPhoneRemoteConnectionEnabled else {
                 completion(false)
                 return
             }
@@ -373,6 +373,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isPhoneRemoteConnectionEnabled = true
         phoneRemoteServer.start()
         AppLogger.shared.write("PHONE REMOTE enabled_by_user")
+    }
+
+    func disablePhoneRemoteConnection() {
+        guard isPhoneRemoteConnectionEnabled else { return }
+        isPhoneRemoteConnectionEnabled = false
+        cancelPhoneApproval()
+        phoneRemoteServer.stop()
+        AppLogger.shared.write("PHONE REMOTE disabled_by_user")
+    }
+
+    func togglePhoneRemoteConnection() {
+        if isPhoneRemoteConnectionEnabled {
+            disablePhoneRemoteConnection()
+        } else {
+            enablePhoneRemoteConnection()
+        }
     }
 
     func enableWebRemoteConnection() {
@@ -1291,6 +1307,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         completion: @escaping (Bool) -> Void
     ) {
         DispatchQueue.main.async {
+            guard self.isPhoneRemoteConnectionEnabled else {
+                completion(false)
+                return
+            }
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "允许“\(deviceName)”连接无线麦？"
@@ -1304,13 +1324,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             alert.accessoryView = codeLabel
             alert.addButton(withTitle: "允许连接")
             alert.addButton(withTitle: "拒绝")
+            alert.addButton(withTitle: "停止等待")
             self.phoneApprovalAlert = alert
-            let allowed = alert.runModal() == .alertFirstButtonReturn
+            let response = alert.runModal()
             guard self.phoneApprovalAlert === alert else {
                 completion(false)
                 return
             }
             self.phoneApprovalAlert = nil
+            if response == .alertThirdButtonReturn {
+                completion(false)
+                self.disablePhoneRemoteConnection()
+                return
+            }
+            let allowed = response == .alertFirstButtonReturn
             if allowed, let identityFingerprint {
                 self.settings.trustPhoneIdentity(identityFingerprint)
             }

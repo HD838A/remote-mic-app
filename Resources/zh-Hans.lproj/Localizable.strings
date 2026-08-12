@@ -219,6 +219,7 @@
 "connection.trusted_devices.count_long" = "%1$@ 台受信任设备";
 "connection.phone.connect" = "连接手机";
 "connection.phone.enabled" = "正在等待手机";
+"connection.phone.cancel_waiting" = "取消等待";
 "connection.trusted_devices.clear" = "清除受信任设备";
 "connection.trusted_devices.clear_confirm.title" = "清除所有受信任设备？";
 "connection.trusted_devices.clear_confirm.message" = "当前连接不会中断，下次连接时需要重新确认授权。";
