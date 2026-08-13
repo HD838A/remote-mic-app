@@ -413,4 +413,29 @@ struct SettingsPageRegressionTests {
         #expect(!versionSummary.contains(".onTapGesture"))
         #expect(!versionSummary.contains(".gesture"))
     }
+
+    @Test func macroFeatureUIIsDelegatedWithoutPublishingItsImplementation() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let integration = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MacroFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+        let settings = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(integration.contains("#if canImport(SayAllMacroRemoteMic)"))
+        #expect(integration.contains("feature.executeBoundMacro"))
+        #expect(integration.contains("feature.hasActiveBinding"))
+        #expect(settings.contains("macroFeature.settingsView"))
+        #expect(settings.contains("macroFeature.enrollmentView"))
+        #expect(!settings.contains("macro_buttons"))
+        #expect(!settings.contains("EarlyAccessController"))
+    }
 }

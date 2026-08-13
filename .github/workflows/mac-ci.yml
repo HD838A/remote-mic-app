@@ -44,13 +44,26 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-ai
+          ref: 6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4
           path: .private-dependencies/sayall-ai
           ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
           persist-credentials: false
 
+      - name: Check out private macro package
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/checkout@v5
+        with:
+          repository: GetSayAll/sayall-macro-platform
+          ref: 508267f073542b29a89ec66c30bf18832678760a
+          path: .private-dependencies/sayall-macro-platform
+          ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
+          persist-credentials: false
+
       - name: Configure private feature package
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
+        run: |
+          echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
+          echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform" >> "$GITHUB_ENV"
 
       - name: Check out shared Mac remote package
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository

@@ -85,7 +85,34 @@ struct BuildSigningTests {
         #expect(buildSource.contains("DEFAULT_SCRATCH_PATH=\"/private/tmp/remote-mic-swiftpm/"))
         #expect(!buildSource.contains("DEFAULT_SCRATCH_PATH=\"$ROOT/.build-app-sayall-ai\""))
         #expect(notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=1"))
+        #expect(notarizeSource.contains("export REQUIRE_SAYALL_MACRO_PLATFORM=1"))
         #expect(verifySource.contains("App is missing the required SayAllAI package marker"))
+    }
+
+    @Test func optionalMacroPlatformResourcesArePackagedAndVerified() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(buildSource.contains("SAYALL_MACRO_PLATFORM_PATH"))
+        #expect(buildSource.contains("SayAllMacroPlatformIncluded"))
+        #expect(buildSource.contains("SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"))
+        #expect(buildSource.contains("SayAll macro platform resource bundle is missing"))
+        #expect(verifySource.contains("REQUIRE_SAYALL_MACRO_PLATFORM"))
+        #expect(verifySource.contains("SayAllMacroPlatformIncluded"))
+        #expect(verifySource.contains("App is missing the required SayAll macro platform marker"))
+        #expect(verifySource.contains("en.lproj/Localizable.strings"))
+        #expect(verifySource.contains("zh-Hans.lproj/Localizable.strings"))
+        #expect(verifySource.contains("zh-hans.lproj/Localizable.strings"))
     }
 
     @Test func unavailablePreReleaseFeedDoesNotPresentACustomErrorAlert() throws {
@@ -190,7 +217,12 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("./scripts/build-dmg.sh"))
         #expect(workflowSource.contains("./scripts/verify-dmg.sh"))
         #expect(workflowSource.contains("GetSayAll/sayall-ai"))
+        #expect(workflowSource.contains("6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_AI_PACKAGE=1"))
+        #expect(workflowSource.contains("GetSayAll/sayall-macro-platform"))
+        #expect(workflowSource.contains("508267f073542b29a89ec66c30bf18832678760a"))
+        #expect(workflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
+        #expect(workflowSource.contains("REQUIRE_SAYALL_MACRO_PLATFORM=1"))
         #expect(workflowSource.contains("GetSayAll/sayall-mac-remote"))
         #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(workflowSource.contains("swift package config set-mirror"))
@@ -206,6 +238,11 @@ struct BuildSigningTests {
             encoding: .utf8
         )
         #expect(ciWorkflowSource.contains("workflow_dispatch:"))
+        #expect(ciWorkflowSource.contains("GetSayAll/sayall-ai"))
+        #expect(ciWorkflowSource.contains("6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4"))
+        #expect(ciWorkflowSource.contains("GetSayAll/sayall-macro-platform"))
+        #expect(ciWorkflowSource.contains("508267f073542b29a89ec66c30bf18832678760a"))
+        #expect(ciWorkflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
         #expect(ciWorkflowSource.contains("GetSayAll/sayall-mac-remote"))
         #expect(ciWorkflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(ciWorkflowSource.contains("swift package config set-mirror"))
@@ -280,13 +317,13 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("apple-silicon"))
         #expect(workflowSource.contains("intel"))
 
-        let architectureCheck = try #require(
-            preinstallSource.range(of: "CURRENT_ARCHITECTURE")
-        )
-        let existingAppRemoval = try #require(
-            preinstallSource.range(of: "/bin/rm -rf -- \"$APP_DESTINATION\"")
-        )
-        #expect(architectureCheck.lowerBound < existingAppRemoval.lowerBound)
+        #expect(preinstallSource.contains("CURRENT_ARCHITECTURE"))
+        #expect(!preinstallSource.contains("/bin/rm -rf -- \"$APP_DESTINATION\""))
+        #expect(preinstallSource.contains("will be updated atomically"))
+        #expect(packageVerifierSource.contains("preinstall must not delete an existing Remote Mic.app"))
+        #expect(preinstallSource.contains("INSTALLED_BUILD="))
+        #expect(preinstallSource.contains("The existing app was left intact. Use a newer installer."))
+        #expect(packageVerifierSource.contains("PackageBuild raw"))
         #expect(packageVerifierSource.contains(
             "package scripts must not require Xcode or Command Line Tools"
         ))

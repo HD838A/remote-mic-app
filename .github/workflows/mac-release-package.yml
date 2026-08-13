@@ -38,8 +38,18 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-ai
+          ref: 6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4
           path: .private-dependencies/sayall-ai
           ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Check out private macro package
+        uses: actions/checkout@v5
+        with:
+          repository: GetSayAll/sayall-macro-platform
+          ref: 508267f073542b29a89ec66c30bf18832678760a
+          path: .private-dependencies/sayall-macro-platform
+          ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
       - name: Check out shared Mac remote package
@@ -70,6 +80,9 @@ jobs:
       - name: Configure private feature package
         run: |
           echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
+          echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform" >> "$GITHUB_ENV"
+          echo "REQUIRE_SAYALL_AI_PACKAGE=1" >> "$GITHUB_ENV"
+          echo "REQUIRE_SAYALL_MACRO_PLATFORM=1" >> "$GITHUB_ENV"
           swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
 
       - name: Install required tools
