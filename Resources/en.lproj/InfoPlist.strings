@@ -1,4 +1,3 @@
 "CFBundleDisplayName" = "Remote Mic";
 "CFBundleName" = "Remote Mic";
 "NSBluetoothAlwaysUsageDescription" = "Connect to the Xiaomi Bluetooth Remote 2 Pro to receive button and voice data.";
-"NSMicrophoneUsageDescription" = "Capture audio from a microphone you explicitly select and bridge it to your chosen virtual microphone.";

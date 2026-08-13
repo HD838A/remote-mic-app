@@ -168,10 +168,7 @@ final class VoiceFnTapSessionController {
     }
 
     @discardableResult
-    func stopVoice(completion: (() -> Void)? = nil) -> Bool {
-        if let completion {
-            idleCompletions.append(completion)
-        }
+    func stopVoice() -> Bool {
         suppressAudioUntilRemoteStop = false
         if pendingVoice != nil {
             pendingVoice?.ended = true

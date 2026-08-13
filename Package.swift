@@ -26,15 +26,6 @@ if let privateFeaturePath = ProcessInfo.processInfo.environment[
     )
 }
 
-if let audioInputKitPath = ProcessInfo.processInfo.environment[
-    "SAYALL_AUDIO_INPUT_KIT_PATH"
-], !audioInputKitPath.isEmpty {
-    packageDependencies.append(.package(path: audioInputKitPath))
-    remoteMicDependencies.append(
-        .product(name: "SayAllAudioInputKit", package: "sayall-audio-input-kit")
-    )
-}
-
 if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
     "REMOTE_MIC_HARDWARE_SIMULATION_PATH"
 ], !hardwareSimulationPath.isEmpty {
@@ -44,9 +35,6 @@ if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
     )
     remoteMicTestDependencies.append(
         .product(name: "XiaomiVoiceRemoteSimulation", package: "hardware-simulation")
-    )
-    remoteMicTestDependencies.append(
-        .product(name: "AudioInputEndpointSimulation", package: "hardware-simulation")
     )
 }
 

@@ -10,7 +10,6 @@ DISPLAY_NAME="Remote Mic"
 OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
-APP_ENTITLEMENTS="$ROOT/Resources/RemoteMic.entitlements"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_WEB_REMOTE_CONFIGURATION="${REQUIRE_WEB_REMOTE_CONFIGURATION:-0}"
 REQUIRE_EARLY_ACCESS_CONFIGURATION="${REQUIRE_EARLY_ACCESS_CONFIGURATION:-0}"
@@ -237,7 +236,6 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
     --force \
     --options runtime \
     --timestamp \
-    --entitlements "$APP_ENTITLEMENTS" \
     --sign "$SIGNING_IDENTITY" \
     "$APP_DIR"
 fi
@@ -272,7 +270,6 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   codesign \
     --force \
     --timestamp=none \
-    --entitlements "$APP_ENTITLEMENTS" \
     --sign - \
     --requirements "=designated => identifier \"$BUNDLE_IDENTIFIER\"" \
     "$APP_DIR"

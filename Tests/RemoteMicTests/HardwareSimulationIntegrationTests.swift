@@ -5,9 +5,6 @@ import Foundation
 import HardwareSimulation
 import Testing
 import XiaomiVoiceRemoteSimulation
-#if canImport(AudioInputEndpointSimulation)
-import AudioInputEndpointSimulation
-#endif
 @testable import RemoteMic
 
 enum SimulatedVoiceRemoteModel: CaseIterable {
@@ -26,74 +23,6 @@ enum SimulatedVoiceRemoteModel: CaseIterable {
 
 @Suite("Hardware simulation integration")
 struct HardwareSimulationIntegrationTests {
-#if canImport(AudioInputEndpointSimulation)
-    @Test func simulatedDJIMicMiniFixtureRejectsStaleGenerationBuffers() throws {
-        let runner = try HardwareScenarioRunner(
-            scenario: try AudioInputEndpointFixture.djiMicMiniStaleBufferScenario(),
-            catalog: try HardwareCatalog(profiles: [AudioInputEndpointFixture.djiMicMiniProfile()])
-        )
-        var activeGeneration: UInt64?
-        var acceptedSamples: [Int16] = []
-
-        runner.runToScenarioEnd { signal in
-            if let endpoint = AudioInputEndpointDescriptor(signal: signal) {
-                activeGeneration = endpoint.generation
-            } else if let removal = AudioInputEndpointRemoval(signal: signal),
-                      activeGeneration == removal.generation {
-                activeGeneration = nil
-            } else if let buffer = AudioInputBuffer(signal: signal),
-                      activeGeneration == buffer.generation {
-                acceptedSamples.append(contentsOf: buffer.samples)
-            }
-        }
-
-        #expect(acceptedSamples == [0, 2_000, -2_000, 3_000, -3_000, 0])
-    }
-
-    @Test func simulatedDJIMicMiniFixtureReconnectsWithANewGeneration() throws {
-        let runner = try HardwareScenarioRunner(
-            scenario: try AudioInputEndpointFixture.djiMicMiniDisconnectReconnectScenario(),
-            catalog: try HardwareCatalog(profiles: [AudioInputEndpointFixture.djiMicMiniProfile()])
-        )
-        var openedGenerations: [UInt64] = []
-        var removedGenerations: [UInt64] = []
-        var bufferedGenerations: [UInt64] = []
-
-        runner.runToScenarioEnd { signal in
-            if let endpoint = AudioInputEndpointDescriptor(signal: signal) {
-                openedGenerations.append(endpoint.generation)
-            } else if let removal = AudioInputEndpointRemoval(signal: signal) {
-                removedGenerations.append(removal.generation)
-            } else if let buffer = AudioInputBuffer(signal: signal) {
-                bufferedGenerations.append(buffer.generation)
-            }
-        }
-
-        #expect(openedGenerations == [1, 2])
-        #expect(removedGenerations == [1])
-        #expect(bufferedGenerations == [1, 2])
-    }
-
-    @Test func simulatedDJIMicMiniIsAStandardSixteenKilohertzMonoInput() throws {
-        let runner = try HardwareScenarioRunner(
-            scenario: try AudioInputEndpointFixture.djiMicMiniContinuousStreamScenario(),
-            catalog: try HardwareCatalog(profiles: [AudioInputEndpointFixture.djiMicMiniProfile()])
-        )
-        var descriptor: AudioInputEndpointDescriptor?
-        var samples: [Int16] = []
-        runner.runToScenarioEnd { signal in
-            descriptor = descriptor ?? AudioInputEndpointDescriptor(signal: signal)
-            if let buffer = AudioInputBuffer(signal: signal) {
-                samples.append(contentsOf: buffer.samples)
-            }
-        }
-        #expect(descriptor?.sampleRate == 16_000)
-        #expect(descriptor?.channelCount == 1)
-        #expect(descriptor?.transportType == "bluetooth-hfp")
-        #expect(samples.count == 18)
-    }
-#endif
-
     @Test(arguments: SimulatedVoiceRemoteModel.allCases)
     func simulatedDirectStreamsPreserveDecodedAudioThroughRemoteStop(
         _ model: SimulatedVoiceRemoteModel

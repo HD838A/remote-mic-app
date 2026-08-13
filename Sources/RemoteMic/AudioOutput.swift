@@ -129,23 +129,7 @@ enum CoreAudioDeviceCatalog {
         )
     }
 
-    static func defaultOutputDevice() -> AudioDeviceInfo? {
-        withPropertyLock {
-            defaultDevice(selector: kAudioHardwarePropertyDefaultOutputDevice)
-        }
-    }
-
-    static func defaultSystemOutputDevice() -> AudioDeviceInfo? {
-        withPropertyLock {
-            defaultDevice(selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
-        }
-    }
-
     static func outputDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
-        devices.map(deviceDiagnostic).joined(separator: " | ")
-    }
-
-    static func inputDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
         devices.map(deviceDiagnostic).joined(separator: " | ")
     }
 
@@ -253,10 +237,9 @@ enum VirtualAudioConnectionLifecyclePolicy {
     static func shouldBeActive(
         readyBluetoothBridgeCount: Int,
         mobileVoiceActive: Bool,
-        testToneActive: Bool,
-        continuousInputEnabled: Bool = false
+        testToneActive: Bool
     ) -> Bool {
-        readyBluetoothBridgeCount > 0 || mobileVoiceActive || testToneActive || continuousInputEnabled
+        readyBluetoothBridgeCount > 0 || mobileVoiceActive || testToneActive
     }
 }
 
@@ -292,7 +275,6 @@ final class VirtualAudioOutput {
     private var pendingDrainLogContexts: [String] = []
     private var drainCompletion: (() -> Void)?
     private var drainGeneration: UInt64 = 0
-    private var playbackGeneration: UInt64 = 0
     private let sourceFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
@@ -442,8 +424,8 @@ final class VirtualAudioOutput {
     }
 
     @discardableResult
-    func enqueue(samples: [Int16], maximumPendingBuffers: Int? = nil) -> Bool {
-        guard let player, engine?.isRunning == true else {
+    func enqueue(samples: [Int16]) -> Bool {
+        guard let player, engine?.isRunning == true, let buffer = makeBuffer(samples: samples) else {
             logRejectedWrite()
             return false
         }
@@ -452,26 +434,15 @@ final class VirtualAudioOutput {
             rejectedWriteCount = 0
         }
         playbackLock.lock()
-        if let maximumPendingBuffers,
-           pendingVoiceBufferCount >= maximumPendingBuffers {
-            playbackLock.unlock()
-            return false
-        }
         pendingVoiceBufferCount += 1
-        let generation = playbackGeneration
         playbackLock.unlock()
-        guard let buffer = makeBuffer(samples: samples) else {
-            scheduledVoiceBufferDidFinish(generation: generation)
-            logRejectedWrite()
-            return false
-        }
         player.scheduleBuffer(
             buffer,
             at: nil,
             options: [],
             completionCallbackType: .dataPlayedBack
         ) { [weak self] _ in
-            self?.scheduledVoiceBufferDidFinish(generation: generation)
+            self?.scheduledVoiceBufferDidFinish()
         }
         return true
     }
@@ -522,7 +493,6 @@ final class VirtualAudioOutput {
         pendingDrainLogContexts.removeAll()
         drainCompletion = nil
         drainGeneration &+= 1
-        playbackGeneration &+= 1
         playbackLock.unlock()
         for context in interruptedContexts {
             AppLogger.shared.write("AUDIO PLAYBACK interrupted \(context)")
@@ -545,7 +515,6 @@ final class VirtualAudioOutput {
         pendingDrainLogContexts.removeAll()
         drainCompletion = nil
         drainGeneration &+= 1
-        playbackGeneration &+= 1
         playbackLock.unlock()
         for context in interruptedContexts {
             AppLogger.shared.write("AUDIO PLAYBACK interrupted \(context)")
@@ -558,14 +527,10 @@ final class VirtualAudioOutput {
         selectedDevice = nil
     }
 
-    private func scheduledVoiceBufferDidFinish(generation: UInt64) {
+    private func scheduledVoiceBufferDidFinish() {
         var completion: (() -> Void)?
         var drainedContexts: [String] = []
         playbackLock.lock()
-        guard generation == playbackGeneration else {
-            playbackLock.unlock()
-            return
-        }
         pendingVoiceBufferCount = max(0, pendingVoiceBufferCount - 1)
         if pendingVoiceBufferCount == 0 {
             drainedContexts = pendingDrainLogContexts

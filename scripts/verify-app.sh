@@ -130,7 +130,6 @@ test "$(plutil -extract CFBundleDevelopmentRegion raw -o - "$PLIST")" = "en"
 test "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "Remote Mic"
 test "$(plutil -extract CFBundleIconFile raw -o - "$PLIST")" = "AppIcon"
 test -n "$(plutil -extract NSBluetoothAlwaysUsageDescription raw -o - "$PLIST")"
-test -n "$(plutil -extract NSMicrophoneUsageDescription raw -o - "$PLIST")"
 test "$(plutil -extract SUFeedURL raw -o - "$PLIST")" = "$RELEASE_FEED_URL"
 test "$(plutil -extract SUEnableAutomaticChecks raw -o - "$PLIST")" = "true"
 test "$(plutil -extract SUScheduledCheckInterval raw -o - "$PLIST")" = "86400"
@@ -152,8 +151,6 @@ if [[ "$REQUIRE_SAYALL_AI_PACKAGE" == "1" && "$SAYALL_AI_INCLUDED" != "true" ]];
 fi
 
 codesign --verify --deep --strict "$APP"
-APP_ENTITLEMENTS="$(codesign -d --entitlements - "$APP" 2>/dev/null)"
-print -r -- "$APP_ENTITLEMENTS" | rg -q 'com.apple.security.device.audio-input'
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
   RELAY_URL="$(plutil -extract RemoteWebRelayURL raw -o - "$PLIST" 2>/dev/null || true)"
   if [[ "$RELAY_URL" != wss://?*/ws ]]; then
