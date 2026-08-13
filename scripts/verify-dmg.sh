@@ -12,7 +12,6 @@ CHECKSUM="$DMG.sha256"
 VERIFY_ROOT="$(mktemp -d /private/tmp/remote-mic-dmg-verify.XXXXXX)"
 MOUNT_POINT="$VERIFY_ROOT/mount"
 INSTALL_PACKAGE="$MOUNT_POINT/$RELEASE_INSTALL_PACKAGE_NAME"
-UNINSTALL_PACKAGE="$MOUNT_POINT/$RELEASE_UNINSTALL_PACKAGE_NAME"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
@@ -68,47 +67,17 @@ hdiutil verify "$DMG"
 hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_POINT" "$DMG" -quiet
 ATTACHED=1
 
-APP="$MOUNT_POINT/$DISPLAY_NAME.app"
-EXPECTED_ROOT_ENTRIES="$(printf '%s\n' \
-  Applications \
-  "$RELEASE_INSTALL_PACKAGE_NAME" \
-  Remote\ Mic.app \
-  "$RELEASE_UNINSTALL_PACKAGE_NAME" | LC_ALL=C sort)"
+EXPECTED_ROOT_ENTRIES="$RELEASE_INSTALL_PACKAGE_NAME"
 ACTUAL_ROOT_ENTRIES="$(find "$MOUNT_POINT" -mindepth 1 -maxdepth 1 \
   -exec basename {} \; | LC_ALL=C sort)"
 
 test "$ACTUAL_ROOT_ENTRIES" = "$EXPECTED_ROOT_ENTRIES"
-test -L "$MOUNT_POINT/Applications"
-test "$(readlink "$MOUNT_POINT/Applications")" = "/Applications"
 test -f "$INSTALL_PACKAGE"
-test -f "$UNINSTALL_PACKAGE"
-"$ROOT/scripts/verify-app.sh" "$APP"
 "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
-"$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
-
-test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "$VERSION"
-test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "$BUILD"
-SIGNATURE_DETAILS="$VERIFY_ROOT/signature-details"
-codesign -dv --verbose=4 "$APP" > "$SIGNATURE_DETAILS" 2>&1
-SIGNATURE="$(awk -F= '
-  /^Authority=/ { print $2; exit }
-  /^Signature=/ { print $2; exit }
-' "$SIGNATURE_DETAILS")"
-test -n "$SIGNATURE"
-
-test "$(sips -g pixelWidth "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "1024"
-test "$(sips -g pixelHeight "$APP/Contents/Resources/RC003-remote-photo.png" | tail -n 1 | tr -cd '0-9')" = "1536"
-
-if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' \
-  "$APP/Contents"; then
-  print -u2 "DMG payload contains a forbidden local path or example device address"
-  exit 1
-fi
 
 print "DMG VERIFY PASS: $DMG"
 print "VERSION: $VERSION ($BUILD)"
 print "RELEASE VARIANT: $RELEASE_VARIANT"
-print "SIGNATURE: $SIGNATURE"
 if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then
   print "NOTARIZATION: stapled and accepted by Gatekeeper"
 fi

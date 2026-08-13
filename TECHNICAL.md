@@ -164,14 +164,9 @@ xcrun swift test
 - `dist/Remote-Mic-<版本>.dmg`；
 - `dist/Remote-Mic-<版本>.dmg.sha256`。
 
-DMG 根目录严格只有四项：
+DMG 根目录严格只有 `Install Remote Mic.pkg`；App-only ZIP 与卸载 PKG 继续作为同一 Release 的高级资产。安装 PKG 在内部暂存驱动，安装后仅在现有驱动缺失、损坏、架构不符、签名异常或版本不匹配时替换，健康同版本驱动保持原样。
 
-- `Install Remote Mic.pkg`；
-- `Uninstall Remote Mic.pkg`；
-- `Remote Mic.app`；
-- 指向 `/Applications` 的 `Applications` 入口。
-
-`verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、根目录清单、应用 bundle 内容、PKG payload、版本号、`arm64` 架构、macOS 14.0 最低版本、有效代码签名和本地路径泄漏。正式模式还校验 Developer ID Team、Hardened Runtime、PKG/DMG 签名、stapled 公证票据与 Gatekeeper 评估。
+`verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、唯一根入口和安装 PKG payload。应用 bundle、卸载 PKG、版本号、架构、最低系统、签名与本地路径泄漏继续由各自产物校验器覆盖；正式模式还校验 Developer ID Team、Hardened Runtime、PKG/DMG 签名、stapled 公证票据与 Gatekeeper 评估。
 
 Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=true` 与 `SUScheduledCheckInterval=86400` 启用每日自动检查；`SUAutomaticallyUpdate=false` 与 `SUAllowsAutomaticUpdates=false` 禁止静默下载或自动安装。用户仍可选择菜单中的“检查更新…”立即检查。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
 

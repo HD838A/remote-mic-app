@@ -54,8 +54,8 @@ if [[ -e "$DESTINATION" ]]; then
     exit 2
   fi
   installer_message \
-    "检测到已有 MiRemoteV 2ch，将原位升级。" \
-    "An existing MiRemoteV 2ch installation will be upgraded in place."
+    "检测到已有 MiRemoteV 2ch；安装后会检查它是否需要更新。" \
+    "An existing MiRemoteV 2ch was found and will be checked before any update."
 fi
 
 if [[ -e "$APP_DESTINATION" || -L "$APP_DESTINATION" ]]; then

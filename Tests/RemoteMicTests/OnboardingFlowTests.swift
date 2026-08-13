@@ -246,7 +246,7 @@ struct OnboardingFlowTests {
         #expect(activeSource.contains("model.refreshRemoteDiscovery()"))
     }
 
-    @Test func remoteStepExposesHIDStatusAndAnExplicitRetry() throws {
+    @Test func remoteStepExposesHIDStatusAndRoutesOneRecoveryActionToExistingRuntime() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -262,8 +262,15 @@ struct OnboardingFlowTests {
         ))
         let remoteSource = viewSource[remoteStart.lowerBound..<remoteEnd.lowerBound]
         #expect(remoteSource.contains("model.hidStatus.text(using: localization)"))
-        #expect(remoteSource.contains("model.applyHIDSettings()"))
-        #expect(remoteSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(!remoteSource.contains("ViewThatFits(in: .horizontal)"))
+        let recoveryStart = try #require(viewSource.range(of: "private func performRecovery"))
+        let recoveryEnd = try #require(viewSource.range(
+            of: "private func resetVoiceTestForRetry",
+            range: recoveryStart.upperBound..<viewSource.endIndex
+        ))
+        let recoverySource = viewSource[recoveryStart.lowerBound..<recoveryEnd.lowerBound]
+        #expect(recoverySource.contains("case .remoteButtonNotReady, .controlsNotConfirmed:"))
+        #expect(recoverySource.contains("model.applyHIDSettings()"))
     }
 
     @Test func completionPageExplainsARegressedRuntimeCondition() throws {
@@ -473,5 +480,126 @@ struct OnboardingFlowTests {
             completedUpdate: false,
             openMainWindowAtLaunch: false
         ))
+    }
+
+    @Test func firstUseFailuresPointToTheExactRecoveryStep() {
+        var capabilities = OnboardingCapabilities()
+        var context = FirstUseDiagnosticContext(
+            step: .permissions,
+            capabilities: capabilities,
+            hasSelectedAudioUID: false
+        )
+        #expect(context.failureReason == .bluetoothPermissionDenied)
+        capabilities.bluetoothGranted = true
+        context = FirstUseDiagnosticContext(
+            step: .permissions,
+            capabilities: capabilities,
+            hasSelectedAudioUID: false
+        )
+        #expect(context.failureReason == .inputMonitoringPermissionDenied)
+
+        capabilities.inputMonitoringGranted = true
+        capabilities.accessibilityGranted = true
+        capabilities.remoteConnected = true
+        capabilities.remoteButtonObserved = true
+        context = FirstUseDiagnosticContext(
+            step: .audio,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true
+        )
+        #expect(context.failureReason == .audioSelectedDeviceMissing)
+
+        capabilities.audioOutputSelected = true
+        capabilities.audioReady = true
+        #expect(OnboardingFlowPolicy.recoveryStep(
+            from: .complete,
+            voiceTool: .typeless,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true
+        ) == nil)
+
+        capabilities.remoteConnected = false
+        #expect(OnboardingFlowPolicy.recoveryStep(
+            from: .complete,
+            voiceTool: .typeless,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true
+        ) == .remote)
+    }
+
+    @Test func firstUseEventsDeduplicatePollingAndKeepExplicitRetries() throws {
+        let suiteName = "RemoteMicTests.Onboarding.Diagnostics.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        settings.recordFirstUseEvent(.entered, step: .permissions, at: now)
+        settings.recordFirstUseEvent(
+            .blocked,
+            step: .permissions,
+            failureReason: .bluetoothPermissionDenied,
+            at: now.addingTimeInterval(1)
+        )
+        settings.recordFirstUseEvent(
+            .blocked,
+            step: .permissions,
+            failureReason: .bluetoothPermissionDenied,
+            at: now.addingTimeInterval(2)
+        )
+        settings.recordFirstUseEvent(
+            .retry,
+            step: .permissions,
+            failureReason: .bluetoothPermissionDenied,
+            at: now.addingTimeInterval(3)
+        )
+        settings.recordFirstUseEvent(
+            .retry,
+            step: .permissions,
+            failureReason: .bluetoothPermissionDenied,
+            at: now.addingTimeInterval(4)
+        )
+
+        #expect(settings.firstUseEvents.count == 4)
+        #expect(settings.firstUseEvents.last?.elapsedMilliseconds == 4_000)
+    }
+
+    @Test func diagnosticSummaryContainsOnlyNormalizedState() {
+        let capabilities = OnboardingCapabilities(
+            bluetoothGranted: true,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false,
+            remoteConnected: false,
+            remoteButtonObserved: false,
+            audioReady: false,
+            audioOutputSelected: false,
+            voiceSessionStarted: false,
+            voiceSamplesReceived: false,
+            voiceSessionEnded: false,
+            transcriptionAppeared: false,
+            testedRemoteButtonCount: 0
+        )
+        let snapshot = FirstUseDiagnosticSnapshot(
+            appVersion: "1.8.14",
+            appBuild: "106",
+            systemMajorVersion: 14,
+            architecture: "arm64",
+            voiceTool: .typeless,
+            context: FirstUseDiagnosticContext(
+                step: .permissions,
+                capabilities: capabilities,
+                hasSelectedAudioUID: false
+            ),
+            bluetoothStatus: "connection.status.searching",
+            buttonStatus: "button_mapping.status.disabled",
+            audioStatus: "audio.output.none_selected",
+            events: []
+        )
+
+        let text = snapshot.redactedText
+        #expect(text.contains("failure=permission.input_monitoring_denied"))
+        #expect(!text.contains("/Users/"))
+        #expect(!text.contains("UUID"))
+        #expect(!text.contains("无线麦已经连接成功"))
     }
 }

@@ -31,10 +31,7 @@ Remote Mic is built natively with SwiftUI. While running in the background, it u
 
 Download the Apple Silicon release through the [Cloudflare CDN entry](https://download.sayall.app/mac). Intel Mac users must download `Remote-Mic-<version>-Intel.dmg` from [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) instead of using the Apple Silicon package.
 
-The DMG provides two installation paths:
-
-1. Recommended: double-click **Install Remote Mic.pkg** on Apple Silicon, or **Install Remote Mic Intel.pkg** on Intel Macs. It installs **Remote Mic.app** and the MiRemoteV 2ch compatible microphone for Doubao Input Method and other voice-input apps.
-2. App only: drag **Remote Mic.app** to Applications. This requires a usable loopback audio device to already be installed.
+The DMG has one ordinary installation entry: double-click **Install Remote Mic.pkg** on Apple Silicon, or **Install Remote Mic Intel.pkg** on Intel Macs. It installs **Remote Mic.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
 Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only from this project's GitHub Releases and verify the DMG with the `.sha256` file from the same release.
 
@@ -116,7 +113,7 @@ Remote Mic does not upload or store voice, does not change the system default in
 ## Uninstall
 
 1. Quit Remote Mic.
-2. Double-click **Uninstall Remote Mic.pkg** in the DMG to remove MiRemoteV 2ch.
+2. Download and run **Uninstall Remote Mic.pkg** from the same GitHub Release to remove MiRemoteV 2ch.
 3. Delete **Remote Mic.app** from Applications.
 
 Uninstalling the compatible microphone does not change or remove BlackHole.

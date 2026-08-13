@@ -20,6 +20,7 @@ struct OnboardingView: View {
     @State private var voiceSamplesReceived = false
     @State private var voiceSessionEnded = false
     @State private var transcript = ""
+    @State private var lastRecordedFailure: FirstUseFailureReason?
     @FocusState private var transcriptFocused: Bool
 
     private let permissionRefreshTimer = Timer.publish(
@@ -109,6 +110,9 @@ struct OnboardingView: View {
             guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             transcriptFocused = true
         }
+        .onChange(of: failureReason) { failure in
+            recordFailureTransition(failure)
+        }
     }
 
     private var phaseHeader: some View {
@@ -158,9 +162,14 @@ struct OnboardingView: View {
             }
 
             ScrollView {
-                stepContent
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 24)
+                VStack(alignment: .leading, spacing: 18) {
+                    stepContent
+                    if let failureReason {
+                        recoveryCard(for: failureReason)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
 
@@ -291,22 +300,19 @@ struct OnboardingView: View {
                     icon: "antenna.radiowaves.left.and.right",
                     titleKey: "permission.bluetooth.title",
                     detailKey: "onboarding.permissions.bluetooth.detail",
-                    granted: bluetoothAuthorization == .allowedAlways,
-                    action: requestBluetoothPermission
+                    granted: bluetoothAuthorization == .allowedAlways
                 )
                 permissionRow(
                     icon: "keyboard",
                     titleKey: "permission.input_monitoring.title",
                     detailKey: "onboarding.permissions.input.detail",
-                    granted: inputMonitoringGranted,
-                    action: model.requestInputMonitoringPermission
+                    granted: inputMonitoringGranted
                 )
                 permissionRow(
                     icon: "hand.point.up.left",
                     titleKey: "permission.accessibility.title",
                     detailKey: "onboarding.permissions.accessibility.detail",
-                    granted: accessibilityGranted,
-                    action: model.requestAccessibilityPermission
+                    granted: accessibilityGranted
                 )
             }
         }
@@ -343,31 +349,10 @@ struct OnboardingView: View {
                 isComplete: !observedRemoteButtons.isEmpty
             )
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    remoteReconnectButton
-                    remoteInputRetryButton
-                    openBluetoothSettingsButton
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        remoteReconnectButton
-                        remoteInputRetryButton
-                    }
-                    openBluetoothSettingsButton
-                }
+            if !model.isConnected {
+                openBluetoothSettingsButton
             }
         }
-    }
-
-    private var remoteReconnectButton: some View {
-        Button("onboarding.remote.reconnect") { model.reconnect() }
-            .buttonStyle(.bordered)
-    }
-
-    private var remoteInputRetryButton: some View {
-        Button("onboarding.remote.retry_input") { model.applyHIDSettings() }
-            .buttonStyle(.bordered)
     }
 
     private var openBluetoothSettingsButton: some View {
@@ -407,9 +392,8 @@ struct OnboardingView: View {
                 isComplete: audioOutputSelected && model.isAudioOutputReady
             )
 
-            HStack(spacing: 10) {
-                Button("onboarding.audio.refresh") { model.refreshAudioDevices() }
-                    .buttonStyle(.bordered)
+            if failureReason == .audioNoOutputDevice ||
+                failureReason == .audioSelectedDeviceMissing {
                 Button("audio.compatibility.open_install_guide") {
                     model.openDoubaoDriverInstructions(using: localization)
                 }
@@ -570,6 +554,47 @@ struct OnboardingView: View {
                     isComplete: false
                 )
             }
+        }
+    }
+
+    private func recoveryCard(for failure: FirstUseFailureReason) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "wrench.and.screwdriver.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.orange)
+                    .frame(width: 34, height: 34)
+                    .background(Color.orange.opacity(0.12), in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(localization.text("onboarding.recovery.\(failure.rawValue).title"))
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(localization.text("onboarding.recovery.\(failure.rawValue).detail"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    performRecovery(for: failure)
+                } label: {
+                    Text(localization.text("onboarding.recovery.\(failure.rawValue).action"))
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("onboarding.diagnostics.copy") {
+                    copyDiagnosticSummary()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(14)
+        .background(Color.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
         }
     }
 
@@ -755,8 +780,7 @@ struct OnboardingView: View {
         icon: String,
         titleKey: String,
         detailKey: String,
-        granted: Bool,
-        action: @escaping () -> Void
+        granted: Bool
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -777,8 +801,9 @@ struct OnboardingView: View {
                     .font(.system(size: 19))
                     .foregroundStyle(Color.green)
             } else {
-                Button("permission.action.request", action: action)
-                    .buttonStyle(.bordered)
+                Image(systemName: "circle")
+                    .font(.system(size: 19))
+                    .foregroundStyle(Color.secondary)
             }
         }
         .padding(13)
@@ -842,6 +867,23 @@ struct OnboardingView: View {
             voiceTool: settings.onboardingVoiceTool,
             capabilities: capabilities
         )
+    }
+
+    private var diagnosticContext: FirstUseDiagnosticContext {
+        FirstUseDiagnosticContext(
+            step: settings.onboardingStep,
+            capabilities: capabilities,
+            hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty
+        )
+    }
+
+    private var failureReason: FirstUseFailureReason? {
+        if settings.onboardingStep == .complete,
+           let completeRuntimeReadyOverride,
+           completeRuntimeReadyOverride {
+            return nil
+        }
+        return diagnosticContext.failureReason
     }
 
     private var selectedAudioDevice: AudioDeviceInfo? {
@@ -944,6 +986,99 @@ struct OnboardingView: View {
             break
         }
         AppLogger.shared.write("ONBOARDING STEP entered=\(step.rawValue)")
+        settings.recordFirstUseEvent(.entered, step: step)
+        lastRecordedFailure = nil
+        DispatchQueue.main.async {
+            recordFailureTransition(failureReason)
+        }
+    }
+
+    private func recordFailureTransition(_ failure: FirstUseFailureReason?) {
+        if let failure {
+            guard failure != lastRecordedFailure else { return }
+            if let previousFailure = lastRecordedFailure {
+                settings.recordFirstUseEvent(
+                    .recovered,
+                    step: settings.onboardingStep,
+                    failureReason: previousFailure
+                )
+            }
+            settings.recordFirstUseEvent(.blocked, step: settings.onboardingStep, failureReason: failure)
+        } else if let previousFailure = lastRecordedFailure {
+            settings.recordFirstUseEvent(
+                .recovered,
+                step: settings.onboardingStep,
+                failureReason: previousFailure
+            )
+            settings.recordFirstUseEvent(.passed, step: settings.onboardingStep)
+        }
+        lastRecordedFailure = failure
+    }
+
+    private func performRecovery(for failure: FirstUseFailureReason) {
+        settings.recordFirstUseEvent(
+            .retry,
+            step: settings.onboardingStep,
+            failureReason: failure
+        )
+        switch failure {
+        case .bluetoothPermissionDenied:
+            requestBluetoothPermission()
+        case .inputMonitoringPermissionDenied:
+            model.requestInputMonitoringPermission()
+        case .accessibilityPermissionDenied:
+            model.requestAccessibilityPermission()
+        case .remoteNotFound:
+            model.reconnect()
+        case .remoteButtonNotReady, .controlsNotConfirmed:
+            model.applyHIDSettings()
+        case .audioNoOutputDevice, .audioSelectedDeviceMissing:
+            model.refreshAudioDevices()
+        case .audioOutputNotReady:
+            model.applyAudioSettings(reason: "onboarding_recovery")
+        case .voiceSessionNotStarted, .voiceSessionNotEnded, .voiceNoTranscript:
+            resetVoiceTestForRetry()
+        case .voiceNoSamples:
+            model.applyAudioSettings(reason: "onboarding_voice_retry")
+            resetVoiceTestForRetry()
+        case .completeRuntimeRegressed:
+            guard let recoveryStep = OnboardingFlowPolicy.recoveryStep(
+                from: .complete,
+                voiceTool: settings.onboardingVoiceTool,
+                capabilities: capabilities,
+                hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty
+            ) else { return }
+            settings.setOnboardingStep(recoveryStep)
+        }
+    }
+
+    private func resetVoiceTestForRetry() {
+        voiceSessionStarted = false
+        voiceSamplesReceived = false
+        voiceSessionEnded = false
+        transcript = ""
+        DispatchQueue.main.async { transcriptFocused = true }
+    }
+
+    private func copyDiagnosticSummary() {
+        let snapshot = FirstUseDiagnosticSnapshot(
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
+            appBuild: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
+            systemMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+            architecture: FirstUseDiagnosticSnapshot.architecture,
+            voiceTool: settings.onboardingVoiceTool,
+            context: diagnosticContext,
+            bluetoothStatus: model.connectionStatus.key,
+            buttonStatus: model.hidStatus.key,
+            audioStatus: model.audioStatus.key,
+            events: settings.firstUseEvents
+        )
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(snapshot.redactedText, forType: .string)
+        AppLogger.shared.write(
+            "ONBOARDING DIAGNOSTICS copied step=\(settings.onboardingStep.rawValue) " +
+                "failure=\(failureReason?.rawValue ?? "none")"
+        )
     }
 
     private func recoverRemoteConnectionIfNeeded() {
@@ -958,6 +1093,7 @@ struct OnboardingView: View {
 
     private func continueFlow() {
         guard canContinue else { return }
+        settings.recordFirstUseEvent(.passed, step: settings.onboardingStep)
         if settings.onboardingStep == .permissions {
             settings.customMappingEnabled = true
             model.setVoiceFnTapModeEnabled(settings.onboardingVoiceTool == .typeless)

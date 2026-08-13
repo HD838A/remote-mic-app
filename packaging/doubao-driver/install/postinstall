@@ -7,6 +7,9 @@ RELEASE_CONFIG="$SCRIPT_DIR/release-variant.plist"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
 BINARY="$DESTINATION/Contents/MacOS/MiRemoteV2ch"
+STAGED_DRIVER="${TARGET_VOLUME%/}/Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver"
+STAGED_PLIST="$STAGED_DRIVER/Contents/Info.plist"
+STAGED_BINARY="$STAGED_DRIVER/Contents/MacOS/MiRemoteV2ch"
 APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
 APP_PLIST="$APP_DESTINATION/Contents/Info.plist"
 APP_BINARY="$APP_DESTINATION/Contents/MacOS/RemoteMic"
@@ -35,16 +38,39 @@ installer_message() {
   fi
 }
 
+driver_architecture() {
+  local description
+  description="$(/usr/bin/file -b "$1" 2>/dev/null || true)"
+  case "$description" in
+    *arm64*) print "arm64" ;;
+    *x86_64*) print "x86_64" ;;
+    *) print "unknown" ;;
+  esac
+}
+
+driver_is_healthy_and_current() {
+  test -d "$DESTINATION" &&
+    test -f "$PLIST" &&
+    test -x "$BINARY" &&
+    test -f "$STAGED_PLIST" &&
+    test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST" 2>/dev/null || true)" = \
+      "com.hd838a.MiRemoteV2ch" &&
+    test "$(/usr/bin/plutil -extract CFBundleName raw -o - "$PLIST" 2>/dev/null || true)" = \
+      "MiRemoteV2ch" &&
+    test "$(driver_architecture "$BINARY")" = "$EXPECTED_ARCHITECTURE" &&
+    test "$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST" 2>/dev/null || true)" = \
+      "$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$STAGED_PLIST" 2>/dev/null || true)" &&
+    /usr/bin/codesign --verify --deep --strict "$DESTINATION" >/dev/null 2>&1
+}
+
 test -f "$RELEASE_CONFIG"
 EXPECTED_ARCHITECTURE="$(/usr/bin/plutil -extract ExpectedArchitecture raw -o - "$RELEASE_CONFIG")"
 MINIMUM_SYSTEM_MAJOR="$(/usr/bin/plutil -extract MinimumSystemMajor raw -o - "$RELEASE_CONFIG")"
 MINIMUM_SYSTEM_VERSION="$(/usr/bin/plutil -extract MinimumSystemVersion raw -o - "$RELEASE_CONFIG")"
 
-test -d "$DESTINATION"
-test -f "$PLIST"
-test -x "$BINARY"
-test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "com.hd838a.MiRemoteV2ch"
-test "$(/usr/bin/plutil -extract CFBundleName raw -o - "$PLIST")" = "MiRemoteV2ch"
+test -d "$STAGED_DRIVER"
+test -f "$STAGED_PLIST"
+test -x "$STAGED_BINARY"
 test -d "$APP_DESTINATION"
 test -f "$APP_PLIST"
 test -x "$APP_BINARY"
@@ -54,12 +80,27 @@ test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - "$APP_PLIST")" 
 test "$(/usr/bin/uname -m)" = "$EXPECTED_ARCHITECTURE"
 SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
 test "$SYSTEM_MAJOR" -ge "$MINIMUM_SYSTEM_MAJOR"
+DRIVER_CHANGED=0
 
-/usr/sbin/chown -R root:wheel "$DESTINATION"
-/usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \;
-/usr/bin/find "$DESTINATION" -type f -exec /bin/chmod 644 {} \;
-/bin/chmod 755 "$BINARY"
-/usr/bin/codesign --verify --deep --strict "$DESTINATION"
+if driver_is_healthy_and_current; then
+  installer_message \
+    "已保留现有的 MiRemoteV 2ch，无需重复安装。" \
+    "The existing MiRemoteV 2ch is healthy and was kept in place."
+else
+  DRIVER_CHANGED=1
+  /bin/rm -rf -- "$DESTINATION"
+  /bin/mkdir -p "${DESTINATION:h}"
+  /usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$STAGED_DRIVER" "$DESTINATION"
+  /usr/sbin/chown -R root:wheel "$DESTINATION"
+  /usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \;
+  /usr/bin/find "$DESTINATION" -type f -exec /bin/chmod 644 {} \;
+  /bin/chmod 755 "$BINARY"
+  /usr/bin/codesign --verify --deep --strict "$DESTINATION"
+  installer_message \
+    "已安装或更新 MiRemoteV 2ch。" \
+    "MiRemoteV 2ch was installed or updated."
+fi
+/bin/rm -rf -- "${STAGED_DRIVER:h}"
 /usr/sbin/chown -R root:wheel "$APP_DESTINATION"
 /usr/bin/find "$APP_DESTINATION" -type d -exec /bin/chmod 755 {} \;
 /usr/bin/find "$APP_DESTINATION" -type f -exec /bin/chmod 644 {} \;
@@ -70,7 +111,9 @@ for app_executable in "${APP_EXECUTABLES[@]}"; do
 done
 /usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"
 
-/usr/bin/killall coreaudiod
+if [[ "$DRIVER_CHANGED" -eq 1 ]]; then
+  /usr/bin/killall coreaudiod
+fi
 
 if [[ -e "$LEGACY_APP_DESTINATION" || -L "$LEGACY_APP_DESTINATION" ]]; then
   if [[ -f "$LEGACY_APP_PLIST" ]] && \

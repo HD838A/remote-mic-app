@@ -56,12 +56,7 @@ else
 fi
 
 ditto --norsrc --noqtn --noacl \
-  "$APP_DIR" "$STAGING/$DISPLAY_NAME.app"
-ln -s /Applications "$STAGING/Applications"
-ditto --norsrc --noqtn --noacl \
   "$OUTPUT_DIR/$INSTALL_PACKAGE" "$STAGING/$INSTALL_PACKAGE"
-ditto --norsrc --noqtn --noacl \
-  "$OUTPUT_DIR/$UNINSTALL_PACKAGE" "$STAGING/$UNINSTALL_PACKAGE"
 
 hdiutil create \
   -volname "$DISPLAY_NAME $VERSION $RELEASE_LABEL" \
