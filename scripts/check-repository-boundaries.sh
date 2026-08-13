@@ -57,4 +57,19 @@ if git grep -n -I -E \
   exit 1
 fi
 
+if git grep -n -I -E \
+  'macro_buttons|EarlyAccessController|RemoteMicMacroController|SayAllMacroRemoteMicFeature' \
+  -- \
+  'Sources/RemoteMic/*.swift' \
+  'Resources/**' \
+  'README*.md' \
+  'TODO.md' \
+  'feature/**' \
+  'Testing/**' \
+  'Bugs/**' \
+  ':(exclude)Sources/RemoteMic/MacroFeatureIntegration.swift'; then
+  print -u2 "macro platform implementation detail returned to the public tree"
+  exit 1
+fi
+
 print "REPOSITORY BOUNDARY PASS"

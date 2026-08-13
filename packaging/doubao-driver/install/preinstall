@@ -27,8 +27,10 @@ installer_message() {
 test -f "$RELEASE_CONFIG"
 EXPECTED_ARCHITECTURE="$(/usr/bin/plutil -extract ExpectedArchitecture raw -o - "$RELEASE_CONFIG")"
 MINIMUM_SYSTEM_MAJOR="$(/usr/bin/plutil -extract MinimumSystemMajor raw -o - "$RELEASE_CONFIG")"
+PACKAGE_BUILD="$(/usr/bin/plutil -extract PackageBuild raw -o - "$RELEASE_CONFIG")"
 CURRENT_ARCHITECTURE="$(/usr/bin/uname -m)"
 CURRENT_SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
+[[ "$PACKAGE_BUILD" == <-> ]]
 if [[ "$CURRENT_ARCHITECTURE" != "$EXPECTED_ARCHITECTURE" ]]; then
   installer_message \
     "未安装：此安装包适用于 $EXPECTED_ARCHITECTURE Mac，当前机器是 $CURRENT_ARCHITECTURE。" \
@@ -69,11 +71,19 @@ if [[ -e "$APP_DESTINATION" || -L "$APP_DESTINATION" ]]; then
       "To avoid overwriting other software, the installer has stopped." >&2
     exit 2
   fi
-  /usr/bin/pkill -x RemoteMic 2>/dev/null || true
-  /bin/rm -rf -- "$APP_DESTINATION"
+  INSTALLED_BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$APP_PLIST" 2>/dev/null || true)"
+  if [[ "$INSTALLED_BUILD" == <-> && "$INSTALLED_BUILD" -gt "$PACKAGE_BUILD" ]]; then
+    installer_message \
+      "未安装：当前 Remote Mic 的构建号 $INSTALLED_BUILD 高于此测试包的构建号 $PACKAGE_BUILD。" \
+      "Installation stopped: the installed Remote Mic build $INSTALLED_BUILD is newer than this test package build $PACKAGE_BUILD." >&2
+    installer_message \
+      "现有应用已完整保留。请改用更新的安装包。" \
+      "The existing app was left intact. Use a newer installer." >&2
+    exit 2
+  fi
   installer_message \
-    "已移除旧版 Remote Mic.app，准备安装新版本。" \
-    "Removed the previous Remote Mic.app before installing the new version."
+    "检测到已有 Remote Mic.app；安装器会以原子方式更新它。" \
+    "An existing Remote Mic.app was found and will be updated atomically."
 fi
 
 if [[ -e "$LEGACY_APP_DESTINATION" || -L "$LEGACY_APP_DESTINATION" ]]; then

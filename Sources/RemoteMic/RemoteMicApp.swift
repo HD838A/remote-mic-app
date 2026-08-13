@@ -127,6 +127,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         observePhoneRemoteButtonTitles()
         installWorkspaceWakeObserver()
         model.privateFeature.refreshAccessIfNeeded()
+        model.macroFeature.refreshAccessIfNeeded()
         if OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: model.settings.isOnboardingComplete,
             step: model.settings.onboardingStep
@@ -176,6 +177,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     func applicationDidBecomeActive(_ notification: Notification) {
         model.privateFeature.refreshAccessIfNeeded()
+        model.macroFeature.refreshAccessIfNeeded()
     }
 
     func applicationShouldHandleReopen(
@@ -209,6 +211,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.model.privateFeature.refreshAccessIfNeeded()
+                self?.model.macroFeature.refreshAccessIfNeeded()
             }
         }
     }
@@ -402,6 +405,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 self.statusItem?.button?.toolTip = self.localization.text("app.name")
                 self.settingsWindowController?.window?.title = self.localization.text("app.name")
                 self.model.privateFeature.updateLocaleIdentifier(
+                    self.localization.locale.identifier
+                )
+                self.model.macroFeature.updateLocaleIdentifier(
                     self.localization.locale.identifier
                 )
                 self.configureApplicationMenu()

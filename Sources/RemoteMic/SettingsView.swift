@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
     case privateFeature
+    case macros
     case mapping
     case statistics
     case permissions
@@ -21,6 +22,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .connection: return "settings.section.connection"
         case .privateFeature: return ""
+        case .macros: return ""
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
         case .permissions: return "settings.section.permissions"
@@ -32,6 +34,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .connection: return "link"
         case .privateFeature: return "sparkles"
+        case .macros: return "command.square"
         case .mapping: return "keyboard"
         case .statistics: return "chart.bar.xaxis"
         case .permissions: return "shield.lefthalf.filled"
@@ -143,6 +146,7 @@ struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
+    @ObservedObject private var macroFeature: MacroFeatureIntegration
     @ObservedObject private var updateInformation: UpdateInformationStore
     @EnvironmentObject private var localization: LocalizationStore
 
@@ -186,6 +190,7 @@ struct SettingsView: View {
         self.model = model
         settings = model.settings
         privateFeature = model.privateFeature
+        macroFeature = model.macroFeature
         self.updateInformation = updateInformation
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
@@ -212,6 +217,11 @@ struct SettingsView: View {
         }
         .onReceive(privateFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
             if !isVisible, selectedSection == .privateFeature {
+                selectedSection = .about
+            }
+        }
+        .onReceive(macroFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
+            if !isVisible, selectedSection == .macros {
                 selectedSection = .about
             }
         }
@@ -382,7 +392,11 @@ struct SettingsView: View {
 
     private var visibleSections: [SettingsSection] {
         SettingsSection.allCases.filter {
-            $0 != .privateFeature || privateFeature.isFeatureVisible
+            switch $0 {
+            case .privateFeature: privateFeature.isFeatureVisible
+            case .macros: macroFeature.isFeatureVisible
+            default: true
+            }
         }
     }
 
@@ -391,12 +405,10 @@ struct SettingsView: View {
             selectedSection = section
         } label: {
             VStack(spacing: 7) {
-                Image(systemName: section == .privateFeature
-                    ? privateFeature.sectionSystemImage
-                    : section.systemImage)
+                Image(systemName: sectionSystemImage(section))
                     .font(.system(size: 21, weight: .semibold))
-                if section == .privateFeature {
-                    Text(privateFeature.sectionTitle)
+                if section == .privateFeature || section == .macros {
+                    Text(sectionTitle(section))
                         .font(.system(size: 13, weight: .semibold))
                 } else {
                     Text(section.title)
@@ -422,6 +434,14 @@ struct SettingsView: View {
         case .privateFeature:
             if privateFeature.isFeatureVisible {
                 privateFeature.settingsView()
+            } else {
+                aboutPage
+            }
+        case .macros:
+            if macroFeature.isFeatureVisible {
+                macroFeature.settingsView(
+                    selectedRemoteProfileID: settings.selectedRemoteProfileID
+                )
             } else {
                 aboutPage
             }
@@ -2203,6 +2223,10 @@ struct SettingsView: View {
                         privateFeature.enrollmentView()
                     }
 
+                    if macroFeature.shouldShowEnrollment {
+                        macroFeature.enrollmentView()
+                    }
+
                     GlassPanel {
                         VStack(spacing: 0) {
                             HStack(spacing: 14) {
@@ -2359,6 +2383,22 @@ struct SettingsView: View {
             }
         }
         .onAppear(perform: refreshUpdateInformation)
+    }
+
+    private func sectionTitle(_ section: SettingsSection) -> String {
+        switch section {
+        case .privateFeature: privateFeature.sectionTitle
+        case .macros: macroFeature.sectionTitle
+        default: ""
+        }
+    }
+
+    private func sectionSystemImage(_ section: SettingsSection) -> String {
+        switch section {
+        case .privateFeature: privateFeature.sectionSystemImage
+        case .macros: macroFeature.sectionSystemImage
+        default: section.systemImage
+        }
     }
 
     @ViewBuilder

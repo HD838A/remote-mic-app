@@ -14,7 +14,9 @@ REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_WEB_REMOTE_CONFIGURATION="${REQUIRE_WEB_REMOTE_CONFIGURATION:-0}"
 REQUIRE_EARLY_ACCESS_CONFIGURATION="${REQUIRE_EARLY_ACCESS_CONFIGURATION:-0}"
 REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
+REQUIRE_SAYALL_MACRO_PLATFORM="${REQUIRE_SAYALL_MACRO_PLATFORM:-0}"
 SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
+SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:-}"
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
@@ -38,6 +40,10 @@ esac
 case "$REQUIRE_SAYALL_AI_PACKAGE" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_AI_PACKAGE must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_SAYALL_MACRO_PLATFORM" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_MACRO_PLATFORM must be 0 or 1"; exit 1 ;;
 esac
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; then
   print -u2 "Developer ID Application signing is required"
@@ -63,10 +69,30 @@ if [[ "$REQUIRE_SAYALL_AI_PACKAGE" == "1" && "$SAYALL_AI_INCLUDED" != "true" ]];
   exit 1
 fi
 
+if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" ]]; then
+  if [[ ! -f "$SAYALL_MACRO_PLATFORM_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_MACRO_PLATFORM_PATH must contain Package.swift"
+    exit 1
+  fi
+  SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:A}"
+  export SAYALL_MACRO_PLATFORM_PATH
+  SAYALL_MACRO_PLATFORM_INCLUDED=true
+else
+  SAYALL_MACRO_PLATFORM_INCLUDED=false
+fi
+if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
+  print -u2 "A SayAll macro platform package is required for this build"
+  exit 1
+fi
+
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
-if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
+if [[ "$SAYALL_AI_INCLUDED" == "true" && "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="sayall-ai-macro-platform"
+elif [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="sayall-ai"
+elif [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="macro-platform"
 else
   SCRATCH_FLAVOR="public"
 fi
@@ -101,6 +127,9 @@ ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllAIIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllAIIncluded -bool "$SAYALL_AI_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllMacroPlatformIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllMacroPlatformIncluded -bool "$SAYALL_MACRO_PLATFORM_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   plutil -replace LSMinimumSystemVersion -string "$RELEASE_MIN_SYSTEM_VERSION" \
@@ -198,6 +227,16 @@ if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   ditto --norsrc --noextattr --noqtn --noacl \
     "$SAYALL_AI_RESOURCE_BUNDLE" \
     "$APP_DIR/Contents/Resources/SayAllAI_SayAllAI.bundle"
+fi
+if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
+  SAYALL_MACRO_RESOURCE_BUNDLE="$BIN_DIR/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+  if [[ ! -d "$SAYALL_MACRO_RESOURCE_BUNDLE" ]]; then
+    print -u2 "SayAll macro platform resource bundle is missing from the Swift build"
+    exit 1
+  fi
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$SAYALL_MACRO_RESOURCE_BUNDLE" \
+    "$APP_DIR/Contents/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
 fi
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then

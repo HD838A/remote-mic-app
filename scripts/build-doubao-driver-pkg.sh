@@ -7,6 +7,7 @@ OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 DRIVER="$OUTPUT_DIR/MiRemoteV2ch.driver"
 APP="$OUTPUT_DIR/Remote Mic.app"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
+BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
 INSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_INSTALL_PACKAGE_NAME"
 LEGACY_INSTALL_PACKAGE="$OUTPUT_DIR/安装豆包兼容麦克风.pkg"
 UNINSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_UNINSTALL_PACKAGE_NAME"
@@ -57,6 +58,8 @@ fi
   "$ROOT/packaging/doubao-driver/install" "$INSTALL_SCRIPTS"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$RELEASE_CONFIG_PLIST" "$INSTALL_SCRIPTS/release-variant.plist"
+/usr/bin/plutil -replace PackageBuild -string "$BUILD" \
+  "$INSTALL_SCRIPTS/release-variant.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
@@ -94,3 +97,4 @@ print "Built: $INSTALL_PACKAGE"
 print "Built: $UNINSTALL_PACKAGE"
 print "RELEASE VARIANT: $RELEASE_VARIANT"
 print "INSTALLER SIGNING IDENTITY: $INSTALLER_SIGNING_IDENTITY"
+print "APP VERSION: $VERSION ($BUILD)"

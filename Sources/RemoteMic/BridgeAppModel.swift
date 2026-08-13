@@ -32,6 +32,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     let settings: AppSettings
     let privateFeature: PrivateFeatureIntegration
+    let macroFeature: MacroFeatureIntegration
 
     @Published private(set) var connectionStatus = LocalizedMessage("bluetooth.status.initializing")
     @Published private(set) var hidStatus = LocalizedMessage("button_mapping.status.disabled")
@@ -139,10 +140,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     init(
         settings: AppSettings = AppSettings(),
         initialAudioDevices: [AudioDeviceInfo] = [],
-        privateFeature: PrivateFeatureIntegration = PrivateFeatureIntegration()
+        privateFeature: PrivateFeatureIntegration = PrivateFeatureIntegration(),
+        macroFeature: MacroFeatureIntegration = MacroFeatureIntegration()
     ) {
         self.settings = settings
         self.privateFeature = privateFeature
+        self.macroFeature = macroFeature
         audioDevices = initialAudioDevices
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
@@ -292,6 +295,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func stop() {
         privateFeature.stop()
+        macroFeature.stop()
         guard started else { return }
         started = false
         completedUpdateHIDRecoveryWorkItem?.cancel()
@@ -910,6 +914,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             ownsEventSuppressor: false,
             actionPerformer: { [weak self] _, _, configured in
                 self?.performExternalConfiguredAction(configured) ?? false
+            },
+            overrideActionPerformer: { [weak self] profileID, button, trigger in
+                self?.macroFeature.executeBoundMacro(
+                    profileID: profileID,
+                    button: button,
+                    trigger: trigger
+                ) == true
+            },
+            hasOverrideBinding: { [weak self] profileID, button, trigger in
+                self?.macroFeature.hasActiveBinding(
+                    profileID: profileID,
+                    button: button,
+                    trigger: trigger
+                ) == true
             }
         )
         monitor.onStatus = { [weak self, weak monitor] value in
@@ -1460,14 +1478,23 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         phase: RemoteButtonPhase,
         source: UsageEventSource
     ) -> Bool {
+        let profileID = settings.selectedRemoteProfileID
         let recognizesDoubleClick = settings.configuredAction(
             for: button,
             trigger: .doubleClick
-        ).action != .disabled
+        ).action != .disabled || macroFeature.hasActiveBinding(
+            profileID: profileID,
+            button: button,
+            trigger: .doubleClick
+        )
         let recognizesLongPress = settings.configuredAction(
             for: button,
             trigger: .longPress
-        ).action != .disabled
+        ).action != .disabled || macroFeature.hasActiveBinding(
+            profileID: profileID,
+            button: button,
+            trigger: .longPress
+        )
 
         var recognizer = mobileButtonGestureRecognizers[source] ?? RemoteButtonGestureRecognizer()
         if phase == .press,
@@ -1579,6 +1606,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         trigger: ButtonTrigger,
         source: UsageEventSource
     ) -> Bool {
+        if macroFeature.executeBoundMacro(
+            profileID: settings.selectedRemoteProfileID,
+            button: button,
+            trigger: trigger
+        ) {
+            settings.recordButtonPress(control: .remoteButton(button), source: source)
+            AppLogger.shared.write(
+                "PHONE REMOTE button=\(button.rawValue) trigger=\(trigger.rawValue) action=private_feature"
+            )
+            return true
+        }
         let configured = settings.configuredAction(for: button, trigger: trigger)
         if configured.action.isAppInternal {
             let handled = performInternalAction(configured.action)

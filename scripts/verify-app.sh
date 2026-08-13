@@ -15,6 +15,7 @@ EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
 REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
+REQUIRE_SAYALL_MACRO_PLATFORM="${REQUIRE_SAYALL_MACRO_PLATFORM:-0}"
 
 case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
@@ -27,6 +28,10 @@ esac
 case "$REQUIRE_SAYALL_AI_PACKAGE" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_AI_PACKAGE must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_SAYALL_MACRO_PLATFORM" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_MACRO_PLATFORM must be 0 or 1"; exit 1 ;;
 esac
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && -z "$EXPECTED_DEVELOPER_TEAM_ID" ]]; then
   print -u2 "EXPECTED_DEVELOPER_TEAM_ID is required for Developer ID verification"
@@ -147,6 +152,24 @@ elif [[ -e "$APP/Contents/Resources/SayAllAI_SayAllAI.bundle" ]]; then
 fi
 if [[ "$REQUIRE_SAYALL_AI_PACKAGE" == "1" && "$SAYALL_AI_INCLUDED" != "true" ]]; then
   print -u2 "App is missing the required SayAllAI package marker"
+  exit 1
+fi
+SAYALL_MACRO_PLATFORM_INCLUDED="$(plutil -extract SayAllMacroPlatformIncluded raw -o - "$PLIST" 2>/dev/null || true)"
+SAYALL_MACRO_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
+  test -d "$SAYALL_MACRO_RESOURCE_BUNDLE"
+  test -f "$SAYALL_MACRO_RESOURCE_BUNDLE/en.lproj/Localizable.strings"
+  if [[ ! -f "$SAYALL_MACRO_RESOURCE_BUNDLE/zh-Hans.lproj/Localizable.strings" && \
+        ! -f "$SAYALL_MACRO_RESOURCE_BUNDLE/zh-hans.lproj/Localizable.strings" ]]; then
+    print -u2 "SayAll macro platform Chinese localization is missing"
+    exit 1
+  fi
+elif [[ -e "$SAYALL_MACRO_RESOURCE_BUNDLE" ]]; then
+  print -u2 "SayAll macro platform resource bundle exists without the inclusion marker"
+  exit 1
+fi
+if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
+  print -u2 "App is missing the required SayAll macro platform marker"
   exit 1
 fi
 
