@@ -6,7 +6,7 @@
 
 ## 用户功能
 
-- “基础按键”提供 `Command-W`、`Command-X`、`Command-A`、`Command-Z`、`Command-Shift-Z`、`Command-F`、`Command-S`。
+- “基础按键”提供 `Command-W`、`Command-X`、`Command-A`、`Command-Z`、`Command-Shift-Z`、`Command-F`、`Command-S` 和 `Command-Delete`。
 - 保留已有的 `Command-Return`、`Shift-Return`、`Command-C`、`Command-V` 和 `Command-Q`。
 - 无线麦自身支持 `Command-Q` 退出和 `Command-W` 关闭当前窗口。
 
@@ -29,4 +29,4 @@
 
 ## 验证与状态
 
-当前状态：已实现。动作分类、重复策略、键码、项目自检、应用构建和验证脚本均通过；桌面实测确认 `Command-W` 关闭设置窗口但保留进程，`Command-Q` 退出进程。实体遥控器触发仍需按 [`testing.md`](testing.md) 完成人工验收。
+当前状态：已实现。动作分类、重复策略和键码由自动化覆盖；桌面实测确认 `Command-W` 关闭设置窗口但保留进程，`Command-Q` 退出进程。`Command-Delete` 的真实遥控器和目标 App 响应仍需按 [`testing.md`](testing.md) 完成人工验收。

@@ -116,6 +116,7 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.commandCopy.category == .basicKeys)
         #expect(ButtonAction.commandClose.category == .basicKeys)
         #expect(ButtonAction.commandUndo.category == .basicKeys)
+        #expect(ButtonAction.commandDelete.category == .basicKeys)
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
@@ -139,6 +140,7 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.commandRedo.allowsRepeat)
         #expect(!ButtonAction.commandFind.allowsRepeat)
         #expect(!ButtonAction.commandSave.allowsRepeat)
+        #expect(!ButtonAction.commandDelete.allowsRepeat)
         #expect(!ButtonAction.previousCommandLeft.allowsRepeat)
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
@@ -363,6 +365,7 @@ struct RemoteButtonsTests {
             (.commandRedo, 6, [.maskCommand, .maskShift]),
             (.commandFind, 3, .maskCommand),
             (.commandSave, 1, .maskCommand),
+            (.commandDelete, 51, .maskCommand),
             (.previousCommandLeft, 123, .maskCommand),
             (.nextCommandRight, 124, .maskCommand),
         ]
