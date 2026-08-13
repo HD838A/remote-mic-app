@@ -26,6 +26,18 @@ if let privateFeaturePath = ProcessInfo.processInfo.environment[
     )
 }
 
+if let macroPlatformPath = ProcessInfo.processInfo.environment[
+    "SAYALL_MACRO_PLATFORM_PATH"
+], !macroPlatformPath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: macroPlatformPath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: macroPlatformPath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllMacroRemoteMic", package: packageIdentity)
+    )
+}
+
 if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
     "REMOTE_MIC_HARDWARE_SIMULATION_PATH"
 ], !hardwareSimulationPath.isEmpty {

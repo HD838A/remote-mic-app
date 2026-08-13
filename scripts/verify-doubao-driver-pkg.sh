@@ -6,6 +6,7 @@ source "$ROOT/scripts/release-variant.sh"
 PACKAGE="${1:?usage: verify-doubao-driver-pkg.sh PACKAGE install|uninstall}"
 MODE="${2:?usage: verify-doubao-driver-pkg.sh PACKAGE install|uninstall}"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
+BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
@@ -68,10 +69,18 @@ case "$MODE" in
       "$EXPANDED/Scripts/release-variant.plist")" = "$RELEASE_MIN_SYSTEM_MAJOR"
     test "$(/usr/bin/plutil -extract MinimumSystemVersion raw -o - \
       "$EXPANDED/Scripts/release-variant.plist")" = "$RELEASE_MIN_SYSTEM_VERSION"
+    test "$(/usr/bin/plutil -extract PackageBuild raw -o - \
+      "$EXPANDED/Scripts/release-variant.plist")" = "$BUILD"
     /usr/bin/grep -Fqx 'DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"' "$EXPANDED/Scripts/preinstall"
     /usr/bin/grep -Fqx 'APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"' "$EXPANDED/Scripts/preinstall"
-    /usr/bin/grep -Fq '/usr/bin/pkill -x RemoteMic 2>/dev/null || true' "$EXPANDED/Scripts/preinstall"
-    /usr/bin/grep -Fq '/bin/rm -rf -- "$APP_DESTINATION"' "$EXPANDED/Scripts/preinstall"
+    if /usr/bin/grep -Fq '/bin/rm -rf -- "$APP_DESTINATION"' "$EXPANDED/Scripts/preinstall"; then
+      print -u2 "preinstall must not delete an existing Remote Mic.app"
+      exit 1
+    fi
+    /usr/bin/grep -Fq 'will be updated atomically' "$EXPANDED/Scripts/preinstall"
+    /usr/bin/grep -Fq 'INSTALLED_BUILD=' "$EXPANDED/Scripts/preinstall"
+    /usr/bin/grep -Fq 'The existing app was left intact. Use a newer installer.' \
+      "$EXPANDED/Scripts/preinstall"
     /usr/bin/grep -Fq '/bin/rm -rf -- "$LEGACY_APP_DESTINATION"' "$EXPANDED/Scripts/preinstall"
     /usr/bin/grep -Fq 'driver_is_healthy_and_current()' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fq '/usr/bin/file -b "$1"' "$EXPANDED/Scripts/postinstall"
@@ -112,6 +121,10 @@ case "$MODE" in
       "$PAYLOAD_APP/Contents/Info.plist")" = "$RELEASE_MIN_SYSTEM_VERSION"
     test "$(/usr/bin/plutil -extract SUFeedURL raw -o - \
       "$PAYLOAD_APP/Contents/Info.plist")" = "$RELEASE_FEED_URL"
+    test "$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - \
+      "$PAYLOAD_APP/Contents/Info.plist")" = "$VERSION"
+    test "$(/usr/bin/plutil -extract CFBundleVersion raw -o - \
+      "$PAYLOAD_APP/Contents/Info.plist")" = "$BUILD"
     ;;
   uninstall)
     /usr/bin/grep -Fq 'identifier="com.hd838a.MiRemoteV2ch.uninstaller"' "$EXPANDED/PackageInfo"

@@ -49,6 +49,8 @@ final class HIDRemoteMonitor {
     private let scheduler: HIDRemoteScheduling
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
+    private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
+    private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
@@ -89,6 +91,12 @@ final class HIDRemoteMonitor {
             ButtonTrigger,
             ConfiguredButtonAction
         ) -> Bool)? = nil,
+        overrideActionPerformer: @escaping (UUID?, RemoteButton, ButtonTrigger) -> Bool = {
+            _, _, _ in false
+        },
+        hasOverrideBinding: @escaping (UUID?, RemoteButton, ButtonTrigger) -> Bool = {
+            _, _, _ in false
+        },
         frontmostBundleIdentifier: @escaping () -> String? = {
             NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         }
@@ -110,6 +118,8 @@ final class HIDRemoteMonitor {
                 )
             )
         }
+        self.overrideActionPerformer = overrideActionPerformer
+        self.hasOverrideBinding = hasOverrideBinding
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
     }
 
@@ -366,12 +376,20 @@ final class HIDRemoteMonitor {
                 for: button,
                 trigger: .doubleClick,
                 profileID: preflightProfileID
-            ).action != .disabled
+            ).action != .disabled || hasOverrideBinding(
+                preflightProfileID,
+                button,
+                .doubleClick
+            )
             let preflightRecognizesLongPress = settings.configuredAction(
                 for: button,
                 trigger: .longPress,
                 profileID: preflightProfileID
-            ).action != .disabled
+            ).action != .disabled || hasOverrideBinding(
+                preflightProfileID,
+                button,
+                .longPress
+            )
             let preflightAction = settings.action(for: button, profileID: preflightProfileID)
             let usesNativePassthrough = preflightProfileID != nil && shouldUseNativePassthrough(
                 button: button,
@@ -401,12 +419,12 @@ final class HIDRemoteMonitor {
                 for: button,
                 trigger: .doubleClick,
                 profileID: profileID
-            ).action != .disabled
+            ).action != .disabled || hasOverrideBinding(profileID, button, .doubleClick)
             let recognizesLongPress = settings.configuredAction(
                 for: button,
                 trigger: .longPress,
                 profileID: profileID
-            ).action != .disabled
+            ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
             let action = settings.action(for: button, profileID: profileID)
             if usesNativePassthrough {
                 nativePassthroughUsages.insert(usage)
@@ -625,6 +643,12 @@ final class HIDRemoteMonitor {
         guard runtimePermissionsAreValid() else {
             releaseForRevokedPermissions()
             return false
+        }
+        if overrideActionPerformer(profileID, button, trigger) {
+            AppLogger.shared.write(
+                "HID BUTTON button=\(button.rawValue) trigger=\(trigger.rawValue) action=private_feature"
+            )
+            return true
         }
         let configured = settings.configuredAction(
             for: button,

@@ -75,6 +75,7 @@
 | 2026-08-11 | [Onboarding 音频步骤错误地只接受 MiRemoteV 2ch](./2026-08-11-onboarding-requires-miremote-audio-device.md) | 候选修复完成，等待真实音频设备验收 |
 | 2026-08-12 | [Remote Mic 运行期间 MacBook 实体方向键偶发失效](./2026-08-12-physical-arrow-keys-blocked.md) | 已修复，自动化通过，等待真机复验 |
 | 2026-08-12 | [Mac 等待手机后无法取消或切换设备](./2026-08-12-mac-phone-waiting-cannot-cancel.md) | 已修复，等待多手机真机验收 |
+| 2026-08-14 | [内测邀请码兑换成功但客户端无反应](./2026-08-14-early-access-fractional-server-time.md) | 已修复，等待签名安装包与用户验收 |
 
 ## 记录模板
 
