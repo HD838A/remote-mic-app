@@ -192,9 +192,10 @@ generate_release_notes() {
 }
 
 generate_candidate_provenance() {
-  local branch head_commit payload_json_file file_path file_name file_size file_sha
+  local branch head_commit base_main_commit payload_json_file file_path file_name file_size file_sha
   branch="$(git symbolic-ref --quiet --short HEAD)"
   head_commit="$(git rev-parse HEAD)"
+  base_main_commit="$(git rev-parse HEAD^)"
   payload_json_file="$WORK_DIR/payload-assets.jsonl"
   : > "$payload_json_file"
 
@@ -214,14 +215,16 @@ generate_candidate_provenance() {
     --arg candidateBranch "$branch" \
     --arg tag "$RELEASE_TAG" \
     --arg tagCommit "$head_commit" \
+    --arg baseMainCommit "$base_main_commit" \
     --arg version "$VERSION" \
     --arg build "$BUILD" \
     '{
-      schemaVersion: 1,
+      schemaVersion: 2,
       repository: $repository,
       candidateBranch: $candidateBranch,
       tag: $tag,
       tagCommit: $tagCommit,
+      baseMainCommit: $baseMainCommit,
       version: $version,
       build: $build,
       payloadAssets: .
@@ -361,17 +364,20 @@ verify_downloaded_candidate() {
     --arg tag "$RELEASE_TAG" \
     --arg version "$VERSION" \
     --arg build "$BUILD" \
-    '.schemaVersion == 1 and .repository == $repository and .tag == $tag and
+    '(.schemaVersion == 1 or .schemaVersion == 2) and
+     .repository == $repository and .tag == $tag and
      .version == $version and .build == $build and
      .candidateBranch == ("release/pre-" + $tag) and
      (.tagCommit | test("^[0-9a-f]{40}$")) and
+     (if .schemaVersion == 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
      ((.payloadAssets | length) == 14 or (.payloadAssets | length) == 16)' "$provenance" >/dev/null
   if [[ "$VERSION" != "${RELEASE_TAG#v}" || ! "$BUILD" =~ '^[0-9]+$' ]]; then
     print -u2 "candidate provenance version/build does not match $RELEASE_TAG"
     exit 1
   fi
 
-  local tag_commit candidate_branch remote_branch_commit asset_name expected_size expected_sha file_path actual_size actual_sha
+  local schema_version tag_commit base_main_commit candidate_branch remote_branch_commit asset_name expected_size expected_sha file_path actual_size actual_sha
+  schema_version="$(jq -r '.schemaVersion' "$provenance")"
   tag_commit="$(jq -r '.tagCommit' "$provenance")"
   candidate_branch="$(jq -r '.candidateBranch' "$provenance")"
   if [[ "$tag_commit" != "$(git rev-parse "$RELEASE_TAG^{commit}")" ]]; then
@@ -382,6 +388,17 @@ verify_downloaded_candidate() {
   if [[ "$remote_branch_commit" != "$tag_commit" ]]; then
     print -u2 "candidate branch is missing or no longer points to the tagged commit"
     exit 1
+  fi
+  if [[ "$schema_version" == "2" ]]; then
+    base_main_commit="$(jq -r '.baseMainCommit' "$provenance")"
+    if [[ "$(git rev-parse "$tag_commit^")" != "$base_main_commit" ]]; then
+      print -u2 "candidate provenance baseMainCommit is not the tag commit's direct parent"
+      exit 1
+    fi
+    if ! git merge-base --is-ancestor "$base_main_commit" origin/main; then
+      print -u2 "candidate provenance baseMainCommit is not contained in main history"
+      exit 1
+    fi
   fi
 
   while IFS=$'\t' read -r asset_name expected_size expected_sha; do
@@ -442,9 +459,9 @@ if [[ "$MODE" == "prerelease" ]]; then
   verify_local_artifacts
   stage_assets
   generate_release_notes
-  generate_candidate_provenance
 
   if [[ "$DRY_RUN" == "1" ]]; then
+    generate_candidate_provenance
     print "RELEASE NOTES:"
     /bin/cat "$RELEASE_NOTES"
     print "PUBLISH DRY RUN PASS"
@@ -455,6 +472,7 @@ if [[ "$MODE" == "prerelease" ]]; then
   fi
 
   verify_candidate_source
+  generate_candidate_provenance
   if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
     print -u2 "release $RELEASE_TAG already exists"
     exit 1
@@ -490,6 +508,11 @@ if [[ "$MODE" == "prerelease" ]]; then
   test "$RELEASE_STATE" = $'false\ttrue'
   test "$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)" = "$LATEST_BEFORE"
   download_and_compare_local_candidate
+  gh workflow run release-guard.yml \
+    --repo "$REPOSITORY" \
+    --ref main \
+    -f "tag=$RELEASE_TAG"
+  print "PREVIEW MAIN RECORDING DISPATCHED: $RELEASE_TAG"
   print "PRE-RELEASE PUBLISH PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
   exit 0
 fi

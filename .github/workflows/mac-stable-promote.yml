@@ -25,7 +25,8 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_repository.full_name == github.repository &&
-       startsWith(github.event.workflow_run.head_branch, 'release/pre-v'))
+       startsWith(github.event.workflow_run.head_branch, 'release/pre-v') &&
+       github.event.workflow_run.event == 'workflow_dispatch')
     runs-on: macos-15
     timeout-minutes: 20
 
@@ -54,8 +55,9 @@ jobs:
               --json number,state,mergedAt,labels,headRefName \
               --jq '[.[] | select(.headRefName == env.CANDIDATE_BRANCH and any(.labels[]; .name == "stable-promotion-approved"))][0]')"
             if [[ -z "$pr_json" || "$pr_json" == "null" ]]; then
-              echo "no approved stable-promotion PR exists for $CANDIDATE_BRANCH" >&2
-              exit 1
+              echo "Preview candidate CI completed without a stable-promotion request; skipping promotion."
+              echo "should_promote=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
             pr_number="$(jq -r '.number' <<< "$pr_json")"
             pr_state="$(jq -r '.state' <<< "$pr_json")"
@@ -67,15 +69,17 @@ jobs:
             fi
             tag="v${CANDIDATE_BRANCH#release/pre-v}"
           fi
-          if [[ ! "$tag" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "invalid stable promotion tag: $tag" >&2
             exit 1
           fi
           git fetch origin main --tags
           git merge --ff-only origin/main
+          echo "should_promote=true" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Promote unchanged candidate assets
+        if: steps.release.outputs.should_promote == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}

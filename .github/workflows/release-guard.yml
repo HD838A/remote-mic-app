@@ -3,9 +3,15 @@ name: Release Guard
 on:
   release:
     types: [published, released, edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Verified pre-release tag whose candidate commit should be recorded in main
+        required: true
+        type: string
 
 concurrency:
-  group: release-guard-${{ github.event.release.tag_name }}
+  group: release-guard-${{ github.event.inputs.tag || github.event.release.tag_name }}
   cancel-in-progress: false
 
 permissions:
@@ -16,7 +22,7 @@ permissions:
 
 jobs:
   reconcile:
-    if: github.event.release.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.release.draft == false
     runs-on: macos-15
     timeout-minutes: 15
 
@@ -33,5 +39,6 @@ jobs:
           STABLE_RELEASE_ACTORS: HD838A
         run: |
           ./scripts/reconcile-release-event.sh \
-            "${{ github.event.release.tag_name }}" \
-            "${{ github.actor }}"
+            "${{ github.event.inputs.tag || github.event.release.tag_name }}" \
+            "${{ github.actor }}" \
+            "${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}"

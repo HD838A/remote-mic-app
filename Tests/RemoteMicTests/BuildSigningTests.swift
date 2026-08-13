@@ -150,12 +150,18 @@ struct BuildSigningTests {
         #expect(!publishSource.contains("prerelease|promote|release"))
         #expect(publishSource.contains("stable promotion is restricted to main"))
         #expect(publishSource.contains("candidate-provenance.json"))
+        #expect(publishSource.contains("schemaVersion: 2"))
+        #expect(publishSource.contains("baseMainCommit"))
         #expect(publishSource.contains("stable-promotion.json"))
         #expect(publishSource.contains("verify_cdn_assets"))
         #expect(publishSource.contains("https://download.sayall.app/mac/releases/$RELEASE_TAG/"))
+        #expect(publishSource.contains("gh workflow run release-guard.yml"))
         #expect(previewVerifierSource.contains("release/pre-vX.Y.Z"))
         #expect(previewVerifierSource.contains("preview candidate contains a non-release change"))
-        #expect(previewVerifierSource.contains("git merge-base --is-ancestor \"$BASE_REF\" HEAD"))
+        #expect(previewVerifierSource.contains("git rev-parse HEAD^"))
+        #expect(previewVerifierSource.contains("must exactly equal the latest origin/main"))
+        #expect(previewVerifierSource.contains("must contain exactly one release metadata commit"))
+        #expect(previewVerifierSource.contains("BASE_MAIN_COMMIT:"))
         #expect(releaseVariantsSource.contains("RELEASE_VARIANT=apple-silicon"))
         #expect(releaseVariantsSource.contains("RELEASE_VARIANT=intel"))
         let candidateIndex = try #require(publishSource.range(of: "gh release create"))
@@ -191,6 +197,35 @@ struct BuildSigningTests {
             encoding: .utf8
         )
         #expect(ciWorkflowSource.contains("workflow_dispatch:"))
+    }
+
+    @Test func previewBranchLifecycleHasExecutableRegressionCoverage() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let lifecycleScript = root.appendingPathComponent(
+            "scripts/test-preview-branch-lifecycle.sh"
+        )
+        let lifecycleSource = try String(
+            contentsOf: lifecycleScript,
+            encoding: .utf8
+        )
+
+        #expect(lifecycleSource.contains("release/pre-v1.8.15"))
+        #expect(lifecycleSource.contains("release/pre-v1.8.16"))
+        #expect(lifecycleSource.contains("PREVIEW BRANCH PASS"))
+        #expect(lifecycleSource.contains("must exactly equal the latest origin/main"))
+        #expect(lifecycleSource.contains("PREVIEW BRANCH LIFECYCLE TEST PASS"))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [lifecycleScript.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
     }
 
     @Test func intelVenturaReleaseLineStaysIsolatedFromAppleSilicon() throws {
@@ -298,6 +333,8 @@ struct BuildSigningTests {
         )
 
         #expect(guardWorkflow.contains("types: [published, released, edited]"))
+        #expect(guardWorkflow.contains("workflow_dispatch:"))
+        #expect(guardWorkflow.contains("github.event.inputs.tag || github.event.release.tag_name"))
         #expect(guardWorkflow.contains("contents: write"))
         #expect(guardWorkflow.contains("pull-requests: write"))
         #expect(guardWorkflow.contains("issues: write"))
@@ -306,6 +343,11 @@ struct BuildSigningTests {
         #expect(reconciliationSource.contains("candidate-provenance.json"))
         #expect(reconciliationSource.contains("stable-promotion.json"))
         #expect(reconciliationSource.contains(".candidateBranch == (\"release/pre-\" + $tag)"))
+        #expect(reconciliationSource.contains(".schemaVersion == 1 or .schemaVersion == 2"))
+        #expect(reconciliationSource.contains("baseMainCommit"))
+        #expect(reconciliationSource.contains("Record $RELEASE_TAG preview candidate in main"))
+        #expect(reconciliationSource.contains("This PR does not promote the GitHub Release to stable"))
+        #expect(reconciliationSource.contains("preview candidate auto-merge"))
         #expect(reconciliationSource.contains("gh pr merge \"$PR_NUMBER\""))
         #expect(reconciliationSource.contains("--auto --merge"))
         #expect(reconciliationSource.contains("gh workflow run mac-ci.yml"))
@@ -313,7 +355,10 @@ struct BuildSigningTests {
         #expect(promotionWorkflow.contains("workflow_dispatch:"))
         #expect(promotionWorkflow.contains("workflow_run:"))
         #expect(promotionWorkflow.contains("github.event.workflow_run.conclusion == 'success'"))
+        #expect(promotionWorkflow.contains("github.event.workflow_run.event == 'workflow_dispatch'"))
         #expect(promotionWorkflow.contains("stable-promotion-approved"))
+        #expect(promotionWorkflow.contains("skipping promotion"))
+        #expect(promotionWorkflow.contains("steps.release.outputs.should_promote == 'true'"))
         #expect(promotionWorkflow.contains("gh pr merge \"$pr_number\""))
         #expect(promotionWorkflow.contains("./scripts/publish-release.sh promote"))
         #expect(!promotionWorkflow.contains("notarize-release.sh"))
