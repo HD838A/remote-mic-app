@@ -39,7 +39,7 @@ struct SettingsPageRegressionTests {
         #expect(!sixthTapUnlocked)
     }
 
-    @Test func nearbyPhoneListenerCanBeStoppedByTheUser() throws {
+    @Test func nearbyMobileListenerOnlyStartsFromAUserConnectionEntry() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -58,15 +58,22 @@ struct SettingsPageRegressionTests {
         #expect(!startupSource.contains("phoneRemoteServer.start()"))
 
         let phoneEntry = try #require(source.range(of: "func enablePhoneRemoteConnection()"))
-        let webEntry = try #require(source.range(
-            of: "func enableWebRemoteConnection()",
+        let watchEntry = try #require(source.range(
+            of: "func enableWatchRemoteConnection()",
             range: phoneEntry.upperBound..<source.endIndex
         ))
-        let phoneEntrySource = source[phoneEntry.lowerBound..<webEntry.lowerBound]
+        let phoneEntrySource = source[phoneEntry.lowerBound..<watchEntry.lowerBound]
         #expect(phoneEntrySource.contains("phoneRemoteServer.start()"))
-        #expect(phoneEntrySource.contains("func disablePhoneRemoteConnection()"))
-        #expect(phoneEntrySource.contains("phoneRemoteServer.stop()"))
-        #expect(phoneEntrySource.contains("func togglePhoneRemoteConnection()"))
+
+        let webEntry = try #require(source.range(
+            of: "func enableWebRemoteConnection()",
+            range: watchEntry.upperBound..<source.endIndex
+        ))
+        let watchEntrySource = source[watchEntry.lowerBound..<webEntry.lowerBound]
+        #expect(watchEntrySource.contains("enablePhoneRemoteConnection()"))
+        #expect(source.contains("func disablePhoneRemoteConnection()"))
+        #expect(source.contains("phoneRemoteServer.stop()"))
+        #expect(source.contains("func togglePhoneRemoteConnection()"))
         #expect(source.contains("LocalizedMessage(\"connection.phone.cancel_waiting\")"))
         #expect(source.contains("response == .alertThirdButtonReturn"))
         #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled else"))
@@ -243,6 +250,7 @@ struct SettingsPageRegressionTests {
             "model.openDoubaoDriverInstructions(using: localization)",
             "model.setVoiceFnTapModeEnabled",
             "model.togglePhoneRemoteConnection()",
+            "model.toggleWatchRemoteConnection()",
             "copyTestFlightPublicBetaLink()",
             "requestWebRemoteSession()",
             "settings.clearTrustedPhoneIdentities()",
@@ -259,17 +267,23 @@ struct SettingsPageRegressionTests {
 
         #expect(source.contains("AppLinks.testFlightPublicBeta"))
         let phoneEntry = try #require(source.range(of: "connection.phone.ios_title"))
+        let watchEntry = try #require(source.range(of: "connection.watch.title"))
         let webEntry = try #require(source.range(
             of: "connection.web.title",
-            range: phoneEntry.upperBound..<source.endIndex
+            range: watchEntry.upperBound..<source.endIndex
         ))
-        let phoneEntrySource = source[phoneEntry.lowerBound..<webEntry.lowerBound]
-        #expect(phoneEntrySource.contains("connection.phone.cancel_waiting"))
-        #expect(phoneEntrySource.contains("model.togglePhoneRemoteConnection()"))
-        #expect(!phoneEntrySource.contains(".disabled(model.isPhoneRemoteConnectionEnabled)"))
-        #expect(!phoneEntrySource.contains(".foregroundStyle(.green)"))
-        #expect(!phoneEntrySource.contains("tint: model.isPhoneRemoteConnectionEnabled ? .green"))
-        #expect(phoneEntrySource.contains("tint: model.isPhoneRemoteConnectionEnabled ? .orange"))
+        #expect(phoneEntry.lowerBound < watchEntry.lowerBound)
+        #expect(watchEntry.lowerBound < webEntry.lowerBound)
+        let mobileEntrySource = source[phoneEntry.lowerBound..<webEntry.lowerBound]
+        #expect(mobileEntrySource.contains("connection.phone.cancel_waiting"))
+        #expect(mobileEntrySource.contains("connection.watch.cancel_waiting"))
+        #expect(mobileEntrySource.contains("model.togglePhoneRemoteConnection()"))
+        #expect(mobileEntrySource.contains("model.toggleWatchRemoteConnection()"))
+        #expect(!mobileEntrySource.contains(".disabled(model.isPhoneRemoteConnectionEnabled)"))
+        #expect(!mobileEntrySource.contains(".disabled(model.isWatchRemoteConnectionEnabled)"))
+        #expect(!mobileEntrySource.contains(".foregroundStyle(.green)"))
+        #expect(mobileEntrySource.contains("tint: model.isPhoneRemoteConnectionEnabled ? .orange"))
+        #expect(mobileEntrySource.contains("tint: model.isWatchRemoteConnectionEnabled ? .orange"))
         #expect(source.contains("ButtonTrigger.allCases"))
         #expect(source.contains("isMappingSelectionLocked"))
         #expect(!source.contains("ScrollView(.horizontal, showsIndicators: false)"))

@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CoreAudio
 import Foundation
+import SayAllMacRemoteCore
 
 private enum MobileVoiceSource {
     case nearby
@@ -54,7 +55,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
 
     private let audioOutput = VirtualAudioOutput()
-    private let phoneRemoteServer = PhoneRemoteServer()
+    private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
+        AppLogger.shared.write(message)
+    })
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
     private lazy var voiceInputDestinationCoordinator = VoiceInputDestinationCoordinator(
@@ -164,11 +167,21 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         phoneRemoteServer.onCommand = { [weak self] button, completion in
             DispatchQueue.main.async {
+                guard let button = Self.appRemoteButton(rawValue: button.rawValue) else {
+                    completion(false)
+                    return
+                }
                 completion(self?.performPhoneCommand(button, source: .nearbyPhone) ?? false)
             }
         }
         phoneRemoteServer.onButtonEvent = { [weak self] button, phase, completion in
             DispatchQueue.main.async {
+                guard let button = Self.appRemoteButton(rawValue: button.rawValue),
+                      let phase = Self.appRemoteButtonPhase(rawValue: phase.rawValue)
+                else {
+                    completion(false)
+                    return
+                }
                 completion(self?.handleMobileButtonEvent(
                     button,
                     phase: phase,
@@ -215,11 +228,21 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         webRemoteClient.onCommand = { [weak self] button, completion in
             DispatchQueue.main.async {
+                guard let button = Self.appRemoteButton(rawValue: button.rawValue) else {
+                    completion(false)
+                    return
+                }
                 completion(self?.performPhoneCommand(button, source: .webRemote) ?? false)
             }
         }
         webRemoteClient.onButtonEvent = { [weak self] button, phase, completion in
             DispatchQueue.main.async {
+                guard let button = Self.appRemoteButton(rawValue: button.rawValue),
+                      let phase = Self.appRemoteButtonPhase(rawValue: phase.rawValue)
+                else {
+                    completion(false)
+                    return
+                }
                 completion(self?.handleMobileButtonEvent(
                     button,
                     phase: phase,
@@ -389,6 +412,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         } else {
             enablePhoneRemoteConnection()
         }
+    }
+
+    var isWatchRemoteConnectionEnabled: Bool {
+        isPhoneRemoteConnectionEnabled
+    }
+
+    func enableWatchRemoteConnection() {
+        enablePhoneRemoteConnection()
+    }
+
+    func toggleWatchRemoteConnection() {
+        togglePhoneRemoteConnection()
     }
 
     func enableWebRemoteConnection() {
@@ -1314,7 +1349,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "允许“\(deviceName)”连接无线麦？"
-            alert.informativeText = "这台 iPhone 将连接“无线麦”App，代替实体遥控器发送按键和按住说话音频。请确认 iPhone 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
+            if Self.isAppleWatchDeviceName(deviceName) {
+                alert.informativeText = "这块 Apple Watch 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 Apple Watch 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
+            } else {
+                alert.informativeText = "这台 iPhone 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 iPhone 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
+            }
             let codeLabel = NSTextField(labelWithString: pairingCode.map(String.init).joined(separator: " "))
             codeLabel.frame = NSRect(x: 0, y: 0, width: 300, height: 44)
             codeLabel.alignment = .center
@@ -1395,6 +1434,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             NSApp.abortModal()
             alert.window.orderOut(nil)
         }
+    }
+
+    nonisolated static func appRemoteButton(rawValue: String) -> RemoteButton? {
+        RemoteButton(rawValue: rawValue)
+    }
+
+    nonisolated static func appRemoteButtonPhase(rawValue: String) -> RemoteButtonPhase? {
+        RemoteButtonPhase(rawValue: rawValue)
+    }
+
+    nonisolated static func isAppleWatchDeviceName(_ deviceName: String) -> Bool {
+        deviceName.range(of: "watch", options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
 
     private func performPhoneCommand(

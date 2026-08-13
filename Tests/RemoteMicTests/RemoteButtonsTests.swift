@@ -1,5 +1,4 @@
 import AppKit
-import CryptoKit
 import Foundation
 import Testing
 @testable import RemoteMic
@@ -1356,30 +1355,6 @@ struct RemoteButtonsTests {
 
         restored.clearTrustedPhoneIdentities()
         #expect(AppSettings(defaults: defaults).trustedPhoneIdentityFingerprints.isEmpty)
-    }
-
-    @Test func phoneIdentityProofMustMatchTheCurrentSessionKey() throws {
-        let identity = P256.Signing.PrivateKey()
-        let firstSessionKey = Data(repeating: 0x11, count: 32)
-        let secondSessionKey = Data(repeating: 0x22, count: 32)
-        let signature = try identity.signature(
-            for: PhoneRemoteIdentityVerifier.proof(for: firstSessionKey)
-        )
-
-        let verified = PhoneRemoteIdentityVerifier.verify(
-            identityPublicKey: identity.publicKey.rawRepresentation.base64EncodedString(),
-            identitySignature: signature.rawRepresentation.base64EncodedString(),
-            sessionPublicKey: firstSessionKey
-        )
-        guard case .verified = verified else {
-            Issue.record("Expected a valid identity proof")
-            return
-        }
-        #expect(PhoneRemoteIdentityVerifier.verify(
-            identityPublicKey: identity.publicKey.rawRepresentation.base64EncodedString(),
-            identitySignature: signature.rawRepresentation.base64EncodedString(),
-            sessionPublicKey: secondSessionKey
-        ) == .invalid)
     }
 
     @Test func updateAndLaunchPreferencesPersistAndImportCompatibly() throws {

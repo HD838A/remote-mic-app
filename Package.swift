@@ -3,11 +3,17 @@ import Foundation
 import PackageDescription
 
 var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
+    .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
+    .package(
+        url: "https://github.com/GetSayAll/sayall-mac-remote.git",
+        revision: "da7f0bcd94af1478c9572ec558771f85ec306480"
+    ),
 ]
 var remoteMicDependencies: [Target.Dependency] = [
     "AudioExceptionGuard",
     .product(name: "Sparkle", package: "Sparkle"),
+    .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
+    .product(name: "SayAllMacRemoteUI", package: "sayall-mac-remote"),
 ]
 var remoteMicTestDependencies: [Target.Dependency] = ["RemoteMic"]
 let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
