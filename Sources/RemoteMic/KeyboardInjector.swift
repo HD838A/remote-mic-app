@@ -196,6 +196,8 @@ enum KeyboardInjector {
             keyPoster(3, .maskCommand)
         case .commandSave:
             keyPoster(1, .maskCommand)
+        case .commandDelete:
+            keyPoster(51, .maskCommand)
         case .arrowUp:
             keyPoster(126, [])
         case .arrowDown:

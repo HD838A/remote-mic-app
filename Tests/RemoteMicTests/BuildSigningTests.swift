@@ -245,6 +245,40 @@ struct BuildSigningTests {
         ))
     }
 
+    @Test func ordinaryDmgHasOneInstallerAndKeepsHealthyDriver() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let dmgSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-dmg.sh"),
+            encoding: .utf8
+        )
+        let postinstallSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "packaging/doubao-driver/install/postinstall"
+            ),
+            encoding: .utf8
+        )
+        let verifierSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-dmg.sh"),
+            encoding: .utf8
+        )
+
+        #expect(dmgSource.contains("$STAGING/$INSTALL_PACKAGE"))
+        #expect(!dmgSource.contains("$STAGING/$DISPLAY_NAME.app"))
+        #expect(!dmgSource.contains("$STAGING/$UNINSTALL_PACKAGE"))
+        #expect(!dmgSource.contains("ln -s /Applications"))
+        #expect(verifierSource.contains("EXPECTED_ROOT_ENTRIES=\"$RELEASE_INSTALL_PACKAGE_NAME\""))
+        #expect(postinstallSource.contains("driver_is_healthy_and_current()"))
+        #expect(postinstallSource.contains("/usr/bin/file -b \"$1\""))
+        #expect(postinstallSource.contains("CFBundleVersion"))
+        #expect(postinstallSource.contains("/usr/bin/codesign --verify --deep --strict"))
+        #expect(postinstallSource.contains("was kept in place"))
+        #expect(!postinstallSource.contains("/usr/bin/lipo"))
+        #expect(!postinstallSource.contains("xcrun"))
+    }
+
     @Test func stablePromotionRequiresMainAndCandidateProvenance() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

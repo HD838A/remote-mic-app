@@ -45,11 +45,14 @@ fi
   "$LEGACY_INSTALL_PACKAGE" \
   "$UNINSTALL_PACKAGE" \
   "$LEGACY_UNINSTALL_PACKAGE"
-/bin/mkdir -p "$PAYLOAD_ROOT/Applications" "$PAYLOAD_ROOT/Library/Audio/Plug-Ins/HAL"
+/bin/mkdir -p \
+  "$PAYLOAD_ROOT/Applications" \
+  "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$APP" "$PAYLOAD_ROOT/Applications/Remote Mic.app"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
-  "$DRIVER" "$PAYLOAD_ROOT/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+  "$DRIVER" \
+  "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/install" "$INSTALL_SCRIPTS"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \

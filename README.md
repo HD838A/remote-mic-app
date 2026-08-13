@@ -44,10 +44,7 @@ Apple Silicon 最新正式版可通过 [Cloudflare CDN 固定入口](https://dow
 
 Windows 与 Mac 单独构建和发布。当前仅提供面向小米 RC003 的 [Windows RC003 Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，它是未签名、尚未由主项目维护者独立真机复验的社区预览版，不进入 Mac 的 Sparkle 更新序列。下载前请阅读 Release 中的权限、杀毒软件和虚拟音频设备提示，并使用 `SHA256SUMS.txt` 校验文件。
 
-打开 DMG 后有两种安装方式：
-
-1. 推荐：Apple Silicon 双击 `Install Remote Mic.pkg`；Intel Mac 双击 `Install Remote Mic Intel.pkg`。安装器会同时安装 Remote Mic 和 `MiRemoteV 2ch` 兼容麦克风，适合豆包输入法及其他语音输入应用。
-2. 仅安装应用：把 Remote Mic.app 拖到 Applications。如果使用这种方式，请确保 Mac 上已经有可用的回环音频设备。
+打开 DMG 后只需双击唯一的 `Install Remote Mic.pkg`；Intel Mac 使用 `Install Remote Mic Intel.pkg`。安装器会安装 Remote Mic，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
 自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从本项目 GitHub Releases 下载，并使用同一 Release 中的 `.sha256` 文件核对 DMG。
 
@@ -131,7 +128,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与 RC003 默
 ## 卸载
 
 1. 退出无线麦。
-2. 双击 DMG 中的 Uninstall Remote Mic.pkg，移除 `MiRemoteV 2ch` 兼容麦克风。
+2. 从同一 GitHub Release 下载并运行 `Uninstall Remote Mic.pkg`，移除 `MiRemoteV 2ch` 兼容麦克风。
 3. 删除“应用程序”中的 Remote Mic.app。
 
 卸载兼容麦克风不会修改或删除已有的 BlackHole。
