@@ -187,6 +187,11 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("./scripts/verify-dmg.sh"))
         #expect(workflowSource.contains("GetSayAll/sayall-ai"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_AI_PACKAGE=1"))
+        #expect(workflowSource.contains("GetSayAll/sayall-mac-remote"))
+        #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
+        #expect(workflowSource.contains("swift package config set-mirror"))
+        #expect(workflowSource.contains("file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"))
+        #expect(workflowSource.contains("da7f0bcd94af1478c9572ec558771f85ec306480"))
         #expect(workflowSource.contains("actions/upload-artifact@v4"))
         #expect(workflowSource.contains("contents: read"))
         #expect(!workflowSource.contains("MATCH_PASSWORD"))
@@ -197,6 +202,9 @@ struct BuildSigningTests {
             encoding: .utf8
         )
         #expect(ciWorkflowSource.contains("workflow_dispatch:"))
+        #expect(ciWorkflowSource.contains("GetSayAll/sayall-mac-remote"))
+        #expect(ciWorkflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
+        #expect(ciWorkflowSource.contains("swift package config set-mirror"))
     }
 
     @Test func previewBranchLifecycleHasExecutableRegressionCoverage() throws {
@@ -435,6 +443,9 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("RELEASE_CREDENTIALS_DEPLOY_KEY"))
         #expect(workflowSource.contains("APPLE_SIGNING_MATCH_DEPLOY_KEY"))
         #expect(workflowSource.contains("RELEASE_AGE_IDENTITY"))
+        #expect(workflowSource.contains("GetSayAll/sayall-mac-remote"))
+        #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
+        #expect(workflowSource.contains("swift package config set-mirror"))
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
         #expect(workflowSource.contains("package-macos-release-in-actions.sh"))

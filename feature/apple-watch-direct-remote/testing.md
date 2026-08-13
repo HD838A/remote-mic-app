@@ -5,6 +5,7 @@
 - `sayall-mac-remote`：`swift test`。
 - Mac 主仓：`swift test`，覆盖专用入口顺序、按需监听、取消等待、按键类型映射和既有稳定功能。
 - Mac Release：按仓库现有发布脚本或 `swift build -c release` 验证。
+- GitHub Actions：使用独立只读部署密钥检出固定 revision 的 `sayall-mac-remote`，PR、候选和正式签名流程均通过 SwiftPM 本地 mirror 构建，避免 runner 匿名读取私有仓库且不改写锁定依赖。
 
 ## 人工测试
 
