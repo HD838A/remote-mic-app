@@ -118,7 +118,7 @@
 "action.arrow_left" = "方向左";
 "action.arrow_right" = "方向右";
 "action.delete_backspace" = "Delete（退格）";
-"action.command_delete" = "Command-Delete";
+"action.command_delete" = "Command-Delete（删除至行首）";
 "action.show_desktop" = "显示桌面";
 "action.context_menu" = "上下文菜单";
 "action.system_volume_up" = "系统音量 +";

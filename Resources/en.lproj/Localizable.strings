@@ -118,7 +118,7 @@
 "action.arrow_left" = "Arrow Left";
 "action.arrow_right" = "Arrow Right";
 "action.delete_backspace" = "Delete (Backspace)";
-"action.command_delete" = "Command-Delete";
+"action.command_delete" = "Command-Delete (Delete to Line Start)";
 "action.show_desktop" = "Show Desktop";
 "action.context_menu" = "Context Menu";
 "action.system_volume_up" = "System Volume +";
