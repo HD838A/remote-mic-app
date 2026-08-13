@@ -2,8 +2,8 @@
 
 ## 适用版本或分支
 
-- 分支：`codex/integrate-macro-platform`
-- 私有测试包：`1.8.17 (109)`；公开发布状态不变。
+- 分支：最新 `main` 或由其直接创建的预览候选。
+- 适用版本：`1.8.19 (111)` 及以后；`1.8.18 (110)` 因打包资源路径导致首次打开设置窗口崩溃，不得发布。
 
 ## 测试前准备
 
@@ -29,6 +29,8 @@ REQUIRE_EARLY_ACCESS_CONFIGURATION=1 \
 REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 ./scripts/verify-app.sh "dist/Remote Mic.app"
 ```
+
+验证最终 ZIP 时必须先临时挪开同版本 `/private/tmp/remote-mic-swiftpm/<版本>-<Build>` 构建缓存，再从全新目录解压并打开设置窗口；否则 SwiftPM 生成的绝对构建路径可能掩盖安装包资源错误。验证结束后恢复原缓存目录。
 
 ## 用例一：公开构建回归
 
@@ -118,5 +120,7 @@ log show --last 30m \
 ## 验证边界
 
 已由自动化和代理验证：快捷指令私有模块 34 项、另一共享资格私有模块 23 项、宿主注入两个模块后的 222 项完整测试、42 项项目自检、Apple Silicon Release App 构建、资源和 ad-hoc 签名校验、仓库边界检查。当前 Mac 已使用真实生产服务完成无效码错误可见性、有效资格恢复、侧边栏出现、完全退出后重启恢复和“重新检查资格”。Build 67 曾因降级安装与破坏性 `preinstall` 在当前 Mac 真实安装失败；`1.8.17 (109)` 已在当前 Apple Silicon Mac 完成用例六和用例七，详见 `Bugs/2026-08-14-macro-preview-installer-deleted-newer-app.md`。
+
+`1.8.18 (110)` 最终 Developer ID ZIP 在移除同版本构建缓存后可稳定复现首次打开设置窗口崩溃；崩溃源于快捷指令 SwiftPM 资源访问器从 App 根目录查找 Bundle，而宿主按 macOS 标准放在 `Contents/Resources`。修复后的私有组件改为优先解析 `Bundle.main.resourceURL`，并保留非 App 环境的 `Bundle.module` 回退；发布前必须用最终签名 ZIP 对原复现再次验收。
 
 自动化只能验证编译边界、资格门禁、事件路由和 App 结构。快捷指令的真实邀请码服务与本机持久化已由代理验收；另一共享资格私有模块本轮只完成生产响应格式回归和宿主注入测试，没有独立邀请码的完整页面兑换。当前构建为 ad-hoc 签名；Developer ID 预览包、Intel Mac 安装、真实遥控器、第三方 App 输入框、系统权限、`800 × 650` 全侧边栏点击以及不同前后台状态仍需验收，未完成部分不得表述为已完成真机验证。
