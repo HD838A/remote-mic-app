@@ -72,6 +72,22 @@ struct VoiceFnTapSessionControllerTests {
         #expect(harness.controller.phase == .idle)
     }
 
+    @Test func stopCompletionRunsOnlyAfterDrainAndMatchingStopTap() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        var completed = false
+
+        #expect(harness.controller.stopVoice { completed = true })
+        #expect(!completed)
+        harness.completeNextDrain()
+        #expect(!completed)
+        harness.scheduler.advance(by: 0.12)
+
+        #expect(completed)
+        #expect(harness.controller.phase == .idle)
+    }
+
     @Test func disablingActiveSessionFinishesMatchingStopTap() {
         let harness = Harness()
         harness.controller.setEnabled(true)

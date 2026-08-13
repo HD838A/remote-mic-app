@@ -6,6 +6,14 @@
   - GitHub Releases 继续保存全部签名、公证资产；发布后必须从 GitHub 与 CDN 分别下载并逐字节比较，同时验证 `HEAD`、`Range`、签名、公证和候选更新发现。完成公开 Worker、官网和 `1.8.12` Pre-release 验证后再勾选。
   - 2026-08-12：Worker 与中英文官网已部署，当前正式版 `v1.8.3` 的 GitHub/CDN DMG 字节一致；候选 appcast、签名公证资产和正式版到候选更新仍由统一 Mac 预览版流程完成。
 
+- [ ] 支持通用 CoreAudio 麦克风持续桥接到统一虚拟声卡
+  - 通用采集与 PCM 归一化已抽离到 GetSayAll 私有 `sayall-audio-input-kit`；公开 GPL 宿主仅保留可选薄适配层。未注入私有组件时功能失败关闭，不改变 RC001/RC003 稳定路径。
+  - 当前仅允许内部源码集成与测试；无线麦组合二进制的 GPL 分发边界解决前，不得打包或对外发布包含私有组件的预览包。
+  - 已实现按 UID 选择、input-only AUHAL、统一 16 kHz 单声道 PCM、显式权限、默认关闭、防回授、RC003/手机抢占、设备恢复和有界背压。
+  - 私有硬件模拟仓库已加入通用 Audio Input Endpoint 与 DJI Mic Mini HFP 场景；15 项跨仓库集成、42 项 Self Test、26 项模拟器测试、Release App 构建、签名与结构校验均通过。
+  - 已在本机最终测试包选择 DJI Mic Mini 并启动 AUHAL 16 kHz 单声道采集，使用 `ffmpeg` 从 `MiRemoteV 2ch` 回读到双声道非零电平；关闭开关后日志确认 `AUDIO INPUT stopped`。本次没有执行闪电说最终转写和长时间运行。
+  - 尚需 DJI → MiRemoteV → 闪电说、听歌共存、断线重连、睡眠唤醒、30 分钟和 2 小时真机验收；AirPods 并发和蓝牙按钮不属于自动化通过范围。
+
 - [x] 建立可选硬件信号模拟回归门禁
   - 私有模拟器 V1 已覆盖小米遥控器 12 个原始按键、36 个短按/双击/长按场景、7 个长按连发场景，以及 BLE 分片、sync、异常、重连、旧回调和双设备隔离；模拟依赖仅在测试环境变量存在时加载，普通开源构建不依赖私有仓库。
   - 自动化只代表 L0–L2 进程内协议和状态响应通过；CoreBluetooth、IOHID/DriverKit、Power 系统行为、射频、音质和安装环境继续由系统级与 RC001/RC003 真机门禁负责。

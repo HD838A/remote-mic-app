@@ -654,6 +654,75 @@ struct SettingsView: View {
                 Text("audio.voice_output.section_title")
                     .font(.headline)
 
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("audio.input.section_title")
+                            .font(.headline)
+                        Spacer()
+                        Toggle("audio.input.enabled", isOn: Binding(
+                            get: { settings.continuousMicrophoneBridgeEnabled },
+                            set: { enabled in
+                                settings.continuousMicrophoneBridgeEnabled = enabled
+                                model.applyMicrophoneBridgeSettings()
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                    }
+
+                    if model.audioInputDevices.isEmpty {
+                        Text("audio.input.none_or_unavailable")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 180), spacing: 8)],
+                            spacing: 8
+                        ) {
+                            ForEach(model.audioInputDevices, id: \.uid) { device in
+                                Button {
+                                    settings.selectedInputDeviceUID = device.uid
+                                    model.applyMicrophoneBridgeSettings()
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: settings.selectedInputDeviceUID == device.uid
+                                            ? "checkmark.circle.fill"
+                                            : "mic.circle")
+                                        Text(device.name)
+                                            .lineLimit(2)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .frame(minHeight: 38)
+                                }
+                                .compatibilityButtonStyle(
+                                    settings.selectedInputDeviceUID == device.uid
+                                        ? .prominent
+                                        : .standard
+                                )
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Text(model.microphoneBridgeStatus.text(using: localization))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if model.microphoneAuthorization != .authorized {
+                            Button("audio.input.request_permission") {
+                                model.requestMicrophoneAccess()
+                            }
+                            .compatibilityButtonStyle(.standard)
+                        }
+                    }
+
+                    Text("audio.input.privacy_help")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Divider()
+
                 HStack(spacing: 14) {
                     Text("audio.output.title")
                         .frame(width: 92, alignment: .leading)

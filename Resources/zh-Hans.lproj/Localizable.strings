@@ -4,6 +4,16 @@
 "audio.output.select_failed" = "无法选择音频设备（错误 %1$@）";
 "audio.output.current_format" = "语音输出：%1$@";
 "audio.output.start_failed" = "启动音频输出失败：%1$@";
+"audio.input.disabled" = "持续麦克风桥接已关闭";
+"audio.input.component_unavailable" = "此构建未包含私有音频输入组件";
+"audio.input.ready" = "所选麦克风已可启动";
+"audio.input.streaming" = "正在持续桥接所选麦克风";
+"audio.input.permission_required" = "需要麦克风权限";
+"audio.input.none_or_unavailable" = "请选择可用的麦克风";
+"audio.input.output_unavailable" = "请先选择可用的语音输出";
+"audio.input.same_device" = "输入和语音输出不能是同一个设备";
+"audio.input.capture_failed" = "麦克风采集失败（%1$@）";
+"audio.input.output_backpressure" = "语音输出处理较慢，正在丢弃过期的麦克风音频";
 "bluetooth.status.initializing" = "正在初始化蓝牙";
 "button_mapping.status.disabled" = "按键映射未启用";
 "audio.compatibility.checking" = "正在检查豆包兼容音频设备";
@@ -261,6 +271,10 @@
 "connection.web.failed" = "网页版连接失败";
 "audio.section.title" = "音频设置";
 "audio.voice_output.section_title" = "语音输出";
+"audio.input.section_title" = "持续麦克风输入";
+"audio.input.enabled" = "启用";
+"audio.input.request_permission" = "允许使用麦克风";
+"audio.input.privacy_help" = "应用只在内部打开所选麦克风，并把声音发送到下方语音输出；不会修改系统默认输入或输出设备。";
 "audio.output.title" = "语音输出";
 "audio.output.disabled" = "不输出语音";
 "audio.gain.title" = "增益";

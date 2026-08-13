@@ -10,6 +10,8 @@ private struct PersonalizedConfiguration: Codable {
     let formatVersion: Int
     let gainDB: Double
     let selectedAudioDeviceUID: String
+    let continuousMicrophoneBridgeEnabled: Bool?
+    let selectedInputDeviceUID: String?
     let customMappingEnabled: Bool
     let buttonBindings: [String: ButtonAction]
     let buttonShortcuts: [String: CustomKeyboardShortcut]
@@ -225,6 +227,8 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let gainDB = "gainDB"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
+        static let continuousMicrophoneBridgeEnabled = "continuousMicrophoneBridgeEnabled"
+        static let selectedInputDeviceUID = "selectedInputDeviceUID"
         static let customMappingEnabled = "customMappingEnabled"
         static let legacyExclusiveHID = "exclusiveHID"
         static let buttonBindings = "buttonBindings"
@@ -262,6 +266,19 @@ final class AppSettings: ObservableObject {
 
     @Published var selectedAudioDeviceUID: String {
         didSet { defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID) }
+    }
+
+    @Published var continuousMicrophoneBridgeEnabled: Bool {
+        didSet {
+            defaults.set(
+                continuousMicrophoneBridgeEnabled,
+                forKey: Keys.continuousMicrophoneBridgeEnabled
+            )
+        }
+    }
+
+    @Published var selectedInputDeviceUID: String {
+        didSet { defaults.set(selectedInputDeviceUID, forKey: Keys.selectedInputDeviceUID) }
     }
 
     @Published var customMappingEnabled: Bool {
@@ -421,6 +438,10 @@ final class AppSettings: ObservableObject {
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
         selectedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        continuousMicrophoneBridgeEnabled = defaults.bool(
+            forKey: Keys.continuousMicrophoneBridgeEnabled
+        )
+        selectedInputDeviceUID = defaults.string(forKey: Keys.selectedInputDeviceUID) ?? ""
         if defaults.object(forKey: Keys.customMappingEnabled) != nil {
             customMappingEnabled = defaults.bool(forKey: Keys.customMappingEnabled)
         } else {
@@ -1145,6 +1166,8 @@ final class AppSettings: ObservableObject {
             formatVersion: 1,
             gainDB: gainDB,
             selectedAudioDeviceUID: selectedAudioDeviceUID,
+            continuousMicrophoneBridgeEnabled: continuousMicrophoneBridgeEnabled,
+            selectedInputDeviceUID: selectedInputDeviceUID,
             customMappingEnabled: customMappingEnabled,
             buttonBindings: Dictionary(
                 uniqueKeysWithValues: buttonBindings.map { ($0.key.rawValue, $0.value) }
@@ -1216,6 +1239,8 @@ final class AppSettings: ObservableObject {
 
         gainDB = configuration.gainDB
         selectedAudioDeviceUID = configuration.selectedAudioDeviceUID
+        continuousMicrophoneBridgeEnabled = configuration.continuousMicrophoneBridgeEnabled ?? false
+        selectedInputDeviceUID = configuration.selectedInputDeviceUID ?? ""
         customMappingEnabled = configuration.customMappingEnabled
         buttonBindings = Self.defaultBindings.merging(importedBindings) { _, imported in imported }
         buttonShortcuts = importedShortcuts

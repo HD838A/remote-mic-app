@@ -4,6 +4,16 @@
 "audio.output.select_failed" = "Unable to select the audio device (error %1$@)";
 "audio.output.current_format" = "Voice output: %1$@";
 "audio.output.start_failed" = "Failed to start audio output: %1$@";
+"audio.input.disabled" = "Continuous microphone bridge is off";
+"audio.input.component_unavailable" = "The private audio input component is unavailable in this build";
+"audio.input.ready" = "Ready to start the selected microphone";
+"audio.input.streaming" = "Continuously bridging the selected microphone";
+"audio.input.permission_required" = "Microphone permission is required";
+"audio.input.none_or_unavailable" = "Select an available microphone";
+"audio.input.output_unavailable" = "Select an available voice output first";
+"audio.input.same_device" = "Input and voice output must be different devices";
+"audio.input.capture_failed" = "Microphone capture failed (%1$@)";
+"audio.input.output_backpressure" = "Voice output is falling behind; old microphone audio is being dropped";
 "bluetooth.status.initializing" = "Initializing Bluetooth";
 "button_mapping.status.disabled" = "Button mapping is disabled";
 "audio.compatibility.checking" = "Checking for the Doubao-compatible audio device";
@@ -261,6 +271,10 @@
 "connection.web.failed" = "Web Remote Connection Failed";
 "audio.section.title" = "Audio Settings";
 "audio.voice_output.section_title" = "Voice Output";
+"audio.input.section_title" = "Continuous Microphone Input";
+"audio.input.enabled" = "Enable";
+"audio.input.request_permission" = "Allow Microphone";
+"audio.input.privacy_help" = "The selected microphone is opened only inside this app and sent to the voice output below. System default input and output devices are not changed.";
 "audio.output.title" = "Voice output";
 "audio.output.disabled" = "No voice output";
 "audio.gain.title" = "Gain";
