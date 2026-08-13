@@ -1,6 +1,14 @@
 {
-  "originHash" : "d4720e4f2840840f34ba32ae576cc7c770e11570873191b9ee345be1555af650",
+  "originHash" : "de9b98830964000e1b5002cd4cec5e20f841367dc79c90b97c4f35b7eb13b858",
   "pins" : [
+    {
+      "identity" : "sayall-mac-remote",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GetSayAll/sayall-mac-remote.git",
+      "state" : {
+        "revision" : "da7f0bcd94af1478c9572ec558771f85ec306480"
+      }
+    },
     {
       "identity" : "sparkle",
       "kind" : "remoteSourceControl",

@@ -2,6 +2,8 @@ import AppKit
 import Charts
 import Combine
 import CoreBluetooth
+import SayAllMacRemoteCore
+import SayAllMacRemoteUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -37,6 +39,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         }
     }
 }
+
+extension BridgeAppModel: WebRemoteSessionModel {}
 
 private enum PermissionVisualState {
     case granted
@@ -232,8 +236,7 @@ struct SettingsView: View {
             ReleaseHistorySheet()
         }
         .sheet(isPresented: $isWebRemoteSessionPresented) {
-            WebRemoteSessionView(model: model)
-                .environmentObject(localization)
+            webRemoteSessionView
         }
         .alert(
             localization.text("connection.trusted_devices.clear_confirm.title"),
@@ -251,8 +254,7 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $isWebRemoteInvitePresented) {
             if isWebRemoteInviteAuthorized {
-                WebRemoteSessionView(model: model)
-                    .environmentObject(localization)
+                webRemoteSessionView
             } else {
                 webRemoteInviteSheet
             }
@@ -370,6 +372,16 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(width: 540)
+    }
+
+    private var webRemoteSessionView: some View {
+        WebRemoteSessionView(
+            model: model,
+            localization: WebRemoteSessionLocalization(
+                locale: localization.locale,
+                text: localization.text
+            )
+        )
     }
 
     private var sidebar: some View {
@@ -552,6 +564,44 @@ struct SettingsView: View {
                         }
                         .compatibilityButtonStyle(.standard)
                     }
+                }
+
+                Divider()
+
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "applewatch")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 34)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("connection.watch.title")
+                            .font(.subheadline.weight(.semibold))
+                        Text("connection.watch.help")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    StatusPill(
+                        text: localization.text(
+                            model.isWatchRemoteConnectionEnabled
+                                ? "connection.watch.enabled"
+                                : "connection.phone.not_enabled"
+                        ),
+                        tint: model.isWatchRemoteConnectionEnabled ? .orange : .secondary
+                    )
+
+                    Button(
+                        model.isWatchRemoteConnectionEnabled
+                            ? "connection.watch.cancel_waiting"
+                            : "connection.watch.connect"
+                    ) {
+                        model.toggleWatchRemoteConnection()
+                    }
+                    .compatibilityButtonStyle(.standard)
                 }
 
                 Divider()

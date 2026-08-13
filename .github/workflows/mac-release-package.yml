@@ -42,6 +42,15 @@ jobs:
           ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
           persist-credentials: false
 
+      - name: Check out shared Mac remote package
+        uses: actions/checkout@v5
+        with:
+          repository: GetSayAll/sayall-mac-remote
+          ref: da7f0bcd94af1478c9572ec558771f85ec306480
+          path: .private-dependencies/sayall-mac-remote
+          ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
+          persist-credentials: false
+
       - name: Check out readonly release credentials
         uses: actions/checkout@v5
         with:
@@ -59,7 +68,9 @@ jobs:
           persist-credentials: false
 
       - name: Configure private feature package
-        run: echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
+        run: |
+          echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
+          swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
 
       - name: Install required tools
         run: brew install age fastlane ripgrep

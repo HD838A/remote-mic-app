@@ -7,6 +7,7 @@
 | 功能 | 状态 | 说明 |
 | --- | --- | --- |
 | [关于页版本中心](./about-update-center/) | 验证中 | 集中展示版本、更新内容、版本历史与正式/预发布更新通道。 |
+| [Apple Watch 直连遥控与收音](./apple-watch-direct-remote/) | 候选代码完成，等待真机验收 | Mac 提供独立 Watch 入口，并复用按需开启的附近连接、现有按键映射与移动语音链路。 |
 | [常用 macOS 快捷键](./common-mac-shortcuts/) | 已完成 | 常用固定快捷键与无线麦标准退出、关窗行为。 |
 | [Mac 下载 Cloudflare CDN](./cloudflare-download-cdn/) | 等待预览版集成 | 官网固定入口与 Worker 已上线；版本化安装包和 Sparkle 更新资产通过 Cloudflare 缓存 GitHub Release 源文件，候选验证由统一 Mac 预览版完成。 |
 | [私有功能组件集成](./private-feature-integration/) | 已完成 | 公开 App 只保留可选适配层；私有实现、资源、测试和内部文档由独立私有组件维护。 |
