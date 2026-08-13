@@ -1,5 +1,11 @@
 # Version History
 
+## 1.8.17 (Pre-release)
+
+- Improved first-time setup and installation. The setup guide now provides a focused recovery action and a privacy-safe diagnostic summary for the current blocker. The installer preserves a healthy existing audio driver while safely handling damaged, outdated, or architecture-mismatched installations.
+- Added Command-Delete to Basic Keys for remote-button mappings, with the same single-trigger behavior as other fixed shortcut combinations.
+- Added a dedicated Apple Watch connection entry to Connection & Voice, ordered after iPhone and before the Web remote. iPhone and Apple Watch share the same on-demand nearby waiting session, which can be cancelled from either entry. Real-device validation of Apple Watch discovery, authorization, buttons, and microphone remains pending for this preview.
+
 ## 1.8.12 (Pre-release)
 
 - Improved the speed and reliability of Mac installer and automatic-update downloads. Existing versions can continue checking for updates, with GitHub downloads retained as a fallback.
