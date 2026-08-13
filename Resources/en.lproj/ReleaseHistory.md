@@ -1,5 +1,9 @@
 # Version History
 
+## 1.8.15 (Pre-release)
+
+- Tap the current version five times in About to reveal the AI invitation entry. The first four taps remain completely hidden, revealing the entry does not access the network, eligibility is requested only after the user enters a code and actively verifies it, and the AI feature remains off by default after approval.
+
 ## 1.8.12 (Pre-release)
 
 - Improved the speed and reliability of Mac installer and automatic-update downloads. Existing versions can continue checking for updates, with GitHub downloads retained as a fallback.
