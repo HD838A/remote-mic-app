@@ -403,10 +403,14 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("privateFeature.shouldShowEnrollment"))
         #expect(source.contains("privateFeature.settingsView()"))
         #expect(source.contains("privateFeature.enrollmentView()"))
-        #expect(!source.contains("registerPrivateFeatureVersionTap"))
-        #expect(!source.contains("PrivateFeatureEntryRevealState"))
-        #expect(!source.contains("privateFeature.revealEnrollment()"))
         #expect(!source.contains("deepSeek"))
         #expect(!source.contains("postDictation"))
+
+        let versionSummary = try #require(
+            source.components(separatedBy: "Text(currentVersion)").last?
+                .components(separatedBy: "if case let .available(update)").first
+        )
+        #expect(!versionSummary.contains(".onTapGesture"))
+        #expect(!versionSummary.contains(".gesture"))
     }
 }
