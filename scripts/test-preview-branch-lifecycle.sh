@@ -83,14 +83,14 @@ prepare_candidate() {
 prepare_candidate "release/pre-v1.8.15" "1.8.15" "107" "prepare 1.8.15"
 (
   cd "$TEST_REPO"
-  PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
+  GITHUB_REF_NAME="" PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
 ) > "$WORK_DIR/valid-output.txt"
 /usr/bin/grep -Fq "PREVIEW BRANCH PASS" "$WORK_DIR/valid-output.txt"
 
 prepare_candidate "release/pre-v1.8.16" "1.8.16" "108" "prepare 1.8.16"
 if (
   cd "$TEST_REPO"
-  PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
+  GITHUB_REF_NAME="" PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
 ) > "$WORK_DIR/chained-output.txt" 2>&1; then
   print -u2 "chained preview candidate unexpectedly passed"
   exit 1
