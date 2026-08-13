@@ -59,7 +59,6 @@
 - RC003 普通 `STREAM_START → AUDIO → STREAM_STOP` 首次尝试成功。
 - 普通按键、自定义快捷键、双击、长按、Typeless Fn 点按保持原行为。
 - BlackHole 2ch 和其他已安装回环设备仍可完成 Onboarding，不强制选择 MiRemoteV 2ch。
-- DJI Mic Mini / 通用 CoreAudio 桥接默认关闭；开启时持续输入可独立保持虚拟输出，RC003、手机和 Fn 会话按顺序抢占与恢复。
 - 中英文 `1020 × 772` 页面不裁切，中文字号不低于 12pt。
 
 ## 日志与验证边界
