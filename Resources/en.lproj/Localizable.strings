@@ -587,6 +587,3 @@
 "about.preferences.restart_onboarding_help" = "Recheck permissions, the remote, voice output device, and voice input without clearing existing connections, button mappings, or other settings.";
 "about.preferences.restart_onboarding_action" = "Run Again";
 "common.action.copy" = "Copy";
-"private_feature.reveal.two_more" = "Tap the version 2 more times to show the invitation entry";
-"private_feature.reveal.one_more" = "Tap the version 1 more time to show the invitation entry";
-"private_feature.reveal.unlocked" = "Invitation entry shown below";
