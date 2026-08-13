@@ -34,7 +34,6 @@
 - `swift test --filter 'RemoteButtonsTests|LocalizationTests'`
 - `swift test --filter OnboardingFlowTests`
 - `swift test --filter BuildSigningTests`
-- `swift test --filter LocalizationTests`
 - `swift test`
 - `scripts/test.sh`
 - Apple Silicon 与 Intel Release 编译（只编译，不执行安装打包）
