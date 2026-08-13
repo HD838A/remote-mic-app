@@ -4,7 +4,7 @@ umask 077
 
 ROOT="${0:A:h:h}"
 PLIST="$ROOT/Resources/Info.plist"
-BASE_REF="${PREVIEW_BASE_REF:-origin/main}"
+BASE_REF="origin/main"
 BRANCH="${GITHUB_REF_NAME:-}"
 
 if [[ "$#" -ne 0 ]]; then
@@ -38,16 +38,23 @@ fi
 
 git fetch origin main --tags >/dev/null
 git rev-parse --verify "$BASE_REF^{commit}" >/dev/null
-if ! git merge-base --is-ancestor "$BASE_REF" HEAD; then
-  print -u2 "preview candidate must contain the latest origin/main"
+HEAD_COMMIT="$(git rev-parse HEAD)"
+BASE_MAIN_COMMIT="$(git rev-parse "$BASE_REF")"
+PARENT_COUNT="$(git show -s --format='%P' HEAD | /usr/bin/awk '{ print NF }')"
+if [[ "$PARENT_COUNT" != "1" ]]; then
+  print -u2 "preview candidate must be one non-merge release commit after origin/main"
   exit 1
 fi
-if git merge-base --is-ancestor HEAD "$BASE_REF"; then
-  print -u2 "preview candidate must add a release commit after origin/main"
+if [[ "$(git rev-parse HEAD^)" != "$BASE_MAIN_COMMIT" ]]; then
+  print -u2 "preview candidate parent must exactly equal the latest origin/main"
+  print -u2 "create each release/pre-vX.Y.Z branch from origin/main, never from an older preview branch or tag"
+  exit 1
+fi
+if [[ "$(git rev-list --count "$BASE_REF"..HEAD)" != "1" ]]; then
+  print -u2 "preview candidate must contain exactly one release metadata commit after origin/main"
   exit 1
 fi
 
-HEAD_COMMIT="$(git rev-parse HEAD)"
 REMOTE_HEAD="$(git ls-remote origin "refs/heads/$BRANCH" | /usr/bin/awk 'NR == 1 { print $1 }')"
 if [[ "$REMOTE_HEAD" != "$HEAD_COMMIT" ]]; then
   print -u2 "preview branch HEAD must already be pushed to origin"
@@ -141,5 +148,5 @@ fi
 print "PREVIEW BRANCH PASS"
 print "BRANCH: $BRANCH"
 print "VERSION: $VERSION ($BUILD)"
-print "BASE: $(git rev-parse "$BASE_REF")"
+print "BASE_MAIN_COMMIT: $BASE_MAIN_COMMIT"
 print "HEAD: $HEAD_COMMIT"
