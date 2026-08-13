@@ -87,6 +87,7 @@ struct BuildSigningTests {
         #expect(notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=1"))
         #expect(notarizeSource.contains("export REQUIRE_SAYALL_MACRO_PLATFORM=1"))
         #expect(verifySource.contains("App is missing the required SayAllAI package marker"))
+        #expect(verifySource.contains("CFBundleDevelopmentRegion"))
     }
 
     @Test func optionalMacroPlatformResourcesArePackagedAndVerified() throws {
@@ -113,6 +114,7 @@ struct BuildSigningTests {
         #expect(verifySource.contains("en.lproj/Localizable.strings"))
         #expect(verifySource.contains("zh-Hans.lproj/Localizable.strings"))
         #expect(verifySource.contains("zh-hans.lproj/Localizable.strings"))
+        #expect(verifySource.contains("CFBundleDevelopmentRegion"))
     }
 
     @Test func unavailablePreReleaseFeedDoesNotPresentACustomErrorAlert() throws {
@@ -220,7 +222,7 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_AI_PACKAGE=1"))
         #expect(workflowSource.contains("GetSayAll/sayall-macro-platform"))
-        #expect(workflowSource.contains("508267f073542b29a89ec66c30bf18832678760a"))
+        #expect(workflowSource.contains("5a051b0cb17d1e3996951f1a15d28b3ba6d03ca6"))
         #expect(workflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_MACRO_PLATFORM=1"))
         #expect(workflowSource.contains("GetSayAll/sayall-mac-remote"))
@@ -241,7 +243,7 @@ struct BuildSigningTests {
         #expect(ciWorkflowSource.contains("GetSayAll/sayall-ai"))
         #expect(ciWorkflowSource.contains("6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4"))
         #expect(ciWorkflowSource.contains("GetSayAll/sayall-macro-platform"))
-        #expect(ciWorkflowSource.contains("508267f073542b29a89ec66c30bf18832678760a"))
+        #expect(ciWorkflowSource.contains("5a051b0cb17d1e3996951f1a15d28b3ba6d03ca6"))
         #expect(ciWorkflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
         #expect(ciWorkflowSource.contains("GetSayAll/sayall-mac-remote"))
         #expect(ciWorkflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))

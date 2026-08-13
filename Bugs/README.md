@@ -80,6 +80,7 @@
 | 2026-08-13 | [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md) | 已修复，两架构 CI 验证通过 |
 | 2026-08-13 | [真实候选版本号导致预发布生命周期测试夹具失败](./2026-08-13-preview-lifecycle-fixture-current-version.md) | 已修复，自动化验证通过 |
 | 2026-08-14 | [内测邀请码兑换成功但客户端无反应](./2026-08-14-early-access-fractional-server-time.md) | 已修复，等待签名安装包与用户验收 |
+| 2026-08-14 | [预览候选首次打开设置窗口因私有资源 Bundle 路径崩溃](./2026-08-14-preview-private-resource-bundle-startup-crash.md) | 已修复，等待新签名候选验证 |
 
 ## 记录模板
 

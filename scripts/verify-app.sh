@@ -143,9 +143,12 @@ test "$(plutil -extract SUAllowsAutomaticUpdates raw -o - "$PLIST")" = "false"
 test -n "$(plutil -extract SUPublicEDKey raw -o - "$PLIST")"
 SAYALL_AI_INCLUDED="$(plutil -extract SayAllAIIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
-  test -d "$APP/Contents/Resources/SayAllAI_SayAllAI.bundle"
-  test -f "$APP/Contents/Resources/SayAllAI_SayAllAI.bundle/en.lproj/Localizable.strings"
-  test -f "$APP/Contents/Resources/SayAllAI_SayAllAI.bundle/zh-Hans.lproj/Localizable.strings"
+  SAYALL_AI_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllAI_SayAllAI.bundle"
+  test -d "$SAYALL_AI_RESOURCE_BUNDLE"
+  test -f "$SAYALL_AI_RESOURCE_BUNDLE/en.lproj/Localizable.strings"
+  test -f "$SAYALL_AI_RESOURCE_BUNDLE/zh-Hans.lproj/Localizable.strings"
+  test -n "$(plutil -extract CFBundleDevelopmentRegion raw -o - \
+    "$SAYALL_AI_RESOURCE_BUNDLE/Info.plist")"
 elif [[ -e "$APP/Contents/Resources/SayAllAI_SayAllAI.bundle" ]]; then
   print -u2 "SayAllAI resource bundle exists without the inclusion marker"
   exit 1
@@ -159,6 +162,8 @@ SAYALL_MACRO_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllMacroPlatform_SayAll
 if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
   test -d "$SAYALL_MACRO_RESOURCE_BUNDLE"
   test -f "$SAYALL_MACRO_RESOURCE_BUNDLE/en.lproj/Localizable.strings"
+  test -n "$(plutil -extract CFBundleDevelopmentRegion raw -o - \
+    "$SAYALL_MACRO_RESOURCE_BUNDLE/Info.plist")"
   if [[ ! -f "$SAYALL_MACRO_RESOURCE_BUNDLE/zh-Hans.lproj/Localizable.strings" && \
         ! -f "$SAYALL_MACRO_RESOURCE_BUNDLE/zh-hans.lproj/Localizable.strings" ]]; then
     print -u2 "SayAll macro platform Chinese localization is missing"
