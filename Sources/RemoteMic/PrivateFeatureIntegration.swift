@@ -42,14 +42,6 @@ final class PrivateFeatureIntegration: ObservableObject {
         #endif
     }
 
-    var isAvailable: Bool {
-        #if canImport(SayAllAI)
-        true
-        #else
-        false
-        #endif
-    }
-
     var sectionSystemImage: String {
         #if canImport(SayAllAI)
         feature.sectionSystemImage
@@ -78,12 +70,6 @@ final class PrivateFeatureIntegration: ObservableObject {
         AnyView(SayAllAIEnrollmentView(feature: feature))
         #else
         AnyView(EmptyView())
-        #endif
-    }
-
-    func revealEnrollment() {
-        #if canImport(SayAllAI)
-        feature.revealEnrollment()
         #endif
     }
 

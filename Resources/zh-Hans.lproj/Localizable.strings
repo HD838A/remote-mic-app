@@ -574,6 +574,3 @@
 "about.preferences.restart_onboarding_help" = "重新检查权限、遥控器、语音输出设备和语音输入；不会清除现有连接、按键映射或其他设置。";
 "about.preferences.restart_onboarding_action" = "重新运行";
 "common.action.copy" = "复制";
-"private_feature.reveal.two_more" = "再点击版本号 2 次显示邀请入口";
-"private_feature.reveal.one_more" = "再点击版本号 1 次显示邀请入口";
-"private_feature.reveal.unlocked" = "邀请入口已显示，请向下查看";
