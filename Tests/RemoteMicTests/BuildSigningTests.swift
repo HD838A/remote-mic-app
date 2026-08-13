@@ -85,6 +85,7 @@ struct BuildSigningTests {
         #expect(buildSource.contains("DEFAULT_SCRATCH_PATH=\"/private/tmp/remote-mic-swiftpm/"))
         #expect(!buildSource.contains("DEFAULT_SCRATCH_PATH=\"$ROOT/.build-app-sayall-ai\""))
         #expect(notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=1"))
+        #expect(notarizeSource.contains("export REQUIRE_SAYALL_MACRO_PLATFORM=1"))
         #expect(verifySource.contains("App is missing the required SayAllAI package marker"))
     }
 
@@ -216,7 +217,12 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("./scripts/build-dmg.sh"))
         #expect(workflowSource.contains("./scripts/verify-dmg.sh"))
         #expect(workflowSource.contains("GetSayAll/sayall-ai"))
+        #expect(workflowSource.contains("6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_AI_PACKAGE=1"))
+        #expect(workflowSource.contains("GetSayAll/sayall-macro-platform"))
+        #expect(workflowSource.contains("508267f073542b29a89ec66c30bf18832678760a"))
+        #expect(workflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
+        #expect(workflowSource.contains("REQUIRE_SAYALL_MACRO_PLATFORM=1"))
         #expect(workflowSource.contains("GetSayAll/sayall-mac-remote"))
         #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(workflowSource.contains("swift package config set-mirror"))
@@ -232,6 +238,11 @@ struct BuildSigningTests {
             encoding: .utf8
         )
         #expect(ciWorkflowSource.contains("workflow_dispatch:"))
+        #expect(ciWorkflowSource.contains("GetSayAll/sayall-ai"))
+        #expect(ciWorkflowSource.contains("6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4"))
+        #expect(ciWorkflowSource.contains("GetSayAll/sayall-macro-platform"))
+        #expect(ciWorkflowSource.contains("508267f073542b29a89ec66c30bf18832678760a"))
+        #expect(ciWorkflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
         #expect(ciWorkflowSource.contains("GetSayAll/sayall-mac-remote"))
         #expect(ciWorkflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(ciWorkflowSource.contains("swift package config set-mirror"))
