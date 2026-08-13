@@ -256,6 +256,9 @@ final class AppSettings: ObservableObject {
         static let onboardingStep = "onboarding.step"
         static let onboardingVoiceTool = "onboarding.voiceTool"
         static let onboardingMigrationVersion = "onboarding.migrationVersion"
+        static let firstUseEvents = "onboarding.diagnostics.events"
+        static let firstUseStepStartedAt = "onboarding.diagnostics.stepStartedAt"
+        static let firstUseLastSignature = "onboarding.diagnostics.lastSignature"
     }
 
     private let defaults: UserDefaults
@@ -595,12 +598,51 @@ final class AppSettings: ObservableObject {
         onboardingStep = step
     }
 
+    func recordFirstUseEvent(
+        _ kind: FirstUseEventKind,
+        step: OnboardingStep,
+        failureReason: FirstUseFailureReason? = nil,
+        at date: Date = Date()
+    ) {
+        let stepStartedAt = defaults.object(forKey: Keys.firstUseStepStartedAt) as? Date ?? date
+        let event = FirstUseEvent(
+            timestamp: date,
+            kind: kind,
+            step: step,
+            elapsedMilliseconds: max(0, Int(date.timeIntervalSince(stepStartedAt) * 1_000)),
+            failureReason: failureReason
+        )
+        if kind == .blocked,
+           defaults.string(forKey: Keys.firstUseLastSignature) == event.deduplicationSignature {
+            return
+        }
+        var events = firstUseEvents
+        events.append(event)
+        if events.count > 100 {
+            events.removeFirst(events.count - 100)
+        }
+        if let data = try? JSONEncoder().encode(events) {
+            defaults.set(data, forKey: Keys.firstUseEvents)
+        }
+        defaults.set(event.deduplicationSignature, forKey: Keys.firstUseLastSignature)
+        if kind == .entered {
+            defaults.set(date, forKey: Keys.firstUseStepStartedAt)
+        }
+    }
+
+    var firstUseEvents: [FirstUseEvent] {
+        defaults.data(forKey: Keys.firstUseEvents)
+            .flatMap { try? JSONDecoder().decode([FirstUseEvent].self, from: $0) }
+            ?? []
+    }
+
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
         guard onboardingVoiceTool != voiceTool else { return }
         onboardingVoiceTool = voiceTool
     }
 
     func completeOnboarding() {
+        recordFirstUseEvent(.completed, step: .complete)
         onboardingStep = .complete
         onboardingCompletedVersion = Self.currentOnboardingVersion
     }
@@ -609,6 +651,8 @@ final class AppSettings: ObservableObject {
         onboardingVoiceTool = .unselected
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
+        defaults.removeObject(forKey: Keys.firstUseStepStartedAt)
+        defaults.removeObject(forKey: Keys.firstUseLastSignature)
     }
 
     func action(for button: RemoteButton) -> ButtonAction {

@@ -142,6 +142,30 @@ enum OnboardingFlowPolicy {
                 capabilities.audioOutputSelected
         }
     }
+
+    static func recoveryStep(
+        from step: OnboardingStep,
+        voiceTool: OnboardingVoiceTool,
+        capabilities: OnboardingCapabilities,
+        hasSelectedAudioUID: Bool
+    ) -> OnboardingStep? {
+        let context = FirstUseDiagnosticContext(
+            step: step,
+            capabilities: capabilities,
+            hasSelectedAudioUID: hasSelectedAudioUID
+        )
+        guard let failure = context.failureReason else { return nil }
+        if step == .complete, failure == .completeRuntimeRegressed {
+            if !capabilities.bluetoothGranted ||
+                !capabilities.inputMonitoringGranted ||
+                !capabilities.accessibilityGranted {
+                return .permissions
+            }
+            if !capabilities.remoteConnected { return .remote }
+            return .audio
+        }
+        return failure.recoveryStep
+    }
 }
 
 enum OnboardingLaunchPolicy {

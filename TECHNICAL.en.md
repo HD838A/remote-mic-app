@@ -157,14 +157,9 @@ build-dmg.sh builds and verifies the app, driver, install PKG, and uninstall PKG
 - dist/Remote-Mic-<version>.dmg
 - dist/Remote-Mic-<version>.dmg.sha256
 
-The DMG root contains exactly four items:
+The DMG root contains only Install Remote Mic.pkg. The app-only ZIP and uninstall PKG remain advanced assets in the same Release. The install PKG stages the driver internally and replaces an existing driver only when it is missing, damaged, built for the wrong architecture, invalidly signed, or a different version; a healthy current driver remains untouched.
 
-- Install Remote Mic.pkg
-- Uninstall Remote Mic.pkg
-- Remote Mic.app
-- Applications, a link to /Applications
-
-verify-dmg.sh validates the SHA-256, HFS+ image, root manifest, app bundle contents, PKG payloads, version, arm64 architecture, macOS 14.0 minimum version, valid code signature, localized resources, and absence of leaked local paths. In official mode it also validates the Developer ID Team, Hardened Runtime, PKG/DMG signatures, stapled notarization tickets, and Gatekeeper assessment.
+verify-dmg.sh validates the SHA-256, HFS+ image, single root entry, and install-PKG payload. The app bundle, uninstall PKG, versions, architecture, minimum OS, signatures, localized resources, and absence of leaked local paths remain covered by their dedicated artifact verifiers. Official mode also validates the Developer ID Team, Hardened Runtime, PKG/DMG signatures, stapled notarization tickets, and Gatekeeper assessment.
 
 Sparkle 2.9.4 is embedded through SwiftPM. Its feed URL and EdDSA public key are in Info.plist; the private key remains in the publisher's restricted local storage and never enters the project or a release. SUEnableAutomaticChecks=true with SUScheduledCheckInterval=86400 enables daily checks, while SUAutomaticallyUpdate=false and SUAllowsAutomaticUpdates=false prevent silent downloads or automatic installation. The menu command remains available for immediate checks. Sparkle updates the app bundle only and never installs or replaces the compatibility microphone driver.
 

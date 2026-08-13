@@ -1,5 +1,12 @@
 # Version History
 
+## 1.8.14 (Pre-release)
+
+- First-run setup now explains the current blocker and highlights one recovery action. If permissions, the remote, or voice output changes on the final page, setup returns directly to the affected stage.
+- Added a copyable redacted setup diagnostic for permission, connection, audio, and voice-check progress without device identifiers, user text, or audio content.
+- The Mac disk image now has one ordinary installation entry. The installer keeps an existing healthy compatible microphone and installs or updates it only when missing or unusable.
+- Added continuous bridging from standard Mac microphones such as DJI Mic Mini to the selected compatible microphone, with automatic handoff to remote, phone, and Fn voice sessions and recovery afterward.
+
 ## 1.8.13 (Pre-release)
 
 - Added a separate Intel Mac package for macOS Ventura 13 or later. The Apple Silicon package continues to require macOS 14 or later.
