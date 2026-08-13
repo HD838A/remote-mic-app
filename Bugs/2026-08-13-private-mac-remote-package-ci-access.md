@@ -1,7 +1,7 @@
 # GitHub Actions 无法读取私有 Mac 远控组件
 
 - 时间：2026-08-13
-- 状态：本地修复验证通过，等待两架构 CI 重验
+- 状态：已修复，两架构 CI 验证通过
 - 影响范围：Apple Watch Mac 入口 PR 的 Apple Silicon 与 Intel Ventura CI，以及后续预览候选和正式签名流程
 - 功能点：`SayAllMacRemote` 私有 Swift Package 依赖访问
 - 简单描述：本地测试和 Release 构建通过，但 GitHub runner 无法匿名克隆私有组件，导致两架构都在 `swift test` 解析依赖时退出。
@@ -51,3 +51,5 @@ error: 'sayall-mac-remote': Failed to clone repository
 同时本地配置相同的 SwiftPM mirror 后运行 Swift 测试和 Release 构建，确认 `Package.resolved` 保持不变，并检查 `git diff --check`、仓库边界与敏感信息扫描。此 Bug 只涉及依赖认证和构建输入，不证明真实 Apple Watch 发现、授权、按键或麦克风已经验收。
 
 本地已确认：211 项 Mac 测试通过；Build Signing 12 项通过；Apple Silicon 与 Intel Ventura Release 构建通过；组件精确为 `da7f0bcd94af1478c9572ec558771f85ec306480`；`Package.resolved` 未改变；仓库边界、diff 和敏感信息检查通过。最终状态仍以重新触发的 GitHub Actions 两架构结果为准。
+
+GitHub Actions Run `31715653640` 已完成重验：Apple Silicon Job `94499588630` 与 Intel Ventura Job `94499588743` 均通过私有组件 checkout、SwiftPM mirror、Swift 测试、核心首次语音旅程门禁、项目自检和 Release 构建。认证失败已由同一原始用例从失败变为通过。
