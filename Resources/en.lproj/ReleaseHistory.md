@@ -1,5 +1,11 @@
 # Version History
 
+## 1.8.18 (Pre-release)
+
+- Added a dedicated Apple Watch entry to Connection & Voice, with on-demand nearby-device waiting and cancellation. Real-device validation of Apple Watch discovery, authorization, buttons, and microphone remains pending.
+- Added a Quick Commands preview for combining app launch, app wait, keyboard shortcut, and input-focus steps, then assigning them to remote buttons.
+- Improved state updates, relaunch restoration, and error feedback for selected preview features.
+
 ## 1.8.12 (Pre-release)
 
 - Improved the speed and reliability of Mac installer and automatic-update downloads. Existing versions can continue checking for updates, with GitHub downloads retained as a fallback.

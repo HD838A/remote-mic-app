@@ -2,7 +2,7 @@
 
 ## 适用版本与分支
 
-- Mac App `1.8.15` 候选分支，包含 Apple Watch 专用连接入口。
+- Mac App `1.8.18 (110)` 候选分支，包含 Apple Watch 专用连接入口。
 - 与当前附近协议兼容的 iPhone / Apple Watch App。
 
 ## 测试前准备
