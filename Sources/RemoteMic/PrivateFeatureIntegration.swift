@@ -81,12 +81,6 @@ final class PrivateFeatureIntegration: ObservableObject {
         #endif
     }
 
-    func revealEnrollment() {
-        #if canImport(SayAllAI)
-        feature.revealEnrollment()
-        #endif
-    }
-
     func refreshAccessIfNeeded(force: Bool = false) {
         #if canImport(SayAllAI)
         feature.refreshAccessIfNeeded(force: force)

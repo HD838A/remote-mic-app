@@ -189,6 +189,15 @@ generate_release_notes() {
   } > "$RELEASE_NOTES"
 
   rg -q '^- ' "$RELEASE_NOTES"
+
+  if rg -i -q \
+    '((连续|连点|点击|轻点).{0,24}(版本号|当前版本).{0,24}(次|隐藏|入口))|((tap|click).{0,24}(version|build).{0,24}(times|hidden|secret|invite|enrollment))|(隐藏入口|秘密手势|secret gesture|hidden entry|invitation-code entry)' \
+    "$ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md" \
+    "$ROOT/Resources/en.lproj/ReleaseHistory.md" \
+    "$RELEASE_NOTES"; then
+    print -u2 "release notes contain an internal trigger or confidential enrollment detail"
+    exit 1
+  fi
 }
 
 generate_candidate_provenance() {

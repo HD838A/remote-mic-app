@@ -139,22 +139,6 @@ enum MappingPermissionPolicy {
     }
 }
 
-struct PrivateFeatureEntryRevealState: Equatable {
-    static let requiredTapCount = 5
-
-    private(set) var tapCount = 0
-
-    var isUnlocked: Bool {
-        tapCount >= Self.requiredTapCount
-    }
-
-    mutating func registerVersionTap() -> Bool {
-        guard !isUnlocked else { return false }
-        tapCount += 1
-        return isUnlocked
-    }
-}
-
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
@@ -190,7 +174,6 @@ struct SettingsView: View {
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
     @State private var webRemoteInviteCode = ""
-    @State private var privateFeatureEntryReveal = PrivateFeatureEntryRevealState()
     private static let requiredWebRemoteInviteCode = "8586"
 
     init(
@@ -2126,8 +2109,6 @@ struct SettingsView: View {
                                         Text(currentVersion)
                                             .font(.system(size: 28, weight: .semibold))
                                             .monospacedDigit()
-                                            .contentShape(Rectangle())
-                                            .onTapGesture(perform: registerPrivateFeatureVersionTap)
                                     }
 
                                     if case let .available(update) = updateInformation.state {
@@ -2446,13 +2427,6 @@ struct SettingsView: View {
         Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? localization.text("common.value.unknown")
-    }
-
-    private func registerPrivateFeatureVersionTap() {
-        guard privateFeature.isAvailable else { return }
-        if privateFeatureEntryReveal.registerVersionTap() {
-            privateFeature.revealEnrollment()
-        }
     }
 
     private func languageTitle(_ language: AppLanguage) -> String {

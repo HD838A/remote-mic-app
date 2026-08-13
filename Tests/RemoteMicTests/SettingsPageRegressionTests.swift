@@ -12,31 +12,7 @@ struct SettingsPageRegressionTests {
         #expect(!privateFeature.isAvailable)
         #expect(!privateFeature.isFeatureVisible)
         #expect(!privateFeature.shouldShowEnrollment)
-        privateFeature.revealEnrollment()
-        #expect(!privateFeature.isFeatureVisible)
-        #expect(!privateFeature.shouldShowEnrollment)
         #endif
-    }
-
-    @Test func privateFeatureEntryRequiresFiveVersionTaps() {
-        var revealState = PrivateFeatureEntryRevealState()
-
-        #expect(!revealState.isUnlocked)
-        let firstTapUnlocked = revealState.registerVersionTap()
-        let secondTapUnlocked = revealState.registerVersionTap()
-        #expect(!firstTapUnlocked)
-        #expect(!secondTapUnlocked)
-
-        let thirdTapUnlocked = revealState.registerVersionTap()
-        #expect(!thirdTapUnlocked)
-        let fourthTapUnlocked = revealState.registerVersionTap()
-        #expect(!fourthTapUnlocked)
-
-        let fifthTapUnlocked = revealState.registerVersionTap()
-        #expect(fifthTapUnlocked)
-        #expect(revealState.isUnlocked)
-        let sixthTapUnlocked = revealState.registerVersionTap()
-        #expect(!sixthTapUnlocked)
     }
 
     @Test func nearbyMobileListenerOnlyStartsFromAUserConnectionEntry() throws {
@@ -427,8 +403,9 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("privateFeature.shouldShowEnrollment"))
         #expect(source.contains("privateFeature.settingsView()"))
         #expect(source.contains("privateFeature.enrollmentView()"))
-        #expect(source.contains("guard privateFeature.isAvailable else { return }"))
-        #expect(source.contains("privateFeature.revealEnrollment()"))
+        #expect(!source.contains("registerPrivateFeatureVersionTap"))
+        #expect(!source.contains("PrivateFeatureEntryRevealState"))
+        #expect(!source.contains("privateFeature.revealEnrollment()"))
         #expect(!source.contains("deepSeek"))
         #expect(!source.contains("postDictation"))
     }

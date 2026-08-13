@@ -1,10 +1,5 @@
 # Version History
 
-## 1.8.16 (Pre-release)
-
-- Tapping the current version five times on the About page can reveal an invitation-code entry for invited AI features. The first four taps remain completely silent; revealing the entry does not contact the service or create a device identity. Eligibility is requested only after the user enters a code and explicitly verifies it, and the feature toggle remains off after approval. Builds without the invited-feature component continue to hide the entry completely.
-- Added a dedicated Apple Watch connection entry to Connection & Voice, ordered after iPhone and before the Web remote. iPhone and Apple Watch share the same on-demand nearby waiting session, which can be cancelled from either entry. Real-device validation of Apple Watch discovery, authorization, buttons, and microphone remains pending for this preview.
-
 ## 1.8.12 (Pre-release)
 
 - Improved the speed and reliability of Mac installer and automatic-update downloads. Existing versions can continue checking for updates, with GitHub downloads retained as a fallback.
