@@ -138,6 +138,14 @@ for release_history in \
   fi
 done
 
+if /usr/bin/grep -Ein \
+  '((连续|连点|点击|轻点).{0,24}(版本号|当前版本).{0,24}(次|隐藏|入口))|((tap|click).{0,24}(version|build).{0,24}(times|hidden|secret|invite|enrollment))|(隐藏入口|秘密手势|secret gesture|hidden entry|invitation-code entry)' \
+  Resources/zh-Hans.lproj/ReleaseHistory.md \
+  Resources/en.lproj/ReleaseHistory.md; then
+  print -u2 "release history contains an internal trigger or confidential enrollment detail"
+  exit 1
+fi
+
 git diff --check "$BASE_REF"..HEAD
 if git diff "$BASE_REF"..HEAD | \
    /usr/bin/grep -En '^\+.*(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|MATCH_PASSWORD=|APPLE_APPLICATION_SPECIFIC_PASSWORD=|AuthKey_[A-Z0-9]+\.p8)'; then
