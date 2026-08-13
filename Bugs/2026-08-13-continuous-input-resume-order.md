@@ -29,6 +29,9 @@
 
 ## 验证
 
-- `swift test`
-- `./scripts/test.sh`
+- 未注入私有组件的定向测试 52 项通过，组件缺失时启动失败关闭；
+- 注入私有组件的 CoreAudio/虚拟音频/Fn 定向测试 20 项通过；
+- 完整公开配置 `swift test` 225 项、21 个 suite 通过；
+- 私有硬件模拟集成 22 项通过，`./scripts/test.sh` 42 项通过；
+- 本轮没有构建 App、签名、公证、打包或发布。
 - 原始真机用例仍需 DJI Mic Mini 与 RC003/Nearby/Web 分别执行，自动化不能证明真实蓝牙、TCC、射频和最终 ASR 行为。

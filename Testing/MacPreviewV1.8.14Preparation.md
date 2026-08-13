@@ -5,7 +5,8 @@
 - 目标版本：`1.8.14 (106)`。
 - 候选分支：`release/pre-v1.8.14`。
 - Apple Silicon 最低版本：macOS 14；Intel 独立包最低版本：macOS 13。
-- 本轮只整理候选代码并 Push，不构建、签名、公证、生成 DMG/PKG 或创建 Release。
+- 本轮只整理候选源码并 Push，不构建 App、签名、公证、生成 DMG/PKG 或创建 Release。
+- 通用 CoreAudio 桥接的私有组件与 GPL 宿主组合分发边界尚未解决，因此当前分支不具备打包或对外发布资格。
 
 候选包含普通用户可感知的改动：
 
@@ -37,7 +38,6 @@
 - `swift test --filter LocalizationTests`
 - `swift test`
 - `scripts/test.sh`
-- Apple Silicon 与 Intel Release 编译（只编译，不执行安装打包）
 - `zsh -n` 校验全部受影响安装脚本
 - 扫描安装脚本不含 `lipo`、`vtool`、`xcrun`、`xcode-select`、`xcodebuild`、`swift`、`swiftc` 或 `clang`
 - `git diff --check` 与敏感信息扫描
@@ -45,5 +45,16 @@
 ## 自动化与真实环境边界
 
 - 自动化不能替代系统权限历史、真实 RC003、豆包、Typeless、其他语音工具、DJI Mic Mini 长时间运行或真实转写。
+- 本轮只验证 Swift 源码与测试目标，不执行 Apple Silicon/Intel App Bundle、Release App、驱动或安装产物构建。
 - 本轮未生成安装产物，因此 DMG 单入口、健康驱动原样保留、异常驱动替换、管理员取消、安装后启动、签名、公证、Gatekeeper 和 Sparkle 跨版本更新尚未执行真实产物验收。
 - 完整现场用例分别见 [FirstUseSuccess.md](./FirstUseSuccess.md)、[FirstRunOnboarding.md](./FirstRunOnboarding.md) 和 [CoreAudioMicrophoneBridge.md](./CoreAudioMicrophoneBridge.md)。
+
+## 本轮源码验证记录（2026-08-13）
+
+- 未注入私有音频组件的定向测试：52 项、6 个 suite 通过；直接验证组件不可用、权限受限和启动失败关闭。
+- 注入 `SAYALL_AUDIO_INPUT_KIT_PATH` 的适配层定向测试：20 项、3 个 suite 通过。
+- 完整公开配置 `swift test`：225 项、21 个 suite 通过。
+- 私有硬件模拟集成：22 项、1 个 suite 通过，覆盖 DJI 标准输入、断线新代次、旧 buffer 拒绝和 RC001/RC003 基线。
+- `scripts/test.sh`：42 项通过。
+- 安装与验证脚本 `zsh -n`、本地化/entitlement plist lint、开发者工具依赖扫描、AI 邀请入口扫描和 `git diff --check` 均通过。
+- 未构建 `.app`、MiRemoteV 2ch、PKG 或 DMG；未签名、公证、访问 Keychain、创建 Tag/Release 或对外发布。

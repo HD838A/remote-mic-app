@@ -4,6 +4,20 @@ import Testing
 
 @Suite("Continuous Core Audio input")
 struct CoreAudioInputSourceTests {
+    @Test func privateComponentAvailabilityMatchesBuildConfiguration() {
+        let source = CoreAudioInputSource()
+#if canImport(SayAllAudioInputKit)
+        #expect(CoreAudioInputSource.isAvailable)
+#else
+        #expect(!CoreAudioInputSource.isAvailable)
+        #expect(MicrophonePermission.status == .restricted)
+        #expect(!source.start(deviceUID: "input", gainDB: 0, session: 1))
+        #expect(source.lastError == "private_audio_input_component_unavailable")
+        #expect(!source.isCapturing)
+        #expect(source.selectedDevice == nil)
+#endif
+    }
+
     @Test func featureIsFailClosedUntilEveryRequirementIsReady() {
         #expect(CoreAudioInputGate.block(
             enabled: false,
