@@ -37,6 +37,10 @@ git -C "$TEST_REPO" remote add origin "$REMOTE_REPO"
 /bin/cp "$VERIFIER" "$TEST_REPO/scripts/verify-preview-branch.sh"
 /bin/chmod 755 "$TEST_REPO/scripts/verify-preview-branch.sh"
 /bin/cp "$ROOT/Resources/Info.plist" "$TEST_REPO/Resources/Info.plist"
+/usr/bin/plutil -replace CFBundleShortVersionString -string "1.8.14" \
+  "$TEST_REPO/Resources/Info.plist"
+/usr/bin/plutil -replace CFBundleVersion -string "106" \
+  "$TEST_REPO/Resources/Info.plist"
 for locale in en zh-Hans; do
   print "## 1.8.14" > "$TEST_REPO/Resources/$locale.lproj/ReleaseHistory.md"
   print -- "- Previous preview" >> "$TEST_REPO/Resources/$locale.lproj/ReleaseHistory.md"
