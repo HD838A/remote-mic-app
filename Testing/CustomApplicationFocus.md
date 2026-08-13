@@ -143,7 +143,7 @@
 - [ ] 已启用 Spotlight 的情况下可以直接录入 Command-Space，录入期间 Spotlight 不弹出，保存后真实遥控器可以正常唤起 Spotlight。
 - [x] 自定义快捷键切换到其他动作、禁用动作后，再切回“自定义快捷键”仍显示并执行原快捷键；重启 APP 后仍保留，只有“恢复默认”才清除。
 - [x] 同一按键触发方式在“自定义快捷键”和“打开自定义 APP”之间切换时，同时保留已录入快捷键、已选 APP、聚焦策略和已学习输入框；当前动作只决定哪一项启用，导出导入后所有保留配置仍可切回使用。
-- [x] 基础按键中的 Command-Return、Shift-Return、Command-C、Command-V、Command-Q 均只执行一次，不因按住遥控器而重复。
+- [x] 自动化确认基础按键中的 Command-Return、Shift-Return、Command-C、Command-V、Command-Q 和 Command-Delete 均只执行一次，不因 App 连发策略而重复；Command-Delete 的真实遥控器与 TextEdit 响应仍按 `feature/common-mac-shortcuts/testing.md` 人工验收。
 - [x] 系统与媒体中的“上一首（⌘←）”和“下一首（⌘→）”均只执行一次。
 - [x] “禁用按键”只显示在动作编辑标题栏、位于关闭按钮左侧；开启后当前触发不执行动作，关闭后恢复为 Escape，动作网格中不再出现“禁用”。
 - [x] 按键映射页面在 `800 × 650` 窗口下没有裁切、错位或异常改变窗口大小。
