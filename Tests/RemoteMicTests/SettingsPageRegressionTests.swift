@@ -5,6 +5,23 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func applicationEditMenuPreservesStandardTextEditingShortcuts() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        for key in ["copy:", "paste:", "cut:", "undo:", "redo:", "selectAll:"] {
+            #expect(appSource.contains("action: \"\(key)\""))
+        }
+        #expect(appSource.contains("item.target = nil"))
+        #expect(appSource.contains("common.action.copy"))
+        #expect(appSource.contains("common.action.select_all"))
+    }
+
     @Test func versionTapRevealRequiresFiveConsecutiveTaps() {
         var counter = VersionTapRevealCounter()
 

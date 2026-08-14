@@ -359,6 +359,7 @@
 "menu.show_logs" = "Show Logs";
 "menu.about" = "About Remote Mic";
 "menu.file" = "File";
+"menu.edit" = "Edit";
 "menu.open_log_folder" = "Open Log Folder";
 "menu.check_for_updates" = "Check for Updates…";
 "common.action.quit" = "Quit";
@@ -430,6 +431,11 @@
 "about.support.github" = "GitHub";
 "about.support.website" = "Website";
 "common.action.close" = "Close";
+"common.action.undo" = "Undo";
+"common.action.redo" = "Redo";
+"common.action.cut" = "Cut";
+"common.action.paste" = "Paste";
+"common.action.select_all" = "Select All";
 "about.version.history_load_failed" = "Version history could not be loaded.";
 "about.preferences.open_main_window_at_launch" = "Open main window at launch";
 "about.preferences.open_main_window_help" = "When disabled, ordinary launches stay in the menu bar; the main window still appears after an update.";
