@@ -93,7 +93,7 @@
   - 预览版 Feed 解析已按当前稳定 Feed 的文件名选择资产，Intel 开启预览版更新时不会串到 Apple Silicon 的 `appcast.xml`。Apple Silicon 默认构建和发行产物仍需作为每次 Intel 改动的回归门禁。
   - 已经过多名 Intel Ventura 用户测试，安装、启动、蓝牙遥控、按键和语音核心路径可以正常使用，Intel 发行线转为正式支持。公开测试步骤见 `Testing/IntelVenturaCompatibility.md`。
   - GitHub Actions 对 Apple Silicon 与 Intel 分别构建和验证；正式候选通过受保护的 `mac-release` Environment 生成两套独立签名、公证产物。稳定晋升沿用同一批候选字节，不重新打包。
-- [ ] 优化 macOS 安装器，为普通用户只提供一个明确的安装入口
+- [ ] 优化 macOS 安装器，为普通用户只提供一个明确的安装入口 <!-- workshop:status=已规划;priority=P1 -->
   - 当前 DMG 同时展示 `Remote Mic.app`、Applications 快捷方式、`Install Remote Mic.pkg` 和卸载 PKG，用户容易误以为 App 与 PKG 需要分别安装，或不知道应该选择哪一种。现有安装 PKG 实际已经同时安装 App 和 `MiRemoteV 2ch` 兼容麦克风，主要问题是发布入口重复而不是缺少合并安装能力。
   - 第一方案是让 DMG 只突出一个签名并公证的 `Install Remote Mic.pkg`，一次完成 App、兼容麦克风、权限正确性检查和安装后启动；不再在同一 DMG 根目录提供并列的 App 拖拽入口。只需要 App、已经安装其他回环设备的高级用户可通过单独的 ZIP 或明确的高级下载入口获取，不与普通安装流程并列。
   - 不优先把安装器包装成自定义 `Install.app`：音频驱动仍然需要管理员授权和系统安装能力，包装 App 最终仍需调用内嵌 PKG 或增加特权辅助进程，会扩大嵌套签名、公证、权限、失败恢复和安全验证范围。只有系统 PKG 的交互无法满足品牌引导或安装状态展示时，才进一步评估 `Install.app` 外壳。
