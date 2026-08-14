@@ -1,5 +1,10 @@
 # Version History
 
+## 1.8.20 (Pre-release)
+
+- Improved access to selected preview features from the About page while keeping the feature switches off until you enable them.
+- Improved preview-feature setup feedback and state handling.
+
 ## 1.8.19 (Pre-release)
 
 - Added a dedicated Apple Watch entry to Connection & Voice, with on-demand nearby-device waiting and cancellation. Real-device validation of Apple Watch discovery, authorization, buttons, and microphone remains pending.
