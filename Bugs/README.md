@@ -50,7 +50,7 @@
 | 2026-08-06 | [macOS 1.7.6 连接遥控器时启动退出](./2026-08-06-macos-176-hid-client-startup-crash.md) | 已修复 |
 | 2026-08-06 | [手机网页版按键只能触发单击](./2026-08-06-mobile-web-buttons-only-single-click.md) | 已修复 |
 | 2026-08-08 | [RC001-MS 语音遥控器适配](./2026-08-08-rc001-voice-remote-compatibility.md) | 兼容性调查已归档 |
-| 2026-08-08 | [RC001 / RC003 型号与充电状态识别](./2026-08-08-remote-model-and-power-detection.md) | 已实现并归档 |
+| 2026-08-08 | [RC001 / RC003 型号与充电状态识别](./2026-08-08-remote-model-and-power-detection.md) | 已修复 <!-- workshop:status=已完成;priority=P2 --> |
 | 2026-08-09 | [Centered Remote Mapping Layout](./2026-08-09-centered-remote-mapping-layout.md) | UI 缺陷已修复 |
 | 2026-08-09 | [Custom Shortcut Repeat and Sidebar Focus Regression](./2026-08-09-custom-shortcut-repeat-and-sidebar-focus.md) | 已修复 |
 | 2026-08-09 | [Frontmost Remote Mic Navigation Repeat Error Sound](./2026-08-09-frontmost-navigation-repeat-error-sound.md) | 已修复 |
