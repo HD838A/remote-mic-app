@@ -72,7 +72,7 @@
 | 2026-08-11 | [Onboarding 全流程恢复与最终可用性审计](./2026-08-11-onboarding-end-to-end-recovery-audit.md) | 候选修复完成，等待真实全流程验收 |
 | 2026-08-11 | [遥控器设备卡名称、状态截断并重复展示](./2026-08-11-remote-device-card-clipping-and-duplication.md) | 候选修复完成，浅/深色页面通过 |
 | 2026-08-11 | [升级后 Onboarding 已收到实体按键但仍显示蓝牙未连接](./2026-08-11-onboarding-upgrade-hid-before-ble.md) | 已修复 <!-- workshop:status=已完成;priority=P2 --> |
-| 2026-08-11 | [蓝牙断连后虚拟麦克风仍保持活动](./2026-08-11-bluetooth-disconnect-keeps-virtual-microphone-active.md) | 候选修复完成，等待真机与会议 App 验证 |
+| 2026-08-11 | [蓝牙断连后虚拟麦克风仍保持活动](./2026-08-11-bluetooth-disconnect-keeps-virtual-microphone-active.md) | 已修复 <!-- workshop:status=已完成;priority=P2 --> |
 | 2026-08-11 | [已安装用户升级后被要求重新完成 Onboarding](./2026-08-11-existing-users-forced-through-onboarding.md) | 候选修复完成，等待真实升级验收 |
 | 2026-08-11 | [Onboarding 音频步骤错误地只接受 MiRemoteV 2ch](./2026-08-11-onboarding-requires-miremote-audio-device.md) | 候选修复完成，等待真实音频设备验收 |
 | 2026-08-12 | [Remote Mic 运行期间 MacBook 实体方向键偶发失效](./2026-08-12-physical-arrow-keys-blocked.md) | 已修复，自动化通过，等待真机复验 |
