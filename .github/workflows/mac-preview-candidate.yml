@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-ai
-          ref: 6d3488f7b18c3131e5ff17d1d19e5ed83caec4c4
+          ref: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
           path: .private-dependencies/sayall-ai
           ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
           persist-credentials: false
@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-macro-platform
-          ref: 5a051b0cb17d1e3996951f1a15d28b3ba6d03ca6
+          ref: 655585100a4f59d1304e42093de060895db5da63
           path: .private-dependencies/sayall-macro-platform
           ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
