@@ -1,5 +1,10 @@
 # Version History
 
+## 1.8.23 (Pre-release)
+
+- Fixed an issue that could cause Remote Mic to quit when opening Quick Commands from the sidebar.
+- Improved Quick Commands resource loading in installed builds so the page opens reliably after a fresh install or upgrade.
+
 ## 1.8.22 (Pre-release)
 
 - Fixed raw localization identifiers appearing on selected settings pages and tightened the input and status layout.
