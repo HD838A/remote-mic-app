@@ -38,6 +38,14 @@ installer_message() {
   fi
 }
 
+hardware_architecture() {
+  if [[ "$(/usr/sbin/sysctl -in hw.optional.arm64 2>/dev/null || print 0)" == "1" ]]; then
+    print "arm64"
+  else
+    print "x86_64"
+  fi
+}
+
 driver_architecture() {
   local description
   description="$(/usr/bin/file -b "$1" 2>/dev/null || true)"
@@ -77,7 +85,19 @@ test -x "$APP_BINARY"
 test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST")" = "com.hd838a.RemoteMic"
 test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - "$APP_PLIST")" = \
   "$MINIMUM_SYSTEM_VERSION"
-test "$(/usr/bin/uname -m)" = "$EXPECTED_ARCHITECTURE"
+CURRENT_ARCHITECTURE="$(hardware_architecture)"
+if [[ "$CURRENT_ARCHITECTURE" != "$EXPECTED_ARCHITECTURE" ]]; then
+  if [[ "$EXPECTED_ARCHITECTURE" == "arm64" ]]; then
+    installer_message \
+      "安装已停止：此安装包仅适用于 Apple 芯片 Mac；请下载文件名中带“Intel”的版本。" \
+      "Installation stopped: this installer is for Macs with Apple silicon. Download the Intel version whose file name includes 'Intel'." >&2
+  else
+    installer_message \
+      "安装已停止：此安装包仅适用于 Intel Mac；请下载文件名中不带“Intel”的 Apple Silicon 版本。" \
+      "Installation stopped: this installer is for Intel Macs. Download the Apple Silicon version whose file name does not include 'Intel'." >&2
+  fi
+  exit 2
+fi
 SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
 test "$SYSTEM_MAJOR" -ge "$MINIMUM_SYSTEM_MAJOR"
 DRIVER_CHANGED=0

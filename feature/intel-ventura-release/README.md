@@ -6,7 +6,7 @@
 
 ## 用户功能介绍
 
-Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，并运行 `Install Remote Mic Intel.pkg`。应用功能、蓝牙遥控、按键映射和语音使用方式与 Apple Silicon 版本一致。
+Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，并运行 `Install Remote Mic Intel.pkg`。应用功能、蓝牙遥控、按键映射和语音使用方式与 Apple Silicon 版本一致。若误开 Apple Silicon 安装包，系统 Installer 会在安装前说明架构不匹配，并提示改下 Intel 版本；Apple Silicon 用户误开 Intel 包时也会得到对应提示。
 
 ## 范围与非目标
 
@@ -18,7 +18,8 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 ## 关键设计与开发过程
 
 - `RELEASE_VARIANT` 统一选择架构、目标三元组、最低系统版本、输出目录、资产名和更新源。
-- Intel 安装器在移除旧 App 前检查 `x86_64` 与 macOS 13，避免错误包破坏现有安装。
+- 两种安装 PKG 都使用 `productbuild` Distribution 产品归档，在 Installer UI 中通过中英文 `Fatal` 消息拒绝错误架构或过低系统，并说明应下载的另一版本。
+- Distribution 与内层安装脚本使用 `hw.optional.arm64` 判断真实硬件，避免 Rosetta 环境下 `uname -m` 把 Apple Silicon 误判为 Intel；preinstall 与 postinstall 继续保留删除或替换前的二次防御。
 - Sparkle Framework 在 Intel 包中只保留 `x86_64` slice，`appcast-intel.xml` 防止跨架构更新串包。
 - GitHub Actions 日常验证两种架构；受保护的正式打包任务在临时 Keychain 中导入既有 Developer ID 证书，并分别完成签名、公证和 staple。
 - 正式打包只复用精确候选 SHA 上已经成功的 Apple Silicon、Intel 候选测试；进入 Apple 凭据环境前会核对候选 push run、两种架构 Job、私有依赖钉定和精确 SHA 的 Draft 回流 PR。
@@ -33,6 +34,7 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - `Sources/RemoteMic/SettingsView.swift`
 - `Sources/RemoteMic/UpdateInformationStore.swift`
 - `packaging/release-variants/`
+- `packaging/doubao-driver/distribution/`
 - `packaging/doubao-driver/install/`
 - `scripts/release-variant.sh`
 - `scripts/build-*.sh`、`scripts/verify-*.sh`
@@ -53,6 +55,7 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - 注入真实 SayAll AI 私有包后，两种变体的 Swift 测试与 Intel macOS 13 Release 构建。
 - `arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建。
 - App、Sparkle、MiRemoteV、PKG 和 DMG 的架构、最低系统版本、权限、签名、公证和 Gatekeeper 校验。
+- 安装器架构回归脚本校验 Distribution 的双架构可评估范围、`hw.optional.arm64`、Fatal 本地化消息、另一版本提示，以及内层脚本不再依赖 `uname -m`。
 - 两套 appcast、资产名和候选溯源隔离校验。
 - 发布流水线回归脚本覆盖私有依赖 Commit 漂移、候选 SHA/Job 不匹配、Draft PR 门禁、双架构真实并行和任一架构失败传播。
 
@@ -64,4 +67,4 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 
 当前状态：已完成，多名 Intel Ventura 用户确认安装、蓝牙遥控、按键和语音核心路径可用。
 
-Intel 与 Apple Silicon 必须持续分别打包和回归。独立 scratch 只消除构建目录竞争，不改变共享临时 Keychain 的只读签名身份、Apple 公证服务等待时间或公开产物验证要求。Actions 正式打包依赖仓库管理员配置受保护的 `mac-release` Environment、两套私有仓库只读访问和专用 age 身份；未配置时正式打包任务会明确失败，日常无密钥 CI 不受影响。
+Intel 与 Apple Silicon 必须持续分别打包和回归，安装器提示不会把两套 App、驱动、DMG、ZIP 或 Sparkle Feed 合并。独立 scratch 只消除构建目录竞争，不改变共享临时 Keychain 的只读签名身份、Apple 公证服务等待时间或公开产物验证要求。Actions 正式打包依赖仓库管理员配置受保护的 `mac-release` Environment、两套私有仓库只读访问和专用 age 身份；未配置时正式打包任务会明确失败，日常无密钥 CI 不受影响。自动化和 Apple Silicon 上的命令行拒绝结果不能替代真实 Intel 与 Apple Silicon 上最终签名包的 Installer.app 交叉界面验收。

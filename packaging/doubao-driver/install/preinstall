@@ -24,17 +24,31 @@ installer_message() {
   fi
 }
 
+hardware_architecture() {
+  if [[ "$(/usr/sbin/sysctl -in hw.optional.arm64 2>/dev/null || print 0)" == "1" ]]; then
+    print "arm64"
+  else
+    print "x86_64"
+  fi
+}
+
 test -f "$RELEASE_CONFIG"
 EXPECTED_ARCHITECTURE="$(/usr/bin/plutil -extract ExpectedArchitecture raw -o - "$RELEASE_CONFIG")"
 MINIMUM_SYSTEM_MAJOR="$(/usr/bin/plutil -extract MinimumSystemMajor raw -o - "$RELEASE_CONFIG")"
 PACKAGE_BUILD="$(/usr/bin/plutil -extract PackageBuild raw -o - "$RELEASE_CONFIG")"
-CURRENT_ARCHITECTURE="$(/usr/bin/uname -m)"
+CURRENT_ARCHITECTURE="$(hardware_architecture)"
 CURRENT_SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
 [[ "$PACKAGE_BUILD" == <-> ]]
 if [[ "$CURRENT_ARCHITECTURE" != "$EXPECTED_ARCHITECTURE" ]]; then
-  installer_message \
-    "未安装：此安装包适用于 $EXPECTED_ARCHITECTURE Mac，当前机器是 $CURRENT_ARCHITECTURE。" \
-    "Installation stopped: this package is for $EXPECTED_ARCHITECTURE Macs, but this Mac is $CURRENT_ARCHITECTURE." >&2
+  if [[ "$EXPECTED_ARCHITECTURE" == "arm64" ]]; then
+    installer_message \
+      "未安装：此安装包仅适用于 Apple 芯片 Mac。当前 Mac 使用 Intel 处理器；请下载文件名中带“Intel”的版本。" \
+      "Installation stopped: this installer is for Macs with Apple silicon. This Mac has an Intel processor. Download the Intel version whose file name includes 'Intel'." >&2
+  else
+    installer_message \
+      "未安装：此安装包仅适用于 Intel Mac。当前 Mac 使用 Apple 芯片；请下载文件名中不带“Intel”的 Apple Silicon 版本。" \
+      "Installation stopped: this installer is for Intel Macs. This Mac has Apple silicon. Download the Apple Silicon version whose file name does not include 'Intel'." >&2
+  fi
   exit 2
 fi
 if [[ "$CURRENT_SYSTEM_MAJOR" -lt "$MINIMUM_SYSTEM_MAJOR" ]]; then
