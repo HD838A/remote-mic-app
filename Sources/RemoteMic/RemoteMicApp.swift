@@ -455,8 +455,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 updateFeedSelection.useStableFeed()
                 updateInformation.reset()
                 configurePreReleaseFeedRefreshTimer(isEnabled: isEnabled)
-                startUpdaterIfNeeded()
-                updaterController.updater.resetUpdateCycleAfterShortDelay()
                 refreshUpdateInformation()
             }
             .store(in: &subscriptions)
@@ -500,9 +498,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         updateFeedRefreshTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let resolvedURL = try await Self.latestReleaseFeedURL(
-                    assetName: updateFeedSelection.appcastAssetName
+                let resolvedFeed = try await Self.latestReleaseFeed(
+                    assetName: updateFeedSelection.appcastAssetName,
+                    includePreRelease: true
                 )
+                let resolvedURL = resolvedFeed.url
                 guard !Task.isCancelled, model.settings.checksForPreReleaseUpdates else { return }
                 let feedChanged = updateFeedSelection.preReleaseFeedURL != resolvedURL
                 updateFeedSelection.usePreReleaseFeed(resolvedURL)
@@ -514,22 +514,22 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 }
             } catch {
                 guard !Task.isCancelled else { return }
-                let feedChanged = updateFeedSelection.preReleaseFeedURL != nil
                 updateFeedSelection.useStableFeed()
                 AppLogger.shared.write(
-                    "UPDATE FEED prerelease_enabled=true resolved=false fallback=stable "
+                    "UPDATE FEED prerelease_enabled=true resolved=false fallback=none "
                         + "error=\(error.localizedDescription)"
                 )
-                if startUpdaterAfterRefresh {
-                    startUpdaterIfNeeded()
-                } else if feedChanged, resetUpdateCycleWhenChanged {
+                if updaterStarted, resetUpdateCycleWhenChanged {
                     updaterController.updater.resetUpdateCycleAfterShortDelay()
                 }
             }
         }
     }
 
-    private static func latestReleaseFeedURL(assetName: String) async throws -> URL {
+    private static func latestReleaseFeed(
+        assetName: String,
+        includePreRelease: Bool
+    ) async throws -> UpdateFeedResolver.ResolvedFeed {
         var request = URLRequest(url: releasesURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15
@@ -541,7 +541,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
             throw UpdateFeedResolutionError.invalidResponse
         }
-        return try UpdateFeedResolver.latestAppcastURL(from: data, assetName: assetName)
+        return try UpdateFeedResolver.latestFeed(
+            from: data,
+            assetName: assetName,
+            includePreRelease: includePreRelease
+        )
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {
@@ -680,27 +684,41 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         updateFeedRefreshTask?.cancel()
         updateFeedRefreshTask = Task { [weak self] in
             guard let self else { return }
-            if model.settings.checksForPreReleaseUpdates {
-                do {
-                    let resolvedURL = try await Self.latestReleaseFeedURL(
-                        assetName: updateFeedSelection.appcastAssetName
-                    )
-                    guard !Task.isCancelled,
-                          model.settings.checksForPreReleaseUpdates
-                    else { return }
-                    updateFeedSelection.usePreReleaseFeed(resolvedURL)
+            updateInformation.beginChecking()
+            let includePreRelease = model.settings.checksForPreReleaseUpdates
+            do {
+                let resolvedFeed = try await Self.latestReleaseFeed(
+                    assetName: updateFeedSelection.appcastAssetName,
+                    includePreRelease: includePreRelease
+                )
+                guard !Task.isCancelled,
+                      model.settings.checksForPreReleaseUpdates == includePreRelease
+                else { return }
+                if includePreRelease {
+                    updateFeedSelection.usePreReleaseFeed(resolvedFeed.url)
                     AppLogger.shared.write("UPDATE CHECK prerelease_enabled=true resolved=true")
-                } catch {
-                    guard !Task.isCancelled else { return }
+                } else {
                     updateFeedSelection.useStableFeed()
-                    AppLogger.shared.write(
-                        "UPDATE CHECK prerelease_enabled=true resolved=false fallback=stable "
-                            + "user_alert=false "
-                            + "error=\(error.localizedDescription)"
-                    )
+                    AppLogger.shared.write("UPDATE CHECK prerelease_enabled=false resolved=true")
                 }
-            } else {
+
+                let currentVersion = Bundle.main.object(
+                    forInfoDictionaryKey: "CFBundleShortVersionString"
+                ) as? String ?? ""
+                guard UpdateVersion.isNewer(resolvedFeed.version, than: currentVersion) else {
+                    startUpdaterIfNeeded()
+                    updateInformation.setUpToDate()
+                    return
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
                 updateFeedSelection.useStableFeed()
+                updateInformation.setUnavailable()
+                AppLogger.shared.write(
+                    "UPDATE CHECK prerelease_enabled=\(includePreRelease) resolved=false "
+                        + "user_alert=false error=\(error.localizedDescription)"
+                )
+                return
             }
             startUpdaterIfNeeded()
             guard !updaterController.updater.sessionInProgress else { return }
