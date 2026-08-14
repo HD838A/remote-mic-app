@@ -545,19 +545,25 @@ struct SettingsView: View {
 
                         StatusPill(
                             text: localization.text(
-                                model.isPhoneRemoteConnectionEnabled
-                                    ? "connection.phone.enabled"
-                                    : "connection.phone.not_enabled"
+                                model.isPhoneRemoteConnected
+                                    ? "connection.phone.connected"
+                                    : model.isPhoneRemoteConnectionEnabled
+                                        ? "connection.phone.enabled"
+                                        : "connection.phone.not_enabled"
                             ),
-                            tint: model.isPhoneRemoteConnectionEnabled ? .orange : .secondary
+                            tint: model.isPhoneRemoteConnected
+                                ? .green
+                                : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary
                         )
                     }
 
                     HStack(spacing: 8) {
                         Button(
-                            model.isPhoneRemoteConnectionEnabled
-                                ? "connection.phone.cancel_waiting"
-                                : "connection.phone.connect"
+                            model.isPhoneRemoteConnected
+                                ? "connection.phone.disconnect"
+                                : model.isPhoneRemoteConnectionEnabled
+                                    ? "connection.phone.cancel_waiting"
+                                    : "connection.phone.connect"
                         ) {
                             model.togglePhoneRemoteConnection()
                         }
@@ -607,17 +613,23 @@ struct SettingsView: View {
 
                     StatusPill(
                         text: localization.text(
-                            model.isWatchRemoteConnectionEnabled
-                                ? "connection.watch.enabled"
-                                : "connection.phone.not_enabled"
+                            model.isWatchRemoteConnected
+                                ? "connection.watch.connected"
+                                : model.isWatchRemoteConnectionEnabled
+                                    ? "connection.watch.enabled"
+                                    : "connection.phone.not_enabled"
                         ),
-                        tint: model.isWatchRemoteConnectionEnabled ? .orange : .secondary
+                        tint: model.isWatchRemoteConnected
+                            ? .green
+                            : model.isWatchRemoteConnectionEnabled ? .orange : .secondary
                     )
 
                     Button(
-                        model.isWatchRemoteConnectionEnabled
-                            ? "connection.watch.cancel_waiting"
-                            : "connection.watch.connect"
+                        model.isWatchRemoteConnected
+                            ? "connection.watch.disconnect"
+                            : model.isWatchRemoteConnectionEnabled
+                                ? "connection.watch.cancel_waiting"
+                                : "connection.watch.connect"
                     ) {
                         model.toggleWatchRemoteConnection()
                     }

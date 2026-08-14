@@ -8,7 +8,7 @@ Apple Watch App 已能发起附近连接，但 Mac `1.8.14` 只有“连接手�
 
 Mac `1.8.15` 的连接页按 iPhone、Apple Watch、网页版排列。点击“连接 Apple Watch”后，Watch 可直接发现 Mac、完成两位码授权，并复用现有遥控按键、手势映射和移动麦克风音频链路。
 
-iPhone 与 Watch 共用一次附近等待。任一入口开启后都能接受两类设备；等待期间可以取消，取消会停止监听并释放候选和旧会话。
+iPhone 与 Watch 共用一次附近等待。任一入口开启后都能接受两类设备；等待期间可以取消。对应设备成功授权后显示“已连接”和“取消连接”；取消会断开会话、停止监听并释放候选和旧会话。
 
 ## 范围与非目标
 
@@ -20,13 +20,13 @@ iPhone 与 Watch 共用一次附近等待。任一入口开启后都能接受两
 
 ## 隐私与兼容边界
 
-Watch 音频只进入现有 Mac 移动语音链路，不由该组件持久化。长期信任沿用现有设备身份记录，用户可以在 Mac 清除。组件 revision 固定为 `30f8e52658bfbdcc670d43c3637479dc221c9df8`；新增的语音开始结果保留旧 Bool 回调，协议字段和既有 iPhone/Web 行为保持兼容。Mac 只在用户开启附近连接后启动 Watch 蓝牙服务，并确认 Bonjour 服务真正发布；发布超时或被移除时会自动恢复，不再只依赖端口监听状态。
+Watch 音频只进入现有 Mac 移动语音链路，不由该组件持久化。长期信任沿用现有设备身份记录，用户可以在 Mac 清除。组件 revision 固定为 `676ea4df1d10ea2b9977498f99027a837615f499`；新增的连接状态与语音开始结果均为组件内部回调，协议字段和既有 iPhone/Web 行为保持兼容。Mac 只在用户开启附近连接后启动 Watch 蓝牙服务，并确认 Bonjour 服务真正发布；发布超时或被移除时会自动恢复，不再只依赖端口监听状态。
 
 ## 涉及文件
 
 - `Package.swift`、`Package.resolved`：固定组件依赖和产品。
-- `Sources/RemoteMic/BridgeAppModel.swift`：组件适配、共享 Watch 状态、授权说明和按键类型映射。
-- `Sources/RemoteMic/SettingsView.swift`：Watch 专用入口和组件 Web 会话视图。
+- `Sources/RemoteMic/BridgeAppModel.swift`：组件适配、iPhone/Watch 独立连接状态、授权说明和按键类型映射。
+- `Sources/RemoteMic/SettingsView.swift`：Watch 专用入口、附近连接三态和组件 Web 会话视图。
 - `Resources/*/Localizable.strings`、`Resources/Info.plist`：入口文案和本地网络用途。
 - `Tests/RemoteMicTests/SettingsPageRegressionTests.swift`：入口顺序、按需监听和状态回归。
 
