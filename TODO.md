@@ -1,11 +1,10 @@
 # TODO
 
-- [ ] 使用 Cloudflare CDN 加速 Mac 下载
+- [x] 使用 Cloudflare CDN 加速 Mac 下载
   - 官网固定入口为 `https://download.sayall.app/mac`，只解析 GitHub 最新正式版并跳转到同域名的版本化 DMG，不把 Pre-release 作为默认下载。
   - Sparkle 的稳定 feed 和预发布发现继续使用 GitHub，版本化 ZIP 与本地化更新说明改走 `download.sayall.app/mac/releases/<tag>/`；旧安装用户无需迁移 feed。
   - GitHub Releases 继续保存全部签名、公证资产；发布后必须从 GitHub 与 CDN 分别下载并逐字节比较，同时验证 `HEAD`、`Range`、签名、公证和候选更新发现。完成公开 Worker、官网和 `1.8.12` Pre-release 验证后再勾选。
   - 2026-08-12：Worker 与中英文官网已部署，当前正式版 `v1.8.3` 的 GitHub/CDN DMG 字节一致；候选 appcast、签名公证资产和正式版到候选更新仍由统一 Mac 预览版流程完成。
-
 - [x] 建立可选硬件信号模拟回归门禁
   - 私有模拟器 V1 已覆盖小米遥控器 12 个原始按键、36 个短按/双击/长按场景、7 个长按连发场景，以及 BLE 分片、sync、异常、重连、旧回调和双设备隔离；模拟依赖仅在测试环境变量存在时加载，普通开源构建不依赖私有仓库。
   - 自动化只代表 L0–L2 进程内协议和状态响应通过；CoreBluetooth、IOHID/DriverKit、Power 系统行为、射频、音质和安装环境继续由系统级与 RC001/RC003 真机门禁负责。
