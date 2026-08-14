@@ -36,6 +36,22 @@ struct UpdateFeedSelection {
     }
 }
 
+struct UpdateCheckPolicy: Equatable {
+    let checksForPreReleaseUpdates: Bool
+
+    var startsUpdaterAutomatically: Bool {
+        !checksForPreReleaseUpdates
+    }
+
+    var allowsBackgroundUpdatePrompts: Bool {
+        !checksForPreReleaseUpdates
+    }
+
+    var refreshesAboutInformationOnAppear: Bool {
+        !checksForPreReleaseUpdates
+    }
+}
+
 @main
 enum RemoteMicApp {
     @MainActor
@@ -97,7 +113,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var updateFeedRefreshTimer: Timer?
     private var updaterStarted = false
     private lazy var updaterController = SPUStandardUpdaterController(
-        startingUpdater: true,
+        startingUpdater: false,
         updaterDelegate: self,
         userDriverDelegate: nil
     )
@@ -455,7 +471,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 updateFeedSelection.useStableFeed()
                 updateInformation.reset()
                 configurePreReleaseFeedRefreshTimer(isEnabled: isEnabled)
-                refreshUpdateInformation()
+                let policy = UpdateCheckPolicy(checksForPreReleaseUpdates: isEnabled)
+                if updaterStarted {
+                    updaterController.updater.automaticallyChecksForUpdates =
+                        policy.allowsBackgroundUpdatePrompts
+                }
+                if policy.startsUpdaterAutomatically {
+                    startUpdaterIfNeeded()
+                    updaterController.updater.resetUpdateCycleAfterShortDelay()
+                    refreshUpdateInformation()
+                }
             }
             .store(in: &subscriptions)
     }
@@ -467,12 +492,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             startUpdaterIfNeeded()
             return
         }
-        refreshPreReleaseFeed(startUpdaterAfterRefresh: true)
+        refreshPreReleaseFeed()
     }
 
     private func startUpdaterIfNeeded() {
         guard !updaterStarted else { return }
-        _ = updaterController
+        updaterController.updater.automaticallyChecksForUpdates =
+            UpdateCheckPolicy(
+                checksForPreReleaseUpdates: model.settings.checksForPreReleaseUpdates
+            ).allowsBackgroundUpdatePrompts
+        updaterController.startUpdater()
         updaterStarted = true
     }
 
@@ -490,10 +519,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
     }
 
-    private func refreshPreReleaseFeed(
-        startUpdaterAfterRefresh: Bool = false,
-        resetUpdateCycleWhenChanged: Bool = false
-    ) {
+    private func refreshPreReleaseFeed(resetUpdateCycleWhenChanged: Bool = false) {
         updateFeedRefreshTask?.cancel()
         updateFeedRefreshTask = Task { [weak self] in
             guard let self else { return }
@@ -507,9 +533,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 let feedChanged = updateFeedSelection.preReleaseFeedURL != resolvedURL
                 updateFeedSelection.usePreReleaseFeed(resolvedURL)
                 AppLogger.shared.write("UPDATE FEED prerelease_enabled=true resolved=true")
-                if startUpdaterAfterRefresh {
-                    startUpdaterIfNeeded()
-                } else if feedChanged, resetUpdateCycleWhenChanged {
+                if feedChanged, resetUpdateCycleWhenChanged, updaterStarted {
                     updaterController.updater.resetUpdateCycleAfterShortDelay()
                 }
             } catch {

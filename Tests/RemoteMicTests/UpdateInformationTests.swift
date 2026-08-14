@@ -4,6 +4,22 @@ import Testing
 
 @Suite("Update information")
 struct UpdateInformationTests {
+    @Test func stableBuildKeepsAutomaticUpdateChecksAndAboutRefresh() {
+        let policy = UpdateCheckPolicy(checksForPreReleaseUpdates: false)
+
+        #expect(policy.startsUpdaterAutomatically)
+        #expect(policy.allowsBackgroundUpdatePrompts)
+        #expect(policy.refreshesAboutInformationOnAppear)
+    }
+
+    @Test func previewChecksRequireUserInitiatedAboutPageAction() {
+        let policy = UpdateCheckPolicy(checksForPreReleaseUpdates: true)
+
+        #expect(!policy.startsUpdaterAutomatically)
+        #expect(!policy.allowsBackgroundUpdatePrompts)
+        #expect(!policy.refreshesAboutInformationOnAppear)
+    }
+
     @Test func releaseFeedResolverUsesNewestPublishedMacAppcast() throws {
         let data = Data(#"""
         [
