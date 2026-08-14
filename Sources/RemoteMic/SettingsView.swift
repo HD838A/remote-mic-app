@@ -142,6 +142,22 @@ enum MappingPermissionPolicy {
     }
 }
 
+struct VersionTapRevealCounter {
+    private(set) var tapCount = 0
+    let requiredTaps: Int
+
+    init(requiredTaps: Int = 5) {
+        self.requiredTaps = max(1, requiredTaps)
+    }
+
+    mutating func registerTap() -> Bool {
+        tapCount += 1
+        guard tapCount >= requiredTaps else { return false }
+        tapCount = 0
+        return true
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
@@ -178,6 +194,7 @@ struct SettingsView: View {
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
     @State private var webRemoteInviteCode = ""
+    @State private var versionTapRevealCounter = VersionTapRevealCounter()
     private static let requiredWebRemoteInviteCode = "8586"
 
     init(
@@ -2126,9 +2143,13 @@ struct SettingsView: View {
                                         Text("about.version.current")
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
-                                        Text(currentVersion)
-                                            .font(.system(size: 28, weight: .semibold))
-                                            .monospacedDigit()
+                                        Button(action: revealPrivateEnrollmentIfNeeded) {
+                                            Text(currentVersion)
+                                                .font(.system(size: 28, weight: .semibold))
+                                                .monospacedDigit()
+                                        }
+                                        .buttonStyle(.plain)
+                                        .contentShape(Rectangle())
                                     }
 
                                     if case let .available(update) = updateInformation.state {
@@ -2467,6 +2488,12 @@ struct SettingsView: View {
         Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? localization.text("common.value.unknown")
+    }
+
+    private func revealPrivateEnrollmentIfNeeded() {
+        guard versionTapRevealCounter.registerTap() else { return }
+        privateFeature.revealEnrollment()
+        macroFeature.revealEnrollment()
     }
 
     private func languageTitle(_ language: AppLanguage) -> String {

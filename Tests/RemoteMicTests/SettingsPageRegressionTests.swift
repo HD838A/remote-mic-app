@@ -5,6 +5,23 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func versionTapRevealRequiresFiveConsecutiveTaps() {
+        var counter = VersionTapRevealCounter()
+
+        for expectedCount in 1...4 {
+            let revealed = counter.registerTap()
+            #expect(!revealed)
+            #expect(counter.tapCount == expectedCount)
+        }
+
+        let revealed = counter.registerTap()
+        #expect(revealed)
+        #expect(counter.tapCount == 0)
+        let revealedAgain = counter.registerTap()
+        #expect(!revealedAgain)
+        #expect(counter.tapCount == 1)
+    }
+
     @Test func privateFeatureFallbackRemainsCompletelyHiddenWithoutPackage() {
         #if !canImport(SayAllAI)
         let privateFeature = PrivateFeatureIntegration(localeIdentifier: "zh-Hans")
