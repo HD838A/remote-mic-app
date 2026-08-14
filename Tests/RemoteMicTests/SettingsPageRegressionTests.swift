@@ -94,6 +94,28 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
     }
 
+    @Test func iphoneAndWatchVoiceSessionsRemainSourceIsolated() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("case nearbyPhone"))
+        #expect(source.contains("case nearbyWatch"))
+        #expect(source.contains("phoneRemoteServer.onVoiceStartResult"))
+        #expect(source.contains("startPhoneVoice(source: .nearbyPhone)"))
+        #expect(source.contains("stopPhoneVoice(source: .nearbyPhone)"))
+        #expect(source.contains("watchBluetoothServer.onVoiceStartResult"))
+        #expect(source.contains("startPhoneVoice(source: .nearbyWatch)"))
+        #expect(source.contains("stopPhoneVoice(source: .nearbyWatch)"))
+        #expect(source.contains("return .busy"))
+        #expect(!source.contains("startPhoneVoice(source: .nearby)"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
