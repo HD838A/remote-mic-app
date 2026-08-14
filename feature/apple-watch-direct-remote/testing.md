@@ -2,9 +2,9 @@
 
 ## 自动化
 
-- `sayall-mac-remote`：`swift test`，18 项通过，覆盖语音开始成功、占用、输出未就绪及兼容回调。
+- `sayall-mac-remote`：`swift test`，20 项通过，覆盖 Phone/Watch 连接状态回调、语音开始成功、占用、输出未就绪及兼容回调。
 - Mac 主仓：`swift test`，覆盖专用入口顺序、按需监听、取消等待、按键类型映射和既有稳定功能。
-- 2026-08-15 回归：Mac 主仓 220 项、18 个 suite 全部通过；`sayall-mac-remote` 18 项通过，包含 iPhone/Watch 语音来源隔离、占用分类、系统 Bonjour 发布确认与发布 watchdog。
+- 2026-08-15 回归：Mac 主仓 220 项、18 个 suite 全部通过；`sayall-mac-remote` 20 项通过，包含 iPhone/Watch 连接状态、语音来源隔离、占用分类、系统 Bonjour 发布确认与发布 watchdog。
 - Mac Release：按仓库现有发布脚本或 `swift build -c release` 验证。
 - GitHub Actions：使用独立只读部署密钥检出固定 revision 的 `sayall-mac-remote`，PR、候选和正式签名流程均通过 SwiftPM 本地 mirror 构建，避免 runner 匿名读取私有仓库且不改写锁定依赖。
 - PR Run `31715653640`：Apple Silicon 与 Intel Ventura 均通过 Swift 测试、核心首次语音旅程门禁、项目自检和 Release 构建。
