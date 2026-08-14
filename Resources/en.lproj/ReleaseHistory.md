@@ -1,5 +1,10 @@
 # Version History
 
+## 1.8.21 (Pre-release)
+
+- Preview updates no longer show update prompts from background checks; open About and check manually to view preview candidates.
+- Stable updates keep their automatic checks and update prompts.
+
 ## 1.8.20 (Pre-release)
 
 - Improved access to selected preview features from the About page while keeping the feature switches off until you enable them.
