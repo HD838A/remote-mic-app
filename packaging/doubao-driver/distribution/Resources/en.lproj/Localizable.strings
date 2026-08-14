@@ -1,0 +1,4 @@
+"wrong_architecture_apple_silicon" = "This installer is for Macs with Apple silicon. This Mac has an Intel processor. Download the Intel version whose file name includes ‘Intel’.";
+"wrong_architecture_intel" = "This installer is for Intel Macs. This Mac has Apple silicon. Download the Apple Silicon version whose file name does not include ‘Intel’.";
+"unsupported_system_apple_silicon" = "This Apple Silicon installer requires macOS 14 or later. Update macOS before installing Remote Mic.";
+"unsupported_system_intel" = "This Intel installer requires macOS 13 or later. Update macOS before installing Remote Mic.";

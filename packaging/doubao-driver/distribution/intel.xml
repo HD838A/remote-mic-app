@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<installer-gui-script minSpecVersion="1">
+    <title>Remote Mic</title>
+    <options customize="never" hostArchitectures="arm64,x86_64"/>
+    <script><![CDATA[
+function hardwareIsAppleSilicon() {
+    return system.sysctl('hw.optional.arm64') == 1;
+}
+
+function currentSystemMajorVersion() {
+    return parseInt(system.version.ProductVersion.split('.')[0], 10);
+}
+
+function installationCheck() {
+    if (hardwareIsAppleSilicon()) {
+        my.result.type = 'Fatal';
+        my.result.message = system.localizedString('wrong_architecture_intel');
+        return false;
+    }
+    if (currentSystemMajorVersion() < 13) {
+        my.result.type = 'Fatal';
+        my.result.message = system.localizedString('unsupported_system_intel');
+        return false;
+    }
+    return true;
+}
+    ]]></script>
+    <installation-check script="installationCheck()"/>
+    <choices-outline>
+        <line choice="remote-mic"/>
+    </choices-outline>
+    <choice id="remote-mic" visible="false" start_selected="true">
+        <pkg-ref id="com.hd838a.RemoteMic.installer"/>
+    </choice>
+    <pkg-ref id="com.hd838a.RemoteMic.installer" auth="Root">RemoteMicComponent.pkg</pkg-ref>
+</installer-gui-script>

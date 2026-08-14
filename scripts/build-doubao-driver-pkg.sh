@@ -18,8 +18,10 @@ WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
 INSTALL_SCRIPTS="$WORK_DIR/install-scripts"
 UNINSTALL_SCRIPTS="$WORK_DIR/uninstall-scripts"
-UNSIGNED_INSTALL_PACKAGE="$WORK_DIR/Install Remote Mic-unsigned.pkg"
+INSTALL_COMPONENT_PACKAGE="$WORK_DIR/RemoteMicComponent.pkg"
 UNSIGNED_UNINSTALL_PACKAGE="$WORK_DIR/Uninstall Remote Mic-unsigned.pkg"
+DISTRIBUTION="$ROOT/packaging/doubao-driver/distribution/$RELEASE_VARIANT.xml"
+DISTRIBUTION_RESOURCES="$ROOT/packaging/doubao-driver/distribution/Resources"
 
 cleanup() {
   case "$WORK_DIR" in
@@ -30,6 +32,10 @@ cleanup() {
 trap cleanup EXIT
 
 test -x /usr/bin/pkgbuild
+test -x /usr/bin/productbuild
+test -f "$DISTRIBUTION"
+test -d "$DISTRIBUTION_RESOURCES/en.lproj"
+test -d "$DISTRIBUTION_RESOURCES/zh-Hans.lproj"
 case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
   *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
@@ -63,6 +69,13 @@ fi
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
+INSTALL_COMPONENT_SIGNING_ARGS=()
+INSTALL_PRODUCT_SIGNING_ARGS=()
+if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
+  INSTALL_COMPONENT_SIGNING_ARGS=(--sign "$INSTALLER_SIGNING_IDENTITY")
+  INSTALL_PRODUCT_SIGNING_ARGS=(--sign "$INSTALLER_SIGNING_IDENTITY")
+fi
+
 /usr/bin/pkgbuild \
   --root "$PAYLOAD_ROOT" \
   --scripts "$INSTALL_SCRIPTS" \
@@ -70,7 +83,24 @@ fi
   --version "$VERSION" \
   --install-location / \
   --ownership recommended \
-  "$UNSIGNED_INSTALL_PACKAGE"
+  "${INSTALL_COMPONENT_SIGNING_ARGS[@]}" \
+  "$INSTALL_COMPONENT_PACKAGE"
+
+if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
+  # productbuild flattens the component into the product archive, so validate
+  # the component's Developer ID signature before creating the outer product.
+  COMPONENT_SIGNATURE_DETAILS="$(/usr/sbin/pkgutil --check-signature \
+    "$INSTALL_COMPONENT_PACKAGE" 2>&1)"
+  print -r -- "$COMPONENT_SIGNATURE_DETAILS" | \
+    rg -q 'Status: signed by a developer certificate issued by Apple for distribution'
+fi
+
+/usr/bin/productbuild \
+  --distribution "$DISTRIBUTION" \
+  --resources "$DISTRIBUTION_RESOURCES" \
+  --package-path "$WORK_DIR" \
+  "${INSTALL_PRODUCT_SIGNING_ARGS[@]}" \
+  "$INSTALL_PACKAGE"
 
 /usr/bin/pkgbuild \
   --nopayload \
@@ -82,11 +112,8 @@ fi
 if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
   test -x /usr/bin/productsign
   /usr/bin/productsign --sign "$INSTALLER_SIGNING_IDENTITY" \
-    "$UNSIGNED_INSTALL_PACKAGE" "$INSTALL_PACKAGE"
-  /usr/bin/productsign --sign "$INSTALLER_SIGNING_IDENTITY" \
     "$UNSIGNED_UNINSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
 else
-  /bin/mv "$UNSIGNED_INSTALL_PACKAGE" "$INSTALL_PACKAGE"
   /bin/mv "$UNSIGNED_UNINSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
 fi
 

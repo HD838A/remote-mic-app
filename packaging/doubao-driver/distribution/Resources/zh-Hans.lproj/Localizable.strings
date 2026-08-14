@@ -1,0 +1,4 @@
+"wrong_architecture_apple_silicon" = "此安装包仅适用于 Apple 芯片 Mac。当前 Mac 使用 Intel 处理器；请下载文件名中带“Intel”的版本。";
+"wrong_architecture_intel" = "此安装包仅适用于 Intel Mac。当前 Mac 使用 Apple 芯片；请下载文件名中不带“Intel”的 Apple Silicon 版本。";
+"unsupported_system_apple_silicon" = "Apple Silicon 安装包需要 macOS 14 或更高版本。请先更新 macOS，再安装 Remote Mic。";
+"unsupported_system_intel" = "Intel 安装包需要 macOS 13 或更高版本。请先更新 macOS，再安装 Remote Mic。";

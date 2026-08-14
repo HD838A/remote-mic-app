@@ -9,6 +9,8 @@ Intel 发行线是独立的正式兼容版本，不使用 Universal 包，也不
 
 自动化可以验证编译、架构、最低系统版本、安装包内容、Sparkle 结构和 Feed 隔离，但不能替代真实 Intel Mac 上的蓝牙、HID、音频驱动和睡眠唤醒验收。
 
+Apple Silicon 与 Intel 继续分别发布，不生成 Universal 包。两个安装 PKG 都使用系统 Installer 的产品归档：用户打开错误架构的 PKG 时，安装器应在复制 payload 和请求管理员授权前显示本地化错误，并明确说明应下载另一架构版本。
+
 ## 自动化门禁
 
 在 `main` 运行：
@@ -23,6 +25,7 @@ RELEASE_VARIANT=intel ./scripts/build-doubao-driver.sh
 RELEASE_VARIANT=intel ./scripts/build-doubao-driver-pkg.sh
 RELEASE_VARIANT=intel BUILD_COMPONENTS=0 ./scripts/build-dmg.sh
 RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
+./scripts/test-installer-architecture-guard.sh
 ```
 
 验收结果必须同时满足：
@@ -30,9 +33,23 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 - App、MiRemoteV 2ch 和 Sparkle 的五个可执行文件均只有 `x86_64` 架构。
 - App 和驱动的最低系统版本均为 13.0。
 - App 的稳定更新地址使用 `appcast-intel.xml`，预览版检查也只寻找该文件。
-- Intel 安装包在删除已有 App 前先拒绝错误架构和低于 macOS 13 的系统。
+- 外层 Distribution 使用 `system.sysctl('hw.optional.arm64')` 判断真实硬件，不依赖可能受 Rosetta 影响的 `uname -m`；错误架构和过低系统必须以 `Fatal` 本地化消息拒绝。
+- 内层 preinstall 与 postinstall 保留相同的硬件和系统防御检查，且在删除或替换已有 App、驱动前执行。
 - PKG 安装脚本不调用 `lipo`、`vtool`、`xcrun`、`xcodebuild`、`swift`、`clang` 或其他开发者工具。
-- DMG 只包含 Intel App、Intel 安装/卸载 PKG 和 Applications 快捷方式。
+- DMG 根目录只包含对应架构的安装 PKG；卸载 PKG 和 App-only ZIP 继续作为 Release 高级资产。
+
+## 错误架构安装包验收
+
+必须使用最终 Developer ID 签名、公证并 staple 的候选产物完成以下交叉检查，不能用 ad-hoc 包替代：
+
+1. 在 Apple Silicon Mac 上打开 `Install Remote Mic Intel.pkg`。预期 Installer 在进入安装步骤前显示“此安装包仅适用于 Intel Mac”，并提示下载文件名不带 `Intel` 的 Apple Silicon 版本。
+2. 关闭错误提示，确认没有请求管理员密码，没有改动 `/Applications/Remote Mic.app`，也没有新增或替换 `/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver`。
+3. 在同一台 Mac 打开 `Install Remote Mic.pkg`。预期能够进入正常安装流程。
+4. 在真实 Intel Ventura Mac 上打开 `Install Remote Mic.pkg`。预期 Installer 在进入安装步骤前显示“此安装包仅适用于 Apple 芯片 Mac”，并提示下载文件名带 `Intel` 的版本。
+5. 关闭错误提示并确认 App、驱动均未变化；随后打开 `Install Remote Mic Intel.pkg`，确认能够进入正常安装流程。
+6. 分别在中文和英文系统语言下重复错误包检查，确认错误内容跟随 Installer 界面语言，而不是安装脚本的 `LANG` 环境变量。
+
+任一错误包能够继续进入授权或复制文件、提示只显示内部架构值 `arm64` / `x86_64`、没有指出另一安装包、语言错误，或关闭后 App/驱动发生变化，都判定为失败。使用命令行只读执行 `installer -showChoicesXML -pkg <PKG> -target /` 可以验证 Distribution 拒绝原因，但不能替代 Installer.app 的真实界面验收。
 
 ## 真实 Intel Ventura 验收清单
 
@@ -52,7 +69,7 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 
 ## 失败时收集信息
 
-记录机型、CPU、macOS 小版本、App 版本与构建号、使用的音频设备、发生步骤和准确时间。随后在“控制台”中按 `RemoteMic`、`Autoupdate`、`MiRemoteV2ch` 过滤对应时间段，并一并提供最新的 Remote Mic `.ips` 崩溃报告。
+记录机型、CPU、macOS 小版本、系统语言、App 版本与构建号、安装包完整文件名、使用的音频设备、发生步骤和准确时间。安装器门禁失败时同时保存 Installer 错误截图和 `/var/log/install.log` 对应时间段；运行功能失败时再在“控制台”中按 `RemoteMic`、`Autoupdate`、`MiRemoteV2ch` 过滤，并一并提供最新的 Remote Mic `.ips` 崩溃报告。
 
 ## GitHub Actions 打包边界
 
@@ -71,4 +88,4 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 
 ## 当前状态
 
-Intel Ventura 已经过多名用户测试，安装、启动、蓝牙遥控、按键和语音核心路径可以正常使用，现作为正式支持发行线。自动化、签名、公证和多人实测各自证明其覆盖边界；Rosetta 或 Apple Silicon 上的 `x86_64` 运行仍不能替代后续版本在真实 Intel 硬件上的回归。
+Intel Ventura 已经过多名用户测试，安装、启动、蓝牙遥控、按键和语音核心路径可以正常使用，现作为正式支持发行线。错误架构提示的 Distribution 结构、双变体 ad-hoc PKG/DMG 和 Apple Silicon 上的 Intel 包拒绝路径已完成自动化或只读验证；最终 Developer ID 包的 Installer.app 双语言界面，以及真实 Intel Mac 打开 Apple Silicon 包，仍需按上方交叉清单验收。自动化、签名、公证和多人实测各自证明其覆盖边界；Rosetta 或 Apple Silicon 上的 `x86_64` 运行仍不能替代真实 Intel 硬件回归。

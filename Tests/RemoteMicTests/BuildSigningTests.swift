@@ -367,6 +367,13 @@ struct BuildSigningTests {
             ),
             encoding: .utf8
         )
+        let installerGuardScript = root.appendingPathComponent(
+            "scripts/test-installer-architecture-guard.sh"
+        )
+        let installerGuardSource = try String(
+            contentsOf: installerGuardScript,
+            encoding: .utf8
+        )
 
         #expect(variantSource.contains("RELEASE_VARIANT=\"${RELEASE_VARIANT:-apple-silicon}\""))
         #expect(variantSource.contains("arm64-apple-macosx14.0"))
@@ -381,6 +388,10 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("intel"))
 
         #expect(preinstallSource.contains("CURRENT_ARCHITECTURE"))
+        #expect(preinstallSource.contains("/usr/sbin/sysctl -in hw.optional.arm64"))
+        #expect(!preinstallSource.contains("/usr/bin/uname -m"))
+        #expect(preinstallSource.contains("Download the Intel version"))
+        #expect(preinstallSource.contains("Download the Apple Silicon version"))
         #expect(!preinstallSource.contains("/bin/rm -rf -- \"$APP_DESTINATION\""))
         #expect(preinstallSource.contains("will be updated atomically"))
         #expect(packageVerifierSource.contains("preinstall must not delete an existing Remote Mic.app"))
@@ -390,6 +401,18 @@ struct BuildSigningTests {
         #expect(packageVerifierSource.contains(
             "package scripts must not require Xcode or Command Line Tools"
         ))
+        #expect(packageVerifierSource.contains("RemoteMicComponent.pkg"))
+        #expect(packageVerifierSource.contains("my.result.type = 'Fatal'"))
+        #expect(installerGuardSource.contains("INSTALLER ARCHITECTURE GUARD TEST PASS"))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [installerGuardScript.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
     }
 
     @Test func ordinaryDmgHasOneInstallerAndKeepsHealthyDriver() throws {
