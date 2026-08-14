@@ -127,7 +127,7 @@ struct BuildSigningTests {
             encoding: .utf8
         )
 
-        #expect(source.contains("resolved=false fallback=stable"))
+        #expect(source.contains("resolved=false fallback=none"))
         #expect(source.contains("user_alert=false"))
         #expect(!source.contains("showPreReleaseFeedUnavailableAlert"))
     }

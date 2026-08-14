@@ -2403,7 +2403,12 @@ struct SettingsView: View {
                 }
             }
         }
-        .onAppear(perform: refreshUpdateInformation)
+        .onAppear {
+            guard UpdateCheckPolicy(
+                checksForPreReleaseUpdates: settings.checksForPreReleaseUpdates
+            ).refreshesAboutInformationOnAppear else { return }
+            refreshUpdateInformation()
+        }
     }
 
     private func sectionTitle(_ section: SettingsSection) -> String {

@@ -32,18 +32,53 @@ struct GitHubReleaseFeedRecord: Decodable, Equatable {
     }
 
     let draft: Bool
+    let prerelease: Bool
+    let tagName: String
     let publishedAt: String?
     let assets: [Asset]
 
     private enum CodingKeys: String, CodingKey {
         case draft
+        case prerelease
+        case tagName = "tag_name"
         case publishedAt = "published_at"
         case assets
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        draft = try container.decode(Bool.self, forKey: .draft)
+        prerelease = try container.decodeIfPresent(Bool.self, forKey: .prerelease) ?? false
+        tagName = try container.decodeIfPresent(String.self, forKey: .tagName) ?? ""
+        publishedAt = try container.decodeIfPresent(String.self, forKey: .publishedAt)
+        assets = try container.decode([Asset].self, forKey: .assets)
     }
 }
 
 enum UpdateFeedResolver {
-    static func latestAppcastURL(from data: Data, assetName: String = "appcast.xml") throws -> URL {
+    struct ResolvedFeed: Equatable {
+        let url: URL
+        let version: String
+        let isPreRelease: Bool
+    }
+
+    static func latestAppcastURL(
+        from data: Data,
+        assetName: String = "appcast.xml",
+        includePreRelease: Bool? = nil
+    ) throws -> URL {
+        try latestFeed(
+            from: data,
+            assetName: assetName,
+            includePreRelease: includePreRelease
+        ).url
+    }
+
+    static func latestFeed(
+        from data: Data,
+        assetName: String = "appcast.xml",
+        includePreRelease: Bool? = nil
+    ) throws -> ResolvedFeed {
         let releases = try JSONDecoder().decode([GitHubReleaseFeedRecord].self, from: data)
         let orderedReleases = releases.enumerated().sorted { lhs, rhs in
             switch (lhs.element.publishedAt, rhs.element.publishedAt) {
@@ -53,16 +88,50 @@ enum UpdateFeedResolver {
                 return lhs.offset < rhs.offset
             }
         }
-        guard let feedURL = orderedReleases.lazy
+        guard let release = orderedReleases.lazy
             .map(\.element)
             .filter({ !$0.draft })
-            .flatMap(\.assets)
-            .first(where: { $0.name == assetName })?
-            .browserDownloadURL
+            .filter({ release in
+                guard let includePreRelease else { return true }
+                return release.prerelease == includePreRelease
+            })
+            .first(where: { release in
+                release.assets.contains { $0.name == assetName }
+            }),
+            let feedURL = release.assets.first(where: { $0.name == assetName })?.browserDownloadURL,
+            let version = UpdateVersion.normalized(release.tagName)
+                ?? feedURL.pathComponents.dropLast().last.flatMap(UpdateVersion.normalized)
         else {
             throw UpdateFeedResolutionError.feedNotFound
         }
-        return feedURL
+        return ResolvedFeed(url: feedURL, version: version, isPreRelease: release.prerelease)
+    }
+}
+
+enum UpdateVersion {
+    static func normalized(_ rawValue: String) -> String? {
+        let value = rawValue.hasPrefix("v") ? String(rawValue.dropFirst()) : rawValue
+        guard value.range(of: #"^\d+(?:\.\d+){1,3}$"#, options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
+    }
+
+    static func isNewer(_ candidate: String, than current: String) -> Bool {
+        guard let candidate = normalized(candidate),
+              let current = normalized(current)
+        else { return false }
+        let candidateParts = candidate.split(separator: ".").compactMap { Int($0) }
+        let currentParts = current.split(separator: ".").compactMap { Int($0) }
+        let count = max(candidateParts.count, currentParts.count)
+        for index in 0..<count {
+            let candidatePart = index < candidateParts.count ? candidateParts[index] : 0
+            let currentPart = index < currentParts.count ? currentParts[index] : 0
+            if candidatePart != currentPart {
+                return candidatePart > currentPart
+            }
+        }
+        return false
     }
 }
 

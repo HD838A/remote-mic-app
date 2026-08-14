@@ -4,6 +4,22 @@ import Testing
 
 @Suite("Update information")
 struct UpdateInformationTests {
+    @Test func stableBuildKeepsAutomaticUpdateChecksAndAboutRefresh() {
+        let policy = UpdateCheckPolicy(checksForPreReleaseUpdates: false)
+
+        #expect(policy.startsUpdaterAutomatically)
+        #expect(policy.allowsBackgroundUpdatePrompts)
+        #expect(policy.refreshesAboutInformationOnAppear)
+    }
+
+    @Test func previewChecksRequireUserInitiatedAboutPageAction() {
+        let policy = UpdateCheckPolicy(checksForPreReleaseUpdates: true)
+
+        #expect(!policy.startsUpdaterAutomatically)
+        #expect(!policy.allowsBackgroundUpdatePrompts)
+        #expect(!policy.refreshesAboutInformationOnAppear)
+    }
+
     @Test func releaseFeedResolverUsesNewestPublishedMacAppcast() throws {
         let data = Data(#"""
         [
@@ -92,6 +108,56 @@ struct UpdateInformationTests {
                 assetName: "appcast-intel.xml"
             ).lastPathComponent == "appcast-intel.xml"
         )
+    }
+
+    @Test func releaseFeedResolverSeparatesStableAndPreReleaseVersions() throws {
+        let data = Data(#"""
+        [
+          {
+            "draft": false,
+            "prerelease": true,
+            "tag_name": "v1.8.20",
+            "published_at": "2026-08-14T03:40:24Z",
+            "assets": [
+              {
+                "name": "appcast.xml",
+                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.20/appcast.xml"
+              }
+            ]
+          },
+          {
+            "draft": false,
+            "prerelease": false,
+            "tag_name": "v1.8.3",
+            "published_at": "2026-08-10T04:26:12Z",
+            "assets": [
+              {
+                "name": "appcast.xml",
+                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.3/appcast.xml"
+              }
+            ]
+          }
+        ]
+        """#.utf8)
+
+        let stable = try UpdateFeedResolver.latestFeed(
+            from: data,
+            includePreRelease: false
+        )
+        let preview = try UpdateFeedResolver.latestFeed(
+            from: data,
+            includePreRelease: true
+        )
+        #expect(stable.version == "1.8.3")
+        #expect(preview.version == "1.8.20")
+        #expect(!UpdateVersion.isNewer(stable.version, than: "1.8.19"))
+        #expect(UpdateVersion.isNewer(preview.version, than: "1.8.19"))
+    }
+
+    @Test func updateVersionComparisonTreatsEqualAndOlderVersionsAsNotNewer() {
+        #expect(!UpdateVersion.isNewer("v1.8.3", than: "1.8.19"))
+        #expect(!UpdateVersion.isNewer("1.8.19", than: "1.8.19"))
+        #expect(UpdateVersion.isNewer("1.8.20", than: "1.8.19"))
     }
 
     @Test func localizedReleaseNotesUseImmutableReleaseAssetURLs() throws {
