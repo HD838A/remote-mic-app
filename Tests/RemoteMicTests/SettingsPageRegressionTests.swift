@@ -66,6 +66,7 @@ struct SettingsPageRegressionTests {
         ))
         let startupSource = source[startup.lowerBound..<stop.lowerBound]
         #expect(!startupSource.contains("phoneRemoteServer.start()"))
+        #expect(!startupSource.contains("watchBluetoothServer.start()"))
 
         let phoneEntry = try #require(source.range(of: "func enablePhoneRemoteConnection()"))
         let watchEntry = try #require(source.range(
@@ -74,6 +75,7 @@ struct SettingsPageRegressionTests {
         ))
         let phoneEntrySource = source[phoneEntry.lowerBound..<watchEntry.lowerBound]
         #expect(phoneEntrySource.contains("phoneRemoteServer.start()"))
+        #expect(phoneEntrySource.contains("watchBluetoothServer.start()"))
 
         let webEntry = try #require(source.range(
             of: "func enableWebRemoteConnection()",
@@ -83,6 +85,8 @@ struct SettingsPageRegressionTests {
         #expect(watchEntrySource.contains("enablePhoneRemoteConnection()"))
         #expect(source.contains("func disablePhoneRemoteConnection()"))
         #expect(source.contains("phoneRemoteServer.stop()"))
+        #expect(source.contains("watchBluetoothServer.stop()"))
+        #expect(source.contains("watchBluetoothServer.updateButtonTitles(titles)"))
         #expect(source.contains("func togglePhoneRemoteConnection()"))
         #expect(source.contains("LocalizedMessage(\"connection.phone.cancel_waiting\")"))
         #expect(source.contains("response == .alertThirdButtonReturn"))

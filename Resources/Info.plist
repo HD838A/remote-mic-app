@@ -27,7 +27,7 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>Connect to the Xiaomi Bluetooth Remote 2 Pro to receive button and voice data.</string>
+    <string>Connect to supported remote controls and Apple Watch to receive button and voice data.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Allow nearby iPhone, iPad, and Apple Watch devices to connect as a remote control and microphone.</string>
     <key>NSBonjourServices</key>

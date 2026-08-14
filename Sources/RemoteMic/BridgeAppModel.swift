@@ -59,6 +59,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
         AppLogger.shared.write(message)
     })
+    private let watchBluetoothServer = WatchBluetoothRemoteServer(logger: { message in
+        AppLogger.shared.write(message)
+    })
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
     private lazy var voiceInputDestinationCoordinator = VoiceInputDestinationCoordinator(
@@ -212,6 +215,68 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self?.receivePhoneAudio(samples, source: .nearby)
             }
         }
+        watchBluetoothServer.isIdentityTrusted = { [weak self] fingerprint in
+            self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
+        }
+        watchBluetoothServer.onApprovalCancelled = { [weak self] in
+            self?.cancelPhoneApproval()
+        }
+        watchBluetoothServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
+            guard let self, self.isPhoneRemoteConnectionEnabled else {
+                completion(false)
+                return
+            }
+            requestPhoneApproval(
+                deviceName: deviceName,
+                pairingCode: pairingCode,
+                identityFingerprint: fingerprint,
+                completion: completion
+            )
+        }
+        watchBluetoothServer.onCommand = { [weak self] button, completion in
+            DispatchQueue.main.async {
+                guard let button = Self.appRemoteButton(rawValue: button.rawValue) else {
+                    completion(false)
+                    return
+                }
+                completion(self?.performPhoneCommand(button, source: .nearbyPhone) ?? false)
+            }
+        }
+        watchBluetoothServer.onButtonEvent = { [weak self] button, phase, completion in
+            DispatchQueue.main.async {
+                guard let button = Self.appRemoteButton(rawValue: button.rawValue),
+                      let phase = Self.appRemoteButtonPhase(rawValue: phase.rawValue)
+                else {
+                    completion(false)
+                    return
+                }
+                completion(self?.handleMobileButtonEvent(
+                    button,
+                    phase: phase,
+                    source: .nearbyPhone
+                ) ?? false)
+            }
+        }
+        watchBluetoothServer.onButtonEventsReset = { [weak self] in
+            DispatchQueue.main.async {
+                self?.resetMobileButtonGestures(source: .nearbyPhone)
+            }
+        }
+        watchBluetoothServer.onVoiceStart = { [weak self] completion in
+            DispatchQueue.main.async {
+                completion(self?.startPhoneVoice(source: .nearby) ?? false)
+            }
+        }
+        watchBluetoothServer.onVoiceStop = { [weak self] in
+            DispatchQueue.main.async {
+                self?.stopPhoneVoice(source: .nearby)
+            }
+        }
+        watchBluetoothServer.onAudio = { [weak self] samples in
+            DispatchQueue.main.async {
+                self?.receivePhoneAudio(samples, source: .nearby)
+            }
+        }
         webRemoteClient.onStateChange = { [weak self] state in
             self?.webRemoteState = state
         }
@@ -322,6 +387,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         discoveryBluetoothBridge = nil
         activeBluetoothVoiceDeviceIdentifier = nil
         phoneRemoteServer.stop()
+        watchBluetoothServer.stop()
         webRemoteClient.stop()
         isPhoneRemoteConnectionEnabled = false
         webRemoteState = .disabled
@@ -399,6 +465,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard started, !isPhoneRemoteConnectionEnabled else { return }
         isPhoneRemoteConnectionEnabled = true
         phoneRemoteServer.start()
+        watchBluetoothServer.start()
         AppLogger.shared.write("PHONE REMOTE enabled_by_user")
     }
 
@@ -407,6 +474,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isPhoneRemoteConnectionEnabled = false
         cancelPhoneApproval()
         phoneRemoteServer.stop()
+        watchBluetoothServer.stop()
         AppLogger.shared.write("PHONE REMOTE disabled_by_user")
     }
 
@@ -482,6 +550,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         remoteButtonTitles = titles
         phoneRemoteServer.updateButtonTitles(titles)
+        watchBluetoothServer.updateButtonTitles(titles)
         webRemoteClient.updateButtonTitles(titles)
     }
 

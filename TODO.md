@@ -38,8 +38,9 @@
   - iOS 源码、专属 CI、设计备选图和 iOS 待办已迁移到独立私有仓库；本仓库继续维护 Mac 端附近连接、授权、按键执行和音频接收，拆仓不改变现有协议或运行行为。Mac CI 已增加仓库边界门禁，禁止迁出的 iOS 目录和专属 CI 回流。
 
 - [ ] 为 Apple Watch 提供独立的 Mac 连接入口 <!-- workshop:status=待验收;priority=P2 -->
-  - `1.8.15` 候选代码已在连接页按 iPhone → Apple Watch → 网页版的顺序加入专用入口；iPhone 与 Watch 共用同一个按需开启的附近监听器，任一入口都可以取消等待，Mac 启动时仍不自动监听。
-  - Mac 附近连接与网页版会话实现已迁入独立 `SayAllMacRemote` 组件并固定 revision；Watch 授权提示会根据设备名称显示专用说明，既有 iPhone、Web、实体遥控器和按键映射链路保持兼容。
+  - 连接页已按 iPhone → Apple Watch → 网页版的顺序加入专用入口；iPhone 与 Watch 共用同一个按需开启状态，任一入口都可以取消等待，Mac 启动时仍不自动监听。
+  - 2026-08-14 修复 `1.8.22` 实际未启动 Watch BLE、旧 TCP 取消回调误停 Watch BLE，以及 Mac Bonjour 只监听端口但未确认服务发布的问题。Mac 现在只在用户点击后同时启动 Phone Bonjour 与 Watch BLE；Bonjour 发布超时、被移除或 listener 失败会自动恢复，Watch 等待 GATT 服务注册完成后才广播。
+  - Mac 附近连接与网页版会话实现已迁入独立 `SayAllMacRemote` 组件并固定 revision；Watch 授权提示会根据设备名称显示专用说明，既有 iPhone、Web、实体遥控器和按键映射链路保持兼容。本机 Release APP 已验证 Bonjour 可被系统发现、Watch BLE 已广播且取消等待会停止两者，Mac 218 项回归通过。
   - 自动化与 Release 构建通过后仍需真实 Apple Watch、实际测试 Mac、虚拟麦克风和第三方语音工具完成发现、授权、按键、收音、取消等待及客户端接管验收，再标记完成。
 - [x] 开发静态产品信息网页
   - 展示无线麦的核心定位、主要功能、适用场景、下载入口和基础使用方式，并提供清晰的产品截图与录屏演示。

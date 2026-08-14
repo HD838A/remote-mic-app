@@ -2,7 +2,7 @@
 
 ## 适用版本与分支
 
-- Mac App `1.8.15` 候选分支，包含 Apple Watch 专用连接入口。
+- Mac App `1.8.23` 候选分支，包含 Apple Watch 专用连接入口、Watch BLE 服务和 Phone Bonjour 发布自恢复。
 - 与当前附近协议兼容的 iPhone / Apple Watch App。
 
 ## 测试前准备
@@ -19,7 +19,7 @@
 3. 不点击入口，观察状态和日志。
 4. 点击“连接 Apple Watch”，再点击“取消等待”。
 
-预期：Mac 启动时不自动监听；Watch 入口显示“正在等待 Watch”，取消后 iPhone 与 Watch 两行共同恢复“尚未开启”。连接页在仓库要求的最小检查窗口下没有裁切、重叠或窗口几何变化，中文文字不低于 12pt。
+预期：Mac 启动时不自动监听；用户点击后日志出现 `PHONE REMOTE service_published`、`WATCH BLE advertising`，Watch 入口显示等待状态；取消后日志出现 `PHONE REMOTE disabled_by_user`、`WATCH BLE stopped`，iPhone 与 Watch 两行共同恢复“尚未开启”。连接页在仓库要求的最小检查窗口下没有裁切、重叠或窗口几何变化，中文文字不低于 12pt。
 
 失败：启动即出现用户开启日志、缺少 Watch 行、顺序错误、等待无法取消、旧授权弹窗残留或页面裁切。
 
@@ -72,7 +72,7 @@
 
 ## 日志收集
 
-保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`listener_ready`、授权结果和 `disabled_by_user`。Watch 端如支持分享诊断日志，应从 Watch/iPhone App 的诊断入口导出；否则保存对应系统分析日志。不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
+保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`listener_ready`、`service_published/service_publish_timeout/service_removed`、`WATCH BLE starting/service_add_requested/advertising/stopped`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志。不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
 
 ## 自动化、代理实测和用户实测边界
 
