@@ -316,7 +316,36 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)
 
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: localization.text("menu.edit"))
+        editMenu.addItem(responderMenuItem("common.action.undo", action: "undo:", keyEquivalent: "z"))
+        editMenu.addItem(responderMenuItem("common.action.redo", action: "redo:", keyEquivalent: "Z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(responderMenuItem("common.action.cut", action: "cut:", keyEquivalent: "x"))
+        editMenu.addItem(responderMenuItem("common.action.copy", action: "copy:", keyEquivalent: "c"))
+        editMenu.addItem(responderMenuItem("common.action.paste", action: "paste:", keyEquivalent: "v"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(responderMenuItem("common.action.select_all", action: "selectAll:", keyEquivalent: "a"))
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
         NSApp.mainMenu = mainMenu
+    }
+
+    private func responderMenuItem(
+        _ titleKey: String,
+        action: String,
+        keyEquivalent: String
+    ) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: localization.text(titleKey),
+            action: Selector(action),
+            keyEquivalent: keyEquivalent
+        )
+        item.keyEquivalentModifierMask = [.command]
+        // A nil target lets AppKit route the standard editing action to the focused text field.
+        item.target = nil
+        return item
     }
 
     private func installApplicationKeyboardShortcuts() {

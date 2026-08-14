@@ -359,6 +359,7 @@
 "menu.show_logs" = "显示日志";
 "menu.about" = "关于无线麦";
 "menu.file" = "文件";
+"menu.edit" = "编辑";
 "menu.open_log_folder" = "打开日志所在文件夹";
 "menu.check_for_updates" = "检查更新…";
 "common.action.quit" = "退出";
@@ -430,6 +431,11 @@
 "about.support.github" = "GitHub";
 "about.support.website" = "官网";
 "common.action.close" = "关闭";
+"common.action.undo" = "撤销";
+"common.action.redo" = "重做";
+"common.action.cut" = "剪切";
+"common.action.paste" = "粘贴";
+"common.action.select_all" = "全选";
 "about.version.history_load_failed" = "无法加载版本历史。";
 "about.preferences.open_main_window_at_launch" = "启动时自动打开主面板";
 "about.preferences.open_main_window_help" = "关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。";
