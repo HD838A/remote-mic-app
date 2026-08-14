@@ -9,9 +9,11 @@ final class MacroFeatureIntegration: ObservableObject {
     @Published private(set) var isFeatureVisible = false
     @Published private(set) var shouldShowEnrollment = false
 
-    #if canImport(SayAllMacroRemoteMic)
+#if canImport(SayAllMacroRemoteMic)
     private let feature: SayAllMacroRemoteMicFeature
-    #endif
+    private var subscriptions = Set<AnyCancellable>()
+    private var enrollmentRevealRequested = false
+#endif
 
     init(localeIdentifier: String = Locale.current.identifier) {
         #if canImport(SayAllMacroRemoteMic)
@@ -21,7 +23,11 @@ final class MacroFeatureIntegration: ObservableObject {
             .assign(to: &$isFeatureVisible)
         feature.$shouldShowEnrollment
             .removeDuplicates()
-            .assign(to: &$shouldShowEnrollment)
+            .sink { [weak self] value in
+                guard let self else { return }
+                self.shouldShowEnrollment = value || self.enrollmentRevealRequested
+            }
+            .store(in: &subscriptions)
         #endif
     }
 
@@ -49,9 +55,16 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     func refreshAccessIfNeeded(force: Bool = false) {
-        #if canImport(SayAllMacroRemoteMic)
+#if canImport(SayAllMacroRemoteMic)
         feature.refreshAccessIfNeeded(force: force)
-        #endif
+#endif
+    }
+
+    func revealEnrollment() {
+#if canImport(SayAllMacroRemoteMic)
+        enrollmentRevealRequested = true
+        shouldShowEnrollment = true
+#endif
     }
 
     func settingsView(selectedRemoteProfileID: UUID?) -> AnyView {

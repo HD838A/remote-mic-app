@@ -10,11 +10,12 @@ final class PrivateFeatureIntegration: ObservableObject {
     @Published private(set) var shouldShowEnrollment = false
     @Published private(set) var hudShouldBeVisible = false
 
-    #if canImport(SayAllAI)
+#if canImport(SayAllAI)
     private let feature: SayAllAIFeature
     private var hudController: SayAllAIHUDController?
     private var subscriptions = Set<AnyCancellable>()
-    #endif
+    private var enrollmentRevealRequested = false
+#endif
 
     init(localeIdentifier: String = Locale.current.identifier) {
         #if canImport(SayAllAI)
@@ -27,7 +28,11 @@ final class PrivateFeatureIntegration: ObservableObject {
             .assign(to: &$isFeatureVisible)
         feature.$shouldShowEnrollment
             .removeDuplicates()
-            .assign(to: &$shouldShowEnrollment)
+            .sink { [weak self] value in
+                guard let self else { return }
+                self.shouldShowEnrollment = value || self.enrollmentRevealRequested
+            }
+            .store(in: &subscriptions)
         feature.$hudShouldBeVisible
             .removeDuplicates()
             .assign(to: &$hudShouldBeVisible)
@@ -82,9 +87,16 @@ final class PrivateFeatureIntegration: ObservableObject {
     }
 
     func refreshAccessIfNeeded(force: Bool = false) {
-        #if canImport(SayAllAI)
+#if canImport(SayAllAI)
         feature.refreshAccessIfNeeded(force: force)
-        #endif
+#endif
+    }
+
+    func revealEnrollment() {
+#if canImport(SayAllAI)
+        enrollmentRevealRequested = true
+        shouldShowEnrollment = true
+#endif
     }
 
     func startVoiceSession() {
