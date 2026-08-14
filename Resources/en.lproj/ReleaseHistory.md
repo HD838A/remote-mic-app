@@ -1,5 +1,11 @@
 # Version History
 
+## 1.8.22 (Pre-release)
+
+- Fixed raw localization identifiers appearing on selected settings pages and tightened the input and status layout.
+- Text fields in Settings now support standard Mac editing shortcuts for copy, paste, cut, undo, redo, and select all.
+- Updated the shared Apple Watch direct-connection component with improved Bluetooth fallback and notification retry behavior. Discovery, authorization, buttons, and microphone flows still require real-device validation.
+
 ## 1.8.21 (Pre-release)
 
 - Preview updates no longer show update prompts from background checks; open About and check manually to view preview candidates.
