@@ -218,7 +218,7 @@
 - [ ] 支持苹果遥控器
   - 已完成 SiriRemoteForge、Wand、siri-remote-steamos、SiriRemoteVibe 及其他相关开源项目的可行性研究；当前总体首选 SiriRemoteForge，建议按“按键 → 触摸/滚动 → 麦克风高级组件”分阶段验证。
   - SiriRemoteForge 集成评估、候选项目源码与 Release 对比，以及暂停的 Apple Remote Windows 路线研究均已迁移至独立的产品资料工作区。
-- [ ] 支持 Xiaomi Bluetooth Remote Control 2（RC001-MS）
+- [x] 支持 Xiaomi Bluetooth Remote Control 2（RC001-MS）
   - 已通过真机确认 RC001-MS 可以连接 Mac，除语音键之外的普通按键能够被现有 App 或 macOS 识别；语音键没有普通按键事件不代表设备没有语音能力，当前未知项是 Voice GATT / HID Report、音频包格式和编码方式。
   - 实现前先记录现有 RC003-MS 的服务、Characteristic、控制包、音频包和解码基线，再为 RC001-MS 增加只用于诊断的完整 Service Discovery、Notify / Indicate 订阅和受控数据日志；不得根据同系列型号猜测 UUID 或直接复制 RC003 常量。
   - 根据真机协议差异选择最小改造：优先只增加设备识别或 `RemoteProfile`，其次共享解码器但区分 UUID，只有传输或编码确实不同才增加独立适配层；RC001-MS 与 RC003-MS 的普通按键、语音、音频和断连恢复都通过回归后才能声明兼容。
