@@ -68,7 +68,7 @@
 | 2026-08-10 | [左右键按住不能连续移动](./2026-08-10-left-right-hold-repeat.md) | 候选修复完成，硬件模拟通过，等待真机验证 |
 | 2026-08-10 | [增益滑块轨道拖动带动整个窗口](./2026-08-10-gain-slider-drags-window.md) | 已修复，等待可见界面复验 |
 | 2026-08-11 | [预发布候选工作流依赖 Runner 未安装的 rg](./2026-08-11-preview-candidate-runner-missing-rg.md) | 已修复 |
-| 2026-08-11 | [Onboarding 新配对遥控器 BLE 与 HID 状态不刷新](./2026-08-11-onboarding-new-remote-ble-hid-refresh.md) | 候选修复完成，等待真机验收 |
+| 2026-08-11 | [Onboarding 新配对遥控器 BLE 与 HID 状态不刷新](./2026-08-11-onboarding-new-remote-ble-hid-refresh.md) | 已修复 <!-- workshop:status=已完成;priority=P2 --> |
 | 2026-08-11 | [Onboarding 全流程恢复与最终可用性审计](./2026-08-11-onboarding-end-to-end-recovery-audit.md) | 候选修复完成，等待真实全流程验收 |
 | 2026-08-11 | [遥控器设备卡名称、状态截断并重复展示](./2026-08-11-remote-device-card-clipping-and-duplication.md) | 候选修复完成，浅/深色页面通过 |
 | 2026-08-11 | [升级后 Onboarding 已收到实体按键但仍显示蓝牙未连接](./2026-08-11-onboarding-upgrade-hid-before-ble.md) | 候选修复完成，等待真实升级与 RC003 验收 |

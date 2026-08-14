@@ -1,10 +1,10 @@
 # Onboarding 新配对遥控器 BLE 与 HID 状态不刷新
 
 - 时间：2026-08-11
-- 状态：候选修复完成，等待 RC001 / RC003 真机验收
+- 状态：已修复
 - 影响范围：macOS `1.8.10 (102)` 候选；Onboarding 遥控器页；新配对或重新配对 RC001 / RC003
 - 功能点：CoreBluetooth discovery、HID monitor、Onboarding 前台恢复
-- 简单描述：系统已连接新遥控器时 App 可能仍显示查找；BLE 显示连接后，系统按键有效但 App 仍收不到普通按键，重启后可能恢复。
+- 简单描述：Bug 索引状态：候选修复完成，等待真机验收
 
 ## 复现证据
 
