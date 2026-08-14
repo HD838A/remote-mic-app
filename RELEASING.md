@@ -9,17 +9,32 @@
 - 每个版本只使用一个候选分支；失败候选保持 Tag 和 Release 不变，修复后递增版本与 Build，并创建新的候选分支。
 - 候选分支在正式晋升完成前必须保留在远端，供来源校验、自动合并和 Release 守卫使用。
 
+## 发布交接清单
+
+开始发布计时前，开发侧必须同时满足：
+
+- 计划发布的产品 Commit 已经 Push，并通过 PR 合入 `origin/main`。
+- `mac-ci.yml`、`mac-preview-candidate.yml`、`mac-release-package.yml` 中 SayAllAI、SayAllMacroPlatform、SayAllMacRemote 均钉定同一组完整 40 位 Commit。
+- 私有依赖 Commit 已经 Push，发布 workflow 的只读部署密钥能够获取这些 Commit。
+- 最新 `main` 的 macOS CI 已成功；发布会话不承担临时整合产品代码、解决开发冲突或补齐尚未交付的私有依赖。
+
+任一条件不满足时，状态是“尚未发布就绪”，不得先创建候选再边发布边补代码。
+
 ## 预览候选流程
 
 1. 将计划发布的功能通过 PR 合入 `main`，等待 macOS CI 通过。
 2. 从最新 `origin/main` 创建 `release/pre-vX.Y.Z`。
 3. 只修改 `Resources/Info.plist`、中英文 `ReleaseHistory.md`，以及确有必要的 `Testing/*.md` 目标版本。
-4. Push 候选分支。GitHub Actions 自动执行分支来源校验、Swift Testing、Self Test、Release 编译和临时 App 打包。
-5. 使用受信任发布机的 readonly Match、随机密码隔离 Keychain、独立 P8 凭据仓库和 Sparkle 私钥完成签名、公证与正式候选制品构建。
-6. Tag、远端候选分支和发布资产必须解析到同一个提交。GitHub Release 必须保持 Pre-release，稳定 `latest` 不得变化。
-7. 从公开 Release 重新下载全部资产并逐字节复核；使用公开稳定版执行固定候选 appcast 的真实 Sparkle 更新。
+4. Push 候选分支。`macOS Preview Candidate` 自动执行分支来源、私有依赖钉定、Swift Testing、Self Test、双架构 Release 编译和临时 App 打包。
+5. 两个候选 Job 对精确候选 SHA 成功后，运行 `scripts/prepare-preview-recording-pr.sh` 创建 Draft 回流 PR。Draft PR 的受保护 CI 可以提前运行，但公开验证完成前不得转 Ready 或合并。
+6. 手动从同一候选分支运行 `macOS Signed Release Packages`。workflow 在进入 `mac-release` Environment、接触 Apple 凭据前，重新核对精确候选 SHA 的成功 push run、两种架构 Job、三条 workflow 的私有依赖 Commit 和 Draft PR。
+7. Environment 审批后，Apple Silicon 与 Intel 使用独立 SwiftPM scratch 并行构建、签名和公证；每种架构的安装与卸载 PKG 也并行提交公证。这里复用步骤 4 对精确 SHA 的测试证明，不重复执行等价的 Swift Testing 和 Self Test。
+8. 发布为 Pre-release 后，从公开 Release 重新下载全部资产并逐字节复核，核对 Tag、远端候选分支、provenance 和发布资产指向同一提交；使用公开稳定版执行固定候选 appcast 的真实 Sparkle 更新。
+9. 只有步骤 8 全部通过，Release Guard 才可将 Draft PR 转 Ready 并启用 Auto-merge。稳定 `latest` 在整个预览发布和验证期间不得变化。
 
 GitHub 自动生成的 CI App 只用于验证打包结构，不是已签名、公证的公开安装包。完整签名发布在受保护的 CI 发布环境完成前，继续使用既有无交互发布机流程。
+
+候选 CI 和正式打包允许并行的是已经相互隔离的工作；Developer ID 签名、公证、staple、Gatekeeper、公开字节和 Sparkle 更新验证均不得省略。下一次预览发布应记录候选 CI、PR CI、Environment 等待、双架构构建、公证、公开验证各阶段耗时，用真实数据确认优化效果。
 
 ## 正式晋升
 

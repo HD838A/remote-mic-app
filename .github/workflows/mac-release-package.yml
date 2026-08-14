@@ -14,10 +14,36 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
+  pull-requests: read
 
 jobs:
+  validate-candidate:
+    name: Verify exact preview candidate CI and Draft recording PR
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out release candidate
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install required validation tools
+        run: |
+          command -v jq >/dev/null || brew install jq
+          command -v rg >/dev/null || brew install ripgrep
+
+      - name: Verify candidate CI, dependency pins, and Draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUIRE_PREVIEW_RECORDING_PR: 1
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: ./scripts/verify-preview-candidate-ci.sh
+
   package:
     name: Sign and notarize Apple Silicon and Intel packages
+    needs: validate-candidate
     runs-on: macos-15
     timeout-minutes: 180
     environment: mac-release
@@ -25,6 +51,8 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       RELEASE_TAG: ${{ inputs.tag }}
       EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
+      PARALLEL_RELEASE_VARIANTS: 1
+      PARALLEL_PACKAGE_NOTARIZATION: 1
       REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
       EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
 
@@ -108,21 +136,6 @@ jobs:
           version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - Resources/Info.plist)"
           test "$RELEASE_TAG" = "v$version"
           ./scripts/verify-preview-branch.sh
-
-      - name: Run Apple Silicon release gates
-        env:
-          RELEASE_VARIANT: apple-silicon
-        run: |
-          swift test
-          ./scripts/test.sh
-
-      - name: Run Intel Ventura release gates
-        env:
-          RELEASE_VARIANT: intel
-        run: |
-          swift test
-          ./scripts/test.sh
-          swift build -c release --triple x86_64-apple-macosx13.0
 
       - name: Sign, notarize, staple, and verify both variants
         run: ./scripts/package-macos-release-in-actions.sh
