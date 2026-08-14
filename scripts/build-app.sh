@@ -75,6 +75,12 @@ if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" ]]; then
     exit 1
   fi
   SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:A}"
+  MACRO_PAGE_SOURCE="$SAYALL_MACRO_PLATFORM_PATH/Sources/SayAllMacroRemoteMic/RemoteMicMacroView.swift"
+  if [[ ! -f "$MACRO_PAGE_SOURCE" ]] || \
+      /usr/bin/grep -Eq 'bundle:[[:space:]]*\.module' "$MACRO_PAGE_SOURCE"; then
+    print -u2 "SayAll macro page bypasses the packaged resource resolver"
+    exit 1
+  fi
   export SAYALL_MACRO_PLATFORM_PATH
   SAYALL_MACRO_PLATFORM_INCLUDED=true
 else

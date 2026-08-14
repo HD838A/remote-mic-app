@@ -289,3 +289,65 @@ Added a shared destination-readiness coordinator, connected every external confi
 - Release App 构建、深度签名校验和 `git diff --check` 通过。
 - 生产视图浅色、深色各 8 张已逐张检查；标准完成态与运行时退化错误态都已检查，无裁切或黑白分栏。
 - 未执行真实 RC001/RC003 新配对、系统权限历史、充电线状态、音频驱动安装或第三方语音工具验收。
+
+---
+
+# 1.8.22 点击快捷指令崩溃
+
+## Observations
+
+- 用户 `1.8.22 (114)` 崩溃报告为主线程 `EXC_BREAKPOINT / SIGTRAP`，Swift `_assertionFailure` 后进入 `RemoteMicMacroView.body.getter`。
+- 用户二进制 UUID 与 GitHub Release 下载包一致；最终 App 含标准 `Contents/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle`，二进制仍含 `.app` 根目录和发布机器 `/private/tmp/...` 两个 SwiftPM 候选路径。
+- 资格入口已通过 `Bundle.main.resourceURL` 解析资源，但 `RemoteMicMacroView` 的空状态两处和通用本地化函数一处仍直接使用 `bundle: .module`。
+- 当前 Mac 没有用户设备的有效资格，因此不伪造线上资格；使用同一资源 Bundle 和自动访问器构造最小标准 `.app` 复现。
+
+## Hypotheses
+
+### H1: 页面残留的直接 `Bundle.module` 找不到用户机不存在的构建目录（ROOT HYPOTHESIS）
+
+- Supports: 崩溃函数、三处源码调用、错误候选路径和 `fatalError` 异常类型完全一致。
+- Conflicts: 资格入口正常；它使用的是另一条安全资源路径，正好限定了故障边界。
+- Test: 标准 `.app/Contents/Resources` 中放入真实 Bundle，分别执行自动访问器和 `Bundle.main.resourceURL` 对照。
+
+### H2: 打包脚本根本没有复制资源
+
+- Supports: 缺资源也会触发同一 `fatalError`。
+- Conflicts: 同 UUID 下载包已确认 Bundle、本地化文件和 `Info.plist` 存在。
+- Test: 最终 App 结构检查；已否定。
+
+### H3: 本地化目录大小写或 `Info.plist` 损坏
+
+- Supports: 历史候选出现过类似问题。
+- Conflicts: 当前在 Bundle 初始化前崩溃，候选路径没有进入 `Contents/Resources`。
+- Test: 通过标准资源 URL 初始化 Bundle 并读取英文字符串。
+
+### H4: Developer ID 签名阻止资源读取
+
+- Supports: 用户运行签名发布包。
+- Conflicts: 资源不含可执行代码，其他资源已正常读取，错误明确是路径解析。
+- Test: 保留最终 App 结构并直接读取标准资源 URL。
+
+## Experiment
+
+- 旧自动访问器在资源实际存在时仍以状态 `133` 退出，报告 `.app` 根目录和不存在的构建机绝对路径。
+- 单变量改为 `Bundle.main.resourceURL` 后状态 `0`，成功读取 `Quick Commands`；H1 确认，H2–H4 不符合故障边界。
+
+## Root Cause
+
+此前只修复资格入口，没有审计实际快捷指令页面；页面三处直接 `Bundle.module` 绕过标准 App 资源解析器，而发布验证只检查文件存在，开发机的绝对构建缓存掩盖了运行时崩溃。
+
+## Fix
+
+- 页面空状态和通用本地化统一复用现有安全资源 Bundle。
+- 私有模块测试禁止 `RemoteMicMacroView` 重新出现 `bundle: .module`。
+- 宿主构建脚本拒绝包含该绕过路径的私有模块。
+
+## Validation
+
+- 私有模块 30 个 XCTest + 7 个 Swift Testing 通过。
+- 宿主门禁测试先失败后通过。
+- 宿主门禁直接检查 `1.8.22` 私有模块提交时在编译前拒绝，状态 `1`，错误为 `SayAll macro page bypasses the packaged resource resolver`。
+- 最新 main 注入修复模块的 Apple Silicon Release App 构建和 `verify-app.sh` 通过。
+- 独立打包 `RemoteMicMacroView` 在移走完整 SwiftPM 构建目录后真实渲染，状态 `0` 并输出 `PACKAGED_MACRO_VIEW_RENDERED`。
+- 无缓存宿主 App 正常启动并在 `800 × 650` 设置窗口打开关于页和快捷指令邀请码区域。
+- 尚未完成 Developer ID、公证、Intel 和有效资格宿主侧边栏真实点击。

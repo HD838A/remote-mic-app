@@ -81,6 +81,7 @@
 | 2026-08-13 | [真实候选版本号导致预发布生命周期测试夹具失败](./2026-08-13-preview-lifecycle-fixture-current-version.md) | 已修复，自动化验证通过 |
 | 2026-08-14 | [内测邀请码兑换成功但客户端无反应](./2026-08-14-early-access-fractional-server-time.md) | 已修复，等待签名安装包与用户验收 |
 | 2026-08-14 | [预览候选首次打开设置窗口因私有资源 Bundle 路径崩溃](./2026-08-14-preview-private-resource-bundle-startup-crash.md) | 已修复，等待新签名候选验证 |
+| 2026-08-14 | [1.8.22 点击快捷指令后 App 崩溃](./2026-08-14-quick-commands-click-crash.md) | 源码修复完成，等待新签名包与用户验收 |
 | 2026-08-14 | [私有邀请码页面显示本地化 Key 且文本编辑快捷键不可用](./2026-08-14-private-enrollment-localization-edit-shortcuts.md) | 候选修复完成，等待最终签名 App 人工验收 |
 | 2026-08-14 | [Watch 与 iPhone 附近连接同时回归](./2026-08-14-watch-ios-nearby-connection-regression/DEBUG.md) | 已修复并通过自动化/本机发布验证，等待实际设备验收 |
 
