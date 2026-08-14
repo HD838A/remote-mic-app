@@ -196,8 +196,9 @@ struct BuildSigningTests {
         #expect(previewVerifierSource.contains("BASE_MAIN_COMMIT:"))
         #expect(previewVerifierSource.contains("confidential enrollment detail"))
         #expect(previewVerifierSource.contains("secret gesture|hidden entry"))
-        #expect(releaseVariantsSource.contains("RELEASE_VARIANT=apple-silicon"))
-        #expect(releaseVariantsSource.contains("RELEASE_VARIANT=intel"))
+        #expect(releaseVariantsSource.contains("PARALLEL_RELEASE_VARIANTS"))
+        #expect(releaseVariantsSource.contains("run_variant apple-silicon"))
+        #expect(releaseVariantsSource.contains("run_variant intel"))
         let candidateIndex = try #require(publishSource.range(of: "gh release create"))
         let promotionIndex = try #require(publishSource.range(of: "gh release edit"))
         #expect(candidateIndex.lowerBound < promotionIndex.lowerBound)
@@ -273,6 +274,65 @@ struct BuildSigningTests {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [lifecycleScript.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
+    }
+
+    @Test func optimizedReleasePipelineHasExecutableRegressionCoverage() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let regressionScript = root.appendingPathComponent(
+            "scripts/test-release-pipeline-optimization.sh"
+        )
+        let regressionSource = try String(
+            contentsOf: regressionScript,
+            encoding: .utf8
+        )
+        let releaseWorkflowSource = try String(
+            contentsOf: root.appendingPathComponent(
+                ".github/workflows/mac-release-package.yml"
+            ),
+            encoding: .utf8
+        )
+        let reconciliationSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/reconcile-release-event.sh"
+            ),
+            encoding: .utf8
+        )
+        let notarizeSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/notarize-release.sh"),
+            encoding: .utf8
+        )
+
+        #expect(regressionSource.contains("RELEASE PIPELINE OPTIMIZATION TEST PASS"))
+        #expect(regressionSource.contains("mismatched private dependency pins unexpectedly passed"))
+        #expect(regressionSource.contains("candidate verification unexpectedly passed"))
+        #expect(regressionSource.contains("--draft"))
+        #expect(regressionSource.contains("PARALLEL_RELEASE_VARIANTS=1"))
+        #expect(releaseWorkflowSource.contains("validate-candidate:"))
+        #expect(releaseWorkflowSource.contains("verify-preview-candidate-ci.sh"))
+        #expect(releaseWorkflowSource.contains("REQUIRE_PREVIEW_RECORDING_PR: 1"))
+        #expect(releaseWorkflowSource.contains("PARALLEL_RELEASE_VARIANTS: 1"))
+        #expect(releaseWorkflowSource.contains("PARALLEL_PACKAGE_NOTARIZATION: 1"))
+        #expect(!releaseWorkflowSource.contains("Run Apple Silicon release gates"))
+        #expect(!releaseWorkflowSource.contains("Run Intel Ventura release gates"))
+        #expect(reconciliationSource.contains("gh pr ready"))
+        #expect(notarizeSource.contains("REMOTE_MIC_BUILD_SCRATCH_PATH"))
+        let buildIndex = try #require(notarizeSource.range(of: "\"$ROOT/scripts/build-app.sh\""))
+        let sparkleToolCheckIndex = try #require(
+            notarizeSource.range(of: "test -x \"$GENERATE_APPCAST\"")
+        )
+        #expect(buildIndex.lowerBound < sparkleToolCheckIndex.lowerBound)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [regressionScript.path]
         process.standardOutput = Pipe()
         process.standardError = Pipe()
         try process.run()
@@ -493,6 +553,9 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
         #expect(workflowSource.contains("package-macos-release-in-actions.sh"))
+        #expect(workflowSource.contains("needs: validate-candidate"))
+        #expect(workflowSource.contains("actions: read"))
+        #expect(workflowSource.contains("pull-requests: read"))
         #expect(bootstrapSource.contains("GITHUB_ACTIONS"))
         #expect(bootstrapSource.contains("run-with-isolated-release-keychain.sh"))
         #expect(bootstrapSource.contains("validate-notary-secrets-repo.sh"))

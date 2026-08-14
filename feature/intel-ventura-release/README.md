@@ -21,6 +21,8 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - Intel 安装器在移除旧 App 前检查 `x86_64` 与 macOS 13，避免错误包破坏现有安装。
 - Sparkle Framework 在 Intel 包中只保留 `x86_64` slice，`appcast-intel.xml` 防止跨架构更新串包。
 - GitHub Actions 日常验证两种架构；受保护的正式打包任务在临时 Keychain 中导入既有 Developer ID 证书，并分别完成签名、公证和 staple。
+- 正式打包只复用精确候选 SHA 上已经成功的 Apple Silicon、Intel 候选测试；进入 Apple 凭据环境前会核对候选 push run、两种架构 Job、私有依赖钉定和精确 SHA 的 Draft 回流 PR。
+- Apple Silicon 与 Intel 使用按版本、Build 和架构区分的 SwiftPM scratch，可并行完成 Release 构建、签名与公证；每种架构的安装、卸载 PKG 也可并行提交公证，任何一条失败都会使整个正式打包失败。
 - 一个 Release 同时携带两套产物，候选溯源记录并校验全部资产；稳定晋升不重新构建。
 
 ## 涉及文件
@@ -52,6 +54,7 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - `arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建。
 - App、Sparkle、MiRemoteV、PKG 和 DMG 的架构、最低系统版本、权限、签名、公证和 Gatekeeper 校验。
 - 两套 appcast、资产名和候选溯源隔离校验。
+- 发布流水线回归脚本覆盖私有依赖 Commit 漂移、候选 SHA/Job 不匹配、Draft PR 门禁、双架构真实并行和任一架构失败传播。
 
 ## 人工测试手册
 
@@ -61,4 +64,4 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 
 当前状态：已完成，多名 Intel Ventura 用户确认安装、蓝牙遥控、按键和语音核心路径可用。
 
-Intel 与 Apple Silicon 必须持续分别打包和回归。Actions 正式打包依赖仓库管理员配置受保护的 `mac-release` Environment、两套私有仓库只读访问和专用 age 身份；未配置时正式打包任务会明确失败，日常无密钥 CI 不受影响。
+Intel 与 Apple Silicon 必须持续分别打包和回归。独立 scratch 只消除构建目录竞争，不改变共享临时 Keychain 的只读签名身份、Apple 公证服务等待时间或公开产物验证要求。Actions 正式打包依赖仓库管理员配置受保护的 `mac-release` Environment、两套私有仓库只读访问和专用 age 身份；未配置时正式打包任务会明确失败，日常无密钥 CI 不受影响。

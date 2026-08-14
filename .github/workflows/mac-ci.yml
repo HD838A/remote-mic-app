@@ -93,6 +93,9 @@ jobs:
       - name: Enforce extracted repository boundaries
         run: ./scripts/check-repository-boundaries.sh
 
+      - name: Verify release dependency pins stay aligned
+        run: ./scripts/verify-release-dependency-pins.sh
+
       - name: Run Swift tests
         run: swift test
 

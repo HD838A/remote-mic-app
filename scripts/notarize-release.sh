@@ -30,8 +30,10 @@ PARALLEL_PACKAGE_NOTARIZATION="${PARALLEL_PACKAGE_NOTARIZATION:-0}"
 PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
 CDN_DOWNLOAD_PREFIX="${RELEASE_DOWNLOAD_PREFIX:-https://download.sayall.app/mac/releases/$RELEASE_TAG/}"
 RELEASE_PAGE="${RELEASE_PAGE_URL:-https://github.com/HD838A/remote-mic-app/releases/tag/$RELEASE_TAG}"
-GENERATE_APPCAST="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
-SIGN_UPDATE="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+DEFAULT_RELEASE_BUILD_SCRATCH_PATH="/private/tmp/remote-mic-swiftpm/$VERSION-$BUILD/$RELEASE_VARIANT-sayall-ai-macro-platform"
+RELEASE_BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_RELEASE_BUILD_SCRATCH_PATH}"
+GENERATE_APPCAST="$RELEASE_BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/bin/generate_appcast"
+SIGN_UPDATE="$RELEASE_BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/bin/sign_update"
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: CODE_SIGN_IDENTITY=... INSTALLER_SIGNING_IDENTITY=... SPARKLE_PRIVATE_KEY_FILE=... $0"
@@ -87,10 +89,6 @@ for command in codesign ditto security xcrun; do
     exit 1
   }
 done
-if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
-  test -x "$GENERATE_APPCAST"
-  test -x "$SIGN_UPDATE"
-fi
 NOTARY_KEYCHAIN_ARGS=()
 if [[ -n "$NOTARY_KEYCHAIN" ]]; then
   test -f "$NOTARY_KEYCHAIN"
@@ -155,9 +153,14 @@ export REQUIRE_SAYALL_MACRO_PLATFORM=1
 export REMOTE_WEB_RELAY_URL
 export EARLY_ACCESS_SERVICE_URL
 export REQUIRE_NOTARIZATION=0
+export REMOTE_MIC_BUILD_SCRATCH_PATH="$RELEASE_BUILD_SCRATCH_PATH"
 
 "$ROOT/scripts/build-app.sh"
 "$ROOT/scripts/verify-app.sh" "$APP"
+if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
+  test -x "$GENERATE_APPCAST"
+  test -x "$SIGN_UPDATE"
+fi
 
 /usr/bin/ditto -c -k --keepParent "$APP" "$APP_NOTARY_ZIP"
 notarize "$APP_NOTARY_ZIP"

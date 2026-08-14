@@ -92,7 +92,7 @@ verify_candidate_provenance() {
 }
 
 ensure_preview_candidate_pr() {
-  local candidate_branch remote_branch_commit pr_number pr_url
+  local candidate_branch remote_branch_commit pr_number pr_url pr_json pr_is_draft
   candidate_branch="$(jq -r '.candidateBranch' "$PROVENANCE")"
   remote_branch_commit="$(git ls-remote origin "refs/heads/$candidate_branch" | /usr/bin/awk 'NR == 1 { print $1 }')"
   if [[ "$remote_branch_commit" != "$TAG_COMMIT" ]]; then
@@ -104,15 +104,15 @@ ensure_preview_candidate_pr() {
     return
   fi
 
-  pr_number="$(
+  pr_json="$(
     gh pr list \
       --repo "$REPOSITORY" \
       --head "$candidate_branch" \
       --base main \
       --state open \
-      --json number \
-      --jq '.[0].number // empty'
+      --json number,isDraft \
   )"
+  pr_number="$(print -r -- "$pr_json" | jq -r '.[0].number // empty')"
   if [[ -z "$pr_number" ]]; then
     pr_url="$(
       gh pr create \
@@ -123,6 +123,12 @@ ensure_preview_candidate_pr() {
         --body "Records the already published $RELEASE_TAG pre-release candidate in main after the required Apple Silicon and Intel checks pass. This PR does not promote the GitHub Release to stable and does not rebuild its signed or notarized assets."
     )"
     pr_number="${pr_url:t}"
+  else
+    pr_is_draft="$(print -r -- "$pr_json" | jq -r '.[0].isDraft')"
+    if [[ "$pr_is_draft" == "true" ]]; then
+      gh pr ready "$pr_number" --repo "$REPOSITORY"
+      print "RELEASE GUARD: marked preview candidate PR #$pr_number ready after public verification"
+    fi
   fi
   gh pr merge "$pr_number" --repo "$REPOSITORY" --auto --merge
   print "RELEASE GUARD: enabled preview candidate auto-merge for PR #$pr_number"

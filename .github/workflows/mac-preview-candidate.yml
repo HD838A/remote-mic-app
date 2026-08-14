@@ -79,7 +79,9 @@ jobs:
         run: command -v rg >/dev/null || brew install ripgrep
 
       - name: Validate candidate branch provenance
-        run: ./scripts/verify-preview-branch.sh
+        run: |
+          ./scripts/verify-preview-branch.sh
+          ./scripts/verify-release-dependency-pins.sh
 
       - name: Run Swift tests
         run: swift test
