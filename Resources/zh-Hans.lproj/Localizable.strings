@@ -434,6 +434,7 @@
 "help.glossary.open" = "术语表";
 "about.support.github" = "GitHub";
 "about.support.website" = "官网";
+"about.support.feedback" = "问题反馈";
 "common.action.close" = "关闭";
 "common.action.undo" = "撤销";
 "common.action.redo" = "重做";

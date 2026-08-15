@@ -434,6 +434,7 @@
 "help.glossary.open" = "Glossary";
 "about.support.github" = "GitHub";
 "about.support.website" = "Website";
+"about.support.feedback" = "Feedback";
 "common.action.close" = "Close";
 "common.action.undo" = "Undo";
 "common.action.redo" = "Redo";

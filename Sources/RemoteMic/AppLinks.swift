@@ -9,6 +9,9 @@ enum AppLinks {
     static let testFlightPublicBeta = URL(
         string: "https://testflight.apple.com/join/J8k8fb7v"
     )!
+    static let feedback = URL(
+        string: "https://my.sayall.app/api/guest-entry?source=mac"
+    )!
 
     static func website(for locale: Locale) -> URL {
         locale.identifier.lowercased().hasPrefix("zh")
