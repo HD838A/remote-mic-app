@@ -157,6 +157,17 @@ if [[ -n "${EARLY_ACCESS_SERVICE_URL:-}" ]]; then
   plutil -insert EarlyAccessServiceURL -string "$EARLY_ACCESS_SERVICE_URL" \
     "$APP_DIR/Contents/Info.plist"
 fi
+if [[ -n "${REMOTE_MIC_SENTRY_DSN:-}" ]]; then
+  if ! print -r -- "$REMOTE_MIC_SENTRY_DSN" | rg -q '^https://[^[:space:]@]+@[^[:space:]/]+/.+$'; then
+    print -u2 "REMOTE_MIC_SENTRY_DSN must be a valid HTTPS Sentry DSN"
+    exit 1
+  fi
+  plutil -remove RemoteMicSentryDSN "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+  plutil -insert RemoteMicSentryDSN -string "$REMOTE_MIC_SENTRY_DSN" \
+    "$APP_DIR/Contents/Info.plist"
+else
+  plutil -remove RemoteMicSentryDSN "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+fi
 if [[ "$REQUIRE_WEB_REMOTE_CONFIGURATION" == "1" ]]; then
   RELAY_URL="$(plutil -extract RemoteWebRelayURL raw -o - \
     "$APP_DIR/Contents/Info.plist" 2>/dev/null || true)"

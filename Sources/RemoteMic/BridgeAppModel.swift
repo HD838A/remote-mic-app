@@ -54,6 +54,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
+    @Published private(set) var diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.ready")
+    @Published private(set) var isSendingDiagnosticLogs = false
 
     private let audioOutput = VirtualAudioOutput()
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
@@ -118,6 +120,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var bluetoothVoiceEnqueueFailureCount = 0
     private var bluetoothVoiceTraceRoute = "none"
     private let hidEventSuppressor = KeyboardEventSuppressor()
+    private let diagnosticLogUploader: DiagnosticLogUploader
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
     private var hidPowerKeySuppressed = false
@@ -144,11 +147,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         settings: AppSettings = AppSettings(),
         initialAudioDevices: [AudioDeviceInfo] = [],
         privateFeature: PrivateFeatureIntegration = PrivateFeatureIntegration(),
-        macroFeature: MacroFeatureIntegration = MacroFeatureIntegration()
+        macroFeature: MacroFeatureIntegration = MacroFeatureIntegration(),
+        diagnosticLogUploader: DiagnosticLogUploader = .shared
     ) {
         self.settings = settings
         self.privateFeature = privateFeature
         self.macroFeature = macroFeature
+        self.diagnosticLogUploader = diagnosticLogUploader
         audioDevices = initialAudioDevices
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
@@ -1119,7 +1124,38 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func openLogFolder() {
-        NSWorkspace.shared.activateFileViewerSelecting([AppLogger.shared.logURL])
+        NSWorkspace.shared.open(AppLogger.shared.logDirectoryURL)
+    }
+
+    func sendDiagnosticLogs() {
+        guard !isSendingDiagnosticLogs else { return }
+        isSendingDiagnosticLogs = true
+        diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.sending")
+        AppLogger.shared.write("DIAGNOSTIC UPLOAD requested_by_user")
+        diagnosticLogUploader.upload { [weak self] result in
+            guard let self else { return }
+            self.isSendingDiagnosticLogs = false
+            switch result {
+            case let .success(count):
+                self.diagnosticUploadStatus = LocalizedMessage(
+                    "diagnostics.upload.success",
+                    arguments: [String(count)]
+                )
+                AppLogger.shared.write("DIAGNOSTIC UPLOAD completed count=\(count)")
+            case let .failure(error):
+                switch error {
+                case .serviceNotConfigured:
+                    self.diagnosticUploadStatus = LocalizedMessage(
+                        "diagnostics.upload.not_configured"
+                    )
+                case .noLogs:
+                    self.diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.no_logs")
+                case .invalidServiceConfiguration, .uploadFailed:
+                    self.diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.failed")
+                }
+                AppLogger.shared.write("DIAGNOSTIC UPLOAD failed reason=\(error)")
+            }
+        }
     }
 
     func openProjectFolder() {

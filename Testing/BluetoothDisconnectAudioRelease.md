@@ -12,7 +12,7 @@
 1. 安装并选择 `MiRemoteV 2ch` 作为 Remote Mic 的语音输出。
 2. 准备一款可选择麦克风的会议或录音 App。
 3. 分别准备“跟随系统默认输入”和“明确选择 MiRemoteV 2ch”两种配置。
-4. 打开 `~/Library/Logs/RemoteMic/runtime.log`，记录每个用例的本地开始与结束时间。
+4. 记录每个用例的本地开始与结束时间；用例结束后通过“权限与隐私 → 发送诊断信息”提交当天和昨天的脱敏日志。
 5. 确认 MacBook 内置麦克风可正常录音；若使用台式 Mac，准备另一个可用的物理输入设备。
 
 ## 用例 1：单遥控器移出范围后释放
@@ -107,7 +107,7 @@
 
 ## 日志收集
 
-1. 复制 `~/Library/Logs/RemoteMic/runtime.log`。
+1. 在“权限与隐私”点击“发送诊断信息”；本地 `.rmlog` 为加密文件，不能直接复制为文本。
 2. 标注用例、设备型号、会议 App、会议 App 的输入模式、开始/结束时间。
 3. 重点搜索：`BLE DISCONNECTED`、`AUDIO RELEASE`、`AUDIO DEFAULT_INPUT`、`AUDIO REBIND`、`ATVV STREAM summary`。
 4. 不需要提交用户语音内容。

@@ -86,7 +86,7 @@
 - Worker：Cloudflare Workers Logs 中筛选 `sayall-download`，不记录完整 IP、Cookie 或任意上游 URL。
 - 发布：保存 GitHub Release JSON、candidate provenance、两条下载路径的 SHA-256 清单和 `curl -I` / Range 结果。
 - Sparkle：保存 CLI `--verbose` 输出；退出码 0 表示发现更新，4 表示没有更高版本。
-- App：`~/Library/Logs/RemoteMic/runtime.log`；崩溃报告位于 `~/Library/Logs/DiagnosticReports/`。
+- App：记录测试时间后通过“权限与隐私 → 发送诊断信息”提交脱敏日志；本地 `.rmlog` 为加密文件。崩溃报告位于 `~/Library/Logs/DiagnosticReports/`。
 
 ## 自动化、代理实测和用户实测边界
 

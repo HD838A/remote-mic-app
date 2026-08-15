@@ -1902,15 +1902,23 @@ struct SettingsView: View {
                                     tint: Color.accentColor.opacity(0.14),
                                     in: Circle()
                                 )
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text("diagnostics.logs.title")
                                 Text("diagnostics.logs.privacy")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                Text(model.diagnosticUploadStatus.text(using: localization))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
-                                .compatibilityButtonStyle(.standard)
+                            VStack(alignment: .trailing, spacing: 8) {
+                                Button("diagnostics.logs.send") { model.sendDiagnosticLogs() }
+                                    .compatibilityButtonStyle(.prominent)
+                                    .disabled(model.isSendingDiagnosticLogs)
+                                Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
+                                    .compatibilityButtonStyle(.standard)
+                            }
                         }
                     }
                 }

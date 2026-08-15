@@ -332,8 +332,15 @@
 "permission.accessibility.description" = "Send mapped button actions to the current app";
 "diagnostics.title" = "Diagnostics";
 "diagnostics.logs.title" = "App Logs";
-"diagnostics.logs.privacy" = "Logs do not record voice content, Bluetooth addresses, or unique device identifiers.";
-"diagnostics.logs.show_in_finder" = "Show Logs in Finder";
+"diagnostics.logs.privacy" = "Logs are encrypted by day and retained for up to 5 days. Only sanitized logs from today and yesterday are uploaded when you send them.";
+"diagnostics.logs.show_in_finder" = "Open Logs Folder";
+"diagnostics.logs.send" = "Send Diagnostics";
+"diagnostics.upload.ready" = "No logs are uploaded unless you choose to send diagnostics.";
+"diagnostics.upload.sending" = "Sending diagnostic logs from today and yesterday…";
+"diagnostics.upload.success" = "Sent %1$@ sanitized log entries.";
+"diagnostics.upload.not_configured" = "The diagnostic service is not configured in this build.";
+"diagnostics.upload.no_logs" = "There are no logs from today or yesterday to send.";
+"diagnostics.upload.failed" = "Sending failed. Check your network connection and try again.";
 "common.status.connected" = "Connected";
 "common.status.connecting" = "Connecting";
 "common.status.preparing" = "Preparing";

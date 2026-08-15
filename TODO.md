@@ -4,6 +4,11 @@
   - App 英文名称统一为 `SayAll`，中文名称继续使用“无线麦”，官网统一为 `https://sayall.app`。
   - Mac App 继续采用独立下载方式维护，Mac App Store 上架暂时暂停；当前只推进 iOS App 与内嵌 Apple Watch App 上架，且不拆分商店专用版本。
 
+- [ ] 加密本地诊断日志并由用户主动发送
+  - macOS 运行日志按本地自然日写入独立的 AES-GCM 加密文件，单文件不超过 10MB，只保留今天及此前 4 天。
+  - 设置页提供“发送诊断信息”按钮；只有用户主动点击后才解密、脱敏并发送今天和昨天的日志，App 启动和其他后台路径不上传 Sentry 日志。
+  - 自动化已覆盖加密、日切、容量、保留期、脱敏、上传范围和无用户操作不上传；真实 Sentry 项目接收、断网恢复和最小窗口页面仍等待发布配置与人工验收。
+
 - [x] 使用 Cloudflare CDN 加速 Mac 下载
   - 官网固定入口为 `https://download.sayall.app/mac`，只解析 GitHub 最新正式版并跳转到同域名的版本化 DMG，不把 Pre-release 作为默认下载。
   - Sparkle 的稳定 feed 和预发布发现继续使用 GitHub，版本化 ZIP 与本地化更新说明改走 `download.sayall.app/mac/releases/<tag>/`；旧安装用户无需迁移 feed。

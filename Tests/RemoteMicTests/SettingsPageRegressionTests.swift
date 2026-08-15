@@ -94,6 +94,39 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
     }
 
+    @Test func diagnosticUploadOnlyStartsFromTheUserButton() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let startup = try #require(modelSource.range(of: "func startIfNeeded()"))
+        let stop = try #require(modelSource.range(
+            of: "func stop()",
+            range: startup.upperBound..<modelSource.endIndex
+        ))
+        let startupSource = modelSource[startup.lowerBound..<stop.lowerBound]
+        #expect(!startupSource.contains("diagnosticLogUploader.upload"))
+
+        let sendMethod = try #require(modelSource.range(of: "func sendDiagnosticLogs()"))
+        let nextMethod = try #require(modelSource.range(
+            of: "func openProjectFolder()",
+            range: sendMethod.upperBound..<modelSource.endIndex
+        ))
+        let sendSource = modelSource[sendMethod.lowerBound..<nextMethod.lowerBound]
+        #expect(sendSource.contains("diagnosticLogUploader.upload"))
+        #expect(settingsSource.contains("Button(\"diagnostics.logs.send\")"))
+        #expect(settingsSource.contains("model.sendDiagnosticLogs()"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

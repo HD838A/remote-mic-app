@@ -66,7 +66,7 @@
 
 ## 日志收集
 
-保存 `~/Library/Logs/RemoteMic/runtime.log` 中测试时间段，重点检查 `PHONE REMOTE enabled_by_user`、`PHONE REMOTE listener_ready` 和 `PHONE REMOTE disabled_by_user`。不得上传校验码、密钥、设备身份指纹、账号信息或音频内容。
+记录测试时间，在“权限与隐私”点击“发送诊断信息”，然后在诊断服务中重点检查 `PHONE REMOTE enabled_by_user`、`PHONE REMOTE listener_ready` 和 `PHONE REMOTE disabled_by_user`。本地 `.rmlog` 为加密文件；不得上传校验码、密钥、设备身份指纹、账号信息或音频内容。
 
 ## 自动化、代理实测和用户实测边界
 

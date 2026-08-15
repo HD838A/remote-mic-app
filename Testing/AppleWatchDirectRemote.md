@@ -72,7 +72,7 @@
 
 ## 日志收集
 
-保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`listener_ready`、`service_published/service_publish_timeout/service_removed`、`WATCH BLE starting/service_add_requested/advertising/stopped`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志。不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
+记录问题时间后，在 Mac“权限与隐私”点击“发送诊断信息”，在诊断服务中重点检查 `PHONE REMOTE enabled_by_user`、`listener_ready`、`service_published/service_publish_timeout/service_removed`、`WATCH BLE starting/service_add_requested/advertising/stopped`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志。本地 `.rmlog` 为加密文件；不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
 
 ## 自动化、代理实测和用户实测边界
 

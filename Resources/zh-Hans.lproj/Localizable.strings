@@ -332,8 +332,15 @@
 "permission.accessibility.description" = "把映射后的按键动作发送给当前应用";
 "diagnostics.title" = "诊断";
 "diagnostics.logs.title" = "应用日志";
-"diagnostics.logs.privacy" = "日志不记录语音内容、蓝牙地址或设备唯一标识。";
-"diagnostics.logs.show_in_finder" = "在 Finder 中显示日志";
+"diagnostics.logs.privacy" = "日志按天加密保存，最多保留 5 天；仅在你主动发送时上传今天和昨天的脱敏日志。";
+"diagnostics.logs.show_in_finder" = "打开日志文件夹";
+"diagnostics.logs.send" = "发送诊断信息";
+"diagnostics.upload.ready" = "平时不会向诊断服务上传日志。";
+"diagnostics.upload.sending" = "正在发送今天和昨天的诊断日志…";
+"diagnostics.upload.success" = "已发送 %1$@ 条脱敏日志。";
+"diagnostics.upload.not_configured" = "诊断服务尚未配置，请使用后续发布版本。";
+"diagnostics.upload.no_logs" = "今天和昨天没有可以发送的日志。";
+"diagnostics.upload.failed" = "发送失败，请检查网络后重试。";
 "common.status.connected" = "已连接";
 "common.status.connecting" = "连接中";
 "common.status.preparing" = "准备中";

@@ -83,7 +83,7 @@
 
 ## 日志收集
 
-1. App 日志：`~/Library/Logs/RemoteMic/runtime.log`，重点搜索 `UPDATE FEED` 与 `UPDATE CHECK`。
+1. App 日志：记录测试时间后，在“权限与隐私”点击“发送诊断信息”，在诊断服务中重点搜索 `UPDATE FEED` 与 `UPDATE CHECK`；本地 `.rmlog` 为加密文件，不能直接阅读。
 2. Console：按进程筛选 `RemoteMic`、`Autoupdate`、`Updater` 和 `Installer`。
 3. 崩溃报告：`~/Library/Logs/DiagnosticReports/` 中本次测试时间之后的 Remote Mic 报告。
 4. Sparkle CLI 使用 `--verbose` 保存完整输出；退出码 `4` 表示没有新版本，不判失败。
