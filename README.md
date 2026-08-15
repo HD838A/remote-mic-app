@@ -42,13 +42,16 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 ## 下载与安装
 
-Apple Silicon 最新正式版可通过 [Cloudflare CDN 固定入口](https://download.sayall.app/mac) 下载，文件名为 `Remote-Mic-<版本>.dmg`。Intel Mac 请从 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) 下载文件名带 `Intel` 的 `Remote-Mic-<版本>-Intel.dmg`，不要使用 Apple Silicon 安装包。
+- 最新正式版（Apple Silicon）：通过 [Cloudflare CDN 固定入口](https://download.sayall.app/mac) 下载。当前正式版入口仅提供 Apple Silicon 安装包，且不需要随版本更新。
+- 最新预览版（Apple Silicon / Intel）：前往 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases)，在发布列表中寻找最新标记为 **Pre-release** 的 macOS 候选版本，并按 Mac 芯片下载对应 DMG。在包含 Intel 安装包的版本晋升为正式版前，Intel 用户请下载名称带 `Intel` 的最新预览版 DMG。
+
+Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 `Remote-Mic-<版本>-Intel.dmg`，两者不能混用。
 
 Windows 与 Mac 单独构建和发布。当前仅提供面向小米 RC003 的 [Windows RC003 Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，它是未签名、尚未由主项目维护者独立真机复验的社区预览版，不进入 Mac 的 Sparkle 更新序列。下载前请阅读 Release 中的权限、杀毒软件和虚拟音频设备提示，并使用 `SHA256SUMS.txt` 校验文件。
 
 打开 DMG 后只需双击唯一的 `Install Remote Mic.pkg`；Intel Mac 使用 `Install Remote Mic Intel.pkg`。安装器会安装 Remote Mic，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
-自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从本项目 GitHub Releases 下载，并使用同一 Release 中的 `.sha256` 文件核对 DMG。
+自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从官网 Cloudflare CDN 固定入口或本项目 GitHub Releases 下载；如需核验，请使用对应 GitHub Release 中的 `.sha256` 文件核对 DMG。
 
 ## 首次使用
 
