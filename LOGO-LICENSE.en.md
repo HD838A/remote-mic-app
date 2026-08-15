@@ -1,4 +1,4 @@
-# Remote Mic App Logo License
+# SayAll App Logo License
 
 [简体中文](LOGO-LICENSE.md)
 
@@ -17,8 +17,8 @@ These brand assets are not covered by the GPL-3.0-only license for the macOS sof
 
 You may copy and distribute these brand assets unchanged only:
 
-1. as part of unmodified official Remote Mic source code or official binary releases;
-2. in screenshots, reviews, tutorials, news coverage, or documentation that accurately describes the official Remote Mic project;
+1. as part of unmodified official SayAll source code or official binary releases;
+2. in screenshots, reviews, tutorials, news coverage, or documentation that accurately describes the official SayAll project;
 3. where applicable law otherwise permits it.
 
 ## Uses requiring prior written authorization
@@ -28,7 +28,7 @@ You must obtain prior written authorization from the copyright owner before:
 1. using the brand assets as the icon, logo, or brand identity of another app, fork, modified version, product, service, or project;
 2. modifying, adapting, redrawing, animating, or creating a derivative likely to be confused with the official logo;
 3. using the brand assets in advertising, merchandise, endorsement, or commercial brand activity;
-4. implying authorization, endorsement, sponsorship, or collaboration by official Remote Mic.
+4. implying authorization, endorsement, sponsorship, or collaboration by official SayAll.
 
 Forks and modified releases must replace these brand assets with assets they are authorized to use.
 

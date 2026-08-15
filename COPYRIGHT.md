@@ -2,9 +2,9 @@
 
 [English](COPYRIGHT.en.md)
 
-**Remote Mic**
+**SayAll**
 
-Copyright (C) 2026 Remote Mic contributors
+Copyright (C) 2026 SayAll contributors
 
 本程序是一个 macOS 适配版本，其实现参考了 GPL-3.0-only 项目 [xxb26553663-star/remote-bridge-hub](https://github.com/xxb26553663-star/remote-bridge-hub)，参考提交为 `8a93f321ac71a602300c6cd77f7256fa4b63068e`。
 
