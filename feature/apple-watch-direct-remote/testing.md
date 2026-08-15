@@ -7,7 +7,7 @@
 - 2026-08-15 回归：Mac 主仓 220 项、18 个 suite 全部通过；`sayall-mac-remote` 20 项通过，包含 iPhone/Watch 连接状态、语音来源隔离、占用分类、系统 Bonjour 发布确认与发布 watchdog。
 - Mac Release：按仓库现有发布脚本或 `swift build -c release` 验证。
 - GitHub Actions：使用独立只读部署密钥检出固定 revision 的 `sayall-mac-remote`，PR、候选和正式签名流程均通过 SwiftPM 本地 mirror 构建，避免 runner 匿名读取私有仓库且不改写锁定依赖。
-- PR Run `31715653640`：Apple Silicon 与 Intel Ventura 均通过 Swift 测试、核心首次语音旅程门禁、项目自检和 Release 构建。
+- 本次修复对应的 Apple Silicon 与 Intel Ventura 结果以合入 PR 的新 CI 为准；旧 Run `31715653640` 只验证过早期私有依赖访问修复，不能作为本次语音来源隔离与连接状态修复的证据。
 - 本机 Release APP 已实际启动：未点击时没有附近监听；点击后日志确认 Phone Bonjour 已发布、Watch BLE 已广播，`dns-sd` 可发现服务；取消等待后两者均停止。
 
 ## 人工测试
