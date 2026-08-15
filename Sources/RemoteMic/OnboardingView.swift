@@ -324,6 +324,36 @@ struct OnboardingView: View {
             Text("onboarding.remote.detail")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text(localization.text("onboarding.remote.first_pairing.title"))
+                    .font(.system(size: 14, weight: .semibold))
+
+                Label {
+                    Text(localization.text("onboarding.remote.first_pairing.wake"))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "1.circle.fill")
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                Label {
+                    Text(localization.text("onboarding.remote.first_pairing.pair"))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "2.circle.fill")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            .font(.system(size: 12))
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
+            }
 
             statusCard(
                 icon: model.isConnected ? "checkmark.circle.fill" : "dot.radiowaves.left.and.right",

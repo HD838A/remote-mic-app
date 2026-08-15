@@ -487,9 +487,12 @@
 "onboarding.permissions.input.detail" = "Read physical button events from the remote";
 "onboarding.permissions.accessibility.detail" = "Run shortcuts and the Typeless Fn tap";
 "onboarding.remote.title" = "Connect the remote, then press a physical button";
-"onboarding.remote.detail" = "Make sure the remote is paired in Bluetooth Settings. Once connected, press any normal button to confirm your Mac receives it.";
+"onboarding.remote.detail" = "For a first-time connection, follow the two steps below. After pairing, press any normal button to confirm your Mac receives it.";
+"onboarding.remote.first_pairing.title" = "Connect the remote for the first time";
+"onboarding.remote.first_pairing.wake" = "Hold TV for about 2 seconds until the white light at the bottom starts flashing.";
+"onboarding.remote.first_pairing.pair" = "Then hold Home + Menu together to enter Bluetooth pairing mode.";
 "onboarding.remote.connected_detail" = "SayAll has a working connection to the remote.";
-"onboarding.remote.searching_detail" = "Keep the remote near your Mac and press a button to wake it.";
+"onboarding.remote.searching_detail" = "Keep the remote near your Mac. For a first connection, follow the steps above; if already paired, press any button to wake it.";
 "onboarding.remote.button_waiting" = "Waiting for a physical button";
 "onboarding.remote.button_received" = "Physical button received";
 "onboarding.remote.button_detail" = "Any button other than the voice key will work.";
