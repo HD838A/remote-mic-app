@@ -15,13 +15,13 @@ struct LocalizationTests {
         localization.select(.english)
         #expect(localization.language == .english)
         #expect(localization.locale.identifier == "en")
-        #expect(localization.localizedWebsiteURL.absoluteString == "https://8586ai.com/en/")
+        #expect(localization.localizedWebsiteURL.absoluteString == "https://sayall.app/en/")
         #expect(AppSettings(defaults: defaults).applicationLanguage == .english)
 
         localization.select(.simplifiedChinese)
         #expect(localization.language == .simplifiedChinese)
         #expect(localization.locale.identifier == "zh-Hans")
-        #expect(localization.localizedWebsiteURL.absoluteString == "https://8586ai.com/")
+        #expect(localization.localizedWebsiteURL.absoluteString == "https://sayall.app/")
         #expect(AppSettings(defaults: defaults).applicationLanguage == .simplifiedChinese)
     }
 
