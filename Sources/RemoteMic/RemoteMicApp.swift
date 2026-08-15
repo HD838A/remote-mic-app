@@ -57,6 +57,28 @@ enum RemoteMicApp {
     @MainActor
     static func main() {
         if let screenshotDirectory = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
+        ] {
+            do {
+                try SettingsScreenshotRenderer.renderAll(
+                    to: URL(fileURLWithPath: screenshotDirectory, isDirectory: true),
+                    sizeValue: ProcessInfo.processInfo.environment[
+                        "REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE"
+                    ],
+                    appearanceName: ProcessInfo.processInfo.environment[
+                        "REMOTE_MIC_SETTINGS_SCREENSHOT_APPEARANCE"
+                    ],
+                    languageName: ProcessInfo.processInfo.environment[
+                        "REMOTE_MIC_SETTINGS_SCREENSHOT_LANGUAGE"
+                    ]
+                )
+            } catch {
+                fputs("Settings screenshot rendering failed: \(error)\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+            return
+        }
+        if let screenshotDirectory = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR"
         ] {
             do {
@@ -279,6 +301,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
         menu.addItem(menuItem("about.support.github", action: #selector(openGitHub)))
         menu.addItem(menuItem("about.support.website", action: #selector(openWebsite)))
+        menu.addItem(menuItem("about.support.feedback", action: #selector(openFeedback)))
         menu.addItem(.separator())
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
@@ -841,6 +864,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func openWebsite() {
         NSWorkspace.shared.open(localization.localizedWebsiteURL)
+    }
+
+    @objc private func openFeedback() {
+        NSWorkspace.shared.open(AppLinks.feedback)
     }
 
     @objc private func closeKeyWindow() {

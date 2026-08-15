@@ -5,8 +5,17 @@ import Foundation
 import SayAllMacRemoteCore
 
 private enum MobileVoiceSource {
-    case nearby
+    case nearbyPhone
+    case nearbyWatch
     case web
+
+    var logName: String {
+        switch self {
+        case .nearbyPhone: return "iphone"
+        case .nearbyWatch: return "watch"
+        case .web: return "web"
+        }
+    }
 }
 
 private struct MobileButtonGestureKey: Hashable {
@@ -52,6 +61,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isAudioOutputReady = false
     @Published private(set) var currentVoiceSampleCount: UInt64 = 0
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
+    @Published private(set) var isPhoneRemoteConnected = false
+    @Published private(set) var isWatchRemoteConnected = false
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
 
@@ -156,6 +167,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         phoneRemoteServer.isIdentityTrusted = { [weak self] fingerprint in
             self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
         }
+        phoneRemoteServer.onConnectionStateChange = { [weak self] connected in
+            DispatchQueue.main.async {
+                self?.isPhoneRemoteConnected = connected
+            }
+        }
         phoneRemoteServer.onApprovalCancelled = { [weak self] in
             self?.cancelPhoneApproval()
         }
@@ -200,23 +216,28 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self?.resetMobileButtonGestures(source: .nearbyPhone)
             }
         }
-        phoneRemoteServer.onVoiceStart = { [weak self] completion in
+        phoneRemoteServer.onVoiceStartResult = { [weak self] completion in
             DispatchQueue.main.async {
-                completion(self?.startPhoneVoice(source: .nearby) ?? false)
+                completion(self?.startPhoneVoice(source: .nearbyPhone) ?? .unavailable)
             }
         }
         phoneRemoteServer.onVoiceStop = { [weak self] in
             DispatchQueue.main.async {
-                self?.stopPhoneVoice(source: .nearby)
+                self?.stopPhoneVoice(source: .nearbyPhone)
             }
         }
         phoneRemoteServer.onAudio = { [weak self] samples in
             DispatchQueue.main.async {
-                self?.receivePhoneAudio(samples, source: .nearby)
+                self?.receivePhoneAudio(samples, source: .nearbyPhone)
             }
         }
         watchBluetoothServer.isIdentityTrusted = { [weak self] fingerprint in
             self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
+        }
+        watchBluetoothServer.onConnectionStateChange = { [weak self] connected in
+            DispatchQueue.main.async {
+                self?.isWatchRemoteConnected = connected
+            }
         }
         watchBluetoothServer.onApprovalCancelled = { [weak self] in
             self?.cancelPhoneApproval()
@@ -262,19 +283,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self?.resetMobileButtonGestures(source: .nearbyPhone)
             }
         }
-        watchBluetoothServer.onVoiceStart = { [weak self] completion in
+        watchBluetoothServer.onVoiceStartResult = { [weak self] completion in
             DispatchQueue.main.async {
-                completion(self?.startPhoneVoice(source: .nearby) ?? false)
+                completion(self?.startPhoneVoice(source: .nearbyWatch) ?? .unavailable)
             }
         }
         watchBluetoothServer.onVoiceStop = { [weak self] in
             DispatchQueue.main.async {
-                self?.stopPhoneVoice(source: .nearby)
+                self?.stopPhoneVoice(source: .nearbyWatch)
             }
         }
         watchBluetoothServer.onAudio = { [weak self] samples in
             DispatchQueue.main.async {
-                self?.receivePhoneAudio(samples, source: .nearby)
+                self?.receivePhoneAudio(samples, source: .nearbyWatch)
             }
         }
         webRemoteClient.onStateChange = { [weak self] state in
@@ -325,7 +346,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         webRemoteClient.onVoiceStart = { [weak self] completion in
             DispatchQueue.main.async {
-                completion(self?.startPhoneVoice(source: .web) ?? false)
+                completion(self?.startPhoneVoice(source: .web) == .started)
             }
         }
         webRemoteClient.onVoiceStop = { [weak self] in
@@ -390,6 +411,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         watchBluetoothServer.stop()
         webRemoteClient.stop()
         isPhoneRemoteConnectionEnabled = false
+        isPhoneRemoteConnected = false
+        isWatchRemoteConnected = false
         webRemoteState = .disabled
         bluetoothVoiceActive = false
         activeMobileVoiceSource = nil
@@ -472,6 +495,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func disablePhoneRemoteConnection() {
         guard isPhoneRemoteConnectionEnabled else { return }
         isPhoneRemoteConnectionEnabled = false
+        isPhoneRemoteConnected = false
+        isWatchRemoteConnected = false
         cancelPhoneApproval()
         phoneRemoteServer.stop()
         watchBluetoothServer.stop()
@@ -1851,29 +1876,49 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         longRecordingCloseTimer = nil
     }
 
-    private func startPhoneVoice(source: MobileVoiceSource) -> Bool {
-        guard activeMobileVoiceSource == nil else { return false }
+    private func startPhoneVoice(source: MobileVoiceSource) -> RemoteVoiceStartResult {
+        guard activeMobileVoiceSource == nil else {
+            AppLogger.shared.write(
+                "MOBILE VOICE start_rejected reason=busy requested=\(source.logName) " +
+                    "active=\(activeMobileVoiceSource?.logName ?? "none")"
+            )
+            return .busy
+        }
         guard isAudioOutputReady || configureVirtualAudioOutput(reason: "mobile_voice_start") else {
+            AppLogger.shared.write(
+                "MOBILE VOICE start_rejected reason=audio_output requested=\(source.logName)"
+            )
             releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_configure_failed")
-            return false
+            return .unavailable
         }
         guard updatePhoneVoiceFunctionKeyState(streaming: true) else {
+            AppLogger.shared.write(
+                "MOBILE VOICE start_rejected reason=function_key requested=\(source.logName)"
+            )
             releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_function_key_failed")
-            return false
+            return .unavailable
         }
         activeMobileVoiceSource = source
         beginVoiceSessionIfNeeded()
-        return true
+        AppLogger.shared.write("MOBILE VOICE started source=\(source.logName)")
+        return .started
     }
 
     private func stopPhoneVoice(source: MobileVoiceSource) {
-        guard activeMobileVoiceSource == source else { return }
+        guard activeMobileVoiceSource == source else {
+            AppLogger.shared.write(
+                "MOBILE VOICE stop_ignored requested=\(source.logName) " +
+                    "active=\(activeMobileVoiceSource?.logName ?? "none")"
+            )
+            return
+        }
         audioOutput.endSessionAfterDraining { [weak self] in
             guard let self, self.activeMobileVoiceSource == source else { return }
             self.activeMobileVoiceSource = nil
             self.updatePhoneVoiceFunctionKeyState(streaming: false)
             self.endVoiceSessionIfNeeded()
             self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
+            AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
         }
     }
 
@@ -2027,7 +2072,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var currentVoiceUsageSource: UsageEventSource {
         if bluetoothVoiceActive { return .bluetoothRemote }
         switch activeMobileVoiceSource {
-        case .nearby: return .nearbyPhone
+        case .nearbyPhone, .nearbyWatch: return .nearbyPhone
         case .web: return .webRemote
         case nil: return .unknown
         }

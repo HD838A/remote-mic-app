@@ -94,6 +94,67 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
     }
 
+    @Test func iphoneAndWatchVoiceSessionsRemainSourceIsolated() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("case nearbyPhone"))
+        #expect(source.contains("case nearbyWatch"))
+        #expect(source.contains("phoneRemoteServer.onVoiceStartResult"))
+        #expect(source.contains("startPhoneVoice(source: .nearbyPhone)"))
+        #expect(source.contains("stopPhoneVoice(source: .nearbyPhone)"))
+        #expect(source.contains("watchBluetoothServer.onVoiceStartResult"))
+        #expect(source.contains("startPhoneVoice(source: .nearbyWatch)"))
+        #expect(source.contains("stopPhoneVoice(source: .nearbyWatch)"))
+        #expect(source.contains("return .busy"))
+        #expect(!source.contains("startPhoneVoice(source: .nearby)"))
+    }
+
+    @Test func mobileConnectionStatusMeetsFontAndSnapshotGates() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/SettingsScreenshotRenderer.swift"
+            ),
+            encoding: .utf8
+        )
+
+        let noInvite = try #require(settingsSource.range(
+            of: "Text(\"connection.phone.no_invite_badge\")"
+        ))
+        let noInviteBlock = settingsSource[noInvite.lowerBound...]
+            .prefix(180)
+        #expect(noInviteBlock.contains(".font(.system(size: 12, weight: .semibold))"))
+
+        let statusPill = try #require(settingsSource.range(of: "private struct StatusPill"))
+        let statusPillBlock = settingsSource[statusPill.lowerBound...]
+            .prefix(420)
+        #expect(statusPillBlock.contains(".font(.system(size: 12, weight: .semibold))"))
+        #expect(appSource.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"))
+        #expect(rendererSource.contains("width >= 800"))
+        #expect(rendererSource.contains("height >= 650"))
+        for section in ["connection", "mapping", "statistics", "permissions", "about"] {
+            #expect(rendererSource.contains(".\(section)"))
+        }
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -253,6 +314,10 @@ struct SettingsPageRegressionTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMappingCanvas.swift"),
             encoding: .utf8
         )
+        let bridgeSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
         let source = settingsSource + mappingCanvasSource
 
         for requiredAction in [
@@ -290,14 +355,25 @@ struct SettingsPageRegressionTests {
         #expect(watchEntry.lowerBound < webEntry.lowerBound)
         let mobileEntrySource = source[phoneEntry.lowerBound..<webEntry.lowerBound]
         #expect(mobileEntrySource.contains("connection.phone.cancel_waiting"))
+        #expect(mobileEntrySource.contains("connection.phone.connected"))
+        #expect(mobileEntrySource.contains("connection.phone.disconnect"))
         #expect(mobileEntrySource.contains("connection.watch.cancel_waiting"))
+        #expect(mobileEntrySource.contains("connection.watch.connected"))
+        #expect(mobileEntrySource.contains("connection.watch.disconnect"))
         #expect(mobileEntrySource.contains("model.togglePhoneRemoteConnection()"))
         #expect(mobileEntrySource.contains("model.toggleWatchRemoteConnection()"))
         #expect(!mobileEntrySource.contains(".disabled(model.isPhoneRemoteConnectionEnabled)"))
         #expect(!mobileEntrySource.contains(".disabled(model.isWatchRemoteConnectionEnabled)"))
         #expect(!mobileEntrySource.contains(".foregroundStyle(.green)"))
-        #expect(mobileEntrySource.contains("tint: model.isPhoneRemoteConnectionEnabled ? .orange"))
-        #expect(mobileEntrySource.contains("tint: model.isWatchRemoteConnectionEnabled ? .orange"))
+        #expect(mobileEntrySource.contains("tint: model.isPhoneRemoteConnected"))
+        #expect(mobileEntrySource.contains("tint: model.isWatchRemoteConnected"))
+        #expect(mobileEntrySource.contains("? .green"))
+        #expect(mobileEntrySource.contains("model.isPhoneRemoteConnectionEnabled ? .orange"))
+        #expect(mobileEntrySource.contains("model.isWatchRemoteConnectionEnabled ? .orange"))
+        #expect(bridgeSource.contains("@Published private(set) var isPhoneRemoteConnected = false"))
+        #expect(bridgeSource.contains("@Published private(set) var isWatchRemoteConnected = false"))
+        #expect(bridgeSource.contains("phoneRemoteServer.onConnectionStateChange"))
+        #expect(bridgeSource.contains("watchBluetoothServer.onConnectionStateChange"))
         #expect(source.contains("ButtonTrigger.allCases"))
         #expect(source.contains("isMappingSelectionLocked"))
         #expect(!source.contains("ScrollView(.horizontal, showsIndicators: false)"))

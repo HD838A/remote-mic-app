@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [移动设备已连接后仍显示正在等待](./2026-08-15-mobile-connection-still-shows-waiting/DEBUG.md)
 - [Intel Sparkle appcast 缺少本地化更新说明](./2026-08-13-intel-appcast-missing-release-notes.md)
 - [SwiftPM 资源构建路径进入发布 App](./2026-08-13-swiftpm-resource-build-path-leak.md)
 - [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md)
@@ -84,6 +85,8 @@
 | 2026-08-14 | [1.8.22 点击快捷指令后 App 崩溃](./2026-08-14-quick-commands-click-crash.md) | 源码修复完成，等待新签名包与用户验收 |
 | 2026-08-14 | [私有邀请码页面显示本地化 Key 且文本编辑快捷键不可用](./2026-08-14-private-enrollment-localization-edit-shortcuts.md) | 候选修复完成，等待最终签名 App 人工验收 |
 | 2026-08-14 | [Watch 与 iPhone 附近连接同时回归](./2026-08-14-watch-ios-nearby-connection-regression/DEBUG.md) | 已修复并通过自动化/本机发布验证，等待实际设备验收 |
+| 2026-08-15 | [Watch BLE 音频积压阻塞 iPhone 语音](./2026-08-15-watch-ble-audio-backlog-blocks-iphone/DEBUG.md) | 候选修复完成，等待真实 Watch 与实际测试 Mac 验收 |
+| 2026-08-15 | [移动设备已连接后仍显示正在等待](./2026-08-15-mobile-connection-still-shows-waiting/DEBUG.md) | 候选修复完成，等待真实 iPhone / Watch 验收 |
 
 ## 记录模板
 

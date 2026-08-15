@@ -27,11 +27,13 @@
 
 1. 从 Watch App 发起连接。
 2. 核对 Watch 与 Mac 的两位码，允许连接。
-3. 断开后重新连接，再清除受信任设备后重试。
+3. 确认 Mac 的 Watch 行显示“已连接”，按钮显示“取消连接”。
+4. 点击“取消连接”，重新开启并连接；再让 Watch 主动断开。
+5. 清除受信任设备后重试。
 
-预期：Mac 授权说明明确指向 Apple Watch；首次需要允许，未清除信任时可自动授权，清除后必须重新确认。普通界面不显示密钥、身份指纹或底层网络细节。
+预期：Mac 授权说明明确指向 Apple Watch；成功后 Watch 行使用成功色显示“已连接”和“取消连接”；取消连接会断开会话并停止附近监听；Watch 主动断线但监听仍开启时回到等待。首次需要允许，未清除信任时可自动授权，清除后必须重新确认。普通界面不显示密钥、身份指纹或底层网络细节。
 
-失败：Watch 一直停在“正在连接 Mac”、Mac 不弹授权、校验码不一致、清除信任无效或授权说明仍只写 iPhone。
+失败：Watch 一直停在“正在连接 Mac”、Mac 不弹授权、连接成功后 Mac 仍显示等待、取消连接无效、断线后残留已连接、校验码不一致、清除信任无效或授权说明仍只写 iPhone。
 
 ## 用例三：遥控按键与映射
 
@@ -46,12 +48,13 @@
 ## 用例四：Watch 麦克风
 
 1. 在 Watch 开始收音，说话 10 秒后停止。
-2. 重复 1 分钟以上会话，并测试中途离开 App、断开网络和取消等待。
-3. 观察 MiRemoteV 2ch 和真实语音输入工具。
+2. 重复 1、3、5 分钟会话，并测试中途离开 App、断开网络和取消等待。
+3. Watch 停止后立即使用已连接 iPhone 开始 10 秒收音；再反向从 iPhone 切回 Watch。
+4. 观察 MiRemoteV 2ch、真实语音输入工具和 Mac 日志中的 `MOBILE VOICE` 开始/停止来源。
 
-预期：音频进入现有移动语音路径，开始与停止各一次；停止、断线或取消等待后不再输出，虚拟麦克风和系统语音键状态正常释放。
+预期：音频进入现有移动语音路径，开始与停止各一次；停止、断线或取消等待后不再输出，虚拟麦克风和系统语音键状态正常释放。Watch 停止不得延迟数十秒，iPhone 与 Watch 只能停止自己的会话；被另一设备占用时客户端显示明确占用提示，不误报辅助功能或虚拟麦克风故障。
 
-失败：Mac 无音频、首句明显丢失、停止后继续收音、会话重复、虚拟麦克风占用不释放或第三方工具没有收到输入。
+失败：Mac 无音频、首句明显丢失、停止后继续收音、停止延迟数秒以上、切换来源后仍永久占用、会话重复、虚拟麦克风占用不释放或第三方工具没有收到输入。
 
 ## 用例五：客户端接管
 
@@ -59,7 +62,7 @@
 2. 反向重复。
 3. 保持一个附近客户端时建立网页版会话。
 
-预期：新的已授权附近客户端安全接管旧会话，无需重启 Mac；当前只保留一个 iPhone 或 Watch 附近客户端，网页版保持独立。
+预期：新的已授权附近客户端安全接管旧会话，无需重启 Mac；当前只保留一个 iPhone 或 Watch 附近客户端，网页版保持独立。iPhone、Watch 和 Web 的语音来源分别记录，任一路的延迟停止不会结束另一来源的当前会话。
 
 失败：旧客户端永久占用、必须重启、按键或音频跨会话泄漏，或网页版被附近连接意外关闭。
 
@@ -72,8 +75,8 @@
 
 ## 日志收集
 
-保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`listener_ready`、`service_published/service_publish_timeout/service_removed`、`WATCH BLE starting/service_add_requested/advertising/stopped`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志。不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
+保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`listener_ready`、`service_published/service_publish_timeout/service_removed`、`WATCH BLE starting/service_add_requested/advertising/stopped`、`MOBILE VOICE started/stopped/start_rejected/stop_ignored`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志。不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
 
 ## 自动化、代理实测和用户实测边界
 
-自动化覆盖组件协议、Mac 编译和入口回归；代理无法替代真实 Apple Watch 的权限、无线链路、麦克风、前后台和实际语音工具验收。任何未执行的真机用例都必须明确标记为未验收。
+自动化覆盖组件协议、连接状态回调、Mac 三态入口、iPhone/Watch 语音来源隔离和占用错误分类；代理无法替代真实 Apple Watch 的权限、无线链路、连接/断线回调、麦克风、前后台、BLE 实时吞吐和实际语音工具验收。任何未执行的真机用例都必须明确标记为未验收。

@@ -220,11 +220,15 @@
 "connection.trusted_devices.count_long" = "%1$@ trusted devices";
 "connection.phone.connect" = "Connect Phone";
 "connection.phone.enabled" = "Waiting for Phone";
+"connection.phone.connected" = "Connected";
+"connection.phone.disconnect" = "Disconnect";
 "connection.phone.cancel_waiting" = "Stop Waiting";
 "connection.watch.title" = "Apple Watch";
 "connection.watch.help" = "The Watch connects directly to this Mac for tap-to-record and optional raise-to-talk.";
 "connection.watch.connect" = "Connect Apple Watch";
 "connection.watch.enabled" = "Waiting for Watch";
+"connection.watch.connected" = "Connected";
+"connection.watch.disconnect" = "Disconnect";
 "connection.watch.cancel_waiting" = "Stop Waiting";
 "connection.trusted_devices.clear" = "Clear Trusted Devices";
 "connection.trusted_devices.clear_confirm.title" = "Clear All Trusted Devices?";
@@ -430,6 +434,7 @@
 "help.glossary.open" = "Glossary";
 "about.support.github" = "GitHub";
 "about.support.website" = "Website";
+"about.support.feedback" = "Feedback";
 "common.action.close" = "Close";
 "common.action.undo" = "Undo";
 "common.action.redo" = "Redo";
