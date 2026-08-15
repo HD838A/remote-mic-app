@@ -31,11 +31,14 @@ SayAll is built natively with SwiftUI. While running in the background, it uses 
 
 ## Download and install
 
-Download the Apple Silicon release through the [Cloudflare CDN entry](https://download.sayall.app/mac). Intel Mac users must download `Remote-Mic-<version>-Intel.dmg` from [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases/latest) instead of using the Apple Silicon package.
+- Latest stable release (Apple Silicon): download it through the permanent [Cloudflare CDN entry](https://download.sayall.app/mac). The current stable entry provides only the Apple Silicon package and does not change between versions.
+- Latest pre-release (Apple Silicon / Intel): open [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases), find the newest macOS candidate marked **Pre-release** in the release list, and download the DMG for your Mac architecture. Until a release containing the Intel package is promoted to stable, Intel users should download the latest pre-release DMG whose name includes `Intel`.
+
+The Apple Silicon installer is named `Remote-Mic-<version>.dmg`; the Intel installer is named `Remote-Mic-<version>-Intel.dmg`. They are not interchangeable.
 
 The DMG has one ordinary installation entry: double-click **Install Remote Mic.pkg** on Apple Silicon, or **Install Remote Mic Intel.pkg** on Intel Macs. It installs **Remote Mic.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
-Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only from this project's GitHub Releases and verify the DMG with the `.sha256` file from the same release.
+Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only through the official Cloudflare CDN entry or this project's GitHub Releases. To verify a DMG, use the `.sha256` file from the corresponding GitHub Release.
 
 ## First use
 

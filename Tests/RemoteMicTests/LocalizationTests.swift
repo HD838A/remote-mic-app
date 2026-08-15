@@ -76,6 +76,37 @@ struct LocalizationTests {
         #expect(referencedURLs == [expectedURL])
     }
 
+    @Test func readmesUseVersionIndependentMacDownloadEntries() throws {
+        let stableURL = "https://download.sayall.app/mac"
+        let previewURL = "https://github.com/HD838A/remote-mic-app/releases"
+        let expectations = [
+            ("README.md", "## 下载与安装", "- 最新正式版（Apple Silicon）：", "- 最新预览版（Apple Silicon / Intel）："),
+            ("README.en.md", "## Download and install", "- Latest stable release (Apple Silicon):", "- Latest pre-release (Apple Silicon / Intel):"),
+        ]
+
+        for (readmeName, sectionHeading, stablePrefix, previewPrefix) in expectations {
+            let readme = try String(
+                contentsOf: repositoryRoot.appendingPathComponent(readmeName),
+                encoding: .utf8
+            )
+            let sectionStart = try #require(readme.range(of: sectionHeading))
+            let remainingReadme = readme[sectionStart.upperBound...]
+            let sectionEnd = remainingReadme.range(of: "\n## ")?.lowerBound ?? readme.endIndex
+            let downloadSection = readme[sectionStart.lowerBound..<sectionEnd]
+            let stableEntry = try #require(
+                downloadSection.split(separator: "\n").first { $0.hasPrefix(stablePrefix) }
+            )
+            let previewEntry = try #require(
+                downloadSection.split(separator: "\n").first { $0.hasPrefix(previewPrefix) }
+            )
+
+            #expect(stableEntry.contains("](\(stableURL))"))
+            #expect(!stableEntry.contains("/releases/"))
+            #expect(previewEntry.contains("](\(previewURL))"))
+            #expect(!previewEntry.contains("/releases/tag/"))
+        }
+    }
+
     @Test func localizationFilesUseSemanticCompleteKeysAndMatchingFormats() throws {
         let localizationDirectories = try sourceLocalizationDirectories()
         let englishDirectory = try #require(
