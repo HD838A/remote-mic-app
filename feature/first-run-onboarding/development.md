@@ -12,6 +12,7 @@
 - `Sources/RemoteMic/RemoteVoiceFunctionMapper.swift`、`HIDRemoteMonitor.swift`：按 HID Location ID 限定电源键抑制成功的安全设备，部分失败时不再全局关闭普通按键，也不放宽锁屏保护。
 - `Sources/RemoteMic/SettingsView.swift`：关于页增加“重新运行设置向导”；设备卡显示完整名称并自适应状态布局，连接页删除重复信息。
 - `Resources/*/Localizable.strings`：中英文向导文案。
+- `Resources/首次安装说明*.md`：同步记录首次激活和蓝牙配对顺序。
 - `Tests/RemoteMicTests/OnboardingFlowTests.swift`：步骤、门禁、持久化、完成版本和重新运行测试。
 - `scripts/test.sh`：把 Onboarding 流程类型加入项目自检的显式编译文件列表。
 - `scripts/build-doubao-driver.sh`：驱动签名前移除调试符号，避免发布安装包包含本机构建路径。
@@ -32,6 +33,7 @@
 12. 完成页重新验证当前权限、BLE 和音频输出，但不依赖视图内存中的语音/按键临时标志；前者保证进入主界面时仍可用，后者避免完成页重建后无故卡死。
 13. `FirstUseDiagnostics` 将当前失败归一化为稳定失败码，记录进入、阻塞、重试、恢复、通过和完成事件；相同阻塞不会被权限轮询重复写入，复制摘要只包含布尔能力、技术状态 key、阶段耗时和失败码。
 14. 每个未通过阶段只突出一个主要修复动作，复用现有权限请求、BLE 重连、HID 重建、设备刷新、音频重配和语音重试；完成页根据当前权限、BLE 和音频状态定向返回受影响页面。
+15. 遥控器页把首次连接分成两条静态说明：先长按 TV 键约 2 秒直到底部白灯闪烁，再同时长按 Home + Menu；说明不参与能力门禁，实际连接和普通实体按键仍由生产状态验证。
 
 ## 全流程门禁审计结论
 
@@ -79,16 +81,16 @@
 
 ## 自动化验证
 
-- `swift test --filter OnboardingFlowTests`：13 项通过，覆盖 HID 已到达但 BLE 未连接时的一次性恢复策略、按键事件与空 bridge 启动分支接线、从系统设置返回后的 BLE/HID 与音频刷新、HID 错误和重试入口、最终运行时重验、完成页截图夹具、旧安装/全新安装/中途续接/主动重跑迁移边界，以及 BlackHole 2ch 等替代音频设备的选择门禁。
+- `swift test --filter OnboardingFlowTests`：16 项通过，覆盖 HID 已到达但 BLE 未连接时的一次性恢复策略、按键事件与空 bridge 启动分支接线、从系统设置返回后的 BLE/HID 与音频刷新、HID 错误和重试入口、最终运行时重验、完成页截图夹具、旧安装/全新安装/中途续接/主动重跑迁移边界，以及 BlackHole 2ch 等替代音频设备的选择门禁。
 - `swift test --filter SettingsPageRegressionTests`：7 项通过。
 - `swift test --filter LocalizationTests`：5 项通过，中英文 key 和格式一致。
-- `swift test`：208 项、20 个 suite 全部通过，没有跳过用例。
+- `swift test`：2026-08-15 本轮 220 项、18 个 suite 全部通过，没有失败用例。
 - `scripts/test.sh`：42 项项目自检通过。
 - 私有硬件模拟：16 项通过，覆盖 RC001/RC003 语音、12 个原始按键、36 个手势、连发、异常报告、重连和双设备隔离。
 - `swift build -c release`：通过。
 - `scripts/build-app.sh`：通过；`codesign --verify --deep --strict` 通过。
 - 测试 App：`dist/Remote Mic.app`。
-- 实现截图：已完成。无需屏幕解锁，直接实例化生产 `OnboardingView`，通过离屏 AppKit 窗口缓存生成浅色、深色各 8 张真实实现截图，逐页确认原生窗口、实际 App 图标、RC003 图片、新增恢复按钮、最终错误卡、标准完成态、底部导航和实时检查区域无裁切；未使用设计稿替代实现证据。
+- 实现截图：已完成。无需屏幕解锁，直接实例化生产 `OnboardingView`，通过离屏 AppKit 窗口缓存生成浅色、深色各 8 张真实实现截图，逐页确认原生窗口、实际 App 图标、RC003 图片、首次连接两步说明、新增恢复按钮、最终错误卡、标准完成态、底部导航和实时检查区域无裁切；未使用设计稿替代实现证据。
 - 深色模式右侧改为深蓝语义画布和自适应检查卡，与左侧同属深色体系；浅色继续使用浅蓝画布。两种外观均不存在黑白分栏。
 - 连接页生产 `SettingsView` 另以窗口合成方式检查浅色和深色：完整显示“小米蓝牙遥控器 2 / 2 Pro”，连接、电量和供电信息不截断，连接页没有重复名称或状态。
 - App 内保留隐藏截图入口：设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR` 后离屏输出全部页面，可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark|system` 指定外观；正常启动路径不显示入口。

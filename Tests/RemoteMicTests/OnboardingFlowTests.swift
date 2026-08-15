@@ -262,6 +262,9 @@ struct OnboardingFlowTests {
         ))
         let remoteSource = viewSource[remoteStart.lowerBound..<remoteEnd.lowerBound]
         #expect(remoteSource.contains("model.hidStatus.text(using: localization)"))
+        #expect(remoteSource.contains("onboarding.remote.first_pairing.title"))
+        #expect(remoteSource.contains("onboarding.remote.first_pairing.wake"))
+        #expect(remoteSource.contains("onboarding.remote.first_pairing.pair"))
         #expect(!remoteSource.contains("ViewThatFits(in: .horizontal)"))
         let recoveryStart = try #require(viewSource.range(of: "private func performRecovery"))
         let recoveryEnd = try #require(viewSource.range(

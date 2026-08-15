@@ -116,6 +116,8 @@ struct LocalizationTests {
         let englishInfo = try strings(at: englishDirectory.appendingPathComponent("InfoPlist.strings"))
 
         #expect(english["action.command_delete"] == "Command-Delete")
+        #expect(english["onboarding.remote.first_pairing.wake"] == "Hold TV for about 2 seconds until the white light at the bottom starts flashing.")
+        #expect(english["onboarding.remote.first_pairing.pair"] == "Then hold Home + Menu together to enter Bluetooth pairing mode.")
 
         #expect(!english.isEmpty)
         for (key, value) in english {
@@ -129,6 +131,8 @@ struct LocalizationTests {
             let localizedInfo = try strings(at: directory.appendingPathComponent("InfoPlist.strings"))
             if directory.lastPathComponent == "zh-Hans.lproj" {
                 #expect(localized["action.command_delete"] == "Command-Delete")
+                #expect(localized["onboarding.remote.first_pairing.wake"] == "长按 TV 键约 2 秒，直到遥控器底部白灯开始闪烁。")
+                #expect(localized["onboarding.remote.first_pairing.pair"] == "同时长按 Home（主页）+ Menu（菜单）键，进入蓝牙配对模式。")
             }
             #expect(Set(localized.keys) == Set(english.keys))
             #expect(Set(localizedInfo.keys) == Set(englishInfo.keys))
