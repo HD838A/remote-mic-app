@@ -57,6 +57,28 @@ enum RemoteMicApp {
     @MainActor
     static func main() {
         if let screenshotDirectory = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
+        ] {
+            do {
+                try SettingsScreenshotRenderer.renderAll(
+                    to: URL(fileURLWithPath: screenshotDirectory, isDirectory: true),
+                    sizeValue: ProcessInfo.processInfo.environment[
+                        "REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE"
+                    ],
+                    appearanceName: ProcessInfo.processInfo.environment[
+                        "REMOTE_MIC_SETTINGS_SCREENSHOT_APPEARANCE"
+                    ],
+                    languageName: ProcessInfo.processInfo.environment[
+                        "REMOTE_MIC_SETTINGS_SCREENSHOT_LANGUAGE"
+                    ]
+                )
+            } catch {
+                fputs("Settings screenshot rendering failed: \(error)\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+            return
+        }
+        if let screenshotDirectory = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR"
         ] {
             do {

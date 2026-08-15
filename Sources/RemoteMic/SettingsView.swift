@@ -7,7 +7,7 @@ import SayAllMacRemoteUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-private enum SettingsSection: String, CaseIterable, Identifiable {
+enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
     case privateFeature
     case macros
@@ -169,8 +169,9 @@ struct SettingsView: View {
     private let checkForUpdates: () -> Void
     private let refreshUpdateInformation: () -> Void
     private let setDockIconVisible: (Bool) -> Void
+    private let minimumContentSize: CGSize
 
-    @State private var selectedSection: SettingsSection = .connection
+    @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var isMappingSelectionLocked = true
     @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
@@ -202,7 +203,9 @@ struct SettingsView: View {
         updateInformation: UpdateInformationStore,
         checkForUpdates: @escaping () -> Void = {},
         refreshUpdateInformation: @escaping () -> Void = {},
-        setDockIconVisible: @escaping (Bool) -> Void = { _ in }
+        setDockIconVisible: @escaping (Bool) -> Void = { _ in },
+        initialSection: SettingsSection = .connection,
+        minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
         self.model = model
         settings = model.settings
@@ -212,6 +215,8 @@ struct SettingsView: View {
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
+        self.minimumContentSize = minimumContentSize
+        _selectedSection = State(initialValue: initialSection)
     }
 
     var body: some View {
@@ -226,7 +231,10 @@ struct SettingsView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
-        .frame(minWidth: 980, minHeight: 732)
+        .frame(
+            minWidth: minimumContentSize.width,
+            minHeight: minimumContentSize.height
+        )
         .onAppear(perform: refreshPermissionStates)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
@@ -532,7 +540,7 @@ struct SettingsView: View {
                                 Text("connection.phone.ios_title")
                                     .font(.subheadline.weight(.semibold))
                                 Text("connection.phone.no_invite_badge")
-                                    .font(.caption2.weight(.semibold))
+                                    .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(.secondary)
                             }
                             Text("connection.phone.ios_help")
@@ -3109,6 +3117,14 @@ private enum CompatibilityButtonStyle {
     case prominent
 }
 
+private enum SettingsVisualRenderingPolicy {
+    static let isScreenshotHarness = ProcessInfo.processInfo.environment[
+        "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
+    ] != nil
+
+    static var usesNativeGlass: Bool { !isScreenshotHarness }
+}
+
 private struct CompatibilityGlassContainer<Content: View>: View {
     let spacing: CGFloat
     private let content: Content
@@ -3120,7 +3136,7 @@ private struct CompatibilityGlassContainer<Content: View>: View {
 
     @ViewBuilder
     var body: some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
             GlassEffectContainer(spacing: spacing) {
                 content
             }
@@ -3135,7 +3151,7 @@ private struct CompatibilityButtonStyleModifier: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
             switch style {
             case .standard:
                 content.buttonStyle(.glass)
@@ -3156,7 +3172,7 @@ private struct CompatibilityButtonStyleModifier: ViewModifier {
 private struct CompatibilityScrollEdgeEffectModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
             content.scrollEdgeEffectStyle(.soft, for: .top)
         } else {
             content
@@ -3195,7 +3211,7 @@ private struct CompatibilityTintedGlassModifier<GlassShape: Shape>: ViewModifier
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
             if interactive {
                 content.glassEffect(.clear.tint(tint).interactive(), in: shape)
             } else {
@@ -3264,10 +3280,20 @@ private struct GlassPanel<Content: View>: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
             content
                 .padding(16)
                 .glassEffect(.regular, in: shape)
+        } else if SettingsVisualRenderingPolicy.isScreenshotHarness {
+            content
+                .padding(16)
+                .background(Color(nsColor: .controlBackgroundColor), in: shape)
+                .overlay(
+                    shape.stroke(
+                        Color(nsColor: .separatorColor).opacity(0.45),
+                        lineWidth: 1
+                    )
+                )
         } else {
             content
                 .padding(16)
@@ -3430,7 +3456,7 @@ private struct StatusPill: View {
 
     var body: some View {
         Text(text)
-            .font(.caption.weight(.semibold))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(tint)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)

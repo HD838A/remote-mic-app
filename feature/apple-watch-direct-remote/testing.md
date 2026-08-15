@@ -2,9 +2,9 @@
 
 ## 自动化
 
-- `sayall-mac-remote`：`swift test`，20 项通过，覆盖 Phone/Watch 连接状态回调、语音开始成功、占用、输出未就绪及兼容回调。
+- `sayall-mac-remote`：`swift test`，21 项通过，覆盖 Phone/Watch 连接状态回调、语音开始成功、占用、输出未就绪、兼容回调，以及 Watch 蓝牙关闭后连接与活动语音只清理一次。
 - Mac 主仓：`swift test`，覆盖专用入口顺序、按需监听、取消等待、按键类型映射和既有稳定功能。
-- 2026-08-15 回归：Mac 主仓 220 项、18 个 suite 全部通过；`sayall-mac-remote` 20 项通过，包含 iPhone/Watch 连接状态、语音来源隔离、占用分类、系统 Bonjour 发布确认与发布 watchdog。
+- 2026-08-16 回归：Mac 主仓 222 项、18 个 suite 全部通过；`sayall-mac-remote` 21 项通过，包含 iPhone/Watch 连接状态、语音来源隔离、占用分类、Watch 蓝牙关闭清理、系统 Bonjour 发布确认与发布 watchdog。
 - Mac Release：按仓库现有发布脚本或 `swift build -c release` 验证。
 - GitHub Actions：使用独立只读部署密钥检出固定 revision 的 `sayall-mac-remote`，PR、候选和正式签名流程均通过 SwiftPM 本地 mirror 构建，避免 runner 匿名读取私有仓库且不改写锁定依赖。
 - 本次修复对应的 Apple Silicon 与 Intel Ventura 结果以合入 PR 的新 CI 为准；旧 Run `31715653640` 只验证过早期私有依赖访问修复，不能作为本次语音来源隔离与连接状态修复的证据。
@@ -16,4 +16,4 @@
 
 ## 验证边界
 
-单元测试、本机系统发现和构建只能确认代码、依赖、发布生命周期与静态入口行为。开发代理当前 Mac 不是用户测试 Mac；真实 iPhone/Watch 的本地网络与蓝牙发现、配对弹窗、麦克风音频、前后台状态和新客户端接管仍需人工验收，未完成前不得表述为真机通过。
+单元测试、本机系统发现和构建只能确认代码、依赖、发布生命周期与静态入口行为。开发代理当前 Mac 不是用户测试 Mac；真实 iPhone/Watch 的本地网络与蓝牙发现、配对弹窗、Mac 蓝牙关闭、麦克风音频、前后台状态和新客户端接管仍需人工验收，未完成前不得表述为真机通过。

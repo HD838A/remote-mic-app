@@ -116,6 +116,45 @@ struct SettingsPageRegressionTests {
         #expect(!source.contains("startPhoneVoice(source: .nearby)"))
     }
 
+    @Test func mobileConnectionStatusMeetsFontAndSnapshotGates() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/SettingsScreenshotRenderer.swift"
+            ),
+            encoding: .utf8
+        )
+
+        let noInvite = try #require(settingsSource.range(
+            of: "Text(\"connection.phone.no_invite_badge\")"
+        ))
+        let noInviteBlock = settingsSource[noInvite.lowerBound...]
+            .prefix(180)
+        #expect(noInviteBlock.contains(".font(.system(size: 12, weight: .semibold))"))
+
+        let statusPill = try #require(settingsSource.range(of: "private struct StatusPill"))
+        let statusPillBlock = settingsSource[statusPill.lowerBound...]
+            .prefix(420)
+        #expect(statusPillBlock.contains(".font(.system(size: 12, weight: .semibold))"))
+        #expect(appSource.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"))
+        #expect(rendererSource.contains("width >= 800"))
+        #expect(rendererSource.contains("height >= 650"))
+        for section in ["connection", "mapping", "statistics", "permissions", "about"] {
+            #expect(rendererSource.contains(".\(section)"))
+        }
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
