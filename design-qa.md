@@ -6,7 +6,7 @@
 
 - 设置窗口：默认及最小尺寸 1020×772，可自由缩放；
 - 首次使用 Onboarding：约 1020×772，不显示步骤编号、总数、百分比、“跳过”或“稍后继续”；
-- 页面：连接与语音、按键映射、统计、权限与隐私、关于；
+- 页面：连接与语音、按键映射、统计、语音记录、权限与隐私、关于；
 - 各页面顶部仅显示主标题，不显示重复说明页面内容的副标题；
 - 仓库截图：
   - [连接与语音](Screenshots/connection-and-voice.png)
@@ -29,6 +29,7 @@
 - 普通界面使用产品语言，不显示遥控器型号代号、蓝牙语音协议名、按键协议名、十六进制按键编号或设备标识术语；
 - 遥控器设备卡只用标准电池图标和百分比表达电量；空电、低电、正常和满电使用不同电池符号与语义颜色，充电或外接电源时在图标上叠加闪电，不再额外显示“可充电电池”文字；
 - 统计页左侧使用醒目的大号“日 / 周 / 全部”切换；按日显示最近 7 天柱状图、按周显示最近 8 周柱状图，全部页面仅显示累计按键次数与累计语音时长并保留扩展空白；
+- 语音记录作为紧跟“统计”的独立侧边栏页面，页头直接提供保存开关；内容使用宽页面的应用列表与日期记录详情，已安装目标 App 显示真实应用图标，图标无法解析时回退通用 App 图标；
 - 网页连接邀请码弹窗顶部重点推荐 iOS App，TestFlight 公测地址不直接显示，并提供打开页面和复制链接操作；
 - 关于页把当前版本、可更新版本、检查更新、更新内容、版本历史与默认关闭的预发布更新开关放在同一区域；语言选项始终完整展示，不使用下拉框；官网和 GitHub 保持显眼，术语表与退出按钮不再显示；
 - 所有界面文案使用稳定语义 key；当前语言缺少 Markdown 帮助时回退英文。
@@ -44,7 +45,7 @@
 
 - 窗口创建与最小尺寸：`Sources/RemoteMic/RemoteMicApp.swift`；
 - Onboarding 根视图、布局和门禁：`Sources/RemoteMic/RemoteMicRootView.swift`、`Sources/RemoteMic/OnboardingView.swift`、`Sources/RemoteMic/OnboardingFlow.swift`；
-- 页面布局、材质和遥控器热点：`Sources/RemoteMic/SettingsView.swift`；
+- 页面布局、材质和遥控器热点：`Sources/RemoteMic/SettingsView.swift`；语音记录内容布局与 App 图标：`Sources/RemoteMic/TranscriptHistorySection.swift`；
 - 实体按键活动状态：`Sources/RemoteMic/HIDRemoteMonitor.swift` 与 `Sources/RemoteMic/BridgeAppModel.swift`。
 
 ## 结论

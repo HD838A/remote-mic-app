@@ -594,7 +594,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("Self.sidebarSectionOrder.filter"))
     }
 
-    @Test func transcriptHistoryLivesInsideStatisticsAndUsesThePublicVoiceLifecycle() throws {
+    @Test func transcriptHistoryHasDedicatedSidebarPageAndUsesThePublicVoiceLifecycle() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -621,13 +621,22 @@ struct SettingsPageRegressionTests {
         )
 
         let statisticsPage = try #require(
-            settingsSource.components(separatedBy: "private var statisticsPage").last
+            settingsSource.components(separatedBy: "private var statisticsPage").last?
+                .components(separatedBy: "private var transcriptHistoryPage").first
         )
-        #expect(statisticsPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
-        #expect(!settingsSource.contains("case transcripts"))
+        let transcriptPage = try #require(
+            settingsSource.components(separatedBy: "private var transcriptHistoryPage").last
+        )
+        #expect(!statisticsPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
+        #expect(settingsSource.contains("case transcripts"))
+        #expect(settingsSource.contains("case .transcripts: return \"settings.section.transcripts\""))
+        #expect(transcriptPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
         #expect(historySource.contains("Dictionary(grouping: model.transcriptRecords"))
         #expect(historySource.contains("Dictionary(grouping: records"))
-        #expect(historySource.contains("$settings.localTranscriptHistoryEnabled"))
+        #expect(settingsSource.contains("$settings.localTranscriptHistoryEnabled"))
+        #expect(historySource.contains("settings.localTranscriptHistoryEnabled"))
+        #expect(historySource.contains("NSWorkspace.shared.urlForApplication"))
+        #expect(historySource.contains("NSWorkspace.shared.icon(forFile:"))
         #expect(historySource.contains("model.copyTranscript(record)"))
         #expect(historySource.contains("model.deleteTranscriptRecord(record)"))
         #expect(historySource.contains("model.deleteTranscriptApplication(applicationKey: key)"))

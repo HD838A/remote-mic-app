@@ -89,6 +89,75 @@ struct TranscriptCaptureCoordinatorTests {
         ) == nil)
     }
 
+    @Test func quickSendKeepsTheLastAcceptedTranscriptCandidate() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.coordinator.startSession(startedAt: Date(timeIntervalSince1970: 100), source: .bluetoothRemote)
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "快速发送",
+            selection: NSRange(location: 4, length: 0)
+        )
+        harness.coordinator.finishSession(endedAt: Date(timeIntervalSince1970: 103))
+        harness.scheduler.advance(by: 0.25)
+
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.scheduler.advance(by: 0.125)
+
+        let capture = try #require(harness.captures.first)
+        #expect(capture.text == "快速发送")
+    }
+
+    @Test func nextVoiceSessionCommitsThePreviousAcceptedCandidate() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.coordinator.startSession(startedAt: Date(timeIntervalSince1970: 100), source: .bluetoothRemote)
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "第一句",
+            selection: NSRange(location: 3, length: 0)
+        )
+        harness.coordinator.finishSession(endedAt: Date(timeIntervalSince1970: 103))
+
+        harness.coordinator.startSession(
+            startedAt: Date(timeIntervalSince1970: 104),
+            source: .bluetoothRemote
+        )
+
+        let capture = try #require(harness.captures.first)
+        #expect(capture.text == "第一句")
+    }
+
+    @Test func revertingToTheOriginalNonemptyDraftDoesNotSaveTheCandidate() {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "草稿",
+            selection: NSRange(location: 2, length: 0)
+        )
+        harness.coordinator.startSession(startedAt: Date(), source: .bluetoothRemote)
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "草稿语音",
+            selection: NSRange(location: 4, length: 0)
+        )
+        harness.coordinator.finishSession(endedAt: Date())
+        harness.scheduler.advance(by: 0.25)
+
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "草稿",
+            selection: NSRange(location: 2, length: 0)
+        )
+        harness.scheduler.advance(by: 0.125)
+
+        #expect(harness.captures.isEmpty)
+    }
+
     @Test func turningTheFeatureOffCancelsAnActivePoll() {
         let harness = CaptureHarness()
         harness.snapshot = CaptureHarness.safeSnapshot(text: "", selection: NSRange(location: 0, length: 0))

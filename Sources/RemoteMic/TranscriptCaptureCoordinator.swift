@@ -196,8 +196,24 @@ final class TranscriptCaptureCoordinator {
     }
 
     func startSession(startedAt: Date, source: UsageEventSource) {
-        cancel()
-        guard isEnabled(), let target = snapshot(), target.isSafeEditableDestination else { return }
+        if isEnabled(), let session = activeSession,
+           session.endedAt != nil, session.acceptedChange != nil {
+            complete(session, reason: "next_session")
+        } else {
+            cancel()
+        }
+        guard isEnabled() else {
+            AppLogger.shared.write("TRANSCRIPT CAPTURE skipped reason=feature_disabled")
+            return
+        }
+        guard let target = snapshot() else {
+            AppLogger.shared.write("TRANSCRIPT CAPTURE skipped reason=snapshot_unavailable")
+            return
+        }
+        guard target.isSafeEditableDestination else {
+            AppLogger.shared.write("TRANSCRIPT CAPTURE skipped reason=unsafe_destination")
+            return
+        }
         generation &+= 1
         activeSession = ActiveSession(
             id: UUID(),
@@ -232,17 +248,25 @@ final class TranscriptCaptureCoordinator {
     private func poll(generation: UInt64) {
         guard isEnabled(), var session = activeSession,
               session.generation == generation,
-              session.endedAt != nil,
-              let current = snapshot(),
-              current.isSafeEditableDestination,
-              current.focusIdentity == session.target.focusIdentity,
-              current.bundleIdentifier == session.target.bundleIdentifier
+              session.endedAt != nil
         else {
             cancel()
             return
         }
+        guard let current = snapshot(),
+              current.isSafeEditableDestination,
+              current.focusIdentity == session.target.focusIdentity,
+              current.bundleIdentifier == session.target.bundleIdentifier
+        else {
+            completeAcceptedChangeOrCancel(session, reason: "destination_changed")
+            return
+        }
 
         if current.text == session.target.text {
+            if current.text.isEmpty, session.acceptedChange != nil {
+                complete(session, reason: "destination_cleared")
+                return
+            }
             session.stableText = nil
             session.stableSince = nil
             session.acceptedChange = nil
@@ -261,20 +285,13 @@ final class TranscriptCaptureCoordinator {
                       clock() - stableSince >= stableDuration,
                       current.selection.length == 0,
                       current.selection.location == NSMaxRange(change.newRange),
-                      let endedAt = session.endedAt {
-                let captured = CapturedTranscript(
-                    sessionID: session.id,
-                    startedAt: session.startedAt,
-                    endedAt: endedAt,
-                    applicationName: session.target.applicationName,
-                    bundleIdentifier: session.target.bundleIdentifier,
-                    source: session.source,
-                    text: session.acceptedChange?.newText ?? change.newText
-                )
-                cancel()
-                onCapture(captured)
+                      session.endedAt != nil {
+                complete(session, reason: "stable")
                 return
             }
+        } else if current.text.isEmpty, session.acceptedChange != nil {
+            complete(session, reason: "destination_cleared")
+            return
         } else {
             cancel()
             return
@@ -284,6 +301,39 @@ final class TranscriptCaptureCoordinator {
         pollTask = schedule(pollInterval) { [weak self] in
             self?.poll(generation: generation)
         }
+    }
+
+    private func completeAcceptedChangeOrCancel(_ session: ActiveSession, reason: String) {
+        guard session.acceptedChange != nil else {
+            cancel()
+            return
+        }
+        complete(session, reason: reason)
+    }
+
+    private func complete(_ session: ActiveSession, reason: String) {
+        guard let endedAt = session.endedAt,
+              let change = session.acceptedChange,
+              !change.newText.isEmpty
+        else {
+            cancel()
+            return
+        }
+        let captured = CapturedTranscript(
+            sessionID: session.id,
+            startedAt: session.startedAt,
+            endedAt: endedAt,
+            applicationName: session.target.applicationName,
+            bundleIdentifier: session.target.bundleIdentifier,
+            source: session.source,
+            text: change.newText
+        )
+        cancel()
+        AppLogger.shared.write(
+            "TRANSCRIPT CAPTURE saved reason=\(reason) " +
+                "bundle=\(session.target.bundleIdentifier) characters=\(change.newText.count)"
+        )
+        onCapture(captured)
     }
 
     static func continuousChange(

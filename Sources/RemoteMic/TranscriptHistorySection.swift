@@ -1,8 +1,10 @@
+import AppKit
 import SwiftUI
 
 private struct TranscriptApplicationSummary: Identifiable {
     let id: String
     let name: String
+    let bundleIdentifier: String
     let count: Int
 }
 
@@ -41,6 +43,7 @@ struct TranscriptHistorySection: View {
                     id: key,
                     name: records.first?.applicationName.nilIfBlank
                         ?? localization.text("statistics.transcripts.unknown_application"),
+                    bundleIdentifier: records.first?.bundleIdentifier ?? "",
                     count: records.count
                 )
             }
@@ -75,23 +78,18 @@ struct TranscriptHistorySection: View {
     }
 
     var body: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 16) {
-                header
+        VStack(spacing: 14) {
+            overviewPanel
 
-                Divider()
-
-                if model.transcriptRecords.isEmpty {
+            if model.transcriptRecords.isEmpty {
+                GlassPanel {
                     emptyState
-                } else {
-                    historyContent
                 }
-
-                Text("statistics.transcripts.privacy")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                historyContent
             }
+
+            privacyPanel
         }
         .onAppear {
             model.refreshTranscriptRecords()
@@ -103,48 +101,27 @@ struct TranscriptHistorySection: View {
         .alert(item: $deletionRequest, content: deletionAlert)
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: "text.bubble.fill")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 36, height: 36)
-                .background(Color.accentColor.opacity(0.14), in: Circle())
+    private var overviewPanel: some View {
+        GlassPanel {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "text.bubble.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 40, height: 40)
+                    .background(Color.accentColor.opacity(0.14), in: Circle())
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("statistics.transcripts.title")
-                    .font(.headline)
                 Text("statistics.transcripts.description")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 18)
-
-            VStack(alignment: .trailing, spacing: 8) {
-                Toggle("statistics.transcripts.enable", isOn: $settings.localTranscriptHistoryEnabled)
-                    .toggleStyle(.switch)
-                    .font(.system(size: 13, weight: .medium))
+                Spacer(minLength: 18)
 
                 if !model.transcriptRecords.isEmpty {
-                    HStack(spacing: 8) {
-                        if let selectedApplication {
-                            Button("statistics.transcripts.delete_application") {
-                                deletionRequest = .application(
-                                    key: selectedApplication.id,
-                                    name: selectedApplication.name
-                                )
-                            }
-                            .font(.system(size: 12))
-                        }
-
-                        Button("statistics.transcripts.delete_all", role: .destructive) {
-                            deletionRequest = .all
-                        }
-                        .font(.system(size: 12))
+                    Button("statistics.transcripts.delete_all", role: .destructive) {
+                        deletionRequest = .all
                     }
-                    .buttonStyle(.borderless)
+                    .font(.system(size: 12, weight: .medium))
+                    .buttonStyle(.bordered)
                 }
             }
         }
@@ -168,66 +145,142 @@ struct TranscriptHistorySection: View {
     }
 
     private var historyContent: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(spacing: 6) {
-                ForEach(applications) { application in
-                    Button {
-                        selectedApplicationKey = application.id
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text(application.name)
-                                .font(.system(size: 13, weight: .medium))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                            Spacer(minLength: 8)
-                            Text(localizedCount(application.count))
-                                .font(.system(size: 12, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
+        HStack(alignment: .top, spacing: 14) {
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("statistics.transcripts.applications")
+                        .font(.system(size: 14, weight: .semibold))
+                    Divider()
+                    VStack(spacing: 6) {
+                        ForEach(applications) { application in
+                            applicationButton(application)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 9)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .background(
-                        activeApplicationKey == application.id
-                            ? Color.accentColor.opacity(0.12)
-                            : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    )
-                    .foregroundStyle(
-                        activeApplicationKey == application.id ? Color.accentColor : Color.primary
-                    )
-                    .accessibilityAddTraits(
-                        activeApplicationKey == application.id ? .isSelected : []
-                    )
                 }
             }
-            .frame(width: 190, alignment: .topLeading)
+            .frame(width: 250, alignment: .topLeading)
 
-            Divider()
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    if let selectedApplication {
+                        HStack(spacing: 12) {
+                            applicationIcon(selectedApplication, size: 44)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(selectedApplication.name)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .lineLimit(1)
+                                Text(localizedEntryCount(selectedApplication.count))
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 16)
+                            Button("statistics.transcripts.delete_application", role: .destructive) {
+                                deletionRequest = .application(
+                                    key: selectedApplication.id,
+                                    name: selectedApplication.name
+                                )
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .buttonStyle(.bordered)
+                        }
 
-            LazyVStack(alignment: .leading, spacing: 18) {
-                ForEach(dayGroups) { group in
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(dayTitle(for: group))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.bottom, 6)
+                        Divider()
+                    }
 
-                        ForEach(Array(group.records.enumerated()), id: \.element.id) {
-                            index, record in
-                            transcriptRow(record)
-                            if index < group.records.count - 1 {
-                                Divider()
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        ForEach(dayGroups) { group in
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(dayTitle(for: group))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.bottom, 6)
+
+                                ForEach(Array(group.records.enumerated()), id: \.element.id) {
+                                    index, record in
+                                    transcriptRow(record)
+                                    if index < group.records.count - 1 {
+                                        Divider()
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func applicationButton(_ application: TranscriptApplicationSummary) -> some View {
+        Button {
+            selectedApplicationKey = application.id
+        } label: {
+            HStack(spacing: 10) {
+                applicationIcon(application, size: 34)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(application.name)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                    Text(localizedEntryCount(application.count))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            activeApplicationKey == application.id
+                ? Color.accentColor.opacity(0.12)
+                : Color.clear,
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .foregroundStyle(
+            activeApplicationKey == application.id ? Color.accentColor : Color.primary
+        )
+        .accessibilityAddTraits(activeApplicationKey == application.id ? .isSelected : [])
+    }
+
+    private func applicationIcon(
+        _ application: TranscriptApplicationSummary,
+        size: CGFloat
+    ) -> some View {
+        Group {
+            if let applicationURL = NSWorkspace.shared.urlForApplication(
+                withBundleIdentifier: application.bundleIdentifier
+            ) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: applicationURL.path))
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Image(systemName: "app.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.secondary)
+                    .padding(size * 0.18)
+                    .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    private var privacyPanel: some View {
+        GlassPanel {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.green)
+                Text("statistics.transcripts.privacy")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -350,6 +403,14 @@ struct TranscriptHistorySection: View {
         formatter.locale = localization.locale
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: count)) ?? String(count)
+    }
+
+    private func localizedEntryCount(_ count: Int) -> String {
+        String(
+            format: localization.text("statistics.transcripts.entry_count"),
+            locale: localization.locale,
+            localizedCount(count)
+        )
     }
 }
 

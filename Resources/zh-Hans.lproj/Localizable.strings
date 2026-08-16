@@ -380,6 +380,7 @@
 "common.status.copied" = "已复制";
 "settings.section.about" = "关于";
 "settings.section.statistics" = "统计";
+"settings.section.transcripts" = "语音记录";
 "about.page.subtitle" = "查看版本、更新、语言和应用显示选项";
 "about.app.description" = "小米蓝牙遥控器 2 Pro 的无线语音与快捷操作工具。";
 "about.app_support.title" = "应用与支持";
@@ -600,6 +601,8 @@
 "statistics.transcripts.empty" = "还没有语音记录。下一次完成语音输入后会显示在这里。";
 "statistics.transcripts.privacy" = "仅保存本次新增的转写文字、目标应用名称和时间；不保存音频、输入框全文、窗口标题、文档名或网址。删除内容会移到废纸篓，可手动恢复。";
 "statistics.transcripts.unknown_application" = "未知应用";
+"statistics.transcripts.applications" = "应用";
+"statistics.transcripts.entry_count" = "%@ 条记录";
 "statistics.transcripts.copy" = "复制这条记录";
 "statistics.transcripts.delete_record" = "删除这条记录";
 "statistics.transcripts.delete_application" = "删除当前应用";

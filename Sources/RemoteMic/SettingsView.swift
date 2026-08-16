@@ -13,6 +13,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case macros
     case mapping
     case statistics
+    case transcripts
     case permissions
     case about
 
@@ -25,6 +26,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .macros: return ""
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
+        case .transcripts: return "settings.section.transcripts"
         case .permissions: return "settings.section.permissions"
         case .about: return "settings.section.about"
         }
@@ -37,6 +39,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .macros: return "command.square"
         case .mapping: return "keyboard"
         case .statistics: return "chart.bar.xaxis"
+        case .transcripts: return "text.bubble.fill"
         case .permissions: return "shield.lefthalf.filled"
         case .about: return "info.circle"
         }
@@ -498,6 +501,8 @@ struct SettingsView: View {
             mappingPage
         case .statistics:
             statisticsPage
+        case .transcripts:
+            transcriptHistoryPage
         case .permissions:
             permissionsPage
         case .about:
@@ -2011,8 +2016,30 @@ struct SettingsView: View {
                 VStack(spacing: 14) {
                     statisticsPeriodContent
                     voiceSessionRankingCard
-                    TranscriptHistorySection(model: model, settings: settings)
                 }
+            }
+        }
+    }
+
+    private var transcriptHistoryPage: some View {
+        settingsPage {
+            HStack(spacing: 14) {
+                PageHeader(title: localization.text("statistics.transcripts.title"))
+                Spacer(minLength: 20)
+                Toggle(
+                    "statistics.transcripts.enable",
+                    isOn: $settings.localTranscriptHistoryEnabled
+                )
+                .toggleStyle(.switch)
+                .font(.system(size: 13, weight: .medium))
+                StatusPill(
+                    text: localization.text("about.privacy.local_only"),
+                    tint: .green
+                )
+            }
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                TranscriptHistorySection(model: model, settings: settings)
             }
         }
     }
