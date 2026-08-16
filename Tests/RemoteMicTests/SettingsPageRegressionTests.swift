@@ -543,13 +543,54 @@ struct SettingsPageRegressionTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
             encoding: .utf8
         )
+        let model = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
 
         #expect(integration.contains("#if canImport(SayAllMacroRemoteMic)"))
         #expect(integration.contains("feature.executeBoundMacro"))
         #expect(integration.contains("feature.hasActiveBinding"))
+        #expect(integration.contains("feature.noteButtonInteraction"))
+        #expect(integration.contains("@Published private(set) var isEditorActive"))
         #expect(settings.contains("macroFeature.settingsView"))
         #expect(settings.contains("macroFeature.enrollmentView"))
+        #expect(settings.contains("macroFeature.setEditorActive(selectedSection == .macros)"))
+        #expect(model.contains("return (resolvedProfileID, !self.macroFeature.isEditorActive)"))
+        #expect(model.contains("if macroFeature.isEditorActive"))
         #expect(!settings.contains("macro_buttons"))
         #expect(!settings.contains("EarlyAccessController"))
+    }
+
+    @Test func sidebarKeepsTheProductPriorityOrder() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let orderStart = try #require(source.range(of: "private static let sidebarSectionOrder"))
+        let listStart = try #require(source.range(
+            of: "= [",
+            range: orderStart.upperBound..<source.endIndex
+        ))
+        let orderEnd = try #require(source.range(
+            of: "]",
+            range: listStart.upperBound..<source.endIndex
+        ))
+        let orderSource = source[listStart.lowerBound...orderEnd.lowerBound]
+        var cursor = orderSource.startIndex
+
+        for section in [".mapping", ".macros", ".statistics", ".connection", ".permissions", ".about"] {
+            let range = try #require(orderSource.range(
+                of: section,
+                range: cursor..<orderSource.endIndex
+            ))
+            cursor = range.upperBound
+        }
+
+        #expect(source.contains("Self.sidebarSectionOrder.filter"))
     }
 }

@@ -1204,7 +1204,7 @@ struct RemoteButtonsTests {
             encoding: .utf8
         )
         #expect(source.contains("settings.registerHIDRemote(fingerprint: fingerprint)"))
-        #expect(source.contains("return (resolvedProfileID, true)"))
+        #expect(source.contains("return (resolvedProfileID, !self.macroFeature.isEditorActive)"))
         #expect(!source.contains("pendingHIDBindingProfileID"))
     }
 

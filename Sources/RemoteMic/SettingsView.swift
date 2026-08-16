@@ -170,6 +170,15 @@ struct SettingsView: View {
     private let refreshUpdateInformation: () -> Void
     private let setDockIconVisible: (Bool) -> Void
     private let minimumContentSize: CGSize
+    private static let sidebarSectionOrder: [SettingsSection] = [
+        .mapping,
+        .macros,
+        .statistics,
+        .connection,
+        .privateFeature,
+        .permissions,
+        .about,
+    ]
 
     @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
@@ -235,7 +244,16 @@ struct SettingsView: View {
             minWidth: minimumContentSize.width,
             minHeight: minimumContentSize.height
         )
-        .onAppear(perform: refreshPermissionStates)
+        .onAppear {
+            refreshPermissionStates()
+            macroFeature.setEditorActive(selectedSection == .macros)
+        }
+        .onChange(of: selectedSection) { section in
+            macroFeature.setEditorActive(section == .macros)
+        }
+        .onDisappear {
+            macroFeature.setEditorActive(false)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             resumeCustomMappingIfPermissionsGranted()
@@ -416,7 +434,7 @@ struct SettingsView: View {
     }
 
     private var visibleSections: [SettingsSection] {
-        SettingsSection.allCases.filter {
+        Self.sidebarSectionOrder.filter {
             switch $0 {
             case .privateFeature: privateFeature.isFeatureVisible
             case .macros: macroFeature.isFeatureVisible
@@ -465,7 +483,13 @@ struct SettingsView: View {
         case .macros:
             if macroFeature.isFeatureVisible {
                 macroFeature.settingsView(
-                    selectedRemoteProfileID: settings.selectedRemoteProfileID
+                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                    configuredActionTitle: { buttonValue, triggerValue in
+                        guard let button = RemoteButton(rawValue: buttonValue),
+                              let trigger = ButtonTrigger(rawValue: triggerValue)
+                        else { return nil }
+                        return mappingActionSummary(for: button, trigger: trigger)
+                    }
                 )
             } else {
                 aboutPage

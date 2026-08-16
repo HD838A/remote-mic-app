@@ -1043,6 +1043,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 ?? self.settings.profileID(forHIDFingerprint: fingerprint)
             let resolvedProfileID = existingProfileID
                 ?? self.settings.registerHIDRemote(fingerprint: fingerprint)
+            if resolvedProfileID == self.settings.selectedRemoteProfileID {
+                self.macroFeature.noteButtonInteraction(button: button)
+            }
             let isNewBinding = existingProfileID == nil
             if isNewBinding {
                 monitor.assignProfileID(resolvedProfileID)
@@ -1057,7 +1060,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 control: .remoteButton(button),
                 source: .bluetoothRemote
             )
-            return (resolvedProfileID, true)
+            return (resolvedProfileID, !self.macroFeature.isEditorActive)
         }
         monitor.onInternalAction = { [weak self] profileID, action in
             guard let self else { return }
@@ -1572,6 +1575,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         phase: RemoteButtonPhase,
         source: UsageEventSource
     ) -> Bool {
+        if macroFeature.isEditorActive {
+            if phase == .press {
+                macroFeature.noteButtonInteraction(button: button)
+            }
+            return true
+        }
         let profileID = settings.selectedRemoteProfileID
         let recognizesDoubleClick = settings.configuredAction(
             for: button,
