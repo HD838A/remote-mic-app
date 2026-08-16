@@ -112,16 +112,16 @@ CHILD_PID=$!
 while process_running "$CHILD_PID"; do
   now_seconds="$(/bin/date +%s)"
   elapsed=$(( now_seconds - START_SECONDS ))
+  if (( now_seconds >= NEXT_HEARTBEAT )); then
+    print -u2 "RELEASE STAGE HEARTBEAT lane=$LANE stage=$STAGE elapsed=${elapsed}s"
+    NEXT_HEARTBEAT=$(( now_seconds + HEARTBEAT_SECONDS ))
+  fi
   if (( elapsed >= TIMEOUT_SECONDS )); then
     TIMED_OUT=1
     print -u2 "RELEASE STAGE TIMEOUT lane=$LANE stage=$STAGE elapsed=${elapsed}s limit=${TIMEOUT_SECONDS}s"
     terminate_process_tree "$CHILD_PID"
     wait "$CHILD_PID" 2>/dev/null || true
     break
-  fi
-  if (( now_seconds >= NEXT_HEARTBEAT )); then
-    print -u2 "RELEASE STAGE HEARTBEAT lane=$LANE stage=$STAGE elapsed=${elapsed}s"
-    NEXT_HEARTBEAT=$(( now_seconds + HEARTBEAT_SECONDS ))
   fi
   /bin/sleep 1
 done
