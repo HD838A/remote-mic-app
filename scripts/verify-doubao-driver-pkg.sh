@@ -54,6 +54,10 @@ case "$MODE" in
     COMPONENT_PACKAGE="$EXPANDED/RemoteMicComponent.pkg"
     test -f "$DISTRIBUTION"
     test -d "$COMPONENT_PACKAGE"
+    COMPONENT_SIGNATURE_DETAILS="$(/usr/sbin/pkgutil --check-signature \
+      "$COMPONENT_PACKAGE" 2>&1 || true)"
+    print -r -- "$COMPONENT_SIGNATURE_DETAILS" | \
+      /usr/bin/grep -Fq 'Status: no signature'
     test -f "$EXPANDED/Resources/en.lproj/Localizable.strings"
     test -f "$EXPANDED/Resources/zh-Hans.lproj/Localizable.strings"
     /usr/bin/xmllint --noout "$DISTRIBUTION"
@@ -218,6 +222,7 @@ if [[ -d "$SCRIPTS_DIR" ]] && \
   exit 1
 fi
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
+  # The deployable outer product archive is the Installer trust boundary.
   SIGNATURE_DETAILS="$(/usr/sbin/pkgutil --check-signature "$PACKAGE" 2>&1)"
   print -r -- "$SIGNATURE_DETAILS" | rg -q 'Status: signed by a developer certificate issued by Apple for distribution'
   print -r -- "$SIGNATURE_DETAILS" | rg -q "Developer ID Installer: .*\\($EXPECTED_DEVELOPER_TEAM_ID\\)"

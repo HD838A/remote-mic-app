@@ -1,7 +1,7 @@
 # macOS 签名发布并发缓存冲突与无限等待
 
 - 时间：2026-08-16
-- 状态：已修复，等待下一次真实受保护工作流验证
+- 状态：第二次修复完成，等待下一次真实受保护工作流验证
 - 影响范围：`macOS Signed Release Packages`，Apple Silicon 与 Intel 并行签名打包
 - 功能点：SwiftPM 依赖下载、Developer ID 签名、公证、PKG/DMG 打包
 - 简单描述：双架构并行时共享 SwiftPM 全局 artifact cache，且签名打包命令没有子超时或总步骤硬上限，导致一次发布先出现 Sparkle 下载冲突，随后 Intel `pkgbuild` 无输出等待约 157 分钟。
@@ -68,3 +68,40 @@
 真实验证边界：本次没有访问 Apple 凭据，没有运行 Developer ID 签名、公证、staple、Environment 审批或发布。下一次受保护工作流必须确认签名 composite step 在 590 秒由内部 supervisor 开始清理，并在 GitHub 10 分钟硬上限内结束；同时确认超时后没有遗留 `codesign`、`pkgbuild`、`productbuild`、`notarytool`、`hdiutil` 或其子进程。
 
 `TODO.md` 没有对应的独立流水线超时条目，因此本次不修改 TODO 状态。
+
+## 第二次真实验收：有界门禁暴露 component 签名阻塞
+
+GitHub Actions Run `31938200895` 在 2026-08-16 对 `1.8.25` 执行了修复后的受保护签名流程。完整失败日志保存在：
+
+```text
+/private/tmp/open-voice-bridge-v1.8.25-failed-run.WNEUIN
+```
+
+已确认的事件顺序：
+
+1. Apple Silicon 与 Intel App 均完成 Developer ID 签名、验证和公证；两次 App 公证分别约 25–26 秒即返回 `Accepted`。
+2. 两个 lane 随后并发进入 `installer-component-pkgbuild`，命令均为带 `--sign 'Developer ID Installer: … (L3QHLDRPAY)'` 的 component `pkgbuild`。
+3. Apple Silicon 从 `09:12:59Z`、Intel 从 `09:13:00Z` 开始后均没有任何 `pkgbuild` 输出。
+4. 两个阶段均在 90 秒达到 timeout 并返回 `124`；Apple Silicon 先失败后，双 lane fail-fast 正确取消 Intel，整个签名步骤在约 326 秒结束。
+5. Upload 被跳过，没有创建或修改 Tag、Release 或公开资产。
+
+因此，第一轮修复的 10 分钟硬上限、阶段 heartbeat、子超时、完整进程树清理和双 lane fail-fast 已在真实 Runner 生效。此次失败不能归因于 Apple Notary；阻塞点已精确定位为两个 lane 首次同时执行的 component `pkgbuild --sign`。
+
+## 历史与工具证据
+
+- `v1.8.23` 成功 Run `31806292978` 使用 unsigned `pkgbuild` 生成安装/卸载包，再由 `productsign` 对最终可分发 PKG 签名。Apple Silicon 与 Intel 的 `pkgbuild`、`productsign` 均在约 1–2 秒内完成，最终 PKG 后续公证、staple 和验证通过。
+- Commit `d9ba8dfb` 为架构错误提示引入 Distribution 产品归档，同时将 component 改为 `pkgbuild --sign`、外层改为 `productbuild --sign`。`1.8.25` 是该双重签名方式首次真实 Developer ID 双 lane 并发验收。
+- 本机 `pkgbuild(1)` 明确说明 component package 通常会由 `productbuild` 纳入 product archive；`productbuild(1)` 明确说明 Distribution 引用的 component 会被 incorporated into the resulting product archive；`productsign(1)` 用于给已经由 `productbuild` 创建的最终 product archive 添加或替换签名。
+- 无凭据结构实验验证：unsigned component 经 Distribution `productbuild` 后被纳入外层 product archive；component 保持 `Status: no signature`，外层在签名前也是 `Status: no signature`。现有最终验证器针对外层 PKG 执行 Developer ID Installer 链检查，公证后再执行 `stapler validate` 和 `spctl -t install`。
+
+## 第二次最小修复
+
+- component `pkgbuild` 固定保持 unsigned，不再让两个 lane 对将被外层产品归档纳入的中间包执行无价值的 Developer ID Installer 签名。
+- Distribution `productbuild` 先生成 unsigned 外层安装产品，继续保留中英文错误架构和最低系统提示。
+- 签名前使用最小 nopayload PKG 执行一次有界 `productsign` 私钥可用性探针；探针通过后，再用 `productsign` 分别签最终安装与卸载 PKG。
+- 所有必要的 Installer 私钥操作使用 macOS `lockf -k -t` 和同一个显式 `/private/tmp` lock file 跨 lane 串行；锁等待时间短于单项 productsign timeout，且不放宽 10 分钟总门禁。
+- 最终验证器明确要求内层 component 无签名，并继续只把可分发外层 PKG 的 Developer ID Installer 签名、公证、staple 和 Gatekeeper 结果作为信任边界。
+
+本机无凭据回归已经覆盖两套完整 ad-hoc 链：Apple Silicon component `pkgbuild` 约 2 秒、Distribution `productbuild` 约 1 秒；Intel component `pkgbuild` 约 1 秒、Distribution `productbuild` 约 2 秒。两套 PKG/DMG 验证通过，`BuildSigningTests` 14/14、installer architecture guard 和 release pipeline optimization regression 均通过。
+
+本轮没有修改、创建或轮换证书，没有请求或输出 secret，没有重试挂起命令，也没有增加任何 timeout。真实 Developer ID 探针、跨 lane 串行 productsign 和最终外层 PKG 公证仍需下一次新的候选工作流验收；不得重跑旧 `1.8.25` 候选。

@@ -18,7 +18,7 @@
 2. 确认该 step 的 `timeout-minutes` 为 `10`。
 3. 确认步骤从入口经过 `run-release-stage.sh`，并配置小于 GitHub 硬上限的内部清理预算。
 
-预期结果：步骤超过 10 分钟时由 GitHub 强制失败；内部 supervisor 会提前终止完整子进程树并返回 `124`，为 Keychain 和临时文件清理保留少量时间。
+预期结果：签名步骤运行满 10 分钟即停止等待并失败；内部 supervisor 在 590 秒开始终止完整子进程树并返回 `124`，为 GitHub 的 600 秒硬停止和 Keychain、临时文件清理保留少量时间。
 
 失败判定：只保留 180 分钟 job timeout、仅依赖人工取消，或 timeout 后仍留下 `notarytool`、`pkgbuild`、`productbuild`、`hdiutil` 子进程。
 
@@ -60,6 +60,17 @@
 
 失败判定：长操作完全无输出，或日志包含 secret 值、命令环境 dump、`set -x`/`xtrace`。
 
+## 用例 6：Installer 最终产品签名与跨 lane 串行
+
+1. 静态检查 `build-doubao-driver-pkg.sh`：component `pkgbuild` 不带 `--sign`，Distribution `productbuild` 先输出 unsigned product archive。
+2. 确认正式签名前先创建最小 nopayload probe PKG，并通过有界 `productsign` 验证 Developer ID Installer 私钥可用性。
+3. 使用两个无凭据 fake signer 同时请求同一个 `lockf -k -t` lock file。
+4. 检查最终验证器对展开后的 `RemoteMicComponent.pkg` 要求 `Status: no signature`，同时仍对外层可分发 PKG 执行 Developer ID Installer、staple 和 `spctl -t install` 检查。
+
+预期结果：两个 fake signer 的 `start/end` 成对出现，不发生重叠；只有最终安装和卸载产品执行真实 `productsign`；架构提示 Distribution 不变；锁等待和单项签名仍受 timeout 限制。
+
+失败判定：component 恢复 `pkgbuild --sign`、外层产品没有最终 Installer 签名、两个 lane 可同时进入 Installer 私钥操作、锁无限等待、探针被省略，或验证器只检查内层 component 而没有检查外层签名与 Gatekeeper。
+
 ## 稳定功能回归
 
 - 普通 ad-hoc App/DMG 构建在未启用 release timeout 时仍按原路径执行。
@@ -88,3 +99,14 @@
 - 修改 shell 通过 `zsh -n`，工作流 YAML 解析通过，`actionlint -ignore SC2129` 通过。
 - 本机第一次冷缓存测试遇到锁屏登录 Keychain `status -128`；该次结果不计入 cache 隔离验收。最终冷缓存验证禁用本机 Keychain/netrc 并使用本地私有依赖镜像，仅证明无凭据下载和 cache 隔离边界。
 - 尚未执行真实 Developer ID timestamp、Installer 签名、Apple 公证、staple、GitHub 10 分钟取消和受保护 Runner 清理；这些项目必须由下一次真实候选工作流补验。
+
+## 2026-08-16 第二次真实工作流与修复记录
+
+- Run `31938200895` 证明 App 公证正常：Apple Silicon 与 Intel 均在约 25–26 秒返回 `Accepted`。
+- 两个 lane 随后同时进入带 Developer ID Installer 的 `installer-component-pkgbuild`，均无工具输出并在 90 秒返回 `124`；fail-fast 正确取消另一 lane，完整步骤约 326 秒失败，没有上传资产。
+- 对照 `v1.8.23` Run `31806292978`：unsigned `pkgbuild` 后对最终 PKG 执行 `productsign`，两架构均在约 1–2 秒内完成，最终公证和验证通过。
+- 无凭据 product archive 结构实验确认 Distribution `productbuild` 会把 component 纳入外层 archive；component 可保持 unsigned，最终验证边界是外层 product archive。
+- 自动化新增 component unsigned、外层最终 productsign、最小 nopayload 签名探针、`lockf` 跨 lane 串行、外层签名/公证/Gatekeeper 验证门禁。
+- 本机双架构 ad-hoc 完整链通过：Apple Silicon component `pkgbuild` 约 2 秒、Distribution `productbuild` 约 1 秒；Intel component `pkgbuild` 约 1 秒、Distribution `productbuild` 约 2 秒。两套 PKG/DMG 验证均通过，架构提示 Distribution 保持不变。
+- `BuildSigningTests` 14/14、installer architecture guard、release pipeline optimization regression 均通过。
+- 本轮未访问 Apple 凭据；下一次必须使用更高版本/Build 的新候选，从包含本修复且双架构 CI 通过的最新 `origin/main` 创建。不得重跑旧 `1.8.25` 候选。

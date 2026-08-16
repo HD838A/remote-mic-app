@@ -18,13 +18,18 @@ RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_PKGBUILD_TIMEOUT_SECONDS="${RELEASE_PKGBUILD_TIMEOUT_SECONDS:-90}"
 RELEASE_PRODUCTBUILD_TIMEOUT_SECONDS="${RELEASE_PRODUCTBUILD_TIMEOUT_SECONDS:-90}"
 RELEASE_PRODUCTSIGN_TIMEOUT_SECONDS="${RELEASE_PRODUCTSIGN_TIMEOUT_SECONDS:-45}"
+INSTALLER_SIGNING_LOCK_TIMEOUT_SECONDS="${INSTALLER_SIGNING_LOCK_TIMEOUT_SECONDS:-30}"
+INSTALLER_SIGNING_LOCK_PATH="${INSTALLER_SIGNING_LOCK_PATH:-/private/tmp/remote-mic-installer-signing.lock}"
 RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
 INSTALL_SCRIPTS="$WORK_DIR/install-scripts"
 UNINSTALL_SCRIPTS="$WORK_DIR/uninstall-scripts"
 INSTALL_COMPONENT_PACKAGE="$WORK_DIR/RemoteMicComponent.pkg"
+UNSIGNED_INSTALL_PACKAGE="$WORK_DIR/Install Remote Mic-unsigned.pkg"
 UNSIGNED_UNINSTALL_PACKAGE="$WORK_DIR/Uninstall Remote Mic-unsigned.pkg"
+SIGNING_PROBE_UNSIGNED_PACKAGE="$WORK_DIR/Installer Signing Probe-unsigned.pkg"
+SIGNING_PROBE_PACKAGE="$WORK_DIR/Installer Signing Probe.pkg"
 DISTRIBUTION="$ROOT/packaging/doubao-driver/distribution/$RELEASE_VARIANT.xml"
 DISTRIBUTION_RESOURCES="$ROOT/packaging/doubao-driver/distribution/Resources"
 
@@ -53,6 +58,19 @@ if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" && ! -x "$RELEASE_STAGE_RUNNER" ]]; then
   print -u2 "release stage runner is unavailable"
   exit 1
 fi
+if ! print -r -- "$INSTALLER_SIGNING_LOCK_TIMEOUT_SECONDS" | \
+    /usr/bin/grep -Eq '^[1-9][0-9]*$'; then
+  print -u2 "INSTALLER_SIGNING_LOCK_TIMEOUT_SECONDS must be a positive integer"
+  exit 1
+fi
+if (( INSTALLER_SIGNING_LOCK_TIMEOUT_SECONDS >= RELEASE_PRODUCTSIGN_TIMEOUT_SECONDS )); then
+  print -u2 "Installer signing lock timeout must be shorter than the productsign stage timeout"
+  exit 1
+fi
+case "$INSTALLER_SIGNING_LOCK_PATH" in
+  /private/tmp/*.lock) ;;
+  *) print -u2 "INSTALLER_SIGNING_LOCK_PATH must be an explicit lock file under /private/tmp"; exit 1 ;;
+esac
 
 run_release_stage() {
   local stage="$1"
@@ -63,6 +81,17 @@ run_release_stage() {
   else
     "$@"
   fi
+}
+
+run_locked_productsign() {
+  local stage="$1"
+  local input_package="$2"
+  local output_package="$3"
+  run_release_stage "$stage" "$RELEASE_PRODUCTSIGN_TIMEOUT_SECONDS" \
+    /usr/bin/lockf -k -t "$INSTALLER_SIGNING_LOCK_TIMEOUT_SECONDS" \
+    "$INSTALLER_SIGNING_LOCK_PATH" \
+    /usr/bin/productsign --sign "$INSTALLER_SIGNING_IDENTITY" \
+    "$input_package" "$output_package"
 }
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$INSTALLER_SIGNING_IDENTITY" == "-" ]]; then
   print -u2 "Developer ID Installer signing is required"
@@ -93,13 +122,6 @@ fi
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
-INSTALL_COMPONENT_SIGNING_ARGS=()
-INSTALL_PRODUCT_SIGNING_ARGS=()
-if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
-  INSTALL_COMPONENT_SIGNING_ARGS=(--sign "$INSTALLER_SIGNING_IDENTITY")
-  INSTALL_PRODUCT_SIGNING_ARGS=(--sign "$INSTALLER_SIGNING_IDENTITY")
-fi
-
 run_release_stage installer-component-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
   /usr/bin/pkgbuild \
   --root "$PAYLOAD_ROOT" \
@@ -108,25 +130,14 @@ run_release_stage installer-component-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECOND
   --version "$VERSION" \
   --install-location / \
   --ownership recommended \
-  "${INSTALL_COMPONENT_SIGNING_ARGS[@]}" \
   "$INSTALL_COMPONENT_PACKAGE"
-
-if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
-  # productbuild flattens the component into the product archive, so validate
-  # the component's Developer ID signature before creating the outer product.
-  COMPONENT_SIGNATURE_DETAILS="$(/usr/sbin/pkgutil --check-signature \
-    "$INSTALL_COMPONENT_PACKAGE" 2>&1)"
-  print -r -- "$COMPONENT_SIGNATURE_DETAILS" | \
-    rg -q 'Status: signed by a developer certificate issued by Apple for distribution'
-fi
 
 run_release_stage installer-productbuild "$RELEASE_PRODUCTBUILD_TIMEOUT_SECONDS" \
   /usr/bin/productbuild \
   --distribution "$DISTRIBUTION" \
   --resources "$DISTRIBUTION_RESOURCES" \
   --package-path "$WORK_DIR" \
-  "${INSTALL_PRODUCT_SIGNING_ARGS[@]}" \
-  "$INSTALL_PACKAGE"
+  "$UNSIGNED_INSTALL_PACKAGE"
 
 run_release_stage uninstaller-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
   /usr/bin/pkgbuild \
@@ -137,11 +148,26 @@ run_release_stage uninstaller-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
   "$UNSIGNED_UNINSTALL_PACKAGE"
 
 if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
+  test -x /usr/bin/lockf
   test -x /usr/bin/productsign
-  run_release_stage uninstaller-productsign "$RELEASE_PRODUCTSIGN_TIMEOUT_SECONDS" \
-    /usr/bin/productsign --sign "$INSTALLER_SIGNING_IDENTITY" \
+  run_release_stage installer-signing-probe-pkgbuild 30 \
+    /usr/bin/pkgbuild \
+    --nopayload \
+    --identifier "com.hd838a.RemoteMic.installer-signing-probe" \
+    --version "$VERSION" \
+    "$SIGNING_PROBE_UNSIGNED_PACKAGE"
+  run_locked_productsign installer-signing-probe-productsign \
+    "$SIGNING_PROBE_UNSIGNED_PACKAGE" "$SIGNING_PROBE_PACKAGE"
+  PROBE_SIGNATURE_DETAILS="$(/usr/sbin/pkgutil --check-signature \
+    "$SIGNING_PROBE_PACKAGE" 2>&1)"
+  print -r -- "$PROBE_SIGNATURE_DETAILS" | \
+    rg -q 'Status: signed by a developer certificate issued by Apple for distribution'
+  run_locked_productsign installer-productsign \
+    "$UNSIGNED_INSTALL_PACKAGE" "$INSTALL_PACKAGE"
+  run_locked_productsign uninstaller-productsign \
     "$UNSIGNED_UNINSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
 else
+  /bin/mv "$UNSIGNED_INSTALL_PACKAGE" "$INSTALL_PACKAGE"
   /bin/mv "$UNSIGNED_UNINSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
 fi
 

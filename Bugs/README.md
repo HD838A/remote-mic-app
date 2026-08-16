@@ -88,7 +88,7 @@
 | 2026-08-14 | [Watch 与 iPhone 附近连接同时回归](./2026-08-14-watch-ios-nearby-connection-regression/DEBUG.md) | 已修复并通过自动化/本机发布验证，等待实际设备验收 |
 | 2026-08-15 | [Watch BLE 音频积压阻塞 iPhone 语音](./2026-08-15-watch-ble-audio-backlog-blocks-iphone/DEBUG.md) | 候选修复完成，等待真实 Watch 与实际测试 Mac 验收 |
 | 2026-08-15 | [移动设备已连接后仍显示正在等待](./2026-08-15-mobile-connection-still-shows-waiting/DEBUG.md) | 候选修复完成，等待真实 iPhone / Watch 验收 |
-| 2026-08-16 | [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md) | 已修复，等待下一次真实受保护工作流验证 |
+| 2026-08-16 | [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md) | 第二次修复完成，等待下一次真实受保护工作流验证 |
 
 ## 记录模板
 
