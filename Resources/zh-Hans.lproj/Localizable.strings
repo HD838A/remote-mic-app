@@ -337,7 +337,7 @@
 "diagnostics.logs.send" = "发送诊断信息";
 "diagnostics.upload.ready" = "平时不会向诊断服务上传日志。";
 "diagnostics.upload.sending" = "正在发送今天和昨天的诊断日志…";
-"diagnostics.upload.success" = "已发送 %1$@ 条脱敏日志。";
+"diagnostics.upload.success" = "已提交 %1$@ 条脱敏日志。";
 "diagnostics.upload.not_configured" = "诊断服务尚未配置，请使用后续发布版本。";
 "diagnostics.upload.no_logs" = "今天和昨天没有可以发送的日志。";
 "diagnostics.upload.failed" = "发送失败，请检查网络后重试。";

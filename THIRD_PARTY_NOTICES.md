@@ -1,5 +1,14 @@
 # Third-party notices
 
+## Sentry Cocoa
+
+- Project: `getsentry/sentry-cocoa`
+- Source: <https://github.com/getsentry/sentry-cocoa>
+- Pinned version: `9.26.0`
+- License: MIT
+
+The official Sentry Cocoa SDK is linked statically and is used only for user-initiated diagnostic log delivery. Automatic crash reporting, sessions, performance tracing, app hang tracking, MetricKit, network tracking, and automatic breadcrumbs are disabled. Its cache is isolated to a temporary directory that the application deletes after each user-initiated attempt, preventing later background retries.
+
 ## remote-bridge-hub
 
 - Project: `xxb26553663-star/remote-bridge-hub`

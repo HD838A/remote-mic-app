@@ -34,7 +34,7 @@ struct AppLoggerTests {
         )
 
         let rawToday = try Data(contentsOf: directory.appendingPathComponent(
-            "runtime-2026-08-15.rmlog"
+            "sayall.app-2026-08-15.rmlog"
         ))
         #expect(!String(decoding: rawToday, as: UTF8.self).contains("TODAY secret diagnostic"))
         let directoryPermissions = try #require(
@@ -43,7 +43,7 @@ struct AppLoggerTests {
         )
         let filePermissions = try #require(
             FileManager.default.attributesOfItem(
-                atPath: directory.appendingPathComponent("runtime-2026-08-15.rmlog").path
+                atPath: directory.appendingPathComponent("sayall.app-2026-08-15.rmlog").path
             )[.posixPermissions] as? NSNumber
         )
         #expect(directoryPermissions.intValue & 0o777 == 0o700)
@@ -85,8 +85,8 @@ struct AppLoggerTests {
             includingPropertiesForKeys: nil
         ).filter { $0.pathExtension == "rmlog" }
         #expect(files.count == 5)
-        #expect(files.contains { $0.lastPathComponent == "runtime-2026-08-11.rmlog" })
-        #expect(!files.contains { $0.lastPathComponent == "runtime-2026-08-10.rmlog" })
+        #expect(files.contains { $0.lastPathComponent == "sayall.app-2026-08-11.rmlog" })
+        #expect(!files.contains { $0.lastPathComponent == "sayall.app-2026-08-10.rmlog" })
     }
 
     @Test func neverGrowsDailyFilePastConfiguredLimit() throws {
@@ -112,7 +112,7 @@ struct AppLoggerTests {
         }
 
         let attributes = try FileManager.default.attributesOfItem(
-            atPath: directory.appendingPathComponent("runtime-2026-08-15.rmlog").path
+            atPath: directory.appendingPathComponent("sayall.app-2026-08-15.rmlog").path
         )
         let size = try #require(attributes[.size] as? NSNumber)
         #expect(size.intValue <= 512)
@@ -131,6 +131,40 @@ struct AppLoggerTests {
         )
 
         #expect(!FileManager.default.fileExists(atPath: legacy.path))
+    }
+
+    @Test func migratesRecentRuntimeEncryptedFileToSayAllPrefix() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let calendar = utcCalendar()
+        let today = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 15,
+            hour: 12
+        )))
+        let source = AppLogger(
+            logDirectoryURL: directory,
+            calendar: calendar,
+            dateProvider: { today },
+            keyDataProvider: { key }
+        )
+        source.writeSynchronously("legacy encrypted entry", at: today)
+        let currentURL = directory.appendingPathComponent("sayall.app-2026-08-15.rmlog")
+        let legacyURL = directory.appendingPathComponent("runtime-2026-08-15.rmlog")
+        try FileManager.default.moveItem(at: currentURL, to: legacyURL)
+
+        let migrated = AppLogger(
+            logDirectoryURL: directory,
+            calendar: calendar,
+            dateProvider: { today },
+            keyDataProvider: { key }
+        )
+
+        #expect(FileManager.default.fileExists(atPath: currentURL.path))
+        #expect(!FileManager.default.fileExists(atPath: legacyURL.path))
+        #expect(try migrated.diagnosticDocuments(referenceDate: today)[0].lines[0]
+            .contains("legacy encrypted entry"))
     }
 
     private func temporaryDirectory() throws -> URL {

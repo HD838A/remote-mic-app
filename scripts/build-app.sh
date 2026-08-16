@@ -105,6 +105,7 @@ fi
 DEFAULT_SCRATCH_PATH="/private/tmp/remote-mic-swiftpm/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
 BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_SCRATCH_PATH}"
 SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+SENTRY_PRIVACY_MANIFEST="$BUILD_SCRATCH_PATH/artifacts/sentry-cocoa/Sentry/Sentry.xcframework/macos-arm64_arm64e_x86_64/Sentry.framework/Versions/A/Resources/PrivacyInfo.xcprivacy"
 
 xcrun swift build \
   --scratch-path "$BUILD_SCRATCH_PATH" \
@@ -124,6 +125,7 @@ esac
 rm -rf -- "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 test -d "$SPARKLE_FRAMEWORK"
+test -f "$SENTRY_PRIVACY_MANIFEST"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$BIN_PATH" "$APP_DIR/Contents/MacOS/$APP_NAME"
 strip -S -x "$APP_DIR/Contents/MacOS/$APP_NAME"
@@ -208,6 +210,8 @@ for document in README TECHNICAL TROUBLESHOOTING COPYRIGHT LOGO-LICENSE; do
 done
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/THIRD_PARTY_NOTICES.md" "$APP_DIR/Contents/Resources/THIRD_PARTY_NOTICES.md"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$SENTRY_PRIVACY_MANIFEST" "$APP_DIR/Contents/Resources/PrivacyInfo.xcprivacy"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/首次安装说明.en.md" \
   "$APP_DIR/Contents/Resources/FirstInstallGuide.md"

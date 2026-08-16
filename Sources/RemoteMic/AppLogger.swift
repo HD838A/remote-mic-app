@@ -26,7 +26,8 @@ final class AppLogger {
     }
 
     private static let fileHeader = Data("RMLG1\n".utf8)
-    private static let filenamePrefix = "runtime-"
+    private static let filenamePrefix = "sayall.app-"
+    private static let legacyFilenamePrefix = "runtime-"
     private static let filenameExtension = "rmlog"
 
     private let queue = DispatchQueue(label: "RemoteMic.logger")
@@ -76,6 +77,7 @@ final class AppLogger {
             ofItemAtPath: logDirectoryURL.path
         )
         try? fileManager.removeItem(at: logDirectoryURL.appendingPathComponent("runtime.log"))
+        migrateLegacyEncryptedLogs(referenceDate: dateProvider())
         removeExpiredLogs(referenceDate: dateProvider())
     }
 
@@ -211,11 +213,31 @@ final class AppLogger {
 
         for url in urls where url.pathExtension == Self.filenameExtension {
             let filename = url.deletingPathExtension().lastPathComponent
-            guard filename.hasPrefix(Self.filenamePrefix) else { continue }
-            let day = String(filename.dropFirst(Self.filenamePrefix.count))
+            let prefix = [Self.filenamePrefix, Self.legacyFilenamePrefix].first {
+                filename.hasPrefix($0)
+            }
+            guard let prefix else { continue }
+            let day = String(filename.dropFirst(prefix.count))
             if !retainedDays.contains(day) {
                 try? fileManager.removeItem(at: url)
             }
+        }
+    }
+
+    private func migrateLegacyEncryptedLogs(referenceDate: Date) {
+        for offset in 0..<retainedDayCount {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: referenceDate) else {
+                continue
+            }
+            let day = dayIdentifier(for: date)
+            let legacyURL = logDirectoryURL.appendingPathComponent(
+                "\(Self.legacyFilenamePrefix)\(day).\(Self.filenameExtension)"
+            )
+            let currentURL = logURL(forDay: day)
+            guard fileManager.fileExists(atPath: legacyURL.path),
+                  !fileManager.fileExists(atPath: currentURL.path)
+            else { continue }
+            try? fileManager.moveItem(at: legacyURL, to: currentURL)
         }
     }
 

@@ -80,34 +80,20 @@ struct DiagnosticLogUploaderTests {
         #expect(sendCount == 0)
     }
 
-    @Test func buildsSentryEnvelopeEndpointAndStructuredLogPayload() throws {
-        let endpoint = try SentryEnvelopeEndpoint(
-            dsn: "https://public-key@o123.ingest.sentry.io/456"
-        )
-        #expect(endpoint.url.absoluteString == "https://o123.ingest.sentry.io/api/456/envelope/")
-        #expect(endpoint.authorizationHeader.contains("sentry_key=public-key"))
+    @Test func usesOfficialSentrySDKWithAutomaticTelemetryDisabled() throws {
+        let source = try String(contentsOf: repositoryRoot()
+            .appendingPathComponent("Sources/RemoteMic/DiagnosticLogUploader.swift"))
 
-        let data = try SentryLogEnvelope(entries: [
-            DiagnosticLogEntry(
-                day: "2026-08-15",
-                sequence: 7,
-                message: "2026-08-15T01:02:03Z BLE READY"
-            ),
-        ]).data()
-        let parts = data.split(separator: 0x0A, maxSplits: 2, omittingEmptySubsequences: false)
-        #expect(parts.count == 3)
-        let itemHeader = try #require(
-            JSONSerialization.jsonObject(with: Data(parts[1])) as? [String: Any]
-        )
-        #expect(itemHeader["type"] as? String == "log")
-        #expect(itemHeader["item_count"] as? Int == 1)
-
-        let payload = try #require(
-            JSONSerialization.jsonObject(with: Data(parts[2])) as? [String: Any]
-        )
-        let items = try #require(payload["items"] as? [[String: Any]])
-        #expect(items[0]["body"] as? String == "2026-08-15T01:02:03Z BLE READY")
-        #expect(items[0]["severity_number"] as? Int == 9)
+        #expect(source.contains("import Sentry"))
+        #expect(source.contains("SentrySDK.start"))
+        #expect(source.contains("SentrySDK.logger"))
+        #expect(source.contains("options.enableCrashHandler = false"))
+        #expect(source.contains("options.enableAutoSessionTracking = false"))
+        #expect(source.contains("options.enableAutoPerformanceTracing = false"))
+        #expect(source.contains("options.cacheDirectoryPath = cacheDirectory.path"))
+        #expect(source.contains("hasPendingSentryEnvelopes"))
+        #expect(!source.contains("URLRequest("))
+        #expect(!source.contains("SentryLogEnvelope"))
     }
 
     private func temporaryDirectory() throws -> URL {
@@ -121,5 +107,12 @@ struct DiagnosticLogUploaderTests {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         return calendar
+    }
+
+    private func repositoryRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }

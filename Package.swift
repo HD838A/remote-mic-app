@@ -4,6 +4,7 @@ import PackageDescription
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
+    .package(url: "https://github.com/getsentry/sentry-cocoa", exact: "9.26.0"),
     .package(
         url: "https://github.com/GetSayAll/sayall-mac-remote.git",
         revision: "dc8a728fd51473d1e08a4b88639175f1cdd7c105"
@@ -11,6 +12,7 @@ var packageDependencies: [Package.Dependency] = [
 ]
 var remoteMicDependencies: [Target.Dependency] = [
     "AudioExceptionGuard",
+    .product(name: "Sentry", package: "sentry-cocoa"),
     .product(name: "Sparkle", package: "Sparkle"),
     .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
     .product(name: "SayAllMacRemoteUI", package: "sayall-mac-remote"),

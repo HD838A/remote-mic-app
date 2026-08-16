@@ -61,6 +61,8 @@ test -f "$APP/Contents/Resources/LICENSE.md"
 test -f "$APP/Contents/Resources/README.md"
 test -f "$APP/Contents/Resources/TECHNICAL.md"
 test -f "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
+test -f "$APP/Contents/Resources/PrivacyInfo.xcprivacy"
+plutil -lint "$APP/Contents/Resources/PrivacyInfo.xcprivacy"
 test -f "$APP/Contents/Resources/TROUBLESHOOTING.md"
 test -f "$APP/Contents/Resources/COPYRIGHT.md"
 test -f "$APP/Contents/Resources/LOGO-LICENSE.md"
@@ -225,7 +227,7 @@ if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   done
 fi
 
-EXPECTED_APP_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
+EXPECTED_APP_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/PrivacyInfo.xcprivacy\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"
@@ -237,7 +239,12 @@ for source_localization_dir in "$ROOT"/Resources/*.lproj(N); do
   done < <(find "$source_localization_dir" -type f | LC_ALL=C sort)
 done
 
-if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' "$APP/Contents"; then
+UNAPPROVED_SENSITIVE_STRINGS="$(
+  find "$APP/Contents" -type f -print0 | xargs -0 strings -a | \
+    rg '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' | \
+    rg -v '^/Users/runner/work/sentry-cocoa/sentry-cocoa/' || true
+)"
+if [[ -n "$UNAPPROVED_SENSITIVE_STRINGS" ]]; then
   print -u2 "bundle contains a forbidden local path or example device address"
   exit 1
 fi

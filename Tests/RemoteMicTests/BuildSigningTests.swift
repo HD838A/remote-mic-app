@@ -58,6 +58,8 @@ struct BuildSigningTests {
         #expect(notarizeSource.contains("export REQUIRE_WEB_REMOTE_CONFIGURATION=1"))
         #expect(notarizeSource.contains("export REMOTE_WEB_RELAY_URL"))
         #expect(verifySource.contains("Developer ID app is missing a production Web Remote relay URL"))
+        #expect(verifySource.contains("^/Users/runner/work/sentry-cocoa/sentry-cocoa/"))
+        #expect(!verifySource.contains("rg -v '/Users/runner'"))
     }
 
     @Test func productionReleaseRequiresAndVerifiesPrivateFeaturePackage() throws {
