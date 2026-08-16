@@ -66,6 +66,9 @@ test -f "$APP/Contents/Resources/COPYRIGHT.md"
 test -f "$APP/Contents/Resources/LOGO-LICENSE.md"
 test -f "$APP/Contents/Resources/FirstInstallGuide.md"
 test -f "$APP/Contents/Resources/RC003-remote-photo.png"
+for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
+  test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
+done
 test -f "$APP/Contents/Resources/AppIcon.icns"
 test -f "$APP/Contents/Resources/StatusIconTemplate.png"
 test -f "$APP/Contents/Resources/StatusIconTemplate@2x.png"
@@ -240,6 +243,9 @@ EXPECTED_APP_FILES=$'Contents/Info.plist\nContents/MacOS/RemoteMic\nContents/Res
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"
+for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
+  test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
+done
 for source_localization_dir in "$ROOT"/Resources/*.lproj(N); do
   localization_name="${source_localization_dir:t}"
   while IFS= read -r source_file; do

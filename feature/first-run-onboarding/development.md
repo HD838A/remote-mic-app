@@ -6,12 +6,14 @@
 - `Sources/RemoteMic/AppSettings.swift`：流程版本、当前位置、语音工具、完成/重新运行操作及旧安装一次性迁移的持久化。
 - `Sources/RemoteMic/RemoteMicRootView.swift`：在向导和既有设置页之间切换，并在进入硬件步骤时启动运行时。
 - `Sources/RemoteMic/OnboardingView.swift`：双栏页面、权限操作、设备与按键状态、真实语音文字测试和固定底部导航。
+- `Sources/RemoteMic/OnboardingInputSourceSwitcher.swift`：通过 macOS Text Input Sources API 检测并切换豆包/微信输入法，读取系统 Fn 动作是否已释放。
 - `Sources/RemoteMic/OnboardingScreenshotRenderer.swift`：通过离屏 AppKit 窗口渲染生产向导，支持浅色、深色和系统外观，使用隔离偏好域。
 - `Sources/RemoteMic/RemoteMicApp.swift`：未完成时强制显示主窗口并延迟完整运行时启动；专用环境变量存在时进入无界面截图模式。
 - `Sources/RemoteMic/BridgeAppModel.swift`：在现有蓝牙语音开始与 PCM 解码回调旁公开当前会话样本计数；允许截图模式注入隔离设置，不保存音频；重连入口在 bridge 尚未创建时可启动蓝牙连接。
 - `Sources/RemoteMic/RemoteVoiceFunctionMapper.swift`、`HIDRemoteMonitor.swift`：按 HID Location ID 限定电源键抑制成功的安全设备，部分失败时不再全局关闭普通按键，也不放宽锁屏保护。
 - `Sources/RemoteMic/SettingsView.swift`：关于页增加“重新运行设置向导”；设备卡显示完整名称并自适应状态布局，连接页删除重复信息。
 - `Resources/*/Localizable.strings`：中英文向导文案。
+- `Resources/Onboarding/*.png`：豆包、微信输入法和微信 App 的浅色/深色原始设置截图。
 - `Resources/首次安装说明*.md`：同步记录首次激活和蓝牙配对顺序。
 - `Tests/RemoteMicTests/OnboardingFlowTests.swift`：步骤、门禁、持久化、完成版本和重新运行测试。
 - `scripts/test.sh`：把 Onboarding 流程类型加入项目自检的显式编译文件列表。
@@ -34,6 +36,8 @@
 13. `FirstUseDiagnostics` 将当前失败归一化为稳定失败码，记录进入、阻塞、重试、恢复、通过和完成事件；相同阻塞不会被权限轮询重复写入，复制摘要只包含布尔能力、技术状态 key、阶段耗时和失败码。
 14. 每个未通过阶段只突出一个主要修复动作，复用现有权限请求、BLE 重连、HID 重建、设备刷新、音频重配和语音重试；完成页根据当前权限、BLE 和音频状态定向返回受影响页面。
 15. 遥控器页把首次连接分成两条静态说明：先长按 TV 键约 2 秒直到底部白灯闪烁，再同时长按 Home + Menu；说明不参与能力门禁，实际连接和普通实体按键仍由生产状态验证。
+16. 豆包和微信输入法使用已验证的系统输入源 ID 自动切换；进入语音测试并聚焦输入框时再次切换，避免 macOS 按 App 记忆输入源后回到 ABC。系统 Fn 动作不是“不执行任何操作”时，输入法选择页不能继续。
+17. 输入法设置采用页面内四项指引：选择输入法、把语音设为 Fn、释放系统 Fn、清空微信 App 的两个语音输入快捷键。第三方设置无法由 App 可靠读取，最终仍由真实语音文字页验证。
 
 ## 全流程门禁审计结论
 

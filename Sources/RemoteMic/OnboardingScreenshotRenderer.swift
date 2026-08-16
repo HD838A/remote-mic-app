@@ -74,7 +74,10 @@ enum OnboardingScreenshotRenderer {
 
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = .simplifiedChinese
-        settings.setOnboardingVoiceTool(.typeless)
+        let requestedVoiceTool = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_TOOL"
+        ].flatMap(OnboardingVoiceTool.init(rawValue:))
+        settings.setOnboardingVoiceTool(requestedVoiceTool ?? .doubao)
         let screenshotAudioDevices = [
             AudioDeviceInfo(id: 1, uid: DoubaoAudioDevicePolicy.deviceUID, name: "MiRemoteV 2ch"),
             AudioDeviceInfo(id: 2, uid: "BlackHole2ch_UID", name: "BlackHole 2ch"),
@@ -95,7 +98,9 @@ enum OnboardingScreenshotRenderer {
             settings.setOnboardingStep(step)
             let rootView = OnboardingView(
                 model: model,
-                completeRuntimeReadyOverride: true
+                completeRuntimeReadyOverride: true,
+                allowsInputSourceSwitching: false,
+                systemFunctionKeyAvailableOverride: true
             )
                 .environmentObject(localization)
                 .frame(width: 1020, height: 772)

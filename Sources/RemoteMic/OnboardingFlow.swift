@@ -61,6 +61,7 @@ enum OnboardingPhase: String, CaseIterable {
 enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
     case unselected
     case doubao
+    case weixin
     case typeless
     case other
 
@@ -73,9 +74,25 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
     var detailKey: String {
         "onboarding.voice_tool.\(rawValue).detail"
     }
+
+    var preferredInputSourceID: String? {
+        switch self {
+        case .doubao:
+            return "com.bytedance.inputmethod.doubaoime.pinyin"
+        case .weixin:
+            return "com.tencent.inputmethod.wetype.pinyin"
+        case .unselected, .typeless, .other:
+            return nil
+        }
+    }
+
+    var requiresFunctionKeySetup: Bool {
+        preferredInputSourceID != nil
+    }
 }
 
 struct OnboardingCapabilities: Equatable {
+    var systemFunctionKeyAvailable = false
     var bluetoothGranted = false
     var inputMonitoringGranted = false
     var accessibilityGranted = false
@@ -117,7 +134,8 @@ enum OnboardingFlowPolicy {
         case .welcome:
             return true
         case .voiceTool:
-            return voiceTool != .unselected
+            return voiceTool != .unselected &&
+                (!voiceTool.requiresFunctionKeySetup || capabilities.systemFunctionKeyAvailable)
         case .permissions:
             return capabilities.bluetoothGranted &&
                 capabilities.inputMonitoringGranted &&

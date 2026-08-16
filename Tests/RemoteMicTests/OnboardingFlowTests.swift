@@ -132,6 +132,81 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func fnInputMethodsRequireTheSystemFnActionToBeReleased() {
+        var capabilities = OnboardingCapabilities()
+
+        #expect(OnboardingVoiceTool.doubao.preferredInputSourceID == "com.bytedance.inputmethod.doubaoime.pinyin")
+        #expect(OnboardingVoiceTool.weixin.preferredInputSourceID == "com.tencent.inputmethod.wetype.pinyin")
+        #expect(OnboardingVoiceTool.typeless.preferredInputSourceID == nil)
+        #expect(OnboardingVoiceTool.other.preferredInputSourceID == nil)
+
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .voiceTool,
+            voiceTool: .doubao,
+            capabilities: capabilities
+        ))
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .voiceTool,
+            voiceTool: .weixin,
+            capabilities: capabilities
+        ))
+
+        capabilities.systemFunctionKeyAvailable = true
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .voiceTool,
+            voiceTool: .doubao,
+            capabilities: capabilities
+        ))
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .voiceTool,
+            voiceTool: .weixin,
+            capabilities: capabilities
+        ))
+    }
+
+    @Test func inputMethodSetupUsesProductionScreenshotsAndSafeScreenshotOverrides() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingScreenshotRenderer.swift"),
+            encoding: .utf8
+        )
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        for resourceName in [
+            "doubao-menu", "doubao-settings", "weixin-input-menu",
+            "weixin-input-settings", "weixin-app-shortcuts",
+        ] {
+            #expect(viewSource.contains(resourceName))
+            for appearance in ["light", "dark"] {
+                #expect(FileManager.default.fileExists(
+                    atPath: root.appendingPathComponent(
+                        "Resources/Onboarding/\(resourceName)-\(appearance).png"
+                    ).path
+                ))
+            }
+        }
+        #expect(viewSource.contains("switchToSelectedInputMethod()"))
+        #expect(viewSource.contains("openKeyboardSettings()"))
+        #expect(rendererSource.contains("allowsInputSourceSwitching: false"))
+        #expect(rendererSource.contains("systemFunctionKeyAvailableOverride: true"))
+        #expect(buildSource.contains("$ROOT/Resources/Onboarding"))
+        #expect(verifySource.contains("Resources/Onboarding/*.png(N)"))
+    }
+
     @Test func observedRemoteButtonRequestsOnlyOneRecoveryWhileBluetoothIsDisconnected() {
         #expect(!OnboardingFlowPolicy.shouldRequestRemoteReconnect(
             remoteConnected: false,

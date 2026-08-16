@@ -3,12 +3,25 @@ import Combine
 import CoreBluetooth
 import SwiftUI
 
+private struct OnboardingInputMethodGuideStep: Identifiable {
+    enum Content {
+        case screenshot(String)
+        case systemFunctionKey
+    }
+
+    let id: Int
+    let titleKey: String
+    let content: Content
+}
+
 struct OnboardingView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject private var settings: AppSettings
     @EnvironmentObject private var localization: LocalizationStore
     @Environment(\.colorScheme) private var colorScheme
     private let completeRuntimeReadyOverride: Bool?
+    private let allowsInputSourceSwitching: Bool
+    private let systemFunctionKeyAvailableOverride: Bool?
 
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -21,6 +34,9 @@ struct OnboardingView: View {
     @State private var voiceSessionEnded = false
     @State private var transcript = ""
     @State private var lastRecordedFailure: FirstUseFailureReason?
+    @State private var inputSourceSwitchResult: OnboardingInputSourceSwitchResult = .notApplicable
+    @State private var systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
+    @State private var selectedInputMethodGuideStep = 0
     @FocusState private var transcriptFocused: Bool
 
     private let permissionRefreshTimer = Timer.publish(
@@ -31,11 +47,15 @@ struct OnboardingView: View {
 
     init(
         model: BridgeAppModel,
-        completeRuntimeReadyOverride: Bool? = nil
+        completeRuntimeReadyOverride: Bool? = nil,
+        allowsInputSourceSwitching: Bool = true,
+        systemFunctionKeyAvailableOverride: Bool? = nil
     ) {
         self.model = model
         settings = model.settings
         self.completeRuntimeReadyOverride = completeRuntimeReadyOverride
+        self.allowsInputSourceSwitching = allowsInputSourceSwitching
+        self.systemFunctionKeyAvailableOverride = systemFunctionKeyAvailableOverride
     }
 
     var body: some View {
@@ -58,10 +78,16 @@ struct OnboardingView: View {
         }
         .onReceive(permissionRefreshTimer) { _ in
             refreshPermissionStates()
+            if settings.onboardingStep == .voiceTool {
+                refreshSystemFunctionKeyUsage()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             switch settings.onboardingStep {
+            case .voiceTool, .voiceTest:
+                switchToSelectedInputMethod()
+                refreshSystemFunctionKeyUsage()
             case .remote:
                 model.refreshRemoteDiscovery()
                 model.applyHIDSettings()
@@ -109,6 +135,10 @@ struct OnboardingView: View {
         .onChange(of: transcript) { value in
             guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             transcriptFocused = true
+        }
+        .onChange(of: transcriptFocused) { isFocused in
+            guard isFocused, settings.onboardingStep == .voiceTest else { return }
+            switchToSelectedInputMethod()
         }
         .onChange(of: failureReason) { failure in
             recordFailureTransition(failure)
@@ -238,16 +268,19 @@ struct OnboardingView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 
-            VStack(spacing: 10) {
-                ForEach([OnboardingVoiceTool.doubao, .typeless, .other]) { tool in
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())],
+                spacing: 10
+            ) {
+                ForEach([OnboardingVoiceTool.doubao, .weixin, .typeless, .other]) { tool in
                     Button {
-                        settings.setOnboardingVoiceTool(tool)
+                        selectVoiceTool(tool)
                     } label: {
-                        HStack(spacing: 14) {
+                        HStack(alignment: .top, spacing: 12) {
                             Image(systemName: voiceToolIcon(tool))
-                                .font(.system(size: 20, weight: .medium))
+                                .font(.system(size: 18, weight: .medium))
                                 .foregroundStyle(Color.accentColor)
-                                .frame(width: 34, height: 34)
+                                .frame(width: 32, height: 32)
                                 .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
 
                             VStack(alignment: .leading, spacing: 4) {
@@ -261,11 +294,12 @@ struct OnboardingView: View {
                             }
                             Spacer()
                             Image(systemName: settings.onboardingVoiceTool == tool ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 18))
+                                .font(.system(size: 17))
                                 .foregroundStyle(settings.onboardingVoiceTool == tool ? Color.accentColor : Color.secondary)
                         }
-                        .padding(14)
+                        .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 82, alignment: .top)
                         .background(
                             settings.onboardingVoiceTool == tool
                                 ? Color.accentColor.opacity(0.09)
@@ -285,7 +319,168 @@ struct OnboardingView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            if settings.onboardingVoiceTool.requiresFunctionKeySetup {
+                inputMethodGuide(for: settings.onboardingVoiceTool)
+            }
         }
+    }
+
+    private func inputMethodGuide(for tool: OnboardingVoiceTool) -> some View {
+        let steps = inputMethodGuideSteps(for: tool)
+        let selectedIndex = min(selectedInputMethodGuideStep, max(0, steps.count - 1))
+        let selectedStep = steps[selectedIndex]
+
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(localization.text("onboarding.voice_tool.guide.title"))
+                    .font(.system(size: 15, weight: .semibold))
+                Text(localization.text("onboarding.voice_tool.guide.detail"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            inputSourceSwitchStatus(for: tool)
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())],
+                spacing: 8
+            ) {
+                ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                    Button {
+                        selectedInputMethodGuideStep = index
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("\(step.id)")
+                                .font(.system(size: 12, weight: .bold))
+                                .frame(width: 22, height: 22)
+                                .background(
+                                    selectedIndex == index
+                                        ? Color.accentColor
+                                        : Color.primary.opacity(0.08),
+                                    in: Circle()
+                                )
+                                .foregroundStyle(selectedIndex == index ? Color.white : Color.primary)
+                            Text(localization.text(step.titleKey))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 44)
+                        .background(
+                            selectedIndex == index
+                                ? Color.accentColor.opacity(0.09)
+                                : Color.primary.opacity(0.035),
+                            in: RoundedRectangle(cornerRadius: 10)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(
+                                    selectedIndex == index
+                                        ? Color.accentColor.opacity(0.55)
+                                        : Color.primary.opacity(0.08),
+                                    lineWidth: 1
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            switch selectedStep.content {
+            case let .screenshot(resourceName):
+                onboardingGuideScreenshot(resourceName: resourceName)
+            case .systemFunctionKey:
+                systemFunctionKeyInstruction
+            }
+        }
+        .padding(14)
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+    }
+
+    private func inputSourceSwitchStatus(for tool: OnboardingVoiceTool) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: inputSourceSwitchResult == .selected ? "checkmark.circle.fill" : "keyboard.badge.ellipsis")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(inputSourceSwitchResult == .selected ? Color.green : Color.accentColor)
+
+            Text(inputSourceSwitchStatusText(for: tool))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 8)
+
+            if inputSourceSwitchResult == .unavailable || inputSourceSwitchResult == .failed {
+                Button("onboarding.voice_tool.switch.retry") {
+                    switchToSelectedInputMethod()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func onboardingGuideScreenshot(resourceName: String) -> some View {
+        Group {
+            if let image = onboardingGuideImage(resourceName: resourceName) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 330)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    }
+            } else {
+                Text("onboarding.voice_tool.guide.image_missing")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120)
+                    .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    private var systemFunctionKeyInstruction: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: systemFunctionKeyAvailable ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(systemFunctionKeyAvailable ? Color.green : Color.orange)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(localization.text(
+                        systemFunctionKeyAvailable
+                            ? "onboarding.voice_tool.system_fn.ready"
+                            : "onboarding.voice_tool.system_fn.conflict"
+                    ))
+                    .font(.system(size: 14, weight: .semibold))
+                    Text("onboarding.voice_tool.system_fn.detail")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if !systemFunctionKeyAvailable {
+                Button("onboarding.voice_tool.system_fn.open_settings") {
+                    openKeyboardSettings()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var permissionsContent: some View {
@@ -872,6 +1067,7 @@ struct OnboardingView: View {
 
     private var capabilities: OnboardingCapabilities {
         OnboardingCapabilities(
+            systemFunctionKeyAvailable: systemFunctionKeyAvailable,
             bluetoothGranted: bluetoothAuthorization == .allowedAlways,
             inputMonitoringGranted: inputMonitoringGranted,
             accessibilityGranted: accessibilityGranted,
@@ -978,10 +1174,125 @@ struct OnboardingView: View {
     private func voiceToolIcon(_ tool: OnboardingVoiceTool) -> String {
         switch tool {
         case .doubao: return "quote.bubble.fill"
+        case .weixin: return "message.fill"
         case .typeless: return "waveform.badge.mic"
         case .other: return "ellipsis.circle.fill"
         case .unselected: return "circle"
         }
+    }
+
+    private var systemFunctionKeyAvailable: Bool {
+        systemFunctionKeyAvailableOverride ?? (systemFunctionKeyUsage == .available)
+    }
+
+    private func inputMethodGuideSteps(
+        for tool: OnboardingVoiceTool
+    ) -> [OnboardingInputMethodGuideStep] {
+        let inputMethodSteps: [OnboardingInputMethodGuideStep]
+        switch tool {
+        case .doubao:
+            inputMethodSteps = [
+                OnboardingInputMethodGuideStep(
+                    id: 1,
+                    titleKey: "onboarding.voice_tool.guide.select_doubao",
+                    content: .screenshot("doubao-menu")
+                ),
+                OnboardingInputMethodGuideStep(
+                    id: 2,
+                    titleKey: "onboarding.voice_tool.guide.configure_doubao",
+                    content: .screenshot("doubao-settings")
+                ),
+            ]
+        case .weixin:
+            inputMethodSteps = [
+                OnboardingInputMethodGuideStep(
+                    id: 1,
+                    titleKey: "onboarding.voice_tool.guide.select_weixin",
+                    content: .screenshot("weixin-input-menu")
+                ),
+                OnboardingInputMethodGuideStep(
+                    id: 2,
+                    titleKey: "onboarding.voice_tool.guide.configure_weixin",
+                    content: .screenshot("weixin-input-settings")
+                ),
+            ]
+        case .unselected, .typeless, .other:
+            return []
+        }
+
+        return inputMethodSteps + [
+            OnboardingInputMethodGuideStep(
+                id: 3,
+                titleKey: "onboarding.voice_tool.guide.release_system_fn",
+                content: .systemFunctionKey
+            ),
+            OnboardingInputMethodGuideStep(
+                id: 4,
+                titleKey: "onboarding.voice_tool.guide.release_wechat_fn",
+                content: .screenshot("weixin-app-shortcuts")
+            ),
+        ]
+    }
+
+    private func onboardingGuideImage(resourceName: String) -> NSImage? {
+        let appearance = colorScheme == .dark ? "dark" : "light"
+        guard let url = Bundle.main.url(
+            forResource: "\(resourceName)-\(appearance)",
+            withExtension: "png",
+            subdirectory: "Onboarding"
+        ) else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
+    }
+
+    private func selectVoiceTool(_ tool: OnboardingVoiceTool) {
+        settings.setOnboardingVoiceTool(tool)
+        selectedInputMethodGuideStep = 0
+        switchToSelectedInputMethod()
+        refreshSystemFunctionKeyUsage()
+    }
+
+    private func switchToSelectedInputMethod() {
+        let tool = settings.onboardingVoiceTool
+        guard tool.requiresFunctionKeySetup else {
+            inputSourceSwitchResult = .notApplicable
+            return
+        }
+        guard allowsInputSourceSwitching else {
+            inputSourceSwitchResult = .selected
+            return
+        }
+
+        if OnboardingInputSourceSwitcher.isSelected(tool) {
+            inputSourceSwitchResult = .selected
+        } else {
+            inputSourceSwitchResult = OnboardingInputSourceSwitcher.select(tool)
+        }
+        AppLogger.shared.write(
+            "ONBOARDING INPUT SOURCE tool=\(tool.rawValue) result=\(inputSourceSwitchResult.rawValue)"
+        )
+    }
+
+    private func inputSourceSwitchStatusText(for tool: OnboardingVoiceTool) -> String {
+        let toolName = localization.text(tool.titleKey)
+        let key: String
+        switch inputSourceSwitchResult {
+        case .selected:
+            key = "onboarding.voice_tool.switch.selected"
+        case .unavailable:
+            key = "onboarding.voice_tool.switch.unavailable"
+        case .failed:
+            key = "onboarding.voice_tool.switch.failed"
+        case .notApplicable:
+            key = "onboarding.voice_tool.switch.waiting"
+        }
+        return LocalizedMessage(key, arguments: [toolName]).text(using: localization)
+    }
+
+    private func refreshSystemFunctionKeyUsage() {
+        guard systemFunctionKeyAvailableOverride == nil else { return }
+        systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
     }
 
     private func refreshPermissionStates() {
@@ -993,6 +1304,9 @@ struct OnboardingView: View {
     private func prepareForStep(_ step: OnboardingStep) {
         refreshPermissionStates()
         switch step {
+        case .voiceTool:
+            switchToSelectedInputMethod()
+            refreshSystemFunctionKeyUsage()
         case .remote:
             observedRemoteButtons.removeAll()
             requestedRemoteConnectionRecovery = false
@@ -1004,6 +1318,7 @@ struct OnboardingView: View {
             voiceSamplesReceived = false
             voiceSessionEnded = false
             transcript = ""
+            switchToSelectedInputMethod()
             DispatchQueue.main.async {
                 transcriptFocused = true
             }
@@ -1151,6 +1466,13 @@ struct OnboardingView: View {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") else {
             return
         }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func openKeyboardSettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension"
+        ) else { return }
         NSWorkspace.shared.open(url)
     }
 }
