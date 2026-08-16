@@ -593,4 +593,54 @@ struct SettingsPageRegressionTests {
 
         #expect(source.contains("Self.sidebarSectionOrder.filter"))
     }
+
+    @Test func transcriptHistoryLivesInsideStatisticsAndUsesThePublicVoiceLifecycle() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let historySource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/TranscriptHistorySection.swift"
+            ),
+            encoding: .utf8
+        )
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let captureSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/TranscriptCaptureCoordinator.swift"
+            ),
+            encoding: .utf8
+        )
+
+        let statisticsPage = try #require(
+            settingsSource.components(separatedBy: "private var statisticsPage").last
+        )
+        #expect(statisticsPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
+        #expect(!settingsSource.contains("case transcripts"))
+        #expect(historySource.contains("Dictionary(grouping: model.transcriptRecords"))
+        #expect(historySource.contains("Dictionary(grouping: records"))
+        #expect(historySource.contains("$settings.localTranscriptHistoryEnabled"))
+        #expect(historySource.contains("model.copyTranscript(record)"))
+        #expect(historySource.contains("model.deleteTranscriptRecord(record)"))
+        #expect(historySource.contains("model.deleteTranscriptApplication(applicationKey: key)"))
+        #expect(historySource.contains("model.deleteAllTranscripts()"))
+
+        #expect(modelSource.contains(
+            "transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)"
+        ))
+        #expect(modelSource.contains(
+            "transcriptCaptureCoordinator.finishSession(endedAt: endedAt)"
+        ))
+        #expect(modelSource.contains("transcriptCaptureCoordinator.cancel()"))
+        #expect(!captureSource.contains("PrivateFeatureIntegration"))
+        #expect(!captureSource.contains("API"))
+    }
 }

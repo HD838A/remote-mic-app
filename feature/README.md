@@ -13,6 +13,7 @@
 | [私有功能组件集成](./private-feature-integration/) | 已完成 | 公开 App 只保留可选适配层；私有实现、资源、测试和内部文档由独立私有组件维护。 |
 | [快捷指令私有模块集成](./quick-commands-private-integration/) | 代码完成，等待人工验收 | 通过可选私有 Swift Package、Feature Flag 和邀请码提供快捷指令页面与遥控器绑定，公开构建保持独立。 |
 | [Intel Ventura 独立发行](./intel-ventura-release/) | 已完成 | Intel 使用 macOS 13、x86_64、独立安装包与更新源，并与 Apple Silicon 分别打包。 |
+| [本地语音转写记录](./local-transcript-history/) | 候选代码完成，等待人工验收 | 默认关闭；在统计页按目标 App 和日期保存、复制和可恢复删除本地转写文字，不依赖 AI 或 API Key。 |
 | [首次使用成功率优化](./first-use-success/) | 候选代码完成，等待安装验收 | 设置卡点提供单一修复动作与脱敏诊断；普通 DMG 只保留一个安装入口并保留健康驱动。 |
 | [延长语音录音与 iOS 点按录音](./extended-voice-recording/) | 部分撤回，等待人工验收 | 普通遥控器 `MIC_EXTEND` 延长方案已撤回；iOS 支持点按切换与按住说话。 |
 | [系统占用快捷键录入](./reserved-shortcut-capture/) | 等待人工验收 | 点击录入后短暂捕获被系统或其他 APP 占用的组合键，并显示明确成功或失败反馈。 |

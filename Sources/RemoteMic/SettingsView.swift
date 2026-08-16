@@ -2011,6 +2011,7 @@ struct SettingsView: View {
                 VStack(spacing: 14) {
                     statisticsPeriodContent
                     voiceSessionRankingCard
+                    TranscriptHistorySection(model: model, settings: settings)
                 }
             }
         }
@@ -3295,7 +3296,7 @@ private struct PageHeader: View {
     }
 }
 
-private struct GlassPanel<Content: View>: View {
+struct GlassPanel<Content: View>: View {
     private let content: Content
 
     init(@ViewBuilder content: () -> Content) {

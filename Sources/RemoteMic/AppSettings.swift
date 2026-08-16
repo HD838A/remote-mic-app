@@ -241,6 +241,7 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
@@ -345,6 +346,15 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
+            )
+        }
+    }
+
+    @Published var localTranscriptHistoryEnabled: Bool {
+        didSet {
+            defaults.set(
+                localTranscriptHistoryEnabled,
+                forKey: Keys.localTranscriptHistoryEnabled
             )
         }
     }
@@ -522,6 +532,9 @@ final class AppSettings: ObservableObject {
         )
         voiceFnTapModeEnabled = defaults.bool(
             forKey: Keys.voiceFnTapModeEnabled
+        )
+        localTranscriptHistoryEnabled = defaults.bool(
+            forKey: Keys.localTranscriptHistoryEnabled
         )
         continuousRecordingPowerBindingBackup = defaults
             .data(forKey: Keys.continuousRecordingPowerBindingBackup)

@@ -591,6 +591,25 @@
 "onboarding.complete.settings" = "所有选项仍可在主面板中随时调整";
 "onboarding.illustration.tagline" = "无线说话，也能随手控制";
 "onboarding.complete.illustration" = "开始使用无线麦";
+
+"common.action.delete" = "删除";
+"statistics.transcripts.title" = "语音记录";
+"statistics.transcripts.description" = "把语音转文字后实际写入目标输入框的文字保存在本机，并按应用和日期整理。";
+"statistics.transcripts.enable" = "保存语音记录";
+"statistics.transcripts.disabled" = "开启后，新的语音转文字结果会保存在本机。已有记录不会因关闭开关而删除。";
+"statistics.transcripts.empty" = "还没有语音记录。下一次完成语音输入后会显示在这里。";
+"statistics.transcripts.privacy" = "仅保存本次新增的转写文字、目标应用名称和时间；不保存音频、输入框全文、窗口标题、文档名或网址。删除内容会移到废纸篓，可手动恢复。";
+"statistics.transcripts.unknown_application" = "未知应用";
+"statistics.transcripts.copy" = "复制这条记录";
+"statistics.transcripts.delete_record" = "删除这条记录";
+"statistics.transcripts.delete_application" = "删除当前应用";
+"statistics.transcripts.delete_all" = "全部删除";
+"statistics.transcripts.delete_record_confirm.title" = "删除这条语音记录？";
+"statistics.transcripts.delete_record_confirm.message" = "记录将移到废纸篓，不会影响已经输入到目标应用中的文字。";
+"statistics.transcripts.delete_application_confirm.title" = "删除这个应用的全部记录？";
+"statistics.transcripts.delete_application_confirm.message" = "“%@”的全部语音记录将移到废纸篓。";
+"statistics.transcripts.delete_all_confirm.title" = "删除全部语音记录？";
+"statistics.transcripts.delete_all_confirm.message" = "所有应用的语音记录都将移到废纸篓。";
 "onboarding.side.permissions" = "权限检查";
 "onboarding.side.remote" = "连接检查";
 "onboarding.side.audio" = "音频检查";

@@ -72,7 +72,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isWatchRemoteConnected = false
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
+    @Published private(set) var transcriptRecords: [TranscriptRecord] = []
 
+    private let transcriptArchiveStore: TranscriptArchiveStore
+    private let transcriptArchiveOperationQueue = DispatchQueue(
+        label: "RemoteMic.transcriptArchive.operations",
+        qos: .utility
+    )
     private let audioOutput = VirtualAudioOutput()
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
         AppLogger.shared.write(message)
@@ -111,6 +117,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.handleVoiceFnTapFailure(failure)
         }
     )
+    private lazy var transcriptCaptureCoordinator = TranscriptCaptureCoordinator(
+        isEnabled: { [weak self] in
+            self?.settings.localTranscriptHistoryEnabled ?? false
+        },
+        onCapture: { [weak self] capture in
+            self?.archiveCapturedTranscript(capture)
+        }
+    )
+    private var transcriptHistoryToggleCancellable: AnyCancellable?
     private var testToneGeneration = 0
     private var phoneVoiceFunctionKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
@@ -171,11 +186,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         settings: AppSettings = AppSettings(),
         initialAudioDevices: [AudioDeviceInfo] = [],
         privateFeature: PrivateFeatureIntegration = PrivateFeatureIntegration(),
-        macroFeature: MacroFeatureIntegration = MacroFeatureIntegration()
+        macroFeature: MacroFeatureIntegration = MacroFeatureIntegration(),
+        transcriptArchiveStore: TranscriptArchiveStore = TranscriptArchiveStore()
     ) {
         self.settings = settings
         self.privateFeature = privateFeature
         self.macroFeature = macroFeature
+        self.transcriptArchiveStore = transcriptArchiveStore
         audioDevices = initialAudioDevices
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
@@ -387,6 +404,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self?.receivePhoneAudio(samples, source: .web)
             }
         }
+        transcriptHistoryToggleCancellable = settings.$localTranscriptHistoryEnabled
+            .removeDuplicates()
+            .sink { [weak self] isEnabled in
+                guard let self else { return }
+                if isEnabled {
+                    refreshTranscriptRecords()
+                } else {
+                    transcriptCaptureCoordinator.cancel()
+                }
+            }
     }
 
     func startIfNeeded() {
@@ -411,6 +438,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         privateFeature.stop()
         macroFeature.stop()
         preferredInputSourceMonitor.stop()
+        transcriptCaptureCoordinator.cancel()
         guard started else { return }
         started = false
         completedUpdateHIDRecoveryWorkItem?.cancel()
@@ -464,6 +492,45 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self.terminationObserver = nil
         }
         AppLogger.shared.write("APP STOP")
+    }
+
+    func refreshTranscriptRecords() {
+        transcriptArchiveOperationQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                let records = try transcriptArchiveStore.loadAll()
+                DispatchQueue.main.async { [weak self] in
+                    self?.transcriptRecords = records
+                }
+            } catch {
+                AppLogger.shared.write("TRANSCRIPT ARCHIVE load_failed")
+            }
+        }
+    }
+
+    @discardableResult
+    func copyTranscript(_ record: TranscriptRecord) -> Bool {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        return pasteboard.writeObjects([record.originalTranscript as NSString])
+    }
+
+    func deleteTranscriptRecord(_ record: TranscriptRecord) {
+        updateTranscriptArchive {
+            try self.transcriptArchiveStore.deleteRecord(id: record.id)
+        }
+    }
+
+    func deleteTranscriptApplication(applicationKey: String) {
+        updateTranscriptArchive {
+            try self.transcriptArchiveStore.deleteApplication(applicationKey: applicationKey)
+        }
+    }
+
+    func deleteAllTranscripts() {
+        updateTranscriptArchive {
+            try self.transcriptArchiveStore.deleteAll()
+        }
     }
 
     static func shouldRecoverHIDAfterCompletedUpdate(
@@ -2147,6 +2214,38 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
     }
 
+    private func archiveCapturedTranscript(_ capture: CapturedTranscript) {
+        let transcript = capture.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !transcript.isEmpty else { return }
+        let record = TranscriptRecord(
+            sessionID: capture.sessionID,
+            startedAt: capture.startedAt,
+            endedAt: capture.endedAt,
+            applicationName: capture.applicationName,
+            bundleIdentifier: capture.bundleIdentifier,
+            source: capture.source,
+            originalTranscript: transcript
+        )
+        updateTranscriptArchive {
+            try self.transcriptArchiveStore.append(record)
+        }
+    }
+
+    private func updateTranscriptArchive(_ operation: @escaping () throws -> Void) {
+        transcriptArchiveOperationQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                try operation()
+                let records = try transcriptArchiveStore.loadAll()
+                DispatchQueue.main.async { [weak self] in
+                    self?.transcriptRecords = records
+                }
+            } catch {
+                AppLogger.shared.write("TRANSCRIPT ARCHIVE update_failed")
+            }
+        }
+    }
+
     private func beginVoiceSessionIfNeeded() {
         guard !isStreaming else { return }
         privateFeature.startVoiceSession()
@@ -2160,13 +2259,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         settings.recordButtonPress(control: .voice, source: source, at: startedAt)
         voiceSessionStartedAt = startedAt
         voiceSessionUsageSource = source
+        transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)
         isStreaming = true
     }
 
     private func endVoiceSessionIfNeeded(flushAudio: Bool = true) {
         guard !bluetoothVoiceActive, activeMobileVoiceSource == nil, isStreaming else { return }
+        let endedAt = Date()
         if let voiceSessionStartedAt {
-            let endedAt = Date()
             settings.recordVoiceDuration(
                 endedAt.timeIntervalSince(voiceSessionStartedAt),
                 startedAt: voiceSessionStartedAt,
@@ -2182,6 +2282,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             audioOutput.endSession()
         }
         privateFeature.finishVoiceSession()
+        transcriptCaptureCoordinator.finishSession(endedAt: endedAt)
     }
 
     private var currentVoiceUsageSource: UsageEventSource {

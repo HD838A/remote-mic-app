@@ -591,6 +591,25 @@
 "onboarding.complete.settings" = "Every option remains adjustable in the main panel";
 "onboarding.illustration.tagline" = "Speak wirelessly. Control instantly.";
 "onboarding.complete.illustration" = "Start using SayAll";
+
+"common.action.delete" = "Delete";
+"statistics.transcripts.title" = "Voice History";
+"statistics.transcripts.description" = "Save the text actually inserted by voice transcription on this Mac, organized by app and date.";
+"statistics.transcripts.enable" = "Save Voice History";
+"statistics.transcripts.disabled" = "Turn this on to save new voice transcription results locally. Existing history is kept when this switch is off.";
+"statistics.transcripts.empty" = "No voice history yet. Your next completed voice input will appear here.";
+"statistics.transcripts.privacy" = "Only the newly inserted transcript, target app name, and time are saved. Audio, full field contents, window titles, document names, and URLs are not stored. Deleted history is moved to the Trash for recovery.";
+"statistics.transcripts.unknown_application" = "Unknown App";
+"statistics.transcripts.copy" = "Copy this entry";
+"statistics.transcripts.delete_record" = "Delete this entry";
+"statistics.transcripts.delete_application" = "Delete Current App";
+"statistics.transcripts.delete_all" = "Delete All";
+"statistics.transcripts.delete_record_confirm.title" = "Delete this voice entry?";
+"statistics.transcripts.delete_record_confirm.message" = "The entry will be moved to the Trash. Text already inserted into the target app is not affected.";
+"statistics.transcripts.delete_application_confirm.title" = "Delete all history for this app?";
+"statistics.transcripts.delete_application_confirm.message" = "All voice history for “%@” will be moved to the Trash.";
+"statistics.transcripts.delete_all_confirm.title" = "Delete all voice history?";
+"statistics.transcripts.delete_all_confirm.message" = "Voice history for every app will be moved to the Trash.";
 "onboarding.side.permissions" = "Permission Check";
 "onboarding.side.remote" = "Connection Check";
 "onboarding.side.audio" = "Audio Check";
