@@ -53,6 +53,8 @@ jobs:
       EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
       PARALLEL_RELEASE_VARIANTS: 1
       PARALLEL_PACKAGE_NOTARIZATION: 1
+      RELEASE_STAGE_TIMEOUTS: 1
+      SIGNED_RELEASE_TIMEOUT_SECONDS: 590
       REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
       EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
 
@@ -138,7 +140,11 @@ jobs:
           ./scripts/verify-preview-branch.sh
 
       - name: Sign, notarize, staple, and verify both variants
-        run: ./scripts/package-macos-release-in-actions.sh
+        timeout-minutes: 10
+        run: |
+          ./scripts/run-release-stage.sh \
+            all signed-release "$SIGNED_RELEASE_TIMEOUT_SECONDS" -- \
+            ./scripts/package-macos-release-in-actions.sh
 
       - name: Upload signed release packages
         uses: actions/upload-artifact@v4

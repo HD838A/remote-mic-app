@@ -14,6 +14,11 @@ UNINSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_UNINSTALL_PACKAGE_NAME"
 LEGACY_UNINSTALL_PACKAGE="$OUTPUT_DIR/卸载豆包兼容麦克风.pkg"
 INSTALLER_SIGNING_IDENTITY="${INSTALLER_SIGNING_IDENTITY:--}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
+RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
+RELEASE_PKGBUILD_TIMEOUT_SECONDS="${RELEASE_PKGBUILD_TIMEOUT_SECONDS:-90}"
+RELEASE_PRODUCTBUILD_TIMEOUT_SECONDS="${RELEASE_PRODUCTBUILD_TIMEOUT_SECONDS:-90}"
+RELEASE_PRODUCTSIGN_TIMEOUT_SECONDS="${RELEASE_PRODUCTSIGN_TIMEOUT_SECONDS:-45}"
+RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
 INSTALL_SCRIPTS="$WORK_DIR/install-scripts"
@@ -40,6 +45,25 @@ case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
   *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
 esac
+case "$RELEASE_STAGE_TIMEOUTS" in
+  0|1) ;;
+  *) print -u2 "RELEASE_STAGE_TIMEOUTS must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" && ! -x "$RELEASE_STAGE_RUNNER" ]]; then
+  print -u2 "release stage runner is unavailable"
+  exit 1
+fi
+
+run_release_stage() {
+  local stage="$1"
+  local timeout_seconds="$2"
+  shift 2
+  if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" ]]; then
+    "$RELEASE_STAGE_RUNNER" "$RELEASE_VARIANT" "$stage" "$timeout_seconds" -- "$@"
+  else
+    "$@"
+  fi
+}
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$INSTALLER_SIGNING_IDENTITY" == "-" ]]; then
   print -u2 "Developer ID Installer signing is required"
   exit 1
@@ -76,7 +100,8 @@ if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
   INSTALL_PRODUCT_SIGNING_ARGS=(--sign "$INSTALLER_SIGNING_IDENTITY")
 fi
 
-/usr/bin/pkgbuild \
+run_release_stage installer-component-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
+  /usr/bin/pkgbuild \
   --root "$PAYLOAD_ROOT" \
   --scripts "$INSTALL_SCRIPTS" \
   --identifier "com.hd838a.RemoteMic.installer" \
@@ -95,14 +120,16 @@ if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
     rg -q 'Status: signed by a developer certificate issued by Apple for distribution'
 fi
 
-/usr/bin/productbuild \
+run_release_stage installer-productbuild "$RELEASE_PRODUCTBUILD_TIMEOUT_SECONDS" \
+  /usr/bin/productbuild \
   --distribution "$DISTRIBUTION" \
   --resources "$DISTRIBUTION_RESOURCES" \
   --package-path "$WORK_DIR" \
   "${INSTALL_PRODUCT_SIGNING_ARGS[@]}" \
   "$INSTALL_PACKAGE"
 
-/usr/bin/pkgbuild \
+run_release_stage uninstaller-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
+  /usr/bin/pkgbuild \
   --nopayload \
   --scripts "$UNINSTALL_SCRIPTS" \
   --identifier "com.hd838a.MiRemoteV2ch.uninstaller" \
@@ -111,7 +138,8 @@ fi
 
 if [[ "$INSTALLER_SIGNING_IDENTITY" != "-" ]]; then
   test -x /usr/bin/productsign
-  /usr/bin/productsign --sign "$INSTALLER_SIGNING_IDENTITY" \
+  run_release_stage uninstaller-productsign "$RELEASE_PRODUCTSIGN_TIMEOUT_SECONDS" \
+    /usr/bin/productsign --sign "$INSTALLER_SIGNING_IDENTITY" \
     "$UNSIGNED_UNINSTALL_PACKAGE" "$UNINSTALL_PACKAGE"
 else
   /bin/mv "$UNSIGNED_UNINSTALL_PACKAGE" "$UNINSTALL_PACKAGE"

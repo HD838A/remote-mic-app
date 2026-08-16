@@ -16,6 +16,10 @@ UNINSTALL_PACKAGE="$RELEASE_UNINSTALL_PACKAGE_NAME"
 BUILD_COMPONENTS="${BUILD_COMPONENTS:-1}"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
+RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
+RELEASE_DMG_BUILD_TIMEOUT_SECONDS="${RELEASE_DMG_BUILD_TIMEOUT_SECONDS:-90}"
+RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
+RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 
 case "$BUILD_COMPONENTS" in
   0|1) ;;
@@ -25,6 +29,25 @@ case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
   *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
 esac
+case "$RELEASE_STAGE_TIMEOUTS" in
+  0|1) ;;
+  *) print -u2 "RELEASE_STAGE_TIMEOUTS must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" && ! -x "$RELEASE_STAGE_RUNNER" ]]; then
+  print -u2 "release stage runner is unavailable"
+  exit 1
+fi
+
+run_release_stage() {
+  local stage="$1"
+  local timeout_seconds="$2"
+  shift 2
+  if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" ]]; then
+    "$RELEASE_STAGE_RUNNER" "$RELEASE_VARIANT" "$stage" "$timeout_seconds" -- "$@"
+  else
+    "$@"
+  fi
+}
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; then
   print -u2 "Developer ID Application signing is required"
   exit 1
@@ -58,7 +81,7 @@ fi
 ditto --norsrc --noqtn --noacl \
   "$OUTPUT_DIR/$INSTALL_PACKAGE" "$STAGING/$INSTALL_PACKAGE"
 
-hdiutil create \
+run_release_stage dmg-hdiutil-create "$RELEASE_DMG_BUILD_TIMEOUT_SECONDS" hdiutil create \
   -volname "$DISPLAY_NAME $VERSION $RELEASE_LABEL" \
   -srcfolder "$STAGING" \
   -fs "HFS+" \
@@ -67,7 +90,8 @@ hdiutil create \
   "$DMG"
 
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
-  codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG"
+  run_release_stage dmg-codesign "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+    codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG"
 fi
 
 (

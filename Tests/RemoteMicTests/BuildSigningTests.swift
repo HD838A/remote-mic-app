@@ -310,6 +310,23 @@ struct BuildSigningTests {
             encoding: .utf8
         )
 
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let driverPackageSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/build-doubao-driver-pkg.sh"
+            ),
+            encoding: .utf8
+        )
+        let stageRunnerSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/run-release-stage.sh"
+            ),
+            encoding: .utf8
+        )
+
         #expect(regressionSource.contains("RELEASE PIPELINE OPTIMIZATION TEST PASS"))
         #expect(regressionSource.contains("mismatched private dependency pins unexpectedly passed"))
         #expect(regressionSource.contains("candidate verification unexpectedly passed"))
@@ -320,10 +337,34 @@ struct BuildSigningTests {
         #expect(releaseWorkflowSource.contains("REQUIRE_PREVIEW_RECORDING_PR: 1"))
         #expect(releaseWorkflowSource.contains("PARALLEL_RELEASE_VARIANTS: 1"))
         #expect(releaseWorkflowSource.contains("PARALLEL_PACKAGE_NOTARIZATION: 1"))
+        let signedStep = try #require(
+            releaseWorkflowSource.components(
+                separatedBy: "- name: Sign, notarize, staple, and verify both variants"
+            ).last?.components(separatedBy: "- name: Upload signed release packages").first
+        )
+        #expect(signedStep.contains("timeout-minutes: 10"))
+        #expect(releaseWorkflowSource.contains("SIGNED_RELEASE_TIMEOUT_SECONDS: 590"))
+        #expect(signedStep.contains("run-release-stage.sh"))
         #expect(!releaseWorkflowSource.contains("Run Apple Silicon release gates"))
         #expect(!releaseWorkflowSource.contains("Run Intel Ventura release gates"))
         #expect(reconciliationSource.contains("gh pr ready"))
         #expect(notarizeSource.contains("REMOTE_MIC_BUILD_SCRATCH_PATH"))
+        #expect(notarizeSource.contains("REMOTE_MIC_BUILD_CACHE_PATH"))
+        #expect(notarizeSource.contains("app-notary"))
+        #expect(notarizeSource.contains("driver-package-build"))
+        #expect(notarizeSource.contains("installer-pkg-notary"))
+        #expect(notarizeSource.contains("uninstaller-pkg-notary"))
+        #expect(notarizeSource.contains("dmg-notary"))
+        #expect(buildSource.contains("--cache-path \"$BUILD_CACHE_PATH\""))
+        #expect(buildSource.contains("app-codesign-installer-xpc"))
+        #expect(driverPackageSource.contains("installer-component-pkgbuild"))
+        #expect(driverPackageSource.contains("installer-productbuild"))
+        #expect(driverPackageSource.contains("uninstaller-pkgbuild"))
+        #expect(driverPackageSource.contains("uninstaller-productsign"))
+        #expect(stageRunnerSource.contains("RELEASE STAGE START"))
+        #expect(stageRunnerSource.contains("RELEASE STAGE HEARTBEAT"))
+        #expect(stageRunnerSource.contains("RELEASE STAGE TIMEOUT"))
+        #expect(stageRunnerSource.contains("exit 124"))
         let buildIndex = try #require(notarizeSource.range(of: "\"$ROOT/scripts/build-app.sh\""))
         let sparkleToolCheckIndex = try #require(
             notarizeSource.range(of: "test -x \"$GENERATE_APPCAST\"")
