@@ -8,6 +8,7 @@ PLIST="$ROOT/Resources/Info.plist"
 REPOSITORY="HD838A/remote-mic-app"
 MODE="${1:-}"
 DRY_RUN="${DRY_RUN:-0}"
+PUBLIC_DOWNLOAD_CONCURRENCY="${PUBLIC_DOWNLOAD_CONCURRENCY:-4}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
 PLIST_VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 PLIST_BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
@@ -42,6 +43,11 @@ case "$DRY_RUN" in
   0|1) ;;
   *) print -u2 "DRY_RUN must be 0 or 1"; exit 1 ;;
 esac
+if ! print -r -- "$PUBLIC_DOWNLOAD_CONCURRENCY" | rg -q '^[1-9][0-9]*$' || \
+    (( PUBLIC_DOWNLOAD_CONCURRENCY > 8 )); then
+  print -u2 "PUBLIC_DOWNLOAD_CONCURRENCY must be between 1 and 8"
+  exit 1
+fi
 if [[ "$EXPECTED_DEVELOPER_TEAM_ID" != "L3QHLDRPAY" ]]; then
   print -u2 "refusing to publish for an unexpected Apple Developer Team"
   exit 1
@@ -310,30 +316,106 @@ verify_promotion_source() {
   fi
 }
 
+wait_for_download_batch() {
+  local label="$1"
+  shift
+  local download_pid failed=0
+  for download_pid in "$@"; do
+    if ! wait "$download_pid"; then
+      failed=1
+    fi
+  done
+  if (( failed != 0 )); then
+    print -u2 "$label asset download or comparison failed"
+    return 1
+  fi
+}
+
+download_asset() {
+  local asset_name="$1"
+  local destination_dir="$2"
+  local download_prefix="$3"
+  local label="$4"
+  local destination_file="$destination_dir/$asset_name"
+
+  curl --fail --silent --show-error --location \
+    --retry 5 --retry-all-errors \
+    "$download_prefix$asset_name" \
+    --output "$destination_file"
+  print "$label DOWNLOAD PASS: $asset_name"
+}
+
+download_assets_from_manifest() {
+  local manifest_file="$1"
+  local destination_dir="$2"
+  local download_prefix="$3"
+  local label="$4"
+  local asset_name
+  local -a batch_pids=()
+
+  for asset_name in "${(@f)$(<"$manifest_file")}"; do
+    [[ -n "$asset_name" ]] || continue
+    download_asset "$asset_name" "$destination_dir" "$download_prefix" "$label" &
+    batch_pids+=("$!")
+    if (( ${#batch_pids[@]} >= PUBLIC_DOWNLOAD_CONCURRENCY )); then
+      wait_for_download_batch "$label" "${batch_pids[@]}"
+      batch_pids=()
+    fi
+  done
+  if (( ${#batch_pids[@]} != 0 )); then
+    wait_for_download_batch "$label" "${batch_pids[@]}"
+  fi
+}
+
+download_and_compare_assets() {
+  local source_dir="$1"
+  local destination_dir="$2"
+  local download_prefix="$3"
+  local label="$4"
+  local manifest_file="$WORK_DIR/$label-assets.txt"
+  local source_file asset_name downloaded_file source_sha downloaded_sha
+
+  /bin/mkdir -p "$destination_dir"
+  test "$(/usr/bin/find "$destination_dir" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "0"
+  : > "$manifest_file"
+  for source_file in "$source_dir"/*(.N); do
+    print -r -- "${source_file:t}" >> "$manifest_file"
+  done
+  LC_ALL=C /usr/bin/sort -o "$manifest_file" "$manifest_file"
+  test "$(/usr/bin/wc -l < "$manifest_file" | /usr/bin/tr -d ' ')" = "17"
+
+  download_assets_from_manifest "$manifest_file" "$destination_dir" \
+    "$download_prefix" "$label"
+
+  for source_file in "$source_dir"/*; do
+    asset_name="${source_file:t}"
+    downloaded_file="$destination_dir/$asset_name"
+    test -f "$downloaded_file"
+    /usr/bin/cmp -s "$source_file" "$downloaded_file"
+    source_sha="$(/usr/bin/shasum -a 256 "$source_file" | /usr/bin/awk '{ print $1 }')"
+    downloaded_sha="$(/usr/bin/shasum -a 256 "$downloaded_file" | /usr/bin/awk '{ print $1 }')"
+    test "$source_sha" = "$downloaded_sha"
+    print "$label COMPARE PASS: $asset_name $downloaded_sha"
+  done
+  test "$(/usr/bin/find "$destination_dir" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "17"
+}
+
 download_release_assets() {
-  /bin/rm -rf -- "$DOWNLOAD_DIR"
+  local manifest_file="$WORK_DIR/github-origin-assets.txt"
   /bin/mkdir -p "$DOWNLOAD_DIR"
-  gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir "$DOWNLOAD_DIR"
+  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "0"
+  gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+    --jq '.assets[].name' | LC_ALL=C /usr/bin/sort > "$manifest_file"
+  test "$(/usr/bin/wc -l < "$manifest_file" | /usr/bin/tr -d ' ')" = "17"
+  download_assets_from_manifest "$manifest_file" "$DOWNLOAD_DIR" \
+    "$GITHUB_DOWNLOAD_PREFIX" github-origin
+  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "17"
 }
 
 verify_cdn_assets() {
   local source_dir="$1"
-  local source_file asset_name downloaded_file expected_count
-  /bin/rm -rf -- "$CDN_DOWNLOAD_DIR"
-  /bin/mkdir -p "$CDN_DOWNLOAD_DIR"
-
-  expected_count=0
-  for source_file in "$source_dir"/*; do
-    asset_name="${source_file:t}"
-    downloaded_file="$CDN_DOWNLOAD_DIR/$asset_name"
-    curl --fail --silent --show-error --location \
-      --retry 5 --retry-all-errors \
-      "$CDN_DOWNLOAD_PREFIX$asset_name" \
-      --output "$downloaded_file"
-    /usr/bin/cmp -s "$source_file" "$downloaded_file"
-    expected_count=$((expected_count + 1))
-  done
-  test "$(/usr/bin/find "$CDN_DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "$expected_count"
+  download_and_compare_assets "$source_dir" "$CDN_DOWNLOAD_DIR" \
+    "$CDN_DOWNLOAD_PREFIX" cdn
 
   local dmg_name="Remote-Mic-$VERSION.dmg"
   local header_file="$WORK_DIR/cdn-dmg-headers.txt"
@@ -423,20 +505,19 @@ verify_downloaded_candidate() {
 }
 
 download_and_compare_local_candidate() {
-  download_release_assets
-  local expected downloaded
-  for expected in "$STAGING_DIR"/*; do
-    downloaded="$DOWNLOAD_DIR/${expected:t}"
-    test -f "$downloaded"
-    /usr/bin/cmp -s "$expected" "$downloaded"
-  done
-  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "17"
-  curl -fsSL "${GITHUB_DOWNLOAD_PREFIX}appcast.xml" -o "$WORK_DIR/tag-appcast.xml"
-  /usr/bin/cmp -s "$STAGING_DIR/appcast.xml" "$WORK_DIR/tag-appcast.xml"
-  curl -fsSL "${GITHUB_DOWNLOAD_PREFIX}appcast-intel.xml" -o "$WORK_DIR/tag-appcast-intel.xml"
-  /usr/bin/cmp -s "$STAGING_DIR/appcast-intel.xml" "$WORK_DIR/tag-appcast-intel.xml"
+  local github_pid cdn_pid github_status=0 cdn_status=0
+  download_and_compare_assets "$STAGING_DIR" "$DOWNLOAD_DIR" \
+    "$GITHUB_DOWNLOAD_PREFIX" github-origin &
+  github_pid="$!"
+  verify_cdn_assets "$STAGING_DIR" &
+  cdn_pid="$!"
+  wait "$github_pid" || github_status="$?"
+  wait "$cdn_pid" || cdn_status="$?"
+  if (( github_status != 0 || cdn_status != 0 )); then
+    print -u2 "public release asset verification failed: github=$github_status cdn=$cdn_status"
+    return 1
+  fi
   verify_downloaded_candidate
-  verify_cdn_assets "$STAGING_DIR"
 }
 
 generate_stable_promotion() {
