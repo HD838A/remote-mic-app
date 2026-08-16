@@ -915,6 +915,28 @@ struct RemoteButtonsTests {
         #expect(AppSettings.defaultBindings[.tv] == .appSwitcher)
     }
 
+    @Test func buttonProfileEditingConsumesPhysicalButtonsWithoutExecutingMappings() {
+        #expect(!ButtonProfileEditingRoutingPolicy.shouldPerformAction(isPageActive: true))
+        #expect(ButtonProfileEditingRoutingPolicy.shouldPerformAction(isPageActive: false))
+    }
+
+    @Test func buttonProfileHostActionPayloadRoundTripsConfiguredActions() throws {
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 8,
+            modifierFlags: [.command],
+            keyLabel: "C"
+        )
+        let configured = ConfiguredButtonAction(
+            action: .customShortcut,
+            shortcut: shortcut,
+            applicationProfileID: UUID()
+        )
+        let payload = try #require(ButtonProfileHostActionCodec.encode(configured))
+
+        #expect(ButtonProfileHostActionCodec.decode(payload) == configured)
+        #expect(ButtonProfileHostActionCodec.decode(Data("invalid".utf8)) == nil)
+    }
+
     @Test func powerDefaultRemainsEscapeWhileExperimentIsUnavailable() {
         #expect(AppSettings.defaultBindings[.power] == .escape)
     }
@@ -1204,7 +1226,8 @@ struct RemoteButtonsTests {
             encoding: .utf8
         )
         #expect(source.contains("settings.registerHIDRemote(fingerprint: fingerprint)"))
-        #expect(source.contains("return (resolvedProfileID, true)"))
+        #expect(source.contains("ButtonProfileEditingRoutingPolicy.shouldPerformAction"))
+        #expect(ButtonProfileEditingRoutingPolicy.shouldPerformAction(isPageActive: false))
         #expect(!source.contains("pendingHIDBindingProfileID"))
     }
 

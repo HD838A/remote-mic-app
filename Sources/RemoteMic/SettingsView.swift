@@ -11,6 +11,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
     case privateFeature
     case macros
+    case buttonProfiles
     case mapping
     case statistics
     case permissions
@@ -23,6 +24,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: return "settings.section.connection"
         case .privateFeature: return ""
         case .macros: return ""
+        case .buttonProfiles: return ""
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
         case .permissions: return "settings.section.permissions"
@@ -35,6 +37,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: return "link"
         case .privateFeature: return "sparkles"
         case .macros: return "command.square"
+        case .buttonProfiles: return "rectangle.3.group"
         case .mapping: return "keyboard"
         case .statistics: return "chart.bar.xaxis"
         case .permissions: return "shield.lefthalf.filled"
@@ -235,7 +238,16 @@ struct SettingsView: View {
             minWidth: minimumContentSize.width,
             minHeight: minimumContentSize.height
         )
-        .onAppear(perform: refreshPermissionStates)
+        .onAppear {
+            refreshPermissionStates()
+            macroFeature.setButtonProfilesPageActive(selectedSection == .buttonProfiles)
+        }
+        .onChange(of: selectedSection) { section in
+            macroFeature.setButtonProfilesPageActive(section == .buttonProfiles)
+        }
+        .onDisappear {
+            macroFeature.setButtonProfilesPageActive(false)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             resumeCustomMappingIfPermissionsGranted()
@@ -246,7 +258,7 @@ struct SettingsView: View {
             }
         }
         .onReceive(macroFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
-            if !isVisible, selectedSection == .macros {
+            if !isVisible, selectedSection == .macros || selectedSection == .buttonProfiles {
                 selectedSection = .about
             }
         }
@@ -419,7 +431,7 @@ struct SettingsView: View {
         SettingsSection.allCases.filter {
             switch $0 {
             case .privateFeature: privateFeature.isFeatureVisible
-            case .macros: macroFeature.isFeatureVisible
+            case .macros, .buttonProfiles: macroFeature.isFeatureVisible
             default: true
             }
         }
@@ -432,7 +444,7 @@ struct SettingsView: View {
             VStack(spacing: 7) {
                 Image(systemName: sectionSystemImage(section))
                     .font(.system(size: 21, weight: .semibold))
-                if section == .privateFeature || section == .macros {
+                if section == .privateFeature || section == .macros || section == .buttonProfiles {
                     Text(sectionTitle(section))
                         .font(.system(size: 13, weight: .semibold))
                 } else {
@@ -464,8 +476,18 @@ struct SettingsView: View {
             }
         case .macros:
             if macroFeature.isFeatureVisible {
-                macroFeature.settingsView(
+                macroFeature.actionSequencesView(
                     selectedRemoteProfileID: settings.selectedRemoteProfileID
+                )
+            } else {
+                aboutPage
+            }
+        case .buttonProfiles:
+            if macroFeature.isFeatureVisible {
+                macroFeature.buttonProfilesView(
+                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                    settings: settings,
+                    localization: localization
                 )
             } else {
                 aboutPage
@@ -2435,6 +2457,7 @@ struct SettingsView: View {
         switch section {
         case .privateFeature: privateFeature.sectionTitle
         case .macros: macroFeature.sectionTitle
+        case .buttonProfiles: macroFeature.buttonProfilesSectionTitle
         default: ""
         }
     }
@@ -2443,6 +2466,7 @@ struct SettingsView: View {
         switch section {
         case .privateFeature: privateFeature.sectionSystemImage
         case .macros: macroFeature.sectionSystemImage
+        case .buttonProfiles: macroFeature.buttonProfilesSectionSystemImage
         default: section.systemImage
         }
     }

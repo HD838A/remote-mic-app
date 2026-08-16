@@ -1010,11 +1010,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self?.performExternalConfiguredAction(configured) ?? false
             },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
-                self?.macroFeature.executeBoundMacro(
+                guard let self else { return false }
+                return self.macroFeature.executeBoundAction(
                     profileID: profileID,
                     button: button,
-                    trigger: trigger
-                ) == true
+                    trigger: trigger,
+                    hostActionPerformer: self.performButtonProfileHostAction
+                )
             },
             hasOverrideBinding: { [weak self] profileID, button, trigger in
                 self?.macroFeature.hasActiveBinding(
@@ -1039,6 +1041,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 return profileID.map { ($0, true) }
             }
             self.lastRemoteButtonPress = button
+            self.macroFeature.noteButtonInteraction(button: button)
             let existingProfileID = profileID
                 ?? self.settings.profileID(forHIDFingerprint: fingerprint)
             let resolvedProfileID = existingProfileID
@@ -1057,7 +1060,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 control: .remoteButton(button),
                 source: .bluetoothRemote
             )
-            return (resolvedProfileID, true)
+            return (
+                resolvedProfileID,
+                shouldPerformAction: ButtonProfileEditingRoutingPolicy.shouldPerformAction(
+                    isPageActive: self.macroFeature.isButtonProfilesPageActive
+                )
+            )
         }
         monitor.onInternalAction = { [weak self] profileID, action in
             guard let self else { return }
@@ -1700,10 +1708,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         trigger: ButtonTrigger,
         source: UsageEventSource
     ) -> Bool {
-        if macroFeature.executeBoundMacro(
+        if macroFeature.executeBoundAction(
             profileID: settings.selectedRemoteProfileID,
             button: button,
-            trigger: trigger
+            trigger: trigger,
+            hostActionPerformer: performButtonProfileHostAction
         ) {
             settings.recordButtonPress(control: .remoteButton(button), source: source)
             AppLogger.shared.write(
@@ -1757,6 +1766,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
         }
         return handled
+    }
+
+    private func performButtonProfileHostAction(_ payload: Data) -> Bool {
+        guard let configured = ButtonProfileHostActionCodec.decode(payload) else {
+            AppLogger.shared.write("BUTTON PROFILE host_action ignored reason=invalid_payload")
+            return false
+        }
+        if configured.action.isAppInternal {
+            return performInternalAction(configured.action)
+        }
+        return performExternalConfiguredAction(configured)
     }
 
     private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {

@@ -2,15 +2,17 @@
 
 ## 实现位置
 
-- 私有模块 `RemoteMicButtonProfiles.swift`：格式 2 模型、版本 1 迁移和前台 App 监听。
-- 私有模块 `RemoteMicMacroController.swift`：方案管理、当前选择、App 规则、持久化和运行时解析。
+- 私有模块 `RemoteMicButtonProfiles.swift`：格式 3 类型化绑定模型、格式 1/2 迁移和前台 App 监听。
+- 私有模块控制层：方案管理、当前选择、App 规则、持久化和运行时解析。
 - 私有模块 `RemoteMicButtonProfilesView.swift`：方案列表、遥控器绑定、手动/自动模式和 App 规则页面。
-- 私有模块 `RemoteMicMacroView.swift`：组合动作与键位方案的并列分段入口。
-- 公开宿主无业务代码改动，继续复用 `MacroFeatureIntegration` 的可选窄接口。
+- 私有模块 `RemoteMicMacroView.swift` 与 `RemoteMicButtonProfilesView.swift`：拆成独立组合动作页和键位方案页；动作按基础、系统媒体、自定义、App 和组合动作平铺分组。
+- 公开宿主 `SettingsView.swift`：增加独立“键位方案”侧边栏和页面激活状态。
+- 公开宿主 `MacroFeatureIntegration.swift`：提供宿主动作目录、类型化 payload 编解码、实体按键通知和编辑态路由状态。
+- 公开宿主 `BridgeAppModel.swift`：执行宿主动作绑定，并在键位方案页内把实体按键切换为只选择不执行。
 
 ## 兼容策略
 
-旧格式只在成功解码后迁移。写入格式 2 前保留 `button-bindings-v1-backup.json`，迁移后的方案直接物化最终绑定，不在每次按键时叠加旧通用与精确配置。
+旧格式只在成功解码后迁移。写入格式 3 前保留旧文件备份；格式 2 的组合动作引用转换为 `.macro`，新宿主动作使用 `.host`，迁移后的方案直接物化最终绑定，不在每次按键时叠加旧通用与精确配置。
 
 删除非默认方案前保存快照；删除被 App 规则或当前选择引用的方案后，规则被移除并按当前模式安全回退。组合动作保存新版本或删除时同步更新所有方案中的引用。
 

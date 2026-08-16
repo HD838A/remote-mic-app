@@ -547,9 +547,82 @@ struct SettingsPageRegressionTests {
         #expect(integration.contains("#if canImport(SayAllMacroRemoteMic)"))
         #expect(integration.contains("feature.executeBoundMacro"))
         #expect(integration.contains("feature.hasActiveBinding"))
-        #expect(settings.contains("macroFeature.settingsView"))
+        #expect(settings.contains("macroFeature.actionSequencesView"))
+        #expect(settings.contains("macroFeature.buttonProfilesView"))
         #expect(settings.contains("macroFeature.enrollmentView"))
         #expect(!settings.contains("macro_buttons"))
         #expect(!settings.contains("EarlyAccessController"))
+    }
+
+    @Test func buttonProfilesUseAnIndependentSidebarAndHIDSelectionRoute() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let integration = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MacroFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+        let settings = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let model = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settings.contains("case buttonProfiles"))
+        #expect(settings.contains("macroFeature.buttonProfilesView"))
+        #expect(settings.contains("macroFeature.actionSequencesView"))
+        #expect(integration.contains("feature.noteButtonInteraction"))
+        #expect(integration.contains("isButtonProfilesPageActive"))
+        #expect(integration.contains("ButtonAction.pickerActions"))
+        #expect(integration.contains("settings.customApplicationProfiles"))
+        #expect(integration.contains("configured.action == .customShortcut"))
+        #expect(model.contains("macroFeature.noteButtonInteraction(button: button)"))
+        #expect(model.contains("ButtonProfileEditingRoutingPolicy.shouldPerformAction"))
+        #expect(model.contains("macroFeature.executeBoundAction"))
+        #expect(model.contains("ButtonProfileHostActionCodec.decode"))
+    }
+
+    @Test func buttonProfileCatalogKeepsEveryAvailableBuiltInAction() {
+        #if canImport(SayAllMacroRemoteMic)
+        let suiteName = "ButtonProfileCatalogTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let localization = LocalizationStore(settings: settings)
+        let integration = MacroFeatureIntegration(localeIdentifier: "zh-Hans")
+
+        let catalogActionIDs = Set(
+            integration.hostActionSections(settings: settings, localization: localization)
+                .flatMap(\.actions)
+                .map(\.id)
+        )
+        let expectedActionIDs = Set(
+            ButtonAction.pickerActions(
+                installedBundleIdentifiers: PresetApplication.installedBundleIdentifiers,
+                current: .disabled,
+                experimentalContinuousRecordingEnabled: false
+            )
+            .filter { ![.customShortcut, .openCustomApplication].contains($0) }
+            .map(\.rawValue)
+        )
+
+        #expect(catalogActionIDs.isSuperset(of: expectedActionIDs))
+        for action in [
+            ButtonAction.volumeUp,
+            .volumeDown,
+            .volumeMute,
+            .playPause,
+            .previousCommandLeft,
+            .nextCommandRight,
+        ] {
+            #expect(catalogActionIDs.contains(action.rawValue))
+        }
+        #endif
     }
 }
