@@ -63,11 +63,12 @@
 ## 用例 6：Installer 最终产品签名与跨 lane 串行
 
 1. 静态检查 `build-doubao-driver-pkg.sh`：component `pkgbuild` 不带 `--sign`，Distribution `productbuild` 先输出 unsigned product archive。
-2. 确认正式签名前先创建最小 nopayload probe PKG，并通过有界 `productsign` 验证 Developer ID Installer 私钥可用性。
-3. 使用两个无凭据 fake signer 同时请求同一个 `lockf -k -t` lock file。
-4. 检查最终验证器对展开后的 `RemoteMicComponent.pkg` 要求 `Status: no signature`，同时仍对外层可分发 PKG 执行 Developer ID Installer、staple 和 `spctl -t install` 检查。
+2. 分别向这两个命令块注入 `--sign` mutation，确认结构门禁拒绝两个变体；不能只检查旧变量名是否消失。
+3. 确认正式签名前先创建最小 nopayload probe PKG，并通过有界 `productsign` 验证 Developer ID Installer 私钥可用性。
+4. 使用两个无凭据 fake signer 同时请求同一个 `lockf -k -t` lock file。
+5. 检查最终验证器对展开后的 `RemoteMicComponent.pkg` 要求 `Status: no signature`，同时仍对外层可分发 PKG 执行 Developer ID Installer、staple 和 `spctl -t install` 检查。
 
-预期结果：两个 fake signer 的 `start/end` 成对出现，不发生重叠；只有最终安装和卸载产品执行真实 `productsign`；架构提示 Distribution 不变；锁等待和单项签名仍受 timeout 限制。
+预期结果：两个 unsigned 命令块的原始版本通过，两个 `--sign` mutation 都被拒绝；两个 fake signer 的 `start/end` 成对出现且不重叠；只有最终安装和卸载产品执行真实 `productsign`；架构提示 Distribution 不变；锁等待和单项签名仍受 timeout 限制。
 
 失败判定：component 恢复 `pkgbuild --sign`、外层产品没有最终 Installer 签名、两个 lane 可同时进入 Installer 私钥操作、锁无限等待、探针被省略，或验证器只检查内层 component 而没有检查外层签名与 Gatekeeper。
 
@@ -82,14 +83,14 @@
 
 - 保存 `scripts/test-release-pipeline-optimization.sh` 输出。
 - 保存双 lane 冷缓存命令及 cache/scratch 目录清单。
-- 下一次真实工作流保存每个阶段的开始、heartbeat、结束和 elapsed；失败时记录 lane/stage 与退出码。
+- 每次真实工作流保存每个阶段的开始、heartbeat、结束和 elapsed；失败时记录 lane/stage 与退出码。
 - 不保存或粘贴 Apple 私钥、P8 内容、Match 密码、Keychain 密码或 Sparkle 私钥。
 
 ## 自动化、代理实测和真实发布边界
 
 - 自动化可以证明参数隔离、确定性 timeout、进程树清理、并发失败传播和日志格式。
 - 代理可在无凭据环境运行并发冷缓存解析/构建和 shell/YAML/Swift 测试。
-- 只有下一次受保护工作流才能证明真实 timestamp、Developer ID、Apple Notary、staple 和 GitHub Runner 取消行为；本次修复不 dispatch、不审批、不签名、不公证、不发布。
+- 无凭据自动化不能单独证明真实 timestamp、Developer ID、Apple Notary 或 staple；这些成功路径已由 Build 119 的受保护工作流补验。Build 118 已证明真实 Runner 的单阶段 timeout 和 fail-fast；590 秒总 supervisor 的实际超时分支没有通过故意挂起真实签名来触发。
 
 ## 2026-08-16 验证记录
 
@@ -98,7 +99,7 @@
 - `BuildSigningTests` 14 项通过；项目自检 42/42 通过；Debug build 成功。
 - 修改 shell 通过 `zsh -n`，工作流 YAML 解析通过，`actionlint -ignore SC2129` 通过。
 - 本机第一次冷缓存测试遇到锁屏登录 Keychain `status -128`；该次结果不计入 cache 隔离验收。最终冷缓存验证禁用本机 Keychain/netrc 并使用本地私有依赖镜像，仅证明无凭据下载和 cache 隔离边界。
-- 尚未执行真实 Developer ID timestamp、Installer 签名、Apple 公证、staple、GitHub 10 分钟取消和受保护 Runner 清理；这些项目必须由下一次真实候选工作流补验。
+- 该无凭据验证阶段当时尚未执行真实 Developer ID timestamp、Installer 签名、Apple 公证和 staple；后续 Build 119 已补齐成功路径。GitHub 10 分钟硬上限未被故意跑满，单阶段 timeout、进程树清理与 fail-fast 由 Build 118 和无凭据回归共同覆盖。
 
 ## 2026-08-16 第二次真实工作流与修复记录
 
@@ -109,4 +110,14 @@
 - 自动化新增 component unsigned、外层最终 productsign、最小 nopayload 签名探针、`lockf` 跨 lane 串行、外层签名/公证/Gatekeeper 验证门禁。
 - 本机双架构 ad-hoc 完整链通过：Apple Silicon component `pkgbuild` 约 2 秒、Distribution `productbuild` 约 1 秒；Intel component `pkgbuild` 约 1 秒、Distribution `productbuild` 约 2 秒。两套 PKG/DMG 验证均通过，架构提示 Distribution 保持不变。
 - `BuildSigningTests` 14/14、installer architecture guard、release pipeline optimization regression 均通过。
-- 本轮未访问 Apple 凭据；下一次必须使用更高版本/Build 的新候选，从包含本修复且双架构 CI 通过的最新 `origin/main` 创建。不得重跑旧 `1.8.25` 候选。
+- 本轮未访问 Apple 凭据；随后已使用更高 Build 的新候选完成验证，没有重跑旧失败候选。
+
+## 2026-08-16 Build 119 真实成功记录
+
+- 受保护 Run [`31944719103`](https://github.com/HD838A/remote-mic-app/actions/runs/31944719103) 在候选提交 `1659b6c094b47e89016a3d6f8a6f81e972ad15f3` 上构建 `1.8.25 (119)`；该候选直接基于包含第二次修复的 `bba72af82084655ff688d38774376f4f6aaae5ff`。
+- Apple Silicon 与 Intel 的 unsigned component `pkgbuild` 和 unsigned Distribution `productbuild` 均约 1 秒完成；两个 Developer ID Installer 探针约 2 秒完成，最终安装和卸载产品的 `productsign` 均约 1 秒完成。
+- 两套 App、四个最终外层 PKG 与两套 DMG 均完成签名、可信 timestamp、公证、staple 和 Gatekeeper 验证；内层 component 保持 unsigned。
+- `signed-release` 阶段约 266 秒，GitHub 签名 step 约 4 分 26 秒，没有触发 590/600 秒门禁。
+- 防回归脚本现在直接解析 component `pkgbuild` 和 Distribution `productbuild` 命令块，并分别运行重新加入 `--sign` 的反向 mutation；任一 mutation 被接受都判定失败。
+
+可见 UI、真实安装写入、卸载结果和真实 Intel Mac 运行不属于本测试手册的流水线进程边界，仍需对应安装与产品测试手册单独验收。
