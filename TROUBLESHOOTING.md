@@ -70,12 +70,13 @@
 
 ## 安装包被 macOS 阻止
 
-自 v1.3.0 起，正式 Release 的应用、两个 PKG 和 DMG 均使用 Developer ID 签名并已完成 Apple 公证。若 macOS 仍阻止安装，请删除本地下载件，从本项目 GitHub Releases 重新下载，并核对同一 Release 中的 `.sha256` 文件；不要使用来源不明的副本。
+自 v1.3.0 起，正式 Release 的应用、安装/卸载 PKG 和 DMG 均使用 Developer ID 签名并已完成 Apple 公证。若 macOS 仍阻止安装，请删除本地下载件，从本项目 GitHub Releases 重新下载，并核对同一 Release 中的 SHA-256 清单；不要使用来源不明的副本。
 
-可使用同一 Release 提供的 `.sha256` 文件核对 DMG：
+同一 Release 的 `Remote-Mic-<版本>.dmg.sha256` 同时列出 Apple Silicon 与 Intel DMG。只下载其中一个 DMG 时，可按精确文件名核对：
 
 ```bash
-shasum -a 256 -c "Remote-Mic-<版本>.dmg.sha256"
+grep -F "  Remote-Mic-<版本>.dmg" \
+  "Remote-Mic-<版本>.dmg.sha256" | shasum -a 256 -c -
 ```
 
 ## 自动更新提示 Autoupdate 没有执行权限
@@ -90,7 +91,7 @@ failed to probe status service for com.hd838a.RemoteMic
 
 旧版 `1.4.2` / `1.4.3` 的安装 PKG 曾把应用内所有普通文件统一改为 `0644`，但只恢复了主程序的执行权限，因而 `Autoupdate`、Updater 和两个 XPC 服务无法启动。重新检查更新或重新安装同一旧版 PKG 不会修复；损坏的更新器也不能通过自动更新修复自身。
 
-首选恢复方式是从最新 Release 下载并远程运行一次 `Remote-Mic-<版本>-Installer.pkg`。如果只能使用远程终端，可执行：
+首选恢复方式是下载对应架构的最新 DMG，挂载后运行其中唯一的安装 PKG。Release 不再重复上传 standalone Installer PKG；远程管理脚本也应从 DMG 读取同一份已签名、公证安装器。如果只能使用远程终端，也可直接执行下面的权限恢复：
 
 ```bash
 sudo chmod 755 \

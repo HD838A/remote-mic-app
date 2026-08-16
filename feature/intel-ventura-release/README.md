@@ -12,7 +12,7 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 
 - Intel 使用 `x86_64` 和 macOS 13.0 最低版本。
 - Apple Silicon 继续使用 `arm64` 和 macOS 14.0 最低版本。
-- 两条发行线使用独立 DMG、PKG、ZIP 和 Sparkle appcast。
+- 两条发行线使用独立 DMG、安装/卸载 PKG、ZIP 和 Sparkle appcast；安装 PKG 只放在对应 DMG 内，公开 Release 仅保留两份架构卸载 PKG。
 - 不生成 Universal 包，不修改蓝牙、HID、ATVV 音频或持久化协议。
 
 ## 关键设计与开发过程
@@ -24,7 +24,7 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - GitHub Actions 日常验证两种架构；受保护的正式打包任务在临时 Keychain 中导入既有 Developer ID 证书，并分别完成签名、公证和 staple。
 - 正式打包只复用精确候选 SHA 上已经成功的 Apple Silicon、Intel 候选测试；进入 Apple 凭据环境前会核对候选 push run、两种架构 Job、私有依赖钉定和精确 SHA 的 Draft 回流 PR。
 - Apple Silicon 与 Intel 使用按版本、Build 和架构区分的 SwiftPM scratch，可并行完成 Release 构建、签名与公证；每种架构的安装、卸载 PKG 也可并行提交公证，任何一条失败都会使整个正式打包失败。
-- 一个 Release 同时携带两套产物，候选溯源记录并校验全部资产；稳定晋升不重新构建。
+- 一个 Release 同时携带两套产物，候选溯源记录并校验全部资产；中英文更新说明由两套 appcast 共享，DMG 校验值合并到同一清单，稳定晋升不重新构建。
 
 ## 涉及文件
 
@@ -56,12 +56,12 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - `arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建。
 - App、Sparkle、MiRemoteV、PKG 和 DMG 的架构、最低系统版本、权限、签名、公证和 Gatekeeper 校验。
 - 安装器架构回归脚本校验 Distribution 的双架构可评估范围、`hw.optional.arm64`、Fatal 本地化消息、另一版本提示，以及内层脚本不再依赖 `uname -m`。
-- 两套 appcast、资产名和候选溯源隔离校验。
+- 两套 appcast、共享说明 URL、12 项资产名和候选溯源隔离校验。
 - 发布流水线回归脚本覆盖私有依赖 Commit 漂移、候选 SHA/Job 不匹配、Draft PR 门禁、双架构真实并行和任一架构失败传播。
 
 ## 人工测试手册
 
-见 [Testing/IntelVenturaCompatibility.md](../../Testing/IntelVenturaCompatibility.md)。
+见 [Testing/IntelVenturaCompatibility.md](../../Testing/IntelVenturaCompatibility.md) 和 [Testing/MacReleaseAssetMatrix.md](../../Testing/MacReleaseAssetMatrix.md)。
 
 ## 当前状态和已知限制
 

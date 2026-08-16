@@ -34,6 +34,9 @@ INTEL_UPDATE_ZIP="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.zip"
 INTEL_APPCAST="$INTEL_OUTPUT_DIR/appcast-intel.xml"
 INTEL_ZH_RELEASE_NOTES="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.zh.txt"
 INTEL_EN_RELEASE_NOTES="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.en.txt"
+SHARED_CHECKSUM_BASENAME="Remote-Mic-$VERSION.dmg.sha256"
+PUBLIC_PAYLOAD_ASSET_COUNT=11
+PUBLIC_RELEASE_ASSET_COUNT=12
 
 if [[ "$#" -ne 1 || ( "$MODE" != "prerelease" && "$MODE" != "promote" ) ]]; then
   print -u2 "usage: $0 prerelease|promote"
@@ -96,9 +99,20 @@ trap cleanup EXIT
 
 /bin/mkdir -p "$STAGING_DIR" "$DOWNLOAD_DIR" "$CDN_DOWNLOAD_DIR"
 
+verify_update_zip() {
+  local archive="$1"
+  local variant="$2"
+  local extract_dir="$WORK_DIR/verify-$variant-update-zip"
+  /bin/mkdir -p "$extract_dir"
+  /usr/bin/ditto -x -k "$archive" "$extract_dir"
+  if [[ "$variant" == "intel" ]]; then
+    RELEASE_VARIANT=intel "$ROOT/scripts/verify-app.sh" "$extract_dir/Remote Mic.app"
+  else
+    "$ROOT/scripts/verify-app.sh" "$extract_dir/Remote Mic.app"
+  fi
+}
+
 verify_local_artifacts() {
-  test -d "$APP"
-  test -f "$INSTALL_PACKAGE"
   test -f "$UNINSTALL_PACKAGE"
   test -f "$DMG"
   test -f "$DMG_CHECKSUM"
@@ -106,22 +120,17 @@ verify_local_artifacts() {
   test -f "$APPCAST"
   test -f "$ZH_RELEASE_NOTES"
   test -f "$EN_RELEASE_NOTES"
-  test -f "$INTEL_INSTALL_PACKAGE"
   test -f "$INTEL_UNINSTALL_PACKAGE"
   test -f "$INTEL_DMG"
   test -f "$INTEL_DMG_CHECKSUM"
   test -f "$INTEL_UPDATE_ZIP"
   test -f "$INTEL_APPCAST"
-  test -f "$INTEL_ZH_RELEASE_NOTES"
-  test -f "$INTEL_EN_RELEASE_NOTES"
 
   export EXPECTED_DEVELOPER_TEAM_ID REQUIRE_DEVELOPER_ID_SIGNING=1 REQUIRE_NOTARIZATION=1
-  "$ROOT/scripts/verify-app.sh" "$APP"
-  "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
+  verify_update_zip "$UPDATE_ZIP" apple-silicon
+  verify_update_zip "$INTEL_UPDATE_ZIP" intel
   "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
   "$ROOT/scripts/verify-dmg.sh" "$DMG"
-  RELEASE_VARIANT=intel "$ROOT/scripts/verify-app.sh" "$INTEL_OUTPUT_DIR/Remote Mic.app"
-  RELEASE_VARIANT=intel "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INTEL_INSTALL_PACKAGE" install
   RELEASE_VARIANT=intel "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INTEL_UNINSTALL_PACKAGE" uninstall
   RELEASE_VARIANT=intel "$ROOT/scripts/verify-dmg.sh" "$INTEL_DMG"
 
@@ -131,56 +140,48 @@ verify_local_artifacts() {
   rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$APPCAST"
   rg -Fq "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$APPCAST"
   rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX${INTEL_UPDATE_ZIP:t}\"" "$INTEL_APPCAST"
-  rg -Fq "$CDN_DOWNLOAD_PREFIX${INTEL_ZH_RELEASE_NOTES:t}" "$INTEL_APPCAST"
-  rg -Fq "$CDN_DOWNLOAD_PREFIX${INTEL_EN_RELEASE_NOTES:t}" "$INTEL_APPCAST"
+  rg -Fq "$CDN_DOWNLOAD_PREFIX${ZH_RELEASE_NOTES:t}" "$INTEL_APPCAST"
+  rg -Fq "$CDN_DOWNLOAD_PREFIX${EN_RELEASE_NOTES:t}" "$INTEL_APPCAST"
   rg -Fq "<sparkle:version>$BUILD</sparkle:version>" "$INTEL_APPCAST"
   rg -Fq "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$INTEL_APPCAST"
 }
 
 stage_assets() {
-  /usr/bin/ditto --norsrc --noqtn --noacl "$INSTALL_PACKAGE" \
-    "$STAGING_DIR/Remote-Mic-$VERSION-Installer.pkg"
   /usr/bin/ditto --norsrc --noqtn --noacl "$UNINSTALL_PACKAGE" \
     "$STAGING_DIR/Remote-Mic-$VERSION-Uninstaller.pkg"
   /usr/bin/ditto --norsrc --noqtn --noacl "$DMG" "$STAGING_DIR/${DMG:t}"
-  /usr/bin/ditto --norsrc --noqtn --noacl "$DMG_CHECKSUM" "$STAGING_DIR/${DMG_CHECKSUM:t}"
   /usr/bin/ditto --norsrc --noqtn --noacl "$UPDATE_ZIP" "$STAGING_DIR/${UPDATE_ZIP:t}"
   /usr/bin/ditto --norsrc --noqtn --noacl "$APPCAST" "$STAGING_DIR/appcast.xml"
   /usr/bin/ditto --norsrc --noqtn --noacl \
     "$ZH_RELEASE_NOTES" "$STAGING_DIR/${ZH_RELEASE_NOTES:t}"
   /usr/bin/ditto --norsrc --noqtn --noacl \
     "$EN_RELEASE_NOTES" "$STAGING_DIR/${EN_RELEASE_NOTES:t}"
-  /usr/bin/ditto --norsrc --noqtn --noacl "$INTEL_INSTALL_PACKAGE" \
-    "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Installer.pkg"
   /usr/bin/ditto --norsrc --noqtn --noacl "$INTEL_UNINSTALL_PACKAGE" \
     "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg"
   /usr/bin/ditto --norsrc --noqtn --noacl "$INTEL_DMG" "$STAGING_DIR/${INTEL_DMG:t}"
   /usr/bin/ditto --norsrc --noqtn --noacl \
-    "$INTEL_DMG_CHECKSUM" "$STAGING_DIR/${INTEL_DMG_CHECKSUM:t}"
-  /usr/bin/ditto --norsrc --noqtn --noacl \
     "$INTEL_UPDATE_ZIP" "$STAGING_DIR/${INTEL_UPDATE_ZIP:t}"
-  /usr/bin/ditto --norsrc --noqtn --noacl \
-    "$INTEL_ZH_RELEASE_NOTES" "$STAGING_DIR/${INTEL_ZH_RELEASE_NOTES:t}"
-  /usr/bin/ditto --norsrc --noqtn --noacl \
-    "$INTEL_EN_RELEASE_NOTES" "$STAGING_DIR/${INTEL_EN_RELEASE_NOTES:t}"
   /usr/bin/ditto --norsrc --noqtn --noacl "$INTEL_APPCAST" "$STAGING_DIR/appcast-intel.xml"
 
-  /usr/bin/cmp -s "$INSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Installer.pkg"
+  (
+    cd "$STAGING_DIR"
+    /usr/bin/shasum -a 256 "${DMG:t}" "${INTEL_DMG:t}" > "$SHARED_CHECKSUM_BASENAME"
+  )
+
   /usr/bin/cmp -s "$UNINSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Uninstaller.pkg"
   /usr/bin/cmp -s "$DMG" "$STAGING_DIR/${DMG:t}"
-  /usr/bin/cmp -s "$DMG_CHECKSUM" "$STAGING_DIR/${DMG_CHECKSUM:t}"
   /usr/bin/cmp -s "$UPDATE_ZIP" "$STAGING_DIR/${UPDATE_ZIP:t}"
   /usr/bin/cmp -s "$APPCAST" "$STAGING_DIR/appcast.xml"
   /usr/bin/cmp -s "$ZH_RELEASE_NOTES" "$STAGING_DIR/${ZH_RELEASE_NOTES:t}"
   /usr/bin/cmp -s "$EN_RELEASE_NOTES" "$STAGING_DIR/${EN_RELEASE_NOTES:t}"
-  /usr/bin/cmp -s "$INTEL_INSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Installer.pkg"
   /usr/bin/cmp -s "$INTEL_UNINSTALL_PACKAGE" "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg"
   /usr/bin/cmp -s "$INTEL_DMG" "$STAGING_DIR/${INTEL_DMG:t}"
-  /usr/bin/cmp -s "$INTEL_DMG_CHECKSUM" "$STAGING_DIR/${INTEL_DMG_CHECKSUM:t}"
   /usr/bin/cmp -s "$INTEL_UPDATE_ZIP" "$STAGING_DIR/${INTEL_UPDATE_ZIP:t}"
-  /usr/bin/cmp -s "$INTEL_ZH_RELEASE_NOTES" "$STAGING_DIR/${INTEL_ZH_RELEASE_NOTES:t}"
-  /usr/bin/cmp -s "$INTEL_EN_RELEASE_NOTES" "$STAGING_DIR/${INTEL_EN_RELEASE_NOTES:t}"
   /usr/bin/cmp -s "$INTEL_APPCAST" "$STAGING_DIR/appcast-intel.xml"
+  (
+    cd "$STAGING_DIR"
+    /usr/bin/shasum -a 256 -c "$SHARED_CHECKSUM_BASENAME"
+  )
 }
 
 generate_release_notes() {
@@ -245,7 +246,8 @@ generate_candidate_provenance() {
       payloadAssets: .
     }' "$payload_json_file" > "$CANDIDATE_PROVENANCE"
 
-  test "$(jq '.payloadAssets | length' "$CANDIDATE_PROVENANCE")" = "16"
+  test "$(jq '.payloadAssets | length' "$CANDIDATE_PROVENANCE")" = \
+    "$PUBLIC_PAYLOAD_ASSET_COUNT"
 }
 
 verify_candidate_source() {
@@ -331,6 +333,26 @@ wait_for_download_batch() {
   fi
 }
 
+require_supported_payload_asset_count() {
+  case "$1" in
+    11|14|16) ;;
+    *)
+      print -u2 "unsupported release payload asset count: $1"
+      return 1
+      ;;
+  esac
+}
+
+require_supported_release_asset_count() {
+  case "$1" in
+    12|15|17) ;;
+    *)
+      print -u2 "unsupported public release asset count: $1"
+      return 1
+      ;;
+  esac
+}
+
 download_asset() {
   local asset_name="$1"
   local destination_dir="$2"
@@ -373,7 +395,7 @@ download_and_compare_assets() {
   local download_prefix="$3"
   local label="$4"
   local manifest_file="$WORK_DIR/$label-assets.txt"
-  local source_file asset_name downloaded_file source_sha downloaded_sha
+  local source_file asset_name downloaded_file source_sha downloaded_sha expected_count
 
   /bin/mkdir -p "$destination_dir"
   test "$(/usr/bin/find "$destination_dir" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "0"
@@ -382,7 +404,8 @@ download_and_compare_assets() {
     print -r -- "${source_file:t}" >> "$manifest_file"
   done
   LC_ALL=C /usr/bin/sort -o "$manifest_file" "$manifest_file"
-  test "$(/usr/bin/wc -l < "$manifest_file" | /usr/bin/tr -d ' ')" = "17"
+  expected_count="$(/usr/bin/wc -l < "$manifest_file" | /usr/bin/tr -d ' ')"
+  require_supported_release_asset_count "$expected_count"
 
   download_assets_from_manifest "$manifest_file" "$destination_dir" \
     "$download_prefix" "$label"
@@ -397,19 +420,23 @@ download_and_compare_assets() {
     test "$source_sha" = "$downloaded_sha"
     print "$label COMPARE PASS: $asset_name $downloaded_sha"
   done
-  test "$(/usr/bin/find "$destination_dir" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "17"
+  test "$(/usr/bin/find "$destination_dir" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = \
+    "$expected_count"
 }
 
 download_release_assets() {
   local manifest_file="$WORK_DIR/github-origin-assets.txt"
+  local expected_count
   /bin/mkdir -p "$DOWNLOAD_DIR"
   test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "0"
   gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
     --jq '.assets[].name' | LC_ALL=C /usr/bin/sort > "$manifest_file"
-  test "$(/usr/bin/wc -l < "$manifest_file" | /usr/bin/tr -d ' ')" = "17"
+  expected_count="$(/usr/bin/wc -l < "$manifest_file" | /usr/bin/tr -d ' ')"
+  require_supported_release_asset_count "$expected_count"
   download_assets_from_manifest "$manifest_file" "$DOWNLOAD_DIR" \
     "$GITHUB_DOWNLOAD_PREFIX" github-origin
-  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "17"
+  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = \
+    "$expected_count"
 }
 
 verify_cdn_assets() {
@@ -461,7 +488,9 @@ verify_downloaded_candidate() {
      .candidateBranch == ("release/pre-" + $tag) and
      (.tagCommit | test("^[0-9a-f]{40}$")) and
      (if .schemaVersion == 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
-     ((.payloadAssets | length) == 14 or (.payloadAssets | length) == 16)' "$provenance" >/dev/null
+     ((.payloadAssets | length) == 11 or
+      (.payloadAssets | length) == 14 or
+      (.payloadAssets | length) == 16)' "$provenance" >/dev/null
   if [[ "$VERSION" != "${RELEASE_TAG#v}" || ! "$BUILD" =~ '^[0-9]+$' ]]; then
     print -u2 "candidate provenance version/build does not match $RELEASE_TAG"
     exit 1
@@ -469,6 +498,7 @@ verify_downloaded_candidate() {
 
   local schema_version tag_commit base_main_commit candidate_branch remote_branch_commit asset_name expected_size expected_sha file_path actual_size actual_sha
   schema_version="$(jq -r '.schemaVersion' "$provenance")"
+  require_supported_payload_asset_count "$(jq '.payloadAssets | length' "$provenance")"
   tag_commit="$(jq -r '.tagCommit' "$provenance")"
   candidate_branch="$(jq -r '.candidateBranch' "$provenance")"
   if [[ "$tag_commit" != "$(git rev-parse "$RELEASE_TAG^{commit}")" ]]; then
@@ -541,7 +571,9 @@ generate_stable_promotion() {
       actor: $actor,
       payloadAssets: .payloadAssets
     }' "$provenance" > "$STABLE_PROMOTION"
-  jq -e '((.payloadAssets | length) == 14 or (.payloadAssets | length) == 16)' \
+  jq -e '((.payloadAssets | length) == 11 or
+          (.payloadAssets | length) == 14 or
+          (.payloadAssets | length) == 16)' \
     "$STABLE_PROMOTION" >/dev/null
 }
 
@@ -563,6 +595,8 @@ if [[ "$MODE" == "prerelease" ]]; then
 
   verify_candidate_source
   generate_candidate_provenance
+  test "$(/usr/bin/find "$STAGING_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = \
+    "$PUBLIC_RELEASE_ASSET_COUNT"
   if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
     print -u2 "release $RELEASE_TAG already exists"
     exit 1
@@ -571,20 +605,15 @@ if [[ "$MODE" == "prerelease" ]]; then
   LATEST_BEFORE="$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)"
   gh release create "$RELEASE_TAG" \
     "$STAGING_DIR/${UPDATE_ZIP:t}" \
-    "$STAGING_DIR/Remote-Mic-$VERSION-Installer.pkg" \
     "$STAGING_DIR/Remote-Mic-$VERSION-Uninstaller.pkg" \
     "$STAGING_DIR/${DMG:t}" \
-    "$STAGING_DIR/${DMG_CHECKSUM:t}" \
+    "$STAGING_DIR/$SHARED_CHECKSUM_BASENAME" \
     "$STAGING_DIR/appcast.xml" \
     "$STAGING_DIR/${ZH_RELEASE_NOTES:t}" \
     "$STAGING_DIR/${EN_RELEASE_NOTES:t}" \
     "$STAGING_DIR/${INTEL_UPDATE_ZIP:t}" \
-    "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Installer.pkg" \
     "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg" \
     "$STAGING_DIR/${INTEL_DMG:t}" \
-    "$STAGING_DIR/${INTEL_DMG_CHECKSUM:t}" \
-    "$STAGING_DIR/${INTEL_ZH_RELEASE_NOTES:t}" \
-    "$STAGING_DIR/${INTEL_EN_RELEASE_NOTES:t}" \
     "$STAGING_DIR/appcast-intel.xml" \
     "$CANDIDATE_PROVENANCE" \
     --repo "$REPOSITORY" \

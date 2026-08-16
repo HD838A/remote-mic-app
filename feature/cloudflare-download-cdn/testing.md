@@ -13,11 +13,12 @@
 - `Remote-Mic-1.8.3.dmg` 从 GitHub 和 CDN 下载后逐字节一致，SHA-256 均为 `00ed41f584a7e44a11dd5c675ca06bff888faa716fbc26f33bc1f74e55fd3c23`。
 - 公开仓库发布脚本语法检查与 `BuildSigningTests` 7/7 通过；完整 `swift test` 为 208/208，`scripts/test.sh` 自检为 42/42。
 - 使用独立 SwiftPM scratch path 加载私有硬件模拟器，完整测试为 224/224，包含 RC001/RC003 直接语音流、12 个原始按键、36 个手势、7 个连发场景、分片、同步、异常、重连和双设备隔离。
+- 未来发布矩阵回归要求新候选 GitHub/CDN 均严格为 12 项且逐字节一致；历史 `v1.8.25` 的 17 项固定 Tag URL 必须继续可下载，稳定晋升解析继续接受历史 15/17 项结构。
 - `scripts/build-app.sh` 完成 Release 配置的 ad-hoc App 构建，`scripts/verify-app.sh`、本地化资源检查和严格 codesign 验证通过；该产物不是候选安装包，也未执行 Developer ID 签名或公证。
 
 ## 尚未完成边界
 
 - 本功能分支不独立修改版本号、建立 Tag、创建 Release、生成候选 appcast 或合并 `main`；这些步骤由统一 Mac 预览版流程完成。
-- 候选 ZIP、PKG、DMG、SHA256、appcast、中英文更新说明和 provenance 尚未完成 GitHub/CDN 全资产字节回验。
+- 精简后的候选 ZIP、架构卸载 PKG、DMG、合并 SHA256 清单、appcast、共享中英文更新说明和 provenance 尚未完成 GitHub/CDN 12/12 全资产字节回验。
 - Sparkle enclosure 签名、从当前正式版发现候选、最终 ZIP 无人值守启动、PKG 等价性与 UI 驱动安装尚未执行。
 - 不同国家、运营商、企业代理、跨网络断点续传和长期缓存命中率仍属于真实用户环境验收范围。

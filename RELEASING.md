@@ -29,7 +29,7 @@
 5. 两个候选 Job 对精确候选 SHA 成功后，运行 `scripts/prepare-preview-recording-pr.sh` 创建 Draft 回流 PR。Draft PR 的受保护 CI 可以提前运行，但公开验证完成前不得转 Ready 或合并。
 6. 手动从同一候选分支运行 `macOS Signed Release Packages`。workflow 在进入 `mac-release` Environment、接触 Apple 凭据前，重新核对精确候选 SHA 的成功 push run、两种架构 Job、三条 workflow 的私有依赖 Commit 和 Draft PR。
 7. Environment 审批后，Apple Silicon 与 Intel 使用独立 SwiftPM scratch 并行构建、签名和公证；每种架构的安装与卸载 PKG 也并行提交公证。这里复用步骤 4 对精确 SHA 的测试证明，不重复执行等价的 Swift Testing 和 Self Test。
-8. 发布为 Pre-release 后，从公开 Release 重新下载全部资产并逐字节复核，核对 Tag、远端候选分支、provenance 和发布资产指向同一提交；使用公开稳定版执行固定候选 appcast 的真实 Sparkle 更新。
+8. 发布为 Pre-release 后，从 GitHub 与 CDN 重新下载公开资产并逐字节复核。新矩阵必须严格为 12 项：两架构 DMG、ZIP、appcast 和卸载 PKG，共享中英文说明、合并 SHA-256 清单及 provenance；安装 PKG 只保留在对应 DMG 内并从 DMG 重新验证。核对 Tag、远端候选分支、provenance 和发布资产指向同一提交；使用公开稳定版执行固定候选 appcast 的真实 Sparkle 更新。历史 15/17 项候选继续允许晋升，但不得改写旧资产。
 9. 只有步骤 8 全部通过，Release Guard 才可将 Draft PR 转 Ready 并启用 Auto-merge。稳定 `latest` 在整个预览发布和验证期间不得变化。
 
 GitHub 自动生成的 CI App 只用于验证打包结构，不是已签名、公证的公开安装包。完整签名发布在受保护的 CI 发布环境完成前，继续使用既有无交互发布机流程。

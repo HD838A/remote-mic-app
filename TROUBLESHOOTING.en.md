@@ -70,11 +70,12 @@ Remote Mic restores the remote voice-button setting that existed before launch w
 
 ## macOS blocks the installer
 
-Starting with v1.3.0, official releases sign the app, both PKGs, and the DMG with Developer ID identities and notarize them with Apple. If macOS still blocks installation, delete the local download, download it again from this project's GitHub Releases, and verify it with the `.sha256` file from the same release; do not use an untrusted copy.
+Starting with v1.3.0, official releases sign the app, install/uninstall PKGs, and DMG with Developer ID identities and notarize them with Apple. If macOS still blocks installation, delete the local download, download it again from this project's GitHub Releases, and verify it with the SHA-256 manifest from the same release; do not use an untrusted copy.
 
-Verify a DMG with the checksum file from the same release:
+`Remote-Mic-<version>.dmg.sha256` lists both Apple Silicon and Intel DMGs. If you downloaded only one DMG, select its exact filename:
 
-    shasum -a 256 -c "Remote-Mic-<version>.dmg.sha256"
+    grep -F "  Remote-Mic-<version>.dmg" \
+      "Remote-Mic-<version>.dmg.sha256" | shasum -a 256 -c -
 
 ## Automatic update reports missing Autoupdate executable permissions
 
@@ -86,7 +87,7 @@ If Console contains any of the following messages, the problem is not the appcas
 
 The older `1.4.2` / `1.4.3` installer PKGs changed every regular file in the app to mode `0644` and restored executable permissions only on the main binary. This prevented Autoupdate, Updater, and both XPC services from launching. Checking again or reinstalling the same old PKG does not repair it, and a broken updater cannot update itself.
 
-The preferred recovery is to download the latest `Remote-Mic-<version>-Installer.pkg` from GitHub Releases and run it once through local or remote management. If only a remote shell is available, run:
+The preferred recovery is to download the latest DMG for the Mac architecture, mount it, and run its single install PKG. The Release no longer uploads the same Installer PKG again as a standalone asset; remote-management scripts should read the signed and notarized installer from the DMG. If only a remote shell is available, you can also repair the permissions directly:
 
     sudo chmod 755 \
       "/Applications/Remote Mic.app/Contents/MacOS/RemoteMic" \

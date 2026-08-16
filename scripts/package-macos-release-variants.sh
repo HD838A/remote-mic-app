@@ -7,6 +7,7 @@ RELEASE_VARIANT_RUNNER="${RELEASE_VARIANT_RUNNER:-$ROOT/scripts/notarize-release
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_VARIANT_TIMEOUT_SECONDS="${RELEASE_VARIANT_TIMEOUT_SECONDS:-560}"
 RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
+GENERATE_SPARKLE_UPDATE="${GENERATE_SPARKLE_UPDATE:-1}"
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
@@ -19,6 +20,10 @@ esac
 case "$RELEASE_STAGE_TIMEOUTS" in
   0|1) ;;
   *) print -u2 "RELEASE_STAGE_TIMEOUTS must be 0 or 1"; exit 1 ;;
+esac
+case "$GENERATE_SPARKLE_UPDATE" in
+  0|1) ;;
+  *) print -u2 "GENERATE_SPARKLE_UPDATE must be 0 or 1"; exit 1 ;;
 esac
 if [[ ! -x "$RELEASE_VARIANT_RUNNER" ]]; then
   print -u2 "release variant runner is not executable: $RELEASE_VARIANT_RUNNER"
@@ -108,6 +113,30 @@ if [[ "$PARALLEL_RELEASE_VARIANTS" == "1" ]]; then
 else
   run_variant apple-silicon
   run_variant intel
+fi
+
+if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
+  VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - \
+    "$ROOT/Resources/Info.plist")"
+  /usr/bin/cmp -s \
+    "$ROOT/dist/Remote-Mic-$VERSION.zh.txt" \
+    "$ROOT/dist/intel/Remote-Mic-$VERSION-Intel.zh.txt"
+  /usr/bin/cmp -s \
+    "$ROOT/dist/Remote-Mic-$VERSION.en.txt" \
+    "$ROOT/dist/intel/Remote-Mic-$VERSION-Intel.en.txt"
+  /usr/bin/grep -Fq \
+    "Remote-Mic-$VERSION.zh.txt" \
+    "$ROOT/dist/intel/appcast-intel.xml"
+  /usr/bin/grep -Fq \
+    "Remote-Mic-$VERSION.en.txt" \
+    "$ROOT/dist/intel/appcast-intel.xml"
+  if /usr/bin/grep -Fq "Remote-Mic-$VERSION-Intel.zh.txt" \
+      "$ROOT/dist/intel/appcast-intel.xml" || \
+     /usr/bin/grep -Fq "Remote-Mic-$VERSION-Intel.en.txt" \
+      "$ROOT/dist/intel/appcast-intel.xml"; then
+    print -u2 "Intel appcast must reuse the shared localized release notes"
+    exit 1
+  fi
 fi
 
 print "SIGNED MACOS RELEASE VARIANTS PASS"

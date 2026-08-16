@@ -63,7 +63,9 @@ verify_candidate_provenance() {
      (.build | test("^[0-9]+$")) and
      .candidateBranch == ("release/pre-" + $tag) and
      (if .schemaVersion == 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
-     ((.payloadAssets | length) == 14 or (.payloadAssets | length) == 16)' "$PROVENANCE" >/dev/null
+     ((.payloadAssets | length) == 11 or
+      (.payloadAssets | length) == 14 or
+      (.payloadAssets | length) == 16)' "$PROVENANCE" >/dev/null
 
   if [[ "$(jq -r '.schemaVersion' "$PROVENANCE")" == "2" ]]; then
     local base_main_commit
@@ -151,7 +153,9 @@ if [[ -f "$PROVENANCE" && -f "$PROMOTION" ]]; then
     --arg tagCommit "$TAG_COMMIT" \
     '.schemaVersion == 1 and .tag == $tag and .tagCommit == $tagCommit and
      (.mainCommit | test("^[0-9a-f]{40}$")) and
-     ((.payloadAssets | length) == 14 or (.payloadAssets | length) == 16)' "$PROMOTION" >/dev/null
+     ((.payloadAssets | length) == 11 or
+      (.payloadAssets | length) == 14 or
+      (.payloadAssets | length) == 16)' "$PROMOTION" >/dev/null
   if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
     print -u2 "stable promotion manifest exists but the tag is not contained in origin/main"
     exit 1
