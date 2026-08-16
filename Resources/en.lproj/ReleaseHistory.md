@@ -1,5 +1,13 @@
 # Version History
 
+## 1.8.25 (Pre-release)
+
+- Opening an installer for the wrong architecture now clearly points to the correct version for the current Mac.
+- Updated SayAll branding and standardized the in-app website link on sayall.app.
+- Improved remote pairing guidance in first-run setup, including waking the remote and holding Home and Menu together to enter pairing mode.
+- Improved iPhone, Apple Watch, and web voice connections with isolated sources, accurate connection status, and a way to cancel a connection.
+- Added a feedback entry to the menu bar for reporting issues from the app.
+
 ## 1.8.23 (Pre-release)
 
 - Fixed an issue that could cause Remote Mic to quit when opening Quick Commands from the sidebar.
