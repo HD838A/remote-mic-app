@@ -65,6 +65,10 @@ fi
   "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq -- '--cache-path "$BUILD_CACHE_PATH"' "$ROOT/scripts/build-app.sh"
 /usr/bin/grep -Fq 'REMOTE_MIC_BUILD_CACHE_PATH' "$ROOT/scripts/notarize-release.sh"
+/usr/bin/grep -Fq 'PUBLIC_PAYLOAD_ASSET_COUNT=11' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'PUBLIC_RELEASE_ASSET_COUNT=12' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'Remote-Mic-$VERSION.dmg.sha256' \
+  "$ROOT/scripts/publish-release.sh"
 
 if PUBLIC_DOWNLOAD_CONCURRENCY=9 "$ROOT/scripts/publish-release.sh" promote \
     > "$WORK_DIR/invalid-download-concurrency.txt" 2>&1; then
@@ -90,9 +94,14 @@ download_functions="$(/usr/bin/awk '
 eval "$download_functions"
 
 /bin/mkdir -p "$WORK_DIR/fake-curl-bin" "$WORK_DIR/public-assets" \
-  "$WORK_DIR/public-download-pass" "$WORK_DIR/public-download-failure"
-for asset_number in {1..17}; do
+  "$WORK_DIR/public-download-pass" "$WORK_DIR/public-download-failure" \
+  "$WORK_DIR/legacy-public-assets" "$WORK_DIR/legacy-public-download"
+for asset_number in {1..12}; do
   print -r -- "asset-$asset_number" > "$WORK_DIR/public-assets/asset-$asset_number.bin"
+done
+for asset_number in {1..17}; do
+  print -r -- "legacy-asset-$asset_number" > \
+    "$WORK_DIR/legacy-public-assets/legacy-asset-$asset_number.bin"
 done
 {
   print '#!/bin/zsh'
@@ -122,7 +131,7 @@ FAKE_CURL_SOURCE="$WORK_DIR/public-assets" \
     'https://example.invalid/releases/v9.9.9/' \
     test-origin > "$WORK_DIR/public-download-pass.txt"
 test "$(/usr/bin/find "$WORK_DIR/public-download-pass" -type f | \
-  /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "17"
+  /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "12"
 
 if PUBLIC_DOWNLOAD_CONCURRENCY=4 \
    WORK_DIR="$WORK_DIR" \
@@ -138,7 +147,25 @@ if PUBLIC_DOWNLOAD_CONCURRENCY=4 \
   exit 1
 fi
 test "$(/usr/bin/find "$WORK_DIR/public-download-failure" -type f | \
-  /usr/bin/wc -l | /usr/bin/tr -d ' ')" -lt "17"
+  /usr/bin/wc -l | /usr/bin/tr -d ' ')" -lt "12"
+
+PUBLIC_DOWNLOAD_CONCURRENCY=4 \
+WORK_DIR="$WORK_DIR" \
+PATH="${FAKE_CURL:h}:$PATH" \
+FAKE_CURL_SOURCE="$WORK_DIR/legacy-public-assets" \
+  download_and_compare_assets \
+    "$WORK_DIR/legacy-public-assets" \
+    "$WORK_DIR/legacy-public-download" \
+    'https://example.invalid/releases/v1.8.25/' \
+    legacy-origin > "$WORK_DIR/legacy-public-download.txt"
+test "$(/usr/bin/find "$WORK_DIR/legacy-public-download" -type f | \
+  /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "17"
+require_supported_release_asset_count 15
+if require_supported_release_asset_count 13 \
+    > "$WORK_DIR/unsupported-release-count.txt" 2>&1; then
+  print -u2 "unsupported release asset count unexpectedly passed"
+  exit 1
+fi
 
 git -C "$TEST_REPO" init -b release/pre-v9.9.9 >/dev/null
 git -C "$TEST_REPO" config user.name "Release Pipeline Test"
@@ -281,6 +308,7 @@ fi
 (
   cd "$TEST_REPO"
   PARALLEL_RELEASE_VARIANTS=1 PARALLEL_TEST_DIR="$WORK_DIR/parallel" \
+    GENERATE_SPARKLE_UPDATE=0 \
     RELEASE_VARIANT_RUNNER="$FAKE_RUNNER" ./scripts/package-macos-release-variants.sh
 ) > "$WORK_DIR/parallel-pass.txt"
 test -f "$WORK_DIR/parallel/apple-silicon.finished"
@@ -292,6 +320,7 @@ if (
   cd "$TEST_REPO"
   PARALLEL_RELEASE_VARIANTS=1 RELEASE_STAGE_TIMEOUTS=1 \
     RELEASE_VARIANT_TIMEOUT_SECONDS=30 \
+    GENERATE_SPARKLE_UPDATE=0 \
     PARALLEL_TEST_DIR="$WORK_DIR/parallel-failure" \
     RELEASE_VARIANT_RUNNER="$FAKE_RUNNER" FAKE_VARIANT_FAIL=intel \
     FAKE_VARIANT_HANG=apple-silicon \

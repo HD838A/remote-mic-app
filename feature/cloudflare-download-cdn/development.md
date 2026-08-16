@@ -20,6 +20,8 @@ GitHub stable / pre-release appcast
   → GitHub Releases 固定标签 ZIP
 ```
 
+未来候选公开 12 项资产。安装 PKG 仍在对应 DMG 内完成签名、公证与校验，但不再作为 standalone Release 资产重复上传；两套 appcast 复用同一对中英文说明，两个 DMG 的摘要写入一个 `Remote-Mic-<version>.dmg.sha256`。该文件名沿用 Worker 现有白名单，无需新增下载路由；Worker 也必须继续接受历史固定标签 URL，不能因新矩阵上线而撤销既有 15/17 项资产路径。
+
 ## 涉及文件
 
 - `scripts/notarize-release.sh`：生成 CDN enclosure 与更新说明 URL。

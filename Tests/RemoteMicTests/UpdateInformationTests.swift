@@ -186,6 +186,17 @@ struct UpdateInformationTests {
             displayVersion: "1.8.6",
             localeIdentifier: "en"
         ) == nil)
+
+        let intelArchiveURL = try #require(URL(
+            string: "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/Remote-Mic-1.8.6-Intel.zip"
+        ))
+        #expect(
+            UpdateReleaseNotes.assetURL(
+                for: intelArchiveURL,
+                displayVersion: "1.8.6",
+                localeIdentifier: "zh-Hans"
+            )?.lastPathComponent == "Remote-Mic-1.8.6.zh.txt"
+        )
     }
 
     @Test func releaseNotesParserKeepsOnlyReadableContent() {

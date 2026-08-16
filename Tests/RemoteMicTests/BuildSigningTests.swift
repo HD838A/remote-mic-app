@@ -604,20 +604,35 @@ struct BuildSigningTests {
         for requiredText in [
             "Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.zh.txt",
             "Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.en.txt",
+            "PUBLISHED_ZH_NOTES_BASENAME=\"Remote-Mic-$VERSION.zh.txt\"",
+            "PUBLISHED_EN_NOTES_BASENAME=\"Remote-Mic-$VERSION.en.txt\"",
             "--release-notes-url-prefix \"$CDN_DOWNLOAD_PREFIX\"",
         ] {
             #expect(notarizeSource.contains(requiredText))
         }
         #expect(notarizeSource.contains("GENERATE_SPARKLE_UPDATE=\"${GENERATE_SPARKLE_UPDATE:-1}\""))
         #expect(notarizeSource.contains("SPARKLE UPDATE: skipped for private test package"))
+        #expect(notarizeSource.contains("appcast-intel-shared-notes.xml"))
+        #expect(notarizeSource.contains("$PUBLISHED_ZH_NOTES_BASENAME"))
+        #expect(notarizeSource.contains("$PUBLISHED_EN_NOTES_BASENAME"))
         #expect(publishSource.contains("$STAGING_DIR/${ZH_RELEASE_NOTES:t}"))
         #expect(publishSource.contains("$STAGING_DIR/${EN_RELEASE_NOTES:t}"))
-        #expect(publishSource.contains("$STAGING_DIR/${INTEL_ZH_RELEASE_NOTES:t}"))
-        #expect(publishSource.contains("$STAGING_DIR/${INTEL_EN_RELEASE_NOTES:t}"))
-        #expect(publishSource.contains(".payloadAssets | length' \"$CANDIDATE_PROVENANCE\")\" = \"16\""))
-        #expect(publishSource.contains("= \"17\""))
-        #expect(publishSource.contains("== 14 or (.payloadAssets | length) == 16"))
+        #expect(!publishSource.contains("$STAGING_DIR/${INTEL_ZH_RELEASE_NOTES:t}"))
+        #expect(!publishSource.contains("$STAGING_DIR/${INTEL_EN_RELEASE_NOTES:t}"))
+        #expect(publishSource.contains("PUBLIC_PAYLOAD_ASSET_COUNT=11"))
+        #expect(publishSource.contains("PUBLIC_RELEASE_ASSET_COUNT=12"))
+        #expect(publishSource.contains("11|14|16"))
+        #expect(publishSource.contains("12|15|17"))
+        #expect(publishSource.contains("Remote-Mic-$VERSION.dmg.sha256"))
         #expect(publishSource.contains("candidate-provenance.json"))
+        let releaseUploadSource = try #require(
+            publishSource.components(separatedBy: "gh release create").last?
+                .components(separatedBy: "--repo \"$REPOSITORY\"").first
+        )
+        #expect(!releaseUploadSource.contains("Remote-Mic-$VERSION-Installer.pkg"))
+        #expect(!releaseUploadSource.contains("Remote-Mic-$VERSION-Intel-Installer.pkg"))
+        #expect(releaseUploadSource.contains("Remote-Mic-$VERSION-Uninstaller.pkg"))
+        #expect(releaseUploadSource.contains("Remote-Mic-$VERSION-Intel-Uninstaller.pkg"))
         #expect(notarizeSource.contains("https://download.sayall.app/mac/releases/$RELEASE_TAG/"))
         #expect(publishSource.contains("appcast-intel.xml"))
         #expect(publishSource.contains("--range 0-1023"))
@@ -651,6 +666,11 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
         #expect(workflowSource.contains("package-macos-release-in-actions.sh"))
+        #expect(!workflowSource.contains("dist/Install Remote Mic.pkg"))
+        #expect(!workflowSource.contains("dist/intel/Install Remote Mic Intel.pkg"))
+        #expect(!workflowSource.contains("dist/intel/Remote-Mic-*-Intel.*.txt"))
+        #expect(workflowSource.contains("dist/Uninstall Remote Mic.pkg"))
+        #expect(workflowSource.contains("dist/intel/Uninstall Remote Mic Intel.pkg"))
         #expect(workflowSource.contains("needs: validate-candidate"))
         #expect(workflowSource.contains("actions: read"))
         #expect(workflowSource.contains("pull-requests: read"))
