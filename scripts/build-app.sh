@@ -17,6 +17,10 @@ REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
 REQUIRE_SAYALL_MACRO_PLATFORM="${REQUIRE_SAYALL_MACRO_PLATFORM:-0}"
 SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
 SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:-}"
+RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
+RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-180}"
+RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
+RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
@@ -45,6 +49,25 @@ case "$REQUIRE_SAYALL_MACRO_PLATFORM" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_MACRO_PLATFORM must be 0 or 1"; exit 1 ;;
 esac
+case "$RELEASE_STAGE_TIMEOUTS" in
+  0|1) ;;
+  *) print -u2 "RELEASE_STAGE_TIMEOUTS must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" && ! -x "$RELEASE_STAGE_RUNNER" ]]; then
+  print -u2 "release stage runner is unavailable"
+  exit 1
+fi
+
+run_release_stage() {
+  local stage="$1"
+  local timeout_seconds="$2"
+  shift 2
+  if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" ]]; then
+    "$RELEASE_STAGE_RUNNER" "$RELEASE_VARIANT" "$stage" "$timeout_seconds" -- "$@"
+  else
+    "$@"
+  fi
+}
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; then
   print -u2 "Developer ID Application signing is required"
   exit 1
@@ -103,15 +126,21 @@ else
   SCRATCH_FLAVOR="public"
 fi
 DEFAULT_SCRATCH_PATH="/private/tmp/remote-mic-swiftpm/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
+DEFAULT_CACHE_PATH="/private/tmp/remote-mic-swiftpm-cache/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
 BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_SCRATCH_PATH}"
+BUILD_CACHE_PATH="${REMOTE_MIC_BUILD_CACHE_PATH:-$DEFAULT_CACHE_PATH}"
 SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 
-xcrun swift build \
+run_release_stage app-swift-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
+  xcrun swift build \
   --scratch-path "$BUILD_SCRATCH_PATH" \
+  --cache-path "$BUILD_CACHE_PATH" \
   -c "$CONFIGURATION" \
   --triple "$RELEASE_TRIPLE"
-BIN_DIR="$(xcrun swift build \
+BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
+  xcrun swift build \
   --scratch-path "$BUILD_SCRATCH_PATH" \
+  --cache-path "$BUILD_CACHE_PATH" \
   -c "$CONFIGURATION" \
   --triple "$RELEASE_TRIPLE" \
   --show-bin-path)"
@@ -246,38 +275,44 @@ if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
 fi
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
-  codesign \
+  run_release_stage app-codesign-installer-xpc "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+    codesign \
     --force \
     --options runtime \
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
     "$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc"
-  codesign \
+  run_release_stage app-codesign-downloader-xpc "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+    codesign \
     --force \
     --options runtime \
     --timestamp \
     --preserve-metadata=entitlements \
     --sign "$SIGNING_IDENTITY" \
     "$SPARKLE_VERSION_DIR/XPCServices/Downloader.xpc"
-  codesign \
+  run_release_stage app-codesign-autoupdate "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+    codesign \
     --force \
     --options runtime \
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
     "$SPARKLE_VERSION_DIR/Autoupdate"
-  codesign \
+  run_release_stage app-codesign-updater "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+    codesign \
     --force \
     --options runtime \
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
     "$SPARKLE_VERSION_DIR/Updater.app"
-  codesign \
+  run_release_stage app-codesign-sparkle-framework "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+    codesign \
     --force \
     --options runtime \
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
     "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-  codesign \
+  run_release_stage app-codesign-main "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+    codesign \
     --force \
     --options runtime \
     --timestamp \

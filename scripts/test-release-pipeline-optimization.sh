@@ -7,6 +7,7 @@ WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-release-pipeline-test.XXXX
 TEST_REPO="$WORK_DIR/repo"
 FAKE_GH="$WORK_DIR/fake-gh"
 FAKE_RUNNER="$WORK_DIR/fake-release-variant-runner"
+FAKE_STAGE_COMMAND="$WORK_DIR/fake-stage-command"
 
 cleanup() {
   case "$WORK_DIR" in
@@ -29,9 +30,17 @@ fi
 /bin/cp "$ROOT/scripts/verify-preview-candidate-ci.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/prepare-preview-recording-pr.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/package-macos-release-variants.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/run-release-stage.sh" "$TEST_REPO/scripts/"
 print '#!/bin/zsh' > "$TEST_REPO/scripts/verify-preview-branch.sh"
 print 'exit 0' >> "$TEST_REPO/scripts/verify-preview-branch.sh"
 /bin/chmod 755 "$TEST_REPO/scripts/"*.sh
+
+/usr/bin/grep -Fq 'timeout-minutes: 10' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'SIGNED_RELEASE_TIMEOUT_SECONDS: 590' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq -- '--cache-path "$BUILD_CACHE_PATH"' "$ROOT/scripts/build-app.sh"
+/usr/bin/grep -Fq 'REMOTE_MIC_BUILD_CACHE_PATH' "$ROOT/scripts/notarize-release.sh"
 
 git -C "$TEST_REPO" init -b release/pre-v9.9.9 >/dev/null
 git -C "$TEST_REPO" config user.name "Release Pipeline Test"
@@ -152,6 +161,7 @@ fi
 {
   print '#!/bin/zsh'
   print 'set -euo pipefail'
+  print 'print -r -- $$ > "$PARALLEL_TEST_DIR/$RELEASE_VARIANT.pid"'
   print 'touch "$PARALLEL_TEST_DIR/$RELEASE_VARIANT.started"'
   print 'case "$RELEASE_VARIANT" in apple-silicon) other=intel ;; intel) other=apple-silicon ;; *) exit 2 ;; esac'
   print 'for attempt in {1..100}; do'
@@ -159,7 +169,13 @@ fi
   print '  /bin/sleep 0.02'
   print 'done'
   print 'test -f "$PARALLEL_TEST_DIR/$other.started"'
-  print 'if [[ "${FAKE_VARIANT_FAIL:-}" == "$RELEASE_VARIANT" ]]; then exit 7; fi'
+  print 'if [[ "${FAKE_VARIANT_FAIL:-}" == "$RELEASE_VARIANT" ]]; then /bin/sleep 0.2; exit 7; fi'
+  print 'if [[ "${FAKE_VARIANT_HANG:-}" == "$RELEASE_VARIANT" ]]; then'
+  print '  trap '\''touch "$PARALLEL_TEST_DIR/$RELEASE_VARIANT.terminated"; exit 143'\'' TERM INT'
+  print '  /bin/sleep 60 &'
+  print '  print -r -- $! > "$PARALLEL_TEST_DIR/$RELEASE_VARIANT.child.pid"'
+  print '  wait'
+  print 'fi'
   print 'touch "$PARALLEL_TEST_DIR/$RELEASE_VARIANT.finished"'
 } > "$FAKE_RUNNER"
 /bin/chmod 755 "$FAKE_RUNNER"
@@ -172,16 +188,88 @@ fi
 test -f "$WORK_DIR/parallel/apple-silicon.finished"
 test -f "$WORK_DIR/parallel/intel.finished"
 
-/bin/rm -f "$WORK_DIR/parallel/"*.started "$WORK_DIR/parallel/"*.finished
+/bin/mkdir "$WORK_DIR/parallel-failure"
+parallel_failure_start="$(date +%s)"
 if (
   cd "$TEST_REPO"
-  PARALLEL_RELEASE_VARIANTS=1 PARALLEL_TEST_DIR="$WORK_DIR/parallel" \
+  PARALLEL_RELEASE_VARIANTS=1 RELEASE_STAGE_TIMEOUTS=1 \
+    RELEASE_VARIANT_TIMEOUT_SECONDS=30 \
+    PARALLEL_TEST_DIR="$WORK_DIR/parallel-failure" \
     RELEASE_VARIANT_RUNNER="$FAKE_RUNNER" FAKE_VARIANT_FAIL=intel \
+    FAKE_VARIANT_HANG=apple-silicon \
     ./scripts/package-macos-release-variants.sh
 ) > "$WORK_DIR/parallel-failure.txt" 2>&1; then
   print -u2 "parallel release wrapper unexpectedly ignored a variant failure"
   exit 1
 fi
+parallel_failure_elapsed=$(( $(date +%s) - parallel_failure_start ))
+if (( parallel_failure_elapsed >= 10 )); then
+  print -u2 "parallel release wrapper did not fail fast"
+  exit 1
+fi
+for pid_file in "$WORK_DIR/parallel-failure/"*.pid(N); do
+  process_id="$(<"$pid_file")"
+  for attempt in {1..20}; do
+    process_state="$(/bin/ps -o stat= -p "$process_id" 2>/dev/null | /usr/bin/tr -d ' ' || true)"
+    [[ -z "$process_state" || "$process_state" == Z* ]] && break
+    /bin/sleep 0.1
+  done
+  if [[ -n "$process_state" && "$process_state" != Z* ]]; then
+    print -u2 "parallel release wrapper left a child process running: $process_id"
+    exit 1
+  fi
+done
+
+{
+  print '#!/bin/zsh'
+  print 'set -euo pipefail'
+  print 'print -r -- $$ > "$FAKE_STAGE_DIR/parent.pid"'
+  print '/bin/zsh -c '\''trap "" TERM INT HUP; /bin/sleep 60 & print -r -- $! > "$FAKE_STAGE_DIR/grandchild.pid"; wait'\'' &'
+  print 'print -r -- $! > "$FAKE_STAGE_DIR/child.pid"'
+  print 'wait'
+} > "$FAKE_STAGE_COMMAND"
+/bin/chmod 755 "$FAKE_STAGE_COMMAND"
+
+quick_stage_start="$(date +%s)"
+"$TEST_REPO/scripts/run-release-stage.sh" test quick-exit 5 -- /usr/bin/true \
+  > "$WORK_DIR/stage-quick-exit.txt" 2>&1
+quick_stage_elapsed=$(( $(date +%s) - quick_stage_start ))
+if (( quick_stage_elapsed >= 3 )); then
+  print -u2 "release stage did not reap a quick exit promptly"
+  exit 1
+fi
+/usr/bin/grep -Fq 'RELEASE STAGE PASS lane=test stage=quick-exit' \
+  "$WORK_DIR/stage-quick-exit.txt"
+
+/bin/mkdir "$WORK_DIR/stage-timeout"
+set +e
+RELEASE_HEARTBEAT_SECONDS=1 FAKE_STAGE_DIR="$WORK_DIR/stage-timeout" \
+  "$TEST_REPO/scripts/run-release-stage.sh" intel test-hang 2 -- \
+  "$FAKE_STAGE_COMMAND" > "$WORK_DIR/stage-timeout.txt" 2>&1
+stage_timeout_status=$?
+set -e
+if [[ "$stage_timeout_status" != "124" ]]; then
+  print -u2 "release stage timeout returned $stage_timeout_status instead of 124"
+  exit 1
+fi
+for expected_log in \
+  'RELEASE STAGE START lane=intel stage=test-hang' \
+  'RELEASE STAGE HEARTBEAT lane=intel stage=test-hang' \
+  'RELEASE STAGE TIMEOUT lane=intel stage=test-hang'; do
+  /usr/bin/grep -Fq "$expected_log" "$WORK_DIR/stage-timeout.txt"
+done
+for pid_file in "$WORK_DIR/stage-timeout/"*.pid(N); do
+  process_id="$(<"$pid_file")"
+  for attempt in {1..20}; do
+    process_state="$(/bin/ps -o stat= -p "$process_id" 2>/dev/null | /usr/bin/tr -d ' ' || true)"
+    [[ -z "$process_state" || "$process_state" == Z* ]] && break
+    /bin/sleep 0.1
+  done
+  if [[ -n "$process_state" && "$process_state" != Z* ]]; then
+    print -u2 "release stage timeout left a child process running: $process_id"
+    exit 1
+  fi
+done
 
 print "RELEASE PIPELINE OPTIMIZATION TEST PASS"
 print "HEAD: $HEAD_COMMIT"

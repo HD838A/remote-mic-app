@@ -14,6 +14,10 @@ BUNDLE_ID="com.hd838a.MiRemoteV2ch"
 DEFINITIONS='$GCC_PREPROCESSOR_DEFINITIONS kDriver_Name=\"MiRemoteV\" kPlugIn_BundleID=\"com.hd838a.MiRemoteV2ch\" kNumber_Of_Channels=2'
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
+RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
+RELEASE_DRIVER_BUILD_TIMEOUT_SECONDS="${RELEASE_DRIVER_BUILD_TIMEOUT_SECONDS:-150}"
+RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
+RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 
 if ! command -v git >/dev/null 2>&1; then
   print -u2 "Missing required command: git"
@@ -27,6 +31,25 @@ case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
   *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
 esac
+case "$RELEASE_STAGE_TIMEOUTS" in
+  0|1) ;;
+  *) print -u2 "RELEASE_STAGE_TIMEOUTS must be 0 or 1"; exit 1 ;;
+esac
+if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" && ! -x "$RELEASE_STAGE_RUNNER" ]]; then
+  print -u2 "release stage runner is unavailable"
+  exit 1
+fi
+
+run_release_stage() {
+  local stage="$1"
+  local timeout_seconds="$2"
+  shift 2
+  if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" ]]; then
+    "$RELEASE_STAGE_RUNNER" "$RELEASE_VARIANT" "$stage" "$timeout_seconds" -- "$@"
+  else
+    "$@"
+  fi
+}
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; then
   print -u2 "Developer ID Application signing is required"
   exit 1
@@ -43,7 +66,7 @@ esac
 
 rm -rf -- "$WORK_ROOT" "$OUTPUT"
 mkdir -p "${WORK_ROOT:h}" "${OUTPUT:h}"
-git clone --depth 1 --branch "$BLACKHOLE_TAG" \
+run_release_stage driver-source-clone 60 git clone --depth 1 --branch "$BLACKHOLE_TAG" \
   https://github.com/ExistentialAudio/BlackHole.git "$SOURCE_ROOT"
 
 if [[ "$(git -C "$SOURCE_ROOT" rev-parse HEAD)" != "$BLACKHOLE_COMMIT" ]]; then
@@ -55,7 +78,7 @@ git -C "$SOURCE_ROOT" apply "$PATCH"
 rg -U -q 'case kAudioDevicePropertyTransportType:(?s:.*?)kAudioDeviceTransportTypeUSB' \
   "$SOURCE_ROOT/BlackHole/BlackHole.c"
 
-xcodebuild \
+run_release_stage driver-xcodebuild "$RELEASE_DRIVER_BUILD_TIMEOUT_SECONDS" xcodebuild \
   -project "$SOURCE_ROOT/BlackHole.xcodeproj" \
   -target BlackHole \
   -configuration Release \
@@ -75,7 +98,7 @@ ditto --norsrc --noextattr --noqtn --noacl \
 if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   codesign --force --deep --sign - --timestamp=none "$OUTPUT"
 else
-  codesign \
+  run_release_stage driver-codesign "$RELEASE_CODESIGN_TIMEOUT_SECONDS" codesign \
     --force \
     --deep \
     --options runtime \
