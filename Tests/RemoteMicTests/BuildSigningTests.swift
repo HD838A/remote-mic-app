@@ -370,6 +370,13 @@ struct BuildSigningTests {
         #expect(stageRunnerSource.contains("RELEASE STAGE HEARTBEAT"))
         #expect(stageRunnerSource.contains("RELEASE STAGE TIMEOUT"))
         #expect(stageRunnerSource.contains("exit 124"))
+        let heartbeatIndex = try #require(
+            stageRunnerSource.range(of: "if (( now_seconds >= NEXT_HEARTBEAT ))")
+        )
+        let timeoutIndex = try #require(
+            stageRunnerSource.range(of: "if (( elapsed >= TIMEOUT_SECONDS ))")
+        )
+        #expect(heartbeatIndex.lowerBound < timeoutIndex.lowerBound)
         let buildIndex = try #require(notarizeSource.range(of: "\"$ROOT/scripts/build-app.sh\""))
         let sparkleToolCheckIndex = try #require(
             notarizeSource.range(of: "test -x \"$GENERATE_APPCAST\"")
@@ -379,11 +386,24 @@ struct BuildSigningTests {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [regressionScript.path]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        let standardOutput = Pipe()
+        let standardError = Pipe()
+        process.standardOutput = standardOutput
+        process.standardError = standardError
         try process.run()
         process.waitUntilExit()
-        #expect(process.terminationStatus == 0)
+        let output = String(
+            data: standardOutput.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        ) ?? ""
+        let error = String(
+            data: standardError.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        ) ?? ""
+        #expect(
+            process.terminationStatus == 0,
+            "Release pipeline regression failed. stdout: \(output) stderr: \(error)"
+        )
     }
 
     @Test func intelVenturaReleaseLineStaysIsolatedFromAppleSilicon() throws {
