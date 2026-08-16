@@ -49,13 +49,15 @@ struct OnboardingView: View {
         model: BridgeAppModel,
         completeRuntimeReadyOverride: Bool? = nil,
         allowsInputSourceSwitching: Bool = true,
-        systemFunctionKeyAvailableOverride: Bool? = nil
+        systemFunctionKeyAvailableOverride: Bool? = nil,
+        initialInputMethodGuideStep: Int = 0
     ) {
         self.model = model
         settings = model.settings
         self.completeRuntimeReadyOverride = completeRuntimeReadyOverride
         self.allowsInputSourceSwitching = allowsInputSourceSwitching
         self.systemFunctionKeyAvailableOverride = systemFunctionKeyAvailableOverride
+        _selectedInputMethodGuideStep = State(initialValue: initialInputMethodGuideStep)
     }
 
     var body: some View {
@@ -191,17 +193,13 @@ struct OnboardingView: View {
                 Color.clear.frame(height: 40)
             }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    stepContent
-                    if let failureReason {
-                        recoveryCard(for: failureReason)
-                    }
+            VStack(alignment: .leading, spacing: 18) {
+                stepContent
+                if let failureReason {
+                    recoveryCard(for: failureReason)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 24)
             }
-            .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             HStack {
                 Spacer()
@@ -269,7 +267,10 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
 
             LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())],
+                columns: [
+                    GridItem(.flexible(), spacing: 10, alignment: .top),
+                    GridItem(.flexible(), alignment: .top),
+                ],
                 spacing: 10
             ) {
                 ForEach([OnboardingVoiceTool.doubao, .weixin, .typeless, .other]) { tool in
@@ -287,10 +288,12 @@ struct OnboardingView: View {
                                 Text(localization.text(tool.titleKey))
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(.primary)
+                                    .lineLimit(1)
                                 Text(localization.text(tool.detailKey))
                                     .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
                                     .multilineTextAlignment(.leading)
+                                    .lineLimit(4, reservesSpace: true)
                             }
                             Spacer()
                             Image(systemName: settings.onboardingVoiceTool == tool ? "checkmark.circle.fill" : "circle")
@@ -299,7 +302,7 @@ struct OnboardingView: View {
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(minHeight: 82, alignment: .top)
+                        .frame(height: 112, alignment: .top)
                         .background(
                             settings.onboardingVoiceTool == tool
                                 ? Color.accentColor.opacity(0.09)
@@ -318,10 +321,6 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.plain)
                 }
-            }
-
-            if settings.onboardingVoiceTool.requiresFunctionKeySetup {
-                inputMethodGuide(for: settings.onboardingVoiceTool)
             }
         }
     }
@@ -344,7 +343,10 @@ struct OnboardingView: View {
             inputSourceSwitchStatus(for: tool)
 
             LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())],
+                columns: [
+                    GridItem(.flexible(), spacing: 8, alignment: .top),
+                    GridItem(.flexible(), alignment: .top),
+                ],
                 spacing: 8
             ) {
                 ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
@@ -366,10 +368,18 @@ struct OnboardingView: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.primary)
                                 .multilineTextAlignment(.leading)
+                                .lineLimit(2, reservesSpace: true)
                             Spacer(minLength: 0)
+                            if step.id == 3 {
+                                Image(systemName: systemFunctionKeyAvailable
+                                    ? "checkmark.circle.fill"
+                                    : "exclamationmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(systemFunctionKeyAvailable ? Color.green : Color.orange)
+                            }
                         }
                         .padding(.horizontal, 10)
-                        .frame(minHeight: 44)
+                        .frame(height: 54)
                         .background(
                             selectedIndex == index
                                 ? Color.accentColor.opacity(0.09)
@@ -397,8 +407,8 @@ struct OnboardingView: View {
                 systemFunctionKeyInstruction
             }
         }
-        .padding(14)
-        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 14))
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
         .overlay {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
@@ -435,7 +445,7 @@ struct OnboardingView: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 330)
+                    .frame(maxWidth: .infinity, maxHeight: 300)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10)
@@ -453,6 +463,8 @@ struct OnboardingView: View {
 
     private var systemFunctionKeyInstruction: some View {
         VStack(alignment: .leading, spacing: 12) {
+            onboardingGuideScreenshot(resourceName: "system-fn")
+
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: systemFunctionKeyAvailable ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.system(size: 20, weight: .medium))
@@ -469,13 +481,14 @@ struct OnboardingView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-
-            if !systemFunctionKeyAvailable {
-                Button("onboarding.voice_tool.system_fn.open_settings") {
-                    openKeyboardSettings()
+                Spacer(minLength: 8)
+                if !systemFunctionKeyAvailable {
+                    Button("onboarding.voice_tool.system_fn.open_settings") {
+                        openKeyboardSettings()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .padding(14)
@@ -838,7 +851,13 @@ struct OnboardingView: View {
                 .blur(radius: 10)
                 .offset(x: 110, y: -210)
 
-            if settings.onboardingStep == .welcome || settings.onboardingStep == .voiceTool {
+            if settings.onboardingStep == .voiceTool,
+               settings.onboardingVoiceTool.requiresFunctionKeySetup {
+                inputMethodGuide(for: settings.onboardingVoiceTool)
+                    .frame(maxWidth: 440)
+                    .padding(28)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else if settings.onboardingStep == .welcome || settings.onboardingStep == .voiceTool {
                 welcomeIllustration
             } else if settings.onboardingStep == .complete {
                 completeIllustration
@@ -1264,11 +1283,7 @@ struct OnboardingView: View {
             return
         }
 
-        if OnboardingInputSourceSwitcher.isSelected(tool) {
-            inputSourceSwitchResult = .selected
-        } else {
-            inputSourceSwitchResult = OnboardingInputSourceSwitcher.select(tool)
-        }
+        inputSourceSwitchResult = OnboardingInputSourceSwitcher.selectIfNeeded(tool)
         AppLogger.shared.write(
             "ONBOARDING INPUT SOURCE tool=\(tool.rawValue) result=\(inputSourceSwitchResult.rawValue)"
         )

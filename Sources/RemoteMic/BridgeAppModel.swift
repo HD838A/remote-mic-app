@@ -75,6 +75,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     })
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
+    private lazy var preferredInputSourceMonitor = PreferredInputSourceMonitor(
+        voiceTool: { [weak self] in
+            self?.settings.onboardingVoiceTool ?? .unselected
+        }
+    )
     private lazy var voiceInputDestinationCoordinator = VoiceInputDestinationCoordinator(
         onStateChange: { [weak self] state in
             self?.handleVoiceInputDestinationState(state)
@@ -386,6 +391,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func stop() {
         privateFeature.stop()
         macroFeature.stop()
+        preferredInputSourceMonitor.stop()
         guard started else { return }
         started = false
         completedUpdateHIDRecoveryWorkItem?.cancel()
@@ -921,6 +927,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func applyHIDSettings() {
+        if started, HIDRemoteMonitor.isInputMonitoringGranted {
+            preferredInputSourceMonitor.start()
+        } else {
+            preferredInputSourceMonitor.stop()
+        }
         if !settings.customMappingEnabled {
             stopLongRecording(reason: "mapping_disabled")
         }

@@ -24,6 +24,13 @@ enum OnboardingSystemFunctionKeyUsage: Equatable {
 }
 
 enum OnboardingInputSourceSwitcher {
+    static func selectIfNeeded(
+        _ voiceTool: OnboardingVoiceTool
+    ) -> OnboardingInputSourceSwitchResult {
+        guard voiceTool.preferredInputSourceID != nil else { return .notApplicable }
+        return isSelected(voiceTool) ? .selected : select(voiceTool)
+    }
+
     static func select(_ voiceTool: OnboardingVoiceTool) -> OnboardingInputSourceSwitchResult {
         guard let targetID = voiceTool.preferredInputSourceID else { return .notApplicable }
         guard let source = inputSource(withID: targetID) else { return .unavailable }

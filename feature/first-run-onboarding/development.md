@@ -7,13 +7,14 @@
 - `Sources/RemoteMic/RemoteMicRootView.swift`：在向导和既有设置页之间切换，并在进入硬件步骤时启动运行时。
 - `Sources/RemoteMic/OnboardingView.swift`：双栏页面、权限操作、设备与按键状态、真实语音文字测试和固定底部导航。
 - `Sources/RemoteMic/OnboardingInputSourceSwitcher.swift`：通过 macOS Text Input Sources API 检测并切换豆包/微信输入法，读取系统 Fn 动作是否已释放。
+- `Sources/RemoteMic/PreferredInputSourceMonitor.swift`：监听全局 Fn 按下边沿，按 Onboarding 保存的工具选择准备对应输入法。
 - `Sources/RemoteMic/OnboardingScreenshotRenderer.swift`：通过离屏 AppKit 窗口渲染生产向导，支持浅色、深色和系统外观，使用隔离偏好域。
 - `Sources/RemoteMic/RemoteMicApp.swift`：未完成时强制显示主窗口并延迟完整运行时启动；专用环境变量存在时进入无界面截图模式。
 - `Sources/RemoteMic/BridgeAppModel.swift`：在现有蓝牙语音开始与 PCM 解码回调旁公开当前会话样本计数；允许截图模式注入隔离设置，不保存音频；重连入口在 bridge 尚未创建时可启动蓝牙连接。
 - `Sources/RemoteMic/RemoteVoiceFunctionMapper.swift`、`HIDRemoteMonitor.swift`：按 HID Location ID 限定电源键抑制成功的安全设备，部分失败时不再全局关闭普通按键，也不放宽锁屏保护。
 - `Sources/RemoteMic/SettingsView.swift`：关于页增加“重新运行设置向导”；设备卡显示完整名称并自适应状态布局，连接页删除重复信息。
 - `Resources/*/Localizable.strings`：中英文向导文案。
-- `Resources/Onboarding/*.png`：豆包、微信输入法和微信 App 的浅色/深色原始设置截图。
+- `Resources/Onboarding/*.png`：豆包、微信输入法、macOS 系统 Fn 和微信 App 的浅色/深色原始设置截图。
 - `Resources/首次安装说明*.md`：同步记录首次激活和蓝牙配对顺序。
 - `Tests/RemoteMicTests/OnboardingFlowTests.swift`：步骤、门禁、持久化、完成版本和重新运行测试。
 - `scripts/test.sh`：把 Onboarding 流程类型加入项目自检的显式编译文件列表。
@@ -38,6 +39,8 @@
 15. 遥控器页把首次连接分成两条静态说明：先长按 TV 键约 2 秒直到底部白灯闪烁，再同时长按 Home + Menu；说明不参与能力门禁，实际连接和普通实体按键仍由生产状态验证。
 16. 豆包和微信输入法使用已验证的系统输入源 ID 自动切换；进入语音测试并聚焦输入框时再次切换，避免 macOS 按 App 记忆输入源后回到 ABC。系统 Fn 动作不是“不执行任何操作”时，输入法选择页不能继续。
 17. 输入法设置采用页面内四项指引：选择输入法、把语音设为 Fn、释放系统 Fn、清空微信 App 的两个语音输入快捷键。第三方设置无法由 App 可靠读取，最终仍由真实语音文字页验证。
+18. Onboarding 左栏不再使用全局 `ScrollView`；每一页在 `1020 × 772` 内固定展示完整任务。语音工具选择卡使用一致高度和顶部对齐，豆包/微信的四项设置移到右栏，避免用户因滚动遗漏后续设置。
+19. 系统 Fn 第 3 项显示匹配当前外观的 macOS 键盘设置原图，同时保留 `AppleFnUsageType` 实时门禁和打开设置入口。完成后，全局 Fn 按下边沿复用同一精确输入源切换器准备 Onboarding 保存的豆包或微信输入法；不自动恢复旧输入源。
 
 ## 全流程门禁审计结论
 
@@ -67,6 +70,7 @@
 4. 截图入口直接实例化生产 `OnboardingView`，使用隔离 `UserDefaults` 和离屏 AppKit 窗口；不依赖屏幕录制、窗口是否可见或机器是否锁屏。
    完成页截图只向生产视图注入“当前运行时已就绪”的截图夹具，不改变普通启动的最终门禁，避免静态截图把恢复错误态误当成标准完成态。
 5. 截图外观必须从 AppKit 窗口根部固定，再让 SwiftUI 环境继承；只修改某个子视图会出现左侧浅色、右侧深色或反向的分裂结果。
+6. 输入法指引截图夹具可以通过 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP=0...3` 选择右栏状态，并用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE=0|1` 覆盖系统 Fn 冲突状态，便于逐项检查且不切换用户真实输入法。
 
 ### 测试
 
@@ -89,12 +93,14 @@
 - `swift test --filter SettingsPageRegressionTests`：7 项通过。
 - `swift test --filter LocalizationTests`：5 项通过，中英文 key 和格式一致。
 - `swift test`：2026-08-15 本轮 220 项、18 个 suite 全部通过，没有失败用例。
-- `scripts/test.sh`：42 项项目自检通过。
+- `swift test`：2026-08-17 系统 Fn 截图与首选输入法准备接入后 230 项、20 个 suite 全部通过；`scripts/test.sh` 42 项项目自检通过。
 - 私有硬件模拟：16 项通过，覆盖 RC001/RC003 语音、12 个原始按键、36 个手势、连发、异常报告、重连和双设备隔离。
 - `swift build -c release`：通过。
 - `scripts/build-app.sh`：通过；`codesign --verify --deep --strict` 通过。
 - 测试 App：`dist/SayAll.app`。
 - 实现截图：已完成。无需屏幕解锁，直接实例化生产 `OnboardingView`，通过离屏 AppKit 窗口缓存生成浅色、深色各 8 张真实实现截图，逐页确认原生窗口、实际 App 图标、RC003 图片、首次连接两步说明、新增恢复按钮、最终错误卡、标准完成态、底部导航和实时检查区域无裁切；未使用设计稿替代实现证据。
+- 2026-08-17 布局回归复验：豆包浅色/深色四个指引状态、微信浅色/深色语音工具页和豆包浅色/深色全部 8 页均已生成并逐张检查；工具卡对齐，右栏被完整利用，全流程无页面内部滚动或裁切。
+- 2026-08-17 系统 Fn 第 3 项复验：浅色、深色正常状态及浅色冲突状态均使用生产视图生成；原始系统设置截图、实时状态、冲突按钮和底部导航同时完整可见，无内部滚动或裁切。
 - 深色模式右侧改为深蓝语义画布和自适应检查卡，与左侧同属深色体系；浅色继续使用浅蓝画布。两种外观均不存在黑白分栏。
 - 连接页生产 `SettingsView` 另以窗口合成方式检查浅色和深色：完整显示“小米蓝牙遥控器 2 / 2 Pro”，连接、电量和供电信息不截断，连接页没有重复名称或状态。
 - App 内保留隐藏截图入口：设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR` 后离屏输出全部页面，可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark|system` 指定外观；正常启动路径不显示入口。

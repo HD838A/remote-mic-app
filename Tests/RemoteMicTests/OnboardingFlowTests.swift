@@ -188,7 +188,7 @@ struct OnboardingFlowTests {
 
         for resourceName in [
             "doubao-menu", "doubao-settings", "weixin-input-menu",
-            "weixin-input-settings", "weixin-app-shortcuts",
+            "weixin-input-settings", "system-fn", "weixin-app-shortcuts",
         ] {
             #expect(viewSource.contains(resourceName))
             for appearance in ["light", "dark"] {
@@ -200,9 +200,18 @@ struct OnboardingFlowTests {
             }
         }
         #expect(viewSource.contains("switchToSelectedInputMethod()"))
+        #expect(viewSource.contains("OnboardingInputSourceSwitcher.selectIfNeeded(tool)"))
         #expect(viewSource.contains("openKeyboardSettings()"))
+        #expect(!viewSource.contains("ScrollView"))
+        #expect(viewSource.contains("GridItem(.flexible(), spacing: 10, alignment: .top)"))
+        #expect(viewSource.contains(".frame(height: 112, alignment: .top)"))
+        #expect(viewSource.contains("inputMethodGuide(for: settings.onboardingVoiceTool)"))
         #expect(rendererSource.contains("allowsInputSourceSwitching: false"))
-        #expect(rendererSource.contains("systemFunctionKeyAvailableOverride: true"))
+        #expect(rendererSource.contains(
+            "systemFunctionKeyAvailableOverride: systemFunctionKeyAvailable"
+        ))
+        #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"))
+        #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"))
         #expect(buildSource.contains("$ROOT/Resources/Onboarding"))
         #expect(verifySource.contains("Resources/Onboarding/*.png(N)"))
     }
@@ -439,6 +448,7 @@ struct OnboardingFlowTests {
         #expect(completed.isOnboardingComplete)
         #expect(completed.onboardingCompletedVersion == AppSettings.currentOnboardingVersion)
         #expect(completed.onboardingStep == .complete)
+        #expect(completed.onboardingVoiceTool == .doubao)
 
         completed.selectedAudioDeviceUID = "MiRemoteV 2ch"
         completed.customMappingEnabled = true

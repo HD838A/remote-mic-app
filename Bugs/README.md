@@ -98,6 +98,7 @@
 | 2026-08-16 | [发布阶段 heartbeat 与 timeout 同时到期导致 CI 偶发失败](./2026-08-16-release-stage-heartbeat-timeout-flake.md) | 已修复，自动化验证通过 |
 | 2026-08-17 | [正式版晋升 Runner 缺少 ripgrep](./2026-08-17-stable-promotion-runner-missing-rg.md) | 已修复，等待下一次受保护晋升验证 |
 | 2026-08-17 | [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md) | 宿主侧候选修复完成，等待真实 MiRemoteV 与第三方 App 验收 |
+| 2026-08-17 | [Onboarding 语音工具页卡片错位并依赖内部滚动](./2026-08-17-onboarding-voice-tool-layout-scroll.md) | 候选修复完成，浅色与深色页面已复验 |
 
 ## 记录模板
 

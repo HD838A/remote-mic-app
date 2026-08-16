@@ -77,6 +77,12 @@ enum OnboardingScreenshotRenderer {
         let requestedVoiceTool = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_TOOL"
         ].flatMap(OnboardingVoiceTool.init(rawValue:))
+        let requestedGuideStep = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"
+        ].flatMap(Int.init) ?? 0
+        let systemFunctionKeyAvailable = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"
+        ].map { $0 != "0" } ?? true
         settings.setOnboardingVoiceTool(requestedVoiceTool ?? .doubao)
         let screenshotAudioDevices = [
             AudioDeviceInfo(id: 1, uid: DoubaoAudioDevicePolicy.deviceUID, name: "MiRemoteV 2ch"),
@@ -100,7 +106,8 @@ enum OnboardingScreenshotRenderer {
                 model: model,
                 completeRuntimeReadyOverride: true,
                 allowsInputSourceSwitching: false,
-                systemFunctionKeyAvailableOverride: true
+                systemFunctionKeyAvailableOverride: systemFunctionKeyAvailable,
+                initialInputMethodGuideStep: requestedGuideStep
             )
                 .environmentObject(localization)
                 .frame(width: 1020, height: 772)
