@@ -72,9 +72,15 @@ final class MacroFeatureIntegration: ObservableObject {
 #endif
     }
 
-    func settingsView(selectedRemoteProfileID: UUID?) -> AnyView {
+    func settingsView(
+        selectedRemoteProfileID: UUID?,
+        configuredActionTitle: @escaping (String, String) -> String?
+    ) -> AnyView {
         #if canImport(SayAllMacroRemoteMic)
-        feature.settingsView(selectedRemoteProfileID: selectedRemoteProfileID)
+        feature.settingsView(
+            selectedRemoteProfileID: selectedRemoteProfileID,
+            configuredActionTitle: configuredActionTitle
+        )
         #else
         AnyView(EmptyView())
         #endif

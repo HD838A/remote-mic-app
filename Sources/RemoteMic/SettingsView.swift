@@ -483,7 +483,13 @@ struct SettingsView: View {
         case .macros:
             if macroFeature.isFeatureVisible {
                 macroFeature.settingsView(
-                    selectedRemoteProfileID: settings.selectedRemoteProfileID
+                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                    configuredActionTitle: { buttonValue, triggerValue in
+                        guard let button = RemoteButton(rawValue: buttonValue),
+                              let trigger = ButtonTrigger(rawValue: triggerValue)
+                        else { return nil }
+                        return mappingActionSummary(for: button, trigger: trigger)
+                    }
                 )
             } else {
                 aboutPage
