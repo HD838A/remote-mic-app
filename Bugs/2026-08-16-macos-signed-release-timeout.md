@@ -1,7 +1,7 @@
 # macOS 签名发布并发缓存冲突与无限等待
 
 - 时间：2026-08-16
-- 状态：第二次修复完成，等待下一次真实受保护工作流验证
+- 状态：已修复；`1.8.25 (119)` 已完成真实受保护 Developer ID 双架构验证
 - 影响范围：`macOS Signed Release Packages`，Apple Silicon 与 Intel 并行签名打包
 - 功能点：SwiftPM 依赖下载、Developer ID 签名、公证、PKG/DMG 打包
 - 简单描述：双架构并行时共享 SwiftPM 全局 artifact cache，且签名打包命令没有子超时或总步骤硬上限，导致一次发布先出现 Sparkle 下载冲突，随后 Intel `pkgbuild` 无输出等待约 157 分钟。
@@ -49,7 +49,7 @@
 - `scripts/build-app.sh`：为每个 lane 同时隔离 SwiftPM scratch 与 cache；Release 模式下给 Swift build 和 timestamp codesign 增加子超时。
 - `scripts/build-doubao-driver.sh`、`scripts/build-doubao-driver-pkg.sh`、`scripts/build-dmg.sh`、`scripts/notarize-release.sh`：只在签名发布模式启用阶段日志和对应长命令子超时。
 - `scripts/test-release-pipeline-optimization.sh`、`Tests/RemoteMicTests/BuildSigningTests.swift`：覆盖 10 分钟阈值、cache 隔离、超时进程树清理、并发失败传播和阶段日志。
-- `Testing/MacSignedReleaseTimeout.md`：记录无 Apple 凭据验证和下一次真实签名发布的验收边界。
+- `Testing/MacSignedReleaseTimeout.md`：记录无 Apple 凭据验证、后续真实签名结果和验收边界。
 
 不修改产品功能、签名身份、证书、Notary 凭据、候选分支、Tag 或 Release。
 
@@ -65,7 +65,7 @@
 
 第一次本机冷缓存验证因图形会话锁屏导致登录 Keychain 返回 `status -128`。这不是 SwiftPM cache 隔离失败；后续验证禁用本机 Keychain/netrc，并将私有依赖镜像到本地，只验证无凭据的真实并发冷缓存下载路径，结果通过。正式发布工作流仍必须使用其隔离发布 Keychain，不能照搬本机验证参数禁用发布 Keychain。
 
-真实验证边界：本次没有访问 Apple 凭据，没有运行 Developer ID 签名、公证、staple、Environment 审批或发布。下一次受保护工作流必须确认签名 composite step 在 590 秒由内部 supervisor 开始清理，并在 GitHub 10 分钟硬上限内结束；同时确认超时后没有遗留 `codesign`、`pkgbuild`、`productbuild`、`notarytool`、`hdiutil` 或其子进程。
+第一轮修复当时的真实验证边界：该轮没有访问 Apple 凭据，没有运行 Developer ID 签名、公证、staple、Environment 审批或发布。后续 Run `31938200895` 已证明单阶段 timeout、完整进程树清理和双 lane fail-fast 会在真实受保护 Runner 生效；Run `31944719103` 已补齐正常成功路径的 Developer ID、timestamp、公证和 staple 验收。590 秒总 supervisor 的实际超时分支没有通过故意挂起真实签名来触发，继续由无凭据进程树测试和 GitHub 10 分钟 step 配置覆盖。
 
 `TODO.md` 没有对应的独立流水线超时条目，因此本次不修改 TODO 状态。
 
@@ -104,4 +104,16 @@ GitHub Actions Run `31938200895` 在 2026-08-16 对 `1.8.25` 执行了修复后�
 
 本机无凭据回归已经覆盖两套完整 ad-hoc 链：Apple Silicon component `pkgbuild` 约 2 秒、Distribution `productbuild` 约 1 秒；Intel component `pkgbuild` 约 1 秒、Distribution `productbuild` 约 2 秒。两套 PKG/DMG 验证通过，`BuildSigningTests` 14/14、installer architecture guard 和 release pipeline optimization regression 均通过。
 
-本轮没有修改、创建或轮换证书，没有请求或输出 secret，没有重试挂起命令，也没有增加任何 timeout。真实 Developer ID 探针、跨 lane 串行 productsign 和最终外层 PKG 公证仍需下一次新的候选工作流验收；不得重跑旧 `1.8.25` 候选。
+本轮没有修改、创建或轮换证书，没有请求或输出 secret，没有重试挂起命令，也没有增加任何 timeout。当时尚待验收的 Developer ID 探针、跨 lane 串行 `productsign` 和最终外层 PKG 公证，已经由下述 Build 119 新候选完成，不是通过重跑失败候选获得。
+
+## Build 119 真实 Developer ID 验收
+
+GitHub Actions Run [`31944719103`](https://github.com/HD838A/remote-mic-app/actions/runs/31944719103) 使用候选提交 `1659b6c094b47e89016a3d6f8a6f81e972ad15f3` 构建 `1.8.25 (119)`，该提交的直接父提交为包含第二次修复的 `bba72af82084655ff688d38774376f4f6aaae5ff`。
+
+- Apple Silicon 与 Intel 的 unsigned component `pkgbuild` 均约 1 秒完成；unsigned Distribution `productbuild` 均约 1 秒完成。
+- 两个 lane 的 nopayload Developer ID Installer `productsign` 探针均约 2 秒完成，最终安装和卸载产品的 `productsign` 均约 1 秒完成。
+- 两套 App、四个最终外层 PKG 和两套 DMG 均完成 Developer ID 签名、可信 timestamp、公证、staple 与对应 Gatekeeper 验证；内层 `RemoteMicComponent.pkg` 继续保持 unsigned。
+- 完整 `signed-release` 阶段约 266 秒结束，GitHub step 约 4 分 26 秒完成，没有触发 590/600 秒门禁。
+- 当前防回归测试直接提取 `installer-component-pkgbuild` 与 `installer-productbuild` 命令块，要求两者不含 `--sign`；测试会分别注入 `--sign` mutation，并要求两个变体都被拒绝，避免以后换一种变量名重新引入 Build 118 的触发路径。
+
+仍然成立的边界：成功的 Build 119 证明正常真实签名链可用，但不会证明 Apple、Keychain 或网络服务永不出现新的瞬时失败；这些相邻故障必须继续由 45–120 秒单阶段 timeout、590 秒总 supervisor、GitHub 10 分钟硬上限和 fail-fast 约束为有界失败。

@@ -475,6 +475,10 @@ struct BuildSigningTests {
         #expect(packageVerifierSource.contains("/usr/sbin/spctl -a -vv -t install \"$PACKAGE\""))
         #expect(packageVerifierSource.contains("my.result.type = 'Fatal'"))
         #expect(installerGuardSource.contains("INSTALLER ARCHITECTURE GUARD TEST PASS"))
+        #expect(installerGuardSource.contains("assert_unsigned_stage_block"))
+        #expect(installerGuardSource.contains("component-sign-mutation"))
+        #expect(installerGuardSource.contains("product-sign-mutation"))
+        #expect(installerGuardSource.contains("unexpectedly accepted --sign"))
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
