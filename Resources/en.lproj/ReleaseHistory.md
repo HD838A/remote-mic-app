@@ -1,5 +1,13 @@
 # Version History
 
+## 1.8.24 (Pre-release)
+
+- When an installer does not match the Mac's processor architecture, Installer now explains whether the Apple Silicon or Intel package is required and directs users to the correct download.
+- Updated the Mac app branding to SayAll and changed its website links to `sayall.app`.
+- Added first-run setup guidance for waking the remote and entering pairing mode with Home + Menu.
+- Voice sessions from iPhone, Apple Watch, and the Mobile Web Remote are now isolated from one another, so a delayed stop from another source does not interrupt the active session. Connection & Voice now distinguishes waiting from connected devices and lets users cancel either state directly.
+- Added a Feedback entry to the menu bar menu.
+
 ## 1.8.23 (Pre-release)
 
 - Fixed an issue that could cause Remote Mic to quit when opening Quick Commands from the sidebar.
