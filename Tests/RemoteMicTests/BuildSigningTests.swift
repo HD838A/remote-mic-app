@@ -359,6 +359,11 @@ struct BuildSigningTests {
         #expect(buildSource.contains("app-codesign-installer-xpc"))
         #expect(driverPackageSource.contains("installer-component-pkgbuild"))
         #expect(driverPackageSource.contains("installer-productbuild"))
+        #expect(driverPackageSource.contains("UNSIGNED_INSTALL_PACKAGE"))
+        #expect(driverPackageSource.contains("installer-signing-probe-productsign"))
+        #expect(driverPackageSource.contains("run_locked_productsign installer-productsign"))
+        #expect(driverPackageSource.contains("/usr/bin/lockf -k -t"))
+        #expect(!driverPackageSource.contains("INSTALL_COMPONENT_SIGNING_ARGS"))
         #expect(driverPackageSource.contains("uninstaller-pkgbuild"))
         #expect(driverPackageSource.contains("uninstaller-productsign"))
         #expect(stageRunnerSource.contains("RELEASE STAGE START"))
@@ -443,6 +448,11 @@ struct BuildSigningTests {
             "package scripts must not require Xcode or Command Line Tools"
         ))
         #expect(packageVerifierSource.contains("RemoteMicComponent.pkg"))
+        #expect(packageVerifierSource.contains("Status: no signature"))
+        #expect(packageVerifierSource.contains(
+            "The deployable outer product archive is the Installer trust boundary."
+        ))
+        #expect(packageVerifierSource.contains("/usr/sbin/spctl -a -vv -t install \"$PACKAGE\""))
         #expect(packageVerifierSource.contains("my.result.type = 'Fatal'"))
         #expect(installerGuardSource.contains("INSTALLER ARCHITECTURE GUARD TEST PASS"))
 
