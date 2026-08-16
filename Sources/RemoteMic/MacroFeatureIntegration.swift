@@ -8,6 +8,7 @@ import SayAllMacroRemoteMic
 final class MacroFeatureIntegration: ObservableObject {
     @Published private(set) var isFeatureVisible = false
     @Published private(set) var shouldShowEnrollment = false
+    @Published private(set) var isEditorActive = false
 
 #if canImport(SayAllMacroRemoteMic)
     private let feature: SayAllMacroRemoteMicFeature
@@ -60,6 +61,10 @@ final class MacroFeatureIntegration: ObservableObject {
 #endif
     }
 
+    func setEditorActive(_ active: Bool) {
+        isEditorActive = active && isFeatureVisible
+    }
+
     func revealEnrollment() {
 #if canImport(SayAllMacroRemoteMic)
         enrollmentRevealRequested = true
@@ -96,6 +101,12 @@ final class MacroFeatureIntegration: ObservableObject {
         )
         #else
         false
+        #endif
+    }
+
+    func noteButtonInteraction(button: RemoteButton) {
+        #if canImport(SayAllMacroRemoteMic)
+        feature.noteButtonInteraction(button: button.rawValue)
         #endif
     }
 
