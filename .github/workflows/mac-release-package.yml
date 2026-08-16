@@ -116,7 +116,17 @@ jobs:
           swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
 
       - name: Install required tools
-        run: brew install age fastlane ripgrep
+        run: |
+          missing_formulae=()
+          command -v age >/dev/null || missing_formulae+=(age)
+          command -v fastlane >/dev/null || missing_formulae+=(fastlane)
+          command -v rg >/dev/null || missing_formulae+=(ripgrep)
+          if (( ${#missing_formulae[@]} != 0 )); then
+            brew install "${missing_formulae[@]}"
+          fi
+          age --version
+          fastlane --version
+          rg --version
 
       - name: Prepare protected release identity
         env:

@@ -3,6 +3,12 @@ set -euo pipefail
 
 ROOT="${0:A:h:h}"
 OUTPUT="$ROOT/.build/self-test/RemoteMicSelfTest"
+SKIP_SWIFT_PACKAGE_BUILD="${SKIP_SWIFT_PACKAGE_BUILD:-0}"
+
+case "$SKIP_SWIFT_PACKAGE_BUILD" in
+  0|1) ;;
+  *) print -u2 "SKIP_SWIFT_PACKAGE_BUILD must be 0 or 1"; exit 1 ;;
+esac
 
 mkdir -p "${OUTPUT:h}"
 xcrun swiftc \
@@ -25,4 +31,8 @@ xcrun swiftc \
   -o "$OUTPUT"
 "$OUTPUT"
 
-xcrun swift build
+if [[ "$SKIP_SWIFT_PACKAGE_BUILD" == "0" ]]; then
+  xcrun swift build
+else
+  print "SWIFT PACKAGE BUILD SKIPPED: already completed by the current CI job"
+fi

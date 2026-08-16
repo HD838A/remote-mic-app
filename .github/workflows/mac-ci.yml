@@ -105,7 +105,7 @@ jobs:
           swift test --filter CoreVoiceInputJourneyTests
 
       - name: Run project self-test
-        run: ./scripts/test.sh
+        run: SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
 
       - name: Build release configuration
         run: swift build -c release --triple "${{ matrix.triple }}"

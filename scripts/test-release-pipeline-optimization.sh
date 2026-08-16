@@ -8,6 +8,7 @@ TEST_REPO="$WORK_DIR/repo"
 FAKE_GH="$WORK_DIR/fake-gh"
 FAKE_RUNNER="$WORK_DIR/fake-release-variant-runner"
 FAKE_STAGE_COMMAND="$WORK_DIR/fake-stage-command"
+FAKE_CURL="$WORK_DIR/fake-curl-bin/curl"
 
 cleanup() {
   case "$WORK_DIR" in
@@ -39,8 +40,105 @@ print 'exit 0' >> "$TEST_REPO/scripts/verify-preview-branch.sh"
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'SIGNED_RELEASE_TIMEOUT_SECONDS: 590' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'command -v rg >/dev/null || missing_formulae+=(ripgrep)' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+if /usr/bin/grep -Fq 'brew install age fastlane ripgrep' \
+    "$TEST_REPO/.github/workflows/mac-release-package.yml"; then
+  print -u2 "signed release workflow still reinstalls every tool"
+  exit 1
+fi
+/usr/bin/grep -Fq 'SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'PUBLIC_DOWNLOAD_CONCURRENCY="${PUBLIC_DOWNLOAD_CONCURRENCY:-4}"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'download_and_compare_assets "$STAGING_DIR" "$DOWNLOAD_DIR"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'verify_cdn_assets "$STAGING_DIR" &' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq '/usr/bin/cmp -s "$source_file" "$downloaded_file"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'downloaded_sha="$(/usr/bin/shasum -a 256' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'public release asset verification failed: github=$github_status cdn=$cdn_status' \
+  "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq -- '--cache-path "$BUILD_CACHE_PATH"' "$ROOT/scripts/build-app.sh"
 /usr/bin/grep -Fq 'REMOTE_MIC_BUILD_CACHE_PATH' "$ROOT/scripts/notarize-release.sh"
+
+if PUBLIC_DOWNLOAD_CONCURRENCY=9 "$ROOT/scripts/publish-release.sh" promote \
+    > "$WORK_DIR/invalid-download-concurrency.txt" 2>&1; then
+  print -u2 "publish script unexpectedly accepted excessive download concurrency"
+  exit 1
+fi
+/usr/bin/grep -Fq 'PUBLIC_DOWNLOAD_CONCURRENCY must be between 1 and 8' \
+  "$WORK_DIR/invalid-download-concurrency.txt"
+
+if SKIP_SWIFT_PACKAGE_BUILD=invalid "$ROOT/scripts/test.sh" \
+    > "$WORK_DIR/invalid-skip-package-build.txt" 2>&1; then
+  print -u2 "self-test unexpectedly accepted an invalid package-build skip flag"
+  exit 1
+fi
+/usr/bin/grep -Fq 'SKIP_SWIFT_PACKAGE_BUILD must be 0 or 1' \
+  "$WORK_DIR/invalid-skip-package-build.txt"
+
+download_functions="$(/usr/bin/awk '
+  /^wait_for_download_batch\(\)/ { capture = 1 }
+  /^verify_stable_download_redirect\(\)/ { capture = 0 }
+  capture { print }
+' "$ROOT/scripts/publish-release.sh")"
+eval "$download_functions"
+
+/bin/mkdir -p "$WORK_DIR/fake-curl-bin" "$WORK_DIR/public-assets" \
+  "$WORK_DIR/public-download-pass" "$WORK_DIR/public-download-failure"
+for asset_number in {1..17}; do
+  print -r -- "asset-$asset_number" > "$WORK_DIR/public-assets/asset-$asset_number.bin"
+done
+{
+  print '#!/bin/zsh'
+  print 'set -euo pipefail'
+  print 'output_file=""'
+  print 'asset_url=""'
+  print 'while (( $# != 0 )); do'
+  print '  case "$1" in'
+  print '    --output) output_file="$2"; shift 2 ;;'
+  print '    http://*|https://*) asset_url="$1"; shift ;;'
+  print '    *) shift ;;'
+  print '  esac'
+  print 'done'
+  print 'asset_name="${asset_url:t}"'
+  print 'if [[ "${FAKE_CURL_FAIL_ASSET:-}" == "$asset_name" ]]; then exit 7; fi'
+  print '/bin/cp "$FAKE_CURL_SOURCE/$asset_name" "$output_file"'
+} > "$FAKE_CURL"
+/bin/chmod 755 "$FAKE_CURL"
+
+PUBLIC_DOWNLOAD_CONCURRENCY=4 \
+WORK_DIR="$WORK_DIR" \
+PATH="${FAKE_CURL:h}:$PATH" \
+FAKE_CURL_SOURCE="$WORK_DIR/public-assets" \
+  download_and_compare_assets \
+    "$WORK_DIR/public-assets" \
+    "$WORK_DIR/public-download-pass" \
+    'https://example.invalid/releases/v9.9.9/' \
+    test-origin > "$WORK_DIR/public-download-pass.txt"
+test "$(/usr/bin/find "$WORK_DIR/public-download-pass" -type f | \
+  /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "17"
+
+if PUBLIC_DOWNLOAD_CONCURRENCY=4 \
+   WORK_DIR="$WORK_DIR" \
+   PATH="${FAKE_CURL:h}:$PATH" \
+   FAKE_CURL_SOURCE="$WORK_DIR/public-assets" \
+   FAKE_CURL_FAIL_ASSET=asset-7.bin \
+     download_and_compare_assets \
+       "$WORK_DIR/public-assets" \
+       "$WORK_DIR/public-download-failure" \
+       'https://example.invalid/releases/v9.9.9/' \
+       test-failure > "$WORK_DIR/public-download-failure.txt" 2>&1; then
+  print -u2 "parallel public download unexpectedly ignored an asset failure"
+  exit 1
+fi
+test "$(/usr/bin/find "$WORK_DIR/public-download-failure" -type f | \
+  /usr/bin/wc -l | /usr/bin/tr -d ' ')" -lt "17"
 
 git -C "$TEST_REPO" init -b release/pre-v9.9.9 >/dev/null
 git -C "$TEST_REPO" config user.name "Release Pipeline Test"
