@@ -29,4 +29,5 @@ HID 日志只能证明事件进入 `private_feature` 路由，不能证明合成
 
 - 私有模块定向测试验证保存的 Chrome 下一标签页快捷键会同步传递 keyCode 124、Command、Option。
 - 宿主定向测试验证最终 flags 为 Command、Option、NumericPad。
-- 自动化环境不能代替签名 App、WindowServer、真实 Chrome 和真实遥控器；最终标签页切换仍列为人工必测。
+- 2026-08-18 用户使用真实 Chrome 与实体遥控器确认 `Command + Option + 左/右箭头` 可以切换标签页。
+- 自动化仍负责防止执行路径和 flags 回归，用户实测负责确认 WindowServer 与 Chrome 的最终可见结果。

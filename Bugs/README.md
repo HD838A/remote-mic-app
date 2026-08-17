@@ -91,9 +91,9 @@
 | 2026-08-15 | [移动设备已连接后仍显示正在等待](./2026-08-15-mobile-connection-still-shows-waiting/DEBUG.md) | 候选修复完成，等待真实 iPhone / Watch 验收 |
 | 2026-08-16 | [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md) | 第二次修复完成，等待下一次真实受保护工作流验证 |
 | 2026-08-16 | [发布阶段 heartbeat 与 timeout 同时到期导致 CI 偶发失败](./2026-08-16-release-stage-heartbeat-timeout-flake.md) | 已修复，自动化验证通过 |
-| 2026-08-17 | [键位方案回车、自动切换状态与方向键 Fn](./2026-08-17-button-profile-wizard-mode-and-arrow-fn.md) | 候选修复完成，等待真实 Chrome 与实体遥控器验收 |
-| 2026-08-18 | [键位方案快捷键录入与左右键路由](./2026-08-18-button-profile-shortcut-capture-and-arrow-routing.md) | 候选修复完成，等待真实 Chrome 与实体遥控器验收 |
-| 2026-08-18 | [Chrome 键位方案方向快捷键失效](./chrome-profile-arrow-shortcut/README.md) | 执行路径修复完成，等待真实 Chrome 与实体遥控器验收 |
+| 2026-08-17 | [键位方案回车、自动切换状态与方向键 Fn](./2026-08-17-button-profile-wizard-mode-and-arrow-fn.md) | Chrome 方向快捷键已通过真实 Chrome 与实体遥控器验收 |
+| 2026-08-18 | [键位方案快捷键录入与左右键路由](./2026-08-18-button-profile-shortcut-capture-and-arrow-routing.md) | Chrome 方向快捷键已通过真实 Chrome 与实体遥控器验收 |
+| 2026-08-18 | [Chrome 键位方案方向快捷键失效](./chrome-profile-arrow-shortcut/README.md) | 已修复并通过真实 Chrome 与实体遥控器验收 |
 | 2026-08-18 | [无线麦前台仍沿用上一套专用方案](./button-profile-remote-mic-frontmost-fallback/README.md) | 已修复并通过自动化，等待真实前台切换验收 |
 
 ## 记录模板

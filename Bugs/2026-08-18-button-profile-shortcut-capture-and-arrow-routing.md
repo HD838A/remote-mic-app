@@ -3,7 +3,7 @@
 ## 状态与影响范围
 
 - 时间：2026-08-18
-- 状态：候选修复完成，等待真实 Chrome 与实体遥控器验收
+- 状态：修复完成；Chrome 方向快捷键已通过真实 Chrome 与实体遥控器验收
 - 影响：键位方案创建流程、页面内快捷键录入、监听模式下遥控器 Left/Right 单击绑定
 
 ## 复现
@@ -42,4 +42,4 @@
 - 私有模块完整 `swift test` 通过 50 项 XCTest 与 69 项 Swift Testing，Release 构建通过。
 - 宿主注入私有模块后完整 `swift test` 通过 228 项；启用硬件模拟后 249 项通过；项目自检 42 项、仓库边界、Release App 构建、App 校验和两仓库 `git diff --check` 通过。
 - 实际 Release App 已验证三步页面、每步 Return、长快捷键完整显示，以及录入期间底部“取消录入”只停止录入并留在设置按键步骤。测试创建的临时方案已清理，原有自动切换状态已恢复。
-- 自动化不能证明用户机器上的 Chrome 快捷键设置、WindowServer 原生事件和实体遥控器最终结果；这些仍按 `Testing/ButtonProfiles.md` 人工验收。
+- 2026-08-18 用户确认真实 Chrome 中使用实体遥控器执行 `Command + Option + 左/右箭头` 可以切换标签页；其他第三方 App、双遥控器和锁屏边界继续按 `Testing/ButtonProfiles.md` 验收。
