@@ -52,16 +52,21 @@
 
 Watch BLE 发送端用无上限逐包确认 FIFO 传输实时音频，导致停止控制严重延迟；Mac 又将 iPhone 和 Watch 合并为同一语音来源，使延迟停止和通道占用跨设备传播。
 
+后续审查又确认了同一首次收音旅程中的第二个时序缺陷：CoreBluetooth 对 `voiceStart` 写入返回成功，只能证明 ATT 数据已到达 Mac，不能证明 Mac 已完成虚拟麦克风、系统语音键和移动语音会话准备。旧 Watch 在写入确认后立即启动本地麦克风，Mac 异步准备期间到达的首批音频会因 `voiceActive == false` 被丢弃；如果控制写入本身失败，Watch 仍会继续排空同一队列中的音频。
+
 ## Fix
 
 - Mac 分别跟踪 iPhone、Watch 和 Web 的移动语音来源；只有当前来源能够发送音频或停止自己的会话。
 - 已占用时返回稳定的 `voice_busy`，音频输出或系统语音键未就绪时返回 `voice_output_unavailable`；旧客户端收到未知 detail 时仍安全降级。
 - 新增脱敏的移动语音开始、拒绝、停止和来源不匹配日志，不记录音频、设备身份或确认码。
 - 固定 `sayall-mac-remote` 到包含兼容结果 API 的 revision；Web 继续使用原 Bool 回调，不改变协议与行为。
+- 新增可选 `voiceReadyV1` 能力。Mac 仅在移动语音输出真正准备成功后回送 `voiceReady`；新版 Watch 收到后才启动本地采集，旧 Watch 和旧 Mac 继续使用原兼容路径。
+- Mac 对重复开始、停止期间尚未完成的开始请求和迟到回调做代次隔离；停止或断线后迟到的成功结果不能重新激活语音。
+- Watch 的确认写入失败会清空当前会话写队列并断开重连，不再继续发送失去开始前提的音频。
 
 ## Validation
 
-- `sayall-mac-remote swift test`：18 项通过。
-- Mac 主仓 `swift test`：220 项、18 个 suite 通过；`swift build` 通过。
-- iOS/Watch iPhone 12 Simulator：69 项通过，包含 Watch 实时写缓冲与用户提示。
+- `sayall-mac-remote swift test`：24 项通过，新增成功后才发送 `voiceReady`、失败不发送、停止取消迟到开始结果三项时序回归。
+- Mac 主仓 `swift test`：226 项、20 个 suite 通过，新增 `voiceStart → Mac 准备完成 → voiceReady` 首次旅程回归。
+- iOS/Watch iPhone 12 Simulator：72 项通过，新增写入失败清队列、可选能力旧版兼容、等待业务就绪与超时接线回归。
 - 未完成真实 Watch BLE 吞吐、停止实际到达延迟、Watch 停止后立即使用 iPhone、MiRemoteV 2ch 输出、豆包响应和实体遥控器 RC003 基线；开发代理当前 Mac 不是用户的实际测试 Mac，不能替代该验收。

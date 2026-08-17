@@ -6,7 +6,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
     .package(
         url: "https://github.com/GetSayAll/sayall-mac-remote.git",
-        revision: "fdecd7d24369dee40c91aac3a78c8e844854530f"
+        revision: "b0c3f844d060a570d523bc5d675ee9742e9d5902"
     ),
 ]
 var remoteMicDependencies: [Target.Dependency] = [
@@ -15,7 +15,10 @@ var remoteMicDependencies: [Target.Dependency] = [
     .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
     .product(name: "SayAllMacRemoteUI", package: "sayall-mac-remote"),
 ]
-var remoteMicTestDependencies: [Target.Dependency] = ["RemoteMic"]
+var remoteMicTestDependencies: [Target.Dependency] = [
+    "RemoteMic",
+    .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
+]
 let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
     ? .macOS(.v13)
     : .macOS(.v14)
