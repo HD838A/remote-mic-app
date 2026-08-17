@@ -46,6 +46,12 @@ case "$DRY_RUN" in
   0|1) ;;
   *) print -u2 "DRY_RUN must be 0 or 1"; exit 1 ;;
 esac
+for command_name in cmp curl gh git jq plutil rg shasum stat; do
+  command -v "$command_name" >/dev/null 2>&1 || {
+    print -u2 "Missing required command: $command_name"
+    exit 1
+  }
+done
 if ! print -r -- "$PUBLIC_DOWNLOAD_CONCURRENCY" | rg -q '^[1-9][0-9]*$' || \
     (( PUBLIC_DOWNLOAD_CONCURRENCY > 8 )); then
   print -u2 "PUBLIC_DOWNLOAD_CONCURRENCY must be between 1 and 8"
@@ -74,12 +80,6 @@ if ! print -r -- "$RELEASE_TAG" | rg -q '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
 fi
 GITHUB_DOWNLOAD_PREFIX="https://github.com/$REPOSITORY/releases/download/$RELEASE_TAG/"
 CDN_DOWNLOAD_PREFIX="https://download.sayall.app/mac/releases/$RELEASE_TAG/"
-for command_name in cmp curl gh git jq plutil rg shasum stat; do
-  command -v "$command_name" >/dev/null 2>&1 || {
-    print -u2 "Missing required command: $command_name"
-    exit 1
-  }
-done
 
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-publish-release.XXXXXX)"
 STAGING_DIR="$WORK_DIR/upload"

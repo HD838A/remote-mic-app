@@ -541,6 +541,10 @@ struct BuildSigningTests {
             contentsOf: root.appendingPathComponent("scripts/reconcile-release-event.sh"),
             encoding: .utf8
         )
+        let publishSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/publish-release.sh"),
+            encoding: .utf8
+        )
 
         #expect(guardWorkflow.contains("types: [published, released, edited]"))
         #expect(guardWorkflow.contains("workflow_dispatch:"))
@@ -571,7 +575,26 @@ struct BuildSigningTests {
         #expect(promotionWorkflow.contains("steps.release.outputs.should_promote == 'true'"))
         #expect(promotionWorkflow.contains("gh pr merge \"$pr_number\""))
         #expect(promotionWorkflow.contains("./scripts/publish-release.sh promote"))
+        #expect(promotionWorkflow.contains("environment: mac-stable-release"))
+        #expect(promotionWorkflow.contains("command -v rg >/dev/null 2>&1"))
+        #expect(promotionWorkflow.contains("brew install ripgrep"))
+        #expect(promotionWorkflow.contains("rg --version"))
+        #expect(!promotionWorkflow.contains("secrets."))
         #expect(!promotionWorkflow.contains("notarize-release.sh"))
+        let toolCheck = try #require(
+            promotionWorkflow.range(of: "command -v rg >/dev/null 2>&1")
+        )
+        let promotionCommand = try #require(
+            promotionWorkflow.range(of: "./scripts/publish-release.sh promote")
+        )
+        #expect(toolCheck.lowerBound < promotionCommand.lowerBound)
+        let dependencyCheck = try #require(
+            publishSource.range(of: "for command_name in cmp curl gh git jq plutil rg shasum stat")
+        )
+        let firstRipgrepUse = try #require(
+            publishSource.range(of: "rg -q '^[1-9][0-9]*$'")
+        )
+        #expect(dependencyCheck.lowerBound < firstRipgrepUse.lowerBound)
         #expect(publishSourceSupportsCrossVersionPromotion(root: root))
     }
 
