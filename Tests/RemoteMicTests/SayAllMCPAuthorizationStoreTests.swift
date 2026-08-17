@@ -51,6 +51,36 @@ struct SayAllMCPAuthorizationStoreTests {
         #expect(try store.listAuthorizations().first?.integrationIdentifier == "cursor")
     }
 
+    @Test func activeClientsAreUniqueAndFailedTemporaryAccessCanBeDiscarded() throws {
+        let store = SayAllMCPAuthorizationStore(
+            accessRoot: temporaryDirectory("authorization-unique")
+        )
+        try store.setEnabled(true)
+        let cursor = try store.createAuthorization(
+            displayName: "Cursor",
+            integrationIdentifier: "cursor"
+        )
+
+        #expect(throws: SayAllMCPAuthorizationError.self) {
+            try store.createAuthorization(
+                displayName: "Cursor Again",
+                integrationIdentifier: "cursor"
+            )
+        }
+        #expect(throws: SayAllMCPAuthorizationError.self) {
+            try store.createAuthorization(displayName: "cursor")
+        }
+
+        try store.discardAuthorization(clientId: cursor.clientId)
+        #expect(try store.listAuthorizations().isEmpty)
+
+        let replacement = try store.createAuthorization(
+            displayName: "Cursor",
+            integrationIdentifier: "cursor"
+        )
+        #expect(replacement.integrationIdentifier == "cursor")
+    }
+
     @Test func revocationAndGlobalDisableApplyToExistingCredentials() throws {
         let store = SayAllMCPAuthorizationStore(
             accessRoot: temporaryDirectory("authorization-revoke")

@@ -302,14 +302,34 @@ struct TranscriptAgentAccessSection: View {
             key = "statistics.transcripts.agent_access.error.helper"
         case .clientUnavailable:
             key = "statistics.transcripts.agent_access.error.client_unavailable"
+        case .clientCommandUnavailable:
+            key = "statistics.transcripts.agent_access.error.client_command_unavailable"
         case .configurationConflict:
             key = "statistics.transcripts.agent_access.error.configuration_conflict"
+        case .invalidClientConfiguration:
+            key = "statistics.transcripts.agent_access.error.invalid_client_configuration"
+        case .unsafeClientConfiguration:
+            key = "statistics.transcripts.agent_access.error.unsafe_client_configuration"
+        case .clientConfigurationWriteFailed:
+            key = "statistics.transcripts.agent_access.error.client_configuration_write"
+        case .clientInstallationRejected:
+            key = "statistics.transcripts.agent_access.error.client_installation_rejected"
         case .integrationFailed:
             key = "statistics.transcripts.agent_access.error.integration"
         case .configurationRemovalFailed:
             key = "statistics.transcripts.agent_access.error.remove_configuration"
+        case .duplicateClient:
+            key = "statistics.transcripts.agent_access.error.duplicate_client"
         }
-        return localization.text(key)
+        let text = localization.text(key)
+        if let client = model.failedClient {
+            return String(
+                format: text,
+                locale: localization.locale,
+                client.displayName
+            )
+        }
+        return text
     }
 
     private func authorizationDate(_ date: Date) -> String {

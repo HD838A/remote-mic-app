@@ -95,6 +95,31 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
             guard !normalizedName.isEmpty, normalizedName.count <= maximumClientNameLength else {
                 throw SayAllMCPAuthorizationError.invalidClientName
             }
+            if let integrationIdentifier {
+                guard !integrationIdentifier.isEmpty,
+                      integrationIdentifier.count <= maximumIntegrationIdentifierLength,
+                      integrationIdentifier.range(
+                          of: #"^[a-z0-9-]+$"#,
+                          options: .regularExpression
+                      ) != nil
+                else {
+                    throw SayAllMCPAuthorizationError.invalidIntegrationIdentifier
+                }
+                guard !state.authorizations.contains(where: {
+                    $0.integrationIdentifier == integrationIdentifier && $0.revokedAt == nil
+                }) else {
+                    throw SayAllMCPAuthorizationError.activeIntegrationExists
+                }
+            }
+            guard !state.authorizations.contains(where: {
+                $0.revokedAt == nil
+                    && $0.displayName.compare(
+                        normalizedName,
+                        options: [.caseInsensitive, .diacriticInsensitive]
+                    ) == .orderedSame
+            }) else {
+                throw SayAllMCPAuthorizationError.activeClientNameExists
+            }
 
             let clientId = UUID()
             let token = try Self.randomToken()
@@ -132,6 +157,19 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
             }
             guard state.authorizations[index].revokedAt == nil else { return }
             state.authorizations[index].revokedAt = Date()
+            try saveState(state)
+        }
+    }
+
+    public func discardAuthorization(clientId: UUID) throws {
+        try queue.sync {
+            var state = try loadState()
+            guard let index = state.authorizations.firstIndex(where: {
+                $0.clientId == clientId
+            }) else {
+                throw SayAllMCPAuthorizationError.authorizationNotFound
+            }
+            state.authorizations.remove(at: index)
             try saveState(state)
         }
     }
@@ -279,6 +317,9 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
 
 public enum SayAllMCPAuthorizationError: Error {
     case invalidClientName
+    case invalidIntegrationIdentifier
+    case activeIntegrationExists
+    case activeClientNameExists
     case authorizationNotFound
     case encodingFailed
     case randomGenerationFailed

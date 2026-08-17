@@ -43,6 +43,7 @@ enum MCPClientIntegrationError: Error, Equatable {
     case configurationConflict
     case invalidConfiguration
     case unsafeConfigurationPath
+    case clientCommandUnavailable
     case commandFailed
     case writeFailed
 }
@@ -131,6 +132,38 @@ struct MCPClientIntegrationService: @unchecked Sendable {
             try installCursor(configuration)
         case .openCode:
             try installOpenCode(configuration)
+        }
+    }
+
+    func preflight(_ client: MCPClientKind) throws {
+        guard isAvailable(client) else {
+            throw MCPClientIntegrationError.clientUnavailable
+        }
+        switch client {
+        case .codex:
+            let existing = try readTextIfPresent(codexConfigurationURL) ?? ""
+            guard managedCodexRange(in: existing) == nil,
+                  !existing.contains("[mcp_servers.sayall_history]")
+            else {
+                throw MCPClientIntegrationError.configurationConflict
+            }
+        case .claudeCode:
+            guard let executable = executableURLProvider("claude") else {
+                throw MCPClientIntegrationError.clientUnavailable
+            }
+            guard try commandRunner(executable, ["--version"]) == 0 else {
+                throw MCPClientIntegrationError.clientCommandUnavailable
+            }
+        case .cursor:
+            try validateJSONEntryAvailable(
+                file: cursorConfigurationURL,
+                rootKey: "mcpServers"
+            )
+        case .openCode:
+            try validateJSONEntryAvailable(
+                file: openCodeConfigurationURL,
+                rootKey: "mcp"
+            )
         }
     }
 
@@ -298,6 +331,17 @@ struct MCPClientIntegrationService: @unchecked Sendable {
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         )
         try writePrivate(data, to: file)
+    }
+
+    private func validateJSONEntryAvailable(file: URL, rootKey: String) throws {
+        let root = try readJSONObject(file)
+        guard root[rootKey] == nil || root[rootKey] is [String: Any] else {
+            throw MCPClientIntegrationError.invalidConfiguration
+        }
+        let servers = root[rootKey] as? [String: Any] ?? [:]
+        guard servers["sayall_history"] == nil else {
+            throw MCPClientIntegrationError.configurationConflict
+        }
     }
 
     private func removeJSONEntry(file: URL, rootKey: String) throws {

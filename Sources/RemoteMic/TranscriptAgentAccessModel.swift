@@ -11,9 +11,15 @@ enum TranscriptAgentAccessError: Equatable, Sendable {
     case revokeFailed
     case helperMissing
     case clientUnavailable
+    case clientCommandUnavailable
     case configurationConflict
+    case invalidClientConfiguration
+    case unsafeClientConfiguration
+    case clientConfigurationWriteFailed
+    case clientInstallationRejected
     case integrationFailed
     case configurationRemovalFailed
+    case duplicateClient
 }
 
 @MainActor
@@ -25,6 +31,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
     @Published private(set) var error: TranscriptAgentAccessError?
     @Published private(set) var copiedConfiguration: ConfigurationKind?
     @Published private(set) var integrationInProgress: MCPClientKind?
+    @Published private(set) var failedClient: MCPClientKind?
 
     enum ConfigurationKind {
         case standardJSON
@@ -53,8 +60,11 @@ final class TranscriptAgentAccessModel: ObservableObject {
     func refresh() {
         do {
             isEnabled = try authorizationStore.isEnabled()
-            authorizations = try authorizationStore.listAuthorizations()
+            authorizations = try authorizationStore.listAuthorizations().filter {
+                $0.revokedAt == nil
+            }
             error = nil
+            failedClient = nil
         } catch {
             self.error = .loadFailed
         }
@@ -67,6 +77,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
             generatedConfiguration = nil
             copiedConfiguration = nil
             error = nil
+            failedClient = nil
         } catch {
             if let restoredValue = try? authorizationStore.isEnabled() {
                 isEnabled = restoredValue
@@ -95,11 +106,19 @@ final class TranscriptAgentAccessModel: ObservableObject {
                 helperExecutableURL: helperURL
             )
             clientName = ""
-            authorizations = try authorizationStore.listAuthorizations()
+            authorizations = try authorizationStore.listAuthorizations().filter {
+                $0.revokedAt == nil
+            }
             copiedConfiguration = nil
             error = nil
+            failedClient = nil
+        } catch SayAllMCPAuthorizationError.activeClientNameExists,
+                SayAllMCPAuthorizationError.activeIntegrationExists {
+            self.error = .duplicateClient
+            failedClient = nil
         } catch {
             self.error = .authorizationFailed
+            failedClient = nil
         }
     }
 
@@ -118,6 +137,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
     }
 
     func connect(_ client: MCPClientKind) {
+        guard integrationInProgress == nil else { return }
         guard activeAuthorization(for: client) == nil else { return }
         guard integrationService.isAvailable(client) else {
             error = .clientUnavailable
@@ -130,11 +150,13 @@ final class TranscriptAgentAccessModel: ObservableObject {
         }
         integrationInProgress = client
         error = nil
+        failedClient = nil
         let authorizationStore = authorizationStore
         let integrationService = integrationService
         Task.detached(priority: .userInitiated) { [weak self] in
             let result: (authorizations: [SayAllMCPAuthorizationRecord], error: TranscriptAgentAccessError?)
             do {
+                try integrationService.preflight(client)
                 let authorization = try authorizationStore.createAuthorization(
                     displayName: client.displayName,
                     integrationIdentifier: client.rawValue
@@ -146,23 +168,41 @@ final class TranscriptAgentAccessModel: ObservableObject {
                     )
                     try integrationService.install(client, configuration: configuration)
                 } catch {
-                    try? authorizationStore.revokeAuthorization(clientId: authorization.clientId)
+                    do {
+                        try authorizationStore.discardAuthorization(
+                            clientId: authorization.clientId
+                        )
+                    } catch {
+                        try? authorizationStore.revokeAuthorization(
+                            clientId: authorization.clientId
+                        )
+                    }
                     throw error
                 }
-                result = (try authorizationStore.listAuthorizations(), nil)
-            } catch MCPClientIntegrationError.configurationConflict {
                 result = (
-                    (try? authorizationStore.listAuthorizations()) ?? [],
-                    .configurationConflict
+                    try authorizationStore.listAuthorizations().filter { $0.revokedAt == nil },
+                    nil
                 )
-            } catch MCPClientIntegrationError.clientUnavailable {
+            } catch let integrationError as MCPClientIntegrationError {
                 result = (
-                    (try? authorizationStore.listAuthorizations()) ?? [],
-                    .clientUnavailable
+                    ((try? authorizationStore.listAuthorizations()) ?? []).filter {
+                        $0.revokedAt == nil
+                    },
+                    Self.accessError(for: integrationError)
+                )
+            } catch SayAllMCPAuthorizationError.activeClientNameExists,
+                    SayAllMCPAuthorizationError.activeIntegrationExists {
+                result = (
+                    ((try? authorizationStore.listAuthorizations()) ?? []).filter {
+                        $0.revokedAt == nil
+                    },
+                    .duplicateClient
                 )
             } catch {
                 result = (
-                    (try? authorizationStore.listAuthorizations()) ?? [],
+                    ((try? authorizationStore.listAuthorizations()) ?? []).filter {
+                        $0.revokedAt == nil
+                    },
                     .integrationFailed
                 )
             }
@@ -175,6 +215,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
                     copiedConfiguration = nil
                 }
                 error = result.error
+                failedClient = result.error == nil ? nil : client
                 integrationInProgress = nil
             }
         }
@@ -208,16 +249,22 @@ final class TranscriptAgentAccessModel: ObservableObject {
                     configurationRemovalFailed ? .configurationRemovalFailed : nil
                 )
             } catch {
-                result = ((try? authorizationStore.listAuthorizations()) ?? [], .revokeFailed)
+                result = (
+                    ((try? authorizationStore.listAuthorizations()) ?? []).filter {
+                        $0.revokedAt == nil
+                    },
+                    .revokeFailed
+                )
             }
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                authorizations = result.authorizations
+                authorizations = result.authorizations.filter { $0.revokedAt == nil }
                 if generatedConfiguration?.authorization.clientId == authorization.clientId {
                     generatedConfiguration = nil
                 }
                 error = result.error
+                failedClient = result.error == nil ? nil : client
                 integrationInProgress = nil
             }
         }
@@ -226,11 +273,14 @@ final class TranscriptAgentAccessModel: ObservableObject {
     private func revokeManualAuthorization(_ authorization: SayAllMCPAuthorizationRecord) {
         do {
             try authorizationStore.revokeAuthorization(clientId: authorization.clientId)
-            authorizations = try authorizationStore.listAuthorizations()
+            authorizations = try authorizationStore.listAuthorizations().filter {
+                $0.revokedAt == nil
+            }
             if generatedConfiguration?.authorization.clientId == authorization.clientId {
                 generatedConfiguration = nil
             }
             error = nil
+            failedClient = nil
         } catch {
             self.error = .revokeFailed
         }
@@ -259,6 +309,27 @@ final class TranscriptAgentAccessModel: ObservableObject {
             if self?.copiedConfiguration == kind {
                 self?.copiedConfiguration = nil
             }
+        }
+    }
+
+    nonisolated private static func accessError(
+        for error: MCPClientIntegrationError
+    ) -> TranscriptAgentAccessError {
+        switch error {
+        case .clientUnavailable:
+            return .clientUnavailable
+        case .clientCommandUnavailable:
+            return .clientCommandUnavailable
+        case .configurationConflict:
+            return .configurationConflict
+        case .invalidConfiguration:
+            return .invalidClientConfiguration
+        case .unsafeConfigurationPath:
+            return .unsafeClientConfiguration
+        case .writeFailed:
+            return .clientConfigurationWriteFailed
+        case .commandFailed:
+            return .clientInstallationRejected
         }
     }
 }

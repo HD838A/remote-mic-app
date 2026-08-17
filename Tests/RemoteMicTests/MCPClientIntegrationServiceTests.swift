@@ -136,7 +136,7 @@ struct MCPClientIntegrationServiceTests {
     }
 
     @MainActor
-    @Test func failedQuickConnectionRevokesItsNewAuthorization() async throws {
+    @Test func failedPreflightDoesNotCreateAnAuthorization() async throws {
         let home = temporaryDirectory("rollback")
         let accessRoot = home.appendingPathComponent("access")
         let helper = home.appendingPathComponent("SayAllMCP")
@@ -166,10 +166,136 @@ struct MCPClientIntegrationServiceTests {
         model.connect(.claudeCode)
         try await waitForIntegration(model)
 
-        #expect(model.error == .integrationFailed)
+        #expect(model.error == .clientCommandUnavailable)
         #expect(model.activeAuthorization(for: .claudeCode) == nil)
+        #expect(try store.listAuthorizations().isEmpty)
+    }
+
+    @MainActor
+    @Test func invalidCursorConfigurationFailsBeforeAuthorizationCreation() async throws {
+        let home = temporaryDirectory("cursor-preflight")
+        let accessRoot = home.appendingPathComponent("access")
+        let helper = home.appendingPathComponent("SayAllMCP")
+        let cursorConfiguration = home.appendingPathComponent(".cursor/mcp.json")
+        try createParent(of: cursorConfiguration)
+        try Data("{\"mcpServers\": {}}}".utf8).write(to: cursorConfiguration)
+        _ = FileManager.default.createFile(atPath: helper.path, contents: Data())
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: helper.path
+        )
+        let store = SayAllMCPAuthorizationStore(accessRoot: accessRoot)
+        let service = MCPClientIntegrationService(
+            homeDirectory: home,
+            applicationURLProvider: { _ in URL(fileURLWithPath: "/Applications/Cursor.app") },
+            executableURLProvider: { _ in nil },
+            commandRunner: { _, _ in 0 }
+        )
+        let model = TranscriptAgentAccessModel(
+            authorizationStore: store,
+            integrationService: service,
+            helperExecutableURL: { helper }
+        )
+        model.setEnabled(true)
+
+        model.connect(.cursor)
+        try await waitForIntegration(model)
+
+        #expect(model.error == .invalidClientConfiguration)
+        #expect(model.failedClient == .cursor)
+        #expect(try store.listAuthorizations().isEmpty)
+    }
+
+    @MainActor
+    @Test func failedInstallationDiscardsItsTemporaryAuthorization() async throws {
+        let home = temporaryDirectory("installation-discard")
+        let accessRoot = home.appendingPathComponent("access")
+        let helper = home.appendingPathComponent("SayAllMCP")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        _ = FileManager.default.createFile(atPath: helper.path, contents: Data())
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: helper.path
+        )
+        let store = SayAllMCPAuthorizationStore(accessRoot: accessRoot)
+        let service = MCPClientIntegrationService(
+            homeDirectory: home,
+            applicationURLProvider: { _ in nil },
+            executableURLProvider: { _ in home.appendingPathComponent("claude") },
+            commandRunner: { _, arguments in arguments == ["--version"] ? 0 : 1 }
+        )
+        let model = TranscriptAgentAccessModel(
+            authorizationStore: store,
+            integrationService: service,
+            helperExecutableURL: { helper }
+        )
+        model.setEnabled(true)
+
+        model.connect(.claudeCode)
+        try await waitForIntegration(model)
+
+        #expect(model.error == .clientInstallationRejected)
+        #expect(model.failedClient == .claudeCode)
+        #expect(try store.listAuthorizations().isEmpty)
+    }
+
+    @MainActor
+    @Test func healthyClientConnectsOnceAndRejectsDuplicateCalls() async throws {
+        let home = temporaryDirectory("healthy-client")
+        let accessRoot = home.appendingPathComponent("access")
+        let helper = home.appendingPathComponent("SayAllMCP")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        _ = FileManager.default.createFile(atPath: helper.path, contents: Data())
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: helper.path
+        )
+        let store = SayAllMCPAuthorizationStore(accessRoot: accessRoot)
+        let service = makeService(home: home)
+        let model = TranscriptAgentAccessModel(
+            authorizationStore: store,
+            integrationService: service,
+            helperExecutableURL: { helper }
+        )
+        model.setEnabled(true)
+
+        model.connect(.cursor)
+        model.connect(.cursor)
+        try await waitForIntegration(model)
+        model.connect(.cursor)
+
+        #expect(model.error == nil)
+        #expect(model.activeAuthorization(for: .cursor) != nil)
         #expect(try store.listAuthorizations().count == 1)
-        #expect(try store.listAuthorizations().first?.revokedAt != nil)
+        #expect(
+            FileManager.default.fileExists(
+                atPath: home.appendingPathComponent(".cursor/mcp.json").path
+            )
+        )
+    }
+
+    @MainActor
+    @Test func revokedAttemptsAreNotShownAsAuthorizedClients() throws {
+        let home = temporaryDirectory("hidden-revoked")
+        let store = SayAllMCPAuthorizationStore(
+            accessRoot: home.appendingPathComponent("access")
+        )
+        try store.setEnabled(true)
+        let failedAttempt = try store.createAuthorization(
+            displayName: "Claude Code",
+            integrationIdentifier: "claude-code"
+        )
+        try store.revokeAuthorization(clientId: failedAttempt.clientId)
+        let model = TranscriptAgentAccessModel(
+            authorizationStore: store,
+            integrationService: makeService(home: home),
+            helperExecutableURL: { home.appendingPathComponent("SayAllMCP") }
+        )
+
+        model.refresh()
+
+        #expect(model.authorizations.isEmpty)
+        #expect(try store.listAuthorizations().count == 1)
     }
 
     @MainActor

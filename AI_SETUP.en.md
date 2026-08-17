@@ -38,6 +38,8 @@ The user must perform these actions in 无线麦SayAll.app:
 
 Quick connection supports Codex, Claude Code, Cursor, and OpenCode. It creates a separate read-only authorization per client and makes a private backup before changing an existing configuration. It will not overwrite a conflicting server, invalid JSON, or commented JSONC.
 
+Quick connection validates the client entry point and configuration before creating an authorization. A failed preflight or installation does not leave duplicate entries under Authorized Clients. Each client can have only one active quick connection, and the page reports the specific failure reason.
+
 ## 3. Verify quick connection first
 
 After restarting the client, verify that an MCP server named `sayall_history` exists, then check:
