@@ -15,9 +15,60 @@ permissions:
   contents: read
 
 jobs:
+  classify_changes:
+    name: Classify changed files
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.changes.outputs.docs_only }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect documentation-only change
+        id: changes
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            diff_range="${{ github.event.pull_request.base.sha }}...HEAD"
+          else
+            before_sha="${{ github.event.before }}"
+            if [[ -z "$before_sha" || "$before_sha" == "0000000000000000000000000000000000000000" ]]; then
+              echo "docs_only=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            diff_range="$before_sha..HEAD"
+          fi
+
+          docs_only=true
+          changed_file_found=false
+          while IFS= read -r changed_path; do
+            [[ -z "$changed_path" ]] && continue
+            changed_file_found=true
+            case "$changed_path" in
+              *.md) ;;
+              *)
+                docs_only=false
+                break
+                ;;
+            esac
+          done < <(git diff --name-only "$diff_range")
+
+          if [[ "$changed_file_found" != "true" ]]; then
+            docs_only=false
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
   test:
     name: Swift tests and build (${{ matrix.label }})
-    runs-on: macos-15
+    needs: classify_changes
+    runs-on: ${{ needs.classify_changes.outputs.docs_only == 'true' && 'ubuntu-latest' || 'macos-15' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -40,7 +91,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check out private feature package
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-ai
@@ -50,7 +101,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out private macro package
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-macro-platform
@@ -60,13 +111,13 @@ jobs:
           persist-credentials: false
 
       - name: Configure private feature package
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
           echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
           echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform" >> "$GITHUB_ENV"
 
       - name: Check out shared Mac remote package
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-mac-remote
@@ -76,10 +127,11 @@ jobs:
           persist-credentials: false
 
       - name: Configure shared Mac remote package
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
 
       - name: Show toolchain
+        if: needs.classify_changes.outputs.docs_only != 'true'
         run: swift --version
 
       - name: Check patch formatting
@@ -90,22 +142,32 @@ jobs:
             git diff --check "${{ github.event.before }}..HEAD"
           fi
 
+      - name: Confirm documentation-only fast path
+        if: needs.classify_changes.outputs.docs_only == 'true'
+        run: echo "Markdown-only change; skipping private dependencies, Swift tests, and macOS builds."
+
       - name: Enforce extracted repository boundaries
+        if: needs.classify_changes.outputs.docs_only != 'true'
         run: ./scripts/check-repository-boundaries.sh
 
       - name: Verify release dependency pins stay aligned
+        if: needs.classify_changes.outputs.docs_only != 'true'
         run: ./scripts/verify-release-dependency-pins.sh
 
       - name: Run Swift tests
+        if: needs.classify_changes.outputs.docs_only != 'true'
         run: swift test
 
       - name: Run core first-voice journey gate
+        if: needs.classify_changes.outputs.docs_only != 'true'
         run: |
           swift test --filter VoiceInputDestinationCoordinatorTests
           swift test --filter CoreVoiceInputJourneyTests
 
       - name: Run project self-test
+        if: needs.classify_changes.outputs.docs_only != 'true'
         run: SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
 
       - name: Build release configuration
+        if: needs.classify_changes.outputs.docs_only != 'true'
         run: swift build -c release --triple "${{ matrix.triple }}"
