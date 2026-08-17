@@ -103,6 +103,7 @@ struct TranscriptHistorySection: View {
                 historyContent
             }
 
+            TranscriptAgentAccessSection()
             deleteAllRow
         }
         .onAppear {

@@ -145,19 +145,24 @@ BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
   --triple "$RELEASE_TRIPLE" \
   --show-bin-path)"
 BIN_PATH="$BIN_DIR/$APP_NAME"
+MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;
   *) print -u2 "refusing to clean unexpected app path: $APP_DIR"; exit 1 ;;
 esac
 rm -rf -- "$APP_DIR"
-mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
+mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
 test -d "$SPARKLE_FRAMEWORK"
+test -x "$MCP_HELPER_PATH"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$BIN_PATH" "$APP_DIR/Contents/MacOS/$APP_NAME"
 strip -S -x "$APP_DIR/Contents/MacOS/$APP_NAME"
 install_name_tool -add_rpath @executable_path/../Frameworks \
   "$APP_DIR/Contents/MacOS/$APP_NAME"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$MCP_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllMCP"
+strip -S -x "$APP_DIR/Contents/Helpers/SayAllMCP"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllAIIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
@@ -284,6 +289,12 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
     --options runtime \
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
+    "$APP_DIR/Contents/Helpers/SayAllMCP"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
     "$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc"
   run_release_stage app-codesign-downloader-xpc "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
     codesign \
@@ -324,6 +335,11 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
 fi
 if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   BUNDLE_IDENTIFIER="$(plutil -extract CFBundleIdentifier raw -o - "$APP_DIR/Contents/Info.plist")"
+  codesign \
+    --force \
+    --timestamp=none \
+    --sign - \
+    "$APP_DIR/Contents/Helpers/SayAllMCP"
   codesign \
     --force \
     --timestamp=none \

@@ -609,6 +609,12 @@ struct SettingsPageRegressionTests {
             ),
             encoding: .utf8
         )
+        let agentAccessSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/TranscriptAgentAccessSection.swift"
+            ),
+            encoding: .utf8
+        )
         let modelSource = try String(
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
             encoding: .utf8
@@ -670,6 +676,11 @@ struct SettingsPageRegressionTests {
         #expect(historySource.contains("dayGroupView(group)"))
         #expect(!historySource.contains(".frame(width: 250, alignment: .topLeading)"))
         #expect(historySource.contains("private var deleteAllRow"))
+        let agentAccessPosition = try #require(
+            historySource.range(of: "TranscriptAgentAccessSection()")
+        )
+        let deleteAllPosition = try #require(historySource.range(of: "deleteAllRow"))
+        #expect(agentAccessPosition.lowerBound < deleteAllPosition.lowerBound)
         #expect(historySource.contains(".buttonStyle(.borderless)"))
         #expect(!historySource.contains("private var overviewPanel"))
         #expect(!historySource.contains("private var privacyPanel"))
@@ -680,6 +691,12 @@ struct SettingsPageRegressionTests {
         #expect(historySource.contains("model.deleteTranscriptRecord(record)"))
         #expect(historySource.contains("model.deleteTranscriptApplication(applicationKey: key)"))
         #expect(historySource.contains("model.deleteAllTranscripts()"))
+        #expect(agentAccessSource.contains("statistics.transcripts.agent_access.enable"))
+        #expect(agentAccessSource.contains("model.copyStandardConfiguration()"))
+        #expect(agentAccessSource.contains("model.copyCodexConfiguration()"))
+        #expect(agentAccessSource.contains("model.revoke(authorization)"))
+        #expect(!agentAccessSource.contains(".sheet("))
+        #expect(!agentAccessSource.contains("Popover"))
 
         #expect(modelSource.contains(
             "transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)"

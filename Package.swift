@@ -11,6 +11,7 @@ var packageDependencies: [Package.Dependency] = [
 ]
 var remoteMicDependencies: [Target.Dependency] = [
     "AudioExceptionGuard",
+    "SayAllMCPKit",
     .product(name: "Sparkle", package: "Sparkle"),
     .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
     .product(name: "SayAllMacRemoteUI", package: "sayall-mac-remote"),
@@ -66,6 +67,10 @@ let package = Package(
         .executable(
             name: "RemoteMic",
             targets: ["RemoteMic"]
+        ),
+        .executable(
+            name: "SayAllMCP",
+            targets: ["SayAllMCP"]
         )
     ],
     dependencies: packageDependencies,
@@ -80,9 +85,18 @@ let package = Package(
             path: "Sources/AudioExceptionGuard",
             publicHeadersPath: "include"
         ),
+        .target(
+            name: "SayAllMCPKit",
+            path: "Sources/SayAllMCPKit"
+        ),
+        .executableTarget(
+            name: "SayAllMCP",
+            dependencies: ["SayAllMCPKit"],
+            path: "Sources/SayAllMCP"
+        ),
         .testTarget(
             name: "RemoteMicTests",
-            dependencies: remoteMicTestDependencies,
+            dependencies: remoteMicTestDependencies + ["SayAllMCPKit"],
             path: "Tests/RemoteMicTests"
         ),
     ],
