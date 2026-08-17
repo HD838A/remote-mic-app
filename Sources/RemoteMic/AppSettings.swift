@@ -250,6 +250,7 @@ final class AppSettings: ObservableObject {
         static let trustedPhoneIdentityFingerprints = "security.trustedPhoneIdentityFingerprints"
         static let onboardingCompletedVersion = "onboarding.completedVersion"
         static let onboardingStep = "onboarding.step"
+        static let onboardingRemoteAvailability = "onboarding.remoteAvailability"
         static let onboardingControlMethod = "onboarding.controlMethod"
         static let onboardingVoiceTool = "onboarding.voiceTool"
         static let onboardingMigrationVersion = "onboarding.migrationVersion"
@@ -399,6 +400,15 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(onboardingStep.rawValue, forKey: Keys.onboardingStep) }
     }
 
+    @Published private(set) var onboardingRemoteAvailability: OnboardingRemoteAvailability {
+        didSet {
+            defaults.set(
+                onboardingRemoteAvailability.rawValue,
+                forKey: Keys.onboardingRemoteAvailability
+            )
+        }
+    }
+
     @Published private(set) var onboardingControlMethod: OnboardingControlMethod {
         didSet {
             defaults.set(onboardingControlMethod.rawValue, forKey: Keys.onboardingControlMethod)
@@ -538,13 +548,29 @@ final class AppSettings: ObservableObject {
             .flatMap(OnboardingStep.init(rawValue:))
             ?? .welcome
         onboardingStep = persistedOnboardingStep
-        onboardingControlMethod = defaults.string(forKey: Keys.onboardingControlMethod)
+        let persistedControlMethod = defaults.string(forKey: Keys.onboardingControlMethod)
             .flatMap(OnboardingControlMethod.init(rawValue:))
             ?? (persistedOnboardingStep == .welcome ||
                 persistedOnboardingStep == .voiceTool ||
+                persistedOnboardingStep == .remoteAvailability ||
                 persistedOnboardingStep == .controlMethod
                 ? .unselected
                 : .physicalRemote)
+        onboardingControlMethod = persistedControlMethod
+        onboardingRemoteAvailability = defaults.string(
+            forKey: Keys.onboardingRemoteAvailability
+        )
+            .flatMap(OnboardingRemoteAvailability.init(rawValue:))
+            ?? {
+                switch persistedControlMethod {
+                case .physicalRemote:
+                    return .hasRemote
+                case .iPhoneApp, .webRemote:
+                    return .noRemote
+                case .unselected:
+                    return .unselected
+                }
+            }()
         onboardingVoiceTool = defaults.string(forKey: Keys.onboardingVoiceTool)
             .flatMap(OnboardingVoiceTool.init(rawValue:))
             ?? .unselected
@@ -640,6 +666,11 @@ final class AppSettings: ObservableObject {
         onboardingControlMethod = controlMethod
     }
 
+    func setOnboardingRemoteAvailability(_ availability: OnboardingRemoteAvailability) {
+        guard onboardingRemoteAvailability != availability else { return }
+        onboardingRemoteAvailability = availability
+    }
+
     func completeOnboarding() {
         recordFirstUseEvent(.completed, step: .complete)
         onboardingStep = .complete
@@ -648,6 +679,7 @@ final class AppSettings: ObservableObject {
 
     func restartOnboarding() {
         onboardingVoiceTool = .unselected
+        onboardingRemoteAvailability = .unselected
         onboardingControlMethod = .unselected
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
@@ -1193,6 +1225,7 @@ final class AppSettings: ObservableObject {
             let hasPersistedOnboardingState =
                 defaults.object(forKey: Keys.onboardingCompletedVersion) != nil ||
                 defaults.object(forKey: Keys.onboardingStep) != nil ||
+                defaults.object(forKey: Keys.onboardingRemoteAvailability) != nil ||
                 defaults.object(forKey: Keys.onboardingControlMethod) != nil ||
                 defaults.object(forKey: Keys.onboardingVoiceTool) != nil
             let isExistingInstall = previousBuild != nil || sparkleHadLaunchedBefore

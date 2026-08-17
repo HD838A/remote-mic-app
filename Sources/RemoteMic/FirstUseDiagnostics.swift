@@ -38,17 +38,20 @@ enum FirstUseFailureReason: String, Codable, Equatable {
 
 struct FirstUseDiagnosticContext: Equatable {
     let step: OnboardingStep
+    let remoteAvailability: OnboardingRemoteAvailability
     let controlMethod: OnboardingControlMethod
     let capabilities: OnboardingCapabilities
     let hasSelectedAudioUID: Bool
 
     init(
         step: OnboardingStep,
+        remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
         capabilities: OnboardingCapabilities,
         hasSelectedAudioUID: Bool
     ) {
         self.step = step
+        self.remoteAvailability = remoteAvailability
         self.controlMethod = controlMethod
         self.capabilities = capabilities
         self.hasSelectedAudioUID = hasSelectedAudioUID
@@ -56,7 +59,7 @@ struct FirstUseDiagnosticContext: Equatable {
 
     var failureReason: FirstUseFailureReason? {
         switch step {
-        case .welcome, .voiceTool:
+        case .welcome, .voiceTool, .remoteAvailability:
             return nil
         case .controlMethod:
             if controlMethod == .unselected { return nil }
@@ -87,6 +90,7 @@ struct FirstUseDiagnosticContext: Equatable {
             guard OnboardingFlowPolicy.canContinue(
                 from: .complete,
                 voiceTool: .other,
+                remoteAvailability: remoteAvailability,
                 controlMethod: controlMethod,
                 capabilities: capabilities
             ) else { return .completeRuntimeRegressed }
@@ -138,6 +142,7 @@ struct FirstUseDiagnosticSnapshot {
             "architecture=\(architecture)",
             "step=\(context.step.rawValue)",
             "voice_tool=\(voiceTool.rawValue)",
+            "remote_availability=\(context.remoteAvailability.rawValue)",
             "control_method=\(context.controlMethod.rawValue)",
             "failure=\(context.failureReason?.rawValue ?? "none")",
             "permission_bluetooth=\(capabilities.bluetoothGranted)",

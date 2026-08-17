@@ -7,7 +7,8 @@ struct OnboardingFlowTests {
     @Test func navigationOrderIsStableAndGroupedIntoThreePhases() {
         #expect(OnboardingStep.welcome.previous == nil)
         #expect(OnboardingStep.welcome.next == .voiceTool)
-        #expect(OnboardingStep.voiceTool.next == .controlMethod)
+        #expect(OnboardingStep.voiceTool.next == .remoteAvailability)
+        #expect(OnboardingStep.remoteAvailability.next == .controlMethod)
         #expect(OnboardingStep.controlMethod.next == .permissions)
         #expect(OnboardingStep.permissions.next == .remote)
         #expect(OnboardingStep.remote.next == .audio)
@@ -17,6 +18,7 @@ struct OnboardingFlowTests {
         #expect(OnboardingStep.complete.next == nil)
 
         #expect(OnboardingPhase.phase(for: .welcome) == .prepare)
+        #expect(OnboardingPhase.phase(for: .remoteAvailability) == .prepare)
         #expect(OnboardingPhase.phase(for: .controlMethod) == .prepare)
         #expect(OnboardingPhase.phase(for: .permissions) == .setup)
         #expect(OnboardingPhase.phase(for: .complete) == .tryIt)
@@ -34,22 +36,52 @@ struct OnboardingFlowTests {
             #expect(OnboardingFlowPolicy.canContinue(
                 from: .controlMethod,
                 voiceTool: .typeless,
+                remoteAvailability: .noRemote,
                 controlMethod: method,
                 capabilities: capabilities
             ))
             #expect(OnboardingFlowPolicy.canContinue(
                 from: .permissions,
                 voiceTool: .typeless,
+                remoteAvailability: .noRemote,
                 controlMethod: method,
                 capabilities: capabilities
             ))
             #expect(OnboardingFlowPolicy.canContinue(
                 from: .remote,
                 voiceTool: .typeless,
+                remoteAvailability: .noRemote,
                 controlMethod: method,
                 capabilities: capabilities
             ))
         }
+
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .remoteAvailability,
+            voiceTool: .typeless,
+            remoteAvailability: .unselected,
+            capabilities: capabilities
+        ))
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .remoteAvailability,
+            voiceTool: .typeless,
+            remoteAvailability: .hasRemote,
+            capabilities: capabilities
+        ))
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .controlMethod,
+            voiceTool: .typeless,
+            remoteAvailability: .hasRemote,
+            controlMethod: .physicalRemote,
+            capabilities: capabilities
+        ))
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .permissions,
+            voiceTool: .typeless,
+            remoteAvailability: .noRemote,
+            controlMethod: .unselected,
+            capabilities: capabilities
+        ))
 
         #expect(!OnboardingFlowPolicy.canContinue(
             from: .permissions,
@@ -64,6 +96,21 @@ struct OnboardingFlowTests {
             voiceTool: .typeless,
             controlMethod: .physicalRemote,
             capabilities: capabilities
+        ))
+    }
+
+    @Test func connectedPhysicalRemoteSkipsOnlyTheAvailabilityQuestion() {
+        #expect(OnboardingFlowPolicy.shouldAutoSelectPhysicalRemote(
+            at: .remoteAvailability,
+            remoteConnected: true
+        ))
+        #expect(!OnboardingFlowPolicy.shouldAutoSelectPhysicalRemote(
+            at: .remoteAvailability,
+            remoteConnected: false
+        ))
+        #expect(!OnboardingFlowPolicy.shouldAutoSelectPhysicalRemote(
+            at: .controlMethod,
+            remoteConnected: true
         ))
     }
 
@@ -260,8 +307,10 @@ struct OnboardingFlowTests {
         #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"))
         #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"))
         #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD"))
-        #expect(rendererSource.contains("03-control-method.png"))
-        #expect(rendererSource.contains("09-complete.png"))
+        #expect(rendererSource.contains(".remoteAvailability"))
+        #expect(rendererSource.contains("controlMethod != .physicalRemote"))
+        #expect(rendererSource.contains("return \"remote-availability\""))
+        #expect(rendererSource.contains("return \"control-method\""))
         #expect(buildSource.contains("$ROOT/Resources/Onboarding"))
         #expect(verifySource.contains("Resources/Onboarding/*.png(N)"))
     }
@@ -310,6 +359,9 @@ struct OnboardingFlowTests {
         ))
         #expect(viewSource.contains("model.isPhoneRemoteConnected"))
         #expect(viewSource.contains("if case .connected = model.webRemoteState"))
+        #expect(viewSource.contains(".onReceive(model.$isConnected.removeDuplicates())"))
+        #expect(viewSource.contains("routeConnectedPhysicalRemoteIfNeeded()"))
+        #expect(viewSource.contains("settings.setOnboardingStep(.permissions)"))
     }
 
     @Test func observedRemoteButtonRequestsOnlyOneRecoveryWhileBluetoothIsDisconnected() {
@@ -540,15 +592,18 @@ struct OnboardingFlowTests {
         #expect(!settings.isOnboardingComplete)
         #expect(settings.onboardingStep == .welcome)
         #expect(settings.onboardingVoiceTool == .unselected)
+        #expect(settings.onboardingRemoteAvailability == .unselected)
         #expect(settings.onboardingControlMethod == .unselected)
 
         settings.setOnboardingVoiceTool(.doubao)
+        settings.setOnboardingRemoteAvailability(.noRemote)
         settings.setOnboardingControlMethod(.iPhoneApp)
         settings.setOnboardingStep(.audio)
 
         let resumed = AppSettings(defaults: defaults)
         #expect(resumed.onboardingStep == .audio)
         #expect(resumed.onboardingVoiceTool == .doubao)
+        #expect(resumed.onboardingRemoteAvailability == .noRemote)
         #expect(resumed.onboardingControlMethod == .iPhoneApp)
         #expect(!resumed.isOnboardingComplete)
 
@@ -558,6 +613,7 @@ struct OnboardingFlowTests {
         #expect(completed.onboardingCompletedVersion == AppSettings.currentOnboardingVersion)
         #expect(completed.onboardingStep == .complete)
         #expect(completed.onboardingVoiceTool == .doubao)
+        #expect(completed.onboardingRemoteAvailability == .noRemote)
         #expect(completed.onboardingControlMethod == .iPhoneApp)
 
         completed.selectedAudioDeviceUID = "MiRemoteV 2ch"
@@ -572,6 +628,7 @@ struct OnboardingFlowTests {
         #expect(!restarted.isOnboardingComplete)
         #expect(restarted.onboardingStep == .welcome)
         #expect(restarted.onboardingVoiceTool == .unselected)
+        #expect(restarted.onboardingRemoteAvailability == .unselected)
         #expect(restarted.onboardingControlMethod == .unselected)
         #expect(restarted.selectedAudioDeviceUID == "MiRemoteV 2ch")
         #expect(restarted.customMappingEnabled)
@@ -640,6 +697,8 @@ struct OnboardingFlowTests {
         #expect(!resumedSettings.isOnboardingComplete)
         #expect(resumedSettings.onboardingStep == .audio)
         #expect(resumedSettings.onboardingVoiceTool == .typeless)
+        #expect(resumedSettings.onboardingRemoteAvailability == .hasRemote)
+        #expect(resumedSettings.onboardingControlMethod == .physicalRemote)
 
         resumedSettings.completeOnboarding()
         resumedSettings.restartOnboarding()
@@ -665,6 +724,10 @@ struct OnboardingFlowTests {
         #expect(!OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: false,
             step: .voiceTool
+        ))
+        #expect(!OnboardingLaunchPolicy.shouldStartRuntime(
+            isComplete: false,
+            step: .remoteAvailability
         ))
         #expect(!OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: false,

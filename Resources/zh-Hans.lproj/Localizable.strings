@@ -506,8 +506,16 @@
 "onboarding.voice_tool.system_fn.conflict" = "系统仍在使用 Fn";
 "onboarding.voice_tool.system_fn.detail" = "打开系统设置 → 键盘，把“按下 Fn/地球键时”改为“不执行任何操作”。";
 "onboarding.voice_tool.system_fn.open_settings" = "打开键盘设置";
-"onboarding.control_method.title" = "你准备怎样控制无线麦？";
-"onboarding.control_method.detail" = "有实体遥控器就直接连接；没有遥控器时推荐使用 iPhone，没有 iPhone 也可以使用网页版。";
+"onboarding.remote_availability.title" = "你现在有实体遥控器吗？";
+"onboarding.remote_availability.detail" = "实体遥控器可以获得完整、稳定的无线麦体验。如果当前没有，也可以继续使用手机。";
+"onboarding.remote_availability.has_remote.title" = "有遥控器";
+"onboarding.remote_availability.has_remote.detail" = "连接小米蓝牙遥控器，使用实体按键和遥控器麦克风。";
+"onboarding.remote_availability.no_remote.title" = "当前没有遥控器";
+"onboarding.remote_availability.no_remote.detail" = "下一步选择 iPhone App 或手机网页版完成体验。";
+"onboarding.remote_availability.recommended" = "优先推荐";
+"onboarding.remote_availability.illustration" = "优先使用实体遥控器";
+"onboarding.control_method.title" = "没有遥控器时，选择手机控制方式";
+"onboarding.control_method.detail" = "有 iPhone 推荐使用 App；没有 iPhone 时，可以直接使用手机网页版。";
 "onboarding.control_method.physical_remote.title" = "使用实体遥控器";
 "onboarding.control_method.physical_remote.detail" = "连接小米蓝牙遥控器，使用实体按键和遥控器麦克风。";
 "onboarding.control_method.iphone_app.title" = "使用 iPhone App";
@@ -515,6 +523,7 @@
 "onboarding.control_method.web_remote.title" = "使用网页版";
 "onboarding.control_method.web_remote.detail" = "没有 iPhone 时，用手机浏览器扫码打开遥控器，无需安装 App。";
 "onboarding.control_method.recommended" = "推荐";
+"onboarding.control_method.no_iphone" = "没有 iPhone 时";
 "onboarding.control_method.illustration" = "选择现在就能使用的控制方式";
 "onboarding.permissions.title" = "允许无线麦连接和控制 Mac";
 "onboarding.permissions.detail" = "无线麦只会要求当前控制方式真正需要的权限，用来接收按键并执行你设置的操作。";

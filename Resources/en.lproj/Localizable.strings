@@ -506,8 +506,16 @@
 "onboarding.voice_tool.system_fn.conflict" = "macOS is still using Fn";
 "onboarding.voice_tool.system_fn.detail" = "Open System Settings → Keyboard and set “Press Fn/Globe key to” to “Do Nothing.”";
 "onboarding.voice_tool.system_fn.open_settings" = "Open Keyboard Settings";
-"onboarding.control_method.title" = "How will you control SayAll?";
-"onboarding.control_method.detail" = "Connect a physical remote if you have one. Otherwise, use the recommended iPhone app, or the web remote when no iPhone is available.";
+"onboarding.remote_availability.title" = "Do you have a physical remote right now?";
+"onboarding.remote_availability.detail" = "A physical remote provides the most complete and reliable SayAll experience. You can continue with a phone if one is not available.";
+"onboarding.remote_availability.has_remote.title" = "I Have a Remote";
+"onboarding.remote_availability.has_remote.detail" = "Connect a Xiaomi Bluetooth remote and use its physical buttons and microphone.";
+"onboarding.remote_availability.no_remote.title" = "No Remote Right Now";
+"onboarding.remote_availability.no_remote.detail" = "Next, choose the iPhone app or the mobile web remote.";
+"onboarding.remote_availability.recommended" = "Preferred";
+"onboarding.remote_availability.illustration" = "Use a physical remote when available";
+"onboarding.control_method.title" = "Choose a phone option without a remote";
+"onboarding.control_method.detail" = "Use the recommended iPhone app when available, or the mobile web remote without an iPhone.";
 "onboarding.control_method.physical_remote.title" = "Physical Remote";
 "onboarding.control_method.physical_remote.detail" = "Connect a Xiaomi Bluetooth remote and use its physical buttons and microphone.";
 "onboarding.control_method.iphone_app.title" = "iPhone App";
@@ -515,6 +523,7 @@
 "onboarding.control_method.web_remote.title" = "Web Remote";
 "onboarding.control_method.web_remote.detail" = "Without an iPhone, scan with a phone browser and use the remote without installing an app.";
 "onboarding.control_method.recommended" = "Recommended";
+"onboarding.control_method.no_iphone" = "Without an iPhone";
 "onboarding.control_method.illustration" = "Choose the control method you can use now";
 "onboarding.permissions.title" = "Allow SayAll to connect and control your Mac";
 "onboarding.permissions.detail" = "SayAll only requires the permissions needed by your selected control method to receive buttons and perform configured actions.";

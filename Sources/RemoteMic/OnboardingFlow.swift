@@ -3,6 +3,7 @@ import Foundation
 enum OnboardingStep: String, CaseIterable, Codable {
     case welcome
     case voiceTool
+    case remoteAvailability
     case controlMethod
     case permissions
     case remote
@@ -13,7 +14,7 @@ enum OnboardingStep: String, CaseIterable, Codable {
 
     var requiresRuntime: Bool {
         switch self {
-        case .welcome, .voiceTool, .controlMethod:
+        case .welcome, .voiceTool, .remoteAvailability, .controlMethod:
             return false
         case .permissions, .remote, .audio, .voiceTest, .controls, .complete:
             return true
@@ -49,13 +50,29 @@ enum OnboardingPhase: String, CaseIterable {
 
     static func phase(for step: OnboardingStep) -> OnboardingPhase {
         switch step {
-        case .welcome, .voiceTool, .controlMethod:
+        case .welcome, .voiceTool, .remoteAvailability, .controlMethod:
             return .prepare
         case .permissions, .remote, .audio:
             return .setup
         case .voiceTest, .controls, .complete:
             return .tryIt
         }
+    }
+}
+
+enum OnboardingRemoteAvailability: String, CaseIterable, Codable, Identifiable {
+    case unselected
+    case hasRemote = "has_remote"
+    case noRemote = "no_remote"
+
+    var id: String { rawValue }
+
+    var titleKey: String {
+        "onboarding.remote_availability.\(rawValue).title"
+    }
+
+    var detailKey: String {
+        "onboarding.remote_availability.\(rawValue).detail"
     }
 }
 
@@ -143,6 +160,13 @@ enum OnboardingAudioSelectionPolicy {
 }
 
 enum OnboardingFlowPolicy {
+    static func shouldAutoSelectPhysicalRemote(
+        at step: OnboardingStep,
+        remoteConnected: Bool
+    ) -> Bool {
+        step == .remoteAvailability && remoteConnected
+    }
+
     static func shouldRequestRemoteReconnect(
         remoteConnected: Bool,
         remoteButtonObserved: Bool,
@@ -154,6 +178,7 @@ enum OnboardingFlowPolicy {
     static func canContinue(
         from step: OnboardingStep,
         voiceTool: OnboardingVoiceTool,
+        remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
         capabilities: OnboardingCapabilities
     ) -> Bool {
@@ -163,10 +188,17 @@ enum OnboardingFlowPolicy {
         case .voiceTool:
             return voiceTool != .unselected &&
                 (!voiceTool.requiresFunctionKeySetup || capabilities.systemFunctionKeyAvailable)
+        case .remoteAvailability:
+            return remoteAvailability != .unselected
         case .controlMethod:
-            return controlMethod != .unselected
+            return remoteAvailability == .noRemote &&
+                (controlMethod == .iPhoneApp || controlMethod == .webRemote)
         case .permissions:
-            return (!controlMethod.requiresBluetoothPermission || capabilities.bluetoothGranted) &&
+            return isControlSelectionValid(
+                remoteAvailability: remoteAvailability,
+                controlMethod: controlMethod
+            ) &&
+                (!controlMethod.requiresBluetoothPermission || capabilities.bluetoothGranted) &&
                 (!controlMethod.requiresInputMonitoringPermission ||
                     capabilities.inputMonitoringGranted) &&
                 capabilities.accessibilityGranted
@@ -182,7 +214,10 @@ enum OnboardingFlowPolicy {
         case .controls:
             return capabilities.testedRemoteButtonCount >= 3
         case .complete:
-            return controlMethod != .unselected &&
+            return isControlSelectionValid(
+                remoteAvailability: remoteAvailability,
+                controlMethod: controlMethod
+            ) &&
                 (!controlMethod.requiresBluetoothPermission || capabilities.bluetoothGranted) &&
                 (!controlMethod.requiresInputMonitoringPermission ||
                     capabilities.inputMonitoringGranted) &&
@@ -196,18 +231,26 @@ enum OnboardingFlowPolicy {
     static func recoveryStep(
         from step: OnboardingStep,
         voiceTool: OnboardingVoiceTool,
+        remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
         capabilities: OnboardingCapabilities,
         hasSelectedAudioUID: Bool
     ) -> OnboardingStep? {
         let context = FirstUseDiagnosticContext(
             step: step,
+            remoteAvailability: remoteAvailability,
             controlMethod: controlMethod,
             capabilities: capabilities,
             hasSelectedAudioUID: hasSelectedAudioUID
         )
         guard let failure = context.failureReason else { return nil }
         if step == .complete, failure == .completeRuntimeRegressed {
+            if !isControlSelectionValid(
+                remoteAvailability: remoteAvailability,
+                controlMethod: controlMethod
+            ) {
+                return remoteAvailability == .noRemote ? .controlMethod : .remoteAvailability
+            }
             if (controlMethod.requiresBluetoothPermission && !capabilities.bluetoothGranted) ||
                 (controlMethod.requiresInputMonitoringPermission &&
                     !capabilities.inputMonitoringGranted) ||
@@ -218,6 +261,20 @@ enum OnboardingFlowPolicy {
             return .audio
         }
         return failure.recoveryStep
+    }
+
+    static func isControlSelectionValid(
+        remoteAvailability: OnboardingRemoteAvailability,
+        controlMethod: OnboardingControlMethod
+    ) -> Bool {
+        switch remoteAvailability {
+        case .hasRemote:
+            return controlMethod == .physicalRemote
+        case .noRemote:
+            return controlMethod == .iPhoneApp || controlMethod == .webRemote
+        case .unselected:
+            return false
+        }
     }
 }
 
