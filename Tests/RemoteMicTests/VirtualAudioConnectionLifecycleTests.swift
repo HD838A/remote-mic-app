@@ -1,9 +1,61 @@
 import CoreAudio
+import Foundation
 import Testing
 @testable import RemoteMic
 
 @Suite("Virtual audio connection lifecycle")
 struct VirtualAudioConnectionLifecycleTests {
+    @Test func stoppedPlayerIsNotHealthyWhenEngineAndDeviceStillLookReady() {
+        #expect(!VirtualAudioHealthPolicy.isPlaybackReady(
+            hasSelectedDevice: true,
+            engineRunning: true,
+            playerPlaying: false
+        ))
+        #expect(!VirtualAudioHealthPolicy.isConfigurationHealthy(
+            hasSelectedDevice: true,
+            engineRunning: true,
+            playerPlaying: false,
+            boundToSelectedDevice: true
+        ))
+    }
+
+    @Test func healthyPlaybackRequiresRunningPlayerAndSelectedBinding() {
+        #expect(VirtualAudioHealthPolicy.isConfigurationHealthy(
+            hasSelectedDevice: true,
+            engineRunning: true,
+            playerPlaying: true,
+            boundToSelectedDevice: true
+        ))
+        #expect(!VirtualAudioHealthPolicy.isConfigurationHealthy(
+            hasSelectedDevice: true,
+            engineRunning: true,
+            playerPlaying: true,
+            boundToSelectedDevice: false
+        ))
+    }
+
+    @Test func everyVoiceEntryChecksLiveAudioHealthInsteadOfCachedReadyState() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        for reason in [
+            "bluetooth_ready",
+            "bluetooth_voice_start",
+            "mobile_voice_start",
+            "test_tone",
+            "long_recording_start",
+        ] {
+            #expect(source.contains("ensureVirtualAudioOutputReady(reason: \"\(reason)\")"))
+        }
+        #expect(!source.contains("isAudioOutputReady || configureVirtualAudioOutput"))
+    }
+
     @Test func lastReadyBluetoothBridgeDisconnectsAndReleasesAudio() {
         #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 0,

@@ -97,7 +97,7 @@
 | 2026-08-16 | [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md) | 第二次修复完成，等待下一次真实受保护工作流验证 |
 | 2026-08-16 | [发布阶段 heartbeat 与 timeout 同时到期导致 CI 偶发失败](./2026-08-16-release-stage-heartbeat-timeout-flake.md) | 已修复，自动化验证通过 |
 | 2026-08-17 | [正式版晋升 Runner 缺少 ripgrep](./2026-08-17-stable-promotion-runner-missing-rg.md) | 已修复，等待下一次受保护晋升验证 |
-| 2026-08-17 | [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md) | 未修复，等待现场日志与真机复现 |
+| 2026-08-17 | [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md) | 宿主侧候选修复完成，等待真实 MiRemoteV 与第三方 App 验收 |
 
 ## 记录模板
 
