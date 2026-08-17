@@ -315,6 +315,25 @@ struct OnboardingFlowTests {
         #expect(verifySource.contains("Resources/Onboarding/*.png(N)"))
     }
 
+    @Test func voiceTestReacquiresInputFocusAndAlignsItsPlaceholder() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewSource.contains(".onAppear {\n                        requestTranscriptFocus()\n                    }"))
+        #expect(viewSource.contains("case .voiceTest:\n                switchToSelectedInputMethod()\n                requestTranscriptFocus()"))
+        #expect(viewSource.contains("private func requestTranscriptFocus()"))
+        #expect(viewSource.contains("transcriptFocused = false\n        DispatchQueue.main.async"))
+        #expect(viewSource.contains("transcriptFocused = true"))
+        #expect(viewSource.contains(".font(.system(size: 15))\n                        .foregroundStyle(.tertiary)\n                        .padding(.horizontal, 15)\n                        .padding(.vertical, 10)"))
+        #expect(!viewSource.contains(".onChange(of: transcript)"))
+    }
+
     @Test func mobileControlPathsPublishButtonsAndVoiceSamplesForTheSharedGates() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

@@ -90,9 +90,12 @@ struct OnboardingView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             switch settings.onboardingStep {
-            case .voiceTool, .voiceTest:
+            case .voiceTool:
                 switchToSelectedInputMethod()
                 refreshSystemFunctionKeyUsage()
+            case .voiceTest:
+                switchToSelectedInputMethod()
+                requestTranscriptFocus()
             case .remoteAvailability:
                 routeConnectedPhysicalRemoteIfNeeded()
             case .remote:
@@ -155,11 +158,8 @@ struct OnboardingView: View {
         .onChange(of: settings.onboardingStep) { step in
             prepareForStep(step)
         }
-        .onChange(of: transcript) { value in
-            guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            transcriptFocused = true
-        }
         .onChange(of: transcriptFocused) { isFocused in
+            AppLogger.shared.write("ONBOARDING TRANSCRIPT focus=\(isFocused)")
             guard isFocused, settings.onboardingStep == .voiceTest else { return }
             switchToSelectedInputMethod()
         }
@@ -979,6 +979,9 @@ struct OnboardingView: View {
                     .focused($transcriptFocused)
                     .scrollContentBackground(.hidden)
                     .padding(10)
+                    .onAppear {
+                        requestTranscriptFocus()
+                    }
                     .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
                     .overlay {
                         RoundedRectangle(cornerRadius: 12)
@@ -990,10 +993,10 @@ struct OnboardingView: View {
 
                 if transcript.isEmpty {
                     Text("onboarding.voice_test.placeholder")
-                        .font(.system(size: 14))
+                        .font(.system(size: 15))
                         .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 18)
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 10)
                         .allowsHitTesting(false)
                 }
             }
@@ -1833,9 +1836,7 @@ struct OnboardingView: View {
             voiceSessionEnded = false
             transcript = ""
             switchToSelectedInputMethod()
-            DispatchQueue.main.async {
-                transcriptFocused = true
-            }
+            requestTranscriptFocus()
         case .controls:
             testedControlButtons.removeAll()
         case .complete:
@@ -1922,7 +1923,16 @@ struct OnboardingView: View {
         voiceSamplesReceived = false
         voiceSessionEnded = false
         transcript = ""
-        DispatchQueue.main.async { transcriptFocused = true }
+        requestTranscriptFocus()
+    }
+
+    private func requestTranscriptFocus() {
+        guard settings.onboardingStep == .voiceTest else { return }
+        transcriptFocused = false
+        DispatchQueue.main.async {
+            guard settings.onboardingStep == .voiceTest else { return }
+            transcriptFocused = true
+        }
     }
 
     private func copyDiagnosticSummary() {
