@@ -50,4 +50,4 @@ run `31988902061` 在 `2026-08-17T02:44:20Z` 进入 `Promote unchanged candidate
 
 ## 验证边界
 
-自动化验证覆盖工作流结构、Shell 语法、缺少 `rg` 时的明确失败信息，以及现有发布脚本回归。此次修复不会触发 Stable Promotion、Tag 或 Release 修改；真实受保护 Environment 审批、公开资产复验、`stable-promotion.json` 上传和 Latest 状态切换，必须在合并后由获授权的发布会话对既有 Pre-release 执行一次正式晋升验证。
+自动化验证覆盖工作流结构、Shell 语法、无 `rg` PATH 下的非法并发参数拒绝、有效晋升预检缺少 `rg` 时的明确失败信息，以及现有发布脚本回归。此次修复不会触发 Stable Promotion、Tag 或 Release 修改；真实受保护 Environment 审批、公开资产复验、`stable-promotion.json` 上传和 Latest 状态切换，必须在合并后由获授权的发布会话对既有 Pre-release 执行一次正式晋升验证。

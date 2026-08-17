@@ -9,6 +9,7 @@ FAKE_GH="$WORK_DIR/fake-gh"
 FAKE_RUNNER="$WORK_DIR/fake-release-variant-runner"
 FAKE_STAGE_COMMAND="$WORK_DIR/fake-stage-command"
 FAKE_CURL="$WORK_DIR/fake-curl-bin/curl"
+NO_RG_BIN="$WORK_DIR/no-rg-bin"
 
 cleanup() {
   case "$WORK_DIR" in
@@ -70,13 +71,27 @@ fi
 /usr/bin/grep -Fq 'Remote-Mic-$VERSION.dmg.sha256' \
   "$ROOT/scripts/publish-release.sh"
 
-if PUBLIC_DOWNLOAD_CONCURRENCY=9 "$ROOT/scripts/publish-release.sh" promote \
+/bin/mkdir -p "$NO_RG_BIN"
+for command_name in cmp curl gh git jq plutil shasum stat; do
+  /bin/ln -s "$(command -v "$command_name")" "$NO_RG_BIN/$command_name"
+done
+
+if PATH="$NO_RG_BIN" PUBLIC_DOWNLOAD_CONCURRENCY=9 \
+    "$ROOT/scripts/publish-release.sh" promote \
     > "$WORK_DIR/invalid-download-concurrency.txt" 2>&1; then
   print -u2 "publish script unexpectedly accepted excessive download concurrency"
   exit 1
 fi
 /usr/bin/grep -Fq 'PUBLIC_DOWNLOAD_CONCURRENCY must be between 1 and 8' \
   "$WORK_DIR/invalid-download-concurrency.txt"
+
+if PATH="$NO_RG_BIN" RELEASE_TAG=v1.8.25 \
+    "$ROOT/scripts/publish-release.sh" promote \
+    > "$WORK_DIR/missing-rg.txt" 2>&1; then
+  print -u2 "publish script unexpectedly accepted a PATH without ripgrep"
+  exit 1
+fi
+/usr/bin/grep -Fxq 'Missing required command: rg' "$WORK_DIR/missing-rg.txt"
 
 if SKIP_SWIFT_PACKAGE_BUILD=invalid "$ROOT/scripts/test.sh" \
     > "$WORK_DIR/invalid-skip-package-build.txt" 2>&1; then

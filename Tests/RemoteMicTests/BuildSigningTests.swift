@@ -592,7 +592,7 @@ struct BuildSigningTests {
             publishSource.range(of: "for command_name in cmp curl gh git jq plutil rg shasum stat")
         )
         let firstRipgrepUse = try #require(
-            publishSource.range(of: "rg -q '^[1-9][0-9]*$'")
+            publishSource.range(of: "rg -Fq \"url=\\\"$CDN_DOWNLOAD_PREFIX")
         )
         #expect(dependencyCheck.lowerBound < firstRipgrepUse.lowerBound)
         #expect(publishSourceSupportsCrossVersionPromotion(root: root))
