@@ -231,7 +231,7 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(workflowSource.contains("swift package config set-mirror"))
         #expect(workflowSource.contains("file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"))
-        #expect(workflowSource.contains("fdecd7d24369dee40c91aac3a78c8e844854530f"))
+        #expect(workflowSource.contains("b0c3f844d060a570d523bc5d675ee9742e9d5902"))
         #expect(workflowSource.contains("actions/upload-artifact@v4"))
         #expect(workflowSource.contains("contents: read"))
         #expect(!workflowSource.contains("MATCH_PASSWORD"))

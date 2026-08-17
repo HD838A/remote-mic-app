@@ -2,12 +2,12 @@
 
 ## 自动化
 
-- `sayall-mac-remote`：`swift test`，21 项通过，覆盖 Phone/Watch 连接状态回调、语音开始成功、占用、输出未就绪、兼容回调，以及 Watch 蓝牙关闭后连接与活动语音只清理一次。
-- Mac 主仓：`swift test`，覆盖专用入口顺序、按需监听、取消等待、按键类型映射和既有稳定功能。
+- `sayall-mac-remote`：`swift test`，24 项通过，覆盖 Phone/Watch 连接状态回调、语音开始成功、占用、输出未就绪、兼容回调、成功后才发送 `voiceReady`、失败不发送以及停止取消迟到开始结果。
+- Mac 主仓：`swift test`，226 项、20 个 suite 通过，覆盖专用入口顺序、按需监听、取消等待、按键类型映射、`voiceStart → Mac 准备完成 → voiceReady` 首次旅程和既有稳定功能。
 - 2026-08-16 回归：Mac 主仓 222 项、18 个 suite 全部通过；`sayall-mac-remote` 21 项通过，包含 iPhone/Watch 连接状态、语音来源隔离、占用分类、Watch 蓝牙关闭清理、系统 Bonjour 发布确认与发布 watchdog。
 - Mac Release：按仓库现有发布脚本或 `swift build -c release` 验证。
 - GitHub Actions：使用独立只读部署密钥检出固定 revision 的 `sayall-mac-remote`，PR、候选和正式签名流程均通过 SwiftPM 本地 mirror 构建，避免 runner 匿名读取私有仓库且不改写锁定依赖。
-- 本次修复对应的 Apple Silicon 与 Intel Ventura 结果以合入 PR 的新 CI 为准；旧 Run `31715653640` 只验证过早期私有依赖访问修复，不能作为本次语音来源隔离与连接状态修复的证据。
+- 本次私有组件 PR 的 GitHub Actions 因账号账单/额度问题未启动任何 runner step；失败不来自代码。Apple Silicon 与 Intel Ventura 候选结果仍以发布管理任务中的新候选 CI 为准，本地 24 项组件测试和 226 项主仓测试不能替代两条远端架构线。
 - 本机 Release APP 已实际启动：未点击时没有附近监听；点击后日志确认 Phone Bonjour 已发布、Watch BLE 已广播，`dns-sd` 可发现服务；取消等待后两者均停止。
 
 ## 人工测试

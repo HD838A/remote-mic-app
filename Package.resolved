@@ -6,7 +6,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/GetSayAll/sayall-mac-remote.git",
       "state" : {
-        "revision" : "fdecd7d24369dee40c91aac3a78c8e844854530f"
+        "revision" : "b0c3f844d060a570d523bc5d675ee9742e9d5902"
       }
     },
     {
