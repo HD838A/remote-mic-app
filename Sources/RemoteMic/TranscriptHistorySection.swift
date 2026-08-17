@@ -6,6 +6,7 @@ private struct TranscriptApplicationSummary: Identifiable {
     let name: String
     let bundleIdentifier: String
     let count: Int
+    let latestEndedAt: Date
 }
 
 private struct TranscriptDayGroup: Identifiable {
@@ -33,6 +34,8 @@ struct TranscriptHistorySection: View {
     @EnvironmentObject private var localization: LocalizationStore
 
     @State private var selectedApplicationKey: String?
+    @State private var isApplicationSwitcherExpanded = false
+    @State private var expandedDayKeys: Set<String> = []
     @State private var copiedRecordID: UUID?
     @State private var deletionRequest: TranscriptDeletionRequest?
 
@@ -44,10 +47,16 @@ struct TranscriptHistorySection: View {
                     name: records.first?.applicationName.nilIfBlank
                         ?? localization.text("statistics.transcripts.unknown_application"),
                     bundleIdentifier: records.first?.bundleIdentifier ?? "",
-                    count: records.count
+                    count: records.count,
+                    latestEndedAt: records.map(\.endedAt).max() ?? .distantPast
                 )
             }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            .sorted {
+                if $0.latestEndedAt == $1.latestEndedAt {
+                    return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                }
+                return $0.latestEndedAt > $1.latestEndedAt
+            }
     }
 
     private var activeApplicationKey: String? {
@@ -99,9 +108,16 @@ struct TranscriptHistorySection: View {
         .onAppear {
             model.refreshTranscriptRecords()
             normalizeSelection()
+            normalizeExpandedDays()
         }
         .onChange(of: applications.map(\.id)) { _, _ in
             normalizeSelection()
+        }
+        .onChange(of: activeApplicationKey) { _, _ in
+            resetExpandedDays()
+        }
+        .onChange(of: dayGroups.map(\.id)) { _, _ in
+            normalizeExpandedDays()
         }
         .alert(item: $deletionRequest, content: deletionAlert)
     }
@@ -124,100 +140,127 @@ struct TranscriptHistorySection: View {
     }
 
     private var historyContent: some View {
-        HStack(alignment: .top, spacing: 14) {
-            GlassPanel {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("statistics.transcripts.applications")
-                        .font(.system(size: 14, weight: .semibold))
-                    Divider()
-                    VStack(spacing: 6) {
-                        allApplicationsButton
-                        ForEach(applications) { application in
-                            applicationButton(application)
-                        }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(selectedApplication?.name
+                        ?? localization.text("statistics.transcripts.all_records"))
+                        .font(.system(size: 22, weight: .semibold))
+                        .lineLimit(1)
+                    Text(localizedEntryCount(
+                        selectedApplication?.count ?? model.transcriptRecords.count
+                    ))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 16)
+
+                if let selectedApplication {
+                    Button("statistics.transcripts.delete_application", role: .destructive) {
+                        deletionRequest = .application(
+                            key: selectedApplication.id,
+                            name: selectedApplication.name
+                        )
                     }
+                    .font(.system(size: 12, weight: .medium))
+                    .buttonStyle(.borderless)
+                    .fixedSize()
+                }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isApplicationSwitcherExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(isApplicationSwitcherExpanded
+                            ? "statistics.transcripts.collapse_applications"
+                            : "statistics.transcripts.expand_applications")
+                        Image(systemName: isApplicationSwitcherExpanded
+                            ? "chevron.up"
+                            : "chevron.down")
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                .fixedSize()
+            }
+
+            applicationSwitcher
+
+            LazyVStack(alignment: .leading, spacing: 12) {
+                ForEach(dayGroups) { group in
+                    dayGroupView(group)
                 }
             }
-            .frame(width: 250, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
 
-            GlassPanel {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 12) {
-                        if let selectedApplication {
-                            applicationIcon(selectedApplication, size: 44)
-                        } else {
-                            Image(systemName: "square.grid.2x2.fill")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(Color.accentColor)
-                                .frame(width: 44, height: 44)
-                                .background(
-                                    Color.accentColor.opacity(0.12),
-                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                )
-                        }
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(selectedApplication?.name
-                                ?? localization.text("statistics.transcripts.all_applications"))
-                                .font(.system(size: 18, weight: .semibold))
-                                .lineLimit(1)
-                            Text(localizedEntryCount(
-                                selectedApplication?.count ?? model.transcriptRecords.count
-                            ))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 16)
-
-                        if let selectedApplication {
-                            Button("statistics.transcripts.delete_application", role: .destructive) {
-                                deletionRequest = .application(
-                                    key: selectedApplication.id,
-                                    name: selectedApplication.name
-                                )
-                            }
-                            .font(.system(size: 12, weight: .medium))
-                            .buttonStyle(.bordered)
-                        }
+    @ViewBuilder
+    private var applicationSwitcher: some View {
+        GlassPanel {
+            if isApplicationSwitcherExpanded {
+                LazyVGrid(
+                    columns: [
+                        GridItem(
+                            .adaptive(minimum: 142, maximum: 220),
+                            spacing: 8,
+                            alignment: .leading
+                        )
+                    ],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    allApplicationsButton(fillsAvailableWidth: true)
+                    ForEach(applications) { application in
+                        applicationButton(application, fillsAvailableWidth: true)
                     }
+                }
+            } else {
+                HStack(spacing: 10) {
+                    allApplicationsButton(fillsAvailableWidth: false)
 
                     Divider()
+                        .frame(height: 42)
 
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        ForEach(dayGroups) { group in
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(dayTitle(for: group))
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.bottom, 6)
-
-                                ForEach(Array(group.records.enumerated()), id: \.element.id) {
-                                    index, record in
-                                    transcriptRow(record)
-                                    if index < group.records.count - 1 {
-                                        Divider()
-                                    }
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(spacing: 8) {
+                                ForEach(applications) { application in
+                                    applicationButton(
+                                        application,
+                                        fillsAvailableWidth: false
+                                    )
+                                    .id(application.id)
                                 }
                             }
                         }
+                        .onChange(of: activeApplicationKey) { _, applicationKey in
+                            guard let applicationKey else { return }
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                proxy.scrollTo(applicationKey, anchor: .center)
+                            }
+                        }
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 
-    private var allApplicationsButton: some View {
+    private func allApplicationsButton(fillsAvailableWidth: Bool) -> some View {
         Button {
             selectedApplicationKey = nil
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 9) {
                 Image(systemName: "square.grid.2x2.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(
                         selectedApplicationKey == nil ? Color.accentColor : Color.secondary
                     )
-                    .frame(width: 34, height: 34)
+                    .frame(width: 32, height: 32)
                     .background(
                         Color.accentColor.opacity(selectedApplicationKey == nil ? 0.12 : 0.06),
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -227,19 +270,21 @@ struct TranscriptHistorySection: View {
                     Text("statistics.transcripts.all_applications")
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
-                    Text(localizedEntryCount(model.transcriptRecords.count))
+                    Text(localizedCount(model.transcriptRecords.count))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 4)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(width: fillsAvailableWidth ? nil : 166)
+        .frame(maxWidth: fillsAvailableWidth ? .infinity : nil, alignment: .leading)
         .background(
             selectedApplicationKey == nil
                 ? Color.accentColor.opacity(0.12)
@@ -248,31 +293,37 @@ struct TranscriptHistorySection: View {
         )
         .foregroundStyle(selectedApplicationKey == nil ? Color.accentColor : Color.primary)
         .accessibilityAddTraits(selectedApplicationKey == nil ? .isSelected : [])
+        .accessibilityValue(localizedEntryCount(model.transcriptRecords.count))
     }
 
-    private func applicationButton(_ application: TranscriptApplicationSummary) -> some View {
+    private func applicationButton(
+        _ application: TranscriptApplicationSummary,
+        fillsAvailableWidth: Bool
+    ) -> some View {
         Button {
             selectedApplicationKey = application.id
         } label: {
-            HStack(spacing: 10) {
-                applicationIcon(application, size: 34)
+            HStack(spacing: 9) {
+                applicationIcon(application, size: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(application.name)
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
-                    Text(localizedEntryCount(application.count))
+                    Text(localizedCount(application.count))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 4)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(width: fillsAvailableWidth ? nil : 158)
+        .frame(maxWidth: fillsAvailableWidth ? .infinity : nil, alignment: .leading)
         .background(
             activeApplicationKey == application.id
                 ? Color.accentColor.opacity(0.12)
@@ -283,6 +334,76 @@ struct TranscriptHistorySection: View {
             activeApplicationKey == application.id ? Color.accentColor : Color.primary
         )
         .accessibilityAddTraits(activeApplicationKey == application.id ? .isSelected : [])
+        .accessibilityValue(localizedEntryCount(application.count))
+    }
+
+    private func dayGroupView(_ group: TranscriptDayGroup) -> some View {
+        let isExpanded = expandedDayKeys.contains(group.id)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    toggleDay(group.id)
+                }
+            } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 14)
+                    Text(dayTitle(for: group))
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("·")
+                        .foregroundStyle(.tertiary)
+                    Text(localizedEntryCount(group.records.count))
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer(minLength: 12)
+                }
+                .foregroundStyle(isExpanded ? Color.accentColor : Color.secondary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 9)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(localizedEntryCount(group.records.count))
+
+            Divider()
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(group.records.enumerated()), id: \.element.id) {
+                        index, record in
+                        timelineRecordRow(
+                            record,
+                            isLast: index == group.records.count - 1
+                        )
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func timelineRecordRow(_ record: TranscriptRecord, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            ZStack(alignment: .top) {
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.78))
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 8, height: 8)
+                    .padding(.top, 17)
+            }
+            .frame(width: 28)
+
+            VStack(spacing: 0) {
+                transcriptRow(record)
+                if !isLast {
+                    Divider()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func applicationIcon(
@@ -342,18 +463,16 @@ struct TranscriptHistorySection: View {
                 .font(.system(size: 12, design: .rounded))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-                .frame(width: 58, alignment: .leading)
+                .frame(width: 54, alignment: .leading)
 
-            if activeApplicationKey == nil {
-                HStack(spacing: 8) {
-                    applicationIcon(bundleIdentifier: record.bundleIdentifier, size: 24)
-                    Text(record.applicationName.nilIfBlank
-                        ?? localization.text("statistics.transcripts.unknown_application"))
-                        .font(.system(size: 12, weight: .medium))
-                        .lineLimit(1)
-                }
-                .frame(width: 132, alignment: .leading)
+            HStack(spacing: 8) {
+                applicationIcon(bundleIdentifier: record.bundleIdentifier, size: 24)
+                Text(record.applicationName.nilIfBlank
+                    ?? localization.text("statistics.transcripts.unknown_application"))
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
             }
+            .frame(width: 126, alignment: .leading)
 
             Text(record.originalTranscript)
                 .font(.system(size: 13))
@@ -391,6 +510,26 @@ struct TranscriptHistorySection: View {
         guard applications.contains(where: { $0.id == current }) else {
             selectedApplicationKey = nil
             return
+        }
+    }
+
+    private func normalizeExpandedDays() {
+        let validKeys = Set(dayGroups.map(\.id))
+        expandedDayKeys.formIntersection(validKeys)
+        if expandedDayKeys.isEmpty, let newestDayKey = dayGroups.first?.id {
+            expandedDayKeys.insert(newestDayKey)
+        }
+    }
+
+    private func resetExpandedDays() {
+        expandedDayKeys = Set(dayGroups.prefix(1).map(\.id))
+    }
+
+    private func toggleDay(_ dayKey: String) {
+        if expandedDayKeys.contains(dayKey) {
+            expandedDayKeys.remove(dayKey)
+        } else {
+            expandedDayKeys.insert(dayKey)
         }
     }
 

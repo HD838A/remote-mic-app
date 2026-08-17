@@ -603,6 +603,9 @@
 "statistics.transcripts.unknown_application" = "未知应用";
 "statistics.transcripts.applications" = "应用";
 "statistics.transcripts.all_applications" = "全部应用";
+"statistics.transcripts.all_records" = "全部记录";
+"statistics.transcripts.expand_applications" = "展开";
+"statistics.transcripts.collapse_applications" = "收起";
 "statistics.transcripts.entry_count" = "%@ 条记录";
 "statistics.transcripts.copy" = "复制这条记录";
 "statistics.transcripts.delete_record" = "删除这条记录";
