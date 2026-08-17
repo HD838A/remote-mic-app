@@ -4,7 +4,7 @@
 
 - 私有模块 `RemoteMicButtonProfiles.swift`：公开格式 v1、类型化绑定模型、编辑草稿和前台 App 监听。
 - 私有模块控制层：方案管理、当前选择、App 规则、持久化和运行时解析。
-- 私有模块 `RemoteMicButtonProfilesView.swift`：稳定方案列表、摘要页和“基本设置（名称与使用方式）→ 设置按键 → 确认保存”三步编辑器；动作只在设置按键步骤按基础、系统媒体、自定义、App 和组合动作平铺分组。
+- 私有模块 `RemoteMicButtonProfilesView.swift`：整行可点击且自适应状态标签的方案列表、完整按键摘要，以及“基本设置（名称与使用方式）→ 设置按键 → 确认保存”三步编辑器；最终确认页预览每个按键和动作，动作只在设置按键步骤按基础、系统媒体、自定义、App 和组合动作平铺分组。
 - 公开宿主 `SettingsView.swift`：增加独立“键位方案”侧边栏和页面激活状态。
 - 公开宿主 `MacroFeatureIntegration.swift`：提供宿主动作目录、类型化 payload 编解码、实体按键通知和编辑态路由状态。
 - 公开宿主 `BridgeAppModel.swift`：执行宿主动作绑定，并在键位方案页内把实体按键切换为只选择不执行。
