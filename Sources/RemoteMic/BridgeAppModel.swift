@@ -1060,11 +1060,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 control: .remoteButton(button),
                 source: .bluetoothRemote
             )
+            let shouldPerformAction = ButtonProfileEditingRoutingPolicy.shouldPerformAction(
+                isBindingEditorActive: self.macroFeature.isButtonProfileBindingEditorActive
+            )
+            if !shouldPerformAction {
+                AppLogger.shared.write(
+                    "BUTTON PROFILE input selected_only button=\(button.rawValue) reason=binding_editor_active"
+                )
+            }
             return (
                 resolvedProfileID,
-                shouldPerformAction: ButtonProfileEditingRoutingPolicy.shouldPerformAction(
-                    isPageActive: self.macroFeature.isButtonProfilesPageActive
-                )
+                shouldPerformAction: shouldPerformAction
             )
         }
         monitor.onInternalAction = { [weak self] profileID, action in

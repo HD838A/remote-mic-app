@@ -21,6 +21,7 @@
 - Panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
+- Action Sequences and Button Profiles use separate sidebar entries. Button Profiles use a four-step in-page flow: name, usage, buttons, and review. Only the button step consumes physical-button presses for selecting a position; the overview and other steps continue executing the saved action. Saved shortcuts are presented as a separate flat category and can be recorded inline for reuse.
 - The UI does not show a separate mute key that is absent from the physical remote.
 - Regular UI uses product language instead of remote model codes, Bluetooth voice protocol names, button protocol names, hexadecimal button numbers, or device-identifier terminology.
 - Statistics uses a prominent large Day / Week / All selector aligned to the left, shows daily bars for the latest seven days, weekly bars for the latest eight weeks, and only all-time button and voice totals in the All view while preserving expansion space.

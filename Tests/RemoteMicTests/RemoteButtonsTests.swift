@@ -915,9 +915,9 @@ struct RemoteButtonsTests {
         #expect(AppSettings.defaultBindings[.tv] == .appSwitcher)
     }
 
-    @Test func buttonProfileEditingConsumesPhysicalButtonsWithoutExecutingMappings() {
-        #expect(!ButtonProfileEditingRoutingPolicy.shouldPerformAction(isPageActive: true))
-        #expect(ButtonProfileEditingRoutingPolicy.shouldPerformAction(isPageActive: false))
+    @Test func onlyButtonBindingEditorConsumesPhysicalButtonsWithoutExecutingMappings() {
+        #expect(!ButtonProfileEditingRoutingPolicy.shouldPerformAction(isBindingEditorActive: true))
+        #expect(ButtonProfileEditingRoutingPolicy.shouldPerformAction(isBindingEditorActive: false))
     }
 
     @Test func buttonProfileHostActionPayloadRoundTripsConfiguredActions() throws {
@@ -1227,7 +1227,7 @@ struct RemoteButtonsTests {
         )
         #expect(source.contains("settings.registerHIDRemote(fingerprint: fingerprint)"))
         #expect(source.contains("ButtonProfileEditingRoutingPolicy.shouldPerformAction"))
-        #expect(ButtonProfileEditingRoutingPolicy.shouldPerformAction(isPageActive: false))
+        #expect(ButtonProfileEditingRoutingPolicy.shouldPerformAction(isBindingEditorActive: false))
         #expect(!source.contains("pendingHIDBindingProfileID"))
     }
 

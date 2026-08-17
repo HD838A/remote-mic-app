@@ -240,13 +240,6 @@ struct SettingsView: View {
         )
         .onAppear {
             refreshPermissionStates()
-            macroFeature.setButtonProfilesPageActive(selectedSection == .buttonProfiles)
-        }
-        .onChange(of: selectedSection) { section in
-            macroFeature.setButtonProfilesPageActive(section == .buttonProfiles)
-        }
-        .onDisappear {
-            macroFeature.setButtonProfilesPageActive(false)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()

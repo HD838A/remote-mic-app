@@ -6,8 +6,8 @@ import SayAllMacroRemoteMic
 #endif
 
 enum ButtonProfileEditingRoutingPolicy {
-    static func shouldPerformAction(isPageActive: Bool) -> Bool {
-        !isPageActive
+    static func shouldPerformAction(isBindingEditorActive: Bool) -> Bool {
+        !isBindingEditorActive
     }
 }
 
@@ -24,7 +24,7 @@ enum ButtonProfileHostActionCodec {
 final class MacroFeatureIntegration: ObservableObject {
     @Published private(set) var isFeatureVisible = false
     @Published private(set) var shouldShowEnrollment = false
-    @Published private(set) var isButtonProfilesPageActive = false
+    @Published private(set) var isButtonProfileBindingEditorActive = false
 
 #if canImport(SayAllMacroRemoteMic)
     private let feature: SayAllMacroRemoteMicFeature
@@ -45,6 +45,9 @@ final class MacroFeatureIntegration: ObservableObject {
                 self.shouldShowEnrollment = value || self.enrollmentRevealRequested
             }
             .store(in: &subscriptions)
+        feature.$isButtonProfileBindingEditorActive
+            .removeDuplicates()
+            .assign(to: &$isButtonProfileBindingEditorActive)
         #endif
     }
 
@@ -158,10 +161,6 @@ final class MacroFeatureIntegration: ObservableObject {
         #if canImport(SayAllMacroRemoteMic)
         feature.noteButtonInteraction(button: button.rawValue)
         #endif
-    }
-
-    func setButtonProfilesPageActive(_ active: Bool) {
-        isButtonProfilesPageActive = active
     }
 
     @discardableResult

@@ -351,3 +351,61 @@ Added a shared destination-readiness coordinator, connected every external confi
 - 独立打包 `RemoteMicMacroView` 在移走完整 SwiftPM 构建目录后真实渲染，状态 `0` 并输出 `PACKAGED_MACRO_VIEW_RENDERED`。
 - 无缓存宿主 App 正常启动并在 `800 × 650` 设置窗口打开关于页和快捷指令邀请码区域。
 - 尚未完成 Developer ID、公证、Intel 和有效资格宿主侧边栏真实点击。
+
+---
+
+# 键位方案摘要页阻断网易云动作调查
+
+## Observations
+
+- 用户已保存网易云自动方案，摘要页显示“当前”和 4 个按键设置，但网易云前台时遥控器动作不执行。
+- 摘要页仍属于 `SettingsSection.buttonProfiles`；旧宿主把整个页面激活状态写入 `isButtonProfilesPageActive`。
+- `HIDRemoteMonitor` 在 `shouldPerformAction == false` 时会在动作解析前消费事件，因此不会出现后续媒体或 `APP ACTION` 完成日志。
+- 第三步需要实体按键只负责选键，但摘要页、名称、使用方式和确认步骤不需要该拦截。
+
+## Hypotheses
+
+### H1: 整个键位方案页面被错误当成按键编辑器（ROOT HYPOTHESIS）
+
+- Supports: `SettingsView` 以侧边栏 section 控制状态，`BridgeAppModel` 直接用该状态决定是否执行；用户失败时正停留在摘要页。
+- Conflicts: 无。
+- Test: 路由策略只接收第三步编辑状态；第三步返回 false，摘要及其他步骤返回 true。
+
+### H2: 网易云自动规则没有命中
+
+- Supports: 自动监听或 App 识别失败也会表现为动作不对。
+- Conflicts: 页面已经显示目标方案为“当前”，证明规则解析和方案选择完成。
+- Test: 控制器既有自动规则测试覆盖精确命中、默认回退和前台变化。
+
+### H3: 网易云媒体快捷键本身失效
+
+- Supports: 冷启动媒体动作历史上需要等待就绪。
+- Conflicts: 用户报告四个已设置按键整体不执行，且旧路由在媒体动作前已经返回。
+- Test: 先解除摘要页拦截，再用真实网易云前台验证最终媒体结果。
+
+### H4: HID 自定义映射监听未启动
+
+- Supports: 监听关闭会导致所有按键不执行。
+- Conflicts: 同一页面能够收到实体按键并用于 UI 选择的既有链路，且问题与页面状态一致。
+- Test: 第三步和摘要页使用同一 HID monitor，只改变 `shouldPerformAction`。
+
+## Experiment
+
+- 将失败优先测试改为 `isBindingEditorActive` 接口时，旧生产代码无法满足新签名；注入私有模块后实现新状态，定向路由测试通过。
+- 私有页面发布 `draft != nil && editorStep == .buttons`，宿主不再从侧边栏 section 推断编辑状态。
+
+## Root Cause
+
+宿主和私有页面之间缺少“第三步正在编辑按键”的精确状态，只能用“键位方案页面已打开”代替，导致保存返回摘要页后仍把所有实体按键作为选键输入消费。
+
+## Fix
+
+- 私有模块发布第三步编辑状态；摘要页、名称、使用方式、确认和页面退出均发布 false。
+- 宿主订阅该状态，HID 路由只在第三步停止执行。
+- 第三步消费按键时新增 `reason=binding_editor_active` 日志；不修改媒体动作、自动规则或 HID 时序。
+
+## Validation
+
+- 定向路由测试：第三步不执行，摘要及其他步骤执行。
+- 私有模块完整测试覆盖自动规则、快捷键绑定持久化和页面结构。
+- 真实网易云音乐、真实遥控器与最终媒体结果仍需本地测试包人工验收。
