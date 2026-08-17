@@ -530,6 +530,8 @@
 "onboarding.permissions.bluetooth.detail" = "发现并连接已配对的蓝牙遥控器";
 "onboarding.permissions.input.detail" = "读取所选控制方式发出的按键";
 "onboarding.permissions.accessibility.detail" = "执行快捷键及 Typeless 的 Fn 点按";
+"onboarding.permissions.mobile_network.title" = "手机连接将在下一页检查";
+"onboarding.permissions.mobile_network.detail" = "iPhone 和网页版不需要蓝牙或输入监控权限；下一页会通过所选手机控制方式的真实连接验证本地网络。";
 "onboarding.remote.title" = "连接遥控器，再按一下实体键";
 "onboarding.remote.detail" = "首次连接请先完成下面两步。配对成功后，按任意一个普通按键确认 Mac 能收到它。";
 "onboarding.remote.first_pairing.title" = "首次连接遥控器";
@@ -568,6 +570,7 @@
 "onboarding.audio.selected" = "已选择 %1$@";
 "onboarding.audio.select_required" = "请选择一个音频回环设备";
 "onboarding.audio.refresh" = "重新检查";
+"onboarding.audio.on_demand_detail" = "手机开始语音时会自动连接所选设备；下一步将通过真实声音和文字进行验证。";
 "onboarding.voice_test.title" = "亲自说一句，确认真的能用";
 "onboarding.voice_test.detail" = "点一下下面的输入框，按住所选控制方式的语音键说话，说完后松开。";
 "onboarding.voice_test.placeholder" = "试着说：无线麦已经连接成功";
@@ -601,6 +604,7 @@
 "onboarding.side.device_found" = "可用音频设备已检测";
 "onboarding.side.device_selected" = "语音输出设备已选中";
 "onboarding.side.audio_ready" = "音频输出正常";
+"onboarding.side.audio_on_demand" = "语音开始时连接音频";
 "onboarding.side.voice_key" = "语音键已按下并松开";
 "onboarding.side.samples" = "语音声音已收到";
 "onboarding.side.transcript" = "文字已经出现";

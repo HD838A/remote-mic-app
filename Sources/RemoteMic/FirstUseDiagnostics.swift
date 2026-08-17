@@ -78,7 +78,9 @@ struct FirstUseDiagnosticContext: Equatable {
         case .audio:
             if !hasSelectedAudioUID { return .audioNoOutputDevice }
             if !capabilities.audioOutputSelected { return .audioSelectedDeviceMissing }
-            if !capabilities.audioReady { return .audioOutputNotReady }
+            if !controlMethod.usesOnDemandAudioOutput && !capabilities.audioReady {
+                return .audioOutputNotReady
+            }
         case .voiceTest:
             if !capabilities.voiceSessionStarted { return .voiceSessionNotStarted }
             if !capabilities.voiceSamplesReceived { return .voiceNoSamples }

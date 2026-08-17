@@ -99,6 +99,10 @@ enum OnboardingControlMethod: String, CaseIterable, Codable, Identifiable {
     var requiresInputMonitoringPermission: Bool {
         self == .physicalRemote
     }
+
+    var usesOnDemandAudioOutput: Bool {
+        self == .iPhoneApp || self == .webRemote
+    }
 }
 
 enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
@@ -205,7 +209,8 @@ enum OnboardingFlowPolicy {
         case .remote:
             return capabilities.remoteConnected && capabilities.remoteButtonObserved
         case .audio:
-            return capabilities.audioReady && capabilities.audioOutputSelected
+            return capabilities.audioOutputSelected &&
+                (controlMethod.usesOnDemandAudioOutput || capabilities.audioReady)
         case .voiceTest:
             return capabilities.voiceSessionStarted &&
                 capabilities.voiceSamplesReceived &&
@@ -223,8 +228,8 @@ enum OnboardingFlowPolicy {
                     capabilities.inputMonitoringGranted) &&
                 capabilities.accessibilityGranted &&
                 capabilities.remoteConnected &&
-                capabilities.audioReady &&
-                capabilities.audioOutputSelected
+                capabilities.audioOutputSelected &&
+                (controlMethod.usesOnDemandAudioOutput || capabilities.audioReady)
         }
     }
 

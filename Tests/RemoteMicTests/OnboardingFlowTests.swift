@@ -99,6 +99,84 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func mobileControlPathsUseOnDemandAudioWithoutWeakeningDeviceSelection() {
+        var capabilities = OnboardingCapabilities(
+            accessibilityGranted: true,
+            remoteConnected: true,
+            remoteButtonObserved: true,
+            audioReady: false,
+            audioOutputSelected: true
+        )
+
+        for method in [OnboardingControlMethod.iPhoneApp, .webRemote] {
+            #expect(method.usesOnDemandAudioOutput)
+            #expect(OnboardingFlowPolicy.canContinue(
+                from: .audio,
+                voiceTool: .typeless,
+                remoteAvailability: .noRemote,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+            #expect(OnboardingFlowPolicy.canContinue(
+                from: .complete,
+                voiceTool: .typeless,
+                remoteAvailability: .noRemote,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+
+            let diagnostic = FirstUseDiagnosticContext(
+                step: .audio,
+                remoteAvailability: .noRemote,
+                controlMethod: method,
+                capabilities: capabilities,
+                hasSelectedAudioUID: true
+            )
+            #expect(diagnostic.failureReason == nil)
+        }
+
+        #expect(!OnboardingControlMethod.physicalRemote.usesOnDemandAudioOutput)
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .audio,
+            voiceTool: .typeless,
+            controlMethod: .physicalRemote,
+            capabilities: capabilities
+        ))
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .complete,
+            voiceTool: .typeless,
+            controlMethod: .physicalRemote,
+            capabilities: capabilities
+        ))
+
+        capabilities.audioOutputSelected = false
+        for method in [OnboardingControlMethod.iPhoneApp, .webRemote] {
+            #expect(!OnboardingFlowPolicy.canContinue(
+                from: .audio,
+                voiceTool: .typeless,
+                remoteAvailability: .noRemote,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+            #expect(!OnboardingFlowPolicy.canContinue(
+                from: .complete,
+                voiceTool: .typeless,
+                remoteAvailability: .noRemote,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+
+            let diagnostic = FirstUseDiagnosticContext(
+                step: .audio,
+                remoteAvailability: .noRemote,
+                controlMethod: method,
+                capabilities: capabilities,
+                hasSelectedAudioUID: true
+            )
+            #expect(diagnostic.failureReason == .audioSelectedDeviceMissing)
+        }
+    }
+
     @Test func connectedPhysicalRemoteSkipsOnlyTheAvailabilityQuestion() {
         #expect(OnboardingFlowPolicy.shouldAutoSelectPhysicalRemote(
             at: .remoteAvailability,
@@ -583,6 +661,10 @@ struct OnboardingFlowTests {
         #expect(!audioSource.contains("Picker("))
         #expect(audioSource.contains("settings.selectedAudioDeviceUID = device.uid"))
         #expect(audioSource.contains("model.applyAudioSettings(reason: \"onboarding_audio_device_selected\")"))
+        #expect(viewSource.contains("onboarding.audio.on_demand_detail"))
+        #expect(viewSource.contains("onboarding.permissions.mobile_network.title"))
+        #expect(viewSource.contains("onboarding.permissions.mobile_network.detail"))
+        #expect(viewSource.contains("onboarding.side.audio_on_demand"))
     }
 
     @Test func availableBlackHoleCanSatisfyTheAudioSelectionGate() {

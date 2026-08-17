@@ -530,6 +530,8 @@
 "onboarding.permissions.bluetooth.detail" = "Discover and connect to your paired Bluetooth remote";
 "onboarding.permissions.input.detail" = "Read button events from the selected control method";
 "onboarding.permissions.accessibility.detail" = "Run shortcuts and the Typeless Fn tap";
+"onboarding.permissions.mobile_network.title" = "Phone connection is checked on the next page";
+"onboarding.permissions.mobile_network.detail" = "iPhone and web control do not need Bluetooth or Input Monitoring access. The next page verifies the local-network connection by connecting the selected phone control.";
 "onboarding.remote.title" = "Connect the remote, then press a physical button";
 "onboarding.remote.detail" = "For a first-time connection, follow the two steps below. After pairing, press any normal button to confirm your Mac receives it.";
 "onboarding.remote.first_pairing.title" = "Connect the remote for the first time";
@@ -568,6 +570,7 @@
 "onboarding.audio.selected" = "%1$@ selected";
 "onboarding.audio.select_required" = "Choose an audio loopback device";
 "onboarding.audio.refresh" = "Check Again";
+"onboarding.audio.on_demand_detail" = "The selected device will connect automatically when phone voice input starts. The next step verifies real audio and text.";
 "onboarding.voice_test.title" = "Say something and confirm it really works";
 "onboarding.voice_test.detail" = "Click the field below, hold the voice key on your selected control method while speaking, then release it.";
 "onboarding.voice_test.placeholder" = "Try saying: SayAll is connected";
@@ -601,6 +604,7 @@
 "onboarding.side.device_found" = "Available audio device detected";
 "onboarding.side.device_selected" = "Voice output device selected";
 "onboarding.side.audio_ready" = "Audio output ready";
+"onboarding.side.audio_on_demand" = "Audio connects when voice starts";
 "onboarding.side.voice_key" = "Voice key pressed and released";
 "onboarding.side.samples" = "Voice audio received";
 "onboarding.side.transcript" = "Text appeared";

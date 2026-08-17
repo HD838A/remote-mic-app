@@ -717,6 +717,15 @@ struct OnboardingView: View {
                     granted: accessibilityGranted
                 )
             }
+
+            if settings.onboardingControlMethod.usesOnDemandAudioOutput {
+                statusCard(
+                    icon: "network",
+                    title: localization.text("onboarding.permissions.mobile_network.title"),
+                    detail: localization.text("onboarding.permissions.mobile_network.detail"),
+                    isComplete: true
+                )
+            }
         }
     }
 
@@ -911,12 +920,12 @@ struct OnboardingView: View {
             }
 
             statusCard(
-                icon: audioOutputSelected && model.isAudioOutputReady
+                icon: onboardingAudioReady
                     ? "checkmark.circle.fill"
                     : "speaker.wave.2",
                 title: selectedAudioDeviceTitle,
-                detail: model.audioStatus.text(using: localization),
-                isComplete: audioOutputSelected && model.isAudioOutputReady
+                detail: selectedAudioDeviceDetail,
+                isComplete: onboardingAudioReady
             )
 
             if failureReason == .audioNoOutputDevice ||
@@ -1342,13 +1351,23 @@ struct OnboardingView: View {
             sidePanel(titleKey: "onboarding.side.audio") {
                 sideCheck("onboarding.side.device_found", isComplete: !model.audioDevices.isEmpty)
                 sideCheck("onboarding.side.device_selected", isComplete: audioOutputSelected)
-                sideCheck("onboarding.side.audio_ready", isComplete: model.isAudioOutputReady)
+                sideCheck(
+                    settings.onboardingControlMethod.usesOnDemandAudioOutput
+                        ? "onboarding.side.audio_on_demand"
+                        : "onboarding.side.audio_ready",
+                    isComplete: onboardingAudioReady
+                )
             }
         case .voiceTest:
             sidePanel(titleKey: "onboarding.side.voice_test") {
                 sideCheck("onboarding.side.voice_key", isComplete: voiceSessionStarted && voiceSessionEnded)
                 sideCheck("onboarding.side.samples", isComplete: voiceSamplesReceived)
-                sideCheck("onboarding.side.audio_ready", isComplete: audioOutputSelected && model.isAudioOutputReady)
+                sideCheck(
+                    settings.onboardingControlMethod.usesOnDemandAudioOutput
+                        ? "onboarding.side.audio_on_demand"
+                        : "onboarding.side.audio_ready",
+                    isComplete: onboardingAudioReady
+                )
                 sideCheck("onboarding.side.transcript", isComplete: transcriptionAppeared)
             }
         case .controls:
@@ -1554,6 +1573,11 @@ struct OnboardingView: View {
         )
     }
 
+    private var onboardingAudioReady: Bool {
+        audioOutputSelected &&
+            (settings.onboardingControlMethod.usesOnDemandAudioOutput || model.isAudioOutputReady)
+    }
+
     private var selectedAudioDeviceTitle: String {
         guard let selectedAudioDevice else {
             return localization.text("onboarding.audio.select_required")
@@ -1562,6 +1586,15 @@ struct OnboardingView: View {
             "onboarding.audio.selected",
             arguments: [selectedAudioDevice.name]
         ).text(using: localization)
+    }
+
+    private var selectedAudioDeviceDetail: String {
+        if settings.onboardingControlMethod.usesOnDemandAudioOutput,
+           audioOutputSelected,
+           !model.isAudioOutputReady {
+            return localization.text("onboarding.audio.on_demand_detail")
+        }
+        return model.audioStatus.text(using: localization)
     }
 
     private var transcriptionAppeared: Bool {
