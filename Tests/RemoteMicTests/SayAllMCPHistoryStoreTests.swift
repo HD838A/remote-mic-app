@@ -27,6 +27,11 @@ struct SayAllMCPHistoryStoreTests {
         #expect(secondPage.records.map(\.text) == ["first"])
         #expect(!secondPage.hasMore)
         #expect(secondPage.nextCursor == nil)
+        let encodedSecondPage = try JSONEncoder().encode(secondPage)
+        let secondPageObject = try #require(
+            JSONSerialization.jsonObject(with: encodedSecondPage) as? [String: Any]
+        )
+        #expect(secondPageObject["nextCursor"] is NSNull)
 
         #expect(throws: SayAllMCPHistoryError.cursorOrderMismatch) {
             try store.query(

@@ -17,129 +17,15 @@ private struct SayAllMCPCommand {
 
     private static func run() throws {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        guard let command = arguments.first else {
+        guard arguments == ["serve"] else {
             printUsage(exitCode: 2)
         }
         let paths = SayAllMCPPaths.defaults()
-        let authorizationStore = SayAllMCPAuthorizationStore(paths: paths)
-        switch command {
-        case "serve":
-            let clientId = ProcessInfo.processInfo.environment[clientIDEnvironmentKey] ?? ""
-            let token = ProcessInfo.processInfo.environment[accessTokenEnvironmentKey] ?? ""
-            let service = SayAllMCPService(paths: paths, clientId: clientId, token: token)
-            try service.validateServerStart()
-            try SayAllMCPStdioServer(service: service).run()
-        case "enable":
-            try authorizationStore.setEnabled(true)
-            printJSON(["enabled": true])
-        case "disable":
-            try authorizationStore.setEnabled(false)
-            printJSON(["enabled": false])
-        case "status":
-            printJSON([
-                "enabled": try authorizationStore.isEnabled(),
-                "authorizations": try publicAuthorizations(authorizationStore),
-            ])
-        case "list":
-            printJSON(["authorizations": try publicAuthorizations(authorizationStore)])
-        case "authorize":
-            let name = try requiredOption("--name", arguments: arguments)
-            let authorization = try authorizationStore.createAuthorization(displayName: name)
-            try printIntegration(authorization, asJSON: true)
-        case "setup":
-            let name = optionalOption("--name", arguments: arguments) ?? "Local AI Client"
-            let authorization = try authorizationStore.setupAuthorization(displayName: name)
-            try printIntegration(authorization, asJSON: arguments.contains("--json"))
-        case "revoke":
-            let value = try requiredOption("--client-id", arguments: arguments)
-            guard let clientId = UUID(uuidString: value) else {
-                throw SayAllMCPAuthorizationError.authorizationNotFound
-            }
-            try authorizationStore.revokeAuthorization(clientId: clientId)
-            printJSON(["revoked": true])
-        case "help", "--help", "-h":
-            printUsage(exitCode: 0)
-        default:
-            printUsage(exitCode: 2)
-        }
-    }
-
-    private static func printIntegration(
-        _ authorization: SayAllMCPCreatedAuthorization,
-        asJSON: Bool
-    ) throws {
-        let config = try SayAllMCPIntegrationConfig(
-            authorization: authorization,
-            helperExecutableURL: URL(fileURLWithPath: CommandLine.arguments[0])
-        )
-        let warning = "无线麦SayAll.app and this MCP server do not upload transcripts. "
-            + "The authorized AI client may send returned text to its own provider."
-        guard asJSON else {
-            FileHandle.standardOutput.write(
-                Data(
-                    """
-                    Created read-only authorization for: \(authorization.displayName)
-                    Client ID: \(authorization.clientId.uuidString.lowercased())
-
-                    Standard MCP JSON (Claude Desktop, Cursor, Windsurf, and compatible hosts):
-                    \(config.standardJSON)
-
-                    Codex TOML:
-                    \(config.codexTOML)
-
-                    Privacy notice: \(warning)
-
-                    """.utf8
-                )
-            )
-            return
-        }
-        printJSON([
-            "authorization": [
-                "clientId": authorization.clientId.uuidString.lowercased(),
-                "displayName": authorization.displayName,
-                "scope": authorization.scope,
-                "token": authorization.token,
-                "createdAt": isoString(authorization.createdAt),
-            ],
-            "mcpConfig": [
-                "command": config.command,
-                "args": config.arguments,
-                "env": config.environment,
-            ],
-            "standardJson": config.standardJSON,
-            "codexToml": config.codexTOML,
-            "warning": warning,
-        ])
-    }
-
-    private static func publicAuthorizations(
-        _ store: SayAllMCPAuthorizationStore
-    ) throws -> [[String: Any]] {
-        try store.listAuthorizations().map { authorization in
-            [
-                "clientId": authorization.clientId.uuidString.lowercased(),
-                "displayName": authorization.displayName,
-                "scope": authorization.scope,
-                "createdAt": isoString(authorization.createdAt),
-                "revokedAt": authorization.revokedAt.map(isoString) ?? NSNull(),
-            ]
-        }
-    }
-
-    private static func requiredOption(_ name: String, arguments: [String]) throws -> String {
-        guard let value = optionalOption(name, arguments: arguments) else {
-            throw SayAllMCPCommandError.missingOption(name)
-        }
-        return value
-    }
-
-    private static func optionalOption(_ name: String, arguments: [String]) -> String? {
-        guard let index = arguments.firstIndex(of: name), arguments.indices.contains(index + 1) else {
-            return nil
-        }
-        let value = arguments[index + 1]
-        return value.hasPrefix("--") ? nil : value
+        let clientId = ProcessInfo.processInfo.environment[clientIDEnvironmentKey] ?? ""
+        let token = ProcessInfo.processInfo.environment[accessTokenEnvironmentKey] ?? ""
+        let service = SayAllMCPService(paths: paths, clientId: clientId, token: token)
+        try service.validateServerStart()
+        try SayAllMCPStdioServer(service: service).run()
     }
 
     private static func printUsage(exitCode: Int32) -> Never {
@@ -147,13 +33,6 @@ private struct SayAllMCPCommand {
             """
             Usage:
               SayAllMCP serve
-              SayAllMCP status
-              SayAllMCP list
-              SayAllMCP enable
-              SayAllMCP disable
-              SayAllMCP authorize --name <client-name>
-              SayAllMCP setup [--name <client-name>] [--json]
-              SayAllMCP revoke --client-id <uuid>
 
             """
         )
@@ -211,7 +90,7 @@ private final class SayAllMCPStdioServer {
                     "capabilities": ["tools": ["listChanged": false]],
                     "serverInfo": [
                         "name": "sayall-remote-mic-history",
-                        "version": "0.1.0",
+                        "version": "1.0.0",
                     ],
                 ]
             )
@@ -346,6 +225,7 @@ private final class SayAllMCPStdioServer {
             "inputSchema": ["type": "object", "additionalProperties": false],
             "outputSchema": [
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["applications", "skippedFileCount"],
                 "properties": [
                     "applications": ["type": "array", "items": applicationSchema],
@@ -376,6 +256,7 @@ private final class SayAllMCPStdioServer {
             ],
             "outputSchema": [
                 "type": "object",
+                "additionalProperties": false,
                 "required": ["records", "nextCursor", "hasMore", "skippedFileCount"],
                 "properties": [
                     "records": ["type": "array", "items": transcriptSchema],
@@ -405,6 +286,7 @@ private final class SayAllMCPStdioServer {
 
     private static let applicationSchema: [String: Any] = [
         "type": "object",
+        "additionalProperties": false,
         "required": [
             "applicationName", "bundleIdentifier", "recordCount",
             "earliestEndedAt", "latestEndedAt",
@@ -420,6 +302,7 @@ private final class SayAllMCPStdioServer {
 
     private static let transcriptSchema: [String: Any] = [
         "type": "object",
+        "additionalProperties": false,
         "required": [
             "id", "startedAt", "endedAt", "localDateKey", "timeZoneIdentifier",
             "applicationName", "bundleIdentifier", "source", "text",
@@ -438,10 +321,6 @@ private final class SayAllMCPStdioServer {
     ]
 }
 
-private enum SayAllMCPCommandError: Error {
-    case missingOption(String)
-}
-
 private enum SayAllMCPProtocolError: Error {
     case invalidRequest
     case invalidArguments
@@ -453,35 +332,11 @@ private func jsonObject<T: Encodable>(_ value: T) throws -> Any {
     return try JSONSerialization.jsonObject(with: encoder.encode(value))
 }
 
-private func printJSON(_ value: Any) {
-    let data = try! JSONSerialization.data(
-        withJSONObject: value,
-        options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-    )
-    FileHandle.standardOutput.write(data)
-    FileHandle.standardOutput.write(Data([0x0A]))
-}
-
 private func writeError(_ message: String) {
     FileHandle.standardError.write(Data(message.utf8))
 }
 
 private func publicErrorMessage(_ error: Error) -> String {
     if let accessError = error as? SayAllMCPAccessDeniedError { return accessError.message }
-    switch error {
-    case SayAllMCPAuthorizationError.invalidClientName:
-        return "Client name must contain 1-100 characters."
-    case SayAllMCPAuthorizationError.authorizationNotFound:
-        return "Authorization was not found."
-    case let SayAllMCPCommandError.missingOption(name):
-        return "Missing required option \(name)."
-    default:
-        return "The local MCP request failed."
-    }
-}
-
-private func isoString(_ date: Date) -> String {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.string(from: date)
+    return "The local MCP request failed."
 }

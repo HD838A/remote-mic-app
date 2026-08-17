@@ -4,20 +4,22 @@
 
 - 分支：`codex/sayall-mcp-integration`
 - 平台：macOS 14 及以上 Apple Silicon；Intel Ventura 构建需单独验证
-- 功能：无线麦SayAll.app“回眸”页面、本机 MCP Helper、授权与只读查询
+- 功能：无线麦SayAll.app“回眸”页面、App 包内 Swift MCP Helper、授权与只读查询
+- 契约版本：正式首发候选 `v1`
 - 当前状态：候选实现，等待真实多客户端验收
 
 ## 测试前准备
 
 1. 安装包含 `Contents/Helpers/SayAllMCP` 的完整测试 App，不要单独复制主可执行文件。
-2. 在“回眸”页开启“记录回眸”，分别从至少两个 App 产生两天以上的无隐私测试记录。
-3. 准备 Codex，以及至少一个使用标准 `mcpServers` JSON 的客户端。
-4. 测试令牌只粘贴到指定客户端配置，不得进入聊天、Issue、截图、日志或版本库。
-5. 记录 App 版本、macOS 版本、客户端名称、测试时间和失败步骤；问题材料不要包含真实转写正文。
+2. 不安装 Node.js、npm、Homebrew 或 Xcode，以验证普通用户安装边界。
+3. 在“回眸”页开启“记录回眸”，分别从至少两个 App 产生两天以上的无隐私测试记录。
+4. 准备 Codex，以及至少一个使用标准 `mcpServers` JSON 的客户端。
+5. 测试令牌只粘贴到指定客户端配置，不得进入聊天、Issue、截图、日志或版本库。
+6. 记录 App 版本、macOS 版本、客户端名称、测试时间和失败步骤；问题材料不要包含真实转写正文。
 
 ## 用例 1：默认关闭
 
-1. 在全新测试账号或没有 `Application Support/SayAllMCP/RemoteMicHistory/v1/settings.ndjson` 的环境启动 App。
+1. 在全新测试账号或没有 `~/Library/Application Support/RemoteMic/MCP/v1/access.json` 的环境启动 App。
 2. 打开“回眸”，查看“本地 Agent 访问”。
 3. 尝试使用任意旧配置启动 Helper。
 
@@ -30,11 +32,11 @@
 1. 主动开启“允许访问”。
 2. 输入客户端名称并创建只读授权。
 3. 分别点击“复制标准 MCP JSON”和“复制 Codex TOML”。
-4. 检查授权列表和本地事件文件权限。
+4. 检查授权列表和 `RemoteMic/MCP/v1/access.json` 权限。
 
-预期结果：每次创建产生不同 client ID 和令牌；配置指向当前 App 内 `Contents/Helpers/SayAllMCP`；授权日志只保存 SHA-256 哈希；目录为 `0700`、事件文件为 `0600`。
+预期结果：每次创建产生不同 client ID 和令牌；配置指向当前 App 内 `Contents/Helpers/SayAllMCP` 并使用 `serve`；状态文件包含 `schemaVersion: 1`，只保存 SHA-256 哈希；目录为 `0700`、文件为 `0600`。
 
-失败判定：令牌写入 UserDefaults、日志或授权事件，客户端共用凭据，Helper 路径指向源码/Node.js，或权限过宽。
+失败判定：令牌写入 UserDefaults、日志或状态文件，客户端共用凭据，Helper 路径指向源码/Node.js，或权限过宽。
 
 ## 用例 3：标准 JSON 和 Codex 连接
 
@@ -42,9 +44,9 @@
 2. 调用 `list_transcript_apps`。
 3. 调用 `query_transcripts`，读取一条无隐私测试记录。
 
-预期结果：两个客户端均能独立启动随包 Helper；App 列表不返回正文；查询只返回公开字段和本次转写文字；无需启动无线麦SayAll.app 主进程，也无需 Node.js。
+预期结果：两个客户端均能独立启动随包 Helper；App 列表不返回正文；查询只返回公开字段和本次转写文字；无需启动无线麦SayAll.app 主进程，也无需任何编程依赖。
 
-失败判定：只能在 App 正在运行时使用、要求 Node.js、出现网络连接、返回内部路径/session ID/`applicationKey`，或 stdout 混入诊断文字。
+失败判定：只能在 App 正在运行时使用、要求额外运行时、出现网络连接、返回内部路径/session ID/`applicationKey`，或 stdout 混入诊断文字。
 
 ## 用例 4：时间、App、顺序与分页
 
@@ -52,11 +54,11 @@
 2. 使用真实 Bundle ID 筛选单个 App。
 3. 分别使用升序、倒序。
 4. 设置 `limit: 1` 并使用 `nextCursor` 读取全部页。
-5. 把倒序游标用于升序查询，并尝试 `limit: 0`、`501`、超过 100 个 Bundle ID。
+5. 把倒序游标用于升序查询，并尝试 `limit: 0`、`501`、超过 100 个 Bundle ID 和未知输入字段。
 
-预期结果：范围和 App 筛选准确；顺序稳定；分页不重不漏；错误游标和越界参数被拒绝；单次最多返回 500 条。
+预期结果：范围和 App 筛选准确；顺序稳定；分页不重不漏；错误游标、越界参数和未知字段被拒绝；单次最多返回 500 条。
 
-失败判定：跨范围或跨 App 返回、游标可跨顺序使用、分页重复/遗漏、一次忽略上限返回全部历史。
+失败判定：跨范围或跨 App 返回、游标可跨顺序使用、分页重复/遗漏，或一次忽略上限返回全部历史。
 
 ## 用例 5：撤销与总开关
 
@@ -75,16 +77,17 @@
 1. 只在测试副本中准备损坏日期 JSON、过大文件和指向其他路径的符号链接，不修改真实历史。
 2. 保留至少一个合法日期文件。
 3. 查询 App 列表和历史。
+4. 把 `access.json` 替换为符号链接或把 `schemaVersion` 改为未知版本。
 
-预期结果：损坏文件计入 `skippedFileCount`，合法记录仍可读；历史根目录符号链接导致安全失败；Helper 不读取链接目标。
+预期结果：损坏历史文件计入 `skippedFileCount`，合法记录仍可读；历史根目录或授权状态符号链接导致安全失败；未知授权 Schema 被拒绝；Helper 不读取链接目标。
 
-失败判定：读取链接外内容、整个服务崩溃、返回损坏正文，或修改/恢复历史文件。
+失败判定：读取链接外内容、整个服务崩溃、返回损坏正文、修改历史文件，或把未知 Schema 当作 `v1` 使用。
 
 ## 用例 7：本地通信与退出
 
 1. MCP 连接期间检查 `SayAllMCP` 进程和监听端口。
 2. 退出客户端。
-3. 检查脱敏审计文件。
+3. 检查 `RemoteMic/MCP/v1/audit/` 下的脱敏审计文件。
 
 预期结果：Helper 只通过 stdin/stdout 通信，不创建 TCP/UDP/Bonjour，不常驻；客户端退出后进程结束；审计包含客户端 ID、工具、时间、结果和数量，不含正文、令牌或完整响应。
 
@@ -93,12 +96,23 @@
 ## 用例 8：界面、本地化和窗口
 
 1. 在中英文下打开“回眸”，分别检查开关关闭、开启、生成配置、有授权、已撤销和错误状态。
-2. 在生产窗口最小尺寸检查长客户端名称和英文文案。
+2. 在 `800 × 650` 窗口检查长客户端名称和英文文案，并逐一点击受影响侧边栏入口。
 3. 确认 Agent 区位于历史之后、“全部删除”之前。
 
-预期结果：所有中文文字不小于 12pt；信息可以换行；没有下拉框、Popover 或 Sheet；“全部删除”仍是整个页面最后一行；开关关闭时授权列表仍可管理。
+预期结果：所有中文文字不小于 12pt；信息可以换行；没有长下拉框、Popover 或连续 Sheet；“全部删除”仍是整个页面最后一行；开关关闭时授权列表仍可管理；窗口几何不变化。
 
-失败判定：核心历史被 Agent 区挤到不可见、页面裁切、令牌直接显示在界面、关闭时无法撤销、全部删除不再位于最底部。
+失败判定：核心历史被 Agent 区挤到不可见、页面裁切、令牌直接显示在界面、关闭时无法撤销，或“全部删除”不再位于最底部。
+
+## 用例 9：v1 向后兼容
+
+1. 在首个正式 `v1` 候选中创建授权并保存标准 JSON、Codex TOML、`access.json` 和两种工具的合法请求/响应 Fixture。
+2. 安装后续候选版本，保持 App 安装路径与客户端配置不变。
+3. 使用原 client ID、令牌、工具名、参数和游标语义重新调用。
+4. 对比必需输出字段，并检查 `RemoteMic/MCP/v1/access.json` 是否仍可读取。
+
+预期结果：旧 Agent 配置无需修改即可启动；旧授权继续有效；两个 `v1` 工具、已发布参数语义和封闭输出结构不变；新增输出结构使用新工具或 `v2`；新版继续读取 `v1` 授权和历史。
+
+失败判定：Helper 路径、`serve` 参数或环境变量被改动，旧配置无法启动，旧授权失效，已发布工具或字段发生破坏性变化，或新版覆盖导致旧 `v1` 数据不可读。
 
 ## 稳定功能回归
 
@@ -106,17 +120,17 @@
 - RC003 普通语音、Nearby iOS、网页版、Fn 注入、按键映射、统计和私有 AI 组件行为保持。
 - 无历史目录时 MCP 返回空集合，不创建伪造历史。
 - App 删除记录后，MCP 后续查询不再返回已删除内容；MCP 自身不能删除或写入历史。
-- App 更新后 Helper 仍具有正确架构、执行权限和签名，已有配置路径稳定时继续可用。
+- App 更新后 Helper 仍具有正确架构、执行权限和签名，安装路径稳定时旧配置继续可用。
 
 ## 日志收集方式
 
-- 授权与开关事件：`~/Library/Application Support/SayAllMCP/RemoteMicHistory/v1/`。
-- 脱敏审计：上述目录的 `audit/` 子目录。
+- 授权状态：`~/Library/Application Support/RemoteMic/MCP/v1/access.json`。
+- 脱敏审计：`~/Library/Application Support/RemoteMic/MCP/v1/audit/`。
 - Helper stderr 可由启动它的 MCP 客户端收集；stdout 不得作为普通日志使用。
 - 提供日志前删除 client ID；不得提供访问令牌或真实转写正文。
 
 ## 自动化、代理实测和用户实测边界
 
-自动化覆盖事件格式、默认关闭、令牌哈希、权限、错误凭据、撤销、历史解析、时间/App 筛选、排序、分页、内部字段排除、配置生成和打包接线；当前完整 `swift test` 为 246 项、26 个 Suite 全部通过。Apple Silicon Release App 已通过随包 Helper 存在、可执行、arm64、macOS 14 最低版本和 ad-hoc 签名校验；Intel Ventura 与 Developer ID 签名仍需发布流程验证。构建与签名只能证明随包 Helper 可执行，不能替代真实 Codex、Claude Desktop、Cursor 等客户端的 MCP 协议兼容性和各自云端数据处理验证。
+自动化覆盖 v1 状态、默认关闭、令牌哈希、权限、未来 Schema 拒绝、错误凭据、撤销、历史解析、时间/App 筛选、排序、分页、内部字段排除、配置生成、唯一 `serve` 入口和打包接线。MCP 专项 11 项、4 个 Suite 以及完整 `swift test` 247 项、26 个 Suite 全部通过。临时数据真实 stdio 已验证初始化、`tools/list`、两个工具、默认关闭拒绝、stdout/stderr 分离和 `nextCursor: null`；四份公开 Schema 与 Helper 完全一致。公开版 Apple Silicon Release App 已通过随包 Helper、资源、arm64、macOS 14 最低版本和 ad-hoc 深度签名校验。
 
-代理已使用临时 Application Support 数据完成本机 stdio 协议闭环，不使用真实令牌或正文；并在生产最小窗口检查关闭状态布局，未开启访问、创建授权或执行删除。用户仍需在自己选择的 AI 客户端中确认配置位置、重启行为、真实分页、撤销即时生效，以及该客户端是否会把返回内容上传给第三方服务商。
+构建与签名只能证明随包 Helper 可执行，不能替代真实 Codex、Claude Desktop、Cursor 等客户端的 MCP 协议兼容性和各自云端数据处理验证。用户仍需在自己选择的 AI 客户端中确认配置位置、重启行为、真实分页、撤销即时生效，以及该客户端是否会把返回内容上传给第三方服务商。

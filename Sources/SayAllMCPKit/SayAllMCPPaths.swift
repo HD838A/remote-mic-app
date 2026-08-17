@@ -21,8 +21,8 @@ public struct SayAllMCPPaths: Sendable {
                 .appendingPathComponent("Transcripts", isDirectory: true)
                 .appendingPathComponent("v1", isDirectory: true),
             accessRoot: applicationSupport
-                .appendingPathComponent("SayAllMCP", isDirectory: true)
-                .appendingPathComponent("RemoteMicHistory", isDirectory: true)
+                .appendingPathComponent("RemoteMic", isDirectory: true)
+                .appendingPathComponent("MCP", isDirectory: true)
                 .appendingPathComponent("v1", isDirectory: true)
         )
     }
@@ -94,6 +94,33 @@ enum SayAllMCPFileSecurity {
             .map(String.init)
     }
 
+    static func readPrivateData(from file: URL) throws -> Data? {
+        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+        let status = try fileStatus(at: file)
+        guard status.isRegularFile, !status.isSymbolicLink else {
+            throw SayAllMCPStorageError.invalidPrivatePath
+        }
+        return try Data(contentsOf: file, options: [.mappedIfSafe])
+    }
+
+    static func writePrivateData(_ data: Data, directory: URL, file: URL) throws {
+        try ensurePrivateDirectory(directory)
+        if FileManager.default.fileExists(atPath: file.path) {
+            let status = try fileStatus(at: file)
+            guard status.isRegularFile, !status.isSymbolicLink else {
+                throw SayAllMCPStorageError.invalidPrivatePath
+            }
+        }
+        try data.write(to: file, options: .atomic)
+        guard Darwin.chmod(file.path, 0o600) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        let status = try fileStatus(at: file)
+        guard status.isRegularFile, !status.isSymbolicLink else {
+            throw SayAllMCPStorageError.invalidPrivatePath
+        }
+    }
+
     static func fileStatus(at url: URL) throws -> FileStatus {
         var metadata = stat()
         guard Darwin.lstat(url.path, &metadata) == 0 else {
@@ -114,6 +141,6 @@ enum SayAllMCPFileSecurity {
 
 public enum SayAllMCPStorageError: Error, Equatable {
     case invalidPrivatePath
-    case invalidEventLog(line: Int)
+    case invalidAccessState
     case invalidTranscriptRoot
 }

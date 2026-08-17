@@ -2,9 +2,10 @@ import CryptoKit
 import Foundation
 import Security
 
+private let accessStateSchemaVersion = 1
 private let maximumClientNameLength = 100
 
-public struct SayAllMCPAuthorizationRecord: Identifiable, Equatable, Sendable {
+public struct SayAllMCPAuthorizationRecord: Codable, Identifiable, Equatable, Sendable {
     public let clientId: UUID
     public let displayName: String
     public let scope: String
@@ -35,14 +36,12 @@ public struct SayAllMCPAccessDeniedError: Error, Equatable, Sendable {
 
 public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
     private let accessRoot: URL
-    private let settingsFile: URL
-    private let authorizationsFile: URL
+    private let stateFile: URL
     private let queue = DispatchQueue(label: "SayAllMCP.authorization")
 
     public init(accessRoot: URL) {
         self.accessRoot = accessRoot
-        settingsFile = accessRoot.appendingPathComponent("settings.ndjson")
-        authorizationsFile = accessRoot.appendingPathComponent("authorizations.ndjson")
+        stateFile = accessRoot.appendingPathComponent("access.json")
     }
 
     public convenience init(paths: SayAllMCPPaths = .defaults()) {
@@ -50,26 +49,21 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
     }
 
     public func isEnabled() throws -> Bool {
-        try queue.sync { try loadSettingEvents().last?.enabled ?? false }
+        try queue.sync { try loadState().enabled }
     }
 
     public func setEnabled(_ enabled: Bool) throws {
         try queue.sync {
-            try appendEvent(
-                SettingEvent(
-                    schemaVersion: 1,
-                    type: "access_changed",
-                    enabled: enabled,
-                    changedAt: Date()
-                ),
-                to: settingsFile
-            )
+            var state = try loadState()
+            state.enabled = enabled
+            try saveState(state)
         }
     }
 
     public func createAuthorization(displayName: String) throws -> SayAllMCPCreatedAuthorization {
         try queue.sync {
-            guard try loadSettingEvents().last?.enabled ?? false else {
+            var state = try loadState()
+            guard state.enabled else {
                 throw SayAllMCPAccessDeniedError(
                     code: "access_disabled",
                     message: "Local Agent access is disabled."
@@ -83,19 +77,17 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
             let clientId = UUID()
             let token = try Self.randomToken()
             let createdAt = Date()
-            try appendEvent(
-                AuthorizationEvent(
-                    schemaVersion: 1,
-                    type: "authorization_created",
+            state.authorizations.append(
+                SayAllMCPAuthorizationRecord(
                     clientId: clientId,
                     displayName: normalizedName,
                     scope: "transcripts.read.all",
                     tokenHash: Self.hashToken(token),
                     createdAt: createdAt,
                     revokedAt: nil
-                ),
-                to: authorizationsFile
+                )
             )
+            try saveState(state)
             return SayAllMCPCreatedAuthorization(
                 clientId: clientId,
                 displayName: normalizedName,
@@ -106,39 +98,24 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
         }
     }
 
-    public func setupAuthorization(displayName: String) throws -> SayAllMCPCreatedAuthorization {
-        if try !isEnabled() {
-            try setEnabled(true)
-        }
-        return try createAuthorization(displayName: displayName)
-    }
-
     public func revokeAuthorization(clientId: UUID) throws {
         try queue.sync {
-            guard let authorization = try resolvedAuthorizations().first(where: {
+            var state = try loadState()
+            guard let index = state.authorizations.firstIndex(where: {
                 $0.clientId == clientId
             }) else {
                 throw SayAllMCPAuthorizationError.authorizationNotFound
             }
-            guard authorization.revokedAt == nil else { return }
-            try appendEvent(
-                AuthorizationEvent(
-                    schemaVersion: 1,
-                    type: "authorization_revoked",
-                    clientId: clientId,
-                    displayName: nil,
-                    scope: nil,
-                    tokenHash: nil,
-                    createdAt: nil,
-                    revokedAt: Date()
-                ),
-                to: authorizationsFile
-            )
+            guard state.authorizations[index].revokedAt == nil else { return }
+            state.authorizations[index].revokedAt = Date()
+            try saveState(state)
         }
     }
 
     public func listAuthorizations() throws -> [SayAllMCPAuthorizationRecord] {
-        try queue.sync { try resolvedAuthorizations() }
+        try queue.sync {
+            try loadState().authorizations.sorted { $0.createdAt > $1.createdAt }
+        }
     }
 
     @discardableResult
@@ -147,7 +124,8 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
         token: String
     ) throws -> SayAllMCPAuthorizationRecord {
         try queue.sync {
-            guard try loadSettingEvents().last?.enabled ?? false else {
+            let state = try loadState()
+            guard state.enabled else {
                 throw SayAllMCPAccessDeniedError(
                     code: "access_disabled",
                     message: "Local Agent access is disabled."
@@ -161,7 +139,7 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
                     message: "Client credentials are invalid."
                 )
             }
-            guard let authorization = try resolvedAuthorizations().first(where: {
+            guard let authorization = state.authorizations.first(where: {
                 $0.clientId == parsedClientId
             }), authorization.revokedAt == nil else {
                 throw SayAllMCPAccessDeniedError(
@@ -181,80 +159,64 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
         }
     }
 
-    private func loadSettingEvents() throws -> [SettingEvent] {
-        try decodeLines(from: settingsFile, as: SettingEvent.self).enumerated().map { index, event in
-            guard event.schemaVersion == 1,
-                  event.type == "access_changed"
-            else { throw SayAllMCPStorageError.invalidEventLog(line: index + 1) }
-            return event
+    private func loadState() throws -> AccessState {
+        guard let data = try SayAllMCPFileSecurity.readPrivateData(from: stateFile) else {
+            return AccessState(
+                schemaVersion: accessStateSchemaVersion,
+                enabled: false,
+                authorizations: []
+            )
+        }
+        do {
+            let state = try Self.makeDecoder().decode(AccessState.self, from: data)
+            try Self.validate(state)
+            return state
+        } catch let error as SayAllMCPStorageError {
+            throw error
+        } catch {
+            throw SayAllMCPStorageError.invalidAccessState
         }
     }
 
-    private func resolvedAuthorizations() throws -> [SayAllMCPAuthorizationRecord] {
-        let events = try decodeLines(from: authorizationsFile, as: AuthorizationEvent.self)
-        var records: [UUID: SayAllMCPAuthorizationRecord] = [:]
-        for (index, event) in events.enumerated() {
-            guard event.schemaVersion == 1 else {
-                throw SayAllMCPStorageError.invalidEventLog(line: index + 1)
-            }
-            switch event.type {
-            case "authorization_created":
-                guard records[event.clientId] == nil,
-                      let displayName = event.displayName,
-                      !displayName.isEmpty,
-                      displayName.count <= maximumClientNameLength,
-                      event.scope == "transcripts.read.all",
-                      let tokenHash = event.tokenHash,
-                      tokenHash.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression) != nil,
-                      let createdAt = event.createdAt
-                else { throw SayAllMCPStorageError.invalidEventLog(line: index + 1) }
-                records[event.clientId] = SayAllMCPAuthorizationRecord(
-                    clientId: event.clientId,
-                    displayName: displayName,
-                    scope: "transcripts.read.all",
-                    tokenHash: tokenHash,
-                    createdAt: createdAt,
-                    revokedAt: nil
-                )
-            case "authorization_revoked":
-                guard var record = records[event.clientId], let revokedAt = event.revokedAt else {
-                    throw SayAllMCPStorageError.invalidEventLog(line: index + 1)
-                }
-                record.revokedAt = revokedAt
-                records[event.clientId] = record
-            default:
-                throw SayAllMCPStorageError.invalidEventLog(line: index + 1)
-            }
-        }
-        return records.values.sorted { $0.createdAt > $1.createdAt }
+    private func saveState(_ state: AccessState) throws {
+        try Self.validate(state)
+        let data = try Self.makeEncoder().encode(state)
+        try SayAllMCPFileSecurity.writePrivateData(
+            data,
+            directory: accessRoot,
+            file: stateFile
+        )
     }
 
-    private func appendEvent<T: Encodable>(_ event: T, to file: URL) throws {
-        let data = try Self.makeEventEncoder().encode(event)
-        guard let line = String(data: data, encoding: .utf8) else {
-            throw SayAllMCPAuthorizationError.encodingFailed
+    private static func validate(_ state: AccessState) throws {
+        guard state.schemaVersion == accessStateSchemaVersion else {
+            throw SayAllMCPStorageError.invalidAccessState
         }
-        try SayAllMCPFileSecurity.appendPrivateLine(line, directory: accessRoot, file: file)
-    }
-
-    private func decodeLines<T: Decodable>(from file: URL, as type: T.Type) throws -> [T] {
-        try SayAllMCPFileSecurity.readPrivateLines(from: file).enumerated().map { index, line in
-            do {
-                return try Self.makeEventDecoder().decode(T.self, from: Data(line.utf8))
-            } catch {
-                throw SayAllMCPStorageError.invalidEventLog(line: index + 1)
+        var clientIds = Set<UUID>()
+        for authorization in state.authorizations {
+            guard clientIds.insert(authorization.clientId).inserted,
+                  !authorization.displayName.isEmpty,
+                  authorization.displayName.count <= maximumClientNameLength,
+                  authorization.scope == "transcripts.read.all",
+                  authorization.tokenHash.range(
+                      of: #"^[a-f0-9]{64}$"#,
+                      options: .regularExpression
+                  ) != nil,
+                  authorization.revokedAt.map({ $0 >= authorization.createdAt }) ?? true
+            else {
+                throw SayAllMCPStorageError.invalidAccessState
             }
         }
     }
 
-    private static func makeEventEncoder() -> JSONEncoder {
+    private static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         SayAllMCPISO8601.configureEncoder(encoder)
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return encoder
     }
 
-    private static func makeEventDecoder() -> JSONDecoder {
+    private static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         SayAllMCPISO8601.configureDecoder(decoder)
         return decoder
@@ -290,20 +252,8 @@ public enum SayAllMCPAuthorizationError: Error {
     case randomGenerationFailed
 }
 
-private struct SettingEvent: Codable {
+private struct AccessState: Codable {
     let schemaVersion: Int
-    let type: String
-    let enabled: Bool
-    let changedAt: Date
-}
-
-private struct AuthorizationEvent: Codable {
-    let schemaVersion: Int
-    let type: String
-    let clientId: UUID
-    let displayName: String?
-    let scope: String?
-    let tokenHash: String?
-    let createdAt: Date?
-    let revokedAt: Date?
+    var enabled: Bool
+    var authorizations: [SayAllMCPAuthorizationRecord]
 }

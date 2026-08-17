@@ -27,11 +27,11 @@ struct SayAllMCPAuthorizationStoreTests {
             ).clientId == created.clientId
         )
 
-        let eventFile = root.appendingPathComponent("authorizations.ndjson")
-        let rawEvents = try String(contentsOf: eventFile, encoding: .utf8)
-        #expect(!rawEvents.contains(created.token))
+        let stateFile = root.appendingPathComponent("access.json")
+        let rawState = try String(contentsOf: stateFile, encoding: .utf8)
+        #expect(!rawState.contains(created.token))
         let permissions = try #require(
-            FileManager.default.attributesOfItem(atPath: eventFile.path)[.posixPermissions]
+            FileManager.default.attributesOfItem(atPath: stateFile.path)[.posixPermissions]
                 as? NSNumber
         )
         #expect(permissions.intValue & 0o777 == 0o600)
@@ -63,8 +63,8 @@ struct SayAllMCPAuthorizationStoreTests {
         #expect(try store.listAuthorizations().count == 2)
     }
 
-    @Test func readsFractionalISOEventsProducedByTheNodeRepository() throws {
-        let root = temporaryDirectory("authorization-node-compatibility")
+    @Test func readsVersionOneAccessStateAndRejectsFutureSchemas() throws {
+        let root = temporaryDirectory("authorization-v1")
         try FileManager.default.createDirectory(
             at: root,
             withIntermediateDirectories: true,
@@ -72,20 +72,35 @@ struct SayAllMCPAuthorizationStoreTests {
         )
         let clientId = UUID()
         let tokenHash = String(repeating: "a", count: 64)
-        let content = """
-        {"schemaVersion":1,"type":"access_changed","enabled":true,"changedAt":"2026-08-18T01:02:03.456Z"}
+        let state = """
+        {
+          "authorizations" : [
+            {
+              "clientId" : "\(clientId.uuidString.lowercased())",
+              "createdAt" : "2026-08-18T01:02:03.456Z",
+              "displayName" : "Codex",
+              "scope" : "transcripts.read.all",
+              "tokenHash" : "\(tokenHash)"
+            }
+          ],
+          "enabled" : true,
+          "schemaVersion" : 1
+        }
         """
-        try Data((content + "\n").utf8).write(to: root.appendingPathComponent("settings.ndjson"))
-        let authorization = """
-        {"schemaVersion":1,"type":"authorization_created","clientId":"\(clientId.uuidString.lowercased())","displayName":"Codex","scope":"transcripts.read.all","tokenHash":"\(tokenHash)","createdAt":"2026-08-18T01:02:03.456Z"}
-        """
-        try Data((authorization + "\n").utf8).write(
-            to: root.appendingPathComponent("authorizations.ndjson")
-        )
+        let stateFile = root.appendingPathComponent("access.json")
+        try Data(state.utf8).write(to: stateFile)
 
         let store = SayAllMCPAuthorizationStore(accessRoot: root)
         #expect(try store.isEnabled())
         #expect(try store.listAuthorizations().first?.clientId == clientId)
+
+        try Data(state.replacingOccurrences(
+            of: "\"schemaVersion\" : 1",
+            with: "\"schemaVersion\" : 2"
+        ).utf8).write(to: stateFile)
+        #expect(throws: SayAllMCPStorageError.invalidAccessState) {
+            try store.isEnabled()
+        }
     }
 
     @Test func privateEventFilesRejectSymbolicLinks() throws {
@@ -104,12 +119,12 @@ struct SayAllMCPAuthorizationStoreTests {
         let targetFile = target.appendingPathComponent("events.ndjson")
         _ = FileManager.default.createFile(atPath: targetFile.path, contents: Data())
         try FileManager.default.createSymbolicLink(
-            at: root.appendingPathComponent("settings.ndjson"),
+            at: root.appendingPathComponent("access.json"),
             withDestinationURL: targetFile
         )
 
         let store = SayAllMCPAuthorizationStore(accessRoot: root)
-        #expect(throws: POSIXError.self) {
+        #expect(throws: SayAllMCPStorageError.invalidPrivatePath) {
             try store.setEnabled(true)
         }
         #expect(try Data(contentsOf: targetFile).isEmpty)

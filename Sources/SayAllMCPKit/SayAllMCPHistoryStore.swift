@@ -64,6 +64,25 @@ public struct SayAllMCPTranscriptPage: Codable, Equatable, Sendable {
     public let nextCursor: String?
     public let hasMore: Bool
     public let skippedFileCount: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case records
+        case nextCursor
+        case hasMore
+        case skippedFileCount
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(records, forKey: .records)
+        if let nextCursor {
+            try container.encode(nextCursor, forKey: .nextCursor)
+        } else {
+            try container.encodeNil(forKey: .nextCursor)
+        }
+        try container.encode(hasMore, forKey: .hasMore)
+        try container.encode(skippedFileCount, forKey: .skippedFileCount)
+    }
 }
 
 public enum SayAllMCPHistoryError: Error, Equatable {

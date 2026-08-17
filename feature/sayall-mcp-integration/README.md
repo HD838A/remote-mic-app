@@ -2,50 +2,58 @@
 
 ## 为什么开发
 
-无线麦SayAll.app 已能在用户主动开启后把语音转文字历史保存到本机，但其他 Agent 原本需要单独下载、构建和配置 `GetSayAll/sayall-mcp`。本功能把同一套只读 MCP、授权和审计能力直接集成进 Mac App，并保持默认关闭。
+无线麦SayAll.app 已能在用户主动开启后把语音转文字历史保存到本机，但其他 Agent 缺少一个无需安装编程工具、可授权、可撤销的读取入口。本功能把唯一正式 MCP 运行时放进 Mac App，并由独立公开仓库 `GetSayAll/sayall-mcp` 提供接口契约和集成资料。
 
 ## 用户功能
 
-- 在“回眸”页面底部开启“本地 Agent 访问”；首次安装和缺少设置事件时保持关闭。
+- 在“回眸”页面底部开启“本地 Agent 访问”；首次安装和缺少设置文件时保持关闭。
 - 为 Codex、Claude Desktop、Cursor 或其他 MCP 客户端创建独立只读授权。
-- 一次性复制标准 MCP JSON 或 Codex TOML；明文令牌不写入 App 偏好、授权日志或审计日志。
+- 一次性复制标准 MCP JSON 或 Codex TOML；明文令牌不写入 App 偏好、授权文件或审计日志。
 - 查看已授权客户端，并在总开关关闭时仍可单独撤销。
 - Agent 可以列出历史中的 App，或按时间、Bundle ID、顺序和游标分页读取记录。
 
 ## 范围与非目标
 
-本次只提供本机 `stdio` MCP 读取能力。不会开放写入、修改、删除、恢复、AI 总结、Embedding、云同步、HTTP、TCP、Bonjour 或后台常驻服务。关闭 Agent 访问不会删除授权事件或回眸历史，也不会改变语音捕获、蓝牙、音频、Fn、Nearby iOS 或网页版协议。
+本次只提供本机 `stdio` MCP 读取能力。不会开放写入、修改、删除、恢复、AI 总结、Embedding、云同步、HTTP、TCP、Bonjour、后台常驻服务或运行时插件加载。关闭 Agent 访问不会删除授权状态或回眸历史，也不会改变语音捕获、蓝牙、音频、Fn、Nearby iOS 或网页版协议。
 
 ## 关键设计与开发过程
 
-- 将上游 TypeScript/Node.js 行为原生实现为 Swift `SayAllMCP` Helper，随 App 放入 `Contents/Helpers`，用户不需要安装 Node.js。
-- 保持与 `GetSayAll/sayall-mcp` revision `eaac711` 的目录、NDJSON 事件、环境变量、工具名、查询字段、MCP 协议协商和令牌哈希格式兼容。
-- 总开关、授权、撤销和审计继续使用追加事件；目录权限 `0700`、文件权限 `0600`，拒绝符号链接和非普通文件。
+- App 包内的 Swift `Contents/Helpers/SayAllMCP` 是唯一正式运行时，用户不需要安装 Node.js、npm、Homebrew、Xcode 或克隆源码。
+- `GetSayAll/sayall-mcp` 只保存公开接口契约、JSON Schema、配置示例、兼容政策和测试资料，不再提供另一套运行时。
+- Helper 只接受 `serve` 参数，使用 stdin/stdout 处理 MCP JSON-RPC，不监听网络端口；stdout 仅输出协议消息，诊断写 stderr。
+- 授权状态保存在 `Application Support/RemoteMic/MCP/v1/access.json`，包含 `schemaVersion: 1`、总开关和授权列表；目录权限 `0700`、文件权限 `0600`，拒绝符号链接和非普通文件。
 - 每个客户端使用 256-bit 随机令牌，只保存 SHA-256 哈希；Helper 启动及每次工具调用都重新检查开关、令牌和撤销状态。
-- Helper 只使用 stdin/stdout 处理 MCP JSON-RPC，不监听网络端口；stdout 仅输出协议消息，诊断写 stderr。
 - 历史读取独立于写入链路，限制单日文件大小、单条文字长度、筛选数量、分页大小和游标长度；公开结果不包含 session ID、磁盘路径、`applicationKey` 或捕获诊断字段。
 
 ## 涉及文件
 
-- `Package.swift`：增加 `SayAllMCPKit` 共享库和 `SayAllMCP` 可执行目标。
-- `Sources/SayAllMCPKit/`：路径安全、授权、审计、历史查询、配置生成和服务门禁。
-- `Sources/SayAllMCP/main.swift`：CLI 兼容命令和 MCP stdio JSON-RPC 服务。
+- `Package.swift`：提供 `SayAllMCPKit` 共享库和 `SayAllMCP` 可执行目标。
+- `Sources/SayAllMCPKit/`：路径安全、版本化授权状态、审计、历史查询、配置生成和服务门禁。
+- `Sources/SayAllMCP/main.swift`：唯一 `serve` 入口和 MCP stdio JSON-RPC 服务。
 - `Sources/RemoteMic/TranscriptAgentAccessModel.swift`：App 内开关、授权、撤销和一次性配置状态。
 - `Sources/RemoteMic/TranscriptAgentAccessSection.swift`：回眸页面内平铺的 Agent 管理界面。
 - `Sources/RemoteMic/TranscriptHistorySection.swift`：在最底部“全部删除”之前接入 Agent 管理区。
 - `scripts/build-app.sh`、`scripts/verify-app.sh`：打包、签名并校验 Helper。
-- `Tests/RemoteMicTests/SayAllMCP*Tests.swift`：默认关闭、事件兼容、授权、撤销、查询、分页和配置自动化。
+- `Tests/RemoteMicTests/SayAllMCP*Tests.swift`：默认关闭、v1 状态、授权、撤销、查询、分页、配置和唯一入口自动化。
 
 ## 隐私与兼容边界
 
 无线麦SayAll.app 和 Helper 不主动上传历史。被授权的 AI 客户端可能把 MCP 返回的文字发送给自己的模型服务商，用户应在创建授权前确认对应客户端的数据处理方式。同一 macOS 登录用户下的恶意非沙盒进程不属于本功能可以完全隔离的边界，因为该进程也可能尝试直接读取用户自己的 Application Support 文件。
 
-既有 `GetSayAll/sayall-mcp` 授权事件可被 App 读取；App 新建的授权也使用相同格式。配置包含当前 App 内 Helper 的绝对路径，移动或重新安装到不同路径后需要重新复制配置，但不必重新创建未撤销授权。
+本功能未上线，因此不兼容未发布的 Node 实现、旧目录或旧事件格式。正式 `v1` 发布后执行以下向后兼容政策：
+
+- 保持 App 包内 Helper 路径、`serve` 参数、`SAYALL_MCP_CLIENT_ID` 和 `SAYALL_MCP_ACCESS_TOKEN` 环境变量稳定；
+- 不改名或删除 `list_transcript_apps`、`query_transcripts`，不改变已发布输入字段语义，不删除或改名已发布的必需输出字段；
+- 新能力可以增加可选输入字段或新工具；由于 `v1` 输出 Schema 是封闭对象，新增输出字段使用新工具名或并行 `v2`；
+- 新版无线麦SayAll.app 继续读取 `RemoteMic/MCP/v1/access.json` 和 `RemoteMic/Transcripts/v1`；未来格式使用新版本目录，不覆盖 `v1`；
+- 当前版本拒绝未知的未来 `access.json` Schema，避免错误解释新格式；这不影响未来新版继续读取已发布的 `v1` 数据。
+
+配置包含当前 App 内 Helper 的绝对路径。只要 App 保持在同一路径，新版继续兼容旧 Agent 配置；用户移动或重新安装到不同路径后，需要从 App 重新复制配置。
 
 ## 验证与当前状态
 
-当前状态：原生 Helper、默认关闭、App 内授权管理、两个只读工具和打包接线已经实现；完整自动化、临时数据 stdio 协议闭环、Apple Silicon Release App 结构校验和生产最小窗口界面检查已通过，等待真实 MCP 客户端验收。
+当前状态：原生 Helper、默认关闭、App 内授权管理、两个只读工具和打包接线已经实现；等待真实 MCP 客户端验收。
 
-自动化结果：`swift test` 共 246 项、26 个 Suite 全部通过，其中 MCP 专项 10 项、4 个 Suite；临时 `CFFIXED_USER_HOME` 环境已验证默认关闭、创建授权、MCP `2025-11-25` 初始化、`tools/list`、空历史查询和关闭后旧凭据立即拒绝。Apple Silicon Release 构建完成，并通过随包 Helper 存在、可执行、arm64、macOS 14 最低版本和 ad-hoc 签名校验。实际“回眸”页面确认历史保持主内容，Agent 区位于历史之后、“全部删除”之前且默认关闭。人工测试见 [`Testing/SayAllMCPIntegration.md`](../../Testing/SayAllMCPIntegration.md)。
+MCP 专项自动化 11 项、4 个 Suite 以及完整 `swift test` 247 项、26 个 Suite 全部通过，覆盖默认关闭、v1 状态文件、未来 Schema 拒绝、令牌哈希和权限、撤销、历史解析、时间/App 筛选、分页、内部字段排除、配置生成和 Helper 唯一入口。临时数据真实 stdio 已验证初始化、`tools/list`、两个工具、默认关闭拒绝、stdout/stderr 分离及无下一页时显式返回 `nextCursor: null`；四份公开 Schema 与 Helper 完全一致。公开版 Apple Silicon Release App 已通过随包 Helper、资源、arm64、macOS 14 最低版本和 ad-hoc 深度签名校验。人工测试见 [`Testing/SayAllMCPIntegration.md`](../../Testing/SayAllMCPIntegration.md)。
 
 已知限制：配置令牌只在创建后的当前页面状态中提供；关闭页面或再次生成后无法恢复明文，需要撤销并创建新授权。真实 Codex、Claude Desktop、Cursor 等客户端是否把返回内容上传，由各客户端自身决定。
