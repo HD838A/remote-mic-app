@@ -713,4 +713,22 @@ struct SettingsPageRegressionTests {
         #expect(!captureSource.contains("PrivateFeatureIntegration"))
         #expect(!captureSource.contains("API"))
     }
+
+    @Test func sharingUsesOneInlinePanelAcrossAboutStatisticsAndSidebar() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("sharePanel(for: .about)"))
+        #expect(source.contains("sharePanel(for: .statistics)"))
+        #expect(source.contains("selectedSection = .about"))
+        #expect(source.contains("expandedShareSection = .about"))
+        #expect(source.contains("ShareCard(url: shareURL)"))
+        #expect(!source.contains(".popover"))
+    }
 }

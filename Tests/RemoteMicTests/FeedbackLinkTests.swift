@@ -20,31 +20,24 @@ struct FeedbackLinkTests {
         } == true)
     }
 
-    @Test func statusMenuWiresFeedbackImmediatelyAfterWebsite() throws {
-        let source = try String(
+    @Test func aboutPageOwnsFeedbackWithoutKeepingTheStatusMenuEntry() throws {
+        let appSource = try String(
             contentsOf: repositoryRoot.appendingPathComponent(
                 "Sources/RemoteMic/RemoteMicApp.swift"
             ),
             encoding: .utf8
         )
-        let websiteEntry = try #require(source.range(
-            of: "menu.addItem(menuItem(\"about.support.website\", action: #selector(openWebsite)))"
-        ))
-        let feedbackEntry = try #require(source.range(
-            of: "menu.addItem(menuItem(\"about.support.feedback\", action: #selector(openFeedback)))"
-        ))
-        let openFeedback = try #require(source.range(
-            of: "@objc private func openFeedback()"
-        ))
+        let settingsSource = try String(
+            contentsOf: repositoryRoot.appendingPathComponent(
+                "Sources/RemoteMic/SettingsView.swift"
+            ),
+            encoding: .utf8
+        )
 
-        #expect(websiteEntry.lowerBound < feedbackEntry.lowerBound)
-        #expect(source[websiteEntry.upperBound..<feedbackEntry.lowerBound]
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty)
-        #expect(feedbackEntry.lowerBound < openFeedback.lowerBound)
-        #expect(source[openFeedback.lowerBound...].prefix(180).contains(
-            "NSWorkspace.shared.open(AppLinks.feedback)"
-        ))
+        #expect(!appSource.contains("#selector(openFeedback)"))
+        #expect(!appSource.contains("@objc private func openFeedback()"))
+        #expect(settingsSource.contains("Link(destination: AppLinks.feedback)"))
+        #expect(settingsSource.contains("about.support.feedback_action"))
     }
 }
 

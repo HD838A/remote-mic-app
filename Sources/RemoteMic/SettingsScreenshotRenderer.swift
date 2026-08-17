@@ -71,6 +71,9 @@ enum SettingsScreenshotRenderer {
                 model: model,
                 updateInformation: updateInformation,
                 initialSection: section,
+                initialShareSection: section == .statistics || section == .about
+                    ? section
+                    : nil,
                 minimumContentSize: .zero
             )
             .environmentObject(localization)

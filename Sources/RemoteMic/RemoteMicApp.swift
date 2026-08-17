@@ -301,7 +301,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
         menu.addItem(menuItem("about.support.github", action: #selector(openGitHub)))
         menu.addItem(menuItem("about.support.website", action: #selector(openWebsite)))
-        menu.addItem(menuItem("about.support.feedback", action: #selector(openFeedback)))
         menu.addItem(.separator())
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
@@ -864,10 +863,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func openWebsite() {
         NSWorkspace.shared.open(localization.localizedWebsiteURL)
-    }
-
-    @objc private func openFeedback() {
-        NSWorkspace.shared.open(AppLinks.feedback)
     }
 
     @objc private func closeKeyWindow() {

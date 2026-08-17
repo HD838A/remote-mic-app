@@ -206,6 +206,7 @@ struct SettingsView: View {
     @State private var isTestFlightLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
+    @State private var expandedShareSection: SettingsSection?
     @State private var webRemoteInviteCode = ""
     @State private var versionTapRevealCounter = VersionTapRevealCounter()
     private static let requiredWebRemoteInviteCode = "8586"
@@ -217,6 +218,7 @@ struct SettingsView: View {
         refreshUpdateInformation: @escaping () -> Void = {},
         setDockIconVisible: @escaping (Bool) -> Void = { _ in },
         initialSection: SettingsSection = .connection,
+        initialShareSection: SettingsSection? = nil,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
         self.model = model
@@ -229,6 +231,7 @@ struct SettingsView: View {
         self.setDockIconVisible = setDockIconVisible
         self.minimumContentSize = minimumContentSize
         _selectedSection = State(initialValue: initialSection)
+        _expandedShareSection = State(initialValue: initialShareSection)
     }
 
     var body: some View {
@@ -432,6 +435,24 @@ struct SettingsView: View {
                 sidebarButton(section)
             }
             Spacer(minLength: 0)
+            Button {
+                selectedSection = .about
+                expandedShareSection = .about
+            } label: {
+                VStack(spacing: 7) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 21, weight: .semibold))
+                    Text("share.action")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .compatibilityFocusEffectDisabled()
+            .foregroundStyle(Color.secondary)
+            .accessibilityLabel(Text("share.sidebar.accessibility_label"))
         }
         .background(Color(nsColor: .controlBackgroundColor))
     }
@@ -2014,6 +2035,7 @@ struct SettingsView: View {
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
                 VStack(spacing: 14) {
+                    sharePanel(for: .statistics)
                     statisticsPeriodContent
                     voiceSessionRankingCard
                 }
@@ -2208,6 +2230,29 @@ struct SettingsView: View {
                         .compatibilityButtonStyle(.standard)
                     }
                     .padding(.horizontal, 6)
+
+                    GlassPanel {
+                        HStack(spacing: 14) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.title3)
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 34)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("about.support.feedback")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("about.support.feedback_description")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 20)
+                            Link(destination: AppLinks.feedback) {
+                                Label("about.support.feedback_action", systemImage: "arrow.up.right")
+                            }
+                            .compatibilityButtonStyle(.standard)
+                        }
+                    }
+
+                    sharePanel(for: .about)
 
                     GlassPanel {
                         VStack(spacing: 16) {
@@ -2485,6 +2530,45 @@ struct SettingsView: View {
                 checksForPreReleaseUpdates: settings.checksForPreReleaseUpdates
             ).refreshesAboutInformationOnAppear else { return }
             refreshUpdateInformation()
+        }
+    }
+
+    private func sharePanel(for section: SettingsSection) -> some View {
+        let isExpanded = expandedShareSection == section
+        let shareURL = AppShareLink.url(for: localization.locale)
+
+        return GlassPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 14) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 34)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("share.title")
+                            .font(.subheadline.weight(.semibold))
+                        Text("share.description")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 20)
+                    Button {
+                        expandedShareSection = isExpanded ? nil : section
+                    } label: {
+                        Label(
+                            isExpanded ? "share.hide_action" : "share.show_action",
+                            systemImage: isExpanded ? "chevron.up" : "qrcode"
+                        )
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+
+                if isExpanded {
+                    Divider()
+                    ShareCard(url: shareURL)
+                        .id(shareURL)
+                }
+            }
         }
     }
 
@@ -3361,6 +3445,67 @@ struct GlassPanel<Content: View>: View {
                         lineWidth: 1
                     )
                 )
+        }
+    }
+}
+
+private struct ShareCard: View {
+    let url: URL
+    @State private var copySucceeded: Bool?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 20) {
+            Group {
+                if let image = AppShareQRCode.image(for: url) {
+                    Image(nsImage: image)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: "qrcode")
+                        .resizable()
+                        .scaledToFit()
+                        .padding(24)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 144, height: 144)
+            .padding(8)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityLabel(Text("share.qr.accessibility_label"))
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("share.card.title")
+                    .font(.headline)
+                Text("share.card.description")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(url.absoluteString)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+                Button {
+                    copySucceeded = AppShareClipboard.copyToGeneralPasteboard(url)
+                } label: {
+                    Label("share.copy_action", systemImage: "doc.on.doc")
+                }
+                .compatibilityButtonStyle(.prominent)
+                .accessibilityHint(Text("share.copy.accessibility_hint"))
+
+                if let copySucceeded {
+                    Label(
+                        copySucceeded ? "share.copy_succeeded" : "share.copy_failed",
+                        systemImage: copySucceeded
+                            ? "checkmark.circle.fill"
+                            : "exclamationmark.triangle.fill"
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(copySucceeded ? Color.green : Color.red)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

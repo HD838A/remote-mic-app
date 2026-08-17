@@ -3,9 +3,10 @@
 ## 实现切片
 
 - `Sources/RemoteMic/AppLinks.swift`：集中保存公开反馈入口。
-- `Sources/RemoteMic/RemoteMicApp.swift`：在状态栏菜单增加入口，并使用 `NSWorkspace` 打开默认浏览器。
+- `Sources/RemoteMic/SettingsView.swift`：在“关于”页面提供入口，使用系统 `Link` 打开默认浏览器。
+- `Sources/RemoteMic/RemoteMicApp.swift`：移除旧状态栏重复入口和动作。
 - `Resources/*.lproj/Localizable.strings`：提供中英文菜单文案。
-- `Tests/RemoteMicTests/FeedbackLinkTests.swift`：锁定入口地址，防止误改为携带凭据的链接。
+- `Tests/RemoteMicTests/FeedbackLinkTests.swift`：锁定入口地址、关于页接线和状态栏无重复入口，防止误改为携带凭据的链接。
 
 ## 关键决策
 
