@@ -192,7 +192,18 @@ final class MacroFeatureIntegration: ObservableObject {
             remoteProfileID: profileID,
             button: button.rawValue,
             trigger: trigger.rawValue,
-            hostActionPerformer: hostActionPerformer
+            hostActionPerformer: hostActionPerformer,
+            shortcutPerformer: { keyCode, modifiers in
+                let handled = KeyboardInjector.sendRecordedShortcut(
+                    keyCode: keyCode,
+                    modifiers: modifiers
+                )
+                AppLogger.shared.write(
+                    "BUTTON PROFILE shortcut key_code=\(keyCode) " +
+                        "modifiers=\(modifiers.joined(separator: ",")) handled=\(handled)"
+                )
+                return handled
+            }
         )
         #else
         false

@@ -228,7 +228,13 @@ enum KeyboardInjector {
             keyPoster(124, .maskCommand)
         case .customShortcut:
             if let shortcut {
-                keyPoster(CGKeyCode(shortcut.keyCode), shortcut.cgEventFlags)
+                keyPoster(
+                    CGKeyCode(shortcut.keyCode),
+                    physicalShortcutFlags(
+                        keyCode: shortcut.keyCode,
+                        flags: shortcut.cgEventFlags
+                    )
+                )
             }
         case .openCustomApplication:
             break
@@ -239,6 +245,35 @@ enum KeyboardInjector {
             break
         }
         return true
+    }
+
+    @discardableResult
+    static func sendRecordedShortcut(
+        keyCode: UInt16,
+        modifiers: [String],
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyPoster: KeyPoster = { postKey(code: $0, flags: $1) }
+    ) -> Bool {
+        guard accessibilityTrusted() else { return false }
+        var flags: CGEventFlags = []
+        if modifiers.contains("command") { flags.insert(.maskCommand) }
+        if modifiers.contains("shift") { flags.insert(.maskShift) }
+        if modifiers.contains("option") { flags.insert(.maskAlternate) }
+        if modifiers.contains("control") { flags.insert(.maskControl) }
+        if modifiers.contains("function") { flags.insert(.maskSecondaryFn) }
+        keyPoster(
+            CGKeyCode(keyCode),
+            physicalShortcutFlags(keyCode: keyCode, flags: flags)
+        )
+        return true
+    }
+
+    private static func physicalShortcutFlags(
+        keyCode: UInt16,
+        flags: CGEventFlags
+    ) -> CGEventFlags {
+        guard (123...126).contains(keyCode) else { return flags }
+        return flags.union(.maskNumericPad)
     }
 
     private static func open(

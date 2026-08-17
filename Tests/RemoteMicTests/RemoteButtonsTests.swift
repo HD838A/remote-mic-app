@@ -937,6 +937,18 @@ struct RemoteButtonsTests {
         #expect(ButtonProfileHostActionCodec.decode(Data("invalid".utf8)) == nil)
     }
 
+    @Test func buttonProfileRecordedArrowShortcutUsesPhysicalArrowFlags() {
+        var posted: (CGKeyCode, CGEventFlags)?
+        #expect(KeyboardInjector.sendRecordedShortcut(
+            keyCode: 124,
+            modifiers: ["command", "option"],
+            accessibilityTrusted: { true },
+            keyPoster: { posted = ($0, $1) }
+        ))
+        #expect(posted?.0 == 124)
+        #expect(posted?.1 == [.maskCommand, .maskAlternate, .maskNumericPad])
+    }
+
     @Test func powerDefaultRemainsEscapeWhileExperimentIsUnavailable() {
         #expect(AppSettings.defaultBindings[.power] == .escape)
     }
