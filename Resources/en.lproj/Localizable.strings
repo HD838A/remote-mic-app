@@ -380,7 +380,7 @@
 "common.status.copied" = "Copied";
 "settings.section.about" = "About";
 "settings.section.statistics" = "Statistics";
-"settings.section.transcripts" = "Voice History";
+"settings.section.transcripts" = "Reflections";
 "about.page.subtitle" = "View version, updates, language, and app display options";
 "about.app.description" = "Wireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro.";
 "about.app_support.title" = "App & Support";
@@ -594,9 +594,9 @@
 "onboarding.complete.illustration" = "Start using SayAll";
 
 "common.action.delete" = "Delete";
-"statistics.transcripts.title" = "Voice History";
+"statistics.transcripts.title" = "Reflections";
 "statistics.transcripts.description" = "Save the text actually inserted by voice transcription on this Mac, organized by app and date.";
-"statistics.transcripts.enable" = "Save Voice History";
+"statistics.transcripts.enable" = "Save to Reflections";
 "statistics.transcripts.disabled" = "Turn this on to save new voice transcription results locally. Existing history is kept when this switch is off.";
 "statistics.transcripts.empty" = "No voice history yet. Your next completed voice input will appear here.";
 "statistics.transcripts.privacy" = "Only the newly inserted transcript, target app name, and time are saved. Audio, full field contents, window titles, document names, and URLs are not stored. Deleted history is moved to the Trash for recovery.";

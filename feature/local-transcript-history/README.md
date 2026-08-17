@@ -6,7 +6,7 @@
 
 ## 用户功能
 
-- 在侧边栏“统计”下方打开“语音记录”，并开启“保存语音记录”。
+- 在侧边栏“统计”下方打开“回眸”（英文为 “Reflections”），并开启“记录回眸”（英文为 “Save to Reflections”）。
 - 新完成的语音输入会按目标 App 和语音结束时的本机日期分组。
 - 页面默认按时间倒序显示全部 App 的记录；左侧应用列表显示真实 App 图标和名称，点击后只查看该 App 的时间线。
 - 页头在标题右侧显示可换行的本地隐私说明，保存开关固定在最右侧；页面底部不重复显示同一说明。
@@ -36,7 +36,7 @@
 - `Sources/RemoteMic/TranscriptArchiveStore.swift`：按 App/日期落盘、加载和可恢复删除。
 - `Sources/RemoteMic/BridgeAppModel.swift`：接入公共语音生命周期并向界面发布记录。
 - `Sources/RemoteMic/TranscriptHistorySection.swift`：带真实 App 图标的应用列表、日期、复制和删除界面。
-- `Sources/RemoteMic/SettingsView.swift`：在统计下方提供独立“语音记录”侧边栏页面，页头依次放置标题、可换行隐私说明和最右侧保存开关。
+- `Sources/RemoteMic/SettingsView.swift`：在统计下方提供独立“回眸”侧边栏页面，页头依次放置标题、可换行隐私说明和最右侧保存开关。
 - `Resources/*/Localizable.strings`：中英文界面文字。
 - `Tests/RemoteMicTests/Transcript*Tests.swift`：存储、捕获和 Feature Flag 自动化。
 
