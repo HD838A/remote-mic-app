@@ -4,6 +4,7 @@
 - [移动设备已连接后仍显示正在等待](./2026-08-15-mobile-connection-still-shows-waiting/DEBUG.md)
 - [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md)
 - [发布阶段 heartbeat 与 timeout 同时到期导致 CI 偶发失败](./2026-08-16-release-stage-heartbeat-timeout-flake.md)
+- [正式版晋升 Runner 缺少 ripgrep](./2026-08-17-stable-promotion-runner-missing-rg.md)
 - [Intel Sparkle appcast 缺少本地化更新说明](./2026-08-13-intel-appcast-missing-release-notes.md)
 - [SwiftPM 资源构建路径进入发布 App](./2026-08-13-swiftpm-resource-build-path-leak.md)
 - [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md)
@@ -92,6 +93,7 @@
 | 2026-08-15 | [移动设备已连接后仍显示正在等待](./2026-08-15-mobile-connection-still-shows-waiting/DEBUG.md) | 候选修复完成，等待真实 iPhone / Watch 验收 |
 | 2026-08-16 | [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md) | 第二次修复完成，等待下一次真实受保护工作流验证 |
 | 2026-08-16 | [发布阶段 heartbeat 与 timeout 同时到期导致 CI 偶发失败](./2026-08-16-release-stage-heartbeat-timeout-flake.md) | 已修复，自动化验证通过 |
+| 2026-08-17 | [正式版晋升 Runner 缺少 ripgrep](./2026-08-17-stable-promotion-runner-missing-rg.md) | 已修复，等待下一次受保护晋升验证 |
 | 2026-08-17 | [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md) | 未修复，等待现场日志与真机复现 |
 
 ## 记录模板
