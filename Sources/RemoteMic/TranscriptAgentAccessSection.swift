@@ -28,6 +28,7 @@ struct TranscriptAgentAccessSection: View {
                     .toggleStyle(.switch)
                     .font(.system(size: 13, weight: .medium))
                     .fixedSize()
+                    .disabled(model.integrationInProgress != nil)
                 }
 
                 Text("statistics.transcripts.agent_access.privacy")
@@ -36,6 +37,9 @@ struct TranscriptAgentAccessSection: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if model.isEnabled {
+                    Divider()
+                    quickConnections
+
                     Divider()
                     authorizationCreator
 
@@ -58,10 +62,100 @@ struct TranscriptAgentAccessSection: View {
         .onAppear(perform: model.refresh)
     }
 
+    private var quickConnections: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("statistics.transcripts.agent_access.quick_connect")
+                .font(.system(size: 13, weight: .semibold))
+            Text("statistics.transcripts.agent_access.quick_connect_description")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10),
+                ],
+                spacing: 10
+            ) {
+                ForEach(MCPClientKind.allCases) { client in
+                    clientCard(client)
+                }
+            }
+        }
+    }
+
+    private func clientCard(_ client: MCPClientKind) -> some View {
+        let connected = model.activeAuthorization(for: client) != nil
+        let available = model.isAvailable(client)
+        let isWorking = model.integrationInProgress == client
+
+        return HStack(spacing: 10) {
+            Group {
+                if let icon = model.applicationIcon(client) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: client.fallbackSymbol)
+                        .resizable()
+                        .scaledToFit()
+                        .padding(4)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 30, height: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(client.displayName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(
+                    connected
+                        ? "statistics.transcripts.agent_access.connected"
+                        : available
+                            ? "statistics.transcripts.agent_access.ready"
+                            : "statistics.transcripts.agent_access.not_installed"
+                )
+                .font(.system(size: 12))
+                .foregroundStyle(connected ? Color.green : .secondary)
+            }
+
+            Spacer(minLength: 6)
+
+            if isWorking {
+                ProgressView()
+                    .controlSize(.small)
+            } else if connected {
+                Button("statistics.transcripts.agent_access.remove_connection", role: .destructive) {
+                    model.removeConnection(client)
+                }
+                .buttonStyle(.bordered)
+                .font(.system(size: 12, weight: .medium))
+            } else {
+                Button("statistics.transcripts.agent_access.connect") {
+                    model.connect(client)
+                }
+                .buttonStyle(.borderedProminent)
+                .font(.system(size: 12, weight: .medium))
+                .disabled(!available || model.integrationInProgress != nil)
+            }
+        }
+        .padding(10)
+        .background(
+            Color.primary.opacity(0.035),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+    }
+
     private var authorizationCreator: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("statistics.transcripts.agent_access.add_client")
+            Text("statistics.transcripts.agent_access.manual_setup")
                 .font(.system(size: 13, weight: .semibold))
+            Text("statistics.transcripts.agent_access.manual_setup_description")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) {
                 TextField(
                     "statistics.transcripts.agent_access.client_name_placeholder",
@@ -206,6 +300,14 @@ struct TranscriptAgentAccessSection: View {
             key = "statistics.transcripts.agent_access.error.revoke"
         case .helperMissing:
             key = "statistics.transcripts.agent_access.error.helper"
+        case .clientUnavailable:
+            key = "statistics.transcripts.agent_access.error.client_unavailable"
+        case .configurationConflict:
+            key = "statistics.transcripts.agent_access.error.configuration_conflict"
+        case .integrationFailed:
+            key = "statistics.transcripts.agent_access.error.integration"
+        case .configurationRemovalFailed:
+            key = "statistics.transcripts.agent_access.error.remove_configuration"
         }
         return localization.text(key)
     }

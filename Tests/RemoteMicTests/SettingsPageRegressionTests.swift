@@ -695,6 +695,10 @@ struct SettingsPageRegressionTests {
         #expect(agentAccessSource.contains("model.copyStandardConfiguration()"))
         #expect(agentAccessSource.contains("model.copyCodexConfiguration()"))
         #expect(agentAccessSource.contains("model.revoke(authorization)"))
+        #expect(agentAccessSource.contains("ForEach(MCPClientKind.allCases)"))
+        #expect(agentAccessSource.contains("LazyVGrid("))
+        #expect(agentAccessSource.contains("model.connect(client)"))
+        #expect(agentAccessSource.contains("model.removeConnection(client)"))
         #expect(!agentAccessSource.contains(".sheet("))
         #expect(!agentAccessSource.contains("Popover"))
 

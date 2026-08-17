@@ -18,6 +18,7 @@ struct SayAllMCPAuthorizationStoreTests {
         let restored = try #require(store.listAuthorizations().first)
         #expect(restored.clientId == created.clientId)
         #expect(restored.displayName == "Codex")
+        #expect(restored.integrationIdentifier == nil)
         #expect(restored.tokenHash.count == 64)
         #expect(restored.tokenHash != created.token)
         #expect(
@@ -35,6 +36,19 @@ struct SayAllMCPAuthorizationStoreTests {
                 as? NSNumber
         )
         #expect(permissions.intValue & 0o777 == 0o600)
+    }
+
+    @Test func storesIntegrationIdentifierAndKeepsOldRecordsDecodable() throws {
+        let root = temporaryDirectory("authorization-integration")
+        let store = SayAllMCPAuthorizationStore(accessRoot: root)
+        try store.setEnabled(true)
+
+        let created = try store.createAuthorization(
+            displayName: "Cursor",
+            integrationIdentifier: "cursor"
+        )
+        #expect(created.integrationIdentifier == "cursor")
+        #expect(try store.listAuthorizations().first?.integrationIdentifier == "cursor")
     }
 
     @Test func revocationAndGlobalDisableApplyToExistingCredentials() throws {

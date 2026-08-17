@@ -159,6 +159,12 @@ The **Statistics** page shows remote button presses, voice duration, and the lon
   <img alt="SayAll usage statistics" src="Screenshots/statistics-en.png">
 </picture>
 
+## Local AI / Agent setup
+
+After explicit user consent, 无线麦SayAll.app can expose local Reflections history as read-only data to Codex, Claude Code, Cursor, OpenCode, and other clients through the bundled Swift MCP Helper. No Node.js or development runtime is required.
+
+For AI-assisted installation, consent, client connection, and verification, give the agent the [AI Installation and MCP Setup Guide](AI_SETUP.en.md).
+
 ## Permissions and privacy
 
 - Bluetooth: connect to the remote and receive voice.

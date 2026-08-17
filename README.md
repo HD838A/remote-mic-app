@@ -163,6 +163,12 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
   <img alt="无线麦使用统计页" src="Screenshots/statistics-zh.png">
 </picture>
 
+## AI / Agent 本地配置
+
+无线麦SayAll.app 可以在用户明确授权后，通过随 App 安装的 Swift MCP Helper，让 Codex、Claude Code、Cursor、OpenCode 等客户端只读访问本机“回眸”历史。用户无需安装 Node.js 或其他开发依赖。
+
+需要由 AI 协助完成安装、授权、客户端连接和验证时，请让 AI 阅读：[AI 安装与 MCP 配置指南](AI_SETUP.md)。
+
 ## 权限与隐私
 
 - 蓝牙：连接遥控器并接收语音；

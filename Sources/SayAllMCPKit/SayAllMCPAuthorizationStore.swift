@@ -4,10 +4,12 @@ import Security
 
 private let accessStateSchemaVersion = 1
 private let maximumClientNameLength = 100
+private let maximumIntegrationIdentifierLength = 50
 
 public struct SayAllMCPAuthorizationRecord: Codable, Identifiable, Equatable, Sendable {
     public let clientId: UUID
     public let displayName: String
+    public let integrationIdentifier: String?
     public let scope: String
     public let tokenHash: String
     public let createdAt: Date
@@ -19,9 +21,26 @@ public struct SayAllMCPAuthorizationRecord: Codable, Identifiable, Equatable, Se
 public struct SayAllMCPCreatedAuthorization: Equatable, Sendable {
     public let clientId: UUID
     public let displayName: String
+    public let integrationIdentifier: String?
     public let scope: String
     public let token: String
     public let createdAt: Date
+
+    public init(
+        clientId: UUID,
+        displayName: String,
+        integrationIdentifier: String? = nil,
+        scope: String,
+        token: String,
+        createdAt: Date
+    ) {
+        self.clientId = clientId
+        self.displayName = displayName
+        self.integrationIdentifier = integrationIdentifier
+        self.scope = scope
+        self.token = token
+        self.createdAt = createdAt
+    }
 }
 
 public struct SayAllMCPAccessDeniedError: Error, Equatable, Sendable {
@@ -60,7 +79,10 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
         }
     }
 
-    public func createAuthorization(displayName: String) throws -> SayAllMCPCreatedAuthorization {
+    public func createAuthorization(
+        displayName: String,
+        integrationIdentifier: String? = nil
+    ) throws -> SayAllMCPCreatedAuthorization {
         try queue.sync {
             var state = try loadState()
             guard state.enabled else {
@@ -81,6 +103,7 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
                 SayAllMCPAuthorizationRecord(
                     clientId: clientId,
                     displayName: normalizedName,
+                    integrationIdentifier: integrationIdentifier,
                     scope: "transcripts.read.all",
                     tokenHash: Self.hashToken(token),
                     createdAt: createdAt,
@@ -91,6 +114,7 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
             return SayAllMCPCreatedAuthorization(
                 clientId: clientId,
                 displayName: normalizedName,
+                integrationIdentifier: integrationIdentifier,
                 scope: "transcripts.read.all",
                 token: token,
                 createdAt: createdAt
@@ -197,6 +221,14 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
             guard clientIds.insert(authorization.clientId).inserted,
                   !authorization.displayName.isEmpty,
                   authorization.displayName.count <= maximumClientNameLength,
+                  authorization.integrationIdentifier.map({
+                      !$0.isEmpty
+                          && $0.count <= maximumIntegrationIdentifierLength
+                          && $0.range(
+                              of: #"^[a-z0-9-]+$"#,
+                              options: .regularExpression
+                          ) != nil
+                  }) ?? true,
                   authorization.scope == "transcripts.read.all",
                   authorization.tokenHash.range(
                       of: #"^[a-f0-9]{64}$"#,

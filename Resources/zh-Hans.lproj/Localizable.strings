@@ -621,6 +621,15 @@
 "statistics.transcripts.agent_access.description" = "允许你授权的 Agent 通过本机 MCP 只读访问回眸记录。";
 "statistics.transcripts.agent_access.enable" = "允许访问";
 "statistics.transcripts.agent_access.privacy" = "无线麦SayAll.app 不会上传记录；被授权的 AI 客户端可能把读取的文字发送给自己的服务商。开关默认关闭，关闭后所有客户端立即无法读取。";
+"statistics.transcripts.agent_access.quick_connect" = "连接 AI 工具";
+"statistics.transcripts.agent_access.quick_connect_description" = "无线麦SayAll.app 会为所选工具创建独立只读授权并写入本机配置；连接后请重新启动对应工具。";
+"statistics.transcripts.agent_access.connected" = "已连接 · 需重启客户端";
+"statistics.transcripts.agent_access.ready" = "可连接";
+"statistics.transcripts.agent_access.not_installed" = "未检测到安装";
+"statistics.transcripts.agent_access.connect" = "连接";
+"statistics.transcripts.agent_access.remove_connection" = "移除";
+"statistics.transcripts.agent_access.manual_setup" = "其他客户端或手动配置";
+"statistics.transcripts.agent_access.manual_setup_description" = "自动连接不可用时，创建一个授权并复制对应格式。配置中的令牌只会显示一次。";
 "statistics.transcripts.agent_access.add_client" = "添加客户端";
 "statistics.transcripts.agent_access.client_name_placeholder" = "例如 Codex 或 Claude Desktop";
 "statistics.transcripts.agent_access.create" = "创建只读授权";
@@ -639,6 +648,10 @@
 "statistics.transcripts.agent_access.error.create" = "无法创建客户端授权。";
 "statistics.transcripts.agent_access.error.revoke" = "无法撤销这个客户端。";
 "statistics.transcripts.agent_access.error.helper" = "当前 App 中缺少本地 MCP Helper，请重新安装完整测试包。";
+"statistics.transcripts.agent_access.error.client_unavailable" = "没有检测到这个客户端，请先安装后再连接。";
+"statistics.transcripts.agent_access.error.configuration_conflict" = "现有配置中已经有同名 MCP，自动连接没有覆盖它。请检查配置或使用下方手动方式。";
+"statistics.transcripts.agent_access.error.integration" = "自动连接失败，刚创建的授权已撤销。请使用下方手动配置。";
+"statistics.transcripts.agent_access.error.remove_configuration" = "访问授权已撤销，但无法自动移除客户端配置。请在对应客户端中手动删除 sayall_history。";
 "onboarding.side.permissions" = "权限检查";
 "onboarding.side.remote" = "连接检查";
 "onboarding.side.audio" = "音频检查";

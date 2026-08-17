@@ -621,6 +621,15 @@
 "statistics.transcripts.agent_access.description" = "Let clients you authorize read Reflections through a local MCP connection.";
 "statistics.transcripts.agent_access.enable" = "Allow Access";
 "statistics.transcripts.agent_access.privacy" = "无线麦SayAll.app does not upload history. An authorized AI client may send returned text to its own provider. Access is off by default, and turning it off blocks every client immediately.";
+"statistics.transcripts.agent_access.quick_connect" = "Connect AI Tools";
+"statistics.transcripts.agent_access.quick_connect_description" = "无线麦SayAll.app creates a separate read-only authorization and updates local configuration for the selected tool. Restart that tool after connecting.";
+"statistics.transcripts.agent_access.connected" = "Connected · Restart required";
+"statistics.transcripts.agent_access.ready" = "Ready to connect";
+"statistics.transcripts.agent_access.not_installed" = "Not detected";
+"statistics.transcripts.agent_access.connect" = "Connect";
+"statistics.transcripts.agent_access.remove_connection" = "Remove";
+"statistics.transcripts.agent_access.manual_setup" = "Other Clients or Manual Setup";
+"statistics.transcripts.agent_access.manual_setup_description" = "If quick connection is unavailable, create an authorization and copy the matching format. Its token is shown only once.";
 "statistics.transcripts.agent_access.add_client" = "Add a Client";
 "statistics.transcripts.agent_access.client_name_placeholder" = "For example, Codex or Claude Desktop";
 "statistics.transcripts.agent_access.create" = "Create Read-Only Access";
@@ -639,6 +648,10 @@
 "statistics.transcripts.agent_access.error.create" = "Client access could not be created.";
 "statistics.transcripts.agent_access.error.revoke" = "This client could not be revoked.";
 "statistics.transcripts.agent_access.error.helper" = "The local MCP Helper is missing from this App. Reinstall the complete test build.";
+"statistics.transcripts.agent_access.error.client_unavailable" = "This client was not detected. Install it before connecting.";
+"statistics.transcripts.agent_access.error.configuration_conflict" = "An MCP with the same name already exists, so quick connection did not overwrite it. Review that configuration or use manual setup below.";
+"statistics.transcripts.agent_access.error.integration" = "Quick connection failed and the new authorization was revoked. Use manual setup below.";
+"statistics.transcripts.agent_access.error.remove_configuration" = "Access was revoked, but the client configuration could not be removed automatically. Remove sayall_history from that client manually.";
 "onboarding.side.permissions" = "Permission Check";
 "onboarding.side.remote" = "Connection Check";
 "onboarding.side.audio" = "Audio Check";
