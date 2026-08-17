@@ -95,14 +95,14 @@ failed to probe status service for com.hd838a.RemoteMic
 
 ```bash
 sudo chmod 755 \
-  "/Applications/Remote Mic.app/Contents/MacOS/RemoteMic" \
-  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" \
-  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
-  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater" \
-  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
-  "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
+  "/Applications/SayAll.app/Contents/MacOS/RemoteMic" \
+  "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" \
+  "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
+  "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater" \
+  "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
+  "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
 
-codesign --verify --deep --strict "/Applications/Remote Mic.app"
+codesign --verify --deep --strict "/Applications/SayAll.app"
 ```
 
 远程修复不要求物理接触 Mac；但 Sparkle 的安装确认界面需要处于已解锁的图形会话。锁屏状态下成功取得 appcast（HTTP 200）只证明更新源可访问，不能视为已完成升级。

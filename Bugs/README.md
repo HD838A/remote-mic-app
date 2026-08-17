@@ -1,6 +1,7 @@
 # Bug 记录
 
 - [Apple Watch BLE 语音已启动但没有有效电平](./2026-08-18-watch-ble-audio-no-signal.md)
+- [v1.8.25 安装后 App bundle 仍显示 Remote Mic](./2026-08-17-v1.8.25-remote-mic-bundle-name.md)
 - [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md)
 - [移动设备已连接后仍显示正在等待](./2026-08-15-mobile-connection-still-shows-waiting/DEBUG.md)
 - [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md)

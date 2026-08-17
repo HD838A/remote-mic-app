@@ -6,10 +6,12 @@ SCRIPT_DIR="${0:A:h}"
 RELEASE_CONFIG="$SCRIPT_DIR/release-variant.plist"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
-APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
+APP_DESTINATION="${TARGET_VOLUME%/}/Applications/SayAll.app"
 APP_PLIST="$APP_DESTINATION/Contents/Info.plist"
-LEGACY_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
-LEGACY_APP_PLIST="$LEGACY_APP_DESTINATION/Contents/Info.plist"
+LEGACY_REMOTE_MIC_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
+LEGACY_REMOTE_MIC_APP_PLIST="$LEGACY_REMOTE_MIC_APP_DESTINATION/Contents/Info.plist"
+LEGACY_CHINESE_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
+LEGACY_CHINESE_APP_PLIST="$LEGACY_CHINESE_APP_DESTINATION/Contents/Info.plist"
 
 uses_chinese_locale() {
   local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
@@ -78,8 +80,8 @@ if [[ -e "$APP_DESTINATION" || -L "$APP_DESTINATION" ]]; then
   if [[ ! -f "$APP_PLIST" ]] || \
      [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$APP_PLIST" 2>/dev/null || true)" != "com.hd838a.RemoteMic" ]]; then
     installer_message \
-      "未安装：目标路径存在不属于 Remote Mic 的应用 $APP_DESTINATION" \
-      "Installation stopped: an app not owned by Remote Mic exists at $APP_DESTINATION." >&2
+      "未安装：目标路径存在不属于无线麦SayAll.app的应用 $APP_DESTINATION" \
+      "Installation stopped: an app not owned by SayAll exists at $APP_DESTINATION." >&2
     installer_message \
       "为避免覆盖其他软件，安装器已停止。" \
       "To avoid overwriting other software, the installer has stopped." >&2
@@ -88,29 +90,53 @@ if [[ -e "$APP_DESTINATION" || -L "$APP_DESTINATION" ]]; then
   INSTALLED_BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$APP_PLIST" 2>/dev/null || true)"
   if [[ "$INSTALLED_BUILD" == <-> && "$INSTALLED_BUILD" -gt "$PACKAGE_BUILD" ]]; then
     installer_message \
-      "未安装：当前 Remote Mic 的构建号 $INSTALLED_BUILD 高于此测试包的构建号 $PACKAGE_BUILD。" \
-      "Installation stopped: the installed Remote Mic build $INSTALLED_BUILD is newer than this test package build $PACKAGE_BUILD." >&2
+      "未安装：当前 SayAll 的构建号 $INSTALLED_BUILD 高于此测试包的构建号 $PACKAGE_BUILD。" \
+      "Installation stopped: the installed SayAll build $INSTALLED_BUILD is newer than this test package build $PACKAGE_BUILD." >&2
     installer_message \
       "现有应用已完整保留。请改用更新的安装包。" \
       "The existing app was left intact. Use a newer installer." >&2
     exit 2
   fi
   installer_message \
-    "检测到已有 Remote Mic.app；安装器会以原子方式更新它。" \
-    "An existing Remote Mic.app was found and will be updated atomically."
+    "检测到已有 SayAll.app；安装器会以原子方式更新它。" \
+    "An existing SayAll.app was found and will be updated atomically."
 fi
 
-if [[ -e "$LEGACY_APP_DESTINATION" || -L "$LEGACY_APP_DESTINATION" ]]; then
-  if [[ -f "$LEGACY_APP_PLIST" ]] && \
-     [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$LEGACY_APP_PLIST" 2>/dev/null || true)" == "com.hd838a.RemoteMic" ]]; then
-    /usr/bin/pkill -x RemoteMic 2>/dev/null || true
-    /bin/rm -rf -- "$LEGACY_APP_DESTINATION"
+check_legacy_app() {
+  local legacy_path="$1"
+  local legacy_plist="$2"
+  local legacy_label="$3"
+  if [[ ! -e "$legacy_path" && ! -L "$legacy_path" ]]; then
+    return
+  fi
+  if [[ -f "$legacy_plist" ]] && \
+     [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$legacy_plist" 2>/dev/null || true)" == "com.hd838a.RemoteMic" ]]; then
+    local installed_build
+    installed_build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$legacy_plist" 2>/dev/null || true)"
+    if [[ "$installed_build" == <-> && "$installed_build" -gt "$PACKAGE_BUILD" ]]; then
+      installer_message \
+        "未安装：旧路径中的 $legacy_label 构建号 $installed_build 高于此测试包的构建号 $PACKAGE_BUILD。" \
+        "Installation stopped: the legacy $legacy_label build $installed_build is newer than this test package build $PACKAGE_BUILD." >&2
+      installer_message \
+        "现有应用已完整保留。请改用更新的安装包。" \
+        "The existing app was left intact. Use a newer installer." >&2
+      exit 2
+    fi
     installer_message \
-      "已移除旧版“无线麦.app”，准备安装新版本。" \
-      "Removed the legacy Remote Mic app before installing the new version."
+      "检测到旧路径中的 $legacy_label；成功安装 SayAll.app 后再安全迁移。" \
+      "The legacy $legacy_label was found and will be migrated only after SayAll.app is installed successfully."
   else
     installer_message \
-      "旧中文应用路径不属于 Remote Mic，安装器将保留它不作处理。" \
-      "The legacy Chinese app path does not belong to Remote Mic and will be left untouched."
+      "旧路径中的 $legacy_label 不属于无线麦SayAll.app，安装器将保留它不作处理。" \
+      "The legacy $legacy_label path does not belong to SayAll and will be left untouched."
   fi
-fi
+}
+
+check_legacy_app \
+  "$LEGACY_REMOTE_MIC_APP_DESTINATION" \
+  "$LEGACY_REMOTE_MIC_APP_PLIST" \
+  "Remote Mic.app"
+check_legacy_app \
+  "$LEGACY_CHINESE_APP_DESTINATION" \
+  "$LEGACY_CHINESE_APP_PLIST" \
+  "无线麦.app"

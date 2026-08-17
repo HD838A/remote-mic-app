@@ -7,7 +7,7 @@ if [[ "$#" -gt 1 ]]; then
   print -u2 "usage: $0 [APP]"
   exit 1
 fi
-APP="${1:-$RELEASE_OUTPUT_DIR/Remote Mic.app}"
+APP="${1:-$RELEASE_OUTPUT_DIR/SayAll.app}"
 PLIST="$APP/Contents/Info.plist"
 BINARY="$APP/Contents/MacOS/RemoteMic"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
@@ -78,6 +78,14 @@ if (( ${#LOCALIZATION_DIRS} == 0 )); then
 fi
 test -d "$APP/Contents/Resources/en.lproj"
 test -f "$APP/Contents/Resources/en.lproj/Glossary.md"
+rg -q '^"CFBundleDisplayName" = "SayAll";$' \
+  "$APP/Contents/Resources/en.lproj/InfoPlist.strings"
+rg -q '^"CFBundleName" = "SayAll";$' \
+  "$APP/Contents/Resources/en.lproj/InfoPlist.strings"
+rg -q '^"CFBundleDisplayName" = "无线麦";$' \
+  "$APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
+rg -q '^"CFBundleName" = "无线麦";$' \
+  "$APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
 for RESOURCE_DIR in "${LOCALIZATION_DIRS[@]}"; do
   test -f "$RESOURCE_DIR/InfoPlist.strings"
   test -f "$RESOURCE_DIR/Localizable.strings"
@@ -132,7 +140,10 @@ test "$(plutil -extract LSUIElement raw -o - "$PLIST")" = "true"
 test "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = \
   "$RELEASE_MIN_SYSTEM_VERSION"
 test "$(plutil -extract CFBundleDevelopmentRegion raw -o - "$PLIST")" = "en"
+test "${APP:t}" = "SayAll.app"
 test "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "SayAll"
+test "$(plutil -extract CFBundleName raw -o - "$PLIST")" = "SayAll"
+test "$(plutil -extract CFBundleExecutable raw -o - "$PLIST")" = "RemoteMic"
 test "$(plutil -extract CFBundleIconFile raw -o - "$PLIST")" = "AppIcon"
 test -n "$(plutil -extract NSBluetoothAlwaysUsageDescription raw -o - "$PLIST")"
 test "$(plutil -extract SUFeedURL raw -o - "$PLIST")" = "$RELEASE_FEED_URL"

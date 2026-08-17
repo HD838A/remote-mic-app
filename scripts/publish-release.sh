@@ -16,7 +16,7 @@ REQUESTED_RELEASE_TAG="${RELEASE_TAG:-}"
 VERSION="$PLIST_VERSION"
 BUILD="$PLIST_BUILD"
 
-APP="$OUTPUT_DIR/Remote Mic.app"
+APP="$OUTPUT_DIR/SayAll.app"
 INSTALL_PACKAGE="$OUTPUT_DIR/Install Remote Mic.pkg"
 UNINSTALL_PACKAGE="$OUTPUT_DIR/Uninstall Remote Mic.pkg"
 DMG="$OUTPUT_DIR/Remote-Mic-$VERSION.dmg"
@@ -106,9 +106,9 @@ verify_update_zip() {
   /bin/mkdir -p "$extract_dir"
   /usr/bin/ditto -x -k "$archive" "$extract_dir"
   if [[ "$variant" == "intel" ]]; then
-    RELEASE_VARIANT=intel "$ROOT/scripts/verify-app.sh" "$extract_dir/Remote Mic.app"
+    RELEASE_VARIANT=intel "$ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
   else
-    "$ROOT/scripts/verify-app.sh" "$extract_dir/Remote Mic.app"
+    "$ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
   fi
 }
 

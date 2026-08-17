@@ -90,14 +90,14 @@ The older `1.4.2` / `1.4.3` installer PKGs changed every regular file in the app
 The preferred recovery is to download the latest DMG for the Mac architecture, mount it, and run its single install PKG. The Release no longer uploads the same Installer PKG again as a standalone asset; remote-management scripts should read the signed and notarized installer from the DMG. If only a remote shell is available, you can also repair the permissions directly:
 
     sudo chmod 755 \
-      "/Applications/Remote Mic.app/Contents/MacOS/RemoteMic" \
-      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" \
-      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
-      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater" \
-      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
-      "/Applications/Remote Mic.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
+      "/Applications/SayAll.app/Contents/MacOS/RemoteMic" \
+      "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" \
+      "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
+      "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater" \
+      "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
+      "/Applications/SayAll.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
 
-    codesign --verify --deep --strict "/Applications/Remote Mic.app"
+    codesign --verify --deep --strict "/Applications/SayAll.app"
 
 Remote repair does not require physical access to the Mac. Sparkle's installation confirmation UI does require an unlocked graphical session, however. Fetching the appcast successfully while the screen is locked proves only that the feed is reachable; it is not proof of a completed upgrade.
 

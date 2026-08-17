@@ -43,7 +43,7 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 必须使用最终 Developer ID 签名、公证并 staple 的候选产物完成以下交叉检查，不能用 ad-hoc 包替代：
 
 1. 在 Apple Silicon Mac 上打开 `Install Remote Mic Intel.pkg`。预期 Installer 在进入安装步骤前显示“此安装包仅适用于 Intel Mac”，并提示下载文件名不带 `Intel` 的 Apple Silicon 版本。
-2. 关闭错误提示，确认没有请求管理员密码，没有改动 `/Applications/Remote Mic.app`，也没有新增或替换 `/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver`。
+2. 关闭错误提示，确认没有请求管理员密码，没有改动 `/Applications/SayAll.app` 或旧版 `/Applications/Remote Mic.app`、`/Applications/无线麦.app`，也没有新增或替换 `/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver`。
 3. 在同一台 Mac 打开 `Install Remote Mic.pkg`。预期能够进入正常安装流程。
 4. 在真实 Intel Ventura Mac 上打开 `Install Remote Mic.pkg`。预期 Installer 在进入安装步骤前显示“此安装包仅适用于 Apple 芯片 Mac”，并提示下载文件名带 `Intel` 的版本。
 5. 关闭错误提示并确认 App、驱动均未变化；随后打开 `Install Remote Mic Intel.pkg`，确认能够进入正常安装流程。

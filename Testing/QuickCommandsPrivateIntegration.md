@@ -23,11 +23,11 @@ REQUIRE_EARLY_ACCESS_CONFIGURATION=1 \
 ./scripts/build-app.sh
 ```
 
-构建结果位于 `dist/Remote Mic.app`。使用以下命令检查资源包、包含标记和签名结构：
+构建结果位于 `dist/SayAll.app`。使用以下命令检查资源包、包含标记和签名结构：
 
 ```bash
 REQUIRE_SAYALL_MACRO_PLATFORM=1 \
-./scripts/verify-app.sh "dist/Remote Mic.app"
+./scripts/verify-app.sh "dist/SayAll.app"
 ```
 
 验证最终 ZIP 时必须先临时挪开同版本 `/private/tmp/remote-mic-swiftpm/<版本>-<Build>` 构建缓存，再从全新目录解压并打开设置窗口；否则 SwiftPM 生成的绝对构建路径可能掩盖安装包资源错误。验证结束后恢复原缓存目录。
@@ -151,7 +151,7 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 
 ### 用例六：覆盖已安装版本
 
-步骤：记录 `/Applications/Remote Mic.app` 当前版本和 Build；确认测试包的 Build 更高；从最终 DMG 运行图形化 Installer。
+步骤：记录 `/Applications/SayAll.app` 当前版本和 Build；如果仍存在旧 `/Applications/Remote Mic.app` 或 `/Applications/无线麦.app` 也一并记录；确认测试包的 Build 更高；从最终 DMG 运行图形化 Installer。
 
 预期：Installer 成功；App 被原子更新为测试包版本；MiRemoteV 2ch 健康时不重复替换；App 能自动或手动启动；用户设置仍保留。
 

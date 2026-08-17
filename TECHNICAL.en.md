@@ -74,10 +74,10 @@ The release device is MiRemoteV 2ch with UID MiRemoteV2ch_UID. It coexists with 
 
 The install PKG payload contains:
 
-- /Applications/Remote Mic.app
+- /Applications/SayAll.app
 - /Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver
 
-Install scripts verify architecture, minimum system version, and code signature, restart Core Audio, and launch the app for the active desktop user. If /Applications/无线麦.app exists, it is deleted only after its Info.plist confirms the Remote Mic bundle identifier; unrecognized content is not touched. The uninstall PKG removes only MiRemoteV2ch.driver and restarts Core Audio.
+Install scripts verify architecture, minimum system version, and code signature, restart Core Audio, and launch the app for the active desktop user. Legacy `/Applications/Remote Mic.app` and `/Applications/无线麦.app` bundles are moved to the target volume's macOS Trash only after the new SayAll.app is verified and each legacy Info.plist confirms the `com.hd838a.RemoteMic` bundle identifier. Collision-safe Trash names keep the old bundles recoverable; unavailable Trash or unrecognized content leaves the old path untouched. The uninstall PKG removes only MiRemoteV2ch.driver and restarts Core Audio.
 
 ## HID and button mapping
 
@@ -150,7 +150,7 @@ Full release build:
 
 build-dmg.sh builds and verifies the app, driver, install PKG, and uninstall PKG in sequence. It produces:
 
-- dist/Remote Mic.app
+- dist/SayAll.app
 - dist/MiRemoteV2ch.driver
 - dist/Install Remote Mic.pkg
 - dist/Uninstall Remote Mic.pkg

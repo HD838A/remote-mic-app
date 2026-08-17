@@ -467,7 +467,7 @@ struct BuildSigningTests {
         #expect(preinstallSource.contains("Download the Apple Silicon version"))
         #expect(!preinstallSource.contains("/bin/rm -rf -- \"$APP_DESTINATION\""))
         #expect(preinstallSource.contains("will be updated atomically"))
-        #expect(packageVerifierSource.contains("preinstall must not delete an existing Remote Mic.app"))
+        #expect(packageVerifierSource.contains("preinstall must not delete an existing SayAll.app"))
         #expect(preinstallSource.contains("INSTALLED_BUILD="))
         #expect(preinstallSource.contains("The existing app was left intact. Use a newer installer."))
         #expect(packageVerifierSource.contains("PackageBuild raw"))
@@ -529,6 +529,92 @@ struct BuildSigningTests {
         #expect(postinstallSource.contains("was kept in place"))
         #expect(!postinstallSource.contains("/usr/bin/lipo"))
         #expect(!postinstallSource.contains("xcrun"))
+    }
+
+    @Test func releaseBundleNameMatchesBrandingAndInstallerPaths() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        func source(_ path: String) throws -> String {
+            try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        }
+
+        let buildSource = try source("scripts/build-app.sh")
+        let runSource = try source("script/build_and_run.sh")
+        let notarizeSource = try source("scripts/notarize-release.sh")
+        let dmgSource = try source("scripts/build-dmg.sh")
+        let dmgVerifierSource = try source("scripts/verify-dmg.sh")
+        let packageSource = try source("scripts/build-doubao-driver-pkg.sh")
+        let packageVerifierSource = try source("scripts/verify-doubao-driver-pkg.sh")
+        let appVerifierSource = try source("scripts/verify-app.sh")
+        let publishSource = try source("scripts/publish-release.sh")
+        let preinstallSource = try source("packaging/doubao-driver/install/preinstall")
+        let postinstallSource = try source("packaging/doubao-driver/install/postinstall")
+        let trashHelperSource = try source(
+            "packaging/doubao-driver/install/trash-legacy-app.zsh"
+        )
+        let trashMigrationTest = root.appendingPathComponent(
+            "scripts/test-legacy-app-trash-migration.sh"
+        )
+        let infoPlist = try #require(
+            NSDictionary(contentsOf: root.appendingPathComponent("Resources/Info.plist"))
+        )
+        let englishInfo = try source("Resources/en.lproj/InfoPlist.strings")
+        let chineseInfo = try source("Resources/zh-Hans.lproj/InfoPlist.strings")
+
+        #expect(buildSource.contains("DISPLAY_NAME=\"SayAll\""))
+        #expect(runSource.contains("dist/SayAll.app"))
+        #expect(notarizeSource.contains("DISPLAY_NAME=\"SayAll\""))
+        #expect(notarizeSource.contains("ditto -c -k --keepParent \"$APP\" \"$UPDATE_ZIP\""))
+        #expect(dmgSource.contains("DISPLAY_NAME=\"SayAll\""))
+        #expect(dmgVerifierSource.contains("DISPLAY_NAME=\"SayAll\""))
+        #expect(packageSource.contains("APP=\"$OUTPUT_DIR/SayAll.app\""))
+        #expect(packageSource.contains("$PAYLOAD_ROOT/Applications/SayAll.app"))
+        #expect(packageVerifierSource.contains("./Applications/SayAll.app/Contents/Info.plist"))
+        #expect(packageVerifierSource.contains("*/Applications/SayAll.app"))
+        #expect(appVerifierSource.contains("test \"${APP:t}\" = \"SayAll.app\""))
+        #expect(appVerifierSource.contains("CFBundleName raw"))
+        #expect(publishSource.contains("$extract_dir/SayAll.app"))
+        #expect(publishSource.contains("Remote-Mic-$VERSION.zip"))
+
+        #expect(preinstallSource.contains("Applications/SayAll.app"))
+        #expect(preinstallSource.contains("Applications/Remote Mic.app"))
+        #expect(preinstallSource.contains("Applications/无线麦.app"))
+        #expect(!preinstallSource.contains("/bin/rm -rf -- \"$legacy_path\""))
+        #expect(postinstallSource.contains("move_legacy_app_to_trash_if_owned"))
+        #expect(postinstallSource.contains("LEGACY_APP_TRASH_ROOT"))
+        #expect(postinstallSource.contains("com.hd838a.RemoteMic"))
+        #expect(trashHelperSource.contains("/bin/mv -n -- \"$legacy_path\""))
+        #expect(trashHelperSource.contains("where it can be restored if needed"))
+        #expect(!trashHelperSource.contains("/bin/rm"))
+        let canonicalVerification = try #require(
+            postinstallSource.range(
+                of: "/usr/bin/codesign --verify --deep --strict \"$APP_DESTINATION\""
+            )
+        )
+        let legacyCleanupDefinition = try #require(
+            postinstallSource.range(of: "move_legacy_app_to_trash_if_owned")
+        )
+        #expect(canonicalVerification.lowerBound < legacyCleanupDefinition.lowerBound)
+
+        #expect(infoPlist["CFBundleDisplayName"] as? String == "SayAll")
+        #expect(infoPlist["CFBundleName"] as? String == "SayAll")
+        #expect(infoPlist["CFBundleExecutable"] as? String == "RemoteMic")
+        #expect(infoPlist["CFBundleIdentifier"] as? String == "com.hd838a.RemoteMic")
+        #expect(englishInfo.contains("\"CFBundleDisplayName\" = \"SayAll\";"))
+        #expect(englishInfo.contains("\"CFBundleName\" = \"SayAll\";"))
+        #expect(chineseInfo.contains("\"CFBundleDisplayName\" = \"无线麦\";"))
+        #expect(chineseInfo.contains("\"CFBundleName\" = \"无线麦\";"))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [trashMigrationTest.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
     }
 
     @Test func stablePromotionRequiresMainAndCandidateProvenance() throws {
