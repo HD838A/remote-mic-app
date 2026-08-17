@@ -391,9 +391,15 @@ final class HIDRemoteMonitor {
                 .longPress
             )
             let preflightAction = settings.action(for: button, profileID: preflightProfileID)
+            let preflightHasOverrideSingleClick = hasOverrideBinding(
+                preflightProfileID,
+                button,
+                .singleClick
+            )
             let usesNativePassthrough = preflightProfileID != nil && shouldUseNativePassthrough(
                 button: button,
                 action: preflightAction,
+                hasOverrideSingleClick: preflightHasOverrideSingleClick,
                 recognizesDoubleClick: preflightRecognizesDoubleClick,
                 recognizesLongPress: preflightRecognizesLongPress
             )
@@ -518,10 +524,12 @@ final class HIDRemoteMonitor {
     private func shouldUseNativePassthrough(
         button: RemoteButton,
         action: ButtonAction,
+        hasOverrideSingleClick: Bool,
         recognizesDoubleClick: Bool,
         recognizesLongPress: Bool
     ) -> Bool {
         guard !activeDeviceIsSeized,
+              !hasOverrideSingleClick,
               !recognizesDoubleClick,
               !recognizesLongPress,
               frontmostBundleIdentifier() != PresetApplication.remoteMic.bundleIdentifier

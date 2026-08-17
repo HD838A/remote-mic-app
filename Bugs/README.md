@@ -92,6 +92,7 @@
 | 2026-08-16 | [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md) | 第二次修复完成，等待下一次真实受保护工作流验证 |
 | 2026-08-16 | [发布阶段 heartbeat 与 timeout 同时到期导致 CI 偶发失败](./2026-08-16-release-stage-heartbeat-timeout-flake.md) | 已修复，自动化验证通过 |
 | 2026-08-17 | [键位方案回车、自动切换状态与方向键 Fn](./2026-08-17-button-profile-wizard-mode-and-arrow-fn.md) | 候选修复完成，等待真实 Chrome 与实体遥控器验收 |
+| 2026-08-18 | [键位方案快捷键录入与左右键路由](./2026-08-18-button-profile-shortcut-capture-and-arrow-routing.md) | 候选修复完成，等待真实 Chrome 与实体遥控器验收 |
 
 ## 记录模板
 

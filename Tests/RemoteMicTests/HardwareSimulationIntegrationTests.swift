@@ -335,6 +335,61 @@ struct HardwareSimulationIntegrationTests {
     }
 
     @Test(arguments: [XiaomiVoiceRemoteButton.left, .right])
+    func monitoredDirectionsPreferPrivateSingleClickBindingsOverNativePassthrough(
+        _ simulatedButton: XiaomiVoiceRemoteButton
+    ) throws {
+        let button = try #require(RemoteButton(rawValue: simulatedButton.rawValue))
+        let action: ButtonAction = button == .left ? .arrowLeft : .arrowRight
+        let suiteName = "HardwareSimulationIntegrationTests.privateDirection.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(action, for: button, trigger: .singleClick)
+        settings.setAction(.disabled, for: button, trigger: .doubleClick)
+        settings.setAction(.disabled, for: button, trigger: .longPress)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = TestHIDRemoteScheduler()
+        var privateEvents: [(RemoteButton, ButtonTrigger)] = []
+        var publicActionCount = 0
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in
+                publicActionCount += 1
+                return true
+            },
+            overrideActionPerformer: { _, button, trigger in
+                privateEvents.append((button, trigger))
+                return true
+            },
+            hasOverrideBinding: { _, candidateButton, trigger in
+                candidateButton == button && trigger == .singleClick
+            },
+            frontmostBundleIdentifier: { PresetApplication.chrome.bundleIdentifier }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "private-direction",
+            profileID: profileID,
+            isSeized: false
+        )
+        let press = simulatedButton.report
+        let release = Data(repeating: 0, count: press.data.count)
+
+        monitor.handleSimulatedReport(reportID: press.reportID, data: press.data)
+        monitor.handleSimulatedReport(reportID: press.reportID, data: release)
+
+        #expect(privateEvents.count == 1)
+        #expect(privateEvents.first?.0 == button)
+        #expect(privateEvents.first?.1 == .singleClick)
+        #expect(publicActionCount == 0)
+        #expect(scheduler.pendingTaskCount == 0)
+    }
+
+    @Test(arguments: [XiaomiVoiceRemoteButton.left, .right])
     func monitoredDirectionsKeepCustomRepeatWithoutLeavingNativeKeysSuppressed(
         _ simulatedButton: XiaomiVoiceRemoteButton
     ) throws {
