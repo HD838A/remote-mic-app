@@ -51,12 +51,13 @@ enum OnboardingScreenshotRenderer {
     private static let pages: [(OnboardingStep, String)] = [
         (.welcome, "01-welcome.png"),
         (.voiceTool, "02-voice-tool.png"),
-        (.permissions, "03-permissions.png"),
-        (.remote, "04-remote.png"),
-        (.audio, "05-audio.png"),
-        (.voiceTest, "06-voice-test.png"),
-        (.controls, "07-controls.png"),
-        (.complete, "08-complete.png"),
+        (.controlMethod, "03-control-method.png"),
+        (.permissions, "04-permissions.png"),
+        (.remote, "05-remote.png"),
+        (.audio, "06-audio.png"),
+        (.voiceTest, "07-voice-test.png"),
+        (.controls, "08-controls.png"),
+        (.complete, "09-complete.png"),
     ]
 
     static func renderAll(to outputDirectory: URL, appearanceName: String?) throws {
@@ -80,10 +81,14 @@ enum OnboardingScreenshotRenderer {
         let requestedGuideStep = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"
         ].flatMap(Int.init) ?? 0
+        let requestedControlMethod = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD"
+        ].flatMap(OnboardingControlMethod.init(rawValue:))
         let systemFunctionKeyAvailable = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"
         ].map { $0 != "0" } ?? true
         settings.setOnboardingVoiceTool(requestedVoiceTool ?? .doubao)
+        settings.setOnboardingControlMethod(requestedControlMethod ?? .physicalRemote)
         let screenshotAudioDevices = [
             AudioDeviceInfo(id: 1, uid: DoubaoAudioDevicePolicy.deviceUID, name: "MiRemoteV 2ch"),
             AudioDeviceInfo(id: 2, uid: "BlackHole2ch_UID", name: "BlackHole 2ch"),

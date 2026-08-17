@@ -7,7 +7,8 @@ struct OnboardingFlowTests {
     @Test func navigationOrderIsStableAndGroupedIntoThreePhases() {
         #expect(OnboardingStep.welcome.previous == nil)
         #expect(OnboardingStep.welcome.next == .voiceTool)
-        #expect(OnboardingStep.voiceTool.next == .permissions)
+        #expect(OnboardingStep.voiceTool.next == .controlMethod)
+        #expect(OnboardingStep.controlMethod.next == .permissions)
         #expect(OnboardingStep.permissions.next == .remote)
         #expect(OnboardingStep.remote.next == .audio)
         #expect(OnboardingStep.audio.next == .voiceTest)
@@ -16,8 +17,54 @@ struct OnboardingFlowTests {
         #expect(OnboardingStep.complete.next == nil)
 
         #expect(OnboardingPhase.phase(for: .welcome) == .prepare)
+        #expect(OnboardingPhase.phase(for: .controlMethod) == .prepare)
         #expect(OnboardingPhase.phase(for: .permissions) == .setup)
         #expect(OnboardingPhase.phase(for: .complete) == .tryIt)
+    }
+
+    @Test func iPhoneAndWebPathsDoNotRequireBluetoothHardwarePermissions() {
+        var capabilities = OnboardingCapabilities(
+            inputMonitoringGranted: false,
+            accessibilityGranted: true,
+            remoteConnected: true,
+            remoteButtonObserved: true
+        )
+
+        for method in [OnboardingControlMethod.iPhoneApp, .webRemote] {
+            #expect(OnboardingFlowPolicy.canContinue(
+                from: .controlMethod,
+                voiceTool: .typeless,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+            #expect(OnboardingFlowPolicy.canContinue(
+                from: .permissions,
+                voiceTool: .typeless,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+            #expect(OnboardingFlowPolicy.canContinue(
+                from: .remote,
+                voiceTool: .typeless,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+        }
+
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .permissions,
+            voiceTool: .typeless,
+            controlMethod: .physicalRemote,
+            capabilities: capabilities
+        ))
+        capabilities.bluetoothGranted = true
+        capabilities.inputMonitoringGranted = true
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .permissions,
+            voiceTool: .typeless,
+            controlMethod: .physicalRemote,
+            capabilities: capabilities
+        ))
     }
 
     @Test func everyRequiredCapabilityBlocksItsStepUntilVerified() {
@@ -212,8 +259,57 @@ struct OnboardingFlowTests {
         ))
         #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"))
         #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"))
+        #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD"))
+        #expect(rendererSource.contains("03-control-method.png"))
+        #expect(rendererSource.contains("09-complete.png"))
         #expect(buildSource.contains("$ROOT/Resources/Onboarding"))
         #expect(verifySource.contains("Resources/Onboarding/*.png(N)"))
+    }
+
+    @Test func mobileControlPathsPublishButtonsAndVoiceSamplesForTheSharedGates() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(modelSource.contains(
+            "@Published private(set) var lastMobileRemoteButtonObservation"
+        ))
+        #expect(modelSource.contains(
+            "@Published private(set) var activeVoiceSource: UsageEventSource?"
+        ))
+        #expect(modelSource.components(separatedBy: "observeMobileButton(").count >= 7)
+
+        let audioStart = try #require(modelSource.range(
+            of: "private func receivePhoneAudio"
+        ))
+        let audioEnd = try #require(modelSource.range(
+            of: "private func beginVoiceSessionIfNeeded",
+            range: audioStart.upperBound..<modelSource.endIndex
+        ))
+        let audioSource = modelSource[audioStart.lowerBound..<audioEnd.lowerBound]
+        #expect(audioSource.contains("currentVoiceSampleCount &+= UInt64(samples.count)"))
+
+        #expect(viewSource.contains(
+            ".onReceive(model.$lastMobileRemoteButtonObservation.compactMap { $0 })"
+        ))
+        #expect(viewSource.contains("source == .nearbyPhone"))
+        #expect(viewSource.contains("source == .webRemote"))
+        #expect(viewSource.contains("selectedControlAcceptsVoice(model.activeVoiceSource)"))
+        #expect(viewSource.contains("source == .bluetoothRemote"))
+        #expect(viewSource.contains(
+            "settings.onboardingControlMethod == .physicalRemote"
+        ))
+        #expect(viewSource.contains("model.isPhoneRemoteConnected"))
+        #expect(viewSource.contains("if case .connected = model.webRemoteState"))
     }
 
     @Test func observedRemoteButtonRequestsOnlyOneRecoveryWhileBluetoothIsDisconnected() {
@@ -291,8 +387,18 @@ struct OnboardingFlowTests {
             range: activeStart.upperBound..<viewSource.endIndex
         ))
         let activeSource = viewSource[activeStart.lowerBound..<activeEnd.lowerBound]
-        #expect(activeSource.contains("model.refreshRemoteDiscovery()"))
-        #expect(activeSource.contains("model.applyHIDSettings()"))
+        #expect(activeSource.contains("prepareSelectedControlConnection()"))
+
+        let prepareStart = try #require(viewSource.range(
+            of: "private func prepareSelectedControlConnection()"
+        ))
+        let prepareEnd = try #require(viewSource.range(
+            of: "private func selectedControlAccepts",
+            range: prepareStart.upperBound..<viewSource.endIndex
+        ))
+        let prepareSource = viewSource[prepareStart.lowerBound..<prepareEnd.lowerBound]
+        #expect(prepareSource.contains("model.refreshRemoteDiscovery()"))
+        #expect(prepareSource.contains("model.applyHIDSettings()"))
 
         let modelSource = try String(
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
@@ -327,7 +433,7 @@ struct OnboardingFlowTests {
         #expect(activeSource.contains("case .audio:"))
         #expect(activeSource.contains("model.refreshAudioDevices()"))
         #expect(activeSource.contains("case .complete:"))
-        #expect(activeSource.contains("model.refreshRemoteDiscovery()"))
+        #expect(activeSource.contains("prepareSelectedControlConnection()"))
     }
 
     @Test func remoteStepExposesHIDStatusAndRoutesOneRecoveryActionToExistingRuntime() throws {
@@ -434,13 +540,16 @@ struct OnboardingFlowTests {
         #expect(!settings.isOnboardingComplete)
         #expect(settings.onboardingStep == .welcome)
         #expect(settings.onboardingVoiceTool == .unselected)
+        #expect(settings.onboardingControlMethod == .unselected)
 
         settings.setOnboardingVoiceTool(.doubao)
+        settings.setOnboardingControlMethod(.iPhoneApp)
         settings.setOnboardingStep(.audio)
 
         let resumed = AppSettings(defaults: defaults)
         #expect(resumed.onboardingStep == .audio)
         #expect(resumed.onboardingVoiceTool == .doubao)
+        #expect(resumed.onboardingControlMethod == .iPhoneApp)
         #expect(!resumed.isOnboardingComplete)
 
         resumed.completeOnboarding()
@@ -449,6 +558,7 @@ struct OnboardingFlowTests {
         #expect(completed.onboardingCompletedVersion == AppSettings.currentOnboardingVersion)
         #expect(completed.onboardingStep == .complete)
         #expect(completed.onboardingVoiceTool == .doubao)
+        #expect(completed.onboardingControlMethod == .iPhoneApp)
 
         completed.selectedAudioDeviceUID = "MiRemoteV 2ch"
         completed.customMappingEnabled = true
@@ -462,6 +572,7 @@ struct OnboardingFlowTests {
         #expect(!restarted.isOnboardingComplete)
         #expect(restarted.onboardingStep == .welcome)
         #expect(restarted.onboardingVoiceTool == .unselected)
+        #expect(restarted.onboardingControlMethod == .unselected)
         #expect(restarted.selectedAudioDeviceUID == "MiRemoteV 2ch")
         #expect(restarted.customMappingEnabled)
         #expect(!restarted.showDockIcon)
@@ -554,6 +665,10 @@ struct OnboardingFlowTests {
         #expect(!OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: false,
             step: .voiceTool
+        ))
+        #expect(!OnboardingLaunchPolicy.shouldStartRuntime(
+            isComplete: false,
+            step: .controlMethod
         ))
         #expect(OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: false,

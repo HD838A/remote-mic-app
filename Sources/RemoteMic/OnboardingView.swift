@@ -1,6 +1,9 @@
 import AppKit
 import Combine
 import CoreBluetooth
+import CoreImage
+import CoreImage.CIFilterBuiltins
+import SayAllMacRemoteCore
 import SwiftUI
 
 private struct OnboardingInputMethodGuideStep: Identifiable {
@@ -91,19 +94,19 @@ struct OnboardingView: View {
                 switchToSelectedInputMethod()
                 refreshSystemFunctionKeyUsage()
             case .remote:
-                model.refreshRemoteDiscovery()
-                model.applyHIDSettings()
+                prepareSelectedControlConnection()
             case .audio:
                 model.refreshAudioDevices()
             case .complete:
-                model.refreshRemoteDiscovery()
+                prepareSelectedControlConnection()
                 model.refreshAudioDevices()
             default:
                 break
             }
         }
         .onReceive(model.$activeRemoteButtons) { buttons in
-            guard !buttons.isEmpty else { return }
+            guard settings.onboardingControlMethod == .physicalRemote,
+                  !buttons.isEmpty else { return }
             if settings.onboardingStep == .remote {
                 observedRemoteButtons.formUnion(buttons)
                 recoverRemoteConnectionIfNeeded()
@@ -112,6 +115,7 @@ struct OnboardingView: View {
             }
         }
         .onReceive(model.$lastRemoteButtonPress.compactMap { $0 }) { button in
+            guard settings.onboardingControlMethod == .physicalRemote else { return }
             if settings.onboardingStep == .remote {
                 observedRemoteButtons.insert(button)
                 recoverRemoteConnectionIfNeeded()
@@ -119,8 +123,17 @@ struct OnboardingView: View {
                 testedControlButtons.insert(button)
             }
         }
+        .onReceive(model.$lastMobileRemoteButtonObservation.compactMap { $0 }) { observation in
+            guard selectedControlAccepts(observation.source) else { return }
+            if settings.onboardingStep == .remote {
+                observedRemoteButtons.insert(observation.button)
+            } else if settings.onboardingStep == .controls {
+                testedControlButtons.insert(observation.button)
+            }
+        }
         .onReceive(model.$isStreaming) { isStreaming in
-            guard settings.onboardingStep == .voiceTest else { return }
+            guard settings.onboardingStep == .voiceTest,
+                  selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
             if isStreaming {
                 voiceSessionStarted = true
             } else if voiceSessionStarted {
@@ -128,7 +141,9 @@ struct OnboardingView: View {
             }
         }
         .onReceive(model.$currentVoiceSampleCount) { sampleCount in
-            guard settings.onboardingStep == .voiceTest, sampleCount > 0 else { return }
+            guard settings.onboardingStep == .voiceTest,
+                  sampleCount > 0,
+                  selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
             voiceSamplesReceived = true
         }
         .onChange(of: settings.onboardingStep) { step in
@@ -227,6 +242,8 @@ struct OnboardingView: View {
             welcomeContent
         case .voiceTool:
             voiceToolContent
+        case .controlMethod:
+            controlMethodContent
         case .permissions:
             permissionsContent
         case .remote:
@@ -313,6 +330,89 @@ struct OnboardingView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(
                                     settings.onboardingVoiceTool == tool
+                                        ? Color.accentColor.opacity(0.65)
+                                        : Color.primary.opacity(0.08),
+                                    lineWidth: 1
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var controlMethodContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            onboardingTitle("onboarding.control_method.title")
+            Text("onboarding.control_method.detail")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 10) {
+                ForEach([
+                    OnboardingControlMethod.physicalRemote,
+                    .iPhoneApp,
+                    .webRemote,
+                ]) { method in
+                    Button {
+                        selectControlMethod(method)
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: controlMethodIcon(method))
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 38, height: 38)
+                                .background(
+                                    Color.accentColor.opacity(0.10),
+                                    in: RoundedRectangle(cornerRadius: 10)
+                                )
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 8) {
+                                    Text(localization.text(method.titleKey))
+                                        .font(.system(size: 15, weight: .semibold))
+                                    if method == .iPhoneApp {
+                                        Text("onboarding.control_method.recommended")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(Color.accentColor)
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Color.accentColor.opacity(0.10),
+                                                in: Capsule()
+                                            )
+                                    }
+                                }
+                                Text(localization.text(method.detailKey))
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 10)
+                            Image(systemName: settings.onboardingControlMethod == method
+                                ? "checkmark.circle.fill"
+                                : "circle")
+                                .font(.system(size: 18))
+                                .foregroundStyle(
+                                    settings.onboardingControlMethod == method
+                                        ? Color.accentColor
+                                        : Color.secondary
+                                )
+                        }
+                        .padding(13)
+                        .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+                        .background(
+                            settings.onboardingControlMethod == method
+                                ? Color.accentColor.opacity(0.09)
+                                : Color.primary.opacity(0.035),
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(
+                                    settings.onboardingControlMethod == method
                                         ? Color.accentColor.opacity(0.65)
                                         : Color.primary.opacity(0.08),
                                     lineWidth: 1
@@ -504,18 +604,22 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 10) {
-                permissionRow(
-                    icon: "antenna.radiowaves.left.and.right",
-                    titleKey: "permission.bluetooth.title",
-                    detailKey: "onboarding.permissions.bluetooth.detail",
-                    granted: bluetoothAuthorization == .allowedAlways
-                )
-                permissionRow(
-                    icon: "keyboard",
-                    titleKey: "permission.input_monitoring.title",
-                    detailKey: "onboarding.permissions.input.detail",
-                    granted: inputMonitoringGranted
-                )
+                if settings.onboardingControlMethod.requiresBluetoothPermission {
+                    permissionRow(
+                        icon: "antenna.radiowaves.left.and.right",
+                        titleKey: "permission.bluetooth.title",
+                        detailKey: "onboarding.permissions.bluetooth.detail",
+                        granted: bluetoothAuthorization == .allowedAlways
+                    )
+                }
+                if settings.onboardingControlMethod.requiresInputMonitoringPermission {
+                    permissionRow(
+                        icon: "keyboard",
+                        titleKey: "permission.input_monitoring.title",
+                        detailKey: "onboarding.permissions.input.detail",
+                        granted: inputMonitoringGranted
+                    )
+                }
                 permissionRow(
                     icon: "hand.point.up.left",
                     titleKey: "permission.accessibility.title",
@@ -526,7 +630,21 @@ struct OnboardingView: View {
         }
     }
 
+    @ViewBuilder
     private var remoteContent: some View {
+        switch settings.onboardingControlMethod {
+        case .physicalRemote:
+            physicalRemoteContent
+        case .iPhoneApp:
+            iPhoneRemoteContent
+        case .webRemote:
+            webRemoteContent
+        case .unselected:
+            controlMethodContent
+        }
+    }
+
+    private var physicalRemoteContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             onboardingTitle("onboarding.remote.title")
             Text("onboarding.remote.detail")
@@ -591,6 +709,87 @@ struct OnboardingView: View {
                 openBluetoothSettingsButton
             }
         }
+    }
+
+    private var iPhoneRemoteContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            onboardingTitle("onboarding.iphone_remote.title")
+            Text("onboarding.iphone_remote.detail")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Link(destination: AppLinks.testFlightPublicBeta) {
+                Label("onboarding.iphone_remote.install", systemImage: "arrow.up.right.square")
+            }
+            .buttonStyle(.borderedProminent)
+
+            statusCard(
+                icon: model.isPhoneRemoteConnected
+                    ? "checkmark.circle.fill"
+                    : "iphone.radiowaves.left.and.right",
+                title: localization.text(
+                    model.isPhoneRemoteConnected
+                        ? "onboarding.iphone_remote.connected"
+                        : "onboarding.iphone_remote.waiting"
+                ),
+                detail: localization.text("onboarding.iphone_remote.connection_detail"),
+                isComplete: model.isPhoneRemoteConnected
+            )
+
+            controllerButtonStatusCard(
+                waitingDetailKey: "onboarding.iphone_remote.button_detail"
+            )
+        }
+    }
+
+    private var webRemoteContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            onboardingTitle("onboarding.web_remote.title")
+            Text("onboarding.web_remote.detail")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            statusCard(
+                icon: webRemoteConnected
+                    ? "checkmark.circle.fill"
+                    : "qrcode.viewfinder",
+                title: webRemoteConnectionTitle,
+                detail: localization.text("onboarding.web_remote.connection_detail"),
+                isComplete: webRemoteConnected
+            )
+
+            controllerButtonStatusCard(
+                waitingDetailKey: "onboarding.web_remote.button_detail"
+            )
+
+            if !model.webRemoteState.isEnabled {
+                Button("onboarding.web_remote.retry") {
+                    model.enableWebRemoteConnection()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private func controllerButtonStatusCard(waitingDetailKey: String) -> some View {
+        statusCard(
+            icon: observedRemoteButtons.isEmpty
+                ? "button.programmable"
+                : "checkmark.circle.fill",
+            title: localization.text(
+                observedRemoteButtons.isEmpty
+                    ? "onboarding.remote.button_waiting"
+                    : "onboarding.remote.button_received"
+            ),
+            detail: localization.text(
+                observedRemoteButtons.isEmpty
+                    ? waitingDetailKey
+                    : "onboarding.remote.button_detail"
+            ),
+            isComplete: !observedRemoteButtons.isEmpty
+        )
     }
 
     private var openBluetoothSettingsButton: some View {
@@ -859,10 +1058,12 @@ struct OnboardingView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else if settings.onboardingStep == .welcome || settings.onboardingStep == .voiceTool {
                 welcomeIllustration
+            } else if settings.onboardingStep == .controlMethod {
+                controlMethodIllustration
             } else if settings.onboardingStep == .complete {
                 completeIllustration
             } else {
-                remoteIllustration
+                selectedControlIllustration
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -901,6 +1102,95 @@ struct OnboardingView: View {
         .padding(28)
     }
 
+    private var controlMethodIllustration: some View {
+        VStack(spacing: 26) {
+            HStack(spacing: 34) {
+                Image(systemName: "appletvremote.gen4.fill")
+                Image(systemName: "iphone")
+                Image(systemName: "safari.fill")
+            }
+            .font(.system(size: 58, weight: .medium))
+            .foregroundStyle(Color.accentColor)
+            Text("onboarding.control_method.illustration")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var selectedControlIllustration: some View {
+        switch settings.onboardingControlMethod {
+        case .physicalRemote, .unselected:
+            remoteIllustration
+        case .iPhoneApp:
+            iPhoneRemoteIllustration
+        case .webRemote:
+            webRemoteIllustration
+        }
+    }
+
+    private var iPhoneRemoteIllustration: some View {
+        VStack(spacing: 24) {
+            Image(systemName: model.isPhoneRemoteConnected
+                ? "iphone.gen3.radiowaves.left.and.right"
+                : "iphone.gen3")
+                .font(.system(size: 150, weight: .light))
+                .foregroundStyle(
+                    model.isPhoneRemoteConnected ? Color.green : Color.accentColor
+                )
+            sideStatusPanel
+        }
+        .padding(28)
+    }
+
+    @ViewBuilder
+    private var webRemoteIllustration: some View {
+        VStack(spacing: 16) {
+            switch model.webRemoteState {
+            case let .waitingForPhone(joinURL, pairingCode, _),
+                 let .awaitingApproval(joinURL, pairingCode, _):
+                if let qrCode = webRemoteQRCode(for: joinURL) {
+                    Image(nsImage: qrCode)
+                        .interpolation(.none)
+                        .resizable()
+                        .frame(width: 250, height: 250)
+                        .padding(14)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                }
+                Text("onboarding.web_remote.scan")
+                    .font(.system(size: 15, weight: .semibold))
+                Text(pairingCode.map(String.init).joined(separator: " "))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color.orange)
+            case let .connected(deviceName):
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 96))
+                    .foregroundStyle(Color.green)
+                Text(deviceName)
+                    .font(.system(size: 16, weight: .semibold))
+            case .connecting:
+                ProgressView()
+                    .controlSize(.large)
+                Text("onboarding.web_remote.connecting")
+                    .font(.system(size: 15, weight: .semibold))
+            case .unavailable, .failed:
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 82))
+                    .foregroundStyle(Color.orange)
+                Text("onboarding.web_remote.unavailable")
+                    .font(.system(size: 15, weight: .semibold))
+            case .disabled:
+                Image(systemName: "qrcode.viewfinder")
+                    .font(.system(size: 100))
+                    .foregroundStyle(Color.accentColor)
+                Text("onboarding.web_remote.preparing")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            sideStatusPanel
+        }
+        .padding(28)
+    }
+
     private var completeIllustration: some View {
         VStack(spacing: 22) {
             ZStack {
@@ -921,13 +1211,26 @@ struct OnboardingView: View {
         switch settings.onboardingStep {
         case .permissions:
             sidePanel(titleKey: "onboarding.side.permissions") {
-                sideCheck("permission.bluetooth.title", isComplete: bluetoothAuthorization == .allowedAlways)
-                sideCheck("permission.input_monitoring.title", isComplete: inputMonitoringGranted)
+                if settings.onboardingControlMethod.requiresBluetoothPermission {
+                    sideCheck(
+                        "permission.bluetooth.title",
+                        isComplete: bluetoothAuthorization == .allowedAlways
+                    )
+                }
+                if settings.onboardingControlMethod.requiresInputMonitoringPermission {
+                    sideCheck(
+                        "permission.input_monitoring.title",
+                        isComplete: inputMonitoringGranted
+                    )
+                }
                 sideCheck("permission.accessibility.title", isComplete: accessibilityGranted)
             }
         case .remote:
             sidePanel(titleKey: "onboarding.side.remote") {
-                sideCheck("onboarding.side.remote_connected", isComplete: model.isConnected)
+                sideCheck(
+                    selectedControlConnectedKey,
+                    isComplete: selectedControlConnected
+                )
                 sideCheck("onboarding.side.button_received", isComplete: !observedRemoteButtons.isEmpty)
             }
         case .audio:
@@ -1090,7 +1393,7 @@ struct OnboardingView: View {
             bluetoothGranted: bluetoothAuthorization == .allowedAlways,
             inputMonitoringGranted: inputMonitoringGranted,
             accessibilityGranted: accessibilityGranted,
-            remoteConnected: model.isConnected,
+            remoteConnected: selectedControlConnected,
             remoteButtonObserved: !observedRemoteButtons.isEmpty,
             audioReady: model.isAudioOutputReady,
             audioOutputSelected: audioOutputSelected,
@@ -1110,6 +1413,7 @@ struct OnboardingView: View {
         return OnboardingFlowPolicy.canContinue(
             from: settings.onboardingStep,
             voiceTool: settings.onboardingVoiceTool,
+            controlMethod: settings.onboardingControlMethod,
             capabilities: capabilities
         )
     }
@@ -1117,6 +1421,7 @@ struct OnboardingView: View {
     private var diagnosticContext: FirstUseDiagnosticContext {
         FirstUseDiagnosticContext(
             step: settings.onboardingStep,
+            controlMethod: settings.onboardingControlMethod,
             capabilities: capabilities,
             hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty
         )
@@ -1154,6 +1459,52 @@ struct OnboardingView: View {
 
     private var transcriptionAppeared: Bool {
         !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var selectedControlConnected: Bool {
+        switch settings.onboardingControlMethod {
+        case .physicalRemote:
+            return model.isConnected
+        case .iPhoneApp:
+            return model.isPhoneRemoteConnected
+        case .webRemote:
+            return webRemoteConnected
+        case .unselected:
+            return false
+        }
+    }
+
+    private var webRemoteConnected: Bool {
+        if case .connected = model.webRemoteState { return true }
+        return false
+    }
+
+    private var webRemoteConnectionTitle: String {
+        switch model.webRemoteState {
+        case .connected:
+            return localization.text("onboarding.web_remote.connected")
+        case .unavailable, .failed:
+            return localization.text("onboarding.web_remote.unavailable")
+        case .connecting:
+            return localization.text("onboarding.web_remote.connecting")
+        case .disabled:
+            return localization.text("onboarding.web_remote.preparing")
+        case .waitingForPhone, .awaitingApproval:
+            return localization.text("onboarding.web_remote.waiting")
+        }
+    }
+
+    private var selectedControlConnectedKey: String {
+        switch settings.onboardingControlMethod {
+        case .physicalRemote:
+            return "onboarding.side.remote_connected"
+        case .iPhoneApp:
+            return "onboarding.side.iphone_connected"
+        case .webRemote:
+            return "onboarding.side.web_connected"
+        case .unselected:
+            return "onboarding.side.control_selected"
+        }
     }
 
     private var primaryActionKey: String {
@@ -1196,6 +1547,15 @@ struct OnboardingView: View {
         case .weixin: return "message.fill"
         case .typeless: return "waveform.badge.mic"
         case .other: return "ellipsis.circle.fill"
+        case .unselected: return "circle"
+        }
+    }
+
+    private func controlMethodIcon(_ method: OnboardingControlMethod) -> String {
+        switch method {
+        case .physicalRemote: return "appletvremote.gen4.fill"
+        case .iPhoneApp: return "iphone"
+        case .webRemote: return "safari.fill"
         case .unselected: return "circle"
         }
     }
@@ -1272,6 +1632,18 @@ struct OnboardingView: View {
         refreshSystemFunctionKeyUsage()
     }
 
+    private func selectControlMethod(_ method: OnboardingControlMethod) {
+        guard settings.onboardingControlMethod != method else { return }
+        if settings.onboardingControlMethod == .iPhoneApp {
+            model.disablePhoneRemoteConnection()
+        } else if settings.onboardingControlMethod == .webRemote {
+            model.disableWebRemoteConnection()
+        }
+        settings.setOnboardingControlMethod(method)
+        observedRemoteButtons.removeAll()
+        testedControlButtons.removeAll()
+    }
+
     private func switchToSelectedInputMethod() {
         let tool = settings.onboardingVoiceTool
         guard tool.requiresFunctionKeySetup else {
@@ -1325,7 +1697,7 @@ struct OnboardingView: View {
         case .remote:
             observedRemoteButtons.removeAll()
             requestedRemoteConnectionRecovery = false
-            model.refreshRemoteDiscovery()
+            prepareSelectedControlConnection()
         case .audio:
             model.refreshAudioDevices()
         case .voiceTest:
@@ -1340,7 +1712,7 @@ struct OnboardingView: View {
         case .controls:
             testedControlButtons.removeAll()
         case .complete:
-            model.refreshRemoteDiscovery()
+            prepareSelectedControlConnection()
             model.refreshAudioDevices()
         default:
             break
@@ -1389,9 +1761,13 @@ struct OnboardingView: View {
         case .accessibilityPermissionDenied:
             model.requestAccessibilityPermission()
         case .remoteNotFound:
-            model.reconnect()
+            prepareSelectedControlConnection()
         case .remoteButtonNotReady, .controlsNotConfirmed:
-            model.applyHIDSettings()
+            if settings.onboardingControlMethod == .physicalRemote {
+                model.applyHIDSettings()
+            } else {
+                prepareSelectedControlConnection()
+            }
         case .audioNoOutputDevice, .audioSelectedDeviceMissing:
             model.refreshAudioDevices()
         case .audioOutputNotReady:
@@ -1405,6 +1781,7 @@ struct OnboardingView: View {
             guard let recoveryStep = OnboardingFlowPolicy.recoveryStep(
                 from: .complete,
                 voiceTool: settings.onboardingVoiceTool,
+                controlMethod: settings.onboardingControlMethod,
                 capabilities: capabilities,
                 hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty
             ) else { return }
@@ -1442,6 +1819,7 @@ struct OnboardingView: View {
     }
 
     private func recoverRemoteConnectionIfNeeded() {
+        guard settings.onboardingControlMethod == .physicalRemote else { return }
         guard OnboardingFlowPolicy.shouldRequestRemoteReconnect(
             remoteConnected: model.isConnected,
             remoteButtonObserved: !observedRemoteButtons.isEmpty,
@@ -1451,10 +1829,65 @@ struct OnboardingView: View {
         model.reconnect()
     }
 
+    private func prepareSelectedControlConnection() {
+        switch settings.onboardingControlMethod {
+        case .physicalRemote:
+            model.refreshRemoteDiscovery()
+            model.applyHIDSettings()
+        case .iPhoneApp:
+            model.enablePhoneRemoteConnection()
+        case .webRemote:
+            if !model.webRemoteState.isEnabled {
+                model.enableWebRemoteConnection()
+            }
+        case .unselected:
+            break
+        }
+    }
+
+    private func selectedControlAccepts(_ source: UsageEventSource) -> Bool {
+        switch settings.onboardingControlMethod {
+        case .iPhoneApp:
+            return source == .nearbyPhone
+        case .webRemote:
+            return source == .webRemote
+        case .physicalRemote, .unselected:
+            return false
+        }
+    }
+
+    private func selectedControlAcceptsVoice(_ source: UsageEventSource?) -> Bool {
+        switch settings.onboardingControlMethod {
+        case .physicalRemote:
+            return source == .bluetoothRemote
+        case .iPhoneApp:
+            return source == .nearbyPhone
+        case .webRemote:
+            return source == .webRemote
+        case .unselected:
+            return false
+        }
+    }
+
+    private func webRemoteQRCode(for url: URL) -> NSImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(url.absoluteString.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage?.transformed(
+            by: CGAffineTransform(scaleX: 10, y: 10)
+        ), let cgImage = CIContext().createCGImage(output, from: output.extent)
+        else { return nil }
+        return NSImage(
+            cgImage: cgImage,
+            size: NSSize(width: cgImage.width, height: cgImage.height)
+        )
+    }
+
     private func continueFlow() {
         guard canContinue else { return }
         settings.recordFirstUseEvent(.passed, step: settings.onboardingStep)
-        if settings.onboardingStep == .permissions {
+        if settings.onboardingStep == .permissions,
+           settings.onboardingControlMethod == .physicalRemote {
             settings.customMappingEnabled = true
             model.setVoiceFnTapModeEnabled(settings.onboardingVoiceTool == .typeless)
         }

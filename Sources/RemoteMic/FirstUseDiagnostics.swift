@@ -38,16 +38,36 @@ enum FirstUseFailureReason: String, Codable, Equatable {
 
 struct FirstUseDiagnosticContext: Equatable {
     let step: OnboardingStep
+    let controlMethod: OnboardingControlMethod
     let capabilities: OnboardingCapabilities
     let hasSelectedAudioUID: Bool
+
+    init(
+        step: OnboardingStep,
+        controlMethod: OnboardingControlMethod = .physicalRemote,
+        capabilities: OnboardingCapabilities,
+        hasSelectedAudioUID: Bool
+    ) {
+        self.step = step
+        self.controlMethod = controlMethod
+        self.capabilities = capabilities
+        self.hasSelectedAudioUID = hasSelectedAudioUID
+    }
 
     var failureReason: FirstUseFailureReason? {
         switch step {
         case .welcome, .voiceTool:
             return nil
+        case .controlMethod:
+            if controlMethod == .unselected { return nil }
         case .permissions:
-            if !capabilities.bluetoothGranted { return .bluetoothPermissionDenied }
-            if !capabilities.inputMonitoringGranted { return .inputMonitoringPermissionDenied }
+            if controlMethod.requiresBluetoothPermission && !capabilities.bluetoothGranted {
+                return .bluetoothPermissionDenied
+            }
+            if controlMethod.requiresInputMonitoringPermission &&
+                !capabilities.inputMonitoringGranted {
+                return .inputMonitoringPermissionDenied
+            }
             if !capabilities.accessibilityGranted { return .accessibilityPermissionDenied }
         case .remote:
             if !capabilities.remoteConnected { return .remoteNotFound }
@@ -67,6 +87,7 @@ struct FirstUseDiagnosticContext: Equatable {
             guard OnboardingFlowPolicy.canContinue(
                 from: .complete,
                 voiceTool: .other,
+                controlMethod: controlMethod,
                 capabilities: capabilities
             ) else { return .completeRuntimeRegressed }
         }
@@ -117,12 +138,13 @@ struct FirstUseDiagnosticSnapshot {
             "architecture=\(architecture)",
             "step=\(context.step.rawValue)",
             "voice_tool=\(voiceTool.rawValue)",
+            "control_method=\(context.controlMethod.rawValue)",
             "failure=\(context.failureReason?.rawValue ?? "none")",
             "permission_bluetooth=\(capabilities.bluetoothGranted)",
             "permission_input_monitoring=\(capabilities.inputMonitoringGranted)",
             "permission_accessibility=\(capabilities.accessibilityGranted)",
-            "remote_connected=\(capabilities.remoteConnected)",
-            "remote_button_observed=\(capabilities.remoteButtonObserved)",
+            "control_connected=\(capabilities.remoteConnected)",
+            "control_button_observed=\(capabilities.remoteButtonObserved)",
             "audio_device_selected=\(context.hasSelectedAudioUID)",
             "audio_device_available=\(capabilities.audioOutputSelected)",
             "audio_output_ready=\(capabilities.audioReady)",

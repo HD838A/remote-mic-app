@@ -250,6 +250,7 @@ final class AppSettings: ObservableObject {
         static let trustedPhoneIdentityFingerprints = "security.trustedPhoneIdentityFingerprints"
         static let onboardingCompletedVersion = "onboarding.completedVersion"
         static let onboardingStep = "onboarding.step"
+        static let onboardingControlMethod = "onboarding.controlMethod"
         static let onboardingVoiceTool = "onboarding.voiceTool"
         static let onboardingMigrationVersion = "onboarding.migrationVersion"
         static let firstUseEvents = "onboarding.diagnostics.events"
@@ -398,6 +399,12 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(onboardingStep.rawValue, forKey: Keys.onboardingStep) }
     }
 
+    @Published private(set) var onboardingControlMethod: OnboardingControlMethod {
+        didSet {
+            defaults.set(onboardingControlMethod.rawValue, forKey: Keys.onboardingControlMethod)
+        }
+    }
+
     @Published private(set) var onboardingVoiceTool: OnboardingVoiceTool {
         didSet { defaults.set(onboardingVoiceTool.rawValue, forKey: Keys.onboardingVoiceTool) }
     }
@@ -527,9 +534,17 @@ final class AppSettings: ObservableObject {
             defaults.stringArray(forKey: Keys.trustedPhoneIdentityFingerprints) ?? []
         )
         onboardingCompletedVersion = defaults.integer(forKey: Keys.onboardingCompletedVersion)
-        onboardingStep = defaults.string(forKey: Keys.onboardingStep)
+        let persistedOnboardingStep = defaults.string(forKey: Keys.onboardingStep)
             .flatMap(OnboardingStep.init(rawValue:))
             ?? .welcome
+        onboardingStep = persistedOnboardingStep
+        onboardingControlMethod = defaults.string(forKey: Keys.onboardingControlMethod)
+            .flatMap(OnboardingControlMethod.init(rawValue:))
+            ?? (persistedOnboardingStep == .welcome ||
+                persistedOnboardingStep == .voiceTool ||
+                persistedOnboardingStep == .controlMethod
+                ? .unselected
+                : .physicalRemote)
         onboardingVoiceTool = defaults.string(forKey: Keys.onboardingVoiceTool)
             .flatMap(OnboardingVoiceTool.init(rawValue:))
             ?? .unselected
@@ -620,6 +635,11 @@ final class AppSettings: ObservableObject {
         onboardingVoiceTool = voiceTool
     }
 
+    func setOnboardingControlMethod(_ controlMethod: OnboardingControlMethod) {
+        guard onboardingControlMethod != controlMethod else { return }
+        onboardingControlMethod = controlMethod
+    }
+
     func completeOnboarding() {
         recordFirstUseEvent(.completed, step: .complete)
         onboardingStep = .complete
@@ -628,6 +648,7 @@ final class AppSettings: ObservableObject {
 
     func restartOnboarding() {
         onboardingVoiceTool = .unselected
+        onboardingControlMethod = .unselected
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
         defaults.removeObject(forKey: Keys.firstUseStepStartedAt)
@@ -1172,6 +1193,7 @@ final class AppSettings: ObservableObject {
             let hasPersistedOnboardingState =
                 defaults.object(forKey: Keys.onboardingCompletedVersion) != nil ||
                 defaults.object(forKey: Keys.onboardingStep) != nil ||
+                defaults.object(forKey: Keys.onboardingControlMethod) != nil ||
                 defaults.object(forKey: Keys.onboardingVoiceTool) != nil
             let isExistingInstall = previousBuild != nil || sparkleHadLaunchedBefore
             if !isOnboardingComplete, !hasPersistedOnboardingState, isExistingInstall {

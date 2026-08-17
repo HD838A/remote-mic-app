@@ -3,6 +3,7 @@ import Foundation
 enum OnboardingStep: String, CaseIterable, Codable {
     case welcome
     case voiceTool
+    case controlMethod
     case permissions
     case remote
     case audio
@@ -12,7 +13,7 @@ enum OnboardingStep: String, CaseIterable, Codable {
 
     var requiresRuntime: Bool {
         switch self {
-        case .welcome, .voiceTool:
+        case .welcome, .voiceTool, .controlMethod:
             return false
         case .permissions, .remote, .audio, .voiceTest, .controls, .complete:
             return true
@@ -48,13 +49,38 @@ enum OnboardingPhase: String, CaseIterable {
 
     static func phase(for step: OnboardingStep) -> OnboardingPhase {
         switch step {
-        case .welcome, .voiceTool:
+        case .welcome, .voiceTool, .controlMethod:
             return .prepare
         case .permissions, .remote, .audio:
             return .setup
         case .voiceTest, .controls, .complete:
             return .tryIt
         }
+    }
+}
+
+enum OnboardingControlMethod: String, CaseIterable, Codable, Identifiable {
+    case unselected
+    case physicalRemote = "physical_remote"
+    case iPhoneApp = "iphone_app"
+    case webRemote = "web_remote"
+
+    var id: String { rawValue }
+
+    var titleKey: String {
+        "onboarding.control_method.\(rawValue).title"
+    }
+
+    var detailKey: String {
+        "onboarding.control_method.\(rawValue).detail"
+    }
+
+    var requiresBluetoothPermission: Bool {
+        self == .physicalRemote
+    }
+
+    var requiresInputMonitoringPermission: Bool {
+        self == .physicalRemote
     }
 }
 
@@ -128,6 +154,7 @@ enum OnboardingFlowPolicy {
     static func canContinue(
         from step: OnboardingStep,
         voiceTool: OnboardingVoiceTool,
+        controlMethod: OnboardingControlMethod = .physicalRemote,
         capabilities: OnboardingCapabilities
     ) -> Bool {
         switch step {
@@ -136,9 +163,12 @@ enum OnboardingFlowPolicy {
         case .voiceTool:
             return voiceTool != .unselected &&
                 (!voiceTool.requiresFunctionKeySetup || capabilities.systemFunctionKeyAvailable)
+        case .controlMethod:
+            return controlMethod != .unselected
         case .permissions:
-            return capabilities.bluetoothGranted &&
-                capabilities.inputMonitoringGranted &&
+            return (!controlMethod.requiresBluetoothPermission || capabilities.bluetoothGranted) &&
+                (!controlMethod.requiresInputMonitoringPermission ||
+                    capabilities.inputMonitoringGranted) &&
                 capabilities.accessibilityGranted
         case .remote:
             return capabilities.remoteConnected && capabilities.remoteButtonObserved
@@ -152,8 +182,10 @@ enum OnboardingFlowPolicy {
         case .controls:
             return capabilities.testedRemoteButtonCount >= 3
         case .complete:
-            return capabilities.bluetoothGranted &&
-                capabilities.inputMonitoringGranted &&
+            return controlMethod != .unselected &&
+                (!controlMethod.requiresBluetoothPermission || capabilities.bluetoothGranted) &&
+                (!controlMethod.requiresInputMonitoringPermission ||
+                    capabilities.inputMonitoringGranted) &&
                 capabilities.accessibilityGranted &&
                 capabilities.remoteConnected &&
                 capabilities.audioReady &&
@@ -164,18 +196,21 @@ enum OnboardingFlowPolicy {
     static func recoveryStep(
         from step: OnboardingStep,
         voiceTool: OnboardingVoiceTool,
+        controlMethod: OnboardingControlMethod = .physicalRemote,
         capabilities: OnboardingCapabilities,
         hasSelectedAudioUID: Bool
     ) -> OnboardingStep? {
         let context = FirstUseDiagnosticContext(
             step: step,
+            controlMethod: controlMethod,
             capabilities: capabilities,
             hasSelectedAudioUID: hasSelectedAudioUID
         )
         guard let failure = context.failureReason else { return nil }
         if step == .complete, failure == .completeRuntimeRegressed {
-            if !capabilities.bluetoothGranted ||
-                !capabilities.inputMonitoringGranted ||
+            if (controlMethod.requiresBluetoothPermission && !capabilities.bluetoothGranted) ||
+                (controlMethod.requiresInputMonitoringPermission &&
+                    !capabilities.inputMonitoringGranted) ||
                 !capabilities.accessibilityGranted {
                 return .permissions
             }

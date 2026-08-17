@@ -23,6 +23,11 @@ private struct MobileButtonGestureKey: Hashable {
     let button: RemoteButton
 }
 
+struct MobileRemoteButtonObservation: Equatable {
+    let source: UsageEventSource
+    let button: RemoteButton
+}
+
 private struct ManagedDefaultInputTransition {
     let virtualUID: String
     let fallbackUID: String
@@ -60,6 +65,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isPlayingTestTone = false
     @Published private(set) var isAudioOutputReady = false
     @Published private(set) var currentVoiceSampleCount: UInt64 = 0
+    @Published private(set) var activeVoiceSource: UsageEventSource?
+    @Published private(set) var lastMobileRemoteButtonObservation: MobileRemoteButtonObservation?
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
     @Published private(set) var isPhoneRemoteConnected = false
     @Published private(set) var isWatchRemoteConnected = false
@@ -202,6 +209,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     completion(false)
                     return
                 }
+                self?.observeMobileButton(button, source: .nearbyPhone)
                 completion(self?.performPhoneCommand(button, source: .nearbyPhone) ?? false)
             }
         }
@@ -212,6 +220,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 else {
                     completion(false)
                     return
+                }
+                if phase == .press {
+                    self?.observeMobileButton(button, source: .nearbyPhone)
                 }
                 completion(self?.handleMobileButtonEvent(
                     button,
@@ -269,6 +280,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     completion(false)
                     return
                 }
+                self?.observeMobileButton(button, source: .nearbyPhone)
                 completion(self?.performPhoneCommand(button, source: .nearbyPhone) ?? false)
             }
         }
@@ -279,6 +291,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 else {
                     completion(false)
                     return
+                }
+                if phase == .press {
+                    self?.observeMobileButton(button, source: .nearbyPhone)
                 }
                 completion(self?.handleMobileButtonEvent(
                     button,
@@ -330,6 +345,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     completion(false)
                     return
                 }
+                self?.observeMobileButton(button, source: .webRemote)
                 completion(self?.performPhoneCommand(button, source: .webRemote) ?? false)
             }
         }
@@ -340,6 +356,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 else {
                     completion(false)
                     return
+                }
+                if phase == .press {
+                    self?.observeMobileButton(button, source: .webRemote)
                 }
                 completion(self?.handleMobileButtonEvent(
                     button,
@@ -1598,6 +1617,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         performMobileConfiguredAction(for: button, trigger: .singleClick, source: source)
     }
 
+    private func observeMobileButton(_ button: RemoteButton, source: UsageEventSource) {
+        lastMobileRemoteButtonObservation = MobileRemoteButtonObservation(
+            source: source,
+            button: button
+        )
+    }
+
     private func handleMobileButtonEvent(
         _ button: RemoteButton,
         phase: RemoteButtonPhase,
@@ -1941,6 +1967,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_function_key_failed")
             return .unavailable
         }
+        currentVoiceSampleCount = 0
         activeMobileVoiceSource = source
         mobileVoiceAudioBatchCount = 0
         mobileVoiceAudioEnqueueFailureCount = 0
@@ -2090,6 +2117,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             return
         }
+        currentVoiceSampleCount &+= UInt64(samples.count)
         mobileVoiceAudioBatchCount += 1
         mobileVoiceAudioSignalMetrics.append(samples)
         let accepted = audioOutput.enqueue(samples: samples)
@@ -2128,6 +2156,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         let startedAt = Date()
         let source = currentVoiceUsageSource
+        activeVoiceSource = source
         settings.recordButtonPress(control: .voice, source: source, at: startedAt)
         voiceSessionStartedAt = startedAt
         voiceSessionUsageSource = source
@@ -2148,6 +2177,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         voiceSessionUsageSource = nil
         isStreaming = false
+        activeVoiceSource = nil
         if flushAudio {
             audioOutput.endSession()
         }
