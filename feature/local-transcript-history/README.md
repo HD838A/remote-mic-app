@@ -8,7 +8,8 @@
 
 - 在侧边栏“统计”下方打开“语音记录”，并开启“保存语音记录”。
 - 新完成的语音输入会按目标 App 和语音结束时的本机日期分组。
-- 应用列表和当前应用详情显示系统安装的真实 App 图标。
+- 页面默认按时间倒序显示全部 App 的记录；左侧应用列表显示真实 App 图标和名称，点击后只查看该 App 的时间线。
+- 页头在标题右侧显示可换行的本地隐私说明，保存开关固定在最右侧；页面底部不重复显示同一说明。
 - 支持复制单条记录、删除单条记录、删除当前 App 的全部记录和删除全部记录。
 - 关闭开关只停止保存新记录，不删除已有记录。
 
@@ -35,7 +36,7 @@
 - `Sources/RemoteMic/TranscriptArchiveStore.swift`：按 App/日期落盘、加载和可恢复删除。
 - `Sources/RemoteMic/BridgeAppModel.swift`：接入公共语音生命周期并向界面发布记录。
 - `Sources/RemoteMic/TranscriptHistorySection.swift`：带真实 App 图标的应用列表、日期、复制和删除界面。
-- `Sources/RemoteMic/SettingsView.swift`：在统计下方提供独立“语音记录”侧边栏页面。
+- `Sources/RemoteMic/SettingsView.swift`：在统计下方提供独立“语音记录”侧边栏页面，页头依次放置标题、可换行隐私说明和最右侧保存开关。
 - `Resources/*/Localizable.strings`：中英文界面文字。
 - `Tests/RemoteMicTests/Transcript*Tests.swift`：存储、捕获和 Feature Flag 自动化。
 
@@ -47,8 +48,8 @@ Accessibility 不提供统一的跨应用“语音结果事件”，因此当前
 
 ## 验证与当前状态
 
-当前状态：修复与独立页面完成，完整自动化和 `1.8.5 (68)` Release App 构建通过，等待真实语音流程人工验收。
+当前状态：捕获修复、独立页面和默认总时间线布局完成，完整自动化和 `1.8.5 (68)` Release App 构建通过，等待真实语音流程人工验收。
 
-自动化 236 项、22 个 Suite 全部通过，覆盖按 App/日期写入、排序、`0600/0700` 权限、可恢复删除、默认关闭及持久化、连续文字提取、快速发送、连续语音、恢复非空原稿不误存、敏感目标拒绝、无候选焦点变化取消和关闭开关取消捕获。Release App 的深度签名、版本、Apple Silicon 架构和无私有 AI 包构建均已校验。人工测试步骤见 [`Testing/LocalTranscriptHistory.md`](../../Testing/LocalTranscriptHistory.md)。
+自动化 236 项、22 个 Suite 全部通过，覆盖按 App/日期写入、排序、`0600/0700` 权限、可恢复删除、默认关闭及持久化、连续文字提取、快速发送、连续语音、恢复非空原稿不误存、敏感目标拒绝、无候选焦点变化取消和关闭开关取消捕获。最新预览 App 已在接近最小窗口尺寸实测：标题保持完整，隐私说明在标题右侧按需换行，保存开关固定最右侧，页面底部无重复隐私卡；默认“全部应用”倒序时间线、单 App 筛选和底部无描边全部删除也保持正常。Release App 的深度签名、版本、Apple Silicon 架构和无私有 AI 包构建均已校验。人工测试步骤见 [`Testing/LocalTranscriptHistory.md`](../../Testing/LocalTranscriptHistory.md)。
 
 尚未完成 RC003、Nearby iOS、网页版、真实第三方 App、前后台、跨日和不同系统版本验收，因此不能标记为已完成或已真机通过。

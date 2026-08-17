@@ -625,15 +625,47 @@ struct SettingsPageRegressionTests {
                 .components(separatedBy: "private var transcriptHistoryPage").first
         )
         let transcriptPage = try #require(
-            settingsSource.components(separatedBy: "private var transcriptHistoryPage").last
+            settingsSource.components(separatedBy: "private var transcriptHistoryPage").last?
+                .components(separatedBy: "private var voiceSessionRankingCard").first
         )
         #expect(!statisticsPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
         #expect(settingsSource.contains("case transcripts"))
         #expect(settingsSource.contains("case .transcripts: return \"settings.section.transcripts\""))
         #expect(transcriptPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
+        #expect(transcriptPage.contains(
+            "PageHeader(title: localization.text(\"statistics.transcripts.title\"))\n"
+                + "                    .fixedSize(horizontal: true, vertical: false)\n"
+                + "                    .layoutPriority(2)"
+        ))
+        let titlePosition = try #require(transcriptPage.range(
+            of: "PageHeader(title: localization.text(\"statistics.transcripts.title\"))"
+        ))
+        let privacyPosition = try #require(transcriptPage.range(
+            of: "Text(localization.text(\"statistics.transcripts.privacy\"))"
+        ))
+        let spacerPosition = try #require(transcriptPage.range(of: "Spacer(minLength: 16)"))
+        let togglePosition = try #require(transcriptPage.range(
+            of: "Toggle(\n                    \"statistics.transcripts.enable\""
+        ))
+        #expect(titlePosition.lowerBound < privacyPosition.lowerBound)
+        #expect(privacyPosition.lowerBound < spacerPosition.lowerBound)
+        #expect(spacerPosition.lowerBound < togglePosition.lowerBound)
+        #expect(transcriptPage.contains("$settings.localTranscriptHistoryEnabled"))
+        #expect(transcriptPage.contains(".lineLimit(2)"))
+        #expect(transcriptPage.contains(".fixedSize(horizontal: false, vertical: true)"))
+        #expect(!transcriptPage.contains("StatusPill("))
         #expect(historySource.contains("Dictionary(grouping: model.transcriptRecords"))
         #expect(historySource.contains("Dictionary(grouping: records"))
-        #expect(settingsSource.contains("$settings.localTranscriptHistoryEnabled"))
+        #expect(historySource.contains("allApplicationsButton"))
+        #expect(historySource.contains("selectedApplicationKey = nil"))
+        #expect(historySource.contains("if let activeApplicationKey"))
+        #expect(historySource.contains("records = model.transcriptRecords"))
+        #expect(historySource.contains("($0.records.first?.endedAt ?? .distantPast) >"))
+        #expect(historySource.contains("if activeApplicationKey == nil"))
+        #expect(historySource.contains("private var deleteAllRow"))
+        #expect(historySource.contains(".buttonStyle(.borderless)"))
+        #expect(!historySource.contains("private var overviewPanel"))
+        #expect(!historySource.contains("private var privacyPanel"))
         #expect(historySource.contains("settings.localTranscriptHistoryEnabled"))
         #expect(historySource.contains("NSWorkspace.shared.urlForApplication"))
         #expect(historySource.contains("NSWorkspace.shared.icon(forFile:"))

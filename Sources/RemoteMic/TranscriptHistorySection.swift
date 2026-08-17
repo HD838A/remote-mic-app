@@ -53,7 +53,7 @@ struct TranscriptHistorySection: View {
     private var activeApplicationKey: String? {
         guard let selectedApplicationKey,
               applications.contains(where: { $0.id == selectedApplicationKey })
-        else { return applications.first?.id }
+        else { return nil }
         return selectedApplicationKey
     }
 
@@ -63,9 +63,13 @@ struct TranscriptHistorySection: View {
     }
 
     private var dayGroups: [TranscriptDayGroup] {
-        guard let activeApplicationKey else { return [] }
-        let records = model.transcriptRecords.filter {
-            $0.applicationKey == activeApplicationKey
+        let records: [TranscriptRecord]
+        if let activeApplicationKey {
+            records = model.transcriptRecords.filter {
+                $0.applicationKey == activeApplicationKey
+            }
+        } else {
+            records = model.transcriptRecords
         }
         return Dictionary(grouping: records, by: \.localDateKey)
             .map { key, records in
@@ -74,13 +78,14 @@ struct TranscriptHistorySection: View {
                     records: records.sorted { $0.endedAt > $1.endedAt }
                 )
             }
-            .sorted { $0.id > $1.id }
+            .sorted {
+                ($0.records.first?.endedAt ?? .distantPast) >
+                    ($1.records.first?.endedAt ?? .distantPast)
+            }
     }
 
     var body: some View {
         VStack(spacing: 14) {
-            overviewPanel
-
             if model.transcriptRecords.isEmpty {
                 GlassPanel {
                     emptyState
@@ -89,7 +94,7 @@ struct TranscriptHistorySection: View {
                 historyContent
             }
 
-            privacyPanel
+            deleteAllRow
         }
         .onAppear {
             model.refreshTranscriptRecords()
@@ -99,32 +104,6 @@ struct TranscriptHistorySection: View {
             normalizeSelection()
         }
         .alert(item: $deletionRequest, content: deletionAlert)
-    }
-
-    private var overviewPanel: some View {
-        GlassPanel {
-            HStack(alignment: .center, spacing: 14) {
-                Image(systemName: "text.bubble.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 40, height: 40)
-                    .background(Color.accentColor.opacity(0.14), in: Circle())
-
-                Text("statistics.transcripts.description")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 18)
-
-                if !model.transcriptRecords.isEmpty {
-                    Button("statistics.transcripts.delete_all", role: .destructive) {
-                        deletionRequest = .all
-                    }
-                    .font(.system(size: 12, weight: .medium))
-                    .buttonStyle(.bordered)
-                }
-            }
-        }
     }
 
     private var emptyState: some View {
@@ -152,6 +131,7 @@ struct TranscriptHistorySection: View {
                         .font(.system(size: 14, weight: .semibold))
                     Divider()
                     VStack(spacing: 6) {
+                        allApplicationsButton
                         ForEach(applications) { application in
                             applicationButton(application)
                         }
@@ -162,18 +142,34 @@ struct TranscriptHistorySection: View {
 
             GlassPanel {
                 VStack(alignment: .leading, spacing: 14) {
-                    if let selectedApplication {
-                        HStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        if let selectedApplication {
                             applicationIcon(selectedApplication, size: 44)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(selectedApplication.name)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .lineLimit(1)
-                                Text(localizedEntryCount(selectedApplication.count))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: 16)
+                        } else {
+                            Image(systemName: "square.grid.2x2.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    Color.accentColor.opacity(0.12),
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(selectedApplication?.name
+                                ?? localization.text("statistics.transcripts.all_applications"))
+                                .font(.system(size: 18, weight: .semibold))
+                                .lineLimit(1)
+                            Text(localizedEntryCount(
+                                selectedApplication?.count ?? model.transcriptRecords.count
+                            ))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 16)
+
+                        if let selectedApplication {
                             Button("statistics.transcripts.delete_application", role: .destructive) {
                                 deletionRequest = .application(
                                     key: selectedApplication.id,
@@ -183,9 +179,9 @@ struct TranscriptHistorySection: View {
                             .font(.system(size: 12, weight: .medium))
                             .buttonStyle(.bordered)
                         }
-
-                        Divider()
                     }
+
+                    Divider()
 
                     LazyVStack(alignment: .leading, spacing: 18) {
                         ForEach(dayGroups) { group in
@@ -209,6 +205,49 @@ struct TranscriptHistorySection: View {
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+    }
+
+    private var allApplicationsButton: some View {
+        Button {
+            selectedApplicationKey = nil
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "square.grid.2x2.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(
+                        selectedApplicationKey == nil ? Color.accentColor : Color.secondary
+                    )
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Color.accentColor.opacity(selectedApplicationKey == nil ? 0.12 : 0.06),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("statistics.transcripts.all_applications")
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                    Text(localizedEntryCount(model.transcriptRecords.count))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            selectedApplicationKey == nil
+                ? Color.accentColor.opacity(0.12)
+                : Color.clear,
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .foregroundStyle(selectedApplicationKey == nil ? Color.accentColor : Color.primary)
+        .accessibilityAddTraits(selectedApplicationKey == nil ? .isSelected : [])
     }
 
     private func applicationButton(_ application: TranscriptApplicationSummary) -> some View {
@@ -250,9 +289,16 @@ struct TranscriptHistorySection: View {
         _ application: TranscriptApplicationSummary,
         size: CGFloat
     ) -> some View {
+        applicationIcon(bundleIdentifier: application.bundleIdentifier, size: size)
+    }
+
+    private func applicationIcon(
+        bundleIdentifier: String,
+        size: CGFloat
+    ) -> some View {
         Group {
             if let applicationURL = NSWorkspace.shared.urlForApplication(
-                withBundleIdentifier: application.bundleIdentifier
+                withBundleIdentifier: bundleIdentifier
             ) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: applicationURL.path))
                     .resizable()
@@ -270,18 +316,24 @@ struct TranscriptHistorySection: View {
         .accessibilityHidden(true)
     }
 
-    private var privacyPanel: some View {
-        GlassPanel {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.green)
-                Text("statistics.transcripts.privacy")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    private var deleteAllRow: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text("statistics.transcripts.description")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 18)
+
+            if !model.transcriptRecords.isEmpty {
+                Button("statistics.transcripts.delete_all", role: .destructive) {
+                    deletionRequest = .all
+                }
+                .font(.system(size: 12, weight: .medium))
+                .buttonStyle(.borderless)
             }
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
     }
 
     private func transcriptRow(_ record: TranscriptRecord) -> some View {
@@ -291,6 +343,17 @@ struct TranscriptHistorySection: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .frame(width: 58, alignment: .leading)
+
+            if activeApplicationKey == nil {
+                HStack(spacing: 8) {
+                    applicationIcon(bundleIdentifier: record.bundleIdentifier, size: 24)
+                    Text(record.applicationName.nilIfBlank
+                        ?? localization.text("statistics.transcripts.unknown_application"))
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                }
+                .frame(width: 132, alignment: .leading)
+            }
 
             Text(record.originalTranscript)
                 .font(.system(size: 13))
@@ -324,10 +387,9 @@ struct TranscriptHistorySection: View {
     }
 
     private func normalizeSelection() {
-        guard let current = selectedApplicationKey,
-              applications.contains(where: { $0.id == current })
-        else {
-            selectedApplicationKey = applications.first?.id
+        guard let current = selectedApplicationKey else { return }
+        guard applications.contains(where: { $0.id == current }) else {
+            selectedApplicationKey = nil
             return
         }
     }

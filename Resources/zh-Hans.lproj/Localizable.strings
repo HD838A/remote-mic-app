@@ -602,6 +602,7 @@
 "statistics.transcripts.privacy" = "仅保存本次新增的转写文字、目标应用名称和时间；不保存音频、输入框全文、窗口标题、文档名或网址。删除内容会移到废纸篓，可手动恢复。";
 "statistics.transcripts.unknown_application" = "未知应用";
 "statistics.transcripts.applications" = "应用";
+"statistics.transcripts.all_applications" = "全部应用";
 "statistics.transcripts.entry_count" = "%@ 条记录";
 "statistics.transcripts.copy" = "复制这条记录";
 "statistics.transcripts.delete_record" = "删除这条记录";

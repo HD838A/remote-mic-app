@@ -602,6 +602,7 @@
 "statistics.transcripts.privacy" = "Only the newly inserted transcript, target app name, and time are saved. Audio, full field contents, window titles, document names, and URLs are not stored. Deleted history is moved to the Trash for recovery.";
 "statistics.transcripts.unknown_application" = "Unknown App";
 "statistics.transcripts.applications" = "Applications";
+"statistics.transcripts.all_applications" = "All Apps";
 "statistics.transcripts.entry_count" = "%@ entries";
 "statistics.transcripts.copy" = "Copy this entry";
 "statistics.transcripts.delete_record" = "Delete this entry";

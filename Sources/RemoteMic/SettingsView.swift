@@ -2023,19 +2023,24 @@ struct SettingsView: View {
 
     private var transcriptHistoryPage: some View {
         settingsPage {
-            HStack(spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
                 PageHeader(title: localization.text("statistics.transcripts.title"))
-                Spacer(minLength: 20)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
+                Text(localization.text("statistics.transcripts.privacy"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
+                Spacer(minLength: 16)
                 Toggle(
                     "statistics.transcripts.enable",
                     isOn: $settings.localTranscriptHistoryEnabled
                 )
                 .toggleStyle(.switch)
                 .font(.system(size: 13, weight: .medium))
-                StatusPill(
-                    text: localization.text("about.privacy.local_only"),
-                    tint: .green
-                )
+                .fixedSize()
             }
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
