@@ -46,7 +46,7 @@ case "$DRY_RUN" in
   0|1) ;;
   *) print -u2 "DRY_RUN must be 0 or 1"; exit 1 ;;
 esac
-if ! print -r -- "$PUBLIC_DOWNLOAD_CONCURRENCY" | rg -q '^[1-9][0-9]*$' || \
+if [[ ! "$PUBLIC_DOWNLOAD_CONCURRENCY" =~ '^[1-9][0-9]*$' ]] || \
     (( PUBLIC_DOWNLOAD_CONCURRENCY > 8 )); then
   print -u2 "PUBLIC_DOWNLOAD_CONCURRENCY must be between 1 and 8"
   exit 1
@@ -68,7 +68,7 @@ else
   fi
   RELEASE_TAG="$REQUESTED_RELEASE_TAG"
 fi
-if ! print -r -- "$RELEASE_TAG" | rg -q '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+if [[ ! "$RELEASE_TAG" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
   print -u2 "RELEASE_TAG must be a stable semantic version tag such as v1.8.8"
   exit 1
 fi

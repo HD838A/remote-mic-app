@@ -29,6 +29,7 @@ jobs:
        github.event.workflow_run.event == 'workflow_dispatch')
     runs-on: macos-15
     timeout-minutes: 20
+    environment: mac-stable-release
 
     steps:
       - name: Check out main
@@ -36,6 +37,13 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+
+      - name: Ensure required promotion tools
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            brew install ripgrep
+          fi
+          rg --version
 
       - name: Resolve and merge approved candidate
         id: release
