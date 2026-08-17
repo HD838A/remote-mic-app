@@ -2,53 +2,53 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleDisplayName</key>
-    <string>SayAll</string>
-    <key>CFBundleExecutable</key>
-    <string>RemoteMic</string>
-    <key>CFBundleIdentifier</key>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>SayAll</string>
+	<key>CFBundleExecutable</key>
+	<string>RemoteMic</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
 	<string>com.hd838a.RemoteMic</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>SayAll</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>SayAll</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-    <string>1.8.25</string>
+	<string>1.8.25</string>
 	<key>CFBundleVersion</key>
-    <string>119</string>
-    <key>LSMinimumSystemVersion</key>
+	<string>120</string>
+	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>Connect to supported remote controls and Apple Watch to receive button and voice data.</string>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>Allow nearby iPhone, iPad, and Apple Watch devices to connect as a remote control and microphone.</string>
-    <key>NSBonjourServices</key>
-    <array>
-        <string>_remotemic._tcp</string>
-    </array>
-    <key>NSHumanReadableCopyright</key>
-    <string>GPL-3.0-only</string>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
-	<key>SUFeedURL</key>
-	<string>https://github.com/HD838A/remote-mic-app/releases/latest/download/appcast.xml</string>
-	<key>SUEnableAutomaticChecks</key>
+	<key>LSUIElement</key>
 	<true/>
-	<key>SUScheduledCheckInterval</key>
-	<integer>86400</integer>
-	<key>SUAutomaticallyUpdate</key>
-	<false/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Connect to supported remote controls and Apple Watch to receive button and voice data.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_remotemic._tcp</string>
+	</array>
+	<key>NSHumanReadableCopyright</key>
+	<string>GPL-3.0-only</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Allow nearby iPhone, iPad, and Apple Watch devices to connect as a remote control and microphone.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<false/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/HD838A/remote-mic-app/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>8dWQovCnGPucjMcQuCHfrAv4PtjuDjJSbHNmItqYiyc=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>
