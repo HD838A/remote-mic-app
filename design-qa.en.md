@@ -34,6 +34,8 @@
 - Avoid drop-down lists whenever practical, especially a single long list that mixes basic keys, system actions, custom actions, and individual apps. Group larger option sets semantically and prefer in-page button grids, segmented choices, or clearly separated lists.
 - Flatten flows into the main page instead of relying on popovers, sheets, or consecutive confirmation dialogs. Related configuration should share one large surface where the current target, available actions, secondary settings, learning state, and test action remain visible together.
 - Keep system dialogs only for file selection, required permission authorization, and irreversible destructive actions. Ordinary instructions, learning progress, success, and failure feedback should appear inline.
+- User-facing pages must use task language. Do not expose bundle identifiers, AX, HID, schema, payload, exact-match logic, frontmost-app terminology, bindings, triggers, mappings, rules, snapshots, or runtime modules. Keep internal identifiers in code, logs, and technical documentation; use plain phrases such as “App You Are Using,” “Press Type,” “When Pressed,” and “Restore the Original Setting.”
+- Empty states must provide one clear and prominent next step. When creating the first item is the only primary task, place a large icon-labeled primary button in the center of the content area instead of relying only on a sidebar, toolbar, or explanatory text.
 
 ## Code locations
 
