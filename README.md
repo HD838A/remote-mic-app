@@ -2,6 +2,8 @@
 
 [English](README.en.md)
 
+[官网](https://sayall.app/) · [配置教程](https://sayall.app/tutorial/)
+
 <p>
   <a href="https://github.com/HD838A/remote-mic-app/stargazers">
     <img src="https://img.shields.io/github/stars/HD838A/remote-mic-app?style=social" alt="GitHub Stars">
@@ -19,6 +21,11 @@
       <img src="Screenshots/wechat-group-qrcode.jpg" alt="无线麦 APP 微信群二维码" width="220"><br>
       <strong>微信群二维码</strong><br>
       微信扫码加入交流群
+    </td>
+    <td align="center">
+      <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="无线麦小红书二维码" width="220"></a><br>
+      <strong>小红书</strong><br>
+      扫码关注无线麦
     </td>
   </tr>
 </table>
@@ -73,6 +80,8 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 - 使用语音输入时，需要安装随安装包提供的兼容麦克风，或在 Mac 上已有 BlackHole 2ch 等回环音频设备。
 
 ## 下载与安装
+
+- 配置教程：[打开官网配置教程](https://sayall.app/tutorial/)。
 
 - 最新正式版（Apple Silicon）：通过 [Cloudflare CDN 固定入口](https://download.sayall.app/mac) 下载。当前正式版入口仅提供 Apple Silicon 安装包，且不需要随版本更新。
 - 最新预览版（Apple Silicon / Intel）：前往 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases)，在发布列表中寻找最新标记为 **Pre-release** 的 macOS 候选版本，并按 Mac 芯片下载对应 DMG。在包含 Intel 安装包的版本晋升为正式版前，Intel 用户请下载名称带 `Intel` 的最新预览版 DMG。
