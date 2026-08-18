@@ -52,7 +52,7 @@ jobs:
             [[ -z "$changed_path" ]] && continue
             changed_file_found=true
             case "$changed_path" in
-              *.md) ;;
+              *.md|Screenshots/*) ;;
               *)
                 docs_only=false
                 break
@@ -144,7 +144,7 @@ jobs:
 
       - name: Confirm documentation-only fast path
         if: needs.classify_changes.outputs.docs_only == 'true'
-        run: echo "Markdown-only change; skipping private dependencies, Swift tests, and macOS builds."
+        run: echo "Documentation-only change; skipping private dependencies, Swift tests, and macOS builds."
 
       - name: Enforce extracted repository boundaries
         if: needs.classify_changes.outputs.docs_only != 'true'
