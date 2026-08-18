@@ -217,6 +217,8 @@ struct BuildSigningTests {
         )
 
         #expect(workflowSource.contains("release/pre-v*"))
+        #expect(workflowSource.contains("!contains(github.ref_name, '-canary-')"))
+        #expect(workflowSource.contains("PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY"))
         #expect(workflowSource.contains("./scripts/verify-preview-branch.sh"))
         #expect(workflowSource.contains("swift test"))
         #expect(workflowSource.contains("./scripts/test.sh"))

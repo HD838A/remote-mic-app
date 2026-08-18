@@ -10,6 +10,7 @@ fi
 
 PIPELINE_FILES=(
   .github/workflows/mac-release-package.yml
+  .github/workflows/mac-preview-candidate.yml
   scripts/build-app.sh
   scripts/build-dmg.sh
   scripts/build-doubao-driver.sh

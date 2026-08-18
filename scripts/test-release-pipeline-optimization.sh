@@ -112,6 +112,17 @@ if /usr/bin/grep -Fq 'brew install age fastlane ripgrep' \
 fi
 /usr/bin/grep -Fq 'SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'if: ${{ !contains(github.ref_name, '\''-canary-'\'') }}' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq \
+  "grep -Eq '^release/pre-v[0-9]+\\.[0-9]+\\.[0-9]+-canary-" \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq './scripts/verify-preview-branch.sh' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'Build and verify ad-hoc candidate DMG' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq 'PUBLIC_DOWNLOAD_CONCURRENCY="${PUBLIC_DOWNLOAD_CONCURRENCY:-4}"' \

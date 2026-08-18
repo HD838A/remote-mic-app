@@ -40,6 +40,7 @@ GitHub Actions Run `32176710841`、Job `95840322389` 在候选提交 `58a37af409
 - 保持 `signed-variant=560s`、`signed-release=590s`、GitHub 签名 step `600s` 不变；没有取消 timeout、没有自动重试，也没有提高完整签名流程硬上限。
 - 新增 `verify-release-timeout-budgets.sh`，要求 `300 < 330 < 560 < 590 < 600` 的父子边界成立，并固定拒绝旧 180 秒预算和父子倒挂。
 - 受保护 canary 必须使用专用 `release/pre-vX.Y.Z-canary-name` 分支并输入 exact commit 与 release pipeline 聚合 SHA-256；远端分支 head 必须等于该提交。Canary 使用 `mac-release` Environment 和真实 Developer ID/Notary 路径，但跳过普通候选分支、Tag 和 Draft PR 规则，不创建 Tag/Release，也不上传下载资产；普通候选 verifier 继续只接受不带后缀的 `release/pre-vX.Y.Z`。
+- Push 专用 canary ref 时，普通 `macOS Preview Candidate` workflow 显式返回 skip-success，不检出私有依赖、不执行候选测试或 ad-hoc 打包，避免把专用 canary ref 误判为普通候选并污染同 SHA 的 PR checks。
 
 ## 验证
 
