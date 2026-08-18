@@ -1,5 +1,18 @@
 # Version History
 
+## 1.9.0 (Pre-release)
+
+- Renamed the app bundle to SayAll.app and added migration from legacy Remote Mic.app and 无线麦.app installations.
+- Combination Actions no longer require an invite code and can bind app launch, waiting, keyboard shortcuts, and input-field focus to remote buttons.
+- Added Reflections, an on-device voice history with undoable deletion. SayAll MCP remains off by default and provides read-only access when enabled.
+- Reworked first-run setup around explicitly compatible devices such as MiRemoteV 2ch and BlackHole 2ch, including real voice-input validation before completion.
+- Improved direct Apple Watch voice input and rapid restart after stopping. Full real-device scenarios remain under validation.
+- Fixed the first phrase after initially focusing an input field sometimes not being recorded in Reflections.
+- Improved virtual-audio release and recovery after stale output state, Mac sleep, or wake.
+- Added sharing to the sidebar, About, and Statistics, and moved issue feedback into About.
+- Added clearer upgrade checks and recovery guidance when permissions are missing.
+- Added layered HID button-path diagnostics to continue investigating intermittent lost input; this does not claim that the underlying cause has been fixed.
+
 ## 1.8.25 (Pre-release)
 
 - Opening an installer for the wrong architecture now clearly points to the correct version for the current Mac.
