@@ -181,8 +181,8 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与 RC003 默
 ## ⭐ Star History
 
 <p align="center">
-  <a href="https://star-history.com/#HD838A/remote-mic-app&Date">
-    <img src="https://api.star-history.com/svg?repos=HD838A/remote-mic-app&type=Date" alt="Star History Chart" width="100%">
+  <a href="https://github.com/HD838A/remote-mic-app/stargazers">
+    <img src="https://raw.githubusercontent.com/HD838A/remote-mic-app/star-history/assets/star-history.svg" alt="Star History Chart" width="100%">
   </a>
 </p>
 
