@@ -18,7 +18,6 @@ jobs:
     name: Validate and package preview candidate (${{ matrix.label }})
     runs-on: macos-15
     timeout-minutes: 75
-    environment: mac-release
     strategy:
       fail-fast: false
       matrix:
@@ -32,11 +31,6 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       RELEASE_VARIANT: ${{ matrix.variant }}
-      EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
-      PARALLEL_PACKAGE_NOTARIZATION: 1
-      RELEASE_STAGE_TIMEOUTS: 1
-      REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
-      EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
 
     steps:
       - name: Check out candidate
@@ -78,52 +72,11 @@ jobs:
           ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
           persist-credentials: false
 
-      - name: Check out readonly release credentials
-        uses: actions/checkout@v5
-        with:
-          repository: HD838A/remotemic-notary-secrets
-          path: .private-release/remotemic-notary-secrets
-          ssh-key: ${{ secrets.RELEASE_CREDENTIALS_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Check out readonly Match signing identities
-        uses: actions/checkout@v5
-        with:
-          repository: HD838A/apple-signing-match
-          path: .private-release/apple-signing-match
-          ssh-key: ${{ secrets.APPLE_SIGNING_MATCH_DEPLOY_KEY }}
-          persist-credentials: false
-
       - name: Configure shared Mac remote package
         run: swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
 
       - name: Install required tools
-        run: |
-          missing_formulae=()
-          command -v age >/dev/null || missing_formulae+=(age)
-          command -v fastlane >/dev/null || missing_formulae+=(fastlane)
-          command -v rg >/dev/null || missing_formulae+=(ripgrep)
-          if (( ${#missing_formulae[@]} != 0 )); then
-            brew install "${missing_formulae[@]}"
-          fi
-          age --version
-          fastlane --version
-          rg --version
-
-      - name: Prepare protected preview signing identity
-        env:
-          RELEASE_AGE_IDENTITY: ${{ secrets.RELEASE_AGE_IDENTITY }}
-        run: |
-          test -n "$RELEASE_AGE_IDENTITY"
-          release_identity="$RUNNER_TEMP/remotemic-preview.agekey"
-          umask 077
-          printf '%s' "$RELEASE_AGE_IDENTITY" > "$release_identity"
-          chmod 600 "$release_identity"
-          {
-            echo "AGE_IDENTITY_FILE=$release_identity"
-            echo "RELEASE_CREDENTIALS_REPO=$GITHUB_WORKSPACE/.private-release/remotemic-notary-secrets"
-            echo "MATCH_REPO=$GITHUB_WORKSPACE/.private-release/apple-signing-match"
-          } >> "$GITHUB_ENV"
+        run: command -v rg >/dev/null || brew install ripgrep
 
       - name: Validate candidate branch provenance
         run: |
@@ -141,9 +94,10 @@ jobs:
       - name: Run project self-test
         run: SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
 
-      - name: Build, sign, notarize, and verify candidate DMG
-        timeout-minutes: 15
-        run: ./scripts/package-macos-preview-in-actions.sh
+      - name: Build and verify ad-hoc candidate DMG
+        run: |
+          ./scripts/build-dmg.sh
+          ./scripts/verify-dmg.sh
 
       - name: Upload CI candidate
         uses: actions/upload-artifact@v4

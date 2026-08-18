@@ -2,14 +2,14 @@
 
 ## 适用版本或分支
 
-- 分支：`fix/bug-1.9.0-test-permission-history-hid-20260819`
-- 目标：由 `macOS Preview Candidate` 受保护工作流生成的 Developer ID 签名候选
+- 分支：`codex/v1-9-0-integration` 或对应 `release/pre-v1.9.0` 候选
+- 目标：由受保护 `macOS Signed Release Packages` 工作流生成并发布到私有 Draft 或公开 Pre-release 的 Developer ID 签名公证包
 
 ## 测试前准备
 
 1. 一台已安装旧版无线麦SayAll.app且输入监控、辅助功能均已开启的 Mac。
 2. 记录旧 App 路径、版本、`codesign -dv --verbose=4` TeamIdentifier 和 `codesign -dr -` designated requirement。
-3. 从对应 commit 的 Actions Artifact 下载正确架构 DMG；不要使用本地 ad-hoc 构建代替。
+3. 从私有 Draft 或公开 Pre-release 下载对应 commit 的正确架构 DMG；不要使用本地构建或 `macOS Preview Candidate` 的 ad-hoc CI Artifact 代替。
 
 ## 用例一：旧路径升级
 
@@ -56,4 +56,4 @@
 
 ## 验证边界
 
-静态测试只能证明工作流要求受保护 Developer ID 身份；只有上述同机真实升级可以证明 macOS TCC 权限是否连续。自动化不能替代系统设置、真实遥控器和真实签名 Artifact。
+静态测试只能证明候选 CI 不接触签名凭据、可分发包必须经过受保护 Developer ID 签名公证流程；只有上述同机真实升级可以证明 macOS TCC 权限是否连续。自动化不能替代系统设置、真实遥控器和真实签名 Artifact。
