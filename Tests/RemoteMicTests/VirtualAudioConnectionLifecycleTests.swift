@@ -59,35 +59,99 @@ struct VirtualAudioConnectionLifecycleTests {
     @Test func lastReadyBluetoothBridgeDisconnectsAndReleasesAudio() {
         #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
             mobileVoiceActive: false,
-            testToneActive: false
+            testToneActive: false,
+            systemSuspended: false
         ))
     }
 
     @Test func anotherReadyBluetoothBridgeKeepsAudioActive() {
         #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: false,
             mobileVoiceActive: false,
-            testToneActive: false
+            testToneActive: false,
+            systemSuspended: false
         ))
         #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 2,
+            bluetoothVoiceActive: false,
             mobileVoiceActive: false,
-            testToneActive: false
+            testToneActive: false,
+            systemSuspended: false
+        ))
+    }
+
+    @Test func connectedIdleBridgeReleasesAudioWhileSystemIsSuspended() {
+        #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: true
+        ))
+    }
+
+    @Test func activeVoiceIsNotInterruptedBySystemSuspension() {
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: true,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: true
         ))
     }
 
     @Test func mobileVoiceOrTestToneKeepsAudioActiveWithoutBluetooth() {
         #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
             mobileVoiceActive: true,
-            testToneActive: false
+            testToneActive: false,
+            systemSuspended: true
         ))
         #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
             mobileVoiceActive: false,
-            testToneActive: true
+            testToneActive: true,
+            systemSuspended: true
         ))
+    }
+
+    @Test func overlappingWorkspaceEventsDoNotResumeAudioPrematurely() {
+        var state = SystemAudioSuspensionState()
+
+        let addedScreenSleep = state.apply(.screenDidSleep)
+        let addedSessionInactive = state.apply(.sessionDidResignActive)
+        #expect(addedScreenSleep)
+        #expect(addedSessionInactive)
+        #expect(state.isSuspended)
+        #expect(state.diagnostic == "screen_sleeping,session_inactive")
+
+        let removedScreenSleep = state.apply(.screenDidWake)
+        #expect(removedScreenSleep)
+        #expect(state.isSuspended)
+        #expect(state.diagnostic == "session_inactive")
+
+        let removedSessionInactive = state.apply(.sessionDidBecomeActive)
+        #expect(removedSessionInactive)
+        #expect(!state.isSuspended)
+        #expect(state.diagnostic == "none")
+    }
+
+    @Test func duplicateWorkspaceEventsAreIdempotent() {
+        var state = SystemAudioSuspensionState()
+
+        let firstSleep = state.apply(.systemWillSleep)
+        let duplicateSleep = state.apply(.systemWillSleep)
+        let firstWake = state.apply(.systemDidWake)
+        let duplicateWake = state.apply(.systemDidWake)
+        #expect(firstSleep)
+        #expect(!duplicateSleep)
+        #expect(firstWake)
+        #expect(!duplicateWake)
     }
 
     @Test func fallbackPrefersBuiltInInputAndExcludesVirtualDevice() {

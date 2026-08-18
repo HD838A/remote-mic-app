@@ -233,13 +233,74 @@ enum CoreAudioDeviceCatalog {
     }
 }
 
+enum SystemAudioSuspensionReason: String, Hashable {
+    case screenSleeping = "screen_sleeping"
+    case sessionInactive = "session_inactive"
+    case systemSleeping = "system_sleeping"
+}
+
+enum SystemAudioLifecycleEvent: String {
+    case screenDidSleep = "screen_did_sleep"
+    case screenDidWake = "screen_did_wake"
+    case sessionDidResignActive = "session_did_resign_active"
+    case sessionDidBecomeActive = "session_did_become_active"
+    case systemWillSleep = "system_will_sleep"
+    case systemDidWake = "system_did_wake"
+
+    var suspensionReason: SystemAudioSuspensionReason {
+        switch self {
+        case .screenDidSleep, .screenDidWake:
+            return .screenSleeping
+        case .sessionDidResignActive, .sessionDidBecomeActive:
+            return .sessionInactive
+        case .systemWillSleep, .systemDidWake:
+            return .systemSleeping
+        }
+    }
+
+    var isSuspending: Bool {
+        switch self {
+        case .screenDidSleep, .sessionDidResignActive, .systemWillSleep:
+            return true
+        case .screenDidWake, .sessionDidBecomeActive, .systemDidWake:
+            return false
+        }
+    }
+}
+
+struct SystemAudioSuspensionState {
+    private(set) var reasons = Set<SystemAudioSuspensionReason>()
+
+    var isSuspended: Bool {
+        !reasons.isEmpty
+    }
+
+    var diagnostic: String {
+        let values = reasons.map(\.rawValue).sorted()
+        return values.isEmpty ? "none" : values.joined(separator: ",")
+    }
+
+    @discardableResult
+    mutating func apply(_ event: SystemAudioLifecycleEvent) -> Bool {
+        if event.isSuspending {
+            return reasons.insert(event.suspensionReason).inserted
+        }
+        return reasons.remove(event.suspensionReason) != nil
+    }
+}
+
 enum VirtualAudioConnectionLifecyclePolicy {
     static func shouldBeActive(
         readyBluetoothBridgeCount: Int,
+        bluetoothVoiceActive: Bool,
         mobileVoiceActive: Bool,
-        testToneActive: Bool
+        testToneActive: Bool,
+        systemSuspended: Bool
     ) -> Bool {
-        readyBluetoothBridgeCount > 0 || mobileVoiceActive || testToneActive
+        if bluetoothVoiceActive || mobileVoiceActive || testToneActive {
+            return true
+        }
+        return readyBluetoothBridgeCount > 0 && !systemSuspended
     }
 }
 
@@ -500,6 +561,13 @@ final class VirtualAudioOutput {
         }
     }
 
+    func cancelPendingDrain() {
+        playbackLock.lock()
+        drainCompletion = nil
+        drainGeneration &+= 1
+        playbackLock.unlock()
+    }
+
     func logWhenPendingVoiceAudioDrains(context: String) {
         playbackLock.lock()
         let alreadyDrained = pendingVoiceBufferCount == 0
@@ -555,6 +623,7 @@ final class VirtualAudioOutput {
 
     private func scheduledVoiceBufferDidFinish() {
         var completion: (() -> Void)?
+        var completionGeneration: UInt64?
         var drainedContexts: [String] = []
         playbackLock.lock()
         pendingVoiceBufferCount = max(0, pendingVoiceBufferCount - 1)
@@ -563,17 +632,36 @@ final class VirtualAudioOutput {
             pendingDrainLogContexts.removeAll()
             completion = drainCompletion
             drainCompletion = nil
-            drainGeneration &+= 1
+            if completion != nil {
+                completionGeneration = drainGeneration
+            }
         }
         playbackLock.unlock()
         for context in drainedContexts {
             AppLogger.shared.write("AUDIO PLAYBACK drained \(context) pending_buffers=0")
         }
-        guard let completion else { return }
+        guard let completion, let completionGeneration else { return }
         DispatchQueue.main.async { [weak self] in
-            self?.flushPlayer()
-            completion()
+            self?.finishDrainedSessionIfNeeded(
+                generation: completionGeneration,
+                completion: completion
+            )
         }
+    }
+
+    private func finishDrainedSessionIfNeeded(
+        generation: UInt64,
+        completion: @escaping () -> Void
+    ) {
+        playbackLock.lock()
+        let shouldFinish = generation == drainGeneration
+        if shouldFinish {
+            drainGeneration &+= 1
+        }
+        playbackLock.unlock()
+        guard shouldFinish else { return }
+        flushPlayer()
+        completion()
     }
 
     private func finishDrainIfNeeded(generation: UInt64, completion: @escaping () -> Void) {
