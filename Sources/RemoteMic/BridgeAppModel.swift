@@ -43,6 +43,85 @@ enum MobileVoiceRestartPolicy {
     }
 }
 
+enum MobileVoiceStopDisposition: Equatable {
+    case ignoredInactive
+    case ignoredAlreadyStopping(cancelledPendingRestart: Bool)
+    case begin(generation: UInt64)
+}
+
+enum MobileVoiceStopCompletion: Equatable {
+    case ignored
+    case stopped
+    case restart(MobileVoiceSource)
+}
+
+struct MobileVoiceLifecycleState {
+    private(set) var activeSource: MobileVoiceSource?
+    private(set) var stoppingSource: MobileVoiceSource?
+    private(set) var pendingRestartSource: MobileVoiceSource?
+    private(set) var stopGeneration: UInt64 = 0
+
+    mutating func markStarted(_ source: MobileVoiceSource) {
+        activeSource = source
+    }
+
+    mutating func requestStart(_ source: MobileVoiceSource) -> MobileVoiceStartDisposition {
+        let disposition = MobileVoiceRestartPolicy.startDisposition(
+            requested: source,
+            active: activeSource,
+            stopping: stoppingSource
+        )
+        guard disposition == .deferUntilStopped else { return disposition }
+        guard pendingRestartSource == nil else { return .busy }
+        pendingRestartSource = source
+        return disposition
+    }
+
+    mutating func beginStop(_ source: MobileVoiceSource) -> MobileVoiceStopDisposition {
+        guard activeSource == source else { return .ignoredInactive }
+        guard stoppingSource != source else {
+            let cancelledPendingRestart = MobileVoiceRestartPolicy.shouldCancelPendingRestart(
+                stopped: source,
+                pending: pendingRestartSource
+            )
+            if cancelledPendingRestart {
+                pendingRestartSource = nil
+            }
+            return .ignoredAlreadyStopping(
+                cancelledPendingRestart: cancelledPendingRestart
+            )
+        }
+        stoppingSource = source
+        stopGeneration &+= 1
+        return .begin(generation: stopGeneration)
+    }
+
+    mutating func completeStop(
+        _ source: MobileVoiceSource,
+        generation: UInt64
+    ) -> MobileVoiceStopCompletion {
+        guard stopGeneration == generation,
+              activeSource == source,
+              stoppingSource == source
+        else { return .ignored }
+        activeSource = nil
+        stoppingSource = nil
+        guard pendingRestartSource == source else { return .stopped }
+        pendingRestartSource = nil
+        return .restart(source)
+    }
+
+    @discardableResult
+    mutating func reset() -> Bool {
+        stopGeneration &+= 1
+        let cancelledPendingRestart = pendingRestartSource != nil
+        activeSource = nil
+        stoppingSource = nil
+        pendingRestartSource = nil
+        return cancelledPendingRestart
+    }
+}
+
 private struct MobileButtonGestureKey: Hashable {
     let source: UsageEventSource
     let button: RemoteButton
@@ -157,13 +236,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var voiceSessionUsageSource: UsageEventSource?
     private var bluetoothVoiceActive = false
     private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
-    private var activeMobileVoiceSource: MobileVoiceSource?
-    private var stoppingMobileVoiceSource: MobileVoiceSource?
-    private var mobileVoiceStopGeneration: UInt64 = 0
-    private var pendingMobileVoiceRestart: (
-        source: MobileVoiceSource,
-        completion: (RemoteVoiceStartResult) -> Void
-    )?
+    private var mobileVoiceLifecycle = MobileVoiceLifecycleState()
+    private var pendingMobileVoiceRestartCompletion: ((RemoteVoiceStartResult) -> Void)?
+    private var activeMobileVoiceSource: MobileVoiceSource? {
+        mobileVoiceLifecycle.activeSource
+    }
+    private var stoppingMobileVoiceSource: MobileVoiceSource? {
+        mobileVoiceLifecycle.stoppingSource
+    }
     private var mobileVoiceAudioBatchCount = 0
     private var mobileVoiceAudioEnqueueFailureCount = 0
     private var mobileVoiceAudioSourceMismatchCount = 0
@@ -525,12 +605,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isWatchRemoteConnected = false
         webRemoteState = .disabled
         bluetoothVoiceActive = false
-        mobileVoiceStopGeneration &+= 1
-        stoppingMobileVoiceSource = nil
-        let pendingMobileVoiceRestart = pendingMobileVoiceRestart
-        self.pendingMobileVoiceRestart = nil
-        pendingMobileVoiceRestart?.completion(.unavailable)
-        activeMobileVoiceSource = nil
+        let cancelledPendingRestart = mobileVoiceLifecycle.reset()
+        let completion = pendingMobileVoiceRestartCompletion
+        pendingMobileVoiceRestartCompletion = nil
+        if cancelledPendingRestart {
+            completion?(.unavailable)
+        }
         voiceSessionUsageSource = nil
         updatePhoneVoiceFunctionKeyState(streaming: false)
         stopHIDMonitors()
@@ -2169,7 +2249,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return .unavailable
         }
         currentVoiceSampleCount = 0
-        activeMobileVoiceSource = source
+        mobileVoiceLifecycle.markStarted(source)
         mobileVoiceAudioBatchCount = 0
         mobileVoiceAudioEnqueueFailureCount = 0
         mobileVoiceAudioSourceMismatchCount = 0
@@ -2183,22 +2263,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         source: MobileVoiceSource,
         completion: @escaping (RemoteVoiceStartResult) -> Void
     ) {
-        switch MobileVoiceRestartPolicy.startDisposition(
-            requested: source,
-            active: activeMobileVoiceSource,
-            stopping: stoppingMobileVoiceSource
-        ) {
+        switch mobileVoiceLifecycle.requestStart(source) {
         case .startNow:
             completion(startPhoneVoice(source: source))
         case .deferUntilStopped:
-            guard pendingMobileVoiceRestart == nil else {
-                AppLogger.shared.write(
-                    "MOBILE VOICE restart_rejected reason=already_pending source=\(source.logName)"
-                )
-                completion(.busy)
-                return
-            }
-            pendingMobileVoiceRestart = (source, completion)
+            pendingMobileVoiceRestartCompletion = completion
             AppLogger.shared.write("MOBILE VOICE restart_deferred source=\(source.logName)")
         case .busy:
             AppLogger.shared.write(
@@ -2211,53 +2280,52 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func stopPhoneVoice(source: MobileVoiceSource) {
-        guard activeMobileVoiceSource == source else {
+        switch mobileVoiceLifecycle.beginStop(source) {
+        case .ignoredInactive:
             AppLogger.shared.write(
                 "MOBILE VOICE stop_ignored requested=\(source.logName) " +
                     "active=\(activeMobileVoiceSource?.logName ?? "none")"
             )
             return
-        }
-        guard stoppingMobileVoiceSource != source else {
-            if MobileVoiceRestartPolicy.shouldCancelPendingRestart(
-                stopped: source,
-                pending: pendingMobileVoiceRestart?.source
-            ), let pending = pendingMobileVoiceRestart {
-                pendingMobileVoiceRestart = nil
-                pending.completion(.unavailable)
+        case let .ignoredAlreadyStopping(cancelledPendingRestart):
+            if cancelledPendingRestart {
+                let completion = pendingMobileVoiceRestartCompletion
+                pendingMobileVoiceRestartCompletion = nil
+                completion?(.unavailable)
                 AppLogger.shared.write(
                     "MOBILE VOICE restart_cancelled source=\(source.logName) reason=stop_before_ready"
                 )
             }
             AppLogger.shared.write("MOBILE VOICE stop_ignored reason=already_stopping source=\(source.logName)")
             return
-        }
-        stoppingMobileVoiceSource = source
-        mobileVoiceStopGeneration &+= 1
-        let stopGeneration = mobileVoiceStopGeneration
-        logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
-        audioOutput.endSessionAfterDraining { [weak self] in
-            guard let self,
-                  self.mobileVoiceStopGeneration == stopGeneration,
-                  self.activeMobileVoiceSource == source,
-                  self.stoppingMobileVoiceSource == source
-            else { return }
-            self.activeMobileVoiceSource = nil
-            self.stoppingMobileVoiceSource = nil
-            self.updatePhoneVoiceFunctionKeyState(streaming: false)
-            self.endVoiceSessionIfNeeded()
-            AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
-            if let pending = self.pendingMobileVoiceRestart,
-               pending.source == source {
-                self.pendingMobileVoiceRestart = nil
-                let result = self.startPhoneVoice(source: source)
-                AppLogger.shared.write(
-                    "MOBILE VOICE restart_completed source=\(source.logName) result=\(result)"
-                )
-                pending.completion(result)
-                return
+        case let .begin(stopGeneration):
+            logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
+            audioOutput.endSessionAfterDraining { [weak self] in
+                guard let self else { return }
+                switch self.mobileVoiceLifecycle.completeStop(
+                    source,
+                    generation: stopGeneration
+                ) {
+                case .ignored:
+                    return
+                case .stopped:
+                    self.updatePhoneVoiceFunctionKeyState(streaming: false)
+                    self.endVoiceSessionIfNeeded()
+                    AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
+                    self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
+                case let .restart(restartSource):
+                    self.updatePhoneVoiceFunctionKeyState(streaming: false)
+                    self.endVoiceSessionIfNeeded()
+                    AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
+                    let completion = self.pendingMobileVoiceRestartCompletion
+                    self.pendingMobileVoiceRestartCompletion = nil
+                    let result = self.startPhoneVoice(source: restartSource)
+                    AppLogger.shared.write(
+                        "MOBILE VOICE restart_completed source=\(restartSource.logName) result=\(result)"
+                    )
+                    completion?(result)
+                }
             }
-            self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
         }
     }
 
