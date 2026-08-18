@@ -155,6 +155,29 @@ struct SettingsPageRegressionTests {
         }
     }
 
+    @Test func mappingHeaderUsesCompactLayoutAtMinimumWindowWidth() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let mappingPage = try #require(settingsSource.range(of: "private var mappingPage"))
+        let editorPanel = try #require(settingsSource.range(
+            of: "private func mappingEditorPanel",
+            range: mappingPage.upperBound..<settingsSource.endIndex
+        ))
+        let mappingSource = settingsSource[mappingPage.lowerBound..<editorPanel.lowerBound]
+
+        #expect(mappingSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(mappingSource.contains("private var mappingHeaderToggle"))
+        #expect(mappingSource.contains(".frame(width: 320)"))
+        #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

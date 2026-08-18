@@ -926,17 +926,26 @@ struct SettingsView: View {
 
     private var mappingPage: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
-                PageHeader(title: localization.text("button_mapping.page.title"))
-                Toggle("button_mapping.toggle.enabled", isOn: Binding(
-                    get: { settings.customMappingEnabled },
-                    set: setCustomMappingEnabled
-                ))
-                .font(.system(size: 14, weight: .medium))
-                .toggleStyle(.switch)
-                Spacer()
-                remoteDeviceSelector()
-                    .frame(width: 400)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 14) {
+                    PageHeader(title: localization.text("button_mapping.page.title"))
+                        .fixedSize(horizontal: true, vertical: false)
+                    mappingHeaderToggle
+                    Spacer()
+                    remoteDeviceSelector()
+                        .frame(width: 400)
+                }
+
+                HStack(alignment: .center, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        PageHeader(title: localization.text("button_mapping.page.title"))
+                            .fixedSize(horizontal: true, vertical: false)
+                        mappingHeaderToggle
+                    }
+                    Spacer(minLength: 14)
+                    remoteDeviceSelector()
+                        .frame(width: 320)
+                }
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
@@ -991,6 +1000,16 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var mappingHeaderToggle: some View {
+        Toggle("button_mapping.toggle.enabled", isOn: Binding(
+            get: { settings.customMappingEnabled },
+            set: setCustomMappingEnabled
+        ))
+        .font(.system(size: 14, weight: .medium))
+        .toggleStyle(.switch)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func mappingEditorPanel(_ target: ShortcutEditingTarget) -> some View {
