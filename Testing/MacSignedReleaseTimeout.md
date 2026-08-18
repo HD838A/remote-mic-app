@@ -32,6 +32,17 @@
 
 失败判定：只隔离 `.build`/scratch，下载或 binary artifact cache 仍指向用户全局目录或同一 lane 目录。
 
+## 用例 2A：首次干净 Release 构建预算
+
+1. 运行 `./scripts/verify-release-timeout-budgets.sh`。
+2. 确认输出依次为 `app-swift-build=300s`、`app-build=330s`、`signed-variant=560s`、`signed-release=590s`、`step=600s`。
+3. 将测试副本中的 Swift build 默认值改回 180 秒，确认验证失败。
+4. 将测试副本中的 `app-build` 改为不比 Swift build 多 30 秒，确认验证失败。
+
+预期结果：首次干净双架构 Release 编译拥有现实预算，同时每个子阶段仍严格处于父 supervisor 内；完整受保护签名步骤仍在 600 秒硬停止，不能通过抬高总上限掩盖慢构建。
+
+失败判定：旧 180 秒仍可通过、父阶段小于或等于子阶段、`signed-release` 大于等于 600 秒、取消 timeout，或失败后静默自动重试。
+
 ## 用例 3：单阶段 timeout 清理完整进程树
 
 1. 使用假命令启动父进程和长时间运行的孙进程。
@@ -72,12 +83,25 @@
 
 失败判定：component 恢复 `pkgbuild --sign`、外层产品没有最终 Installer 签名、两个 lane 可同时进入 Installer 私钥操作、锁无限等待、探针被省略，或验证器只检查内层 component 而没有检查外层签名与 Gatekeeper。
 
+## 用例 7：受保护 Developer ID canary
+
+1. 将发布流水线修复提交并 Push，同时把相同 exact commit 推到专用 `release/pre-vX.Y.Z-canary-name` 分支；不要创建候选 Tag 或 Release。普通候选仍只使用不带后缀的 `release/pre-vX.Y.Z`。
+2. 计算 `./scripts/release-pipeline-digest.sh`，记录 exact commit 和 64 位 digest。
+3. 从该 exact commit 手动运行 `macOS Signed Release Packages`，设置 `canary=true`，输入版本对应 tag 文本、exact commit 和 digest。
+4. 审核 `mac-release` Environment 前检查 workflow、脚本和 digest；审批后等待双架构 Developer ID、timestamp、公证、staple 与验证完成。
+5. 检查 workflow 没有运行 Upload step，GitHub Releases、Tags 和可下载 Actions artifact 均未新增。
+
+预期结果：provenance gate 同时验证本地 checkout、远端 canary 分支 head、exact SHA 和脚本聚合 digest；canary 不要求普通候选 CI 或 Draft PR，但仍使用受保护 Environment 并检查三个私有依赖 pin 一致；真实签名公证路径通过后只输出完成记录，不发布任何字节。
+
+失败判定：SHA/digest 不匹配仍可执行、canary 绕过 Environment、拥有 `contents: write`、创建/修改 Tag 或 Release、上传 artifact，或用 canary 结果冒充最终候选产品验收。
+
 ## 稳定功能回归
 
 - 普通 ad-hoc App/DMG 构建在未启用 release timeout 时仍按原路径执行。
 - Apple Silicon 与 Intel 的输出名称、最低系统、架构、签名身份类型和 appcast 名称不变。
 - 任一 lane 或并行 PKG 公证失败时，整个签名任务必须失败。
 - 无 Apple 凭据测试不得触发真实签名、公证、Environment 审批或发布。
+- Canary 只允许在流水线变更合入前验证真实 Developer ID 路径，不能替代候选分支和最终发布门禁。
 
 ## 日志收集
 
@@ -91,6 +115,7 @@
 - 自动化可以证明参数隔离、确定性 timeout、进程树清理、并发失败传播和日志格式。
 - 代理可在无凭据环境运行并发冷缓存解析/构建和 shell/YAML/Swift 测试。
 - 无凭据自动化不能单独证明真实 timestamp、Developer ID、Apple Notary 或 staple；这些成功路径已由 Build 119 的受保护工作流补验。Build 118 已证明真实 Runner 的单阶段 timeout 和 fail-fast；590 秒总 supervisor 的实际超时分支没有通过故意挂起真实签名来触发。
+- 每次修改签名、打包、公证或 timeout 编排后，必须用本次提交的 exact SHA 和 pipeline digest 重新运行 canary；脚本 digest 变化会使旧 canary 失效。
 
 ## 2026-08-16 验证记录
 

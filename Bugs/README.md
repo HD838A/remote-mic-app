@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [macOS 1.9.0 签名流程的 Swift Release 冷构建被 180 秒误杀](./2026-08-19-macos-release-swift-build-timeout.md)
 - [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md)
 - [组合动作输入框学习容易与回眸 MCP 配置混淆](./2026-08-19-macro-focus-mcp-guidance-confusion.md)
 - [1.9.0 内测版 OK 键偶发无响应且日志无法定位](./2026-08-19-ok-button-intermittent-hid-report-loss.md)
@@ -49,6 +50,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-19 | [macOS 1.9.0 签名流程的 Swift Release 冷构建被 180 秒误杀](./2026-08-19-macos-release-swift-build-timeout.md) | 代码修复完成，等待受保护 Developer ID canary |
 | 2026-08-19 | [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md) | 候选修复完成，等待真实 Codex 与遥控器验收 |
 | 2026-08-19 | [Watch 停止后立即重新收音被判定占用](./2026-08-19-watch-voice-restart-during-audio-drain.md) | 候选修复完成，等待真机验收 |
 | 2026-08-19 | [组合动作输入框学习容易与回眸 MCP 配置混淆](./2026-08-19-macro-focus-mcp-guidance-confusion.md) | 说明已优化，等待有效资格页面人工验收 |
