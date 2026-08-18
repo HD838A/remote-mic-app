@@ -106,6 +106,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var bluetoothVoiceActive = false
     private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
     private var activeMobileVoiceSource: MobileVoiceSource?
+    private var mobileVoiceAudioBatchCount = 0
+    private var mobileVoiceAudioEnqueueFailureCount = 0
+    private var mobileVoiceAudioSourceMismatchCount = 0
+    private var mobileVoiceAudioSignalMetrics = WatchBluetoothAudioSignalMetrics()
     private var longRecordingRequested = false
     private var longRecordingGeneration: UInt64 = 0
     private var longRecordingOpenTimer: DispatchSourceTimer?
@@ -1908,6 +1912,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return .unavailable
         }
         activeMobileVoiceSource = source
+        mobileVoiceAudioBatchCount = 0
+        mobileVoiceAudioEnqueueFailureCount = 0
+        mobileVoiceAudioSourceMismatchCount = 0
+        mobileVoiceAudioSignalMetrics = WatchBluetoothAudioSignalMetrics()
         beginVoiceSessionIfNeeded()
         AppLogger.shared.write("MOBILE VOICE started source=\(source.logName)")
         return .started
@@ -1921,6 +1929,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
+        logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
         audioOutput.endSessionAfterDraining { [weak self] in
             guard let self, self.activeMobileVoiceSource == source else { return }
             self.activeMobileVoiceSource = nil
@@ -2039,8 +2048,45 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func receivePhoneAudio(_ samples: [Int16], source: MobileVoiceSource) {
-        guard activeMobileVoiceSource == source else { return }
-        audioOutput.enqueue(samples: samples)
+        guard activeMobileVoiceSource == source else {
+            mobileVoiceAudioSourceMismatchCount += 1
+            if mobileVoiceAudioSourceMismatchCount == 1 ||
+                mobileVoiceAudioSourceMismatchCount.isMultiple(of: 20) {
+                AppLogger.shared.write(
+                    "MOBILE VOICE audio_dropped reason=source_mismatch requested=\(source.logName) " +
+                        "active=\(activeMobileVoiceSource?.logName ?? "none") " +
+                        "count=\(mobileVoiceAudioSourceMismatchCount)"
+                )
+            }
+            return
+        }
+        mobileVoiceAudioBatchCount += 1
+        mobileVoiceAudioSignalMetrics.append(samples)
+        let accepted = audioOutput.enqueue(samples: samples)
+        if !accepted { mobileVoiceAudioEnqueueFailureCount += 1 }
+        if mobileVoiceAudioBatchCount == 1 || mobileVoiceAudioBatchCount.isMultiple(of: 20) {
+            AppLogger.shared.write(
+                "MOBILE VOICE audio source=\(source.logName) batches=\(mobileVoiceAudioBatchCount) " +
+                    "samples=\(mobileVoiceAudioSignalMetrics.sampleCount) " +
+                    "nonzero=\(mobileVoiceAudioSignalMetrics.nonZeroSampleCount) " +
+                    "peak=\(mobileVoiceAudioSignalMetrics.peak) rms=\(mobileVoiceAudioSignalMetrics.rms) " +
+                    "accepted=\(accepted) enqueue_failures=\(mobileVoiceAudioEnqueueFailureCount) " +
+                    "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
+            )
+        }
+    }
+
+    private func logMobileVoiceAudioSummary(source: MobileVoiceSource, reason: String) {
+        AppLogger.shared.write(
+            "MOBILE VOICE audio_summary source=\(source.logName) reason=\(reason) " +
+                "batches=\(mobileVoiceAudioBatchCount) " +
+                "samples=\(mobileVoiceAudioSignalMetrics.sampleCount) " +
+                "nonzero=\(mobileVoiceAudioSignalMetrics.nonZeroSampleCount) " +
+                "peak=\(mobileVoiceAudioSignalMetrics.peak) rms=\(mobileVoiceAudioSignalMetrics.rms) " +
+                "enqueue_failures=\(mobileVoiceAudioEnqueueFailureCount) " +
+                "source_mismatches=\(mobileVoiceAudioSourceMismatchCount) " +
+                "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
+        )
     }
 
     private func beginVoiceSessionIfNeeded() {

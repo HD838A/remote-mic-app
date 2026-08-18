@@ -86,7 +86,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-mac-remote
-          ref: b0c3f844d060a570d523bc5d675ee9742e9d5902
+          ref: 04a1bf2b713ee98c4d2c07cd690bb4b26288a82d
           path: .private-dependencies/sayall-mac-remote
           ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
           persist-credentials: false
