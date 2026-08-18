@@ -93,11 +93,11 @@ enum OnboardingControlMethod: String, CaseIterable, Codable, Identifiable {
     }
 
     var requiresBluetoothPermission: Bool {
-        self == .physicalRemote
+        self != .unselected
     }
 
     var requiresInputMonitoringPermission: Bool {
-        self == .physicalRemote
+        self != .unselected
     }
 
     var usesOnDemandAudioOutput: Bool {

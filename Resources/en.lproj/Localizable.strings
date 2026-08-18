@@ -526,12 +526,12 @@
 "onboarding.control_method.no_iphone" = "Without an iPhone";
 "onboarding.control_method.illustration" = "Choose the control method you can use now";
 "onboarding.permissions.title" = "Allow SayAll to connect and control your Mac";
-"onboarding.permissions.detail" = "SayAll only requires the permissions needed by your selected control method to receive buttons and perform configured actions.";
+"onboarding.permissions.detail" = "Enable all three permissions so every control method, custom button, and input-source switch remains available.";
 "onboarding.permissions.bluetooth.detail" = "Discover and connect to your paired Bluetooth remote";
-"onboarding.permissions.input.detail" = "Read button events from the selected control method";
+"onboarding.permissions.input.detail" = "Read physical button events and switch input sources automatically with Fn";
 "onboarding.permissions.accessibility.detail" = "Run shortcuts and the Typeless Fn tap";
 "onboarding.permissions.mobile_network.title" = "Phone connection is checked on the next page";
-"onboarding.permissions.mobile_network.detail" = "iPhone and web control do not need Bluetooth or Input Monitoring access. The next page verifies the local-network connection by connecting the selected phone control.";
+"onboarding.permissions.mobile_network.detail" = "After all three system permissions are enabled, the next page verifies the local-network connection through a real iPhone app or web session.";
 "onboarding.remote.title" = "Connect the remote, then press a physical button";
 "onboarding.remote.detail" = "For a first-time connection, follow the two steps below. After pairing, press any normal button to confirm your Mac receives it.";
 "onboarding.remote.first_pairing.title" = "Connect the remote for the first time";

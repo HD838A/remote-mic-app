@@ -526,12 +526,12 @@
 "onboarding.control_method.no_iphone" = "没有 iPhone 时";
 "onboarding.control_method.illustration" = "选择现在就能使用的控制方式";
 "onboarding.permissions.title" = "允许无线麦连接和控制 Mac";
-"onboarding.permissions.detail" = "无线麦只会要求当前控制方式真正需要的权限，用来接收按键并执行你设置的操作。";
+"onboarding.permissions.detail" = "为确保所有控制方式、自定义按键和输入法切换都能正常使用，请开启以下三项权限。";
 "onboarding.permissions.bluetooth.detail" = "发现并连接已配对的蓝牙遥控器";
-"onboarding.permissions.input.detail" = "读取所选控制方式发出的按键";
+"onboarding.permissions.input.detail" = "读取实体按键并支持 Fn 自动切换输入法";
 "onboarding.permissions.accessibility.detail" = "执行快捷键及 Typeless 的 Fn 点按";
 "onboarding.permissions.mobile_network.title" = "手机连接将在下一页检查";
-"onboarding.permissions.mobile_network.detail" = "iPhone 和网页版不需要蓝牙或输入监控权限；下一页会通过所选手机控制方式的真实连接验证本地网络。";
+"onboarding.permissions.mobile_network.detail" = "三项系统权限开启后，下一页会通过 iPhone App 或网页版的真实连接验证本地网络。";
 "onboarding.remote.title" = "连接遥控器，再按一下实体键";
 "onboarding.remote.detail" = "首次连接请先完成下面两步。配对成功后，按任意一个普通按键确认 Mac 能收到它。";
 "onboarding.remote.first_pairing.title" = "首次连接遥控器";

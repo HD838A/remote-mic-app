@@ -20,7 +20,7 @@ iPhone 与网页语音使用按需虚拟音频生命周期，但 Onboarding 音�
 
 - iPhone/网页在音频页和完成页只要求所选输出设备仍存在；真实输出是否可用继续由下一页会话开始、PCM、停止和文字上屏共同验证。
 - 实体遥控器继续要求输出持续 Ready，设备未选择或已消失时所有路径仍阻塞。
-- 权限页解释手机分支无需蓝牙和输入监控，本地网络在下一页通过真实连接验证。
+- 按产品要求，实体遥控器、iPhone App 和网页版统一要求蓝牙、输入监控和辅助功能全部开启；手机分支的本地网络仍在下一页通过真实连接验证。
 - 本地测试包使用发布流程已有的私有生产配置，并设置 `REQUIRE_WEB_REMOTE_CONFIGURATION=1`，缺少 Relay 时直接拒绝打包。
 
 ## 验证
@@ -29,4 +29,4 @@ iPhone 与网页语音使用按需虚拟音频生命周期，但 Onboarding 音�
 - `swift test`：235 项、20 个 suite 通过；`scripts/test.sh` 42 项项目自检与 `swift build` 通过。
 - `plutil -lint Resources/en.lproj/Localizable.strings Resources/zh-Hans.lproj/Localizable.strings`：通过。
 - iPhone 与网页分支浅色/深色共 40 张生产视图截图已逐张检查，无内部滚动、裁切或黑白分栏。
-- 自动化覆盖三条路径的门禁差异及设备缺失回归；真实 iPhone Nearby、网页 WSS、Safari 扫码、手机按需语音和第三方输入法文字上屏仍需用户现场验收。
+- 自动化覆盖三条路径统一权限门禁、按需音频差异及设备缺失回归；真实 iPhone Nearby、网页 WSS、Safari 扫码、手机按需语音和第三方输入法文字上屏仍需用户现场验收。

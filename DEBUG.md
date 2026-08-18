@@ -9,7 +9,7 @@
 - 第二次手机语音在 `18:34:03Z` 再次按需配置音频并进入 Ready；进入语音测试页后，`18:34:05Z` 松开又释放音频。
 - iPhone 分支随后真实收到语音和普通按键：日志包含 `MOBILE VOICE started/stopped source=iphone` 和三个不同的 `PHONE REMOTE button`，因此 Nearby、本地网络、辅助功能、手机控制与语音链路都实际工作。
 - 进入完成页时手机语音已经停止，音频状态又是 `engine_running=false selected={none}`；页面显示“当前环境状态发生了变化”，无法点击“打开无线麦”。
-- iPhone 权限页只显示辅助功能。当前 Bundle 已声明本地网络用途和 Bonjour 服务；真实 Nearby 连接已经成功。iPhone/网页没有使用 CoreBluetooth 遥控器或 IOHID 实体按键，不应照搬实体遥控器的蓝牙与输入监控权限。
+- iPhone 权限页只显示辅助功能。当前 Bundle 已声明本地网络用途和 Bonjour 服务；真实 Nearby 连接已经成功。虽然 iPhone/网页接收当前按键不依赖 CoreBluetooth 遥控器或 IOHID，后续产品规则明确要求所有控制方式统一开启蓝牙、输入监控和辅助功能，以覆盖切换控制方式、自定义按键及 Fn 输入法切换。
 - `18:37:20Z` 之后日志来自另一次 `APP START version=1.8.5` 和实体遥控器流程，不作为本次 iPhone `1.8.25 (119)` 问题的证据。
 
 ## Hypotheses
@@ -42,25 +42,25 @@
 
 - Supports：页面只显示一项，用户认为信息不完整；Nearby 涉及本地网络。
 - Conflicts：包已声明本地网络用途与 Bonjour；现场 Nearby、语音和按键成功；macOS 本地网络没有与辅助功能相同的可靠授权查询/跳转 API，连接页的真实会话门禁更准确。
-- Test：检查生产连接启动、Info.plist 和权限策略；如果没有额外可查询且必需的权限，保留辅助功能唯一门禁，并在功能档案说明本地网络由下一页真实连接验证。
+- Test：检查生产连接启动、Info.plist 和权限策略；本地网络继续由下一页真实连接验证，三项系统权限按统一产品门禁逐项验证。
 
 ## Experiments
 
 - H1：直接读取用户测试 ZIP 对应 App 的 `Info.plist`，`RemoteWebRelayURL` 不存在；`build-app.sh` 只在 `REMOTE_WEB_RELAY_URL` 非空时写入该 key，`WebRemoteConfiguration.relayURL()` 在环境和 Bundle 都无值时返回 nil。三层证据一致，确认本地打包遗漏配置。
 - H2 / H3：临时在现有 iPhone/Web 分支测试中加入三行实验断言：设备已选择、连接与辅助功能有效、`audioReady=false` 时，音频页和完成页应通过。旧实现对 iPhone、网页两条路径共四个断言全部失败；实验代码随后撤回。该结果与现场 `mobile_voice_start` 才 Ready、`mobile_voice_stopped` 即 Release 的日志完全一致，确认门禁模型与按需音频生命周期冲突。
 - H4：只读检查 `selectedControlConnected`，iPhone 明确使用 `model.isPhoneRemoteConnected`，网页明确使用 `webRemoteConnected`；完成页没有直接使用实体 BLE 的 `model.isConnected`。日志中的 BLE timeout 是同时存在的旧实体遥控器后台尝试，不是本次完成页根因，H4 被否定。
-- H5：只读检查确认 iPhone/Web 的权限策略只要求 Accessibility；Bundle 已声明 `NSLocalNetworkUsageDescription` 和 `_remotemic._tcp`，现场 Nearby 连接、语音、按键均成功。没有发现被遗漏且可在本页可靠预检的权限，H5 被否定为功能 Bug；页面需要解释为什么只有一项以及本地网络在下一页验证。
+- H5：只读检查确认 iPhone/Web 的当前连接技术只依赖 Accessibility，Bundle 已声明 `NSLocalNetworkUsageDescription` 和 `_remotemic._tcp`，现场 Nearby 连接、语音、按键均成功；随后产品规则改为所有方式统一开启三项系统权限，因此不再按最小技术依赖裁剪权限页。
 
 ## Root Cause
 
 1. 本地测试包没有注入发布流程已有的生产 `REMOTE_WEB_RELAY_URL`，Web Remote 配置为空，无法生成会话二维码。
 2. iPhone 和网页语音采用按需虚拟音频生命周期：只有语音开始时配置，停止后立即释放；Onboarding 音频页和完成页却复用了实体遥控器“播放器必须持续 Ready”的门禁，导致必须先说话才能离开音频页，并在说完后必然卡住完成页。
-3. iPhone 权限页只显示辅助功能是依赖模型的正确结果，但没有说明本地网络由下一页真实 Nearby 连接验证，视觉上像遗漏权限。
+3. iPhone 权限页按最小技术依赖只显示辅助功能，与“所有控制方式统一开启完整权限”的产品要求不一致。
 
 ## Fix
 
 - 已实现：手机/网页音频页和完成页以“所选设备仍存在”为静态门禁，实际配置成功继续由下一页真实语音的会话、PCM、停止和文字验证；实体遥控器仍要求持续 Ready。
-- 已实现：iPhone/Web 权限页补充无额外蓝牙/HID 权限、本地网络在连接页验证的解释，不增加无法可靠读取的伪权限状态。
+- 已实现：三种控制方式统一显示并验证蓝牙、输入监控和辅助功能；本地网络仍在连接页通过 Nearby/WSS 真实会话验证。
 - 待执行：下一份本地测试包从私有生产环境注入 relay，并启用 `REQUIRE_WEB_REMOTE_CONFIGURATION=1`，缺配置时打包直接失败。
 
 ## Validation

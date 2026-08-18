@@ -24,37 +24,61 @@ struct OnboardingFlowTests {
         #expect(OnboardingPhase.phase(for: .complete) == .tryIt)
     }
 
-    @Test func iPhoneAndWebPathsDoNotRequireBluetoothHardwarePermissions() {
+    @Test func everyControlMethodRequiresAllThreePermissions() {
         var capabilities = OnboardingCapabilities(
-            inputMonitoringGranted: false,
+            bluetoothGranted: true,
+            inputMonitoringGranted: true,
             accessibilityGranted: true,
             remoteConnected: true,
             remoteButtonObserved: true
         )
 
-        for method in [OnboardingControlMethod.iPhoneApp, .webRemote] {
-            #expect(OnboardingFlowPolicy.canContinue(
-                from: .controlMethod,
-                voiceTool: .typeless,
-                remoteAvailability: .noRemote,
-                controlMethod: method,
-                capabilities: capabilities
-            ))
+        for method in [
+            OnboardingControlMethod.physicalRemote,
+            .iPhoneApp,
+            .webRemote,
+        ] {
+            #expect(method.requiresBluetoothPermission)
+            #expect(method.requiresInputMonitoringPermission)
             #expect(OnboardingFlowPolicy.canContinue(
                 from: .permissions,
                 voiceTool: .typeless,
-                remoteAvailability: .noRemote,
+                remoteAvailability: method == .physicalRemote ? .hasRemote : .noRemote,
                 controlMethod: method,
                 capabilities: capabilities
             ))
-            #expect(OnboardingFlowPolicy.canContinue(
-                from: .remote,
+
+            capabilities.bluetoothGranted = false
+            #expect(!OnboardingFlowPolicy.canContinue(
+                from: .permissions,
                 voiceTool: .typeless,
-                remoteAvailability: .noRemote,
+                remoteAvailability: method == .physicalRemote ? .hasRemote : .noRemote,
                 controlMethod: method,
                 capabilities: capabilities
             ))
+            capabilities.bluetoothGranted = true
+            capabilities.inputMonitoringGranted = false
+            #expect(!OnboardingFlowPolicy.canContinue(
+                from: .permissions,
+                voiceTool: .typeless,
+                remoteAvailability: method == .physicalRemote ? .hasRemote : .noRemote,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+            capabilities.inputMonitoringGranted = true
+            capabilities.accessibilityGranted = false
+            #expect(!OnboardingFlowPolicy.canContinue(
+                from: .permissions,
+                voiceTool: .typeless,
+                remoteAvailability: method == .physicalRemote ? .hasRemote : .noRemote,
+                controlMethod: method,
+                capabilities: capabilities
+            ))
+            capabilities.accessibilityGranted = true
         }
+
+        #expect(!OnboardingControlMethod.unselected.requiresBluetoothPermission)
+        #expect(!OnboardingControlMethod.unselected.requiresInputMonitoringPermission)
 
         #expect(!OnboardingFlowPolicy.canContinue(
             from: .remoteAvailability,
@@ -83,14 +107,6 @@ struct OnboardingFlowTests {
             capabilities: capabilities
         ))
 
-        #expect(!OnboardingFlowPolicy.canContinue(
-            from: .permissions,
-            voiceTool: .typeless,
-            controlMethod: .physicalRemote,
-            capabilities: capabilities
-        ))
-        capabilities.bluetoothGranted = true
-        capabilities.inputMonitoringGranted = true
         #expect(OnboardingFlowPolicy.canContinue(
             from: .permissions,
             voiceTool: .typeless,
@@ -101,6 +117,8 @@ struct OnboardingFlowTests {
 
     @Test func mobileControlPathsUseOnDemandAudioWithoutWeakeningDeviceSelection() {
         var capabilities = OnboardingCapabilities(
+            bluetoothGranted: true,
+            inputMonitoringGranted: true,
             accessibilityGranted: true,
             remoteConnected: true,
             remoteButtonObserved: true,
