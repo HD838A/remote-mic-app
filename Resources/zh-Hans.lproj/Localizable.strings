@@ -622,8 +622,8 @@
 "statistics.transcripts.agent_access.enable" = "允许访问";
 "statistics.transcripts.agent_access.privacy" = "无线麦SayAll.app 不会上传记录；被授权的 AI 客户端可能把读取的文字发送给自己的服务商。开关默认关闭，关闭后所有客户端立即无法读取。";
 "statistics.transcripts.agent_access.quick_connect" = "连接 AI 工具";
-"statistics.transcripts.agent_access.quick_connect_description" = "无线麦SayAll.app 会为所选工具创建独立只读授权并写入本机配置；连接后请重新启动对应工具。";
-"statistics.transcripts.agent_access.connected" = "已连接 · 需重启客户端";
+"statistics.transcripts.agent_access.quick_connect_description" = "无线麦SayAll.app 会为所选工具创建独立只读授权并写入本机配置；连接后请关闭并重新打开对应 AI 工具，无需重启无线麦。";
+"statistics.transcripts.agent_access.connected" = "已连接 · 请重新打开 %@";
 "statistics.transcripts.agent_access.ready" = "可连接";
 "statistics.transcripts.agent_access.not_installed" = "未检测到安装";
 "statistics.transcripts.agent_access.connect" = "连接";

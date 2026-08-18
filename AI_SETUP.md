@@ -34,7 +34,7 @@
 2. 如需记录新的语音转文字历史，开启页头的“记录回眸”。
 3. 在页面下方找到“本地 Agent 访问”，主动开启“允许访问”。
 4. 在“连接 AI 工具”中点击目标客户端的“连接”。
-5. 连接成功后重启目标客户端。
+5. 连接成功后关闭并重新打开目标客户端；无需重启无线麦SayAll.app。
 
 App 内快速连接支持 Codex、Claude Code、Cursor 和 OpenCode。它会为每个客户端创建独立只读授权，并在改写已有配置前创建私有备份。遇到同名 MCP、无效 JSON 或带注释的 JSONC 时不会强行覆盖。
 
@@ -42,7 +42,7 @@ App 内快速连接支持 Codex、Claude Code、Cursor 和 OpenCode。它会为�
 
 ## 3. 优先验证快速连接
 
-客户端重启后，检查是否出现名为 `sayall_history` 的 MCP Server，并依次验证：
+重新打开客户端后，检查是否出现名为 `sayall_history` 的 MCP Server，并依次验证：
 
 1. MCP `initialize` 成功。
 2. `tools/list` 中存在 `list_transcript_apps` 和 `query_transcripts`。
@@ -128,6 +128,7 @@ OpenCode 本地 Server 的格式为：
 - 未看到快速连接按钮：确认安装的是包含本功能的新版本完整 App。
 - 客户端显示“未检测到安装”：先安装目标客户端，再重新打开“回眸”。
 - 提示同名 MCP：检查目标配置中的 `sayall_history`，不要覆盖用户自行维护的同名 Server；可以改用手动配置或先由用户移除冲突项。
+- Codex 报告 `missing escaped value`：检查是否是旧测试版生成了包含 `\/` 的 Helper 路径；撤销旧授权并使用修复后的无线麦SayAll.app 重新连接，不要继续使用已经贴入聊天或公开位置的令牌。
 - Helper 不存在或不可执行：重新安装完整无线麦SayAll.app。
 - 能连接但不能读取：确认“允许访问”仍开启、对应授权未撤销，并且“回眸”中已有记录。
 - App 被移动到其他目录：旧配置中的绝对 Helper 路径会失效；把 App 放回 `/Applications`，或在 App 内移除连接后重新连接。

@@ -699,6 +699,7 @@ struct SettingsPageRegressionTests {
         #expect(agentAccessSource.contains("LazyVGrid("))
         #expect(agentAccessSource.contains("model.connect(client)"))
         #expect(agentAccessSource.contains("model.removeConnection(client)"))
+        #expect(agentAccessSource.contains("client.displayName"))
         #expect(!agentAccessSource.contains(".sheet("))
         #expect(!agentAccessSource.contains("Popover"))
 

@@ -34,7 +34,7 @@ The user must perform these actions in 无线麦SayAll.app:
 2. Turn on **Save to Reflections** if new speech-to-text history should be recorded.
 3. Find **Local Agent Access** lower on the page and turn on **Allow Access**.
 4. Under **Connect AI Tools**, select **Connect** for the intended client.
-5. Restart that client after the connection succeeds.
+5. Quit and reopen that client after the connection succeeds; 无线麦SayAll.app does not need to restart.
 
 Quick connection supports Codex, Claude Code, Cursor, and OpenCode. It creates a separate read-only authorization per client and makes a private backup before changing an existing configuration. It will not overwrite a conflicting server, invalid JSON, or commented JSONC.
 
@@ -42,7 +42,7 @@ Quick connection validates the client entry point and configuration before creat
 
 ## 3. Verify quick connection first
 
-After restarting the client, verify that an MCP server named `sayall_history` exists, then check:
+After reopening the client, verify that an MCP server named `sayall_history` exists, then check:
 
 1. MCP `initialize` succeeds.
 2. `tools/list` contains `list_transcript_apps` and `query_transcripts`.
@@ -109,6 +109,7 @@ Do not automatically rewrite JSONC or an invalid configuration.
 
 - No quick-connect cards: install a complete newer build that includes this feature.
 - Client says it is not detected: install that client and reopen Reflections.
+- Codex reports `missing escaped value`: check whether an older test build wrote a Helper path containing `\/`; revoke that authorization and reconnect with the fixed 无线麦SayAll.app. Never reuse a token pasted into chat or another public location.
 - Same-name conflict: inspect the existing `sayall_history` entry and do not overwrite a user-managed server. Use manual setup or let the user remove the conflict.
 - Missing or non-executable Helper: reinstall the complete app.
 - Connected but reads fail: confirm **Allow Access** is still on, the client authorization is active, and Reflections contains history.

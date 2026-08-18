@@ -24,6 +24,7 @@
 - 授权状态保存在 `Application Support/RemoteMic/MCP/v1/access.json`，包含 `schemaVersion: 1`、总开关和授权列表；目录权限 `0700`、文件权限 `0600`，拒绝符号链接和非普通文件。
 - 每个客户端使用 256-bit 随机令牌，只保存 SHA-256 哈希；Helper 启动及每次工具调用都重新检查开关、令牌和撤销状态。
 - Codex 只维护带 SayAll 标记的独立 TOML 区块；Cursor 和 OpenCode 只在严格 JSON 可解析时合并 `sayall_history`；Claude Code 使用官方用户级 CLI。写入前创建权限为 `0600` 的碰撞安全备份，冲突或 JSONC 不强行覆盖。
+- Codex TOML 使用独立的 basic string 转义器，路径分隔符 `/` 保持原样；连接状态提示关闭并重新打开具体 AI 客户端，无需重启无线麦。
 - 快速连接在生成令牌前先检查客户端入口和配置；预检失败不创建授权，安装中途失败会丢弃未成功交付的临时授权。同一快速客户端和同名手动客户端最多保留一份有效授权；页面只列出有效授权，并按失败类型显示具体客户端错误。
 - 历史读取独立于写入链路，限制单日文件大小、单条文字长度、筛选数量、分页大小和游标长度；公开结果不包含 session ID、磁盘路径、`applicationKey` 或捕获诊断字段。
 
@@ -56,8 +57,8 @@
 
 ## 验证与当前状态
 
-当前状态：原生 Helper、默认关闭、App 内授权管理、四客户端快速连接、手动配置降级、两个只读工具和打包接线已经实现；等待真实 MCP 客户端验收。
+当前状态：原生 Helper、默认关闭、App 内授权管理、四客户端快速连接、手动配置降级、两个只读工具和打包接线已经实现；Codex 无效 TOML 路径转义已修复，等待真实 MCP 客户端验收。
 
-完整 `swift test` 262 项、27 个 Suite 全部通过；其中快速连接 13 项覆盖连接前预检、健康客户端单次成功、失败临时授权丢弃、撤销记录隐藏、Codex 托管区块、Claude Code CLI、Cursor/OpenCode 合并、同名冲突、JSONC 拒绝、私有备份和移除。其余自动化覆盖默认关闭、v1 状态文件、未来 Schema 拒绝、令牌哈希和权限、有效授权唯一性、撤销、历史解析、时间/App 筛选、分页、内部字段排除、配置生成和 Helper 唯一入口。临时数据真实 stdio 已验证初始化、`tools/list`、两个工具、默认关闭拒绝、stdout/stderr 分离及无下一页时显式返回 `nextCursor: null`；四份公开 Schema 与 Helper 完全一致。人工测试见 [`Testing/SayAllMCPIntegration.md`](../../Testing/SayAllMCPIntegration.md)。
+完整 `swift test` 共 263 项、27 个 Suite 全部通过；其中快速连接自动化覆盖连接前预检、健康客户端单次成功、失败临时授权丢弃、撤销记录隐藏、Codex 托管区块与合法 TOML 路径转义、Claude Code CLI、Cursor/OpenCode 合并、同名冲突、JSONC 拒绝、私有备份和移除。其余自动化覆盖默认关闭、v1 状态文件、未来 Schema 拒绝、令牌哈希和权限、有效授权唯一性、撤销、历史解析、时间/App 筛选、分页、内部字段排除、配置生成和 Helper 唯一入口。临时数据真实 stdio 已验证初始化、`tools/list`、两个工具、默认关闭拒绝、stdout/stderr 分离及无下一页时显式返回 `nextCursor: null`；四份公开 Schema 与 Helper 完全一致。人工测试见 [`Testing/SayAllMCPIntegration.md`](../../Testing/SayAllMCPIntegration.md)。
 
 已知限制：手动配置令牌只在创建后的当前页面状态中提供；关闭页面或再次生成后无法恢复明文，需要撤销并创建新授权。快速连接要求目标客户端已安装且现有配置可安全解析；冲突、JSONC、损坏的 CLI 或客户端拒绝安装时，需要先修复客户端环境或使用手动配置。底层状态文件继续保留用户主动撤销的旧授权以维持审计兼容，但页面不再把它们显示为已授权客户端。真实 Codex、Claude Code、Cursor、OpenCode 是否把返回内容上传，由各客户端自身决定。

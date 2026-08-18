@@ -89,6 +89,19 @@ struct TranscriptAgentAccessSection: View {
         let connected = model.activeAuthorization(for: client) != nil
         let available = model.isAvailable(client)
         let isWorking = model.integrationInProgress == client
+        let status = connected
+            ? String(
+                format: localization.text(
+                    "statistics.transcripts.agent_access.connected"
+                ),
+                locale: localization.locale,
+                client.displayName
+            )
+            : localization.text(
+                available
+                    ? "statistics.transcripts.agent_access.ready"
+                    : "statistics.transcripts.agent_access.not_installed"
+            )
 
         return HStack(spacing: 10) {
             Group {
@@ -110,13 +123,7 @@ struct TranscriptAgentAccessSection: View {
                 Text(client.displayName)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
-                Text(
-                    connected
-                        ? "statistics.transcripts.agent_access.connected"
-                        : available
-                            ? "statistics.transcripts.agent_access.ready"
-                            : "statistics.transcripts.agent_access.not_installed"
-                )
+                Text(status)
                 .font(.system(size: 12))
                 .foregroundStyle(connected ? Color.green : .secondary)
             }

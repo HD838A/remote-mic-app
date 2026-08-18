@@ -45,7 +45,23 @@ public struct SayAllMCPIntegrationConfig: Equatable, Sendable {
     }
 
     private static func tomlString(_ value: String) -> String {
-        let data = try! JSONEncoder().encode(value)
-        return String(data: data, encoding: .utf8)!
+        var escaped = "\""
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            case 0x08: escaped += "\\b"
+            case 0x09: escaped += "\\t"
+            case 0x0A: escaped += "\\n"
+            case 0x0C: escaped += "\\f"
+            case 0x0D: escaped += "\\r"
+            case 0x22: escaped += "\\\""
+            case 0x5C: escaped += "\\\\"
+            case 0x00...0x1F, 0x7F:
+                escaped += String(format: "\\u%04X", scalar.value)
+            default:
+                escaped.unicodeScalars.append(scalar)
+            }
+        }
+        escaped += "\""
+        return escaped
     }
 }
