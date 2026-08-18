@@ -1,6 +1,7 @@
 # Bug 记录
 
 - [Apple Watch BLE 语音已启动但没有有效电平](./2026-08-18-watch-ble-audio-no-signal.md)
+- [回眸页面阻断 Intel Ventura 构建](./2026-08-18-reflections-intel-ventura-onchange.md)
 - [v1.8.25 安装后 App bundle 仍显示 Remote Mic](./2026-08-17-v1.8.25-remote-mic-bundle-name.md)
 - [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md)
 - [没有实体遥控器的用户无法完成 Onboarding](./2026-08-17-onboarding-requires-physical-remote.md)
@@ -42,6 +43,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-18 | [回眸页面阻断 Intel Ventura 构建](./2026-08-18-reflections-intel-ventura-onchange.md) | 已修复，等待 Intel 真机验收 |
 | 2026-08-18 | [Apple Watch BLE 语音已启动但没有有效电平](./2026-08-18-watch-ble-audio-no-signal.md) | 诊断修复完成，等待真机验收 |
 | 2026-08-18 | [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md) | 修复完成，等待真实 Codex 验收 |
 | 2026-08-17 | [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md) | 修复完成，等待真实快速发送复验 |

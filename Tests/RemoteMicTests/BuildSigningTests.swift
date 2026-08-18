@@ -449,6 +449,12 @@ struct BuildSigningTests {
             contentsOf: installerGuardScript,
             encoding: .utf8
         )
+        let transcriptHistorySource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/TranscriptHistorySection.swift"
+            ),
+            encoding: .utf8
+        )
 
         #expect(variantSource.contains("RELEASE_VARIANT=\"${RELEASE_VARIANT:-apple-silicon}\""))
         #expect(variantSource.contains("arm64-apple-macosx14.0"))
@@ -461,6 +467,13 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("x86_64-apple-macosx13.0"))
         #expect(workflowSource.contains("apple-silicon"))
         #expect(workflowSource.contains("intel"))
+        #expect(transcriptHistorySource.contains(
+            ".onChange(of: applications.map(\\.id)) { _ in"
+        ))
+        #expect(transcriptHistorySource.contains(
+            ".onChange(of: activeApplicationKey) { applicationKey in"
+        ))
+        #expect(!transcriptHistorySource.contains(") { _, _ in"))
 
         #expect(preinstallSource.contains("CURRENT_ARCHITECTURE"))
         #expect(preinstallSource.contains("/usr/sbin/sysctl -in hw.optional.arm64"))

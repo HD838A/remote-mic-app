@@ -111,13 +111,13 @@ struct TranscriptHistorySection: View {
             normalizeSelection()
             normalizeExpandedDays()
         }
-        .onChange(of: applications.map(\.id)) { _, _ in
+        .onChange(of: applications.map(\.id)) { _ in
             normalizeSelection()
         }
-        .onChange(of: activeApplicationKey) { _, _ in
+        .onChange(of: activeApplicationKey) { _ in
             resetExpandedDays()
         }
-        .onChange(of: dayGroups.map(\.id)) { _, _ in
+        .onChange(of: dayGroups.map(\.id)) { _ in
             normalizeExpandedDays()
         }
         .alert(item: $deletionRequest, content: deletionAlert)
@@ -239,7 +239,7 @@ struct TranscriptHistorySection: View {
                                 }
                             }
                         }
-                        .onChange(of: activeApplicationKey) { _, applicationKey in
+                        .onChange(of: activeApplicationKey) { applicationKey in
                             guard let applicationKey else { return }
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 proxy.scrollTo(applicationKey, anchor: .center)
