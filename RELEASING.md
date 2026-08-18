@@ -46,6 +46,15 @@ GitHub 自动生成的 CI App 只用于验证打包结构，不是已签名、�
 
 候选 CI 和正式打包允许并行的是已经相互隔离的工作；Developer ID 签名、公证、staple、Gatekeeper、公开字节和 Sparkle 更新验证均不得省略。下一次预览发布应记录候选 CI、PR CI、Environment 等待、双架构构建、公证、公开验证各阶段耗时，用真实数据确认优化效果。
 
+## 私有 Draft 内部测试包
+
+- 私有 Draft 不属于公开 Pre-release 或正式版，也不授权 Push 源码；但可安装的 macOS 资产必须使用与公开包同等级的 Developer ID 签名和 Apple 公证，禁止 ad-hoc、未公证或未 staple 的 App、DMG、PKG 和包含这些内容的 ZIP。
+- 从已提交且可识别的精确源码状态，在隔离 worktree 中调用项目原生签名、公证和打包路径。Apple 凭据只允许由 `mac-release` 受保护 Environment、隔离临时 Keychain 或既有无交互发布机承载；验证步骤不能代替签名、公证，也不得输出任何凭据值。
+- 上传前对最终资产验证 Developer ID Application / Installer、Team ID `L3QHLDRPAY`、Hardened Runtime、嵌套组件 `codesign --deep --strict`、`stapler validate` 和 `spctl`。ZIP 不要求自身 staple，但必须解压，并对内部 App、DMG 或 PKG 分别完成上述适用检查。
+- Draft 创建后必须重新下载每一项资产，核对 GitHub `sha256:` digest、本地 SHA-256 与逐字节一致性，并再次执行 macOS 资产验证。只有远端复验全部通过后才能执行旧 Draft 保留策略；失败时保留当前与旧 Draft，报告阻断原因，不得降级重打 ad-hoc 包。
+- Release Notes 必须明确这是私有内部测试包，并记录版本、Build、源码 Commit、预期 Team ID、签名公证复验和 SHA-256；不得写入证书名称、私钥路径、密码、P8、notary 凭据或 Token。
+- 纯非 macOS 私有 Draft 继续按其平台原生门禁发布，不强制 Apple Team ID。
+
 ## 正式晋升
 
 - 只有用户明确指定具体版本并要求正式发布时才允许晋升。

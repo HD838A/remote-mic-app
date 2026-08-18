@@ -54,6 +54,14 @@
 - 正式版必须由用户明确指定具体版本。候选提交先合入 `main`，再晋升同一 Tag 和同一批资产，禁止从 `main` 重新构建正式包。
 - 完整流程与 Release Notes 规则见 [`RELEASING.md`](RELEASING.md)。
 
+## macOS 私有 Draft 安装包门禁
+
+- 私有 GitHub Draft 只是分发范围受限，不降低安装包信任要求；任何提供给用户安装的 App、DMG、PKG 或包含这些内容的 ZIP 都必须走项目原生 Developer ID 签名与 Apple 公证流程，禁止上传 ad-hoc、未公证或未 staple 的内部包。
+- 上传前和从私有 Draft 重新下载后，都必须验证 Developer ID Application / Installer、预期 Team ID `L3QHLDRPAY`、Hardened Runtime、嵌套组件 `codesign --deep --strict`、`stapler validate` 和 `spctl` Gatekeeper；ZIP 必须解压验证内部 App/DMG/PKG，不能只校验 ZIP 摘要。
+- GitHub 远端摘要、重新下载后的 SHA-256 和逐字节比较必须同时通过，才允许清理旧 Draft。任一签名、公证、下载或摘要检查失败时保留现有 Draft，不得降级为 ad-hoc 重试。
+- 签名和公证仍由受保护 Environment、隔离临时 Keychain 或既有无交互发布机承载；不得在日志、Release Notes、仓库或聊天中打印、复制或持久化证书、私钥、密码、P8、notary 凭据和 Token。验证脚本只消费最终资产与非秘密 Team ID，不负责生成签名。
+- 非 macOS 私有 Draft 资产不适用 Apple 门禁。完整流程见 [`RELEASING.md`](RELEASING.md)。
+
 ## macOS Feature Flag 与预览版回归门禁
 
 - Feature Flag 默认关闭不等于风险已隔离。只要实验功能改动了共享蓝牙协议、状态机、音频、HID、持久化或页面容器，必须验证开关缺失/默认关闭、明确关闭、开启、使用后再关闭四种状态。
