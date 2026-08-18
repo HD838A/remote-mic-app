@@ -207,3 +207,9 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 - 中文官网：[sayall.app](https://sayall.app/)
 - English website：[sayall.app/en](https://sayall.app/en/)
+
+## 其他作品
+
+- [Vibe PPT Web Template](https://github.com/GetSayAll/vibe-ppt-web-template)
+- [Claude Code Config](https://github.com/HD838A/claude-code-config)
+- [DJI 4G Mac](https://github.com/HD838A/dji-4g-mac)
