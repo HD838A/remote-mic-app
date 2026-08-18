@@ -2,7 +2,7 @@
 
 ## 适用版本与分支
 
-- Mac App `1.8.25 (120)` 内部测试构建或后续版本，包含 Apple Watch 专用入口、Watch BLE 服务、Phone Bonjour 发布自恢复和 `voiceReadyV1` 语音就绪握手。
+- Mac App `1.8.25 (121)` 可安装内部测试构建或后续版本，包含 Apple Watch 专用入口、Watch BLE 服务、Phone Bonjour 发布自恢复、`voiceReadyV1` 语音就绪握手和完整音频链路诊断。
 - iOS / Watch `0.8.12 (25)` 或后续 TestFlight 构建；旧客户端仍可连接，但不能验证新增的安全分包和全链路诊断。
 
 ## 测试前准备
