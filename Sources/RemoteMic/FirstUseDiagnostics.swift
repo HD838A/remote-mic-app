@@ -12,6 +12,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
     case voiceSessionNotStarted = "voice.session_not_started"
     case voiceNoSamples = "voice.no_samples"
     case voiceSessionNotEnded = "voice.session_not_ended"
+    case voiceManualInput = "voice.manual_input"
     case voiceNoTranscript = "voice.no_transcript"
     case controlsNotConfirmed = "controls.not_confirmed"
     case completeRuntimeRegressed = "complete.runtime_regressed"
@@ -26,7 +27,11 @@ enum FirstUseFailureReason: String, Codable, Equatable {
             return .remote
         case .audioNoOutputDevice, .audioSelectedDeviceMissing, .audioOutputNotReady:
             return .audio
-        case .voiceSessionNotStarted, .voiceNoSamples, .voiceSessionNotEnded, .voiceNoTranscript:
+        case .voiceSessionNotStarted,
+             .voiceNoSamples,
+             .voiceSessionNotEnded,
+             .voiceManualInput,
+             .voiceNoTranscript:
             return .voiceTest
         case .controlsNotConfirmed:
             return .controls
@@ -85,6 +90,7 @@ struct FirstUseDiagnosticContext: Equatable {
             if !capabilities.voiceSessionStarted { return .voiceSessionNotStarted }
             if !capabilities.voiceSamplesReceived { return .voiceNoSamples }
             if !capabilities.voiceSessionEnded { return .voiceSessionNotEnded }
+            if capabilities.manualTranscriptInputObserved { return .voiceManualInput }
             if !capabilities.transcriptionAppeared { return .voiceNoTranscript }
         case .controls:
             if capabilities.testedRemoteButtonCount < 3 { return .controlsNotConfirmed }
@@ -159,6 +165,7 @@ struct FirstUseDiagnosticSnapshot {
             "voice_samples_received=\(capabilities.voiceSamplesReceived)",
             "voice_ended=\(capabilities.voiceSessionEnded)",
             "transcription_appeared=\(capabilities.transcriptionAppeared)",
+            "manual_transcript_input_observed=\(capabilities.manualTranscriptInputObserved)",
             "tested_button_count=\(capabilities.testedRemoteButtonCount)",
             "bluetooth_status=\(bluetoothStatus)",
             "button_status=\(buttonStatus)",

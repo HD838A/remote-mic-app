@@ -98,6 +98,12 @@ enum OnboardingScreenshotRenderer {
         defer { NSApp.appearance = previousAppearance }
 
         for (step, filename) in pages(for: controlMethod) {
+            settings.selectedAudioDeviceUID = switch step {
+            case .voiceTest, .controls, .complete:
+                DoubaoAudioDevicePolicy.deviceUID
+            default:
+                ""
+            }
             settings.setOnboardingStep(step)
             let rootView = OnboardingView(
                 model: model,

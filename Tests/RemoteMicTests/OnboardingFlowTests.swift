@@ -278,6 +278,13 @@ struct OnboardingFlowTests {
             capabilities: capabilities
         ))
         capabilities.transcriptionAppeared = true
+        capabilities.manualTranscriptInputObserved = true
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .voiceTest,
+            voiceTool: .typeless,
+            capabilities: capabilities
+        ))
+        capabilities.manualTranscriptInputObserved = false
         #expect(OnboardingFlowPolicy.canContinue(
             from: .voiceTest,
             voiceTool: .typeless,
@@ -407,11 +414,13 @@ struct OnboardingFlowTests {
         #expect(rendererSource.contains("controlMethod != .physicalRemote"))
         #expect(rendererSource.contains("return \"remote-availability\""))
         #expect(rendererSource.contains("return \"control-method\""))
+        #expect(rendererSource.contains("case .voiceTest, .controls, .complete:"))
+        #expect(rendererSource.contains("DoubaoAudioDevicePolicy.deviceUID"))
         #expect(buildSource.contains("$ROOT/Resources/Onboarding"))
         #expect(verifySource.contains("Resources/Onboarding/*.png(N)"))
     }
 
-    @Test func voiceTestReacquiresInputFocusAndAlignsItsPlaceholder() throws {
+    @Test func voiceTestReacquiresInputFocusAndRejectsManualKeyboardText() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -427,7 +436,10 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("transcriptFocused = false\n        DispatchQueue.main.async"))
         #expect(viewSource.contains("transcriptFocused = true"))
         #expect(viewSource.contains(".font(.system(size: 15))\n                        .foregroundStyle(.tertiary)\n                        .padding(.horizontal, 15)\n                        .padding(.vertical, 10)"))
-        #expect(!viewSource.contains(".onChange(of: transcript)"))
+        #expect(viewSource.contains(".onChange(of: transcript)"))
+        #expect(viewSource.contains("NSApp.currentEvent?.type == .keyDown"))
+        #expect(viewSource.contains("manualTranscriptInputObserved = true"))
+        #expect(viewSource.contains("transcript = \"\"\n                voiceSessionStarted = true"))
     }
 
     @Test func mobileControlPathsPublishButtonsAndVoiceSamplesForTheSharedGates() throws {
@@ -658,7 +670,7 @@ struct OnboardingFlowTests {
         #expect(rendererSource.contains("completeRuntimeReadyOverride: true"))
     }
 
-    @Test func audioStepOffersEveryAvailableOutputInsteadOfRequiringMiRemote() throws {
+    @Test func audioStepOnlyOffersRequiredMiRemoteV2ch() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -674,31 +686,34 @@ struct OnboardingFlowTests {
         ))
         let audioSource = viewSource[audioStart.lowerBound..<audioEnd.lowerBound]
 
-        #expect(audioSource.contains("ForEach(model.audioDevices"))
-        #expect(!audioSource.contains("DoubaoAudioDevicePolicy.device"))
+        #expect(audioSource.contains("if let requiredAudioDevice"))
+        #expect(!audioSource.contains("ForEach(model.audioDevices"))
         #expect(!audioSource.contains("Picker("))
         #expect(audioSource.contains("settings.selectedAudioDeviceUID = device.uid"))
         #expect(audioSource.contains("model.applyAudioSettings(reason: \"onboarding_audio_device_selected\")"))
+        #expect(viewSource.contains("DoubaoAudioDevicePolicy.device(in: model.audioDevices)"))
         #expect(viewSource.contains("onboarding.audio.on_demand_detail"))
         #expect(viewSource.contains("onboarding.permissions.mobile_network.title"))
         #expect(viewSource.contains("onboarding.permissions.mobile_network.detail"))
         #expect(viewSource.contains("onboarding.side.audio_on_demand"))
     }
 
-    @Test func availableBlackHoleCanSatisfyTheAudioSelectionGate() {
-        let availableUIDs = ["MiRemoteV2ch_UID", "BlackHole2ch_UID"]
-
-        #expect(OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+    @Test func onlyAvailableMiRemoteV2chCanSatisfyTheAudioSelectionGate() {
+        #expect(OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
+            selectedUID: "MiRemoteV2ch_UID",
+            requiredUID: "MiRemoteV2ch_UID"
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
             selectedUID: "BlackHole2ch_UID",
-            availableUIDs: availableUIDs
+            requiredUID: "MiRemoteV2ch_UID"
         ))
-        #expect(!OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
-            selectedUID: "missing",
-            availableUIDs: availableUIDs
-        ))
-        #expect(!OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+        #expect(!OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
             selectedUID: "",
-            availableUIDs: availableUIDs
+            requiredUID: "MiRemoteV2ch_UID"
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
+            selectedUID: "MiRemoteV2ch_UID",
+            requiredUID: nil
         ))
     }
 
@@ -894,8 +909,21 @@ struct OnboardingFlowTests {
         )
         #expect(context.failureReason == .audioSelectedDeviceMissing)
 
+        capabilities.voiceSessionStarted = true
+        capabilities.voiceSamplesReceived = true
+        capabilities.voiceSessionEnded = true
+        capabilities.transcriptionAppeared = true
+        capabilities.manualTranscriptInputObserved = true
+        context = FirstUseDiagnosticContext(
+            step: .voiceTest,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true
+        )
+        #expect(context.failureReason == .voiceManualInput)
+
         capabilities.audioOutputSelected = true
         capabilities.audioReady = true
+        capabilities.manualTranscriptInputObserved = false
         #expect(OnboardingFlowPolicy.recoveryStep(
             from: .complete,
             voiceTool: .typeless,

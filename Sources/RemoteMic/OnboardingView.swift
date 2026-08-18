@@ -36,6 +36,7 @@ struct OnboardingView: View {
     @State private var voiceSamplesReceived = false
     @State private var voiceSessionEnded = false
     @State private var transcript = ""
+    @State private var manualTranscriptInputObserved = false
     @State private var lastRecordedFailure: FirstUseFailureReason?
     @State private var inputSourceSwitchResult: OnboardingInputSourceSwitchResult = .notApplicable
     @State private var systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
@@ -144,6 +145,10 @@ struct OnboardingView: View {
             guard settings.onboardingStep == .voiceTest,
                   selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
             if isStreaming {
+                voiceSamplesReceived = false
+                voiceSessionEnded = false
+                manualTranscriptInputObserved = false
+                transcript = ""
                 voiceSessionStarted = true
             } else if voiceSessionStarted {
                 voiceSessionEnded = true
@@ -162,6 +167,14 @@ struct OnboardingView: View {
             AppLogger.shared.write("ONBOARDING TRANSCRIPT focus=\(isFocused)")
             guard isFocused, settings.onboardingStep == .voiceTest else { return }
             switchToSelectedInputMethod()
+        }
+        .onChange(of: transcript) { _, updatedText in
+            guard settings.onboardingStep == .voiceTest,
+                  transcriptFocused,
+                  !updatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  NSApp.currentEvent?.type == .keyDown else { return }
+            manualTranscriptInputObserved = true
+            AppLogger.shared.write("ONBOARDING TRANSCRIPT manual_keyboard_input=true")
         }
         .onChange(of: failureReason) { failure in
             recordFailureTransition(failure)
@@ -904,19 +917,15 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if model.audioDevices.isEmpty {
+            if let requiredAudioDevice {
+                audioDeviceRow(requiredAudioDevice)
+            } else {
                 statusCard(
                     icon: "waveform.badge.magnifyingglass",
                     title: localization.text("onboarding.audio.no_devices"),
                     detail: localization.text("onboarding.audio.device_detail"),
                     isComplete: false
                 )
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(model.audioDevices, id: \.uid) { device in
-                        audioDeviceRow(device)
-                    }
-                }
             }
 
             statusCard(
@@ -1349,7 +1358,7 @@ struct OnboardingView: View {
             }
         case .audio:
             sidePanel(titleKey: "onboarding.side.audio") {
-                sideCheck("onboarding.side.device_found", isComplete: !model.audioDevices.isEmpty)
+                sideCheck("onboarding.side.device_found", isComplete: requiredAudioDevice != nil)
                 sideCheck("onboarding.side.device_selected", isComplete: audioOutputSelected)
                 sideCheck(
                     settings.onboardingControlMethod.usesOnDemandAudioOutput
@@ -1368,7 +1377,7 @@ struct OnboardingView: View {
                         : "onboarding.side.audio_ready",
                     isComplete: onboardingAudioReady
                 )
-                sideCheck("onboarding.side.transcript", isComplete: transcriptionAppeared)
+                sideCheck("onboarding.side.transcript", isComplete: verifiedTranscriptionAppeared)
             }
         case .controls:
             sidePanel(titleKey: "onboarding.side.controls") {
@@ -1525,6 +1534,7 @@ struct OnboardingView: View {
             voiceSamplesReceived: voiceSamplesReceived,
             voiceSessionEnded: voiceSessionEnded,
             transcriptionAppeared: transcriptionAppeared,
+            manualTranscriptInputObserved: manualTranscriptInputObserved,
             testedRemoteButtonCount: testedControlButtons.count
         )
     }
@@ -1562,14 +1572,18 @@ struct OnboardingView: View {
         return diagnosticContext.failureReason
     }
 
+    private var requiredAudioDevice: AudioDeviceInfo? {
+        DoubaoAudioDevicePolicy.device(in: model.audioDevices)
+    }
+
     private var selectedAudioDevice: AudioDeviceInfo? {
-        model.audioDevices.first { $0.uid == settings.selectedAudioDeviceUID }
+        audioOutputSelected ? requiredAudioDevice : nil
     }
 
     private var audioOutputSelected: Bool {
-        OnboardingAudioSelectionPolicy.isSelectedDeviceAvailable(
+        OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
             selectedUID: settings.selectedAudioDeviceUID,
-            availableUIDs: model.audioDevices.lazy.map(\.uid)
+            requiredUID: requiredAudioDevice?.uid
         )
     }
 
@@ -1589,8 +1603,10 @@ struct OnboardingView: View {
     }
 
     private var selectedAudioDeviceDetail: String {
+        guard audioOutputSelected else {
+            return localization.text("onboarding.audio.device_detail")
+        }
         if settings.onboardingControlMethod.usesOnDemandAudioOutput,
-           audioOutputSelected,
            !model.isAudioOutputReady {
             return localization.text("onboarding.audio.on_demand_detail")
         }
@@ -1599,6 +1615,10 @@ struct OnboardingView: View {
 
     private var transcriptionAppeared: Bool {
         !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var verifiedTranscriptionAppeared: Bool {
+        transcriptionAppeared && !manualTranscriptInputObserved
     }
 
     private var selectedControlConnected: Bool {
@@ -1662,7 +1682,10 @@ struct OnboardingView: View {
     }
 
     private var voiceTestStatusText: String {
-        if transcriptionAppeared, voiceSessionEnded {
+        if manualTranscriptInputObserved {
+            return localization.text("onboarding.voice_test.manual_input")
+        }
+        if verifiedTranscriptionAppeared, voiceSessionEnded {
             return localization.text("onboarding.voice_test.success")
         }
         if voiceSamplesReceived {
@@ -1867,6 +1890,7 @@ struct OnboardingView: View {
             voiceSessionStarted = false
             voiceSamplesReceived = false
             voiceSessionEnded = false
+            manualTranscriptInputObserved = false
             transcript = ""
             switchToSelectedInputMethod()
             requestTranscriptFocus()
@@ -1933,7 +1957,10 @@ struct OnboardingView: View {
             model.refreshAudioDevices()
         case .audioOutputNotReady:
             model.applyAudioSettings(reason: "onboarding_recovery")
-        case .voiceSessionNotStarted, .voiceSessionNotEnded, .voiceNoTranscript:
+        case .voiceSessionNotStarted,
+             .voiceSessionNotEnded,
+             .voiceManualInput,
+             .voiceNoTranscript:
             resetVoiceTestForRetry()
         case .voiceNoSamples:
             model.applyAudioSettings(reason: "onboarding_voice_retry")
@@ -1955,6 +1982,7 @@ struct OnboardingView: View {
         voiceSessionStarted = false
         voiceSamplesReceived = false
         voiceSessionEnded = false
+        manualTranscriptInputObserved = false
         transcript = ""
         requestTranscriptFocus()
     }

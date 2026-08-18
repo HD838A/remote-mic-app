@@ -1,7 +1,9 @@
-# Onboarding 音频步骤错误地只接受 MiRemoteV 2ch
+# Onboarding 曾允许替代音频设备（历史方案，已撤销）
+
+> 2026-08-18 产品验收确认 Onboarding 必须选择无线麦配套的 `MiRemoteV 2ch`。本文件记录的“允许 BlackHole 和其他设备”方案已被撤销；当前结论见 [`2026-08-18-onboarding-miremote-and-manual-text-gates.md`](2026-08-18-onboarding-miremote-and-manual-text-gates.md)。
 
 - 时间：2026-08-11
-- 状态：候选修复完成，等待真实音频设备验收
+- 状态：历史方案，已被 2026-08-18 修复取代
 - 影响范围：macOS `1.8.8 (100)`、`1.8.9 (101)` 及后续未修复候选；使用 BlackHole 2ch 或其他音频回环设备的用户
 - 功能点：首次使用设置向导、音频输出选择、语音输入准备
 - 简单描述：BlackHole 2ch 已被用户选中且音频输出可用时，Onboarding 第五步仍要求改选 MiRemoteV 2ch，无法继续。
