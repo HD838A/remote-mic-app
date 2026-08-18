@@ -90,6 +90,7 @@
 - [ ] 在无线麦SayAll.app 内集成本地语音历史只读 MCP
   - 已将唯一正式运行时实现为 App 内 Swift `stdio` Helper，提供默认关闭总开关、每客户端 256-bit 授权、SHA-256 哈希、撤销、脱敏审计、App 列表和按时间/App 分页查询；App 内可一键连接 Codex、Claude Code、Cursor 和 OpenCode，并保留标准 MCP JSON、Codex TOML 手动降级，用户不需要 Node.js、npm 或开发工具。`GetSayAll/sayall-mcp` 只提供公开契约、Schema 和集成资料。
   - 主仓库提供中英文 AI 安装与 MCP 配置指南，约束 AI 必须先取得用户明确授权、不得静默开启访问或上传令牌，并说明完整 App 检查、快速连接、手动配置、验证和排障流程。
+  - canonical Helper 路径统一为 `/Applications/SayAll.app/Contents/Helpers/SayAllMCP`；非标准目录使用运行中 App 的真实路径。授权状态只保存 Helper 路径指纹，App 移动、改名或旧记录缺少指纹时显示移除并重新连接提示，不自动覆盖其他 MCP 配置。
   - 未发布的 Node 实现、旧目录和旧事件格式不纳入兼容；正式 `v1` 发布后保持 Helper 路径、`serve` 参数、环境变量、工具名、已发布字段语义和 `RemoteMic/MCP/v1/access.json` 向后兼容；`v1` 输出 Schema 为封闭对象，新增输出字段或其他破坏性变化使用新工具名或并行 `v2`。
   - MCP 只读现有 `Application Support/RemoteMic/Transcripts/v1`，不监听网络、不常驻、不修改或删除历史；自动化已覆盖四客户端配置合并、冲突拒绝、私有备份、移除和失败授权回滚，仍需在四个真实客户端完成连接、分页读取、撤销、关闭后拒绝和第三方数据处理人工验收后再勾选。
   - 已修复快速连接失败后重复显示“已撤销”授权的问题：客户端与配置先预检，安装中途失败的临时授权直接丢弃，授权列表只显示有效授权；同一快速客户端和同名手动客户端不能重复生效，并按 CLI、配置格式、同名冲突、路径安全、写入或安装命令显示具体失败原因。

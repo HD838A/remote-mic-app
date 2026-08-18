@@ -15,13 +15,13 @@
 默认安装位置：
 
 ```text
-/Applications/Remote Mic.app
+/Applications/SayAll.app
 ```
 
 随包 Swift MCP Helper：
 
 ```text
-/Applications/Remote Mic.app/Contents/Helpers/SayAllMCP
+/Applications/SayAll.app/Contents/Helpers/SayAllMCP
 ```
 
 确认 App 与 Helper 均存在，而且 Helper 可执行。缺少 Helper 时，应让用户重新安装完整无线麦SayAll.app，不要尝试用 Node.js 或源码替代。
@@ -67,7 +67,7 @@ App 内快速连接支持 Codex、Claude Code、Cursor 和 OpenCode。它会为�
 
 ```toml
 [mcp_servers.sayall_history]
-command = "/Applications/Remote Mic.app/Contents/Helpers/SayAllMCP"
+command = "/Applications/SayAll.app/Contents/Helpers/SayAllMCP"
 args = ["serve"]
 env = { SAYALL_MCP_CLIENT_ID = "<由 App 生成>", SAYALL_MCP_ACCESS_TOKEN = "<由 App 生成>" }
 ```
@@ -108,7 +108,7 @@ OpenCode 本地 Server 的格式为：
     "sayall_history": {
       "type": "local",
       "command": [
-        "/Applications/Remote Mic.app/Contents/Helpers/SayAllMCP",
+        "/Applications/SayAll.app/Contents/Helpers/SayAllMCP",
         "serve"
       ],
       "environment": {
@@ -130,6 +130,7 @@ OpenCode 本地 Server 的格式为：
 - 提示同名 MCP：检查目标配置中的 `sayall_history`，不要覆盖用户自行维护的同名 Server；可以改用手动配置或先由用户移除冲突项。
 - Codex 报告 `missing escaped value`：检查是否是旧测试版生成了包含 `\/` 的 Helper 路径；撤销旧授权并使用修复后的无线麦SayAll.app 重新连接，不要继续使用已经贴入聊天或公开位置的令牌。
 - Helper 不存在或不可执行：重新安装完整无线麦SayAll.app。
+- 页面提示 App 位置已变化：旧配置仍指向移动前的 Helper。先在无线麦SayAll.app 中移除对应连接，再重新连接；不要手工覆盖其他 MCP Server。
 - 能连接但不能读取：确认“允许访问”仍开启、对应授权未撤销，并且“回眸”中已有记录。
 - App 被移动到其他目录：旧配置中的绝对 Helper 路径会失效；把 App 放回 `/Applications`，或在 App 内移除连接后重新连接。
 - 更换客户端或不再使用：在“已授权客户端”或对应客户端卡中移除连接。关闭总开关会立即阻止全部客户端，但不会删除历史。
@@ -138,4 +139,4 @@ OpenCode 本地 Server 的格式为：
 
 正式 `v1` 会保持 Helper 路径、`serve` 参数、两个环境变量以及 `list_transcript_apps`、`query_transcripts` 的已发布语义向后兼容。新版可以增加可选能力，但不会要求普通用户安装编程环境。
 
-历史与授权状态保存在当前 macOS 用户的 Application Support 中。授权文件只保存令牌哈希；客户端配置必须保存实际令牌才能启动本地 MCP，因此这些配置应保持用户私有权限，不能同步到公开仓库。
+历史与授权状态保存在当前 macOS 用户的 Application Support 中。授权文件只保存令牌和 Helper 路径的哈希，不保存明文令牌或原始 App 路径；客户端配置必须保存实际令牌和 Helper 路径才能启动本地 MCP，因此这些配置应保持用户私有权限，不能同步到公开仓库。

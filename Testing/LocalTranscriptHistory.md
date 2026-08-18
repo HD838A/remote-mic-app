@@ -2,8 +2,8 @@
 
 ## 适用范围
 
-- 分支：`codex/local-transcript-history`
-- 测试版本：Remote Mic `1.8.5 (68)`
+- 分支：`codex/v1-9-0-history-mcp`
+- 测试版本：无线麦SayAll.app `1.9.0` 候选（Build 待发布会话确定）
 - 平台：Apple Silicon macOS 14 及以上
 - 功能入口：设置窗口侧边栏“回眸”（英文为 “Reflections”），位于“统计”下方
 - 当前阶段：候选代码验证；尚未发布

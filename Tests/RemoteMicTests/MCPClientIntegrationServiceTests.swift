@@ -266,12 +266,79 @@ struct MCPClientIntegrationServiceTests {
 
         #expect(model.error == nil)
         #expect(model.activeAuthorization(for: .cursor) != nil)
+        #expect(!model.needsReconnect(.cursor))
         #expect(try store.listAuthorizations().count == 1)
         #expect(
             FileManager.default.fileExists(
                 atPath: home.appendingPathComponent(".cursor/mcp.json").path
             )
         )
+    }
+
+    @MainActor
+    @Test func noncanonicalAppPathWorksAndMovingItRequiresReconnect() async throws {
+        let home = temporaryDirectory("moved-app")
+        let accessRoot = home.appendingPathComponent("access")
+        let originalHelper = home
+            .appendingPathComponent("Preview Builds/SayAll Preview.app")
+            .appendingPathComponent("Contents/Helpers/SayAllMCP")
+        try createParent(of: originalHelper)
+        _ = FileManager.default.createFile(atPath: originalHelper.path, contents: Data())
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: originalHelper.path
+        )
+        let store = SayAllMCPAuthorizationStore(accessRoot: accessRoot)
+        let initialModel = TranscriptAgentAccessModel(
+            authorizationStore: store,
+            integrationService: makeService(home: home),
+            helperExecutableURL: { originalHelper }
+        )
+        initialModel.setEnabled(true)
+        initialModel.connect(.cursor)
+        try await waitForIntegration(initialModel)
+
+        #expect(initialModel.activeAuthorization(for: .cursor) != nil)
+        #expect(!initialModel.needsReconnect(.cursor))
+
+        let movedHelper = URL(
+            fileURLWithPath: "/Applications/SayAll.app/Contents/Helpers/SayAllMCP"
+        )
+        let relaunchedModel = TranscriptAgentAccessModel(
+            authorizationStore: store,
+            integrationService: makeService(home: home),
+            helperExecutableURL: { movedHelper }
+        )
+        relaunchedModel.refresh()
+
+        #expect(relaunchedModel.needsReconnect(.cursor))
+    }
+
+    @MainActor
+    @Test func legacyRemoteMicPathAndUnfingerprintedRecordsRequireReconnect() throws {
+        let home = temporaryDirectory("legacy-path")
+        let store = SayAllMCPAuthorizationStore(
+            accessRoot: home.appendingPathComponent("access")
+        )
+        try store.setEnabled(true)
+        _ = try store.createAuthorization(
+            displayName: "Codex",
+            integrationIdentifier: MCPClientKind.codex.rawValue,
+            helperExecutablePath: "/Applications/Remote Mic.app/Contents/Helpers/SayAllMCP"
+        )
+        _ = try store.createAuthorization(displayName: "Legacy Manual Client")
+        let model = TranscriptAgentAccessModel(
+            authorizationStore: store,
+            integrationService: makeService(home: home),
+            helperExecutableURL: {
+                URL(fileURLWithPath: "/Applications/SayAll.app/Contents/Helpers/SayAllMCP")
+            }
+        )
+
+        model.refresh()
+
+        #expect(model.needsReconnect(.codex))
+        #expect(model.authorizations.allSatisfy(model.needsReconnect))
     }
 
     @MainActor
@@ -344,7 +411,7 @@ struct MCPClientIntegrationServiceTests {
                 createdAt: Date(timeIntervalSince1970: 0)
             ),
             helperExecutableURL: URL(
-                fileURLWithPath: "/Applications/Remote Mic.app/Contents/Helpers/SayAllMCP"
+                fileURLWithPath: "/Applications/SayAll.app/Contents/Helpers/SayAllMCP"
             )
         )
     }

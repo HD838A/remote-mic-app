@@ -12,6 +12,7 @@ public struct SayAllMCPAuthorizationRecord: Codable, Identifiable, Equatable, Se
     public let integrationIdentifier: String?
     public let scope: String
     public let tokenHash: String
+    public let helperExecutablePathHash: String?
     public let createdAt: Date
     public var revokedAt: Date?
 
@@ -81,7 +82,8 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
 
     public func createAuthorization(
         displayName: String,
-        integrationIdentifier: String? = nil
+        integrationIdentifier: String? = nil,
+        helperExecutablePath: String? = nil
     ) throws -> SayAllMCPCreatedAuthorization {
         try queue.sync {
             var state = try loadState()
@@ -131,6 +133,7 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
                     integrationIdentifier: integrationIdentifier,
                     scope: "transcripts.read.all",
                     tokenHash: Self.hashToken(token),
+                    helperExecutablePathHash: helperExecutablePath.map(Self.helperExecutablePathHash),
                     createdAt: createdAt,
                     revokedAt: nil
                 )
@@ -272,6 +275,9 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
                       of: #"^[a-f0-9]{64}$"#,
                       options: .regularExpression
                   ) != nil,
+                  authorization.helperExecutablePathHash.map({
+                      $0.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression) != nil
+                  }) ?? true,
                   authorization.revokedAt.map({ $0 >= authorization.createdAt }) ?? true
             else {
                 throw SayAllMCPStorageError.invalidAccessState
@@ -305,6 +311,16 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
 
     private static func hashToken(_ token: String) -> String {
         SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    public static func helperExecutablePathHash(_ path: String) -> String {
+        let normalizedPath = URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .path
+        return SHA256.hash(data: Data(normalizedPath.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private static func constantTimeEqual(_ left: Data, _ right: Data) -> Bool {

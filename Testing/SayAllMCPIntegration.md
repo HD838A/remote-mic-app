@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 分支：`codex/sayall-mcp-integration`
+- 分支：`codex/v1-9-0-history-mcp`
 - 平台：macOS 14 及以上 Apple Silicon；Intel Ventura 构建需单独验证
 - 功能：无线麦SayAll.app“回眸”页面、App 包内 Swift MCP Helper、授权与只读查询
 - 契约版本：正式首发候选 `v1`
@@ -34,7 +34,7 @@
 3. 分别点击“复制标准 MCP JSON”和“复制 Codex TOML”。
 4. 检查授权列表和 `RemoteMic/MCP/v1/access.json` 权限。
 
-预期结果：每次创建产生不同 client ID 和令牌；配置指向当前 App 内 `Contents/Helpers/SayAllMCP` 并使用 `serve`；状态文件包含 `schemaVersion: 1`，只保存 SHA-256 哈希；目录为 `0700`、文件为 `0600`。
+预期结果：每次创建产生不同 client ID 和令牌；配置指向当前 App 内 `Contents/Helpers/SayAllMCP` 并使用 `serve`；标准安装路径为 `/Applications/SayAll.app/Contents/Helpers/SayAllMCP`，从其他目录运行时使用该 App 的真实绝对路径；状态文件包含 `schemaVersion: 1`，只保存令牌和 Helper 路径的 SHA-256 哈希，不保存原始值；目录为 `0700`、文件为 `0600`。
 
 失败判定：令牌写入 UserDefaults、日志或状态文件，客户端共用凭据，Helper 路径指向源码/Node.js，或权限过宽。
 
@@ -70,6 +70,18 @@
 预期结果：`command` 中的路径分隔符保持 `/`，不出现 `\/`；Codex 能加载完整配置、创建会话并启动 `sayall_history`。
 
 失败判定：Codex 报告 `missing escaped value`、任何路径分隔符写成 `\/`、整个配置无法加载，或为了生效要求重启无线麦。
+
+## 用例 3C：App 改名、移动和旧路径配置
+
+1. 从 `/Applications/SayAll.app` 快速连接一个客户端并确认可用。
+2. 退出无线麦SayAll.app，把测试 App 移到包含空格的其他目录后重新启动。
+3. 打开“回眸”，检查原客户端状态；不要直接编辑客户端配置。
+4. 准备一份由旧测试版生成、Helper 指向 `/Applications/Remote Mic.app/Contents/Helpers/SayAllMCP` 的授权状态，再从 `/Applications/SayAll.app` 启动。
+5. 按页面提示先移除对应连接，再重新连接，检查目标配置中的其他 MCP Server。
+
+预期结果：非标准目录首次连接时使用当前真实 Helper 路径；移动后和旧 `Remote Mic.app` 路径均显示明确的重新连接提示。移除和重连只处理 `sayall_history` 或 Codex 的 SayAll 托管区块，其他 MCP 和客户端设置保持不变；授权文件只保存路径指纹，不保存原始自定义目录。
+
+失败判定：移动后仍错误显示健康、客户端继续静默使用不存在的旧 Helper、自动覆盖同名非托管 MCP、改写或删除其他 MCP、日志或授权文件暴露用户自定义 App 路径。
 
 ## 用例 4：时间、App、顺序与分页
 
@@ -143,7 +155,7 @@
 - RC003 普通语音、Nearby iOS、网页版、Fn 注入、按键映射、统计和私有 AI 组件行为保持。
 - 无历史目录时 MCP 返回空集合，不创建伪造历史。
 - App 删除记录后，MCP 后续查询不再返回已删除内容；MCP 自身不能删除或写入历史。
-- App 更新后 Helper 仍具有正确架构、执行权限和签名，安装路径稳定时旧配置继续可用。
+- App 更新后 Helper 仍具有正确架构、执行权限和签名，安装路径稳定时旧配置继续可用；App 改名或移动后显示重新连接提示，不自动覆盖其他 MCP。
 - 旧状态文件中的撤销授权不再显示为“已授权客户端”，但仍保持不可用；升级不会自动改变现有有效授权或客户端配置。
 
 ## 日志收集方式
@@ -155,6 +167,6 @@
 
 ## 自动化、代理实测和用户实测边界
 
-自动化覆盖 v1 状态、默认关闭、令牌哈希、权限、未来 Schema 拒绝、错误凭据、有效授权唯一性、撤销、历史解析、时间/App 筛选、排序、分页、内部字段排除、配置生成、Codex TOML 合法转义、四客户端预检、安全合并与移除、冲突拒绝、失败临时授权丢弃、撤销记录隐藏、唯一 `serve` 入口和打包接线。完整 `swift test` 共 263 项、27 个 Suite，通过；临时数据真实 stdio 已验证初始化、`tools/list`、两个工具、默认关闭拒绝、stdout/stderr 分离和 `nextCursor: null`；四份公开 Schema 与 Helper 完全一致。
+自动化覆盖 v1 状态、默认关闭、令牌及 Helper 路径哈希、旧状态兼容、非标准运行路径、移动后和旧 `Remote Mic.app` 路径检测、权限、未来 Schema 拒绝、错误凭据、有效授权唯一性、撤销、历史解析、时间/App 筛选、排序、分页、内部字段排除、配置生成、Codex TOML 合法转义、四客户端预检、安全合并与移除、冲突拒绝、失败临时授权丢弃、撤销记录隐藏、唯一 `serve` 入口和打包接线。真实客户端、Intel Ventura 和最终签名包结果以本次候选验证记录为准。
 
 构建与签名只能证明随包 Helper 可执行，不能替代真实 Codex、Claude Code、Cursor、OpenCode 的 MCP 协议兼容性和各自云端数据处理验证。用户仍需在自己选择的 AI 客户端中确认配置位置、关闭并重新打开后的加载行为、真实分页、撤销即时生效，以及该客户端是否会把返回内容上传给第三方服务商。

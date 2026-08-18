@@ -624,6 +624,7 @@
 "statistics.transcripts.agent_access.quick_connect" = "Connect AI Tools";
 "statistics.transcripts.agent_access.quick_connect_description" = "无线麦SayAll.app creates a separate read-only authorization and updates local configuration for the selected tool. Quit and reopen that AI tool after connecting; SayAll does not need to restart.";
 "statistics.transcripts.agent_access.connected" = "Connected · Reopen %@";
+"statistics.transcripts.agent_access.path_changed" = "The App location changed. Remove this connection, then connect it again.";
 "statistics.transcripts.agent_access.ready" = "Ready to connect";
 "statistics.transcripts.agent_access.not_installed" = "Not detected";
 "statistics.transcripts.agent_access.connect" = "Connect";

@@ -624,6 +624,7 @@
 "statistics.transcripts.agent_access.quick_connect" = "连接 AI 工具";
 "statistics.transcripts.agent_access.quick_connect_description" = "无线麦SayAll.app 会为所选工具创建独立只读授权并写入本机配置；连接后请关闭并重新打开对应 AI 工具，无需重启无线麦。";
 "statistics.transcripts.agent_access.connected" = "已连接 · 请重新打开 %@";
+"statistics.transcripts.agent_access.path_changed" = "App 位置已变化，请先移除这个连接，再重新连接。";
 "statistics.transcripts.agent_access.ready" = "可连接";
 "statistics.transcripts.agent_access.not_installed" = "未检测到安装";
 "statistics.transcripts.agent_access.connect" = "连接";

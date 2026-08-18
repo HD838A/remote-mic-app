@@ -21,7 +21,7 @@
 - App 包内的 Swift `Contents/Helpers/SayAllMCP` 是唯一正式运行时，用户不需要安装 Node.js、npm、Homebrew、Xcode 或克隆源码。
 - `GetSayAll/sayall-mcp` 只保存公开接口契约、JSON Schema、配置示例、兼容政策和测试资料，不再提供另一套运行时。
 - Helper 只接受 `serve` 参数，使用 stdin/stdout 处理 MCP JSON-RPC，不监听网络端口；stdout 仅输出协议消息，诊断写 stderr。
-- 授权状态保存在 `Application Support/RemoteMic/MCP/v1/access.json`，包含 `schemaVersion: 1`、总开关和授权列表；目录权限 `0700`、文件权限 `0600`，拒绝符号链接和非普通文件。
+- 授权状态保存在 `Application Support/RemoteMic/MCP/v1/access.json`，包含 `schemaVersion: 1`、总开关和授权列表；令牌与 Helper 位置只保存 SHA-256 哈希。目录权限 `0700`、文件权限 `0600`，拒绝符号链接和非普通文件。
 - 每个客户端使用 256-bit 随机令牌，只保存 SHA-256 哈希；Helper 启动及每次工具调用都重新检查开关、令牌和撤销状态。
 - Codex 只维护带 SayAll 标记的独立 TOML 区块；Cursor 和 OpenCode 只在严格 JSON 可解析时合并 `sayall_history`；Claude Code 使用官方用户级 CLI。写入前创建权限为 `0600` 的碰撞安全备份，冲突或 JSONC 不强行覆盖。
 - Codex TOML 使用独立的 basic string 转义器，路径分隔符 `/` 保持原样；连接状态提示关闭并重新打开具体 AI 客户端，无需重启无线麦。
@@ -47,17 +47,18 @@
 
 本功能未上线，因此不兼容未发布的 Node 实现、旧目录或旧事件格式。正式 `v1` 发布后执行以下向后兼容政策：
 
-- 保持 App 包内 Helper 路径、`serve` 参数、`SAYALL_MCP_CLIENT_ID` 和 `SAYALL_MCP_ACCESS_TOKEN` 环境变量稳定；
+- canonical Helper 为 `/Applications/SayAll.app/Contents/Helpers/SayAllMCP`；从非标准位置运行时生成当前真实路径。App 改名、移动或旧记录缺少路径指纹时提示用户移除并重新连接，不自动覆盖其他 MCP；
+- 保持 `serve` 参数、`SAYALL_MCP_CLIENT_ID` 和 `SAYALL_MCP_ACCESS_TOKEN` 环境变量稳定；
 - 不改名或删除 `list_transcript_apps`、`query_transcripts`，不改变已发布输入字段语义，不删除或改名已发布的必需输出字段；
 - 新能力可以增加可选输入字段或新工具；由于 `v1` 输出 Schema 是封闭对象，新增输出字段使用新工具名或并行 `v2`；
 - 新版无线麦SayAll.app 继续读取 `RemoteMic/MCP/v1/access.json` 和 `RemoteMic/Transcripts/v1`；未来格式使用新版本目录，不覆盖 `v1`；
 - 当前版本拒绝未知的未来 `access.json` Schema，避免错误解释新格式；这不影响未来新版继续读取已发布的 `v1` 数据。
 
-配置包含当前 App 内 Helper 的绝对路径。只要 App 保持在同一路径，新版继续兼容旧 Agent 配置；用户移动或重新安装到不同路径后，需要从 App 重新复制配置。
+配置包含当前 App 内 Helper 的绝对路径。只要 App 保持在同一路径，新版继续兼容旧 Agent 配置；用户移动、改名或从旧 `Remote Mic.app` 迁移后，页面会依据私有路径指纹提示移除并重新连接。该流程只修改 SayAll 自己的配置项。
 
 ## 验证与当前状态
 
-当前状态：原生 Helper、默认关闭、App 内授权管理、四客户端快速连接、手动配置降级、两个只读工具和打包接线已经实现；Codex 无效 TOML 路径转义已修复，等待真实 MCP 客户端验收。
+当前状态：原生 Helper、默认关闭、App 内授权管理、四客户端快速连接、手动配置降级、两个只读工具和打包接线已经实现；Codex 无效 TOML 路径转义及 App 改名/移动后的旧 Helper 路径提示已修复，等待真实 MCP 客户端验收。
 
 完整 `swift test` 共 263 项、27 个 Suite 全部通过；其中快速连接自动化覆盖连接前预检、健康客户端单次成功、失败临时授权丢弃、撤销记录隐藏、Codex 托管区块与合法 TOML 路径转义、Claude Code CLI、Cursor/OpenCode 合并、同名冲突、JSONC 拒绝、私有备份和移除。其余自动化覆盖默认关闭、v1 状态文件、未来 Schema 拒绝、令牌哈希和权限、有效授权唯一性、撤销、历史解析、时间/App 筛选、分页、内部字段排除、配置生成和 Helper 唯一入口。临时数据真实 stdio 已验证初始化、`tools/list`、两个工具、默认关闭拒绝、stdout/stderr 分离及无下一页时显式返回 `nextCursor: null`；四份公开 Schema 与 Helper 完全一致。人工测试见 [`Testing/SayAllMCPIntegration.md`](../../Testing/SayAllMCPIntegration.md)。
 

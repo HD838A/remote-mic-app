@@ -32,6 +32,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
     @Published private(set) var copiedConfiguration: ConfigurationKind?
     @Published private(set) var integrationInProgress: MCPClientKind?
     @Published private(set) var failedClient: MCPClientKind?
+    @Published private(set) var authorizationsNeedingReconnect: Set<UUID> = []
 
     enum ConfigurationKind {
         case standardJSON
@@ -63,6 +64,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
             authorizations = try authorizationStore.listAuthorizations().filter {
                 $0.revokedAt == nil
             }
+            refreshReconnectRequirements()
             error = nil
             failedClient = nil
         } catch {
@@ -99,7 +101,8 @@ final class TranscriptAgentAccessModel: ObservableObject {
         }
         do {
             let authorization = try authorizationStore.createAuthorization(
-                displayName: normalizedName
+                displayName: normalizedName,
+                helperExecutablePath: helperURL.path
             )
             generatedConfiguration = try SayAllMCPIntegrationConfig(
                 authorization: authorization,
@@ -109,6 +112,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
             authorizations = try authorizationStore.listAuthorizations().filter {
                 $0.revokedAt == nil
             }
+            refreshReconnectRequirements()
             copiedConfiguration = nil
             error = nil
             failedClient = nil
@@ -136,6 +140,14 @@ final class TranscriptAgentAccessModel: ObservableObject {
         }
     }
 
+    func needsReconnect(_ authorization: SayAllMCPAuthorizationRecord) -> Bool {
+        authorizationsNeedingReconnect.contains(authorization.clientId)
+    }
+
+    func needsReconnect(_ client: MCPClientKind) -> Bool {
+        activeAuthorization(for: client).map(needsReconnect) ?? false
+    }
+
     func connect(_ client: MCPClientKind) {
         guard integrationInProgress == nil else { return }
         guard activeAuthorization(for: client) == nil else { return }
@@ -159,7 +171,8 @@ final class TranscriptAgentAccessModel: ObservableObject {
                 try integrationService.preflight(client)
                 let authorization = try authorizationStore.createAuthorization(
                     displayName: client.displayName,
-                    integrationIdentifier: client.rawValue
+                    integrationIdentifier: client.rawValue,
+                    helperExecutablePath: helperURL.path
                 )
                 do {
                     let configuration = try SayAllMCPIntegrationConfig(
@@ -210,6 +223,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 authorizations = result.authorizations
+                refreshReconnectRequirements()
                 if result.error == nil {
                     generatedConfiguration = nil
                     copiedConfiguration = nil
@@ -260,6 +274,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 authorizations = result.authorizations.filter { $0.revokedAt == nil }
+                refreshReconnectRequirements()
                 if generatedConfiguration?.authorization.clientId == authorization.clientId {
                     generatedConfiguration = nil
                 }
@@ -276,6 +291,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
             authorizations = try authorizationStore.listAuthorizations().filter {
                 $0.revokedAt == nil
             }
+            refreshReconnectRequirements()
             if generatedConfiguration?.authorization.clientId == authorization.clientId {
                 generatedConfiguration = nil
             }
@@ -310,6 +326,19 @@ final class TranscriptAgentAccessModel: ObservableObject {
                 self?.copiedConfiguration = nil
             }
         }
+    }
+
+    private func refreshReconnectRequirements() {
+        let currentHash = SayAllMCPAuthorizationStore.helperExecutablePathHash(
+            helperExecutableURL().path
+        )
+        authorizationsNeedingReconnect = Set(
+            authorizations.compactMap { authorization in
+                authorization.helperExecutablePathHash == currentHash
+                    ? nil
+                    : authorization.clientId
+            }
+        )
     }
 
     nonisolated private static func accessError(

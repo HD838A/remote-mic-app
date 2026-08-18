@@ -14,13 +14,18 @@ struct SayAllMCPAuthorizationStoreTests {
         }
 
         try store.setEnabled(true)
-        let created = try store.createAuthorization(displayName: "Codex")
+        let helperPath = "/Applications/SayAll.app/Contents/Helpers/SayAllMCP"
+        let created = try store.createAuthorization(
+            displayName: "Codex",
+            helperExecutablePath: helperPath
+        )
         let restored = try #require(store.listAuthorizations().first)
         #expect(restored.clientId == created.clientId)
         #expect(restored.displayName == "Codex")
         #expect(restored.integrationIdentifier == nil)
         #expect(restored.tokenHash.count == 64)
         #expect(restored.tokenHash != created.token)
+        #expect(restored.helperExecutablePathHash?.count == 64)
         #expect(
             try store.requireAuthorized(
                 clientId: created.clientId.uuidString,
@@ -31,6 +36,7 @@ struct SayAllMCPAuthorizationStoreTests {
         let stateFile = root.appendingPathComponent("access.json")
         let rawState = try String(contentsOf: stateFile, encoding: .utf8)
         #expect(!rawState.contains(created.token))
+        #expect(!rawState.contains(helperPath))
         let permissions = try #require(
             FileManager.default.attributesOfItem(atPath: stateFile.path)[.posixPermissions]
                 as? NSNumber
@@ -137,6 +143,7 @@ struct SayAllMCPAuthorizationStoreTests {
         let store = SayAllMCPAuthorizationStore(accessRoot: root)
         #expect(try store.isEnabled())
         #expect(try store.listAuthorizations().first?.clientId == clientId)
+        #expect(try store.listAuthorizations().first?.helperExecutablePathHash == nil)
 
         try Data(state.replacingOccurrences(
             of: "\"schemaVersion\" : 1",

@@ -87,9 +87,12 @@ struct TranscriptAgentAccessSection: View {
 
     private func clientCard(_ client: MCPClientKind) -> some View {
         let connected = model.activeAuthorization(for: client) != nil
+        let needsReconnect = model.needsReconnect(client)
         let available = model.isAvailable(client)
         let isWorking = model.integrationInProgress == client
-        let status = connected
+        let status = needsReconnect
+            ? localization.text("statistics.transcripts.agent_access.path_changed")
+            : connected
             ? String(
                 format: localization.text(
                     "statistics.transcripts.agent_access.connected"
@@ -125,7 +128,7 @@ struct TranscriptAgentAccessSection: View {
                     .lineLimit(1)
                 Text(status)
                 .font(.system(size: 12))
-                .foregroundStyle(connected ? Color.green : .secondary)
+                .foregroundStyle(needsReconnect ? Color.orange : (connected ? Color.green : .secondary))
             }
 
             Spacer(minLength: 6)
@@ -275,6 +278,12 @@ struct TranscriptAgentAccessSection: View {
                 Text(authorizationDate(authorization.createdAt))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                if model.needsReconnect(authorization) {
+                    Text("statistics.transcripts.agent_access.path_changed")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 12)
             if authorization.revokedAt == nil {

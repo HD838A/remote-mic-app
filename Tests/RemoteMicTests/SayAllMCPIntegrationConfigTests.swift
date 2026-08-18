@@ -12,7 +12,7 @@ struct SayAllMCPIntegrationConfigTests {
             token: "test-token-that-is-long-enough-for-the-helper",
             createdAt: Date(timeIntervalSince1970: 0)
         )
-        let helper = URL(fileURLWithPath: "/Applications/Remote Mic.app/Contents/Helpers/SayAllMCP")
+        let helper = URL(fileURLWithPath: "/Applications/SayAll.app/Contents/Helpers/SayAllMCP")
         let configuration = try SayAllMCPIntegrationConfig(
             authorization: authorization,
             helperExecutableURL: helper
@@ -28,7 +28,7 @@ struct SayAllMCPIntegrationConfigTests {
         #expect(!configuration.codexTOML.contains(#"\/"#))
         #expect(
             configuration.codexTOML.contains(
-                "command = \"/Applications/Remote Mic.app/Contents/Helpers/SayAllMCP\""
+                "command = \"/Applications/SayAll.app/Contents/Helpers/SayAllMCP\""
             )
         )
     }
@@ -42,7 +42,7 @@ struct SayAllMCPIntegrationConfigTests {
             createdAt: Date(timeIntervalSince1970: 0)
         )
         let helper = URL(
-            fileURLWithPath: "/Applications/Remote \"Mic\"\\Build\n.app/Contents/Helpers/SayAllMCP"
+            fileURLWithPath: "/Users/test/Preview Builds/SayAll \"Dev\"\\Build\n.app/Contents/Helpers/SayAllMCP"
         )
         let configuration = try SayAllMCPIntegrationConfig(
             authorization: authorization,
@@ -50,7 +50,7 @@ struct SayAllMCPIntegrationConfigTests {
         )
 
         #expect(!configuration.codexTOML.contains(#"\/"#))
-        #expect(configuration.codexTOML.contains(#"Remote \"Mic\"\\Build\n.app"#))
+        #expect(configuration.codexTOML.contains(#"SayAll \"Dev\"\\Build\n.app"#))
         #expect(configuration.codexTOML.contains(#"token-with-quote-\"-slash-\\-and-newline-\n"#))
     }
 
