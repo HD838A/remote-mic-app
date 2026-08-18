@@ -99,6 +99,7 @@
 "trigger.double_click" = "双击";
 "trigger.long_press" = "长按";
 "app.name" = "无线麦";
+"macro.integration.focus_mcp_boundary" = "“学习输入框”只负责把光标放到目标 App 的输入位置；“回眸”中的 Codex MCP / TOML 只负责授权读取本地历史，两者互不替代。";
 "application.wechat" = "微信";
 "application.wecom" = "企业微信";
 "application.netease_music" = "网易云音乐";

@@ -507,15 +507,28 @@ struct SettingsView: View {
             }
         case .macros:
             if macroFeature.isFeatureVisible {
-                macroFeature.settingsView(
-                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
-                    configuredActionTitle: { buttonValue, triggerValue in
-                        guard let button = RemoteButton(rawValue: buttonValue),
-                              let trigger = ButtonTrigger(rawValue: triggerValue)
-                        else { return nil }
-                        return mappingActionSummary(for: button, trigger: trigger)
-                    }
-                )
+                VStack(spacing: 0) {
+                    macroFeature.settingsView(
+                        selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                        configuredActionTitle: { buttonValue, triggerValue in
+                            guard let button = RemoteButton(rawValue: buttonValue),
+                                  let trigger = ButtonTrigger(rawValue: triggerValue)
+                            else { return nil }
+                            return mappingActionSummary(for: button, trigger: trigger)
+                        }
+                    )
+                    Divider()
+                    Label(
+                        localization.text("macro.integration.focus_mcp_boundary"),
+                        systemImage: "info.circle"
+                    )
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 10)
+                }
             } else {
                 aboutPage
             }

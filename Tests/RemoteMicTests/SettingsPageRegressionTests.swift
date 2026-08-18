@@ -571,6 +571,18 @@ struct SettingsPageRegressionTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
             encoding: .utf8
         )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent(
+                "Resources/zh-Hans.lproj/Localizable.strings"
+            ),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent(
+                "Resources/en.lproj/Localizable.strings"
+            ),
+            encoding: .utf8
+        )
 
         #expect(integration.contains("#if canImport(SayAllMacroRemoteMic)"))
         #expect(integration.contains("feature.executeBoundMacro"))
@@ -578,10 +590,16 @@ struct SettingsPageRegressionTests {
         #expect(integration.contains("feature.noteButtonInteraction"))
         #expect(integration.contains("@Published private(set) var isEditorActive"))
         #expect(settings.contains("macroFeature.settingsView"))
+        #expect(settings.contains("macro.integration.focus_mcp_boundary"))
+        #expect(settings.contains(".font(.system(size: 12))"))
         #expect(settings.contains("macroFeature.enrollmentView"))
         #expect(settings.contains("macroFeature.setEditorActive(selectedSection == .macros)"))
         #expect(model.contains("return (resolvedProfileID, !self.macroFeature.isEditorActive)"))
         #expect(model.contains("if macroFeature.isEditorActive"))
+        #expect(chinese.contains("输入框"))
+        #expect(chinese.contains("MCP / TOML"))
+        #expect(english.contains("Learn Input Field"))
+        #expect(english.contains("MCP / TOML"))
         #expect(!settings.contains("macro_buttons"))
         #expect(!settings.contains("EarlyAccessController"))
     }

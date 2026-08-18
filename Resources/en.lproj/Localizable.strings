@@ -99,6 +99,7 @@
 "trigger.double_click" = "Double-click";
 "trigger.long_press" = "Long-press";
 "app.name" = "SayAll";
+"macro.integration.focus_mcp_boundary" = "Learn Input Field only places the cursor in the target app. Codex MCP / TOML under Reflections only authorizes local history access; neither replaces the other.";
 "application.wechat" = "WeChat";
 "application.wecom" = "WeCom";
 "application.netease_music" = "NetEase Cloud Music";
