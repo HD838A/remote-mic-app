@@ -2,6 +2,12 @@
 
 [简体中文](README.md)
 
+<p>
+  <a href="https://github.com/HD838A/remote-mic-app/stargazers">
+    <img src="https://img.shields.io/github/stars/HD838A/remote-mic-app?style=social" alt="GitHub Stars">
+  </a>
+</p>
+
 Chinese website: [sayall.app](https://sayall.app/)
 
 English website: [sayall.app/en](https://sayall.app/en/)
@@ -12,9 +18,11 @@ The Mac app continues to be distributed directly. Mac App Store submission is pa
 
 ![SayAll — a voice remote for Vibe Coding](Screenshots/Remote-Mic-Introduce-1.png)
 
-SayAll is a macOS app that turns a Xiaomi Bluetooth Remote 2 Pro into a wireless voice remote for your Mac. It provides both a standard Dock entry and a persistent menu bar entry.
+**SayAll does more than listen. It also acts and helps you remember.**
 
-Hold the remote voice button to speak. The direction, OK, Back, Home, Menu, TV, Power, and volume buttons can control macOS or launch commonly used apps.
+**Speak to type. Press once to do more. Revisit what you said.**
+
+SayAll is a macOS app that turns a compatible Bluetooth voice remote into a wireless microphone for your Mac. It starts with effortless voice input, then connects common actions, app-specific button profiles, and the words you explicitly choose to keep.
 
 SayAll is built natively with SwiftUI. While running in the background, it uses less than 0.5% CPU and around 50 MB of memory—lighter than a single Chrome tab.
 
@@ -22,6 +30,30 @@ SayAll is built natively with SwiftUI. While running in the background, it uses 
   <source media="(prefers-color-scheme: dark)" srcset="Screenshots/connection-and-voice-dark-en.png">
   <img alt="Connection and Voice settings" src="Screenshots/connection-and-voice-en.png">
 </picture>
+
+## SayAll does more than listen
+
+### Speak to type
+
+Hold to speak and release to stop. Add text to the app you are using without interrupting a meeting or pausing your music. SayAll does not automatically change the Mac's default input or output devices.
+
+### Press once to do more (new capability, real-world validation in progress)
+
+Action sequences can run several supported local steps in order, then bind them to a click, double-click, or long press. They are designed for stable, repeatable workflows—not arbitrary scripts, unlimited automation, or remote execution.
+
+### The right controls for each app (candidate capability)
+
+One remote can keep multiple complete button profiles. Switch them manually or explicitly enable matching by the active app; unmatched apps return to the default profile. Full validation with physical remotes and third-party apps is still in progress.
+
+### Revisit what you said (candidate capability awaiting full voice validation)
+
+After you enable Revisit, SayAll keeps only final text entered through SayAll and organizes it by app and date on this Mac. Local Agent Access can then create separate, revocable, read-only MCP authorization for each AI client.
+
+- Revisit and Local Agent Access are off by default.
+- No audio, complete conversations, other people's replies, or surrounding text is stored.
+- There is no cloud sync or cross-device sync.
+- MCP uses local `stdio` and opens no HTTP or TCP listener.
+- SayAll does not upload Revisit data, but a third-party AI client may send retrieved text to its cloud model.
 
 ## Requirements
 
@@ -130,6 +162,14 @@ When installing over an older release, the installer recognizes the legacy /Appl
 Read the [Troubleshooting Guide](TROUBLESHOOTING.en.md) first. The complete onboarding flow is in the [First-Install Guide](Resources/首次安装说明.en.md).
 
 For development, build, protocol, test, and release details, see the [Technical Documentation](TECHNICAL.en.md).
+
+## ⭐ Star History
+
+<p align="center">
+  <a href="https://star-history.com/#HD838A/remote-mic-app&Date">
+    <img src="https://api.star-history.com/svg?repos=HD838A/remote-mic-app&type=Date" alt="Star History Chart" width="100%">
+  </a>
+</p>
 
 ## License and sources
 

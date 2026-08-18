@@ -2,6 +2,12 @@
 
 [English](README.en.md)
 
+<p>
+  <a href="https://github.com/HD838A/remote-mic-app/stargazers">
+    <img src="https://img.shields.io/github/stars/HD838A/remote-mic-app?style=social" alt="GitHub Stars">
+  </a>
+</p>
+
 <table>
   <tr>
     <td align="center">
@@ -23,9 +29,11 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 ![无线麦——为 Vibe Coding 而生的语音遥控器](Screenshots/Remote-Mic-Introduce-1.png)
 
-无线麦是一款 macOS 应用，可以把小米蓝牙遥控器 2 Pro 变成 Mac 的无线语音遥控器。它同时提供常规 Dock 入口和常驻菜单栏入口。
+**无线麦，不只听你说。还能替你做，帮你记。**
 
-按住遥控器的语音键即可说话；遥控器上的方向、确定、返回、主页、菜单、TV 和音量键也可以用来控制 Mac，或设置为打开常用应用。
+**开口就输入，一键做更多，说过有回眸。**
+
+无线麦 SayAll 是一款 macOS 应用，可以把兼容的蓝牙语音遥控器变成 Mac 的无线麦。它先让语音输入随手可得，再把常用操作、不同 App 的键位方案和你主动保存的表达连接起来。
 
 无线麦使用 SwiftUI 原生开发，常驻运行时 CPU 占用率低于 0.5%，内存占用约 50 MB，比一个 Chrome 标签页还要轻量。
 
@@ -33,6 +41,30 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
   <source media="(prefers-color-scheme: dark)" srcset="Screenshots/connection-and-voice-dark-zh.png">
   <img alt="连接与语音设置页" src="Screenshots/connection-and-voice-zh.png">
 </picture>
+
+## 无线麦，不只听你说
+
+### 开口就输入
+
+按住说，松开停。开会不发言、听歌不暂停，也能把文字送进正在使用的 App。无线麦不会为了语音输入自动修改 Mac 的默认输入或输出设备。
+
+### 一键做更多（新增能力，真实环境验证中）
+
+组合动作可以把多个受支持的本机步骤依次执行，再绑定到遥控器的单击、双击或长按。它面向稳定、重复的工作流，不等于任意脚本、无限自动化或远程执行。
+
+### 切得准（候选能力，真实环境验证中）
+
+同一只遥控器可以保存多套完整键位方案。你可以手动切换，也可以主动开启按 App 自动匹配；没有匹配规则时回到默认方案。当前仍在进行真实遥控器和第三方 App 的完整验证。
+
+### 说过有回眸（候选能力，等待完整真实语音验收）
+
+主动开启“记录回眸”后，无线麦只保存通过 SayAll 输入并最终稳定出现的文字，按 App 和日期整理在当前 Mac。开启“本地 Agent 访问”后，可以为每个 AI 客户端创建独立、可撤销的只读 MCP 授权。
+
+- 回眸和本地 Agent 访问默认关闭；
+- 不保存音频，不读取完整聊天、其他人的回复或输入框前后文；
+- 不提供云同步或跨设备同步；
+- MCP 通过本机 `stdio` 工作，不监听 HTTP/TCP；
+- 无线麦不会主动上传回眸记录，但第三方 AI 客户端可能把读取结果发送给其云端模型。
 
 ## 使用要求
 
@@ -145,6 +177,14 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与 RC003 默
 开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)。
 
 后续开发计划见 [TODO](TODO.md)。
+
+## ⭐ Star History
+
+<p align="center">
+  <a href="https://star-history.com/#HD838A/remote-mic-app&Date">
+    <img src="https://api.star-history.com/svg?repos=HD838A/remote-mic-app&type=Date" alt="Star History Chart" width="100%">
+  </a>
+</p>
 
 ## 许可与来源
 
