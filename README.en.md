@@ -104,9 +104,9 @@ To confirm the audio path, send a one-second test tone or inspect input level in
 
 ### Typeless compatibility
 
-Tap-to-toggle voice tools such as Typeless are incompatible with the RC003's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** under **Connection & Voice** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
+Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝牙遥控器 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** under **Connection & Voice** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
 
-You must still **hold the RC003 voice key while speaking and release it to finish**. The RC003 firmware stops microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete RC003 HID mapping automatically disables the mode and restores the default Fn-hold mapping.
+You must still **hold the 小米蓝牙遥控器 2 Pro voice key while speaking and release it to finish**. The 小米蓝牙遥控器 2 Pro firmware stops microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete 小米蓝牙遥控器 2 Pro HID mapping automatically disables the mode and restores the default Fn-hold mapping.
 
 If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install Remote Mic.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
 

@@ -79,9 +79,9 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 `Remote-Mic-<版本>-Intel.dmg`，两者不能混用。
 
-Windows 与 Mac 单独构建和发布。当前仅提供面向小米 RC003 的 [Windows RC003 Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，它是未签名、尚未由主项目维护者独立真机复验的社区预览版，不进入 Mac 的 Sparkle 更新序列。下载前请阅读 Release 中的权限、杀毒软件和虚拟音频设备提示，并使用 `SHA256SUMS.txt` 校验文件。
+Windows 与 Mac 单独构建和发布。当前仅提供面向小米蓝牙遥控器 2 Pro 的 [Windows 小米蓝牙遥控器 2 Pro Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，它是未签名、尚未由主项目维护者独立真机复验的社区预览版，不进入 Mac 的 Sparkle 更新序列。下载前请阅读 Release 中的权限、杀毒软件和虚拟音频设备提示，并使用 `SHA256SUMS.txt` 校验文件。
 
-打开 DMG 后只需双击唯一的 `Install Remote Mic.pkg`；Intel Mac 使用 `Install Remote Mic Intel.pkg`。安装器会安装 Remote Mic，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
+打开 DMG 后只需双击唯一的 `Install Remote Mic.pkg`；Intel Mac 使用 `Install Remote Mic Intel.pkg`。安装器会安装 SayAll.app，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
 自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从官网 Cloudflare CDN 固定入口或本项目 GitHub Releases 下载；如需核验，请使用同一 GitHub Release 中的 `Remote-Mic-<版本>.dmg.sha256`，它会按文件名列出两种架构的 DMG。
 
@@ -90,7 +90,7 @@ Windows 与 Mac 单独构建和发布。当前仅提供面向小米 RC003 的 [W
 1. 在“系统设置 → 蓝牙”中打开蓝牙。
 2. 同时长按遥控器的“主页”和“菜单”键，使遥控器进入配对状态。
 3. 在 Mac 上连接名称为 `MI RC`、`Xiaomi Bluetooth Remote 2`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”的设备。
-4. 启动 Remote Mic，按提示允许蓝牙权限。
+4. 启动 SayAll.app，按提示允许蓝牙权限。
 5. 如果需要自定义普通按键，再允许“输入监控”和“辅助功能”。授权后请完全退出并重新打开应用。
 
 应用启动后会显示 Dock 图标并常驻菜单栏：
@@ -117,11 +117,11 @@ Windows 与 Mac 单独构建和发布。当前仅提供面向小米 RC003 的 [W
 
 ### Typeless 兼容
 
-Typeless 等点按 Fn 开始、再次点按结束的语音工具，与 RC003 默认的 Fn 长按行为不兼容。在“连接与语音”中开启“语音键模拟 Fn 点按”后，无线麦会在语音流开始和排空结束时各发送一次 Fn 点按。Typeless 和无线麦仍需选择同一个回环设备，并需授予无线麦“辅助功能”权限。
+Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝牙遥控器 2 Pro 默认的 Fn 长按行为不兼容。在“连接与语音”中开启“语音键模拟 Fn 点按”后，无线麦会在语音流开始和排空结束时各发送一次 Fn 点按。Typeless 和无线麦仍需选择同一个回环设备，并需授予无线麦“辅助功能”权限。
 
-该模式仍然要求**按住 RC003 语音键说话、松开结束**；RC003 固件在松开语音键后不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或 RC003 HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
+该模式仍然要求**按住小米蓝牙遥控器 2 Pro 语音键说话、松开结束**；小米蓝牙遥控器 2 Pro 固件在松开语音键后不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或小米蓝牙遥控器 2 Pro HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
 
-豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 Install Remote Mic.pkg，然后在 Remote Mic 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
+豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 `Install Remote Mic.pkg`，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
 
 ![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
 
