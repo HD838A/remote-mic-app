@@ -3,7 +3,7 @@ name: Update Star History
 on:
   workflow_dispatch:
   schedule:
-    - cron: "23 2 * * *"
+    - cron: "23 * * * *"
 
 concurrency:
   group: update-star-history
