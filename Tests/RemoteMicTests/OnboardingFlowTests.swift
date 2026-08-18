@@ -670,7 +670,7 @@ struct OnboardingFlowTests {
         #expect(rendererSource.contains("completeRuntimeReadyOverride: true"))
     }
 
-    @Test func audioStepOnlyOffersRequiredMiRemoteV2ch() throws {
+    @Test func audioStepOnlyOffersSupportedVirtualAudioDevices() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -686,34 +686,56 @@ struct OnboardingFlowTests {
         ))
         let audioSource = viewSource[audioStart.lowerBound..<audioEnd.lowerBound]
 
-        #expect(audioSource.contains("if let requiredAudioDevice"))
+        #expect(audioSource.contains("ForEach(supportedAudioDevices"))
         #expect(!audioSource.contains("ForEach(model.audioDevices"))
         #expect(!audioSource.contains("Picker("))
         #expect(audioSource.contains("settings.selectedAudioDeviceUID = device.uid"))
         #expect(audioSource.contains("model.applyAudioSettings(reason: \"onboarding_audio_device_selected\")"))
-        #expect(viewSource.contains("DoubaoAudioDevicePolicy.device(in: model.audioDevices)"))
+        #expect(viewSource.contains("OnboardingAudioSelectionPolicy.isSupportedDevice"))
         #expect(viewSource.contains("onboarding.audio.on_demand_detail"))
         #expect(viewSource.contains("onboarding.permissions.mobile_network.title"))
         #expect(viewSource.contains("onboarding.permissions.mobile_network.detail"))
         #expect(viewSource.contains("onboarding.side.audio_on_demand"))
     }
 
-    @Test func onlyAvailableMiRemoteV2chCanSatisfyTheAudioSelectionGate() {
-        #expect(OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
-            selectedUID: "MiRemoteV2ch_UID",
-            requiredUID: "MiRemoteV2ch_UID"
+    @Test func onlyMiRemoteAndBlackHoleCanSatisfyTheAudioSelectionGate() {
+        #expect(OnboardingAudioSelectionPolicy.isSupportedDevice(
+            uid: "MiRemoteV2ch_UID",
+            name: "MiRemoteV 2ch"
         ))
-        #expect(!OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
+        #expect(OnboardingAudioSelectionPolicy.isSupportedDevice(
+            uid: "BlackHole2ch_UID",
+            name: "BlackHole 2ch"
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isSupportedDevice(
+            uid: "Beosound_UID",
+            name: "Beosound A1 2nd Gen"
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isSupportedDevice(
+            uid: "BuiltInOutputDevice",
+            name: "MacBook Pro Speakers"
+        ))
+
+        let availableSupportedUIDs = ["MiRemoteV2ch_UID", "BlackHole2ch_UID"]
+        #expect(OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
+            selectedUID: "MiRemoteV2ch_UID",
+            availableSupportedUIDs: availableSupportedUIDs
+        ))
+        #expect(OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
             selectedUID: "BlackHole2ch_UID",
-            requiredUID: "MiRemoteV2ch_UID"
+            availableSupportedUIDs: availableSupportedUIDs
         ))
-        #expect(!OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
+        #expect(!OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
+            selectedUID: "Beosound_UID",
+            availableSupportedUIDs: availableSupportedUIDs
+        ))
+        #expect(!OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
             selectedUID: "",
-            requiredUID: "MiRemoteV2ch_UID"
+            availableSupportedUIDs: availableSupportedUIDs
         ))
-        #expect(!OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
+        #expect(!OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
             selectedUID: "MiRemoteV2ch_UID",
-            requiredUID: nil
+            availableSupportedUIDs: ["BlackHole2ch_UID"]
         ))
     }
 

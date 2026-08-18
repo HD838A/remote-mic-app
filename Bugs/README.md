@@ -97,7 +97,7 @@
 | 2026-08-11 | [升级后 Onboarding 已收到实体按键但仍显示蓝牙未连接](./2026-08-11-onboarding-upgrade-hid-before-ble.md) | 已修复 <!-- workshop:status=已完成;priority=P2 --> |
 | 2026-08-11 | [蓝牙断连后虚拟麦克风仍保持活动](./2026-08-11-bluetooth-disconnect-keeps-virtual-microphone-active.md) | 已修复 <!-- workshop:status=已完成;priority=P2 --> |
 | 2026-08-11 | [已安装用户升级后被要求重新完成 Onboarding](./2026-08-11-existing-users-forced-through-onboarding.md) | 候选修复完成，等待真实升级验收 |
-| 2026-08-11 | [Onboarding 音频步骤错误地只接受 MiRemoteV 2ch](./2026-08-11-onboarding-requires-miremote-audio-device.md) | 候选修复完成，等待真实音频设备验收 |
+| 2026-08-11 | [Onboarding 错误拒绝 BlackHole 2ch](./2026-08-11-onboarding-requires-miremote-audio-device.md) | BlackHole 支持已恢复，等待真实音频设备验收 |
 | 2026-08-12 | [Remote Mic 运行期间 MacBook 实体方向键偶发失效](./2026-08-12-physical-arrow-keys-blocked.md) | 已修复，自动化通过，等待真机复验 |
 | 2026-08-12 | [Mac 等待手机后无法取消或切换设备](./2026-08-12-mac-phone-waiting-cannot-cancel.md) | 已修复，等待多手机真机验收 |
 | 2026-08-13 | [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md) | 已修复，两架构 CI 验证通过 |
@@ -115,6 +115,8 @@
 | 2026-08-17 | [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md) | 宿主侧候选修复完成，等待真实 MiRemoteV 与第三方 App 验收 |
 | 2026-08-17 | [Onboarding 语音工具页卡片错位并依赖内部滚动](./2026-08-17-onboarding-voice-tool-layout-scroll.md) | 候选修复完成，浅色与深色页面已复验 |
 | 2026-08-17 | [没有实体遥控器的用户无法完成 Onboarding](./2026-08-17-onboarding-requires-physical-remote.md) | 候选修复完成，等待 iPhone 与网页版真机验收 |
+| 2026-08-18 | [Onboarding 普通音频设备与手动文字错误通过](./2026-08-18-onboarding-miremote-and-manual-text-gates.md) | 候选修复完成，等待真实语音工具验收 |
+| 2026-08-19 | [Onboarding 错误拒绝 BlackHole 2ch](./2026-08-19-onboarding-blackhole-support.md) | 候选修复完成，等待真实 BlackHole 验收 |
 
 ## 记录模板
 

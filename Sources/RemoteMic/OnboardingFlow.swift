@@ -156,14 +156,18 @@ struct OnboardingCapabilities: Equatable {
 }
 
 enum OnboardingAudioSelectionPolicy {
-    static func isRequiredDeviceSelected(
+    private static let supportedUIDs = ["MiRemoteV2ch_UID", "BlackHole2ch_UID"]
+    private static let supportedNames = ["MiRemoteV 2ch", "BlackHole 2ch"]
+
+    static func isSupportedDevice(uid: String, name: String) -> Bool {
+        supportedUIDs.contains(uid) || supportedNames.contains(name)
+    }
+
+    static func isSupportedDeviceSelected(
         selectedUID: String,
-        requiredUID: String?
+        availableSupportedUIDs: some Sequence<String>
     ) -> Bool {
-        guard let requiredUID, !requiredUID.isEmpty else {
-            return false
-        }
-        return selectedUID == requiredUID
+        !selectedUID.isEmpty && availableSupportedUIDs.contains(selectedUID)
     }
 }
 

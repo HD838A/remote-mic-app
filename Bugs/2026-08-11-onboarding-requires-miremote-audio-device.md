@@ -1,9 +1,9 @@
-# Onboarding 曾允许替代音频设备（历史方案，已撤销）
+# Onboarding 错误拒绝 BlackHole 2ch
 
-> 2026-08-18 产品验收确认 Onboarding 必须选择无线麦配套的 `MiRemoteV 2ch`。本文件记录的“允许 BlackHole 和其他设备”方案已被撤销；当前结论见 [`2026-08-18-onboarding-miremote-and-manual-text-gates.md`](2026-08-18-onboarding-miremote-and-manual-text-gates.md)。
+> 2026-08-19 产品验收明确 BlackHole 2ch 是受支持方案。当前实现只允许 MiRemoteV 2ch 与 BlackHole 2ch，不再允许本文件候选阶段曾放开的所有系统输出；最终结论见 [`2026-08-19-onboarding-blackhole-support.md`](2026-08-19-onboarding-blackhole-support.md)。
 
 - 时间：2026-08-11
-- 状态：历史方案，已被 2026-08-18 修复取代
+- 状态：BlackHole 支持已恢复，全部系统输出方案已收敛
 - 影响范围：macOS `1.8.8 (100)`、`1.8.9 (101)` 及后续未修复候选；使用 BlackHole 2ch 或其他音频回环设备的用户
 - 功能点：首次使用设置向导、音频输出选择、语音输入准备
 - 简单描述：BlackHole 2ch 已被用户选中且音频输出可用时，Onboarding 第五步仍要求改选 MiRemoteV 2ch，无法继续。
@@ -28,9 +28,9 @@
 
 ## 修复
 
-1. 音频页直接平铺显示当前检测到的全部输出设备，不使用下拉框。
-2. 用户可选择 MiRemoteV 2ch、BlackHole 2ch 或其他已经安装的设备；选择后继续复用生产 `applyAudioSettings` 配置链路。
-3. 门禁改为“所选 UID 仍存在于当前设备列表，并且生产音频输出已就绪”。
+1. 音频页平铺显示当前检测到的 MiRemoteV 2ch 与 BlackHole 2ch，不使用下拉框。
+2. 用户选择任一受支持虚拟设备后继续复用生产 `applyAudioSettings` 配置链路；普通扬声器和其他系统输出不展示。
+3. 门禁要求所选 UID 属于当前受支持设备列表，并且生产音频输出已就绪。
 4. 下一步仍要求真实 PCM、完整停止和文字进入输入框，因此选错非回环设备不能完成整个 Onboarding。
 5. 离屏截图夹具同时提供 MiRemoteV 2ch 与 BlackHole 2ch，用于检查平铺列表；不伪造音频引擎成功状态。
 
@@ -41,4 +41,4 @@
 
 ## 验证边界
 
-自动化证明 BlackHole UID 能通过设备选择门禁，并且页面没有继续硬编码 MiRemoteV 选择按钮。离屏截图只能证明布局；真实 BlackHole 2ch、其他第三方回环设备、Core Audio 输出和最终文字上屏仍需按测试手册验收。
+自动化证明 BlackHole UID 能通过设备选择门禁，并且页面没有继续硬编码 MiRemoteV 选择按钮。离屏截图只能证明布局；真实 BlackHole 2ch、Core Audio 输出和最终文字上屏仍需按测试手册验收。

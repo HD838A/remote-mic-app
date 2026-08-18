@@ -917,15 +917,19 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let requiredAudioDevice {
-                audioDeviceRow(requiredAudioDevice)
-            } else {
+            if supportedAudioDevices.isEmpty {
                 statusCard(
                     icon: "waveform.badge.magnifyingglass",
                     title: localization.text("onboarding.audio.no_devices"),
                     detail: localization.text("onboarding.audio.device_detail"),
                     isComplete: false
                 )
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(supportedAudioDevices, id: \.uid) { device in
+                        audioDeviceRow(device)
+                    }
+                }
             }
 
             statusCard(
@@ -1358,7 +1362,7 @@ struct OnboardingView: View {
             }
         case .audio:
             sidePanel(titleKey: "onboarding.side.audio") {
-                sideCheck("onboarding.side.device_found", isComplete: requiredAudioDevice != nil)
+                sideCheck("onboarding.side.device_found", isComplete: !supportedAudioDevices.isEmpty)
                 sideCheck("onboarding.side.device_selected", isComplete: audioOutputSelected)
                 sideCheck(
                     settings.onboardingControlMethod.usesOnDemandAudioOutput
@@ -1572,18 +1576,20 @@ struct OnboardingView: View {
         return diagnosticContext.failureReason
     }
 
-    private var requiredAudioDevice: AudioDeviceInfo? {
-        DoubaoAudioDevicePolicy.device(in: model.audioDevices)
+    private var supportedAudioDevices: [AudioDeviceInfo] {
+        model.audioDevices.filter { device in
+            OnboardingAudioSelectionPolicy.isSupportedDevice(uid: device.uid, name: device.name)
+        }
     }
 
     private var selectedAudioDevice: AudioDeviceInfo? {
-        audioOutputSelected ? requiredAudioDevice : nil
+        supportedAudioDevices.first { $0.uid == settings.selectedAudioDeviceUID }
     }
 
     private var audioOutputSelected: Bool {
-        OnboardingAudioSelectionPolicy.isRequiredDeviceSelected(
+        OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
             selectedUID: settings.selectedAudioDeviceUID,
-            requiredUID: requiredAudioDevice?.uid
+            availableSupportedUIDs: supportedAudioDevices.lazy.map(\.uid)
         )
     }
 
@@ -1604,7 +1610,7 @@ struct OnboardingView: View {
 
     private var selectedAudioDeviceDetail: String {
         guard audioOutputSelected else {
-            return localization.text("onboarding.audio.device_detail")
+            return localization.text("onboarding.audio.select_detail")
         }
         if settings.onboardingControlMethod.usesOnDemandAudioOutput,
            !model.isAudioOutputReady {
