@@ -573,11 +573,17 @@ struct SettingsPageRegressionTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
             encoding: .utf8
         )
+        let mappingCanvas = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMappingCanvas.swift"),
+            encoding: .utf8
+        )
 
         #expect(settings.contains("case buttonProfiles"))
         #expect(settings.contains("macroFeature.buttonProfilesView"))
         #expect(settings.contains("macroFeature.actionSequencesView"))
         #expect(integration.contains("feature.noteButtonInteraction"))
+        #expect(integration.contains("ButtonProfileGlobalControlPolicy"))
+        #expect(integration.contains("globalControlAction"))
         #expect(integration.contains("isButtonProfileBindingEditorActive"))
         #expect(integration.contains("feature.$isButtonProfileBindingEditorActive"))
         #expect(integration.contains("ButtonAction.pickerActions"))
@@ -588,6 +594,10 @@ struct SettingsPageRegressionTests {
         #expect(model.contains("reason=binding_editor_active"))
         #expect(model.contains("macroFeature.executeBoundAction"))
         #expect(model.contains("ButtonProfileHostActionCodec.decode"))
+        #expect(model.contains("performMobileGlobalControl(for: button, source: source)"))
+        #expect(settings.contains("reservedActionSummary: mappingReservedActionSummary"))
+        #expect(mappingCanvas.contains("if let reservedSummary = reservedActionSummary(button)"))
+        #expect(mappingCanvas.contains("button_mapping.global_control.help"))
     }
 
     @Test func buttonProfileCatalogKeepsEveryAvailableBuiltInAction() {

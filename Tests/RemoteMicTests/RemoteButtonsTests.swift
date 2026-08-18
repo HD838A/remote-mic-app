@@ -915,6 +915,21 @@ struct RemoteButtonsTests {
         #expect(AppSettings.defaultBindings[.tv] == .appSwitcher)
     }
 
+    @Test func tvBecomesTheGlobalAppSwitcherOnlyWhileButtonProfilesAreAvailable() {
+        #expect(ButtonProfileGlobalControlPolicy.configuredAction(
+            isEnabled: true,
+            for: .tv
+        )?.action == .appSwitcher)
+        #expect(ButtonProfileGlobalControlPolicy.configuredAction(
+            isEnabled: true,
+            for: .home
+        ) == nil)
+        #expect(ButtonProfileGlobalControlPolicy.configuredAction(
+            isEnabled: false,
+            for: .tv
+        ) == nil)
+    }
+
     @Test func onlyButtonBindingEditorConsumesPhysicalButtonsWithoutExecutingMappings() {
         #expect(!ButtonProfileEditingRoutingPolicy.shouldPerformAction(isBindingEditorActive: true))
         #expect(ButtonProfileEditingRoutingPolicy.shouldPerformAction(isBindingEditorActive: false))

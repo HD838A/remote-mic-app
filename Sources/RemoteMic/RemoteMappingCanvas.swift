@@ -95,6 +95,7 @@ struct RemoteMappingCanvas: View {
     let activeButtons: Set<RemoteButton>
     let voiceActive: Bool
     let actionSummary: (RemoteButton, ButtonTrigger) -> String
+    let reservedActionSummary: (RemoteButton) -> String?
     let onEdit: (RemoteButton, ButtonTrigger) -> Void
 
     var body: some View {
@@ -212,29 +213,49 @@ struct RemoteMappingCanvas: View {
                 Spacer(minLength: 0)
             }
 
-            HStack(spacing: 4) {
-                ForEach(ButtonTrigger.allCases) { trigger in
-                    Button {
-                        selectedButton = button
-                        onEdit(button, trigger)
-                    } label: {
-                        VStack(spacing: 1) {
-                            Text(trigger.displayName(using: localization))
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            Text(actionSummary(button, trigger))
-                                .font(.system(size: 12, weight: trigger == .singleClick ? .semibold : .regular))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+            if let reservedSummary = reservedActionSummary(button) {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(reservedSummary)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+                .background(
+                    Color.accentColor.opacity(0.09),
+                    in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                )
+                .help(localization.text("button_mapping.global_control.help"))
+            } else {
+                HStack(spacing: 4) {
+                    ForEach(ButtonTrigger.allCases) { trigger in
+                        Button {
+                            selectedButton = button
+                            onEdit(button, trigger)
+                        } label: {
+                            VStack(spacing: 1) {
+                                Text(trigger.displayName(using: localization))
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Text(actionSummary(button, trigger))
+                                    .font(.system(size: 12, weight: trigger == .singleClick ? .semibold : .regular))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 5)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .buttonStyle(.plain)
+                        .help(
+                            "\(button.displayName(using: localization)) · \(trigger.displayName(using: localization))"
+                        )
                     }
-                    .buttonStyle(.plain)
-                    .help(
-                        "\(button.displayName(using: localization)) · \(trigger.displayName(using: localization))"
-                    )
                 }
             }
         }

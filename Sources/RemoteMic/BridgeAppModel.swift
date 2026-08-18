@@ -1009,6 +1009,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             actionPerformer: { [weak self] _, _, configured in
                 self?.performExternalConfiguredAction(configured) ?? false
             },
+            globalControlPerformer: { [weak self] _, button in
+                guard let self,
+                      let configured = self.macroFeature.globalControlAction(for: button)
+                else { return nil }
+                return self.performExternalConfiguredAction(configured)
+            },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
                 guard let self else { return false }
                 return self.macroFeature.executeBoundAction(
@@ -1578,7 +1584,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ button: RemoteButton,
         source: UsageEventSource
     ) -> Bool {
-        performMobileConfiguredAction(for: button, trigger: .singleClick, source: source)
+        if macroFeature.globalControlAction(for: button) != nil {
+            return performMobileGlobalControl(for: button, source: source)
+        }
+        return performMobileConfiguredAction(for: button, trigger: .singleClick, source: source)
     }
 
     private func handleMobileButtonEvent(
@@ -1586,6 +1595,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         phase: RemoteButtonPhase,
         source: UsageEventSource
     ) -> Bool {
+        if macroFeature.globalControlAction(for: button) != nil {
+            switch phase {
+            case .press:
+                return performMobileGlobalControl(for: button, source: source)
+            case .release:
+                return true
+            }
+        }
         let profileID = settings.selectedRemoteProfileID
         let recognizesDoubleClick = settings.configuredAction(
             for: button,
@@ -1624,6 +1641,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         mobileButtonGestureRecognizers[source] = recognizer
         return processMobileGestureCommands(commands, source: source)
+    }
+
+    private func performMobileGlobalControl(
+        for button: RemoteButton,
+        source: UsageEventSource
+    ) -> Bool {
+        guard let configured = macroFeature.globalControlAction(for: button) else {
+            return false
+        }
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            _ = KeyboardInjector.requestAccessibilityAccess()
+            return false
+        }
+        guard performExternalConfiguredAction(configured) else { return false }
+        settings.recordButtonPress(control: .remoteButton(button), source: source)
+        AppLogger.shared.write(
+            "PHONE REMOTE button=\(button.rawValue) action=global_app_switcher"
+        )
+        return true
     }
 
     private func processMobileGestureCommands(

@@ -310,6 +310,8 @@
 "button_mapping.voice_button.title" = "语音键";
 "button_mapping.voice_button.fixed" = "固定";
 "button_mapping.voice_button.detail" = "按住说话；语音输入与 Fn 功能不参与自定义映射。";
+"button_mapping.global_control.action" = "切换 Mac App";
+"button_mapping.global_control.help" = "TV 键始终用于切换 Mac App，不随键位方案变化。";
 "button_mapping.action.not_set" = "未设置";
 "button_mapping.single_click.help" = "按一下立即执行；设置双击后会稍等片刻再确认。";
 "button_mapping.double_click.effect" = "单击会稍等片刻以区分双击；按住重复同时停用。";

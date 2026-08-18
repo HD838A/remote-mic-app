@@ -310,6 +310,8 @@
 "button_mapping.voice_button.title" = "Voice Button";
 "button_mapping.voice_button.fixed" = "Fixed";
 "button_mapping.voice_button.detail" = "Hold to talk. Voice input and Fn behavior are not customizable.";
+"button_mapping.global_control.action" = "Switch Mac Apps";
+"button_mapping.global_control.help" = "The TV button always switches Mac apps and does not change with Button Profiles.";
 "button_mapping.action.not_set" = "Not Set";
 "button_mapping.single_click.help" = "Runs after one press. It waits briefly when a double-click action is set.";
 "button_mapping.double_click.effect" = "Single-click waits briefly to distinguish a double-click, and hold-to-repeat is disabled.";

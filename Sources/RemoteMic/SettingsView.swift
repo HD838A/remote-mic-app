@@ -917,6 +917,7 @@ struct SettingsView: View {
                             activeButtons: model.activeRemoteButtons,
                             voiceActive: model.isStreaming,
                             actionSummary: mappingActionSummary,
+                            reservedActionSummary: mappingReservedActionSummary,
                             onEdit: { button, trigger in
                                 selectedRemoteButton = button
                                 isPresetApplicationActionsExpanded = false
@@ -1870,6 +1871,11 @@ struct SettingsView: View {
         default: break
         }
         return configured.action.displayName(using: localization)
+    }
+
+    private func mappingReservedActionSummary(for button: RemoteButton) -> String? {
+        guard macroFeature.globalControlAction(for: button) != nil else { return nil }
+        return localization.text("button_mapping.global_control.action")
     }
 
     private var permissionsPage: some View {

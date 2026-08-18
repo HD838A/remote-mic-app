@@ -49,6 +49,7 @@ final class HIDRemoteMonitor {
     private let scheduler: HIDRemoteScheduling
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
+    private let globalControlPerformer: (UUID?, RemoteButton) -> Bool?
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
@@ -91,6 +92,9 @@ final class HIDRemoteMonitor {
             ButtonTrigger,
             ConfiguredButtonAction
         ) -> Bool)? = nil,
+        globalControlPerformer: @escaping (UUID?, RemoteButton) -> Bool? = {
+            _, _ in nil
+        },
         overrideActionPerformer: @escaping (UUID?, RemoteButton, ButtonTrigger) -> Bool = {
             _, _, _ in false
         },
@@ -118,6 +122,7 @@ final class HIDRemoteMonitor {
                 )
             )
         }
+        self.globalControlPerformer = globalControlPerformer
         self.overrideActionPerformer = overrideActionPerformer
         self.hasOverrideBinding = hasOverrideBinding
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
@@ -413,6 +418,17 @@ final class HIDRemoteMonitor {
                     profileID = routing.profileID
                 }
                 shouldPerformAction = routing.shouldPerformAction
+            }
+            if let handled = globalControlPerformer(profileID, button) {
+                guard handled else {
+                    stop()
+                    updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
+                    return
+                }
+                AppLogger.shared.write(
+                    "HID BUTTON button=\(button.rawValue) action=global_app_switcher"
+                )
+                continue
             }
             guard let profileID, shouldPerformAction else {
                 if !activeDeviceIsSeized, usesNativePassthrough {

@@ -11,6 +11,18 @@ enum ButtonProfileEditingRoutingPolicy {
     }
 }
 
+enum ButtonProfileGlobalControlPolicy {
+    static let reservedButton = RemoteButton.tv
+
+    static func configuredAction(
+        isEnabled: Bool,
+        for button: RemoteButton
+    ) -> ConfiguredButtonAction? {
+        guard isEnabled, button == reservedButton else { return nil }
+        return ConfiguredButtonAction(action: .appSwitcher, shortcut: nil)
+    }
+}
+
 enum ButtonProfileHostActionCodec {
     static func encode(_ configured: ConfiguredButtonAction) -> Data? {
         try? JSONEncoder().encode(configured)
@@ -161,6 +173,13 @@ final class MacroFeatureIntegration: ObservableObject {
         #if canImport(SayAllMacroRemoteMic)
         feature.noteButtonInteraction(button: button.rawValue)
         #endif
+    }
+
+    func globalControlAction(for button: RemoteButton) -> ConfiguredButtonAction? {
+        ButtonProfileGlobalControlPolicy.configuredAction(
+            isEnabled: isFeatureVisible,
+            for: button
+        )
     }
 
     @discardableResult

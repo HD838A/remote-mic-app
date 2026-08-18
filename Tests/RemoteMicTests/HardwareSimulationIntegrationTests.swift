@@ -558,6 +558,57 @@ struct HardwareSimulationIntegrationTests {
         #expect(monitor.status != LocalizedMessage("button_mapping.permission.accessibility_expired"))
     }
 
+    @Test func globalTVControlBypassesProfilesSecondaryGesturesAndBindingEditor() throws {
+        let suiteName = "HardwareSimulationIntegrationTests.globalTV.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.showDesktop, for: .tv, trigger: .singleClick)
+        settings.setAction(.commandCopy, for: .tv, trigger: .doubleClick)
+        settings.setAction(.commandPaste, for: .tv, trigger: .longPress)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = TestHIDRemoteScheduler()
+        var globalButtons: [RemoteButton] = []
+        var publicActionCount = 0
+        var privateActionCount = 0
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in
+                publicActionCount += 1
+                return true
+            },
+            globalControlPerformer: { _, button in
+                guard button == .tv else { return nil }
+                globalButtons.append(button)
+                return true
+            },
+            overrideActionPerformer: { _, _, _ in
+                privateActionCount += 1
+                return true
+            },
+            hasOverrideBinding: { _, button, _ in button == .tv }
+        )
+        monitor.onButtonPressed = { _, _, _ in
+            (profileID, shouldPerformAction: false)
+        }
+        monitor.connectSimulatedDevice(fingerprint: "global-tv", profileID: profileID)
+        let report = XiaomiVoiceRemoteButton.tv.report
+        let release = Data(repeating: 0, count: report.data.count)
+
+        monitor.handleSimulatedReport(reportID: report.reportID, data: report.data)
+        monitor.handleSimulatedReport(reportID: report.reportID, data: release)
+
+        #expect(globalButtons == [.tv])
+        #expect(publicActionCount == 0)
+        #expect(privateActionCount == 0)
+        #expect(scheduler.pendingTaskCount == 0)
+    }
+
     @Test(arguments: XiaomiVoiceRemoteButton.allCases.filter { $0 != .back })
     func monitoredNativeButtonsReleaseSuppressionAfterReleaseAndDisconnect(
         _ simulatedButton: XiaomiVoiceRemoteButton
