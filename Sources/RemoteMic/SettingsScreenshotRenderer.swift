@@ -27,9 +27,11 @@ enum SettingsScreenshotRenderer {
     }
 
     private static let sections: [SettingsSection] = [
-        .connection,
         .mapping,
+        .macros,
         .statistics,
+        .transcripts,
+        .connection,
         .permissions,
         .about,
     ]

@@ -625,6 +625,42 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("Self.sidebarSectionOrder.filter"))
     }
 
+    @Test func settingsScreenshotGateCoversEveryReleaseVisiblePage() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/SettingsScreenshotRenderer.swift"
+            ),
+            encoding: .utf8
+        )
+        let sectionsStart = try #require(source.range(of: "private static let sections"))
+        let listStart = try #require(source.range(
+            of: "= [",
+            range: sectionsStart.upperBound..<source.endIndex
+        ))
+        let listEnd = try #require(source.range(
+            of: "]",
+            range: listStart.upperBound..<source.endIndex
+        ))
+        let sections = source[listStart.lowerBound...listEnd.lowerBound]
+
+        for section in [
+            ".mapping",
+            ".macros",
+            ".statistics",
+            ".transcripts",
+            ".connection",
+            ".permissions",
+            ".about",
+        ] {
+            #expect(sections.contains(section))
+        }
+        #expect(!sections.contains(".privateFeature"))
+    }
+
     @Test func transcriptHistoryHasDedicatedSidebarPageAndUsesThePublicVoiceLifecycle() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
