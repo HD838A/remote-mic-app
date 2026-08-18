@@ -14,8 +14,21 @@ permissions:
   contents: read
 
 jobs:
+  skip-release-canary:
+    name: Skip preview packaging for protected release canary
+    if: ${{ contains(github.ref_name, '-canary-') }}
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Confirm dedicated canary ref
+        run: |
+          printf '%s' "$GITHUB_REF_NAME" | \
+            grep -Eq '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+-canary-[a-z0-9][a-z0-9._-]*$'
+          echo "PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY"
+
   validate-and-package:
     name: Validate and package preview candidate (${{ matrix.label }})
+    if: ${{ !contains(github.ref_name, '-canary-') }}
     runs-on: macos-15
     timeout-minutes: 75
     strategy:

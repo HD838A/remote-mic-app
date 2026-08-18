@@ -33,6 +33,17 @@ fi
 /bin/cp "$ROOT/scripts/prepare-preview-recording-pr.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/package-macos-release-variants.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/run-release-stage.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/build-app.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/notarize-release.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/verify-release-timeout-budgets.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/verify-release-canary-provenance.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/release-pipeline-digest.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/build-dmg.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/build-doubao-driver.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/build-doubao-driver-pkg.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/package-macos-release-in-actions.sh" "$TEST_REPO/scripts/"
+/bin/mkdir -p "$TEST_REPO/Resources"
+/bin/cp "$ROOT/Resources/Info.plist" "$TEST_REPO/Resources/"
 print '#!/bin/zsh' > "$TEST_REPO/scripts/verify-preview-branch.sh"
 print 'exit 0' >> "$TEST_REPO/scripts/verify-preview-branch.sh"
 /bin/chmod 755 "$TEST_REPO/scripts/"*.sh
@@ -41,6 +52,57 @@ print 'exit 0' >> "$TEST_REPO/scripts/verify-preview-branch.sh"
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'SIGNED_RELEASE_TIMEOUT_SECONDS: 590' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'if: ${{ !inputs.canary }}' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'PROTECTED RELEASE CANARY PROVENANCE PASS' \
+  "$TEST_REPO/scripts/verify-release-canary-provenance.sh"
+/usr/bin/grep -Fq 'No Tag, Release, or downloadable artifact was created.' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'environment: mac-release' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'contents: read' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+if /usr/bin/grep -Eq 'contents:[[:space:]]*write|gh release|git tag' \
+    "$TEST_REPO/.github/workflows/mac-release-package.yml" \
+    "$TEST_REPO/scripts/verify-release-canary-provenance.sh"; then
+  print -u2 "release canary unexpectedly has release mutation capability"
+  exit 1
+fi
+"$TEST_REPO/scripts/verify-release-timeout-budgets.sh" \
+  > "$WORK_DIR/timeout-budgets-pass.txt"
+/usr/bin/grep -Fq \
+  'app-swift-build=300s app-build=330s signed-variant=560s signed-release=590s step=600s' \
+  "$WORK_DIR/timeout-budgets-pass.txt"
+
+/usr/bin/sed \
+  's/RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300/RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-180/' \
+  "$TEST_REPO/scripts/build-app.sh" > "$WORK_DIR/build-app-old-timeout.sh"
+if "$TEST_REPO/scripts/verify-release-timeout-budgets.sh" \
+    "$WORK_DIR/build-app-old-timeout.sh" \
+    "$TEST_REPO/scripts/notarize-release.sh" \
+    "$TEST_REPO/scripts/package-macos-release-variants.sh" \
+    "$TEST_REPO/.github/workflows/mac-release-package.yml" \
+    > "$WORK_DIR/timeout-old-budget.txt" 2>&1; then
+  print -u2 "obsolete 180-second Swift build budget unexpectedly passed"
+  exit 1
+fi
+/usr/bin/grep -Fq 'obsolete 180-second budget' \
+  "$WORK_DIR/timeout-old-budget.txt"
+
+/usr/bin/sed \
+  's/RELEASE_APP_BUILD_TIMEOUT_SECONDS:-330/RELEASE_APP_BUILD_TIMEOUT_SECONDS:-300/' \
+  "$TEST_REPO/scripts/notarize-release.sh" > "$WORK_DIR/notarize-inverted-timeout.sh"
+if "$TEST_REPO/scripts/verify-release-timeout-budgets.sh" \
+    "$TEST_REPO/scripts/build-app.sh" \
+    "$WORK_DIR/notarize-inverted-timeout.sh" \
+    "$TEST_REPO/scripts/package-macos-release-variants.sh" \
+    "$TEST_REPO/.github/workflows/mac-release-package.yml" \
+    > "$WORK_DIR/timeout-inverted-budget.txt" 2>&1; then
+  print -u2 "inverted app build timeout relationship unexpectedly passed"
+  exit 1
+fi
+/usr/bin/grep -Fq 'at least 30 seconds beyond app-swift-build' \
+  "$WORK_DIR/timeout-inverted-budget.txt"
 /usr/bin/grep -Fq 'command -v rg >/dev/null || missing_formulae+=(ripgrep)' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 if /usr/bin/grep -Fq 'brew install age fastlane ripgrep' \
@@ -49,6 +111,17 @@ if /usr/bin/grep -Fq 'brew install age fastlane ripgrep' \
   exit 1
 fi
 /usr/bin/grep -Fq 'SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'if: ${{ !contains(github.ref_name, '\''-canary-'\'') }}' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq \
+  "grep -Eq '^release/pre-v[0-9]+\\.[0-9]+\\.[0-9]+-canary-" \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq './scripts/verify-preview-branch.sh' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'Build and verify ad-hoc candidate DMG' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
@@ -188,6 +261,56 @@ git -C "$TEST_REPO" config user.email "release-pipeline@example.invalid"
 git -C "$TEST_REPO" add .
 git -C "$TEST_REPO" commit -m "release candidate" >/dev/null
 HEAD_COMMIT="$(git -C "$TEST_REPO" rev-parse HEAD)"
+
+CANARY_VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - \
+  "$TEST_REPO/Resources/Info.plist")"
+CANARY_BRANCH="release/pre-v$CANARY_VERSION-canary-timeout-budget"
+CANARY_REMOTE="$WORK_DIR/canary-origin.git"
+git init --bare "$CANARY_REMOTE" >/dev/null
+git -C "$TEST_REPO" push "$CANARY_REMOTE" \
+  "HEAD:refs/heads/$CANARY_BRANCH" >/dev/null
+CANARY_DIGEST="$(cd "$TEST_REPO" && ./scripts/release-pipeline-digest.sh)"
+(
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="$CANARY_BRANCH" \
+  CANARY_REMOTE_NAME="$CANARY_REMOTE" \
+  EXPECTED_COMMIT="$HEAD_COMMIT" \
+  EXPECTED_PIPELINE_DIGEST="$CANARY_DIGEST" \
+  RELEASE_TAG="v$CANARY_VERSION" \
+    ./scripts/verify-release-canary-provenance.sh
+) > "$WORK_DIR/canary-provenance-pass.txt"
+/usr/bin/grep -Fq 'PROTECTED RELEASE CANARY PROVENANCE PASS' \
+  "$WORK_DIR/canary-provenance-pass.txt"
+
+if (
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="release/pre-v$CANARY_VERSION" \
+  CANARY_REMOTE_NAME="$CANARY_REMOTE" \
+  EXPECTED_COMMIT="$HEAD_COMMIT" \
+  EXPECTED_PIPELINE_DIGEST="$CANARY_DIGEST" \
+  RELEASE_TAG="v$CANARY_VERSION" \
+    ./scripts/verify-release-canary-provenance.sh
+) > "$WORK_DIR/canary-normal-branch.txt" 2>&1; then
+  print -u2 "release canary unexpectedly accepted a normal preview branch"
+  exit 1
+fi
+/usr/bin/grep -Fq 'release/pre-vX.Y.Z-canary-name' \
+  "$WORK_DIR/canary-normal-branch.txt"
+
+if (
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="release/pre-v$CANARY_VERSION-canary-unpushed" \
+  CANARY_REMOTE_NAME="$CANARY_REMOTE" \
+  EXPECTED_COMMIT="$HEAD_COMMIT" \
+  EXPECTED_PIPELINE_DIGEST="$CANARY_DIGEST" \
+  RELEASE_TAG="v$CANARY_VERSION" \
+    ./scripts/verify-release-canary-provenance.sh
+) > "$WORK_DIR/canary-unpushed-branch.txt" 2>&1; then
+  print -u2 "release canary unexpectedly accepted an unpushed branch"
+  exit 1
+fi
+/usr/bin/grep -Fq 'remote head must match' \
+  "$WORK_DIR/canary-unpushed-branch.txt"
 
 (
   cd "$TEST_REPO"
