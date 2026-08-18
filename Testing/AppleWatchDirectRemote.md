@@ -3,7 +3,7 @@
 ## 适用版本与分支
 
 - Mac App `1.9.0 (121)` 可安装内部测试构建或后续版本，包含 Apple Watch 专用入口、Watch BLE 服务、Phone Bonjour 发布自恢复、`voiceReadyV1` 语音就绪握手和完整音频链路诊断。
-- iOS / Watch `0.8.12 (25)` 或后续 TestFlight 构建；旧客户端仍可连接，但不能验证新增的安全分包和全链路诊断。
+- iOS / Watch `0.8.12 (28)` 或后续 TestFlight 构建；旧客户端仍可连接，但不能验证新增的控制优先级、generation 隔离和会话汇总诊断。
 
 ## 测试前准备
 
@@ -52,10 +52,11 @@
 3. Watch 停止后立即使用已连接 iPhone 开始 10 秒收音；再反向从 iPhone 切回 Watch。
 4. 观察 MiRemoteV 2ch、真实语音输入工具和 Mac 日志中的 `MOBILE VOICE` 开始/停止来源。
 5. 同时检查 `WATCH BLE AUDIO decoded/summary` 和 `MOBILE VOICE audio/audio_summary` 的帧数、样本数、peak、RMS、非零样本与入队失败。
+6. Watch 停止后立即再次开始，连续执行至少 20 次；每次分别说“上一句结束”和“下一句开始”。
 
-预期：Mac 完成虚拟麦克风和系统语音键准备后才通知 Watch 开始本地采集，首批音频不会在 Mac 尚未就绪时被丢弃；音频进入现有移动语音路径，开始与停止各一次；正常讲话时组件解码和宿主入队两层的 peak/RMS/非零样本均大于零，帧数与样本数持续增长，`enqueue_failures=0`；停止、断线或取消等待后不再输出，虚拟麦克风和系统语音键状态正常释放。Watch 停止不得延迟数十秒，iPhone 与 Watch 只能停止自己的会话；被另一设备占用时客户端显示明确占用提示，不误报辅助功能或虚拟麦克风故障。
+预期：Mac 完成虚拟麦克风和系统语音键准备后才通知 Watch 开始本地采集，首批音频不会在 Mac 尚未就绪时被丢弃；音频进入现有移动语音路径，开始与停止各一次；正常讲话时组件解码和宿主入队两层的 peak/RMS/非零样本均大于零，帧数与样本数持续增长，`enqueue_failures=0`；停止、断线或取消等待后不再输出，虚拟麦克风和系统语音键状态正常释放。停止中立即重启会出现 `restart_deferred → stopped → started → restart_completed`，不会返回 `voice_busy`，两句不会合并。iPhone 与 Watch 只能停止自己的会话；被另一设备占用时客户端显示明确占用提示，不误报辅助功能或虚拟麦克风故障。
 
-失败：Mac 无音频、首句明显丢失、Watch 在 Mac 准备完成前已经开始产生音频、等待就绪超过 5 秒后仍保持录音状态、停止后继续收音、停止延迟数秒以上、切换来源后仍永久占用、会话重复、虚拟麦克风占用不释放或第三方工具没有收到输入。
+失败：Mac 无音频、首句明显丢失、Watch 在 Mac 准备完成前已经开始产生音频、等待就绪超过 5 秒后仍保持录音状态、停止后继续收音、停止延迟数秒以上、同一 Watch 立即重启仍返回占用、两句合并、切换来源后永久占用、会话重复、虚拟麦克风占用不释放或第三方工具没有收到输入。
 
 ## 用例五：客户端接管
 
@@ -76,8 +77,8 @@
 
 ## 日志收集
 
-保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`WATCH BLE starting/advertising`、`WATCH BLE AUDIO decoded/summary`、`MOBILE VOICE started/stopped/audio/audio_summary`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志，确认 `waiting_for_mac_ready → recording → voice_first_frame` 顺序，并核对 `ble_audio_write_capability`、`voice_signal` 和停止汇总。出现 `mac_ready_timeout` 或 `ble_write_failed` 时不应再继续发送本次语音。日志只包含计数和幅度统计，不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
+保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`WATCH BLE starting/advertising`、`WATCH BLE AUDIO decoded/summary`、`MOBILE VOICE started/stopped/audio/audio_summary`、`restart_deferred/restart_completed`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志，确认 `waiting_for_mac_ready → recording → voice_first_frame` 顺序，并核对 `ble_audio_write_capability`、`ble_audio_queue_progress/summary`、`voice_signal` 和停止汇总。出现 `mac_ready_timeout` 或 `ble_write_failed` 时不应再继续发送本次语音。日志只包含计数和幅度统计，不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
 
 ## 自动化、代理实测和用户实测边界
 
-自动化覆盖组件协议、连接状态回调、Mac 三态入口、iPhone/Watch 语音来源隔离、占用错误分类及首次 `voiceReady` 时序；代理无法替代真实 Apple Watch 的权限、无线链路、连接/断线回调、麦克风、前后台、BLE 实时吞吐和实际语音工具验收。任何未执行的真机用例都必须明确标记为未验收。
+自动化覆盖组件协议、连接状态回调、Mac 三态入口、iPhone/Watch 语音来源隔离、不同来源占用错误分类、同一来源停止中延迟重启及首次 `voiceReady` 时序；代理无法替代真实 Apple Watch 的权限、无线链路、连接/断线回调、麦克风、前后台、BLE 实时吞吐和实际语音工具验收。任何未执行的真机用例都必须明确标记为未验收。

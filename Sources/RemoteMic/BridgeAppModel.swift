@@ -4,7 +4,7 @@ import CoreAudio
 import Foundation
 import SayAllMacRemoteCore
 
-private enum MobileVoiceSource {
+enum MobileVoiceSource: Equatable {
     case nearbyPhone
     case nearbyWatch
     case web
@@ -15,6 +15,31 @@ private enum MobileVoiceSource {
         case .nearbyWatch: return "watch"
         case .web: return "web"
         }
+    }
+}
+
+enum MobileVoiceStartDisposition: Equatable {
+    case startNow
+    case deferUntilStopped
+    case busy
+}
+
+enum MobileVoiceRestartPolicy {
+    static func startDisposition(
+        requested: MobileVoiceSource,
+        active: MobileVoiceSource?,
+        stopping: MobileVoiceSource?
+    ) -> MobileVoiceStartDisposition {
+        guard let active else { return .startNow }
+        if active == requested, stopping == requested { return .deferUntilStopped }
+        return .busy
+    }
+
+    static func shouldCancelPendingRestart(
+        stopped: MobileVoiceSource,
+        pending: MobileVoiceSource?
+    ) -> Bool {
+        pending == stopped
     }
 }
 
@@ -133,6 +158,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var bluetoothVoiceActive = false
     private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
     private var activeMobileVoiceSource: MobileVoiceSource?
+    private var stoppingMobileVoiceSource: MobileVoiceSource?
+    private var mobileVoiceStopGeneration: UInt64 = 0
+    private var pendingMobileVoiceRestart: (
+        source: MobileVoiceSource,
+        completion: (RemoteVoiceStartResult) -> Void
+    )?
     private var mobileVoiceAudioBatchCount = 0
     private var mobileVoiceAudioEnqueueFailureCount = 0
     private var mobileVoiceAudioSourceMismatchCount = 0
@@ -257,7 +288,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         phoneRemoteServer.onVoiceStartResult = { [weak self] completion in
             DispatchQueue.main.async {
-                completion(self?.startPhoneVoice(source: .nearbyPhone) ?? .unavailable)
+                guard let self else {
+                    completion(.unavailable)
+                    return
+                }
+                self.requestPhoneVoiceStart(
+                    source: .nearbyPhone,
+                    completion: completion
+                )
             }
         }
         phoneRemoteServer.onVoiceStop = { [weak self] in
@@ -328,7 +366,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         watchBluetoothServer.onVoiceStartResult = { [weak self] completion in
             DispatchQueue.main.async {
-                completion(self?.startPhoneVoice(source: .nearbyWatch) ?? .unavailable)
+                guard let self else {
+                    completion(.unavailable)
+                    return
+                }
+                self.requestPhoneVoiceStart(
+                    source: .nearbyWatch,
+                    completion: completion
+                )
             }
         }
         watchBluetoothServer.onVoiceStop = { [weak self] in
@@ -393,7 +438,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         webRemoteClient.onVoiceStart = { [weak self] completion in
             DispatchQueue.main.async {
-                completion(self?.startPhoneVoice(source: .web) == .started)
+                guard let self else {
+                    completion(false)
+                    return
+                }
+                self.requestPhoneVoiceStart(source: .web) {
+                    completion($0 == .started)
+                }
             }
         }
         webRemoteClient.onVoiceStop = { [weak self] in
@@ -474,6 +525,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isWatchRemoteConnected = false
         webRemoteState = .disabled
         bluetoothVoiceActive = false
+        mobileVoiceStopGeneration &+= 1
+        stoppingMobileVoiceSource = nil
+        let pendingMobileVoiceRestart = pendingMobileVoiceRestart
+        self.pendingMobileVoiceRestart = nil
+        pendingMobileVoiceRestart?.completion(.unavailable)
         activeMobileVoiceSource = nil
         voiceSessionUsageSource = nil
         updatePhoneVoiceFunctionKeyState(streaming: false)
@@ -2123,6 +2179,37 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         return .started
     }
 
+    private func requestPhoneVoiceStart(
+        source: MobileVoiceSource,
+        completion: @escaping (RemoteVoiceStartResult) -> Void
+    ) {
+        switch MobileVoiceRestartPolicy.startDisposition(
+            requested: source,
+            active: activeMobileVoiceSource,
+            stopping: stoppingMobileVoiceSource
+        ) {
+        case .startNow:
+            completion(startPhoneVoice(source: source))
+        case .deferUntilStopped:
+            guard pendingMobileVoiceRestart == nil else {
+                AppLogger.shared.write(
+                    "MOBILE VOICE restart_rejected reason=already_pending source=\(source.logName)"
+                )
+                completion(.busy)
+                return
+            }
+            pendingMobileVoiceRestart = (source, completion)
+            AppLogger.shared.write("MOBILE VOICE restart_deferred source=\(source.logName)")
+        case .busy:
+            AppLogger.shared.write(
+                "MOBILE VOICE start_rejected reason=busy requested=\(source.logName) " +
+                    "active=\(activeMobileVoiceSource?.logName ?? "none") " +
+                    "stopping=\(stoppingMobileVoiceSource?.logName ?? "none")"
+            )
+            completion(.busy)
+        }
+    }
+
     private func stopPhoneVoice(source: MobileVoiceSource) {
         guard activeMobileVoiceSource == source else {
             AppLogger.shared.write(
@@ -2131,14 +2218,46 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
+        guard stoppingMobileVoiceSource != source else {
+            if MobileVoiceRestartPolicy.shouldCancelPendingRestart(
+                stopped: source,
+                pending: pendingMobileVoiceRestart?.source
+            ), let pending = pendingMobileVoiceRestart {
+                pendingMobileVoiceRestart = nil
+                pending.completion(.unavailable)
+                AppLogger.shared.write(
+                    "MOBILE VOICE restart_cancelled source=\(source.logName) reason=stop_before_ready"
+                )
+            }
+            AppLogger.shared.write("MOBILE VOICE stop_ignored reason=already_stopping source=\(source.logName)")
+            return
+        }
+        stoppingMobileVoiceSource = source
+        mobileVoiceStopGeneration &+= 1
+        let stopGeneration = mobileVoiceStopGeneration
         logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
         audioOutput.endSessionAfterDraining { [weak self] in
-            guard let self, self.activeMobileVoiceSource == source else { return }
+            guard let self,
+                  self.mobileVoiceStopGeneration == stopGeneration,
+                  self.activeMobileVoiceSource == source,
+                  self.stoppingMobileVoiceSource == source
+            else { return }
             self.activeMobileVoiceSource = nil
+            self.stoppingMobileVoiceSource = nil
             self.updatePhoneVoiceFunctionKeyState(streaming: false)
             self.endVoiceSessionIfNeeded()
-            self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
             AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
+            if let pending = self.pendingMobileVoiceRestart,
+               pending.source == source {
+                self.pendingMobileVoiceRestart = nil
+                let result = self.startPhoneVoice(source: source)
+                AppLogger.shared.write(
+                    "MOBILE VOICE restart_completed source=\(source.logName) result=\(result)"
+                )
+                pending.completion(result)
+                return
+            }
+            self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
         }
     }
 

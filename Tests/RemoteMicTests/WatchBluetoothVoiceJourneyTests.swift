@@ -29,10 +29,47 @@ struct WatchBluetoothVoiceJourneyTests {
             encoding: .utf8
         )
         #expect(bridgeSource.contains(
-            "completion(self?.startPhoneVoice(source: .nearbyWatch) ?? .unavailable)"
+            "requestPhoneVoiceStart(\n                    source: .nearbyWatch"
         ))
         #expect(bridgeSource.contains("MOBILE VOICE audio source="))
         #expect(bridgeSource.contains("MOBILE VOICE audio_summary source="))
         #expect(bridgeSource.contains("accepted=\\(accepted)"))
+    }
+
+    @Test func sameWatchCanRestartAfterStopBeginsWithoutBeingReportedBusy() {
+        #expect(MobileVoiceRestartPolicy.startDisposition(
+            requested: .nearbyWatch,
+            active: .nearbyWatch,
+            stopping: .nearbyWatch
+        ) == .deferUntilStopped)
+        #expect(MobileVoiceRestartPolicy.startDisposition(
+            requested: .nearbyWatch,
+            active: nil,
+            stopping: nil
+        ) == .startNow)
+    }
+
+    @Test func anotherMobileSourceCannotTakeOverWhileVoiceIsStopping() {
+        #expect(MobileVoiceRestartPolicy.startDisposition(
+            requested: .nearbyPhone,
+            active: .nearbyWatch,
+            stopping: .nearbyWatch
+        ) == .busy)
+        #expect(MobileVoiceRestartPolicy.startDisposition(
+            requested: .web,
+            active: .nearbyPhone,
+            stopping: nil
+        ) == .busy)
+    }
+
+    @Test func stopBeforeVoiceReadyCancelsOnlyTheMatchingPendingRestart() {
+        #expect(MobileVoiceRestartPolicy.shouldCancelPendingRestart(
+            stopped: .nearbyWatch,
+            pending: .nearbyWatch
+        ))
+        #expect(!MobileVoiceRestartPolicy.shouldCancelPendingRestart(
+            stopped: .nearbyPhone,
+            pending: .nearbyWatch
+        ))
     }
 }

@@ -2,6 +2,7 @@
 
 - [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md)
 - [遥控器持续连接时虚拟音频阻止 Mac 自动休眠](./2026-08-18-connected-virtual-audio-blocks-mac-idle-sleep.md)
+- [Watch 停止后立即重新收音被判定占用](./2026-08-19-watch-voice-restart-during-audio-drain.md)
 - [Apple Watch BLE 语音已启动但没有有效电平](./2026-08-18-watch-ble-audio-no-signal.md)
 - [回眸页面阻断 Intel Ventura 构建](./2026-08-18-reflections-intel-ventura-onchange.md)
 - [v1.8.25 安装后 App bundle 仍显示 Remote Mic](./2026-08-17-v1.8.25-remote-mic-bundle-name.md)
@@ -46,6 +47,7 @@
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
 | 2026-08-19 | [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md) | 候选修复完成，等待真实 Codex 与遥控器验收 |
+| 2026-08-19 | [Watch 停止后立即重新收音被判定占用](./2026-08-19-watch-voice-restart-during-audio-drain.md) | 候选修复完成，等待真机验收 |
 | 2026-08-18 | [遥控器持续连接时虚拟音频阻止 Mac 自动休眠](./2026-08-18-connected-virtual-audio-blocks-mac-idle-sleep.md) | 候选修复完成，等待真实休眠与 `pmset` 验收 |
 | 2026-08-18 | [回眸页面缺少侧边栏入口](./2026-08-18-reflections-sidebar-entry-missing.md) | 已修复，等待 800 × 650 组合页面人工验收 |
 | 2026-08-18 | [回眸页面阻断 Intel Ventura 构建](./2026-08-18-reflections-intel-ventura-onchange.md) | 已修复，等待 Intel 真机验收 |
