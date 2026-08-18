@@ -35,11 +35,28 @@ private func hidInputReport(
     report: UnsafeMutablePointer<UInt8>,
     reportLength: CFIndex
 ) {
-    guard let context, let sender, result == kIOReturnSuccess, reportLength > 0 else { return }
+    guard let context else { return }
     let monitor = Unmanaged<HIDRemoteMonitor>.fromOpaque(context).takeUnretainedValue()
+    guard result == kIOReturnSuccess else {
+        monitor.reportCallbackRejected(reason: "io_error", result: result, reportLength: reportLength)
+        return
+    }
+    guard let sender else {
+        monitor.reportCallbackRejected(reason: "missing_sender", result: result, reportLength: reportLength)
+        return
+    }
+    guard reportLength > 0 else {
+        monitor.reportCallbackRejected(reason: "empty_report", result: result, reportLength: reportLength)
+        return
+    }
     let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
     let data = Data(bytes: report, count: reportLength)
     monitor.handleReport(from: device, reportID: reportID, data: data)
+}
+
+enum HIDReportRoutingDecision: Equatable {
+    case accepted(String)
+    case rejected(String)
 }
 
 final class HIDRemoteMonitor {
@@ -52,6 +69,7 @@ final class HIDRemoteMonitor {
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
+    private let diagnosticLogger: (String) -> Void
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
     private var allowedLocationIDs: Set<UInt32>?
@@ -99,7 +117,8 @@ final class HIDRemoteMonitor {
         },
         frontmostBundleIdentifier: @escaping () -> String? = {
             NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        }
+        },
+        diagnosticLogger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
         self.settings = settings
         self.profileID = profileID
@@ -121,6 +140,7 @@ final class HIDRemoteMonitor {
         self.overrideActionPerformer = overrideActionPerformer
         self.hasOverrideBinding = hasOverrideBinding
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
+        self.diagnosticLogger = diagnosticLogger
     }
 
     func assignProfileID(_ profileID: UUID) {
@@ -229,6 +249,7 @@ final class HIDRemoteMonitor {
 
     fileprivate func deviceDidMatch(result: IOReturn, device: IOHIDDevice) {
         guard result == kIOReturnSuccess else {
+            diagnosticLogger("HID DEVICE rejected reason=match_error result=\(result)")
             updateStatus(LocalizedMessage("button_mapping.error.device_open_failed"))
             return
         }
@@ -236,17 +257,29 @@ final class HIDRemoteMonitor {
             locationID: Self.locationID(for: device),
             allowedLocationIDs: allowedLocationIDs
         ) else {
-            AppLogger.shared.write("HID DEVICE rejected unsafe_location")
+            diagnosticLogger("HID DEVICE rejected reason=unsafe_location")
             return
         }
-        guard let fingerprint = Self.fingerprint(for: device) else { return }
+        guard let fingerprint = Self.fingerprint(for: device) else {
+            diagnosticLogger("HID DEVICE rejected reason=fingerprint_unavailable")
+            return
+        }
         if profileID == nil, targetFingerprint == nil, deviceFingerprint == nil {
+            diagnosticLogger("HID DEVICE deferred reason=discovery_waiting_for_report")
             return
         }
-        guard activeDevice == nil,
-              targetFingerprint == nil || targetFingerprint == fingerprint,
-              !excludedFingerprints().contains(fingerprint)
-        else { return }
+        guard activeDevice == nil else {
+            diagnosticLogger("HID DEVICE rejected reason=active_device_exists")
+            return
+        }
+        guard targetFingerprint == nil || targetFingerprint == fingerprint else {
+            diagnosticLogger("HID DEVICE rejected reason=target_mismatch")
+            return
+        }
+        guard !excludedFingerprints().contains(fingerprint) else {
+            diagnosticLogger("HID DEVICE rejected reason=excluded_fingerprint")
+            return
+        }
         _ = activateDevice(device, fingerprint: fingerprint, allowManagerFallback: false)
     }
 
@@ -310,32 +343,62 @@ final class HIDRemoteMonitor {
     }
 
     fileprivate func handleReport(from device: IOHIDDevice, reportID: UInt32, data: Data) {
-        guard manager != nil, settings.customMappingEnabled else { return }
+        guard manager != nil else {
+            diagnosticLogger("HID REPORT rejected reason=monitor_inactive")
+            return
+        }
+        guard settings.customMappingEnabled else {
+            diagnosticLogger("HID REPORT rejected reason=mapping_disabled")
+            return
+        }
         guard Self.isLocationAllowed(
             locationID: Self.locationID(for: device),
             allowedLocationIDs: allowedLocationIDs
-        ) else { return }
-        guard let fingerprint = Self.resolvedFingerprintForReport(
+        ) else {
+            diagnosticLogger("HID REPORT rejected reason=unsafe_location")
+            return
+        }
+        let routing = Self.reportRoutingDecision(
             reportingFingerprint: Self.fingerprint(for: device),
             activeFingerprint: deviceFingerprint,
             targetFingerprint: targetFingerprint,
             excludedFingerprints: excludedFingerprints()
-        ) else { return }
+        )
+        let fingerprint: String
+        switch routing {
+        case let .accepted(value):
+            fingerprint = value
+        case let .rejected(reason):
+            diagnosticLogger("HID REPORT rejected reason=\(reason)")
+            return
+        }
         if deviceFingerprint == nil {
             guard activateDevice(
                 device,
                 fingerprint: fingerprint,
                 allowManagerFallback: true
-            ) else { return }
+            ) else {
+                diagnosticLogger("HID REPORT rejected reason=device_activation_failed")
+                return
+            }
         }
         guard runtimePermissionsAreValid() else {
+            diagnosticLogger("HID REPORT rejected reason=runtime_permission_revoked")
             releaseForRevokedPermissions()
             return
         }
-        guard let usages = RemoteHIDReportParser.usages(reportID: reportID, data: data) else {
-            return
-        }
-        process(usages: usages)
+        parseAndProcess(reportID: reportID, data: data, source: "device")
+    }
+
+    fileprivate func reportCallbackRejected(
+        reason: String,
+        result: IOReturn,
+        reportLength: CFIndex
+    ) {
+        diagnosticLogger(
+            "HID REPORT callback_rejected reason=\(reason) result=\(result) " +
+                "bytes=\(max(0, reportLength))"
+        )
     }
 
     func connectSimulatedDevice(
@@ -350,10 +413,29 @@ final class HIDRemoteMonitor {
     }
 
     func handleSimulatedReport(reportID: UInt32, data: Data) {
-        guard settings.customMappingEnabled, runtimePermissionsAreValid() else { return }
-        guard let usages = RemoteHIDReportParser.usages(reportID: reportID, data: data) else {
+        guard settings.customMappingEnabled else {
+            diagnosticLogger("HID REPORT rejected reason=mapping_disabled source=simulated")
             return
         }
+        guard runtimePermissionsAreValid() else {
+            diagnosticLogger("HID REPORT rejected reason=runtime_permission_revoked source=simulated")
+            return
+        }
+        parseAndProcess(reportID: reportID, data: data, source: "simulated")
+    }
+
+    private func parseAndProcess(reportID: UInt32, data: Data, source: String) {
+        guard let usages = RemoteHIDReportParser.usages(reportID: reportID, data: data) else {
+            diagnosticLogger(
+                "HID REPORT rejected reason=parse_failed source=\(source) " +
+                    "id=\(reportID) bytes=\(data.count)"
+            )
+            return
+        }
+        diagnosticLogger(
+            "HID REPORT accepted source=\(source) id=\(reportID) bytes=\(data.count) " +
+                "usage_count=\(usages.count) buttons=\(Self.buttonList(for: usages))"
+        )
         process(usages: usages)
     }
 
@@ -366,6 +448,12 @@ final class HIDRemoteMonitor {
     private func process(usages: Set<UInt16>) {
         let pressed = usages.subtracting(activeUsages)
         let released = activeUsages.subtracting(usages)
+        if !pressed.isEmpty || !released.isEmpty {
+            diagnosticLogger(
+                "HID EDGE pressed=\(Self.buttonList(for: pressed)) " +
+                    "released=\(Self.buttonList(for: released))"
+            )
+        }
         activeUsages = usages
         onActiveButtons?(profileID, RemoteButton.buttons(for: usages))
 
@@ -446,6 +534,9 @@ final class HIDRemoteMonitor {
                     action: action,
                     frontmostBundleIdentifier: frontmostBundleIdentifier()
                 ) else { continue }
+                diagnosticLogger(
+                    "HID GESTURE button=\(button.rawValue) trigger=singleClick path=raw"
+                )
                 guard performConfiguredAction(for: button, trigger: .singleClick) else { return }
                 startRepeatIfNeeded(
                     usage: usage,
@@ -480,15 +571,43 @@ final class HIDRemoteMonitor {
         targetFingerprint: String?,
         excludedFingerprints: Set<String>
     ) -> String? {
-        guard let reportingFingerprint else { return nil }
+        switch reportRoutingDecision(
+            reportingFingerprint: reportingFingerprint,
+            activeFingerprint: activeFingerprint,
+            targetFingerprint: targetFingerprint,
+            excludedFingerprints: excludedFingerprints
+        ) {
+        case let .accepted(fingerprint): fingerprint
+        case .rejected: nil
+        }
+    }
+
+    static func reportRoutingDecision(
+        reportingFingerprint: String?,
+        activeFingerprint: String?,
+        targetFingerprint: String?,
+        excludedFingerprints: Set<String>
+    ) -> HIDReportRoutingDecision {
+        guard let reportingFingerprint else { return .rejected("fingerprint_unavailable") }
         if let activeFingerprint {
-            return reportingFingerprint == activeFingerprint ? activeFingerprint : nil
+            return reportingFingerprint == activeFingerprint
+                ? .accepted(activeFingerprint)
+                : .rejected("active_fingerprint_mismatch")
         }
-        guard !excludedFingerprints.contains(reportingFingerprint) else { return nil }
+        guard !excludedFingerprints.contains(reportingFingerprint) else {
+            return .rejected("excluded_fingerprint")
+        }
         if let targetFingerprint {
-            return reportingFingerprint == targetFingerprint ? targetFingerprint : nil
+            return reportingFingerprint == targetFingerprint
+                ? .accepted(targetFingerprint)
+                : .rejected("target_fingerprint_mismatch")
         }
-        return reportingFingerprint
+        return .accepted(reportingFingerprint)
+    }
+
+    private static func buttonList(for usages: Set<UInt16>) -> String {
+        let buttons = usages.compactMap { RemoteButton.usageMap[$0]?.rawValue }.sorted()
+        return buttons.isEmpty ? "none" : buttons.joined(separator: ",")
     }
 
     func shouldAcceptRawPress(
@@ -604,6 +723,9 @@ final class HIDRemoteMonitor {
             case let .cancelLongPressTimeout(button):
                 longPressTimers.removeValue(forKey: button)?.cancel()
             case let .trigger(button, trigger):
+                diagnosticLogger(
+                    "HID GESTURE button=\(button.rawValue) trigger=\(trigger.rawValue) path=recognizer"
+                )
                 guard performConfiguredAction(for: button, trigger: trigger) else { return false }
             }
         }
@@ -663,6 +785,10 @@ final class HIDRemoteMonitor {
             return true
         }
         guard actionPerformer(button, trigger, configured) else {
+            diagnosticLogger(
+                "HID ACTION failed button=\(button.rawValue) trigger=\(trigger.rawValue) " +
+                    "action=\(configured.action.rawValue)"
+            )
             stop()
             updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
             return false

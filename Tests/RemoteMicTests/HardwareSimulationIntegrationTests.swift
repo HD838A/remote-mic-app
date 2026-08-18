@@ -455,6 +455,39 @@ struct HardwareSimulationIntegrationTests {
         #expect(scheduler.pendingTaskCount == 0)
     }
 
+    @Test func HIDDiagnosticsTraceReportsEdgesGesturesAndActionsWithoutRawPayloads() throws {
+        let suiteName = "HardwareSimulationIntegrationTests.hidDiagnostics.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.returnKey, for: .ok)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        var diagnostics: [String] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in true },
+            diagnosticLogger: { diagnostics.append($0) }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "diagnostic", profileID: profileID)
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: Data([0x28, 0, 0, 0, 0, 0])
+        )
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: Data([0, 0, 0, 0, 0, 0])
+        )
+
+        #expect(diagnostics.contains { $0.contains("HID REPORT accepted source=simulated") })
+        #expect(diagnostics.contains { $0.contains("HID EDGE pressed=ok") })
+        #expect(diagnostics.contains { $0.contains("HID GESTURE button=ok") })
+        #expect(!diagnostics.contains { $0.contains("0x28") || $0.contains("diagnostic") })
+    }
+
     @Test func privateMacroBindingCanOwnDisabledDoubleClickWithoutStoppingHID() throws {
         let suiteName = "HardwareSimulationIntegrationTests.privateMacro.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
