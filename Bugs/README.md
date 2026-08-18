@@ -43,6 +43,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-18 | [回眸页面缺少侧边栏入口](./2026-08-18-reflections-sidebar-entry-missing.md) | 已修复，等待 800 × 650 组合页面人工验收 |
 | 2026-08-18 | [回眸页面阻断 Intel Ventura 构建](./2026-08-18-reflections-intel-ventura-onchange.md) | 已修复，等待 Intel 真机验收 |
 | 2026-08-18 | [Apple Watch BLE 语音已启动但没有有效电平](./2026-08-18-watch-ble-audio-no-signal.md) | 诊断修复完成，等待真机验收 |
 | 2026-08-18 | [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md) | 修复完成，等待真实 Codex 验收 |

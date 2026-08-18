@@ -177,6 +177,7 @@ struct SettingsView: View {
         .mapping,
         .macros,
         .statistics,
+        .transcripts,
         .connection,
         .privateFeature,
         .permissions,

@@ -37,7 +37,7 @@
 - `Sources/RemoteMic/TranscriptArchiveStore.swift`：按 App/日期落盘、加载和可恢复删除。
 - `Sources/RemoteMic/BridgeAppModel.swift`：接入公共语音生命周期并向界面发布记录。
 - `Sources/RemoteMic/TranscriptHistorySection.swift`：顶部可展开应用栏、可折叠日期时间线、真实 App 图标、复制和删除界面。
-- `Sources/RemoteMic/SettingsView.swift`：在统计下方提供独立“回眸”侧边栏页面，页头依次放置标题、可换行隐私说明和最右侧保存开关。
+- `Sources/RemoteMic/SettingsView.swift`：在唯一侧边栏顺序中把“回眸”固定放在“统计”下方，并提供独立页面；页头依次放置标题、可换行隐私说明和最右侧保存开关。
 - `Resources/*/Localizable.strings`：中英文界面文字。
 - `Tests/RemoteMicTests/Transcript*Tests.swift`：存储、捕获和 Feature Flag 自动化。
 
@@ -51,6 +51,6 @@ Accessibility 不提供统一的跨应用“语音结果事件”，因此当前
 
 当前状态：捕获修复、独立页面、顶部可展开应用栏和可折叠日期时间线已完成，自动化与公开版 Release App 构建通过，等待更完整的真实语音流程人工验收。
 
-自动化覆盖按 App/日期写入、排序、`0600/0700` 权限、可恢复删除、默认关闭及持久化、连续文字提取、快速发送、连续语音、恢复非空原稿不误存、敏感目标拒绝、无候选焦点变化取消和关闭开关取消捕获；静态回归同时覆盖顶部应用栏、最近使用排序、单行横向浏览、页面内自适应网格和日期折叠结构。当前桌面历史验证沿用原功能分支记录；`1.9.0` 最终签名包、10 App 横向滚动、跨日期默认折叠、浅色/深色及真实 RC003、Nearby iOS、Watch、Web 输入仍需按测试手册验收。人工测试步骤见 [`Testing/LocalTranscriptHistory.md`](../../Testing/LocalTranscriptHistory.md)。
+自动化覆盖按 App/日期写入、排序、`0600/0700` 权限、可恢复删除、默认关闭及持久化、连续文字提取、快速发送、连续语音、恢复非空原稿不误存、敏感目标拒绝、无候选焦点变化取消和关闭开关取消捕获；静态回归同时覆盖“统计 → 回眸”的侧边栏可达顺序、顶部应用栏、最近使用排序、单行横向浏览、页面内自适应网格和日期折叠结构。当前桌面历史验证沿用原功能分支记录；`1.9.0` 最终签名包、10 App 横向滚动、跨日期默认折叠、浅色/深色及真实 RC003、Nearby iOS、Watch、Web 输入仍需按测试手册验收。人工测试步骤见 [`Testing/LocalTranscriptHistory.md`](../../Testing/LocalTranscriptHistory.md)。
 
 尚未完成 RC003、Nearby iOS、网页版、真实第三方 App、前后台、跨日和不同系统版本验收，因此不能标记为已完成或已真机通过。

@@ -583,7 +583,15 @@ struct SettingsPageRegressionTests {
         let orderSource = source[listStart.lowerBound...orderEnd.lowerBound]
         var cursor = orderSource.startIndex
 
-        for section in [".mapping", ".macros", ".statistics", ".connection", ".permissions", ".about"] {
+        for section in [
+            ".mapping",
+            ".macros",
+            ".statistics",
+            ".transcripts",
+            ".connection",
+            ".permissions",
+            ".about",
+        ] {
             let range = try #require(orderSource.range(
                 of: section,
                 range: cursor..<orderSource.endIndex
