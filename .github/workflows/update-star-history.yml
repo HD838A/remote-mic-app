@@ -1,0 +1,52 @@
+name: Update Star History
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 2 * * *"
+
+concurrency:
+  group: update-star-history
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Generate Star History SVG
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/generate-star-history.mjs "$RUNNER_TEMP/star-history.svg"
+
+      - name: Publish SVG branch
+        env:
+          STAR_HISTORY_SVG: ${{ runner.temp }}/star-history.svg
+        run: |
+          git fetch origin star-history:refs/remotes/origin/star-history || true
+          if git show-ref --verify --quiet refs/remotes/origin/star-history; then
+            git switch --create star-history --track origin/star-history
+          else
+            git switch --create star-history
+          fi
+          mkdir -p assets
+          cp "$STAR_HISTORY_SVG" assets/star-history.svg
+          git add -- assets/star-history.svg
+          if git diff --cached --quiet -- assets/star-history.svg; then
+            echo "Star History has not changed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --only -m "docs: update star history" -- assets/star-history.svg
+          git push origin star-history
