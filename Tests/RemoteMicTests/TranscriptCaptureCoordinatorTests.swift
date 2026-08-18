@@ -169,24 +169,89 @@ struct TranscriptCaptureCoordinatorTests {
 
         #expect(harness.captures.isEmpty)
     }
+
+    @Test func initialFocusRetriesBeforeCapturingTheSession() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = nil
+        harness.coordinator.startSession(
+            startedAt: Date(timeIntervalSince1970: 100),
+            source: .bluetoothRemote
+        )
+
+        harness.scheduler.advance(by: 0.25)
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.scheduler.advance(by: 0.125)
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "焦点恢复",
+            selection: NSRange(location: 4, length: 0)
+        )
+        harness.coordinator.finishSession(endedAt: Date(timeIntervalSince1970: 103))
+        harness.scheduler.advance(by: 1)
+
+        #expect(try #require(harness.captures.first).text == "焦点恢复")
+        #expect(harness.logs.contains { $0.contains("target_ready retry=true") })
+    }
+
+    @Test func nextSessionTakesOneFinalSnapshotBeforeCancelingThePreviousSession() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.coordinator.startSession(
+            startedAt: Date(timeIntervalSince1970: 100),
+            source: .bluetoothRemote
+        )
+        harness.coordinator.finishSession(endedAt: Date(timeIntervalSince1970: 101))
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "来不及轮询",
+            selection: NSRange(location: 6, length: 0)
+        )
+
+        harness.coordinator.startSession(
+            startedAt: Date(timeIntervalSince1970: 102),
+            source: .bluetoothRemote
+        )
+
+        #expect(try #require(harness.captures.first).text == "来不及轮询")
+        #expect(harness.logs.contains { $0.contains("saved reason=next_session_snapshot") })
+    }
+
+    @Test func unavailableInitialFocusEndsWithADiagnosticReason() {
+        let harness = CaptureHarness(initialSnapshotTimeout: 0.5)
+        harness.snapshot = nil
+        harness.coordinator.startSession(startedAt: Date(), source: .bluetoothRemote)
+        harness.scheduler.advance(by: 1)
+
+        #expect(harness.captures.isEmpty)
+        #expect(harness.logs.contains("TRANSCRIPT CAPTURE skipped reason=initial_focus_unavailable"))
+    }
 }
 
 private final class CaptureHarness {
     var enabled: Bool
     var snapshot: TranscriptCaptureSnapshot?
     var captures: [CapturedTranscript] = []
+    var logs: [String] = []
     let scheduler = TranscriptManualScheduler()
+    let initialSnapshotTimeout: TimeInterval
 
     lazy var coordinator = TranscriptCaptureCoordinator(
+        initialSnapshotTimeout: initialSnapshotTimeout,
         isEnabled: { [unowned self] in enabled },
         schedule: scheduler.schedule,
         clock: { [unowned self] in scheduler.currentTime },
         snapshot: { [unowned self] in snapshot },
-        onCapture: { [unowned self] capture in captures.append(capture) }
+        onCapture: { [unowned self] capture in captures.append(capture) },
+        log: { [unowned self] message in logs.append(message) }
     )
 
-    init(enabled: Bool = true) {
+    init(enabled: Bool = true, initialSnapshotTimeout: TimeInterval = 1.25) {
         self.enabled = enabled
+        self.initialSnapshotTimeout = initialSnapshotTimeout
     }
 
     static func safeSnapshot(text: String, selection: NSRange) -> TranscriptCaptureSnapshot {

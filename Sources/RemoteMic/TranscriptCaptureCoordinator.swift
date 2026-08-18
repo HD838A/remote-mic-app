@@ -146,6 +146,7 @@ struct TranscriptCaptureSnapshot: Equatable {
 final class TranscriptCaptureCoordinator {
     typealias Scheduler = (TimeInterval, @escaping () -> Void) -> VoiceFnTapScheduledTask
     typealias SnapshotProvider = () -> TranscriptCaptureSnapshot?
+    typealias Logger = (String) -> Void
 
     private static let maximumTranscriptCharacters = 8_000
 
@@ -161,6 +162,16 @@ final class TranscriptCaptureCoordinator {
         var acceptedChange: TranscriptTextChange?
     }
 
+    private struct PendingSession {
+        let id: UUID
+        let generation: UInt64
+        let startedAt: Date
+        let source: UsageEventSource
+        let snapshotDeadline: TimeInterval
+        var endedAt: Date?
+    }
+
+    private let initialSnapshotTimeout: TimeInterval
     private let pollInterval: TimeInterval
     private let stableDuration: TimeInterval
     private let totalTimeout: TimeInterval
@@ -169,13 +180,17 @@ final class TranscriptCaptureCoordinator {
     private let clock: () -> TimeInterval
     private let snapshot: SnapshotProvider
     private let onCapture: (CapturedTranscript) -> Void
+    private let log: Logger
 
     private var generation: UInt64 = 0
+    private var pendingSession: PendingSession?
     private var activeSession: ActiveSession?
+    private var initialSnapshotTask: VoiceFnTapScheduledTask?
     private var pollTask: VoiceFnTapScheduledTask?
     private var timeoutTask: VoiceFnTapScheduledTask?
 
     init(
+        initialSnapshotTimeout: TimeInterval = 1.25,
         pollInterval: TimeInterval = 0.125,
         stableDuration: TimeInterval = 0.9,
         totalTimeout: TimeInterval = 8,
@@ -183,8 +198,10 @@ final class TranscriptCaptureCoordinator {
         schedule: @escaping Scheduler = VoiceFnTapScheduledTask.mainQueue,
         clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         snapshot: @escaping SnapshotProvider = TranscriptCaptureSnapshot.system,
-        onCapture: @escaping (CapturedTranscript) -> Void
+        onCapture: @escaping (CapturedTranscript) -> Void,
+        log: @escaping Logger = AppLogger.shared.write
     ) {
+        self.initialSnapshotTimeout = initialSnapshotTimeout
         self.pollInterval = pollInterval
         self.stableDuration = stableDuration
         self.totalTimeout = totalTimeout
@@ -193,71 +210,183 @@ final class TranscriptCaptureCoordinator {
         self.clock = clock
         self.snapshot = snapshot
         self.onCapture = onCapture
+        self.log = log
     }
 
     func startSession(startedAt: Date, source: UsageEventSource) {
-        if isEnabled(), let session = activeSession,
-           session.endedAt != nil, session.acceptedChange != nil {
-            complete(session, reason: "next_session")
-        } else {
-            cancel()
-        }
+        settleExistingSessionBeforeNextStart()
         guard isEnabled() else {
-            AppLogger.shared.write("TRANSCRIPT CAPTURE skipped reason=feature_disabled")
-            return
-        }
-        guard let target = snapshot() else {
-            AppLogger.shared.write("TRANSCRIPT CAPTURE skipped reason=snapshot_unavailable")
-            return
-        }
-        guard target.isSafeEditableDestination else {
-            AppLogger.shared.write("TRANSCRIPT CAPTURE skipped reason=unsafe_destination")
+            log("TRANSCRIPT CAPTURE skipped reason=feature_disabled")
             return
         }
         generation &+= 1
-        activeSession = ActiveSession(
+        let pending = PendingSession(
             id: UUID(),
             generation: generation,
             startedAt: startedAt,
             source: source,
-            target: target
+            snapshotDeadline: clock() + initialSnapshotTimeout
         )
+        guard let target = snapshot() else {
+            pendingSession = pending
+            log("TRANSCRIPT CAPTURE waiting reason=initial_focus_unavailable")
+            scheduleInitialSnapshotRetry(generation: pending.generation)
+            return
+        }
+        guard target.isSafeEditableDestination else {
+            log("TRANSCRIPT CAPTURE skipped reason=unsafe_destination")
+            return
+        }
+        activate(pending, target: target, recoveredAfterRetry: false)
+    }
+
+    private func activate(
+        _ pending: PendingSession,
+        target: TranscriptCaptureSnapshot,
+        recoveredAfterRetry: Bool
+    ) {
+        initialSnapshotTask?.cancel()
+        initialSnapshotTask = nil
+        pendingSession = nil
+        activeSession = ActiveSession(
+            id: pending.id,
+            generation: pending.generation,
+            startedAt: pending.startedAt,
+            source: pending.source,
+            target: target,
+            endedAt: pending.endedAt
+        )
+        log("TRANSCRIPT CAPTURE target_ready retry=\(recoveredAfterRetry)")
+        if pending.endedAt != nil {
+            scheduleFinishedSession(generation: pending.generation)
+        }
     }
 
     func finishSession(endedAt: Date) {
+        if var pending = pendingSession, pending.endedAt == nil {
+            pending.endedAt = endedAt
+            pendingSession = pending
+            return
+        }
         guard isEnabled(), var session = activeSession, session.endedAt == nil else { return }
         session.endedAt = endedAt
         activeSession = session
-        let generation = session.generation
+        scheduleFinishedSession(generation: session.generation)
+    }
+
+    private func scheduleFinishedSession(generation: UInt64) {
+        timeoutTask?.cancel()
         timeoutTask = schedule(totalTimeout) { [weak self] in
             guard self?.activeSession?.generation == generation else { return }
-            self?.cancel()
+            self?.cancel(reason: "timeout")
         }
         poll(generation: generation)
     }
 
-    func cancel() {
+    func cancel(reason: String = "external") {
+        let hadSession = pendingSession != nil || activeSession != nil
+        clearState()
+        if hadSession {
+            log("TRANSCRIPT CAPTURE canceled reason=\(reason)")
+        }
+    }
+
+    private func clearState() {
         generation &+= 1
+        initialSnapshotTask?.cancel()
         pollTask?.cancel()
         timeoutTask?.cancel()
+        initialSnapshotTask = nil
         pollTask = nil
         timeoutTask = nil
+        pendingSession = nil
         activeSession = nil
     }
 
-    private func poll(generation: UInt64) {
-        guard isEnabled(), var session = activeSession,
-              session.generation == generation,
-              session.endedAt != nil
-        else {
-            cancel()
+    private func scheduleInitialSnapshotRetry(generation: UInt64) {
+        initialSnapshotTask = schedule(pollInterval) { [weak self] in
+            self?.retryInitialSnapshot(generation: generation)
+        }
+    }
+
+    private func retryInitialSnapshot(generation: UInt64) {
+        guard let pending = pendingSession, pending.generation == generation else { return }
+        guard isEnabled() else {
+            cancel(reason: "feature_disabled_during_initial_focus")
             return
         }
+        if let target = snapshot() {
+            guard target.isSafeEditableDestination else {
+                clearState()
+                log("TRANSCRIPT CAPTURE skipped reason=unsafe_destination")
+                return
+            }
+            activate(pending, target: target, recoveredAfterRetry: true)
+            return
+        }
+        guard clock() < pending.snapshotDeadline else {
+            clearState()
+            log("TRANSCRIPT CAPTURE skipped reason=initial_focus_unavailable")
+            return
+        }
+        scheduleInitialSnapshotRetry(generation: generation)
+    }
+
+    private func settleExistingSessionBeforeNextStart() {
+        if pendingSession != nil {
+            cancel(reason: "superseded_during_initial_focus")
+            return
+        }
+        guard let session = activeSession else { return }
+        guard session.endedAt != nil else {
+            cancel(reason: "superseded_before_finish")
+            return
+        }
+        if session.acceptedChange != nil {
+            complete(session, reason: "next_session")
+        } else if let updated = sessionAcceptingCurrentSnapshot(session) {
+            complete(updated, reason: "next_session_snapshot")
+        } else {
+            cancel(reason: "superseded_without_text_change")
+        }
+    }
+
+    private func sessionAcceptingCurrentSnapshot(_ session: ActiveSession) -> ActiveSession? {
         guard let current = snapshot(),
               current.isSafeEditableDestination,
               current.focusIdentity == session.target.focusIdentity,
-              current.bundleIdentifier == session.target.bundleIdentifier
-        else {
+              current.bundleIdentifier == session.target.bundleIdentifier,
+              let change = Self.continuousChange(
+                  original: session.target.text,
+                  updated: current.text,
+                  originalSelection: session.target.selection
+              ),
+              change.oldRange == session.target.selection,
+              !change.newText.isEmpty,
+              change.newText.count <= Self.maximumTranscriptCharacters
+        else { return nil }
+        var updated = session
+        updated.acceptedChange = change
+        return updated
+    }
+
+    private func poll(generation: UInt64) {
+        guard var session = activeSession, session.generation == generation else { return }
+        guard isEnabled() else {
+            cancel(reason: "feature_disabled_during_poll")
+            return
+        }
+        guard session.endedAt != nil else { return }
+        guard let current = snapshot() else {
+            completeAcceptedChangeOrCancel(session, reason: "snapshot_unavailable_after_finish")
+            return
+        }
+        guard current.isSafeEditableDestination else {
+            completeAcceptedChangeOrCancel(session, reason: "destination_became_unsafe")
+            return
+        }
+        guard current.focusIdentity == session.target.focusIdentity,
+              current.bundleIdentifier == session.target.bundleIdentifier else {
             completeAcceptedChangeOrCancel(session, reason: "destination_changed")
             return
         }
@@ -293,7 +422,7 @@ final class TranscriptCaptureCoordinator {
             complete(session, reason: "destination_cleared")
             return
         } else {
-            cancel()
+            cancel(reason: "discontinuous_text_change")
             return
         }
 
@@ -305,7 +434,7 @@ final class TranscriptCaptureCoordinator {
 
     private func completeAcceptedChangeOrCancel(_ session: ActiveSession, reason: String) {
         guard session.acceptedChange != nil else {
-            cancel()
+            cancel(reason: reason)
             return
         }
         complete(session, reason: reason)
@@ -316,7 +445,7 @@ final class TranscriptCaptureCoordinator {
               let change = session.acceptedChange,
               !change.newText.isEmpty
         else {
-            cancel()
+            cancel(reason: "missing_accepted_change")
             return
         }
         let captured = CapturedTranscript(
@@ -328,8 +457,8 @@ final class TranscriptCaptureCoordinator {
             source: session.source,
             text: change.newText
         )
-        cancel()
-        AppLogger.shared.write(
+        clearState()
+        log(
             "TRANSCRIPT CAPTURE saved reason=\(reason) " +
                 "bundle=\(session.target.bundleIdentifier) characters=\(change.newText.count)"
         )
