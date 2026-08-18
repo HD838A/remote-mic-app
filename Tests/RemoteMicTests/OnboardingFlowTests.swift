@@ -437,9 +437,62 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("transcriptFocused = true"))
         #expect(viewSource.contains(".font(.system(size: 15))\n                        .foregroundStyle(.tertiary)\n                        .padding(.horizontal, 15)\n                        .padding(.vertical, 10)"))
         #expect(viewSource.contains(".onChange(of: transcript)"))
-        #expect(viewSource.contains("NSApp.currentEvent?.type == .keyDown"))
+        #expect(!viewSource.contains(".onChange(of: transcript) { _, updatedText in"))
+        #expect(viewSource.contains("OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput"))
+        #expect(viewSource.contains(".eventSourceStateID"))
+        #expect(viewSource.contains(".eventSourceUnixProcessID"))
         #expect(viewSource.contains("manualTranscriptInputObserved = true"))
+        #expect(viewSource.contains("ONBOARDING TRANSCRIPT manual_keyboard_input=true"))
         #expect(viewSource.contains("transcript = \"\"\n                voiceSessionStarted = true"))
+    }
+
+    @Test func transcriptInputPolicyRejectsSyntheticAndUnknownEventSources() {
+        #expect(OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: 10,
+            sourceStateID: 1,
+            sourceUnixProcessID: 0
+        ))
+        #expect(OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: 10,
+            sourceStateID: 1,
+            sourceUnixProcessID: -1
+        ))
+
+        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: 11,
+            sourceStateID: 1,
+            sourceUnixProcessID: 0
+        ))
+        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: 10,
+            sourceStateID: 0,
+            sourceUnixProcessID: 0
+        ))
+        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: 10,
+            sourceStateID: -1,
+            sourceUnixProcessID: 0
+        ))
+        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: 10,
+            sourceStateID: 99,
+            sourceUnixProcessID: 0
+        ))
+        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: 10,
+            sourceStateID: 1,
+            sourceUnixProcessID: 42
+        ))
+        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: nil,
+            sourceStateID: nil,
+            sourceUnixProcessID: nil
+        ))
+        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
+            eventTypeRawValue: 10,
+            sourceStateID: 1,
+            sourceUnixProcessID: nil
+        ))
     }
 
     @Test func mobileControlPathsPublishButtonsAndVoiceSamplesForTheSharedGates() throws {

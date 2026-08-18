@@ -171,6 +171,25 @@ enum OnboardingAudioSelectionPolicy {
     }
 }
 
+enum OnboardingTranscriptInputPolicy {
+    private static let keyDownEventTypeRawValue: UInt = 10
+    private static let hidSystemStateRawValue: Int64 = 1
+
+    static func isConfirmedPhysicalKeyboardInput(
+        eventTypeRawValue: UInt?,
+        sourceStateID: Int64?,
+        sourceUnixProcessID: Int64?
+    ) -> Bool {
+        guard eventTypeRawValue == keyDownEventTypeRawValue,
+              sourceStateID == hidSystemStateRawValue,
+              let sourceUnixProcessID,
+              sourceUnixProcessID <= 0 else {
+            return false
+        }
+        return true
+    }
+}
+
 enum OnboardingFlowPolicy {
     static func shouldAutoSelectPhysicalRemote(
         at step: OnboardingStep,
