@@ -252,7 +252,7 @@ struct BuildSigningTests {
         #expect(ciWorkflowSource.contains("swift package config set-mirror"))
         #expect(ciWorkflowSource.contains("classify_changes:"))
         #expect(ciWorkflowSource.contains("Detect documentation-only change"))
-        #expect(ciWorkflowSource.contains("*.md) ;;"))
+        #expect(ciWorkflowSource.contains("*.md|Screenshots/*) ;;"))
         #expect(ciWorkflowSource.contains("docs_only: ${{ steps.changes.outputs.docs_only }}"))
         #expect(ciWorkflowSource.contains("needs.classify_changes.outputs.docs_only == 'true' && 'ubuntu-latest' || 'macos-15'"))
         #expect(ciWorkflowSource.contains("Confirm documentation-only fast path"))
