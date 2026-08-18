@@ -3,9 +3,9 @@
 ## 适用范围
 
 - 版本：无线麦SayAll.app 三种控制方式 Onboarding 未发布候选
-- 当前候选分支：`codex/onboarding-input-method-guidance`
+- 当前候选分支：`codex/v1-9-0-onboarding`（固定基线 `origin/main` `1390a7c2`，Onboarding 集成终点 `542e2967`）
 - 平台：macOS 14 及以上
-- 功能状态：自动化和生产视图截图已通过，等待实体遥控器、iPhone Nearby 与手机 Safari 网页版真实环境验收
+- 功能状态：Onboarding 自动化、双架构 Release 构建和 58 张生产视图截图已通过；等待实体遥控器、iPhone Nearby、手机 Safari 网页版及第三方语音工具真实环境验收
 - 目标：确认只有真正全新安装需要完整设置向导；流程优先实体遥控器，只有当前没有遥控器才继续选择 iPhone App 或网页版，三条最终路径都必须通过真实连接、按键、语音和文字上屏。
 
 > `v1.8.14 (106)` 候选在原流程上增加单一主要修复动作、脱敏设置诊断、失败码与阶段耗时记录，以及完成页定向回跳；新增用例见 [`FirstUseSuccess.md`](FirstUseSuccess.md)。

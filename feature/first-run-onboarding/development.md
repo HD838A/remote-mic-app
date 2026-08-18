@@ -103,6 +103,8 @@
 - `swift test`：2026-08-18 语音测试输入框候选修复后 234 项、20 个 suite 全部通过；`scripts/test.sh` 42 项项目自检通过。
 - `swift test --filter OnboardingFlowTests`：2026-08-18 手机按需音频门禁修复后 23 项通过；覆盖 iPhone/网页音频页和完成页、实体遥控器持续 Ready 基线、设备缺失失败和权限说明接线。
 - `swift test`：同一修复后 235 项、20 个 suite 全部通过；`scripts/test.sh` 42 项项目自检和 `swift build` 通过。iPhone 与网页分支浅色/深色各 10 张生产视图截图均已逐张检查，无内部滚动、裁切或黑白分栏。
+- `codex/v1-9-0-onboarding` 固定基线集成：`swift test --filter OnboardingFlowTests` 23 项、`swift test` 237 项/21 suites、`SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh` 42/42 通过；`arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建通过。实体遥控器 18 张、iPhone 20 张、网页 20 张生产 Onboarding 截图已逐张检查，无裁切或黑白分栏。
+- 同次 800×650 设置页检查中，固定主线基线的“按键映射 / Buttons”页顶部标题与启用开关文案发生严重窄列换行，中英文、浅深色四种组合均复现；Onboarding 七提交未修改该页面或设置容器。本集成不越界修复，但 1.9.0 候选必须在后续组合分支修复并重新执行全部设置入口门禁。
 - 私有硬件模拟：16 项通过，覆盖 RC001/RC003 语音、12 个原始按键、36 个手势、连发、异常报告、重连和双设备隔离。
 - `swift build -c release`：通过。
 - `scripts/build-app.sh`：通过；`codesign --verify --deep --strict` 通过。
@@ -118,4 +120,4 @@
 
 ## 已知限制
 
-自动化无法证明系统权限弹窗、真实 RC003、iPhone Nearby、手机 Safari 网页版、MiRemoteV 2ch、BlackHole 2ch、其他回环设备、第三方语音工具或文字上屏链路在用户机器上可用。完成页只有在运行时检测通过后才可到达，但正式验收仍需执行 `Testing/FirstRunOnboarding.md`。
+自动化无法证明系统权限弹窗、真实 RC003、iPhone Nearby、手机 Safari 网页版、MiRemoteV 2ch、BlackHole 2ch、其他回环设备、豆包、微信输入法、Typeless、微信 App 快捷键、macOS 14/15 差异或文字上屏链路在用户机器上可用。完成页只有在运行时检测通过后才可到达，但正式验收仍需执行 `Testing/FirstRunOnboarding.md`。
