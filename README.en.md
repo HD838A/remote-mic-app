@@ -198,3 +198,9 @@ The macOS app, driver, and related software code in this repository are GPL-3.0-
 The project was originally forked from [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge) and is now maintained independently in this repository.
 
 The MiRemoteV 2ch naming and USB-transport compatibility approach for Doubao device enumeration were informed by [VincentKingHsu/MiRemoteVoice](https://github.com/VincentKingHsu/MiRemoteVoice) v1.0.0-beta.1 (MIT). This project does not reuse that project's binary replacement script. Instead, it independently derives MiRemoteV2ch.driver from [ExistentialAudio/BlackHole](https://github.com/ExistentialAudio/BlackHole) v0.7.1 at commit e2b22aaaba4e507a097131704bf96dabc004d9cf under GPL-3.0. The driver has a separate identity, coexists with BlackHole, and never overwrites or removes BlackHole files.
+
+## Other projects
+
+- [Vibe PPT Web Template](https://github.com/GetSayAll/vibe-ppt-web-template)
+- [Claude Code Config](https://github.com/HD838A/claude-code-config)
+- [DJI 4G Mac](https://github.com/HD838A/dji-4g-mac)
