@@ -335,6 +335,7 @@
 "permission.action.request" = "请求权限";
 "permission.accessibility.title" = "辅助功能";
 "permission.accessibility.description" = "把映射后的按键动作发送给当前应用";
+"permissions.upgrade_identity_help" = "如果升级后权限没有延续，请把这个 Developer ID 签名版本保留在“应用程序”中，并补授权一次；后续同身份签名更新将继续复用该系统权限。";
 "diagnostics.title" = "诊断";
 "diagnostics.logs.title" = "应用日志";
 "diagnostics.logs.privacy" = "日志不记录语音内容、蓝牙地址或设备唯一标识。";

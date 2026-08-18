@@ -5,6 +5,21 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func grantedPermissionsDoNotKeepShowingRequestButtons() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("if state != .granted"))
+        #expect(source.contains("settings.isOnboardingComplete"))
+        #expect(source.contains("permissions.upgrade_identity_help"))
+    }
+
     @Test func applicationEditMenuPreservesStandardTextEditingShortcuts() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

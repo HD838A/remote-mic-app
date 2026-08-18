@@ -3,6 +3,30 @@ import Testing
 
 @Suite("Build signing")
 struct BuildSigningTests {
+    @Test func previewCandidateUsesProtectedDeveloperIDSigning() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let workflow = try String(
+            contentsOf: root.appendingPathComponent(".github/workflows/mac-preview-candidate.yml"),
+            encoding: .utf8
+        )
+        let packagingSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/package-macos-preview-in-actions.sh"),
+            encoding: .utf8
+        )
+
+        #expect(workflow.contains("environment: mac-release"))
+        #expect(workflow.contains("Build, sign, notarize, and verify candidate DMG"))
+        #expect(workflow.contains("./scripts/package-macos-preview-in-actions.sh"))
+        #expect(!workflow.contains("Build and verify ad-hoc candidate DMG"))
+        #expect(packagingSource.contains("run-with-isolated-release-keychain.sh"))
+        #expect(packagingSource.contains("EXPECTED_DEVELOPER_TEAM_ID"))
+        #expect(packagingSource.contains("GENERATE_SPARKLE_UPDATE=0"))
+        #expect(packagingSource.contains("notarize-release.sh"))
+    }
+
     @Test func buildDefaultsToStableAdHocSigning() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -206,7 +230,7 @@ struct BuildSigningTests {
         #expect(candidateIndex.lowerBound < promotionIndex.lowerBound)
     }
 
-    @Test func previewBranchPushBuildsACandidateWithoutReleaseSecrets() throws {
+    @Test func previewBranchPushBuildsAProtectedSignedCandidate() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -220,8 +244,9 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("./scripts/verify-preview-branch.sh"))
         #expect(workflowSource.contains("swift test"))
         #expect(workflowSource.contains("./scripts/test.sh"))
-        #expect(workflowSource.contains("./scripts/build-dmg.sh"))
-        #expect(workflowSource.contains("./scripts/verify-dmg.sh"))
+        #expect(workflowSource.contains("environment: mac-release"))
+        #expect(workflowSource.contains("./scripts/package-macos-preview-in-actions.sh"))
+        #expect(workflowSource.contains("RELEASE_AGE_IDENTITY"))
         #expect(workflowSource.contains("GetSayAll/sayall-ai"))
         #expect(workflowSource.contains("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_AI_PACKAGE=1"))

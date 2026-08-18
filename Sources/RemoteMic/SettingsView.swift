@@ -1989,6 +1989,16 @@ struct SettingsView: View {
                         ) {
                             model.requestAccessibilityPermission()
                         }
+
+                        if settings.isOnboardingComplete,
+                           !inputMonitoringGranted || !accessibilityGranted {
+                            Divider().padding(.leading, 62)
+                            Label("permissions.upgrade_identity_help", systemImage: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.vertical, 12)
+                        }
                     }
                 }
 
@@ -2942,9 +2952,11 @@ struct SettingsView: View {
 
             Spacer(minLength: 16)
             StatusPill(text: state.title(using: localization), tint: state.tint)
-            Button(actionTitle, action: action)
-                .compatibilityButtonStyle(.standard)
-                .frame(width: 112)
+            if state != .granted {
+                Button(actionTitle, action: action)
+                    .compatibilityButtonStyle(.standard)
+                    .frame(width: 112)
+            }
         }
         .padding(.vertical, 12)
     }

@@ -335,6 +335,7 @@
 "permission.action.request" = "Request Permission";
 "permission.accessibility.title" = "Accessibility";
 "permission.accessibility.description" = "Send mapped button actions to the current app";
+"permissions.upgrade_identity_help" = "If permissions disappeared after an upgrade, keep this Developer ID signed build in Applications and request the missing permission once. Later signed updates will reuse the same system identity.";
 "diagnostics.title" = "Diagnostics";
 "diagnostics.logs.title" = "App Logs";
 "diagnostics.logs.privacy" = "Logs do not record voice content, Bluetooth addresses, or unique device identifiers.";

@@ -3,6 +3,7 @@
 - [x] 统一 SayAll 品牌、官网与当前上架战略
   - App 英文名称统一为 `SayAll`，中文名称继续使用“无线麦”，官网统一为 `https://sayall.app`。
   - 2026-08-17 补齐发布产物名称层：canonical bundle 与安装目标统一为 `SayAll.app`，英文显示 SayAll、简中显示无线麦；`RemoteMic` 可执行文件、`com.hd838a.RemoteMic` Bundle ID 和 `Remote-Mic-*` 发布资产文件名继续保持兼容。安装器仅在 Bundle ID 匹配且新 App 已验证后，把旧 `Remote Mic.app` / `无线麦.app` 移到目标卷对应的废纸篓；Trash 不可用时保留旧 App。
+  - 2026-08-19 修复路径改名后的内测权限身份：预览候选不再发布 ad-hoc 安装包，改由受保护工作流使用与正式版相同 Team 的 Developer ID 签名并公证；真实同机升级权限延续仍按 `Testing/MacPreviewPermissionContinuity.md` 验收。
   - Mac App 继续采用独立下载方式维护，Mac App Store 上架暂时暂停；当前只推进 iOS App 与内嵌 Apple Watch App 上架，且不拆分商店专用版本。
 
 - [x] 使用 Cloudflare CDN 加速 Mac 下载
