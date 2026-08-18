@@ -31,5 +31,8 @@ struct WatchBluetoothVoiceJourneyTests {
         #expect(bridgeSource.contains(
             "completion(self?.startPhoneVoice(source: .nearbyWatch) ?? .unavailable)"
         ))
+        #expect(bridgeSource.contains("MOBILE VOICE audio source="))
+        #expect(bridgeSource.contains("MOBILE VOICE audio_summary source="))
+        #expect(bridgeSource.contains("accepted=\\(accepted)"))
     }
 }

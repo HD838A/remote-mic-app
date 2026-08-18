@@ -22,6 +22,8 @@ iPhone 与 Watch 共用一次附近等待。任一入口开启后都能接受两
 
 Watch 音频只进入现有 Mac 移动语音链路，不由该组件持久化。长期信任沿用现有设备身份记录，用户可以在 Mac 清除。组件固定到已合入私有仓库主分支的 revision；新增的连接状态、语音开始结果和 `voiceReadyV1` 均保持可选与旧版兼容，既有 iPhone/Web 行为不变。Mac 只在用户开启附近连接后启动 Watch 蓝牙服务，并确认 Bonjour 服务真正发布；发布超时或被移除时会自动恢复，不再只依赖端口监听状态。Watch 蓝牙关闭或异常失去可用状态时会清理授权、连接和语音占用，避免界面残留“已连接”或继续阻塞 iPhone 语音。Mac 只在虚拟麦克风与系统语音键准备成功后通知新版 Watch 开始采集，避免首批音频提前到达被丢弃。
 
+Watch BLE 音频诊断只记录包数、字节数、完整帧、解码失败、peak/RMS、非零样本和虚拟输出入队结果，不记录原始语音。Mac 按 CoreBluetooth 契约把同一写回调内的请求作为一个批次处理并只响应一次；配套 Watch 使用不超过 161 bytes 的无响应音频包，继续依赖系统背压保证完整顺序。
+
 ## 涉及文件
 
 - `Package.swift`、`Package.resolved`：固定组件依赖和产品。
@@ -33,4 +35,4 @@ Watch 音频只进入现有 Mac 移动语音链路，不由该组件持久化。
 
 ## 当前状态与限制
 
-状态：候选代码完成，已补充 iPhone/Watch 语音来源隔离、占用错误分类、移动语音诊断日志和 `voiceReadyV1` 首句就绪握手，等待真机验收。自动化和构建结果记录在 [testing.md](testing.md)，人工步骤见 [Testing/AppleWatchDirectRemote.md](../../Testing/AppleWatchDirectRemote.md)。真实 Watch 的附近发现、授权、按键、BLE 实时收音、首句听感和停止后切换 iPhone 尚不能由本机自动化替代。
+状态：候选代码完成，已补充 iPhone/Watch 语音来源隔离、`voiceReadyV1`、安全分包配套、CoreBluetooth 批量写响应修正，以及接收→解码→宿主→虚拟输出分层诊断，等待真机验收。自动化和构建结果记录在 [testing.md](testing.md)，人工步骤见 [Testing/AppleWatchDirectRemote.md](../../Testing/AppleWatchDirectRemote.md)。真实 Watch 的附近发现、授权、按键、BLE 实时收音、首句听感和停止后切换 iPhone 尚不能由本机自动化替代。
