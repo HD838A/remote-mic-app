@@ -62,6 +62,8 @@ enum SettingsScreenshotRenderer {
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
         let localization = LocalizationStore(settings: settings)
+        model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
+        model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
 
         _ = NSApplication.shared
         let previousAppearance = NSApp.appearance

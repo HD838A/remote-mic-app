@@ -659,6 +659,12 @@ struct SettingsPageRegressionTests {
             #expect(sections.contains(section))
         }
         #expect(!sections.contains(".privateFeature"))
+        #expect(source.contains(
+            "model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)"
+        ))
+        #expect(source.contains(
+            "model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)"
+        ))
     }
 
     @Test func transcriptHistoryHasDedicatedSidebarPageAndUsesThePublicVoiceLifecycle() throws {
