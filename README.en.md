@@ -2,15 +2,33 @@
 
 [简体中文](README.md)
 
+[Website](https://sayall.app/en/) · [Setup tutorial](https://sayall.app/en/tutorial/)
+
 <p>
   <a href="https://github.com/HD838A/remote-mic-app/stargazers">
     <img src="https://img.shields.io/github/stars/HD838A/remote-mic-app?style=social" alt="GitHub Stars">
   </a>
 </p>
 
-Chinese website: [sayall.app](https://sayall.app/)
-
-English website: [sayall.app/en](https://sayall.app/en/)
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb"><img src="Screenshots/community-entry-qrcode.png" alt="SayAll permanent community entry" width="220"></a><br>
+      <strong>Permanent entry</strong><br>
+      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb">Open the latest community page</a>
+    </td>
+    <td align="center">
+      <img src="Screenshots/wechat-group-qrcode.jpg" alt="SayAll WeChat group QR code" width="220"><br>
+      <strong>WeChat group</strong><br>
+      Scan in WeChat to join
+    </td>
+    <td align="center">
+      <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="SayAll Xiaohongshu QR code" width="220"></a><br>
+      <strong>Xiaohongshu</strong><br>
+      Scan to follow SayAll
+    </td>
+  </tr>
+</table>
 
 iOS app beta: [Join the TestFlight public beta](https://testflight.apple.com/join/J8k8fb7v)
 
@@ -62,6 +80,8 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 - For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
 
 ## Download and install
+
+- Setup tutorial: [Open the website tutorial](https://sayall.app/en/tutorial/).
 
 - Latest stable release (Apple Silicon): download it through the permanent [Cloudflare CDN entry](https://download.sayall.app/mac). The current stable entry provides only the Apple Silicon package and does not change between versions.
 - Latest pre-release (Apple Silicon / Intel): open [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases), find the newest macOS candidate marked **Pre-release** in the release list, and download the DMG for your Mac architecture. Until a release containing the Intel package is promoted to stable, Intel users should download the latest pre-release DMG whose name includes `Intel`.
