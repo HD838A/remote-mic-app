@@ -48,17 +48,6 @@ enum OnboardingScreenshotRenderer {
         }
     }
 
-    private static let pages: [(OnboardingStep, String)] = [
-        (.welcome, "01-welcome.png"),
-        (.voiceTool, "02-voice-tool.png"),
-        (.permissions, "03-permissions.png"),
-        (.remote, "04-remote.png"),
-        (.audio, "05-audio.png"),
-        (.voiceTest, "06-voice-test.png"),
-        (.controls, "07-controls.png"),
-        (.complete, "08-complete.png"),
-    ]
-
     static func renderAll(to outputDirectory: URL, appearanceName: String?) throws {
         let screenshotAppearance = try ScreenshotAppearance(environmentValue: appearanceName)
         try FileManager.default.createDirectory(
@@ -74,7 +63,24 @@ enum OnboardingScreenshotRenderer {
 
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = .simplifiedChinese
-        settings.setOnboardingVoiceTool(.typeless)
+        let requestedVoiceTool = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_TOOL"
+        ].flatMap(OnboardingVoiceTool.init(rawValue:))
+        let requestedGuideStep = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"
+        ].flatMap(Int.init) ?? 0
+        let requestedControlMethod = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD"
+        ].flatMap(OnboardingControlMethod.init(rawValue:))
+        let systemFunctionKeyAvailable = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"
+        ].map { $0 != "0" } ?? true
+        let controlMethod = requestedControlMethod ?? .physicalRemote
+        settings.setOnboardingVoiceTool(requestedVoiceTool ?? .doubao)
+        settings.setOnboardingRemoteAvailability(
+            controlMethod == .physicalRemote ? .hasRemote : .noRemote
+        )
+        settings.setOnboardingControlMethod(controlMethod)
         let screenshotAudioDevices = [
             AudioDeviceInfo(id: 1, uid: DoubaoAudioDevicePolicy.deviceUID, name: "MiRemoteV 2ch"),
             AudioDeviceInfo(id: 2, uid: "BlackHole2ch_UID", name: "BlackHole 2ch"),
@@ -91,11 +97,20 @@ enum OnboardingScreenshotRenderer {
         NSApp.setActivationPolicy(.regular)
         defer { NSApp.appearance = previousAppearance }
 
-        for (step, filename) in pages {
+        for (step, filename) in pages(for: controlMethod) {
+            settings.selectedAudioDeviceUID = switch step {
+            case .voiceTest, .controls, .complete:
+                DoubaoAudioDevicePolicy.deviceUID
+            default:
+                ""
+            }
             settings.setOnboardingStep(step)
             let rootView = OnboardingView(
                 model: model,
-                completeRuntimeReadyOverride: true
+                completeRuntimeReadyOverride: true,
+                allowsInputSourceSwitching: false,
+                systemFunctionKeyAvailableOverride: systemFunctionKeyAvailable,
+                initialInputMethodGuideStep: requestedGuideStep
             )
                 .environmentObject(localization)
                 .frame(width: 1020, height: 772)
@@ -124,6 +139,46 @@ enum OnboardingScreenshotRenderer {
             try png.write(to: outputDirectory.appendingPathComponent(filename))
             window.orderOut(nil)
             window.contentViewController = nil
+        }
+    }
+
+    private static func pages(
+        for controlMethod: OnboardingControlMethod
+    ) -> [(OnboardingStep, String)] {
+        var steps: [OnboardingStep] = [
+            .welcome,
+            .voiceTool,
+            .remoteAvailability,
+        ]
+        if controlMethod != .physicalRemote {
+            steps.append(.controlMethod)
+        }
+        steps.append(contentsOf: [
+            .permissions,
+            .remote,
+            .audio,
+            .voiceTest,
+            .controls,
+            .complete,
+        ])
+        return steps.enumerated().map { index, step in
+            let number = String(format: "%02d", index + 1)
+            return (step, "\(number)-\(filenameComponent(for: step)).png")
+        }
+    }
+
+    private static func filenameComponent(for step: OnboardingStep) -> String {
+        switch step {
+        case .welcome: return "welcome"
+        case .voiceTool: return "voice-tool"
+        case .remoteAvailability: return "remote-availability"
+        case .controlMethod: return "control-method"
+        case .permissions: return "permissions"
+        case .remote: return "remote"
+        case .audio: return "audio"
+        case .voiceTest: return "voice-test"
+        case .controls: return "controls"
+        case .complete: return "complete"
         }
     }
 

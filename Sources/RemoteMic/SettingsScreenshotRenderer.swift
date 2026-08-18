@@ -27,9 +27,11 @@ enum SettingsScreenshotRenderer {
     }
 
     private static let sections: [SettingsSection] = [
-        .connection,
         .mapping,
+        .macros,
         .statistics,
+        .transcripts,
+        .connection,
         .permissions,
         .about,
     ]
@@ -60,6 +62,8 @@ enum SettingsScreenshotRenderer {
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
         let localization = LocalizationStore(settings: settings)
+        model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
+        model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
 
         _ = NSApplication.shared
         let previousAppearance = NSApp.appearance
@@ -71,6 +75,9 @@ enum SettingsScreenshotRenderer {
                 model: model,
                 updateInformation: updateInformation,
                 initialSection: section,
+                initialShareSection: section == .statistics || section == .about
+                    ? section
+                    : nil,
                 minimumContentSize: .zero
             )
             .environmentObject(localization)

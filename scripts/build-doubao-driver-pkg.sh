@@ -5,7 +5,7 @@ ROOT="${0:A:h:h}"
 source "$ROOT/scripts/release-variant.sh"
 OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 DRIVER="$OUTPUT_DIR/MiRemoteV2ch.driver"
-APP="$OUTPUT_DIR/Remote Mic.app"
+APP="$OUTPUT_DIR/SayAll.app"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
 INSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_INSTALL_PACKAGE_NAME"
@@ -109,7 +109,7 @@ fi
   "$PAYLOAD_ROOT/Applications" \
   "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
-  "$APP" "$PAYLOAD_ROOT/Applications/Remote Mic.app"
+  "$APP" "$PAYLOAD_ROOT/Applications/SayAll.app"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$DRIVER" \
   "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver"

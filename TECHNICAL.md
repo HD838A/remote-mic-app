@@ -73,10 +73,10 @@ ATVV 通道为：
 
 安装 PKG 的 payload 包含：
 
-- `/Applications/Remote Mic.app`；
+- `/Applications/SayAll.app`；
 - `/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver`。
 
-安装脚本校验架构、最低系统版本和签名，重启 CoreAudio，并为当前桌面用户启动应用。卸载 PKG 只删除 `MiRemoteV2ch.driver` 并重启 CoreAudio，不删除应用或 BlackHole。
+安装脚本校验架构、最低系统版本和签名，重启 CoreAudio，并为当前桌面用户启动应用。新 `SayAll.app` 验证通过后，Bundle ID 匹配的旧 `Remote Mic.app` / `无线麦.app` 会使用防冲突名称移入目标卷对应的 macOS 废纸篓；Trash 不可用或移动失败时旧 App 保持原样。卸载 PKG 只删除 `MiRemoteV2ch.driver` 并重启 CoreAudio，不删除应用或 BlackHole。
 
 ## HID 与按键映射
 
@@ -157,7 +157,7 @@ xcrun swift test
 
 `build-dmg.sh` 会依次构建并验证应用、驱动、安装 PKG 和卸载 PKG，生成：
 
-- `dist/Remote Mic.app`；
+- `dist/SayAll.app`；
 - `dist/MiRemoteV2ch.driver`；
 - `dist/Install Remote Mic.pkg`；
 - `dist/Uninstall Remote Mic.pkg`；

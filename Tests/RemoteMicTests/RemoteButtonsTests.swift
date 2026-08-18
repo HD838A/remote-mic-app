@@ -35,6 +35,33 @@ struct RemoteButtonsTests {
         ) == "remote-a")
     }
 
+    @Test func HIDReportRoutingExplainsEveryFingerprintRejection() {
+        #expect(HIDRemoteMonitor.reportRoutingDecision(
+            reportingFingerprint: nil,
+            activeFingerprint: nil,
+            targetFingerprint: nil,
+            excludedFingerprints: []
+        ) == .rejected("fingerprint_unavailable"))
+        #expect(HIDRemoteMonitor.reportRoutingDecision(
+            reportingFingerprint: "remote-b",
+            activeFingerprint: "remote-a",
+            targetFingerprint: nil,
+            excludedFingerprints: []
+        ) == .rejected("active_fingerprint_mismatch"))
+        #expect(HIDRemoteMonitor.reportRoutingDecision(
+            reportingFingerprint: "remote-a",
+            activeFingerprint: nil,
+            targetFingerprint: nil,
+            excludedFingerprints: ["remote-a"]
+        ) == .rejected("excluded_fingerprint"))
+        #expect(HIDRemoteMonitor.reportRoutingDecision(
+            reportingFingerprint: "remote-b",
+            activeFingerprint: nil,
+            targetFingerprint: "remote-a",
+            excludedFingerprints: []
+        ) == .rejected("target_fingerprint_mismatch"))
+    }
+
     @Test func presetApplicationsHaveExpectedNamesAndBundleIdentifiers() {
         let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
         let mappings = Dictionary(uniqueKeysWithValues: PresetApplication.allCases.map {

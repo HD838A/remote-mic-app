@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 适用分支：包含 12 项 macOS 公开资产矩阵的 `main`、开发分支及其后续 `release/pre-v*` 候选。
+- 适用分支：包含 12 项 macOS 公开资产矩阵的 `main`、开发分支及其后续 `release/pre-v*` 候选，也适用于私有 GitHub Draft 中的可安装 macOS 测试资产。
 - Apple Silicon：`arm64`、macOS 14 及以上。
 - Intel：`x86_64`、macOS 13 及以上。
 - 本手册验证发布资产、安装入口、Sparkle、CDN 与历史兼容；不授权创建 Tag、Release、签名或公证。
@@ -10,7 +10,7 @@
 ## 测试前准备
 
 1. 使用干净的独立 worktree，并固定到待测提交。
-2. 准备两架构已完成 Developer ID 签名、公证和 staple 的产物；无凭据开发回归可使用结构等价的 ad-hoc 产物，但必须明确其验证边界。
+2. 准备两架构已完成 Developer ID 签名、公证和 staple 的产物；无凭据开发回归可使用结构等价的 ad-hoc 产物检查脚本结构，但 ad-hoc 产物不得上传为私有 Draft、公开 Pre-release 或正式版。
 3. 安装 `jq`、`rg`、`gh`，并确认可访问 GitHub Releases 与 `https://download.sayall.app`。
 4. 不输出或复制 Apple 私钥、P8、Match 密码、Keychain 密码、Sparkle 私钥或部署密钥。
 
@@ -77,6 +77,17 @@
 预期结果：旧 URL 继续返回原字节，旧候选仍可按原 provenance 晋升；只有未来新候选必须严格使用 12/11。
 
 失败判定：新代码要求所有历史 Release 都是 12 项、旧 URL 404、或为兼容而放宽新候选数量门禁。
+
+## 用例 7：私有 Draft 远端复验
+
+1. 使用私有仓库创建保持 `Draft=true`、`Pre-release=false` 的内部测试版本，不发布、不改变稳定 `latest`。
+2. 上传前对最终 DMG/PKG/App 验证 Developer ID Application / Installer、Team ID `L3QHLDRPAY`、Hardened Runtime、嵌套 `codesign --deep --strict`、`stapler validate` 与对应类型的 `spctl`；ZIP 解压后验证内部资产，不对 ZIP 自身执行 staple。
+3. 创建 Draft 后重新下载每项资产，比较 GitHub digest、本地 SHA-256 和完整字节，再对下载副本重复步骤 2。
+4. 分别使用 ad-hoc App、错误 Team ID、缺少 Hardened Runtime 和无 staple 票据的夹具运行门禁，确认均在上传前失败；再使用纯非 macOS 资产确认不会被错误要求 Apple Team ID。
+
+预期结果：只有正确签名、公证且远端字节一致的 macOS 资产能进入私有 Draft 保留清理阶段；证书、私钥和 notary 凭据值不出现在输出中。
+
+失败判定：私有 Draft 允许 ad-hoc、只验证本地不验证下载副本、只比较摘要不验证签名公证、ZIP 不解压，或纯非 macOS Draft 被 Apple 门禁误伤。
 
 ## 稳定功能回归
 

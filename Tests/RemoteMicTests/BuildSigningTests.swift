@@ -22,6 +22,8 @@ struct BuildSigningTests {
         #expect(source.contains("--preserve-metadata=entitlements"))
         #expect(source.contains("$SPARKLE_VERSION_DIR/Autoupdate"))
         #expect(source.contains("$SPARKLE_VERSION_DIR/Updater.app"))
+        #expect(source.contains("Contents/Helpers/SayAllMCP"))
+        #expect(source.contains("$MCP_HELPER_PATH"))
         #expect(!source.contains("security find-identity -p codesigning -v"))
         #expect(!source.contains("git config --get user.email"))
         let signingSource = try #require(source.components(separatedBy: "codesign --verify --deep").first)
@@ -204,7 +206,7 @@ struct BuildSigningTests {
         #expect(candidateIndex.lowerBound < promotionIndex.lowerBound)
     }
 
-    @Test func previewBranchPushBuildsACandidateWithoutReleaseSecrets() throws {
+    @Test func previewBranchPushBuildsAnExactSHAAdHocCandidateWithoutSigningSecrets() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -218,13 +220,15 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("./scripts/verify-preview-branch.sh"))
         #expect(workflowSource.contains("swift test"))
         #expect(workflowSource.contains("./scripts/test.sh"))
+        #expect(workflowSource.contains("Build and verify ad-hoc candidate DMG"))
         #expect(workflowSource.contains("./scripts/build-dmg.sh"))
         #expect(workflowSource.contains("./scripts/verify-dmg.sh"))
+        #expect(workflowSource.contains("${{ github.sha }}"))
         #expect(workflowSource.contains("GetSayAll/sayall-ai"))
         #expect(workflowSource.contains("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_AI_PACKAGE=1"))
         #expect(workflowSource.contains("GetSayAll/sayall-macro-platform"))
-        #expect(workflowSource.contains("bd2b3d112594373aa10be2bd5e605a008e6182b1"))
+        #expect(workflowSource.contains("734f24be4f6ebeacadeaa41d9902bdf414807d06"))
         #expect(workflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_MACRO_PLATFORM=1"))
         #expect(workflowSource.contains("GetSayAll/sayall-mac-remote"))
@@ -234,6 +238,14 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("04a1bf2b713ee98c4d2c07cd690bb4b26288a82d"))
         #expect(workflowSource.contains("actions/upload-artifact@v4"))
         #expect(workflowSource.contains("contents: read"))
+        #expect(!workflowSource.contains("environment: mac-release"))
+        #expect(!workflowSource.contains("RELEASE_AGE_IDENTITY"))
+        #expect(!workflowSource.contains("RELEASE_CREDENTIALS_DEPLOY_KEY"))
+        #expect(!workflowSource.contains("APPLE_SIGNING_MATCH_DEPLOY_KEY"))
+        #expect(!workflowSource.contains("remotemic-notary-secrets"))
+        #expect(!workflowSource.contains("apple-signing-match"))
+        #expect(!workflowSource.contains("package-macos-preview-in-actions.sh"))
+        #expect(!workflowSource.contains("notarize-release.sh"))
         #expect(!workflowSource.contains("MATCH_PASSWORD"))
         #expect(!workflowSource.contains("AuthKey_"))
 
@@ -245,7 +257,7 @@ struct BuildSigningTests {
         #expect(ciWorkflowSource.contains("GetSayAll/sayall-ai"))
         #expect(ciWorkflowSource.contains("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"))
         #expect(ciWorkflowSource.contains("GetSayAll/sayall-macro-platform"))
-        #expect(ciWorkflowSource.contains("bd2b3d112594373aa10be2bd5e605a008e6182b1"))
+        #expect(ciWorkflowSource.contains("734f24be4f6ebeacadeaa41d9902bdf414807d06"))
         #expect(ciWorkflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
         #expect(ciWorkflowSource.contains("GetSayAll/sayall-mac-remote"))
         #expect(ciWorkflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
@@ -344,6 +356,10 @@ struct BuildSigningTests {
         #expect(releaseWorkflowSource.contains("REQUIRE_PREVIEW_RECORDING_PR: 1"))
         #expect(releaseWorkflowSource.contains("PARALLEL_RELEASE_VARIANTS: 1"))
         #expect(releaseWorkflowSource.contains("PARALLEL_PACKAGE_NOTARIZATION: 1"))
+        #expect(releaseWorkflowSource.contains("environment: mac-release"))
+        #expect(releaseWorkflowSource.contains("RELEASE_AGE_IDENTITY"))
+        #expect(releaseWorkflowSource.contains("remotemic-notary-secrets"))
+        #expect(releaseWorkflowSource.contains("apple-signing-match"))
         let signedStep = try #require(
             releaseWorkflowSource.components(
                 separatedBy: "- name: Sign, notarize, staple, and verify both variants"
@@ -352,6 +368,7 @@ struct BuildSigningTests {
         #expect(signedStep.contains("timeout-minutes: 10"))
         #expect(releaseWorkflowSource.contains("SIGNED_RELEASE_TIMEOUT_SECONDS: 590"))
         #expect(signedStep.contains("run-release-stage.sh"))
+        #expect(signedStep.contains("\"$SIGNED_RELEASE_TIMEOUT_SECONDS\""))
         #expect(!releaseWorkflowSource.contains("Run Apple Silicon release gates"))
         #expect(!releaseWorkflowSource.contains("Run Intel Ventura release gates"))
         #expect(reconciliationSource.contains("gh pr ready"))
@@ -447,6 +464,12 @@ struct BuildSigningTests {
             contentsOf: installerGuardScript,
             encoding: .utf8
         )
+        let transcriptHistorySource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/TranscriptHistorySection.swift"
+            ),
+            encoding: .utf8
+        )
 
         #expect(variantSource.contains("RELEASE_VARIANT=\"${RELEASE_VARIANT:-apple-silicon}\""))
         #expect(variantSource.contains("arm64-apple-macosx14.0"))
@@ -459,6 +482,13 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("x86_64-apple-macosx13.0"))
         #expect(workflowSource.contains("apple-silicon"))
         #expect(workflowSource.contains("intel"))
+        #expect(transcriptHistorySource.contains(
+            ".onChange(of: applications.map(\\.id)) { _ in"
+        ))
+        #expect(transcriptHistorySource.contains(
+            ".onChange(of: activeApplicationKey) { applicationKey in"
+        ))
+        #expect(!transcriptHistorySource.contains(") { _, _ in"))
 
         #expect(preinstallSource.contains("CURRENT_ARCHITECTURE"))
         #expect(preinstallSource.contains("/usr/sbin/sysctl -in hw.optional.arm64"))
@@ -467,7 +497,7 @@ struct BuildSigningTests {
         #expect(preinstallSource.contains("Download the Apple Silicon version"))
         #expect(!preinstallSource.contains("/bin/rm -rf -- \"$APP_DESTINATION\""))
         #expect(preinstallSource.contains("will be updated atomically"))
-        #expect(packageVerifierSource.contains("preinstall must not delete an existing Remote Mic.app"))
+        #expect(packageVerifierSource.contains("preinstall must not delete an existing SayAll.app"))
         #expect(preinstallSource.contains("INSTALLED_BUILD="))
         #expect(preinstallSource.contains("The existing app was left intact. Use a newer installer."))
         #expect(packageVerifierSource.contains("PackageBuild raw"))
@@ -529,6 +559,92 @@ struct BuildSigningTests {
         #expect(postinstallSource.contains("was kept in place"))
         #expect(!postinstallSource.contains("/usr/bin/lipo"))
         #expect(!postinstallSource.contains("xcrun"))
+    }
+
+    @Test func releaseBundleNameMatchesBrandingAndInstallerPaths() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        func source(_ path: String) throws -> String {
+            try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        }
+
+        let buildSource = try source("scripts/build-app.sh")
+        let runSource = try source("script/build_and_run.sh")
+        let notarizeSource = try source("scripts/notarize-release.sh")
+        let dmgSource = try source("scripts/build-dmg.sh")
+        let dmgVerifierSource = try source("scripts/verify-dmg.sh")
+        let packageSource = try source("scripts/build-doubao-driver-pkg.sh")
+        let packageVerifierSource = try source("scripts/verify-doubao-driver-pkg.sh")
+        let appVerifierSource = try source("scripts/verify-app.sh")
+        let publishSource = try source("scripts/publish-release.sh")
+        let preinstallSource = try source("packaging/doubao-driver/install/preinstall")
+        let postinstallSource = try source("packaging/doubao-driver/install/postinstall")
+        let trashHelperSource = try source(
+            "packaging/doubao-driver/install/trash-legacy-app.zsh"
+        )
+        let trashMigrationTest = root.appendingPathComponent(
+            "scripts/test-legacy-app-trash-migration.sh"
+        )
+        let infoPlist = try #require(
+            NSDictionary(contentsOf: root.appendingPathComponent("Resources/Info.plist"))
+        )
+        let englishInfo = try source("Resources/en.lproj/InfoPlist.strings")
+        let chineseInfo = try source("Resources/zh-Hans.lproj/InfoPlist.strings")
+
+        #expect(buildSource.contains("DISPLAY_NAME=\"SayAll\""))
+        #expect(runSource.contains("dist/SayAll.app"))
+        #expect(notarizeSource.contains("DISPLAY_NAME=\"SayAll\""))
+        #expect(notarizeSource.contains("ditto -c -k --keepParent \"$APP\" \"$UPDATE_ZIP\""))
+        #expect(dmgSource.contains("DISPLAY_NAME=\"SayAll\""))
+        #expect(dmgVerifierSource.contains("DISPLAY_NAME=\"SayAll\""))
+        #expect(packageSource.contains("APP=\"$OUTPUT_DIR/SayAll.app\""))
+        #expect(packageSource.contains("$PAYLOAD_ROOT/Applications/SayAll.app"))
+        #expect(packageVerifierSource.contains("./Applications/SayAll.app/Contents/Info.plist"))
+        #expect(packageVerifierSource.contains("*/Applications/SayAll.app"))
+        #expect(appVerifierSource.contains("test \"${APP:t}\" = \"SayAll.app\""))
+        #expect(appVerifierSource.contains("CFBundleName raw"))
+        #expect(publishSource.contains("$extract_dir/SayAll.app"))
+        #expect(publishSource.contains("Remote-Mic-$VERSION.zip"))
+
+        #expect(preinstallSource.contains("Applications/SayAll.app"))
+        #expect(preinstallSource.contains("Applications/Remote Mic.app"))
+        #expect(preinstallSource.contains("Applications/无线麦.app"))
+        #expect(!preinstallSource.contains("/bin/rm -rf -- \"$legacy_path\""))
+        #expect(postinstallSource.contains("move_legacy_app_to_trash_if_owned"))
+        #expect(postinstallSource.contains("LEGACY_APP_TRASH_ROOT"))
+        #expect(postinstallSource.contains("com.hd838a.RemoteMic"))
+        #expect(trashHelperSource.contains("/bin/mv -n -- \"$legacy_path\""))
+        #expect(trashHelperSource.contains("where it can be restored if needed"))
+        #expect(!trashHelperSource.contains("/bin/rm"))
+        let canonicalVerification = try #require(
+            postinstallSource.range(
+                of: "/usr/bin/codesign --verify --deep --strict \"$APP_DESTINATION\""
+            )
+        )
+        let legacyCleanupDefinition = try #require(
+            postinstallSource.range(of: "move_legacy_app_to_trash_if_owned")
+        )
+        #expect(canonicalVerification.lowerBound < legacyCleanupDefinition.lowerBound)
+
+        #expect(infoPlist["CFBundleDisplayName"] as? String == "SayAll")
+        #expect(infoPlist["CFBundleName"] as? String == "SayAll")
+        #expect(infoPlist["CFBundleExecutable"] as? String == "RemoteMic")
+        #expect(infoPlist["CFBundleIdentifier"] as? String == "com.hd838a.RemoteMic")
+        #expect(englishInfo.contains("\"CFBundleDisplayName\" = \"SayAll\";"))
+        #expect(englishInfo.contains("\"CFBundleName\" = \"SayAll\";"))
+        #expect(chineseInfo.contains("\"CFBundleDisplayName\" = \"无线麦\";"))
+        #expect(chineseInfo.contains("\"CFBundleName\" = \"无线麦\";"))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [trashMigrationTest.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
     }
 
     @Test func stablePromotionRequiresMainAndCandidateProvenance() throws {

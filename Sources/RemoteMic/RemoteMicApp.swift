@@ -127,7 +127,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
     private var applicationShortcutMonitor: Any?
-    private var workspaceWakeObserver: NSObjectProtocol?
+    private var workspaceAudioLifecycleObservers: [NSObjectProtocol] = []
     private var updateFeedSelection = UpdateFeedSelection(
         stableFeedURLString: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
     )
@@ -163,7 +163,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         observeModel()
         observeLocalization()
         observePhoneRemoteButtonTitles()
-        installWorkspaceWakeObserver()
+        installWorkspaceAudioLifecycleObservers()
         model.privateFeature.refreshAccessIfNeeded()
         model.macroFeature.refreshAccessIfNeeded()
         if OnboardingLaunchPolicy.shouldStartRuntime(
@@ -207,10 +207,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             NSEvent.removeMonitor(applicationShortcutMonitor)
             self.applicationShortcutMonitor = nil
         }
-        if let workspaceWakeObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(workspaceWakeObserver)
-            self.workspaceWakeObserver = nil
-        }
+        let workspaceNotificationCenter = NSWorkspace.shared.notificationCenter
+        workspaceAudioLifecycleObservers.forEach(workspaceNotificationCenter.removeObserver)
+        workspaceAudioLifecycleObservers.removeAll()
+        AppLogger.shared.write("SYSTEM AUDIO observers_stopped")
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -241,17 +241,31 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
     }
 
-    private func installWorkspaceWakeObserver() {
-        workspaceWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.model.privateFeature.refreshAccessIfNeeded()
-                self?.model.macroFeature.refreshAccessIfNeeded()
+    private func installWorkspaceAudioLifecycleObservers() {
+        let notificationCenter = NSWorkspace.shared.notificationCenter
+        let events: [(Notification.Name, SystemAudioLifecycleEvent)] = [
+            (NSWorkspace.screensDidSleepNotification, .screenDidSleep),
+            (NSWorkspace.screensDidWakeNotification, .screenDidWake),
+            (NSWorkspace.sessionDidResignActiveNotification, .sessionDidResignActive),
+            (NSWorkspace.sessionDidBecomeActiveNotification, .sessionDidBecomeActive),
+            (NSWorkspace.willSleepNotification, .systemWillSleep),
+            (NSWorkspace.didWakeNotification, .systemDidWake),
+        ]
+        workspaceAudioLifecycleObservers = events.map { name, event in
+            notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.model.handleSystemAudioLifecycle(event)
+                    if event == .systemDidWake {
+                        self.model.privateFeature.refreshAccessIfNeeded()
+                        self.model.macroFeature.refreshAccessIfNeeded()
+                    }
+                }
             }
         }
+        AppLogger.shared.write(
+            "SYSTEM AUDIO observers_started events=\(events.map { $0.1.rawValue }.joined(separator: ","))"
+        )
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -301,7 +315,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
         menu.addItem(menuItem("about.support.github", action: #selector(openGitHub)))
         menu.addItem(menuItem("about.support.website", action: #selector(openWebsite)))
-        menu.addItem(menuItem("about.support.feedback", action: #selector(openFeedback)))
         menu.addItem(.separator())
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
@@ -864,10 +877,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func openWebsite() {
         NSWorkspace.shared.open(localization.localizedWebsiteURL)
-    }
-
-    @objc private func openFeedback() {
-        NSWorkspace.shared.open(AppLinks.feedback)
     }
 
     @objc private func closeKeyWindow() {

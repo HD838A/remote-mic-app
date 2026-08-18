@@ -122,12 +122,13 @@ case "$MODE" in
     /usr/bin/grep -Fq 'identifier="com.hd838a.RemoteMic.installer"' "$PACKAGE_INFO"
     /usr/bin/grep -Fq '<payload ' "$PACKAGE_INFO"
     /usr/bin/lsbom -s "$COMPONENT_PACKAGE/Bom" > "$PAYLOAD_FILES"
-    /usr/bin/grep -qx './Applications/Remote Mic.app/Contents/Info.plist' "$PAYLOAD_FILES"
-    /usr/bin/grep -qx './Applications/Remote Mic.app/Contents/MacOS/RemoteMic' "$PAYLOAD_FILES"
+    /usr/bin/grep -qx './Applications/SayAll.app/Contents/Info.plist' "$PAYLOAD_FILES"
+    /usr/bin/grep -qx './Applications/SayAll.app/Contents/MacOS/RemoteMic' "$PAYLOAD_FILES"
     /usr/bin/grep -qx './Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver/Contents/Info.plist' "$PAYLOAD_FILES"
     /usr/bin/grep -qx './Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch' "$PAYLOAD_FILES"
     test -x "$SCRIPTS_DIR/preinstall"
     test -x "$SCRIPTS_DIR/postinstall"
+    test -f "$SCRIPTS_DIR/trash-legacy-app.zsh"
     test -f "$SCRIPTS_DIR/release-variant.plist"
     test "$(/usr/bin/plutil -extract ExpectedArchitecture raw -o - \
       "$SCRIPTS_DIR/release-variant.plist")" = "$RELEASE_ARCH"
@@ -138,22 +139,39 @@ case "$MODE" in
     test "$(/usr/bin/plutil -extract PackageBuild raw -o - \
       "$SCRIPTS_DIR/release-variant.plist")" = "$BUILD"
     /usr/bin/grep -Fqx 'DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"' "$SCRIPTS_DIR/preinstall"
-    /usr/bin/grep -Fqx 'APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"' "$SCRIPTS_DIR/preinstall"
+    /usr/bin/grep -Fqx 'APP_DESTINATION="${TARGET_VOLUME%/}/Applications/SayAll.app"' "$SCRIPTS_DIR/preinstall"
     if /usr/bin/grep -Fq '/bin/rm -rf -- "$APP_DESTINATION"' "$SCRIPTS_DIR/preinstall"; then
-      print -u2 "preinstall must not delete an existing Remote Mic.app"
+      print -u2 "preinstall must not delete an existing SayAll.app"
+      exit 1
+    fi
+    if /usr/bin/grep -Fq '/bin/rm -rf -- "$legacy_path"' "$SCRIPTS_DIR/preinstall"; then
+      print -u2 "preinstall must not delete a legacy app before SayAll.app is verified"
       exit 1
     fi
     /usr/bin/grep -Fq 'will be updated atomically' "$SCRIPTS_DIR/preinstall"
     /usr/bin/grep -Fq 'INSTALLED_BUILD=' "$SCRIPTS_DIR/preinstall"
     /usr/bin/grep -Fq 'The existing app was left intact. Use a newer installer.' \
       "$SCRIPTS_DIR/preinstall"
-    /usr/bin/grep -Fq '/bin/rm -rf -- "$LEGACY_APP_DESTINATION"' "$SCRIPTS_DIR/preinstall"
+    /usr/bin/grep -Fqx 'LEGACY_REMOTE_MIC_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"' "$SCRIPTS_DIR/preinstall"
+    /usr/bin/grep -Fqx 'LEGACY_CHINESE_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"' "$SCRIPTS_DIR/preinstall"
+    /usr/bin/grep -Fq 'check_legacy_app' "$SCRIPTS_DIR/preinstall"
     /usr/bin/grep -Fq 'driver_is_healthy_and_current()' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq '/usr/bin/file -b "$1"' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq 'The existing MiRemoteV 2ch is healthy and was kept in place.' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq '/usr/bin/codesign --verify --deep --strict "$DESTINATION"' "$SCRIPTS_DIR/postinstall"
-    /usr/bin/grep -Fqx 'APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"' "$SCRIPTS_DIR/postinstall"
-    /usr/bin/grep -Fqx 'LEGACY_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fqx 'APP_DESTINATION="${TARGET_VOLUME%/}/Applications/SayAll.app"' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fqx 'LEGACY_REMOTE_MIC_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fqx 'LEGACY_CHINESE_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'move_legacy_app_to_trash_if_owned' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'LEGACY_APP_TRASH_ROOT' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq '/bin/mv -n -- "$legacy_path" "$trash_destination"' \
+      "$SCRIPTS_DIR/trash-legacy-app.zsh"
+    /usr/bin/grep -Fq 'where it can be restored if needed' \
+      "$SCRIPTS_DIR/trash-legacy-app.zsh"
+    if /usr/bin/grep -Fq '/bin/rm' "$SCRIPTS_DIR/trash-legacy-app.zsh"; then
+      print -u2 "legacy app migration helper must never permanently delete an app"
+      exit 1
+    fi
     for sparkle_executable in \
       '$SPARKLE_VERSION_DIR/Sparkle' \
       '$SPARKLE_VERSION_DIR/Autoupdate' \
@@ -181,7 +199,7 @@ case "$MODE" in
     /usr/bin/grep -Fq '/bin/launchctl asuser "$CONSOLE_UID"' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq '/usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"' "$SCRIPTS_DIR/postinstall"
     /usr/sbin/pkgutil --expand-full "$PACKAGE" "$FULL_EXPANDED"
-    PAYLOAD_APP="$(/usr/bin/find "$FULL_EXPANDED" -type d -path '*/Applications/Remote Mic.app' -print -quit)"
+    PAYLOAD_APP="$(/usr/bin/find "$FULL_EXPANDED" -type d -path '*/Applications/SayAll.app' -print -quit)"
     PAYLOAD_DRIVER="$(/usr/bin/find "$FULL_EXPANDED" -type d -path '*/Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver' -print -quit)"
     test -n "$PAYLOAD_APP"
     test -n "$PAYLOAD_DRIVER"
@@ -195,6 +213,12 @@ case "$MODE" in
       "$PAYLOAD_APP/Contents/Info.plist")" = "$VERSION"
     test "$(/usr/bin/plutil -extract CFBundleVersion raw -o - \
       "$PAYLOAD_APP/Contents/Info.plist")" = "$BUILD"
+    test "$(/usr/bin/plutil -extract CFBundleName raw -o - \
+      "$PAYLOAD_APP/Contents/Info.plist")" = "SayAll"
+    /usr/bin/grep -Fq '"CFBundleName" = "SayAll";' \
+      "$PAYLOAD_APP/Contents/Resources/en.lproj/InfoPlist.strings"
+    /usr/bin/grep -Fq '"CFBundleName" = "无线麦";' \
+      "$PAYLOAD_APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
     ;;
   uninstall)
     test -f "$PACKAGE_INFO"

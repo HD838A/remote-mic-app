@@ -13,6 +13,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case macros
     case mapping
     case statistics
+    case transcripts
     case permissions
     case about
 
@@ -25,6 +26,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .macros: return ""
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
+        case .transcripts: return "settings.section.transcripts"
         case .permissions: return "settings.section.permissions"
         case .about: return "settings.section.about"
         }
@@ -37,6 +39,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .macros: return "command.square"
         case .mapping: return "keyboard"
         case .statistics: return "chart.bar.xaxis"
+        case .transcripts: return "text.bubble.fill"
         case .permissions: return "shield.lefthalf.filled"
         case .about: return "info.circle"
         }
@@ -174,6 +177,7 @@ struct SettingsView: View {
         .mapping,
         .macros,
         .statistics,
+        .transcripts,
         .connection,
         .privateFeature,
         .permissions,
@@ -203,6 +207,7 @@ struct SettingsView: View {
     @State private var isTestFlightLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
+    @State private var expandedShareSection: SettingsSection?
     @State private var webRemoteInviteCode = ""
     @State private var versionTapRevealCounter = VersionTapRevealCounter()
     private static let requiredWebRemoteInviteCode = "8586"
@@ -214,6 +219,7 @@ struct SettingsView: View {
         refreshUpdateInformation: @escaping () -> Void = {},
         setDockIconVisible: @escaping (Bool) -> Void = { _ in },
         initialSection: SettingsSection = .connection,
+        initialShareSection: SettingsSection? = nil,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
         self.model = model
@@ -226,6 +232,7 @@ struct SettingsView: View {
         self.setDockIconVisible = setDockIconVisible
         self.minimumContentSize = minimumContentSize
         _selectedSection = State(initialValue: initialSection)
+        _expandedShareSection = State(initialValue: initialShareSection)
     }
 
     var body: some View {
@@ -429,6 +436,24 @@ struct SettingsView: View {
                 sidebarButton(section)
             }
             Spacer(minLength: 0)
+            Button {
+                selectedSection = .about
+                expandedShareSection = .about
+            } label: {
+                VStack(spacing: 7) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 21, weight: .semibold))
+                    Text("share.action")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .compatibilityFocusEffectDisabled()
+            .foregroundStyle(Color.secondary)
+            .accessibilityLabel(Text("share.sidebar.accessibility_label"))
         }
         .background(Color(nsColor: .controlBackgroundColor))
     }
@@ -482,15 +507,28 @@ struct SettingsView: View {
             }
         case .macros:
             if macroFeature.isFeatureVisible {
-                macroFeature.settingsView(
-                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
-                    configuredActionTitle: { buttonValue, triggerValue in
-                        guard let button = RemoteButton(rawValue: buttonValue),
-                              let trigger = ButtonTrigger(rawValue: triggerValue)
-                        else { return nil }
-                        return mappingActionSummary(for: button, trigger: trigger)
-                    }
-                )
+                VStack(spacing: 0) {
+                    macroFeature.settingsView(
+                        selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                        configuredActionTitle: { buttonValue, triggerValue in
+                            guard let button = RemoteButton(rawValue: buttonValue),
+                                  let trigger = ButtonTrigger(rawValue: triggerValue)
+                            else { return nil }
+                            return mappingActionSummary(for: button, trigger: trigger)
+                        }
+                    )
+                    Divider()
+                    Label(
+                        localization.text("macro.integration.focus_mcp_boundary"),
+                        systemImage: "info.circle"
+                    )
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 10)
+                }
             } else {
                 aboutPage
             }
@@ -498,6 +536,8 @@ struct SettingsView: View {
             mappingPage
         case .statistics:
             statisticsPage
+        case .transcripts:
+            transcriptHistoryPage
         case .permissions:
             permissionsPage
         case .about:
@@ -899,17 +939,26 @@ struct SettingsView: View {
 
     private var mappingPage: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
-                PageHeader(title: localization.text("button_mapping.page.title"))
-                Toggle("button_mapping.toggle.enabled", isOn: Binding(
-                    get: { settings.customMappingEnabled },
-                    set: setCustomMappingEnabled
-                ))
-                .font(.system(size: 14, weight: .medium))
-                .toggleStyle(.switch)
-                Spacer()
-                remoteDeviceSelector()
-                    .frame(width: 400)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 14) {
+                    PageHeader(title: localization.text("button_mapping.page.title"))
+                        .fixedSize(horizontal: true, vertical: false)
+                    mappingHeaderToggle
+                    Spacer()
+                    remoteDeviceSelector()
+                        .frame(width: 400)
+                }
+
+                HStack(alignment: .center, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        PageHeader(title: localization.text("button_mapping.page.title"))
+                            .fixedSize(horizontal: true, vertical: false)
+                        mappingHeaderToggle
+                    }
+                    Spacer(minLength: 14)
+                    remoteDeviceSelector()
+                        .frame(width: 320)
+                }
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
@@ -964,6 +1013,16 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var mappingHeaderToggle: some View {
+        Toggle("button_mapping.toggle.enabled", isOn: Binding(
+            get: { settings.customMappingEnabled },
+            set: setCustomMappingEnabled
+        ))
+        .font(.system(size: 14, weight: .medium))
+        .toggleStyle(.switch)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func mappingEditorPanel(_ target: ShortcutEditingTarget) -> some View {
@@ -1930,6 +1989,16 @@ struct SettingsView: View {
                         ) {
                             model.requestAccessibilityPermission()
                         }
+
+                        if settings.isOnboardingComplete,
+                           !inputMonitoringGranted || !accessibilityGranted {
+                            Divider().padding(.leading, 62)
+                            Label("permissions.upgrade_identity_help", systemImage: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.vertical, 12)
+                        }
                     }
                 }
 
@@ -2009,9 +2078,38 @@ struct SettingsView: View {
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
                 VStack(spacing: 14) {
+                    sharePanel(for: .statistics)
                     statisticsPeriodContent
                     voiceSessionRankingCard
                 }
+            }
+        }
+    }
+
+    private var transcriptHistoryPage: some View {
+        settingsPage {
+            HStack(alignment: .center, spacing: 14) {
+                PageHeader(title: localization.text("statistics.transcripts.title"))
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
+                Text(localization.text("statistics.transcripts.privacy"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
+                Spacer(minLength: 16)
+                Toggle(
+                    "statistics.transcripts.enable",
+                    isOn: $settings.localTranscriptHistoryEnabled
+                )
+                .toggleStyle(.switch)
+                .font(.system(size: 13, weight: .medium))
+                .fixedSize()
+            }
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                TranscriptHistorySection(model: model, settings: settings)
             }
         }
     }
@@ -2175,6 +2273,29 @@ struct SettingsView: View {
                         .compatibilityButtonStyle(.standard)
                     }
                     .padding(.horizontal, 6)
+
+                    GlassPanel {
+                        HStack(spacing: 14) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.title3)
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 34)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("about.support.feedback")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("about.support.feedback_description")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 20)
+                            Link(destination: AppLinks.feedback) {
+                                Label("about.support.feedback_action", systemImage: "arrow.up.right")
+                            }
+                            .compatibilityButtonStyle(.standard)
+                        }
+                    }
+
+                    sharePanel(for: .about)
 
                     GlassPanel {
                         VStack(spacing: 16) {
@@ -2452,6 +2573,45 @@ struct SettingsView: View {
                 checksForPreReleaseUpdates: settings.checksForPreReleaseUpdates
             ).refreshesAboutInformationOnAppear else { return }
             refreshUpdateInformation()
+        }
+    }
+
+    private func sharePanel(for section: SettingsSection) -> some View {
+        let isExpanded = expandedShareSection == section
+        let shareURL = AppShareLink.url(for: localization.locale)
+
+        return GlassPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 14) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 34)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("share.title")
+                            .font(.subheadline.weight(.semibold))
+                        Text("share.description")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 20)
+                    Button {
+                        expandedShareSection = isExpanded ? nil : section
+                    } label: {
+                        Label(
+                            isExpanded ? "share.hide_action" : "share.show_action",
+                            systemImage: isExpanded ? "chevron.up" : "qrcode"
+                        )
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+
+                if isExpanded {
+                    Divider()
+                    ShareCard(url: shareURL)
+                        .id(shareURL)
+                }
+            }
         }
     }
 
@@ -2792,9 +2952,11 @@ struct SettingsView: View {
 
             Spacer(minLength: 16)
             StatusPill(text: state.title(using: localization), tint: state.tint)
-            Button(actionTitle, action: action)
-                .compatibilityButtonStyle(.standard)
-                .frame(width: 112)
+            if state != .granted {
+                Button(actionTitle, action: action)
+                    .compatibilityButtonStyle(.standard)
+                    .frame(width: 112)
+            }
         }
         .padding(.vertical, 12)
     }
@@ -3295,7 +3457,7 @@ private struct PageHeader: View {
     }
 }
 
-private struct GlassPanel<Content: View>: View {
+struct GlassPanel<Content: View>: View {
     private let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -3328,6 +3490,67 @@ private struct GlassPanel<Content: View>: View {
                         lineWidth: 1
                     )
                 )
+        }
+    }
+}
+
+private struct ShareCard: View {
+    let url: URL
+    @State private var copySucceeded: Bool?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 20) {
+            Group {
+                if let image = AppShareQRCode.image(for: url) {
+                    Image(nsImage: image)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: "qrcode")
+                        .resizable()
+                        .scaledToFit()
+                        .padding(24)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 144, height: 144)
+            .padding(8)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityLabel(Text("share.qr.accessibility_label"))
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("share.card.title")
+                    .font(.headline)
+                Text("share.card.description")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(url.absoluteString)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+                Button {
+                    copySucceeded = AppShareClipboard.copyToGeneralPasteboard(url)
+                } label: {
+                    Label("share.copy_action", systemImage: "doc.on.doc")
+                }
+                .compatibilityButtonStyle(.prominent)
+                .accessibilityHint(Text("share.copy.accessibility_hint"))
+
+                if let copySucceeded {
+                    Label(
+                        copySucceeded ? "share.copy_succeeded" : "share.copy_failed",
+                        systemImage: copySucceeded
+                            ? "checkmark.circle.fill"
+                            : "exclamationmark.triangle.fill"
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(copySucceeded ? Color.green : Color.red)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

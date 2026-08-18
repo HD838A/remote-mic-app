@@ -1,3 +1,141 @@
+# Onboarding iPhone / Web 分支门禁调查
+
+## Observations
+
+- 现场测试包为 Apple Silicon 本地 ad-hoc 包，源码提交 `3618d94e`，Bundle 版本 `1.8.25 (119)`。
+- 网页版连接页稳定显示“网页版暂时不可用”，右栏没有二维码；同一测试包的 `Info.plist` 无法读取 `RemoteWebRelayURL`，但包含 `NSLocalNetworkUsageDescription` 和 `_remotemic._tcp` Bonjour 服务。
+- iPhone 分支的音频页已经检测并选中 `MiRemoteV 2ch`，但“音频输出正常”未通过；用户只有从 iPhone 开始一次语音后才能继续。
+- 对应现场日志在 `18:33:56Z` 首次收到手机语音时才执行 `AUDIO REBIND reason=mobile_voice_start → AUDIO CONFIGURE → AUDIO READY`；松开后在 `18:34:01Z` 执行 `AUDIO RELEASE reason=mobile_voice_stopped`。
+- 第二次手机语音在 `18:34:03Z` 再次按需配置音频并进入 Ready；进入语音测试页后，`18:34:05Z` 松开又释放音频。
+- iPhone 分支随后真实收到语音和普通按键：日志包含 `MOBILE VOICE started/stopped source=iphone` 和三个不同的 `PHONE REMOTE button`，因此 Nearby、本地网络、辅助功能、手机控制与语音链路都实际工作。
+- 进入完成页时手机语音已经停止，音频状态又是 `engine_running=false selected={none}`；页面显示“当前环境状态发生了变化”，无法点击“打开无线麦”。
+- iPhone 权限页只显示辅助功能。当前 Bundle 已声明本地网络用途和 Bonjour 服务；真实 Nearby 连接已经成功。虽然 iPhone/网页接收当前按键不依赖 CoreBluetooth 遥控器或 IOHID，后续产品规则明确要求所有控制方式统一开启蓝牙、输入监控和辅助功能，以覆盖切换控制方式、自定义按键及 Fn 输入法切换。
+- `18:37:20Z` 之后日志来自另一次 `APP START version=1.8.5` 和实体遥控器流程，不作为本次 iPhone `1.8.25 (119)` 问题的证据。
+
+## Hypotheses
+
+### H1：本地测试包没有注入 Web Relay 配置（ROOT HYPOTHESIS）
+
+- Supports：包内没有 `RemoteWebRelayURL`；页面稳定显示“暂时不可用”，而不是生成二维码后连接失败。
+- Conflicts：正式发布构建可能由 CI 注入配置，因此问题可能只影响本地测试包，不一定影响公开预览版。
+- Test：使用明确的生产 relay 环境变量重建同一提交，验证包内 key 存在且 Web 会话配置能够生成二维码数据。
+
+### H2：音频页错误要求按需手机音频播放器处于持续运行状态（ROOT HYPOTHESIS）
+
+- Supports：日志只在 `mobile_voice_start` 配置输出，停止时释放；截图中设备存在且已选，唯一未通过项是输出 Ready；开始语音后立即可继续。
+- Conflicts：实体遥控器路径会因 BLE Ready 提前保持音频播放器运行，原门禁对实体路径成立。
+- Test：用能力策略测试分别输入“设备存在且已选、iPhone 未开始语音、播放器未运行”和实体遥控器同状态；iPhone 应允许进入真实语音测试，实体遥控器仍保持原门禁。
+
+### H3：完成页错误把瞬时音频播放器 Ready 当成手机路径的持续环境条件（ROOT HYPOTHESIS）
+
+- Supports：手机语音停止后日志明确释放音频，随后进入完成页；页面唯一表现为环境变化，真实 Nearby、语音与三个普通按键此前均已通过。
+- Conflicts：完成页仍必须确认所选音频设备没有被移除，不能无条件放行。
+- Test：完成页能力策略在 iPhone/网页路径下要求 MiRemoteV 2ch 或 BlackHole 2ch 已选择且仍存在，在实体遥控器路径下继续要求生产输出 Ready；设备被移除时三条路径都必须失败并回到音频页。
+
+### H4：完成页误用了实体遥控器 BLE 连接状态判断手机连接
+
+- Supports：同一时段日志持续出现 BLE timeout，截图提示也提到遥控器连接。
+- Conflicts：现有分支设计已有 Nearby/WSS 独立连接能力，且失败也可能完全来自音频 Ready。
+- Test：检查 `selectedControlConnected` 与完成页策略调用，确认 iPhone 使用 Nearby、网页使用 WSS，而不是 `model.isConnected`。
+
+### H5：iPhone 权限页遗漏了必须可预检的系统权限
+
+- Supports：页面只显示一项，用户认为信息不完整；Nearby 涉及本地网络。
+- Conflicts：包已声明本地网络用途与 Bonjour；现场 Nearby、语音和按键成功；macOS 本地网络没有与辅助功能相同的可靠授权查询/跳转 API，连接页的真实会话门禁更准确。
+- Test：检查生产连接启动、Info.plist 和权限策略；本地网络继续由下一页真实连接验证，三项系统权限按统一产品门禁逐项验证。
+
+## Experiments
+
+- H1：直接读取用户测试 ZIP 对应 App 的 `Info.plist`，`RemoteWebRelayURL` 不存在；`build-app.sh` 只在 `REMOTE_WEB_RELAY_URL` 非空时写入该 key，`WebRemoteConfiguration.relayURL()` 在环境和 Bundle 都无值时返回 nil。三层证据一致，确认本地打包遗漏配置。
+- H2 / H3：临时在现有 iPhone/Web 分支测试中加入三行实验断言：设备已选择、连接与辅助功能有效、`audioReady=false` 时，音频页和完成页应通过。旧实现对 iPhone、网页两条路径共四个断言全部失败；实验代码随后撤回。该结果与现场 `mobile_voice_start` 才 Ready、`mobile_voice_stopped` 即 Release 的日志完全一致，确认门禁模型与按需音频生命周期冲突。
+- H4：只读检查 `selectedControlConnected`，iPhone 明确使用 `model.isPhoneRemoteConnected`，网页明确使用 `webRemoteConnected`；完成页没有直接使用实体 BLE 的 `model.isConnected`。日志中的 BLE timeout 是同时存在的旧实体遥控器后台尝试，不是本次完成页根因，H4 被否定。
+- H5：只读检查确认 iPhone/Web 的当前连接技术只依赖 Accessibility，Bundle 已声明 `NSLocalNetworkUsageDescription` 和 `_remotemic._tcp`，现场 Nearby 连接、语音、按键均成功；随后产品规则改为所有方式统一开启三项系统权限，因此不再按最小技术依赖裁剪权限页。
+
+## Root Cause
+
+1. 本地测试包没有注入发布流程已有的生产 `REMOTE_WEB_RELAY_URL`，Web Remote 配置为空，无法生成会话二维码。
+2. iPhone 和网页语音采用按需虚拟音频生命周期：只有语音开始时配置，停止后立即释放；Onboarding 音频页和完成页却复用了实体遥控器“播放器必须持续 Ready”的门禁，导致必须先说话才能离开音频页，并在说完后必然卡住完成页。
+3. iPhone 权限页按最小技术依赖只显示辅助功能，与“所有控制方式统一开启完整权限”的产品要求不一致。
+
+## Fix
+
+- 已实现：手机/网页音频页和完成页以“MiRemoteV 2ch 或 BlackHole 2ch 已选择且仍存在”为静态门禁，实际配置成功继续由下一页真实语音的会话、PCM、停止和文字验证；实体遥控器仍要求持续 Ready。
+- 已实现：三种控制方式统一显示并验证蓝牙、输入监控和辅助功能；本地网络仍在连接页通过 Nearby/WSS 真实会话验证。
+- 待执行：下一份本地测试包从私有生产环境注入 relay，并启用 `REQUIRE_WEB_REMOTE_CONFIGURATION=1`，缺配置时打包直接失败。
+
+## Validation
+
+- 旧实现加入回归断言后，iPhone/网页在 `audioReady=false` 时的音频页和完成页共四个断言全部失败，复现门禁冲突。
+- 修复后 `swift test --filter OnboardingFlowTests` 23 项通过；同时覆盖实体遥控器仍失败、设备未选择仍失败和诊断失败码一致性。
+- 中英文 strings 已通过 `plutil -lint`；完整 235 项 Swift 测试、42 项项目自检和构建通过。
+- iPhone 与网页分支浅色/深色共 40 张生产视图截图已逐张检查，无内部滚动、裁切或黑白分栏。
+- 带生产 Relay 配置的本地包及真实手机链路待后续步骤完成。
+
+---
+# Local transcript quick-send loss investigation
+
+## Observations
+
+- 功能开关持久化值为开启，现场 App 为 `1.8.5 (67)`，日志确认辅助功能权限可用。
+- 2026-08-17 02:25:49 与 02:26:33 的两次 Codex 语音均完成音频接收和排空，但本地没有对应记录，也没有 `TRANSCRIPT ARCHIVE update_failed`。
+- TextEdit 会话 22 成功保存；随后 Codex 会话 25、27、28 也成功保存，证明存储、权限和 Codex 的 Accessibility 输入框并非持续不可用。
+- Codex 会话 23 在停止约 1 秒后发送 Return，没有保存；会话 24 停止约 1 秒后下一次语音开始，也没有保存。会话 25、27、28 的文字在输入框中保留足够时间并成功保存。
+- `TranscriptCaptureCoordinator` 发现文字变化后要求稳定 0.9 秒；输入框在这之前恢复原文会清空候选，新会话开始则直接 `cancel()` 丢弃上一候选。
+- 早期会话 19、20 的日志只有秒级精度且没有捕获候选诊断，因此可以确认它们没有落盘，但不能逐毫秒证明其文字何时出现、何时被发送清空。
+
+## Hypotheses
+
+### H1：快速发送或连续开始下一段语音时，已观察到的候选文字被清空（ROOT HYPOTHESIS）
+
+- 支持：失败会话 23 的停止到 Return 仅约 1 秒；失败会话 24 的停止到下一会话开始仅约 1 秒；代码在这两种状态都丢弃候选。
+- 冲突：会话 19、20 的 Return 日志约在停止 3 秒后，但缺少转写文字实际出现时间和候选诊断，不能单靠秒级日志排除同类竞态。
+- 实验：让测试在候选文字稳定满 0.9 秒前把输入框恢复为原文，确认旧实现丢失已观察到的文字。
+
+### H2：开关在最初两次语音时实际尚未生效
+
+- 支持：用户是在测试过程中确认开关状态。
+- 冲突：持久化值为开启；同一进程后续无需重启即可保存 TextEdit 和 Codex。
+- 实验：现有启用状态测试和同进程现场成功记录足以否定持续初始化问题。
+
+### H3：Codex 输入框不提供所需的 Accessibility 属性
+
+- 支持：最初只有 TextEdit 基准成功。
+- 冲突：同一 Codex Bundle 随后连续保存三条记录。
+- 实验：现场 Codex 成功记录已经否定“完全不兼容”，只剩时序性变化可能。
+
+### H4：归档写入失败或统计页未刷新
+
+- 支持：用户在页面中看不到历史。
+- 冲突：失败时目录根本不存在且没有归档失败日志；后续写入后文件与页面数据均出现。
+- 实验：直接检查 `Application Support/RemoteMic/Transcripts/v1` 与运行日志，否定仅 UI 刷新问题。
+
+## Experiment
+
+- 在现有连续文字提取测试中只改动 3 行：结束语音后先推进 0.25 秒让协调器观察到合法候选，再把输入框模拟为发送后的空值，最后推进一个 0.125 秒轮询周期。
+- 旧实现稳定失败：`harness.captures` 为空，证明候选虽然已经被观察到，但输入框清空会进入取消分支并永久丢失。
+- 实验只改变一个变量（候选稳定前输入框清空），运行后已恢复测试源码。
+
+## Root Cause
+
+协调器把“稳定 0.9 秒”作为唯一提交条件，却在快速发送、焦点离开或下一次语音开始时无条件取消会话；因此已经观察到且符合原始光标连续差异规则的候选文字会在输入框清空前来不及提交。
+
+## Fix
+
+- 已观察到的合法候选在输入框清空、目标焦点离开或下一段语音开始时先结算，没有候选时仍取消。
+- 周围文字发生无关变化、敏感目标、关闭开关和语音过程中切换目标仍保持拒绝。
+- 日志新增不含正文的结算原因、Bundle ID 和字符数，后续可以区分稳定保存、快速发送和连续语音结算。
+- 新增快速发送与下一段语音开始回归；旧实现的最小复现失败，修复后同一状态机用例通过。
+
+## Validation
+
+- `swift test`：236 项、22 个 Suite 全部通过。
+- `plutil -lint`：Info.plist 与中英文 Localizable.strings 通过。
+- `git diff --check`：通过。
+- `1.8.5 (68)` Release App 构建成功，深度签名验证通过，主程序为 arm64，且未包含私有 AI 包。
+- 独立语音记录页已实测侧边栏顺序、宽布局和真实 App 图标；RC001/Codex 快速发送与连续语音仍需用户使用新 App 完成真实时序复验。
+
+---
+
 # Voice input destination readiness investigation
 
 ## Observations

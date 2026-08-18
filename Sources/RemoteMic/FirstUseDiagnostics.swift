@@ -12,6 +12,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
     case voiceSessionNotStarted = "voice.session_not_started"
     case voiceNoSamples = "voice.no_samples"
     case voiceSessionNotEnded = "voice.session_not_ended"
+    case voiceManualInput = "voice.manual_input"
     case voiceNoTranscript = "voice.no_transcript"
     case controlsNotConfirmed = "controls.not_confirmed"
     case completeRuntimeRegressed = "complete.runtime_regressed"
@@ -26,7 +27,11 @@ enum FirstUseFailureReason: String, Codable, Equatable {
             return .remote
         case .audioNoOutputDevice, .audioSelectedDeviceMissing, .audioOutputNotReady:
             return .audio
-        case .voiceSessionNotStarted, .voiceNoSamples, .voiceSessionNotEnded, .voiceNoTranscript:
+        case .voiceSessionNotStarted,
+             .voiceNoSamples,
+             .voiceSessionNotEnded,
+             .voiceManualInput,
+             .voiceNoTranscript:
             return .voiceTest
         case .controlsNotConfirmed:
             return .controls
@@ -38,16 +43,39 @@ enum FirstUseFailureReason: String, Codable, Equatable {
 
 struct FirstUseDiagnosticContext: Equatable {
     let step: OnboardingStep
+    let remoteAvailability: OnboardingRemoteAvailability
+    let controlMethod: OnboardingControlMethod
     let capabilities: OnboardingCapabilities
     let hasSelectedAudioUID: Bool
 
+    init(
+        step: OnboardingStep,
+        remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
+        controlMethod: OnboardingControlMethod = .physicalRemote,
+        capabilities: OnboardingCapabilities,
+        hasSelectedAudioUID: Bool
+    ) {
+        self.step = step
+        self.remoteAvailability = remoteAvailability
+        self.controlMethod = controlMethod
+        self.capabilities = capabilities
+        self.hasSelectedAudioUID = hasSelectedAudioUID
+    }
+
     var failureReason: FirstUseFailureReason? {
         switch step {
-        case .welcome, .voiceTool:
+        case .welcome, .voiceTool, .remoteAvailability:
             return nil
+        case .controlMethod:
+            if controlMethod == .unselected { return nil }
         case .permissions:
-            if !capabilities.bluetoothGranted { return .bluetoothPermissionDenied }
-            if !capabilities.inputMonitoringGranted { return .inputMonitoringPermissionDenied }
+            if controlMethod.requiresBluetoothPermission && !capabilities.bluetoothGranted {
+                return .bluetoothPermissionDenied
+            }
+            if controlMethod.requiresInputMonitoringPermission &&
+                !capabilities.inputMonitoringGranted {
+                return .inputMonitoringPermissionDenied
+            }
             if !capabilities.accessibilityGranted { return .accessibilityPermissionDenied }
         case .remote:
             if !capabilities.remoteConnected { return .remoteNotFound }
@@ -55,11 +83,14 @@ struct FirstUseDiagnosticContext: Equatable {
         case .audio:
             if !hasSelectedAudioUID { return .audioNoOutputDevice }
             if !capabilities.audioOutputSelected { return .audioSelectedDeviceMissing }
-            if !capabilities.audioReady { return .audioOutputNotReady }
+            if !controlMethod.usesOnDemandAudioOutput && !capabilities.audioReady {
+                return .audioOutputNotReady
+            }
         case .voiceTest:
             if !capabilities.voiceSessionStarted { return .voiceSessionNotStarted }
             if !capabilities.voiceSamplesReceived { return .voiceNoSamples }
             if !capabilities.voiceSessionEnded { return .voiceSessionNotEnded }
+            if capabilities.manualTranscriptInputObserved { return .voiceManualInput }
             if !capabilities.transcriptionAppeared { return .voiceNoTranscript }
         case .controls:
             if capabilities.testedRemoteButtonCount < 3 { return .controlsNotConfirmed }
@@ -67,6 +98,8 @@ struct FirstUseDiagnosticContext: Equatable {
             guard OnboardingFlowPolicy.canContinue(
                 from: .complete,
                 voiceTool: .other,
+                remoteAvailability: remoteAvailability,
+                controlMethod: controlMethod,
                 capabilities: capabilities
             ) else { return .completeRuntimeRegressed }
         }
@@ -117,12 +150,14 @@ struct FirstUseDiagnosticSnapshot {
             "architecture=\(architecture)",
             "step=\(context.step.rawValue)",
             "voice_tool=\(voiceTool.rawValue)",
+            "remote_availability=\(context.remoteAvailability.rawValue)",
+            "control_method=\(context.controlMethod.rawValue)",
             "failure=\(context.failureReason?.rawValue ?? "none")",
             "permission_bluetooth=\(capabilities.bluetoothGranted)",
             "permission_input_monitoring=\(capabilities.inputMonitoringGranted)",
             "permission_accessibility=\(capabilities.accessibilityGranted)",
-            "remote_connected=\(capabilities.remoteConnected)",
-            "remote_button_observed=\(capabilities.remoteButtonObserved)",
+            "control_connected=\(capabilities.remoteConnected)",
+            "control_button_observed=\(capabilities.remoteButtonObserved)",
             "audio_device_selected=\(context.hasSelectedAudioUID)",
             "audio_device_available=\(capabilities.audioOutputSelected)",
             "audio_output_ready=\(capabilities.audioReady)",
@@ -130,6 +165,7 @@ struct FirstUseDiagnosticSnapshot {
             "voice_samples_received=\(capabilities.voiceSamplesReceived)",
             "voice_ended=\(capabilities.voiceSessionEnded)",
             "transcription_appeared=\(capabilities.transcriptionAppeared)",
+            "manual_transcript_input_observed=\(capabilities.manualTranscriptInputObserved)",
             "tested_button_count=\(capabilities.testedRemoteButtonCount)",
             "bluetooth_status=\(bluetoothStatus)",
             "button_status=\(buttonStatus)",

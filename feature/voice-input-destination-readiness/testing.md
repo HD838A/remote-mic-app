@@ -20,7 +20,7 @@ swift test
 ./scripts/test.sh
 swift build -c release
 ./scripts/build-app.sh
-./scripts/verify-app.sh "dist/Remote Mic.app"
+./scripts/verify-app.sh "dist/SayAll.app"
 ```
 
 ## 人工验收

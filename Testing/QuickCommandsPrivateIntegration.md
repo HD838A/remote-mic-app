@@ -23,11 +23,11 @@ REQUIRE_EARLY_ACCESS_CONFIGURATION=1 \
 ./scripts/build-app.sh
 ```
 
-构建结果位于 `dist/Remote Mic.app`。使用以下命令检查资源包、包含标记和签名结构：
+构建结果位于 `dist/SayAll.app`。使用以下命令检查资源包、包含标记和签名结构：
 
 ```bash
 REQUIRE_SAYALL_MACRO_PLATFORM=1 \
-./scripts/verify-app.sh "dist/Remote Mic.app"
+./scripts/verify-app.sh "dist/SayAll.app"
 ```
 
 验证最终 ZIP 时必须先临时挪开同版本 `/private/tmp/remote-mic-swiftpm/<版本>-<Build>` 构建缓存，再从全新目录解压并打开设置窗口；否则 SwiftPM 生成的绝对构建路径可能掩盖安装包资源错误。验证结束后恢复原缓存目录。
@@ -68,9 +68,9 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 
 步骤：创建组合动作，分别添加打开 App、打开网址、等待 App、录入快捷键、运行本机快捷指令、执行已有组合动作和学习输入框步骤；保存、重新进入并测试执行。
 
-预期：页面内完成主要配置；中文字号不小于 12pt；数据重启后保留；学习记录可测试和重新学习；敏感输入框被拒绝。“运行快捷指令”和“执行已有组合动作”均在卡片内搜索选择，不使用长下拉框或连续弹窗；前者显示名称、Identifier 和可用状态，可刷新并测试运行，导出不包含快捷指令本体；后者执行最新已保存版本并只保存稳定 ID。“打开网址”在卡片内输入完整 URL，只允许 `http` / `https` 并使用系统默认浏览器，保存、撤销和导入导出后内容不丢失。
+预期：页面内完成主要配置；中文字号不小于 12pt；数据重启后保留；学习记录可测试和重新学习；敏感输入框被拒绝。页面底部明确说明“学习输入框”只负责把光标放到目标 App，“回眸”中的 Codex MCP / TOML 只负责授权读取本地历史，两者互不替代。“运行快捷指令”和“执行已有组合动作”均在卡片内搜索选择，不使用长下拉框或连续弹窗；前者显示名称、Identifier 和可用状态，可刷新并测试运行，导出不包含快捷指令本体；后者执行最新已保存版本并只保存稳定 ID。“打开网址”在卡片内输入完整 URL，只允许 `http` / `https` 并使用系统默认浏览器，保存、撤销和导入导出后内容不丢失。
 
-失败判定：数据丢失、需要连续弹窗、输入框误聚焦或敏感输入框可被学习。
+失败判定：数据丢失、需要连续弹窗、输入框误聚焦、敏感输入框可被学习，或页面让用户误以为 MCP / TOML 能完成输入框聚焦。
 
 ### 用例三 C：运行本机快捷指令
 
@@ -151,7 +151,7 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 
 ### 用例六：覆盖已安装版本
 
-步骤：记录 `/Applications/Remote Mic.app` 当前版本和 Build；确认测试包的 Build 更高；从最终 DMG 运行图形化 Installer。
+步骤：记录 `/Applications/SayAll.app` 当前版本和 Build；如果仍存在旧 `/Applications/Remote Mic.app` 或 `/Applications/无线麦.app` 也一并记录；确认测试包的 Build 更高；从最终 DMG 运行图形化 Installer。
 
 预期：Installer 成功；App 被原子更新为测试包版本；MiRemoteV 2ch 健康时不重复替换；App 能自动或手动启动；用户设置仍保留。
 

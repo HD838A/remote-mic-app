@@ -4,13 +4,14 @@ set -euo pipefail
 TARGET_VOLUME="${3:-/}"
 SCRIPT_DIR="${0:A:h}"
 RELEASE_CONFIG="$SCRIPT_DIR/release-variant.plist"
+LEGACY_APP_TRASH_HELPER="$SCRIPT_DIR/trash-legacy-app.zsh"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
 BINARY="$DESTINATION/Contents/MacOS/MiRemoteV2ch"
 STAGED_DRIVER="${TARGET_VOLUME%/}/Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver"
 STAGED_PLIST="$STAGED_DRIVER/Contents/Info.plist"
 STAGED_BINARY="$STAGED_DRIVER/Contents/MacOS/MiRemoteV2ch"
-APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
+APP_DESTINATION="${TARGET_VOLUME%/}/Applications/SayAll.app"
 APP_PLIST="$APP_DESTINATION/Contents/Info.plist"
 APP_BINARY="$APP_DESTINATION/Contents/MacOS/RemoteMic"
 SPARKLE_VERSION_DIR="$APP_DESTINATION/Contents/Frameworks/Sparkle.framework/Versions/B"
@@ -22,8 +23,10 @@ APP_EXECUTABLES=(
   "$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc/Contents/MacOS/Installer"
   "$SPARKLE_VERSION_DIR/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
 )
-LEGACY_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
-LEGACY_APP_PLIST="$LEGACY_APP_DESTINATION/Contents/Info.plist"
+LEGACY_REMOTE_MIC_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"
+LEGACY_REMOTE_MIC_APP_PLIST="$LEGACY_REMOTE_MIC_APP_DESTINATION/Contents/Info.plist"
+LEGACY_CHINESE_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
+LEGACY_CHINESE_APP_PLIST="$LEGACY_CHINESE_APP_DESTINATION/Contents/Info.plist"
 
 uses_chinese_locale() {
   local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
@@ -37,6 +40,9 @@ installer_message() {
     print "$2"
   fi
 }
+
+test -f "$LEGACY_APP_TRASH_HELPER"
+source "$LEGACY_APP_TRASH_HELPER"
 
 hardware_architecture() {
   if [[ "$(/usr/sbin/sysctl -in hw.optional.arm64 2>/dev/null || print 0)" == "1" ]]; then
@@ -135,41 +141,56 @@ if [[ "$DRIVER_CHANGED" -eq 1 ]]; then
   /usr/bin/killall coreaudiod
 fi
 
-if [[ -e "$LEGACY_APP_DESTINATION" || -L "$LEGACY_APP_DESTINATION" ]]; then
-  if [[ -f "$LEGACY_APP_PLIST" ]] && \
-     [[ "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$LEGACY_APP_PLIST" 2>/dev/null || true)" == "com.hd838a.RemoteMic" ]]; then
-    /usr/bin/pkill -x RemoteMic 2>/dev/null || true
-    /bin/rm -rf -- "$LEGACY_APP_DESTINATION"
-    installer_message \
-      "已将旧版“无线麦.app”迁移到“Remote Mic.app”。" \
-      "Migrated the legacy app to Remote Mic.app."
-  else
-    installer_message \
-      "旧中文应用路径不属于 Remote Mic，安装器已保留它不作处理。" \
-      "The legacy Chinese app path does not belong to Remote Mic and was left untouched."
-  fi
-fi
-
 CONSOLE_USER="$(/usr/bin/stat -f '%Su' /dev/console)"
+if [[ "$CONSOLE_USER" != "root" && "$CONSOLE_USER" != "loginwindow" ]] && \
+   CONSOLE_UID="$(/usr/bin/id -u "$CONSOLE_USER" 2>/dev/null)"; then
+  USER_HOME="$(/usr/bin/dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory \
+    2>/dev/null | /usr/bin/sed -n 's/^NFSHomeDirectory: //p')"
+else
+  CONSOLE_UID=0
+  USER_HOME=""
+fi
+if [[ "$TARGET_VOLUME" == "/" && "$USER_HOME" == /* && "$USER_HOME" != "/" && \
+      "$USER_HOME" != *'/../'* && "$USER_HOME" != *'/..' ]]; then
+  LEGACY_APP_TRASH_ROOT="${TARGET_VOLUME%/}$USER_HOME/.Trash"
+else
+  LEGACY_APP_TRASH_ROOT="${TARGET_VOLUME%/}/.Trashes/$CONSOLE_UID"
+fi
+LEGACY_APP_MIGRATION_TOKEN="$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
+
+move_legacy_app_to_trash_if_owned \
+  "$LEGACY_REMOTE_MIC_APP_DESTINATION" \
+  "$LEGACY_REMOTE_MIC_APP_PLIST" \
+  "Remote Mic.app" \
+  "$LEGACY_APP_TRASH_ROOT" \
+  "$CONSOLE_UID" \
+  "$LEGACY_APP_MIGRATION_TOKEN"
+move_legacy_app_to_trash_if_owned \
+  "$LEGACY_CHINESE_APP_DESTINATION" \
+  "$LEGACY_CHINESE_APP_PLIST" \
+  "无线麦.app" \
+  "$LEGACY_APP_TRASH_ROOT" \
+  "$CONSOLE_UID" \
+  "$LEGACY_APP_MIGRATION_TOKEN"
+
 if [[ "$TARGET_VOLUME" != "/" ]]; then
   installer_message \
-    "已完成安装；请从目标磁盘的“应用程序”目录手动打开 Remote Mic。" \
-    "Installation is complete. Open Remote Mic from Applications on the target disk."
+    "已完成安装；请从目标磁盘的“应用程序”目录手动打开无线麦SayAll.app。" \
+    "Installation is complete. Open SayAll from Applications on the target disk."
 elif [[ "$CONSOLE_USER" != "root" && "$CONSOLE_USER" != "loginwindow" ]]; then
-  CONSOLE_UID="$(/usr/bin/id -u "$CONSOLE_USER")"
   /usr/bin/pkill -U "$CONSOLE_UID" -x RemoteMic 2>/dev/null || true
   if /bin/launchctl asuser "$CONSOLE_UID" \
     /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"; then
     installer_message \
-      "已安装并启动 Remote Mic；请在状态栏打开设置并选择 MiRemoteV 2ch。" \
-      "Remote Mic is installed and running. Open its menu bar settings and select MiRemoteV 2ch."
+      "已安装并启动无线麦SayAll.app；请在状态栏打开设置并选择 MiRemoteV 2ch。" \
+      "SayAll is installed and running. Open its menu bar settings and select MiRemoteV 2ch."
   else
     installer_message \
-      "已完成安装，但未能自动启动应用；请从“应用程序”手动打开 Remote Mic。" \
-      "Installation is complete, but the app could not be launched automatically. Open Remote Mic from Applications."
+      "已完成安装，但未能自动启动应用；请从“应用程序”手动打开无线麦SayAll.app。" \
+      "Installation is complete, but the app could not be launched automatically. Open SayAll from Applications."
   fi
 else
   installer_message \
-    "已完成安装；登录桌面后请从“应用程序”打开 Remote Mic。" \
-    "Installation is complete. After signing in, open Remote Mic from Applications."
+    "已完成安装；登录桌面后请从“应用程序”打开无线麦SayAll.app。" \
+    "Installation is complete. After signing in, open SayAll from Applications."
 fi

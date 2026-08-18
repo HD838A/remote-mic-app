@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${0:A:h:h}"
 source "$ROOT/scripts/release-variant.sh"
 OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
-DISPLAY_NAME="Remote Mic"
+DISPLAY_NAME="SayAll"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 PLIST="$ROOT/Resources/Info.plist"
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"

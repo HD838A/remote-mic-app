@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${0:A:h:h}"
 source "$ROOT/scripts/release-variant.sh"
 OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
-DISPLAY_NAME="Remote Mic"
+DISPLAY_NAME="SayAll"
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
 DMG="${1:-$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.dmg}"

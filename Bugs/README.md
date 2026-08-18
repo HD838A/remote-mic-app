@@ -1,7 +1,16 @@
 # Bug 记录
 
+- [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md)
+- [组合动作输入框学习容易与回眸 MCP 配置混淆](./2026-08-19-macro-focus-mcp-guidance-confusion.md)
+- [1.9.0 内测版 OK 键偶发无响应且日志无法定位](./2026-08-19-ok-button-intermittent-hid-report-loss.md)
+- [v1.9.0 内测包升级后系统权限失效](./2026-08-19-v1.9.0-preview-permission-identity.md)
+- [遥控器持续连接时虚拟音频阻止 Mac 自动休眠](./2026-08-18-connected-virtual-audio-blocks-mac-idle-sleep.md)
+- [Watch 停止后立即重新收音被判定占用](./2026-08-19-watch-voice-restart-during-audio-drain.md)
 - [Apple Watch BLE 语音已启动但没有有效电平](./2026-08-18-watch-ble-audio-no-signal.md)
+- [回眸页面阻断 Intel Ventura 构建](./2026-08-18-reflections-intel-ventura-onchange.md)
+- [v1.8.25 安装后 App bundle 仍显示 Remote Mic](./2026-08-17-v1.8.25-remote-mic-bundle-name.md)
 - [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md)
+- [没有实体遥控器的用户无法完成 Onboarding](./2026-08-17-onboarding-requires-physical-remote.md)
 - [移动设备已连接后仍显示正在等待](./2026-08-15-mobile-connection-still-shows-waiting/DEBUG.md)
 - [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md)
 - [发布阶段 heartbeat 与 timeout 同时到期导致 CI 偶发失败](./2026-08-16-release-stage-heartbeat-timeout-flake.md)
@@ -10,6 +19,8 @@
 - [SwiftPM 资源构建路径进入发布 App](./2026-08-13-swiftpm-resource-build-path-leak.md)
 - [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md)
 - [真实候选版本号导致预发布生命周期测试夹具失败](./2026-08-13-preview-lifecycle-fixture-current-version.md)
+- [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md)
+- [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md)
 
 本目录统一保存已经发现、调查或修复的问题。每个 Bug 使用独立 Markdown 文件，至少记录时间、状态、影响范围、功能点、简单描述和详细过程；无法从历史提交恢复的细节会明确标注，不补写推测。
 
@@ -38,7 +49,18 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-19 | [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md) | 候选修复完成，等待真实 Codex 与遥控器验收 |
+| 2026-08-19 | [Watch 停止后立即重新收音被判定占用](./2026-08-19-watch-voice-restart-during-audio-drain.md) | 候选修复完成，等待真机验收 |
+| 2026-08-19 | [组合动作输入框学习容易与回眸 MCP 配置混淆](./2026-08-19-macro-focus-mcp-guidance-confusion.md) | 说明已优化，等待有效资格页面人工验收 |
+| 2026-08-19 | [1.9.0 内测版 OK 键偶发无响应且日志无法定位](./2026-08-19-ok-button-intermittent-hid-report-loss.md) | 诊断增强完成，等待 RC003 真机复现并确认根因 |
+| 2026-08-19 | [v1.9.0 内测包升级后系统权限失效](./2026-08-19-v1.9.0-preview-permission-identity.md) | 候选修复完成，等待真实签名包升级验收 |
+| 2026-08-18 | [遥控器持续连接时虚拟音频阻止 Mac 自动休眠](./2026-08-18-connected-virtual-audio-blocks-mac-idle-sleep.md) | 候选修复完成，等待真实休眠与 `pmset` 验收 |
+| 2026-08-18 | [回眸页面缺少侧边栏入口](./2026-08-18-reflections-sidebar-entry-missing.md) | 已修复，等待 800 × 650 组合页面人工验收 |
+| 2026-08-18 | [回眸页面阻断 Intel Ventura 构建](./2026-08-18-reflections-intel-ventura-onchange.md) | 已修复，等待 Intel 真机验收 |
 | 2026-08-18 | [Apple Watch BLE 语音已启动但没有有效电平](./2026-08-18-watch-ble-audio-no-signal.md) | 诊断修复完成，等待真机验收 |
+| 2026-08-18 | [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md) | 修复完成，等待真实 Codex 验收 |
+| 2026-08-17 | [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md) | 修复完成，等待真实快速发送复验 |
+| 2026-08-18 | [800 × 650 按键映射页页头被压成竖排](./2026-08-18-settings-mapping-header-compressed-800x650.md) | 已修复，等待最终打包 App 可见页面复验 |
 | 2026-07-29 | [睡眠或音频路由变化后打开页面崩溃](./2026-07-29-audio-route-change-player-crash.md) | 已修复 |
 | 2026-07-30 | [Automatic Application Focus Investigation](./2026-07-30-automatic-application-focus.md) | 已修复 |
 | 2026-07-30 | [cmux Frontmost Refocus Follow-up](./2026-07-30-cmux-frontmost-refocus-follow-up.md) | 已修复 |
@@ -81,7 +103,7 @@
 | 2026-08-11 | [升级后 Onboarding 已收到实体按键但仍显示蓝牙未连接](./2026-08-11-onboarding-upgrade-hid-before-ble.md) | 已修复 <!-- workshop:status=已完成;priority=P2 --> |
 | 2026-08-11 | [蓝牙断连后虚拟麦克风仍保持活动](./2026-08-11-bluetooth-disconnect-keeps-virtual-microphone-active.md) | 已修复 <!-- workshop:status=已完成;priority=P2 --> |
 | 2026-08-11 | [已安装用户升级后被要求重新完成 Onboarding](./2026-08-11-existing-users-forced-through-onboarding.md) | 候选修复完成，等待真实升级验收 |
-| 2026-08-11 | [Onboarding 音频步骤错误地只接受 MiRemoteV 2ch](./2026-08-11-onboarding-requires-miremote-audio-device.md) | 候选修复完成，等待真实音频设备验收 |
+| 2026-08-11 | [Onboarding 错误拒绝 BlackHole 2ch](./2026-08-11-onboarding-requires-miremote-audio-device.md) | BlackHole 支持已恢复，等待真实音频设备验收 |
 | 2026-08-12 | [Remote Mic 运行期间 MacBook 实体方向键偶发失效](./2026-08-12-physical-arrow-keys-blocked.md) | 已修复，自动化通过，等待真机复验 |
 | 2026-08-12 | [Mac 等待手机后无法取消或切换设备](./2026-08-12-mac-phone-waiting-cannot-cancel.md) | 已修复，等待多手机真机验收 |
 | 2026-08-13 | [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md) | 已修复，两架构 CI 验证通过 |
@@ -96,7 +118,11 @@
 | 2026-08-16 | [macOS 签名发布并发缓存冲突与无限等待](./2026-08-16-macos-signed-release-timeout.md) | 第二次修复完成，等待下一次真实受保护工作流验证 |
 | 2026-08-16 | [发布阶段 heartbeat 与 timeout 同时到期导致 CI 偶发失败](./2026-08-16-release-stage-heartbeat-timeout-flake.md) | 已修复，自动化验证通过 |
 | 2026-08-17 | [正式版晋升 Runner 缺少 ripgrep](./2026-08-17-stable-promotion-runner-missing-rg.md) | 已修复，等待下一次受保护晋升验证 |
-| 2026-08-17 | [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md) | 未修复，等待现场日志与真机复现 |
+| 2026-08-17 | [MiRemoteV 2ch 音频通道偶发失效，重新选择后恢复](./2026-08-17-miremotev-audio-channel-stale-until-reselected.md) | 宿主侧候选修复完成，等待真实 MiRemoteV 与第三方 App 验收 |
+| 2026-08-17 | [Onboarding 语音工具页卡片错位并依赖内部滚动](./2026-08-17-onboarding-voice-tool-layout-scroll.md) | 候选修复完成，浅色与深色页面已复验 |
+| 2026-08-17 | [没有实体遥控器的用户无法完成 Onboarding](./2026-08-17-onboarding-requires-physical-remote.md) | 候选修复完成，等待 iPhone 与网页版真机验收 |
+| 2026-08-18 | [Onboarding 普通音频设备与手动文字错误通过](./2026-08-18-onboarding-miremote-and-manual-text-gates.md) | 候选修复完成，等待真实语音工具验收 |
+| 2026-08-19 | [Onboarding 错误拒绝 BlackHole 2ch](./2026-08-19-onboarding-blackhole-support.md) | 候选修复完成，等待真实 BlackHole 验收 |
 
 ## 记录模板
 
