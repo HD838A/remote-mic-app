@@ -1,5 +1,9 @@
 # Version History
 
+## 1.9.2 (Pre-release)
+
+- Combination Actions no longer require an invitation code and are directly available in builds that include the corresponding private module. Independent access restrictions for other invitation-only features remain unchanged.
+
 ## 1.9.1 (Pre-release)
 
 - Renamed the app bundle to SayAll.app and added migration from legacy Remote Mic.app and 无线麦.app installations.
