@@ -10,9 +10,9 @@ WORKFLOWS=(
   "$ROOT/.github/workflows/mac-release-package.yml"
 )
 DEPENDENCIES=(
-  "SayAllAI|GetSayAll/sayall-ai"
-  "SayAllMacroPlatform|GetSayAll/sayall-macro-platform"
-  "SayAllMacRemote|GetSayAll/sayall-mac-remote"
+  "SayAllAI|GetSayAll/sayall-ai|SAYALL_AI_RELEASE_REF"
+  "SayAllMacroPlatform|GetSayAll/sayall-macro-platform|SAYALL_MACRO_PLATFORM_RELEASE_REF"
+  "SayAllMacRemote|GetSayAll/sayall-mac-remote|SAYALL_MAC_REMOTE_RELEASE_REF"
 )
 
 if [[ "$#" -ne 0 ]]; then
@@ -23,7 +23,8 @@ fi
 extract_ref() {
   local workflow="$1"
   local repository="$2"
-  /usr/bin/awk -v repository="$repository" '
+  local variable_name="$3"
+  /usr/bin/awk -v repository="$repository" -v variable_name="$variable_name" '
     $0 ~ "repository:[[:space:]]*" repository "[[:space:]]*$" {
       found = 1
       next
@@ -35,6 +36,15 @@ extract_ref() {
       exit
     }
     found && /repository:[[:space:]]*/ { exit 1 }
+    $0 ~ "^[[:space:]]*" variable_name ":[[:space:]]*" {
+      value = $0
+      sub("^[[:space:]]*" variable_name ":[[:space:]]*", "", value)
+      gsub(/[[:space:]]+$/, "", value)
+      fallback = value
+    }
+    END {
+      if (!found && fallback != "") print fallback
+    }
   ' "$workflow"
 }
 
@@ -76,11 +86,13 @@ test -f "$PACKAGE_RESOLVED"
 
 for dependency in "${DEPENDENCIES[@]}"; do
   label="${dependency%%|*}"
-  repository="${dependency#*|}"
+  remainder="${dependency#*|}"
+  repository="${remainder%%|*}"
+  variable_name="${remainder#*|}"
   expected_ref=""
 
   for workflow in "${WORKFLOWS[@]}"; do
-    pinned_ref="$(extract_ref "$workflow" "$repository")"
+    pinned_ref="$(extract_ref "$workflow" "$repository" "$variable_name")"
     if [[ ! "$pinned_ref" =~ '^[0-9a-f]{40}$' ]]; then
       print -u2 "$label must use a full 40-character commit in ${workflow:t}"
       exit 1

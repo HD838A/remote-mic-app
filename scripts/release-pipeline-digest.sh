@@ -11,6 +11,7 @@ fi
 PIPELINE_FILES=(
   .github/workflows/mac-release-package.yml
   .github/workflows/mac-preview-candidate.yml
+  .github/workflows/mac-ci.yml
   scripts/build-app.sh
   scripts/build-dmg.sh
   scripts/build-doubao-driver.sh
@@ -20,6 +21,11 @@ PIPELINE_FILES=(
   scripts/package-macos-release-variants.sh
   scripts/release-pipeline-digest.sh
   scripts/run-release-stage.sh
+  scripts/release-slo-ledger.sh
+  scripts/release-user-wall-watchdog.sh
+  scripts/verify-release-dependency-pins.sh
+  scripts/verify-release-metadata-diff.sh
+  scripts/verify-release-ready-main-ci.sh
   scripts/verify-release-canary-provenance.sh
   scripts/verify-release-timeout-budgets.sh
 )

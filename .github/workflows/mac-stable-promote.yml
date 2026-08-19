@@ -7,6 +7,10 @@ on:
         description: Existing pre-release tag to promote, for example v1.8.8
         required: true
         type: string
+      request_started_at:
+        description: Unix epoch seconds when the user requested this stable promotion
+        required: true
+        type: string
   workflow_run:
     workflows: ["macOS CI"]
     types: [completed]
@@ -17,19 +21,74 @@ concurrency:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
+  stable-slo-watchdog:
+    name: Enforce 30-minute user-wall stable SLO
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 31
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Cancel an over-budget promotion once, without rebuilding or retrying
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
+          SLO_SECONDS: 1800
+        run: |
+          request_started_at="$REQUEST_STARTED_AT_INPUT"
+          if [[ ! "$request_started_at" =~ ^[0-9]+$ ]]; then
+            echo "request_started_at must be Unix epoch seconds" >&2
+            exit 2
+          fi
+          while true; do
+            now="$(date +%s)"
+            elapsed=$(( now - request_started_at ))
+            artifact_count="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=stable-slo-ledger-complete-$GITHUB_RUN_ID" \
+              --jq '.total_count')"
+            if [[ "$artifact_count" == "1" ]]; then
+              echo "STABLE SLO WATCHDOG PASS elapsed=${elapsed}s"
+              exit 0
+            fi
+            failed_jobs="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest" \
+              --jq '[.jobs[] | select(.name != "Enforce 30-minute user-wall stable SLO" and .conclusion != null and .conclusion != "success" and .conclusion != "skipped")] | length')"
+            if (( failed_jobs != 0 )); then
+              echo "A promotion job already failed; watchdog will not retry or rebuild it."
+              exit 0
+            fi
+            if (( elapsed >= SLO_SECONDS )); then
+              echo "STABLE SLO EXCEEDED elapsed=${elapsed}s budget=${SLO_SECONDS}s; cancelling run once." >&2
+              gh api --method POST \
+                "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"
+              exit 124
+            fi
+            sleep 15
+          done
+
+  reconciliation-requires-release-manager:
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Refuse untimed automatic stable promotion
+        run: |
+          echo "workflow_run reconciliation has no authoritative user-request timestamp."
+          echo "Return to the allowlisted release-manager task and manually dispatch the exact stable tag."
+
   promote:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_repository.full_name == github.repository &&
-       startsWith(github.event.workflow_run.head_branch, 'release/pre-v') &&
-       github.event.workflow_run.event == 'workflow_dispatch')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     timeout-minutes: 20
     environment: mac-stable-release
+    env:
+      STABLE_SLO_SECONDS: 1800
+      STABLE_COMPLETION_SLO_SECONDS: 1740
+      STABLE_PROMOTION_STAGE_TIMEOUT_SECONDS: 600
 
     steps:
       - name: Check out main
@@ -38,6 +97,21 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Initialize stable user-wall ledger
+        env:
+          REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
+        run: |
+          request_started_at="$REQUEST_STARTED_AT_INPUT"
+          test -n "$request_started_at"
+          {
+            echo "STABLE_SLO_CLOCK=user-wall"
+            echo "RELEASE_REQUEST_STARTED_AT=$request_started_at"
+            echo "RELEASE_SLO_LEDGER=$RUNNER_TEMP/stable-slo.tsv"
+          } >> "$GITHUB_ENV"
+          ./scripts/release-slo-ledger.sh init "$RUNNER_TEMP/stable-slo.tsv" "$request_started_at"
+          ./scripts/release-slo-ledger.sh check "$RUNNER_TEMP/stable-slo.tsv" "$request_started_at" "$STABLE_COMPLETION_SLO_SECONDS" environment-approval-wait
+          ./scripts/release-slo-ledger.sh start "$RUNNER_TEMP/stable-slo.tsv" "$request_started_at" unchanged-byte-promotion
+
       - name: Ensure required promotion tools
         run: |
           if ! command -v rg >/dev/null 2>&1; then
@@ -45,38 +119,13 @@ jobs:
           fi
           rg --version
 
-      - name: Resolve and merge approved candidate
+      - name: Resolve requested candidate
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_TAG: ${{ inputs.tag }}
-          CANDIDATE_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
-          if [[ -n "$REQUESTED_TAG" ]]; then
-            tag="$REQUESTED_TAG"
-          else
-            pr_json="$(gh pr list \
-              --repo "$GITHUB_REPOSITORY" \
-              --head "$CANDIDATE_BRANCH" \
-              --base main \
-              --state all \
-              --json number,state,mergedAt,labels,headRefName \
-              --jq '[.[] | select(.headRefName == env.CANDIDATE_BRANCH and any(.labels[]; .name == "stable-promotion-approved"))][0]')"
-            if [[ -z "$pr_json" || "$pr_json" == "null" ]]; then
-              echo "Preview candidate CI completed without a stable-promotion request; skipping promotion."
-              echo "should_promote=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            pr_number="$(jq -r '.number' <<< "$pr_json")"
-            pr_state="$(jq -r '.state' <<< "$pr_json")"
-            if [[ "$pr_state" == "OPEN" ]]; then
-              gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --merge
-            elif [[ "$(jq -r '.mergedAt // empty' <<< "$pr_json")" == "" ]]; then
-              echo "approved PR #$pr_number was closed without merging" >&2
-              exit 1
-            fi
-            tag="v${CANDIDATE_BRANCH#release/pre-v}"
-          fi
+          tag="$REQUESTED_TAG"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "invalid stable promotion tag: $tag" >&2
             exit 1
@@ -91,4 +140,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
-        run: ./scripts/publish-release.sh promote
+        run: |
+          ./scripts/run-release-stage.sh all stable-promotion \
+            "$STABLE_PROMOTION_STAGE_TIMEOUT_SECONDS" -- \
+            ./scripts/publish-release.sh promote
+          ./scripts/release-slo-ledger.sh finish "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" unchanged-byte-promotion success
+          ./scripts/release-slo-ledger.sh check "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" "$STABLE_COMPLETION_SLO_SECONDS" successful-pipeline
+
+      - name: Record failed stable promotion
+        if: failure()
+        run: |
+          ./scripts/release-slo-ledger.sh finish "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" unchanged-byte-promotion failed external-github-or-cdn
+
+      - name: Upload completed stable ledger
+        if: success() && steps.release.outputs.should_promote == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-slo-ledger-complete-${{ github.run_id }}
+          path: ${{ env.RELEASE_SLO_LEDGER }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload failed stable ledger
+        if: failure() && env.RELEASE_SLO_LEDGER != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-slo-ledger-failed-${{ github.run_id }}
+          path: ${{ env.RELEASE_SLO_LEDGER }}
+          if-no-files-found: error
+          retention-days: 90

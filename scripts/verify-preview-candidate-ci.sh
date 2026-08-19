@@ -103,6 +103,26 @@ if [[ "$REQUIRE_PREVIEW_RECORDING_PR" == "1" ]]; then
     print -u2 "signed packaging requires one exact-SHA Draft preview recording PR"
     exit 1
   fi
+  PR_NUMBER="$(print -r -- "$PR_JSON" | jq -r '.[0].number')"
+  PR_CHECKS_JSON="$(
+    "$GH_BIN" pr view "$PR_NUMBER" \
+      --repo "$REPOSITORY" \
+      --json statusCheckRollup
+  )"
+  if ! print -r -- "$PR_CHECKS_JSON" | jq -e '
+    [.statusCheckRollup[] | select(
+      .name == "Swift tests and build (Apple Silicon)" and
+      .status == "COMPLETED" and .conclusion == "SUCCESS"
+    )] | length == 1
+  ' >/dev/null || ! print -r -- "$PR_CHECKS_JSON" | jq -e '
+    [.statusCheckRollup[] | select(
+      .name == "Swift tests and build (Intel Ventura)" and
+      .status == "COMPLETED" and .conclusion == "SUCCESS"
+    )] | length == 1
+  ' >/dev/null; then
+    print -u2 "signed packaging requires successful exact-SHA Draft PR Apple Silicon and Intel checks"
+    exit 1
+  fi
 fi
 
 print "PREVIEW CANDIDATE CI PASS"
