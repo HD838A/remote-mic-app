@@ -213,6 +213,11 @@
 "connection.phone.section_title" = "iPhone、Apple Watch 与网页版";
 "connection.phone.ios_title" = "iOS App（推荐）";
 "connection.phone.no_invite_badge" = "无需邀请码";
+"connection.phone.qr_badge" = "扫码优先";
+"connection.phone.qr_title" = "使用 iPhone App 扫码连接";
+"connection.phone.qr_help" = "在 iPhone 无线麦的 Mac 页面点按“扫描二维码”，可直接连接这台 Mac；自动发现仍会保留作为备用。";
+"connection.phone.qr_refresh" = "二维码短时有效并会自动更新；停止等待或重新开启后，需要扫描新的二维码。";
+"connection.phone.qr_accessibility" = "iPhone 连接二维码";
 "connection.phone.ios_help" = "先连接手机开始等待，再从 TestFlight 安装并打开 iOS App。";
 "connection.phone.not_enabled" = "尚未开启";
 "connection.trusted_devices.title" = "受信任的移动设备";
@@ -570,6 +575,7 @@
 "onboarding.iphone_remote.install" = "安装或打开 iOS App";
 "onboarding.iphone_remote.connected" = "iPhone 已连接";
 "onboarding.iphone_remote.waiting" = "正在等待 iPhone";
+"onboarding.iphone_remote.scan" = "在 iPhone 无线麦中扫描二维码，优先直接连接这台 Mac";
 "onboarding.iphone_remote.connection_detail" = "保持无线麦 iOS App 在前台，首次连接需要在 Mac 上允许。";
 "onboarding.iphone_remote.button_detail" = "连接后，在 iPhone 遥控器上按任意普通按键。";
 "onboarding.web_remote.title" = "用浏览器连接这台 Mac";

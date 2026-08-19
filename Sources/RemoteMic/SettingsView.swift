@@ -603,7 +603,7 @@ struct SettingsView: View {
                             HStack(spacing: 6) {
                                 Text("connection.phone.ios_title")
                                     .font(.subheadline.weight(.semibold))
-                                Text("connection.phone.no_invite_badge")
+                                Text("connection.phone.qr_badge")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(.secondary)
                             }
@@ -661,6 +661,11 @@ struct SettingsView: View {
                             )
                         }
                         .compatibilityButtonStyle(.standard)
+                    }
+
+                    if let invitation = model.phoneRemoteInvitation {
+                        Divider()
+                        PhoneRemoteInvitationCard(invitation: invitation)
                     }
                 }
 

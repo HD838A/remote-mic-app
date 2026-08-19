@@ -107,6 +107,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("response == .alertThirdButtonReturn"))
         #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled else"))
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
+        #expect(source.contains("phoneRemoteServer.onInvitationChange"))
+        #expect(source.contains("@Published private(set) var phoneRemoteInvitation"))
     }
 
     @Test func iphoneAndWatchVoiceSessionsRemainSourceIsolated() throws {
@@ -153,7 +155,7 @@ struct SettingsPageRegressionTests {
         )
 
         let noInvite = try #require(settingsSource.range(
-            of: "Text(\"connection.phone.no_invite_badge\")"
+            of: "Text(\"connection.phone.qr_badge\")"
         ))
         let noInviteBlock = settingsSource[noInvite.lowerBound...]
             .prefix(180)
@@ -413,6 +415,7 @@ struct SettingsPageRegressionTests {
         #expect(bridgeSource.contains("@Published private(set) var isWatchRemoteConnected = false"))
         #expect(bridgeSource.contains("phoneRemoteServer.onConnectionStateChange"))
         #expect(bridgeSource.contains("watchBluetoothServer.onConnectionStateChange"))
+        #expect(mobileEntrySource.contains("PhoneRemoteInvitationCard"))
         #expect(source.contains("ButtonTrigger.allCases"))
         #expect(source.contains("isMappingSelectionLocked"))
         #expect(!source.contains("ScrollView(.horizontal, showsIndicators: false)"))

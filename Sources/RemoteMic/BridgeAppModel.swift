@@ -174,6 +174,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
     @Published private(set) var isPhoneRemoteConnected = false
     @Published private(set) var isWatchRemoteConnected = false
+    @Published private(set) var phoneRemoteInvitation: PhoneRemoteInvitation?
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
     @Published private(set) var transcriptRecords: [TranscriptRecord] = []
@@ -316,6 +317,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         phoneRemoteServer.onConnectionStateChange = { [weak self] connected in
             DispatchQueue.main.async {
                 self?.isPhoneRemoteConnected = connected
+            }
+        }
+        phoneRemoteServer.onInvitationChange = { [weak self] invitation in
+            DispatchQueue.main.async {
+                self?.phoneRemoteInvitation = invitation
             }
         }
         phoneRemoteServer.onApprovalCancelled = { [weak self] in
