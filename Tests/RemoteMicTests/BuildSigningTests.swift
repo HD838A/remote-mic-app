@@ -614,6 +614,14 @@ struct BuildSigningTests {
         #expect(appVerifierSource.contains("CFBundleName raw"))
         #expect(publishSource.contains("$extract_dir/SayAll.app"))
         #expect(publishSource.contains("Remote-Mic-$VERSION.zip"))
+        #expect(publishSource.contains("PUBLIC_PRODUCT_NAME=\"无线麦SayAll.app\""))
+        #expect(publishSource.contains("--title \"$PUBLIC_PRODUCT_NAME $VERSION\""))
+        #expect(!publishSource.contains("--title \"Remote Mic $VERSION\""))
+
+        let fastReleaseSource = try source("scripts/fast-release.sh")
+        #expect(fastReleaseSource.contains("PUBLIC_PRODUCT_NAME=\"无线麦SayAll.app\""))
+        #expect(fastReleaseSource.contains("git tag -a \"$RELEASE_TAG\" -m \"$PUBLIC_PRODUCT_NAME $VERSION\""))
+        #expect(!fastReleaseSource.contains("git tag -a \"$RELEASE_TAG\" -m \"Remote Mic $VERSION\""))
 
         #expect(preinstallSource.contains("Applications/SayAll.app"))
         #expect(preinstallSource.contains("Applications/Remote Mic.app"))

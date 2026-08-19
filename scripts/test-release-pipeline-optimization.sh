@@ -143,6 +143,19 @@ fi
 /usr/bin/grep -Fq 'PUBLIC_RELEASE_ASSET_COUNT=12' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'Remote-Mic-$VERSION.dmg.sha256' \
   "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'PUBLIC_PRODUCT_NAME="无线麦SayAll.app"' \
+  "$ROOT/scripts/publish-release.sh" "$ROOT/scripts/fast-release.sh"
+/usr/bin/grep -Fq -- '--title "$PUBLIC_PRODUCT_NAME $VERSION"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'git tag -a "$RELEASE_TAG" -m "$PUBLIC_PRODUCT_NAME $VERSION"' \
+  "$ROOT/scripts/fast-release.sh"
+if /usr/bin/grep -Fq -- '--title "Remote Mic $VERSION"' \
+    "$ROOT/scripts/publish-release.sh" || \
+   /usr/bin/grep -Fq 'git tag -a "$RELEASE_TAG" -m "Remote Mic $VERSION"' \
+    "$ROOT/scripts/fast-release.sh"; then
+  print -u2 "release metadata still uses the retired Remote Mic brand"
+  exit 1
+fi
 
 /bin/mkdir -p "$NO_RG_BIN"
 for command_name in cmp curl gh git jq plutil shasum stat; do

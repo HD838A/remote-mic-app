@@ -6,6 +6,7 @@ ROOT="${0:A:h:h}"
 OUTPUT_DIR="$ROOT/dist"
 PLIST="$ROOT/Resources/Info.plist"
 REPOSITORY="HD838A/remote-mic-app"
+PUBLIC_PRODUCT_NAME="无线麦SayAll.app"
 MODE="${1:-}"
 DRY_RUN="${DRY_RUN:-0}"
 PUBLIC_DOWNLOAD_CONCURRENCY="${PUBLIC_DOWNLOAD_CONCURRENCY:-4}"
@@ -620,7 +621,7 @@ if [[ "$MODE" == "prerelease" ]]; then
     --verify-tag \
     --prerelease \
     --latest=false \
-    --title "Remote Mic $VERSION" \
+    --title "$PUBLIC_PRODUCT_NAME $VERSION" \
     --notes-file "$RELEASE_NOTES"
 
   RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.draft, .prerelease] | @tsv')"
