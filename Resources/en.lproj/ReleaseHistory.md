@@ -1,5 +1,10 @@
 # Version History
 
+## 1.9.3 (Pre-release)
+
+- First-run setup now keeps Typeless Fn-tap behavior in sync and can continue connection checks after a physical remote button has been recognized.
+- Combination Actions no longer require an invitation code and are directly available in builds that include the corresponding private module. Independent access restrictions for other invitation-only features remain unchanged.
+
 ## 1.9.1 (Pre-release)
 
 - Renamed the app bundle to SayAll.app and added migration from legacy Remote Mic.app and 无线麦.app installations.
