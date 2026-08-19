@@ -556,6 +556,8 @@
 "onboarding.remote.first_pairing.wake" = "Hold TV for about 2 seconds until the white light at the bottom starts flashing.";
 "onboarding.remote.first_pairing.pair" = "Then hold Home + Menu together to enter Bluetooth pairing mode.";
 "onboarding.remote.connected_detail" = "SayAll has a working connection to the remote.";
+"onboarding.remote.hid_connected" = "Physical remote recognized";
+"onboarding.remote.hid_connected_detail" = "A remote button was received. The voice connection will keep preparing in the background.";
 "onboarding.remote.searching_detail" = "Keep the remote near your Mac. For a first connection, follow the steps above; if already paired, press any button to wake it.";
 "onboarding.remote.button_waiting" = "Waiting for a control button";
 "onboarding.remote.button_received" = "Control button received";

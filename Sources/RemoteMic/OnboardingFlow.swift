@@ -191,6 +191,14 @@ enum OnboardingTranscriptInputPolicy {
 }
 
 enum OnboardingFlowPolicy {
+    static func isPhysicalRemoteRecognized(
+        at step: OnboardingStep,
+        voiceConnectionReady: Bool,
+        validatedHIDButtonObserved: Bool
+    ) -> Bool {
+        voiceConnectionReady || (step == .remote && validatedHIDButtonObserved)
+    }
+
     static func shouldAutoSelectPhysicalRemote(
         at step: OnboardingStep,
         remoteConnected: Bool

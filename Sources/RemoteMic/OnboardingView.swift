@@ -804,14 +804,20 @@ struct OnboardingView: View {
             }
 
             statusCard(
-                icon: model.isConnected ? "checkmark.circle.fill" : "dot.radiowaves.left.and.right",
-                title: model.connectionStatus.text(using: localization),
+                icon: selectedControlConnected
+                    ? "checkmark.circle.fill"
+                    : "dot.radiowaves.left.and.right",
+                title: !model.isConnected && selectedControlConnected
+                    ? localization.text("onboarding.remote.hid_connected")
+                    : model.connectionStatus.text(using: localization),
                 detail: localization.text(
                     model.isConnected
                         ? "onboarding.remote.connected_detail"
-                        : "onboarding.remote.searching_detail"
+                        : selectedControlConnected
+                            ? "onboarding.remote.hid_connected_detail"
+                            : "onboarding.remote.searching_detail"
                 ),
-                isComplete: model.isConnected
+                isComplete: selectedControlConnected
             )
 
             statusCard(
@@ -827,7 +833,7 @@ struct OnboardingView: View {
                 isComplete: !observedRemoteButtons.isEmpty
             )
 
-            if !model.isConnected {
+            if !selectedControlConnected {
                 openBluetoothSettingsButton
             }
         }
@@ -1640,7 +1646,11 @@ struct OnboardingView: View {
     private var selectedControlConnected: Bool {
         switch settings.onboardingControlMethod {
         case .physicalRemote:
-            return model.isConnected
+            return OnboardingFlowPolicy.isPhysicalRemoteRecognized(
+                at: settings.onboardingStep,
+                voiceConnectionReady: model.isConnected,
+                validatedHIDButtonObserved: !observedRemoteButtons.isEmpty
+            )
         case .iPhoneApp:
             return model.isPhoneRemoteConnected
         case .webRemote:
@@ -2124,9 +2134,10 @@ struct OnboardingView: View {
             }
             return
         }
-        if settings.onboardingStep == .permissions,
-           settings.onboardingControlMethod == .physicalRemote {
-            settings.customMappingEnabled = true
+        if settings.onboardingStep == .permissions {
+            if settings.onboardingControlMethod == .physicalRemote {
+                settings.customMappingEnabled = true
+            }
             model.setVoiceFnTapModeEnabled(settings.onboardingVoiceTool == .typeless)
         }
         if settings.onboardingStep == .complete {

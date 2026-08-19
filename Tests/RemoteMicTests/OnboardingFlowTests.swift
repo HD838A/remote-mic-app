@@ -210,6 +210,29 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func validatedRemoteButtonAlsoProvesThePhysicalRemoteIsRecognized() {
+        #expect(OnboardingFlowPolicy.isPhysicalRemoteRecognized(
+            at: .complete,
+            voiceConnectionReady: true,
+            validatedHIDButtonObserved: false
+        ))
+        #expect(OnboardingFlowPolicy.isPhysicalRemoteRecognized(
+            at: .remote,
+            voiceConnectionReady: false,
+            validatedHIDButtonObserved: true
+        ))
+        #expect(!OnboardingFlowPolicy.isPhysicalRemoteRecognized(
+            at: .remote,
+            voiceConnectionReady: false,
+            validatedHIDButtonObserved: false
+        ))
+        #expect(!OnboardingFlowPolicy.isPhysicalRemoteRecognized(
+            at: .complete,
+            voiceConnectionReady: false,
+            validatedHIDButtonObserved: true
+        ))
+    }
+
     @Test func everyRequiredCapabilityBlocksItsStepUntilVerified() {
         var capabilities = OnboardingCapabilities()
 
@@ -845,6 +868,41 @@ struct OnboardingFlowTests {
         #expect(!restarted.openMainWindowAtLaunch)
         #expect(restarted.checksForPreReleaseUpdates)
         #expect(restarted.action(for: .ok) == .escape)
+    }
+
+    @Test func onboardingVoiceToolKeepsTheFnTapPreferenceInSync() throws {
+        let suiteName = "RemoteMicTests.OnboardingFnTap.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.setOnboardingVoiceTool(.typeless)
+        #expect(settings.voiceFnTapModeEnabled)
+
+        let resumed = AppSettings(defaults: defaults)
+        #expect(resumed.voiceFnTapModeEnabled)
+
+        resumed.setOnboardingVoiceTool(.doubao)
+        #expect(!resumed.voiceFnTapModeEnabled)
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        #expect(viewSource.contains(
+            """
+            if settings.onboardingStep == .permissions {
+                        if settings.onboardingControlMethod == .physicalRemote {
+                            settings.customMappingEnabled = true
+                        }
+                        model.setVoiceFnTapModeEnabled(settings.onboardingVoiceTool == .typeless)
+                    }
+            """
+        ))
     }
 
     @Test func existingInstallSkipsOnboardingWhileNewAndResumedFlowsRemainRequired() throws {

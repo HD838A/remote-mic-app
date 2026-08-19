@@ -47,6 +47,7 @@
 23. iPhone/网页语音输出采用按需生命周期：手机语音开始时配置，停止后释放。音频页和完成页要求 MiRemoteV 2ch 或 BlackHole 2ch 已选择且仍存在，真实会话、PCM、停止和文字继续在语音页验证；实体遥控器继续要求生产输出持续 Ready。三种控制方式统一检查蓝牙、输入监控和辅助功能；权限页不伪造无法可靠查询的本地网络授权状态，而是在连接页用 Nearby/WSS 真实会话作为门禁。
 24. 语音测试的文字状态不再等同于输入框非空。每次所选来源开始语音时清空旧文字；只有 `keyDown + hidSystemState + sourceUnixProcessID <= 0` 才确认物理手输并阻塞继续，合成/非零 PID/combined/private/缺失或未知事件来源全部 fail-open。视图只传事件类型、state ID 和 PID 给纯策略，诊断只记录布尔状态，不记录 PID、键码、文字或 App。
 25. SayAll.app 路径迁移后的私有 Draft 与公开 Pre-release 必须使用正式 Developer ID Team 签名并公证；Push 候选 CI 的 ad-hoc exact-SHA Artifact 只用于验证，不可分发或用于权限连续性验收。权限页在权限已授予时不再重复显示请求按钮，已有用户权限异常时只显示兜底说明。App 不尝试修改 TCC 数据库，也不自动删除系统权限条目。
+26. Onboarding 语音工具选择直接同步 Fn 点按偏好：Typeless 为开启，豆包、微信和其他工具为关闭；三种控制方式离开权限页时统一应用运行时设置，实体遥控器才额外开启自定义映射。实体遥控器连接页的“已识别”由语音 bridge Ready 或生产 HID 普通按键证明；后者不会替代后续真实语音流门禁，完成页仍要求当前 bridge Ready。
 
 ## 全流程门禁审计结论
 
@@ -92,11 +93,13 @@
 
 2026-08-11 的升级恢复修复没有改变全局蓝牙与音频启动顺序，也不会在已连接、未收到实体按键或本页已经请求过恢复时重复重连。真实 Sparkle 升级首次启动和 RC003 仍需按测试手册验收。
 
+2026-08-19 的识别聚合只改变 Onboarding 对既有生产状态的解释：不修改 HID 匹配、报告解析、共享蓝牙协议或音频格式。普通键盘与仅系统蓝牙列表显示连接仍不能通过；真实 Typeless Fn 点按和 RC001 / RC003 的 BLE/HID 异步时序仍需现场验收。
+
 旧安装迁移只改变根视图选择，不修改蓝牙、HID、音频、权限、映射或用户配置。中途向导状态与主动重新运行状态优先，不会因存在更新记录而被自动完成。
 
 ## 自动化验证
 
-- `swift test --filter OnboardingFlowTests`：2026-08-19 最新 23 项通过，覆盖两层控制方式选择、连接恢复、MiRemoteV/BlackHole 白名单、普通音频输出拒绝、手动键盘文字阻塞、输入框重新聚焦、最终运行时重验和迁移边界。
+- `swift test --filter OnboardingFlowTests`：2026-08-19 最新 26 项通过，覆盖两层控制方式选择、Typeless Fn 点按同步、BLE/HID 实体识别、连接恢复、MiRemoteV/BlackHole 白名单、普通音频输出拒绝、手动键盘文字阻塞、输入框重新聚焦、最终运行时重验和迁移边界。
 - `swift test --filter SettingsPageRegressionTests`：7 项通过。
 - `swift test --filter LocalizationTests`：5 项通过，中英文 key 和格式一致。
 - `swift test`：2026-08-15 本轮 220 项、18 个 suite 全部通过，没有失败用例。
@@ -106,6 +109,7 @@
 - `swift test --filter OnboardingFlowTests`：2026-08-18 手机按需音频门禁修复后 23 项通过；覆盖 iPhone/网页音频页和完成页、实体遥控器持续 Ready 基线、设备缺失失败和权限说明接线。
 - `swift test`：同一修复后 235 项、20 个 suite 全部通过；`scripts/test.sh` 42 项项目自检和 `swift build` 通过。iPhone 与网页分支浅色/深色各 10 张生产视图截图均已逐张检查，无内部滚动、裁切或黑白分栏。
 - `codex/v1-9-0-onboarding` 固定基线集成：`swift test --filter OnboardingFlowTests` 23 项、`swift test` 237 项/21 suites、`SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh` 42/42 通过；`arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建通过。实体遥控器 18 张、iPhone 20 张、网页 20 张生产 Onboarding 截图已逐张检查，无裁切或黑白分栏。
+- 2026-08-19 Typeless 与 BLE/HID 识别候选：`swift test` 312 项/31 suites、项目自检 42/42、Apple Silicon App 校验及 `x86_64-apple-macosx13.0` Release 构建通过；实体路径浅色/深色各 9 张生产页面无裁切或黑白分栏。隐藏截图夹具未模拟真实 HID 按键，新识别状态仍需 RC001 / RC003 真机查看。
 - 同次 800×650 设置页检查中，固定主线基线的“按键映射 / Buttons”页顶部标题与启用开关文案发生严重窄列换行，中英文、浅深色四种组合均复现；Onboarding 七提交未修改该页面或设置容器。本集成不越界修复，但 1.9.0 候选必须在后续组合分支修复并重新执行全部设置入口门禁。
 - 私有硬件模拟：16 项通过，覆盖 RC001/RC003 语音、12 个原始按键、36 个手势、连发、异常报告、重连和双设备隔离。
 - `swift build -c release`：通过。

@@ -556,6 +556,8 @@
 "onboarding.remote.first_pairing.wake" = "长按 TV 键约 2 秒，直到遥控器底部白灯开始闪烁。";
 "onboarding.remote.first_pairing.pair" = "同时长按 Home（主页）+ Menu（菜单）键，进入蓝牙配对模式。";
 "onboarding.remote.connected_detail" = "无线麦已与遥控器建立可用连接。";
+"onboarding.remote.hid_connected" = "已识别实体遥控器";
+"onboarding.remote.hid_connected_detail" = "已收到遥控器按键，语音连接会在后台继续准备。";
 "onboarding.remote.searching_detail" = "保持遥控器靠近 Mac；首次连接按上方步骤操作，已配对时按任意键唤醒。";
 "onboarding.remote.button_waiting" = "等待控制按键";
 "onboarding.remote.button_received" = "已收到控制按键";
