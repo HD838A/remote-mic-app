@@ -61,7 +61,9 @@ verify_candidate_provenance() {
      .tagCommit == $tagCommit and
      .version == ($tag | ltrimstr("v")) and
      (.build | test("^[0-9]+$")) and
-     (.candidateBranch == ("release/pre-" + $tag) or .candidateBranch == ("release/pre-" + $tag + "-rerun")) and
+     (.candidateBranch == ("release/pre-" + $tag) or
+      ((.candidateBranch | startswith("release/pre-" + $tag + "-rerun")) and
+       (.candidateBranch | ltrimstr("release/pre-" + $tag + "-rerun") | test("^([2-9][0-9]*)?$")))) and
      (if .schemaVersion == 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
      ((.payloadAssets | length) == 11 or
       (.payloadAssets | length) == 14 or

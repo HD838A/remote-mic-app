@@ -26,7 +26,7 @@ REPOSITORY_ROOT="$ROOT" "$TRUSTED_RUNNER" >/dev/null
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 HEAD_COMMIT="$(git rev-parse HEAD)"
 VERSION="${BRANCH#release/pre-v}"
-VERSION="${VERSION%-rerun}"
+VERSION="${VERSION%%-rerun*}"
 PR_JSON="$(
   "$GH_BIN" pr list \
     --repo "$REPOSITORY" \

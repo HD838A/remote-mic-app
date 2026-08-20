@@ -63,8 +63,14 @@ BRANCH="$(git symbolic-ref --quiet --short HEAD)" || {
   print -u2 "fast release requires a branch, not detached HEAD"
   exit 1
 }
-if [[ "$BRANCH" != "release/pre-v$VERSION" && "$BRANCH" != "release/pre-v$VERSION-rerun" ]]; then
-  print -u2 "fast release requires release/pre-v$VERSION or its -rerun recovery form"
+if [[ ! "$BRANCH" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+(-rerun([2-9][0-9]*)?)?$' ]]; then
+  print -u2 "fast release requires release/pre-v$VERSION or a numbered recovery form"
+  exit 1
+fi
+BRANCH_VERSION="${BRANCH#release/pre-v}"
+BRANCH_VERSION="${BRANCH_VERSION%%-rerun*}"
+if [[ "$BRANCH_VERSION" != "$VERSION" ]]; then
+  print -u2 "fast release branch version $BRANCH_VERSION does not match $VERSION"
   exit 1
 fi
 

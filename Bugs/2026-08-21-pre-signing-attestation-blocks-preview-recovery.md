@@ -32,6 +32,7 @@ PR #128 的 Apple Silicon Job `96564419079` 与 Intel Job `96564418649` 均只�
 
 - 旧 attestation 不匹配时，分别查询指定 Tag 和 GitHub Release；任一存在都继续拒绝替换。
 - 两者都不存在时保留当前请求生成的新 attestation，不复用或清空其 JSON。
+- 恢复候选分支支持依次使用 `-rerun`、`-rerun2`、`-rerun3` 等编号后缀；版本解析、候选 CI、元数据复用、provenance、回流和 watchdog 使用同一规则，避免第二次签名前恢复被固定分支名阻断。
 - 回归测试同时覆盖公开身份存在时保持不可变、无公开身份时成功恢复，以及恢复后的请求 ID、Tag 和 `releaseReadyAt` 完整性。
 
 ## 验证

@@ -91,6 +91,14 @@ prepare_candidate "release/pre-v1.8.15" "1.8.15" "107" "prepare 1.8.15"
 ) > "$WORK_DIR/valid-output.txt"
 /usr/bin/grep -Fq "PREVIEW BRANCH PASS" "$WORK_DIR/valid-output.txt"
 
+git -C "$TEST_REPO" switch main >/dev/null
+prepare_candidate "release/pre-v1.8.15-rerun2" "1.8.15" "107" "recover 1.8.15"
+(
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="" PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
+) > "$WORK_DIR/recovery-output.txt"
+/usr/bin/grep -Fq "PREVIEW BRANCH PASS" "$WORK_DIR/recovery-output.txt"
+
 prepare_candidate "release/pre-v1.8.16" "1.8.16" "108" "prepare 1.8.16"
 if (
   cd "$TEST_REPO"
