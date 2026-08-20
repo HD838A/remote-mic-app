@@ -113,8 +113,19 @@ if [[ -n "$locked_json" ]]; then
       (.mainCiCompletedAt | type) == "string" and
       (.candidateGateCompletedAt | type) == "string"
     ' >/dev/null; then
-    print -u2 "release request timestamps/identity are immutable for $RELEASE_TAG"
-    exit 1
+    public_identity_exists=0
+    if "$GH_BIN" release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+      public_identity_exists=1
+    fi
+    if "$GH_BIN" api "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+      public_identity_exists=1
+    fi
+    if (( public_identity_exists != 0 )); then
+      print -u2 "release request timestamps/identity are immutable for $RELEASE_TAG"
+      exit 1
+    fi
+    print "Replacing a pre-signing-only attestation for $RELEASE_TAG; no public tag or release exists."
+    locked_json=""
   fi
   expected_json="$locked_json"
   ready_epoch="$(print -r -- "$locked_json" | jq -r '.releaseReadyAt')"
