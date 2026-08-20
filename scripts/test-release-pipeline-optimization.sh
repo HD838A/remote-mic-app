@@ -28,6 +28,8 @@ fi
 /bin/cp "$ROOT/.github/workflows/mac-ci.yml" "$TEST_REPO/.github/workflows/"
 /bin/cp "$ROOT/.github/workflows/mac-preview-candidate.yml" "$TEST_REPO/.github/workflows/"
 /bin/cp "$ROOT/.github/workflows/mac-release-package.yml" "$TEST_REPO/.github/workflows/"
+/bin/cp "$ROOT/Package.swift" "$TEST_REPO/"
+/bin/cp "$ROOT/Package.resolved" "$TEST_REPO/"
 /bin/cp "$ROOT/scripts/verify-release-dependency-pins.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-preview-candidate-ci.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/prepare-preview-recording-pr.sh" "$TEST_REPO/scripts/"
@@ -350,6 +352,52 @@ fi
 /usr/bin/grep -Fq "commit differs across macOS CI, preview, and signed release workflows" \
   "$WORK_DIR/pins-mismatch.txt"
 /bin/cp "$WORK_DIR/mac-ci.yml" "$TEST_REPO/.github/workflows/mac-ci.yml"
+
+MAC_REMOTE_PIN="$(/usr/bin/awk '
+  /url:[[:space:]]*"https:\/\/github.com\/GetSayAll\/sayall-mac-remote.git"/ {
+    found = 1
+    next
+  }
+  found && /revision:[[:space:]]*"/ {
+    sub(/^.*revision:[[:space:]]*"/, "")
+    sub(/".*$/, "")
+    print
+    exit
+  }
+' "$TEST_REPO/Package.swift")"
+[[ "$MAC_REMOTE_PIN" =~ '^[0-9a-f]{40}$' ]]
+
+/bin/cp "$TEST_REPO/Package.swift" "$WORK_DIR/Package.swift"
+/usr/bin/sed \
+  "s/$MAC_REMOTE_PIN/2222222222222222222222222222222222222222/" \
+  "$TEST_REPO/Package.swift" > "$WORK_DIR/Package-mismatch.swift"
+/bin/mv "$WORK_DIR/Package-mismatch.swift" "$TEST_REPO/Package.swift"
+if (
+  cd "$TEST_REPO"
+  ./scripts/verify-release-dependency-pins.sh
+) > "$WORK_DIR/manifest-pin-mismatch.txt" 2>&1; then
+  print -u2 "mismatched Package.swift dependency pin unexpectedly passed"
+  exit 1
+fi
+/usr/bin/grep -Fq "commit differs across Package.swift, Package.resolved, and macOS workflows" \
+  "$WORK_DIR/manifest-pin-mismatch.txt"
+/bin/cp "$WORK_DIR/Package.swift" "$TEST_REPO/Package.swift"
+
+/bin/cp "$TEST_REPO/Package.resolved" "$WORK_DIR/Package.resolved"
+/usr/bin/sed \
+  "s/$MAC_REMOTE_PIN/3333333333333333333333333333333333333333/" \
+  "$TEST_REPO/Package.resolved" > "$WORK_DIR/Package-mismatch.resolved"
+/bin/mv "$WORK_DIR/Package-mismatch.resolved" "$TEST_REPO/Package.resolved"
+if (
+  cd "$TEST_REPO"
+  ./scripts/verify-release-dependency-pins.sh
+) > "$WORK_DIR/resolved-pin-mismatch.txt" 2>&1; then
+  print -u2 "mismatched Package.resolved dependency pin unexpectedly passed"
+  exit 1
+fi
+/usr/bin/grep -Fq "commit differs across Package.swift, Package.resolved, and macOS workflows" \
+  "$WORK_DIR/resolved-pin-mismatch.txt"
+/bin/cp "$WORK_DIR/Package.resolved" "$TEST_REPO/Package.resolved"
 
 {
   print -r -- '#!/bin/zsh'

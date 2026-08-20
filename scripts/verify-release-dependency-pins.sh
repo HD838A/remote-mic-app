@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
+PACKAGE_MANIFEST="$ROOT/Package.swift"
+PACKAGE_RESOLVED="$ROOT/Package.resolved"
 WORKFLOWS=(
   "$ROOT/.github/workflows/mac-ci.yml"
   "$ROOT/.github/workflows/mac-preview-candidate.yml"
@@ -36,9 +38,41 @@ extract_ref() {
   ' "$workflow"
 }
 
+extract_manifest_ref() {
+  /usr/bin/awk '
+    /url:[[:space:]]*"https:\/\/github.com\/GetSayAll\/sayall-mac-remote.git"/ {
+      found = 1
+      next
+    }
+    found && /revision:[[:space:]]*"/ {
+      sub(/^.*revision:[[:space:]]*"/, "")
+      sub(/".*$/, "")
+      print
+      exit
+    }
+  ' "$PACKAGE_MANIFEST"
+}
+
+extract_resolved_ref() {
+  /usr/bin/awk '
+    /"identity"[[:space:]]*:[[:space:]]*"sayall-mac-remote"/ {
+      found = 1
+      next
+    }
+    found && /"revision"[[:space:]]*:/ {
+      sub(/^.*"revision"[[:space:]]*:[[:space:]]*"/, "")
+      sub(/".*$/, "")
+      print
+      exit
+    }
+  ' "$PACKAGE_RESOLVED"
+}
+
 for workflow in "${WORKFLOWS[@]}"; do
   test -f "$workflow"
 done
+test -f "$PACKAGE_MANIFEST"
+test -f "$PACKAGE_RESOLVED"
 
 for dependency in "${DEPENDENCIES[@]}"; do
   label="${dependency%%|*}"
@@ -58,6 +92,23 @@ for dependency in "${DEPENDENCIES[@]}"; do
       exit 1
     fi
   done
+
+  if [[ "$label" == "SayAllMacRemote" ]]; then
+    manifest_ref="$(extract_manifest_ref)"
+    resolved_ref="$(extract_resolved_ref)"
+    if [[ ! "$manifest_ref" =~ '^[0-9a-f]{40}$' ]]; then
+      print -u2 "$label must use a full 40-character revision in Package.swift"
+      exit 1
+    fi
+    if [[ ! "$resolved_ref" =~ '^[0-9a-f]{40}$' ]]; then
+      print -u2 "$label must use a full 40-character revision in Package.resolved"
+      exit 1
+    fi
+    if [[ "$manifest_ref" != "$expected_ref" || "$resolved_ref" != "$expected_ref" ]]; then
+      print -u2 "$label commit differs across Package.swift, Package.resolved, and macOS workflows"
+      exit 1
+    fi
+  fi
 
   print "$label: $expected_ref"
 done
