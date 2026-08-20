@@ -35,7 +35,7 @@ jobs:
   classify-candidate:
     name: Classify exact parent-main CI reuse
     if: ${{ !contains(github.ref_name, '-canary-') }}
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     timeout-minutes: 3
     outputs:
       reuse_parent_main_ci: ${{ steps.reuse.outputs.eligible }}
