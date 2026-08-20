@@ -27,6 +27,7 @@ PIPELINE_FILES=(
   scripts/release-slo-ledger.sh
   scripts/release-user-wall-watchdog.sh
   scripts/resolve-release-request-attestation.sh
+  scripts/resolve-stable-request-attestation.sh
   scripts/run-trusted-release-validation.sh
   scripts/verify-release-dependency-pins.sh
   scripts/verify-release-metadata-diff.sh

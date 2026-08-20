@@ -71,7 +71,7 @@ fi
 RUN_JSON="$(
   "$GH_BIN" run view "$RUN_ID" \
     --repo "$REPOSITORY" \
-    --json workflowName,event,status,conclusion,headBranch,headSha,jobs,url
+    --json workflowName,event,status,conclusion,headBranch,headSha,jobs,url,updatedAt
 )"
 if ! print -r -- "$RUN_JSON" | jq -e \
   --arg workflow "$WORKFLOW_NAME" \
@@ -96,6 +96,19 @@ if ! print -r -- "$RUN_JSON" | jq -e \
   ' >/dev/null; then
   print -u2 "preview candidate run $RUN_ID is not a successful exact-SHA two-architecture push run"
   exit 1
+fi
+
+CANDIDATE_GATE_COMPLETED_AT="$(print -r -- "$RUN_JSON" | jq -r '.updatedAt // empty')"
+if [[ -n "${RELEASE_READY_PROOF_OUTPUT:-}" ]]; then
+  [[ -r "$RELEASE_READY_PROOF_OUTPUT" && -n "$CANDIDATE_GATE_COMPLETED_AT" ]] || {
+    print -u2 "candidate CI proof lacks a trusted completion timestamp"
+    exit 1
+  }
+  proof_temp="${RELEASE_READY_PROOF_OUTPUT}.candidate-gate.tmp"
+  jq --arg candidateGateCompletedAt "$CANDIDATE_GATE_COMPLETED_AT" \
+    '. + {candidateGateCompletedAt: $candidateGateCompletedAt}' \
+    "$RELEASE_READY_PROOF_OUTPUT" > "$proof_temp"
+  /bin/mv "$proof_temp" "$RELEASE_READY_PROOF_OUTPUT"
 fi
 
 if [[ "$REQUIRE_PREVIEW_RECORDING_PR" == "1" ]]; then
@@ -139,4 +152,5 @@ fi
 print "PREVIEW CANDIDATE CI PASS"
 print "BRANCH: $BRANCH"
 print "HEAD: $HEAD_COMMIT"
+print "CANDIDATE_GATE_COMPLETED_AT: $CANDIDATE_GATE_COMPLETED_AT"
 print "RUN_ID: $RUN_ID"

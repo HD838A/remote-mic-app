@@ -34,6 +34,7 @@ fi
 /bin/cp "$ROOT/scripts/verify-release-ready-main-ci.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/run-trusted-release-validation.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/resolve-release-request-attestation.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/resolve-stable-request-attestation.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/release-slo-ledger.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/release-user-wall-watchdog.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-release-metadata-diff.sh" "$TEST_REPO/scripts/"
@@ -188,6 +189,14 @@ fi
 /usr/bin/grep -Fq 'STABLE_COMPLETION_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq 'Enforce 30-minute user-wall stable SLO' \
+  "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
+/usr/bin/grep -Fq 'request_id:' \
+  "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
+/usr/bin/grep -Fq 'resolve-stable-request-attestation.sh' \
+  "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
+/usr/bin/grep -Fq 'stable-request-attestation-${{ inputs.tag }}' \
+  "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
+/usr/bin/grep -Fq ".requestStartedAt' \"\$RUNNER_TEMP/stable-request/stable-request-attestation.json\"" \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq 'reconciliation-requires-release-manager:' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
@@ -456,7 +465,7 @@ fi
   print -r -- '    proof_steps="[{\"name\":\"Reuse exact parent main product-code proof\",\"conclusion\":\"success\"}]"'
   print -r -- '    jobs="[{\"name\":\"Validate and package preview candidate (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps},{\"name\":\"Validate and package preview candidate (Intel Ventura)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps}]"'
   print -r -- '    if [[ "$mode" == "missing-intel" ]]; then jobs="[{\"name\":\"Validate and package preview candidate (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps}]"; fi'
-  print -r -- '    print -r -- "{\"workflowName\":\"macOS Preview Candidate\",\"event\":\"push\",\"status\":\"completed\",\"conclusion\":\"$conclusion\",\"headBranch\":\"release/pre-v9.9.9\",\"headSha\":\"$head_sha\",\"jobs\":$jobs,\"url\":\"https://example.invalid/run/42\"}"'
+  print -r -- '    print -r -- "{\"workflowName\":\"macOS Preview Candidate\",\"event\":\"push\",\"status\":\"completed\",\"conclusion\":\"$conclusion\",\"headBranch\":\"release/pre-v9.9.9\",\"headSha\":\"$head_sha\",\"jobs\":$jobs,\"url\":\"https://example.invalid/run/42\",\"updatedAt\":\"2026-08-20T10:05:00Z\"}"'
   print -r -- '    ;;'
   print -r -- '  "pr list")'
   print -r -- '    case "$mode" in'
@@ -496,6 +505,9 @@ for failure_mode in main-wrong-sha main-missing-intel main-docs-only; do
   fi
 done
 
+jq '. + {candidateGateCompletedAt:"2026-08-20T10:05:00Z"}' \
+  "$WORK_DIR/main-proof.json" > "$WORK_DIR/release-ready-proof.json"
+
 {
   print '#!/bin/zsh'
   print 'set -euo pipefail'
@@ -511,9 +523,11 @@ GH_BIN="$FAKE_ATTEST_GH" GITHUB_REPOSITORY=HD838A/remote-mic-app \
   "$ROOT/scripts/resolve-release-request-attestation.sh" \
     req-12345 v9.9.9 1787219000 \
     "$HEAD_COMMIT" \
-    "$WORK_DIR/main-proof.json" "$WORK_DIR/release-request-attestation.json" \
+    "$WORK_DIR/release-ready-proof.json" "$WORK_DIR/release-request-attestation.json" \
     > "$WORK_DIR/attestation-first.txt"
 /usr/bin/grep -Fq 'RELEASE REQUEST ATTESTATION PASS' "$WORK_DIR/attestation-first.txt"
+test "$(jq -r '.releaseReadyAt' "$WORK_DIR/release-request-attestation.json")" = "1787220300"
+test "$(jq -r '.candidateGateCompletedAt' "$WORK_DIR/release-request-attestation.json")" = "2026-08-20T10:05:00Z"
 /bin/mkdir -p "$WORK_DIR/attestation-artifact"
 /bin/cp "$WORK_DIR/release-request-attestation.json" \
   "$WORK_DIR/attestation-artifact/release-request-attestation.json"
@@ -523,12 +537,53 @@ if GH_BIN="$FAKE_ATTEST_GH" FAKE_ATTEST_ZIP="$WORK_DIR/attestation.zip" \
     "$ROOT/scripts/resolve-release-request-attestation.sh" \
       req-12345 v9.9.9 1787219060 \
       "$HEAD_COMMIT" \
-      "$WORK_DIR/main-proof.json" "$WORK_DIR/release-request-attestation-late.json" \
+      "$WORK_DIR/release-ready-proof.json" "$WORK_DIR/release-request-attestation-late.json" \
       > "$WORK_DIR/attestation-late.txt" 2>&1; then
   print -u2 "release request attestation allowed a later retry timestamp"
   exit 1
 fi
 /usr/bin/grep -Fq 'timestamps/identity are immutable' "$WORK_DIR/attestation-late.txt"
+
+jq '.candidateGateCompletedAt = "2026-08-20T10:10:00Z"' \
+  "$WORK_DIR/release-ready-proof.json" > "$WORK_DIR/retried-release-ready-proof.json"
+GH_BIN="$FAKE_ATTEST_GH" FAKE_ATTEST_ZIP="$WORK_DIR/attestation.zip" \
+  GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  "$ROOT/scripts/resolve-release-request-attestation.sh" \
+    req-12345 v9.9.9 1787219000 "$HEAD_COMMIT" \
+    "$WORK_DIR/retried-release-ready-proof.json" "$WORK_DIR/release-request-attestation-retry.json" \
+    > "$WORK_DIR/attestation-retry.txt"
+test "$(jq -r '.releaseReadyAt' "$WORK_DIR/release-request-attestation-retry.json")" = "1787220300"
+
+if GH_BIN="$FAKE_ATTEST_GH" GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  "$ROOT/scripts/resolve-release-request-attestation.sh" \
+    req-12345 v9.9.8 1787219000 "$HEAD_COMMIT" \
+    "$WORK_DIR/main-proof.json" "$WORK_DIR/release-request-attestation-missing-gate.json" \
+    > "$WORK_DIR/attestation-missing-gate.txt" 2>&1; then
+  print -u2 "release request attestation accepted a missing candidate gate timestamp"
+  exit 1
+fi
+/usr/bin/grep -Fq 'lacks a trusted main/candidate completion timestamp' \
+  "$WORK_DIR/attestation-missing-gate.txt"
+
+GH_BIN="$FAKE_ATTEST_GH" GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  "$ROOT/scripts/resolve-stable-request-attestation.sh" \
+    stable-req-12345 v9.9.9 1787221000 "$WORK_DIR/stable-request-attestation.json" \
+    > "$WORK_DIR/stable-attestation-first.txt"
+/usr/bin/grep -Fq 'STABLE REQUEST ATTESTATION PASS' "$WORK_DIR/stable-attestation-first.txt"
+/bin/mkdir -p "$WORK_DIR/stable-attestation-artifact"
+/bin/cp "$WORK_DIR/stable-request-attestation.json" \
+  "$WORK_DIR/stable-attestation-artifact/stable-request-attestation.json"
+(cd "$WORK_DIR/stable-attestation-artifact" && /usr/bin/zip -q "$WORK_DIR/stable-attestation.zip" stable-request-attestation.json)
+if GH_BIN="$FAKE_ATTEST_GH" FAKE_ATTEST_ZIP="$WORK_DIR/stable-attestation.zip" \
+  GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  "$ROOT/scripts/resolve-stable-request-attestation.sh" \
+    stable-req-12345 v9.9.9 1787221060 "$WORK_DIR/stable-request-attestation-late.json" \
+    > "$WORK_DIR/stable-attestation-late.txt" 2>&1; then
+  print -u2 "stable request attestation allowed a retry to reset its timestamp"
+  exit 1
+fi
+/usr/bin/grep -Fq 'stable request timestamp/identity is immutable' \
+  "$WORK_DIR/stable-attestation-late.txt"
 
 /bin/mkdir -p "$METADATA_REPO"
 git -C "$METADATA_REPO" init -b main >/dev/null

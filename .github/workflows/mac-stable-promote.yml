@@ -11,6 +11,10 @@ on:
         description: Unix epoch seconds when the user requested this stable promotion
         required: true
         type: string
+      request_id:
+        description: Immutable release-manager request identifier, reused unchanged on retry
+        required: true
+        type: string
       expected_pipeline_digest:
         description: Reviewed release pipeline SHA-256 digest
         required: true
@@ -25,24 +29,62 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
+  resolve-stable-request:
+    name: Resolve immutable stable request attestation
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Resolve first stable request timestamp
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/resolve-stable-request-attestation.sh \
+            "${{ inputs.request_id }}" "${{ inputs.tag }}" \
+            "${{ inputs.request_started_at }}" \
+            "$RUNNER_TEMP/stable-request-attestation.json"
+
+      - name: Persist immutable stable request timestamp
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-request-attestation-${{ inputs.tag }}
+          path: ${{ runner.temp }}/stable-request-attestation.json
+          if-no-files-found: error
+          retention-days: 90
+
   stable-slo-watchdog:
     name: Enforce 30-minute user-wall stable SLO
     if: github.event_name == 'workflow_dispatch'
+    needs: resolve-stable-request
     runs-on: ubuntu-latest
     timeout-minutes: 31
     permissions:
       actions: write
       contents: read
     steps:
+      - name: Download immutable stable request attestation
+        uses: actions/download-artifact@v5
+        with:
+          name: stable-request-attestation-${{ inputs.tag }}
+          path: ${{ runner.temp }}/stable-request
+
       - name: Cancel an over-budget promotion once, without rebuilding or retrying
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
           SLO_SECONDS: 1800
         run: |
-          request_started_at="$REQUEST_STARTED_AT_INPUT"
+          request_started_at="$(jq -r '.requestStartedAt' "$RUNNER_TEMP/stable-request/stable-request-attestation.json")"
           if [[ ! "$request_started_at" =~ ^[0-9]+$ ]]; then
             echo "request_started_at must be Unix epoch seconds" >&2
             exit 2
@@ -86,6 +128,7 @@ jobs:
 
   promote:
     if: github.event_name == 'workflow_dispatch'
+    needs: resolve-stable-request
     runs-on: macos-15
     timeout-minutes: 20
     environment: mac-stable-release
@@ -101,11 +144,15 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Download immutable stable request attestation
+        uses: actions/download-artifact@v5
+        with:
+          name: stable-request-attestation-${{ inputs.tag }}
+          path: ${{ runner.temp }}/stable-request
+
       - name: Initialize stable user-wall ledger
-        env:
-          REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
         run: |
-          request_started_at="$REQUEST_STARTED_AT_INPUT"
+          request_started_at="$(jq -r '.requestStartedAt' "$RUNNER_TEMP/stable-request/stable-request-attestation.json")"
           test -n "$request_started_at"
           {
             echo "STABLE_SLO_CLOCK=user-wall"

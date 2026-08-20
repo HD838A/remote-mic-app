@@ -27,27 +27,37 @@ for required in "$MAIN_CI_PROOF"; do
 done
 
 completed_at="$(jq -r '.mainCiCompletedAt // empty' "$MAIN_CI_PROOF")"
+candidate_gate_completed_at="$(jq -r '.candidateGateCompletedAt // empty' "$MAIN_CI_PROOF")"
 base_main_commit="$(jq -r '.baseMainCommit // empty' "$MAIN_CI_PROOF")"
 proof_candidate_commit="$(jq -r '.candidateCommit // empty' "$MAIN_CI_PROOF")"
-if [[ -z "$completed_at" || ! "$base_main_commit" =~ '^[0-9a-f]{40}$' ]]; then
-  print -u2 "main CI proof lacks a trusted completion timestamp or base commit"
+if [[ -z "$completed_at" || -z "$candidate_gate_completed_at" ||
+      ! "$base_main_commit" =~ '^[0-9a-f]{40}$' ]]; then
+  print -u2 "release proof lacks a trusted main/candidate completion timestamp or base commit"
   exit 1
 fi
 if [[ "$proof_candidate_commit" != "$CANDIDATE_COMMIT" ]]; then
   print -u2 "main CI proof does not belong to the exact candidate commit"
   exit 1
 fi
-if ready_epoch="$(/bin/date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$completed_at" +%s 2>/dev/null)"; then
-  :
-elif ready_epoch="$(/bin/date -u -d "$completed_at" +%s 2>/dev/null)"; then
-  :
-else
+parse_timestamp() {
+  local timestamp="$1"
+  if /bin/date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$timestamp" +%s 2>/dev/null; then
+    return 0
+  fi
+  /bin/date -u -d "$timestamp" +%s 2>/dev/null
+}
+
+main_ci_epoch="$(parse_timestamp "$completed_at")" || {
   print -u2 "cannot parse main CI completion timestamp: $completed_at"
   exit 1
-fi
-if (( ready_epoch < REQUEST_STARTED_AT )); then
-  ready_epoch="$REQUEST_STARTED_AT"
-fi
+}
+candidate_gate_epoch="$(parse_timestamp "$candidate_gate_completed_at")" || {
+  print -u2 "cannot parse candidate gate completion timestamp: $candidate_gate_completed_at"
+  exit 1
+}
+ready_epoch="$REQUEST_STARTED_AT"
+(( main_ci_epoch > ready_epoch )) && ready_epoch="$main_ci_epoch"
+(( candidate_gate_epoch > ready_epoch )) && ready_epoch="$candidate_gate_epoch"
 
 artifact_name="release-request-attestation-$RELEASE_TAG"
 work_dir="$(/usr/bin/mktemp -d /private/tmp/sayall-release-attestation.XXXXXX)"
@@ -61,8 +71,11 @@ expected_json="$(jq -n \
   --argjson releaseReadyAt "$ready_epoch" \
   --arg candidateCommit "$CANDIDATE_COMMIT" \
   --arg baseMainCommit "$base_main_commit" \
-  '{schemaVersion:1,requestId:$requestId,tag:$tag,requestStartedAt:$requestStartedAt,releaseReadyAt:$releaseReadyAt,candidateCommit:$candidateCommit,baseMainCommit:$baseMainCommit}')"
+  --arg mainCiCompletedAt "$completed_at" \
+  --arg candidateGateCompletedAt "$candidate_gate_completed_at" \
+  '{schemaVersion:2,requestId:$requestId,tag:$tag,requestStartedAt:$requestStartedAt,releaseReadyAt:$releaseReadyAt,candidateCommit:$candidateCommit,baseMainCommit:$baseMainCommit,mainCiCompletedAt:$mainCiCompletedAt,candidateGateCompletedAt:$candidateGateCompletedAt}')"
 
+locked_json=""
 for artifact_id in "${artifact_ids[@]}"; do
   [[ -n "$artifact_id" ]] || continue
   zip_path="$work_dir/$artifact_id.zip"
@@ -72,11 +85,40 @@ for artifact_id in "${artifact_ids[@]}"; do
   /usr/bin/unzip -q "$zip_path" -d "$extract_dir"
   existing_file="$extract_dir/release-request-attestation.json"
   [[ -r "$existing_file" ]] || { print -u2 "existing release attestation artifact is malformed"; exit 1; }
-  if ! jq -e --argjson expected "$expected_json" '. == $expected' "$existing_file" >/dev/null; then
+  existing_json="$(jq -S . "$existing_file")" || {
+    print -u2 "existing release attestation artifact is malformed"
+    exit 1
+  }
+  if [[ -n "$locked_json" && "$existing_json" != "$locked_json" ]]; then
+    print -u2 "release request attestation artifacts disagree for $RELEASE_TAG"
+    exit 1
+  fi
+  locked_json="$existing_json"
+done
+
+if [[ -n "$locked_json" ]]; then
+  if ! print -r -- "$locked_json" | jq -e \
+    --arg requestId "$REQUEST_ID" \
+    --arg tag "$RELEASE_TAG" \
+    --argjson requestStartedAt "$REQUEST_STARTED_AT" \
+    --arg candidateCommit "$CANDIDATE_COMMIT" \
+    --arg baseMainCommit "$base_main_commit" '
+      .schemaVersion == 2 and
+      .requestId == $requestId and .tag == $tag and
+      .requestStartedAt == $requestStartedAt and
+      .candidateCommit == $candidateCommit and
+      .baseMainCommit == $baseMainCommit and
+      (.releaseReadyAt | type) == "number" and
+      .releaseReadyAt >= .requestStartedAt and
+      (.mainCiCompletedAt | type) == "string" and
+      (.candidateGateCompletedAt | type) == "string"
+    ' >/dev/null; then
     print -u2 "release request timestamps/identity are immutable for $RELEASE_TAG"
     exit 1
   fi
-done
+  expected_json="$locked_json"
+  ready_epoch="$(print -r -- "$locked_json" | jq -r '.releaseReadyAt')"
+fi
 
 /bin/mkdir -p "${OUTPUT_FILE:h}"
 print -r -- "$expected_json" | jq -S . > "$OUTPUT_FILE"

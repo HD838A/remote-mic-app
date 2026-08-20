@@ -11,7 +11,7 @@
 
 ## 发布交接清单
 
-用户发出发布指令时立即记录 `request_started_at`；指定代码合入最新 `origin/main` 且该 SHA 的双架构 CI 成功后，再冻结一次不可重置的 `release_ready_at`。总任务墙钟不超过 30 分钟，纯发布窗口从 `release_ready_at` 起不超过 15 分钟。
+用户发出发布指令时立即记录 `request_started_at`；指定代码合入最新 `origin/main`、该 SHA 的双架构 CI 成功，并且首次候选 exact-SHA metadata/provenance gate 完成且版本、Build、Release Notes 冻结后，将三者可信时间的最大值冻结为不可重置的 `release_ready_at`。总任务墙钟不超过 30 分钟，纯发布窗口从 `release_ready_at` 起不超过 15 分钟。
 
 - 计划发布的产品 Commit 已经 Push，并通过 PR 合入 `origin/main`。
 - `mac-ci.yml`、`mac-preview-candidate.yml`、`mac-release-package.yml` 中 SayAllAI、SayAllMacroPlatform、SayAllMacRemote 均钉定同一组完整 40 位 Commit。
@@ -63,7 +63,7 @@ GitHub 自动生成的 CI App 只用于验证打包结构，不是已签名、�
 - 先通过 PR 将原候选提交合入 `main`，保留原 Tag 和原资产，不重新构建。
 - 晋升前必须证明 Tag 提交已包含在 `origin/main`，并复核 `candidate-provenance.json` 中的分支、提交和资产摘要。
 - 正式晋升只修改现有 GitHub Release 的分类和 `latest` 状态，不替换任何候选资产，也绝不重新进入 Apple 签名、公证或打包流程。
-- 正式晋升的 30 分钟承诺只允许从发布管理任务手动 dispatch，并必须传入用户请求时的 `request_started_at`；发布机上的独立 watchdog 覆盖 GitHub Runner 尚未启动的等待。GitHub 页面手改 Release 后产生的 `workflow_run` reconciliation 只是恢复机制，没有原始用户时间戳，不得执行正式晋升或冒充 30 分钟用户墙钟；它必须回到发布管理任务重新发起明确的 exact-version 手动晋升。
+- 正式晋升的 30 分钟承诺只允许从发布管理任务手动 dispatch，并必须传入用户请求时的 `request_started_at`、不可变 `request_id`；workflow 按 Tag 持久化首次 stable attestation，重试时 request ID 或时间不一致必须 fail closed，watchdog 和 promote 只能读取该账本。发布机上的独立 watchdog 覆盖 GitHub Runner 尚未启动的等待。GitHub 页面手改 Release 后产生的 `workflow_run` reconciliation 只是恢复机制，没有原始用户时间戳，不得执行正式晋升或冒充 30 分钟用户墙钟；它必须回到发布管理任务重新发起明确的 exact-version 手动晋升。
 - GitHub 页面上的人工“设为正式版”只视为晋升请求；Release 守卫会先恢复为 Pre-release，校验候选来源，创建或复用候选分支到 `main` 的 PR、显式调度必需 CI 并启用 Auto-merge。CI 成功后，受保护的晋升工作流确认带授权标签的 PR 已合入 `main`，再只晋升原 Tag 和原资产。
 - 晋升脚本从候选的 `candidate-provenance.json` 读取版本和 Build，不依赖 `main` 当时的 `Info.plist`；因此后续开发已经提高版本号时，仍可安全晋升较早的已验收候选。
 
