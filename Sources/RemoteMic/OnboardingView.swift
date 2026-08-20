@@ -722,7 +722,8 @@ struct OnboardingView: View {
                         icon: "antenna.radiowaves.left.and.right",
                         titleKey: "permission.bluetooth.title",
                         detailKey: "onboarding.permissions.bluetooth.detail",
-                        granted: bluetoothAuthorization == .allowedAlways
+                        granted: bluetoothAuthorization == .allowedAlways,
+                        action: requestBluetoothPermission
                     )
                 }
                 if settings.onboardingControlMethod.requiresInputMonitoringPermission {
@@ -730,14 +731,16 @@ struct OnboardingView: View {
                         icon: "keyboard",
                         titleKey: "permission.input_monitoring.title",
                         detailKey: "onboarding.permissions.input.detail",
-                        granted: inputMonitoringGranted
+                        granted: inputMonitoringGranted,
+                        action: model.requestInputMonitoringPermission
                     )
                 }
                 permissionRow(
                     icon: "hand.point.up.left",
                     titleKey: "permission.accessibility.title",
                     detailKey: "onboarding.permissions.accessibility.detail",
-                    granted: accessibilityGranted
+                    granted: accessibilityGranted,
+                    action: model.requestAccessibilityPermission
                 )
             }
 
@@ -1480,34 +1483,36 @@ struct OnboardingView: View {
         icon: String,
         titleKey: String,
         detailKey: String,
-        granted: Bool
+        granted: Bool,
+        action: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(granted ? Color.green : Color.accentColor)
-                .frame(width: 32, height: 32)
-                .background((granted ? Color.green : Color.accentColor).opacity(0.10), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(localization.text(titleKey))
-                    .font(.system(size: 14, weight: .semibold))
-                Text(localization.text(detailKey))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 10)
-            if granted {
-                Image(systemName: "checkmark.circle.fill")
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(granted ? Color.green : Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background((granted ? Color.green : Color.accentColor).opacity(0.10), in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localization.text(titleKey))
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(localization.text(detailKey))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 10)
+                Image(systemName: granted ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 19))
-                    .foregroundStyle(Color.green)
-            } else {
-                Image(systemName: "circle")
-                    .font(.system(size: 19))
-                    .foregroundStyle(Color.secondary)
+                    .foregroundStyle(granted ? Color.green : Color.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.tertiary)
             }
+            .padding(13)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .padding(13)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+        .buttonStyle(.plain)
     }
 
     private func statusCard(
@@ -2158,13 +2163,22 @@ struct OnboardingView: View {
     }
 
     private func requestBluetoothPermission() {
+        if bluetoothAuthorization == .allowedAlways {
+            openBluetoothPrivacySettings()
+            return
+        }
+
         model.reconnect()
         if bluetoothAuthorization == .denied || bluetoothAuthorization == .restricted {
-            guard let url = URL(
-                string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
-            ) else { return }
-            NSWorkspace.shared.open(url)
+            openBluetoothPrivacySettings()
         }
+    }
+
+    private func openBluetoothPrivacySettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func openBluetoothSettings() {

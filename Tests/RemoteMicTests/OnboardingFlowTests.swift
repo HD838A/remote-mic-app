@@ -115,6 +115,24 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func permissionRowsRemainClickableAfterAuthorization() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewSource.contains("Button(action: action)"))
+        #expect(viewSource.contains("action: requestBluetoothPermission"))
+        #expect(viewSource.contains("action: model.requestInputMonitoringPermission"))
+        #expect(viewSource.contains("action: model.requestAccessibilityPermission"))
+        #expect(viewSource.contains("if bluetoothAuthorization == .allowedAlways"))
+        #expect(viewSource.contains("Privacy_Bluetooth"))
+    }
+
     @Test func mobileControlPathsUseOnDemandAudioWithoutWeakeningDeviceSelection() {
         var capabilities = OnboardingCapabilities(
             bluetoothGranted: true,
