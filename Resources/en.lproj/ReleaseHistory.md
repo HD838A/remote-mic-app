@@ -1,5 +1,9 @@
 # Version History
 
+## 1.9.5 (Pre-release)
+
+- Fixed an issue where an unbound physical remote could be detected during first-run setup but its first button press might not respond.
+
 ## 1.9.4 (Pre-release)
 
 - After Connect iPhone is enabled on the Mac, an iPhone can scan a short-lived QR code to connect directly over the current local network. If direct connection fails, SayAll automatically falls back to existing Bonjour/P2P discovery, while legacy iPhone and Apple Watch connection paths remain unchanged.
