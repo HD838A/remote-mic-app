@@ -22,13 +22,26 @@ fi
 
 artifact_name="stable-request-attestation-$RELEASE_TAG"
 work_dir="$(/usr/bin/mktemp -d /private/tmp/sayall-stable-attestation.XXXXXX)"
+release_json="$($GH_BIN api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG")" || {
+  print -u2 "requested stable promotion source release does not exist: $RELEASE_TAG"
+  exit 1
+}
+if ! print -r -- "$release_json" | jq -e \
+    --arg tag "$RELEASE_TAG" \
+    '.tag_name == $tag and .draft == false and .prerelease == true' \
+    >/dev/null; then
+  print -u2 "stable promotion source must be an existing published pre-release: $RELEASE_TAG"
+  exit 1
+fi
 artifact_json="$($GH_BIN api "repos/$REPOSITORY/actions/artifacts?name=$artifact_name&per_page=100")"
 artifact_ids=("${(@f)$(print -r -- "$artifact_json" | jq -r '.artifacts[] | select(.expired == false) | .id')}")
+release_ready_at="$(/bin/date +%s)"
 expected_json="$(jq -n \
   --arg requestId "$REQUEST_ID" \
   --arg tag "$RELEASE_TAG" \
   --argjson requestStartedAt "$REQUEST_STARTED_AT" \
-  '{schemaVersion:1,mode:"stable",requestId:$requestId,tag:$tag,requestStartedAt:$requestStartedAt}')"
+  --argjson releaseReadyAt "$release_ready_at" \
+  '{schemaVersion:2,mode:"stable",requestId:$requestId,tag:$tag,requestStartedAt:$requestStartedAt,releaseReadyAt:$releaseReadyAt}')"
 
 locked_json=""
 for artifact_id in "${artifact_ids[@]}"; do
@@ -40,7 +53,13 @@ for artifact_id in "${artifact_ids[@]}"; do
   /usr/bin/unzip -q "$zip_path" -d "$extract_dir"
   existing_file="$extract_dir/stable-request-attestation.json"
   [[ -r "$existing_file" ]] || { print -u2 "existing stable attestation artifact is malformed"; exit 1; }
-  existing_json="$(jq -S . "$existing_file")" || {
+  existing_json="$(jq -S '
+    if .schemaVersion == 1 and (.releaseReadyAt | not) then
+      .schemaVersion = 2 | .releaseReadyAt = .requestStartedAt
+    else
+      .
+    end
+  ' "$existing_file")" || {
     print -u2 "existing stable attestation artifact is malformed"
     exit 1
   }
@@ -52,7 +71,14 @@ for artifact_id in "${artifact_ids[@]}"; do
 done
 
 if [[ -n "$locked_json" ]]; then
-  if ! print -r -- "$locked_json" | jq -e --argjson expected "$expected_json" '. == $expected' >/dev/null; then
+  if ! print -r -- "$locked_json" | jq -e \
+      --arg requestId "$REQUEST_ID" \
+      --arg tag "$RELEASE_TAG" \
+      --argjson requestStartedAt "$REQUEST_STARTED_AT" \
+      '.schemaVersion == 2 and .mode == "stable" and .requestId == $requestId and
+       .tag == $tag and .requestStartedAt == $requestStartedAt and
+       (.releaseReadyAt | type == "number") and .releaseReadyAt >= .requestStartedAt' \
+      >/dev/null; then
     print -u2 "stable request timestamp/identity is immutable for $RELEASE_TAG"
     exit 1
   fi
@@ -64,3 +90,4 @@ print -r -- "$expected_json" | jq -S . > "$OUTPUT_FILE"
 print "STABLE REQUEST ATTESTATION PASS"
 print "REQUEST_ID: $REQUEST_ID"
 print "REQUEST_STARTED_AT: $REQUEST_STARTED_AT"
+print "RELEASE_READY_AT: $(jq -r '.releaseReadyAt' "$OUTPUT_FILE")"

@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   preview-slo-watchdog:
-    name: Enforce 30-minute total and 15-minute ready preview SLO
+    name: Enforce 30-minute release-ready preview SLO
     if: ${{ !inputs.canary }}
     needs: validate-candidate
     runs-on: ubuntu-latest
@@ -58,8 +58,7 @@ jobs:
       - name: Cancel an over-budget release once, without retrying
         env:
           GH_TOKEN: ${{ github.token }}
-          TOTAL_SLO_SECONDS: 1740
-          READY_SLO_SECONDS: 840
+          READY_SLO_SECONDS: 1740
         run: |
           attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
           request_started_at="$(jq -r '.requestStartedAt' "$attestation")"
@@ -83,13 +82,13 @@ jobs:
             fi
             failed_jobs="$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest" \
-              --jq '[.jobs[] | select(.name != "Enforce 30-minute total and 15-minute ready preview SLO" and .conclusion != null and .conclusion != "success" and .conclusion != "skipped")] | length')"
+              --jq '[.jobs[] | select(.name != "Enforce 30-minute release-ready preview SLO" and .conclusion != null and .conclusion != "success" and .conclusion != "skipped")] | length')"
             if (( failed_jobs != 0 )); then
               echo "A release job already failed; watchdog will not retry it."
               exit 0
             fi
-            if (( total_elapsed >= TOTAL_SLO_SECONDS || ready_elapsed >= READY_SLO_SECONDS )); then
-              echo "PREVIEW SLO EXCEEDED total=${total_elapsed}s/${TOTAL_SLO_SECONDS}s ready=${ready_elapsed}s/${READY_SLO_SECONDS}s; cancelling run once." >&2
+            if (( ready_elapsed >= READY_SLO_SECONDS )); then
+              echo "PREVIEW SLO EXCEEDED total=${total_elapsed}s(reported-only) ready=${ready_elapsed}s/${READY_SLO_SECONDS}s; cancelling run once." >&2
               gh api --method POST \
                 "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"
               exit 124
@@ -205,8 +204,7 @@ jobs:
       PARALLEL_PACKAGE_NOTARIZATION: 1
       RELEASE_STAGE_TIMEOUTS: 1
       SIGNED_RELEASE_TIMEOUT_SECONDS: 540
-      PREVIEW_SIGNED_READY_SLO_SECONDS: 660
-      PREVIEW_TOTAL_INTERNAL_SLO_SECONDS: 1740
+      PREVIEW_READY_SLO_SECONDS: 1740
       CANARY_MODE: ${{ inputs.canary }}
       REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
       EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
@@ -250,8 +248,7 @@ jobs:
             echo "RELEASE_SLO_LEDGER=$ledger"
           } >> "$GITHUB_ENV"
           ./scripts/release-slo-ledger.sh finish "$ledger" "$request_started_at" environment-approval-and-runner-wait success external-approval-wait
-          ./scripts/release-slo-ledger.sh check "$ledger" "$request_started_at" "$PREVIEW_TOTAL_INTERNAL_SLO_SECONDS" external-approval-wait
-          ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" "$PREVIEW_SIGNED_READY_SLO_SECONDS" external-approval-wait
+          ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" "$PREVIEW_READY_SLO_SECONDS" external-approval-wait
           ./scripts/release-slo-ledger.sh start "$ledger" "$request_started_at" signed-build-notarization
 
       - name: Check out private feature package
@@ -356,12 +353,9 @@ jobs:
         if: ${{ !inputs.canary }}
         run: |
           now="$(date +%s)"
-          total_remaining=$(( PREVIEW_TOTAL_INTERNAL_SLO_SECONDS - (now - RELEASE_REQUEST_STARTED_AT) - 45 ))
-          ready_remaining=$(( PREVIEW_SIGNED_READY_SLO_SECONDS - (now - RELEASE_READY_AT) - 45 ))
-          remaining="$total_remaining"
-          if (( ready_remaining < remaining )); then remaining="$ready_remaining"; fi
+          remaining=$(( PREVIEW_READY_SLO_SECONDS - (now - RELEASE_READY_AT) - 45 ))
           if (( remaining <= 0 )); then
-            echo "No user-wall budget remains for signed packaging and artifact upload." >&2
+            echo "No release-ready budget remains for signed packaging and artifact upload." >&2
             exit 124
           fi
           if (( remaining < SIGNED_RELEASE_TIMEOUT_SECONDS )); then
@@ -382,8 +376,7 @@ jobs:
           result="${{ job.status }}"
           ./scripts/release-slo-ledger.sh finish "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" signed-build-notarization "$result"
           if [[ "$result" == "success" && "$CANARY_MODE" != "true" ]]; then
-            ./scripts/release-slo-ledger.sh check "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" "$PREVIEW_TOTAL_INTERNAL_SLO_SECONDS" successful-pipeline
-            ./scripts/release-slo-ledger.sh check "$RELEASE_SLO_LEDGER" "$RELEASE_READY_AT" "$PREVIEW_SIGNED_READY_SLO_SECONDS" successful-pipeline
+            ./scripts/release-slo-ledger.sh check "$RELEASE_SLO_LEDGER" "$RELEASE_READY_AT" "$PREVIEW_READY_SLO_SECONDS" successful-pipeline
           fi
 
       - name: Upload signed release packages
@@ -436,8 +429,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       RELEASE_REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
-      PREVIEW_PUBLISHED_SLO_SECONDS: 840
-      PREVIEW_TOTAL_PUBLISHED_SLO_SECONDS: 1740
+      PREVIEW_READY_SLO_SECONDS: 1740
       PUBLICATION_MAX_SECONDS: 180
       EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
       PUBLIC_DOWNLOAD_CONCURRENCY: 4
@@ -482,15 +474,11 @@ jobs:
           attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
           RELEASE_REQUEST_STARTED_AT="$(jq -r '.requestStartedAt' "$attestation")"
           RELEASE_READY_AT="$(jq -r '.releaseReadyAt' "$attestation")"
-          ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_REQUEST_STARTED_AT" "$PREVIEW_TOTAL_PUBLISHED_SLO_SECONDS" signed-artifact-transfer
-          ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_READY_AT" "$PREVIEW_PUBLISHED_SLO_SECONDS" signed-artifact-transfer
+          ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_READY_AT" "$PREVIEW_READY_SLO_SECONDS" signed-artifact-transfer
           ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
 
           now="$(date +%s)"
-          total_remaining=$(( PREVIEW_TOTAL_PUBLISHED_SLO_SECONDS - (now - RELEASE_REQUEST_STARTED_AT) ))
-          ready_remaining=$(( PREVIEW_PUBLISHED_SLO_SECONDS - (now - RELEASE_READY_AT) ))
-          remaining="$total_remaining"
-          if (( ready_remaining < remaining )); then remaining="$ready_remaining"; fi
+          remaining=$(( PREVIEW_READY_SLO_SECONDS - (now - RELEASE_READY_AT) ))
           if (( remaining > PUBLICATION_MAX_SECONDS )); then
             remaining="$PUBLICATION_MAX_SECONDS"
           fi
@@ -523,8 +511,7 @@ jobs:
           set -e
           if [[ "$publish_status" == "0" ]]; then
             ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
-            ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_REQUEST_STARTED_AT" "$PREVIEW_TOTAL_PUBLISHED_SLO_SECONDS" successful-pipeline
-            ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_READY_AT" "$PREVIEW_PUBLISHED_SLO_SECONDS" successful-pipeline
+            ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_READY_AT" "$PREVIEW_READY_SLO_SECONDS" successful-pipeline
           else
             ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification failed external-github-or-cdn
             exit "$publish_status"

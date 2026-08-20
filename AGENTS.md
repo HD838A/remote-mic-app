@@ -45,13 +45,13 @@
 ## macOS 预览候选分支
 
 - 功能和修复必须先通过 PR 合入 `main`；不得直接在预览候选分支开发产品功能。
-- 发布会话收到尚未合入 `origin/main` 的产品 Commit 时，必须停止发布并报告“尚未发布就绪”；不得把功能整合、冲突处理或私有依赖开发计入发布操作，也不得在发布会话中代替开发 PR 合代码。
+- 发布会话收到尚未合入 `origin/main` 的产品 Commit 时，必须从最新 `origin/main` 建立独立开发集成分支，只重放用户指定工作及必要依赖，通过普通 PR 和必需检查合入；机械冲突可依据代码、测试和文档解决，涉及产品取舍或行为丢失时才请求用户决策。集成完成前不得创建候选或接触 Apple 发布凭据。
 - 每个候选版本使用一次性的 `release/pre-vX.Y.Z` 分支，并从最新 `origin/main` 创建。
 - 候选分支只允许修改版本号、Build、中英文版本历史和必要的测试手册目标版本；Push 后由 GitHub Actions 自动校验来源、运行完整 Mac 测试并生成临时 CI App 包。
 - 精确候选 SHA 的 Apple Silicon 与 Intel 候选 Job 成功后，可提前创建候选分支到 `main` 的 Draft 回流 PR，让受保护 PR CI 与正式签名、公证并行；公开 Release 字节、provenance 和固定候选更新验证完成前，该 PR 必须保持 Draft，禁止 Ready 或合并。
 - 公开 Pre-release 仍必须使用 Developer ID 签名、公证、Sparkle 签名和公开资产复核；GitHub CI 的 ad-hoc App 不能当作公开安装包。
 - 候选 Tag、远端候选分支和发布资产必须指向同一提交；候选分支在正式晋升完成前不得删除或 force-push。
-- 正式版必须由用户明确指定具体版本。候选提交先合入 `main`，再晋升同一 Tag 和同一批资产，禁止从 `main` 重新构建正式包。
+- 不存在“发布正式版”命令。正式版只能由用户明确指定一个已发布并验证的 Pre-release，再将该预览版的同一 Tag、Commit 和同一批资产晋升为正式版；禁止从 `main` 重新构建正式包。
 - 完整流程与 Release Notes 规则见 [`RELEASING.md`](RELEASING.md)。
 
 ## macOS 私有 Draft 安装包门禁
