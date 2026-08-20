@@ -2,7 +2,7 @@
 
 ## 1.9.5 (Pre-release)
 
-- Fixed an issue where an unbound physical remote could be detected during first-run setup but its first button press might not respond; first-run setup now accepts the initial input reliably.
+- Fixed an issue where an unbound physical remote could be detected during first-run setup but its first button press could be ignored; first-run setup now accepts the initial input reliably.
 
 ## 1.9.4 (Pre-release)
 
