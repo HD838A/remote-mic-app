@@ -561,6 +561,8 @@ struct OnboardingFlowTests {
             "settings.onboardingControlMethod == .physicalRemote"
         ))
         #expect(viewSource.contains("model.isPhoneRemoteConnected"))
+        #expect(viewSource.contains("model.phoneRemoteInvitation"))
+        #expect(viewSource.contains("PhoneRemoteInvitationQRCode.image"))
         #expect(viewSource.contains("if case .connected = model.webRemoteState"))
         #expect(viewSource.contains(".onReceive(model.$isConnected.removeDuplicates())"))
         #expect(viewSource.contains("routeConnectedPhysicalRemoteIfNeeded()"))

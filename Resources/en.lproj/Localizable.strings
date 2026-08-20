@@ -213,6 +213,11 @@
 "connection.phone.section_title" = "iPhone, Apple Watch, and Web";
 "connection.phone.ios_title" = "iOS App (Recommended)";
 "connection.phone.no_invite_badge" = "No invite code";
+"connection.phone.qr_badge" = "Scan first";
+"connection.phone.qr_title" = "Connect from the iPhone app";
+"connection.phone.qr_help" = "On the Mac page in SayAll for iPhone, tap Scan QR Code to connect directly to this Mac. Automatic discovery remains available as a fallback.";
+"connection.phone.qr_refresh" = "The code expires shortly and refreshes automatically. Scan a new code after stopping or restarting phone connections.";
+"connection.phone.qr_accessibility" = "iPhone connection QR code";
 "connection.phone.ios_help" = "Start phone connection on this Mac, then install and open the iOS app from TestFlight.";
 "connection.phone.not_enabled" = "Not Started";
 "connection.trusted_devices.title" = "Trusted Mobile Devices";
@@ -570,6 +575,7 @@
 "onboarding.iphone_remote.install" = "Install or Open the iOS App";
 "onboarding.iphone_remote.connected" = "iPhone connected";
 "onboarding.iphone_remote.waiting" = "Waiting for iPhone";
+"onboarding.iphone_remote.scan" = "Scan this code in SayAll for iPhone to connect directly to this Mac";
 "onboarding.iphone_remote.connection_detail" = "Keep the SayAll iOS app in the foreground. The first connection must be approved on your Mac.";
 "onboarding.iphone_remote.button_detail" = "After connecting, press any normal button in the iPhone remote.";
 "onboarding.web_remote.title" = "Connect a browser to this Mac";

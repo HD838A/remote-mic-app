@@ -16,6 +16,7 @@
 | [本地语音转写记录](./local-transcript-history/) | 界面迭代完成，等待人工验收 | 默认关闭；独立侧边栏页面使用顶部可展开应用栏、可折叠日期时间线和真实 App 图标筛选，不依赖 AI 或 API Key。 |
 | [本地 Agent 访问集成](./sayall-mcp-integration/) | 候选代码完成，等待客户端验收 | App 内 Swift Helper 是唯一运行时；`GetSayAll/sayall-mcp` 提供公开契约，访问默认关闭且不需要 Node.js。 |
 | [首次使用成功率优化](./first-use-success/) | 候选代码完成，等待安装验收 | 设置卡点提供单一修复动作与脱敏诊断；普通 DMG 只保留一个安装入口并保留健康驱动。 |
+| [iPhone 二维码局域网直连](./iphone-qr-direct/) | 代码与自动化验证完成，等待真机验收 | iPhone 扫码优先直连当前 Mac 监听周期，Bonjour/P2P 与 Watch 原路径保持不变。 |
 | [延长语音录音与 iOS 点按录音](./extended-voice-recording/) | 部分撤回，等待人工验收 | 普通遥控器 `MIC_EXTEND` 延长方案已撤回；iOS 支持点按切换与按住说话。 |
 | [系统占用快捷键录入](./reserved-shortcut-capture/) | 等待人工验收 | 点击录入后短暂捕获被系统或其他 APP 占用的组合键，并显示明确成功或失败反馈。 |
 | [首次使用设置向导](./first-run-onboarding/) | 等待人工验收 | 仅全新安装通过不可跳过的实时门禁完成语音工具、优先实体遥控器或无遥控器时的 iPhone/网页版、对应权限、兼容麦克风、真实语音文字和普通按键检查；旧安装升级自动迁移。 |

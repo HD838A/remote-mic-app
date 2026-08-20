@@ -6,7 +6,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
     .package(
         url: "https://github.com/GetSayAll/sayall-mac-remote.git",
-        revision: "04a1bf2b713ee98c4d2c07cd690bb4b26288a82d"
+        revision: "3f3c782180eef4024b53941c1f65d80e7cff4c66"
     ),
 ]
 var remoteMicDependencies: [Target.Dependency] = [

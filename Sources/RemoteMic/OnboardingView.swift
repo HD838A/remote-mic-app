@@ -1273,14 +1273,28 @@ struct OnboardingView: View {
     }
 
     private var iPhoneRemoteIllustration: some View {
-        VStack(spacing: 24) {
-            Image(systemName: model.isPhoneRemoteConnected
-                ? "iphone.gen3.radiowaves.left.and.right"
-                : "iphone.gen3")
-                .font(.system(size: 150, weight: .light))
-                .foregroundStyle(
-                    model.isPhoneRemoteConnected ? Color.green : Color.accentColor
-                )
+        VStack(spacing: 18) {
+            if !model.isPhoneRemoteConnected,
+               let invitation = model.phoneRemoteInvitation,
+               let qrCode = PhoneRemoteInvitationQRCode.image(for: invitation) {
+                Image(nsImage: qrCode)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 220, height: 220)
+                    .padding(12)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                Text("onboarding.iphone_remote.scan")
+                    .font(.system(size: 15, weight: .semibold))
+                    .multilineTextAlignment(.center)
+            } else {
+                Image(systemName: model.isPhoneRemoteConnected
+                    ? "iphone.gen3.radiowaves.left.and.right"
+                    : "iphone.gen3")
+                    .font(.system(size: 150, weight: .light))
+                    .foregroundStyle(
+                        model.isPhoneRemoteConnected ? Color.green : Color.accentColor
+                    )
+            }
             sideStatusPanel
         }
         .padding(28)

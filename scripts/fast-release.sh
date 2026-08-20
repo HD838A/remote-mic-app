@@ -5,6 +5,7 @@ umask 077
 ROOT="${0:A:h:h}"
 PLIST="$ROOT/Resources/Info.plist"
 REPOSITORY="HD838A/remote-mic-app"
+PUBLIC_PRODUCT_NAME="无线麦SayAll.app"
 EXPECTED_TEAM_ID="L3QHLDRPAY"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
@@ -145,7 +146,7 @@ if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
     exit 1
   fi
 else
-  git tag -a "$RELEASE_TAG" -m "Remote Mic $VERSION"
+  git tag -a "$RELEASE_TAG" -m "$PUBLIC_PRODUCT_NAME $VERSION"
 fi
 
 REMOTE_TAG_COMMIT="$(git ls-remote origin "refs/tags/$RELEASE_TAG^{}" | \

@@ -237,7 +237,7 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(workflowSource.contains("swift package config set-mirror"))
         #expect(workflowSource.contains("file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"))
-        #expect(workflowSource.contains("04a1bf2b713ee98c4d2c07cd690bb4b26288a82d"))
+        #expect(workflowSource.contains("3f3c782180eef4024b53941c1f65d80e7cff4c66"))
         #expect(workflowSource.contains("actions/upload-artifact@v4"))
         #expect(workflowSource.contains("contents: read"))
         #expect(!workflowSource.contains("environment: mac-release"))
@@ -614,6 +614,14 @@ struct BuildSigningTests {
         #expect(appVerifierSource.contains("CFBundleName raw"))
         #expect(publishSource.contains("$extract_dir/SayAll.app"))
         #expect(publishSource.contains("Remote-Mic-$VERSION.zip"))
+        #expect(publishSource.contains("PUBLIC_PRODUCT_NAME=\"无线麦SayAll.app\""))
+        #expect(publishSource.contains("--title \"$PUBLIC_PRODUCT_NAME $VERSION\""))
+        #expect(!publishSource.contains("--title \"Remote Mic $VERSION\""))
+
+        let fastReleaseSource = try source("scripts/fast-release.sh")
+        #expect(fastReleaseSource.contains("PUBLIC_PRODUCT_NAME=\"无线麦SayAll.app\""))
+        #expect(fastReleaseSource.contains("git tag -a \"$RELEASE_TAG\" -m \"$PUBLIC_PRODUCT_NAME $VERSION\""))
+        #expect(!fastReleaseSource.contains("git tag -a \"$RELEASE_TAG\" -m \"Remote Mic $VERSION\""))
 
         #expect(preinstallSource.contains("Applications/SayAll.app"))
         #expect(preinstallSource.contains("Applications/Remote Mic.app"))

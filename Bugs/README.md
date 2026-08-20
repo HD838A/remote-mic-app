@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [GitHub Release 标题回退为旧品牌](./2026-08-19-github-release-title-legacy-brand.md)
 - [macOS 1.9.0 签名流程的 Swift Release 冷构建被 180 秒误杀](./2026-08-19-macos-release-swift-build-timeout.md)
 - [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md)
 - [组合动作输入框学习容易与回眸 MCP 配置混淆](./2026-08-19-macro-focus-mcp-guidance-confusion.md)
@@ -50,6 +51,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-19 | [GitHub Release 标题回退为旧品牌](./2026-08-19-github-release-title-legacy-brand.md) | 已修复 |
 | 2026-08-19 | [macOS 1.9.0 签名流程的 Swift Release 冷构建被 180 秒误杀](./2026-08-19-macos-release-swift-build-timeout.md) | 代码修复完成，等待受保护 Developer ID canary |
 | 2026-08-19 | [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md) | 候选修复完成，等待真实 Codex 与遥控器验收 |
 | 2026-08-19 | [Watch 停止后立即重新收音被判定占用](./2026-08-19-watch-voice-restart-during-audio-drain.md) | 候选修复完成，等待真机验收 |
