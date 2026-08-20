@@ -206,9 +206,9 @@
 "connection.status.voice_active" = "语音中";
 "common.status.ready" = "已就绪";
 "connection.status.voice_trigger" = "语音触发";
-"connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";
-"connection.voice_fn_tap.hint" = "适配点按式语音输入（如 Typeless）：按下语音键注入一次 Fn 开始，松开再注入一次结束，音频在按住期间照常传输。需要辅助功能权限；开启后语音键不再直接发 Fn。";
-"connection.voice_fn_tap.hint_short" = "用于需要点按 Fn 开始和结束的语音工具；遥控器仍需按住说话。";
+"connection.voice_fn_tap.enabled" = "语音键使用点按式触发";
+"connection.voice_fn_tap.hint" = "适配点按式语音输入：Typeless 使用 Fn 点按，macOS 系统听写使用 Fn-D。按下语音键开始，松开并排空音频后结束。需要辅助功能权限；遥控器仍需按住说话。";
+"connection.voice_fn_tap.hint_short" = "根据首次设置的语音工具发送 Fn 或 Fn-D；遥控器仍需按住说话。";
 "connection.action.reconnect" = "立即重新连接";
 "connection.phone.section_title" = "iPhone、Apple Watch 与网页版";
 "connection.phone.ios_title" = "iOS App（推荐）";
@@ -504,6 +504,8 @@
 "onboarding.voice_tool.weixin.detail" = "按住 Fn 说话，把遥控器声音送入微信输入法。";
 "onboarding.voice_tool.typeless.title" = "Typeless";
 "onboarding.voice_tool.typeless.detail" = "语音键会模拟 Fn 点按并传送遥控器声音。";
+"onboarding.voice_tool.system_dictation.title" = "macOS 系统听写";
+"onboarding.voice_tool.system_dictation.detail" = "按住遥控器时用 Fn-D 启动听写，松开后停止。";
 "onboarding.voice_tool.other.title" = "其他语音工具";
 "onboarding.voice_tool.other.detail" = "使用你选择的语音输出设备，在常用语音输入工具中测试。";
 "onboarding.voice_tool.guide.title" = "把 Fn 交给选中的输入法";

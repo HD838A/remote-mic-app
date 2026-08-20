@@ -110,6 +110,7 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
     case doubao
     case weixin
     case typeless
+    case systemDictation = "system_dictation"
     case other
 
     var id: String { rawValue }
@@ -128,9 +129,17 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
             return "com.bytedance.inputmethod.doubaoime.pinyin"
         case .weixin:
             return "com.tencent.inputmethod.wetype.pinyin"
-        case .unselected, .typeless, .other:
+        case .unselected, .typeless, .systemDictation, .other:
             return nil
         }
+    }
+
+    var usesTapToggleVoiceTrigger: Bool {
+        self == .typeless || self == .systemDictation
+    }
+
+    var usesSystemDictationShortcut: Bool {
+        self == .systemDictation
     }
 
     var requiresFunctionKeySetup: Bool {

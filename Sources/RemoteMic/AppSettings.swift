@@ -670,7 +670,7 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
-        let shouldEnableFnTap = voiceTool == .typeless
+        let shouldEnableFnTap = voiceTool.usesTapToggleVoiceTrigger
         if voiceFnTapModeEnabled != shouldEnableFnTap {
             voiceFnTapModeEnabled = shouldEnableFnTap
         }

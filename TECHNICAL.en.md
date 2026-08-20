@@ -105,6 +105,8 @@ The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. `R
 
 The opt-in Typeless compatibility mode first requires Accessibility permission, then transactionally maps F5 to usage 0 on every matching RC003 service. Missing targets or any partial failure roll back all changes, disable the setting, and restore the default Fn mapping. Once enabled, `VoiceFnTapSessionController` buffers pre-roll at physical voice-stream start and writes it to the loopback device only after the opening Fn tap succeeds. On release it waits for `VirtualAudioOutput.endSessionAfterDraining` before sending the matching closing Fn tap. Generations and cancellable tasks isolate rapid consecutive sessions and clean up on disable, disconnect, reconnect, or app exit; a failed opening tap never produces a closing tap.
 
+When macOS Dictation is selected, the same session lifecycle and RC003 voice-key neutralization transaction are reused, while the opening and closing triggers use Apple's system `Fn-D` Dictation shortcut. Typeless continues to receive plain Fn taps, and other voice tools keep their existing mapping. Phone and web voice paths likewise send `Fn-D` before audio starts and a paired closing shortcut only after audio drains.
+
 This mode only adapts the trigger semantics seen by the target app. The RC003 must still be physically held to capture audio; it does not provide continuous recording or independent transcription. Configuration import/export includes optional `voiceFnTapModeEnabled`, with missing legacy fields treated as off. On exit, the app restores the managed source usages' prior mappings while preserving unrelated runtime changes.
 
 ## Menu bar and window

@@ -106,6 +106,8 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的 F5 映射为 usage `0`；任一目标失败或目标不完整时立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 
+选择 macOS 系统听写时复用同一会话生命周期和 RC003 语音键 neutralize 事务，但开始与结束触发改为 Apple 系统 `Fn-D` 听写快捷键；Typeless 仍发送普通 Fn 点按，其他语音工具保持原映射。手机和网页语音路径同样在音频开始前发送一次 `Fn-D`，并在音频排空后发送配对的结束快捷键。
+
 该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceFnTapModeEnabled`；旧配置缺少字段时按关闭处理。应用退出时恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
 
 ## 菜单栏与窗口

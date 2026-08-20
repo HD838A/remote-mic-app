@@ -464,6 +464,14 @@ if let defaults = UserDefaults(suiteName: suiteName) {
             settings.customMappingEnabled,
         "unavailable continuous recording experiment cannot replace power binding"
     )
+    settings.setOnboardingVoiceTool(.systemDictation)
+    check(
+        settings.onboardingVoiceTool == .systemDictation &&
+            settings.voiceFnTapModeEnabled &&
+            settings.onboardingVoiceTool.usesTapToggleVoiceTrigger &&
+            settings.onboardingVoiceTool.usesSystemDictationShortcut,
+        "macOS Dictation onboarding selects the tap-toggle Fn-D route"
+    )
     defaults.removePersistentDomain(forName: suiteName)
 } else {
     check(false, "saved bindings merge with defaults")
@@ -502,6 +510,63 @@ check(
         fnTapStopped && stopWaitedForDrain && fnTapEvents == [true, false, true, false] &&
         fnTapController.phase == .idle,
     "Typeless Fn tap session buffers pre-roll and stops after drain"
+)
+
+var dictationScheduledOperations: [() -> Void] = []
+var dictationEvents: [Bool] = []
+var dictationAudio: [[Int16]] = []
+let dictationController = VoiceFnTapSessionController(
+    postTapActivationDelay: { 0.45 },
+    schedule: { _, operation in
+        dictationScheduledOperations.append(operation)
+        return VoiceFnTapScheduledTask {}
+    },
+    setFunctionKeyPressed: { pressed in
+        dictationEvents.append(pressed)
+        return true
+    },
+    enqueueAudio: { dictationAudio.append($0) },
+    drainAudio: { _ in },
+    onFailure: { _ in }
+)
+dictationController.setEnabled(true)
+let dictationStarted = dictationController.startVoice()
+let dictationBuffered = dictationController.receive([4, 5, 6])
+dictationScheduledOperations.removeFirst()()
+dictationScheduledOperations.removeFirst()()
+let dictationWaitedForActivation = dictationAudio.isEmpty && dictationEvents == [true, false]
+dictationScheduledOperations.removeFirst()()
+check(
+    dictationStarted && dictationBuffered && dictationWaitedForActivation &&
+        dictationAudio == [[4, 5, 6]] && dictationController.phase == .active(1),
+    "macOS Dictation session keeps pre-roll buffered through activation delay"
+)
+
+var interruptedScheduledOperations: [() -> Void] = []
+var interruptedDictationEvents: [Bool] = []
+let interruptedDictationController = VoiceFnTapSessionController(
+    postTapActivationDelay: { 0.45 },
+    schedule: { _, operation in
+        interruptedScheduledOperations.append(operation)
+        return VoiceFnTapScheduledTask {}
+    },
+    setFunctionKeyPressed: { pressed in
+        interruptedDictationEvents.append(pressed)
+        return true
+    },
+    enqueueAudio: { _ in },
+    drainAudio: { _ in },
+    onFailure: { _ in }
+)
+interruptedDictationController.setEnabled(true)
+_ = interruptedDictationController.startVoice()
+interruptedScheduledOperations.removeFirst()()
+interruptedScheduledOperations.removeFirst()()
+interruptedDictationController.setEnabled(false)
+check(
+    interruptedDictationEvents == [true, false, true, false] &&
+        interruptedDictationController.phase == .idle,
+    "macOS Dictation activation wait closes its paired trigger when disabled"
 )
 
 print("RESULT passed=\(passed) failed=\(failed)")

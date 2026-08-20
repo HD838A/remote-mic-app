@@ -447,6 +447,45 @@ struct RemoteButtonsTests {
         #expect(!didPost)
     }
 
+    @Test func systemDictationShortcutPostsFnDDownAndUp() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        #expect(KeyboardInjector.setSystemDictationShortcutPressed(
+            true,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(KeyboardInjector.setSystemDictationShortcutPressed(
+            false,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == KeyboardInjector.systemDictationKeyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2 == .maskSecondaryFn)
+        #expect(posted[1].0 == KeyboardInjector.systemDictationKeyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2 == .maskSecondaryFn)
+    }
+
+    @Test func systemDictationShortcutRequiresAccessibility() {
+        var didPost = false
+        #expect(!KeyboardInjector.setSystemDictationShortcutPressed(
+            true,
+            accessibilityTrusted: { false },
+            keyStatePoster: { _, _, _ in
+                didPost = true
+                return true
+            }
+        ))
+        #expect(!didPost)
+    }
+
     @Test func unconfiguredCustomShortcutDoesNotReportPermissionFailure() {
         #expect(KeyboardInjector.send(
             .customShortcut,

@@ -72,6 +72,42 @@ struct VoiceFnTapSessionControllerTests {
         #expect(harness.controller.phase == .idle)
     }
 
+    @Test func buffersUntilPostTapActivationDelayCompletes() {
+        let harness = Harness(postTapActivationDelay: 0.45)
+        harness.controller.setEnabled(true)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([1, 2, 3]))
+
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.controller.phase == .starting(1))
+        #expect(harness.enqueuedAudio.isEmpty)
+
+        #expect(harness.controller.receive([4, 5]))
+        harness.scheduler.advance(by: 0.44)
+        #expect(harness.enqueuedAudio.isEmpty)
+        harness.scheduler.advance(by: 0.01)
+        #expect(harness.controller.phase == .active(1))
+        #expect(harness.enqueuedAudio == [[1, 2, 3, 4, 5]])
+    }
+
+    @Test func disablingDuringPostTapActivationDelayClosesTheOpenedTarget() {
+        let harness = Harness(postTapActivationDelay: 0.45)
+        harness.controller.setEnabled(true)
+        #expect(harness.controller.startVoice())
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.functionKeyEvents == [true, false])
+        #expect(harness.controller.phase == .starting(1))
+
+        var disabled = false
+        harness.controller.setEnabled(false) { disabled = true }
+
+        #expect(disabled)
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        harness.scheduler.runAll()
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+    }
+
     @Test func disablingActiveSessionFinishesMatchingStopTap() {
         let harness = Harness()
         harness.controller.setEnabled(true)
@@ -167,7 +203,9 @@ private final class Harness {
     var enqueuedAudio: [[Int16]] = []
     var drainCompletions: [() -> Void] = []
     var failures: [VoiceFnTapFailure] = []
+    let postTapActivationDelay: TimeInterval
     lazy var controller = VoiceFnTapSessionController(
+        postTapActivationDelay: { [unowned self] in self.postTapActivationDelay },
         schedule: scheduler.schedule,
         setFunctionKeyPressed: { [unowned self] pressed in
             functionKeyEvents.append(pressed)
@@ -184,8 +222,9 @@ private final class Harness {
         }
     )
 
-    init(functionKeyResults: [Bool] = []) {
+    init(functionKeyResults: [Bool] = [], postTapActivationDelay: TimeInterval = 0) {
         self.functionKeyResults = functionKeyResults
+        self.postTapActivationDelay = postTapActivationDelay
     }
 
     func startActiveSession() {

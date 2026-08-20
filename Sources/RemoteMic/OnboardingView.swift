@@ -321,7 +321,13 @@ struct OnboardingView: View {
                 ],
                 spacing: 10
             ) {
-                ForEach([OnboardingVoiceTool.doubao, .weixin, .typeless, .other]) { tool in
+                ForEach([
+                    OnboardingVoiceTool.doubao,
+                    .weixin,
+                    .typeless,
+                    .systemDictation,
+                    .other,
+                ]) { tool in
                     Button {
                         selectVoiceTool(tool)
                     } label: {
@@ -1735,6 +1741,7 @@ struct OnboardingView: View {
         case .doubao: return "quote.bubble.fill"
         case .weixin: return "message.fill"
         case .typeless: return "waveform.badge.mic"
+        case .systemDictation: return "mic.fill"
         case .other: return "ellipsis.circle.fill"
         case .unselected: return "circle"
         }
@@ -1792,7 +1799,7 @@ struct OnboardingView: View {
                     content: .screenshot("weixin-input-settings")
                 ),
             ]
-        case .unselected, .typeless, .other:
+        case .unselected, .typeless, .systemDictation, .other:
             return []
         }
 
@@ -2138,7 +2145,7 @@ struct OnboardingView: View {
             if settings.onboardingControlMethod == .physicalRemote {
                 settings.customMappingEnabled = true
             }
-            model.setVoiceFnTapModeEnabled(settings.onboardingVoiceTool == .typeless)
+            model.setVoiceFnTapModeEnabled(settings.onboardingVoiceTool.usesTapToggleVoiceTrigger)
         }
         if settings.onboardingStep == .complete {
             settings.completeOnboarding()

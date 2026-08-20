@@ -120,6 +120,7 @@ struct LocalizationTests {
         #expect(english["onboarding.remote.first_pairing.wake"] == "Hold TV for about 2 seconds until the white light at the bottom starts flashing.")
         #expect(english["onboarding.remote.first_pairing.pair"] == "Then hold Home + Menu together to enter Bluetooth pairing mode.")
         #expect(english["onboarding.voice_tool.weixin.title"] == "WeChat Input Method")
+        #expect(english["onboarding.voice_tool.system_dictation.title"] == "macOS Dictation")
         #expect(english["onboarding.voice_tool.system_fn.conflict"] == "macOS is still using Fn")
 
         #expect(!english.isEmpty)
@@ -138,6 +139,7 @@ struct LocalizationTests {
                 #expect(localized["onboarding.remote.first_pairing.wake"] == "长按 TV 键约 2 秒，直到遥控器底部白灯开始闪烁。")
                 #expect(localized["onboarding.remote.first_pairing.pair"] == "同时长按 Home（主页）+ Menu（菜单）键，进入蓝牙配对模式。")
                 #expect(localized["onboarding.voice_tool.weixin.title"] == "微信输入法")
+                #expect(localized["onboarding.voice_tool.system_dictation.title"] == "macOS 系统听写")
                 #expect(localized["onboarding.voice_tool.system_fn.conflict"] == "系统仍在使用 Fn")
             }
             #expect(Set(localized.keys) == Set(english.keys))

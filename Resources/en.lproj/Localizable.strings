@@ -206,9 +206,9 @@
 "connection.status.voice_active" = "Voice active";
 "common.status.ready" = "Ready";
 "connection.status.voice_trigger" = "Voice trigger";
-"connection.voice_fn_tap.enabled" = "Simulate Fn Tap on Voice Key";
-"connection.voice_fn_tap.hint" = "For tap-to-toggle voice apps (e.g. Typeless): pressing the voice key injects one Fn tap to start, releasing injects another to stop, while audio streams as usual. Requires Accessibility permission; the voice key no longer emits Fn directly.";
-"connection.voice_fn_tap.hint_short" = "For voice tools that use Fn taps to start and stop. Keep holding the remote button while speaking.";
+"connection.voice_fn_tap.enabled" = "Use Tap-to-Toggle Voice Trigger";
+"connection.voice_fn_tap.hint" = "For tap-to-toggle voice input: Typeless receives Fn, while macOS Dictation receives Fn-D. Pressing starts the target; releasing stops it after audio drains. Accessibility permission is required. Keep holding the remote button while speaking.";
+"connection.voice_fn_tap.hint_short" = "Sends Fn or Fn-D for the voice tool selected during setup. Keep holding the remote button while speaking.";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "iPhone, Apple Watch, and Web";
 "connection.phone.ios_title" = "iOS App (Recommended)";
@@ -504,6 +504,8 @@
 "onboarding.voice_tool.weixin.detail" = "Hold Fn to send remote audio to WeChat Input Method.";
 "onboarding.voice_tool.typeless.title" = "Typeless";
 "onboarding.voice_tool.typeless.detail" = "The voice key taps Fn and sends audio from the remote.";
+"onboarding.voice_tool.system_dictation.title" = "macOS Dictation";
+"onboarding.voice_tool.system_dictation.detail" = "Hold the remote to start Dictation with Fn-D, then release to stop.";
 "onboarding.voice_tool.other.title" = "Another Voice Tool";
 "onboarding.voice_tool.other.detail" = "Use your selected voice output device with your preferred voice input tool.";
 "onboarding.voice_tool.guide.title" = "Reserve Fn for the selected input method";

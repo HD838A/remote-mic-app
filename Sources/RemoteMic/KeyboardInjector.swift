@@ -70,6 +70,7 @@ enum KeyboardInjector {
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
     static let functionKeyCode: CGKeyCode = 63
+    static let systemDictationKeyCode: CGKeyCode = 2
     private static let focusRequests = ApplicationFocusRequestGate()
     private static let focusQueue = DispatchQueue(
         label: "RemoteMic.application-focus",
@@ -106,6 +107,20 @@ enum KeyboardInjector {
             functionKeyCode,
             isPressed,
             isPressed ? .maskSecondaryFn : []
+        )
+    }
+
+    @discardableResult
+    static func setSystemDictationShortcutPressed(
+        _ isPressed: Bool,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postKeyState
+    ) -> Bool {
+        guard accessibilityTrusted() else { return false }
+        return keyStatePoster(
+            systemDictationKeyCode,
+            isPressed,
+            .maskSecondaryFn
         )
     }
 

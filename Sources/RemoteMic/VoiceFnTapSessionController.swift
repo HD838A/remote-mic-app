@@ -44,6 +44,7 @@ final class VoiceFnTapSessionController {
     typealias FunctionKeySetter = (Bool) -> Bool
     typealias AudioEnqueuer = ([Int16]) -> Void
     typealias AudioDrainer = (@escaping () -> Void) -> Void
+    typealias PostTapActivationDelay = () -> TimeInterval
     typealias DestinationReadiness = (
         @escaping (VoiceInputDestinationWaitResult) -> Void
     ) -> VoiceInputDestinationWait
@@ -57,6 +58,7 @@ final class VoiceFnTapSessionController {
     private let tapDuration: TimeInterval
     private let maximumPreRollSampleCount: Int
     private let schedule: Scheduler
+    private let postTapActivationDelay: PostTapActivationDelay
     private let destinationReadiness: DestinationReadiness
     private let setFunctionKeyPressed: FunctionKeySetter
     private let enqueueAudio: AudioEnqueuer
@@ -72,6 +74,7 @@ final class VoiceFnTapSessionController {
     private var pendingVoice: PendingVoice?
     private var scheduledTasks: [VoiceFnTapScheduledTask] = []
     private var functionKeyIsPressed = false
+    private var openingTapCompleted = false
     private var idleCompletions: [() -> Void] = []
     private var suppressAudioUntilRemoteStop = false
 
@@ -83,6 +86,7 @@ final class VoiceFnTapSessionController {
         startDelay: TimeInterval = 0.15,
         tapDuration: TimeInterval = 0.12,
         maximumPreRollSampleCount: Int = 80_000,
+        postTapActivationDelay: @escaping PostTapActivationDelay = { 0 },
         schedule: @escaping Scheduler = VoiceFnTapScheduledTask.mainQueue,
         destinationReadiness: @escaping DestinationReadiness = { _ in .immediate },
         setFunctionKeyPressed: @escaping FunctionKeySetter,
@@ -93,6 +97,7 @@ final class VoiceFnTapSessionController {
         self.startDelay = startDelay
         self.tapDuration = tapDuration
         self.maximumPreRollSampleCount = maximumPreRollSampleCount
+        self.postTapActivationDelay = postTapActivationDelay
         self.schedule = schedule
         self.destinationReadiness = destinationReadiness
         self.setFunctionKeyPressed = setFunctionKeyPressed
@@ -207,7 +212,7 @@ final class VoiceFnTapSessionController {
             // Posting another tap here would toggle the target back on.
             needsStopTap = false
         case .starting:
-            needsStopTap = completedInFlightTap
+            needsStopTap = openingTapCompleted || completedInFlightTap
         case .idle:
             needsStopTap = false
         }
@@ -276,14 +281,28 @@ final class VoiceFnTapSessionController {
                 self.fail(.startTapFailed)
                 return
             }
-            self.phase = .active(sessionGeneration)
-            if !self.preRoll.isEmpty {
-                self.enqueueAudio(self.preRoll)
-                self.preRoll.removeAll(keepingCapacity: false)
+            self.openingTapCompleted = true
+            let activationDelay = max(0, self.postTapActivationDelay())
+            if activationDelay == 0 {
+                self.activateSession(generation: sessionGeneration)
+            } else {
+                let task = self.schedule(activationDelay) { [weak self] in
+                    self?.activateSession(generation: sessionGeneration)
+                }
+                self.scheduledTasks.append(task)
             }
-            if self.remoteEnded {
-                self.beginDrain(generation: sessionGeneration)
-            }
+        }
+    }
+
+    private func activateSession(generation sessionGeneration: UInt64) {
+        guard phase == .starting(sessionGeneration), generation == sessionGeneration else { return }
+        phase = .active(sessionGeneration)
+        if !preRoll.isEmpty {
+            enqueueAudio(preRoll)
+            preRoll.removeAll(keepingCapacity: false)
+        }
+        if remoteEnded {
+            beginDrain(generation: sessionGeneration)
         }
     }
 
@@ -354,7 +373,7 @@ final class VoiceFnTapSessionController {
             generation &+= 1
             cancelScheduledTasks()
             let completedStartTap = releaseFunctionKeyIfNeeded()
-            if completedStartTap, !postImmediateFunctionKeyTap() {
+            if (openingTapCompleted || completedStartTap), !postImmediateFunctionKeyTap() {
                 onFailure(.stopTapFailed)
             }
             resetSessionState()
@@ -393,6 +412,7 @@ final class VoiceFnTapSessionController {
         phase = .idle
         preRoll.removeAll(keepingCapacity: false)
         remoteEnded = false
+        openingTapCompleted = false
         cancelScheduledTasks()
         releaseFunctionKeyIfNeeded()
     }

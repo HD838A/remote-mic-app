@@ -203,10 +203,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     )
     private lazy var voiceFnTapSession = VoiceFnTapSessionController(
+        postTapActivationDelay: { [weak self] in
+            self?.settings.onboardingVoiceTool.usesSystemDictationShortcut == true ? 0.45 : 0
+        },
         destinationReadiness: { [weak self] completion in
             self?.voiceInputDestinationCoordinator.waitUntilReady(completion: completion) ?? .immediate
         },
-        setFunctionKeyPressed: { KeyboardInjector.setFunctionKeyPressed($0) },
+        setFunctionKeyPressed: { [weak self] isPressed in
+            self?.setVoiceToggleShortcutPressed(isPressed) ?? false
+        },
         enqueueAudio: { [weak self] samples in
             _ = self?.audioOutput.enqueue(samples: samples)
         },
@@ -2661,6 +2666,26 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return true
         }
         let shouldHold = transition == .press
+        if settings.voiceFnTapModeEnabled,
+           settings.onboardingVoiceTool.usesSystemDictationShortcut {
+            guard setVoiceToggleShortcutPressed(true),
+                  setVoiceToggleShortcutPressed(false)
+            else {
+                phoneVoiceFunctionKeyLatch.rollback(transition)
+                AppLogger.shared.write(
+                    "PHONE VOICE SYSTEM DICTATION TAP failed phase=\(shouldHold ? "start" : "stop")"
+                )
+                return false
+            }
+            isVoiceTriggerEnabled = !shouldHold
+            voiceShortcutStatus = LocalizedMessage(
+                shouldHold ? "voice_button.status.fn_pressed" : "voice_button.status.fn_released"
+            )
+            AppLogger.shared.write(
+                "PHONE VOICE SYSTEM DICTATION TAP phase=\(shouldHold ? "start" : "stop")"
+            )
+            return true
+        }
         guard KeyboardInjector.setFunctionKeyPressed(shouldHold) else {
             phoneVoiceFunctionKeyLatch.rollback(transition)
             AppLogger.shared.write(
@@ -2676,5 +2701,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             "PHONE VOICE FN \(shouldHold ? "DOWN" : "UP")"
         )
         return true
+    }
+
+    private func setVoiceToggleShortcutPressed(_ isPressed: Bool) -> Bool {
+        if settings.onboardingVoiceTool.usesSystemDictationShortcut {
+            let success = KeyboardInjector.setSystemDictationShortcutPressed(isPressed)
+            AppLogger.shared.write(
+                "VOICE SYSTEM DICTATION key=fn-d state=\(isPressed ? "down" : "up") success=\(success)"
+            )
+            return success
+        }
+        return KeyboardInjector.setFunctionKeyPressed(isPressed)
     }
 }

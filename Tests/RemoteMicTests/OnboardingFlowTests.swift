@@ -358,7 +358,12 @@ struct OnboardingFlowTests {
         #expect(OnboardingVoiceTool.doubao.preferredInputSourceID == "com.bytedance.inputmethod.doubaoime.pinyin")
         #expect(OnboardingVoiceTool.weixin.preferredInputSourceID == "com.tencent.inputmethod.wetype.pinyin")
         #expect(OnboardingVoiceTool.typeless.preferredInputSourceID == nil)
+        #expect(OnboardingVoiceTool.systemDictation.preferredInputSourceID == nil)
         #expect(OnboardingVoiceTool.other.preferredInputSourceID == nil)
+        #expect(OnboardingVoiceTool.typeless.usesTapToggleVoiceTrigger)
+        #expect(OnboardingVoiceTool.systemDictation.usesTapToggleVoiceTrigger)
+        #expect(OnboardingVoiceTool.systemDictation.usesSystemDictationShortcut)
+        #expect(!OnboardingVoiceTool.other.usesTapToggleVoiceTrigger)
 
         #expect(!OnboardingFlowPolicy.canContinue(
             from: .voiceTool,
@@ -882,6 +887,9 @@ struct OnboardingFlowTests {
         let resumed = AppSettings(defaults: defaults)
         #expect(resumed.voiceFnTapModeEnabled)
 
+        resumed.setOnboardingVoiceTool(.systemDictation)
+        #expect(resumed.voiceFnTapModeEnabled)
+
         resumed.setOnboardingVoiceTool(.doubao)
         #expect(!resumed.voiceFnTapModeEnabled)
 
@@ -899,7 +907,7 @@ struct OnboardingFlowTests {
                         if settings.onboardingControlMethod == .physicalRemote {
                             settings.customMappingEnabled = true
                         }
-                        model.setVoiceFnTapModeEnabled(settings.onboardingVoiceTool == .typeless)
+                        model.setVoiceFnTapModeEnabled(settings.onboardingVoiceTool.usesTapToggleVoiceTrigger)
                     }
             """
         ))
