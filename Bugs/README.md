@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Issue #100：升级后权限失效且旧 App 影响安装](./2026-08-20-issue-100-upgrade-permission-repair.md)
 - [Onboarding 已授权权限无法再次打开系统设置](./2026-08-20-onboarding-granted-permissions-not-clickable.md)
 - [macOS 1.9.0 签名流程的 Swift Release 冷构建被 180 秒误杀](./2026-08-19-macos-release-swift-build-timeout.md)
 - [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md)
@@ -51,6 +52,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-20 | [Issue #100：升级后权限失效且旧 App 影响安装](./2026-08-20-issue-100-upgrade-permission-repair.md) | 权限修复入口已实现；安装失败等待现场 Installer 日志 |
 | 2026-08-20 | [Onboarding 已授权权限无法再次打开系统设置](./2026-08-20-onboarding-granted-permissions-not-clickable.md) | 候选修复完成，等待正式签名升级权限连续性验收 |
 | 2026-08-19 | [macOS 1.9.0 签名流程的 Swift Release 冷构建被 180 秒误杀](./2026-08-19-macos-release-swift-build-timeout.md) | 代码修复完成，等待受保护 Developer ID canary |
 | 2026-08-19 | [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md) | 候选修复完成，等待真实 Codex 与遥控器验收 |

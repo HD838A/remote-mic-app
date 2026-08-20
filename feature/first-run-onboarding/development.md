@@ -49,6 +49,7 @@
 25. SayAll.app 路径迁移后的私有 Draft 与公开 Pre-release 必须使用正式 Developer ID Team 签名并公证；Push 候选 CI 的 ad-hoc exact-SHA Artifact 只用于验证，不可分发或用于权限连续性验收。权限页的三张状态卡在已授予后仍保持可点击，直接打开对应系统隐私页；点击不改变权限门禁，App 不尝试修改 TCC 数据库，也不自动删除系统权限条目。正式 `Remote Mic.app` 与 `SayAll.app` 保持相同 Bundle ID、可执行文件、Team ID 和 designated requirement 时，文件名与显示名变化原则上延续既有权限。
 26. Onboarding 语音工具选择直接同步 Fn 点按偏好：Typeless 为开启，豆包、微信和其他工具为关闭；三种控制方式离开权限页时统一应用运行时设置，实体遥控器才额外开启自定义映射。实体遥控器连接页的“已识别”由语音 bridge Ready 或生产 HID 普通按键证明；后者不会替代后续真实语音流门禁，完成页仍要求当前 bridge Ready。
 27. 权限卡统一使用整卡 plain Button：蓝牙未决定时继续由生产重连触发系统请求，拒绝/受限和已授权时打开 `Privacy_Bluetooth`；输入监控与辅助功能复用现有 `BridgeAppModel` 系统设置入口。已授权蓝牙分支不调用重连，避免仅为排障入口扰动稳定连接。
+28. 完成更新后的权限恢复使用独立纯策略，不修改 Onboarding 完成版本：只有已完成用户、当前启动确认为版本更新且三项权限任一缺失时，设置窗口初始页为“权限与隐私”。这复用现有设置页的实时刷新与补授权操作，不引入新的修复向导或持久化状态。
 
 ## 全流程门禁审计结论
 
@@ -112,6 +113,7 @@
 - `codex/v1-9-0-onboarding` 固定基线集成：`swift test --filter OnboardingFlowTests` 23 项、`swift test` 237 项/21 suites、`SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh` 42/42 通过；`arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建通过。实体遥控器 18 张、iPhone 20 张、网页 20 张生产 Onboarding 截图已逐张检查，无裁切或黑白分栏。
 - 2026-08-19 Typeless 与 BLE/HID 识别候选：`swift test` 312 项/31 suites、项目自检 42/42、Apple Silicon App 校验及 `x86_64-apple-macosx13.0` Release 构建通过；实体路径浅色/深色各 9 张生产页面无裁切或黑白分栏。隐藏截图夹具未模拟真实 HID 按键，新识别状态仍需 RC001 / RC003 真机查看。
 - 2026-08-20 权限卡候选：定向源码回归测试先在旧实现产生 5 个 assertion issue，修复后通过；Onboarding 27 项、完整 Swift 313 项/31 suites、项目自检 42/42 通过。权限页浅色/深色生产视图均为 Retina `2040 × 1608`，对应 `1020 × 772` 内容区；三张卡、进入箭头、修复卡和底部导航无裁切、无内部滚动或黑白分栏。签名静态审计确认公开 `v1.9.3` SayAll.app 与旧安装 Remote Mic.app 的 Bundle ID、可执行文件、Team ID 和 designated requirement 一致；真实 TCC 升级和系统设置跳转仍需正式签名包现场验收。
+- 2026-08-20 Issue #100 定向恢复候选：旧实现没有升级权限修复策略，定向测试先失败；新增纯策略和设置窗口初始页接线后通过。Onboarding 28 项、完整 Swift 314 项/31 suites、项目自检 42/42 通过；权限页浅色/深色 `800 × 650` 无裁切。公开 1.8.3 与 1.9.3 App 的正式代码身份逐项一致，公开 1.9.3 PKG 已包含旧 App 迁移；真实 TCC 与剩余安装失败仍需现场日志验收。
 - 同次 800×650 设置页检查中，固定主线基线的“按键映射 / Buttons”页顶部标题与启用开关文案发生严重窄列换行，中英文、浅深色四种组合均复现；Onboarding 七提交未修改该页面或设置容器。本集成不越界修复，但 1.9.0 候选必须在后续组合分支修复并重新执行全部设置入口门禁。
 - 私有硬件模拟：16 项通过，覆盖 RC001/RC003 语音、12 个原始按键、36 个手势、连发、异常报告、重连和双设备隔离。
 - `swift build -c release`：通过。
