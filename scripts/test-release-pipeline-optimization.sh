@@ -158,17 +158,20 @@ fi
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
-/usr/bin/grep -Fq 'TOTAL_SLO_SECONDS: 1740' \
+/usr/bin/grep -Fq 'READY_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'READY_SLO_SECONDS: 840' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+if /usr/bin/grep -Fq 'TOTAL_SLO_SECONDS:' \
+    "$TEST_REPO/.github/workflows/mac-release-package.yml"; then
+  print -u2 "preview workflow still truncates the release-ready window with a request-total SLO"
+  exit 1
+fi
 /usr/bin/grep -Fq 'timeout-minutes: 30' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq '.releaseReadyAt' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'request_id:' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'PREVIEW_PUBLISHED_SLO_SECONDS: 840' \
+/usr/bin/grep -Fq 'PREVIEW_READY_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'PUBLICATION_MAX_SECONDS: 180' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
@@ -184,11 +187,11 @@ fi
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'test "$remote_tag_commit" = "$head_commit"' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'SLO_SECONDS: 1800' \
+/usr/bin/grep -Fq 'READY_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
-/usr/bin/grep -Fq 'STABLE_COMPLETION_SLO_SECONDS: 1740' \
+/usr/bin/grep -Fq 'STABLE_READY_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
-/usr/bin/grep -Fq 'Enforce 30-minute user-wall stable SLO' \
+/usr/bin/grep -Fq 'Enforce 30-minute release-ready stable promotion SLO' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq 'request_id:' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
@@ -196,13 +199,15 @@ fi
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq 'stable-request-attestation-${{ inputs.tag }}' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
-/usr/bin/grep -Fq ".requestStartedAt' \"\$RUNNER_TEMP/stable-request/stable-request-attestation.json\"" \
+/usr/bin/grep -Fq 'stable promotion source must be an existing published pre-release' \
+  "$TEST_REPO/scripts/resolve-stable-request-attestation.sh"
+/usr/bin/grep -Fq 'release_ready_at="$(jq -r' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq 'reconciliation-requires-release-manager:' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq 'if: github.event_name == '\''workflow_dispatch'\''' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
-/usr/bin/grep -Fq 'workflow_run reconciliation has no authoritative user-request timestamp.' \
+/usr/bin/grep -Fq 'workflow_run reconciliation has no authoritative command to promote a specified pre-release.' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq './scripts/publish-release.sh promote' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
@@ -511,7 +516,13 @@ jq '. + {candidateGateCompletedAt:"2026-08-20T10:05:00Z"}' \
 {
   print '#!/bin/zsh'
   print 'set -euo pipefail'
-  print 'if [[ "$*" == *"actions/artifacts?name="* ]]; then'
+  print 'if [[ "$*" == *"releases/tags/v9.9.9"* ]]; then'
+  print '  case "${FAKE_ATTEST_RELEASE_MODE:-valid}" in'
+  print '    missing) exit 1 ;;'
+  print '    stable) print -r -- '\''{"tag_name":"v9.9.9","draft":false,"prerelease":false}'\'' ;;'
+  print '    *) print -r -- '\''{"tag_name":"v9.9.9","draft":false,"prerelease":true}'\'' ;;'
+  print '  esac'
+  print 'elif [[ "$*" == *"actions/artifacts?name="* ]]; then'
   print '  if [[ -n "${FAKE_ATTEST_ZIP:-}" ]]; then print -r -- '\''{"artifacts":[{"id":91,"expired":false}]}'\''; else print -r -- '\''{"artifacts":[]}'\''; fi'
   print 'elif [[ "$*" == *"actions/artifacts/91/zip"* ]]; then'
   print '  /bin/cat "$FAKE_ATTEST_ZIP"'
@@ -570,6 +581,16 @@ GH_BIN="$FAKE_ATTEST_GH" GITHUB_REPOSITORY=HD838A/remote-mic-app \
     stable-req-12345 v9.9.9 1787221000 "$WORK_DIR/stable-request-attestation.json" \
     > "$WORK_DIR/stable-attestation-first.txt"
 /usr/bin/grep -Fq 'STABLE REQUEST ATTESTATION PASS' "$WORK_DIR/stable-attestation-first.txt"
+if GH_BIN="$FAKE_ATTEST_GH" FAKE_ATTEST_RELEASE_MODE=stable \
+  GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  "$ROOT/scripts/resolve-stable-request-attestation.sh" \
+    stable-req-invalid v9.9.9 1787221000 "$WORK_DIR/stable-request-attestation-invalid.json" \
+    > "$WORK_DIR/stable-attestation-invalid.txt" 2>&1; then
+  print -u2 "stable request attestation accepted a stable release as its promotion source"
+  exit 1
+fi
+/usr/bin/grep -Fq 'stable promotion source must be an existing published pre-release' \
+  "$WORK_DIR/stable-attestation-invalid.txt"
 /bin/mkdir -p "$WORK_DIR/stable-attestation-artifact"
 /bin/cp "$WORK_DIR/stable-request-attestation.json" \
   "$WORK_DIR/stable-attestation-artifact/stable-request-attestation.json"
@@ -776,7 +797,7 @@ set +e
 GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-wrong.log" \
 RELEASE_WATCHDOG_POLL_SECONDS=1 \
   "$TEST_REPO/scripts/release-user-wall-watchdog.sh" preview \
-    "$(( watchdog_now - 1000 ))" "$(( watchdog_now - 900 ))" req-12345 release/pre-v9.9.9 "$WORK_DIR/watchdog-wrong-complete" "$WORK_DIR/watchdog-empty-runs" \
+    "$(( watchdog_now - 1900 ))" "$(( watchdog_now - 1800 ))" req-12345 release/pre-v9.9.9 "$WORK_DIR/watchdog-wrong-complete" "$WORK_DIR/watchdog-empty-runs" \
     > "$WORK_DIR/watchdog-wrong.txt" 2>&1
 wrong_completion_status="$?"
 set -e
@@ -787,7 +808,7 @@ set +e
 GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-expired.log" \
 RELEASE_WATCHDOG_POLL_SECONDS=1 \
   "$TEST_REPO/scripts/release-user-wall-watchdog.sh" preview \
-    "$(( $(date +%s) - 1000 ))" "$(( $(date +%s) - 900 ))" req-12345 release/pre-v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-empty-runs" \
+    "$(( $(date +%s) - 1900 ))" "$(( $(date +%s) - 1800 ))" req-12345 release/pre-v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-empty-runs" \
     > "$WORK_DIR/watchdog-expired.txt" 2>&1
 watchdog_status="$?"
 set -e

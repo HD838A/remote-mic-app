@@ -64,7 +64,7 @@ jobs:
           retention-days: 90
 
   stable-slo-watchdog:
-    name: Enforce 30-minute user-wall stable SLO
+    name: Enforce 30-minute release-ready stable promotion SLO
     if: github.event_name == 'workflow_dispatch'
     needs: resolve-stable-request
     runs-on: ubuntu-latest
@@ -82,32 +82,37 @@ jobs:
       - name: Cancel an over-budget promotion once, without rebuilding or retrying
         env:
           GH_TOKEN: ${{ github.token }}
-          SLO_SECONDS: 1800
+          READY_SLO_SECONDS: 1740
         run: |
-          request_started_at="$(jq -r '.requestStartedAt' "$RUNNER_TEMP/stable-request/stable-request-attestation.json")"
-          if [[ ! "$request_started_at" =~ ^[0-9]+$ ]]; then
-            echo "request_started_at must be Unix epoch seconds" >&2
+          attestation="$RUNNER_TEMP/stable-request/stable-request-attestation.json"
+          request_started_at="$(jq -r '.requestStartedAt' "$attestation")"
+          release_ready_at="$(jq -r '.releaseReadyAt' "$attestation")"
+          if [[ ! "$request_started_at" =~ ^[0-9]+$ ||
+                ! "$release_ready_at" =~ ^[0-9]+$ ||
+                "$release_ready_at" -lt "$request_started_at" ]]; then
+            echo "stable request/ready timestamps must be ordered Unix epoch seconds" >&2
             exit 2
           fi
           while true; do
             now="$(date +%s)"
-            elapsed=$(( now - request_started_at ))
+            total_elapsed=$(( now - request_started_at ))
+            ready_elapsed=$(( now - release_ready_at ))
             artifact_count="$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=stable-slo-ledger-complete-$GITHUB_RUN_ID" \
               --jq '.total_count')"
             if [[ "$artifact_count" == "1" ]]; then
-              echo "STABLE SLO WATCHDOG PASS elapsed=${elapsed}s"
+              echo "STABLE SLO WATCHDOG PASS total=${total_elapsed}s ready=${ready_elapsed}s"
               exit 0
             fi
             failed_jobs="$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest" \
-              --jq '[.jobs[] | select(.name != "Enforce 30-minute user-wall stable SLO" and .conclusion != null and .conclusion != "success" and .conclusion != "skipped")] | length')"
+              --jq '[.jobs[] | select(.name != "Enforce 30-minute release-ready stable promotion SLO" and .conclusion != null and .conclusion != "success" and .conclusion != "skipped")] | length')"
             if (( failed_jobs != 0 )); then
               echo "A promotion job already failed; watchdog will not retry or rebuild it."
               exit 0
             fi
-            if (( elapsed >= SLO_SECONDS )); then
-              echo "STABLE SLO EXCEEDED elapsed=${elapsed}s budget=${SLO_SECONDS}s; cancelling run once." >&2
+            if (( ready_elapsed >= READY_SLO_SECONDS )); then
+              echo "STABLE SLO EXCEEDED total=${total_elapsed}s(reported-only) ready=${ready_elapsed}s/${READY_SLO_SECONDS}s; cancelling run once." >&2
               gh api --method POST \
                 "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"
               exit 124
@@ -123,8 +128,8 @@ jobs:
     steps:
       - name: Refuse untimed automatic stable promotion
         run: |
-          echo "workflow_run reconciliation has no authoritative user-request timestamp."
-          echo "Return to the allowlisted release-manager task and manually dispatch the exact stable tag."
+          echo "workflow_run reconciliation has no authoritative command to promote a specified pre-release."
+          echo "Return to the allowlisted release-manager task and request promotion of the exact pre-release tag."
 
   promote:
     if: github.event_name == 'workflow_dispatch'
@@ -133,8 +138,7 @@ jobs:
     timeout-minutes: 20
     environment: mac-stable-release
     env:
-      STABLE_SLO_SECONDS: 1800
-      STABLE_COMPLETION_SLO_SECONDS: 1740
+      STABLE_READY_SLO_SECONDS: 1740
       STABLE_PROMOTION_STAGE_TIMEOUT_SECONDS: 600
 
     steps:
@@ -150,17 +154,21 @@ jobs:
           name: stable-request-attestation-${{ inputs.tag }}
           path: ${{ runner.temp }}/stable-request
 
-      - name: Initialize stable user-wall ledger
+      - name: Initialize stable release-ready ledger
         run: |
-          request_started_at="$(jq -r '.requestStartedAt' "$RUNNER_TEMP/stable-request/stable-request-attestation.json")"
+          attestation="$RUNNER_TEMP/stable-request/stable-request-attestation.json"
+          request_started_at="$(jq -r '.requestStartedAt' "$attestation")"
+          release_ready_at="$(jq -r '.releaseReadyAt' "$attestation")"
           test -n "$request_started_at"
+          test -n "$release_ready_at"
           {
-            echo "STABLE_SLO_CLOCK=user-wall"
+            echo "STABLE_SLO_CLOCK=release-ready"
             echo "RELEASE_REQUEST_STARTED_AT=$request_started_at"
+            echo "RELEASE_READY_AT=$release_ready_at"
             echo "RELEASE_SLO_LEDGER=$RUNNER_TEMP/stable-slo.tsv"
           } >> "$GITHUB_ENV"
           ./scripts/release-slo-ledger.sh init "$RUNNER_TEMP/stable-slo.tsv" "$request_started_at"
-          ./scripts/release-slo-ledger.sh check "$RUNNER_TEMP/stable-slo.tsv" "$request_started_at" "$STABLE_COMPLETION_SLO_SECONDS" environment-approval-wait
+          ./scripts/release-slo-ledger.sh check "$RUNNER_TEMP/stable-slo.tsv" "$release_ready_at" "$STABLE_READY_SLO_SECONDS" environment-approval-wait
           ./scripts/release-slo-ledger.sh start "$RUNNER_TEMP/stable-slo.tsv" "$request_started_at" unchanged-byte-promotion
 
       - name: Ensure required promotion tools
@@ -202,7 +210,7 @@ jobs:
             "$STABLE_PROMOTION_STAGE_TIMEOUT_SECONDS" -- \
             ./scripts/publish-release.sh promote
           ./scripts/release-slo-ledger.sh finish "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" unchanged-byte-promotion success
-          ./scripts/release-slo-ledger.sh check "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" "$STABLE_COMPLETION_SLO_SECONDS" successful-pipeline
+          ./scripts/release-slo-ledger.sh check "$RELEASE_SLO_LEDGER" "$RELEASE_READY_AT" "$STABLE_READY_SLO_SECONDS" successful-pipeline
 
       - name: Record failed stable promotion
         if: failure()

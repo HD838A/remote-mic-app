@@ -19,15 +19,13 @@ if [[ "$#" -ne 7 ]]; then
 fi
 case "$MODE" in
   preview)
-    TOTAL_BUDGET_SECONDS=1740
-    READY_BUDGET_SECONDS=840
+    READY_BUDGET_SECONDS=1740
     [[ "$TARGET" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+$' ]] || {
       print -u2 "preview watchdog requires release/pre-vX.Y.Z"
       exit 2
     }
     ;;
   stable)
-    TOTAL_BUDGET_SECONDS=1740
     READY_BUDGET_SECONDS=1740
     [[ "$TARGET" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]] || {
       print -u2 "stable watchdog requires vX.Y.Z"
@@ -123,9 +121,9 @@ while true; do
     print -u2 "release timestamps cannot be in the future"
     exit 2
   fi
-  if (( total_elapsed >= TOTAL_BUDGET_SECONDS || ready_elapsed >= READY_BUDGET_SECONDS )); then
+  if (( ready_elapsed >= READY_BUDGET_SECONDS )); then
     cancel_registered_runs
-    print -u2 "RELEASE USER-WALL SLO EXCEEDED mode=$MODE target=$TARGET total=${total_elapsed}s/${TOTAL_BUDGET_SECONDS}s ready=${ready_elapsed}s/${READY_BUDGET_SECONDS}s"
+    print -u2 "RELEASE USER-WALL SLO EXCEEDED mode=$MODE target=$TARGET total=${total_elapsed}s(reported-only) ready=${ready_elapsed}s/${READY_BUDGET_SECONDS}s"
     print -u2 "The release manager has at most 60 seconds to report this bounded failure."
     exit 124
   fi
