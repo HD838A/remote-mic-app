@@ -48,6 +48,7 @@
 24. 语音测试的文字状态不再等同于输入框非空。每次所选来源开始语音时清空旧文字；只有 `keyDown + hidSystemState + sourceUnixProcessID <= 0` 才确认物理手输并阻塞继续，合成/非零 PID/combined/private/缺失或未知事件来源全部 fail-open。视图只传事件类型、state ID 和 PID 给纯策略，诊断只记录布尔状态，不记录 PID、键码、文字或 App。
 25. SayAll.app 路径迁移后的私有 Draft 与公开 Pre-release 必须使用正式 Developer ID Team 签名并公证；Push 候选 CI 的 ad-hoc exact-SHA Artifact 只用于验证，不可分发或用于权限连续性验收。权限页在权限已授予时不再重复显示请求按钮，已有用户权限异常时只显示兜底说明。App 不尝试修改 TCC 数据库，也不自动删除系统权限条目。
 26. Onboarding 语音工具选择直接同步 Fn 点按偏好：Typeless 为开启，豆包、微信和其他工具为关闭；三种控制方式离开权限页时统一应用运行时设置，实体遥控器才额外开启自定义映射。实体遥控器连接页的“已识别”由语音 bridge Ready 或生产 HID 普通按键证明；后者不会替代后续真实语音流门禁，完成页仍要求当前 bridge Ready。
+27. 未绑定 HID discovery 不再等待未显式打开的设备自行产生首报告：匹配到通过 Location 安全门且未被其他 monitor 占用的候选后，以非独占模式打开但不绑定；第一份包含已知普通按键的报告提升实际发送设备并关闭其他候选，空闲/未知 usage 不抢占，随后沿用 fingerprint 路由和 Profile 注册。已绑定 monitor、双遥控器隔离及 Power→F20 安全门不变。
 
 ## 全流程门禁审计结论
 
@@ -110,6 +111,7 @@
 - `swift test`：同一修复后 235 项、20 个 suite 全部通过；`scripts/test.sh` 42 项项目自检和 `swift build` 通过。iPhone 与网页分支浅色/深色各 10 张生产视图截图均已逐张检查，无内部滚动、裁切或黑白分栏。
 - `codex/v1-9-0-onboarding` 固定基线集成：`swift test --filter OnboardingFlowTests` 23 项、`swift test` 237 项/21 suites、`SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh` 42/42 通过；`arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建通过。实体遥控器 18 张、iPhone 20 张、网页 20 张生产 Onboarding 截图已逐张检查，无裁切或黑白分栏。
 - 2026-08-19 Typeless 与 BLE/HID 识别候选：`swift test` 312 项/31 suites、项目自检 42/42、Apple Silicon App 校验及 `x86_64-apple-macosx13.0` Release 构建通过；实体路径浅色/深色各 9 张生产页面无裁切或黑白分栏。隐藏截图夹具未模拟真实 HID 按键，新识别状态仍需 RC001 / RC003 真机查看。
+- 2026-08-20 HID 首报告死锁候选：1.9.3 现场日志确认 157 次设备匹配均被延迟且没有报告或边沿；失败优先测试后改为非独占探测候选，只有包含已知普通按键的真实报告才提升设备，空闲报告不会抢占。Remote buttons 86 项、Onboarding 26 项、完整 Swift 314 项/31 suites、硬件事件回放 21 项、项目自检 42/42 与 Apple Silicon / Intel Release 构建通过；真实 IOHID 回调、双遥控器及电源键仍待真机验收。
 - 同次 800×650 设置页检查中，固定主线基线的“按键映射 / Buttons”页顶部标题与启用开关文案发生严重窄列换行，中英文、浅深色四种组合均复现；Onboarding 七提交未修改该页面或设置容器。本集成不越界修复，但 1.9.0 候选必须在后续组合分支修复并重新执行全部设置入口门禁。
 - 私有硬件模拟：16 项通过，覆盖 RC001/RC003 语音、12 个原始按键、36 个手势、连发、异常报告、重连和双设备隔离。
 - `swift build -c release`：通过。

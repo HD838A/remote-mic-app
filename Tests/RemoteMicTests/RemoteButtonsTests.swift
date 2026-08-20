@@ -5,6 +5,39 @@ import Testing
 
 @Suite("Remote buttons")
 struct RemoteButtonsTests {
+    @Test func discoveryProbesMatchedDevicesWithoutBindingTheEnumerationWinner() {
+        #expect(HIDRemoteMonitor.deviceMatchDecision(
+            reportingFingerprint: "unbound-remote",
+            activeFingerprint: nil,
+            targetFingerprint: nil,
+            excludedFingerprints: []
+        ) == .probe)
+        #expect(HIDRemoteMonitor.deviceMatchDecision(
+            reportingFingerprint: "bound-remote",
+            activeFingerprint: nil,
+            targetFingerprint: "bound-remote",
+            excludedFingerprints: []
+        ) == .activate("bound-remote"))
+        #expect(HIDRemoteMonitor.deviceMatchDecision(
+            reportingFingerprint: "already-owned",
+            activeFingerprint: nil,
+            targetFingerprint: nil,
+            excludedFingerprints: ["already-owned"]
+        ) == .rejected("excluded_fingerprint"))
+        #expect(HIDRemoteMonitor.deviceMatchDecision(
+            reportingFingerprint: nil,
+            activeFingerprint: nil,
+            targetFingerprint: nil,
+            excludedFingerprints: []
+        ) == .rejected("fingerprint_unavailable"))
+        #expect(HIDRemoteMonitor.deviceMatchDecision(
+            reportingFingerprint: "other-remote",
+            activeFingerprint: "active-remote",
+            targetFingerprint: nil,
+            excludedFingerprints: []
+        ) == .rejected("active_device_exists"))
+    }
+
     @Test func discoveryRoutesTheRemoteThatWasActuallyPressed() {
         #expect(HIDRemoteMonitor.resolvedFingerprintForReport(
             reportingFingerprint: "pressed-remote",
@@ -12,6 +45,12 @@ struct RemoteButtonsTests {
             targetFingerprint: nil,
             excludedFingerprints: []
         ) == "pressed-remote")
+    }
+
+    @Test func discoveryPromotesOnlyAReportContainingAKnownRemoteButton() {
+        #expect(!HIDRemoteMonitor.shouldPromoteDiscoveryReport(usages: []))
+        #expect(!HIDRemoteMonitor.shouldPromoteDiscoveryReport(usages: [0xFFFF]))
+        #expect(HIDRemoteMonitor.shouldPromoteDiscoveryReport(usages: [RemoteButton.ok.hidUsage]))
     }
 
     @Test func discoveryRejectsAlreadyBoundRemotesAndDedicatedMonitorsStayIsolated() {

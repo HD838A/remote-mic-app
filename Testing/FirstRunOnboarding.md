@@ -155,6 +155,20 @@
 
 失败判定：仍需重启才能显示、BLE Ready 后普通按键无响应、安全设备也被全局拒绝、失败设备仍被 App 接管，或出现锁屏/关机系统动作。
 
+## 用例 4B-1：未绑定遥控器的首份 HID 报告
+
+1. 使用新的 macOS 测试用户或隔离偏好域启动未完成 Onboarding 的候选版，确保遥控器 Profile 尚无 HID fingerprint。
+2. 连接一只 RC001 或 RC003，确认 BLE Ready、输入监控和辅助功能均正常。
+3. 检查日志出现 `HID DEVICE probing mode=monitored`，且在按键前不会因为系统枚举顺序直接绑定 Profile。
+4. 短按方向键或 OK 键，确认日志依次出现 `HID CONNECTED mode=probed`、`HID REPORT accepted` 和 `HID EDGE pressed=`，页面立即显示已收到按键并允许继续。
+5. 点击“重新检测按键”、断开后重连并重复，确认不再持续出现 `discovery_waiting_for_report` 且无需重启 App。
+6. 同时连接两只尚未绑定的遥控器，先按第二只，再按第一只；确认第一份真实报告决定对应 Profile，随后新的 discovery 仍能识别剩余遥控器，两只设备不会重复执行同一动作。
+7. 按电源键，确认只执行配置动作且 Mac 不锁屏、不弹关机确认。
+
+预期结果：discovery 会以非独占模式探测所有安全候选，首份真实报告选择实际操作的设备，不再形成“等待报告后才打开设备”的闭环；双遥控器隔离、电源键保护和首按不丢失保持不变。
+
+失败判定：日志只有重复 `HID DEVICE deferred reason=discovery_waiting_for_report`、系统响应按键但 App 无任何 `HID REPORT`、系统枚举的第一只遥控器错误抢占 Profile、首个按键被消耗、两只遥控器重复执行，或电源键触发系统动作。
+
 ## 用例 4C：iPhone App 与无 iPhone 网页版
 
 ### iPhone App
