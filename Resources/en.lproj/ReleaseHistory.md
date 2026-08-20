@@ -1,5 +1,11 @@
 # Version History
 
+## 1.9.6 (Pre-release)
+
+- First-run setup permission cards remain clickable after authorization, so you can reopen the relevant macOS Privacy settings when checking or repairing access.
+- Users upgrading from an existing installation are guided to the permission repair page when required access is missing.
+- Improved first-run physical-remote discovery so the first real button press selects the correct remote without waiting indefinitely for an initial HID report; clearer guidance is shown when another input tool has exclusive access.
+
 ## 1.9.5 (Pre-release)
 
 - Fixed an issue where an unbound physical remote could be detected during first-run setup but its first button press might not respond; first-run setup now accepts the initial input reliably.
