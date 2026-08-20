@@ -80,8 +80,20 @@ if ! print -r -- "$RUN_JSON" | jq -e \
     .conclusion == "success" and
     .headBranch == $branch and
     .headSha == $headSha and
-    ([.jobs[] | select(.name == "Validate and package preview candidate (Apple Silicon)" and .status == "completed" and .conclusion == "success")] | length) == 1 and
-    ([.jobs[] | select(.name == "Validate and package preview candidate (Intel Ventura)" and .status == "completed" and .conclusion == "success")] | length) == 1
+    ([.jobs[] | select(
+      .name == "Validate and package preview candidate (Apple Silicon)" and
+      .status == "completed" and .conclusion == "success" and
+      (([.steps[] | select(.name == "Reuse exact parent main product-code proof" and .conclusion == "success")] | length) == 1 or
+       (([.steps[] | select(.name == "Run full candidate validation when reuse is ineligible" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select(.name == "Upload full ad-hoc candidate" and .conclusion == "success")] | length) == 1))
+    )] | length) == 1 and
+    ([.jobs[] | select(
+      .name == "Validate and package preview candidate (Intel Ventura)" and
+      .status == "completed" and .conclusion == "success" and
+      (([.steps[] | select(.name == "Reuse exact parent main product-code proof" and .conclusion == "success")] | length) == 1 or
+       (([.steps[] | select(.name == "Run full candidate validation when reuse is ineligible" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select(.name == "Upload full ad-hoc candidate" and .conclusion == "success")] | length) == 1))
+    )] | length) == 1
   ' >/dev/null; then
   print -u2 "preview candidate run $RUN_ID is not a successful exact-SHA two-architecture push run"
   exit 1

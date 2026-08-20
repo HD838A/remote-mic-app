@@ -14,10 +14,7 @@ NO_RG_BIN="$WORK_DIR/no-rg-bin"
 METADATA_REPO="$WORK_DIR/metadata-repo"
 
 cleanup() {
-  case "$WORK_DIR" in
-    /private/tmp/remotemic-release-pipeline-test.*) /bin/rm -rf -- "$WORK_DIR" ;;
-    *) print -u2 "refusing to clean unexpected release pipeline test path: $WORK_DIR" ;;
-  esac
+  print -u2 "release pipeline test evidence retained at: $WORK_DIR"
 }
 trap cleanup EXIT
 
@@ -51,6 +48,7 @@ fi
 /bin/cp "$ROOT/scripts/package-macos-release-in-actions.sh" "$TEST_REPO/scripts/"
 /bin/mkdir -p "$TEST_REPO/Resources"
 /bin/cp "$ROOT/Resources/Info.plist" "$TEST_REPO/Resources/"
+/bin/cp "$ROOT/Package.swift" "$ROOT/Package.resolved" "$TEST_REPO/"
 print '#!/bin/zsh' > "$TEST_REPO/scripts/verify-preview-branch.sh"
 print 'exit 0' >> "$TEST_REPO/scripts/verify-preview-branch.sh"
 /bin/chmod 755 "$TEST_REPO/scripts/"*.sh
@@ -127,11 +125,15 @@ fi
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'timeout-minutes: 3' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-if /usr/bin/grep -Eq 'swift test|scripts/test\.sh|build-dmg\.sh|swift build' \
-    "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"; then
-  print -u2 "metadata-only preview still repeats product tests or builds"
-  exit 1
-fi
+/usr/bin/grep -Fq "if: needs.classify-candidate.outputs.reuse_parent_main_ci == 'true'" \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq "if: needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'" \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'Run full candidate validation when reuse is ineligible' \
+  "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'swift test' "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq 'swift build -c release' "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+/usr/bin/grep -Fq './scripts/build-dmg.sh' "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'if: ${{ !contains(github.ref_name, '\''-canary-'\'') }}' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY' \
@@ -143,11 +145,15 @@ fi
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'GITHUB_REF_NAME: ${{ github.head_ref }}' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
-/usr/bin/grep -Fq 'release_metadata_only=false' \
+/usr/bin/grep -Fq 'reuse_parent_main_ci=false' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq './scripts/verify-release-metadata-diff.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
-/usr/bin/grep -Fq 'SLO_SECONDS: 900' \
+/usr/bin/grep -Fq 'TOTAL_SLO_SECONDS: 1800' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'READY_SLO_SECONDS: 900' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'release_ready_at:' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'PREVIEW_PUBLISHED_SLO_SECONDS: 840' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
@@ -424,8 +430,9 @@ fi
   print -r -- '      failed) head_sha="$head_commit"; conclusion=failure ;;'
   print -r -- '      *) head_sha="$head_commit"; conclusion=success ;;'
   print -r -- '    esac'
-  print -r -- '    jobs="[{\"name\":\"Validate and package preview candidate (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\"},{\"name\":\"Validate and package preview candidate (Intel Ventura)\",\"status\":\"completed\",\"conclusion\":\"success\"}]"'
-  print -r -- '    if [[ "$mode" == "missing-intel" ]]; then jobs="[{\"name\":\"Validate and package preview candidate (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\"}]"; fi'
+  print -r -- '    proof_steps="[{\"name\":\"Reuse exact parent main product-code proof\",\"conclusion\":\"success\"}]"'
+  print -r -- '    jobs="[{\"name\":\"Validate and package preview candidate (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps},{\"name\":\"Validate and package preview candidate (Intel Ventura)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps}]"'
+  print -r -- '    if [[ "$mode" == "missing-intel" ]]; then jobs="[{\"name\":\"Validate and package preview candidate (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps}]"; fi'
   print -r -- '    print -r -- "{\"workflowName\":\"macOS Preview Candidate\",\"event\":\"push\",\"status\":\"completed\",\"conclusion\":\"$conclusion\",\"headBranch\":\"release/pre-v9.9.9\",\"headSha\":\"$head_sha\",\"jobs\":$jobs,\"url\":\"https://example.invalid/run/42\"}"'
   print -r -- '    ;;'
   print -r -- '  "pr list")'
@@ -470,14 +477,22 @@ git -C "$METADATA_REPO" init -b main >/dev/null
 git -C "$METADATA_REPO" config user.name "Release Metadata Test"
 git -C "$METADATA_REPO" config user.email "release-metadata@example.invalid"
 /bin/mkdir -p "$METADATA_REPO/Resources/en.lproj" \
-  "$METADATA_REPO/Resources/zh-Hans.lproj" "$METADATA_REPO/Testing"
-print '<plist/>' > "$METADATA_REPO/Resources/Info.plist"
+  "$METADATA_REPO/Resources/zh-Hans.lproj"
+print '<plist><dict>' > "$METADATA_REPO/Resources/Info.plist"
+print '<key>CFBundleDisplayName</key><string>SayAll</string>' >> "$METADATA_REPO/Resources/Info.plist"
+print '<key>CFBundleShortVersionString</key>' >> "$METADATA_REPO/Resources/Info.plist"
+print '<string>9.9.8</string>' >> "$METADATA_REPO/Resources/Info.plist"
+print '<key>CFBundleVersion</key>' >> "$METADATA_REPO/Resources/Info.plist"
+print '<string>998</string>' >> "$METADATA_REPO/Resources/Info.plist"
+print '</dict></plist>' >> "$METADATA_REPO/Resources/Info.plist"
 print '# English' > "$METADATA_REPO/Resources/en.lproj/ReleaseHistory.md"
 print '# 中文' > "$METADATA_REPO/Resources/zh-Hans.lproj/ReleaseHistory.md"
 git -C "$METADATA_REPO" add Resources
 git -C "$METADATA_REPO" commit -m base >/dev/null
 METADATA_BASE="$(git -C "$METADATA_REPO" rev-parse HEAD)"
-print '<plist version="9.9.9"/>' > "$METADATA_REPO/Resources/Info.plist"
+/usr/bin/sed -e 's/>9.9.8</>9.9.9</' -e 's/>998</>999</' \
+  "$METADATA_REPO/Resources/Info.plist" > "$WORK_DIR/candidate-Info.plist"
+/bin/mv "$WORK_DIR/candidate-Info.plist" "$METADATA_REPO/Resources/Info.plist"
 print '## 9.9.9' >> "$METADATA_REPO/Resources/en.lproj/ReleaseHistory.md"
 print '## 9.9.9' >> "$METADATA_REPO/Resources/zh-Hans.lproj/ReleaseHistory.md"
 git -C "$METADATA_REPO" add Resources
@@ -503,6 +518,69 @@ if (
 fi
 /usr/bin/grep -Fq 'non-release change: Sources/Product.swift' \
   "$WORK_DIR/metadata-reject.txt"
+
+if (
+  cd "$METADATA_REPO"
+  "$ROOT/scripts/verify-release-metadata-diff.sh" \
+    "$METADATA_BASE" "$(git rev-parse HEAD)" release/pre-v9.9.9
+) > "$WORK_DIR/metadata-nondirect.txt" 2>&1; then
+  print -u2 "non-direct candidate unexpectedly reused main CI"
+  exit 1
+fi
+/usr/bin/grep -Fq 'must be one direct commit after base main' \
+  "$WORK_DIR/metadata-nondirect.txt"
+
+PLIST_REPO="$WORK_DIR/unsafe-info-plist"
+git clone -q "$METADATA_REPO" "$PLIST_REPO"
+git -C "$PLIST_REPO" config user.name "Release Metadata Test"
+git -C "$PLIST_REPO" config user.email "release-metadata@example.invalid"
+git -C "$PLIST_REPO" switch --detach "$METADATA_BASE" >/dev/null
+/usr/bin/sed \
+  -e 's/>SayAll</>Unsafe Name</' \
+  -e 's/>9.9.8</>9.9.9</' \
+  -e 's/>998</>999</' \
+  "$PLIST_REPO/Resources/Info.plist" > "$WORK_DIR/unsafe-Info.plist"
+/bin/mv "$WORK_DIR/unsafe-Info.plist" "$PLIST_REPO/Resources/Info.plist"
+print '## 9.9.9' >> "$PLIST_REPO/Resources/en.lproj/ReleaseHistory.md"
+print '## 9.9.9' >> "$PLIST_REPO/Resources/zh-Hans.lproj/ReleaseHistory.md"
+git -C "$PLIST_REPO" add Resources
+git -C "$PLIST_REPO" commit -m "unsafe plist metadata" >/dev/null
+if (
+  cd "$PLIST_REPO"
+  "$ROOT/scripts/verify-release-metadata-diff.sh" \
+    "$METADATA_BASE" "$(git rev-parse HEAD)" release/pre-v9.9.9
+) > "$WORK_DIR/unsafe-info-plist.txt" 2>&1; then
+  print -u2 "non-version Info.plist change unexpectedly reused main CI"
+  exit 1
+fi
+/usr/bin/grep -Fq 'may change only version/build values in Info.plist' \
+  "$WORK_DIR/unsafe-info-plist.txt"
+
+for unsafe_path in \
+  Package.swift \
+  Config/RemoteMic.entitlements \
+  .github/workflows/mac-release-package.yml \
+  scripts/package-macos-release-variants.sh; do
+  unsafe_repo="$WORK_DIR/unsafe-${unsafe_path:t:r}"
+  git clone -q "$METADATA_REPO" "$unsafe_repo"
+  git -C "$unsafe_repo" config user.name "Release Metadata Test"
+  git -C "$unsafe_repo" config user.email "release-metadata@example.invalid"
+  git -C "$unsafe_repo" switch --detach "$METADATA_BASE" >/dev/null
+  /bin/mkdir -p "${unsafe_repo}/${unsafe_path:h}"
+  print 'unsafe release input' > "$unsafe_repo/$unsafe_path"
+  git -C "$unsafe_repo" add "$unsafe_path"
+  git -C "$unsafe_repo" commit -m "unsafe $unsafe_path" >/dev/null
+  if (
+    cd "$unsafe_repo"
+    "$ROOT/scripts/verify-release-metadata-diff.sh" \
+      "$METADATA_BASE" "$(git rev-parse HEAD)" release/pre-v9.9.9
+  ) > "$WORK_DIR/unsafe-${unsafe_path:t:r}.txt" 2>&1; then
+    print -u2 "unsafe release input unexpectedly reused main CI: $unsafe_path"
+    exit 1
+  fi
+  /usr/bin/grep -Fq "non-release change: $unsafe_path" \
+    "$WORK_DIR/unsafe-${unsafe_path:t:r}.txt"
+done
 
 ledger_now="$(date +%s)"
 ledger_file="$WORK_DIR/release-slo.tsv"
@@ -567,7 +645,7 @@ done
 touch "$WORK_DIR/watchdog-complete"
 GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-pass.log" \
   "$TEST_REPO/scripts/release-user-wall-watchdog.sh" preview \
-    "$(date +%s)" release/pre-v9.9.9 "$WORK_DIR/watchdog-complete" "$WORK_DIR/watchdog-empty-runs" \
+    "$(date +%s)" "$(date +%s)" release/pre-v9.9.9 "$WORK_DIR/watchdog-complete" "$WORK_DIR/watchdog-empty-runs" \
     > "$WORK_DIR/watchdog-pass.txt"
 /usr/bin/grep -Fq 'RELEASE USER-WALL WATCHDOG PASS' "$WORK_DIR/watchdog-pass.txt"
 
@@ -575,7 +653,7 @@ set +e
 GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-expired.log" \
 RELEASE_WATCHDOG_POLL_SECONDS=1 \
   "$TEST_REPO/scripts/release-user-wall-watchdog.sh" preview \
-    "$(( $(date +%s) - 900 ))" release/pre-v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-empty-runs" \
+    "$(( $(date +%s) - 1000 ))" "$(( $(date +%s) - 900 ))" release/pre-v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-empty-runs" \
     > "$WORK_DIR/watchdog-expired.txt" 2>&1
 watchdog_status="$?"
 set -e
@@ -591,7 +669,7 @@ set +e
 GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-registered.log" \
 RELEASE_WATCHDOG_POLL_SECONDS=1 \
   "$TEST_REPO/scripts/release-user-wall-watchdog.sh" stable \
-    "$(( $(date +%s) - 1800 ))" v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-runs" \
+    "$(( $(date +%s) - 1800 ))" "$(( $(date +%s) - 1800 ))" v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-runs" \
     > "$WORK_DIR/watchdog-registered.txt" 2>&1
 registered_watchdog_status="$?"
 set -e

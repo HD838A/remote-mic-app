@@ -28,7 +28,7 @@
 - 候选 Push 后即可创建 Draft PR，使 Preview 和 PR CI 并行；两条 PR required context 保持名称不变。
 - 签名保持双架构真实重建、Developer ID、公证和 10 分钟硬限，内部 supervisor 收紧到 540 秒。
 - 在同一 workflow 中增加不持有 Apple 凭据的 publish Job，直接消费签名 artifact、创建不可变 Tag/Pre-release，并完成 GitHub/CDN 并行逐字节验证。
-- 预览与正式分别增加 900/1800 秒用户墙钟 watchdog；到期取消一次并失败，不自动重试或重建。
+- 预览增加双时钟 watchdog：用户请求起总计 30 分钟、代码 release-ready 后 15 分钟；任一到期只取消本次登记的运行并失败，不自动重试、重建或重置时间戳。
 - 稳定晋升继续只复用预览原字节，不进入签名、公证或打包。
 
 ## 验证
@@ -40,5 +40,5 @@
 ## 边界
 
 - 静态和 fake-service 自动化不能证明 Apple 公证或 GitHub/CDN 每次都在预算内完成。
-- 硬指标定义为预览 15 分钟、正式 30 分钟内“成功或明确失败”；外部服务过慢时不允许跳过签名、公证、staple 或公开字节验证来制造成功。
+- 硬指标定义为预览总计 30 分钟且 ready 后 15 分钟内“成功或明确失败”；外部服务过慢时不允许跳过签名、公证、staple 或公开字节验证来制造成功。
 - 修改后的真实 Developer ID 路径在合入 `main` 前仍需受保护 canary 验证；本提交不 Push、不运行真实发布。
