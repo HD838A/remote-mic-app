@@ -10,16 +10,17 @@
 ## 自动化验证
 
 1. 运行 `actionlint` 检查四条 macOS workflow。
-2. 运行 `./scripts/test-release-pipeline-optimization.sh`。
-3. 运行 `swift test --filter BuildSigningTests`。
-4. 确认 Preview 和 Draft PR 的 metadata-only 路径调用 `verify-release-ready-main-ci.sh`；符合资格时不执行完整产品 CI，不符合时自动执行 Swift tests、Self Test、双架构 Release build 与 ad-hoc DMG 验证。
-5. 确认父 `main` 证明必须是精确 SHA 的 push run，并且 Apple Silicon、Intel Job 内的 Swift tests、Self Test 和 Release build 均成功；文档-only main run不得被误复用。
-6. 确认真实预览 dispatch 缺少 `request_started_at` 或 `release_ready_at` 会立即失败；两者必须有序且不可由重试重置。
-7. 在 workflow 尚未获得 Runner 的场景启动本机 watchdog；确认 Preview 和正式晋升都只在 ready 后 1740 秒内部截止取消本次显式登记的运行，并在 30 分钟前留下明确失败信息。`request_started_at` 总墙钟只记录和汇报，不得截短 30 分钟纯发布窗口。
-8. 将 Draft PR 的 Apple Silicon 或 Intel required check 分别置为 pending/failed，确认签名 workflow 在接触 Apple 凭据前拒绝继续。
-9. 确认双架构签名 composite step 仍为 10 分钟硬限，内部 signed-release supervisor 为 540 秒，publication supervisor 最多 180 秒。
-10. 确认 publish Job 不持有 Apple 凭据，签名 Job 没有 `contents: write`；publish Job 才拥有创建 Tag、Release 和 dispatch Guard 所需的最小写权限。
-11. 确认正式晋升只调用 `publish-release.sh promote`，不调用任何 build、sign、notary 或 package 脚本。
+2. 运行 `./scripts/verify-release-workflow-gh-token.sh`，对每个包含 `gh`/GitHub API 调用的 workflow step 做无秘密静态检查，确认显式设置 `GH_TOKEN: ${{ github.token }}`；特别覆盖 `Validate release identity`，并确认该步骤位于任何 Apple 凭据读取之前。
+3. 运行 `./scripts/test-release-pipeline-optimization.sh`。
+4. 运行 `swift test --filter BuildSigningTests`。
+5. 确认 Preview 和 Draft PR 的 metadata-only 路径调用 `verify-release-ready-main-ci.sh`；符合资格时不执行完整产品 CI，不符合时自动执行 Swift tests、Self Test、双架构 Release build 与 ad-hoc DMG 验证。
+6. 确认父 `main` 证明必须是精确 SHA 的 push run，并且 Apple Silicon、Intel Job 内的 Swift tests、Self Test 和 Release build 均成功；文档-only main run不得被误复用。
+7. 确认真实预览 dispatch 缺少 `request_started_at` 或 `release_ready_at` 会立即失败；两者必须有序且不可由重试重置。
+8. 在 workflow 尚未获得 Runner 的场景启动本机 watchdog；确认 Preview 和正式晋升都只在 ready 后 1740 秒内部截止取消本次显式登记的运行，并在 30 分钟前留下明确失败信息。使用 `scripts/release-user-wall-watchdog.sh`，为每个 Run 登记完整的 `requestId`/workflow/SHA/branch/target，轮询间隔有界；不要只依赖 GitHub 队列内 watchdog。
+9. 将 Draft PR 的 Apple Silicon 或 Intel required check 分别置为 pending/failed，确认签名 workflow 在接触 Apple 凭据前拒绝继续。
+10. 确认双架构签名 composite step 仍为 10 分钟硬限，内部 signed-release supervisor 为 540 秒，publication supervisor 最多 180 秒。
+11. 确认 publish Job 不持有 Apple 凭据，签名 Job 没有 `contents: write`；publish Job 才拥有创建 Tag、Release 和 dispatch Guard 所需的最小写权限。
+12. 确认正式晋升只调用 `publish-release.sh promote`，不调用任何 build、sign、notary 或 package 脚本。
 
 ## 真实发布验收
 

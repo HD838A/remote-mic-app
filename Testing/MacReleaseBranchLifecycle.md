@@ -2,14 +2,14 @@
 
 ## 适用范围
 
-- 适用分支：包含候选基线、provenance schema 2 和候选回流门禁的 `main` 及后续 `release/pre-vX.Y.Z`。
+- 适用分支：包含候选基线、provenance schema 2 和候选回流门禁的 `main` 及后续 `release/pre-vX.Y.Z`、编号恢复候选 `release/pre-vX.Y.Z-rerun([2-9][0-9]*)?`。
 - 适用流程：macOS Preview Candidate、macOS Signed Release Packages、Release Guard、macOS CI、macOS Stable Promotion。
 - 本手册只验证发布分支与资产生命周期，不代替 App 功能、安装、Intel Ventura、签名或公证的专项验收。
 
 ## 测试前准备
 
 1. 使用干净工作区，执行 `git fetch origin main --tags`，确认本地 `main` 与 `origin/main` 一致。
-2. 选择尚未使用的测试版本和递增 build；候选分支必须命名为 `release/pre-vX.Y.Z`。
+2. 选择尚未占用的测试版本和递增 build；首次候选命名为 `release/pre-vX.Y.Z`。如果专门验证签名前恢复，使用同版本且未占用的 `-rerun` 或更高编号后缀。
 3. 候选只修改 `Resources/Info.plist` 的版本/build、两份 `ReleaseHistory.md` 和必要的 `Testing/*.md`。
 4. 真正发布 Pre-release 前，仍需通过受保护 Environment 审批、两种架构打包、签名、公证及下载字节校验。
 
@@ -71,6 +71,16 @@
 预期结果：同一个 Tag 从 Pre-release 变为 Stable，所有候选资产摘要完全一致，只新增正式晋升证明；未重新签名、公证或打包。
 
 失败判定：候选未进入 main 就晋升、选择了未发布候选、创建新 Tag、替换任一资产或从 main 重建。
+
+## 用例 7：签名前失败的同版本恢复
+
+1. 让候选在 `Validate release identity` 或其他读取 Apple 凭据前的无秘密步骤失败，确认远端没有对应 Tag、Release、appcast 或可分发资产。
+2. 修复流水线并通过普通 PR 合入 `main`，从最新 `origin/main` 创建同版本 `release/pre-vX.Y.Z-rerun`，随后按需使用 `-rerun2` 等更高编号。
+3. 检查新候选的 provenance、请求 attestation、候选 SHA 和 Draft PR，确认旧失败候选与 Run 仍保留。
+
+预期结果：同一版本恢复进入正常候选流程，`request_started_at` 不变，新的候选 SHA 和 attestation 与旧失败身份区分；不创建新 Tag 之前不要求递增版本。
+
+失败判定：改写旧候选、force-push、清理失败证据、复用不匹配的公开 attestation，或仅因无秘密流水线失败就强制递增版本。
 
 ## 稳定功能回归
 

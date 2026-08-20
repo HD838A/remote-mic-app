@@ -28,7 +28,7 @@
 
 - 功能和修复必须先通过 PR 合入 `main`；不得直接在预览候选分支开发产品功能。
 - 发布会话收到尚未合入 `origin/main` 的产品 Commit 时，必须从最新 `origin/main` 建立独立开发集成分支，只重放用户指定工作及必要依赖，通过普通 PR 和必需检查合入；机械冲突可依据代码、测试和文档解决，涉及产品取舍或行为丢失时才请求用户决策。集成完成前不得创建候选或接触 Apple 发布凭据。
-- 每个候选版本使用一次性的 `release/pre-vX.Y.Z` 分支，并从最新 `origin/main` 创建。
+- 每个候选版本首次使用从最新 `origin/main` 创建的一次性 `release/pre-vX.Y.Z` 分支；仅在签名前失败且没有 Tag、Release、appcast 或分发资产时，才可按序创建同版本 `-rerun`、`-rerun2` 等恢复分支。旧候选不得改写、删除或 force-push。
 - 候选分支只允许修改版本号、Build、中英文版本历史和必要的测试手册目标版本；Push 后由 GitHub Actions 自动校验来源、运行完整 Mac 测试并生成临时 CI App 包。
 - 精确候选 SHA 的 Apple Silicon 与 Intel 候选 Job 成功后，可提前创建候选分支到 `main` 的 Draft 回流 PR，让受保护 PR CI 与正式签名、公证并行；公开 Release 字节、provenance 和固定候选更新验证完成前，该 PR 必须保持 Draft，禁止 Ready 或合并。
 - 公开 Pre-release 仍必须使用 Developer ID 签名、公证、Sparkle 签名和公开资产复核；GitHub CI 的 ad-hoc App 不能当作公开安装包。

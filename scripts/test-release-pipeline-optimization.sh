@@ -45,6 +45,7 @@ fi
 /bin/cp "$ROOT/scripts/notarize-release.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-release-timeout-budgets.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-release-canary-provenance.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/verify-release-workflow-gh-token.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/release-pipeline-digest.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/build-dmg.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/build-doubao-driver.sh" "$TEST_REPO/scripts/"
@@ -74,6 +75,8 @@ print 'exit 0' >> "$TEST_REPO/scripts/run-trusted-release-validation.sh"
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'contents: read' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
+REPOSITORY_ROOT="$TEST_REPO" \
+  "$TEST_REPO/scripts/verify-release-workflow-gh-token.sh"
 package_job_source="$(/usr/bin/awk '
   /^  package:/ { capture = 1 }
   /^  publish:/ { capture = 0 }
