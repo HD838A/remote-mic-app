@@ -37,6 +37,8 @@
 "button_mapping.error.device_open_failed" = "Unable to open the remote button device";
 "button_mapping.status.connected" = "Button controls connected";
 "button_mapping.error.device_read_failed" = "Unable to read remote buttons (error %1$@)";
+"button_mapping.error.exclusive_access" = "Another input tool is using the remote. Quit or pause keyboard, mouse, or device remapping tools, then try again. Common examples include Karabiner-Elements, BetterTouchTool, USB Overdrive, and SteerMouse.";
+"button_mapping.error.exclusive_access.karabiner" = "Another input tool is using the remote. If you use Karabiner-Elements, open Devices, find the Xiaomi Bluetooth Voice Remote, turn off “Modify events” or set the device to “Ignore”, then try again.";
 "button_mapping.error.power_suppression_failed" = "Unable to safely override the remote power button";
 "button_mapping.status.connected_fallback" = "Button controls connected";
 "button_mapping.status.connected_system_actions_may_remain" = "Button controls connected; some original system actions may still occur";

@@ -115,6 +115,24 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func permissionRowsRemainClickableAfterAuthorization() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewSource.contains("Button(action: action)"))
+        #expect(viewSource.contains("action: requestBluetoothPermission"))
+        #expect(viewSource.contains("action: model.requestInputMonitoringPermission"))
+        #expect(viewSource.contains("action: model.requestAccessibilityPermission"))
+        #expect(viewSource.contains("if bluetoothAuthorization == .allowedAlways"))
+        #expect(viewSource.contains("Privacy_Bluetooth"))
+    }
+
     @Test func mobileControlPathsUseOnDemandAudioWithoutWeakeningDeviceSelection() {
         var capabilities = OnboardingCapabilities(
             bluetoothGranted: true,
@@ -1015,6 +1033,67 @@ struct OnboardingFlowTests {
             completedUpdate: false,
             openMainWindowAtLaunch: false
         ))
+    }
+
+    @Test func completedUpdateOpensPermissionRepairOnlyWhenARequiredPermissionIsMissing() throws {
+        #expect(CompletedUpdatePermissionRepairPolicy.shouldOpenPermissions(
+            isOnboardingComplete: true,
+            completedUpdate: true,
+            bluetoothGranted: false,
+            inputMonitoringGranted: true,
+            accessibilityGranted: true
+        ))
+        #expect(CompletedUpdatePermissionRepairPolicy.shouldOpenPermissions(
+            isOnboardingComplete: true,
+            completedUpdate: true,
+            bluetoothGranted: true,
+            inputMonitoringGranted: false,
+            accessibilityGranted: true
+        ))
+        #expect(CompletedUpdatePermissionRepairPolicy.shouldOpenPermissions(
+            isOnboardingComplete: true,
+            completedUpdate: true,
+            bluetoothGranted: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: false
+        ))
+        #expect(!CompletedUpdatePermissionRepairPolicy.shouldOpenPermissions(
+            isOnboardingComplete: true,
+            completedUpdate: true,
+            bluetoothGranted: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: true
+        ))
+        #expect(!CompletedUpdatePermissionRepairPolicy.shouldOpenPermissions(
+            isOnboardingComplete: true,
+            completedUpdate: false,
+            bluetoothGranted: false,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ))
+        #expect(!CompletedUpdatePermissionRepairPolicy.shouldOpenPermissions(
+            isOnboardingComplete: false,
+            completedUpdate: true,
+            bluetoothGranted: false,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let rootViewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicRootView.swift"),
+            encoding: .utf8
+        )
+        #expect(appSource.contains("showSettingsWindow(initialSection: .permissions)"))
+        #expect(appSource.contains("UPDATE PERMISSION_REPAIR"))
+        #expect(rootViewSource.contains("initialSection: initialSettingsSection"))
     }
 
     @Test func firstUseFailuresPointToTheExactRecoveryStep() {

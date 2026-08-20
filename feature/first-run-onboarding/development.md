@@ -46,9 +46,12 @@
 22. 语音测试输入框不能只依赖父页面切换时的一次 `FocusState` 请求；输入框真正出现、App 回到前台和用户重试时都先复位再在下一次主队列调度重新聚焦。占位符使用与正文一致的 15pt 字号和内容起点，焦点日志只记录布尔状态，不记录用户文字。
 23. iPhone/网页语音输出采用按需生命周期：手机语音开始时配置，停止后释放。音频页和完成页要求 MiRemoteV 2ch 或 BlackHole 2ch 已选择且仍存在，真实会话、PCM、停止和文字继续在语音页验证；实体遥控器继续要求生产输出持续 Ready。三种控制方式统一检查蓝牙、输入监控和辅助功能；权限页不伪造无法可靠查询的本地网络授权状态，而是在连接页用 Nearby/WSS 真实会话作为门禁。
 24. 语音测试的文字状态不再等同于输入框非空。每次所选来源开始语音时清空旧文字；只有 `keyDown + hidSystemState + sourceUnixProcessID <= 0` 才确认物理手输并阻塞继续，合成/非零 PID/combined/private/缺失或未知事件来源全部 fail-open。视图只传事件类型、state ID 和 PID 给纯策略，诊断只记录布尔状态，不记录 PID、键码、文字或 App。
-25. SayAll.app 路径迁移后的私有 Draft 与公开 Pre-release 必须使用正式 Developer ID Team 签名并公证；Push 候选 CI 的 ad-hoc exact-SHA Artifact 只用于验证，不可分发或用于权限连续性验收。权限页在权限已授予时不再重复显示请求按钮，已有用户权限异常时只显示兜底说明。App 不尝试修改 TCC 数据库，也不自动删除系统权限条目。
+25. SayAll.app 路径迁移后的私有 Draft 与公开 Pre-release 必须使用正式 Developer ID Team 签名并公证；Push 候选 CI 的 ad-hoc exact-SHA Artifact 只用于验证，不可分发或用于权限连续性验收。权限页的三张状态卡在已授予后仍保持可点击，直接打开对应系统隐私页；点击不改变权限门禁，App 不尝试修改 TCC 数据库，也不自动删除系统权限条目。正式 `Remote Mic.app` 与 `SayAll.app` 保持相同 Bundle ID、可执行文件、Team ID 和 designated requirement 时，文件名与显示名变化原则上延续既有权限。
 26. Onboarding 语音工具选择直接同步 Fn 点按偏好：Typeless 为开启，豆包、微信和其他工具为关闭；三种控制方式离开权限页时统一应用运行时设置，实体遥控器才额外开启自定义映射。实体遥控器连接页的“已识别”由语音 bridge Ready 或生产 HID 普通按键证明；后者不会替代后续真实语音流门禁，完成页仍要求当前 bridge Ready。
 27. 未绑定 HID discovery 不再等待未显式打开的设备自行产生首报告：匹配到通过 Location 安全门且未被其他 monitor 占用的候选后，以非独占模式打开但不绑定；第一份包含已知普通按键的报告提升实际发送设备并关闭其他候选，空闲/未知 usage 不抢占，随后沿用 fingerprint 路由和 Profile 注册。已绑定 monitor、双遥控器隔离及 Power→F20 安全门不变。
+28. 权限卡统一使用整卡 plain Button：蓝牙未决定时继续由生产重连触发系统请求，拒绝/受限和已授权时打开 `Privacy_Bluetooth`；输入监控与辅助功能复用现有 `BridgeAppModel` 系统设置入口。已授权蓝牙分支不调用重连，避免仅为排障入口扰动稳定连接。
+29. 完成更新后的权限恢复使用独立纯策略，不修改 Onboarding 完成版本：只有已完成用户、当前启动确认为版本更新且三项权限任一缺失时，设置窗口初始页为“权限与隐私”。这复用现有设置页的实时刷新与补授权操作，不引入新的修复向导或持久化状态。
+30. HID manager、probe 或设备打开返回 `kIOReturnExclusiveAccess` 时才触发第三方占用提示；通用文案覆盖所有输入工具，Karabiner-Elements 的安装状态只用于补充具体操作，不作为占用根因。Karabiner 指引为“设备”中找到小米蓝牙语音遥控器后关闭 “Modify events” 或设为 “Ignore”。
 
 ## 全流程门禁审计结论
 
@@ -112,6 +115,9 @@
 - `codex/v1-9-0-onboarding` 固定基线集成：`swift test --filter OnboardingFlowTests` 23 项、`swift test` 237 项/21 suites、`SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh` 42/42 通过；`arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建通过。实体遥控器 18 张、iPhone 20 张、网页 20 张生产 Onboarding 截图已逐张检查，无裁切或黑白分栏。
 - 2026-08-19 Typeless 与 BLE/HID 识别候选：`swift test` 312 项/31 suites、项目自检 42/42、Apple Silicon App 校验及 `x86_64-apple-macosx13.0` Release 构建通过；实体路径浅色/深色各 9 张生产页面无裁切或黑白分栏。隐藏截图夹具未模拟真实 HID 按键，新识别状态仍需 RC001 / RC003 真机查看。
 - 2026-08-20 HID 首报告死锁候选：1.9.3 现场日志确认 157 次设备匹配均被延迟且没有报告或边沿；失败优先测试后改为非独占探测候选，只有包含已知普通按键的真实报告才提升设备，空闲报告不会抢占。Remote buttons 86 项、Onboarding 26 项、完整 Swift 314 项/31 suites、硬件事件回放 21 项、项目自检 42/42 与 Apple Silicon / Intel Release 构建通过；真实 IOHID 回调、双遥控器及电源键仍待真机验收。
+- 2026-08-20 权限卡候选：定向源码回归测试先在旧实现产生 5 个 assertion issue，修复后通过；Onboarding 27 项、完整 Swift 313 项/31 suites、项目自检 42/42 通过。权限页浅色/深色生产视图均为 Retina `2040 × 1608`，对应 `1020 × 772` 内容区；三张卡、进入箭头、修复卡和底部导航无裁切、无内部滚动或黑白分栏。签名静态审计确认公开 `v1.9.3` SayAll.app 与旧安装 Remote Mic.app 的 Bundle ID、可执行文件、Team ID 和 designated requirement 一致；真实 TCC 升级和系统设置跳转仍需正式签名包现场验收。
+- 2026-08-20 Issue #100 定向恢复候选：旧实现没有升级权限修复策略，定向测试先失败；新增纯策略和设置窗口初始页接线后通过。Onboarding 28 项、完整 Swift 314 项/31 suites、项目自检 42/42 通过；权限页浅色/深色 `800 × 650` 无裁切。公开 1.8.3 与 1.9.3 App 的正式代码身份逐项一致，公开 1.9.3 PKG 已包含旧 App 迁移；真实 TCC 与剩余安装失败仍需现场日志验收。
+- 2026-08-20 HID 首报告死锁候选：1.9.3 现场日志确认 157 次设备匹配均被延迟且没有报告或边沿；失败优先测试后改为非独占探测候选，只有包含已知普通按键的真实报告才提升设备，空闲报告不会抢占；并增加独占错误与 Karabiner-Elements 指引分支。Remote buttons 88 项、Onboarding 28 项、完整 Swift 318 项/31 suites、硬件事件回放 21 项、项目自检 42/42 与 Apple Silicon / Intel Release 构建通过；真实 IOHID 回调、双遥控器、第三方 HID 工具及电源键仍待真机验收。
 - 同次 800×650 设置页检查中，固定主线基线的“按键映射 / Buttons”页顶部标题与启用开关文案发生严重窄列换行，中英文、浅深色四种组合均复现；Onboarding 七提交未修改该页面或设置容器。本集成不越界修复，但 1.9.0 候选必须在后续组合分支修复并重新执行全部设置入口门禁。
 - 私有硬件模拟：16 项通过，覆盖 RC001/RC003 语音、12 个原始按键、36 个手势、连发、异常报告、重连和双设备隔离。
 - `swift build -c release`：通过。

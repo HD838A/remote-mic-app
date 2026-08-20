@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CoreBluetooth
 import Darwin
 import Sparkle
 import SwiftUI
@@ -179,6 +180,20 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         ) {
             model.recoverHIDAfterCompletedUpdate()
         }
+        let shouldOpenPermissionRepair = CompletedUpdatePermissionRepairPolicy.shouldOpenPermissions(
+            isOnboardingComplete: model.settings.isOnboardingComplete,
+            completedUpdate: completedUpdate,
+            bluetoothGranted: CBManager.authorization == .allowedAlways,
+            inputMonitoringGranted: HIDRemoteMonitor.isInputMonitoringGranted,
+            accessibilityGranted: KeyboardInjector.isAccessibilityTrusted
+        )
+        if shouldOpenPermissionRepair {
+            AppLogger.shared.write(
+                "UPDATE PERMISSION_REPAIR bluetooth=\(CBManager.authorization == .allowedAlways) " +
+                    "input=\(HIDRemoteMonitor.isInputMonitoringGranted) " +
+                    "accessibility=\(KeyboardInjector.isAccessibilityTrusted)"
+            )
+        }
         refreshMenuStatus()
 
         if OnboardingLaunchPolicy.shouldShowMainWindow(
@@ -188,7 +203,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         ) {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.showSettings()
+                if shouldOpenPermissionRepair {
+                    self.showSettingsWindow(initialSection: .permissions)
+                } else {
+                    self.showSettings()
+                }
                 if completedUpdate {
                     self.showUpdateCompletedAlert()
                 }
@@ -690,8 +709,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     @objc private func showSettings() {
+        showSettingsWindow(initialSection: .connection)
+    }
+
+    private func showSettingsWindow(initialSection: SettingsSection) {
         if settingsWindowController == nil {
-            settingsWindowController = makeSettingsWindowController()
+            settingsWindowController = makeSettingsWindowController(
+                initialSettingsSection: initialSection
+            )
         }
         guard let windowController = settingsWindowController,
               let window = windowController.window else { return }
@@ -700,7 +725,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.makeKeyAndOrderFront(nil)
     }
 
-    private func makeSettingsWindowController() -> NSWindowController {
+    private func makeSettingsWindowController(
+        initialSettingsSection: SettingsSection = .connection
+    ) -> NSWindowController {
         let hostingController = NSHostingController(
             rootView: RemoteMicRootView(
                 model: model,
@@ -711,7 +738,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 },
                 setDockIconVisible: { [weak self] isVisible in
                     self?.setDockIconVisible(isVisible)
-                }
+                },
+                initialSettingsSection: initialSettingsSection
             )
             .environmentObject(localization)
         )
