@@ -516,7 +516,7 @@ jq '. + {candidateGateCompletedAt:"2026-08-20T10:05:00Z"}' \
 {
   print '#!/bin/zsh'
   print 'set -euo pipefail'
-  print 'if [[ "$*" == *"releases/tags/v9.9.9"* ]]; then'
+  print 'if [[ "$*" == *"releases/tags/v9.9.9"* || "$*" == *"release view v9.9.9"* ]]; then'
   print '  case "${FAKE_ATTEST_RELEASE_MODE:-valid}" in'
   print '    missing) exit 1 ;;'
   print '    stable) print -r -- '\''{"tag_name":"v9.9.9","draft":false,"prerelease":false}'\'' ;;'
@@ -554,6 +554,19 @@ if GH_BIN="$FAKE_ATTEST_GH" FAKE_ATTEST_ZIP="$WORK_DIR/attestation.zip" \
   exit 1
 fi
 /usr/bin/grep -Fq 'timestamps/identity are immutable' "$WORK_DIR/attestation-late.txt"
+
+GH_BIN="$FAKE_ATTEST_GH" FAKE_ATTEST_ZIP="$WORK_DIR/attestation.zip" \
+  GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  "$ROOT/scripts/resolve-release-request-attestation.sh" \
+    req-recovered v9.9.8 1787219060 \
+    "$HEAD_COMMIT" \
+    "$WORK_DIR/release-ready-proof.json" "$WORK_DIR/release-request-attestation-recovered.json" \
+    > "$WORK_DIR/attestation-recovered.txt"
+/usr/bin/grep -Fq 'Replacing a pre-signing-only attestation for v9.9.8' \
+  "$WORK_DIR/attestation-recovered.txt"
+test "$(jq -r '.requestId' "$WORK_DIR/release-request-attestation-recovered.json")" = "req-recovered"
+test "$(jq -r '.tag' "$WORK_DIR/release-request-attestation-recovered.json")" = "v9.9.8"
+test "$(jq -r '.releaseReadyAt' "$WORK_DIR/release-request-attestation-recovered.json")" = "1787220300"
 
 jq '.candidateGateCompletedAt = "2026-08-20T10:10:00Z"' \
   "$WORK_DIR/release-ready-proof.json" > "$WORK_DIR/retried-release-ready-proof.json"
