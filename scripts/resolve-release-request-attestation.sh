@@ -125,10 +125,10 @@ if [[ -n "$locked_json" ]]; then
       exit 1
     fi
     print "Replacing a pre-signing-only attestation for $RELEASE_TAG; no public tag or release exists."
-    locked_json=""
+  else
+    expected_json="$locked_json"
+    ready_epoch="$(print -r -- "$locked_json" | jq -r '.releaseReadyAt')"
   fi
-  expected_json="$locked_json"
-  ready_epoch="$(print -r -- "$locked_json" | jq -r '.releaseReadyAt')"
 fi
 
 /bin/mkdir -p "${OUTPUT_FILE:h}"

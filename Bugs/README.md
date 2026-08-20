@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [签名前失败的 attestation 阻止同版本预览恢复](./2026-08-21-pre-signing-attestation-blocks-preview-recovery.md)
 - [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md)
 - [Onboarding 已发现遥控器但永远等不到首个 HID 按键](./2026-08-20-onboarding-hid-discovery-report-deadlock.md)
 - [GitHub Release 标题回退为旧品牌](./2026-08-19-github-release-title-legacy-brand.md)
@@ -135,6 +136,7 @@
 | 2026-08-17 | [没有实体遥控器的用户无法完成 Onboarding](./2026-08-17-onboarding-requires-physical-remote.md) | 候选修复完成，等待 iPhone 与网页版真机验收 |
 | 2026-08-18 | [Onboarding 普通音频设备与手动文字错误通过](./2026-08-18-onboarding-miremote-and-manual-text-gates.md) | 候选修复完成，等待真实语音工具验收 |
 | 2026-08-19 | [Onboarding 错误拒绝 BlackHole 2ch](./2026-08-19-onboarding-blackhole-support.md) | 候选修复完成，等待真实 BlackHole 验收 |
+| 2026-08-21 | [签名前失败的 attestation 阻止同版本预览恢复](./2026-08-21-pre-signing-attestation-blocks-preview-recovery.md) | 已修复，自动化验证通过；等待受保护预览发布验证 |
 
 ## 记录模板
 
