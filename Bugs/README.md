@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md)
 - [Onboarding 已发现遥控器但永远等不到首个 HID 按键](./2026-08-20-onboarding-hid-discovery-report-deadlock.md)
 - [GitHub Release 标题回退为旧品牌](./2026-08-19-github-release-title-legacy-brand.md)
 - [Issue #100：升级后权限失效且旧 App 影响安装](./2026-08-20-issue-100-upgrade-permission-repair.md)
@@ -54,6 +55,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-20 | [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md) | 候选修复完成，等待 Karabiner-Elements 与其他 HID 工具真机验收 |
 | 2026-08-20 | [Onboarding 已发现遥控器但永远等不到首个 HID 按键](./2026-08-20-onboarding-hid-discovery-report-deadlock.md) | 根因已确认并完成候选修复，等待 RC001 / RC003 真机验收 |
 | 2026-08-19 | [GitHub Release 标题回退为旧品牌](./2026-08-19-github-release-title-legacy-brand.md) | 已修复 |
 | 2026-08-20 | [Issue #100：升级后权限失效且旧 App 影响安装](./2026-08-20-issue-100-upgrade-permission-repair.md) | 权限修复入口已实现；安装失败等待现场 Installer 日志 |

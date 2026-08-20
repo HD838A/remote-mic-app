@@ -186,6 +186,20 @@
 
 失败判定：日志只有重复 `HID DEVICE deferred reason=discovery_waiting_for_report`、系统响应按键但 App 无任何 `HID REPORT`、系统枚举的第一只遥控器错误抢占 Profile、首个按键被消耗、两只遥控器重复执行，或电源键触发系统动作。
 
+## 用例 4B-2：第三方输入工具占用 HID
+
+1. 在没有第三方 HID 工具接管遥控器的环境中完成用例 4B-1，确认普通按键可被发现。
+2. 安装并运行 Karabiner-Elements，在“设备”中找到“小米蓝牙语音遥控器”，开启该设备的 “Modify events”。重新进入 Onboarding 遥控器页并点击重新检测。
+3. 确认页面显示“遥控器被其他输入工具占用”，而不是泛化的权限失败；日志出现 `reason=exclusive_access` 和 `karabiner_installed=true`。
+4. 关闭 Karabiner-Elements 中该设备的 “Modify events”，或将该设备设为 “Ignore”，回到 SayAll 后点击重新检测。
+5. 确认无需重启 App 即可出现 `HID DEVICE probing`、`HID CONNECTED` 和真实 `HID REPORT`，普通按键可以继续 Onboarding。
+6. 在 Karabiner-Elements 已安装但没有管理该遥控器的环境中重复，确认不会因为“已安装”本身阻止正常连接。
+7. 使用其他 HID 映射工具占用设备，确认显示通用占用提示，不把根因错误归因于 Karabiner-Elements。
+
+预期结果：只有真实 `kIOReturnExclusiveAccess` 才触发第三方占用提示；Karabiner-Elements 安装状态只决定是否补充专项操作步骤，关闭占用后可以通过重新检测恢复。
+
+失败判定：没有区分独占错误、把 Karabiner 安装误判为正在占用、要求重启 App、仍显示权限错误，或关闭 “Modify events” 后无法恢复。
+
 ## 用例 4C：iPhone App 与无 iPhone 网页版
 
 ### iPhone App

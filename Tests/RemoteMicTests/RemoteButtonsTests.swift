@@ -5,6 +5,38 @@ import Testing
 
 @Suite("Remote buttons")
 struct RemoteButtonsTests {
+    @Test func exclusiveHIDAccessUsesASeparateUserFacingFailure() {
+        #expect(HIDRemoteMonitor.deviceOpenFailureMessageKey(
+            result: kIOReturnExclusiveAccess,
+            karabinerElementsInstalled: false
+        ) == "button_mapping.error.exclusive_access")
+        #expect(HIDRemoteMonitor.deviceOpenFailureMessageKey(
+            result: kIOReturnExclusiveAccess,
+            karabinerElementsInstalled: true
+        ) == "button_mapping.error.exclusive_access.karabiner")
+        #expect(HIDRemoteMonitor.deviceOpenFailureMessageKey(
+            result: kIOReturnSuccess,
+            karabinerElementsInstalled: true
+        ) == nil)
+    }
+
+    @Test func karabinerInstallationDetectionIsBestEffortAndDoesNotRequireItToBeRunning() {
+        #expect(HIDRemoteMonitor.isKarabinerElementsInstalled(
+            applicationURL: URL(fileURLWithPath: "/custom/Karabiner-Elements.app"),
+            fileExists: { _ in false }
+        ))
+        #expect(HIDRemoteMonitor.isKarabinerElementsInstalled(
+            applicationURL: nil,
+            fileExists: { path in
+                path == "/Applications/Karabiner-Elements.app"
+            }
+        ))
+        #expect(!HIDRemoteMonitor.isKarabinerElementsInstalled(
+            applicationURL: nil,
+            fileExists: { _ in false }
+        ))
+    }
+
     @Test func discoveryProbesMatchedDevicesWithoutBindingTheEnumerationWinner() {
         #expect(HIDRemoteMonitor.deviceMatchDecision(
             reportingFingerprint: "unbound-remote",
