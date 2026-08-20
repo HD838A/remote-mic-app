@@ -38,8 +38,11 @@ if [[ ! "$BRANCH" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
   exit 1
 fi
 
-"$ROOT/scripts/verify-preview-branch.sh" >/dev/null
-"$ROOT/scripts/verify-release-dependency-pins.sh" >/dev/null
+BASE_COMMIT="$(git rev-parse HEAD^)"
+TRUSTED_RUNNER="$(/usr/bin/mktemp /private/tmp/sayall-trusted-candidate-ci.XXXXXX)"
+git show "${BASE_COMMIT}:scripts/run-trusted-release-validation.sh" > "$TRUSTED_RUNNER"
+/bin/chmod 755 "$TRUSTED_RUNNER"
+REPOSITORY_ROOT="$ROOT" GITHUB_REF_NAME="$BRANCH" "$TRUSTED_RUNNER" >/dev/null
 HEAD_COMMIT="$(git rev-parse HEAD)"
 if [[ -n "${RELEASE_TAG:-}" && "$RELEASE_TAG" != "v${BRANCH#release/pre-v}" ]]; then
   print -u2 "signed packaging tag must match the preview candidate branch"
@@ -68,7 +71,7 @@ fi
 RUN_JSON="$(
   "$GH_BIN" run view "$RUN_ID" \
     --repo "$REPOSITORY" \
-    --json workflowName,event,status,conclusion,headBranch,headSha,jobs,url
+    --json workflowName,event,status,conclusion,headBranch,headSha,jobs,url,updatedAt
 )"
 if ! print -r -- "$RUN_JSON" | jq -e \
   --arg workflow "$WORKFLOW_NAME" \
@@ -80,11 +83,32 @@ if ! print -r -- "$RUN_JSON" | jq -e \
     .conclusion == "success" and
     .headBranch == $branch and
     .headSha == $headSha and
-    ([.jobs[] | select(.name == "Validate and package preview candidate (Apple Silicon)" and .status == "completed" and .conclusion == "success")] | length) == 1 and
-    ([.jobs[] | select(.name == "Validate and package preview candidate (Intel Ventura)" and .status == "completed" and .conclusion == "success")] | length) == 1
+    ([.jobs[] | select(
+      .name == "Validate and package preview candidate (Apple Silicon)" and
+      .status == "completed" and .conclusion == "success" and
+      ([.steps[] | select(.name == "Reuse exact parent main product-code proof" and .conclusion == "success")] | length) == 1
+    )] | length) == 1 and
+    ([.jobs[] | select(
+      .name == "Validate and package preview candidate (Intel Ventura)" and
+      .status == "completed" and .conclusion == "success" and
+      ([.steps[] | select(.name == "Reuse exact parent main product-code proof" and .conclusion == "success")] | length) == 1
+    )] | length) == 1
   ' >/dev/null; then
   print -u2 "preview candidate run $RUN_ID is not a successful exact-SHA two-architecture push run"
   exit 1
+fi
+
+CANDIDATE_GATE_COMPLETED_AT="$(print -r -- "$RUN_JSON" | jq -r '.updatedAt // empty')"
+if [[ -n "${RELEASE_READY_PROOF_OUTPUT:-}" ]]; then
+  [[ -r "$RELEASE_READY_PROOF_OUTPUT" && -n "$CANDIDATE_GATE_COMPLETED_AT" ]] || {
+    print -u2 "candidate CI proof lacks a trusted completion timestamp"
+    exit 1
+  }
+  proof_temp="${RELEASE_READY_PROOF_OUTPUT}.candidate-gate.tmp"
+  jq --arg candidateGateCompletedAt "$CANDIDATE_GATE_COMPLETED_AT" \
+    '. + {candidateGateCompletedAt: $candidateGateCompletedAt}' \
+    "$RELEASE_READY_PROOF_OUTPUT" > "$proof_temp"
+  /bin/mv "$proof_temp" "$RELEASE_READY_PROOF_OUTPUT"
 fi
 
 if [[ "$REQUIRE_PREVIEW_RECORDING_PR" == "1" ]]; then
@@ -103,9 +127,30 @@ if [[ "$REQUIRE_PREVIEW_RECORDING_PR" == "1" ]]; then
     print -u2 "signed packaging requires one exact-SHA Draft preview recording PR"
     exit 1
   fi
+  PR_NUMBER="$(print -r -- "$PR_JSON" | jq -r '.[0].number')"
+  PR_CHECKS_JSON="$(
+    "$GH_BIN" pr view "$PR_NUMBER" \
+      --repo "$REPOSITORY" \
+      --json statusCheckRollup
+  )"
+  if ! print -r -- "$PR_CHECKS_JSON" | jq -e '
+    [.statusCheckRollup[] | select(
+      .name == "Swift tests and build (Apple Silicon)" and
+      .status == "COMPLETED" and .conclusion == "SUCCESS"
+    )] | length == 1
+  ' >/dev/null || ! print -r -- "$PR_CHECKS_JSON" | jq -e '
+    [.statusCheckRollup[] | select(
+      .name == "Swift tests and build (Intel Ventura)" and
+      .status == "COMPLETED" and .conclusion == "SUCCESS"
+    )] | length == 1
+  ' >/dev/null; then
+    print -u2 "signed packaging requires successful exact-SHA Draft PR Apple Silicon and Intel checks"
+    exit 1
+  fi
 fi
 
 print "PREVIEW CANDIDATE CI PASS"
 print "BRANCH: $BRANCH"
 print "HEAD: $HEAD_COMMIT"
+print "CANDIDATE_GATE_COMPLETED_AT: $CANDIDATE_GATE_COMPLETED_AT"
 print "RUN_ID: $RUN_ID"

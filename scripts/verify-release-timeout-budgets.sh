@@ -79,8 +79,8 @@ if (( variant_timeout >= signed_release_timeout )); then
   print -u2 "signed-variant must remain inside signed-release"
   exit 1
 fi
-if (( signed_release_timeout != 590 )); then
-  print -u2 "signed-release must retain the 590-second hard supervisor"
+if (( signed_release_timeout != 540 )); then
+  print -u2 "signed-release must retain the 540-second SLO supervisor"
   exit 1
 fi
 if (( step_timeout_seconds != 600 )); then

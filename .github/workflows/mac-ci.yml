@@ -13,6 +13,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   classify_changes:
@@ -20,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
+      reuse_parent_main_ci: ${{ steps.changes.outputs.reuse_parent_main_ci }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -29,11 +31,27 @@ jobs:
       - name: Detect documentation-only change
         id: changes
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "reuse_parent_main_ci=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          reuse_parent_main_ci=false
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] &&
+             git show "${PR_BASE_SHA}:scripts/run-trusted-release-validation.sh" > "$trusted_runner" &&
+             chmod 755 "$trusted_runner" &&
+             GITHUB_REF_NAME="$PR_HEAD_REF" REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"; then
+            reuse_parent_main_ci=true
+          fi
+          echo "reuse_parent_main_ci=$reuse_parent_main_ci" >> "$GITHUB_OUTPUT"
 
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             diff_range="${{ github.event.pull_request.base.sha }}...HEAD"
@@ -91,7 +109,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check out private feature package
-        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-ai
@@ -101,7 +119,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out private macro package
-        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-macro-platform
@@ -111,13 +129,13 @@ jobs:
           persist-credentials: false
 
       - name: Configure private feature package
-        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
           echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
           echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform" >> "$GITHUB_ENV"
 
       - name: Check out shared Mac remote package
-        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-mac-remote
@@ -127,11 +145,11 @@ jobs:
           persist-credentials: false
 
       - name: Configure shared Mac remote package
-        if: needs.classify_changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
 
       - name: Show toolchain
-        if: needs.classify_changes.outputs.docs_only != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
         run: swift --version
 
       - name: Check patch formatting
@@ -146,28 +164,41 @@ jobs:
         if: needs.classify_changes.outputs.docs_only == 'true'
         run: echo "Documentation-only change; skipping private dependencies, Swift tests, and macOS builds."
 
+      - name: Reuse exact parent main CI for release metadata
+        if: needs.classify_changes.outputs.reuse_parent_main_ci == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REF_NAME: ${{ github.head_ref }}
+        run: |
+          git checkout --detach "${{ github.event.pull_request.head.sha }}"
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          git show "${{ github.event.pull_request.base.sha }}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
+          chmod 755 "$trusted_runner"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
+          echo "Release metadata-only PR; exact parent main already passed both architecture lanes."
+
       - name: Enforce extracted repository boundaries
-        if: needs.classify_changes.outputs.docs_only != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
         run: ./scripts/check-repository-boundaries.sh
 
       - name: Verify release dependency pins stay aligned
-        if: needs.classify_changes.outputs.docs_only != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
         run: ./scripts/verify-release-dependency-pins.sh
 
       - name: Run Swift tests
-        if: needs.classify_changes.outputs.docs_only != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
         run: swift test
 
       - name: Run core first-voice journey gate
-        if: needs.classify_changes.outputs.docs_only != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
         run: |
           swift test --filter VoiceInputDestinationCoordinatorTests
           swift test --filter CoreVoiceInputJourneyTests
 
       - name: Run project self-test
-        if: needs.classify_changes.outputs.docs_only != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
         run: SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
 
       - name: Build release configuration
-        if: needs.classify_changes.outputs.docs_only != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
         run: swift build -c release --triple "${{ matrix.triple }}"

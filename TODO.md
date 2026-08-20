@@ -253,8 +253,8 @@
   - “关于”页提供默认关闭的预发布更新开关；仅在用户主动开启后，Sparkle 自动与手动检查才会包含最新候选版本。
   - v1.7.3 修复预发布源解析失败或缓存旧地址时阻断正式版检查的问题；预发布源不可用时必须清除旧地址并回退到稳定更新源。
   - 候选版本不存在、GitHub API 限流、网络超时或候选源暂不可用时静默忽略，不显示错误弹窗；手动检查继续使用稳定源。
-  - macOS 候选统一使用从最新 `main` 创建的 `release/pre-vX.Y.Z` 分支；功能必须先通过 PR 合入 `main`，发布会话不再临时整合开发 Commit。候选分支只保留一个版本、ReleaseHistory 和测试说明提交，禁止从旧预览分支或 Tag 串联下一候选。Push 后由 GitHub Actions 自动完成来源校验、三条 workflow 私有依赖钉定一致性、完整 Mac 测试和临时 App 打包。
-  - 精确候选 SHA 的 Apple Silicon、Intel Job 成功后，发布会话提前创建 Draft 回流 PR，使受保护 PR CI 与正式双架构签名、公证并行；正式打包复用该精确 SHA 的候选测试证明，并通过独立 SwiftPM scratch 隔离两种架构。Pre-release 资产完成发布、公开下载字节和 provenance 校验后，Release Guard 才将 Draft PR 转 Ready 并启用自动合并；这只把候选提交记录回 `main`，不会把 GitHub Release 晋升为正式版。下一预览版必须从回流后的最新 `main` 创建。
+  - macOS 候选统一使用从最新 `main` 创建的 `release/pre-vX.Y.Z` 分支；功能必须先通过 PR 合入 `main`，发布会话不再临时整合开发 Commit。候选分支只保留一个版本、ReleaseHistory 和测试说明提交，禁止从旧预览分支或 Tag 串联下一候选。metadata-only Push 与 Draft PR CI 复用父 `main` 精确 SHA 已通过的双架构测试、自检和 Release 构建，不再重复编译同一产品代码；出现产品代码、依赖或流水线差异时拒绝 fast path。
+  - 候选 Push 后立即创建 Draft 回流 PR；严格 metadata-only 候选复用父 main 精确 SHA 的双架构完整 CI，其他变化自动回到全量 CI。签名产物在受保护 workflow 内直接交给无 Apple 凭据的 publish Job。预览按用户请求总墙钟 30 分钟、release-ready 后 15 分钟双时钟执行 watchdog，超时明确失败且不盲重试或重置时间戳。
   - 正式版只能选择已经发布并验证过的 Pre-release，复用完全相同的 Tag、签名、公证资产和摘要；候选回流 `main` 不构成正式发布授权，禁止从 `main` 重建正式资产。
   - 2026-08-17：正式晋升工作流补充独立 `mac-stable-release` Environment 和按需安装 `ripgrep` 的工具门禁；晋升仍只复验并提升既有候选字节，不读取 Apple 签名 Secrets，也不重新打包。
   - 2026-08-19：GitHub Release 标题和 Tag 注释统一使用 `无线麦SayAll.app <版本>`，并由 Swift 与 shell 回归测试拒绝旧的 `Remote Mic` 用户可见标题。

@@ -12,6 +12,12 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
+
+env:
+  SAYALL_AI_RELEASE_REF: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
+  SAYALL_MACRO_PLATFORM_RELEASE_REF: 734f24be4f6ebeacadeaa41d9902bdf414807d06
+  SAYALL_MAC_REMOTE_RELEASE_REF: 3f3c782180eef4024b53941c1f65d80e7cff4c66
 
 jobs:
   skip-release-canary:
@@ -26,9 +32,39 @@ jobs:
             grep -Eq '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+-canary-[a-z0-9][a-z0-9._-]*$'
           echo "PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY"
 
+  classify-candidate:
+    name: Classify exact parent-main CI reuse
+    if: ${{ !contains(github.ref_name, '-canary-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      reuse_parent_main_ci: ${{ steps.reuse.outputs.eligible }}
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Test strict metadata-only and exact parent-main proof
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          eligible=false
+          base_sha="$(git rev-parse HEAD^)"
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          if git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner" &&
+             chmod 755 "$trusted_runner" &&
+             REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"; then
+            eligible=true
+          fi
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+          echo "PARENT MAIN CI REUSE ELIGIBLE: $eligible"
+
   validate-and-package:
     name: Validate and package preview candidate (${{ matrix.label }})
-    if: ${{ !contains(github.ref_name, '-canary-') }}
+    if: ${{ !contains(github.ref_name, '-canary-') && needs.classify-candidate.outputs.reuse_parent_main_ci == 'true' }}
+    needs: classify-candidate
     runs-on: macos-15
     timeout-minutes: 75
     strategy:
@@ -44,82 +80,47 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       RELEASE_VARIANT: ${{ matrix.variant }}
-
     steps:
       - name: Check out candidate
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Check out private feature package
-        uses: actions/checkout@v5
-        with:
-          repository: GetSayAll/sayall-ai
-          ref: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
-          path: .private-dependencies/sayall-ai
-          ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Check out private macro package
-        uses: actions/checkout@v5
-        with:
-          repository: GetSayAll/sayall-macro-platform
-          ref: 734f24be4f6ebeacadeaa41d9902bdf414807d06
-          path: .private-dependencies/sayall-macro-platform
-          ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Configure private feature package
+      - name: Install required validation tools
         run: |
-          echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
-          echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform" >> "$GITHUB_ENV"
-          echo "REQUIRE_SAYALL_AI_PACKAGE=1" >> "$GITHUB_ENV"
-          echo "REQUIRE_SAYALL_MACRO_PLATFORM=1" >> "$GITHUB_ENV"
+          command -v jq >/dev/null
+          command -v rg >/dev/null || {
+            if [[ "$RUNNER_OS" == "macOS" ]]; then brew install ripgrep; else exit 1; fi
+          }
 
-      - name: Check out shared Mac remote package
-        uses: actions/checkout@v5
-        with:
-          repository: GetSayAll/sayall-mac-remote
-          ref: 3f3c782180eef4024b53941c1f65d80e7cff4c66
-          path: .private-dependencies/sayall-mac-remote
-          ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Configure shared Mac remote package
-        run: swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
-
-      - name: Install required tools
-        run: command -v rg >/dev/null || brew install ripgrep
-
-      - name: Validate candidate branch provenance
+      - name: Reuse exact parent main product-code proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_READY_PROOF_OUTPUT: ${{ runner.temp }}/release-ready-main-ci-${{ matrix.variant }}.json
         run: |
-          ./scripts/verify-preview-branch.sh
-          ./scripts/verify-release-dependency-pins.sh
+          base_sha="$(git rev-parse HEAD^)"
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
+          chmod 755 "$trusted_runner"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
 
-      - name: Run Swift tests
-        run: swift test
-
-      - name: Run core first-voice journey gate
-        run: |
-          swift test --filter VoiceInputDestinationCoordinatorTests
-          swift test --filter CoreVoiceInputJourneyTests
-
-      - name: Run project self-test
-        run: SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
-
-      - name: Build and verify ad-hoc candidate DMG
-        run: |
-          ./scripts/build-dmg.sh
-          ./scripts/verify-dmg.sh
-
-      - name: Upload CI candidate
+      - name: Upload exact-SHA release-ready proof
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}-${{ github.sha }}
-          path: |
-            ${{ matrix.variant == 'intel' && 'dist/intel/Remote-Mic-*-Intel.dmg' || 'dist/Remote-Mic-*.dmg' }}
-            ${{ matrix.variant == 'intel' && 'dist/intel/Remote-Mic-*-Intel.dmg.sha256' || 'dist/Remote-Mic-*.dmg.sha256' }}
-            ${{ matrix.variant == 'intel' && 'dist/intel/Install Remote Mic Intel.pkg' || 'dist/Install Remote Mic.pkg' }}
-            ${{ matrix.variant == 'intel' && 'dist/intel/Uninstall Remote Mic Intel.pkg' || 'dist/Uninstall Remote Mic.pkg' }}
+          name: ${{ matrix.artifact }}-${{ github.sha }}-release-ready-proof
+          path: ${{ runner.temp }}/release-ready-main-ci-${{ matrix.variant }}.json
           if-no-files-found: error
           retention-days: 14
+
+  reject-ineligible-candidate:
+    name: Reject preview candidate without reusable parent-main proof
+    if: ${{ !contains(github.ref_name, '-canary-') && needs.classify-candidate.outputs.reuse_parent_main_ci != 'true' }}
+    needs: classify-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require the recording PR to be the sole full-CI producer
+        run: |
+          echo "Preview candidates must be strict metadata-only children of a passing main commit." >&2
+          echo "The recording PR is the only full-CI producer when reuse is ineligible; Preview will not duplicate it." >&2
+          exit 1
