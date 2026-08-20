@@ -20,8 +20,8 @@ fi
 case "$MODE" in
   preview)
     READY_BUDGET_SECONDS=1740
-    [[ "$TARGET" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+$' ]] || {
-      print -u2 "preview watchdog requires release/pre-vX.Y.Z"
+    [[ "$TARGET" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+(-rerun)?$' ]] || {
+      print -u2 "preview watchdog requires release/pre-vX.Y.Z or its -rerun recovery form"
       exit 2
     }
     ;;

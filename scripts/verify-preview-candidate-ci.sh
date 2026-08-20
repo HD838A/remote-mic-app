@@ -33,10 +33,12 @@ if [[ -z "$BRANCH" ]]; then
     exit 1
   }
 fi
-if [[ ! "$BRANCH" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
-  print -u2 "candidate CI verification requires release/pre-vX.Y.Z"
+if [[ ! "$BRANCH" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+(-rerun)?$' ]]; then
+  print -u2 "candidate CI verification requires release/pre-vX.Y.Z or its -rerun recovery form"
   exit 1
 fi
+BRANCH_VERSION="${BRANCH#release/pre-v}"
+BRANCH_VERSION="${BRANCH_VERSION%-rerun}"
 
 BASE_COMMIT="$(git rev-parse HEAD^)"
 TRUSTED_RUNNER="$(/usr/bin/mktemp /private/tmp/sayall-trusted-candidate-ci.XXXXXX)"
@@ -44,7 +46,7 @@ git show "${BASE_COMMIT}:scripts/run-trusted-release-validation.sh" > "$TRUSTED_
 /bin/chmod 755 "$TRUSTED_RUNNER"
 REPOSITORY_ROOT="$ROOT" GITHUB_REF_NAME="$BRANCH" "$TRUSTED_RUNNER" >/dev/null
 HEAD_COMMIT="$(git rev-parse HEAD)"
-if [[ -n "${RELEASE_TAG:-}" && "$RELEASE_TAG" != "v${BRANCH#release/pre-v}" ]]; then
+if [[ -n "${RELEASE_TAG:-}" && "$RELEASE_TAG" != "v$BRANCH_VERSION" ]]; then
   print -u2 "signed packaging tag must match the preview candidate branch"
   exit 1
 fi
