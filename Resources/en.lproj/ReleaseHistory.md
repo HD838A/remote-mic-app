@@ -1,5 +1,9 @@
 # Version History
 
+## 1.9.4 (Pre-release)
+
+- After Connect iPhone is enabled on the Mac, an iPhone can scan a short-lived QR code to connect directly over the current local network. If direct connection fails, SayAll automatically falls back to existing Bonjour/P2P discovery, while legacy iPhone and Apple Watch connection paths remain unchanged.
+
 ## 1.9.3 (Pre-release)
 
 - First-run setup now keeps Typeless Fn-tap behavior in sync and can continue connection checks after a physical remote button has been recognized.
