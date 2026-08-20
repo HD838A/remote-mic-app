@@ -44,10 +44,11 @@ jobs:
           fi
 
           reuse_parent_main_ci=false
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] &&
-             ./scripts/verify-release-metadata-diff.sh \
-               "$PR_BASE_SHA" "$PR_HEAD_SHA" "$PR_HEAD_REF" &&
-             ./scripts/verify-release-ready-main-ci.sh "$PR_BASE_SHA"; then
+             git show "${PR_BASE_SHA}:scripts/run-trusted-release-validation.sh" > "$trusted_runner" &&
+             chmod 755 "$trusted_runner" &&
+             GITHUB_REF_NAME="$PR_HEAD_REF" REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"; then
             reuse_parent_main_ci=true
           fi
           echo "reuse_parent_main_ci=$reuse_parent_main_ci" >> "$GITHUB_OUTPUT"
@@ -170,9 +171,10 @@ jobs:
           GITHUB_REF_NAME: ${{ github.head_ref }}
         run: |
           git checkout --detach "${{ github.event.pull_request.head.sha }}"
-          ./scripts/verify-preview-branch.sh
-          ./scripts/verify-release-dependency-pins.sh
-          ./scripts/verify-release-ready-main-ci.sh "${{ github.event.pull_request.base.sha }}"
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          git show "${{ github.event.pull_request.base.sha }}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
+          chmod 755 "$trusted_runner"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
           echo "Release metadata-only PR; exact parent main already passed both architecture lanes."
 
       - name: Enforce extracted repository boundaries

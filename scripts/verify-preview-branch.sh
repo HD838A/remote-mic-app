@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-ROOT="${0:A:h:h}"
+ROOT="${REPOSITORY_ROOT:-${0:A:h:h}}"
 PLIST="$ROOT/Resources/Info.plist"
 BASE_REF="origin/main"
 BRANCH="${GITHUB_REF_NAME:-}"

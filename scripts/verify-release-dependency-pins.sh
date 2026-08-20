@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-ROOT="${0:A:h:h}"
+ROOT="${REPOSITORY_ROOT:-${0:A:h:h}}"
 PACKAGE_MANIFEST="$ROOT/Package.swift"
 PACKAGE_RESOLVED="$ROOT/Package.resolved"
 WORKFLOWS=(

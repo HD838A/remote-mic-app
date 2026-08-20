@@ -38,8 +38,11 @@ if [[ ! "$BRANCH" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
   exit 1
 fi
 
-"$ROOT/scripts/verify-preview-branch.sh" >/dev/null
-"$ROOT/scripts/verify-release-dependency-pins.sh" >/dev/null
+BASE_COMMIT="$(git rev-parse HEAD^)"
+TRUSTED_RUNNER="$(/usr/bin/mktemp /private/tmp/sayall-trusted-candidate-ci.XXXXXX)"
+git show "${BASE_COMMIT}:scripts/run-trusted-release-validation.sh" > "$TRUSTED_RUNNER"
+/bin/chmod 755 "$TRUSTED_RUNNER"
+REPOSITORY_ROOT="$ROOT" GITHUB_REF_NAME="$BRANCH" "$TRUSTED_RUNNER" >/dev/null
 HEAD_COMMIT="$(git rev-parse HEAD)"
 if [[ -n "${RELEASE_TAG:-}" && "$RELEASE_TAG" != "v${BRANCH#release/pre-v}" ]]; then
   print -u2 "signed packaging tag must match the preview candidate branch"
@@ -83,16 +86,12 @@ if ! print -r -- "$RUN_JSON" | jq -e \
     ([.jobs[] | select(
       .name == "Validate and package preview candidate (Apple Silicon)" and
       .status == "completed" and .conclusion == "success" and
-      (([.steps[] | select(.name == "Reuse exact parent main product-code proof" and .conclusion == "success")] | length) == 1 or
-       (([.steps[] | select(.name == "Run full candidate validation when reuse is ineligible" and .conclusion == "success")] | length) == 1 and
-        ([.steps[] | select(.name == "Upload full ad-hoc candidate" and .conclusion == "success")] | length) == 1))
+      ([.steps[] | select(.name == "Reuse exact parent main product-code proof" and .conclusion == "success")] | length) == 1
     )] | length) == 1 and
     ([.jobs[] | select(
       .name == "Validate and package preview candidate (Intel Ventura)" and
       .status == "completed" and .conclusion == "success" and
-      (([.steps[] | select(.name == "Reuse exact parent main product-code proof" and .conclusion == "success")] | length) == 1 or
-       (([.steps[] | select(.name == "Run full candidate validation when reuse is ineligible" and .conclusion == "success")] | length) == 1 and
-        ([.steps[] | select(.name == "Upload full ad-hoc candidate" and .conclusion == "success")] | length) == 1))
+      ([.steps[] | select(.name == "Reuse exact parent main product-code proof" and .conclusion == "success")] | length) == 1
     )] | length) == 1
   ' >/dev/null; then
   print -u2 "preview candidate run $RUN_ID is not a successful exact-SHA two-architecture push run"

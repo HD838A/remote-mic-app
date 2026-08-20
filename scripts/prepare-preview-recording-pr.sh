@@ -18,8 +18,11 @@ for command_name in git jq "$GH_BIN"; do
 done
 
 cd "$ROOT"
-"$ROOT/scripts/verify-preview-branch.sh" >/dev/null
-"$ROOT/scripts/verify-release-dependency-pins.sh" >/dev/null
+BASE_COMMIT="$(git rev-parse HEAD^)"
+TRUSTED_RUNNER="$(/usr/bin/mktemp /private/tmp/sayall-trusted-recording-pr.XXXXXX)"
+git show "${BASE_COMMIT}:scripts/run-trusted-release-validation.sh" > "$TRUSTED_RUNNER"
+/bin/chmod 755 "$TRUSTED_RUNNER"
+REPOSITORY_ROOT="$ROOT" "$TRUSTED_RUNNER" >/dev/null
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 HEAD_COMMIT="$(git rev-parse HEAD)"
 VERSION="${BRANCH#release/pre-v}"

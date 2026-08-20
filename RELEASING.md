@@ -28,7 +28,7 @@
 - 普通非发布任务在必需的 PR 检查通过并完成普通合并后即可交付；合并后的 `main` CI 默认作为异步确认，不阻塞首轮回复，但必须保留 Run URL，并在失败时立即回报。修改 CI 门禁本身、共享发布脚本或用户明确要求验证 `main` 时，仍需等待对应 `main` 检查通过。
 - 真实发布不得套用上述异步边界。候选 CI、PR 必需检查、Environment 审批、真实签名与公证、公开 GitHub/CDN 字节验证、Release Guard 和候选回流必须按发布流程全部完成后，才能报告发布完成。
 - 每个真实发布必须把用户指令到达时的 Unix epoch 秒作为 `request_started_at` 传入 workflow，并生成可下载的 TSV 阶段账本。账本至少记录候选门禁、Environment/Runner 等待、签名与公证、发布和 GitHub/CDN 公开字节验证；失败必须分类为开发未就绪、审批等待、Apple/GitHub/CDN 外部等待或成功流水线时间，禁止从 Commit 或 CI 开始时间替代用户墙钟。
-- 发布管理任务收到指令后的第一项动作必须是在不依赖 GitHub Hosted Runner 的发布机上后台启动 `scripts/release-user-wall-watchdog.sh`。预览同时使用 `request_started_at + 1740 秒` 和 `release_ready_at + 840 秒` 两个内部截止，为最终回报各保留 60 秒；任何重试、重新 dispatch 或候选重建都不得重置时间戳。每次 Push/dispatch 得到的精确 workflow run ID 必须只追加到本次请求独有的 run-id 文件。
+- 发布管理任务收到指令后的第一项动作必须是在不依赖 GitHub Hosted Runner 的发布机上后台启动 `scripts/release-user-wall-watchdog.sh`。预览同时使用 `request_started_at + 1740 秒` 和 `release_ready_at + 840 秒` 两个内部截止，为最终回报各保留 60 秒；任何重试、重新 dispatch 或候选重建都不得重置时间戳。每次 Push/dispatch 得到的精确 workflow run ID 必须只追加到本次请求独有的 JSONL manifest。发布完成标记必须是包含 `mode`、`requestId`、`target`、`requestStartedAt`、`releaseReadyAt` 和 `status: published-and-verified` 的 JSON，不得使用空文件或复用其他请求的完成标记。
 - 硬指标：预览版用户总等待不超过 30 分钟，且代码 release-ready 后的候选、签名、公证、发布与公开验证不超过 15 分钟。达到任一预算仍未完成时，watchdog 必须取消本次登记的 Run 并明确失败，不得盲目重试、延长签名门限或继续静默等待。
 - 预览内部预算：候选元数据 `≤2 分钟`，Developer ID 双架构签名/公证及 artifact 交接累计到 `release_ready_at + 11 分钟`，发布与 GitHub/CDN 逐字节验证 `≤3 分钟`，最后保留 `1 分钟` 回报。签名 composite step 继续保留 10 分钟硬限，同时内部 supervisor 限 540 秒；publication supervisor 限 180 秒。
 
@@ -38,8 +38,8 @@
 2. 从最新 `origin/main` 创建 `release/pre-vX.Y.Z`。
 3. 只修改 `Resources/Info.plist`、中英文 `ReleaseHistory.md`，以及确有必要的 `Testing/*.md` 目标版本。
 4. Push 候选分支后立即运行 `scripts/prepare-preview-recording-pr.sh` 创建 Draft 回流 PR，让 Preview 与 PR CI 并行。候选必须是父提交精确等于最新 `origin/main` 的单个 metadata-only Commit；任一产品代码、依赖、签名或流水线变更都会拒绝 fast path 并返回开发。
-5. `macOS Preview Candidate` 与 Draft PR 仅在严格 metadata-only 直接子提交且父 `main` 精确 SHA 的 Apple Silicon/Intel 测试、自检和 Release 构建均成功时复用该证明。源码、依赖、workflow、entitlements、打包脚本、非直接父、SHA 不匹配、父 main 缺失/失败或 docs-only 证明都会拒绝复用并回到完整双架构 CI。
-6. 从同一候选分支运行 `macOS Signed Release Packages`，同时传入最初的 `request_started_at` 和冻结后的 `release_ready_at`。workflow 在进入 `mac-release` Environment、接触 Apple 凭据前，重新核对精确候选 Preview、两种架构证明、三条 workflow 私有依赖 Commit，以及 Draft PR 的 Apple Silicon/Intel 必需检查均已成功。
+5. `macOS Preview Candidate` 与 Draft PR 仅在严格 metadata-only 直接子提交且父 `main` 精确 SHA 的 Apple Silicon/Intel 测试、自检和 Release 构建均成功时复用该证明。源码、依赖、workflow、entitlements、打包脚本、非直接父、SHA 不匹配、父 main 缺失/失败或 docs-only 证明都会拒绝复用。Preview 不再自行运行第二套完整 CI；需要完整 exact-candidate CI 时只由 Draft recording PR 生产一次，随后返回开发修正候选结构。
+6. 从同一候选分支运行 `macOS Signed Release Packages`，传入最初的 `request_started_at` 和不可变 `request_id`。workflow 从精确父 `main` CI 证明推导并持久化 `release_ready_at`，重试必须复用同一份 attestation；在进入 `mac-release` Environment、接触 Apple 凭据前，重新核对精确候选 Preview、两种架构证明、三条 workflow 私有依赖 Commit，以及 Draft PR 的 Apple Silicon/Intel 必需检查均已成功。独立 GitHub watchdog 与发布机 watchdog 都同时监管总计时和 ready 计时。
 7. Environment 审批后，Apple Silicon 与 Intel 使用独立 SwiftPM scratch 并行构建、签名和公证；每种架构的安装与卸载 PKG 也并行提交公证。签名失败或 540 秒 supervisor 到期只失败一次，不自动重建或重试。
 8. 签名 Job 只持有读取源码和凭据所需权限；独立 publish Job 不接触 Apple 凭据，只取得 `contents/actions: write`。它在 GitHub 内部直接接收签名 artifact、创建不可变 Tag 和 Pre-release，并从 GitHub 与 CDN 并行下载 12 项公开资产逐字节复核，避免“上传 Actions artifact → 下载到本机 → 再上传 Release”的往返。
 9. 只有步骤 8 全部通过，workflow 才上传 `release-slo-ledger-published-*` 完成标志，watchdog 才结束；Release Guard 随后将 Draft PR 转 Ready并启用 Auto-merge。稳定 `latest` 在整个预览发布和验证期间不得变化。

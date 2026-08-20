@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="${REPOSITORY_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 WORKFLOW_FILE="mac-ci.yml"
 WORKFLOW_NAME="macOS CI"
@@ -54,7 +54,7 @@ fi
 RUN_JSON="$(
   "$GH_BIN" run view "$RUN_ID" \
     --repo "$REPOSITORY" \
-    --json workflowName,event,status,conclusion,headBranch,headSha,jobs,url
+    --json workflowName,event,status,conclusion,headBranch,headSha,jobs,url,updatedAt
 )"
 if ! printf '%s\n' "$RUN_JSON" | jq -e \
   --arg workflow "$WORKFLOW_NAME" \
@@ -92,6 +92,7 @@ if [[ -n "$PROOF_OUTPUT" ]]; then
     --arg baseMainCommit "$MAIN_COMMIT" \
     --argjson mainCiRunId "$RUN_ID" \
     --arg mainCiRunUrl "$(printf '%s\n' "$RUN_JSON" | jq -r '.url')" \
+    --arg mainCiCompletedAt "$(printf '%s\n' "$RUN_JSON" | jq -r '.updatedAt')" \
     '{
       schemaVersion: 1,
       repository: $repository,
@@ -99,7 +100,8 @@ if [[ -n "$PROOF_OUTPUT" ]]; then
       baseMainCommit: $baseMainCommit,
       reusedChecks: ["Apple Silicon", "Intel Ventura"],
       mainCiRunId: $mainCiRunId,
-      mainCiRunUrl: $mainCiRunUrl
+      mainCiRunUrl: $mainCiRunUrl,
+      mainCiCompletedAt: $mainCiCompletedAt
     }' > "$PROOF_OUTPUT"
 fi
 

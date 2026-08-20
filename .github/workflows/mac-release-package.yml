@@ -24,8 +24,8 @@ on:
         description: Unix epoch seconds when the user requested this preview release
         required: false
         type: string
-      release_ready_at:
-        description: Unix epoch seconds when requested code was merged into passing main and became release-ready
+      request_id:
+        description: Immutable release-manager request identifier, reused unchanged on retry
         required: false
         type: string
 
@@ -40,32 +40,40 @@ permissions:
 
 jobs:
   preview-slo-watchdog:
-    name: Enforce 30-minute total and 15-minute release-ready preview SLOs
+    name: Enforce 30-minute total and 15-minute ready preview SLO
     if: ${{ !inputs.canary }}
+    needs: validate-candidate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       actions: write
       contents: read
     steps:
+      - name: Download immutable request attestation
+        uses: actions/download-artifact@v5
+        with:
+          name: release-request-attestation-${{ inputs.tag }}
+          path: ${{ runner.temp }}/release-request
+
       - name: Cancel an over-budget release once, without retrying
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
-          RELEASE_READY_AT: ${{ inputs.release_ready_at }}
-          TOTAL_SLO_SECONDS: 1800
-          READY_SLO_SECONDS: 900
+          TOTAL_SLO_SECONDS: 1740
+          READY_SLO_SECONDS: 840
         run: |
-          if [[ ! "$REQUEST_STARTED_AT" =~ ^[0-9]+$ ||
-                ! "$RELEASE_READY_AT" =~ ^[0-9]+$ ||
-                "$RELEASE_READY_AT" -lt "$REQUEST_STARTED_AT" ]]; then
-            echo "request_started_at/release_ready_at must be ordered Unix epoch seconds" >&2
+          attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
+          request_started_at="$(jq -r '.requestStartedAt' "$attestation")"
+          release_ready_at="$(jq -r '.releaseReadyAt' "$attestation")"
+          if [[ ! "$request_started_at" =~ ^[0-9]+$ ||
+                ! "$release_ready_at" =~ ^[0-9]+$ ||
+                "$release_ready_at" -lt "$request_started_at" ]]; then
+            echo "immutable release timestamps are invalid" >&2
             exit 2
           fi
           while true; do
             now="$(date +%s)"
-            total_elapsed=$(( now - REQUEST_STARTED_AT ))
-            ready_elapsed=$(( now - RELEASE_READY_AT ))
+            total_elapsed=$(( now - request_started_at ))
+            ready_elapsed=$(( now - release_ready_at ))
             artifact_count="$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=release-slo-ledger-published-$GITHUB_RUN_ID" \
               --jq '.total_count')"
@@ -75,7 +83,7 @@ jobs:
             fi
             failed_jobs="$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest" \
-              --jq '[.jobs[] | select(.name != "Enforce 30-minute total and 15-minute release-ready preview SLOs" and .conclusion != null and .conclusion != "success" and .conclusion != "skipped")] | length')"
+              --jq '[.jobs[] | select(.name != "Enforce 30-minute total and 15-minute ready preview SLO" and .conclusion != null and .conclusion != "success" and .conclusion != "skipped")] | length')"
             if (( failed_jobs != 0 )); then
               echo "A release job already failed; watchdog will not retry it."
               exit 0
@@ -103,24 +111,18 @@ jobs:
       - name: Initialize user-wall release ledger
         env:
           REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
-          RELEASE_READY_AT_INPUT: ${{ inputs.release_ready_at }}
           CANARY_MODE: ${{ inputs.canary }}
         run: |
           request_started_at="$REQUEST_STARTED_AT_INPUT"
-          release_ready_at="$RELEASE_READY_AT_INPUT"
           if [[ "$CANARY_MODE" == "true" && -z "$request_started_at" ]]; then
             request_started_at="$(date +%s)"
-            release_ready_at="$request_started_at"
           fi
-          if [[ ! "$request_started_at" =~ ^[0-9]+$ ||
-                ! "$release_ready_at" =~ ^[0-9]+$ ||
-                "$release_ready_at" -lt "$request_started_at" ]]; then
-            echo "A real preview requires ordered request_started_at and release_ready_at timestamps." >&2
+          if [[ ! "$request_started_at" =~ ^[0-9]+$ ]]; then
+            echo "A real preview requires request_started_at." >&2
             exit 2
           fi
           {
             echo "RELEASE_REQUEST_STARTED_AT=$request_started_at"
-            echo "RELEASE_READY_AT=$release_ready_at"
             echo "RELEASE_SLO_LEDGER=$RUNNER_TEMP/release-slo.tsv"
           } >> "$GITHUB_ENV"
           ./scripts/release-slo-ledger.sh init "$RUNNER_TEMP/release-slo.tsv" "$request_started_at"
@@ -135,6 +137,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUIRE_PREVIEW_RECORDING_PR: 1
+          RELEASE_READY_PROOF_OUTPUT: ${{ runner.temp }}/release-ready-main-ci.json
           RELEASE_TAG: ${{ inputs.tag }}
           CANARY_MODE: ${{ inputs.canary }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
@@ -148,6 +151,27 @@ jobs:
             ./scripts/verify-release-timeout-budgets.sh
             ./scripts/verify-preview-candidate-ci.sh
           fi
+
+      - name: Resolve immutable request attestation
+        if: ${{ !inputs.canary }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REQUEST_ID: ${{ inputs.request_id }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          ./scripts/resolve-release-request-attestation.sh \
+            "$RELEASE_REQUEST_ID" "$RELEASE_TAG" "$RELEASE_REQUEST_STARTED_AT" \
+            "$(git rev-parse HEAD)" "$RUNNER_TEMP/release-ready-main-ci.json" \
+            "$RUNNER_TEMP/release-request-attestation.json"
+
+      - name: Persist first request timestamps
+        if: ${{ !inputs.canary }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-request-attestation-${{ inputs.tag }}
+          path: ${{ runner.temp }}/release-request-attestation.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Record candidate gates and approval wait
         if: always()
@@ -199,16 +223,25 @@ jobs:
           name: release-slo-ledger-${{ github.run_id }}
           path: ${{ runner.temp }}/release-slo
 
+      - name: Download immutable request attestation
+        if: ${{ !inputs.canary }}
+        uses: actions/download-artifact@v5
+        with:
+          name: release-request-attestation-${{ inputs.tag }}
+          path: ${{ runner.temp }}/release-request
+
       - name: Enforce preview user-wall budget before credentials
         env:
           REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
-          RELEASE_READY_AT_INPUT: ${{ inputs.release_ready_at }}
         run: |
           request_started_at="$REQUEST_STARTED_AT_INPUT"
-          release_ready_at="$RELEASE_READY_AT_INPUT"
           if [[ "$CANARY_MODE" == "true" && -z "$request_started_at" ]]; then
             request_started_at="$(date +%s)"
             release_ready_at="$request_started_at"
+          else
+            attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
+            request_started_at="$(jq -r '.requestStartedAt' "$attestation")"
+            release_ready_at="$(jq -r '.releaseReadyAt' "$attestation")"
           fi
           ledger="$RUNNER_TEMP/release-slo/release-slo.tsv"
           {
@@ -312,7 +345,11 @@ jobs:
           else
             version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - Resources/Info.plist)"
             test "$RELEASE_TAG" = "v$version"
-            ./scripts/verify-preview-branch.sh
+            base_sha="$(git rev-parse HEAD^)"
+            trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+            git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
+            chmod 755 "$trusted_runner"
+            REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
           fi
 
       - name: Compute remaining signed-build budget
@@ -399,7 +436,6 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       RELEASE_REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
-      RELEASE_READY_AT: ${{ inputs.release_ready_at }}
       PREVIEW_PUBLISHED_SLO_SECONDS: 840
       PREVIEW_TOTAL_PUBLISHED_SLO_SECONDS: 1740
       PUBLICATION_MAX_SECONDS: 180
@@ -423,6 +459,12 @@ jobs:
           name: release-slo-ledger-final-${{ github.run_id }}
           path: ${{ runner.temp }}/release-slo
 
+      - name: Download immutable request attestation
+        uses: actions/download-artifact@v5
+        with:
+          name: release-request-attestation-${{ inputs.tag }}
+          path: ${{ runner.temp }}/release-request
+
       - name: Install publication tools only when missing
         run: |
           missing_formulae=()
@@ -437,6 +479,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ledger="$RUNNER_TEMP/release-slo/release-slo.tsv"
+          attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
+          RELEASE_REQUEST_STARTED_AT="$(jq -r '.requestStartedAt' "$attestation")"
+          RELEASE_READY_AT="$(jq -r '.releaseReadyAt' "$attestation")"
           ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_REQUEST_STARTED_AT" "$PREVIEW_TOTAL_PUBLISHED_SLO_SECONDS" signed-artifact-transfer
           ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_READY_AT" "$PREVIEW_PUBLISHED_SLO_SECONDS" signed-artifact-transfer
           ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
@@ -455,7 +500,11 @@ jobs:
           fi
 
           head_commit="$(git rev-parse HEAD)"
-          ./scripts/verify-preview-branch.sh
+          base_sha="$(git rev-parse HEAD^)"
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
+          chmod 755 "$trusted_runner"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
           if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
             git tag -a "$RELEASE_TAG" -m "无线麦SayAll.app $RELEASE_TAG"
           fi

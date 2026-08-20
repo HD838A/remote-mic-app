@@ -14,6 +14,11 @@ permissions:
   contents: read
   actions: read
 
+env:
+  SAYALL_AI_RELEASE_REF: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
+  SAYALL_MACRO_PLATFORM_RELEASE_REF: 734f24be4f6ebeacadeaa41d9902bdf414807d06
+  SAYALL_MAC_REMOTE_RELEASE_REF: 3f3c782180eef4024b53941c1f65d80e7cff4c66
+
 jobs:
   skip-release-canary:
     name: Skip preview packaging for protected release canary
@@ -47,8 +52,10 @@ jobs:
         run: |
           eligible=false
           base_sha="$(git rev-parse HEAD^)"
-          if ./scripts/verify-release-metadata-diff.sh "$base_sha" "$GITHUB_SHA" "$GITHUB_REF_NAME" &&
-             ./scripts/verify-release-ready-main-ci.sh "$base_sha"; then
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          if git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner" &&
+             chmod 755 "$trusted_runner" &&
+             REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"; then
             eligible=true
           fi
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
@@ -56,7 +63,7 @@ jobs:
 
   validate-and-package:
     name: Validate and package preview candidate (${{ matrix.label }})
-    if: ${{ !contains(github.ref_name, '-canary-') }}
+    if: ${{ !contains(github.ref_name, '-canary-') && needs.classify-candidate.outputs.reuse_parent_main_ci == 'true' }}
     needs: classify-candidate
     runs-on: macos-15
     timeout-minutes: 75
@@ -67,11 +74,9 @@ jobs:
           - variant: apple-silicon
             label: Apple Silicon
             artifact: mac-preview-apple-silicon
-            triple: arm64-apple-macosx14.0
           - variant: intel
             label: Intel Ventura
             artifact: mac-preview-intel
-            triple: x86_64-apple-macosx13.0
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       RELEASE_VARIANT: ${{ matrix.variant }}
@@ -89,18 +94,17 @@ jobs:
           }
 
       - name: Reuse exact parent main product-code proof
-        if: needs.classify-candidate.outputs.reuse_parent_main_ci == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_READY_PROOF_OUTPUT: ${{ runner.temp }}/release-ready-main-ci-${{ matrix.variant }}.json
         run: |
-          ./scripts/verify-release-metadata-diff.sh "$(git rev-parse HEAD^)" "$GITHUB_SHA" "$GITHUB_REF_NAME"
-          ./scripts/verify-preview-branch.sh
-          ./scripts/verify-release-dependency-pins.sh
-          ./scripts/verify-release-ready-main-ci.sh "$(git rev-parse HEAD^)"
+          base_sha="$(git rev-parse HEAD^)"
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
+          chmod 755 "$trusted_runner"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
 
       - name: Upload exact-SHA release-ready proof
-        if: needs.classify-candidate.outputs.reuse_parent_main_ci == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}-${{ github.sha }}-release-ready-proof
@@ -108,70 +112,15 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Check out private feature package
-        if: needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'
-        uses: actions/checkout@v5
-        with:
-          repository: GetSayAll/sayall-ai
-          ref: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
-          path: .private-dependencies/sayall-ai
-          ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Check out private macro package
-        if: needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'
-        uses: actions/checkout@v5
-        with:
-          repository: GetSayAll/sayall-macro-platform
-          ref: 734f24be4f6ebeacadeaa41d9902bdf414807d06
-          path: .private-dependencies/sayall-macro-platform
-          ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Check out shared Mac remote package
-        if: needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'
-        uses: actions/checkout@v5
-        with:
-          repository: GetSayAll/sayall-mac-remote
-          ref: 3f3c782180eef4024b53941c1f65d80e7cff4c66
-          path: .private-dependencies/sayall-mac-remote
-          ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Configure private packages for full validation
-        if: needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'
+  reject-ineligible-candidate:
+    name: Reject preview candidate without reusable parent-main proof
+    if: ${{ !contains(github.ref_name, '-canary-') && needs.classify-candidate.outputs.reuse_parent_main_ci != 'true' }}
+    needs: classify-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require the recording PR to be the sole full-CI producer
         run: |
-          {
-            echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai"
-            echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform"
-            echo "REQUIRE_SAYALL_AI_PACKAGE=1"
-            echo "REQUIRE_SAYALL_MACRO_PLATFORM=1"
-          } >> "$GITHUB_ENV"
-          swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
-
-      - name: Run full candidate validation when reuse is ineligible
-        if: needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'
-        run: |
-          ./scripts/check-repository-boundaries.sh
-          ./scripts/verify-release-dependency-pins.sh
-          swift test
-          swift test --filter VoiceInputDestinationCoordinatorTests
-          swift test --filter CoreVoiceInputJourneyTests
-          SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
-          swift build -c release --triple "${{ matrix.triple }}"
-          ./scripts/build-dmg.sh
-          ./scripts/verify-dmg.sh
-          ./scripts/verify-preview-branch.sh
-
-      - name: Upload full ad-hoc candidate
-        if: needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}-${{ github.sha }}
-          path: |
-            ${{ matrix.variant == 'intel' && 'dist/intel/Remote-Mic-*-Intel.dmg' || 'dist/Remote-Mic-*.dmg' }}
-            ${{ matrix.variant == 'intel' && 'dist/intel/Remote-Mic-*-Intel.dmg.sha256' || 'dist/Remote-Mic-*.dmg.sha256' }}
-            ${{ matrix.variant == 'intel' && 'dist/intel/Install Remote Mic Intel.pkg' || 'dist/Install Remote Mic.pkg' }}
-            ${{ matrix.variant == 'intel' && 'dist/intel/Uninstall Remote Mic Intel.pkg' || 'dist/Uninstall Remote Mic.pkg' }}
-          if-no-files-found: error
-          retention-days: 14
+          echo "Preview candidates must be strict metadata-only children of a passing main commit." >&2
+          echo "The recording PR is the only full-CI producer when reuse is ineligible; Preview will not duplicate it." >&2
+          exit 1

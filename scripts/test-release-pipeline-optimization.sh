@@ -7,6 +7,7 @@ WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-release-pipeline-test.XXXX
 TEST_REPO="$WORK_DIR/repo"
 FAKE_GH="$WORK_DIR/fake-gh"
 FAKE_WATCHDOG_GH="$WORK_DIR/fake-watchdog-gh"
+FAKE_ATTEST_GH="$WORK_DIR/fake-attestation-gh"
 FAKE_RUNNER="$WORK_DIR/fake-release-variant-runner"
 FAKE_STAGE_COMMAND="$WORK_DIR/fake-stage-command"
 FAKE_CURL="$WORK_DIR/fake-curl-bin/curl"
@@ -31,6 +32,8 @@ fi
 /bin/cp "$ROOT/scripts/verify-release-dependency-pins.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-preview-candidate-ci.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-release-ready-main-ci.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/run-trusted-release-validation.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/resolve-release-request-attestation.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/release-slo-ledger.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/release-user-wall-watchdog.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-release-metadata-diff.sh" "$TEST_REPO/scripts/"
@@ -46,11 +49,14 @@ fi
 /bin/cp "$ROOT/scripts/build-doubao-driver.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/build-doubao-driver-pkg.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/package-macos-release-in-actions.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/publish-release.sh" "$TEST_REPO/scripts/"
 /bin/mkdir -p "$TEST_REPO/Resources"
 /bin/cp "$ROOT/Resources/Info.plist" "$TEST_REPO/Resources/"
 /bin/cp "$ROOT/Package.swift" "$ROOT/Package.resolved" "$TEST_REPO/"
 print '#!/bin/zsh' > "$TEST_REPO/scripts/verify-preview-branch.sh"
 print 'exit 0' >> "$TEST_REPO/scripts/verify-preview-branch.sh"
+print '#!/bin/zsh' > "$TEST_REPO/scripts/run-trusted-release-validation.sh"
+print 'exit 0' >> "$TEST_REPO/scripts/run-trusted-release-validation.sh"
 /bin/chmod 755 "$TEST_REPO/scripts/"*.sh
 
 /usr/bin/grep -Fq 'timeout-minutes: 10' \
@@ -121,19 +127,21 @@ if /usr/bin/grep -Fq 'brew install age fastlane ripgrep' \
   print -u2 "signed release workflow still reinstalls every tool"
   exit 1
 fi
-/usr/bin/grep -Fq './scripts/verify-release-ready-main-ci.sh' \
+/usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'timeout-minutes: 3' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq "if: needs.classify-candidate.outputs.reuse_parent_main_ci == 'true'" \
+/usr/bin/grep -Fq "needs.classify-candidate.outputs.reuse_parent_main_ci == 'true'" \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq "if: needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'" \
+/usr/bin/grep -Fq "needs.classify-candidate.outputs.reuse_parent_main_ci != 'true'" \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq 'Run full candidate validation when reuse is ineligible' \
+/usr/bin/grep -Fq 'Require the recording PR to be the sole full-CI producer' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq 'swift test' "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq 'swift build -c release' "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq './scripts/build-dmg.sh' "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
+if /usr/bin/grep -Eq 'swift test|swift build -c release|build-dmg\.sh' \
+    "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"; then
+  print -u2 "Preview workflow unexpectedly duplicates full product-code CI"
+  exit 1
+fi
 /usr/bin/grep -Fq 'if: ${{ !contains(github.ref_name, '\''-canary-'\'') }}' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY' \
@@ -141,19 +149,23 @@ fi
 /usr/bin/grep -Fq \
   "grep -Eq '^release/pre-v[0-9]+\\.[0-9]+\\.[0-9]+-canary-" \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq './scripts/verify-preview-branch.sh' \
+/usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
 /usr/bin/grep -Fq 'GITHUB_REF_NAME: ${{ github.head_ref }}' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq 'reuse_parent_main_ci=false' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
-/usr/bin/grep -Fq './scripts/verify-release-metadata-diff.sh' \
+/usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
-/usr/bin/grep -Fq 'TOTAL_SLO_SECONDS: 1800' \
+/usr/bin/grep -Fq 'TOTAL_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'READY_SLO_SECONDS: 900' \
+/usr/bin/grep -Fq 'READY_SLO_SECONDS: 840' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'release_ready_at:' \
+/usr/bin/grep -Fq 'timeout-minutes: 30' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq '.releaseReadyAt' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'request_id:' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'PREVIEW_PUBLISHED_SLO_SECONDS: 840' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
@@ -165,7 +177,7 @@ fi
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'release-user-wall-watchdog.sh' \
   "$TEST_REPO/scripts/release-pipeline-digest.sh"
-/usr/bin/grep -Fq './scripts/verify-preview-branch.sh' \
+/usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'git ls-remote origin "refs/tags/$RELEASE_TAG^{}"' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
@@ -210,6 +222,15 @@ fi
 /usr/bin/grep -Fq 'PUBLIC_RELEASE_ASSET_COUNT=12' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'Remote-Mic-$VERSION.dmg.sha256' \
   "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'PUBLIC_PRODUCT_NAME="无线麦SayAll.app"' \
+  "$ROOT/scripts/publish-release.sh" "$ROOT/scripts/fast-release.sh"
+/usr/bin/grep -Fq -- '--title "$PUBLIC_PRODUCT_NAME $VERSION"' \
+  "$ROOT/scripts/publish-release.sh"
+if /usr/bin/grep -Fq -- '--title "Remote Mic $VERSION"' \
+    "$ROOT/scripts/publish-release.sh"; then
+  print -u2 "release title regressed to the retired Remote Mic brand"
+  exit 1
+fi
 
 /bin/mkdir -p "$NO_RG_BIN"
 for command_name in cmp curl gh git jq plutil shasum stat; do
@@ -326,7 +347,9 @@ git -C "$TEST_REPO" init -b release/pre-v9.9.9 >/dev/null
 git -C "$TEST_REPO" config user.name "Release Pipeline Test"
 git -C "$TEST_REPO" config user.email "release-pipeline@example.invalid"
 git -C "$TEST_REPO" add .
-git -C "$TEST_REPO" commit -m "release candidate" >/dev/null
+git -C "$TEST_REPO" commit -m "release-ready main" >/dev/null
+TEST_BASE_COMMIT="$(git -C "$TEST_REPO" rev-parse HEAD)"
+git -C "$TEST_REPO" commit --allow-empty -m "release candidate" >/dev/null
 HEAD_COMMIT="$(git -C "$TEST_REPO" rev-parse HEAD)"
 
 CANARY_VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - \
@@ -422,7 +445,7 @@ fi
   print -r -- '      [[ "$mode" == "main-docs-only" ]] && build_steps="[{\"name\":\"Confirm documentation-only fast path\",\"conclusion\":\"success\"}]"'
   print -r -- '      main_jobs="[{\"name\":\"Swift tests and build (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$build_steps},{\"name\":\"Swift tests and build (Intel Ventura)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$build_steps}]"'
   print -r -- '      [[ "$mode" == "main-missing-intel" ]] && main_jobs="[{\"name\":\"Swift tests and build (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$build_steps}]"'
-  print -r -- '      print -r -- "{\"workflowName\":\"macOS CI\",\"event\":\"push\",\"status\":\"completed\",\"conclusion\":\"success\",\"headBranch\":\"main\",\"headSha\":\"$main_sha\",\"jobs\":$main_jobs,\"url\":\"https://example.invalid/run/43\"}"'
+  print -r -- '      print -r -- "{\"workflowName\":\"macOS CI\",\"event\":\"push\",\"status\":\"completed\",\"conclusion\":\"success\",\"headBranch\":\"main\",\"headSha\":\"$main_sha\",\"jobs\":$main_jobs,\"url\":\"https://example.invalid/run/43\",\"updatedAt\":\"2026-08-20T10:00:00Z\"}"'
   print -r -- '      exit 0'
   print -r -- '    fi'
   print -r -- '    case "$mode" in'
@@ -454,11 +477,12 @@ fi
 } > "$FAKE_GH"
 /bin/chmod 755 "$FAKE_GH"
 
-git -C "$TEST_REPO" update-ref refs/remotes/origin/main "$(git -C "$TEST_REPO" rev-parse HEAD)"
+git -C "$TEST_REPO" update-ref refs/remotes/origin/main "$TEST_BASE_COMMIT"
 MAIN_CI_COMMIT="$(git -C "$TEST_REPO" rev-parse origin/main)"
 (
   cd "$TEST_REPO"
-  GH_BIN="$FAKE_GH" ./scripts/verify-release-ready-main-ci.sh "$MAIN_CI_COMMIT"
+  GH_BIN="$FAKE_GH" RELEASE_READY_PROOF_OUTPUT="$WORK_DIR/main-proof.json" \
+    ./scripts/verify-release-ready-main-ci.sh "$MAIN_CI_COMMIT"
 ) > "$WORK_DIR/main-ci-pass.txt"
 /usr/bin/grep -Fq 'RELEASE-READY MAIN CI PASS' "$WORK_DIR/main-ci-pass.txt"
 for failure_mode in main-wrong-sha main-missing-intel main-docs-only; do
@@ -471,6 +495,40 @@ for failure_mode in main-wrong-sha main-missing-intel main-docs-only; do
     exit 1
   fi
 done
+
+{
+  print '#!/bin/zsh'
+  print 'set -euo pipefail'
+  print 'if [[ "$*" == *"actions/artifacts?name="* ]]; then'
+  print '  if [[ -n "${FAKE_ATTEST_ZIP:-}" ]]; then print -r -- '\''{"artifacts":[{"id":91,"expired":false}]}'\''; else print -r -- '\''{"artifacts":[]}'\''; fi'
+  print 'elif [[ "$*" == *"actions/artifacts/91/zip"* ]]; then'
+  print '  /bin/cat "$FAKE_ATTEST_ZIP"'
+  print 'else exit 2; fi'
+} > "$FAKE_ATTEST_GH"
+/bin/chmod 755 "$FAKE_ATTEST_GH"
+
+GH_BIN="$FAKE_ATTEST_GH" GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  "$ROOT/scripts/resolve-release-request-attestation.sh" \
+    req-12345 v9.9.9 1787219000 \
+    "$HEAD_COMMIT" \
+    "$WORK_DIR/main-proof.json" "$WORK_DIR/release-request-attestation.json" \
+    > "$WORK_DIR/attestation-first.txt"
+/usr/bin/grep -Fq 'RELEASE REQUEST ATTESTATION PASS' "$WORK_DIR/attestation-first.txt"
+/bin/mkdir -p "$WORK_DIR/attestation-artifact"
+/bin/cp "$WORK_DIR/release-request-attestation.json" \
+  "$WORK_DIR/attestation-artifact/release-request-attestation.json"
+(cd "$WORK_DIR/attestation-artifact" && /usr/bin/zip -q "$WORK_DIR/attestation.zip" release-request-attestation.json)
+if GH_BIN="$FAKE_ATTEST_GH" FAKE_ATTEST_ZIP="$WORK_DIR/attestation.zip" \
+   GITHUB_REPOSITORY=HD838A/remote-mic-app \
+    "$ROOT/scripts/resolve-release-request-attestation.sh" \
+      req-12345 v9.9.9 1787219060 \
+      "$HEAD_COMMIT" \
+      "$WORK_DIR/main-proof.json" "$WORK_DIR/release-request-attestation-late.json" \
+      > "$WORK_DIR/attestation-late.txt" 2>&1; then
+  print -u2 "release request attestation allowed a later retry timestamp"
+  exit 1
+fi
+/usr/bin/grep -Fq 'timestamps/identity are immutable' "$WORK_DIR/attestation-late.txt"
 
 /bin/mkdir -p "$METADATA_REPO"
 git -C "$METADATA_REPO" init -b main >/dev/null
@@ -639,21 +697,42 @@ done
   print '#!/bin/zsh'
   print 'set -euo pipefail'
   print 'print -r -- "$*" >> "$FAKE_WATCHDOG_LOG"'
+  print 'if [[ "${1:-} ${2:-}" == "run view" ]]; then'
+  print '  run_id="${3:-}"'
+  print '  if [[ "$run_id" == "77" ]]; then'
+  print '    print -r -- '\''{"workflowName":"macOS Stable Promotion","headSha":"1111111111111111111111111111111111111111","headBranch":"main"}'\'''
+  print '  else'
+  print '    print -r -- '\''{"workflowName":"wrong workflow","headSha":"2222222222222222222222222222222222222222","headBranch":"wrong"}'\'''
+  print '  fi'
+  print 'fi'
 } > "$FAKE_WATCHDOG_GH"
 /bin/chmod 755 "$FAKE_WATCHDOG_GH"
 
-touch "$WORK_DIR/watchdog-complete"
+watchdog_now="$(date +%s)"
+print -r -- "{\"mode\":\"preview\",\"requestId\":\"req-12345\",\"target\":\"release/pre-v9.9.9\",\"requestStartedAt\":$watchdog_now,\"releaseReadyAt\":$watchdog_now,\"status\":\"published-and-verified\"}" > "$WORK_DIR/watchdog-complete"
 GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-pass.log" \
   "$TEST_REPO/scripts/release-user-wall-watchdog.sh" preview \
-    "$(date +%s)" "$(date +%s)" release/pre-v9.9.9 "$WORK_DIR/watchdog-complete" "$WORK_DIR/watchdog-empty-runs" \
+    "$watchdog_now" "$watchdog_now" req-12345 release/pre-v9.9.9 "$WORK_DIR/watchdog-complete" "$WORK_DIR/watchdog-empty-runs" \
     > "$WORK_DIR/watchdog-pass.txt"
 /usr/bin/grep -Fq 'RELEASE USER-WALL WATCHDOG PASS' "$WORK_DIR/watchdog-pass.txt"
+
+print -r -- "{\"mode\":\"preview\",\"requestId\":\"wrong-request\",\"target\":\"release/pre-v9.9.9\",\"requestStartedAt\":$watchdog_now,\"releaseReadyAt\":$watchdog_now,\"status\":\"published-and-verified\"}" > "$WORK_DIR/watchdog-wrong-complete"
+set +e
+GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-wrong.log" \
+RELEASE_WATCHDOG_POLL_SECONDS=1 \
+  "$TEST_REPO/scripts/release-user-wall-watchdog.sh" preview \
+    "$(( watchdog_now - 1000 ))" "$(( watchdog_now - 900 ))" req-12345 release/pre-v9.9.9 "$WORK_DIR/watchdog-wrong-complete" "$WORK_DIR/watchdog-empty-runs" \
+    > "$WORK_DIR/watchdog-wrong.txt" 2>&1
+wrong_completion_status="$?"
+set -e
+test "$wrong_completion_status" = "124"
+/usr/bin/grep -Fq 'Ignoring completion file with mismatched release identity' "$WORK_DIR/watchdog-wrong.txt"
 
 set +e
 GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-expired.log" \
 RELEASE_WATCHDOG_POLL_SECONDS=1 \
   "$TEST_REPO/scripts/release-user-wall-watchdog.sh" preview \
-    "$(( $(date +%s) - 1000 ))" "$(( $(date +%s) - 900 ))" release/pre-v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-empty-runs" \
+    "$(( $(date +%s) - 1000 ))" "$(( $(date +%s) - 900 ))" req-12345 release/pre-v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-empty-runs" \
     > "$WORK_DIR/watchdog-expired.txt" 2>&1
 watchdog_status="$?"
 set -e
@@ -664,23 +743,26 @@ if [[ -s "$WORK_DIR/watchdog-expired.log" ]]; then
 fi
 /usr/bin/grep -Fq 'RELEASE USER-WALL SLO EXCEEDED' "$WORK_DIR/watchdog-expired.txt"
 
-print -r -- $'77\ninvalid\n88' > "$WORK_DIR/watchdog-runs"
+print -r -- '{"runId":77,"workflow":"macOS Stable Promotion","headSha":"1111111111111111111111111111111111111111","headBranch":"main","target":"v9.9.9","requestId":"req-12345"}' > "$WORK_DIR/watchdog-runs"
+print -r -- 'invalid' >> "$WORK_DIR/watchdog-runs"
+print -r -- '{"runId":88,"workflow":"macOS Stable Promotion","headSha":"2222222222222222222222222222222222222222","headBranch":"main","target":"v9.9.9","requestId":"req-12345"}' >> "$WORK_DIR/watchdog-runs"
 set +e
 GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-registered.log" \
 RELEASE_WATCHDOG_POLL_SECONDS=1 \
   "$TEST_REPO/scripts/release-user-wall-watchdog.sh" stable \
-    "$(( $(date +%s) - 1800 ))" "$(( $(date +%s) - 1800 ))" v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-runs" \
+    "$(( $(date +%s) - 1800 ))" "$(( $(date +%s) - 1800 ))" req-12345 v9.9.9 "$WORK_DIR/watchdog-never-completes" "$WORK_DIR/watchdog-runs" \
     > "$WORK_DIR/watchdog-registered.txt" 2>&1
 registered_watchdog_status="$?"
 set -e
 test "$registered_watchdog_status" = "124"
 /usr/bin/grep -Fq 'run cancel 77' "$WORK_DIR/watchdog-registered.log"
-/usr/bin/grep -Fq 'run cancel 88' "$WORK_DIR/watchdog-registered.log"
-if /usr/bin/grep -Fq 'run cancel invalid' "$WORK_DIR/watchdog-registered.log"; then
-  print -u2 "watchdog attempted to cancel an invalid registered run id"
+/usr/bin/grep -Fq 'run view 88' "$WORK_DIR/watchdog-registered.log"
+if /usr/bin/grep -Fq 'run cancel 88' "$WORK_DIR/watchdog-registered.log"; then
+  print -u2 "watchdog cancelled a remotely mismatched run"
   exit 1
 fi
-/usr/bin/grep -Fq 'Ignoring invalid registered workflow run id: invalid' "$WORK_DIR/watchdog-registered.txt"
+/usr/bin/grep -Fq 'Ignoring malformed workflow run manifest entry' "$WORK_DIR/watchdog-registered.txt"
+/usr/bin/grep -Fq 'remote identity does not match' "$WORK_DIR/watchdog-registered.txt"
 
 for failure_mode in wrong-sha failed missing-intel; do
   if (

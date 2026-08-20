@@ -11,6 +11,10 @@ on:
         description: Unix epoch seconds when the user requested this stable promotion
         required: true
         type: string
+      expected_pipeline_digest:
+        description: Reviewed release pipeline SHA-256 digest
+        required: true
+        type: string
   workflow_run:
     workflows: ["macOS CI"]
     types: [completed]
@@ -124,6 +128,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_TAG: ${{ inputs.tag }}
+          EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
         run: |
           tag="$REQUESTED_TAG"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -132,6 +137,11 @@ jobs:
           fi
           git fetch origin main --tags
           git merge --ff-only origin/main
+          if [[ ! "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ||
+                "$(./scripts/release-pipeline-digest.sh)" != "$EXPECTED_PIPELINE_DIGEST" ]]; then
+            echo "stable promotion pipeline digest does not match reviewed input" >&2
+            exit 1
+          fi
           echo "should_promote=true" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
