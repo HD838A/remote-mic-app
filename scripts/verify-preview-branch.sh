@@ -19,8 +19,8 @@ if [[ -z "$BRANCH" ]]; then
     exit 1
   }
 fi
-if [[ ! "$BRANCH" =~ '^release/pre-v([0-9]+\.[0-9]+\.[0-9]+)(-rerun)?$' ]]; then
-  print -u2 "preview branch must match release/pre-vX.Y.Z or its -rerun recovery form"
+if [[ ! "$BRANCH" =~ '^release/pre-v([0-9]+\.[0-9]+\.[0-9]+)(-rerun([2-9][0-9]*)?)?$' ]]; then
+  print -u2 "preview branch must match release/pre-vX.Y.Z or a numbered recovery form"
   exit 1
 fi
 

@@ -486,7 +486,9 @@ verify_downloaded_candidate() {
     '(.schemaVersion == 1 or .schemaVersion == 2) and
      .repository == $repository and .tag == $tag and
      .version == $version and .build == $build and
-     (.candidateBranch == ("release/pre-" + $tag) or .candidateBranch == ("release/pre-" + $tag + "-rerun")) and
+     (.candidateBranch == ("release/pre-" + $tag) or
+      ((.candidateBranch | startswith("release/pre-" + $tag + "-rerun")) and
+       (.candidateBranch | ltrimstr("release/pre-" + $tag + "-rerun") | test("^([2-9][0-9]*)?$")))) and
      (.tagCommit | test("^[0-9a-f]{40}$")) and
      (if .schemaVersion == 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
      ((.payloadAssets | length) == 11 or

@@ -449,6 +449,7 @@ fi
   print -r -- 'command_name="${1:-} ${2:-}"'
   print -r -- 'if [[ -n "${FAKE_GH_LOG:-}" ]]; then print -r -- "$*" >> "$FAKE_GH_LOG"; fi'
   print -r -- 'head_commit="$(git rev-parse HEAD)"'
+  print -r -- 'head_branch="${FAKE_HEAD_BRANCH:-release/pre-v9.9.9}"'
   print -r -- 'case "$command_name" in'
   print -r -- '  "run list") if [[ "$*" == *"--workflow mac-ci.yml"* ]]; then print 43; else print 42; fi ;;'
   print -r -- '  "run view")'
@@ -470,7 +471,7 @@ fi
   print -r -- '    proof_steps="[{\"name\":\"Reuse exact parent main product-code proof\",\"conclusion\":\"success\"}]"'
   print -r -- '    jobs="[{\"name\":\"Validate and package preview candidate (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps},{\"name\":\"Validate and package preview candidate (Intel Ventura)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps}]"'
   print -r -- '    if [[ "$mode" == "missing-intel" ]]; then jobs="[{\"name\":\"Validate and package preview candidate (Apple Silicon)\",\"status\":\"completed\",\"conclusion\":\"success\",\"steps\":$proof_steps}]"; fi'
-  print -r -- '    print -r -- "{\"workflowName\":\"macOS Preview Candidate\",\"event\":\"push\",\"status\":\"completed\",\"conclusion\":\"$conclusion\",\"headBranch\":\"release/pre-v9.9.9\",\"headSha\":\"$head_sha\",\"jobs\":$jobs,\"url\":\"https://example.invalid/run/42\",\"updatedAt\":\"2026-08-20T10:05:00Z\"}"'
+  print -r -- '    print -r -- "{\"workflowName\":\"macOS Preview Candidate\",\"event\":\"push\",\"status\":\"completed\",\"conclusion\":\"$conclusion\",\"headBranch\":\"$head_branch\",\"headSha\":\"$head_sha\",\"jobs\":$jobs,\"url\":\"https://example.invalid/run/42\",\"updatedAt\":\"2026-08-20T10:05:00Z\"}"'
   print -r -- '    ;;'
   print -r -- '  "pr list")'
   print -r -- '    case "$mode" in'
@@ -651,6 +652,12 @@ METADATA_HEAD="$(git -C "$METADATA_REPO" rev-parse HEAD)"
     "$METADATA_BASE" "$METADATA_HEAD" release/pre-v9.9.9
 ) > "$WORK_DIR/metadata-pass.txt"
 /usr/bin/grep -Fq 'RELEASE METADATA DIFF PASS' "$WORK_DIR/metadata-pass.txt"
+(
+  cd "$METADATA_REPO"
+  "$ROOT/scripts/verify-release-metadata-diff.sh" \
+    "$METADATA_BASE" "$METADATA_HEAD" release/pre-v9.9.9-rerun2
+) > "$WORK_DIR/metadata-recovery-pass.txt"
+/usr/bin/grep -Fq 'RELEASE METADATA DIFF PASS' "$WORK_DIR/metadata-recovery-pass.txt"
 /bin/mkdir -p "$METADATA_REPO/Sources"
 print 'let productCode = true' > "$METADATA_REPO/Sources/Product.swift"
 git -C "$METADATA_REPO" add Sources
@@ -765,6 +772,15 @@ test "$ledger_overrun_status" = "124"
 
 (
   cd "$TEST_REPO"
+  GITHUB_REF_NAME=release/pre-v9.9.9-rerun2 \
+    FAKE_HEAD_BRANCH=release/pre-v9.9.9-rerun2 \
+    RELEASE_TAG=v9.9.9 GH_BIN="$FAKE_GH" \
+    ./scripts/verify-preview-candidate-ci.sh 42
+) > "$WORK_DIR/candidate-recovery-pass.txt"
+/usr/bin/grep -Fq "PREVIEW CANDIDATE CI PASS" "$WORK_DIR/candidate-recovery-pass.txt"
+
+(
+  cd "$TEST_REPO"
   GITHUB_REF_NAME=release/pre-v9.9.9 GH_BIN="$FAKE_GH" FAKE_GH_MODE=draft \
     REQUIRE_PREVIEW_RECORDING_PR=1 RELEASE_TAG=v9.9.9 \
     ./scripts/verify-preview-candidate-ci.sh 42
@@ -804,6 +820,13 @@ GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-pass.log" \
     "$watchdog_now" "$watchdog_now" req-12345 release/pre-v9.9.9 "$WORK_DIR/watchdog-complete" "$WORK_DIR/watchdog-empty-runs" \
     > "$WORK_DIR/watchdog-pass.txt"
 /usr/bin/grep -Fq 'RELEASE USER-WALL WATCHDOG PASS' "$WORK_DIR/watchdog-pass.txt"
+
+print -r -- "{\"mode\":\"preview\",\"requestId\":\"req-12345\",\"target\":\"release/pre-v9.9.9-rerun2\",\"requestStartedAt\":$watchdog_now,\"releaseReadyAt\":$watchdog_now,\"status\":\"published-and-verified\"}" > "$WORK_DIR/watchdog-recovery-complete"
+GH_BIN="$FAKE_WATCHDOG_GH" FAKE_WATCHDOG_LOG="$WORK_DIR/watchdog-recovery-pass.log" \
+  "$TEST_REPO/scripts/release-user-wall-watchdog.sh" preview \
+    "$watchdog_now" "$watchdog_now" req-12345 release/pre-v9.9.9-rerun2 "$WORK_DIR/watchdog-recovery-complete" "$WORK_DIR/watchdog-empty-runs" \
+    > "$WORK_DIR/watchdog-recovery-pass.txt"
+/usr/bin/grep -Fq 'RELEASE USER-WALL WATCHDOG PASS' "$WORK_DIR/watchdog-recovery-pass.txt"
 
 print -r -- "{\"mode\":\"preview\",\"requestId\":\"wrong-request\",\"target\":\"release/pre-v9.9.9\",\"requestStartedAt\":$watchdog_now,\"releaseReadyAt\":$watchdog_now,\"status\":\"published-and-verified\"}" > "$WORK_DIR/watchdog-wrong-complete"
 set +e
