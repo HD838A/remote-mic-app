@@ -6,6 +6,8 @@
 
 - `main` 必须始终与最新已获取的 `origin/main` 精确一致；检查或交付前必须先 fetch 远端并重新核对 SHA。
 - 不得在 `main` 工作区直接开发功能、修复 Bug 或临时保存未提交改动；产品工作必须使用独立分支和 worktree。
+- 每个功能或 Bug 分支都必须从最新已获取的 `origin/main` 创建；创建前必须 fetch 并确认分支基线与 `origin/main` 的 SHA 一致。
+- 每个功能或 Bug 分支提交 PR 时，目标分支必须是远端 `main`（即 GitHub 上的 `origin/main`）；不得将 PR 指向旧分支、候选分支或其他工作分支。
 - 分支、worktree、提交或发布操作不得为了方便而让 `main` 暂时承载其他工作项；完成操作后仍必须恢复 `main == origin/main`。
 
 ## 独立工作项提交边界
