@@ -62,7 +62,7 @@ HID START mode=adaptive
 - 修复后定向测试 `discoveryProbesMatchedDevicesWithoutBindingTheEnumerationWinner` 通过。
 - `swift test --filter RemoteButtonsTests`：86 项通过，覆盖发现探测、空闲报告不抢占、报告来源路由、已绑定隔离、首按不丢失、权限与电源键安全门。
 - `swift test --filter OnboardingFlowTests`：28 项通过。
-- `swift test`：314 项、31 个 suite 通过。
+- `swift test`：316 项、31 个 suite 通过。
 - 私有硬件事件回放：21 项通过，覆盖 RC001 / RC003 语音、12 个按键、36 个手势、双设备隔离和 monitored 模式抑制释放。
 - `SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh`：42/42 通过。
 - Apple Silicon 与 `x86_64-apple-macosx13.0` Release 构建通过。
