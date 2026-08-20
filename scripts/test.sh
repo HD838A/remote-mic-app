@@ -15,6 +15,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/ATVVProtocol.swift" \
   "$ROOT/Sources/RemoteMic/BluetoothLifecycle.swift" \
   "$ROOT/Sources/RemoteMic/RemoteButtons.swift" \
+  "$ROOT/Sources/RemoteMic/KeyboardShortcutPicker.swift" \
   "$ROOT/Sources/RemoteMic/RemoteDeviceProfile.swift" \
   "$ROOT/Sources/RemoteMic/FirstUseDiagnostics.swift" \
   "$ROOT/Sources/RemoteMic/OnboardingFlow.swift" \

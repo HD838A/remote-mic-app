@@ -142,7 +142,14 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         return flags
     }
 
+    var standaloneModifier: StandaloneKeyboardModifier? {
+        StandaloneKeyboardModifier.matching(self)
+    }
+
     func displayName(using localization: LocalizationStore) -> String {
+        if let standaloneModifier {
+            return standaloneModifier.displayName(using: localization)
+        }
         var result = ""
         if modifierFlags.contains(.control) { result += "⌃" }
         if modifierFlags.contains(.option) { result += "⌥" }

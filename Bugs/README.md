@@ -127,6 +127,7 @@
 | 2026-08-17 | [没有实体遥控器的用户无法完成 Onboarding](./2026-08-17-onboarding-requires-physical-remote.md) | 候选修复完成，等待 iPhone 与网页版真机验收 |
 | 2026-08-18 | [Onboarding 普通音频设备与手动文字错误通过](./2026-08-18-onboarding-miremote-and-manual-text-gates.md) | 候选修复完成，等待真实语音工具验收 |
 | 2026-08-19 | [Onboarding 错误拒绝 BlackHole 2ch](./2026-08-19-onboarding-blackhole-support.md) | 候选修复完成，等待真实 BlackHole 验收 |
+| 2026-08-20 | [重新授权后组合快捷键监听未恢复](./2026-08-20-hid-permission-recovery-custom-shortcuts.md) | 候选修复完成，等待真实权限与遥控器验收 |
 
 ## 记录模板
 

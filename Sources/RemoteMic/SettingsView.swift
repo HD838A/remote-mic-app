@@ -173,6 +173,7 @@ struct SettingsView: View {
     private let refreshUpdateInformation: () -> Void
     private let setDockIconVisible: (Bool) -> Void
     private let minimumContentSize: CGSize
+    private let initialShortcutPickerShowsKeyboard: Bool
     private static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
         .macros,
@@ -220,6 +221,9 @@ struct SettingsView: View {
         setDockIconVisible: @escaping (Bool) -> Void = { _ in },
         initialSection: SettingsSection = .connection,
         initialShareSection: SettingsSection? = nil,
+        initialMappingEditingButton: RemoteButton? = nil,
+        initialMappingEditingTrigger: ButtonTrigger = .singleClick,
+        initialShortcutPickerShowsKeyboard: Bool = false,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
         self.model = model
@@ -231,8 +235,15 @@ struct SettingsView: View {
         self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
         self.minimumContentSize = minimumContentSize
+        self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
         _selectedSection = State(initialValue: initialSection)
         _expandedShareSection = State(initialValue: initialShareSection)
+        _selectedRemoteButton = State(initialValue: initialMappingEditingButton ?? .ok)
+        _mappingEditingTarget = State(
+            initialValue: initialMappingEditingButton.map {
+                ShortcutEditingTarget(button: $0, trigger: initialMappingEditingTrigger)
+            }
+        )
     }
 
     var body: some View {
@@ -1008,6 +1019,18 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .compatibilityScrollEdgeEffect()
+                .onAppear {
+                    guard let target = mappingEditingTarget else { return }
+                    let scrollTarget = settings.configuredAction(
+                        for: target.button,
+                        trigger: target.trigger
+                    ).action == .customShortcut
+                        ? "mapping-shortcut-editor-\(target.id)"
+                        : "mapping-action-editor"
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(scrollTarget, anchor: .top)
+                    }
+                }
                 .onChange(of: mappingEditingTarget?.id) { targetID in
                     guard targetID != nil else { return }
                     DispatchQueue.main.async {
@@ -1519,38 +1542,50 @@ struct SettingsView: View {
                 )
                 .frame(height: 1)
             } else {
-                HStack(spacing: 10) {
-                    Label {
-                        Text(
-                            configured.shortcut?.displayName(using: localization) ??
-                                localization.text("shortcut.editor.not_recorded")
-                        )
-                    } icon: {
-                        Image(systemName: configured.shortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
-                            .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.green)
-                    }
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.primary)
-                    .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        Label {
+                            Text(
+                                configured.shortcut?.displayName(using: localization) ??
+                                    localization.text("shortcut.editor.not_recorded")
+                            )
+                        } icon: {
+                            Image(systemName: configured.shortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
+                                .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.green)
+                        }
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.primary)
+                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
 
-                    Button(configured.shortcut == nil ? "shortcut.action.record" : "shortcut.action.record_again") {
-                        applicationShortcutCaptureProfileID = nil
-                        shortcutCaptureFeedback = nil
-                        shortcutCaptureTarget = target
-                    }
-                    .compatibilityButtonStyle(.prominent)
+                        Button(configured.shortcut == nil ? "shortcut.action.record" : "shortcut.action.record_again") {
+                            applicationShortcutCaptureProfileID = nil
+                            shortcutCaptureFeedback = nil
+                            shortcutCaptureTarget = target
+                        }
+                        .compatibilityButtonStyle(.standard)
 
-                    Button("common.action.clear") {
-                        settings.setShortcut(nil, for: button, trigger: trigger)
-                        shortcutCaptureFeedback = nil
+                        Button("common.action.clear") {
+                            settings.setShortcut(nil, for: button, trigger: trigger)
+                            shortcutCaptureFeedback = nil
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .disabled(configured.shortcut == nil)
                     }
-                    .compatibilityButtonStyle(.standard)
-                    .disabled(configured.shortcut == nil)
+
+                    shortcutCaptureFeedbackView(contextID: contextID)
+
+                    KeyboardShortcutPicker(
+                        shortcut: configured.shortcut,
+                        showsStandardKeyboardInitially: initialShortcutPickerShowsKeyboard,
+                        onSelect: { shortcut in
+                            settings.setShortcut(shortcut, for: button, trigger: trigger)
+                            shortcutCaptureFeedback = nil
+                        }
+                    )
+                    .id("mapping-shortcut-editor-\(contextID)")
                 }
-
-                shortcutCaptureFeedbackView(contextID: contextID)
             }
         }
         .padding(12)
