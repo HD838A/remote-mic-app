@@ -76,6 +76,7 @@ final class HIDRemoteMonitor {
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
     private let diagnosticLogger: (String) -> Void
+    private let karabinerElementsInstalled: () -> Bool
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
     private var allowedLocationIDs: Set<UInt32>?
@@ -125,7 +126,10 @@ final class HIDRemoteMonitor {
         frontmostBundleIdentifier: @escaping () -> String? = {
             NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         },
-        diagnosticLogger: @escaping (String) -> Void = AppLogger.shared.write
+        diagnosticLogger: @escaping (String) -> Void = AppLogger.shared.write,
+        karabinerElementsInstalled: @escaping () -> Bool = {
+            HIDRemoteMonitor.isKarabinerElementsInstalled()
+        }
     ) {
         self.settings = settings
         self.profileID = profileID
@@ -148,6 +152,7 @@ final class HIDRemoteMonitor {
         self.hasOverrideBinding = hasOverrideBinding
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
         self.diagnosticLogger = diagnosticLogger
+        self.karabinerElementsInstalled = karabinerElementsInstalled
     }
 
     func assignProfileID(_ profileID: UUID) {
@@ -224,7 +229,22 @@ final class HIDRemoteMonitor {
                 CFRunLoopMode.commonModes.rawValue
             )
             eventSuppressor.stop()
-            updateStatus(LocalizedMessage("button_mapping.error.remote_read_failed", arguments: [String(result)]))
+            let karabinerInstalled = karabinerElementsInstalled()
+            if let exclusiveMessageKey = Self.deviceOpenFailureMessageKey(
+                result: result,
+                karabinerElementsInstalled: karabinerInstalled
+            ) {
+                updateStatus(LocalizedMessage(exclusiveMessageKey))
+                AppLogger.shared.write(
+                    "HID MANAGER OPEN BLOCKED reason=exclusive_access " +
+                        "karabiner_installed=\(karabinerInstalled) result=\(result)"
+                )
+            } else {
+                updateStatus(LocalizedMessage(
+                    "button_mapping.error.remote_read_failed",
+                    arguments: [String(result)]
+                ))
+            }
             return
         }
         self.manager = manager
@@ -290,10 +310,20 @@ final class HIDRemoteMonitor {
         guard !probedDevices.contains(where: { CFEqual($0, device) }) else { return }
         let monitorResult = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
         guard monitorResult == kIOReturnSuccess else {
-            updateStatus(LocalizedMessage(
-                "button_mapping.error.device_read_failed",
-                arguments: [String(monitorResult)]
+            let karabinerInstalled = karabinerElementsInstalled()
+            updateStatus(Self.deviceOpenFailureMessage(
+                result: monitorResult,
+                karabinerElementsInstalled: karabinerInstalled
             ))
+            if Self.deviceOpenFailureMessageKey(
+                result: monitorResult,
+                karabinerElementsInstalled: karabinerInstalled
+            ) != nil {
+                AppLogger.shared.write(
+                    "HID DEVICE PROBE BLOCKED reason=exclusive_access " +
+                        "karabiner_installed=\(karabinerInstalled) monitor=\(monitorResult)"
+                )
+            }
             diagnosticLogger("HID DEVICE PROBE FAILED monitor=\(monitorResult)")
             return
         }
@@ -342,6 +372,19 @@ final class HIDRemoteMonitor {
         }
 
         let monitorResult = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+        let karabinerInstalled = karabinerElementsInstalled()
+        if let exclusiveMessageKey = Self.deviceOpenFailureMessageKey(
+            result: monitorResult,
+            karabinerElementsInstalled: karabinerInstalled
+        ) {
+            updateStatus(LocalizedMessage(exclusiveMessageKey))
+            AppLogger.shared.write(
+                "HID DEVICE OPEN BLOCKED reason=exclusive_access " +
+                    "karabiner_installed=\(karabinerInstalled) " +
+                    "seize=\(seizeResult) monitor=\(monitorResult)"
+            )
+            return false
+        }
         guard monitorResult == kIOReturnSuccess || allowManagerFallback else {
             updateStatus(LocalizedMessage("button_mapping.error.device_read_failed", arguments: [String(monitorResult)]))
             AppLogger.shared.write(
@@ -720,6 +763,45 @@ final class HIDRemoteMonitor {
 
     static func shouldPromoteDiscoveryReport(usages: Set<UInt16>) -> Bool {
         !RemoteButton.buttons(for: usages).isEmpty
+    }
+
+    static func deviceOpenFailureMessageKey(
+        result: IOReturn,
+        karabinerElementsInstalled: Bool
+    ) -> String? {
+        guard result == kIOReturnExclusiveAccess else { return nil }
+        return karabinerElementsInstalled
+            ? "button_mapping.error.exclusive_access.karabiner"
+            : "button_mapping.error.exclusive_access"
+    }
+
+    static func isKarabinerElementsInstalled(
+        applicationURL: URL? = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "org.pqrs.Karabiner-Elements"
+        ),
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> Bool {
+        if applicationURL != nil { return true }
+        return [
+            "/Applications/Karabiner-Elements.app",
+            "/Library/Application Support/org.pqrs.Karabiner-Elements",
+        ].contains(where: fileExists)
+    }
+
+    private static func deviceOpenFailureMessage(
+        result: IOReturn,
+        karabinerElementsInstalled: Bool
+    ) -> LocalizedMessage {
+        if let key = deviceOpenFailureMessageKey(
+            result: result,
+            karabinerElementsInstalled: karabinerElementsInstalled
+        ) {
+            return LocalizedMessage(key)
+        }
+        return LocalizedMessage(
+            "button_mapping.error.device_read_failed",
+            arguments: [String(result)]
+        )
     }
 
     private static func buttonList(for usages: Set<UInt16>) -> String {

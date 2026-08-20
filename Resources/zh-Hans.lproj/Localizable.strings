@@ -37,6 +37,8 @@
 "button_mapping.error.device_open_failed" = "无法打开遥控器按键设备";
 "button_mapping.status.connected" = "按键功能已连接";
 "button_mapping.error.device_read_failed" = "无法读取遥控器按键（错误 %1$@）";
+"button_mapping.error.exclusive_access" = "遥控器被其他输入工具占用。请退出或暂停键盘、鼠标或设备映射工具后重新检测。常见软件包括 Karabiner-Elements、BetterTouchTool、USB Overdrive 和 SteerMouse。";
+"button_mapping.error.exclusive_access.karabiner" = "遥控器被其他输入工具占用。若使用 Karabiner-Elements，请打开“设备”，找到“小米蓝牙语音遥控器”，关闭“Modify events”或将设备设为“Ignore”，然后重新检测。";
 "button_mapping.error.power_suppression_failed" = "无法安全接管遥控器开关机键";
 "button_mapping.status.connected_fallback" = "按键功能已连接";
 "button_mapping.status.connected_system_actions_may_remain" = "按键功能已连接；部分系统原操作可能仍会触发";

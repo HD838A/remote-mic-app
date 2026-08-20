@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md)
 - [Onboarding 已发现遥控器但永远等不到首个 HID 按键](./2026-08-20-onboarding-hid-discovery-report-deadlock.md)
 - [Issue #100：升级后权限失效且旧 App 影响安装](./2026-08-20-issue-100-upgrade-permission-repair.md)
 - [Onboarding 已授权权限无法再次打开系统设置](./2026-08-20-onboarding-granted-permissions-not-clickable.md)
@@ -53,6 +54,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-20 | [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md) | 候选修复完成，等待 Karabiner-Elements 与其他 HID 工具真机验收 |
 | 2026-08-20 | [Onboarding 已发现遥控器但永远等不到首个 HID 按键](./2026-08-20-onboarding-hid-discovery-report-deadlock.md) | 根因已确认并完成候选修复，等待 RC001 / RC003 真机验收 |
 | 2026-08-20 | [Issue #100：升级后权限失效且旧 App 影响安装](./2026-08-20-issue-100-upgrade-permission-repair.md) | 权限修复入口已实现；安装失败等待现场 Installer 日志 |
 | 2026-08-20 | [Onboarding 已授权权限无法再次打开系统设置](./2026-08-20-onboarding-granted-permissions-not-clickable.md) | 候选修复完成，等待正式签名升级权限连续性验收 |
