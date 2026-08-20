@@ -6,6 +6,10 @@ enum XiaomiVoiceRemoteNameMatcher {
         "xiaomi bluetooth remote 2",
         "xiaomi bluetooth remote 2 pro",
         "小米蓝牙语音遥控器",
+        // 蓝牙遥控器 2 / 2 Pro (model ARN9) advertise under these names.
+        "小米蓝牙遥控器2",
+        "小米蓝牙遥控器2 pro",
+        "arn9",
     ]
 
     static func matches(_ rawName: String?) -> Bool {
