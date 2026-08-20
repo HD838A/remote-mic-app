@@ -334,6 +334,7 @@ jobs:
 
       - name: Validate release identity
         env:
+          GH_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
         run: |
