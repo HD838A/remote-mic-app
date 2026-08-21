@@ -2193,6 +2193,7 @@ struct RemoteButtonsTests {
             virtualKey: 126,
             keyDown: true
         ))
+        down.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
         let up = try #require(CGEvent(
             keyboardEventSource: nil,
             virtualKey: 126,
@@ -2211,6 +2212,39 @@ struct RemoteButtonsTests {
         suppressor.arm(button: .up, edge: .up)
         #expect(suppressor.handle(type: .keyUp, event: up))
         #expect(!suppressor.handle(type: .keyDown, event: down))
+    }
+
+    @Test func missingRemoteKeyUpDoesNotSuppressNextPhysicalKeyPress() throws {
+        let suppressor = KeyboardEventSuppressor()
+        let remoteDown = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 123,
+            keyDown: true
+        ))
+        let remoteRepeat = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 123,
+            keyDown: true
+        ))
+        remoteRepeat.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+        let physicalDown = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 123,
+            keyDown: true
+        ))
+        let physicalRepeat = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 123,
+            keyDown: true
+        ))
+        physicalRepeat.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+
+        suppressor.arm(button: .left, edge: .down)
+        #expect(suppressor.handle(type: .keyDown, event: remoteDown))
+        #expect(suppressor.handle(type: .keyDown, event: remoteRepeat))
+
+        #expect(!suppressor.handle(type: .keyDown, event: physicalDown))
+        #expect(!suppressor.handle(type: .keyDown, event: physicalRepeat))
     }
 
     @Test func remoteModelNumberIdentificationIsStrictAndCaseInsensitive() {

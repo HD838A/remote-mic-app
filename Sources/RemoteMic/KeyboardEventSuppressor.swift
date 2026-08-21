@@ -92,7 +92,17 @@ final class KeyboardEventSuppressor {
         switch edge {
         case .down:
             heldEventCounts[nativeEvent, default: 0] += 1
+            pendingEvents.append(PendingEvent(
+                event: nativeEvent,
+                edge: edge,
+                expiresAt: now + 0.18
+            ))
         case .up:
+            if let pendingDownIndex = pendingEvents.firstIndex(where: {
+                $0.event == nativeEvent && $0.edge == .down
+            }) {
+                pendingEvents.remove(at: pendingDownIndex)
+            }
             let remaining = (heldEventCounts[nativeEvent] ?? 0) - 1
             if remaining > 0 {
                 heldEventCounts[nativeEvent] = remaining
@@ -126,19 +136,25 @@ final class KeyboardEventSuppressor {
         let now = ProcessInfo.processInfo.systemUptime
         lock.lock()
         pendingEvents.removeAll { $0.expiresAt <= now }
-        if descriptor.edge == .down, (heldEventCounts[descriptor.event] ?? 0) > 0 {
+        if let matchIndex = pendingEvents.firstIndex(where: {
+            $0.event == descriptor.event && $0.edge == descriptor.edge
+        }) {
+            pendingEvents.remove(at: matchIndex)
             lock.unlock()
             return true
         }
-        guard let matchIndex = pendingEvents.firstIndex(where: {
-            $0.event == descriptor.event && $0.edge == descriptor.edge
-        }) else {
+        if descriptor.edge == .down, (heldEventCounts[descriptor.event] ?? 0) > 0 {
+            if type == .keyDown,
+               event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+                heldEventCounts.removeValue(forKey: descriptor.event)
+                lock.unlock()
+                return false
+            }
             lock.unlock()
-            return false
+            return true
         }
-        pendingEvents.remove(at: matchIndex)
         lock.unlock()
-        return true
+        return false
     }
 
     private func descriptor(
