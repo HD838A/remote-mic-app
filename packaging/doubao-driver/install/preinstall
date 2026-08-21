@@ -12,6 +12,7 @@ LEGACY_REMOTE_MIC_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.ap
 LEGACY_REMOTE_MIC_APP_PLIST="$LEGACY_REMOTE_MIC_APP_DESTINATION/Contents/Info.plist"
 LEGACY_CHINESE_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
 LEGACY_CHINESE_APP_PLIST="$LEGACY_CHINESE_APP_DESTINATION/Contents/Info.plist"
+OWNED_APP_FOUND=0
 
 uses_chinese_locale() {
   local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
@@ -100,6 +101,7 @@ if [[ -e "$APP_DESTINATION" || -L "$APP_DESTINATION" ]]; then
   installer_message \
     "检测到已有 SayAll.app；安装器会以原子方式更新它。" \
     "An existing SayAll.app was found and will be updated atomically."
+  OWNED_APP_FOUND=1
 fi
 
 check_legacy_app() {
@@ -125,6 +127,7 @@ check_legacy_app() {
     installer_message \
       "检测到旧路径中的 $legacy_label；成功安装 SayAll.app 后再安全迁移。" \
       "The legacy $legacy_label was found and will be migrated only after SayAll.app is installed successfully."
+    OWNED_APP_FOUND=1
   else
     installer_message \
       "旧路径中的 $legacy_label 不属于无线麦SayAll.app，安装器将保留它不作处理。" \
@@ -140,3 +143,10 @@ check_legacy_app \
   "$LEGACY_CHINESE_APP_DESTINATION" \
   "$LEGACY_CHINESE_APP_PLIST" \
   "无线麦.app"
+
+if [[ "$OWNED_APP_FOUND" -eq 1 ]]; then
+  /usr/bin/pkill -x RemoteMic 2>/dev/null || true
+  installer_message \
+    "已停止正在运行的无线麦进程，随后更新音频驱动。" \
+    "Stopped the running SayAll/Remote Mic process before updating the audio driver."
+fi
