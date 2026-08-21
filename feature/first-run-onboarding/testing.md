@@ -15,6 +15,8 @@
 1.9.3 真实日志确认未绑定 HID discovery 首报告死锁：设备匹配 157 次但没有一次 `HID REPORT` 或 `HID CONNECTED`。候选实现改为非独占探测安全候选，只有包含已知普通按键的首份真实报告才绑定实际设备，空闲或未知报告不会抢占；Remote buttons 86 项、Onboarding 26 项、完整 Swift 314 项/31 suites、硬件事件回放 21 项、项目自检 42/42 与 Apple Silicon / Intel Release 构建通过。真实 IOHID 回调、RC001 / RC003、双遥控器及电源键保护仍需按用例 4B-1 现场验收。
 2026-08-20 权限卡候选增加已授权状态回归：蓝牙、输入监控和辅助功能整卡仍可点击并打开各自系统隐私页，已授权蓝牙不会额外重连。Onboarding 27 项、完整 Swift 313 项/31 suites、项目自检 42/42 通过；权限页浅色/深色生产视图无裁切、内部滚动或黑白分栏。正式签名改名权限连续性必须使用同 Team、Bundle ID 和 designated requirement 的 Remote Mic.app → SayAll.app 升级验证，ad-hoc 包不计入通过。
 
+2026-08-21 修复输入法确认重复弹出：豆包/微信只在输入法选择页主动调用系统输入源切换；进入后续页面、输入框重新聚焦或 App 回到前台不再重复调用，完成后的 Fn 自动切换监视器保持不变。自动化与 Release 构建需通过；真实系统确认框、豆包/微信文字上屏仍需现场验收。
+
 Issue #100 增加升级首次启动矩阵：已完成用户在更新后缺任一权限时直接进入“权限与隐私”；全部正常、非更新启动和未完成 Onboarding 均不触发。Onboarding 28 项、完整 Swift 314 项/31 suites、项目自检 42/42 通过，权限页浅色/深色 `800 × 650` 无裁切。真实安装失败必须提供 `/var/log/install.log`，不能用删除旧 App 后偶然成功替代根因验证。
 
 1.9.3 真实日志确认未绑定 HID discovery 首报告死锁：设备匹配 157 次但没有一次 `HID REPORT` 或 `HID CONNECTED`。候选实现改为非独占探测安全候选，只有包含已知普通按键的首份真实报告才绑定实际设备，空闲或未知报告不会抢占；随后补充 `kIOReturnExclusiveAccess` 的通用占用提示和 Karabiner-Elements 专项操作说明。真实 IOHID 回调、RC001 / RC003、双遥控器、电源键及第三方 HID 工具仍需按用例 4B-1、4B-2 现场验收。
