@@ -92,6 +92,6 @@
 
 ## 验证边界
 
-- 既有自动化覆盖生产 HID parser、monitor、定时连发、suppressor 和断连重置。Issue #137 新增生产 suppressor 事件回放，覆盖左键缺失 release 后实体键盘首击与 autorepeat 自愈；需由 PR CI 完成执行确认。
+- 既有自动化覆盖生产 HID parser、monitor、定时连发、suppressor 和断连重置。Issue #137 新增生产 suppressor 事件回放，覆盖左键缺失 release 后实体键盘首击与 autorepeat 自愈；本地 `RemoteButtonsTests` 89 项及 `scripts/test.sh` 42 项已通过。可选硬件模拟包未在本地配置，PR CI 仍等待上游批准 fork workflow。
 - 自动化不能证明真实 CGEvent tap、系统键盘来源、蓝牙固件 release 丢失、休眠唤醒和最终实体键盘体验。
 - 用例一至五必须在真实 `mode=monitored` 环境完成后，才能将本 Bug 标记为真机验收通过；若无法稳定制造丢包，必须明确记录用例五未完成，不能用正常松开或断连替代。
