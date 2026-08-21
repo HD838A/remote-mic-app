@@ -1,5 +1,9 @@
 # Version History
 
+## 1.9.7 (Pre-release)
+
+- Fixed repeated macOS input-source confirmation prompts during first-run voice setup; changing the selected input method now happens only when the voice-tool step requires it.
+
 ## 1.9.6 (Pre-release)
 
 - First-run setup permission cards remain clickable after authorization, so you can reopen the relevant macOS Privacy settings when checking or repairing access.
