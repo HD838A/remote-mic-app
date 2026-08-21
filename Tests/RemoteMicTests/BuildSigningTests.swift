@@ -1,8 +1,45 @@
+import AppKit
 import Foundation
 import Testing
 
 @Suite("Build signing")
 struct BuildSigningTests {
+    @Test func appIconUsesTransparentMacOSAsset() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let iconURL = root.appendingPathComponent("Resources/AppIcon.png")
+        let representation = try #require(
+            NSBitmapImageRep(data: Data(contentsOf: iconURL))
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(representation.pixelsWide == 1024)
+        #expect(representation.pixelsHigh == 1024)
+        #expect(representation.hasAlpha)
+        let corners: [(Int, Int)] = [
+            (0, 0),
+            (representation.pixelsWide - 1, 0),
+            (0, representation.pixelsHigh - 1),
+            (representation.pixelsWide - 1, representation.pixelsHigh - 1),
+        ]
+        for (x, y) in corners {
+            let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
+            #expect(alpha <= (1.0 / 255.0))
+        }
+        let centerAlpha = representation.colorAt(
+            x: representation.pixelsWide / 2,
+            y: representation.pixelsHigh / 2
+        )?.alphaComponent ?? 0
+        #expect(centerAlpha >= 0.5)
+        #expect(verifySource.contains("/usr/bin/iconutil --convert iconset"))
+        #expect(verifySource.contains("app icon corner is not transparent"))
+    }
+
     @Test func buildDefaultsToStableAdHocSigning() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

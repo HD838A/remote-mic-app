@@ -32,6 +32,7 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 
 - App、MiRemoteV 2ch 和 Sparkle 的五个可执行文件均只有 `x86_64` 架构。
 - App 和驱动的最低系统版本均为 13.0。
+- App 主图标为 `1024 × 1024` RGBA，打包后的 `.icns` 包含完整十档尺寸；每档图标四角透明且中心不透明，不能回退成铺满画布的正方形。
 - App 的稳定更新地址使用 `appcast-intel.xml`，预览版检查也只寻找该文件。
 - 外层 Distribution 使用 `system.sysctl('hw.optional.arm64')` 判断真实硬件，不依赖可能受 Rosetta 影响的 `uname -m`；错误架构和过低系统必须以 `Fatal` 本地化消息拒绝。
 - 内层 preinstall 与 postinstall 保留相同的硬件和系统防御检查，且在删除或替换已有 App、驱动前执行。
@@ -57,15 +58,16 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 
 1. 下载后核对 SHA-256，打开 DMG，确认 Gatekeeper 不提示来源或完整性异常。
 2. 运行 `Install Remote Mic Intel.pkg`，确认普通管理员授权即可完成安装，不要求下载开发者工具。
-3. 首次启动完成蓝牙、输入监控和辅助功能权限流程；已安装过旧版本的用户不应重新进入完整 Onboarding。
-4. 配对小米蓝牙遥控器 2 Pro，验证连接、断开、重连和实体按键事件。
-5. 验证单击、双击、长按映射，尤其确认 Fn 语音输入第一次触发即可向当前聚焦输入框输入。
-6. 验证 ATVV 语音开始、PCM 到达、松开结束，以及连续多次语音输入。
-7. 分别选择 MiRemoteV 2ch 和 BlackHole 2ch，确认两种音频回环设备都可完成语音输入。
-8. 验证 iOS 附近连接与网页版连接入口，不改变现有邀请码和服务配置行为。
-9. 让 Mac 睡眠后唤醒，验证 App 不崩溃，遥控器、HID、音频设备和菜单栏状态能够恢复。
-10. 使用 Intel 测试 Feed 验证同架构跨版本更新；不得下载或安装 Apple Silicon 资产。
-11. 运行 `Uninstall Remote Mic Intel.pkg`，确认驱动移除、Core Audio 刷新且 App 的既有卸载行为不变。
+3. 分别在 Finder、Launchpad、Dock 和 App 自身关于页查看 SayAll 图标，确认使用透明圆角品牌图，不出现铺满画布的正方形背景；覆盖安装后也不能继续显示旧缓存图标。
+4. 首次启动完成蓝牙、输入监控和辅助功能权限流程；已安装过旧版本的用户不应重新进入完整 Onboarding。
+5. 配对小米蓝牙遥控器 2 Pro，验证连接、断开、重连和实体按键事件。
+6. 验证单击、双击、长按映射，尤其确认 Fn 语音输入第一次触发即可向当前聚焦输入框输入。
+7. 验证 ATVV 语音开始、PCM 到达、松开结束，以及连续多次语音输入。
+8. 分别选择 MiRemoteV 2ch 和 BlackHole 2ch，确认两种音频回环设备都可完成语音输入。
+9. 验证 iOS 附近连接与网页版连接入口，不改变现有邀请码和服务配置行为。
+10. 让 Mac 睡眠后唤醒，验证 App 不崩溃，遥控器、HID、音频设备和菜单栏状态能够恢复。
+11. 使用 Intel 测试 Feed 验证同架构跨版本更新；不得下载或安装 Apple Silicon 资产。
+12. 运行 `Uninstall Remote Mic Intel.pkg`，确认驱动移除、Core Audio 刷新且 App 的既有卸载行为不变。
 
 ## 失败时收集信息
 
@@ -88,4 +90,4 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 
 ## 当前状态
 
-Intel Ventura 已经过多名用户测试，安装、启动、蓝牙遥控、按键和语音核心路径可以正常使用，现作为正式支持发行线。错误架构提示的 Distribution 结构、双变体 ad-hoc PKG/DMG 和 Apple Silicon 上的 Intel 包拒绝路径已完成自动化或只读验证；最终 Developer ID 包的 Installer.app 双语言界面，以及真实 Intel Mac 打开 Apple Silicon 包，仍需按上方交叉清单验收。自动化、签名、公证和多人实测各自证明其覆盖边界；Rosetta 或 Apple Silicon 上的 `x86_64` 运行仍不能替代真实 Intel 硬件回归。
+Intel Ventura 已经过多名用户测试，安装、启动、蓝牙遥控、按键和语音核心路径可以正常使用，现作为正式支持发行线。错误架构提示的 Distribution 结构、双变体 ad-hoc PKG/DMG、Apple Silicon 上的 Intel 包拒绝路径和 App 图标透明角门禁已完成自动化或只读验证；最终 Developer ID 包的 Installer.app 双语言界面、真实 Intel Mac 打开 Apple Silicon 包，以及 Finder、Launchpad、Dock 的圆角图标显示仍需按上方交叉清单验收。自动化、签名、公证和多人实测各自证明其覆盖边界；Rosetta 或 Apple Silicon 上的 `x86_64` 运行仍不能替代真实 Intel 硬件回归。

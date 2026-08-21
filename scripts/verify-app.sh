@@ -12,6 +12,7 @@ PLIST="$APP/Contents/Info.plist"
 BINARY="$APP/Contents/MacOS/RemoteMic"
 MCP_HELPER="$APP/Contents/Helpers/SayAllMCP"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
+APP_ICON="$APP/Contents/Resources/AppIcon.icns"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
@@ -71,7 +72,68 @@ test -f "$APP/Contents/Resources/RC003-remote-photo.png"
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
 done
-test -f "$APP/Contents/Resources/AppIcon.icns"
+test -f "$APP_ICON"
+ICON_CHECK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/sayall-app-icon.XXXXXX")"
+ICONSET="$ICON_CHECK_ROOT/AppIcon.iconset"
+/usr/bin/iconutil --convert iconset --output "$ICONSET" "$APP_ICON"
+EXPECTED_ICON_NAMES=(
+  icon_16x16.png
+  icon_16x16@2x.png
+  icon_32x32.png
+  icon_32x32@2x.png
+  icon_128x128.png
+  icon_128x128@2x.png
+  icon_256x256.png
+  icon_256x256@2x.png
+  icon_512x512.png
+  icon_512x512@2x.png
+)
+for icon_name in "${EXPECTED_ICON_NAMES[@]}"; do
+  test -f "$ICONSET/$icon_name"
+done
+ICON_IMAGES=("$ICONSET"/*.png(N))
+/usr/bin/xcrun swift - "$ROOT/Resources/AppIcon.png" "${ICON_IMAGES[@]}" <<'SWIFT'
+import AppKit
+import Darwin
+import Foundation
+
+func fail(_ message: String) -> Never {
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+    exit(1)
+}
+
+for (index, path) in CommandLine.arguments.dropFirst().enumerated() {
+    let url = URL(fileURLWithPath: path)
+    guard let representation = try? NSBitmapImageRep(data: Data(contentsOf: url)) else {
+        fail("unable to decode app icon image: \(path)")
+    }
+    if index == 0 && (representation.pixelsWide != 1024 || representation.pixelsHigh != 1024) {
+        fail("app icon master must be 1024x1024: \(path)")
+    }
+    guard representation.hasAlpha else {
+        fail("app icon image is missing an alpha channel: \(path)")
+    }
+    let corners: [(Int, Int)] = [
+        (0, 0),
+        (representation.pixelsWide - 1, 0),
+        (0, representation.pixelsHigh - 1),
+        (representation.pixelsWide - 1, representation.pixelsHigh - 1),
+    ]
+    for (x, y) in corners {
+        let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
+        if alpha > (1.0 / 255.0) {
+            fail("app icon corner is not transparent: \(path) (\(x),\(y))")
+        }
+    }
+    let centerAlpha = representation.colorAt(
+        x: representation.pixelsWide / 2,
+        y: representation.pixelsHigh / 2
+    )?.alphaComponent ?? 0
+    if centerAlpha < 0.5 {
+        fail("app icon center is unexpectedly transparent: \(path)")
+    }
+}
+SWIFT
 test -f "$APP/Contents/Resources/StatusIconTemplate.png"
 test -f "$APP/Contents/Resources/StatusIconTemplate@2x.png"
 test -f "$APP/Contents/Resources/StatusIconActiveTemplate.png"
