@@ -524,6 +524,30 @@ struct SettingsPageRegressionTests {
         ))
     }
 
+    @Test func remoteSelectorsOnlyShowConnectedProfilesAndKeepDiscoveryFallback() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let selectorStart = try #require(source.range(of: "private func remoteDeviceSelector"))
+        let selectorEnd = try #require(source.range(
+            of: "private func remoteDeviceCard",
+            range: selectorStart.upperBound..<source.endIndex
+        ))
+        let selectorSource = source[selectorStart.lowerBound..<selectorEnd.lowerBound]
+
+        #expect(selectorSource.contains("model.isRemoteConnected($0.id)"))
+        #expect(selectorSource.contains("ForEach(connectedProfiles)"))
+        #expect(selectorSource.contains("remoteDeviceEmptyState(vertical: vertical)"))
+        #expect(!selectorSource.contains("ForEach(settings.remoteDeviceProfiles)"))
+        #expect(source.contains("Button(\"connection.action.reconnect\")"))
+    }
+
     @Test func aboutPageKeepsVersionFeaturesTogetherAndLanguagesVisible() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

@@ -1141,18 +1141,55 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func remoteDeviceSelector(vertical: Bool = false) -> some View {
-        if vertical {
+        let connectedProfiles = settings.remoteDeviceProfiles.filter {
+            model.isRemoteConnected($0.id)
+        }
+        if connectedProfiles.isEmpty {
+            remoteDeviceEmptyState(vertical: vertical)
+        } else if vertical {
             VStack(spacing: 8) {
-                ForEach(settings.remoteDeviceProfiles) { profile in
+                ForEach(connectedProfiles) { profile in
                     remoteDeviceCard(profile, fillsWidth: true)
                 }
             }
         } else {
             HStack(spacing: 8) {
-                ForEach(settings.remoteDeviceProfiles) { profile in
+                ForEach(connectedProfiles) { profile in
                     remoteDeviceCard(profile)
                 }
             }
+        }
+    }
+
+    private func remoteDeviceEmptyState(vertical: Bool) -> some View {
+        VStack(alignment: vertical ? .leading : .center, spacing: 8) {
+            Image(systemName: "appletvremote.gen4.fill")
+                .font(.system(size: vertical ? 24 : 18, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Text(model.connectionStatus.text(using: localization))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(vertical ? .leading : .center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !vertical {
+                Button("connection.action.reconnect") {
+                    model.reconnect()
+                }
+                .compatibilityButtonStyle(.standard)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: vertical ? .leading : .center)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(
+            Color.primary.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.secondary.opacity(0.18))
         }
     }
 
