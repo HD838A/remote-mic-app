@@ -1,7 +1,7 @@
 # Issue #137：RC003 丢失松开报告后实体左右方向键失效
 
 - 时间：2026-08-21
-- 状态：已修复，代码回归待 CI，真实 RC003 丢包场景待验收
+- 状态：已修复，本地自动化通过，PR CI 与真实 RC003 丢包场景待验收
 - 影响范围：macOS；RC003 处于非独占 `HID CONNECTED mode=monitored` 路径
 - 原始反馈：<https://github.com/HD838A/remote-mic-app/issues/137>
 
@@ -16,7 +16,7 @@ seize_error=-536870207
 
 可重复触发条件是：遥控器左键或右键产生 `down`，但蓝牙链路没有交付对应 `up`；随后外接键盘和 MacBook 内置键盘的同方向键均无响应，上下键仍正常，退出并重新启动无线麦后恢复。
 
-本地没有真实 RC003，无法主动制造固件或蓝牙层丢包。现有 Swift 工具链在加载测试前因 Swift 6.1.2 编译器与 macOS 26.2 SDK / Swift 6.2 模块不匹配而失败，因此本轮本地未执行生产回放。Issue 的真实设备复现、当前状态机的确定性代码路径和新增回归用例共同作为复现依据；不能把它表述为本机真机复现。
+本地没有真实 RC003，无法主动制造固件或蓝牙层丢包。安装 Xcode 26.3 后，新增回归已直接驱动生产 `KeyboardEventSuppressor` 完成确定性事件回放；Issue 的真实设备复现、当前状态机的代码路径和该回放共同作为复现依据。自动化仍不能表述为本机真机复现。
 
 ## 日志结论
 
@@ -41,7 +41,7 @@ Issue 只提供连接模式与 seize 失败码，没有提供问题发生时间�
 3. 交付不带 autorepeat 标记的实体键盘新首击，必须通过并清除陈旧状态；
 4. 同一实体按键随后的 autorepeat 也必须通过。
 
-在 `origin/main` 的无条件 held 判断下，第 3、4 步会继续被吞掉。当前本地工具链无法执行该测试，需由 PR CI 完成红绿验证。
+在 `origin/main` 的无条件 held 判断下，第 3、4 步会继续被吞掉。修复分支上的该回归已通过；PR CI 仍需由上游仓库批准 fork workflow 后执行。
 
 ## 修复
 
@@ -52,7 +52,7 @@ Issue 只提供连接模式与 seize 失败码，没有提供问题发生时间�
 
 ## 验证
 
-计划执行：
+已执行：
 
 ```text
 swift test --filter RemoteButtonsTests
@@ -60,6 +60,13 @@ swift test --filter HardwareSimulationIntegrationTests
 scripts/test.sh
 ```
 
-本地验证边界：`git diff --check` 已通过；上述 Swift 命令受本机工具链/SDK 不匹配阻塞，等待 PR CI。没有执行真实 RC003、真实蓝牙丢包、CGEvent tap 或内置/外接键盘验收。
+本地验证结果：
+
+- `swift test --filter RemoteButtonsTests`：89 项通过，包含缺失 release 自愈及多遥控器 autorepeat 基线。
+- `swift test --filter HardwareSimulationIntegrationTests`：本地未配置可选 `REMOTE_MIC_HARDWARE_SIMULATION_PATH`，因此匹配 0 项，不能计为硬件模拟通过。
+- `scripts/test.sh`：42 项通过，随后 Swift Package 构建成功。
+- `git diff --check`：通过。
+
+没有执行真实 RC003、真实蓝牙丢包、CGEvent tap 或内置/外接键盘验收；PR CI 仍等待上游批准 fork workflow。
 
 真机验收必须覆盖：正常短按与长按左右键、丢失 release 后第一次实体键盘首击、内置与外接键盘、两只遥控器、断连与重连，并保留问题时间段完整日志。
