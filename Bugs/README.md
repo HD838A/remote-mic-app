@@ -2,6 +2,7 @@
 
 - [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md)
 - [签名前失败的 attestation 阻止同版本预览恢复](./2026-08-21-pre-signing-attestation-blocks-preview-recovery.md)
+- [Onboarding 离开输入法页后重复触发输入法确认](./2026-08-21-onboarding-input-source-confirmation-repeats.md)
 - [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md)
 - [Onboarding 已发现遥控器但永远等不到首个 HID 按键](./2026-08-20-onboarding-hid-discovery-report-deadlock.md)
 - [GitHub Release 标题回退为旧品牌](./2026-08-19-github-release-title-legacy-brand.md)
@@ -139,6 +140,7 @@
 | 2026-08-19 | [Onboarding 错误拒绝 BlackHole 2ch](./2026-08-19-onboarding-blackhole-support.md) | 候选修复完成，等待真实 BlackHole 验收 |
 | 2026-08-21 | [签名前失败的 attestation 阻止同版本预览恢复](./2026-08-21-pre-signing-attestation-blocks-preview-recovery.md) | 已修复，自动化验证通过；等待受保护预览发布验证 |
 | 2026-08-21 | [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md) | 已修复，`v1.9.6` 受保护预览发布验证通过 |
+| 2026-08-21 | [Onboarding 离开输入法页后重复触发输入法确认](./2026-08-21-onboarding-input-source-confirmation-repeats.md) | 已修复，自动化通过；等待豆包/微信输入法真机验收 |
 
 ## 记录模板
 

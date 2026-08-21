@@ -472,7 +472,9 @@ struct OnboardingFlowTests {
         )
 
         #expect(viewSource.contains(".onAppear {\n                        requestTranscriptFocus()\n                    }"))
-        #expect(viewSource.contains("case .voiceTest:\n                switchToSelectedInputMethod()\n                requestTranscriptFocus()"))
+        #expect(viewSource.contains("case .voiceTest:\n                requestTranscriptFocus()"))
+        #expect(!viewSource.contains("case .voiceTest:\n                switchToSelectedInputMethod()"))
+        #expect(viewSource.contains("guard settings.onboardingStep == .voiceTool else { return }"))
         #expect(viewSource.contains("private func requestTranscriptFocus()"))
         #expect(viewSource.contains("transcriptFocused = false\n        DispatchQueue.main.async"))
         #expect(viewSource.contains("transcriptFocused = true"))

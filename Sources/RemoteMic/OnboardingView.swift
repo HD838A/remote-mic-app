@@ -95,7 +95,6 @@ struct OnboardingView: View {
                 switchToSelectedInputMethod()
                 refreshSystemFunctionKeyUsage()
             case .voiceTest:
-                switchToSelectedInputMethod()
                 requestTranscriptFocus()
             case .remoteAvailability:
                 routeConnectedPhysicalRemoteIfNeeded()
@@ -166,7 +165,6 @@ struct OnboardingView: View {
         .onChange(of: transcriptFocused) { isFocused in
             AppLogger.shared.write("ONBOARDING TRANSCRIPT focus=\(isFocused)")
             guard isFocused, settings.onboardingStep == .voiceTest else { return }
-            switchToSelectedInputMethod()
         }
         .onChange(of: transcript) { updatedText in
             guard settings.onboardingStep == .voiceTest,
@@ -1874,6 +1872,7 @@ struct OnboardingView: View {
     }
 
     private func switchToSelectedInputMethod() {
+        guard settings.onboardingStep == .voiceTool else { return }
         let tool = settings.onboardingVoiceTool
         guard tool.requiresFunctionKeySetup else {
             inputSourceSwitchResult = .notApplicable
@@ -1937,7 +1936,6 @@ struct OnboardingView: View {
             voiceSessionEnded = false
             manualTranscriptInputObserved = false
             transcript = ""
-            switchToSelectedInputMethod()
             requestTranscriptFocus()
         case .controls:
             testedControlButtons.removeAll()
