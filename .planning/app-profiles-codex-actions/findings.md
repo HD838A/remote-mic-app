@@ -11,3 +11,4 @@
 - 新字段均为可选导入字段，旧配置缺失时使用空应用 profile、速度 5、非反向默认值。
 - Release 主应用类型检查和打包通过；系统默认 SwiftPM 构建受本机 CLT/SDK 环境限制，使用 `--disable-sandbox` 构建成功。
 - Codex 翻页可直接映射 macOS 原生 Page Up / Page Down key code（116 / 121）；无需新增 Codex API 或滚轮参数，现有应用 profile picker 会自动发现新动作。
+- 实测日志显示遥控器已正确解析为 `codexPageUp` / `codexPageDown`，但 Codex 未响应合成 Page Up/Page Down；GitHub MacosUseSDK 的可复用滚轮实现使用目标坐标、`wheelCount=2` 和约 15ms 事件间隔，因此翻页动作改为独立的大步长滚轮事件。

@@ -12,6 +12,7 @@
 - [completed] 4. 增加回归测试并验证迁移兼容性
 - [completed] 5. Release 构建、安装、重启和运行验证
 - [completed] 6. 新增 Codex Page Up / Page Down 翻页动作
+- [completed] 7. 将 Codex 翻页改为定位窗口的大步长滚轮事件
 
 ## 成功标准
 
@@ -21,6 +22,7 @@
 - 滚轮方向和速度设置可以持久化，并影响滚轮事件。
 - 现有 RC003 语音、微信电源键、Command-Tab 和原有滚轮动作不回归。
 - Codex 配置可将遥控器左键/右键分别绑定为上一页/下一页。
+- Codex 翻页使用前台窗口中心、wheelCount=2、独立步长和短事件间隔。
 
 ## 约束
 

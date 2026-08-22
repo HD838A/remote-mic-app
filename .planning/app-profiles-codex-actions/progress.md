@@ -14,3 +14,5 @@
 - 安装包与构建产物 `RemoteMic` SHA-256 相同；SwiftPM 测试目标仍因当前环境缺少 `Testing` 模块无法执行，仓库自测保持 42/42。
 - 本轮新增 Codex Page Up / Page Down 动作，分别发送 key code 116 / 121；已补充中英文文案和 KeyboardInjector 回归测试，待完成构建、安装、重启和提交验证。
 - Codex 翻页功能已完成 Release 构建、`APP VERIFY PASS`、安装和重启；安装包与构建产物 SHA-256 一致，运行进程已确认。工作区待提交。
+- 根据测试反馈，将 Codex 翻页底层从 Page Up/Page Down 键事件改为前台窗口中心的大步长滚轮事件：wheelCount=2、独立步长 12 行、间隔 12ms；已更新可注入回归测试。
+- 新版本已完成类型检查、自测 42/42、Release 构建、`APP VERIFY PASS`、安装和重启；安装包与构建产物 SHA-256 一致，运行进程 PID 为 36884。

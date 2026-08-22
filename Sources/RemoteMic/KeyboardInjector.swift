@@ -21,6 +21,7 @@ enum KeyboardInjector {
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
     typealias ScrollEventPoster = (Int32) -> Bool
+    typealias PageScrollEventPoster = (Int32) -> Bool
 
     struct AccessibilityTextCandidate: Equatable {
         let role: String
@@ -70,6 +71,7 @@ enum KeyboardInjector {
 
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
+    static let codexPageScrollLines: Int32 = 12
     static let functionKeyCode: CGKeyCode = 63
     static let rightOptionKeyCode: CGKeyCode = 61
     private static let focusRequests = ApplicationFocusRequestGate()
@@ -144,6 +146,7 @@ enum KeyboardInjector {
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) },
+        pageScrollEventPoster: PageScrollEventPoster = { postCodexPageScroll(delta: $0) },
         scrollSpeed: Int32 = 5,
         scrollDirectionInverted: Bool = false
     ) -> Bool {
@@ -251,9 +254,9 @@ enum KeyboardInjector {
         case .codexScrollToLatest:
             keyPoster(119, .maskCommand)
         case .codexPageUp:
-            keyPoster(116, [])
+            return pageScrollEventPoster(codexPageScrollDelta(for: .codexPageUp))
         case .codexPageDown:
-            keyPoster(121, [])
+            return pageScrollEventPoster(codexPageScrollDelta(for: .codexPageDown))
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -1404,6 +1407,66 @@ enum KeyboardInjector {
         event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         event.post(tap: .cghidEventTap)
         return true
+    }
+
+    private static func postCodexPageScroll(delta: Int32) -> Bool {
+        guard let windowCenter = frontmostWindowCenter(),
+              let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                  scrollWheelEvent2Source: source,
+                  units: .line,
+                  wheelCount: 2,
+                  wheel1: delta,
+                  wheel2: 0,
+                  wheel3: 0
+              )
+        else {
+            AppLogger.shared.write("CODEX PAGE SCROLL failed reason=frontmost_window_unavailable")
+            return false
+        }
+        event.location = windowCenter
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
+        AppLogger.shared.write(
+            "CODEX PAGE SCROLL posted delta=\(delta) location=\(Int(windowCenter.x)),\(Int(windowCenter.y))"
+        )
+        usleep(12_000)
+        return true
+    }
+
+    static func codexPageScrollDelta(for action: ButtonAction) -> Int32 {
+        action == .codexPageDown ? -codexPageScrollLines : codexPageScrollLines
+    }
+
+    private static func frontmostWindowCenter() -> CGPoint? {
+        guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+              let windows = CGWindowListCopyWindowInfo(
+                  [.optionOnScreenOnly, .excludeDesktopElements],
+                  kCGNullWindowID
+              ) as? [[String: Any]] else {
+            return nil
+        }
+
+        let windowFrames = windows.compactMap { window -> CGRect? in
+            guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t,
+                  ownerPID == processIdentifier,
+                  let layer = window[kCGWindowLayer as String] as? Int,
+                  layer == 0,
+                  let boundsValue = window[kCGWindowBounds as String]
+            else { return nil }
+
+            let bounds = boundsValue as! CFDictionary
+            var frame = CGRect.zero
+            guard CGRectMakeWithDictionaryRepresentation(bounds, &frame),
+                  frame.width > 0,
+                  frame.height > 0 else { return nil }
+            return frame
+        }
+
+        guard let frame = windowFrames.max(by: { $0.width * $0.height < $1.width * $1.height }) else {
+            return nil
+        }
+        return CGPoint(x: frame.midX, y: frame.midY)
     }
 
     static func scrollDelta(
