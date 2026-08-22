@@ -57,6 +57,13 @@ final class MouseModeController {
     /// their normal bindings, and only the toggle binding exits the mode.
     static let managedButtons: Set<RemoteButton> = directionButtons.union([.ok])
 
+    static let browserBundleIdentifiers: Set<String> = [
+        "com.google.Chrome",
+        "com.apple.Safari",
+        "net.imput.helium",
+    ]
+    static let weChatBundleIdentifier = "com.tencent.xinWeChat"
+
     typealias Scheduler = (TimeInterval, @escaping () -> Void) -> MouseModeScheduledTask
     typealias MovePoster = (CGPoint) -> Void
     typealias ClickPoster = (KeyboardInjector.MouseClickButton, CGPoint) -> Void
@@ -80,6 +87,7 @@ final class MouseModeController {
     private let keyPoster: KeyPoster
     private let cursorPosition: () -> CGPoint?
     private let screenBounds: () -> CGRect
+    private let frontmostBundleIdentifier: () -> String?
     private let accessibilityTrusted: () -> Bool
     private let logger: (String) -> Void
 
@@ -107,6 +115,9 @@ final class MouseModeController {
         keyPoster: @escaping KeyPoster = { KeyboardInjector.postKey(code: $0, flags: $1) },
         cursorPosition: @escaping () -> CGPoint? = { CGEvent(source: nil)?.location },
         screenBounds: @escaping () -> CGRect = { MouseModeController.quartzScreenBounds() },
+        frontmostBundleIdentifier: @escaping () -> String? = {
+            NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        },
         accessibilityTrusted: @escaping () -> Bool = { KeyboardInjector.isAccessibilityTrusted },
         logger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
@@ -117,6 +128,7 @@ final class MouseModeController {
         self.keyPoster = keyPoster
         self.cursorPosition = cursorPosition
         self.screenBounds = screenBounds
+        self.frontmostBundleIdentifier = frontmostBundleIdentifier
         self.accessibilityTrusted = accessibilityTrusted
         self.logger = logger
     }
@@ -248,17 +260,22 @@ final class MouseModeController {
     private func directionPressed(_ button: RemoteButton) {
         let current = now()
         var state = directionStates[button] ?? DirectionTapState()
+        // The double-tap mapping is resolved against the live frontmost app:
+        // without a mapped action the press is ordinary and moves normally
+        // (no bounce-back, no suppression).
         if let releasedAt = state.lastTapReleasedAt,
-           current - releasedAt <= Self.doubleTapWindow {
-            // Double-tap: bounce the cursor back to where it was before the
-            // first press, inject the mapped key, and suppress movement for
-            // the rest of this press.
+           current - releasedAt <= Self.doubleTapWindow,
+           let key = Self.doubleTapKey(
+               for: button,
+               frontmostBundleIdentifier: frontmostBundleIdentifier()
+           ) {
+            // Double-tap with a mapped action: bounce the cursor back to where
+            // it was before the first press, inject the mapped key, and
+            // suppress movement for the rest of this press.
             if let position = state.lastTapPosition {
                 postMove(position)
             }
-            if let key = Self.doubleTapKey(for: button) {
-                keyPoster(key.code, key.flags)
-            }
+            keyPoster(key.code, key.flags)
             logger("MOUSE MODE double_tap button=\(button.rawValue)")
             state.pressedAt = nil
             state.positionAtPressStart = nil
@@ -306,16 +323,36 @@ final class MouseModeController {
         directionStates[button] = state
     }
 
-    /// Fixed double-tap mapping (not configurable): Page Up / Page Down /
-    /// Command-[ (browser back) / Command-W (close window).
-    static func doubleTapKey(for button: RemoteButton) -> (code: CGKeyCode, flags: CGEventFlags)? {
-        switch button {
-        case .up: return (116, [])
-        case .down: return (121, [])
-        case .left: return (33, .maskCommand)
-        case .right: return (13, .maskCommand)
-        default: return nil
+    /// Context-aware fixed double-tap mapping (not configurable), resolved
+    /// against the live frontmost app:
+    /// - Browsers (Chrome / Safari / Helium): up = Command-↑ (scroll to top,
+    ///   keyCode 126), down = Command-↓ (scroll to bottom, 125),
+    ///   left = Command-[ (history back, 33), right = Command-W (close tab, 13).
+    /// - WeChat: up = Page Up (116), down = Page Down (121), left/right = none.
+    /// - Everything else: no action — a double-tap behaves like two ordinary
+    ///   short-press moves (no bounce-back, no injection, no suppression).
+    static func doubleTapKey(
+        for button: RemoteButton,
+        frontmostBundleIdentifier: String?
+    ) -> (code: CGKeyCode, flags: CGEventFlags)? {
+        if let bundleID = frontmostBundleIdentifier,
+           browserBundleIdentifiers.contains(bundleID) {
+            switch button {
+            case .up: return (126, .maskCommand)
+            case .down: return (125, .maskCommand)
+            case .left: return (33, .maskCommand)
+            case .right: return (13, .maskCommand)
+            default: return nil
+            }
         }
+        if frontmostBundleIdentifier == weChatBundleIdentifier {
+            switch button {
+            case .up: return (116, [])
+            case .down: return (121, [])
+            default: return nil
+            }
+        }
+        return nil
     }
 
     private func tick() {

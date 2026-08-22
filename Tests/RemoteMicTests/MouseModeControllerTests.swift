@@ -222,32 +222,131 @@ struct MouseModeControllerTests {
         ))
     }
 
-    @Test func doubleTapUpPostsPageUpAndBouncesBack() {
-        assertDoubleTap(button: .up, expectedCode: 116, expectedFlags: [])
+    @Test func doubleTapUpInBrowserScrollsToTopAndBouncesBack() {
+        assertDoubleTap(
+            button: .up,
+            bundleID: "com.google.Chrome",
+            expectedCode: 126,
+            expectedFlags: .maskCommand
+        )
     }
 
-    @Test func doubleTapDownPostsPageDownAndBouncesBack() {
-        assertDoubleTap(button: .down, expectedCode: 121, expectedFlags: [])
+    @Test func doubleTapDownInBrowserScrollsToBottomAndBouncesBack() {
+        assertDoubleTap(
+            button: .down,
+            bundleID: "com.google.Chrome",
+            expectedCode: 125,
+            expectedFlags: .maskCommand
+        )
     }
 
-    @Test func doubleTapLeftPostsCommandOpenBracketAndBouncesBack() {
-        assertDoubleTap(button: .left, expectedCode: 33, expectedFlags: .maskCommand)
+    @Test func doubleTapLeftInBrowserGoesBackAndBouncesBack() {
+        assertDoubleTap(
+            button: .left,
+            bundleID: "com.google.Chrome",
+            expectedCode: 33,
+            expectedFlags: .maskCommand
+        )
     }
 
-    @Test func doubleTapRightPostsCommandWAndBouncesBack() {
-        assertDoubleTap(button: .right, expectedCode: 13, expectedFlags: .maskCommand)
+    @Test func doubleTapRightInBrowserClosesTabAndBouncesBack() {
+        assertDoubleTap(
+            button: .right,
+            bundleID: "com.google.Chrome",
+            expectedCode: 13,
+            expectedFlags: .maskCommand
+        )
+    }
+
+    @Test func safariAndHeliumShareTheBrowserMapping() {
+        assertDoubleTap(
+            button: .left,
+            bundleID: "com.apple.Safari",
+            expectedCode: 33,
+            expectedFlags: .maskCommand
+        )
+        assertDoubleTap(
+            button: .left,
+            bundleID: "net.imput.helium",
+            expectedCode: 33,
+            expectedFlags: .maskCommand
+        )
+    }
+
+    @Test func doubleTapUpDownInWeChatPagesUpDown() {
+        assertDoubleTap(
+            button: .up,
+            bundleID: MouseModeController.weChatBundleIdentifier,
+            expectedCode: 116,
+            expectedFlags: []
+        )
+        assertDoubleTap(
+            button: .down,
+            bundleID: MouseModeController.weChatBundleIdentifier,
+            expectedCode: 121,
+            expectedFlags: []
+        )
+    }
+
+    @Test func doubleTapLeftRightInWeChatDoesNothingButMovesNormally() {
+        assertDoubleTapWithoutActionMovesNormally(
+            button: .left,
+            bundleID: MouseModeController.weChatBundleIdentifier
+        )
+        assertDoubleTapWithoutActionMovesNormally(
+            button: .right,
+            bundleID: MouseModeController.weChatBundleIdentifier
+        )
+    }
+
+    @Test func doubleTapInUnmappedAppDoesNothingButMovesNormally() {
+        assertDoubleTapWithoutActionMovesNormally(
+            button: .up,
+            bundleID: "com.apple.TextEdit"
+        )
+        assertDoubleTapWithoutActionMovesNormally(button: .down, bundleID: nil)
+    }
+
+    private func assertDoubleTapWithoutActionMovesNormally(
+        button: RemoteButton,
+        bundleID: String?
+    ) {
+        let harness = Harness(cursor: CGPoint(x: 500, y: 400))
+        harness.frontmostBundleID = bundleID
+        #expect(harness.controller.activate())
+
+        // First tap moves a little and is recorded.
+        #expect(harness.controller.handle(button: button, edge: .down))
+        harness.advance(by: MouseModeController.tickInterval)
+        harness.tick()
+        #expect(harness.controller.handle(button: button, edge: .up))
+        #expect(!harness.moves.isEmpty)
+
+        // Second press lands in the window but the app has no mapping: no
+        // injection, no bounce-back, and the press moves normally.
+        harness.advance(by: 0.125)
+        let movesBeforeSecondPress = harness.moves.count
+        #expect(harness.controller.handle(button: button, edge: .down))
+        #expect(harness.keys.isEmpty)
+        #expect(harness.moves.count == movesBeforeSecondPress)
+        harness.advance(by: MouseModeController.tickInterval)
+        harness.tick()
+        #expect(harness.moves.count > movesBeforeSecondPress)
+        #expect(harness.controller.handle(button: button, edge: .up))
+        #expect(harness.keys.isEmpty)
     }
 
     @Test func secondPressInsideTheWindowFiresAndOutsideDoesNot() {
         // Gap 0.25 s (<= 0.3 s window): double-tap fires.
         let inside = Harness(cursor: CGPoint(x: 500, y: 400))
+        inside.frontmostBundleID = "com.google.Chrome"
         #expect(inside.controller.activate())
         #expect(inside.controller.handle(button: .up, edge: .down))
         inside.advance(by: 0.125)
         #expect(inside.controller.handle(button: .up, edge: .up))
         inside.advance(by: 0.25)
         #expect(inside.controller.handle(button: .up, edge: .down))
-        #expect(inside.keys.map(\.0) == [116])
+        #expect(inside.keys.map(\.0) == [126])
         #expect(inside.controller.handle(button: .up, edge: .up))
 
         // Gap 0.3125 s (> 0.3 s window): the second press is a fresh press.
@@ -310,10 +409,12 @@ struct MouseModeControllerTests {
 
     private func assertDoubleTap(
         button: RemoteButton,
+        bundleID: String?,
         expectedCode: CGKeyCode,
         expectedFlags: CGEventFlags
     ) {
         let harness = Harness(cursor: CGPoint(x: 500, y: 400))
+        harness.frontmostBundleID = bundleID
         #expect(harness.controller.activate())
         let positionBeforeFirstPress = harness.cursor
 
@@ -632,6 +733,7 @@ struct MouseModeControllerTests {
         var tickHandler: (() -> Void)?
         var tickCancelled = false
         var pendingOperations: [PendingOperation] = []
+        var frontmostBundleID: String?
         var moves: [CGPoint] = []
         var clicks: [(KeyboardInjector.MouseClickButton, CGPoint)] = []
         var keys: [(CGKeyCode, CGEventFlags)] = []
@@ -674,6 +776,7 @@ struct MouseModeControllerTests {
                 },
                 cursorPosition: { [unowned self] in self.cursor },
                 screenBounds: { [unowned self] in self.bounds },
+                frontmostBundleIdentifier: { [unowned self] in self.frontmostBundleID },
                 accessibilityTrusted: { [unowned self] in self.trusted },
                 logger: { _ in }
             )
