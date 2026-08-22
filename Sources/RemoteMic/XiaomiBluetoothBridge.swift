@@ -1025,10 +1025,19 @@ extension XiaomiBluetoothBridge {
             return
         }
         if characteristic.uuid == modelNumberUUID {
-            guard let modelNumber = String(data: data, encoding: .utf8),
-                  let model = XiaomiRemoteModel.identified(by: modelNumber)
-            else {
-                AppLogger.shared.write("BLE MODEL unrecognized")
+            guard let modelNumber = String(data: data, encoding: .utf8) else {
+                AppLogger.shared.write("BLE MODEL unreadable")
+                return
+            }
+            let normalizedModelNumber = modelNumber.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            if normalizedModelNumber.contains("ARN9") {
+                // ARN9 firmware encodes ADPCM low-nibble-first; flipping the
+                // default high-first order is required for intelligible audio.
+                decoder.lowNibbleFirst = true
+                AppLogger.shared.write("BLE MODEL ARN9 adpcm=low-nibble-first")
+            }
+            guard let model = XiaomiRemoteModel.identified(by: modelNumber) else {
+                AppLogger.shared.write("BLE MODEL unrecognized modelNumber=\(normalizedModelNumber)")
                 return
             }
             AppLogger.shared.write("BLE MODEL identified=\(model.rawValue)")

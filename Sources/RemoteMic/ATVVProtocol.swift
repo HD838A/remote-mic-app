@@ -90,6 +90,11 @@ final class IMAADPCMDecoder {
     private(set) var predictor = 0
     private(set) var stepIndex = 0
 
+    // RC001/RC003 (firmware 2671) encode high-nibble-first; ARN9 firmware
+    // encodes low-nibble-first. Default stays high-first; the bridge flips
+    // this once the 2A24 model number identifies an ARN9 remote.
+    var lowNibbleFirst = false
+
     func reset(predictor: Int = 0, stepIndex: Int = 0) {
         self.predictor = min(32_767, max(-32_768, predictor))
         self.stepIndex = min(88, max(0, stepIndex))
@@ -99,8 +104,13 @@ final class IMAADPCMDecoder {
         var samples: [Int16] = []
         samples.reserveCapacity(data.count * 2)
         for byte in data {
-            samples.append(decodeNibble(Int(byte >> 4)))
-            samples.append(decodeNibble(Int(byte & 0x0F)))
+            if lowNibbleFirst {
+                samples.append(decodeNibble(Int(byte & 0x0F)))
+                samples.append(decodeNibble(Int(byte >> 4)))
+            } else {
+                samples.append(decodeNibble(Int(byte >> 4)))
+                samples.append(decodeNibble(Int(byte & 0x0F)))
+            }
         }
         return samples
     }

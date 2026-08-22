@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md)
 - [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md)
 - [签名前失败的 attestation 阻止同版本预览恢复](./2026-08-21-pre-signing-attestation-blocks-preview-recovery.md)
 - [Onboarding 离开输入法页后重复触发输入法确认](./2026-08-21-onboarding-input-source-confirmation-repeats.md)
@@ -58,6 +59,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-21 | [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md) | 候选修复完成，等待真实 Intel macOS 13 图标与缓存验收 |
 | 2026-08-20 | [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md) | 候选修复完成，等待 Karabiner-Elements 与其他 HID 工具真机验收 |
 | 2026-08-20 | [Onboarding 已发现遥控器但永远等不到首个 HID 按键](./2026-08-20-onboarding-hid-discovery-report-deadlock.md) | 根因已确认并完成候选修复，等待 RC001 / RC003 真机验收 |
 | 2026-08-19 | [GitHub Release 标题回退为旧品牌](./2026-08-19-github-release-title-legacy-brand.md) | 已修复 |

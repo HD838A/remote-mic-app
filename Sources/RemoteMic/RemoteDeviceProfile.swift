@@ -19,6 +19,9 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
         switch modelNumber.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
         case "RC001": return .rc001
         case "RC003": return .rc003
+        // ARN9 is the 蓝牙遥控器 2 hardware reporting its own model string;
+        // treat it as the RC family so the UI badge resolves.
+        case let value where value.contains("ARN9"): return .rc003
         default: return nil
         }
     }
