@@ -1,7 +1,7 @@
 # App 改名后 PKG 升级时旧进程未及时停止
 
 - 时间：2026-08-21
-- 状态：正式签名 PKG 已验证旧进程提前停止；完整升级被 Installer 旧路径重定位问题阻断
+- 状态：修复完成，真实签名 PKG 的 1.8.3 → 1.9.7 升级已通过；实体遥控器按键仍需独立真机验收
 - 影响范围：从 1.8.x `Remote Mic.app` / `无线麦.app` 通过 PKG 升级到 1.9.x `SayAll.app`
 - 功能点：PKG 安装、旧 App 路径迁移、MiRemoteV 2ch、Onboarding 音频与 HID 初始化
 - 简单描述：用户通过 PKG 安装 1.9.x 后，Onboarding 卡在音频页；手动删除 1.8.x 旧 App 后重新安装恢复正常。
@@ -42,9 +42,8 @@
 
 - `BuildSigningTests` 增加安装时序静态门禁，要求 preinstall 具备 owned-app 标记、`pkill -x RemoteMic` 和“更新音频驱动前停止进程”的提示。
 - 原有旧 App 废纸篓迁移测试继续覆盖可恢复移动、冲突命名、非产品 Bundle ID 和 Trash 不可用边界。
-- 2026-08-22 真实 PKG 监控确认：运行中的 1.8.3 `RemoteMic` 进程在驱动目录修改和 `coreaudiod` 重启之前退出，证明本次 `preinstall` 停止时序生效。
-- 同一次安装随后因 macOS Installer 把新 App 重定位到旧 `/Applications/Remote Mic.app` 而失败；`postinstall` 要求 `/Applications/SayAll.app` 存在，因此完整迁移、CoreAudio 重启、MiRemoteV 2ch 重新枚举和实体遥控器验收没有执行。独立根因记录见 [`2026-08-22-pkg-bundle-relocation-keeps-legacy-path.md`](./2026-08-22-pkg-bundle-relocation-keeps-legacy-path.md)。
+- 2026-08-22 第一次真实候选安装确认旧进程提前停止，但暴露旧 receipt relocation；修复 component plist 后，第二次真实安装已成功完成 canonical 路径迁移、receipt 更新和 MiRemoteV 2ch 枚举。独立根因和通过记录见 [`2026-08-22-pkg-bundle-relocation-keeps-legacy-path.md`](./2026-08-22-pkg-bundle-relocation-keeps-legacy-path.md)。
 
 ## 验证边界
 
-真实签名 PKG 已证明旧进程停止时序正确，但完整升级仍失败，不能表述为用户现场问题已解决。修复 Installer 路径重定位后，必须从官方 1.8.3 重新执行相同测试，并继续覆盖 CoreAudio、MiRemoteV 2ch、Onboarding 和实体遥控器。
+真实签名 PKG 已证明旧进程停止时序和旧 receipt 迁移均正确，完整升级通过。实体遥控器、第三方 HID 工具和真实语音输入仍需按测试手册独立验收；本次升级测试因未连接实体遥控器，日志中的 BLE timeout 不属于 PKG 迁移失败。

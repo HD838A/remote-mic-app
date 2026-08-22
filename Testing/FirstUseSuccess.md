@@ -66,6 +66,8 @@
 
 失败判定：旧进程在驱动更新或 `coreaudiod` 重启期间仍运行、旧 App 未迁移且继续占用资源、音频设备不可用、HID 电源键保护失败，或必须手动删除旧 App 后重新安装才能恢复。
 
+2026-08-22 真实验收记录：官方 1.8.3 → Developer ID 签名、公证 1.9.7 (130) PKG 在未重启 Mac 的情况下通过。旧 `RemoteMic` 进程先退出；新 App 位于 `/Applications/SayAll.app`；旧 App 进入废纸篓；Installer receipt 更新；`runtime.log` 出现 `APP START version=1.9.7` 和 `AUDIO READY`，MiRemoteV 2ch 可枚举。第一次候选曾因 macOS Installer 旧 receipt relocation 失败，修复 component plist 的 `BundleIsRelocatable=false` 后复验通过。该次未连接实体遥控器，因此 HID 按键和真实语音输入仍需独立执行。
+
 ## 稳定功能回归
 
 - RC003 普通 `STREAM_START → AUDIO → STREAM_STOP` 首次尝试成功。

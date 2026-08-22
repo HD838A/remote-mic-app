@@ -1,7 +1,7 @@
 # PKG 升级时 macOS Installer 将 SayAll 重定位到旧 Remote Mic 路径
 
 - 时间：2026-08-22
-- 状态：真实签名升级稳定复现，尚未修复
+- 状态：已修复，真实签名升级复验通过
 - 影响范围：已通过 `com.hd838a.RemoteMic.installer` 安装 1.8.x 的用户，经 PKG 升级到以 `SayAll.app` 为 canonical 路径的 1.9.x
 - 功能点：PKG 安装、App 改名、旧 App 迁移、MiRemoteV 2ch
 
@@ -49,9 +49,23 @@
 
 ## 修复边界
 
-正式修复需要保证旧 receipt 存在时，新 payload 仍确定安装到 `/Applications/SayAll.app`，同时保持 App 的 Bundle ID、Team ID 和 designated requirement 不变，以延续 TCC 权限。不能仅让 `postinstall` 接受旧路径，否则 canonical 路径迁移仍未完成。
+正式修复在 component plist 中将 `Applications/SayAll.app` 的 `BundleIsRelocatable` 设为 `false`，保证旧 receipt 存在时，新 payload 仍确定安装到 `/Applications/SayAll.app`，同时保持 App 的 Bundle ID、Team ID 和 designated requirement 不变，以延续 TCC 权限。不能仅让 `postinstall` 接受旧路径，否则 canonical 路径迁移仍未完成。
 
-根因修复前不得把“旧进程提前停止”当作完整升级通过。修复后必须重新执行官方 1.8.3 → 候选 PKG 的真实签名升级，确认：
+构建脚本现在先使用 `pkgbuild --analyze` 生成 component plist，按路径定位 SayAll 组件并关闭 relocation，再将该 plist 传给正式 component package。`scripts/test-installer-architecture-guard.sh` 和 `BuildSigningTests` 对该门禁做结构回归。
+
+## 真实复验
+
+2026-08-22 在同一台未重启的 Apple Silicon Mac 上重新建立官方 1.8.3 基线，并使用修复后的真实 Developer ID 签名、公证、staple 的 1.9.7 (130) PKG：
+
+1. 旧版 `RemoteMic` PID `11061` 在新 App 启动前退出。
+2. Installer 返回成功；`com.hd838a.RemoteMic.installer` receipt 更新到 1.9.7。
+3. 新 App 位于 `/Applications/SayAll.app`，旧 `/Applications/Remote Mic.app` 不再存在，旧 App 进入废纸篓。
+4. 新 App 启动后 `runtime.log` 出现 `APP START version=1.9.7`、`AUDIO READY target={name=MiRemoteV 2ch ...}`；未出现 `audio.no_output_device`。
+5. 系统仍能枚举 MiRemoteV 2ch，当前驱动版本为 596；因为旧驱动已经健康且同版本，本次 postinstall 正确跳过了 CoreAudio 重启。
+
+证据文件：`/tmp/sayall-upgrade-test-20260822/install-1.9.7-fixed.log`、`/tmp/sayall-upgrade-test-20260822/process-driver-watch-fixed.log` 和 `~/Library/Logs/RemoteMic/runtime.log` 的 00:28:40Z–00:28:46Z 时间段。
+
+后续发布必须重新执行官方上一正式版 → 候选 PKG 的真实签名升级，确认：
 
 1. 旧进程先停止；
 2. 新 App 最终只位于 `/Applications/SayAll.app`；
