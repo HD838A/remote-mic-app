@@ -6,6 +6,20 @@ enum AppConfigurationError: Error {
     case invalidValues
 }
 
+enum VoiceKeyMode: String, Codable, CaseIterable, Identifiable {
+    case fnGlobe = "fn_globe"
+    case rightOptionHold = "right_option_hold"
+
+    var id: String { rawValue }
+
+    func displayName(using localization: LocalizationStore) -> String {
+        switch self {
+        case .fnGlobe: return localization.text("connection.voice_key.mode.fn_globe")
+        case .rightOptionHold: return localization.text("connection.voice_key.mode.right_option")
+        }
+    }
+}
+
 private struct PersonalizedConfiguration: Codable {
     let formatVersion: Int
     let gainDB: Double
@@ -22,6 +36,7 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
+    let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -241,6 +256,7 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let voiceKeyMode = "voiceKeyMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
@@ -347,6 +363,12 @@ final class AppSettings: ObservableObject {
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
             )
+        }
+    }
+
+    @Published var voiceKeyMode: VoiceKeyMode {
+        didSet {
+            defaults.set(voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
         }
     }
 
@@ -533,6 +555,9 @@ final class AppSettings: ObservableObject {
         voiceFnTapModeEnabled = defaults.bool(
             forKey: Keys.voiceFnTapModeEnabled
         )
+        voiceKeyMode = VoiceKeyMode(
+            rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
+        ) ?? .fnGlobe
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -1286,6 +1311,7 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
+            voiceKeyMode: voiceKeyMode,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -1347,6 +1373,7 @@ final class AppSettings: ObservableObject {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
         voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
+        voiceKeyMode = configuration.voiceKeyMode ?? .fnGlobe
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup

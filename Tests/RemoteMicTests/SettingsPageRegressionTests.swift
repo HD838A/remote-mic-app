@@ -456,6 +456,8 @@ struct SettingsPageRegressionTests {
             source.range(of: voiceFnToggle)!.lowerBound >
                 source.range(of: "private var mappingPage")!.lowerBound
         )
+        #expect(source.contains("connection.voice_key.mode"))
+        #expect(source.contains("model.setVoiceKeyMode($0)"))
     }
 
     @Test func remoteCardsShowCompleteNamesWithoutDuplicateConnectionSummary() throws {

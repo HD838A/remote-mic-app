@@ -518,6 +518,45 @@ struct RemoteButtonsTests {
         #expect(!didPost)
     }
 
+    @Test func rightOptionVoiceKeyPostsRightOptionDownAndUp() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        #expect(KeyboardInjector.setRightOptionKeyPressed(
+            true,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(KeyboardInjector.setRightOptionKeyPressed(
+            false,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == KeyboardInjector.rightOptionKeyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2 == .maskAlternate)
+        #expect(posted[1].0 == KeyboardInjector.rightOptionKeyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2.isEmpty)
+    }
+
+    @Test func rightOptionVoiceKeyRequiresAccessibility() {
+        var didPost = false
+        #expect(!KeyboardInjector.setRightOptionKeyPressed(
+            true,
+            accessibilityTrusted: { false },
+            keyStatePoster: { _, _, _ in
+                didPost = true
+                return true
+            }
+        ))
+        #expect(!didPost)
+    }
+
     @Test func unconfiguredCustomShortcutDoesNotReportPermissionFailure() {
         #expect(KeyboardInjector.send(
             .customShortcut,
@@ -1434,6 +1473,33 @@ struct RemoteButtonsTests {
             from: try JSONSerialization.data(withJSONObject: legacyObject)
         )
         #expect(!target.voiceFnTapModeEnabled)
+    }
+
+    @Test func voiceKeyModeExportsAndLegacyImportDefaultsToFnGlobe() throws {
+        let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.voiceKeyMode = .rightOptionHold
+        let exported = try source.exportedConfigurationData()
+        let object = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        #expect(object["voiceKeyMode"] as? String == VoiceKeyMode.rightOptionHold.rawValue)
+
+        let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.voiceKeyMode == .rightOptionHold)
+
+        var legacyObject = object
+        legacyObject.removeValue(forKey: "voiceKeyMode")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(target.voiceKeyMode == .fnGlobe)
     }
 
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {

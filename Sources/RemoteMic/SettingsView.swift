@@ -1115,12 +1115,29 @@ struct SettingsView: View {
                 Divider().frame(height: 28)
 
                 VStack(alignment: .leading, spacing: 2) {
+                    Text("connection.voice_key.mode")
+                        .font(.system(size: 12, weight: .medium))
+                    Picker(
+                        "connection.voice_key.mode",
+                        selection: Binding(
+                            get: { settings.voiceKeyMode },
+                            set: { model.setVoiceKeyMode($0) }
+                        )
+                    ) {
+                        ForEach(VoiceKeyMode.allCases) { mode in
+                            Text(mode.displayName(using: localization)).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+
                     Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
                         get: { settings.voiceFnTapModeEnabled },
                         set: { model.setVoiceFnTapModeEnabled($0) }
                     ))
                     .font(.system(size: 12, weight: .medium))
                     .toggleStyle(.switch)
+                    .disabled(settings.voiceKeyMode == .rightOptionHold)
                     Text("connection.voice_fn_tap.hint_short")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)

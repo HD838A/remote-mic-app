@@ -130,6 +130,10 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 该模式仍然要求**按住小米蓝牙遥控器 2 Pro 语音键说话、松开结束**；小米蓝牙遥控器 2 Pro 固件在松开语音键后不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或小米蓝牙遥控器 2 Pro HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
 
+### 微信按住说话
+
+在“按键映射”页的“语音键模式”中选择“右 Option 长按”，无线麦会在 RC003 语音键按下时发送 Right Option keyDown，松开时发送配对的 keyUp。该模式用于 Mac 微信的按住说话；它会关闭 Fn/Globe 映射和 Typeless 的 Fn 点按模式，并需要无线麦的“辅助功能”权限。旧配置默认继续使用 Fn/地球键模式。
+
 豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 `Install Remote Mic.pkg`，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
 
 ![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
