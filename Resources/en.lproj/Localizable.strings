@@ -123,6 +123,10 @@
 "action.custom_shortcut" = "Custom Shortcut";
 "action.open_custom_application" = "Open Custom App";
 "action.toggle_long_recording" = "Toggle Continuous Recording";
+"action.mouse_left_click" = "Mouse Left Click";
+"action.mouse_right_click" = "Mouse Right Click";
+"action.mouse_middle_click" = "Mouse Middle Click";
+"action.toggle_mouse_mode" = "Toggle Mouse Mode";
 "action.open_remote_mic" = "Open SayAll";
 "action.open_codex" = "Open Codex";
 "action.open_claude" = "Open Claude";
@@ -382,6 +386,7 @@
 "app.version_with_build" = "Version %1$@ (%2$@)";
 "app.version" = "Version %1$@";
 "status_item.voice_active_accessibility" = "Xiaomi Bluetooth Remote 2 Pro voice active";
+"status_item.mouse_mode_accessibility" = "Mouse mode is active";
 "status_item.accessibility_label" = "Xiaomi Bluetooth Remote 2 Pro";
 "about.alert.description_with_version" = "Version %1$@\nWireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro.";
 "common.action.ok" = "OK";

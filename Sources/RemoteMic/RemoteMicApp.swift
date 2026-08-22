@@ -298,7 +298,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            if let image = statusImage(isStreaming: false) {
+            if let image = statusImage(isStreaming: false, isMouseModeActive: false) {
                 button.image = image
             } else {
                 button.title = localization.text("status_item.accessibility_label")
@@ -478,6 +478,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             model.$hidStatus,
             model.$isStreaming
         )
+        .receive(on: RunLoop.main)
+        .sink { [weak self] _ in
+            self?.refreshMenuStatus()
+        }
+        .store(in: &subscriptions)
+
+        model.$isMouseModeActive
         .receive(on: RunLoop.main)
         .sink { [weak self] _ in
             self?.refreshMenuStatus()
@@ -668,15 +675,27 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             ? localization.text("connection.status.voice_active")
             : model.audioStatus.text(using: localization)
         hidItem.title = model.hidStatus.text(using: localization)
-        statusItem?.button?.image = statusImage(isStreaming: model.isStreaming)
+        statusItem?.button?.image = statusImage(
+            isStreaming: model.isStreaming,
+            isMouseModeActive: model.isMouseModeActive
+        )
     }
 
-    private func statusImage(isStreaming: Bool) -> NSImage? {
-        let resourceName = isStreaming ? "StatusIconActiveTemplate" : "StatusIconTemplate"
-        let fallbackSymbol = isStreaming ? "mic.fill" : "dot.radiowaves.left.and.right"
-        let accessibilityDescription = localization.text(
-            isStreaming ? "status_item.voice_active_accessibility" : "status_item.accessibility_label"
-        )
+    private func statusImage(isStreaming: Bool, isMouseModeActive: Bool) -> NSImage? {
+        let highlighted = isStreaming || isMouseModeActive
+        let resourceName = highlighted ? "StatusIconActiveTemplate" : "StatusIconTemplate"
+        let fallbackSymbol: String
+        let accessibilityDescription: String
+        if isMouseModeActive {
+            fallbackSymbol = "cursorarrow"
+            accessibilityDescription = localization.text("status_item.mouse_mode_accessibility")
+        } else if isStreaming {
+            fallbackSymbol = "mic.fill"
+            accessibilityDescription = localization.text("status_item.voice_active_accessibility")
+        } else {
+            fallbackSymbol = "dot.radiowaves.left.and.right"
+            accessibilityDescription = localization.text("status_item.accessibility_label")
+        }
         let image = NSImage(named: NSImage.Name(resourceName))
             ?? NSImage(
                 systemSymbolName: fallbackSymbol,

@@ -157,6 +157,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var audioStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var doubaoAudioStatus = LocalizedMessage("audio.compatibility.checking")
     @Published private(set) var isStreaming = false
+    @Published private(set) var isMouseModeActive = false
     @Published private(set) var isConnected = false
     @Published private(set) var isVoiceTriggerEnabled = false
     @Published private(set) var activeRemoteButtons = Set<RemoteButton>()
@@ -203,6 +204,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.handleVoiceInputDestinationState(state)
         }
     )
+    private lazy var mouseModeController: MouseModeController = {
+        let controller = MouseModeController()
+        controller.onStateChange = { [weak self] isActive in
+            guard let self else { return }
+            self.isMouseModeActive = isActive
+            self.hidMonitors.values.forEach { $0.flushInFlightInputState() }
+            self.discoveryHIDMonitor?.flushInFlightInputState()
+        }
+        return controller
+    }()
     private lazy var voiceFnTapSession = VoiceFnTapSessionController(
         destinationReadiness: { [weak self] completion in
             self?.voiceInputDestinationCoordinator.waitUntilReady(completion: completion) ?? .immediate
@@ -1278,6 +1289,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func stopHIDMonitors() {
+        mouseModeController.deactivate(reason: "hid_monitors_stopped")
         hidMonitors.values.forEach { $0.stop() }
         discoveryHIDMonitor?.stop()
         hidMonitors.removeAll()
@@ -1375,6 +1387,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             guard let self else { return }
             if let profileID { self.selectRemoteProfile(profileID) }
             self.performInternalAction(action)
+        }
+        monitor.mouseModeEdgeHandler = { [weak self] button, edge in
+            self?.mouseModeController.handle(button: button, edge: edge) ?? false
+        }
+        monitor.onRemoteDisconnected = { [weak self] in
+            self?.mouseModeController.deactivate(reason: "remote_disconnected")
         }
         return monitor
     }
@@ -2122,14 +2140,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     @discardableResult
     private func performInternalAction(_ action: ButtonAction) -> Bool {
-        guard action == .toggleLongRecording else { return false }
-        guard action.isEnabled(
-            experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
-        ) else {
-            AppLogger.shared.write("LONG RECORDING ignored feature_enabled=false")
+        switch action {
+        case .toggleLongRecording:
+            guard action.isEnabled(
+                experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
+            ) else {
+                AppLogger.shared.write("LONG RECORDING ignored feature_enabled=false")
+                return false
+            }
+            return toggleLongRecording()
+        case .toggleMouseMode:
+            return mouseModeController.toggle()
+        default:
             return false
         }
-        return toggleLongRecording()
     }
 
     private func toggleLongRecording() -> Bool {
