@@ -72,6 +72,7 @@ final class HIDRemoteMonitor {
     private let scheduler: HIDRemoteScheduling
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
+    private let holdActionPerformer: (RemoteButton, RemoteButtonPhase, ConfiguredButtonAction) -> Bool
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
@@ -87,6 +88,7 @@ final class HIDRemoteMonitor {
     private(set) var profileID: UUID?
     private var activeDeviceIsSeized = false
     private var activeUsages = Set<UInt16>()
+    private var activeHoldButtons = Set<RemoteButton>()
     private var nativePassthroughUsages = Set<UInt16>()
     private var repeatTimers: [UInt16: HIDRemoteScheduledTask] = [:]
     private var nonRepeatablePressedButtons = Set<RemoteButton>()
@@ -94,6 +96,8 @@ final class HIDRemoteMonitor {
     private var gestureRecognizer = RemoteButtonGestureRecognizer()
     private var doubleClickTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     private var longPressTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
+    private var appSwitcherNavigationTimer: HIDRemoteScheduledTask?
+    private var appSwitcherNavigationActive = false
     private var permissionMonitor: HIDRemoteScheduledTask?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
@@ -115,6 +119,11 @@ final class HIDRemoteMonitor {
         actionPerformer: ((
             RemoteButton,
             ButtonTrigger,
+            ConfiguredButtonAction
+        ) -> Bool)? = nil,
+        holdActionPerformer: ((
+            RemoteButton,
+            RemoteButtonPhase,
             ConfiguredButtonAction
         ) -> Bool)? = nil,
         overrideActionPerformer: @escaping (UUID?, RemoteButton, ButtonTrigger) -> Bool = {
@@ -140,14 +149,24 @@ final class HIDRemoteMonitor {
         self.scheduler = scheduler
         self.runtimePermissions = runtimePermissions
         self.actionPerformer = actionPerformer ?? { _, _, configured in
-            KeyboardInjector.send(
+            let scrollSettings = settings.scrollSettings(
+                forApplicationBundleIdentifier: frontmostBundleIdentifier()
+            )
+            return KeyboardInjector.send(
                 configured.action,
                 shortcut: configured.shortcut,
                 applicationProfile: settings.customApplicationProfile(
                     id: configured.applicationProfileID
+                ),
+                scrollSpeed: Int32(scrollSettings.scrollSpeed),
+                scrollDirectionInverted: scrollSettings.scrollDirectionInverted,
+                pageScrollLines: Int32(scrollSettings.pageScrollLines),
+                pageScrollIntervalMilliseconds: Int32(
+                    scrollSettings.pageScrollIntervalMilliseconds
                 )
             )
         }
+        self.holdActionPerformer = holdActionPerformer ?? { _, _, _ in true }
         self.overrideActionPerformer = overrideActionPerformer
         self.hasOverrideBinding = hasOverrideBinding
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
@@ -592,11 +611,16 @@ final class HIDRemoteMonitor {
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
+            let currentFrontmostBundleIdentifier = frontmostBundleIdentifier()
+            if appSwitcherNavigationActive, button != .left, button != .right {
+                clearAppSwitcherNavigation()
+            }
             let preflightProfileID = profileID
             let preflightRecognizesDoubleClick = settings.configuredAction(
                 for: button,
                 trigger: .doubleClick,
-                profileID: preflightProfileID
+                profileID: preflightProfileID,
+                applicationBundleIdentifier: currentFrontmostBundleIdentifier
             ).action != .disabled || hasOverrideBinding(
                 preflightProfileID,
                 button,
@@ -605,13 +629,18 @@ final class HIDRemoteMonitor {
             let preflightRecognizesLongPress = settings.configuredAction(
                 for: button,
                 trigger: .longPress,
-                profileID: preflightProfileID
+                profileID: preflightProfileID,
+                applicationBundleIdentifier: currentFrontmostBundleIdentifier
             ).action != .disabled || hasOverrideBinding(
                 preflightProfileID,
                 button,
                 .longPress
             )
-            let preflightAction = settings.action(for: button, profileID: preflightProfileID)
+            let preflightAction = settings.action(
+                for: button,
+                profileID: preflightProfileID,
+                applicationBundleIdentifier: currentFrontmostBundleIdentifier
+            )
             let usesNativePassthrough = preflightProfileID != nil && shouldUseNativePassthrough(
                 button: button,
                 action: preflightAction,
@@ -639,14 +668,62 @@ final class HIDRemoteMonitor {
             let recognizesDoubleClick = settings.configuredAction(
                 for: button,
                 trigger: .doubleClick,
-                profileID: profileID
+                profileID: profileID,
+                applicationBundleIdentifier: currentFrontmostBundleIdentifier
             ).action != .disabled || hasOverrideBinding(profileID, button, .doubleClick)
             let recognizesLongPress = settings.configuredAction(
                 for: button,
                 trigger: .longPress,
-                profileID: profileID
+                profileID: profileID,
+                applicationBundleIdentifier: currentFrontmostBundleIdentifier
             ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
-            let action = settings.action(for: button, profileID: profileID)
+            let action = settings.action(
+                for: button,
+                profileID: profileID,
+                applicationBundleIdentifier: currentFrontmostBundleIdentifier
+            )
+            if let navigationAction = appSwitcherNavigationAction(for: button) {
+                if !activeDeviceIsSeized {
+                    eventSuppressor.arm(button: button, edge: .down)
+                }
+                let configured = ConfiguredButtonAction(action: navigationAction, shortcut: nil)
+                guard actionPerformer(button, .singleClick, configured) else {
+                    diagnosticLogger(
+                        "HID APP_SWITCHER NAV failed button=\(button.rawValue) " +
+                            "action=\(navigationAction.rawValue)"
+                    )
+                    stop()
+                    updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
+                    return
+                }
+                AppLogger.shared.write(
+                    "HID APP_SWITCHER NAV button=\(button.rawValue) " +
+                        "action=\(navigationAction.rawValue)"
+                )
+                armAppSwitcherNavigation()
+                continue
+            }
+            if action.isHoldAction {
+                let configured = settings.configuredAction(
+                    for: button,
+                    trigger: .singleClick,
+                    profileID: profileID,
+                    applicationBundleIdentifier: currentFrontmostBundleIdentifier
+                )
+                guard holdActionPerformer(button, .press, configured) else {
+                    diagnosticLogger(
+                        "HID HOLD failed button=\(button.rawValue) phase=press " +
+                            "action=\(action.rawValue)"
+                    )
+                    stop()
+                    return
+                }
+                activeHoldButtons.insert(button)
+                diagnosticLogger(
+                    "HID HOLD button=\(button.rawValue) phase=press action=\(action.rawValue)"
+                )
+                continue
+            }
             if usesNativePassthrough {
                 nativePassthroughUsages.insert(usage)
                 AppLogger.shared.write(
@@ -665,7 +742,7 @@ final class HIDRemoteMonitor {
                 guard shouldAcceptRawPress(
                     button: button,
                     action: action,
-                    frontmostBundleIdentifier: frontmostBundleIdentifier()
+                    frontmostBundleIdentifier: currentFrontmostBundleIdentifier
                 ) else { continue }
                 diagnosticLogger(
                     "HID GESTURE button=\(button.rawValue) trigger=singleClick path=raw"
@@ -687,6 +764,27 @@ final class HIDRemoteMonitor {
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
             if let button = RemoteButton.usageMap[usage] {
+                if activeHoldButtons.remove(button) != nil {
+                    let configured = settings.configuredAction(
+                        for: button,
+                        trigger: .singleClick,
+                        profileID: profileID,
+                        applicationBundleIdentifier: frontmostBundleIdentifier()
+                    )
+                    guard holdActionPerformer(button, .release, configured) else {
+                        diagnosticLogger(
+                            "HID HOLD failed button=\(button.rawValue) phase=release " +
+                                "action=\(configured.action.rawValue)"
+                        )
+                        stop()
+                        return
+                    }
+                    diagnosticLogger(
+                        "HID HOLD button=\(button.rawValue) phase=release " +
+                            "action=\(configured.action.rawValue)"
+                    )
+                    continue
+                }
                 scheduleNonRepeatableRelease(for: button)
                 guard processGestureCommands(gestureRecognizer.release(button)) else { return }
             }
@@ -872,7 +970,11 @@ final class HIDRemoteMonitor {
     ) {
         guard let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: button) else { return }
         guard
-            !settings.hasSecondaryAction(for: button, profileID: profileID),
+            !settings.hasSecondaryAction(
+                for: button,
+                profileID: profileID,
+                applicationBundleIdentifier: frontmostBundleIdentifier()
+            ),
             action != .disabled,
             Self.shouldRepeat(
                 action: action,
@@ -885,7 +987,11 @@ final class HIDRemoteMonitor {
             repeatingEveryMilliseconds: interval
         ) { [weak self] in
             guard let self, self.activeUsages.contains(usage) else { return }
-            if self.settings.hasSecondaryAction(for: button, profileID: self.profileID) ||
+            if self.settings.hasSecondaryAction(
+                for: button,
+                profileID: self.profileID,
+                applicationBundleIdentifier: self.frontmostBundleIdentifier()
+            ) ||
                 !Self.shouldRepeat(
                     action: action,
                     frontmostBundleIdentifier: self.frontmostBundleIdentifier()
@@ -899,7 +1005,11 @@ final class HIDRemoteMonitor {
             }
             let configured = ConfiguredButtonAction(
                 action: action,
-                shortcut: self.settings.shortcut(for: button, profileID: self.profileID)
+                shortcut: self.settings.shortcut(
+                    for: button,
+                    profileID: self.profileID,
+                    applicationBundleIdentifier: self.frontmostBundleIdentifier()
+                )
             )
             if !self.actionPerformer(button, .singleClick, configured) {
                 self.releaseForRevokedPermissions()
@@ -974,7 +1084,8 @@ final class HIDRemoteMonitor {
         let configured = settings.configuredAction(
             for: button,
             trigger: trigger,
-            profileID: profileID
+            profileID: profileID,
+            applicationBundleIdentifier: frontmostBundleIdentifier()
         )
         if configured.action.isAppInternal {
             onInternalAction?(profileID, configured.action)
@@ -992,10 +1103,39 @@ final class HIDRemoteMonitor {
             updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
             return false
         }
+        if configured.action == .appSwitcher {
+            armAppSwitcherNavigation()
+        }
         AppLogger.shared.write(
             "HID BUTTON button=\(button.rawValue) trigger=\(trigger.rawValue) action=\(configured.action.rawValue)"
         )
         return true
+    }
+
+    private func appSwitcherNavigationAction(for button: RemoteButton) -> ButtonAction? {
+        guard appSwitcherNavigationActive else { return nil }
+        switch button {
+        case .left: return .previousCommandLeft
+        case .right: return .nextCommandRight
+        default: return nil
+        }
+    }
+
+    private func armAppSwitcherNavigation() {
+        appSwitcherNavigationTimer?.cancel()
+        appSwitcherNavigationActive = true
+        appSwitcherNavigationTimer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherNavigationMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            self?.clearAppSwitcherNavigation()
+        }
+    }
+
+    private func clearAppSwitcherNavigation() {
+        appSwitcherNavigationTimer?.cancel()
+        appSwitcherNavigationTimer = nil
+        appSwitcherNavigationActive = false
     }
 
     private func resetGestureRecognition() {
@@ -1007,6 +1147,21 @@ final class HIDRemoteMonitor {
     }
 
     private func resetInputState() {
+        let buttonsToRelease = activeHoldButtons
+        activeHoldButtons.removeAll()
+        for button in buttonsToRelease {
+            let configured = settings.configuredAction(
+                for: button,
+                trigger: .singleClick,
+                profileID: profileID,
+                applicationBundleIdentifier: frontmostBundleIdentifier()
+            )
+            _ = holdActionPerformer(button, .release, configured)
+            diagnosticLogger(
+                "HID HOLD button=\(button.rawValue) phase=release reason=reset " +
+                    "action=\(configured.action.rawValue)"
+            )
+        }
         if !activeDeviceIsSeized {
             for usage in activeUsages {
                 if let button = RemoteButton.usageMap[usage] {
@@ -1020,6 +1175,7 @@ final class HIDRemoteMonitor {
         nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
         nonRepeatableReleaseTimers.removeAll()
         nonRepeatablePressedButtons.removeAll()
+        clearAppSwitcherNavigation()
         resetGestureRecognition()
         activeUsages.removeAll()
         onActiveButtons?(profileID, [])

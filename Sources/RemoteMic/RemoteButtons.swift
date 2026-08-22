@@ -348,7 +348,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
     func displayName(using localization: LocalizationStore) -> String {
         switch self {
         case .remoteMic: return localization.text("app.name")
-        case .codex: return "Codex"
+        case .codex: return localization.text("application.chatgpt")
         case .claude: return "Claude"
         case .cmux: return "cmux"
         case .weChat: return localization.text("application.wechat")
@@ -402,6 +402,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
 enum ButtonActionCategory: String, CaseIterable, Identifiable {
     case basicKeys
     case systemAndMedia
+    case applicationSpecific
     case custom
     case applications
 
@@ -411,6 +412,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
         switch self {
         case .basicKeys: return "button_mapping.action_group.basic_keys"
         case .systemAndMedia: return "button_mapping.action_group.system_and_media"
+        case .applicationSpecific: return "button_mapping.action_group.application_specific"
         case .custom: return "button_mapping.action_group.custom"
         case .applications: return "button_mapping.action_group.applications"
         }
@@ -438,6 +440,13 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case arrowDown
     case arrowLeft
     case arrowRight
+    case scrollUp
+    case scrollDown
+    case codexStopGeneration
+    case codexFocusInput
+    case codexScrollToLatest
+    case codexPageUp
+    case codexPageDown
     case deleteBackward
     case showDesktop
     case contextMenu
@@ -446,6 +455,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeDown
     case volumeMute
     case playPause
+    case wechatVoiceMessage
     case previousCommandLeft
     case nextCommandRight
     case customShortcut
@@ -467,7 +477,11 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
-    func displayName(using localization: LocalizationStore) -> String {
+    func displayName(
+        using localization: LocalizationStore,
+        applicationName: String? = nil
+    ) -> String {
+        let applicationSpecificName = applicationName ?? PresetApplication.codex.displayName(using: localization)
         switch self {
         case .disabled: return localization.text("action.disabled")
         case .escape: return "Escape"
@@ -489,6 +503,18 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .arrowDown: return localization.text("action.arrow_down")
         case .arrowLeft: return localization.text("action.arrow_left")
         case .arrowRight: return localization.text("action.arrow_right")
+        case .scrollUp: return localization.text("action.scroll_up")
+        case .scrollDown: return localization.text("action.scroll_down")
+        case .codexStopGeneration:
+            return applicationSpecificName + " " + localization.text("action.app.stop_generation")
+        case .codexFocusInput:
+            return applicationSpecificName + " " + localization.text("action.app.focus_input")
+        case .codexScrollToLatest:
+            return applicationSpecificName + " " + localization.text("action.app.scroll_to_latest")
+        case .codexPageUp:
+            return applicationSpecificName + " " + localization.text("action.app.page_up")
+        case .codexPageDown:
+            return applicationSpecificName + " " + localization.text("action.app.page_down")
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
@@ -497,6 +523,9 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .volumeDown: return localization.text("action.system_volume_down")
         case .volumeMute: return localization.text("action.system_mute")
         case .playPause: return localization.text("action.play_pause")
+        case .wechatVoiceMessage:
+            let weChatName = applicationName ?? PresetApplication.weChat.displayName(using: localization)
+            return weChatName + " " + localization.text("action.app.voice_message")
         case .previousCommandLeft: return localization.text("action.previous_command_left")
         case .nextCommandRight: return localization.text("action.next_command_right")
         case .customShortcut: return localization.text("action.custom_shortcut")
@@ -546,8 +575,12 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
-             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
+             .playPause, .previousCommandLeft, .nextCommandRight,
+             .scrollUp, .scrollDown, .toggleLongRecording:
             return .systemAndMedia
+        case .codexStopGeneration, .codexFocusInput, .codexScrollToLatest, .codexPageUp, .codexPageDown,
+             .wechatVoiceMessage:
+            return .applicationSpecific
         case .customShortcut, .openCustomApplication:
             return .custom
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
@@ -576,11 +609,39 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .commandDelete,
             .previousCommandLeft,
             .nextCommandRight,
+            .wechatVoiceMessage,
+            .codexStopGeneration,
+            .codexFocusInput,
+            .codexScrollToLatest,
+            .codexPageUp,
+            .codexPageDown,
         ].contains(self) && presetApplication == nil && !isAppInternal
+    }
+
+    var isHoldAction: Bool {
+        self == .wechatVoiceMessage
     }
 
     var isAppInternal: Bool {
         self == .toggleLongRecording
+    }
+
+    var applicationSpecificBundleIdentifier: String? {
+        switch self {
+        case .codexStopGeneration, .codexFocusInput, .codexScrollToLatest, .codexPageUp, .codexPageDown:
+            return PresetApplication.codex.bundleIdentifier
+        case .wechatVoiceMessage:
+            return PresetApplication.weChat.bundleIdentifier
+        default:
+            return nil
+        }
+    }
+
+    func isAvailable(forApplicationBundleIdentifier bundleIdentifier: String?) -> Bool {
+        guard let requiredBundleIdentifier = applicationSpecificBundleIdentifier else {
+            return true
+        }
+        return requiredBundleIdentifier == bundleIdentifier
     }
 
     func isEnabled(experimentalContinuousRecordingEnabled: Bool) -> Bool {
@@ -590,7 +651,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     static func pickerActions(
         installedBundleIdentifiers: Set<String>,
         current: ButtonAction,
-        experimentalContinuousRecordingEnabled: Bool
+        experimentalContinuousRecordingEnabled: Bool,
+        button: RemoteButton? = nil
     ) -> [ButtonAction] {
         allCases.filter { action in
             guard action.isEnabled(

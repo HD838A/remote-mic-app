@@ -96,9 +96,11 @@ ATVV 通道为：
 | 电源 | Escape |
 | 音量 + / - | 系统音量增减 |
 
-用户还可以选择系统静音、播放/暂停，或打开 Codex、Claude、cmux、微信、Cursor、Xcode、Slack、企业微信、网易云音乐、Chrome、Safari 和 Zed。选择器只显示当前已安装的预置应用，但会保留后来被卸载的已有映射；应用启动动作不会重复创建实例。
+用户还可以选择系统静音、播放/暂停，或打开 Codex、Claude、cmux、微信、Cursor、Xcode、Slack、企业微信、网易云音乐、Chrome、Safari 和 Zed。电源键专用的“微信发语音消息（按住右 Option）”动作通过独立的 hold-action 通道发送成对的 Right Option keyDown/keyUp，不进入普通单击或手势识别路径；选择器不会把它提供给其他实体按键。选择器只显示当前已安装的预置应用，但会保留后来被卸载的已有映射；应用启动动作不会重复创建实例。
 
 方向、返回和音量键支持长按重复；打开应用动作不重复。普通实体按键活动状态会发布到 SwiftUI，用于高亮遥控器示意图和定位映射行。
+
+微信电源键动作使用独立的 `HIDRemoteMonitor.holdActionPerformer` 和 `BridgeAppModel` 的 `VoiceFunctionKeyLatch`。物理释放、遥控器断连、权限释放和应用退出都会尝试发送 Right Option keyUp；豆包等全局监听器仍可能收到相同的系统 Right Option 事件。
 
 ## 语音键 Fn 映射
 
@@ -107,6 +109,8 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的 F5 映射为 usage `0`；任一目标失败或目标不完整时立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 
 该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceFnTapModeEnabled`；旧配置缺少字段时按关闭处理。应用退出时恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
+
+RC003 语音键固定使用 Fn/Globe 硬件映射；旧配置中的 `rightOptionHold` 会在加载或导入时自动回退为 `fnGlobe`。微信按住说话只由电源键的专用动作发送 Right Option，不改变 RC003 麦克风键。
 
 ## 菜单栏与窗口
 
