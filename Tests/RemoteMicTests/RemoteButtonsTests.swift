@@ -207,7 +207,7 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.openCustomApplication.allowsRepeat)
     }
 
-    @Test func weChatVoiceMessageIsAvailableOnlyForPowerButton() {
+    @Test func weChatVoiceMessageIsAvailableForAnyButton() {
         let installed = Set<String>()
         let powerSelection = ButtonAction.pickerActions(
             installedBundleIdentifiers: installed,
@@ -223,7 +223,7 @@ struct RemoteButtonsTests {
         )
 
         #expect(powerSelection.contains(.wechatVoiceMessage))
-        #expect(!otherSelection.contains(.wechatVoiceMessage))
+        #expect(otherSelection.contains(.wechatVoiceMessage))
         #expect(ButtonAction.wechatVoiceMessage.isHoldAction)
         #expect(!ButtonAction.wechatVoiceMessage.allowsRepeat)
     }

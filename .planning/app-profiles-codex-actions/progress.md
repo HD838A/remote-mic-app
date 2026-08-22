@@ -6,6 +6,7 @@
 - `dist/SayAll.app` 通过 `APP VERIFY PASS` 与 `codesign --verify --deep --strict`，已安装到 `/Applications/SayAll.app` 并重启；运行 PID 为 39460，安装包与构建产物 `RemoteMic` SHA-256 均为 `85b4a0dc930f14eda39cc6e4ab7b36cc051bbcf645eada74df625a013ed522d1`。
 - 视觉检查确认 ChatGPT profile 下动作顺序为系统与媒体、应用专属动作、自定义动作，滚动设置显示为 ChatGPT 配置；第 8 阶段完成。
 - 第 9 阶段完成：微信语音动作移入应用专属分类，按 `com.tencent.xinWeChat` 过滤，并在微信 profile 中显示为“微信 发语音消息（按住右 Option）”。已恢复 UI 到原先的 ChatGPT profile。
+- 第 10 阶段完成：取消微信语音动作只能绑定电源键的限制；实体 HID 与手机/网页遥控器入口均支持任意按键按住/松开发送 Right Option 状态。UI 已在微信 profile 的上键编辑器中验证动作可选，并恢复到 ChatGPT profile。
 
 ## 2026-08-22
 

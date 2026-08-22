@@ -651,9 +651,6 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         button: RemoteButton? = nil
     ) -> [ButtonAction] {
         allCases.filter { action in
-            guard action != .wechatVoiceMessage || button == .power || action == current else {
-                return false
-            }
             guard action.isEnabled(
                 experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled
             ) else {
