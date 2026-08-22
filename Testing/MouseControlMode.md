@@ -137,6 +137,7 @@
 - 菜单栏菜单 → “打开日志所在文件夹”，收集测试时间段的日志文件。
 - 关键日志标记：`MOUSE MODE activated`、`MOUSE MODE deactivated reason=...`、`MOUSE MODE double_tap button=up/down/left/right`、`MOUSE MODE double_tap_ok`（OK 双击注入右键）、`MOUSE MODE long_press_send`（长按 OK 注入 Return）、`HID BUTTON ... action=mouseLeftClick/mouseRightClick/mouseMiddleClick/toggleMouseMode`、`INTERNAL ACTION ignored_by_keyboard`（手机 / 网页来源触发内部动作时不应出现 mouse 模式误拦截）。
 - 日志不包含语音内容；提交反馈前无需额外脱敏，但不要公开发布含本机路径的完整日志。
+- 真机验收时若 TV 键仍有 § 泄漏到焦点输入框，先确认当前测试包包含 TV 键码修复（nativeEvent keyCode=10，`fix/tv-native-keycode` 分支，本地测试包已叠加该修复）。
 
 ## 验证边界
 
