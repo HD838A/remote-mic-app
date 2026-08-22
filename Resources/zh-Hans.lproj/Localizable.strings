@@ -110,6 +110,8 @@
 "action.arrow_down" = "方向下";
 "action.arrow_left" = "方向左";
 "action.arrow_right" = "方向右";
+"action.scroll_up" = "向上滚动";
+"action.scroll_down" = "向下滚动";
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "显示桌面";
