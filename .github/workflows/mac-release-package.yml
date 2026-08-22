@@ -233,8 +233,10 @@ jobs:
           REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
         run: |
           request_started_at="$REQUEST_STARTED_AT_INPUT"
-          if [[ "$CANARY_MODE" == "true" && -z "$request_started_at" ]]; then
-            request_started_at="$(date +%s)"
+          if [[ "$CANARY_MODE" == "true" ]]; then
+            if [[ -z "$request_started_at" ]]; then
+              request_started_at="$(date +%s)"
+            fi
             release_ready_at="$request_started_at"
           else
             attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
