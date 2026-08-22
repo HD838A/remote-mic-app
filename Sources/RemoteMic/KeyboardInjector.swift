@@ -20,6 +20,7 @@ enum KeyboardInjector {
     typealias CmuxCommandRunner = (URL, [String], TimeInterval) -> CmuxCommandResult
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
+    typealias ScrollEventPoster = (Int32) -> Bool
 
     struct AccessibilityTextCandidate: Equatable {
         let role: String
@@ -141,7 +142,8 @@ enum KeyboardInjector {
         customApplicationOpener: CustomApplicationOpener = openCustomApplication,
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
-        keyPoster: KeyPoster = { postKey(code: $0, flags: $1) }
+        keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
+        scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) }
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -221,6 +223,10 @@ enum KeyboardInjector {
             keyPoster(123, [])
         case .arrowRight:
             keyPoster(124, [])
+        case .scrollUp:
+            return scrollEventPoster(5)
+        case .scrollDown:
+            return scrollEventPoster(-5)
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -1352,6 +1358,22 @@ enum KeyboardInjector {
               let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
         else { return false }
         event.flags = flags
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
+    private static func postScrollWheel(delta: Int32) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                scrollWheelEvent2Source: source,
+                units: .line,
+                wheelCount: 1,
+                wheel1: delta,
+                wheel2: 0,
+                wheel3: 0
+              )
+        else { return false }
         event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         event.post(tap: .cghidEventTap)
         return true

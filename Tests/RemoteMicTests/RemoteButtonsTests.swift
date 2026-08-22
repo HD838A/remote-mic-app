@@ -263,6 +263,8 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
         #expect(ButtonAction.volumeDown.allowsRepeat)
+        #expect(ButtonAction.scrollUp.allowsRepeat)
+        #expect(ButtonAction.scrollDown.allowsRepeat)
         #expect(ButtonAction.deleteBackward.allowsRepeat)
     }
 
@@ -498,6 +500,26 @@ struct RemoteButtonsTests {
             #expect(posted?.0 == keyCode)
             #expect(posted?.1 == modifiers)
         }
+    }
+
+    @Test func scrollActionsPostExpectedWheelDeltas() {
+        var deltas: [Int32] = []
+        let poster: KeyboardInjector.ScrollEventPoster = { delta in
+            deltas.append(delta)
+            return true
+        }
+
+        #expect(KeyboardInjector.send(
+            .scrollUp,
+            accessibilityTrusted: { true },
+            scrollEventPoster: poster
+        ))
+        #expect(KeyboardInjector.send(
+            .scrollDown,
+            accessibilityTrusted: { true },
+            scrollEventPoster: poster
+        ))
+        #expect(deltas == [5, -5])
     }
 
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {
