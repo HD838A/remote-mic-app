@@ -1,5 +1,9 @@
 # Version History
 
+## 1.9.8 (Pre-release)
+
+- Improved upgrades from older Remote Mic installations: the previous app now stops before the audio driver is updated, and the new SayAll.app stays at its canonical Applications location so audio setup can continue reliably after the upgrade.
+
 ## 1.9.7 (Pre-release)
 
 - Fixed repeated macOS input-source confirmation prompts during first-run voice setup; changing the selected input method now happens only when the voice-tool step requires it.
