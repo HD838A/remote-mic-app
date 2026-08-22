@@ -678,6 +678,7 @@ final class HIDRemoteMonitor {
                     "HID APP_SWITCHER NAV button=\(button.rawValue) " +
                         "action=\(navigationAction.rawValue)"
                 )
+                armAppSwitcherNavigation()
                 continue
             }
             if action.isHoldAction {
