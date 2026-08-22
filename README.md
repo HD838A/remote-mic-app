@@ -201,6 +201,31 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
   </a>
 </p>
 
+## ☕️ 请我买 Token
+
+如果「无线麦 SayAll」对你有帮助，欢迎自愿请我买一点 Token。
+
+这些支持会用于支付 AI 开发工具的 Token 费用，帮助我继续为大家开发新功能、优化已有功能、修复问题，让这个项目能够持续迭代。
+
+赞赏完全自愿，不影响软件使用，也不构成任何服务承诺。金额随意，量力而行；无论是否赞赏，都感谢你的使用、反馈和分享。
+
+谢谢你支持「无线麦 SayAll」继续变得更好。
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="Screenshots/donation-wechat.jpg" alt="微信赞赏码" width="280">
+      <br>
+      微信
+    </td>
+    <td align="center">
+      <img src="Screenshots/donation-alipay.jpg" alt="支付宝赞赏码" width="280">
+      <br>
+      支付宝
+    </td>
+  </tr>
+</table>
+
 ## 许可与来源
 
 本仓库中的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可。iOS App 已由独立私有仓库维护，并继续通过上方 TestFlight 公测入口分发。macOS App 的 Logo 和 App Icon 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
