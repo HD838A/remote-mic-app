@@ -54,6 +54,20 @@
 
 失败判定：DMG 并列 App/Applications/卸载入口、健康驱动仍被替换、异常驱动被错误保留、安装脚本要求开发工具，或 App/Sparkle 可执行权限损坏。
 
+## 用例 5：旧版 Remote Mic 到 SayAll 的 PKG 升级时序
+
+1. 在独立测试账号安装一个已完成 Onboarding 的旧版 `/Applications/Remote Mic.app`，并保持无线麦运行。
+2. 使用正式 Developer ID 签名的 `Install Remote Mic.pkg` 安装 1.9.x；不要手动删除旧 App。
+3. 观察安装期间的进程、`/var/log/install.log`，以及安装完成后的 `runtime.log`。
+4. 确认安装器先停止旧 `RemoteMic` 进程，再更新 MiRemoteV 2ch 或重启 `coreaudiod`；新 App 验证后旧 App 被移入废纸篓并启动 `SayAll.app`。
+5. 进入 Onboarding 音频页，确认 `MiRemoteV 2ch` 可枚举、可选择，实体遥控器按键和语音测试可继续。
+
+预期结果：无需手动删除 1.8.x App；旧路径中的产品 App 可恢复地移入废纸篓；新版本首次启动不出现 `audio.no_output_device` 或 `button_mapping.error.power_suppression_failed`。
+
+失败判定：旧进程在驱动更新或 `coreaudiod` 重启期间仍运行、旧 App 未迁移且继续占用资源、音频设备不可用、HID 电源键保护失败，或必须手动删除旧 App 后重新安装才能恢复。
+
+2026-08-22 真实验收记录：官方 1.8.3 → Developer ID 签名、公证 1.9.7 (130) PKG 在未重启 Mac 的情况下通过。旧 `RemoteMic` 进程先退出；新 App 位于 `/Applications/SayAll.app`；旧 App 进入废纸篓；Installer receipt 更新；`runtime.log` 出现 `APP START version=1.9.7` 和 `AUDIO READY`，MiRemoteV 2ch 可枚举。第一次候选曾因 macOS Installer 旧 receipt relocation 失败，修复 component plist 的 `BundleIsRelocatable=false` 后复验通过。该次未连接实体遥控器，因此 HID 按键和真实语音输入仍需独立执行。
+
 ## 稳定功能回归
 
 - RC003 普通 `STREAM_START → AUDIO → STREAM_STOP` 首次尝试成功。
@@ -63,6 +77,6 @@
 
 ## 日志与验证边界
 
-自动化覆盖失败码、定向回跳、事件去重、摘要字段、脚本语法、DMG 根目录约束和禁止开发者工具命令。模拟硬件和单元测试不能替代真实权限历史、RC003、第三方输入工具、驱动安装、管理员授权、CoreAudio 重启和安装后启动；这些必须在生成后续候选安装包时执行。
+自动化覆盖失败码、定向回跳、事件去重、摘要字段、脚本语法、DMG 根目录约束、旧 App 迁移安全边界和安装前停止进程的静态时序门禁。模拟硬件和单元测试不能替代真实权限历史、RC003、第三方输入工具、驱动安装、管理员授权、CoreAudio 重启和安装后启动；用例 5 必须在生成后续候选安装包时执行。
 
 权限依赖复核继续保留现有三项门禁：普通按键需要输入监控和辅助功能，Typeless Fn 点按至少需要辅助功能；尚无足够真实证据证明豆包或其他工具可安全缩减完整首次流程权限。

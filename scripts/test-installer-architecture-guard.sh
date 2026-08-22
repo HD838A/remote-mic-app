@@ -100,6 +100,11 @@ for package_script in "$PREINSTALL" "$POSTINSTALL"; do
 done
 
 /usr/bin/grep -Fq '/usr/bin/productbuild' "$BUILD_SCRIPT"
+/usr/bin/grep -Fq 'COMPONENT_PLIST=' "$BUILD_SCRIPT"
+/usr/bin/grep -Fq '/usr/bin/pkgbuild' "$BUILD_SCRIPT"
+/usr/bin/grep -Fq -- '--analyze' "$BUILD_SCRIPT"
+/usr/bin/grep -Fq 'BundleIsRelocatable false' "$BUILD_SCRIPT"
+/usr/bin/grep -Fq 'Applications/SayAll.app' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'UNSIGNED_INSTALL_PACKAGE=' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'installer-signing-probe-productsign' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'run_locked_productsign installer-productsign' "$BUILD_SCRIPT"

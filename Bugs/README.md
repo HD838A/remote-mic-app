@@ -2,6 +2,7 @@
 
 - [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md)
 - [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md)
+- [App 改名后 PKG 升级时旧进程未及时停止](./2026-08-21-pkg-legacy-app-process-order.md)
 - [签名前失败的 attestation 阻止同版本预览恢复](./2026-08-21-pre-signing-attestation-blocks-preview-recovery.md)
 - [Onboarding 离开输入法页后重复触发输入法确认](./2026-08-21-onboarding-input-source-confirmation-repeats.md)
 - [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md)
@@ -61,9 +62,10 @@
 | --- | --- | --- |
 | 2026-08-21 | [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md) | 候选修复完成，等待真实 Intel macOS 13 图标与缓存验收 |
 | 2026-08-20 | [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md) | 候选修复完成，等待 Karabiner-Elements 与其他 HID 工具真机验收 |
+| 2026-08-21 | [App 改名后 PKG 升级时旧进程未及时停止](./2026-08-21-pkg-legacy-app-process-order.md) | 已修复，等待正式签名 PKG 与实体遥控器升级验收 |
 | 2026-08-20 | [Onboarding 已发现遥控器但永远等不到首个 HID 按键](./2026-08-20-onboarding-hid-discovery-report-deadlock.md) | 根因已确认并完成候选修复，等待 RC001 / RC003 真机验收 |
 | 2026-08-19 | [GitHub Release 标题回退为旧品牌](./2026-08-19-github-release-title-legacy-brand.md) | 已修复 |
-| 2026-08-20 | [Issue #100：升级后权限失效且旧 App 影响安装](./2026-08-20-issue-100-upgrade-permission-repair.md) | 权限修复入口已实现；安装失败等待现场 Installer 日志 |
+| 2026-08-20 | [Issue #100：升级后权限失效且旧 App 影响安装](./2026-08-20-issue-100-upgrade-permission-repair.md) | 权限入口与旧进程时序已修复，等待正式签名 PKG 验收 |
 | 2026-08-20 | [Onboarding 已授权权限无法再次打开系统设置](./2026-08-20-onboarding-granted-permissions-not-clickable.md) | 候选修复完成，等待正式签名升级权限连续性验收 |
 | 2026-08-19 | [macOS 1.9.0 签名流程的 Swift Release 冷构建被 180 秒误杀](./2026-08-19-macos-release-swift-build-timeout.md) | 代码修复完成，等待受保护 Developer ID canary |
 | 2026-08-19 | [组合动作后立即说话导致回眸整段漏记](./2026-08-19-reflections-initial-focus-unavailable.md) | 候选修复完成，等待真实 Codex 与遥控器验收 |

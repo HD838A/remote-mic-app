@@ -25,6 +25,7 @@ WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
 INSTALL_SCRIPTS="$WORK_DIR/install-scripts"
 UNINSTALL_SCRIPTS="$WORK_DIR/uninstall-scripts"
+COMPONENT_PLIST="$WORK_DIR/components.plist"
 INSTALL_COMPONENT_PACKAGE="$WORK_DIR/RemoteMicComponent.pkg"
 UNSIGNED_INSTALL_PACKAGE="$WORK_DIR/Install Remote Mic-unsigned.pkg"
 UNSIGNED_UNINSTALL_PACKAGE="$WORK_DIR/Uninstall Remote Mic-unsigned.pkg"
@@ -122,10 +123,38 @@ fi
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
+run_release_stage installer-component-analysis "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
+  /usr/bin/pkgbuild \
+  --analyze \
+  --root "$PAYLOAD_ROOT" \
+  "$COMPONENT_PLIST"
+
+APP_COMPONENT_INDEX=-1
+component_index=0
+while true; do
+  bundle_path="$(/usr/libexec/PlistBuddy \
+    -c "Print :$component_index:RootRelativeBundlePath" \
+    "$COMPONENT_PLIST" 2>/dev/null || true)"
+  [[ -z "$bundle_path" ]] && break
+  if [[ "$bundle_path" == "Applications/SayAll.app" ]]; then
+    /usr/libexec/PlistBuddy \
+      -c "Set :$component_index:BundleIsRelocatable false" \
+      "$COMPONENT_PLIST"
+    APP_COMPONENT_INDEX="$component_index"
+    break
+  fi
+  component_index=$((component_index + 1))
+done
+if [[ "$APP_COMPONENT_INDEX" -lt 0 ]]; then
+  print -u2 "unable to identify the SayAll.app component in the generated plist"
+  exit 1
+fi
+
 run_release_stage installer-component-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
   /usr/bin/pkgbuild \
   --root "$PAYLOAD_ROOT" \
   --scripts "$INSTALL_SCRIPTS" \
+  --component-plist "$COMPONENT_PLIST" \
   --identifier "com.hd838a.RemoteMic.installer" \
   --version "$VERSION" \
   --install-location / \
