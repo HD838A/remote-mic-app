@@ -422,6 +422,8 @@ struct BuildSigningTests {
         #expect(releaseWorkflowSource.contains("request_id:"))
         #expect(releaseWorkflowSource.contains("resolve-release-request-attestation.sh"))
         #expect(releaseWorkflowSource.contains("release-request-attestation-${{ inputs.tag }}"))
+        #expect(releaseWorkflowSource.contains("if [[ \"$CANARY_MODE\" == \"true\" ]]; then"))
+        #expect(releaseWorkflowSource.contains("release_ready_at=\"$request_started_at\""))
         #expect(releaseWorkflowSource.contains(".releaseReadyAt"))
         #expect(!releaseWorkflowSource.contains("release_ready_at:"))
         #expect(releaseWorkflowSource.contains("PUBLICATION_MAX_SECONDS: 180"))
