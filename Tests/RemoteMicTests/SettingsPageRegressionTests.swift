@@ -216,6 +216,20 @@ struct SettingsPageRegressionTests {
         #expect(settingsSource.contains("window?.performDrag(with: event)"))
     }
 
+    @Test func settingsWindowRemainsVisibleWhenTheApplicationBecomesInactive() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+
+        #expect(appSource.contains("window.hidesOnDeactivate = false"))
+        #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
+    }
+
     @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
         #expect(MappingSelectionPolicy.selection(
             current: .home,

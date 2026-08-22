@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [设置窗口在失去焦点后被移出屏幕](./2026-08-22-settings-window-hides-on-deactivate.md)
 - [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md)
 - [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md)
 - [App 改名后 PKG 升级时旧进程未及时停止](./2026-08-21-pkg-legacy-app-process-order.md)
@@ -60,6 +61,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-22 | [设置窗口在失去焦点后被移出屏幕](./2026-08-22-settings-window-hides-on-deactivate.md) | 候选修复完成，等待可见 App 验收 |
 | 2026-08-21 | [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md) | 候选修复完成，等待真实 Intel macOS 13 图标与缓存验收 |
 | 2026-08-20 | [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md) | 候选修复完成，等待 Karabiner-Elements 与其他 HID 工具真机验收 |
 | 2026-08-21 | [App 改名后 PKG 升级时旧进程未及时停止](./2026-08-21-pkg-legacy-app-process-order.md) | 已修复，等待正式签名 PKG 与实体遥控器升级验收 |
