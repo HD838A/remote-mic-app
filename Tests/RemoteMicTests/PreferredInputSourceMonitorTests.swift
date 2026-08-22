@@ -14,7 +14,8 @@ struct PreferredInputSourceMonitorTests {
             encoding: .utf8
         )
 
-        #expect(source.contains("if started, HIDRemoteMonitor.isInputMonitoringGranted"))
+        #expect(source.contains("let permissionSnapshot = HIDPermissionSnapshot.current"))
+        #expect(source.contains("if started, permissionSnapshot.inputMonitoringGranted"))
         #expect(source.contains("preferredInputSourceMonitor.start()"))
         #expect(source.contains("preferredInputSourceMonitor.stop()"))
     }
