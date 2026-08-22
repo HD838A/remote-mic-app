@@ -196,7 +196,7 @@
   - 仍需在 macOS 14、15 和当前系统上验证全新安装、逐项拒绝后恢复、退出后续接、App 重启、权限被撤销、实体遥控器/iPhone Nearby/手机 Safari 网页版断连、音频设备缺失、豆包/Typeless/其他工具及完成后的首次真实使用；使用 `1020 × 772` 窗口逐步检查 Onboarding 和“连接、按键映射、权限”页面，确保页头、状态、主要操作、滚动和底部导航均不裁切，也不改变窗口几何。
   - 详细步骤、状态模型、错误分支、导航结构、实现切片和验收矩阵保存在私有产品资料库；公开 TODO 只保留产品行为和兼容边界。
 - [x] ~~自动聚焦输入框~~（已完成：打开 Codex、Claude、cmux 后自动聚焦其输入区域；内置 App、自定义 App和自定义快捷键现统一等待 system-wide Accessibility 最终焦点成为安全可编辑位置，再允许第一次 Fn 语音启动）
-  - 2026-08-22 真机发现该能力对 Claude Desktop 和 Codex 两个 Electron 应用稳定失效（`composer_not_found`）：Chromium 默认不为 web 内容建辅助功能树，必须由辅助技术客户端先声明自己。已在聚焦流程中设置 `AXManualAccessibility` 并把 composer 重试窗口放宽到 12 × 250ms；根因与复验步骤见 `Bugs/2026-08-22-electron-composer-focus-needs-manual-accessibility.md`，真机复验前该条不能视为对 Electron 目标已验收。
+  - 2026-08-22 真机发现该能力对 Claude Desktop 和 ChatGPT 稳定失效（`composer_not_found`）：web 内容的辅助功能树是懒加载的，必须由辅助技术客户端先声明自己。已在聚焦流程中设置 `AXManualAccessibility`，对不认该 Chromium 约定的外壳降级为标准的 `AXEnhancedUserInterface`，并把 composer 重试窗口放宽到 12 × 250ms。Claude Desktop 已真机验收通过；ChatGPT 的降级路径仍待复验。根因与步骤见 `Bugs/2026-08-22-electron-composer-focus-needs-manual-accessibility.md`。
 - [ ] 支持通过遥控器按键一键唤起 Codex 并启动其语音功能（仅记录，暂不开发）
   - 第一层“打开或切换到 Codex，并聚焦输入框”已经具备技术基础；目标是将其与“启动 Codex 自带语音输入”组合为一个可配置动作，用户按一次遥控器按键即可开始说话。
   - 实现前先确认 Codex 是否提供稳定的全局快捷键、菜单命令、URL Scheme、App Intent 或其他公开入口。若存在，优先调用公开入口；若只有可访问性树中的麦克风按钮，可评估通过辅助功能执行 `AXPress`，但不得依赖固定屏幕坐标。
