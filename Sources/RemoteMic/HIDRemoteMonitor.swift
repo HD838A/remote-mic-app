@@ -96,6 +96,8 @@ final class HIDRemoteMonitor {
     private var gestureRecognizer = RemoteButtonGestureRecognizer()
     private var doubleClickTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     private var longPressTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
+    private var appSwitcherNavigationTimer: HIDRemoteScheduledTask?
+    private var appSwitcherNavigationActive = false
     private var permissionMonitor: HIDRemoteScheduledTask?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
@@ -600,6 +602,9 @@ final class HIDRemoteMonitor {
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
+            if appSwitcherNavigationActive, button != .left, button != .right {
+                clearAppSwitcherNavigation()
+            }
             let preflightProfileID = profileID
             let preflightRecognizesDoubleClick = settings.configuredAction(
                 for: button,
@@ -655,6 +660,26 @@ final class HIDRemoteMonitor {
                 profileID: profileID
             ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
             let action = settings.action(for: button, profileID: profileID)
+            if let navigationAction = appSwitcherNavigationAction(for: button) {
+                if !activeDeviceIsSeized {
+                    eventSuppressor.arm(button: button, edge: .down)
+                }
+                let configured = ConfiguredButtonAction(action: navigationAction, shortcut: nil)
+                guard actionPerformer(button, .singleClick, configured) else {
+                    diagnosticLogger(
+                        "HID APP_SWITCHER NAV failed button=\(button.rawValue) " +
+                            "action=\(navigationAction.rawValue)"
+                    )
+                    stop()
+                    updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
+                    return
+                }
+                AppLogger.shared.write(
+                    "HID APP_SWITCHER NAV button=\(button.rawValue) " +
+                        "action=\(navigationAction.rawValue)"
+                )
+                continue
+            }
             if action.isHoldAction {
                 let configured = settings.configuredAction(
                     for: button,
@@ -1040,10 +1065,39 @@ final class HIDRemoteMonitor {
             updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
             return false
         }
+        if configured.action == .appSwitcher {
+            armAppSwitcherNavigation()
+        }
         AppLogger.shared.write(
             "HID BUTTON button=\(button.rawValue) trigger=\(trigger.rawValue) action=\(configured.action.rawValue)"
         )
         return true
+    }
+
+    private func appSwitcherNavigationAction(for button: RemoteButton) -> ButtonAction? {
+        guard appSwitcherNavigationActive else { return nil }
+        switch button {
+        case .left: return .previousCommandLeft
+        case .right: return .nextCommandRight
+        default: return nil
+        }
+    }
+
+    private func armAppSwitcherNavigation() {
+        appSwitcherNavigationTimer?.cancel()
+        appSwitcherNavigationActive = true
+        appSwitcherNavigationTimer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherNavigationMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            self?.clearAppSwitcherNavigation()
+        }
+    }
+
+    private func clearAppSwitcherNavigation() {
+        appSwitcherNavigationTimer?.cancel()
+        appSwitcherNavigationTimer = nil
+        appSwitcherNavigationActive = false
     }
 
     private func resetGestureRecognition() {
@@ -1082,6 +1136,7 @@ final class HIDRemoteMonitor {
         nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
         nonRepeatableReleaseTimers.removeAll()
         nonRepeatablePressedButtons.removeAll()
+        clearAppSwitcherNavigation()
         resetGestureRecognition()
         activeUsages.removeAll()
         onActiveButtons?(profileID, [])

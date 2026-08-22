@@ -455,6 +455,57 @@ struct HardwareSimulationIntegrationTests {
         #expect(scheduler.pendingTaskCount == 0)
     }
 
+    @Test func appSwitcherNavigationUsesCommandArrowsForRemoteLeftAndRight() throws {
+        let suiteName = "HardwareSimulationIntegrationTests.appSwitcherNavigation.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        settings.setAction(.arrowLeft, for: .left)
+        settings.setAction(.arrowRight, for: .right)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = TestHIDRemoteScheduler()
+        let recorder = HIDActionRecorder()
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { button, trigger, configured in
+                recorder.events.append(.init(
+                    button: button,
+                    trigger: trigger,
+                    action: configured.action
+                ))
+                return true
+            },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher",
+            profileID: profileID,
+            isSeized: false
+        )
+
+        let empty = Data([0, 0, 0, 0, 0, 0])
+        monitor.handleSimulatedReport(reportID: 1, data: Data([0x65, 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: empty)
+        monitor.handleSimulatedReport(reportID: 1, data: Data([0x4F, 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: empty)
+        monitor.handleSimulatedReport(reportID: 1, data: Data([0x50, 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: empty)
+        monitor.disconnectSimulatedDevice()
+
+        #expect(recorder.events == [
+            .init(button: .menu, trigger: .singleClick, action: .appSwitcher),
+            .init(button: .right, trigger: .singleClick, action: .nextCommandRight),
+            .init(button: .left, trigger: .singleClick, action: .previousCommandLeft),
+        ])
+        #expect(scheduler.pendingTaskCount == 0)
+    }
+
     @Test func HIDDiagnosticsTraceReportsEdgesGesturesAndActionsWithoutRawPayloads() throws {
         let suiteName = "HardwareSimulationIntegrationTests.hidDiagnostics.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

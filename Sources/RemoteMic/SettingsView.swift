@@ -1115,12 +1115,6 @@ struct SettingsView: View {
                 Divider().frame(height: 28)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("connection.voice_key.mode")
-                        .font(.system(size: 12, weight: .medium))
-                    Text(VoiceKeyMode.fnGlobe.displayName(using: localization))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-
                     Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
                         get: { settings.voiceFnTapModeEnabled },
                         set: { model.setVoiceFnTapModeEnabled($0) }
