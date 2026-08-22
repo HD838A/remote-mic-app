@@ -24,9 +24,6 @@
 "voice_button.status.waiting" = "Waiting for the remote Fn hardware mapping";
 "voice_button.status.fn_pressed" = "Hardware Fn is held; release the voice button to release it";
 "voice_button.status.fn_released" = "Hardware Fn released";
-"voice_button.status.option_enabled" = "The remote voice button is ready for Right Option hold";
-"voice_button.status.option_pressed" = "Right Option is held; release the voice button to release it";
-"voice_button.status.option_released" = "Right Option released";
 "voice_button.status.waiting_for_input" = "Waiting for the target input to be ready";
 "voice_button.status.input_ready" = "Target input is ready";
 "voice_button.status.input_unavailable" = "Target input was not ready; voice input was cancelled";
@@ -214,7 +211,6 @@
 "connection.status.voice_trigger" = "Voice trigger";
 "connection.voice_key.mode" = "Voice Key Mode";
 "connection.voice_key.mode.fn_globe" = "Fn/Globe";
-"connection.voice_key.mode.right_option" = "Right Option Hold";
 "connection.voice_fn_tap.enabled" = "Simulate Fn Tap on Voice Key";
 "connection.voice_fn_tap.hint" = "For tap-to-toggle voice apps (e.g. Typeless): pressing the voice key injects one Fn tap to start, releasing injects another to stop, while audio streams as usual. Requires Accessibility permission; the voice key no longer emits Fn directly.";
 "connection.voice_fn_tap.hint_short" = "For voice tools that use Fn taps to start and stop. Keep holding the remote button while speaking.";

@@ -1496,24 +1496,25 @@ struct RemoteButtonsTests {
         #expect(!target.voiceFnTapModeEnabled)
     }
 
-    @Test func voiceKeyModeExportsAndLegacyImportDefaultsToFnGlobe() throws {
+    @Test func rightOptionVoiceKeyModeAlwaysFallsBackToFnGlobe() throws {
         let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
         let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
         let source = AppSettings(defaults: sourceDefaults)
         source.voiceKeyMode = .rightOptionHold
+        #expect(source.voiceKeyMode == .fnGlobe)
         let exported = try source.exportedConfigurationData()
         let object = try #require(
             JSONSerialization.jsonObject(with: exported) as? [String: Any]
         )
-        #expect(object["voiceKeyMode"] as? String == VoiceKeyMode.rightOptionHold.rawValue)
+        #expect(object["voiceKeyMode"] as? String == VoiceKeyMode.fnGlobe.rawValue)
 
         let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
         let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
         defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
         let target = AppSettings(defaults: targetDefaults)
         try target.importConfiguration(from: exported)
-        #expect(target.voiceKeyMode == .rightOptionHold)
+        #expect(target.voiceKeyMode == .fnGlobe)
 
         var legacyObject = object
         legacyObject.removeValue(forKey: "voiceKeyMode")

@@ -110,7 +110,7 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 
 该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceFnTapModeEnabled`；旧配置缺少字段时按关闭处理。应用退出时恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
 
-“语音键模式”由 `VoiceKeyMode` 持久化，默认值为 `fnGlobe`。选择 `rightOptionHold` 时，`RemoteVoiceFunctionMapper` 将 RC003 的 F5 usage 中和，`BridgeAppModel` 复用 `VoiceFunctionKeyLatch` 管理语音流开始/结束的幂等状态，并通过 `KeyboardInjector.setRightOptionKeyPressed` 注入右 Option keyDown/keyUp；应用退出、断连或模式切换会先释放可能仍处于按下状态的右 Option。Right Option 模式与 Typeless Fn 点按模式互斥，旧配置缺少 `voiceKeyMode` 时保持 Fn/Globe。
+RC003 语音键固定使用 Fn/Globe 硬件映射；旧配置中的 `rightOptionHold` 会在加载或导入时自动回退为 `fnGlobe`。微信按住说话只由电源键的专用动作发送 Right Option，不改变 RC003 麦克风键。
 
 ## 菜单栏与窗口
 

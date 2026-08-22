@@ -24,9 +24,6 @@
 "voice_button.status.waiting" = "等待遥控器 Fn 硬件映射";
 "voice_button.status.fn_pressed" = "硬件 Fn 已按下；松开语音键即释放";
 "voice_button.status.fn_released" = "硬件 Fn 已释放";
-"voice_button.status.option_enabled" = "遥控器语音键已准备为右 Option 长按";
-"voice_button.status.option_pressed" = "右 Option 已按下；松开语音键即释放";
-"voice_button.status.option_released" = "右 Option 已释放";
 "voice_button.status.waiting_for_input" = "正在等待目标输入位置准备完成";
 "voice_button.status.input_ready" = "目标输入位置已准备完成";
 "voice_button.status.input_unavailable" = "目标输入位置未准备完成，已取消本次语音输入";
@@ -214,7 +211,6 @@
 "connection.status.voice_trigger" = "语音触发";
 "connection.voice_key.mode" = "语音键模式";
 "connection.voice_key.mode.fn_globe" = "Fn/地球键";
-"connection.voice_key.mode.right_option" = "右 Option 长按";
 "connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";
 "connection.voice_fn_tap.hint" = "适配点按式语音输入（如 Typeless）：按下语音键注入一次 Fn 开始，松开再注入一次结束，音频在按住期间照常传输。需要辅助功能权限；开启后语音键不再直接发 Fn。";
 "connection.voice_fn_tap.hint_short" = "用于需要点按 Fn 开始和结束的语音工具；遥控器仍需按住说话。";

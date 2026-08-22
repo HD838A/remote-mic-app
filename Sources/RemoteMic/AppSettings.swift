@@ -8,15 +8,22 @@ enum AppConfigurationError: Error {
 
 enum VoiceKeyMode: String, Codable, CaseIterable, Identifiable {
     case fnGlobe = "fn_globe"
+    // Kept only so older exported configurations can still be decoded.
     case rightOptionHold = "right_option_hold"
+
+    static let allCases: [VoiceKeyMode] = [.fnGlobe]
 
     var id: String { rawValue }
 
     func displayName(using localization: LocalizationStore) -> String {
         switch self {
         case .fnGlobe: return localization.text("connection.voice_key.mode.fn_globe")
-        case .rightOptionHold: return localization.text("connection.voice_key.mode.right_option")
+        case .rightOptionHold: return localization.text("connection.voice_key.mode.fn_globe")
         }
+    }
+
+    var normalized: VoiceKeyMode {
+        .fnGlobe
     }
 }
 
@@ -368,6 +375,10 @@ final class AppSettings: ObservableObject {
 
     @Published var voiceKeyMode: VoiceKeyMode {
         didSet {
+            guard voiceKeyMode == .fnGlobe else {
+                voiceKeyMode = .fnGlobe
+                return
+            }
             defaults.set(voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
         }
     }
@@ -555,9 +566,9 @@ final class AppSettings: ObservableObject {
         voiceFnTapModeEnabled = defaults.bool(
             forKey: Keys.voiceFnTapModeEnabled
         )
-        voiceKeyMode = VoiceKeyMode(
+        voiceKeyMode = (VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
-        ) ?? .fnGlobe
+        ) ?? .fnGlobe).normalized
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -1373,7 +1384,7 @@ final class AppSettings: ObservableObject {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
         voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
-        voiceKeyMode = configuration.voiceKeyMode ?? .fnGlobe
+        voiceKeyMode = (configuration.voiceKeyMode ?? .fnGlobe).normalized
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup
