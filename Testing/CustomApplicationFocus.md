@@ -121,7 +121,7 @@
 
 ### 预置动作路径（打开 Claude / 打开 Codex）
 
-对 Claude Desktop（Electron，期望 `result=success`）和 ChatGPT `/Applications/ChatGPT.app`（非 Chromium 外壳，期望 `result=fallback_enhanced_success`）分别执行：
+对 Claude Desktop（Electron，期望 `result=success`）和 ChatGPT `/Applications/ChatGPT.app`（非 Chromium 外壳，实测两个属性都不支持，期望 `result=fallback_enhanced_not_implemented` 但聚焦仍由扫描本身唤醒而成功）分别执行：
 
 1. 彻底退出目标应用，按下映射按键（冷启动）。
 2. 应用已在前台且焦点位于侧边栏时，再次按下映射按键（热路径）。
@@ -130,6 +130,8 @@
 预期结果：每次都实际看到光标进入对话输入框；日志出现
 `APP FOCUS manual_accessibility bundle=<id> attempt=0 result=...`，随后出现
 `APP FOCUS succeeded bundle=<id> method=accessibility`。冷启动允许在若干次重试后成功，但必须在同一次按键内完成，不能要求用户再按一次。
+
+已知例外：ChatGPT 冷启动的**第一次**按键可能在辅助树建好之前用完 2.75 秒窗口而失败，之后的按键稳定成功。这是已记录的时间窗边界，不是新根因；复现时记录应用版本与失败次数即可。
 
 失败判定：仍然出现 `APP FOCUS failed ... reason=composer_not_found`；或 `manual_accessibility` 一直是 `result=cannot_complete`、`result=attribute_unsupported`、`result=fallback_enhanced_*` 且非 success；或需要开启 VoiceOver 才能成功。
 
@@ -144,7 +146,7 @@
 ### 副作用检查
 
 - [ ] Electron 目标（Claude Desktop）日志为 `result=success`，不进入降级路径。
-- [ ] 走降级路径的应用（ChatGPT 等）窗口没有出现变形、缩放或异常动画；`AXEnhancedUserInterface` 的这类副作用主要报告在 Electron 上，若在非 Chromium 应用上出现必须记录应用名称与版本。
+- [ ] 走降级路径的应用（ChatGPT 等）窗口没有出现变形、缩放或异常动画；`AXEnhancedUserInterface` 的这类副作用主要报告在 Electron 上，若在非 Chromium 应用上出现必须记录应用名称与版本。ChatGPT 实测两个属性都不支持，因此不会真正写入任何属性。
 - [ ] 纯原生目标（TextEdit、Proma 等）的聚焦行为与修复前一致，日志中的 `manual_accessibility` 结果为 `fallback_enhanced_*` 或 `attribute_unsupported`，且不影响后续流程。
 - [ ] 系统 VoiceOver 未被本功能开启或改变。
 

@@ -1,7 +1,7 @@
 # Electron 应用聚焦失败：未声明辅助技术客户端导致 web 内容树为空
 
 - 时间：2026-08-22
-- 状态：Electron 目标已真机验收通过；非 Chromium 壳的降级修复等待真机复验
+- 状态：Claude Desktop（Electron）与 ChatGPT（非 Chromium 外壳）均已真机复验；ChatGPT 走的不是降级属性生效路径，冷启动首次按键存在已知时间窗边界，见「验证边界」
 - 影响范围：macOS 1.9.8（含本地自构建版）；预置动作 `openClaude` / `openCodex` 的 `accessibilityComposer` 聚焦路径；自定义 APP 的 `recordedAccessibility` 聚焦路径同类风险
 - 功能点：打开 App 后聚焦输入框
 - 简单描述：权限齐全时，按键打开 Claude Desktop 或 Codex 后，输入框聚焦稳定失败并记录 `APP FOCUS failed method=accessibility reason=composer_not_found`。
@@ -56,8 +56,9 @@ Chromium / Electron 默认不为 web 内容构建辅助功能树，只有当辅�
 
 ## 验证边界
 
-- 已完成：`xcrun swift build` 通过；`scripts/test.sh` 自检 43 项通过；`scripts/build-app.sh` 产出 ad-hoc 签名 App 并通过 `codesign --verify --deep --strict`。
+- 已完成：`xcrun swift build` 通过；`scripts/test.sh` 自检 42 项通过；`scripts/build-app.sh` 产出 ad-hoc 签名 App 并通过 `codesign --verify --deep --strict`。
 - 已完成（仅编译期）：新增的纯函数单测（结果名映射、日志节流、重试窗口 ≥ 2 秒）已通过类型检查；本机只有 Command Line Tools，缺少 `Testing` 模块，Swift Testing 套件必须在装有 Xcode 的机器或 CI 上执行。
 - 已完成（真机）：Claude Desktop 冷重启后按键聚焦成功，日志 `result=success` → `APP FOCUS succeeded`。
-- 待完成（真机）：ChatGPT（`com.openai.codex`）在降级链修复后复验，期望日志变为 `result=fallback_enhanced_success` 且随后 `APP FOCUS succeeded`；同时确认该应用与其他非 Chromium 应用没有出现窗口变形、缩放或异常动画，Electron 应用仍在第一步成功、不进入降级路径。
+- 已完成（真机）：ChatGPT（`com.openai.codex`）在降级链修复后复验，结果与预期不同：该应用对两个属性都不支持，日志为 `result=fallback_enhanced_not_implemented`，即 `AXManualAccessibility` 与 `AXEnhancedUserInterface` 都没有被接受。但聚焦仍然成功——唤醒它懒加载的 web 内容树的是聚焦流程的**扫描本身**，而不是任何一个属性。相应的边界是时间：冷启动后的第一次按键可能在树建好之前用完 12 × 250ms（2.75 秒）窗口而失败，之后的按键稳定成功。该应用与其他非 Chromium 应用均未观察到窗口变形、缩放或异常动画；Claude Desktop 仍在第一步 `result=success`，不进入降级路径。
+- 已知边界（未修复）：ChatGPT 冷启动首次按键可能超出 2.75 秒重试窗口。继续放宽窗口会拖长所有目标的失败路径，因此本次不改；如果真机反馈该场景常见，再单独评估按应用区分窗口或在扫描到空壳时提前重试。
 - 自动化不能证明 Electron 真实建树时间、`AXManualAccessibility` 在各 Electron 版本上的行为，以及最终输入框是否真正获得焦点。
