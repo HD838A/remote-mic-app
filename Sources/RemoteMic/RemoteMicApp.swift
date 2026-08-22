@@ -757,6 +757,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         // A settings window must remain visible when the user switches to another app.
         // Closing it remains an explicit red-button or Command-W action.
         window.hidesOnDeactivate = false
+        window.canHide = false
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 1020, height: 772)

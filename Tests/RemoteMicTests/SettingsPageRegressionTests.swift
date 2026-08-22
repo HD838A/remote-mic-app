@@ -227,6 +227,7 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(appSource.contains("window.hidesOnDeactivate = false"))
+        #expect(appSource.contains("window.canHide = false"))
         #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
     }
 
