@@ -115,6 +115,8 @@
 "action.codex_stop_generation" = "Codex: Stop Generation";
 "action.codex_focus_input" = "Codex: Focus Input";
 "action.codex_scroll_to_latest" = "Codex: Scroll to Latest";
+"action.codex_page_up" = "Codex: Page Up";
+"action.codex_page_down" = "Codex: Page Down";
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "Show Desktop";

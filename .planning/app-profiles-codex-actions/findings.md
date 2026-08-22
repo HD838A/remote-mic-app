@@ -10,3 +10,4 @@
 - 滚轮速度限制为 1...10，默认 5；反向设置只改变滚轮 delta 的符号，不影响语音、Command-Tab 或方向键。
 - 新字段均为可选导入字段，旧配置缺失时使用空应用 profile、速度 5、非反向默认值。
 - Release 主应用类型检查和打包通过；系统默认 SwiftPM 构建受本机 CLT/SDK 环境限制，使用 `--disable-sandbox` 构建成功。
+- Codex 翻页可直接映射 macOS 原生 Page Up / Page Down key code（116 / 121）；无需新增 Codex API 或滚轮参数，现有应用 profile picker 会自动发现新动作。

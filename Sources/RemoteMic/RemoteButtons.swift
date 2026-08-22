@@ -439,6 +439,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case codexStopGeneration
     case codexFocusInput
     case codexScrollToLatest
+    case codexPageUp
+    case codexPageDown
     case deleteBackward
     case showDesktop
     case contextMenu
@@ -496,6 +498,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .codexStopGeneration: return localization.text("action.codex_stop_generation")
         case .codexFocusInput: return localization.text("action.codex_focus_input")
         case .codexScrollToLatest: return localization.text("action.codex_scroll_to_latest")
+        case .codexPageUp: return localization.text("action.codex_page_up")
+        case .codexPageDown: return localization.text("action.codex_page_down")
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
@@ -556,7 +560,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .wechatVoiceMessage, .previousCommandLeft, .nextCommandRight,
              .scrollUp, .scrollDown, .codexStopGeneration, .codexFocusInput,
-             .codexScrollToLatest, .toggleLongRecording:
+             .codexScrollToLatest, .codexPageUp, .codexPageDown, .toggleLongRecording:
             return .systemAndMedia
         case .customShortcut, .openCustomApplication:
             return .custom
@@ -590,6 +594,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .codexStopGeneration,
             .codexFocusInput,
             .codexScrollToLatest,
+            .codexPageUp,
+            .codexPageDown,
         ].contains(self) && presetApplication == nil && !isAppInternal
     }
 

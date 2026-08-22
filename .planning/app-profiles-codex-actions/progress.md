@@ -12,3 +12,5 @@
 - Release 构建成功，`scripts/verify-app.sh dist/SayAll.app` 报告 `APP VERIFY PASS`。
 - 已将新包安装到 `/Applications/SayAll.app`，签名校验通过，重启后的 `RemoteMic` 进程 PID 为 32057。
 - 安装包与构建产物 `RemoteMic` SHA-256 相同；SwiftPM 测试目标仍因当前环境缺少 `Testing` 模块无法执行，仓库自测保持 42/42。
+- 本轮新增 Codex Page Up / Page Down 动作，分别发送 key code 116 / 121；已补充中英文文案和 KeyboardInjector 回归测试，待完成构建、安装、重启和提交验证。
+- Codex 翻页功能已完成 Release 构建、`APP VERIFY PASS`、安装和重启；安装包与构建产物 SHA-256 一致，运行进程已确认。工作区待提交。

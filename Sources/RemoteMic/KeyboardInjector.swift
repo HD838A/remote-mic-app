@@ -250,6 +250,10 @@ enum KeyboardInjector {
             return focusComposer(processIdentifier: processIdentifier)
         case .codexScrollToLatest:
             keyPoster(119, .maskCommand)
+        case .codexPageUp:
+            keyPoster(116, [])
+        case .codexPageDown:
+            keyPoster(121, [])
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:

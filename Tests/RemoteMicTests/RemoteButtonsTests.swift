@@ -553,6 +553,27 @@ struct RemoteButtonsTests {
         #expect(posted[1].1 == .maskCommand)
     }
 
+    @Test func codexPageActionsPostNativePageNavigationKeys() {
+        var posted: [(CGKeyCode, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyPoster = { code, flags in
+            posted.append((code, flags))
+        }
+
+        #expect(KeyboardInjector.send(
+            .codexPageUp,
+            accessibilityTrusted: { true },
+            keyPoster: poster
+        ))
+        #expect(KeyboardInjector.send(
+            .codexPageDown,
+            accessibilityTrusted: { true },
+            keyPoster: poster
+        ))
+        #expect(posted == [(116, []), (121, [])])
+        #expect(!ButtonAction.codexPageUp.allowsRepeat)
+        #expect(!ButtonAction.codexPageDown.allowsRepeat)
+    }
+
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
