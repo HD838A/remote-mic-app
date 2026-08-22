@@ -245,6 +245,50 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.deleteBackward.allowsRepeat)
     }
 
+    @Test func electronComposerFocusWaitsLongEnoughForTheManualAccessibilityTree() {
+        // 真机上 Electron 收到 AXManualAccessibility 后约 1~2 秒才建好 web 内容树。
+        #expect(KeyboardInjector.manualAccessibilityAttribute == "AXManualAccessibility")
+        #expect(KeyboardInjector.composerFocusMaximumAttempts == 12)
+        #expect(KeyboardInjector.composerFocusRetryMilliseconds == 250)
+        let retryWindow =
+            (KeyboardInjector.composerFocusMaximumAttempts - 1) *
+            KeyboardInjector.composerFocusRetryMilliseconds
+        #expect(retryWindow >= 2_000)
+    }
+
+    @Test func manualAccessibilityFailuresAreNamedAndLoggedOnlyWhenTheyAddInformation() {
+        #expect(KeyboardInjector.manualAccessibilityResultName(.success) == "success")
+        #expect(
+            KeyboardInjector.manualAccessibilityResultName(.attributeUnsupported)
+                == "attribute_unsupported"
+        )
+        #expect(KeyboardInjector.manualAccessibilityResultName(.cannotComplete) == "cannot_complete")
+        #expect(KeyboardInjector.manualAccessibilityResultName(.apiDisabled) == "api_disabled")
+        #expect(KeyboardInjector.manualAccessibilityResultName(.actionUnsupported).hasPrefix("error_"))
+
+        // 首次尝试总是记录一行，之后只记录第一次真正建树成功。
+        #expect(KeyboardInjector.shouldLogManualAccessibility(
+            result: .attributeUnsupported,
+            attempt: 0,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(!KeyboardInjector.shouldLogManualAccessibility(
+            result: .attributeUnsupported,
+            attempt: 4,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(KeyboardInjector.shouldLogManualAccessibility(
+            result: .success,
+            attempt: 4,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(!KeyboardInjector.shouldLogManualAccessibility(
+            result: .success,
+            attempt: 4,
+            alreadyLoggedSuccess: true
+        ))
+    }
+
     @Test func hidReportsRouteOnlyToTheirActivePhysicalRemote() {
         #expect(HIDRemoteMonitor.acceptsReport(
             reportingFingerprint: "remote-a",

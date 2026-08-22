@@ -111,6 +111,40 @@
 
 如果目标 APP 更新后 Accessibility 结构改变，应重新记录输入框。重新记录前不能把旧记录偶然聚焦到其他控件视为成功。
 
+## 用例 4A：Electron 应用（Claude Desktop、Codex）辅助功能树声明
+
+适用于 2026-08-22 的聚焦修复：聚焦流程会在每轮尝试开始处对目标进程设置 `AXManualAccessibility = true`，Chromium 才会为 web 内容构建辅助功能树；预置动作「打开 Claude」「打开 Codex」的重试窗口为 12 × 250ms，自定义 APP 的「聚焦已记录输入框」路径仍为 8 × 200ms。
+
+**测试期间必须关闭 VoiceOver**，否则无法区分是本修复生效还是旁白替我们建了树。
+
+### 预置动作路径（打开 Claude / 打开 Codex）
+
+对 Claude Desktop 和 Codex 分别执行：
+
+1. 彻底退出目标应用，按下映射按键（冷启动）。
+2. 应用已在前台且焦点位于侧边栏时，再次按下映射按键（热路径）。
+3. 应用在后台时按下映射按键。
+
+预期结果：每次都实际看到光标进入对话输入框；日志出现
+`APP FOCUS manual_accessibility bundle=<id> attempt=0 result=...`，随后出现
+`APP FOCUS succeeded bundle=<id> method=accessibility`。冷启动允许在若干次重试后成功，但必须在同一次按键内完成，不能要求用户再按一次。
+
+失败判定：仍然出现 `APP FOCUS failed ... reason=composer_not_found`；或 `manual_accessibility` 一直是 `result=cannot_complete` / `result=attribute_unsupported`；或需要开启 VoiceOver 才能成功。
+
+### 自定义 APP 路径（聚焦已记录输入框）
+
+选择一个 Electron 应用作为自定义 APP，记录其输入框后执行冷启动与热路径两种情况。
+
+预期结果：与预置路径一致，日志同样出现 `manual_accessibility` 行。
+
+失败判定：热路径成功但冷启动稳定失败，说明 8 × 200ms（1.4 秒）的重试窗口短于该应用的建树时间；记录应用版本与失败次数，这是已知的待放宽项，不要当作新根因。
+
+### 副作用检查
+
+- [ ] 目标应用窗口没有出现变形、缩放或异常动画（本修复刻意不使用 VoiceOver 的 `AXEnhancedUserInterface`，若仍出现此类现象必须记录）。
+- [ ] 非 Electron 目标（TextEdit、Proma 等原生应用）的聚焦行为与修复前一致，日志中的 `manual_accessibility` 结果为 `attribute_unsupported` 且不影响后续流程。
+- [ ] 系统 VoiceOver 未被本功能开启或改变。
+
 ## 用例 5：单击、双击、长按与多遥控器
 
 - [ ] 单击绑定只触发一次。
@@ -175,3 +209,4 @@
 - 本次本机 UI 回归已确认动作编辑区默认保持紧凑，“打开具体 APP”可按需展开，禁用 Switch 与新增固定组合键均可见且无文字截断。
 - 用户已完成本轮自定义快捷键、自定义 APP、输入框学习、配置保留、页面布局和双遥控器按键路线的真机验收，并确认全部通过。
 - 目标 APP 后续升级如果改变 Accessibility 结构，可能需要重新学习输入框；这是配置失效边界，不影响已验证的当前版本行为。
+- 2026-08-22 Electron 聚焦修复：`AXManualAccessibility` 的设置、日志节流与 12 × 250ms 重试窗口只完成了纯函数单测的编译期校验与本地构建、签名；Swift Testing 套件需在装有 Xcode 的机器或 CI 执行。用例 4A 全部未在真机验收，自动化无法证明 Electron 的真实建树时间、各版本对该属性的响应，或输入框最终是否获得焦点。根因与复现记录见 `Bugs/2026-08-22-electron-composer-focus-needs-manual-accessibility.md`。

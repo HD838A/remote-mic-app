@@ -70,7 +70,20 @@ enum KeyboardInjector {
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
     static let functionKeyCode: CGKeyCode = 63
+    /// Chromium based apps only build the accessibility tree for their web
+    /// content once an assistive client announces itself, so the composer scan
+    /// finds an empty shell until this attribute is set. VoiceOver triggers the
+    /// same build through `AXEnhancedUserInterface`, which is deliberately not
+    /// used here because it is known to distort windows and animations on some
+    /// Electron versions. Non Electron apps answer `attributeUnsupported`.
+    static let manualAccessibilityAttribute = "AXManualAccessibility"
+    /// The web content tree needs about one to two seconds after the attribute
+    /// is set, so the composer scan keeps retrying for longer than that.
+    static let composerFocusMaximumAttempts = 12
+    static let composerFocusRetryMilliseconds = 250
     private static let focusRequests = ApplicationFocusRequestGate()
+    private static let manualAccessibilityLock = NSLock()
+    private static var manualAccessibilityLoggedProcesses: Set<pid_t> = []
     private static let focusQueue = DispatchQueue(
         label: "RemoteMic.application-focus",
         qos: .userInitiated
@@ -358,6 +371,13 @@ enum KeyboardInjector {
         let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(0) : .milliseconds(200)
         focusQueue.asyncAfter(deadline: .now() + delay) {
             guard focusRequests.isCurrent(requestID) else { return }
+            if isAccessibilityTrusted, application.focusStrategy == .recordedAccessibility {
+                announceManualAccessibility(
+                    processIdentifier: processIdentifier,
+                    bundleIdentifier: application.bundleIdentifier,
+                    attempt: attempt
+                )
+            }
             if applicationIsFrontmost(processIdentifier) {
                 guard isAccessibilityTrusted else {
                     AppLogger.shared.write(
@@ -510,11 +530,20 @@ enum KeyboardInjector {
         requestID: UInt64,
         attempt: Int
     ) {
-        let maximumAttempts = 8
-        let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(0) : .milliseconds(200)
+        let maximumAttempts = composerFocusMaximumAttempts
+        let delay: DispatchTimeInterval = attempt == 0
+            ? .milliseconds(0)
+            : .milliseconds(composerFocusRetryMilliseconds)
         focusQueue.asyncAfter(deadline: .now() + delay) {
             guard focusRequests.isCurrent(requestID) else { return }
 
+            if isAccessibilityTrusted {
+                announceManualAccessibility(
+                    processIdentifier: processIdentifier,
+                    bundleIdentifier: application.bundleIdentifier,
+                    attempt: attempt
+                )
+            }
             if applicationIsFrontmost(processIdentifier) {
                 guard isAccessibilityTrusted else {
                     AppLogger.shared.write(
@@ -544,6 +573,66 @@ enum KeyboardInjector {
                 )
             }
         }
+    }
+
+    static func manualAccessibilityResultName(_ result: AXError) -> String {
+        switch result {
+        case .success: return "success"
+        case .attributeUnsupported: return "attribute_unsupported"
+        case .cannotComplete: return "cannot_complete"
+        case .invalidUIElement: return "invalid_element"
+        case .apiDisabled: return "api_disabled"
+        case .notImplemented: return "not_implemented"
+        default: return "error_\(result.rawValue)"
+        }
+    }
+
+    /// The attribute is set on every attempt because it is idempotent, but only
+    /// the first attempt and the attempt that finally builds the tree carry new
+    /// information; the retries in between would repeat the same reason.
+    static func shouldLogManualAccessibility(
+        result: AXError,
+        attempt: Int,
+        alreadyLoggedSuccess: Bool
+    ) -> Bool {
+        if attempt == 0 { return true }
+        return result == .success && !alreadyLoggedSuccess
+    }
+
+    @discardableResult
+    private static func announceManualAccessibility(
+        processIdentifier: pid_t,
+        bundleIdentifier: String,
+        attempt: Int
+    ) -> Bool {
+        let result = AXUIElementSetAttributeValue(
+            AXUIElementCreateApplication(processIdentifier),
+            manualAccessibilityAttribute as CFString,
+            kCFBooleanTrue
+        )
+
+        manualAccessibilityLock.lock()
+        let alreadyLoggedSuccess = manualAccessibilityLoggedProcesses.contains(processIdentifier)
+        let shouldLog = shouldLogManualAccessibility(
+            result: result,
+            attempt: attempt,
+            alreadyLoggedSuccess: alreadyLoggedSuccess
+        )
+        if result == .success {
+            if manualAccessibilityLoggedProcesses.count >= 64 {
+                manualAccessibilityLoggedProcesses.removeAll()
+            }
+            manualAccessibilityLoggedProcesses.insert(processIdentifier)
+        }
+        manualAccessibilityLock.unlock()
+
+        if shouldLog {
+            AppLogger.shared.write(
+                "APP FOCUS manual_accessibility bundle=\(bundleIdentifier) " +
+                    "attempt=\(attempt) result=\(manualAccessibilityResultName(result))"
+            )
+        }
+        return result == .success
     }
 
     private static func applicationIsFrontmost(_ processIdentifier: pid_t) -> Bool {
