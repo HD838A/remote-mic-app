@@ -112,6 +112,9 @@
 "action.arrow_right" = "方向右";
 "action.scroll_up" = "滚轮上";
 "action.scroll_down" = "滚轮下";
+"action.codex_stop_generation" = "Codex 停止生成";
+"action.codex_focus_input" = "Codex 聚焦输入框";
+"action.codex_scroll_to_latest" = "Codex 滚动到最新";
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "显示桌面";
@@ -143,6 +146,15 @@
 "button_mapping.action_group.system_and_media" = "系统与媒体";
 "button_mapping.action_group.custom" = "自定义动作";
 "button_mapping.action_group.applications" = "打开具体 APP";
+"button_mapping.application_profile.title" = "按应用配置";
+"button_mapping.application_profile.default" = "默认配置";
+"button_mapping.application_profile.add" = "添加应用配置…";
+"button_mapping.application_profile.remove" = "删除当前应用配置";
+"button_mapping.application_profile.picker_title" = "选择应用配置";
+"button_mapping.scroll_settings.title" = "滚轮设置";
+"button_mapping.scroll_settings.speed" = "滚动速度";
+"button_mapping.scroll_settings.invert" = "反转滚动方向";
+"button_mapping.scroll_settings.hint" = "只影响“滚轮上 / 滚轮下”动作，按住遥控器时会继续重复。";
 "button_mapping.action.disable_switch" = "禁用按键";
 "custom_application.target" = "目标 APP";
 "custom_application.not_configured" = "尚未选择 APP";

@@ -45,6 +45,9 @@ private struct PersonalizedConfiguration: Codable {
     let voiceFnTapModeEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
+    let applicationMappingProfiles: [ApplicationMappingProfile]?
+    let scrollSpeed: Int?
+    let scrollDirectionInverted: Bool?
 }
 
 enum UsageStatisticsPeriod: String, CaseIterable, Identifiable {
@@ -257,6 +260,10 @@ final class AppSettings: ObservableObject {
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
         static let selectedRemoteProfileID = "selectedRemoteProfileID"
+        static let applicationMappingProfiles = "applicationMappingProfiles"
+        static let selectedApplicationMappingProfileID = "selectedApplicationMappingProfileID"
+        static let scrollSpeed = "scrollSpeed"
+        static let scrollDirectionInverted = "scrollDirectionInverted"
         static let applicationLanguage = "applicationLanguage"
         static let showDockIcon = "showDockIcon"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
@@ -335,6 +342,34 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var selectedRemoteProfileID: UUID? {
         didSet { defaults.set(selectedRemoteProfileID?.uuidString, forKey: Keys.selectedRemoteProfileID) }
+    }
+
+    @Published private(set) var applicationMappingProfiles: [ApplicationMappingProfile] {
+        didSet { saveApplicationMappingProfiles() }
+    }
+
+    @Published private(set) var selectedApplicationMappingProfileID: UUID? {
+        didSet {
+            defaults.set(
+                selectedApplicationMappingProfileID?.uuidString,
+                forKey: Keys.selectedApplicationMappingProfileID
+            )
+        }
+    }
+
+    @Published var scrollSpeed: Int {
+        didSet {
+            let normalized = Self.normalizedScrollSpeed(scrollSpeed)
+            guard normalized == scrollSpeed else {
+                scrollSpeed = normalized
+                return
+            }
+            defaults.set(scrollSpeed, forKey: Keys.scrollSpeed)
+        }
+    }
+
+    @Published var scrollDirectionInverted: Bool {
+        didSet { defaults.set(scrollDirectionInverted, forKey: Keys.scrollDirectionInverted) }
     }
 
     @Published var applicationLanguage: AppLanguage {
@@ -480,6 +515,21 @@ final class AppSettings: ObservableObject {
         self.defaults = defaults
         remoteDeviceProfiles = []
         selectedRemoteProfileID = nil
+        let loadedApplicationMappingProfiles = defaults
+            .data(forKey: Keys.applicationMappingProfiles)
+            .flatMap { try? JSONDecoder().decode([ApplicationMappingProfile].self, from: $0) }
+            ?? []
+        applicationMappingProfiles = loadedApplicationMappingProfiles
+        let savedApplicationMappingProfileID = defaults
+            .string(forKey: Keys.selectedApplicationMappingProfileID)
+            .flatMap(UUID.init(uuidString:))
+        selectedApplicationMappingProfileID = loadedApplicationMappingProfiles.contains {
+            $0.id == savedApplicationMappingProfileID
+        } ? savedApplicationMappingProfileID : nil
+        scrollSpeed = Self.normalizedScrollSpeed(
+            defaults.object(forKey: Keys.scrollSpeed) == nil ? 5 : defaults.integer(forKey: Keys.scrollSpeed)
+        )
+        scrollDirectionInverted = defaults.bool(forKey: Keys.scrollDirectionInverted)
         gainDB = defaults.object(forKey: Keys.gainDB) == nil
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
@@ -751,6 +801,19 @@ final class AppSettings: ObservableObject {
         return profile.mappings.parsedButtonBindings[button] ?? Self.defaultBindings[button] ?? .disabled
     }
 
+    func action(
+        for button: RemoteButton,
+        profileID: UUID?,
+        applicationBundleIdentifier: String?
+    ) -> ButtonAction {
+        configuredAction(
+            for: button,
+            trigger: .singleClick,
+            profileID: profileID,
+            applicationBundleIdentifier: applicationBundleIdentifier
+        ).action
+    }
+
     func setAction(_ action: ButtonAction, for button: RemoteButton) {
         buttonBindings[button] = action
     }
@@ -764,6 +827,19 @@ final class AppSettings: ObservableObject {
               let profile = remoteDeviceProfiles.first(where: { $0.id == profileID })
         else { return shortcut(for: button) }
         return profile.mappings.parsedButtonShortcuts[button]
+    }
+
+    func shortcut(
+        for button: RemoteButton,
+        profileID: UUID?,
+        applicationBundleIdentifier: String?
+    ) -> CustomKeyboardShortcut? {
+        configuredAction(
+            for: button,
+            trigger: .singleClick,
+            profileID: profileID,
+            applicationBundleIdentifier: applicationBundleIdentifier
+        ).shortcut
     }
 
     func setShortcut(_ shortcut: CustomKeyboardShortcut?, for button: RemoteButton) {
@@ -784,6 +860,50 @@ final class AppSettings: ObservableObject {
     func customApplicationProfile(id: UUID?) -> CustomApplicationProfile? {
         guard let id else { return nil }
         return customApplicationProfiles.first(where: { $0.id == id })
+    }
+
+    var selectedApplicationMappingProfile: ApplicationMappingProfile? {
+        guard let selectedApplicationMappingProfileID else { return nil }
+        return applicationMappingProfiles.first { $0.id == selectedApplicationMappingProfileID }
+    }
+
+    func selectApplicationMappingProfile(_ profileID: UUID?) {
+        guard profileID == nil || applicationMappingProfiles.contains(where: { $0.id == profileID }) else {
+            return
+        }
+        selectedApplicationMappingProfileID = profileID
+    }
+
+    @discardableResult
+    func addApplicationMappingProfile(
+        displayName: String,
+        bundleIdentifier: String
+    ) -> UUID {
+        if let existing = applicationMappingProfiles.first(where: {
+            $0.bundleIdentifier == bundleIdentifier
+        }) {
+            selectedApplicationMappingProfileID = existing.id
+            return existing.id
+        }
+        let profile = ApplicationMappingProfile(
+            displayName: displayName,
+            bundleIdentifier: bundleIdentifier,
+            mappings: currentMappings()
+        )
+        applicationMappingProfiles.append(profile)
+        selectedApplicationMappingProfileID = profile.id
+        return profile.id
+    }
+
+    func removeApplicationMappingProfile(_ profileID: UUID) {
+        applicationMappingProfiles.removeAll { $0.id == profileID }
+        if selectedApplicationMappingProfileID == profileID {
+            selectedApplicationMappingProfileID = nil
+        }
+    }
+
+    private static func normalizedScrollSpeed(_ value: Int) -> Int {
+        min(max(value, 1), 10)
     }
 
     @discardableResult
@@ -831,6 +951,180 @@ final class AppSettings: ObservableObject {
             )
         }
         return profile.mappings.parsedSecondaryButtonBindings[button]?[trigger] ?? .disabled
+    }
+
+    func configuredAction(
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        applicationMappingProfileID: UUID?
+    ) -> ConfiguredButtonAction {
+        guard let applicationMappingProfileID,
+              let applicationProfile = applicationMappingProfiles.first(where: {
+                  $0.id == applicationMappingProfileID
+              })
+        else {
+            return configuredAction(for: button, trigger: trigger)
+        }
+        return configuredAction(
+            in: applicationProfile.mappings,
+            for: button,
+            trigger: trigger,
+            fallback: configuredAction(
+                for: button,
+                trigger: trigger,
+                profileID: selectedRemoteProfileID
+            )
+        )
+    }
+
+    func configuredAction(
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        profileID: UUID?,
+        applicationBundleIdentifier: String?
+    ) -> ConfiguredButtonAction {
+        guard let applicationBundleIdentifier,
+              let applicationProfile = applicationMappingProfiles.first(where: {
+                  $0.bundleIdentifier == applicationBundleIdentifier
+              })
+        else {
+            return configuredAction(for: button, trigger: trigger, profileID: profileID)
+        }
+        return configuredAction(
+            in: applicationProfile.mappings,
+            for: button,
+            trigger: trigger,
+            fallback: configuredAction(for: button, trigger: trigger, profileID: profileID)
+        )
+    }
+
+    private func configuredAction(
+        in mappings: RemoteDeviceMappings,
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        fallback: ConfiguredButtonAction
+    ) -> ConfiguredButtonAction {
+        if trigger == .singleClick {
+            return ConfiguredButtonAction(
+                action: mappings.parsedButtonBindings[button] ?? fallback.action,
+                shortcut: mappings.parsedButtonShortcuts[button] ?? fallback.shortcut,
+                applicationProfileID: mappings.parsedButtonApplicationProfileIDs[button]
+                    ?? fallback.applicationProfileID
+            )
+        }
+        return mappings.parsedSecondaryButtonBindings[button]?[trigger] ?? fallback
+    }
+
+    func setAction(
+        _ action: ButtonAction,
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        applicationMappingProfileID: UUID?
+    ) {
+        guard let applicationMappingProfileID else {
+            setAction(action, for: button, trigger: trigger)
+            return
+        }
+        updateApplicationMappingProfile(applicationMappingProfileID) { bindings, _, _, secondaryBindings in
+            if trigger == .singleClick {
+                bindings[button] = action
+                return
+            }
+            var triggerBindings = secondaryBindings[button] ?? [:]
+            let existing = triggerBindings[trigger]
+            triggerBindings[trigger] = ConfiguredButtonAction(
+                action: action,
+                shortcut: existing?.shortcut,
+                applicationProfileID: existing?.applicationProfileID
+            )
+            secondaryBindings[button] = triggerBindings.isEmpty ? nil : triggerBindings
+        }
+    }
+
+    func setShortcut(
+        _ shortcut: CustomKeyboardShortcut?,
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        applicationMappingProfileID: UUID?
+    ) {
+        guard let applicationMappingProfileID else {
+            setShortcut(shortcut, for: button, trigger: trigger)
+            return
+        }
+        updateApplicationMappingProfile(applicationMappingProfileID) { _, shortcuts, _, secondaryBindings in
+            if trigger == .singleClick {
+                if let shortcut { shortcuts[button] = shortcut } else { shortcuts[button] = nil }
+                return
+            }
+            guard var bindings = secondaryBindings[button], var binding = bindings[trigger] else { return }
+            binding.shortcut = shortcut
+            bindings[trigger] = binding
+            secondaryBindings[button] = bindings
+        }
+    }
+
+    func setApplicationProfileID(
+        _ applicationProfileID: UUID?,
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        applicationMappingProfileID: UUID?
+    ) {
+        guard let applicationMappingProfileID else {
+            setApplicationProfileID(applicationProfileID, for: button, trigger: trigger)
+            return
+        }
+        updateApplicationMappingProfile(applicationMappingProfileID) { _, _, applicationProfileIDs, secondaryBindings in
+            if trigger == .singleClick {
+                if let applicationProfileID {
+                    applicationProfileIDs[button] = applicationProfileID
+                } else {
+                    applicationProfileIDs[button] = nil
+                }
+                return
+            }
+            guard var bindings = secondaryBindings[button], var binding = bindings[trigger] else { return }
+            binding.applicationProfileID = applicationProfileID
+            bindings[trigger] = binding
+            secondaryBindings[button] = bindings
+        }
+    }
+
+    func resetApplicationMappingProfile(_ profileID: UUID) {
+        guard let index = applicationMappingProfiles.firstIndex(where: { $0.id == profileID }) else {
+            return
+        }
+        applicationMappingProfiles[index].mappings = RemoteDeviceMappings(
+            buttonBindings: Self.defaultBindings,
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+    }
+
+    private func updateApplicationMappingProfile(
+        _ profileID: UUID,
+        _ update: (
+            inout [RemoteButton: ButtonAction],
+            inout [RemoteButton: CustomKeyboardShortcut],
+            inout [RemoteButton: UUID],
+            inout [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]]
+        ) -> Void
+    ) {
+        guard let index = applicationMappingProfiles.firstIndex(where: { $0.id == profileID }) else {
+            return
+        }
+        var profile = applicationMappingProfiles[index]
+        var bindings = profile.mappings.parsedButtonBindings
+        var shortcuts = profile.mappings.parsedButtonShortcuts
+        var applicationProfileIDs = profile.mappings.parsedButtonApplicationProfileIDs
+        var secondaryBindings = profile.mappings.parsedSecondaryButtonBindings
+        update(&bindings, &shortcuts, &applicationProfileIDs, &secondaryBindings)
+        profile.mappings = RemoteDeviceMappings(
+            buttonBindings: bindings,
+            buttonShortcuts: shortcuts,
+            buttonApplicationProfileIDs: applicationProfileIDs,
+            secondaryButtonBindings: secondaryBindings
+        )
+        applicationMappingProfiles[index] = profile
     }
 
     var selectedRemoteProfile: RemoteDeviceProfile? {
@@ -1006,6 +1300,21 @@ final class AppSettings: ObservableObject {
     func hasSecondaryAction(for button: RemoteButton, profileID: UUID?) -> Bool {
         [.doubleClick, .longPress].contains { trigger in
             configuredAction(for: button, trigger: trigger, profileID: profileID).action != .disabled
+        }
+    }
+
+    func hasSecondaryAction(
+        for button: RemoteButton,
+        profileID: UUID?,
+        applicationBundleIdentifier: String?
+    ) -> Bool {
+        [.doubleClick, .longPress].contains { trigger in
+            configuredAction(
+                for: button,
+                trigger: trigger,
+                profileID: profileID,
+                applicationBundleIdentifier: applicationBundleIdentifier
+            ).action != .disabled
         }
     }
 
@@ -1323,7 +1632,10 @@ final class AppSettings: ObservableObject {
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
             voiceKeyMode: voiceKeyMode,
-            continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
+            continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup,
+            applicationMappingProfiles: applicationMappingProfiles,
+            scrollSpeed: scrollSpeed,
+            scrollDirectionInverted: scrollDirectionInverted
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -1385,6 +1697,10 @@ final class AppSettings: ObservableObject {
         }
         voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
         voiceKeyMode = (configuration.voiceKeyMode ?? .fnGlobe).normalized
+        applicationMappingProfiles = configuration.applicationMappingProfiles ?? []
+        selectedApplicationMappingProfileID = nil
+        scrollSpeed = Self.normalizedScrollSpeed(configuration.scrollSpeed ?? 5)
+        scrollDirectionInverted = configuration.scrollDirectionInverted ?? false
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup
@@ -1442,6 +1758,20 @@ final class AppSettings: ObservableObject {
     private func saveCustomApplicationProfiles() {
         guard let data = try? JSONEncoder().encode(customApplicationProfiles) else { return }
         defaults.set(data, forKey: Keys.customApplicationProfiles)
+    }
+
+    private func saveApplicationMappingProfiles() {
+        guard let data = try? JSONEncoder().encode(applicationMappingProfiles) else { return }
+        defaults.set(data, forKey: Keys.applicationMappingProfiles)
+    }
+
+    private func currentMappings() -> RemoteDeviceMappings {
+        RemoteDeviceMappings(
+            buttonBindings: buttonBindings,
+            buttonShortcuts: buttonShortcuts,
+            buttonApplicationProfileIDs: buttonApplicationProfileIDs,
+            secondaryButtonBindings: secondaryButtonBindings
+        )
     }
 
     private func saveRemoteDeviceProfiles() {

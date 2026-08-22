@@ -436,6 +436,9 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case arrowRight
     case scrollUp
     case scrollDown
+    case codexStopGeneration
+    case codexFocusInput
+    case codexScrollToLatest
     case deleteBackward
     case showDesktop
     case contextMenu
@@ -490,6 +493,9 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .arrowRight: return localization.text("action.arrow_right")
         case .scrollUp: return localization.text("action.scroll_up")
         case .scrollDown: return localization.text("action.scroll_down")
+        case .codexStopGeneration: return localization.text("action.codex_stop_generation")
+        case .codexFocusInput: return localization.text("action.codex_focus_input")
+        case .codexScrollToLatest: return localization.text("action.codex_scroll_to_latest")
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
@@ -549,7 +555,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .wechatVoiceMessage, .previousCommandLeft, .nextCommandRight,
-             .scrollUp, .scrollDown, .toggleLongRecording:
+             .scrollUp, .scrollDown, .codexStopGeneration, .codexFocusInput,
+             .codexScrollToLatest, .toggleLongRecording:
             return .systemAndMedia
         case .customShortcut, .openCustomApplication:
             return .custom
@@ -580,6 +587,9 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .previousCommandLeft,
             .nextCommandRight,
             .wechatVoiceMessage,
+            .codexStopGeneration,
+            .codexFocusInput,
+            .codexScrollToLatest,
         ].contains(self) && presetApplication == nil && !isAppInternal
     }
 

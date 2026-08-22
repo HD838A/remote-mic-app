@@ -112,6 +112,9 @@
 "action.arrow_right" = "Arrow Right";
 "action.scroll_up" = "Scroll Up";
 "action.scroll_down" = "Scroll Down";
+"action.codex_stop_generation" = "Codex: Stop Generation";
+"action.codex_focus_input" = "Codex: Focus Input";
+"action.codex_scroll_to_latest" = "Codex: Scroll to Latest";
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "Show Desktop";
@@ -143,6 +146,15 @@
 "button_mapping.action_group.system_and_media" = "System & Media";
 "button_mapping.action_group.custom" = "Custom Actions";
 "button_mapping.action_group.applications" = "Open an App";
+"button_mapping.application_profile.title" = "Application Profile";
+"button_mapping.application_profile.default" = "Default Profile";
+"button_mapping.application_profile.add" = "Add Application Profile…";
+"button_mapping.application_profile.remove" = "Remove Current Application Profile";
+"button_mapping.application_profile.picker_title" = "Choose Application Profile";
+"button_mapping.scroll_settings.title" = "Scroll Settings";
+"button_mapping.scroll_settings.speed" = "Scroll speed";
+"button_mapping.scroll_settings.invert" = "Invert scroll direction";
+"button_mapping.scroll_settings.hint" = "Applies only to Scroll Up / Scroll Down actions; holding the remote repeats the action.";
 "button_mapping.action.disable_switch" = "Disable Button";
 "custom_application.target" = "Target app";
 "custom_application.not_configured" = "No app selected";

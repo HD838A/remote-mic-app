@@ -1944,7 +1944,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             return true
         }
-        let configured = settings.configuredAction(for: button, trigger: .singleClick)
+        let configured = settings.configuredAction(
+            for: button,
+            trigger: .singleClick,
+            profileID: settings.selectedRemoteProfileID,
+            applicationBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
         if button == .power, configured.action == .wechatVoiceMessage {
             guard updatePowerWeChatVoiceKeyState(pressed: phase == .press) else {
                 return false
@@ -1955,9 +1960,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return true
         }
         let profileID = settings.selectedRemoteProfileID
+        let frontmostBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let recognizesDoubleClick = settings.configuredAction(
             for: button,
-            trigger: .doubleClick
+            trigger: .doubleClick,
+            profileID: profileID,
+            applicationBundleIdentifier: frontmostBundleIdentifier
         ).action != .disabled || macroFeature.hasActiveBinding(
             profileID: profileID,
             button: button,
@@ -1965,7 +1973,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         let recognizesLongPress = settings.configuredAction(
             for: button,
-            trigger: .longPress
+            trigger: .longPress,
+            profileID: profileID,
+            applicationBundleIdentifier: frontmostBundleIdentifier
         ).action != .disabled || macroFeature.hasActiveBinding(
             profileID: profileID,
             button: button,
@@ -2093,7 +2103,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return true
         }
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = settings.configuredAction(
+            for: button,
+            trigger: trigger,
+            profileID: settings.selectedRemoteProfileID,
+            applicationBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
         guard !configured.action.isHoldAction else { return false }
         if configured.action.isAppInternal {
             let handled = performInternalAction(configured.action)
@@ -2135,7 +2150,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let handled = KeyboardInjector.send(
             configured.action,
             shortcut: configured.shortcut,
-            applicationProfile: applicationProfile
+            applicationProfile: applicationProfile,
+            scrollSpeed: Int32(settings.scrollSpeed),
+            scrollDirectionInverted: settings.scrollDirectionInverted
         )
         if !handled, let requestID {
             voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)

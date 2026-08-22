@@ -118,6 +118,25 @@ struct RemoteDeviceMappings: Codable, Equatable {
     }
 }
 
+struct ApplicationMappingProfile: Codable, Equatable, Identifiable {
+    let id: UUID
+    var displayName: String
+    var bundleIdentifier: String
+    var mappings: RemoteDeviceMappings
+
+    init(
+        id: UUID = UUID(),
+        displayName: String,
+        bundleIdentifier: String,
+        mappings: RemoteDeviceMappings
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.bundleIdentifier = bundleIdentifier
+        self.mappings = mappings
+    }
+}
+
 struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
     let id: UUID
     var model: XiaomiRemoteModel

@@ -970,6 +970,10 @@ struct SettingsView: View {
             .padding(.bottom, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            applicationMappingSelector
+                .padding(.horizontal, 22)
+                .padding(.bottom, 14)
+
             Divider()
 
             ScrollViewReader { proxy in
@@ -1003,6 +1007,7 @@ struct SettingsView: View {
                         }
 
                         mappingFooter
+                        scrollSettingsPanel
                     }
                     .padding(22)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1030,6 +1035,71 @@ struct SettingsView: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 
+    private var applicationMappingSelector: some View {
+        GlassPanel {
+            HStack(spacing: 12) {
+                Label("button_mapping.application_profile.title", systemImage: "macwindow.on.rectangle")
+                    .font(.system(size: 13, weight: .semibold))
+
+                Spacer(minLength: 8)
+
+                Menu {
+                    Button {
+                        settings.selectApplicationMappingProfile(nil)
+                    } label: {
+                        Label(
+                            "button_mapping.application_profile.default",
+                            systemImage: settings.selectedApplicationMappingProfileID == nil
+                                ? "checkmark"
+                                : "app"
+                        )
+                    }
+
+                    if !settings.applicationMappingProfiles.isEmpty {
+                        Divider()
+                    }
+
+                    ForEach(settings.applicationMappingProfiles) { profile in
+                        Button {
+                            settings.selectApplicationMappingProfile(profile.id)
+                        } label: {
+                            Label(
+                                profile.displayName,
+                                systemImage: settings.selectedApplicationMappingProfileID == profile.id
+                                    ? "checkmark"
+                                    : "app"
+                            )
+                        }
+                    }
+
+                    Divider()
+                    Button("button_mapping.application_profile.add") {
+                        chooseApplicationMappingProfile()
+                    }
+                    if let selectedID = settings.selectedApplicationMappingProfileID {
+                        Button("button_mapping.application_profile.remove", role: .destructive) {
+                            settings.removeApplicationMappingProfile(selectedID)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 7) {
+                        Text(
+                            settings.selectedApplicationMappingProfile?.displayName ??
+                                localization.text("button_mapping.application_profile.default")
+                        )
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.accentColor.opacity(0.10), in: Capsule())
+                }
+                .menuStyle(.borderlessButton)
+            }
+        }
+    }
+
     private func mappingEditorPanel(_ target: ShortcutEditingTarget) -> some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 14) {
@@ -1049,14 +1119,16 @@ struct SettingsView: View {
                             get: {
                                 settings.configuredAction(
                                     for: target.button,
-                                    trigger: target.trigger
+                                    trigger: target.trigger,
+                                    applicationMappingProfileID: settings.selectedApplicationMappingProfileID
                                 ).action == .disabled
                             },
                             set: { disabled in
                                 settings.setAction(
                                     disabled ? .disabled : .escape,
                                     for: target.button,
-                                    trigger: target.trigger
+                                    trigger: target.trigger,
+                                    applicationMappingProfileID: settings.selectedApplicationMappingProfileID
                                 )
                                 shortcutCaptureTarget = nil
                                 applicationShortcutCaptureProfileID = nil
@@ -1131,10 +1203,52 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
 
                 Button("common.action.restore_defaults") {
-                    settings.resetBindings()
+                    if let selectedProfileID = settings.selectedApplicationMappingProfileID {
+                        settings.resetApplicationMappingProfile(selectedProfileID)
+                    } else {
+                        settings.resetBindings()
+                    }
                     selectedRemoteButton = .ok
                 }
                 .compatibilityButtonStyle(.standard)
+            }
+        }
+    }
+
+    private var scrollSettingsPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("button_mapping.scroll_settings.title", systemImage: "arrow.up.and.down")
+                    .font(.system(size: 13, weight: .semibold))
+
+                HStack(spacing: 18) {
+                    Stepper(
+                        value: Binding(
+                            get: { settings.scrollSpeed },
+                            set: { settings.scrollSpeed = $0 }
+                        ),
+                        in: 1...10
+                    ) {
+                        Text(
+                            localization.text("button_mapping.scroll_settings.speed") +
+                                " " + String(settings.scrollSpeed)
+                        )
+                    }
+                    .frame(width: 220, alignment: .leading)
+
+                    Toggle(
+                        "button_mapping.scroll_settings.invert",
+                        isOn: $settings.scrollDirectionInverted
+                    )
+                    .toggleStyle(.switch)
+
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 12))
+
+                Text("button_mapping.scroll_settings.hint")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -1338,7 +1452,11 @@ struct SettingsView: View {
         _ button: RemoteButton,
         trigger: ButtonTrigger
     ) -> some View {
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = settings.configuredAction(
+            for: button,
+            trigger: trigger,
+            applicationMappingProfileID: settings.selectedApplicationMappingProfileID
+        )
         let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
         let actions = ButtonAction.pickerActions(
             installedBundleIdentifiers: installedBundleIdentifiers,
@@ -1360,7 +1478,12 @@ struct SettingsView: View {
                         installedBundleIdentifiers: installedBundleIdentifiers,
                         isManagedPowerAction: isManagedPowerAction,
                         onSelect: { action in
-                            settings.setAction(action, for: button, trigger: trigger)
+                            settings.setAction(
+                                action,
+                                for: button,
+                                trigger: trigger,
+                                applicationMappingProfileID: settings.selectedApplicationMappingProfileID
+                            )
                             shortcutCaptureTarget = nil
                             applicationShortcutCaptureProfileID = nil
                         }
@@ -1535,7 +1658,12 @@ struct SettingsView: View {
 
                 ShortcutCaptureView(
                     onCapture: { shortcut in
-                        settings.setShortcut(shortcut, for: button, trigger: trigger)
+                        settings.setShortcut(
+                            shortcut,
+                            for: button,
+                            trigger: trigger,
+                            applicationMappingProfileID: settings.selectedApplicationMappingProfileID
+                        )
                         AppLogger.shared.write("SHORTCUT CAPTURE completed target=button")
                         shortcutCaptureFeedback = ShortcutCaptureFeedback(
                             contextID: contextID,
@@ -1581,7 +1709,12 @@ struct SettingsView: View {
                     .compatibilityButtonStyle(.prominent)
 
                     Button("common.action.clear") {
-                        settings.setShortcut(nil, for: button, trigger: trigger)
+                        settings.setShortcut(
+                            nil,
+                            for: button,
+                            trigger: trigger,
+                            applicationMappingProfileID: settings.selectedApplicationMappingProfileID
+                        )
                         shortcutCaptureFeedback = nil
                     }
                     .compatibilityButtonStyle(.standard)
@@ -1615,7 +1748,12 @@ struct SettingsView: View {
                         profile,
                         selected: configured.applicationProfileID == profile.id
                     ) {
-                        settings.setApplicationProfileID(profile.id, for: button, trigger: trigger)
+                        settings.setApplicationProfileID(
+                            profile.id,
+                            for: button,
+                            trigger: trigger,
+                            applicationMappingProfileID: settings.selectedApplicationMappingProfileID
+                        )
                     }
                 }
 
@@ -1875,6 +2013,30 @@ struct SettingsView: View {
         }
     }
 
+    private func chooseApplicationMappingProfile() {
+        let panel = NSOpenPanel()
+        panel.title = localization.text("button_mapping.application_profile.picker_title")
+        panel.prompt = localization.text("common.action.choose")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.resolvesAliases = true
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let bundle = Bundle(url: url),
+              let bundleIdentifier = bundle.bundleIdentifier,
+              !bundleIdentifier.isEmpty
+        else { return }
+
+        let displayName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+            ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+            ?? url.deletingPathExtension().lastPathComponent
+        settings.addApplicationMappingProfile(
+            displayName: displayName,
+            bundleIdentifier: bundleIdentifier
+        )
+    }
+
     private func chooseCustomApplication(
         for button: RemoteButton,
         trigger: ButtonTrigger
@@ -1913,7 +2075,12 @@ struct SettingsView: View {
                 )
             )
         }
-        settings.setApplicationProfileID(profileID, for: button, trigger: trigger)
+        settings.setApplicationProfileID(
+            profileID,
+            for: button,
+            trigger: trigger,
+            applicationMappingProfileID: settings.selectedApplicationMappingProfileID
+        )
     }
 
     private func recordCustomApplicationInput(profileID: UUID) {
@@ -1958,7 +2125,11 @@ struct SettingsView: View {
     }
 
     private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = settings.configuredAction(
+            for: button,
+            trigger: trigger,
+            applicationMappingProfileID: settings.selectedApplicationMappingProfileID
+        )
         guard configured.action != .disabled else {
             return localization.text("button_mapping.action.not_set")
         }

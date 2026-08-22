@@ -9,3 +9,4 @@
 - 协议自测通过 42/42；Release 构建完成，`scripts/verify-app.sh` 报告 `APP VERIFY PASS`。
 - 已安装并重启 `/Applications/SayAll.app`，进程重新启动成功。
 - 界面检查确认“系统与媒体”分类显示“滚轮上”和“滚轮下”。
+- 开始外部 GitHub 类似项目调研；批量查询参数错误一次，已记录并准备调整命令。

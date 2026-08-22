@@ -522,6 +522,37 @@ struct RemoteButtonsTests {
         #expect(deltas == [5, -5])
     }
 
+    @Test func scrollDeltaHonorsSpeedAndDirection() {
+        #expect(KeyboardInjector.scrollDelta(for: .scrollUp, speed: 7, inverted: false) == 7)
+        #expect(KeyboardInjector.scrollDelta(for: .scrollDown, speed: 7, inverted: false) == -7)
+        #expect(KeyboardInjector.scrollDelta(for: .scrollUp, speed: 7, inverted: true) == -7)
+        #expect(KeyboardInjector.scrollDelta(for: .scrollDown, speed: 7, inverted: true) == 7)
+        #expect(KeyboardInjector.scrollDelta(for: .scrollUp, speed: 99, inverted: false) == 10)
+    }
+
+    @Test func codexActionsPostStopAndScrollToLatestShortcuts() {
+        var posted: [(CGKeyCode, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyPoster = { code, flags in
+            posted.append((code, flags))
+        }
+
+        #expect(KeyboardInjector.send(
+            .codexStopGeneration,
+            accessibilityTrusted: { true },
+            keyPoster: poster
+        ))
+        #expect(KeyboardInjector.send(
+            .codexScrollToLatest,
+            accessibilityTrusted: { true },
+            keyPoster: poster
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == 53)
+        #expect(posted[0].1 == [])
+        #expect(posted[1].0 == 119)
+        #expect(posted[1].1 == .maskCommand)
+    }
+
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
@@ -1309,6 +1340,46 @@ struct RemoteButtonsTests {
             trigger: .singleClick,
             profileID: secondProfileID
         ).action == .showDesktop)
+    }
+
+    @Test func applicationMappingProfilesOverrideOnlyTheirBundle() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.setAction(.showDesktop, for: .menu)
+        let profileID = settings.addApplicationMappingProfile(
+            displayName: "Codex",
+            bundleIdentifier: "com.example.codex"
+        )
+        settings.setAction(
+            .codexStopGeneration,
+            for: .menu,
+            trigger: .singleClick,
+            applicationMappingProfileID: profileID
+        )
+
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: settings.selectedRemoteProfileID,
+            applicationBundleIdentifier: "com.example.codex"
+        ).action == .codexStopGeneration)
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: settings.selectedRemoteProfileID,
+            applicationBundleIdentifier: "com.example.other"
+        ).action == .showDesktop)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.applicationMappingProfiles.count == 1)
+        #expect(restored.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: restored.selectedRemoteProfileID,
+            applicationBundleIdentifier: "com.example.codex"
+        ).action == .codexStopGeneration)
     }
 
     @Test func additionalBluetoothRemoteCopiesCurrentMappingsBeforeIndependentEditing() throws {

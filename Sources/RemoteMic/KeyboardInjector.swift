@@ -143,7 +143,9 @@ enum KeyboardInjector {
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
-        scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) }
+        scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) },
+        scrollSpeed: Int32 = 5,
+        scrollDirectionInverted: Bool = false
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -224,9 +226,30 @@ enum KeyboardInjector {
         case .arrowRight:
             keyPoster(124, [])
         case .scrollUp:
-            return scrollEventPoster(5)
+            return scrollEventPoster(
+                scrollDelta(
+                    for: .scrollUp,
+                    speed: scrollSpeed,
+                    inverted: scrollDirectionInverted
+                )
+            )
         case .scrollDown:
-            return scrollEventPoster(-5)
+            return scrollEventPoster(
+                scrollDelta(
+                    for: .scrollDown,
+                    speed: scrollSpeed,
+                    inverted: scrollDirectionInverted
+                )
+            )
+        case .codexStopGeneration:
+            keyPoster(53, [])
+        case .codexFocusInput:
+            guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+                return false
+            }
+            return focusComposer(processIdentifier: processIdentifier)
+        case .codexScrollToLatest:
+            keyPoster(119, .maskCommand)
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -1377,6 +1400,16 @@ enum KeyboardInjector {
         event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         event.post(tap: .cghidEventTap)
         return true
+    }
+
+    static func scrollDelta(
+        for action: ButtonAction,
+        speed: Int32,
+        inverted: Bool
+    ) -> Int32 {
+        let normalizedSpeed = min(max(abs(speed), 1), 10)
+        let base = action == .scrollDown ? -normalizedSpeed : normalizedSpeed
+        return inverted ? -base : base
     }
 
     private static func postSystemKey(type: Int32) {
