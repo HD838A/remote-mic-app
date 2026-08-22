@@ -147,6 +147,7 @@
 | 2026-08-21 | [签名前失败的 attestation 阻止同版本预览恢复](./2026-08-21-pre-signing-attestation-blocks-preview-recovery.md) | 已修复，自动化验证通过；等待受保护预览发布验证 |
 | 2026-08-21 | [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md) | 已修复，`v1.9.6` 受保护预览发布验证通过 |
 | 2026-08-21 | [Onboarding 离开输入法页后重复触发输入法确认](./2026-08-21-onboarding-input-source-confirmation-repeats.md) | 已修复，自动化通过；等待豆包/微信输入法真机验收 |
+| 2026-08-23 | [运行时切换输入法反复触发系统确认且不会恢复原输入法](./2026-08-23-runtime-input-source-confirmation-and-restore.md) | 候选修复完成，等待真实豆包/微信输入法与遥控器验收 |
 | 2026-08-21 | [设置页只展示已连接遥控器](./2026-08-21-settings-connected-remotes-only.md) | 已修复，自动化与构建通过；等待真实双遥控器和首次配对验收 |
 
 ## 记录模板
