@@ -123,6 +123,10 @@
 "action.custom_shortcut" = "自定义快捷键";
 "action.open_custom_application" = "打开自定义 APP";
 "action.toggle_long_recording" = "切换持续录音";
+"action.mouse_left_click" = "鼠标左键";
+"action.mouse_right_click" = "鼠标右键";
+"action.mouse_middle_click" = "鼠标中键";
+"action.toggle_mouse_mode" = "切换鼠标模式";
 "action.open_remote_mic" = "打开无线麦";
 "action.open_codex" = "打开 Codex";
 "action.open_claude" = "打开 Claude";
@@ -382,6 +386,7 @@
 "app.version_with_build" = "版本 %1$@ (%2$@)";
 "app.version" = "版本 %1$@";
 "status_item.voice_active_accessibility" = "小米蓝牙遥控器 2 Pro 正在传输语音";
+"status_item.mouse_mode_accessibility" = "鼠标模式已开启";
 "status_item.accessibility_label" = "小米蓝牙遥控器 2 Pro";
 "about.alert.description_with_version" = "版本 %1$@\n小米蓝牙遥控器 2 Pro 的无线语音与快捷操作工具。";
 "common.action.ok" = "好";

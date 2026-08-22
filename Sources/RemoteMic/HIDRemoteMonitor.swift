@@ -100,6 +100,10 @@ final class HIDRemoteMonitor {
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
     var onButtonPressed: ((UUID?, String, RemoteButton) -> (profileID: UUID, shouldPerformAction: Bool)?)?
     var onInternalAction: ((UUID?, ButtonAction) -> Void)?
+    /// When this returns true the edge is fully consumed (mouse mode) and must
+    /// skip gesture recognition and native passthrough.
+    var mouseModeEdgeHandler: ((RemoteButton, RemoteEventEdge) -> Bool)?
+    var onRemoteDisconnected: (() -> Void)?
 
     init(
         settings: AppSettings,
@@ -257,6 +261,7 @@ final class HIDRemoteMonitor {
         permissionMonitor?.cancel()
         permissionMonitor = nil
         resetInputState()
+        onRemoteDisconnected?()
         if ownsEventSuppressor { eventSuppressor.stop() }
         probedDevices.forEach {
             IOHIDDeviceClose($0, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -420,6 +425,7 @@ final class HIDRemoteMonitor {
             deviceFingerprint = nil
             resetInputState()
             activeDeviceIsSeized = false
+            onRemoteDisconnected?()
             updateStatus(LocalizedMessage("button_mapping.status.disconnected"))
             AppLogger.shared.write("HID DISCONNECTED")
             return
@@ -576,6 +582,7 @@ final class HIDRemoteMonitor {
         deviceFingerprint = nil
         resetInputState()
         activeDeviceIsSeized = false
+        onRemoteDisconnected?()
     }
 
     private func process(usages: Set<UInt16>) {
@@ -592,6 +599,12 @@ final class HIDRemoteMonitor {
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
+            if mouseModeEdgeHandler?(button, .down) == true {
+                if !activeDeviceIsSeized {
+                    eventSuppressor.arm(button: button, edge: .down)
+                }
+                continue
+            }
             let preflightProfileID = profileID
             let preflightRecognizesDoubleClick = settings.configuredAction(
                 for: button,
@@ -681,6 +694,14 @@ final class HIDRemoteMonitor {
 
         for usage in released {
             let usedNativePassthrough = nativePassthroughUsages.remove(usage) != nil
+            if !usedNativePassthrough,
+               let button = RemoteButton.usageMap[usage],
+               mouseModeEdgeHandler?(button, .up) == true {
+                if !activeDeviceIsSeized {
+                    eventSuppressor.arm(button: button, edge: .up)
+                }
+                continue
+            }
             if !activeDeviceIsSeized, !usedNativePassthrough,
                let button = RemoteButton.usageMap[usage] {
                 eventSuppressor.arm(button: button, edge: .up)
@@ -1004,6 +1025,19 @@ final class HIDRemoteMonitor {
         longPressTimers.values.forEach { $0.cancel() }
         longPressTimers.removeAll()
         gestureRecognizer.reset()
+    }
+
+    /// Clears in-flight gesture, repeat and non-repeatable press state while
+    /// keeping the physical button diff state (`activeUsages`). Called when
+    /// mouse mode activates or deactivates so edges consumed by mouse mode
+    /// never leave phantom long-press, double-click or repeat timers behind.
+    func flushInFlightInputState() {
+        repeatTimers.values.forEach { $0.cancel() }
+        repeatTimers.removeAll()
+        nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
+        nonRepeatableReleaseTimers.removeAll()
+        nonRepeatablePressedButtons.removeAll()
+        resetGestureRecognition()
     }
 
     private func resetInputState() {
