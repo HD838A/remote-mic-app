@@ -216,6 +216,38 @@ struct SettingsPageRegressionTests {
         #expect(settingsSource.contains("window?.performDrag(with: event)"))
     }
 
+    @Test func settingsWindowKeepsTheDockIconUntilItCloses() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+
+        #expect(appSource.contains("window.hidesOnDeactivate = false"))
+        #expect(appSource.contains("window.delegate = self"))
+        #expect(appSource.contains("SettingsWindowActivationPolicy.value("))
+        #expect(appSource.contains("func windowWillClose(_ notification: Notification)"))
+        #expect(appSource.contains("isSettingsWindowOpen = false"))
+        #expect(!appSource.contains("window.canHide = false"))
+        #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
+
+        #expect(SettingsWindowActivationPolicy.value(
+            showDockIcon: false,
+            isSettingsWindowOpen: true
+        ) == .regular)
+        #expect(SettingsWindowActivationPolicy.value(
+            showDockIcon: false,
+            isSettingsWindowOpen: false
+        ) == .accessory)
+        #expect(SettingsWindowActivationPolicy.value(
+            showDockIcon: true,
+            isSettingsWindowOpen: false
+        ) == .regular)
+    }
+
     @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
         #expect(MappingSelectionPolicy.selection(
             current: .home,
