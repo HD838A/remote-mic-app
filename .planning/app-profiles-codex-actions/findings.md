@@ -17,6 +17,3 @@
 - 滚轮速度、反向、翻页步长和事件间隔存入 `ApplicationMappingProfile.scrollSettings`；旧 profile 缺字段时使用 5、非反向、12 行、12ms，并保留全局默认回退。
 - `wechatVoiceMessage` 与 Codex 动作共用应用专属分类，但绑定 `com.tencent.xinWeChat`；保留 `isHoldAction`、不可重复和仅电源键可选的既有约束。
 - 应用专属动作的选择器原先额外限制 `wechatVoiceMessage` 只能出现在电源键；移除该 UI 限制后，HID 按住事件本来已支持任意按钮，但 Bridge 的 hold 回调和手机/网页遥控器入口仍有电源键 guard，已一并改为通用 hold action。
-- 用户现场确认：在微信对话中单击对方语音气泡可以正常播放；目标是复用该“单击播放”语义，不是接听微信语音电话。
-- Computer Use 当前只能看到微信窗口级 Accessibility 节点，消息区未暴露；对坐标点击返回 `AXError.notImplemented`，因此实现必须优先使用受控 AXPress/节点定位，找不到时失败闭环，不能盲点。
-- 现场验证显示微信当前版本仍不提供语音气泡 AX 节点；播放器先尝试 AXPress，失败后使用用户鼠标当前位置作为明确目标，并将 AppKit 坐标转换为 Quartz 坐标后发送一次鼠标点击。修正前点击位置错误，修正后用户确认语音播放成功。

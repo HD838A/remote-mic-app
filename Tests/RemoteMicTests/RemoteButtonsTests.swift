@@ -228,67 +228,6 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.wechatVoiceMessage.allowsRepeat)
     }
 
-    @Test func weChatPlayVoiceMessageIsAWechatOnlyTapAction() {
-        #expect(ButtonAction.wechatPlayVoiceMessage.category == .applicationSpecific)
-        #expect(ButtonAction.wechatPlayVoiceMessage.isAvailable(
-            forApplicationBundleIdentifier: PresetApplication.weChat.bundleIdentifier
-        ))
-        #expect(!ButtonAction.wechatPlayVoiceMessage.isAvailable(
-            forApplicationBundleIdentifier: PresetApplication.codex.bundleIdentifier
-        ))
-        #expect(!ButtonAction.wechatPlayVoiceMessage.isHoldAction)
-        #expect(!ButtonAction.wechatPlayVoiceMessage.allowsRepeat)
-    }
-
-    @Test func weChatPlayVoiceMessageRequiresARecognizableVoiceCandidate() {
-        #expect(WeChatVoiceMessagePlayer.isVoiceSemantic("2 秒 语音消息"))
-        #expect(WeChatVoiceMessagePlayer.isVoiceSemantic("voice message 2\""))
-        #expect(!WeChatVoiceMessagePlayer.isVoiceSemantic("聊天设置"))
-        #expect(WeChatVoiceMessagePlayer.candidateScore(
-            .init(
-                role: "AXButton",
-                semanticText: "聊天设置",
-                frame: .zero,
-                supportsPress: true
-            )
-            ) == Int.min)
-    }
-
-    @Test func weChatCursorFallbackOnlyAcceptsChatContentArea() {
-        let frame = CGRect(x: 100, y: 100, width: 900, height: 700)
-        #expect(
-            WeChatVoiceMessagePlayer.cursorClickPoint(
-                in: frame,
-                cursorLocation: CGPoint(x: 500, y: 500)
-            ) == CGPoint(x: 500, y: 500)
-        )
-        #expect(
-            WeChatVoiceMessagePlayer.cursorClickPoint(
-                in: frame,
-                cursorLocation: CGPoint(x: 500, y: 120)
-            ) == nil
-        )
-        #expect(
-            WeChatVoiceMessagePlayer.cursorClickPoint(
-                in: frame,
-                cursorLocation: CGPoint(x: 50, y: 500)
-            ) == nil
-        )
-    }
-
-    @Test func weChatPlayVoiceMessageUsesInjectedPlayer() {
-        var invoked = false
-        #expect(KeyboardInjector.send(
-            .wechatPlayVoiceMessage,
-            accessibilityTrusted: { true },
-            weChatVoiceMessagePoster: {
-                invoked = true
-                return true
-            }
-        ))
-        #expect(invoked)
-    }
-
     @Test func buttonActionsAreSeparatedIntoClearFlatCategories() {
         #expect(ButtonAction.escape.category == .basicKeys)
         #expect(ButtonAction.commandReturn.category == .basicKeys)

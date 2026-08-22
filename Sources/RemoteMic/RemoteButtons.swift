@@ -452,7 +452,6 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeMute
     case playPause
     case wechatVoiceMessage
-    case wechatPlayVoiceMessage
     case previousCommandLeft
     case nextCommandRight
     case customShortcut
@@ -523,9 +522,6 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .wechatVoiceMessage:
             let weChatName = applicationName ?? PresetApplication.weChat.displayName(using: localization)
             return weChatName + " " + localization.text("action.app.voice_message")
-        case .wechatPlayVoiceMessage:
-            let weChatName = applicationName ?? PresetApplication.weChat.displayName(using: localization)
-            return weChatName + " " + localization.text("action.app.play_voice_message")
         case .previousCommandLeft: return localization.text("action.previous_command_left")
         case .nextCommandRight: return localization.text("action.next_command_right")
         case .customShortcut: return localization.text("action.custom_shortcut")
@@ -579,7 +575,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .scrollUp, .scrollDown, .toggleLongRecording:
             return .systemAndMedia
         case .codexStopGeneration, .codexFocusInput, .codexScrollToLatest, .codexPageUp, .codexPageDown,
-             .wechatVoiceMessage, .wechatPlayVoiceMessage:
+             .wechatVoiceMessage:
             return .applicationSpecific
         case .customShortcut, .openCustomApplication:
             return .custom
@@ -610,7 +606,6 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .previousCommandLeft,
             .nextCommandRight,
             .wechatVoiceMessage,
-            .wechatPlayVoiceMessage,
             .codexStopGeneration,
             .codexFocusInput,
             .codexScrollToLatest,
@@ -632,8 +627,6 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .codexStopGeneration, .codexFocusInput, .codexScrollToLatest, .codexPageUp, .codexPageDown:
             return PresetApplication.codex.bundleIdentifier
         case .wechatVoiceMessage:
-            return PresetApplication.weChat.bundleIdentifier
-        case .wechatPlayVoiceMessage:
             return PresetApplication.weChat.bundleIdentifier
         default:
             return nil

@@ -22,7 +22,6 @@ enum KeyboardInjector {
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
     typealias ScrollEventPoster = (Int32) -> Bool
     typealias PageScrollEventPoster = (Int32, Int32) -> Bool
-    typealias WeChatVoiceMessagePoster = () -> Bool
 
     struct AccessibilityTextCandidate: Equatable {
         let role: String
@@ -149,9 +148,6 @@ enum KeyboardInjector {
         scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) },
         pageScrollEventPoster: PageScrollEventPoster = {
             postCodexPageScroll(delta: $0, intervalMilliseconds: $1)
-        },
-        weChatVoiceMessagePoster: WeChatVoiceMessagePoster = {
-            WeChatVoiceMessagePlayer.playCurrentVoiceMessage()
         },
         scrollSpeed: Int32 = 5,
         scrollDirectionInverted: Bool = false,
@@ -289,8 +285,6 @@ enum KeyboardInjector {
             postSystemKey(type: 16)
         case .wechatVoiceMessage:
             break
-        case .wechatPlayVoiceMessage:
-            return weChatVoiceMessagePoster()
         case .previousCommandLeft:
             keyPoster(123, .maskCommand)
         case .nextCommandRight:
