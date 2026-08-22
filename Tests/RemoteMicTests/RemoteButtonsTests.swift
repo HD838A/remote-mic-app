@@ -240,6 +240,7 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
         #expect(ButtonAction.codexStopGeneration.category == .applicationSpecific)
         #expect(ButtonAction.codexPageUp.category == .applicationSpecific)
+        #expect(ButtonAction.wechatVoiceMessage.category == .applicationSpecific)
         #expect(ButtonAction.customShortcut.category == .custom)
         #expect(ButtonAction.openCustomApplication.category == .custom)
         #expect(ButtonAction.openCodex.category == .applications)
@@ -598,6 +599,16 @@ struct RemoteButtonsTests {
             using: localization,
             applicationName: "ChatGPT"
         ).contains("ChatGPT"))
+        #expect(ButtonAction.wechatVoiceMessage.isAvailable(
+            forApplicationBundleIdentifier: PresetApplication.weChat.bundleIdentifier
+        ))
+        #expect(!ButtonAction.wechatVoiceMessage.isAvailable(
+            forApplicationBundleIdentifier: PresetApplication.codex.bundleIdentifier
+        ))
+        #expect(ButtonAction.wechatVoiceMessage.displayName(
+            using: localization,
+            applicationName: "微信"
+        ).contains("微信"))
     }
 
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {

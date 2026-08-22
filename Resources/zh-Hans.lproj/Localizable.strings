@@ -123,6 +123,7 @@
 "action.app.scroll_to_latest" = "滚动到最新";
 "action.app.page_up" = "上一页";
 "action.app.page_down" = "下一页";
+"action.app.voice_message" = "发语音消息（按住右 Option）";
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "显示桌面";

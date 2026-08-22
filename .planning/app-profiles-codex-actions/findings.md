@@ -15,3 +15,4 @@
 - 本机 `/Applications/ChatGPT.app` 的显示名称为 ChatGPT、bundle identifier 为 `com.openai.codex`；内部 `.codex` 枚举保持兼容旧配置，UI 使用应用 profile 的显示名称。
 - 应用专属动作独立为 `applicationSpecific` 分类，并按所选 profile 的 bundle identifier 过滤；未选择应用 profile 时不显示专属动作。
 - 滚轮速度、反向、翻页步长和事件间隔存入 `ApplicationMappingProfile.scrollSettings`；旧 profile 缺字段时使用 5、非反向、12 行、12ms，并保留全局默认回退。
+- `wechatVoiceMessage` 与 Codex 动作共用应用专属分类，但绑定 `com.tencent.xinWeChat`；保留 `isHoldAction`、不可重复和仅电源键可选的既有约束。

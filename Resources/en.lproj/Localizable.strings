@@ -123,6 +123,7 @@
 "action.app.scroll_to_latest" = "Scroll to Latest";
 "action.app.page_up" = "Page Up";
 "action.app.page_down" = "Page Down";
+"action.app.voice_message" = "Voice Message (hold Right Option)";
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "Show Desktop";

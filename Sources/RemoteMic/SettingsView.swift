@@ -1589,6 +1589,7 @@ struct SettingsView: View {
                         installedBundleIdentifiers: installedBundleIdentifiers,
                         isManagedPowerAction: isManagedPowerAction,
                         applicationName: applicationName,
+                        applicationBundleIdentifier: applicationSpecificBundleIdentifier,
                         onSelect: { action in
                             settings.setAction(
                                 action,
@@ -1647,6 +1648,7 @@ struct SettingsView: View {
         installedBundleIdentifiers: Set<String>,
         isManagedPowerAction: Bool,
         applicationName: String?,
+        applicationBundleIdentifier: String?,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
         if category == .applications {
@@ -1657,6 +1659,7 @@ struct SettingsView: View {
                     installedBundleIdentifiers: installedBundleIdentifiers,
                     isManagedPowerAction: isManagedPowerAction,
                     applicationName: applicationName,
+                    applicationBundleIdentifier: applicationBundleIdentifier,
                     onSelect: onSelect
                 )
                 .padding(.top, 8)
@@ -1675,6 +1678,7 @@ struct SettingsView: View {
                     installedBundleIdentifiers: installedBundleIdentifiers,
                     isManagedPowerAction: isManagedPowerAction,
                     applicationName: applicationName,
+                    applicationBundleIdentifier: applicationBundleIdentifier,
                     onSelect: onSelect
                 )
             }
@@ -1687,6 +1691,7 @@ struct SettingsView: View {
         installedBundleIdentifiers: Set<String>,
         isManagedPowerAction: Bool,
         applicationName: String?,
+        applicationBundleIdentifier: String?,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
         LazyVGrid(
@@ -1709,7 +1714,8 @@ struct SettingsView: View {
                         Text(
                             action.displayName(
                                 using: localization,
-                                applicationName: applicationName
+                                applicationName: action.applicationSpecificBundleIdentifier ==
+                                    applicationBundleIdentifier ? applicationName : nil
                             ) +
                                 (unavailableApplication
                                     ? localization.text("common.suffix.not_installed")
