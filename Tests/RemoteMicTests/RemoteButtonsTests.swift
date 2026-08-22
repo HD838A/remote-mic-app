@@ -140,7 +140,7 @@ struct RemoteButtonsTests {
         })
         #expect(mappings == [
             localization.text("app.name"): "com.hd838a.RemoteMic",
-            "Codex": "com.openai.codex",
+            "ChatGPT": "com.openai.codex",
             "Claude": "com.anthropic.claudefordesktop",
             "cmux": "com.cmuxterm.app",
             localization.text("application.wechat"): "com.tencent.xinWeChat",
@@ -238,6 +238,8 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
+        #expect(ButtonAction.codexStopGeneration.category == .applicationSpecific)
+        #expect(ButtonAction.codexPageUp.category == .applicationSpecific)
         #expect(ButtonAction.customShortcut.category == .custom)
         #expect(ButtonAction.openCustomApplication.category == .custom)
         #expect(ButtonAction.openCodex.category == .applications)
@@ -555,8 +557,10 @@ struct RemoteButtonsTests {
 
     @Test func codexPageActionsPostIndependentLargeScrollDeltas() {
         var deltas: [Int32] = []
-        let poster: KeyboardInjector.PageScrollEventPoster = { delta in
+        var intervals: [Int32] = []
+        let poster: KeyboardInjector.PageScrollEventPoster = { delta, interval in
             deltas.append(delta)
+            intervals.append(interval)
             return true
         }
 
@@ -568,13 +572,32 @@ struct RemoteButtonsTests {
         #expect(KeyboardInjector.send(
             .codexPageDown,
             accessibilityTrusted: { true },
-            pageScrollEventPoster: poster
+            pageScrollEventPoster: poster,
+            pageScrollLines: 14,
+            pageScrollIntervalMilliseconds: 15
         ))
-        #expect(deltas == [12, -12])
+        #expect(deltas == [12, -14])
+        #expect(intervals == [12, 15])
         #expect(KeyboardInjector.codexPageScrollDelta(for: .codexPageUp) == 12)
         #expect(KeyboardInjector.codexPageScrollDelta(for: .codexPageDown) == -12)
+        #expect(KeyboardInjector.codexPageScrollDelta(for: .codexPageUp, lines: 50) == 50)
+        #expect(KeyboardInjector.codexPageScrollDelta(for: .codexPageDown, lines: 99) == -50)
         #expect(!ButtonAction.codexPageUp.allowsRepeat)
         #expect(!ButtonAction.codexPageDown.allowsRepeat)
+    }
+
+    @Test func applicationSpecificActionsUseSelectedApplicationNameAndBundleScope() {
+        let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
+        #expect(ButtonAction.codexPageUp.isAvailable(
+            forApplicationBundleIdentifier: PresetApplication.codex.bundleIdentifier
+        ))
+        #expect(!ButtonAction.codexPageUp.isAvailable(
+            forApplicationBundleIdentifier: "com.example.other"
+        ))
+        #expect(ButtonAction.codexPageUp.displayName(
+            using: localization,
+            applicationName: "ChatGPT"
+        ).contains("ChatGPT"))
     }
 
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {
@@ -1382,6 +1405,23 @@ struct RemoteButtonsTests {
             trigger: .singleClick,
             applicationMappingProfileID: profileID
         )
+        settings.setScrollSpeed(8, applicationMappingProfileID: profileID)
+        settings.setScrollDirectionInverted(true, applicationMappingProfileID: profileID)
+        settings.setPageScrollLines(24, applicationMappingProfileID: profileID)
+        settings.setPageScrollIntervalMilliseconds(15, applicationMappingProfileID: profileID)
+
+        let appScrollSettings = settings.scrollSettings(
+            forApplicationBundleIdentifier: "com.example.codex"
+        )
+        #expect(appScrollSettings == ApplicationScrollSettings(
+            scrollSpeed: 8,
+            scrollDirectionInverted: true,
+            pageScrollLines: 24,
+            pageScrollIntervalMilliseconds: 15
+        ))
+        #expect(settings.scrollSettings(
+            forApplicationBundleIdentifier: "com.example.other"
+        ) == settings.globalScrollSettings)
 
         #expect(settings.configuredAction(
             for: .menu,
@@ -1404,6 +1444,14 @@ struct RemoteButtonsTests {
             profileID: restored.selectedRemoteProfileID,
             applicationBundleIdentifier: "com.example.codex"
         ).action == .codexStopGeneration)
+        #expect(restored.scrollSettings(
+            forApplicationBundleIdentifier: "com.example.codex"
+        ) == ApplicationScrollSettings(
+            scrollSpeed: 8,
+            scrollDirectionInverted: true,
+            pageScrollLines: 24,
+            pageScrollIntervalMilliseconds: 15
+        ))
     }
 
     @Test func additionalBluetoothRemoteCopiesCurrentMappingsBeforeIndependentEditing() throws {

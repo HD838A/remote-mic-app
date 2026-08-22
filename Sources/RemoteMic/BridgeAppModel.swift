@@ -2147,12 +2147,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 applicationProfile: applicationProfile
             ).map { voiceInputDestinationCoordinator.beginTargetSwitch(intent: $0) }
             : nil
+        let scrollSettings = settings.scrollSettings(
+            forApplicationBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
         let handled = KeyboardInjector.send(
             configured.action,
             shortcut: configured.shortcut,
             applicationProfile: applicationProfile,
-            scrollSpeed: Int32(settings.scrollSpeed),
-            scrollDirectionInverted: settings.scrollDirectionInverted
+            scrollSpeed: Int32(scrollSettings.scrollSpeed),
+            scrollDirectionInverted: scrollSettings.scrollDirectionInverted,
+            pageScrollLines: Int32(scrollSettings.pageScrollLines),
+            pageScrollIntervalMilliseconds: Int32(
+                scrollSettings.pageScrollIntervalMilliseconds
+            )
         )
         if !handled, let requestID {
             voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)

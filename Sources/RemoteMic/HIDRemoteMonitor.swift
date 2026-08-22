@@ -149,11 +149,20 @@ final class HIDRemoteMonitor {
         self.scheduler = scheduler
         self.runtimePermissions = runtimePermissions
         self.actionPerformer = actionPerformer ?? { _, _, configured in
-            KeyboardInjector.send(
+            let scrollSettings = settings.scrollSettings(
+                forApplicationBundleIdentifier: frontmostBundleIdentifier()
+            )
+            return KeyboardInjector.send(
                 configured.action,
                 shortcut: configured.shortcut,
                 applicationProfile: settings.customApplicationProfile(
                     id: configured.applicationProfileID
+                ),
+                scrollSpeed: Int32(scrollSettings.scrollSpeed),
+                scrollDirectionInverted: scrollSettings.scrollDirectionInverted,
+                pageScrollLines: Int32(scrollSettings.pageScrollLines),
+                pageScrollIntervalMilliseconds: Int32(
+                    scrollSettings.pageScrollIntervalMilliseconds
                 )
             )
         }

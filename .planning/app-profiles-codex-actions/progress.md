@@ -1,5 +1,11 @@
 # 进度日志
 
+- 第 8 阶段进行中：将应用专属动作移入独立分类，按所选应用 profile 显示并使用其名称；滚轮速度、方向、翻页步长和事件间隔改为 profile 独立设置。
+- 已完成旧 profile/config 的默认值迁移、HID/手机遥控器路径的按前台应用读取，以及动作和翻页参数回归测试补充；待执行完整类型检查、测试、自测、打包、安装、重启和提交。
+- 已完成源码类型检查、测试源码语法解析、`git diff --check` 和仓库自测 42/42；SwiftPM Release 构建成功。
+- `dist/SayAll.app` 通过 `APP VERIFY PASS` 与 `codesign --verify --deep --strict`，已安装到 `/Applications/SayAll.app` 并重启；运行 PID 为 39460，安装包与构建产物 `RemoteMic` SHA-256 均为 `85b4a0dc930f14eda39cc6e4ab7b36cc051bbcf645eada74df625a013ed522d1`。
+- 视觉检查确认 ChatGPT profile 下动作顺序为系统与媒体、应用专属动作、自定义动作，滚动设置显示为 ChatGPT 配置；第 8 阶段完成。
+
 ## 2026-08-22
 
 - 开始实现按应用配置、Codex 动作和滚轮方向/速度设置。

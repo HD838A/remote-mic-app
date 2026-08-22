@@ -48,6 +48,8 @@ private struct PersonalizedConfiguration: Codable {
     let applicationMappingProfiles: [ApplicationMappingProfile]?
     let scrollSpeed: Int?
     let scrollDirectionInverted: Bool?
+    let pageScrollLines: Int?
+    let pageScrollIntervalMilliseconds: Int?
 }
 
 enum UsageStatisticsPeriod: String, CaseIterable, Identifiable {
@@ -264,6 +266,8 @@ final class AppSettings: ObservableObject {
         static let selectedApplicationMappingProfileID = "selectedApplicationMappingProfileID"
         static let scrollSpeed = "scrollSpeed"
         static let scrollDirectionInverted = "scrollDirectionInverted"
+        static let pageScrollLines = "pageScrollLines"
+        static let pageScrollIntervalMilliseconds = "pageScrollIntervalMilliseconds"
         static let applicationLanguage = "applicationLanguage"
         static let showDockIcon = "showDockIcon"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
@@ -370,6 +374,31 @@ final class AppSettings: ObservableObject {
 
     @Published var scrollDirectionInverted: Bool {
         didSet { defaults.set(scrollDirectionInverted, forKey: Keys.scrollDirectionInverted) }
+    }
+
+    @Published var pageScrollLines: Int {
+        didSet {
+            let normalized = Self.normalizedPageScrollLines(pageScrollLines)
+            guard normalized == pageScrollLines else {
+                pageScrollLines = normalized
+                return
+            }
+            defaults.set(pageScrollLines, forKey: Keys.pageScrollLines)
+        }
+    }
+
+    @Published var pageScrollIntervalMilliseconds: Int {
+        didSet {
+            let normalized = Self.normalizedPageScrollInterval(pageScrollIntervalMilliseconds)
+            guard normalized == pageScrollIntervalMilliseconds else {
+                pageScrollIntervalMilliseconds = normalized
+                return
+            }
+            defaults.set(
+                pageScrollIntervalMilliseconds,
+                forKey: Keys.pageScrollIntervalMilliseconds
+            )
+        }
     }
 
     @Published var applicationLanguage: AppLanguage {
@@ -530,6 +559,16 @@ final class AppSettings: ObservableObject {
             defaults.object(forKey: Keys.scrollSpeed) == nil ? 5 : defaults.integer(forKey: Keys.scrollSpeed)
         )
         scrollDirectionInverted = defaults.bool(forKey: Keys.scrollDirectionInverted)
+        pageScrollLines = Self.normalizedPageScrollLines(
+            defaults.object(forKey: Keys.pageScrollLines) == nil
+                ? 12
+                : defaults.integer(forKey: Keys.pageScrollLines)
+        )
+        pageScrollIntervalMilliseconds = Self.normalizedPageScrollInterval(
+            defaults.object(forKey: Keys.pageScrollIntervalMilliseconds) == nil
+                ? 12
+                : defaults.integer(forKey: Keys.pageScrollIntervalMilliseconds)
+        )
         gainDB = defaults.object(forKey: Keys.gainDB) == nil
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
@@ -867,6 +906,35 @@ final class AppSettings: ObservableObject {
         return applicationMappingProfiles.first { $0.id == selectedApplicationMappingProfileID }
     }
 
+    var globalScrollSettings: ApplicationScrollSettings {
+        ApplicationScrollSettings(
+            scrollSpeed: scrollSpeed,
+            scrollDirectionInverted: scrollDirectionInverted,
+            pageScrollLines: pageScrollLines,
+            pageScrollIntervalMilliseconds: pageScrollIntervalMilliseconds
+        )
+    }
+
+    func scrollSettings(forApplicationMappingProfileID profileID: UUID?) -> ApplicationScrollSettings {
+        guard let profileID,
+              let profile = applicationMappingProfiles.first(where: { $0.id == profileID })
+        else {
+            return globalScrollSettings
+        }
+        return profile.scrollSettings
+    }
+
+    func scrollSettings(forApplicationBundleIdentifier bundleIdentifier: String?) -> ApplicationScrollSettings {
+        guard let bundleIdentifier,
+              let profile = applicationMappingProfiles.first(where: {
+                  $0.bundleIdentifier == bundleIdentifier
+              })
+        else {
+            return globalScrollSettings
+        }
+        return profile.scrollSettings
+    }
+
     func selectApplicationMappingProfile(_ profileID: UUID?) {
         guard profileID == nil || applicationMappingProfiles.contains(where: { $0.id == profileID }) else {
             return
@@ -888,7 +956,8 @@ final class AppSettings: ObservableObject {
         let profile = ApplicationMappingProfile(
             displayName: displayName,
             bundleIdentifier: bundleIdentifier,
-            mappings: currentMappings()
+            mappings: currentMappings(),
+            scrollSettings: globalScrollSettings
         )
         applicationMappingProfiles.append(profile)
         selectedApplicationMappingProfileID = profile.id
@@ -904,6 +973,65 @@ final class AppSettings: ObservableObject {
 
     private static func normalizedScrollSpeed(_ value: Int) -> Int {
         min(max(value, 1), 10)
+    }
+
+    private static func normalizedPageScrollLines(_ value: Int) -> Int {
+        min(max(value, 1), 50)
+    }
+
+    private static func normalizedPageScrollInterval(_ value: Int) -> Int {
+        min(max(value, 10), 15)
+    }
+
+    func setScrollSpeed(_ value: Int, applicationMappingProfileID profileID: UUID?) {
+        guard let profileID,
+              let index = applicationMappingProfiles.firstIndex(where: { $0.id == profileID })
+        else {
+            scrollSpeed = value
+            return
+        }
+        var profile = applicationMappingProfiles[index]
+        profile.scrollSettings.scrollSpeed = Self.normalizedScrollSpeed(value)
+        applicationMappingProfiles[index] = profile
+    }
+
+    func setScrollDirectionInverted(_ value: Bool, applicationMappingProfileID profileID: UUID?) {
+        guard let profileID,
+              let index = applicationMappingProfiles.firstIndex(where: { $0.id == profileID })
+        else {
+            scrollDirectionInverted = value
+            return
+        }
+        var profile = applicationMappingProfiles[index]
+        profile.scrollSettings.scrollDirectionInverted = value
+        applicationMappingProfiles[index] = profile
+    }
+
+    func setPageScrollLines(_ value: Int, applicationMappingProfileID profileID: UUID?) {
+        guard let profileID,
+              let index = applicationMappingProfiles.firstIndex(where: { $0.id == profileID })
+        else {
+            pageScrollLines = value
+            return
+        }
+        var profile = applicationMappingProfiles[index]
+        profile.scrollSettings.pageScrollLines = Self.normalizedPageScrollLines(value)
+        applicationMappingProfiles[index] = profile
+    }
+
+    func setPageScrollIntervalMilliseconds(
+        _ value: Int,
+        applicationMappingProfileID profileID: UUID?
+    ) {
+        guard let profileID,
+              let index = applicationMappingProfiles.firstIndex(where: { $0.id == profileID })
+        else {
+            pageScrollIntervalMilliseconds = value
+            return
+        }
+        var profile = applicationMappingProfiles[index]
+        profile.scrollSettings.pageScrollIntervalMilliseconds = Self.normalizedPageScrollInterval(value)
+        applicationMappingProfiles[index] = profile
     }
 
     @discardableResult
@@ -1098,6 +1226,7 @@ final class AppSettings: ObservableObject {
             buttonShortcuts: [:],
             secondaryButtonBindings: [:]
         )
+        applicationMappingProfiles[index].scrollSettings = globalScrollSettings
     }
 
     private func updateApplicationMappingProfile(
@@ -1635,7 +1764,9 @@ final class AppSettings: ObservableObject {
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup,
             applicationMappingProfiles: applicationMappingProfiles,
             scrollSpeed: scrollSpeed,
-            scrollDirectionInverted: scrollDirectionInverted
+            scrollDirectionInverted: scrollDirectionInverted,
+            pageScrollLines: pageScrollLines,
+            pageScrollIntervalMilliseconds: pageScrollIntervalMilliseconds
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -1701,6 +1832,10 @@ final class AppSettings: ObservableObject {
         selectedApplicationMappingProfileID = nil
         scrollSpeed = Self.normalizedScrollSpeed(configuration.scrollSpeed ?? 5)
         scrollDirectionInverted = configuration.scrollDirectionInverted ?? false
+        pageScrollLines = Self.normalizedPageScrollLines(configuration.pageScrollLines ?? 12)
+        pageScrollIntervalMilliseconds = Self.normalizedPageScrollInterval(
+            configuration.pageScrollIntervalMilliseconds ?? 12
+        )
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup

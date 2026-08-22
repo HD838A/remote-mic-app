@@ -1216,31 +1216,134 @@ struct SettingsView: View {
     }
 
     private var scrollSettingsPanel: some View {
-        GlassPanel {
+        let profileID = settings.selectedApplicationMappingProfileID
+        let profileName = settings.selectedApplicationMappingProfile?.displayName
+        let scopeTitle: String
+        if let profileName {
+            scopeTitle = String(
+                format: localization.text("button_mapping.scroll_settings.scope.application"),
+                profileName
+            )
+        } else {
+            scopeTitle = localization.text("button_mapping.scroll_settings.scope.default")
+        }
+        return GlassPanel {
             VStack(alignment: .leading, spacing: 10) {
-                Label("button_mapping.scroll_settings.title", systemImage: "arrow.up.and.down")
-                    .font(.system(size: 13, weight: .semibold))
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Label("button_mapping.scroll_settings.title", systemImage: "arrow.up.and.down")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(scopeTitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.accentColor.opacity(0.10), in: Capsule())
+                }
 
                 HStack(spacing: 18) {
                     Stepper(
                         value: Binding(
-                            get: { settings.scrollSpeed },
-                            set: { settings.scrollSpeed = $0 }
+                            get: {
+                                settings.scrollSettings(
+                                    forApplicationMappingProfileID: profileID
+                                ).scrollSpeed
+                            },
+                            set: {
+                                settings.setScrollSpeed(
+                                    $0,
+                                    applicationMappingProfileID: profileID
+                                )
+                            }
                         ),
                         in: 1...10
                     ) {
                         Text(
                             localization.text("button_mapping.scroll_settings.speed") +
-                                " " + String(settings.scrollSpeed)
+                                " " + String(
+                                    settings.scrollSettings(
+                                        forApplicationMappingProfileID: profileID
+                                    ).scrollSpeed
+                                )
                         )
                     }
-                    .frame(width: 220, alignment: .leading)
+                    .frame(width: 190, alignment: .leading)
 
                     Toggle(
                         "button_mapping.scroll_settings.invert",
-                        isOn: $settings.scrollDirectionInverted
+                        isOn: Binding(
+                            get: {
+                                settings.scrollSettings(
+                                    forApplicationMappingProfileID: profileID
+                                ).scrollDirectionInverted
+                            },
+                            set: {
+                                settings.setScrollDirectionInverted(
+                                    $0,
+                                    applicationMappingProfileID: profileID
+                                )
+                            }
+                        )
                     )
                     .toggleStyle(.switch)
+
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 12))
+
+                HStack(spacing: 18) {
+                    Stepper(
+                        value: Binding(
+                            get: {
+                                settings.scrollSettings(
+                                    forApplicationMappingProfileID: profileID
+                                ).pageScrollLines
+                            },
+                            set: {
+                                settings.setPageScrollLines(
+                                    $0,
+                                    applicationMappingProfileID: profileID
+                                )
+                            }
+                        ),
+                        in: 1...50
+                    ) {
+                        Text(
+                            localization.text("button_mapping.scroll_settings.page_lines") +
+                                " " + String(
+                                    settings.scrollSettings(
+                                        forApplicationMappingProfileID: profileID
+                                    ).pageScrollLines
+                                )
+                        )
+                    }
+                    .frame(width: 190, alignment: .leading)
+
+                    Stepper(
+                        value: Binding(
+                            get: {
+                                settings.scrollSettings(
+                                    forApplicationMappingProfileID: profileID
+                                ).pageScrollIntervalMilliseconds
+                            },
+                            set: {
+                                settings.setPageScrollIntervalMilliseconds(
+                                    $0,
+                                    applicationMappingProfileID: profileID
+                                )
+                            }
+                        ),
+                        in: 10...15
+                    ) {
+                        Text(
+                            localization.text("button_mapping.scroll_settings.interval") +
+                                " " + String(
+                                    settings.scrollSettings(
+                                        forApplicationMappingProfileID: profileID
+                                    ).pageScrollIntervalMilliseconds
+                                )
+                        )
+                    }
+                    .frame(width: 230, alignment: .leading)
 
                     Spacer(minLength: 0)
                 }
@@ -1458,12 +1561,20 @@ struct SettingsView: View {
             applicationMappingProfileID: settings.selectedApplicationMappingProfileID
         )
         let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
+        let selectedApplicationProfile = settings.selectedApplicationMappingProfile
+        let applicationSpecificBundleIdentifier = selectedApplicationProfile?.bundleIdentifier
         let actions = ButtonAction.pickerActions(
             installedBundleIdentifiers: installedBundleIdentifiers,
             current: configured.action,
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled,
             button: button
-        ).filter { $0 != .disabled }
+        ).filter {
+            $0 != .disabled && (
+                $0.isAvailable(forApplicationBundleIdentifier: applicationSpecificBundleIdentifier) ||
+                    $0 == configured.action
+            )
+        }
+        let applicationName = selectedApplicationProfile?.displayName
         let isManagedPowerAction = button == .power &&
             trigger == .singleClick &&
             settings.experimentalContinuousRecordingEnabled
@@ -1477,6 +1588,7 @@ struct SettingsView: View {
                         selectedAction: configured.action,
                         installedBundleIdentifiers: installedBundleIdentifiers,
                         isManagedPowerAction: isManagedPowerAction,
+                        applicationName: applicationName,
                         onSelect: { action in
                             settings.setAction(
                                 action,
@@ -1534,6 +1646,7 @@ struct SettingsView: View {
         selectedAction: ButtonAction,
         installedBundleIdentifiers: Set<String>,
         isManagedPowerAction: Bool,
+        applicationName: String?,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
         if category == .applications {
@@ -1543,6 +1656,7 @@ struct SettingsView: View {
                     selectedAction: selectedAction,
                     installedBundleIdentifiers: installedBundleIdentifiers,
                     isManagedPowerAction: isManagedPowerAction,
+                    applicationName: applicationName,
                     onSelect: onSelect
                 )
                 .padding(.top, 8)
@@ -1560,6 +1674,7 @@ struct SettingsView: View {
                     selectedAction: selectedAction,
                     installedBundleIdentifiers: installedBundleIdentifiers,
                     isManagedPowerAction: isManagedPowerAction,
+                    applicationName: applicationName,
                     onSelect: onSelect
                 )
             }
@@ -1571,6 +1686,7 @@ struct SettingsView: View {
         selectedAction: ButtonAction,
         installedBundleIdentifiers: Set<String>,
         isManagedPowerAction: Bool,
+        applicationName: String?,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
         LazyVGrid(
@@ -1591,7 +1707,10 @@ struct SettingsView: View {
                         Image(systemName: selectedAction == action ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(selectedAction == action ? Color.accentColor : Color.secondary)
                         Text(
-                            action.displayName(using: localization) +
+                            action.displayName(
+                                using: localization,
+                                applicationName: applicationName
+                            ) +
                                 (unavailableApplication
                                     ? localization.text("common.suffix.not_installed")
                                     : unavailableExperiment

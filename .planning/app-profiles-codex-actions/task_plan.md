@@ -13,6 +13,7 @@
 - [completed] 5. Release 构建、安装、重启和运行验证
 - [completed] 6. 新增 Codex Page Up / Page Down 翻页动作
 - [completed] 7. 将 Codex 翻页改为定位窗口的大步长滚轮事件
+- [completed] 8. 按应用拆分专属动作与滚动配置并优化 UI
 
 ## 成功标准
 
@@ -23,6 +24,9 @@
 - 现有 RC003 语音、微信电源键、Command-Tab 和原有滚轮动作不回归。
 - Codex 配置可将遥控器左键/右键分别绑定为上一页/下一页。
 - Codex 翻页使用前台窗口中心、wheelCount=2、独立步长和短事件间隔。
+- 应用专属动作显示在系统与媒体、自定义动作之间，并随所选应用 profile 过滤。
+- 应用专属动作显示所选应用名称；后续应用动作通过 bundle identifier 约束到对应应用。
+- 普通滚轮速度、反向、翻页步长和事件间隔可按应用 profile 独立持久化，旧配置回退到全局默认值。
 
 ## 约束
 

@@ -344,7 +344,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
     func displayName(using localization: LocalizationStore) -> String {
         switch self {
         case .remoteMic: return localization.text("app.name")
-        case .codex: return "Codex"
+        case .codex: return localization.text("application.chatgpt")
         case .claude: return "Claude"
         case .cmux: return "cmux"
         case .weChat: return localization.text("application.wechat")
@@ -398,6 +398,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
 enum ButtonActionCategory: String, CaseIterable, Identifiable {
     case basicKeys
     case systemAndMedia
+    case applicationSpecific
     case custom
     case applications
 
@@ -407,6 +408,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
         switch self {
         case .basicKeys: return "button_mapping.action_group.basic_keys"
         case .systemAndMedia: return "button_mapping.action_group.system_and_media"
+        case .applicationSpecific: return "button_mapping.action_group.application_specific"
         case .custom: return "button_mapping.action_group.custom"
         case .applications: return "button_mapping.action_group.applications"
         }
@@ -471,7 +473,11 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
-    func displayName(using localization: LocalizationStore) -> String {
+    func displayName(
+        using localization: LocalizationStore,
+        applicationName: String? = nil
+    ) -> String {
+        let applicationSpecificName = applicationName ?? PresetApplication.codex.displayName(using: localization)
         switch self {
         case .disabled: return localization.text("action.disabled")
         case .escape: return "Escape"
@@ -495,11 +501,16 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .arrowRight: return localization.text("action.arrow_right")
         case .scrollUp: return localization.text("action.scroll_up")
         case .scrollDown: return localization.text("action.scroll_down")
-        case .codexStopGeneration: return localization.text("action.codex_stop_generation")
-        case .codexFocusInput: return localization.text("action.codex_focus_input")
-        case .codexScrollToLatest: return localization.text("action.codex_scroll_to_latest")
-        case .codexPageUp: return localization.text("action.codex_page_up")
-        case .codexPageDown: return localization.text("action.codex_page_down")
+        case .codexStopGeneration:
+            return applicationSpecificName + " " + localization.text("action.app.stop_generation")
+        case .codexFocusInput:
+            return applicationSpecificName + " " + localization.text("action.app.focus_input")
+        case .codexScrollToLatest:
+            return applicationSpecificName + " " + localization.text("action.app.scroll_to_latest")
+        case .codexPageUp:
+            return applicationSpecificName + " " + localization.text("action.app.page_up")
+        case .codexPageDown:
+            return applicationSpecificName + " " + localization.text("action.app.page_down")
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
@@ -559,9 +570,10 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .wechatVoiceMessage, .previousCommandLeft, .nextCommandRight,
-             .scrollUp, .scrollDown, .codexStopGeneration, .codexFocusInput,
-             .codexScrollToLatest, .codexPageUp, .codexPageDown, .toggleLongRecording:
+             .scrollUp, .scrollDown, .toggleLongRecording:
             return .systemAndMedia
+        case .codexStopGeneration, .codexFocusInput, .codexScrollToLatest, .codexPageUp, .codexPageDown:
+            return .applicationSpecific
         case .customShortcut, .openCustomApplication:
             return .custom
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
@@ -605,6 +617,22 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
 
     var isAppInternal: Bool {
         self == .toggleLongRecording
+    }
+
+    var applicationSpecificBundleIdentifier: String? {
+        switch self {
+        case .codexStopGeneration, .codexFocusInput, .codexScrollToLatest, .codexPageUp, .codexPageDown:
+            return PresetApplication.codex.bundleIdentifier
+        default:
+            return nil
+        }
+    }
+
+    func isAvailable(forApplicationBundleIdentifier bundleIdentifier: String?) -> Bool {
+        guard let requiredBundleIdentifier = applicationSpecificBundleIdentifier else {
+            return true
+        }
+        return requiredBundleIdentifier == bundleIdentifier
     }
 
     func isEnabled(experimentalContinuousRecordingEnabled: Bool) -> Bool {

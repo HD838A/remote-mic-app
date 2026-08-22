@@ -118,22 +118,64 @@ struct RemoteDeviceMappings: Codable, Equatable {
     }
 }
 
+struct ApplicationScrollSettings: Codable, Equatable {
+    var scrollSpeed: Int
+    var scrollDirectionInverted: Bool
+    var pageScrollLines: Int
+    var pageScrollIntervalMilliseconds: Int
+
+    init(
+        scrollSpeed: Int = 5,
+        scrollDirectionInverted: Bool = false,
+        pageScrollLines: Int = 12,
+        pageScrollIntervalMilliseconds: Int = 12
+    ) {
+        self.scrollSpeed = min(max(scrollSpeed, 1), 10)
+        self.scrollDirectionInverted = scrollDirectionInverted
+        self.pageScrollLines = min(max(pageScrollLines, 1), 50)
+        self.pageScrollIntervalMilliseconds = min(max(pageScrollIntervalMilliseconds, 10), 15)
+    }
+}
+
 struct ApplicationMappingProfile: Codable, Equatable, Identifiable {
     let id: UUID
     var displayName: String
     var bundleIdentifier: String
     var mappings: RemoteDeviceMappings
+    var scrollSettings: ApplicationScrollSettings
 
     init(
         id: UUID = UUID(),
         displayName: String,
         bundleIdentifier: String,
-        mappings: RemoteDeviceMappings
+        mappings: RemoteDeviceMappings,
+        scrollSettings: ApplicationScrollSettings = ApplicationScrollSettings()
     ) {
         self.id = id
         self.displayName = displayName
         self.bundleIdentifier = bundleIdentifier
         self.mappings = mappings
+        self.scrollSettings = scrollSettings
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case displayName
+        case bundleIdentifier
+        case mappings
+        case scrollSettings
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        bundleIdentifier = try container.decode(String.self, forKey: .bundleIdentifier)
+        mappings = try container.decode(RemoteDeviceMappings.self, forKey: .mappings)
+        scrollSettings = try container.decodeIfPresent(
+            ApplicationScrollSettings.self,
+            forKey: .scrollSettings
+        ) ?? ApplicationScrollSettings()
     }
 }
 

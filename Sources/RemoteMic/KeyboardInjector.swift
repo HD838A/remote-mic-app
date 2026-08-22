@@ -21,7 +21,7 @@ enum KeyboardInjector {
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
     typealias ScrollEventPoster = (Int32) -> Bool
-    typealias PageScrollEventPoster = (Int32) -> Bool
+    typealias PageScrollEventPoster = (Int32, Int32) -> Bool
 
     struct AccessibilityTextCandidate: Equatable {
         let role: String
@@ -146,9 +146,13 @@ enum KeyboardInjector {
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) },
-        pageScrollEventPoster: PageScrollEventPoster = { postCodexPageScroll(delta: $0) },
+        pageScrollEventPoster: PageScrollEventPoster = {
+            postCodexPageScroll(delta: $0, intervalMilliseconds: $1)
+        },
         scrollSpeed: Int32 = 5,
-        scrollDirectionInverted: Bool = false
+        scrollDirectionInverted: Bool = false,
+        pageScrollLines: Int32 = 12,
+        pageScrollIntervalMilliseconds: Int32 = 12
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -254,9 +258,15 @@ enum KeyboardInjector {
         case .codexScrollToLatest:
             keyPoster(119, .maskCommand)
         case .codexPageUp:
-            return pageScrollEventPoster(codexPageScrollDelta(for: .codexPageUp))
+            return pageScrollEventPoster(
+                codexPageScrollDelta(for: .codexPageUp, lines: pageScrollLines),
+                pageScrollIntervalMilliseconds
+            )
         case .codexPageDown:
-            return pageScrollEventPoster(codexPageScrollDelta(for: .codexPageDown))
+            return pageScrollEventPoster(
+                codexPageScrollDelta(for: .codexPageDown, lines: pageScrollLines),
+                pageScrollIntervalMilliseconds
+            )
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -1409,7 +1419,10 @@ enum KeyboardInjector {
         return true
     }
 
-    private static func postCodexPageScroll(delta: Int32) -> Bool {
+    private static func postCodexPageScroll(
+        delta: Int32,
+        intervalMilliseconds: Int32 = 12
+    ) -> Bool {
         guard let windowCenter = frontmostWindowCenter(),
               let source = CGEventSource(stateID: .hidSystemState),
               let event = CGEvent(
@@ -1430,12 +1443,14 @@ enum KeyboardInjector {
         AppLogger.shared.write(
             "CODEX PAGE SCROLL posted delta=\(delta) location=\(Int(windowCenter.x)),\(Int(windowCenter.y))"
         )
-        usleep(12_000)
+        let interval = min(max(intervalMilliseconds, 10), 15)
+        usleep(useconds_t(interval * 1_000))
         return true
     }
 
-    static func codexPageScrollDelta(for action: ButtonAction) -> Int32 {
-        action == .codexPageDown ? -codexPageScrollLines : codexPageScrollLines
+    static func codexPageScrollDelta(for action: ButtonAction, lines: Int32 = codexPageScrollLines) -> Int32 {
+        let normalizedLines = min(max(abs(lines), 1), 50)
+        return action == .codexPageDown ? -normalizedLines : normalizedLines
     }
 
     private static func frontmostWindowCenter() -> CGPoint? {

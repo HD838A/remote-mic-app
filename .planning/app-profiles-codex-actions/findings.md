@@ -12,3 +12,6 @@
 - Release 主应用类型检查和打包通过；系统默认 SwiftPM 构建受本机 CLT/SDK 环境限制，使用 `--disable-sandbox` 构建成功。
 - Codex 翻页可直接映射 macOS 原生 Page Up / Page Down key code（116 / 121）；无需新增 Codex API 或滚轮参数，现有应用 profile picker 会自动发现新动作。
 - 实测日志显示遥控器已正确解析为 `codexPageUp` / `codexPageDown`，但 Codex 未响应合成 Page Up/Page Down；GitHub MacosUseSDK 的可复用滚轮实现使用目标坐标、`wheelCount=2` 和约 15ms 事件间隔，因此翻页动作改为独立的大步长滚轮事件。
+- 本机 `/Applications/ChatGPT.app` 的显示名称为 ChatGPT、bundle identifier 为 `com.openai.codex`；内部 `.codex` 枚举保持兼容旧配置，UI 使用应用 profile 的显示名称。
+- 应用专属动作独立为 `applicationSpecific` 分类，并按所选 profile 的 bundle identifier 过滤；未选择应用 profile 时不显示专属动作。
+- 滚轮速度、反向、翻页步长和事件间隔存入 `ApplicationMappingProfile.scrollSettings`；旧 profile 缺字段时使用 5、非反向、12 行、12ms，并保留全局默认回退。
