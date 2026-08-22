@@ -827,6 +827,42 @@ struct HardwareSimulationIntegrationTests {
         }
     }
 
+    @Test func powerWeChatVoiceMessageProducesOnlyPressAndReleaseHoldEvents() throws {
+        let suiteName = "HardwareSimulationIntegrationTests.powerWeChatVoiceMessage.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.wechatVoiceMessage, for: .power)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        var phases: [String] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in
+                Issue.record("hold action must not use the tap action performer")
+                return false
+            },
+            holdActionPerformer: { button, phase, configured in
+                phases.append("\(button.rawValue):\(phase.rawValue):\(configured.action.rawValue)")
+                return true
+            },
+            frontmostBundleIdentifier: { PresetApplication.weChat.bundleIdentifier }
+        )
+
+        monitor.connectSimulatedDevice(fingerprint: "power-voice", profileID: profileID)
+        monitor.handleSimulatedReport(reportID: 1, data: Data([0x66, 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: Data([0, 0, 0, 0, 0, 0]))
+        monitor.disconnectSimulatedDevice()
+
+        #expect(phases == [
+            "power:press:wechatVoiceMessage",
+            "power:release:wechatVoiceMessage",
+        ])
+    }
+
     private func driveHIDScenario(
         _ scenario: HardwareScenario,
         isSeized: Bool = true,

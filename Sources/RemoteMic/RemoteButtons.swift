@@ -442,6 +442,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case volumeDown
     case volumeMute
     case playPause
+    case wechatVoiceMessage
     case previousCommandLeft
     case nextCommandRight
     case customShortcut
@@ -493,6 +494,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .volumeDown: return localization.text("action.system_volume_down")
         case .volumeMute: return localization.text("action.system_mute")
         case .playPause: return localization.text("action.play_pause")
+        case .wechatVoiceMessage: return localization.text("action.wechat_voice_message")
         case .previousCommandLeft: return localization.text("action.previous_command_left")
         case .nextCommandRight: return localization.text("action.next_command_right")
         case .customShortcut: return localization.text("action.custom_shortcut")
@@ -542,7 +544,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
-             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
+             .playPause, .wechatVoiceMessage, .previousCommandLeft, .nextCommandRight,
+             .toggleLongRecording:
             return .systemAndMedia
         case .customShortcut, .openCustomApplication:
             return .custom
@@ -572,7 +575,12 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .commandDelete,
             .previousCommandLeft,
             .nextCommandRight,
+            .wechatVoiceMessage,
         ].contains(self) && presetApplication == nil && !isAppInternal
+    }
+
+    var isHoldAction: Bool {
+        self == .wechatVoiceMessage
     }
 
     var isAppInternal: Bool {
@@ -586,9 +594,13 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     static func pickerActions(
         installedBundleIdentifiers: Set<String>,
         current: ButtonAction,
-        experimentalContinuousRecordingEnabled: Bool
+        experimentalContinuousRecordingEnabled: Bool,
+        button: RemoteButton? = nil
     ) -> [ButtonAction] {
         allCases.filter { action in
+            guard action != .wechatVoiceMessage || button == .power || action == current else {
+                return false
+            }
             guard action.isEnabled(
                 experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled
             ) else {

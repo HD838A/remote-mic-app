@@ -237,6 +237,8 @@ enum KeyboardInjector {
             postSystemKey(type: 7)
         case .playPause:
             postSystemKey(type: 16)
+        case .wechatVoiceMessage:
+            break
         case .previousCommandLeft:
             keyPoster(123, .maskCommand)
         case .nextCommandRight:

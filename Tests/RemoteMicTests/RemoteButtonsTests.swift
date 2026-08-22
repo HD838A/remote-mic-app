@@ -207,6 +207,27 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.openCustomApplication.allowsRepeat)
     }
 
+    @Test func weChatVoiceMessageIsAvailableOnlyForPowerButton() {
+        let installed = Set<String>()
+        let powerSelection = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installed,
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false,
+            button: .power
+        )
+        let otherSelection = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installed,
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false,
+            button: .up
+        )
+
+        #expect(powerSelection.contains(.wechatVoiceMessage))
+        #expect(!otherSelection.contains(.wechatVoiceMessage))
+        #expect(ButtonAction.wechatVoiceMessage.isHoldAction)
+        #expect(!ButtonAction.wechatVoiceMessage.allowsRepeat)
+    }
+
     @Test func buttonActionsAreSeparatedIntoClearFlatCategories() {
         #expect(ButtonAction.escape.category == .basicKeys)
         #expect(ButtonAction.commandReturn.category == .basicKeys)

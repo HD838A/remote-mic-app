@@ -121,6 +121,7 @@
 "action.system_volume_down" = "System Volume -";
 "action.system_mute" = "Mute System Audio";
 "action.play_pause" = "Play / Pause";
+"action.wechat_voice_message" = "WeChat Voice Message (hold Right Option)";
 "action.previous_command_left" = "Previous (⌘←)";
 "action.next_command_right" = "Next (⌘→)";
 "action.custom_shortcut" = "Custom Shortcut";

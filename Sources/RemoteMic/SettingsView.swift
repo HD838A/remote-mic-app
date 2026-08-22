@@ -1360,7 +1360,8 @@ struct SettingsView: View {
         let actions = ButtonAction.pickerActions(
             installedBundleIdentifiers: installedBundleIdentifiers,
             current: configured.action,
-            experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
+            experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled,
+            button: button
         ).filter { $0 != .disabled }
         let isManagedPowerAction = button == .power &&
             trigger == .singleClick &&

@@ -96,9 +96,11 @@ ATVV 通道为：
 | 电源 | Escape |
 | 音量 + / - | 系统音量增减 |
 
-用户还可以选择系统静音、播放/暂停，或打开 Codex、Claude、cmux、微信、Cursor、Xcode、Slack、企业微信、网易云音乐、Chrome、Safari 和 Zed。选择器只显示当前已安装的预置应用，但会保留后来被卸载的已有映射；应用启动动作不会重复创建实例。
+用户还可以选择系统静音、播放/暂停，或打开 Codex、Claude、cmux、微信、Cursor、Xcode、Slack、企业微信、网易云音乐、Chrome、Safari 和 Zed。电源键专用的“微信发语音消息（按住右 Option）”动作通过独立的 hold-action 通道发送成对的 Right Option keyDown/keyUp，不进入普通单击或手势识别路径；选择器不会把它提供给其他实体按键。选择器只显示当前已安装的预置应用，但会保留后来被卸载的已有映射；应用启动动作不会重复创建实例。
 
 方向、返回和音量键支持长按重复；打开应用动作不重复。普通实体按键活动状态会发布到 SwiftUI，用于高亮遥控器示意图和定位映射行。
+
+微信电源键动作使用独立的 `HIDRemoteMonitor.holdActionPerformer` 和 `BridgeAppModel` 的 `VoiceFunctionKeyLatch`。物理释放、遥控器断连、权限释放和应用退出都会尝试发送 Right Option keyUp；豆包等全局监听器仍可能收到相同的系统 Right Option 事件。
 
 ## 语音键 Fn 映射
 

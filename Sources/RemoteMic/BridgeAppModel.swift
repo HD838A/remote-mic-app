@@ -234,6 +234,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var testToneGeneration = 0
     private var phoneVoiceFunctionKeyLatch = VoiceFunctionKeyLatch()
     private var rightOptionVoiceKeyLatch = VoiceFunctionKeyLatch()
+    private var powerWeChatVoiceKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
     private var voiceSessionUsageSource: UsageEventSource?
     private var bluetoothVoiceActive = false
@@ -599,6 +600,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
         _ = updateRightOptionVoiceKeyState(streaming: false)
+        _ = updatePowerWeChatVoiceKeyState(pressed: false)
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
         bluetoothBridges.removeAll()
@@ -1333,6 +1335,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             actionPerformer: { [weak self] _, _, configured in
                 self?.performExternalConfiguredAction(configured) ?? false
             },
+            holdActionPerformer: { [weak self] button, phase, configured in
+                self?.performHoldConfiguredAction(
+                    button: button,
+                    phase: phase,
+                    configured: configured
+                ) ?? false
+            },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
                 self?.macroFeature.executeBoundMacro(
                     profileID: profileID,
@@ -1962,6 +1971,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             return true
         }
+        let configured = settings.configuredAction(for: button, trigger: .singleClick)
+        if button == .power, configured.action == .wechatVoiceMessage {
+            guard updatePowerWeChatVoiceKeyState(pressed: phase == .press) else {
+                return false
+            }
+            if phase == .press {
+                settings.recordButtonPress(control: .remoteButton(button), source: source)
+            }
+            return true
+        }
         let profileID = settings.selectedRemoteProfileID
         let recognizesDoubleClick = settings.configuredAction(
             for: button,
@@ -2102,6 +2121,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return true
         }
         let configured = settings.configuredAction(for: button, trigger: trigger)
+        guard !configured.action.isHoldAction else { return false }
         if configured.action.isAppInternal {
             let handled = performInternalAction(configured.action)
             if handled {
@@ -2129,6 +2149,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
+        guard !configured.action.isHoldAction else { return false }
         let applicationProfile = settings.customApplicationProfile(
             id: configured.applicationProfileID
         )
@@ -2147,6 +2168,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
         }
         return handled
+    }
+
+    private func performHoldConfiguredAction(
+        button: RemoteButton,
+        phase: RemoteButtonPhase,
+        configured: ConfiguredButtonAction
+    ) -> Bool {
+        guard button == .power, configured.action == .wechatVoiceMessage else {
+            return false
+        }
+        return updatePowerWeChatVoiceKeyState(pressed: phase == .press)
     }
 
     private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {
@@ -2725,6 +2757,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         AppLogger.shared.write(
             "VOICE RIGHT_OPTION \(shouldHold ? "DOWN" : "UP")"
+        )
+        return true
+    }
+
+    @discardableResult
+    private func updatePowerWeChatVoiceKeyState(pressed: Bool) -> Bool {
+        guard let transition = powerWeChatVoiceKeyLatch.transition(streaming: pressed) else {
+            return true
+        }
+        let shouldHold = transition == .press
+        guard KeyboardInjector.setRightOptionKeyPressed(shouldHold) else {
+            powerWeChatVoiceKeyLatch.rollback(transition)
+            AppLogger.shared.write(
+                "POWER WECHAT RIGHT_OPTION \(shouldHold ? "DOWN" : "UP") failed"
+            )
+            return false
+        }
+        AppLogger.shared.write(
+            "POWER WECHAT RIGHT_OPTION \(shouldHold ? "DOWN" : "UP")"
         )
         return true
     }
