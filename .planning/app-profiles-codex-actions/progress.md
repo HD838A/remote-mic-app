@@ -7,6 +7,15 @@
 - 视觉检查确认 ChatGPT profile 下动作顺序为系统与媒体、应用专属动作、自定义动作，滚动设置显示为 ChatGPT 配置；第 8 阶段完成。
 - 第 9 阶段完成：微信语音动作移入应用专属分类，按 `com.tencent.xinWeChat` 过滤，并在微信 profile 中显示为“微信 发语音消息（按住右 Option）”。已恢复 UI 到原先的 ChatGPT profile。
 - 第 10 阶段完成：取消微信语音动作只能绑定电源键的限制；实体 HID 与手机/网页遥控器入口均支持任意按键按住/松开发送 Right Option 状态。UI 已在微信 profile 的上键编辑器中验证动作可选，并恢复到 ChatGPT profile。
+- 第 11 阶段开始：用户确认微信对话中的语音气泡单击可播放；开始新增独立的“播放收到的语音消息”动作，保留现有微信发语音/语音转文字逻辑不变。
+- 已新增 `wechatPlayVoiceMessage` 动作、双语文案、Accessibility 语音节点播放器、动作过滤/注入测试和 `Testing/WeChatVoiceMessagePlayback.md`；旧 `wechatVoiceMessage` 按住右 Option 行为未改动。
+- `swiftc -parse Sources/RemoteMic/*.swift Tests/RemoteMicTests/*.swift`、`git diff --check` 和两份 `.strings` `plutil -lint` 通过。
+- `swift build`、`SKIP_SWIFT_PACKAGE_BUILD=1 scripts/test.sh` 均被本机 Swift 6.3.3 与 SDK Swift 6.3.2 版本不匹配阻塞，尚未宣称编译或单元测试通过。
+- 通过同时重定向 Swift/Clang module cache 后，Debug 主目标完整编译通过；Swift Testing 目标因环境缺少 `Testing` 模块失败；纯 Swift 自测 `passed=42 failed=0`。
+- Release 构建、`APP VERIFY PASS`、深度签名校验和安装包主程序 SHA-256 校验通过；已安装并启动 `/Applications/SayAll.app`，日志确认 `APP START version=1.9.8`。
+- SayAll UI 已验证微信 Profile 的应用专属动作显示“微信 播放收到的语音消息”，并将 TV 键单击临时配置为该动作；安装新包后 macOS 辅助功能授权失效，现场遥控器测试等待重新授权。
+- 第 11 阶段实测完成：TV 键事件被正确接收并触发微信播放动作；微信未暴露语音气泡 AX 节点，加入鼠标位置回退并修正 AppKit/Quartz 垂直坐标转换。用户确认修正后的短按可播放语音，且单次按键只产生一次点击。
+- 坐标回退仅允许点击当前微信窗口内容区域，不使用固定坐标；Release 构建、APP VERIFY、42/42 自测和安装后现场播放验证均通过。
 
 ## 2026-08-22
 
