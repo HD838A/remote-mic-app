@@ -2180,6 +2180,8 @@ struct RemoteButtonsTests {
     @Test func nativeEventDescriptorsCoverPotentialDuplicateEvents() {
         #expect(RemoteButton.up.nativeEvent == .keyboard(keyCode: 126))
         #expect(RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36))
+        // Real RC003 hardware emits keyCode 10 (ISO §) for the TV key.
+        #expect(RemoteButton.tv.nativeEvent == .keyboard(keyCode: 10))
         #expect(RemoteButton.power.nativeEvent == .keyboard(keyCode: 90))
         #expect(RemoteButton.menu.nativeEvent == .keyboard(keyCode: KeyboardInjector.contextualMenuKeyCode))
         #expect(RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0))

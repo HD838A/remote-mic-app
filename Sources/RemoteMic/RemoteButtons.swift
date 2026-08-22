@@ -79,7 +79,11 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
     var nativeEvent: RemoteNativeEvent? {
         switch self {
         case .ok: return .keyboard(keyCode: 36)
-        case .tv: return .keyboard(keyCode: 50)
+        // Measured on a real RC003 (2026-08-22): the TV key's keyboard
+        // interface actually emits keyCode 10 (ISO §) with flags 0x100.
+        // 50 was the historical value from the initial release and never
+        // matched the hardware, so the suppressor missed the real event.
+        case .tv: return .keyboard(keyCode: 10)
         case .home: return .keyboard(keyCode: 115)
         case .right: return .keyboard(keyCode: 124)
         case .left: return .keyboard(keyCode: 123)
