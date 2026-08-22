@@ -110,6 +110,8 @@
 "action.arrow_down" = "Arrow Down";
 "action.arrow_left" = "Arrow Left";
 "action.arrow_right" = "Arrow Right";
+"action.scroll_up" = "Scroll Up";
+"action.scroll_down" = "Scroll Down";
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "Show Desktop";
