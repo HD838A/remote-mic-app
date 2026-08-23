@@ -11,6 +11,10 @@ MODE="${1:-}"
 DRY_RUN="${DRY_RUN:-0}"
 PUBLIC_DOWNLOAD_CONCURRENCY="${PUBLIC_DOWNLOAD_CONCURRENCY:-4}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
+REQUEST_ATTESTATION="${RELEASE_REQUEST_ATTESTATION:-}"
+REQUEST_ID="${RELEASE_REQUEST_ID:-}"
+EXPECTED_PIPELINE_DIGEST="${EXPECTED_PIPELINE_DIGEST:-}"
+EXPECTED_STABLE_TAG="${EXPECTED_STABLE_TAG:-v1.8.3}"
 PLIST_VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
 PLIST_BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
 REQUESTED_RELEASE_TAG="${RELEASE_TAG:-}"
@@ -36,11 +40,12 @@ INTEL_APPCAST="$INTEL_OUTPUT_DIR/appcast-intel.xml"
 INTEL_ZH_RELEASE_NOTES="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.zh.txt"
 INTEL_EN_RELEASE_NOTES="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.en.txt"
 SHARED_CHECKSUM_BASENAME="Remote-Mic-$VERSION.dmg.sha256"
-PUBLIC_PAYLOAD_ASSET_COUNT=11
-PUBLIC_RELEASE_ASSET_COUNT=12
 
-if [[ "$#" -ne 1 || ( "$MODE" != "prerelease" && "$MODE" != "promote" ) ]]; then
-  print -u2 "usage: $0 prerelease|promote"
+if [[ "$#" -ne 1 || \
+      ( "$MODE" != "prerelease" && \
+        "$MODE" != "verify-prerelease" && \
+        "$MODE" != "promote" ) ]]; then
+  print -u2 "usage: $0 prerelease|verify-prerelease|promote"
   exit 1
 fi
 case "$DRY_RUN" in
@@ -56,7 +61,11 @@ if [[ "$EXPECTED_DEVELOPER_TEAM_ID" != "L3QHLDRPAY" ]]; then
   print -u2 "refusing to publish for an unexpected Apple Developer Team"
   exit 1
 fi
-if [[ "$MODE" == "prerelease" ]]; then
+if [[ ! "$EXPECTED_STABLE_TAG" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
+  print -u2 "EXPECTED_STABLE_TAG must be an exact semantic version tag"
+  exit 1
+fi
+if [[ "$MODE" == "prerelease" || "$MODE" == "verify-prerelease" ]]; then
   RELEASE_TAG="${REQUESTED_RELEASE_TAG:-v$VERSION}"
   if [[ "$RELEASE_TAG" != "v$VERSION" ]]; then
     print -u2 "RELEASE_TAG must match the version in Resources/Info.plist"
@@ -82,12 +91,54 @@ for command_name in cmp curl gh git jq plutil rg shasum stat; do
   }
 done
 
+if [[ "$DRY_RUN" == "0" ]]; then
+  expected_workflow_path=".github/workflows/mac-release-package.yml"
+  expected_head_branch="release/pre-$RELEASE_TAG"
+  if [[ "$MODE" == "promote" ]]; then
+    expected_workflow_path=".github/workflows/mac-stable-promote.yml"
+    expected_head_branch="main"
+  fi
+  expected_workflow_ref="$REPOSITORY/$expected_workflow_path@"
+  current_commit="$(git -C "$ROOT" rev-parse HEAD)"
+  if [[ "${GITHUB_ACTIONS:-}" != "true" || \
+        "${GITHUB_REPOSITORY:-}" != "$REPOSITORY" || \
+        "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" || \
+        "${GITHUB_REF_NAME:-}" != "$expected_head_branch" || \
+        "${GITHUB_SHA:-}" != "$current_commit" || \
+        ! "${GITHUB_RUN_ID:-}" =~ '^[1-9][0-9]*$' || \
+        ! "${GITHUB_RUN_ATTEMPT:-}" =~ '^[1-9][0-9]*$' || \
+        "${GITHUB_WORKFLOW_REF:-}" != "$expected_workflow_ref"* ]]; then
+    print -u2 "release mutation is restricted to the expected protected GitHub workflow"
+    exit 1
+  fi
+  run_identity="$(gh api "repos/$REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT")"
+  if ! print -r -- "$run_identity" | jq -e \
+    --arg repository "$REPOSITORY" \
+    --arg event "workflow_dispatch" \
+    --arg workflowPath "$expected_workflow_path" \
+    --arg headBranch "$expected_head_branch" \
+    --arg headSha "$current_commit" \
+    --argjson runAttempt "$GITHUB_RUN_ATTEMPT" '
+      .repository.full_name == $repository and
+      .event == $event and
+      .path == $workflowPath and
+      .head_branch == $headBranch and
+      .head_sha == $headSha and
+      .run_attempt == $runAttempt and
+      .status == "in_progress"
+    ' >/dev/null; then
+    print -u2 "GitHub API did not confirm the active protected release workflow identity"
+    exit 1
+  fi
+fi
+
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-publish-release.XXXXXX)"
 STAGING_DIR="$WORK_DIR/upload"
 DOWNLOAD_DIR="$WORK_DIR/download"
 CDN_DOWNLOAD_DIR="$WORK_DIR/cdn-download"
 RELEASE_NOTES="$WORK_DIR/release-notes.md"
 CANDIDATE_PROVENANCE="$STAGING_DIR/candidate-provenance.json"
+CANDIDATE_RELEASE_MANIFEST="$WORK_DIR/candidate-release-assets.txt"
 STABLE_PROMOTION="$WORK_DIR/stable-promotion.json"
 
 cleanup() {
@@ -99,6 +150,15 @@ cleanup() {
 trap cleanup EXIT
 
 /bin/mkdir -p "$STAGING_DIR" "$DOWNLOAD_DIR" "$CDN_DOWNLOAD_DIR"
+
+require_expected_stable_latest() {
+  local actual_stable_tag
+  actual_stable_tag="$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)"
+  if [[ "$actual_stable_tag" != "$EXPECTED_STABLE_TAG" ]]; then
+    print -u2 "stable latest must remain $EXPECTED_STABLE_TAG during Preview publication; found $actual_stable_tag"
+    return 1
+  fi
+}
 
 verify_update_zip() {
   local archive="$1"
@@ -208,11 +268,97 @@ generate_release_notes() {
   fi
 }
 
+validate_payload_asset_manifest() {
+  local provenance="$1"
+  jq -e '
+    (.payloadAssets | type == "array" and length > 0) and
+    ([.payloadAssets[].name] | length == (unique | length)) and
+    all(.payloadAssets[];
+      (.name | type == "string" and length > 0 and
+        test("^[A-Za-z0-9][A-Za-z0-9._-]*$") and
+        . != "candidate-provenance.json" and
+        . != "stable-promotion.json") and
+      (.size | type == "number" and . >= 0 and floor == .) and
+      (.sha256 | type == "string" and test("^[0-9a-f]{64}$")))
+  ' "$provenance" >/dev/null
+}
+
+validate_request_attestation() {
+  local expected_commit="$1"
+  local expected_base="$2"
+  if [[ ! -r "$REQUEST_ATTESTATION" ]]; then
+    print -u2 "preview publication requires the immutable request attestation"
+    return 1
+  fi
+  jq -e \
+    --arg requestId "$REQUEST_ID" \
+    --arg tag "$RELEASE_TAG" \
+    --arg commit "$expected_commit" \
+    --arg base "$expected_base" \
+    --arg pipelineDigest "$EXPECTED_PIPELINE_DIGEST" '
+      .schemaVersion == 4 and
+      .requestId == $requestId and
+      .attemptId == $commit and
+      .tag == $tag and
+      .candidateCommit == $commit and
+      .baseMainCommit == $base and
+      .pipelineDigest == $pipelineDigest and
+      (.requestStartedAt | type == "number" and . >= 0 and floor == .) and
+      (.releaseReadyAt | type == "number") and
+      (.releaseReadyAt >= .requestStartedAt) and
+      (.releaseReadyAt | floor == .) and
+      (.pipelineQualifiedAt | type == "string" and length > 0) and
+      (.pipelineQualificationRunId | type == "number" and . > 0) and
+      (.pipelineQualificationArtifactId | type == "number" and . > 0) and
+      (.pipelineQualificationArtifactDigest | type == "string" and
+        test("^sha256:[0-9a-f]{64}$")) and
+      (.attestationRunId | type == "number" and . > 0) and
+      (.attestationRunAttempt | type == "number" and . > 0)
+    ' "$REQUEST_ATTESTATION" >/dev/null
+}
+
+write_candidate_release_manifest() {
+  local provenance="$1"
+  local output_file="$2"
+  validate_payload_asset_manifest "$provenance"
+  {
+    jq -r '.payloadAssets[].name' "$provenance"
+    print -r -- "candidate-provenance.json"
+  } | LC_ALL=C /usr/bin/sort > "$output_file"
+  test "$(/usr/bin/wc -l < "$output_file" | /usr/bin/tr -d ' ')" -gt 1
+}
+
+verify_asset_directory_matches_manifest() {
+  local source_dir="$1"
+  local manifest_file="$2"
+  local label="$3"
+  local actual_manifest="$WORK_DIR/$label-actual-assets.txt"
+  local file_path
+  : > "$actual_manifest"
+  for file_path in "$source_dir"/*(DN); do
+    if [[ ! -f "$file_path" || -L "$file_path" ]]; then
+      print -u2 "$label contains a non-regular release asset: ${file_path:t}"
+      return 1
+    fi
+    print -r -- "${file_path:t}" >> "$actual_manifest"
+  done
+  LC_ALL=C /usr/bin/sort -o "$actual_manifest" "$actual_manifest"
+  if ! /usr/bin/cmp -s "$manifest_file" "$actual_manifest"; then
+    print -u2 "$label asset set does not exactly match candidate provenance"
+    print -u2 "expected assets:"
+    /bin/cat "$manifest_file" >&2
+    print -u2 "actual assets:"
+    /bin/cat "$actual_manifest" >&2
+    return 1
+  fi
+}
+
 generate_candidate_provenance() {
   local branch head_commit base_main_commit payload_json_file file_path file_name file_size file_sha
   branch="$(git symbolic-ref --quiet --short HEAD)"
   head_commit="$(git rev-parse HEAD)"
   base_main_commit="$(git rev-parse HEAD^)"
+  validate_request_attestation "$head_commit" "$base_main_commit"
   payload_json_file="$WORK_DIR/payload-assets.jsonl"
   : > "$payload_json_file"
 
@@ -235,8 +381,9 @@ generate_candidate_provenance() {
     --arg baseMainCommit "$base_main_commit" \
     --arg version "$VERSION" \
     --arg build "$BUILD" \
+    --slurpfile requestAttestation "$REQUEST_ATTESTATION" \
     '{
-      schemaVersion: 2,
+      schemaVersion: 3,
       repository: $repository,
       candidateBranch: $candidateBranch,
       tag: $tag,
@@ -244,11 +391,23 @@ generate_candidate_provenance() {
       baseMainCommit: $baseMainCommit,
       version: $version,
       build: $build,
+      requestId: $requestAttestation[0].requestId,
+      attemptId: $requestAttestation[0].attemptId,
+      requestStartedAt: $requestAttestation[0].requestStartedAt,
+      releaseReadyAt: $requestAttestation[0].releaseReadyAt,
+      pipelineDigest: $requestAttestation[0].pipelineDigest,
+      pipelineQualifiedAt: $requestAttestation[0].pipelineQualifiedAt,
+      pipelineQualificationRunId: $requestAttestation[0].pipelineQualificationRunId,
+      pipelineQualificationArtifactId: $requestAttestation[0].pipelineQualificationArtifactId,
+      pipelineQualificationArtifactDigest: $requestAttestation[0].pipelineQualificationArtifactDigest,
+      requestAttestationRunId: $requestAttestation[0].attestationRunId,
+      requestAttestationRunAttempt: $requestAttestation[0].attestationRunAttempt,
       payloadAssets: .
-    }' "$payload_json_file" > "$CANDIDATE_PROVENANCE"
-
-  test "$(jq '.payloadAssets | length' "$CANDIDATE_PROVENANCE")" = \
-    "$PUBLIC_PAYLOAD_ASSET_COUNT"
+  }' "$payload_json_file" > "$CANDIDATE_PROVENANCE"
+  write_candidate_release_manifest \
+    "$CANDIDATE_PROVENANCE" "$CANDIDATE_RELEASE_MANIFEST"
+  verify_asset_directory_matches_manifest \
+    "$STAGING_DIR" "$CANDIDATE_RELEASE_MANIFEST" staging
 }
 
 verify_candidate_source() {
@@ -334,26 +493,6 @@ wait_for_download_batch() {
   fi
 }
 
-require_supported_payload_asset_count() {
-  case "$1" in
-    11|14|16) ;;
-    *)
-      print -u2 "unsupported release payload asset count: $1"
-      return 1
-      ;;
-  esac
-}
-
-require_supported_release_asset_count() {
-  case "$1" in
-    12|15|17) ;;
-    *)
-      print -u2 "unsupported public release asset count: $1"
-      return 1
-      ;;
-  esac
-}
-
 download_asset() {
   local asset_name="$1"
   local destination_dir="$2"
@@ -378,6 +517,9 @@ download_assets_from_manifest() {
 
   for asset_name in "${(@f)$(<"$manifest_file")}"; do
     [[ -n "$asset_name" ]] || continue
+    if [[ -f "$destination_dir/$asset_name" ]]; then
+      continue
+    fi
     download_asset "$asset_name" "$destination_dir" "$download_prefix" "$label" &
     batch_pids+=("$!")
     if (( ${#batch_pids[@]} >= PUBLIC_DOWNLOAD_CONCURRENCY )); then
@@ -395,55 +537,64 @@ download_and_compare_assets() {
   local destination_dir="$2"
   local download_prefix="$3"
   local label="$4"
-  local manifest_file="$WORK_DIR/$label-assets.txt"
+  local manifest_file="$5"
   local source_file asset_name downloaded_file source_sha downloaded_sha expected_count
 
   /bin/mkdir -p "$destination_dir"
   test "$(/usr/bin/find "$destination_dir" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "0"
-  : > "$manifest_file"
-  for source_file in "$source_dir"/*(.N); do
-    print -r -- "${source_file:t}" >> "$manifest_file"
-  done
-  LC_ALL=C /usr/bin/sort -o "$manifest_file" "$manifest_file"
+  verify_asset_directory_matches_manifest "$source_dir" "$manifest_file" "$label-source"
   expected_count="$(/usr/bin/wc -l < "$manifest_file" | /usr/bin/tr -d ' ')"
-  require_supported_release_asset_count "$expected_count"
+  test "$expected_count" -gt 1
 
   download_assets_from_manifest "$manifest_file" "$destination_dir" \
     "$download_prefix" "$label"
 
-  for source_file in "$source_dir"/*; do
-    asset_name="${source_file:t}"
+  while IFS= read -r asset_name; do
+    [[ -n "$asset_name" ]] || continue
+    source_file="$source_dir/$asset_name"
     downloaded_file="$destination_dir/$asset_name"
+    test -f "$source_file"
     test -f "$downloaded_file"
     /usr/bin/cmp -s "$source_file" "$downloaded_file"
     source_sha="$(/usr/bin/shasum -a 256 "$source_file" | /usr/bin/awk '{ print $1 }')"
     downloaded_sha="$(/usr/bin/shasum -a 256 "$downloaded_file" | /usr/bin/awk '{ print $1 }')"
     test "$source_sha" = "$downloaded_sha"
     print "$label COMPARE PASS: $asset_name $downloaded_sha"
-  done
-  test "$(/usr/bin/find "$destination_dir" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = \
-    "$expected_count"
+  done < "$manifest_file"
+  verify_asset_directory_matches_manifest \
+    "$destination_dir" "$manifest_file" "$label-download"
 }
 
 download_release_assets() {
-  local manifest_file="$WORK_DIR/github-origin-assets.txt"
-  local expected_count
+  local remote_manifest="$WORK_DIR/github-origin-assets.txt"
   /bin/mkdir -p "$DOWNLOAD_DIR"
   test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "0"
   gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
-    --jq '.assets[].name' | LC_ALL=C /usr/bin/sort > "$manifest_file"
-  expected_count="$(/usr/bin/wc -l < "$manifest_file" | /usr/bin/tr -d ' ')"
-  require_supported_release_asset_count "$expected_count"
-  download_assets_from_manifest "$manifest_file" "$DOWNLOAD_DIR" \
+    --jq '.assets[].name' | LC_ALL=C /usr/bin/sort > "$remote_manifest"
+  if ! rg -Fxq 'candidate-provenance.json' "$remote_manifest"; then
+    print -u2 "release is missing candidate-provenance.json"
+    return 1
+  fi
+  download_asset candidate-provenance.json "$DOWNLOAD_DIR" \
     "$GITHUB_DOWNLOAD_PREFIX" github-origin
-  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = \
-    "$expected_count"
+  validate_payload_asset_manifest "$DOWNLOAD_DIR/candidate-provenance.json"
+  write_candidate_release_manifest \
+    "$DOWNLOAD_DIR/candidate-provenance.json" "$CANDIDATE_RELEASE_MANIFEST"
+  if ! /usr/bin/cmp -s "$remote_manifest" "$CANDIDATE_RELEASE_MANIFEST"; then
+    print -u2 "GitHub Release asset set does not exactly match candidate provenance"
+    return 1
+  fi
+  download_assets_from_manifest "$CANDIDATE_RELEASE_MANIFEST" "$DOWNLOAD_DIR" \
+    "$GITHUB_DOWNLOAD_PREFIX" github-origin
+  verify_asset_directory_matches_manifest \
+    "$DOWNLOAD_DIR" "$CANDIDATE_RELEASE_MANIFEST" github-origin-download
 }
 
 verify_cdn_assets() {
   local source_dir="$1"
+  local manifest_file="$2"
   download_and_compare_assets "$source_dir" "$CDN_DOWNLOAD_DIR" \
-    "$CDN_DOWNLOAD_PREFIX" cdn
+    "$CDN_DOWNLOAD_PREFIX" cdn "$manifest_file"
 
   local dmg_name="Remote-Mic-$VERSION.dmg"
   local header_file="$WORK_DIR/cdn-dmg-headers.txt"
@@ -483,27 +634,62 @@ verify_downloaded_candidate() {
     --arg tag "$RELEASE_TAG" \
     --arg version "$VERSION" \
     --arg build "$BUILD" \
-    '(.schemaVersion == 1 or .schemaVersion == 2) and
+    '(.schemaVersion == 1 or .schemaVersion == 2 or .schemaVersion == 3) and
      .repository == $repository and .tag == $tag and
      .version == $version and .build == $build and
-     (.candidateBranch == ("release/pre-" + $tag) or
-      ((.candidateBranch | startswith("release/pre-" + $tag + "-rerun")) and
-       (.candidateBranch | ltrimstr("release/pre-" + $tag + "-rerun") | test("^([2-9][0-9]*)?$")))) and
+     (.candidateBranch | type == "string") and
      (.tagCommit | test("^[0-9a-f]{40}$")) and
-     (if .schemaVersion == 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
-     ((.payloadAssets | length) == 11 or
-      (.payloadAssets | length) == 14 or
-      (.payloadAssets | length) == 16)' "$provenance" >/dev/null
+     (if .schemaVersion >= 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
+     (if .schemaVersion == 3 then
+        (.requestId | type == "string" and length >= 8) and
+        .attemptId == .tagCommit and
+        (.requestStartedAt | type == "number" and . >= 0 and floor == .) and
+        (.releaseReadyAt | type == "number") and
+        (.releaseReadyAt >= .requestStartedAt) and
+        (.releaseReadyAt | floor == .) and
+        (.pipelineDigest | type == "string" and test("^[0-9a-f]{64}$")) and
+        (.pipelineQualifiedAt | type == "string" and length > 0) and
+        (.pipelineQualificationRunId | type == "number" and . > 0) and
+        (.pipelineQualificationArtifactId | type == "number" and . > 0) and
+        (.pipelineQualificationArtifactDigest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+        (.requestAttestationRunId | type == "number" and . > 0) and
+        (.requestAttestationRunAttempt | type == "number" and . > 0)
+      else true end)' \
+    "$provenance" >/dev/null
+  validate_payload_asset_manifest "$provenance"
   if [[ "$VERSION" != "${RELEASE_TAG#v}" || ! "$BUILD" =~ '^[0-9]+$' ]]; then
     print -u2 "candidate provenance version/build does not match $RELEASE_TAG"
     exit 1
   fi
 
-  local schema_version tag_commit base_main_commit candidate_branch remote_branch_commit asset_name expected_size expected_sha file_path actual_size actual_sha
+  local schema_version tag_commit base_main_commit candidate_branch legacy_branch_prefix legacy_branch_suffix remote_branch_commit asset_name expected_size expected_sha file_path actual_size actual_sha
   schema_version="$(jq -r '.schemaVersion' "$provenance")"
-  require_supported_payload_asset_count "$(jq '.payloadAssets | length' "$provenance")"
   tag_commit="$(jq -r '.tagCommit' "$provenance")"
   candidate_branch="$(jq -r '.candidateBranch' "$provenance")"
+  if ! git check-ref-format "refs/heads/$candidate_branch"; then
+    print -u2 "candidate provenance contains an invalid branch ref"
+    exit 1
+  fi
+  if [[ "$MODE" == "prerelease" || "$MODE" == "verify-prerelease" ]]; then
+    if [[ "$candidate_branch" != "release/pre-$RELEASE_TAG" ]]; then
+      print -u2 "new Preview provenance must use the single branch release/pre-$RELEASE_TAG"
+      exit 1
+    fi
+  elif [[ "$schema_version" == "3" ]]; then
+    if [[ "$candidate_branch" != "release/pre-$RELEASE_TAG" ]]; then
+      print -u2 "schema 3 candidate provenance must use release/pre-$RELEASE_TAG"
+      exit 1
+    fi
+  elif [[ "$schema_version" == "2" && \
+          "$candidate_branch" != "release/pre-$RELEASE_TAG" ]]; then
+    legacy_branch_prefix="release/pre-$RELEASE_TAG-rerun"
+    legacy_branch_suffix="${candidate_branch#$legacy_branch_prefix}"
+    if [[ "$candidate_branch" != "$legacy_branch_prefix"* || \
+          ! "$legacy_branch_suffix" =~ '^([2-9][0-9]*)?$' ]]; then
+      print -u2 "candidate provenance contains an unsupported branch"
+      exit 1
+    fi
+  fi
   if [[ "$tag_commit" != "$(git rev-parse "$RELEASE_TAG^{commit}")" ]]; then
     print -u2 "candidate provenance tag commit does not match $RELEASE_TAG"
     exit 1
@@ -513,7 +699,7 @@ verify_downloaded_candidate() {
     print -u2 "candidate branch is missing or no longer points to the tagged commit"
     exit 1
   fi
-  if [[ "$schema_version" == "2" ]]; then
+  if [[ "$schema_version" == "2" || "$schema_version" == "3" ]]; then
     base_main_commit="$(jq -r '.baseMainCommit' "$provenance")"
     if [[ "$(git rev-parse "$tag_commit^")" != "$base_main_commit" ]]; then
       print -u2 "candidate provenance baseMainCommit is not the tag commit's direct parent"
@@ -524,6 +710,21 @@ verify_downloaded_candidate() {
       exit 1
     fi
   fi
+
+  if [[ "$schema_version" == "3" && \
+        ( "$MODE" == "prerelease" || "$MODE" == "verify-prerelease" ) ]]; then
+    validate_request_attestation "$tag_commit" "$(jq -r '.baseMainCommit' "$provenance")"
+    if ! /usr/bin/cmp -s \
+      <(jq -S '{requestId,attemptId,requestStartedAt,releaseReadyAt,pipelineDigest,pipelineQualifiedAt,pipelineQualificationRunId,pipelineQualificationArtifactId,pipelineQualificationArtifactDigest}' "$REQUEST_ATTESTATION") \
+      <(jq -S '{requestId,attemptId,requestStartedAt,releaseReadyAt,pipelineDigest,pipelineQualifiedAt,pipelineQualificationRunId,pipelineQualificationArtifactId,pipelineQualificationArtifactDigest}' "$provenance"); then
+      print -u2 "candidate provenance does not match the immutable request attestation"
+      exit 1
+    fi
+  fi
+
+  write_candidate_release_manifest "$provenance" "$CANDIDATE_RELEASE_MANIFEST"
+  verify_asset_directory_matches_manifest \
+    "$DOWNLOAD_DIR" "$CANDIDATE_RELEASE_MANIFEST" downloaded-candidate
 
   while IFS=$'\t' read -r asset_name expected_size expected_sha; do
     file_path="$DOWNLOAD_DIR/$asset_name"
@@ -540,9 +741,9 @@ verify_downloaded_candidate() {
 download_and_compare_local_candidate() {
   local github_pid cdn_pid github_status=0 cdn_status=0
   download_and_compare_assets "$STAGING_DIR" "$DOWNLOAD_DIR" \
-    "$GITHUB_DOWNLOAD_PREFIX" github-origin &
+    "$GITHUB_DOWNLOAD_PREFIX" github-origin "$CANDIDATE_RELEASE_MANIFEST" &
   github_pid="$!"
-  verify_cdn_assets "$STAGING_DIR" &
+  verify_cdn_assets "$STAGING_DIR" "$CANDIDATE_RELEASE_MANIFEST" &
   cdn_pid="$!"
   wait "$github_pid" || github_status="$?"
   wait "$cdn_pid" || cdn_status="$?"
@@ -574,11 +775,34 @@ generate_stable_promotion() {
       actor: $actor,
       payloadAssets: .payloadAssets
     }' "$provenance" > "$STABLE_PROMOTION"
-  jq -e '((.payloadAssets | length) == 11 or
-          (.payloadAssets | length) == 14 or
-          (.payloadAssets | length) == 16)' \
-    "$STABLE_PROMOTION" >/dev/null
+  validate_payload_asset_manifest "$STABLE_PROMOTION"
 }
+
+dispatch_preview_recording_guard() {
+  gh workflow run release-guard.yml \
+    --repo "$REPOSITORY" \
+    --ref main \
+    -f "tag=$RELEASE_TAG"
+  print "PREVIEW MAIN RECORDING DISPATCHED: $RELEASE_TAG"
+}
+
+if [[ "$MODE" == "verify-prerelease" ]]; then
+  if [[ "$DRY_RUN" == "1" ]]; then
+    print -u2 "verify-prerelease requires the existing public Pre-release"
+    exit 2
+  fi
+  verify_candidate_source
+  require_expected_stable_latest
+  release_state="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.draft, .prerelease] | @tsv')"
+  test "$release_state" = $'false\ttrue'
+  download_release_assets
+  verify_downloaded_candidate
+  verify_cdn_assets "$DOWNLOAD_DIR" "$CANDIDATE_RELEASE_MANIFEST"
+  require_expected_stable_latest
+  dispatch_preview_recording_guard
+  print "EXISTING PRE-RELEASE VERIFICATION PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
+  exit 0
+fi
 
 if [[ "$MODE" == "prerelease" ]]; then
   verify_local_artifacts
@@ -598,27 +822,26 @@ if [[ "$MODE" == "prerelease" ]]; then
 
   verify_candidate_source
   generate_candidate_provenance
-  test "$(/usr/bin/find "$STAGING_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = \
-    "$PUBLIC_RELEASE_ASSET_COUNT"
   if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
     print -u2 "release $RELEASE_TAG already exists"
     exit 1
   fi
 
-  LATEST_BEFORE="$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)"
-  gh release create "$RELEASE_TAG" \
-    "$STAGING_DIR/${UPDATE_ZIP:t}" \
-    "$STAGING_DIR/Remote-Mic-$VERSION-Uninstaller.pkg" \
-    "$STAGING_DIR/${DMG:t}" \
-    "$STAGING_DIR/$SHARED_CHECKSUM_BASENAME" \
-    "$STAGING_DIR/appcast.xml" \
-    "$STAGING_DIR/${ZH_RELEASE_NOTES:t}" \
-    "$STAGING_DIR/${EN_RELEASE_NOTES:t}" \
-    "$STAGING_DIR/${INTEL_UPDATE_ZIP:t}" \
-    "$STAGING_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg" \
-    "$STAGING_DIR/${INTEL_DMG:t}" \
-    "$STAGING_DIR/appcast-intel.xml" \
-    "$CANDIDATE_PROVENANCE" \
+  require_expected_stable_latest
+  active_branch="$(git symbolic-ref --quiet --short HEAD)"
+  active_head="$(git rev-parse HEAD)"
+  remote_active_head="$(git ls-remote origin "refs/heads/$active_branch" | /usr/bin/awk 'NR == 1 { print $1 }')"
+  if [[ "$remote_active_head" != "$active_head" ]]; then
+    print -u2 "candidate branch changed before GitHub Release creation"
+    exit 1
+  fi
+  typeset -a release_uploads=()
+  while IFS= read -r asset_name; do
+    [[ -n "$asset_name" ]] || continue
+    release_uploads+=("$STAGING_DIR/$asset_name")
+  done < "$CANDIDATE_RELEASE_MANIFEST"
+  (( ${#release_uploads[@]} > 1 ))
+  gh release create "$RELEASE_TAG" "${release_uploads[@]}" \
     --repo "$REPOSITORY" \
     --verify-tag \
     --prerelease \
@@ -628,13 +851,9 @@ if [[ "$MODE" == "prerelease" ]]; then
 
   RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.draft, .prerelease] | @tsv')"
   test "$RELEASE_STATE" = $'false\ttrue'
-  test "$(gh api "repos/$REPOSITORY/releases/latest" --jq .tag_name)" = "$LATEST_BEFORE"
+  require_expected_stable_latest
   download_and_compare_local_candidate
-  gh workflow run release-guard.yml \
-    --repo "$REPOSITORY" \
-    --ref main \
-    -f "tag=$RELEASE_TAG"
-  print "PREVIEW MAIN RECORDING DISPATCHED: $RELEASE_TAG"
+  dispatch_preview_recording_guard
   print "PRE-RELEASE PUBLISH PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
   exit 0
 fi
@@ -644,7 +863,7 @@ RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.d
 test "$RELEASE_STATE" = $'false\ttrue'
 download_release_assets
 verify_downloaded_candidate
-verify_cdn_assets "$DOWNLOAD_DIR"
+verify_cdn_assets "$DOWNLOAD_DIR" "$CANDIDATE_RELEASE_MANIFEST"
 
 if [[ "$DRY_RUN" == "1" ]]; then
   print "PUBLISH DRY RUN PASS"

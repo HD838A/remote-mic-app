@@ -50,26 +50,109 @@ PROVENANCE="$WORK_DIR/candidate-provenance.json"
 PROMOTION="$WORK_DIR/stable-promotion.json"
 TAG_COMMIT="$(git rev-parse "$RELEASE_TAG^{commit}")"
 
+validate_payload_asset_manifest() {
+  local provenance="$1"
+  jq -e '
+    (.payloadAssets | type == "array" and length > 0) and
+    ([.payloadAssets[].name] | length == (unique | length)) and
+    all(.payloadAssets[];
+      (.name | type == "string" and length > 0 and
+        test("^[A-Za-z0-9][A-Za-z0-9._-]*$") and
+        . != "candidate-provenance.json" and
+        . != "stable-promotion.json") and
+      (.size | type == "number" and . >= 0 and floor == .) and
+      (.sha256 | type == "string" and test("^[0-9a-f]{64}$")))
+  ' "$provenance" >/dev/null
+}
+
+verify_release_asset_set() {
+  local expected_manifest="$WORK_DIR/expected-release-assets.txt"
+  local actual_manifest="$WORK_DIR/actual-release-assets.txt"
+  local file_path
+  {
+    jq -r '.payloadAssets[].name' "$PROVENANCE"
+    print -r -- "candidate-provenance.json"
+    if [[ -f "$PROMOTION" ]]; then
+      print -r -- "stable-promotion.json"
+    fi
+  } | LC_ALL=C /usr/bin/sort > "$expected_manifest"
+  : > "$actual_manifest"
+  for file_path in "$WORK_DIR"/*(DN); do
+    [[ "${file_path:t}" == "expected-release-assets.txt" || \
+       "${file_path:t}" == "actual-release-assets.txt" ]] && continue
+    if [[ ! -f "$file_path" || -L "$file_path" ]]; then
+      print -u2 "release contains a non-regular asset: ${file_path:t}"
+      exit 1
+    fi
+    print -r -- "${file_path:t}" >> "$actual_manifest"
+  done
+  LC_ALL=C /usr/bin/sort -o "$actual_manifest" "$actual_manifest"
+  if ! /usr/bin/cmp -s "$expected_manifest" "$actual_manifest"; then
+    print -u2 "release asset set does not exactly match candidate provenance"
+    exit 1
+  fi
+}
+
 verify_candidate_provenance() {
   test -f "$PROVENANCE"
+  if [[ "$RELEASE_STATE" == $'false\ttrue' && -f "$PROMOTION" ]]; then
+    print -u2 "pre-release must not contain stable-promotion.json"
+    exit 1
+  fi
   jq -e \
     --arg repository "$REPOSITORY" \
     --arg tag "$RELEASE_TAG" \
     --arg tagCommit "$TAG_COMMIT" \
-    '(.schemaVersion == 1 or .schemaVersion == 2) and
+    '(.schemaVersion == 1 or .schemaVersion == 2 or .schemaVersion == 3) and
      .repository == $repository and .tag == $tag and
      .tagCommit == $tagCommit and
      .version == ($tag | ltrimstr("v")) and
      (.build | test("^[0-9]+$")) and
-     (.candidateBranch == ("release/pre-" + $tag) or
-      ((.candidateBranch | startswith("release/pre-" + $tag + "-rerun")) and
-       (.candidateBranch | ltrimstr("release/pre-" + $tag + "-rerun") | test("^([2-9][0-9]*)?$")))) and
-     (if .schemaVersion == 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
-     ((.payloadAssets | length) == 11 or
-      (.payloadAssets | length) == 14 or
-      (.payloadAssets | length) == 16)' "$PROVENANCE" >/dev/null
+     (.candidateBranch | type == "string" and length > 0) and
+     (if .schemaVersion >= 2 then (.baseMainCommit | test("^[0-9a-f]{40}$")) else true end) and
+     (if .schemaVersion == 3 then
+        (.requestId | type == "string" and length >= 8) and
+        .attemptId == .tagCommit and
+        (.requestStartedAt | type == "number" and . >= 0 and floor == .) and
+        (.releaseReadyAt | type == "number") and
+        (.releaseReadyAt >= .requestStartedAt) and
+        (.releaseReadyAt | floor == .) and
+        (.pipelineDigest | type == "string" and test("^[0-9a-f]{64}$")) and
+        (.pipelineQualifiedAt | type == "string" and length > 0) and
+        (.pipelineQualificationRunId | type == "number" and . > 0) and
+        (.pipelineQualificationArtifactId | type == "number" and . > 0) and
+        (.pipelineQualificationArtifactDigest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+        (.requestAttestationRunId | type == "number" and . > 0) and
+        (.requestAttestationRunAttempt | type == "number" and . > 0)
+      else true end)' \
+    "$PROVENANCE" >/dev/null
+  validate_payload_asset_manifest "$PROVENANCE"
+  verify_release_asset_set
 
-  if [[ "$(jq -r '.schemaVersion' "$PROVENANCE")" == "2" ]]; then
+  local schema_version candidate_branch legacy_branch_prefix legacy_branch_suffix
+  schema_version="$(jq -r '.schemaVersion' "$PROVENANCE")"
+  candidate_branch="$(jq -r '.candidateBranch' "$PROVENANCE")"
+  if ! git check-ref-format "refs/heads/$candidate_branch"; then
+    print -u2 "release guard candidate provenance contains an invalid branch ref"
+    exit 1
+  fi
+  if [[ "$schema_version" == "3" && \
+        "$candidate_branch" != "release/pre-$RELEASE_TAG" ]]; then
+    print -u2 "release guard schema 3 provenance must use release/pre-$RELEASE_TAG"
+    exit 1
+  fi
+  if [[ "$schema_version" == "2" && \
+        "$candidate_branch" != "release/pre-$RELEASE_TAG" ]]; then
+    legacy_branch_prefix="release/pre-$RELEASE_TAG-rerun"
+    legacy_branch_suffix="${candidate_branch#$legacy_branch_prefix}"
+    if [[ "$candidate_branch" != "$legacy_branch_prefix"* || \
+          ! "$legacy_branch_suffix" =~ '^([2-9][0-9]*)?$' ]]; then
+      print -u2 "release guard schema 2 provenance contains an unsupported branch"
+      exit 1
+    fi
+  fi
+
+  if [[ "$schema_version" == "2" || "$schema_version" == "3" ]]; then
     local base_main_commit
     base_main_commit="$(jq -r '.baseMainCommit' "$PROVENANCE")"
     if [[ "$(git rev-parse "$TAG_COMMIT^")" != "$base_main_commit" ]]; then
@@ -154,10 +237,8 @@ if [[ -f "$PROVENANCE" && -f "$PROMOTION" ]]; then
     --arg tag "$RELEASE_TAG" \
     --arg tagCommit "$TAG_COMMIT" \
     '.schemaVersion == 1 and .tag == $tag and .tagCommit == $tagCommit and
-     (.mainCommit | test("^[0-9a-f]{40}$")) and
-     ((.payloadAssets | length) == 11 or
-      (.payloadAssets | length) == 14 or
-      (.payloadAssets | length) == 16)' "$PROMOTION" >/dev/null
+     (.mainCommit | test("^[0-9a-f]{40}$"))' "$PROMOTION" >/dev/null
+  validate_payload_asset_manifest "$PROMOTION"
   if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
     print -u2 "stable promotion manifest exists but the tag is not contained in origin/main"
     exit 1

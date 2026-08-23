@@ -170,15 +170,23 @@ DMG 根目录严格只有 `Install Remote Mic.pkg`；App-only ZIP 与对应架�
 
 Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=true` 与 `SUScheduledCheckInterval=86400` 启用每日自动检查；`SUAutomaticallyUpdate=false` 与 `SUAllowsAutomaticUpdates=false` 禁止静默下载或自动安装。用户仍可选择菜单中的“检查更新…”立即检查。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
 
-正式发布使用 `scripts/notarize-release.sh`：它只接受已同步到发布 Mac 的既有 Developer ID 身份、Keychain 中的本地公证 profile 和受限的 Sparkle 私钥文件引用。脚本按应用、两个 PKG、DMG 的顺序公证和 staple，最后从已 staple 的应用生成 Sparkle ZIP 与签名 appcast；不会把任何证书、P12、API 密钥或私钥写入仓库或 Release。
+预览版的正式发布路径只能由受保护的 `.github/workflows/mac-release-package.yml` 执行。workflow 在受保护 Environment 内部调用 `scripts/notarize-release.sh`，使用既有 Developer ID 身份、公证凭据和 Sparkle 私钥完成双架构签名、公证、staple、ZIP 与 appcast 生成；本地命令不得读取这些凭据或直接执行发布。
 
 候选版本先以 GitHub pre-release 发布。`notarize-release.sh` 使用固定 `RELEASE_TAG` 生成 appcast 的 GitHub 发布页，并让 enclosure ZIP 和本地化更新说明使用 `download.sayall.app/mac/releases/<tag>/` 的不可变 Cloudflare CDN 地址；发布脚本在 GitHub 资产可用后从 CDN 重新下载并逐字节比较，同时验证 `HEAD` 与 `Range`。应用内的 `SUFeedURL` 仍固定为 GitHub `releases/latest/download/appcast.xml`，旧安装用户不需要迁移 feed。GitHub 的 latest release 排除 draft 和 pre-release，因此默认关闭预发布检查的用户继续取得正式版本 appcast。用户在“关于”页主动开启预发布检查后，应用通过 GitHub 公共 Release API 解析最新一个带 `appcast.xml` 的非草稿 Release，并把其不可变资产 URL 作为 Sparkle 动态 feed；手动检查前会刷新，常驻运行时也会定期刷新。
 
-`scripts/publish-release.sh prerelease` 只接受干净、已推送且由同一远端 Tag 指向的源提交。公开矩阵固定为 12 项：两套 DMG、两套 Sparkle ZIP、两套 appcast、两套架构卸载 PKG、共享中英文更新说明、合并的 SHA-256 清单和候选 provenance。两套安装 PKG 只存在于对应 DMG 内，不再作为独立 Release 资产重复上传。脚本确认 pre-release 未改变 latest release，并从 GitHub 与 CDN 回下载全部 12 项逐字节比较；晋升逻辑继续兼容历史 15/17 项 Release。测试机应使用与架构一致的 Sparkle CLI 单次 `--feed-url <候选版本 appcast URL>` 覆盖完成候选探测或更新，不写入持久化的 `SUFeedURL` 偏好；实际安装候选版本时需要处于已解锁的图形会话。
+受保护 workflow 的无 Apple 凭据发布 Job 会调用 `scripts/publish-release.sh prerelease`，并只接受干净、已推送且由同一远端 Tag 指向的源提交。资产集合和数量由 candidate provenance / canonical manifest 决定，不在命令或文档中写死；两套安装 PKG 只存在于对应 DMG 内，不再作为独立 Release 资产重复上传。该 Job 确认 pre-release 未改变 latest release，并从 GitHub 与 CDN 回下载 manifest 列出的全部资产逐字节比较，同时保留对历史资产矩阵的晋升验证兼容。测试机应使用与架构一致的 Sparkle CLI 单次 `--feed-url <候选版本 appcast URL>` 覆盖完成候选探测或更新，不写入持久化的 `SUFeedURL` 偏好；实际安装候选版本时需要处于已解锁的图形会话。
 
-仅修改本地化文案或内置文档的低风险版本，在 `release/pre-v<版本>` 候选分支完成版本号、发布历史、commit 和 push 后，可使用 `ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 ./scripts/fast-release.sh`。它会运行完整 Swift 测试、使用一次性 Keychain 分别签名并公证 Apple Silicon 与 Intel 产物，再发布 pre-release 并逐字节校验公开资产。正式晋升仍是独立授权步骤，必须在同一候选提交进入 `main` 后复用原始候选字节。快速命令只允许明确的文档和资源白名单，且 `Info.plist` 只能改变显示版本与 build number；发现 Swift、蓝牙、音频、安装器或发布流水线改动时会拒绝执行，必须走完整候选验收流程。
+`scripts/fast-release.sh` 只是无秘密的候选预检与调度器。唯一的 `release/pre-vX.Y.Z` 分支、exact SHA Draft PR、候选 CI 和发布流水线 qualification proof 都已存在后，使用原始请求时间与不可变请求 ID 调用：
 
-候选版本通过干净安装、运行和 Sparkle 端到端更新测试后，运行 `scripts/publish-release.sh promote` 将相同 Tag 和相同资产晋升为正式版。晋升后必须再次确认 latest appcast 与候选版本 appcast 逐字节一致。失败的候选版本不得覆盖资产或晋升；应递增显示版本和 `CFBundleVersion`，重新构建、签名、公证并发布新的 pre-release。
+```bash
+RELEASE_REQUEST_STARTED_AT=<原始请求的 Unix 秒> \
+RELEASE_REQUEST_ID=<不可变请求 ID> \
+./scripts/fast-release.sh
+```
+
+该命令只验证干净工作区、远端 exact head、候选 CI、唯一 Draft PR 和 qualification proof，随后 dispatch 受保护 workflow，并在 25 秒有界窗口内解析和打印新 Run ID/URL。若 dispatch 已成功但 Run 身份暂未解析，命令会明确要求核对既有 Run，不会自动重复 dispatch。它不读取 Apple、Match、Notary 或 Sparkle 凭据，不在本机签名、公证、创建或 Push Tag，也不创建、编辑 Release、上传资产或发布 appcast。相同 SHA 的非内容失败必须复用同一分支、PR、版本、Build、请求 ID 和原始时钟重新 dispatch。
+
+候选版本通过干净安装、运行和 Sparkle 端到端更新测试后，只能在用户明确指定该现有 Pre-release 后，由受保护的 stable promotion workflow 将相同 Tag 和相同资产晋升为正式版。晋升后必须再次确认 latest appcast 与候选版本 appcast 逐字节一致。失败的候选版本不得覆盖资产或晋升；只有发布字节确实变化时才选择新的显示版本和 `CFBundleVersion`，重新走完整受保护流程。
 
 ### 发布故障复盘与强制检查
 

@@ -24,9 +24,10 @@ jobs:
       reuse_parent_main_ci: ${{ steps.changes.outputs.reuse_parent_main_ci }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Detect documentation-only change
         id: changes
@@ -48,7 +49,8 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] &&
              git show "${PR_BASE_SHA}:scripts/run-trusted-release-validation.sh" > "$trusted_runner" &&
              chmod 755 "$trusted_runner" &&
-             GITHUB_REF_NAME="$PR_HEAD_REF" REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"; then
+             GITHUB_REF_NAME="$PR_HEAD_REF" REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
+               ALLOW_FROZEN_BASE_MAIN=1 "$trusted_runner"; then
             reuse_parent_main_ci=true
           fi
           echo "reuse_parent_main_ci=$reuse_parent_main_ci" >> "$GITHUB_OUTPUT"
@@ -104,13 +106,13 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Check out private feature package
         if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-ai
           ref: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
@@ -120,7 +122,7 @@ jobs:
 
       - name: Check out private macro package
         if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-macro-platform
           ref: b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
@@ -136,7 +138,7 @@ jobs:
 
       - name: Check out shared Mac remote package
         if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-mac-remote
           ref: 3f3c782180eef4024b53941c1f65d80e7cff4c66
@@ -174,7 +176,7 @@ jobs:
           trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
           git show "${{ github.event.pull_request.base.sha }}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
           chmod 755 "$trusted_runner"
-          REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 "$trusted_runner"
           echo "Release metadata-only PR; exact parent main already passed both architecture lanes."
 
       - name: Enforce extracted repository boundaries

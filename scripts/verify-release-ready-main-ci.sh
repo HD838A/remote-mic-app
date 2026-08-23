@@ -29,9 +29,13 @@ if [[ ! "$MAIN_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
   echo "release-ready main commit must be a full 40-character SHA" >&2
   exit 1
 fi
-if [[ "$MAIN_COMMIT" != "$(git rev-parse origin/main)" ]]; then
-  echo "release candidate parent must be the latest fetched origin/main" >&2
-  exit 1
+CURRENT_MAIN_COMMIT="$(git rev-parse origin/main)"
+if [[ "$MAIN_COMMIT" != "$CURRENT_MAIN_COMMIT" ]]; then
+  if [[ "${ALLOW_FROZEN_BASE_MAIN:-0}" != "1" ]] || \
+     ! git merge-base --is-ancestor "$MAIN_COMMIT" "$CURRENT_MAIN_COMMIT"; then
+    echo "release candidate base must be the current origin/main or an approved frozen ancestor" >&2
+    exit 1
+  fi
 fi
 
 RUN_ID="$(
@@ -47,7 +51,7 @@ RUN_ID="$(
     --jq '.[0].databaseId // empty'
 )"
 if [[ -z "$RUN_ID" || ! "$RUN_ID" =~ ^[0-9]+$ ]]; then
-  echo "latest origin/main has no successful macOS CI push run: $MAIN_COMMIT" >&2
+  echo "candidate base main has no successful macOS CI push run: $MAIN_COMMIT" >&2
   exit 1
 fi
 
