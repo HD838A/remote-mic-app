@@ -248,6 +248,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     func applicationDidBecomeActive(_ notification: Notification) {
         model.privateFeature.refreshAccessIfNeeded()
         model.macroFeature.refreshAccessIfNeeded()
+        model.refreshHIDAfterPermissionChange()
     }
 
     func applicationShouldHandleReopen(

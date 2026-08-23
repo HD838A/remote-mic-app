@@ -1940,6 +1940,64 @@ struct RemoteButtonsTests {
         #expect(apply.lowerBound < delayedRestart.lowerBound)
     }
 
+    @Test func HIDPermissionsRecoverWhenAuthorizationChangesAfterLaunch() throws {
+        let denied = HIDPermissionSnapshot(
+            inputMonitoringGranted: true,
+            accessibilityGranted: false
+        )
+        let granted = HIDPermissionSnapshot(
+            inputMonitoringGranted: true,
+            accessibilityGranted: true
+        )
+
+        #expect(HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: true,
+            previous: denied,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: true,
+            previous: granted,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: false,
+            customMappingEnabled: true,
+            previous: denied,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: false,
+            previous: denied,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: true,
+            previous: nil,
+            current: granted
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let activeCallback = try #require(appSource.range(of: "func applicationDidBecomeActive"))
+        let callbackEnd = try #require(appSource.range(
+            of: "func applicationShouldHandleReopen",
+            range: activeCallback.upperBound..<appSource.endIndex
+        ))
+        let callbackSource = appSource[activeCallback.lowerBound..<callbackEnd.lowerBound]
+        #expect(callbackSource.contains("model.refreshHIDAfterPermissionChange()"))
+    }
+
     @Test func customShortcutsPersistAndResetWithBindings() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
