@@ -140,7 +140,7 @@ struct RemoteButtonsTests {
         })
         #expect(mappings == [
             localization.text("app.name"): "com.hd838a.RemoteMic",
-            "ChatGPT": "com.openai.codex",
+            localization.text("application.chatgpt"): "com.openai.codex",
             "Claude": "com.anthropic.claudefordesktop",
             "cmux": "com.cmuxterm.app",
             localization.text("application.wechat"): "com.tencent.xinWeChat",
