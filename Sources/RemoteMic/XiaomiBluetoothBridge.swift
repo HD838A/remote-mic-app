@@ -883,7 +883,9 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               let generation = centralGeneration,
               lifecycle.acceptsDidFailToConnect(generation: generation)
         else { return }
-        AppLogger.shared.write("BLE CONNECT FAILED error=\(error?.localizedDescription ?? "unknown")")
+        AppLogger.shared.write(
+            "BLE CONNECT FAILED " + AppLogger.optionalErrorFields(error)
+        )
         let delay = shouldRun
             ? requestedReconnectDelay ?? nextAutomaticReconnectDelay(
                 bypassCachedTarget: currentAttemptUsesCachedTarget
@@ -930,7 +932,7 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             shouldBypassCachedTarget = false
         }
         AppLogger.shared.write(
-            "BLE DISCONNECTED phase=\(lifecycle) error=\(error?.localizedDescription ?? "none")"
+            "BLE DISCONNECTED phase=\(lifecycle) " + AppLogger.optionalErrorFields(error)
         )
         let delay = shouldRun
             ? requestedReconnectDelay ?? nextAutomaticReconnectDelay(
@@ -1003,7 +1005,8 @@ extension XiaomiBluetoothBridge {
         if service.uuid == batteryServiceUUID {
             if let error {
                 AppLogger.shared.write(
-                    "BLE BATTERY characteristic_discovery_failed error=\(error.localizedDescription)"
+                    "BLE BATTERY characteristic_discovery_failed " +
+                        AppLogger.errorFields(error)
                 )
                 delegate?.bluetoothBridge(self, didUpdateBatteryLevel: nil)
                 delegate?.bluetoothBridge(self, didUpdatePowerState: nil)
@@ -1037,7 +1040,8 @@ extension XiaomiBluetoothBridge {
         if service.uuid == deviceInformationServiceUUID {
             if let error {
                 AppLogger.shared.write(
-                    "BLE MODEL characteristic_discovery_failed error=\(error.localizedDescription)"
+                    "BLE MODEL characteristic_discovery_failed " +
+                        AppLogger.errorFields(error)
                 )
                 return
             }
@@ -1099,7 +1103,7 @@ extension XiaomiBluetoothBridge {
             if let error {
                 AppLogger.shared.write(
                     "BLE BATTERY notification_failed uuid=\(characteristic.uuid.uuidString) " +
-                        "error=\(error.localizedDescription)"
+                        AppLogger.errorFields(error)
                 )
             }
             return
@@ -1138,13 +1142,19 @@ extension XiaomiBluetoothBridge {
         else { return }
         if let error {
             if characteristic.uuid == batteryLevelUUID {
-                AppLogger.shared.write("BLE BATTERY read_failed error=\(error.localizedDescription)")
+                AppLogger.shared.write(
+                    "BLE BATTERY read_failed " + AppLogger.errorFields(error)
+                )
                 delegate?.bluetoothBridge(self, didUpdateBatteryLevel: nil)
             } else if characteristic.uuid == batteryLevelStatusUUID {
-                AppLogger.shared.write("BLE POWER read_failed error=\(error.localizedDescription)")
+                AppLogger.shared.write(
+                    "BLE POWER read_failed " + AppLogger.errorFields(error)
+                )
                 delegate?.bluetoothBridge(self, didUpdatePowerState: nil)
             } else if characteristic.uuid == modelNumberUUID {
-                AppLogger.shared.write("BLE MODEL read_failed error=\(error.localizedDescription)")
+                AppLogger.shared.write(
+                    "BLE MODEL read_failed " + AppLogger.errorFields(error)
+                )
             }
             return
         }
@@ -1157,7 +1167,9 @@ extension XiaomiBluetoothBridge {
         }
         if characteristic.uuid == batteryLevelStatusUUID {
             let powerState = RemotePowerState.decodeBatteryLevelStatus(data)
-            AppLogger.shared.write("BLE POWER state=\(String(describing: powerState))")
+            AppLogger.shared.write(
+                "BLE POWER state=\(powerState?.logValue ?? "unavailable")"
+            )
             delegate?.bluetoothBridge(self, didUpdatePowerState: powerState)
             return
         }

@@ -272,6 +272,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         workspaceAudioLifecycleObservers.forEach(workspaceNotificationCenter.removeObserver)
         workspaceAudioLifecycleObservers.removeAll()
         AppLogger.shared.write("SYSTEM AUDIO observers_stopped")
+        AppLogger.shared.flush()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -667,8 +668,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 guard !Task.isCancelled else { return }
                 updateFeedSelection.useStableFeed()
                 AppLogger.shared.write(
-                    "UPDATE FEED prerelease_enabled=true resolved=false fallback=none "
-                        + "error=\(error.localizedDescription)"
+                    "UPDATE FEED prerelease_enabled=true resolved=false fallback=none " +
+                        AppLogger.errorFields(error)
                 )
                 if updaterStarted, resetUpdateCycleWhenChanged {
                     updaterController.updater.resetUpdateCycleAfterShortDelay()
@@ -890,8 +891,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 updateFeedSelection.useStableFeed()
                 updateInformation.setUnavailable()
                 AppLogger.shared.write(
-                    "UPDATE CHECK prerelease_enabled=\(includePreRelease) resolved=false "
-                        + "user_alert=false error=\(error.localizedDescription)"
+                    "UPDATE CHECK prerelease_enabled=\(includePreRelease) resolved=false " +
+                        "user_alert=false " + AppLogger.errorFields(error)
                 )
                 return
             }
