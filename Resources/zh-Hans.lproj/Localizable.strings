@@ -122,6 +122,7 @@
 "action.next_command_right" = "下一首（⌘→）";
 "action.custom_shortcut" = "自定义快捷键";
 "action.open_custom_application" = "打开自定义 APP";
+"action.toggle_local_karaoke" = "切换本地卡拉 OK";
 "action.toggle_long_recording" = "切换持续录音";
 "action.open_remote_mic" = "打开无线麦";
 "action.open_codex" = "打开 Codex";
@@ -288,6 +289,19 @@
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";
 "audio.action.send_test_tone" = "发送 1 秒测试音";
 "audio.output.privacy_help" = "应用只把遥控器语音写到所选设备。最后一只遥控器断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
+"karaoke.title" = "本地卡拉 OK";
+"karaoke.subtitle" = "默认不绑定实体按键；可在“按键”页面把任意按键的单击、双击或长按设为“切换本地卡拉 OK”。只在当前 App 运行期间生效。";
+"karaoke.action.turn_on" = "开启返听";
+"karaoke.action.turn_off" = "关闭返听";
+"karaoke.status.off" = "已关闭；普通语音继续输出到所选虚拟麦克风。";
+"karaoke.status.opening" = "正在请求蓝牙麦克风持续拾音…";
+"karaoke.status.active" = "正在通过“%1$@”本地播放蓝牙麦克风声音。";
+"karaoke.status.hold_to_sing" = "当前遥控器没有提供持续音频；请按住语音键，通过“%1$@”本地返听。";
+"karaoke.status.waiting_connection" = "等待已选择的蓝牙遥控器重新连接。";
+"karaoke.status.unavailable" = "当前无法开启：请先连接遥控器，并结束其他语音会话。";
+"karaoke.status.output_unavailable" = "没有可用的物理声音输出设备，卡拉 OK 未开启。";
+"karaoke.status.stopping" = "正在关闭蓝牙麦克风和本地返听…";
+"karaoke.safety_help" = "建议佩戴耳机，避免扬声器回授啸叫。声音只在本机实时播放，不保存、不转写，也不会发送到虚拟麦克风；锁屏、睡眠或退出 App 会自动关闭。";
 "audio.compatibility.title" = "豆包输入法兼容";
 "audio.compatibility.section_title" = "语音输入与兼容";
 "audio.compatibility.microphone_label" = "兼容虚拟麦克风";
@@ -317,7 +331,7 @@
 "button_mapping.selection_lock_hint_short" = "按遥控器时保持当前编辑项。";
 "button_mapping.voice_button.title" = "语音键";
 "button_mapping.voice_button.fixed" = "固定";
-"button_mapping.voice_button.detail" = "按住说话；语音输入与 Fn 功能不参与自定义映射。";
+"button_mapping.voice_button.detail" = "按住说话；语音输入与 Fn 功能不参与自定义映射，也不会默认切换本地卡拉 OK。";
 "button_mapping.action.not_set" = "未设置";
 "button_mapping.single_click.help" = "按一下立即执行；设置双击后会稍等片刻再确认。";
 "button_mapping.double_click.effect" = "单击会稍等片刻以区分双击；按住重复同时停用。";
@@ -408,7 +422,7 @@
 "common.action.continue" = "继续";
 "remote.photo.missing" = "实物图资源缺失";
 "remote.mapping.instructions" = "点击或按下实物按键定位映射；麦克风键固定用于语音输入与 Fn 功能。";
-"remote.voice_button.help" = "按住麦克风键进行语音输入；在需要时也可作为 Mac Fn 键使用。";
+"remote.voice_button.help" = "按住麦克风键进行语音输入；在需要时也可作为 Mac Fn 键使用。卡拉 OK 需另行绑定普通按键。";
 "remote.voice_button.accessibility_label" = "语音输入与 Fn 键，固定核心功能";
 "menu.open_settings" = "打开设置…";
 "menu.show_logs" = "显示日志";

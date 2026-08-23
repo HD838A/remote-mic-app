@@ -457,6 +457,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case nextCommandRight
     case customShortcut
     case openCustomApplication
+    case toggleLocalKaraoke
     case toggleLongRecording
     case openRemoteMic
     case openCodex
@@ -508,6 +509,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .nextCommandRight: return localization.text("action.next_command_right")
         case .customShortcut: return localization.text("action.custom_shortcut")
         case .openCustomApplication: return localization.text("action.open_custom_application")
+        case .toggleLocalKaraoke: return localization.text("action.toggle_local_karaoke")
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
         case .openCodex: return localization.text("action.open_codex")
@@ -553,7 +555,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
-             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
+             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLocalKaraoke,
+             .toggleLongRecording:
             return .systemAndMedia
         case .customShortcut, .openCustomApplication:
             return .custom
@@ -587,7 +590,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     }
 
     var isAppInternal: Bool {
-        self == .toggleLongRecording
+        self == .toggleLocalKaraoke || self == .toggleLongRecording
     }
 
     func isEnabled(experimentalContinuousRecordingEnabled: Bool) -> Bool {

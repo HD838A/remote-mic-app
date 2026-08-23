@@ -253,6 +253,8 @@ enum KeyboardInjector {
             }
         case .openCustomApplication:
             break
+        case .toggleLocalKaraoke:
+            break
         case .toggleLongRecording:
             break
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor, .openXcode,

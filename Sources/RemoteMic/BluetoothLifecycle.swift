@@ -120,3 +120,13 @@ enum ATVVSessionGate {
         return now < cancelledAt.addingTimeInterval(cancelledOpenSuppressionInterval)
     }
 }
+
+enum KaraokeRoutingPolicy {
+    static func usesLocalPlayback(
+        modeEnabled: Bool,
+        targetDeviceIdentifier: UUID?,
+        streamDeviceIdentifier: UUID
+    ) -> Bool {
+        modeEnabled && targetDeviceIdentifier == streamDeviceIdentifier
+    }
+}

@@ -404,6 +404,7 @@ struct SettingsPageRegressionTests {
             "model.sendTestTone()",
             "model.selectDoubaoAudioDevice()",
             "model.openDoubaoDriverInstructions(using: localization)",
+            "model.setKaraokeModeEnabled",
             "model.setVoiceFnTapModeEnabled",
             "model.togglePhoneRemoteConnection()",
             "model.toggleWatchRemoteConnection()",
@@ -465,6 +466,11 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("button_mapping.permission_prompt.open"))
         #expect(source.contains("button_mapping.selection_lock_hint_short"))
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
+        #expect(source.contains("karaoke.title"))
+        #expect(source.contains("karaoke.action.turn_on"))
+        #expect(source.contains("karaoke.action.turn_off"))
+        #expect(source.contains("model.karaokeStatus.text(using: localization)"))
+        #expect(source.contains("!model.isKaraokeModeEnabled &&"))
         #expect(source.contains("ButtonActionCategory.allCases"))
         #expect(source.contains("LazyVGrid("))
         #expect(source.contains("button_mapping.action.disable_switch"))

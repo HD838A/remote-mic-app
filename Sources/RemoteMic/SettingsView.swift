@@ -907,6 +907,47 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Text("karaoke.title")
+                            .font(.headline)
+                        Spacer(minLength: 16)
+                        Button {
+                            model.setKaraokeModeEnabled(!model.isKaraokeModeEnabled)
+                        } label: {
+                            Text(
+                                model.isKaraokeModeEnabled
+                                    ? "karaoke.action.turn_off"
+                                    : "karaoke.action.turn_on"
+                            )
+                        }
+                        .compatibilityButtonStyle(
+                            model.isKaraokeModeEnabled ? .standard : .prominent
+                        )
+                        .disabled(
+                            !model.isKaraokeModeEnabled &&
+                                (!model.isConnected || model.isStreaming)
+                        )
+                    }
+
+                    Text("karaoke.subtitle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(model.karaokeStatus.text(using: localization))
+                        .font(.caption)
+                        .foregroundStyle(model.isKaraokeModeEnabled ? Color.orange : Color.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("karaoke.safety_help")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 HStack {
                     Text(model.testToneStatus.text(using: localization))
                         .font(.caption)

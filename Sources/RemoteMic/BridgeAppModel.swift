@@ -168,9 +168,17 @@ enum BluetoothVoiceStopPolicy {
     }
 }
 
+private enum KaraokeHostAudioCapability {
+    case unknown
+    case continuous
+    case manualOnly
+}
+
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
+    private static let karaokeHostAudioTimeout: TimeInterval = 1.5
+    private static let karaokeCloseTimeout: TimeInterval = 2
 
     let settings: AppSettings
     let privateFeature: PrivateFeatureIntegration
@@ -201,6 +209,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var phoneRemoteInvitation: PhoneRemoteInvitation?
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
+    @Published private(set) var isKaraokeModeEnabled = false
+    @Published private(set) var karaokeStatus = LocalizedMessage("karaoke.status.off")
     @Published private(set) var transcriptRecords: [TranscriptRecord] = []
 
     private let transcriptArchiveStore: TranscriptArchiveStore
@@ -209,6 +219,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         qos: .utility
     )
     private let audioOutput = VirtualAudioOutput()
+    private let karaokeAudioOutput = VirtualAudioOutput()
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
         AppLogger.shared.write(message)
     })
@@ -295,6 +306,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var bluetoothVoiceDecodedSampleCount = 0
     private var bluetoothVoiceEnqueueFailureCount = 0
     private var bluetoothVoiceTraceRoute = "none"
+    private var karaokeDeviceIdentifier: UUID?
+    private var karaokeOutputDeviceName: String?
+    private var karaokeHostAudioCapability: KaraokeHostAudioCapability = .unknown
+    private var karaokeHostOpenPending = false
+    private var activeBluetoothVoiceUsesKaraoke = false
+    private var activeKaraokeStreamWasHostRequested = false
+    private var karaokeReopenWorkItem: DispatchWorkItem?
+    private var karaokeHostAudioTimeoutWorkItem: DispatchWorkItem?
+    private var karaokeCloseTimeoutWorkItem: DispatchWorkItem?
+    private var karaokeGeneration: UInt64 = 0
     private let hidEventSuppressor = KeyboardEventSuppressor()
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
@@ -335,6 +356,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioDevices = initialAudioDevices
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
+        }
+        karaokeAudioOutput.onConfigurationChange = { [weak self] in
+            DispatchQueue.main.async {
+                self?.recoverKaraokeAudioOutputAfterConfigurationChange()
+            }
         }
         phoneRemoteServer.isIdentityTrusted = { [weak self] fingerprint in
             self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
@@ -619,6 +645,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             statusMessage: LocalizedMessage("app.status.stopped"),
             logReason: "app_stop"
         )
+        disableKaraokeMode(reason: "app_stop", closeMicrophone: true)
         stopLongRecording(reason: "app_stop")
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
@@ -628,6 +655,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothBridgeStates.removeAll()
         discoveryBluetoothBridge = nil
         activeBluetoothVoiceDeviceIdentifier = nil
+        activeBluetoothVoiceUsesKaraoke = false
+        activeKaraokeStreamWasHostRequested = false
+        karaokeHostOpenPending = false
+        cancelKaraokeTimers()
         phoneRemoteServer.stop()
         watchBluetoothServer.stop()
         webRemoteClient.stop()
@@ -656,6 +687,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         } else {
             audioOutput.stop()
         }
+        karaokeAudioOutput.stop()
+        karaokeDeviceIdentifier = nil
+        karaokeOutputDeviceName = nil
+        karaokeHostAudioCapability = .unknown
+        karaokeStatus = LocalizedMessage("karaoke.status.off")
         voiceFunctionMapper.restore()
         if let terminationObserver {
             NotificationCenter.default.removeObserver(terminationObserver)
@@ -993,6 +1029,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "test_tone=\(isPlayingTestTone) audio_ready=\(isAudioOutputReady)"
         )
         guard started, changed else { return }
+        if event.isSuspending, isKaraokeModeEnabled {
+            disableKaraokeMode(reason: "system_\(event.rawValue)", closeMicrophone: true)
+        }
         guard !audioStartupPending else {
             AppLogger.shared.write(
                 "SYSTEM AUDIO lifecycle_deferred event=\(event.rawValue) cause=audio_startup_pending " +
@@ -1642,17 +1681,33 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
+                let voiceUsedKaraoke = activeBluetoothVoiceUsesKaraoke
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
-                endVoiceSessionIfNeeded(flushAudio: false)
+                activeBluetoothVoiceUsesKaraoke = false
+                activeKaraokeStreamWasHostRequested = false
+                cancelKaraokeStreamTimers()
+                if voiceUsedKaraoke {
+                    endKaraokeStream()
+                    if !isKaraokeModeEnabled {
+                        stopKaraokeOutputAfterDraining()
+                    }
+                } else {
+                    endVoiceSessionIfNeeded(flushAudio: false)
+                }
             }
             if longRecordingRequested {
                 finishLongRecording(reason: "bluetooth_not_ready")
+            }
+            if identifier == karaokeDeviceIdentifier, isKaraokeModeEnabled {
+                karaokeHostOpenPending = false
+                karaokeStatus = LocalizedMessage("karaoke.status.waiting_connection")
             }
         }
         refreshBluetoothPresentation()
         if isConnected {
             voiceFnTapSession.resume()
+            resumeKaraokeAfterBluetoothReadyIfNeeded()
             if shouldKeepVirtualAudioActive {
                 cancelVirtualAudioReleaseIfPending(trigger: "bluetooth_ready")
                 _ = ensureVirtualAudioOutputReady(reason: "bluetooth_ready")
@@ -1679,14 +1734,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("ATVV STREAM rejected_busy")
             return
         }
-        guard ensureVirtualAudioOutputReady(reason: "bluetooth_voice_start") else {
-            _ = bridge.requestMicrophoneClose()
-            AppLogger.shared.write("ATVV STREAM rejected_audio_output")
-            return
+        let usesKaraoke = KaraokeRoutingPolicy.usesLocalPlayback(
+            modeEnabled: isKaraokeModeEnabled,
+            targetDeviceIdentifier: karaokeDeviceIdentifier,
+            streamDeviceIdentifier: identifier
+        )
+        if usesKaraoke {
+            guard ensureKaraokeAudioOutputReady(reason: "stream_start") else {
+                disableKaraokeMode(reason: "output_unavailable", closeMicrophone: false)
+                _ = bridge.requestMicrophoneClose()
+                AppLogger.shared.write("KARAOKE STREAM rejected_audio_output")
+                return
+            }
+        } else {
+            guard ensureVirtualAudioOutputReady(reason: "bluetooth_voice_start") else {
+                _ = bridge.requestMicrophoneClose()
+                AppLogger.shared.write("ATVV STREAM rejected_audio_output")
+                return
+            }
         }
+        cancelKaraokeReopen()
         activeBluetoothVoiceDeviceIdentifier = identifier
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = true
+        activeBluetoothVoiceUsesKaraoke = usesKaraoke
+        activeKaraokeStreamWasHostRequested = usesKaraoke && karaokeHostOpenPending
+        karaokeHostOpenPending = false
         let model = profileID
             .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
             ?? .unknown
@@ -1700,39 +1773,55 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothVoiceEnqueueFailureCount = 0
         bluetoothVoiceTraceRoute = "none"
         AppLogger.shared.write(
-            "ATVV STREAM accepted trace=\(bluetoothVoiceTraceCounter) model=\(model.rawValue)"
+            "ATVV STREAM accepted trace=\(bluetoothVoiceTraceCounter) model=\(model.rawValue) " +
+                "karaoke=\(usesKaraoke)"
         )
-        cancelVirtualAudioReleaseIfPending(trigger: "bluetooth_voice_start")
-        if !isAudioOutputReady {
-            let configured = configureVirtualAudioOutput(reason: "bluetooth_voice_start")
-            AppLogger.shared.write(
-                "SYSTEM AUDIO voice_start_recovery configured=\(configured) " +
-                    "suspended=\(systemAudioSuspensionState.isSuspended) " +
-                    "reasons=\(systemAudioSuspensionState.diagnostic)"
-            )
+        if usesKaraoke {
+            beginKaraokeStream()
+            if activeKaraokeStreamWasHostRequested,
+               karaokeHostAudioCapability != .manualOnly {
+                scheduleKaraokeHostAudioTimeout(for: identifier)
+            }
+        } else {
+            cancelVirtualAudioReleaseIfPending(trigger: "bluetooth_voice_start")
+            if !isAudioOutputReady {
+                let configured = configureVirtualAudioOutput(reason: "bluetooth_voice_start")
+                AppLogger.shared.write(
+                    "SYSTEM AUDIO voice_start_recovery configured=\(configured) " +
+                        "suspended=\(systemAudioSuspensionState.isSuspended) " +
+                        "reasons=\(systemAudioSuspensionState.diagnostic)"
+                )
+            }
+            if longRecordingRequested {
+                longRecordingOpenTimer?.cancel()
+                longRecordingOpenTimer = nil
+                AppLogger.shared.write("LONG RECORDING started")
+            }
+            _ = voiceFnTapSession.startVoice()
+            beginVoiceSessionIfNeeded()
         }
-        if longRecordingRequested {
-            longRecordingOpenTimer?.cancel()
-            longRecordingOpenTimer = nil
-            AppLogger.shared.write("LONG RECORDING started")
-        }
-        _ = voiceFnTapSession.startVoice()
-        beginVoiceSessionIfNeeded()
     }
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
-        guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
+        guard let identifier = bridge.deviceIdentifier,
+              identifier == activeBluetoothVoiceDeviceIdentifier
+        else { return }
+        let usedKaraoke = activeBluetoothVoiceUsesKaraoke
+        let hostRequestedStream = activeKaraokeStreamWasHostRequested
+        cancelKaraokeStreamTimers()
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = false
-        if longRecordingRequested {
+        activeBluetoothVoiceUsesKaraoke = false
+        activeKaraokeStreamWasHostRequested = false
+        if !usedKaraoke, longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
-        } else if longRecordingCloseTimer != nil {
+        } else if !usedKaraoke, longRecordingCloseTimer != nil {
             longRecordingCloseTimer?.cancel()
             longRecordingCloseTimer = nil
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
-        let handledByFnTapMode = voiceFnTapSession.stopVoice()
+        let handledByFnTapMode = usedKaraoke ? false : voiceFnTapSession.stopVoice()
         let shouldFlushAudio = BluetoothVoiceStopPolicy.shouldFlushAudio(
             handledByFnTapMode: handledByFnTapMode
         )
@@ -1740,7 +1829,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let durationMilliseconds = bluetoothVoiceTraceStartedAt.map {
             max(0, Int(Date().timeIntervalSince($0) * 1_000))
         } ?? 0
-        let pendingBuffers = audioOutput.pendingVoiceBufferCountForDiagnostics
+        let pendingBuffers = usedKaraoke
+            ? karaokeAudioOutput.pendingVoiceBufferCountForDiagnostics
+            : audioOutput.pendingVoiceBufferCountForDiagnostics
         AppLogger.shared.write(
             "ATVV STREAM summary trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue) " +
                 "duration_ms=\(durationMilliseconds) batches=\(bluetoothVoiceDecodedBatchCount) " +
@@ -1749,12 +1840,37 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "route=\(bluetoothVoiceTraceRoute) pending_buffers=\(pendingBuffers) " +
                 "flush=\(shouldFlushAudio)"
         )
-        audioOutput.logWhenPendingVoiceAudioDrains(
-            context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
-        )
+        if usedKaraoke {
+            karaokeAudioOutput.logWhenPendingVoiceAudioDrains(
+                context: "karaoke trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
+            )
+        } else {
+            audioOutput.logWhenPendingVoiceAudioDrains(
+                context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
+            )
+        }
         activeBluetoothVoiceTraceID = nil
         bluetoothVoiceTraceStartedAt = nil
-        endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
+        if usedKaraoke {
+            endKaraokeStream()
+            if hostRequestedStream,
+               bluetoothVoiceDecodedBatchCount == 0,
+               karaokeHostAudioCapability == .unknown {
+                karaokeHostAudioCapability = .manualOnly
+                publishKaraokeManualStatus()
+                AppLogger.shared.write("KARAOKE HOST_OPEN fallback reason=no_audio_before_stop")
+            }
+        } else {
+            endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
+        }
+
+        if usedKaraoke, isKaraokeModeEnabled {
+            resumeKaraokeAfterStreamStop()
+        } else if usedKaraoke {
+            stopKaraokeOutputAfterDraining()
+        } else if isKaraokeModeEnabled {
+            resumeKaraokeAfterBluetoothReadyIfNeeded()
+        }
         if systemAudioSuspensionState.isSuspended {
             releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
         }
@@ -1764,17 +1880,37 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard let identifier = bridge.deviceIdentifier,
               identifier == activeBluetoothVoiceDeviceIdentifier
         else { return }
-        let handledByFnTapMode = voiceFnTapSession.receive(samples)
-        let enqueued = handledByFnTapMode || audioOutput.enqueue(samples: samples)
+        let handledByFnTapMode: Bool
+        let enqueued: Bool
+        if activeBluetoothVoiceUsesKaraoke {
+            handledByFnTapMode = false
+            if activeKaraokeStreamWasHostRequested,
+               karaokeHostAudioCapability != .continuous {
+                karaokeHostAudioCapability = .continuous
+                karaokeHostAudioTimeoutWorkItem?.cancel()
+                karaokeHostAudioTimeoutWorkItem = nil
+                publishKaraokeActiveStatus()
+                AppLogger.shared.write("KARAOKE HOST_OPEN audio_confirmed")
+            }
+            enqueued = karaokeAudioOutput.enqueue(samples: samples)
+        } else {
+            handledByFnTapMode = voiceFnTapSession.receive(samples)
+            enqueued = handledByFnTapMode || audioOutput.enqueue(samples: samples)
+        }
         bluetoothVoiceDecodedBatchCount += 1
         bluetoothVoiceDecodedSampleCount += samples.count
         currentVoiceSampleCount &+= UInt64(samples.count)
         if !enqueued {
             bluetoothVoiceEnqueueFailureCount += 1
         }
-        bluetoothVoiceTraceRoute = handledByFnTapMode ? "fn_tap" : "virtual_audio"
+        bluetoothVoiceTraceRoute = activeBluetoothVoiceUsesKaraoke
+            ? "local_karaoke"
+            : (handledByFnTapMode ? "fn_tap" : "virtual_audio")
         if loggedBluetoothVoiceAudioDeviceIdentifier != identifier {
             loggedBluetoothVoiceAudioDeviceIdentifier = identifier
+            let pendingBufferCount = activeBluetoothVoiceUsesKaraoke
+                ? karaokeAudioOutput.pendingVoiceBufferCountForDiagnostics
+                : audioOutput.pendingVoiceBufferCountForDiagnostics
             let model = settings.profileID(forBluetoothIdentifier: identifier)
                 .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
                 ?? .unknown
@@ -1782,7 +1918,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "ATVV AUDIO routed trace=\(activeBluetoothVoiceTraceID ?? 0) " +
                     "model=\(model.rawValue) route=\(bluetoothVoiceTraceRoute) " +
                     "accepted=\(enqueued) first_batch_samples=\(samples.count) " +
-                    "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
+                    "pending_buffers=\(pendingBufferCount)"
             )
         }
     }
@@ -2165,16 +2301,359 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
+    func setKaraokeModeEnabled(_ enabled: Bool) {
+        if enabled {
+            _ = enableKaraokeMode(trigger: "settings", bridge: selectedBluetoothBridge)
+        } else {
+            disableKaraokeMode(reason: "settings", closeMicrophone: true)
+        }
+    }
+
     @discardableResult
-    private func performInternalAction(_ action: ButtonAction) -> Bool {
-        guard action == .toggleLongRecording else { return false }
-        guard action.isEnabled(
-            experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
-        ) else {
-            AppLogger.shared.write("LONG RECORDING ignored feature_enabled=false")
+    private func toggleKaraokeMode(
+        trigger: String,
+        bridge: XiaomiBluetoothBridge?
+    ) -> Bool {
+        if isKaraokeModeEnabled {
+            disableKaraokeMode(reason: trigger, closeMicrophone: true)
+            return true
+        }
+        return enableKaraokeMode(trigger: trigger, bridge: bridge)
+    }
+
+    @discardableResult
+    private func enableKaraokeMode(
+        trigger: String,
+        bridge: XiaomiBluetoothBridge?
+    ) -> Bool {
+        guard started,
+              !systemAudioSuspensionState.isSuspended,
+              !bluetoothVoiceActive,
+              activeMobileVoiceSource == nil,
+              !longRecordingRequested,
+              let bridge,
+              let identifier = bridge.deviceIdentifier,
+              isBluetoothBridgeReady(bridge)
+        else {
+            karaokeStatus = LocalizedMessage("karaoke.status.unavailable")
+            AppLogger.shared.write(
+                "KARAOKE MODE enable_rejected trigger=\(trigger) started=\(started) " +
+                    "connected=\(isConnected) suspended=\(systemAudioSuspensionState.isSuspended) " +
+                    "bluetooth_voice=\(bluetoothVoiceActive) mobile_voice=\(activeMobileVoiceSource != nil)"
+            )
             return false
         }
-        return toggleLongRecording()
+        guard configureKaraokeAudioOutput(reason: "enable_\(trigger)") else {
+            karaokeStatus = LocalizedMessage("karaoke.status.output_unavailable")
+            return false
+        }
+
+        karaokeGeneration &+= 1
+        isKaraokeModeEnabled = true
+        karaokeDeviceIdentifier = identifier
+        karaokeHostAudioCapability = .unknown
+        karaokeHostOpenPending = false
+        cancelKaraokeTimers()
+        karaokeStatus = LocalizedMessage("karaoke.status.opening")
+        scheduleKaraokeMicrophoneOpen(delay: 0.15, reason: trigger)
+        AppLogger.shared.write(
+            "KARAOKE MODE enabled trigger=\(trigger) output=\(karaokeOutputDeviceName ?? "unknown")"
+        )
+        return true
+    }
+
+    private func disableKaraokeMode(reason: String, closeMicrophone: Bool) {
+        let wasEnabled = isKaraokeModeEnabled
+        karaokeGeneration &+= 1
+        isKaraokeModeEnabled = false
+        karaokeHostOpenPending = false
+        cancelKaraokeTimers()
+        let karaokeStreamActive = bluetoothVoiceActive && activeBluetoothVoiceUsesKaraoke
+
+        var closeWritten = false
+        if closeMicrophone,
+           let bridge = karaokeBridge,
+           karaokeStreamActive {
+            closeWritten = bridge.requestMicrophoneClose()
+            scheduleKaraokeCloseTimeout(for: bridge, reason: reason)
+        }
+        if karaokeStreamActive {
+            karaokeStatus = LocalizedMessage("karaoke.status.stopping")
+        } else {
+            stopKaraokeOutputAfterDraining()
+        }
+        if wasEnabled || karaokeStreamActive {
+            AppLogger.shared.write(
+                "KARAOKE MODE disabled reason=\(reason) close_written=\(closeWritten) " +
+                    "stream_active=\(karaokeStreamActive)"
+            )
+        }
+    }
+
+    private var karaokeBridge: XiaomiBluetoothBridge? {
+        guard let karaokeDeviceIdentifier else { return nil }
+        return bluetoothBridges[karaokeDeviceIdentifier]
+    }
+
+    private func isBluetoothBridgeReady(_ bridge: XiaomiBluetoothBridge) -> Bool {
+        guard let state = bluetoothBridgeStates[ObjectIdentifier(bridge)] else { return false }
+        if case .ready = state { return true }
+        return false
+    }
+
+    @discardableResult
+    private func configureKaraokeAudioOutput(reason: String) -> Bool {
+        guard let device = CoreAudioDeviceCatalog.preferredLocalPlaybackOutput(
+            excludingUID: settings.selectedAudioDeviceUID
+        ) else {
+            karaokeOutputDeviceName = nil
+            karaokeStatus = LocalizedMessage("karaoke.status.output_unavailable")
+            AppLogger.shared.write("KARAOKE AUDIO configure_failed reason=\(reason) no_physical_output")
+            return false
+        }
+        if karaokeAudioOutput.isReadyForTestTone,
+           karaokeAudioOutput.selectedDevice?.uid == device.uid {
+            karaokeOutputDeviceName = device.name
+            return true
+        }
+        let configured = karaokeAudioOutput.configure(deviceUID: device.uid)
+        guard configured else {
+            karaokeOutputDeviceName = nil
+            karaokeStatus = LocalizedMessage("karaoke.status.output_unavailable")
+            AppLogger.shared.write(
+                "KARAOKE AUDIO configure_failed reason=\(reason) target=\(device.name)"
+            )
+            return false
+        }
+        karaokeOutputDeviceName = device.name
+        AppLogger.shared.write("KARAOKE AUDIO ready reason=\(reason) target=\(device.name)")
+        return true
+    }
+
+    @discardableResult
+    private func ensureKaraokeAudioOutputReady(reason: String) -> Bool {
+        configureKaraokeAudioOutput(reason: reason)
+    }
+
+    private func recoverKaraokeAudioOutputAfterConfigurationChange() {
+        guard started, isKaraokeModeEnabled else { return }
+        guard ensureKaraokeAudioOutputReady(reason: "engine_configuration_change") else {
+            disableKaraokeMode(reason: "engine_configuration_change", closeMicrophone: true)
+            return
+        }
+        if activeBluetoothVoiceUsesKaraoke {
+            publishKaraokeActiveStatus()
+        }
+    }
+
+    private func beginKaraokeStream() {
+        cancelTestToneIfNeeded(
+            statusMessage: LocalizedMessage("audio.test_tone.blocked_voice_active"),
+            logReason: "karaoke_start"
+        )
+        currentVoiceSampleCount = 0
+        isStreaming = true
+        activeVoiceSource = .bluetoothRemote
+        publishKaraokeActiveStatus()
+    }
+
+    private func endKaraokeStream() {
+        guard !bluetoothVoiceActive, activeMobileVoiceSource == nil else { return }
+        isStreaming = false
+        activeVoiceSource = nil
+    }
+
+    private func publishKaraokeActiveStatus() {
+        karaokeStatus = LocalizedMessage(
+            "karaoke.status.active",
+            arguments: [karaokeOutputDeviceName ?? "—"]
+        )
+    }
+
+    private func publishKaraokeManualStatus() {
+        guard isKaraokeModeEnabled else { return }
+        karaokeStatus = LocalizedMessage(
+            "karaoke.status.hold_to_sing",
+            arguments: [karaokeOutputDeviceName ?? "—"]
+        )
+    }
+
+    private func scheduleKaraokeMicrophoneOpen(delay: TimeInterval, reason: String) {
+        cancelKaraokeReopen()
+        guard isKaraokeModeEnabled,
+              karaokeHostAudioCapability != .manualOnly
+        else {
+            publishKaraokeManualStatus()
+            return
+        }
+        let generation = karaokeGeneration
+        let work = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.started,
+                  self.isKaraokeModeEnabled,
+                  self.karaokeGeneration == generation,
+                  !self.bluetoothVoiceActive,
+                  self.activeMobileVoiceSource == nil,
+                  let bridge = self.karaokeBridge,
+                  self.isBluetoothBridgeReady(bridge)
+            else { return }
+            self.karaokeReopenWorkItem = nil
+            self.karaokeHostOpenPending = true
+            guard bridge.requestMicrophoneOpen() else {
+                self.karaokeHostOpenPending = false
+                self.karaokeHostAudioCapability = .manualOnly
+                self.publishKaraokeManualStatus()
+                AppLogger.shared.write("KARAOKE HOST_OPEN rejected reason=\(reason) fallback=manual")
+                return
+            }
+            self.karaokeStatus = LocalizedMessage("karaoke.status.opening")
+            AppLogger.shared.write("KARAOKE HOST_OPEN requested reason=\(reason)")
+        }
+        karaokeReopenWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func scheduleKaraokeHostAudioTimeout(for identifier: UUID) {
+        karaokeHostAudioTimeoutWorkItem?.cancel()
+        let generation = karaokeGeneration
+        let work = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.isKaraokeModeEnabled,
+                  self.karaokeGeneration == generation,
+                  self.activeBluetoothVoiceUsesKaraoke,
+                  self.activeBluetoothVoiceDeviceIdentifier == identifier,
+                  self.bluetoothVoiceDecodedBatchCount == 0
+            else { return }
+            self.karaokeHostAudioTimeoutWorkItem = nil
+            self.karaokeHostAudioCapability = .manualOnly
+            self.publishKaraokeManualStatus()
+            let closeWritten = self.karaokeBridge?.requestMicrophoneClose() ?? false
+            if let bridge = self.karaokeBridge {
+                self.scheduleKaraokeCloseTimeout(for: bridge, reason: "host_audio_timeout")
+            }
+            AppLogger.shared.write(
+                "KARAOKE HOST_OPEN fallback reason=audio_timeout close_written=\(closeWritten)"
+            )
+        }
+        karaokeHostAudioTimeoutWorkItem = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.karaokeHostAudioTimeout,
+            execute: work
+        )
+    }
+
+    private func scheduleKaraokeCloseTimeout(
+        for bridge: XiaomiBluetoothBridge,
+        reason: String
+    ) {
+        karaokeCloseTimeoutWorkItem?.cancel()
+        let generation = karaokeGeneration
+        let identifier = bridge.deviceIdentifier
+        let work = DispatchWorkItem { [weak self, weak bridge] in
+            guard let self,
+                  self.karaokeGeneration == generation,
+                  self.activeBluetoothVoiceUsesKaraoke,
+                  self.activeBluetoothVoiceDeviceIdentifier == identifier
+            else { return }
+            self.karaokeCloseTimeoutWorkItem = nil
+            self.bluetoothVoiceActive = false
+            self.activeBluetoothVoiceDeviceIdentifier = nil
+            self.loggedBluetoothVoiceAudioDeviceIdentifier = nil
+            self.activeBluetoothVoiceUsesKaraoke = false
+            self.activeKaraokeStreamWasHostRequested = false
+            self.activeBluetoothVoiceTraceID = nil
+            self.bluetoothVoiceTraceStartedAt = nil
+            self.endKaraokeStream()
+            self.stopKaraokeOutputAfterDraining()
+            bridge?.reconnectNow()
+            AppLogger.shared.write("KARAOKE STREAM close_timeout reason=\(reason) reconnecting=true")
+        }
+        karaokeCloseTimeoutWorkItem = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.karaokeCloseTimeout,
+            execute: work
+        )
+    }
+
+    private func resumeKaraokeAfterStreamStop() {
+        guard isKaraokeModeEnabled else {
+            stopKaraokeOutputAfterDraining()
+            return
+        }
+        guard karaokeHostAudioCapability != .manualOnly else {
+            publishKaraokeManualStatus()
+            return
+        }
+        scheduleKaraokeMicrophoneOpen(
+            delay: 0.2,
+            reason: "stream_stopped"
+        )
+    }
+
+    private func resumeKaraokeAfterBluetoothReadyIfNeeded() {
+        guard isKaraokeModeEnabled,
+              !bluetoothVoiceActive,
+              let bridge = karaokeBridge,
+              isBluetoothBridgeReady(bridge)
+        else { return }
+        guard karaokeHostAudioCapability != .manualOnly else {
+            publishKaraokeManualStatus()
+            return
+        }
+        scheduleKaraokeMicrophoneOpen(delay: 0.2, reason: "bluetooth_ready")
+    }
+
+    private func stopKaraokeOutputAfterDraining() {
+        let generation = karaokeGeneration
+        karaokeAudioOutput.endSessionAfterDraining { [weak self] in
+            guard let self,
+                  !self.isKaraokeModeEnabled,
+                  self.karaokeGeneration == generation
+            else { return }
+            self.karaokeAudioOutput.stop()
+            self.karaokeDeviceIdentifier = nil
+            self.karaokeOutputDeviceName = nil
+            self.karaokeHostAudioCapability = .unknown
+            self.karaokeStatus = LocalizedMessage("karaoke.status.off")
+        }
+    }
+
+    private func cancelKaraokeReopen() {
+        karaokeReopenWorkItem?.cancel()
+        karaokeReopenWorkItem = nil
+    }
+
+    private func cancelKaraokeStreamTimers() {
+        karaokeHostAudioTimeoutWorkItem?.cancel()
+        karaokeHostAudioTimeoutWorkItem = nil
+        karaokeCloseTimeoutWorkItem?.cancel()
+        karaokeCloseTimeoutWorkItem = nil
+    }
+
+    private func cancelKaraokeTimers() {
+        cancelKaraokeReopen()
+        cancelKaraokeStreamTimers()
+    }
+
+    @discardableResult
+    private func performInternalAction(_ action: ButtonAction) -> Bool {
+        switch action {
+        case .toggleLocalKaraoke:
+            return toggleKaraokeMode(
+                trigger: "button_mapping",
+                bridge: selectedBluetoothBridge
+            )
+        case .toggleLongRecording:
+            guard action.isEnabled(
+                experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
+            ) else {
+                AppLogger.shared.write("LONG RECORDING ignored feature_enabled=false")
+                return false
+            }
+            return toggleLongRecording()
+        default:
+            return false
+        }
     }
 
     private func toggleLongRecording() -> Bool {
@@ -2184,7 +2663,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         guard isConnected,
               !bluetoothVoiceActive,
-              activeMobileVoiceSource == nil
+              activeMobileVoiceSource == nil,
+              !isKaraokeModeEnabled
         else {
             AppLogger.shared.write(
                 "LONG RECORDING rejected connected=\(isConnected) audio_ready=\(isAudioOutputReady) " +
@@ -2391,7 +2871,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var shouldKeepVirtualAudioActive: Bool {
         VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: readyBluetoothBridgeCount,
-            bluetoothVoiceActive: bluetoothVoiceActive,
+            bluetoothVoiceActive: bluetoothVoiceActive && !activeBluetoothVoiceUsesKaraoke,
             mobileVoiceActive: activeMobileVoiceSource != nil,
             testToneActive: isPlayingTestTone,
             systemSuspended: systemAudioSuspensionState.isSuspended
@@ -2399,7 +2879,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private var hasActiveVirtualAudioSource: Bool {
-        bluetoothVoiceActive || activeMobileVoiceSource != nil || isPlayingTestTone
+        (bluetoothVoiceActive && !activeBluetoothVoiceUsesKaraoke) ||
+            activeMobileVoiceSource != nil ||
+            isPlayingTestTone
     }
 
     private func resumeVirtualAudioOutputIfNeeded(reason: String) {

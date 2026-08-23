@@ -122,6 +122,7 @@
 "action.next_command_right" = "Next (⌘→)";
 "action.custom_shortcut" = "Custom Shortcut";
 "action.open_custom_application" = "Open Custom App";
+"action.toggle_local_karaoke" = "Toggle Local Karaoke";
 "action.toggle_long_recording" = "Toggle Continuous Recording";
 "action.open_remote_mic" = "Open SayAll";
 "action.open_codex" = "Open Codex";
@@ -288,6 +289,19 @@
 "audio.action.learn_virtual_microphones" = "Get BlackHole";
 "audio.action.send_test_tone" = "Play Test Sound";
 "audio.output.privacy_help" = "The app writes remote voice only to the selected device. When the last remote disconnects, a matching system default input temporarily falls back to a physical microphone and is restored on reconnect only if you have not changed it. The system default output is never changed.";
+"karaoke.title" = "Local Karaoke";
+"karaoke.subtitle" = "No physical button is assigned by default. Under Buttons, assign Toggle Local Karaoke to any button's click, double-click, or long-press. It lasts only for this app session.";
+"karaoke.action.turn_on" = "Turn On Monitor";
+"karaoke.action.turn_off" = "Turn Off Monitor";
+"karaoke.status.off" = "Off. Normal voice continues to use the selected virtual microphone.";
+"karaoke.status.opening" = "Requesting continuous audio from the Bluetooth microphone…";
+"karaoke.status.active" = "Playing the Bluetooth microphone locally through “%1$@”.";
+"karaoke.status.hold_to_sing" = "This remote did not provide continuous audio. Hold its voice button to monitor locally through “%1$@”.";
+"karaoke.status.waiting_connection" = "Waiting for the selected Bluetooth remote to reconnect.";
+"karaoke.status.unavailable" = "Unavailable now. Connect the remote and finish any other voice session first.";
+"karaoke.status.output_unavailable" = "No physical sound output is available, so Local Karaoke was not enabled.";
+"karaoke.status.stopping" = "Stopping the Bluetooth microphone and local monitor…";
+"karaoke.safety_help" = "Headphones are recommended to prevent speaker feedback. Audio is played live on this Mac only; it is not saved, transcribed, or sent to the virtual microphone. Locking, sleeping, or quitting the app turns the mode off.";
 "audio.compatibility.title" = "Doubao Input Compatibility";
 "audio.compatibility.section_title" = "Voice Input & Compatibility";
 "audio.compatibility.microphone_label" = "Compatible virtual microphone";
@@ -317,7 +331,7 @@
 "button_mapping.selection_lock_hint_short" = "Keep the current item selected while using the remote.";
 "button_mapping.voice_button.title" = "Voice Button";
 "button_mapping.voice_button.fixed" = "Fixed";
-"button_mapping.voice_button.detail" = "Hold to talk. Voice input and Fn behavior are not customizable.";
+"button_mapping.voice_button.detail" = "Hold to talk. Voice input and Fn stay fixed; assign Local Karaoke to another button.";
 "button_mapping.action.not_set" = "Not Set";
 "button_mapping.single_click.help" = "Runs after one press. It waits briefly when a double-click action is set.";
 "button_mapping.double_click.effect" = "Single-click waits briefly to distinguish a double-click, and hold-to-repeat is disabled.";
@@ -408,7 +422,7 @@
 "common.action.continue" = "Continue";
 "remote.photo.missing" = "Remote photo resource is missing";
 "remote.mapping.instructions" = "Click or press a physical button to select its mapping. The microphone button remains fixed for voice input and Fn functions.";
-"remote.voice_button.help" = "Hold the microphone button for voice input; it can also act as the Mac Fn key when needed.";
+"remote.voice_button.help" = "Hold the microphone button for voice input. It can also act as the Mac Fn key when needed. Assign Local Karaoke to an ordinary button separately.";
 "remote.voice_button.accessibility_label" = "Voice input and Fn button, fixed core function";
 "menu.open_settings" = "Open Settings…";
 "menu.show_logs" = "Show Logs";
