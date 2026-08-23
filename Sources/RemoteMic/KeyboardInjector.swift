@@ -20,6 +20,7 @@ enum KeyboardInjector {
     typealias CmuxCommandRunner = (URL, [String], TimeInterval) -> CmuxCommandResult
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
+    typealias MouseClickPoster = (CGPoint) -> Bool
     typealias ScrollEventPoster = (Int32) -> Bool
     typealias PageScrollEventPoster = (Int32, Int32) -> Bool
 
@@ -71,6 +72,7 @@ enum KeyboardInjector {
 
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
+    static let codexPageScrollEventCount = 3
     static let codexPageScrollLines: Int32 = 12
     static let functionKeyCode: CGKeyCode = 63
     /// Web content shells only build the accessibility tree once an assistive
@@ -163,6 +165,7 @@ enum KeyboardInjector {
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
+        mouseClickPoster: @escaping MouseClickPoster = { postMouseClick(at: $0) },
         scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) },
         pageScrollEventPoster: PageScrollEventPoster = {
             postCodexPageScroll(delta: $0, intervalMilliseconds: $1)
@@ -272,7 +275,15 @@ enum KeyboardInjector {
             guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
                 return false
             }
-            return focusComposer(processIdentifier: processIdentifier)
+            let focusRequestID = focusRequests.begin()
+            scheduleAccessibilityComposerFocus(
+                application: .codex,
+                processIdentifier: processIdentifier,
+                requestID: focusRequestID,
+                attempt: 0,
+                mouseClickPoster: mouseClickPoster
+            )
+            return true
         case .codexScrollToLatest:
             keyPoster(119, .maskCommand)
         case .codexPageUp:
@@ -616,7 +627,8 @@ enum KeyboardInjector {
         application: PresetApplication,
         processIdentifier: pid_t,
         requestID: UInt64,
-        attempt: Int
+        attempt: Int,
+        mouseClickPoster: @escaping MouseClickPoster = { postMouseClick(at: $0) }
     ) {
         let maximumAttempts = composerFocusMaximumAttempts
         let delay: DispatchTimeInterval = attempt == 0
@@ -639,7 +651,10 @@ enum KeyboardInjector {
                     )
                     return
                 }
-                if focusComposer(processIdentifier: processIdentifier) {
+                if focusComposer(
+                    processIdentifier: processIdentifier,
+                    mouseClickPoster: mouseClickPoster
+                ) {
                     AppLogger.shared.write(
                         "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=accessibility"
                     )
@@ -653,7 +668,8 @@ enum KeyboardInjector {
                     application: application,
                     processIdentifier: processIdentifier,
                     requestID: requestID,
-                    attempt: nextAttempt
+                    attempt: nextAttempt,
+                    mouseClickPoster: mouseClickPoster
                 )
             } else if focusRequests.isCurrent(requestID) {
                 AppLogger.shared.write(
@@ -755,7 +771,10 @@ enum KeyboardInjector {
         NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier
     }
 
-    private static func focusComposer(processIdentifier: pid_t) -> Bool {
+    private static func focusComposer(
+        processIdentifier: pid_t,
+        mouseClickPoster: MouseClickPoster = { postMouseClick(at: $0) }
+    ) -> Bool {
         let applicationElement = AXUIElementCreateApplication(processIdentifier)
         for window in applicationWindows(applicationElement) {
             let windowTitle = axString(window, attribute: kAXTitleAttribute).lowercased()
@@ -768,7 +787,9 @@ enum KeyboardInjector {
             ) else { continue }
             if focusAccessibilityElement(
                 candidates[candidateIndex].element,
-                applicationElement: applicationElement
+                applicationElement: applicationElement,
+                requiresPhysicalClick: true,
+                mouseClickPoster: mouseClickPoster
             ) {
                 return true
             }
@@ -1098,8 +1119,18 @@ enum KeyboardInjector {
     private static func focusAccessibilityElement(
         _ element: AXUIElement,
         applicationElement: AXUIElement,
-        requiresApplicationFocusedElement: Bool = false
+        requiresApplicationFocusedElement: Bool = false,
+        requiresPhysicalClick: Bool = false,
+        mouseClickPoster: MouseClickPoster = { postMouseClick(at: $0) }
     ) -> Bool {
+        if requiresPhysicalClick {
+            guard let clickPoint = accessibilityClickPoint(for: axFrame(element)) else {
+                return false
+            }
+            guard mouseClickPoster(clickPoint) else { return false }
+            usleep(30_000)
+            return true
+        }
         if accessibilityElementIsFocused(
             element,
             applicationElement: applicationElement,
@@ -1126,6 +1157,11 @@ enum KeyboardInjector {
             applicationElement: applicationElement,
             requiresApplicationFocusedElement: requiresApplicationFocusedElement
         )
+    }
+
+    static func accessibilityClickPoint(for frame: CGRect?) -> CGPoint? {
+        guard let frame, frame.width > 1, frame.height > 1 else { return nil }
+        return CGPoint(x: frame.midX, y: frame.midY)
     }
 
     private static func accessibilityElementIsFocused(
@@ -1545,6 +1581,29 @@ enum KeyboardInjector {
         return true
     }
 
+    private static func postMouseClick(at location: CGPoint) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseDown,
+                  mouseCursorPosition: location,
+                  mouseButton: .left
+              ),
+              let up = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseUp,
+                  mouseCursorPosition: location,
+                  mouseButton: .left
+              )
+        else { return false }
+
+        down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        return true
+    }
+
     private static func postScrollWheel(delta: Int32) -> Bool {
         guard let source = CGEventSource(stateID: .hidSystemState),
               let event = CGEvent(
@@ -1565,29 +1624,57 @@ enum KeyboardInjector {
         delta: Int32,
         intervalMilliseconds: Int32 = 12
     ) -> Bool {
-        guard let windowCenter = frontmostWindowCenter(),
-              let source = CGEventSource(stateID: .hidSystemState),
-              let event = CGEvent(
-                  scrollWheelEvent2Source: source,
-                  units: .line,
-                  wheelCount: 2,
-                  wheel1: delta,
-                  wheel2: 0,
-                  wheel3: 0
-              )
-        else {
-            AppLogger.shared.write("CODEX PAGE SCROLL failed reason=frontmost_window_unavailable")
-            return false
-        }
-        event.location = windowCenter
-        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
-        event.post(tap: .cghidEventTap)
-        AppLogger.shared.write(
-            "CODEX PAGE SCROLL posted delta=\(delta) location=\(Int(windowCenter.x)),\(Int(windowCenter.y))"
-        )
         let interval = min(max(intervalMilliseconds, 10), 15)
-        usleep(useconds_t(interval * 1_000))
+        let eventDeltas = codexPageScrollEventDeltas(
+            delta: delta,
+            eventCount: codexPageScrollEventCount
+        )
+        guard !eventDeltas.isEmpty else { return true }
+
+        for (index, eventDelta) in eventDeltas.enumerated() {
+            guard let windowCenter = frontmostWindowCenter(),
+                  let source = CGEventSource(stateID: .hidSystemState),
+                  let event = CGEvent(
+                      scrollWheelEvent2Source: source,
+                      units: .line,
+                      wheelCount: 2,
+                      wheel1: eventDelta,
+                      wheel2: 0,
+                      wheel3: 0
+                  )
+            else {
+                AppLogger.shared.write(
+                    "CODEX PAGE SCROLL failed reason=frontmost_window_unavailable index=\(index)"
+                )
+                return false
+            }
+            event.location = windowCenter
+            event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            event.post(tap: .cghidEventTap)
+            AppLogger.shared.write(
+                "CODEX PAGE SCROLL posted delta=\(eventDelta) index=\(index + 1)/\(eventDeltas.count) " +
+                    "location=\(Int(windowCenter.x)),\(Int(windowCenter.y))"
+            )
+            if index < eventDeltas.index(before: eventDeltas.endIndex) {
+                usleep(useconds_t(interval * 1_000))
+            }
+        }
         return true
+    }
+
+    static func codexPageScrollEventDeltas(
+        delta: Int32,
+        eventCount: Int = codexPageScrollEventCount
+    ) -> [Int32] {
+        guard delta != 0 else { return [] }
+        let count = max(eventCount, 1)
+        let magnitude = abs(delta)
+        let sign: Int32 = delta < 0 ? -1 : 1
+        let base = magnitude / Int32(count)
+        let remainder = magnitude % Int32(count)
+        return (0..<count).map { index in
+            sign * (base + (Int32(index) < remainder ? 1 : 0))
+        }.filter { $0 != 0 }
     }
 
     static func codexPageScrollDelta(for action: ButtonAction, lines: Int32 = codexPageScrollLines) -> Int32 {

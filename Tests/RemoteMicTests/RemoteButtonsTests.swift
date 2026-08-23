@@ -733,6 +733,28 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.codexPageDown.allowsRepeat)
     }
 
+    @Test func codexPageScrollPreservesConfiguredStepAcrossEventBurst() {
+        #expect(KeyboardInjector.codexPageScrollEventDeltas(delta: 12) == [4, 4, 4])
+        #expect(KeyboardInjector.codexPageScrollEventDeltas(delta: -14) == [-5, -5, -4])
+        #expect(KeyboardInjector.codexPageScrollEventDeltas(delta: 2, eventCount: 3) == [1, 1])
+        #expect(KeyboardInjector.codexPageScrollEventDeltas(delta: 0).isEmpty)
+        #expect(
+            KeyboardInjector.codexPageScrollEventDeltas(delta: 14).reduce(0, +) == 14
+        )
+        #expect(
+            KeyboardInjector.codexPageScrollEventDeltas(delta: -14).reduce(0, +) == -14
+        )
+    }
+
+    @Test func accessibilityClickPointUsesComposerFrameCenter() {
+        #expect(
+            KeyboardInjector.accessibilityClickPoint(
+                for: CGRect(x: 100, y: 200, width: 400, height: 80)
+            ) == CGPoint(x: 300, y: 240)
+        )
+        #expect(KeyboardInjector.accessibilityClickPoint(for: .zero) == nil)
+    }
+
     @Test func applicationSpecificActionsUseSelectedApplicationNameAndBundleScope() {
         let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
         #expect(ButtonAction.codexPageUp.isAvailable(
