@@ -200,6 +200,8 @@
 "remote.device.bound_short" = "Bound";
 "remote.device.unbound" = "Not bound";
 "remote.device.current" = "Current";
+"remote.device.voice_level" = "Remote microphone level";
+"remote.device.voice_level.help" = "Shows the loudness actually captured by the remote while you hold the voice button";
 "remote.device.disconnected" = "Disconnected";
 "remote.device.battery_unavailable" = "Battery level is temporarily unavailable";
 "remote.device.power.battery" = "Battery power";

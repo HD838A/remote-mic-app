@@ -298,6 +298,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var connectedRemoteProfileIDs = Set<UUID>()
     @Published private(set) var remoteBatteryLevels: [UUID: Int] = [:]
     @Published private(set) var remotePowerStates: [UUID: RemotePowerState] = [:]
+    @Published private(set) var remoteVoiceLevels: [UUID: Double] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
@@ -399,6 +400,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var bluetoothBridgeStates: [ObjectIdentifier: BluetoothBridgeState] = [:]
     private var discoveryBluetoothBridge: XiaomiBluetoothBridge?
     private var activeBluetoothVoiceDeviceIdentifier: UUID?
+    private var bluetoothVoiceLevelMeter = VoiceAudioLevelMeter()
     private var bluetoothVoiceTraceCounter: UInt64 = 0
     private var activeBluetoothVoiceTraceID: UInt64?
     private var bluetoothVoiceTraceStartedAt: Date?
@@ -438,6 +440,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     init(
         settings: AppSettings = AppSettings(),
         initialAudioDevices: [AudioDeviceInfo] = [],
+        initialConnectedRemoteProfileIDs: Set<UUID> = [],
+        initialRemoteBatteryLevels: [UUID: Int] = [:],
+        initialRemotePowerStates: [UUID: RemotePowerState] = [:],
+        initialRemoteVoiceLevels: [UUID: Double] = [:],
         privateFeature: PrivateFeatureIntegration = PrivateFeatureIntegration(),
         macroFeature: MacroFeatureIntegration = MacroFeatureIntegration(),
         loginItemService: LoginItemService = LoginItemService(),
@@ -449,6 +455,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.loginItemService = loginItemService
         self.transcriptArchiveStore = transcriptArchiveStore
         audioDevices = initialAudioDevices
+        connectedRemoteProfileIDs = initialConnectedRemoteProfileIDs
+        remoteBatteryLevels = initialRemoteBatteryLevels
+        remotePowerStates = initialRemotePowerStates
+        remoteVoiceLevels = initialRemoteVoiceLevels
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
         }
@@ -746,6 +756,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothBridgeStates.removeAll()
         discoveryBluetoothBridge = nil
         activeBluetoothVoiceDeviceIdentifier = nil
+        bluetoothVoiceLevelMeter.reset()
+        remoteVoiceLevels.removeAll()
         phoneRemoteServer.stop()
         watchBluetoothServer.stop()
         webRemoteClient.stop()
@@ -1997,9 +2009,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                let profileID = settings.profileID(forBluetoothIdentifier: identifier) {
                 remoteBatteryLevels.removeValue(forKey: profileID)
                 remotePowerStates.removeValue(forKey: profileID)
+                remoteVoiceLevels.removeValue(forKey: profileID)
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
+                bluetoothVoiceLevelMeter.reset()
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
                 releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
@@ -2084,6 +2098,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothVoiceDecodedBatchCount = 0
         bluetoothVoiceDecodedSampleCount = 0
         resetCurrentVoiceSampleReceipt()
+        bluetoothVoiceLevelMeter.reset()
+        if let profileID {
+            remoteVoiceLevels[profileID] = 0
+        }
         bluetoothVoiceEnqueueFailureCount = 0
         bluetoothVoiceTraceRoute = "none"
         bluetoothVoiceTailDiagnostics.reset()
@@ -2111,10 +2129,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
         guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
+        let profileID = bridge.deviceIdentifier.flatMap {
+            settings.profileID(forBluetoothIdentifier: $0)
+        }
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = false
         releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+        bluetoothVoiceLevelMeter.reset()
+        if let profileID {
+            remoteVoiceLevels[profileID] = 0
+        }
         if longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
         } else if longRecordingCloseTimer != nil {
@@ -2200,6 +2225,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothVoiceDecodedSampleCount += samples.count
         bluetoothVoiceTailDiagnostics.append(samples, at: ProcessInfo.processInfo.systemUptime)
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
+        if let level = bluetoothVoiceLevelMeter.append(samples),
+           let profileID = settings.profileID(forBluetoothIdentifier: identifier),
+           abs((remoteVoiceLevels[profileID] ?? 0) - level) >= 0.01 {
+            remoteVoiceLevels[profileID] = level
+        }
         if !enqueued {
             bluetoothVoiceEnqueueFailureCount += 1
         }
@@ -2249,6 +2279,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func batteryLevel(for profileID: UUID) -> Int? {
         remoteBatteryLevels[profileID]
+    }
+
+    func voiceLevel(for profileID: UUID) -> Double {
+        remoteVoiceLevels[profileID] ?? 0
     }
 
     func powerState(for profileID: UUID) -> RemotePowerState? {

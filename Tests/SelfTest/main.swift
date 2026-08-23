@@ -557,6 +557,33 @@ check(
     "test tone safety gate rejects missing device, active RC003 voice stream, or in-flight playback"
 )
 
+var quietVoiceLevelMeter = VoiceAudioLevelMeter()
+var loudVoiceLevelMeter = VoiceAudioLevelMeter()
+let voiceLevelWindow = VoiceAudioLevelMeter.updateWindowSampleCount
+let quietVoiceLevel = quietVoiceLevelMeter.append(
+    Array(repeating: Int16(500), count: voiceLevelWindow)
+) ?? -1
+let loudVoiceLevel = loudVoiceLevelMeter.append(
+    Array(repeating: Int16(12_000), count: voiceLevelWindow)
+) ?? -1
+check(
+    quietVoiceLevel > 0 && loudVoiceLevel > quietVoiceLevel && loudVoiceLevel <= 1,
+    "remote voice level meter follows post-gain PCM loudness"
+)
+let releasedVoiceLevel = loudVoiceLevelMeter.append(
+    Array(repeating: Int16(0), count: voiceLevelWindow)
+) ?? -1
+check(
+    releasedVoiceLevel > 0 && releasedVoiceLevel < loudVoiceLevel,
+    "remote voice level meter releases smoothly toward silence"
+)
+loudVoiceLevelMeter.reset()
+check(
+    loudVoiceLevelMeter.level == 0 &&
+        loudVoiceLevelMeter.append(Array(repeating: Int16(1), count: voiceLevelWindow - 1)) == nil,
+    "remote voice level meter resets session state and throttles UI publication"
+)
+
 let suiteName = "RemoteMicSelfTest.\(UUID().uuidString)"
 if let defaults = UserDefaults(suiteName: suiteName) {
     let saved = try JSONEncoder().encode([

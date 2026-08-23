@@ -615,6 +615,7 @@ struct SettingsPageRegressionTests {
         #expect(cardSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(cardSource.contains("fillsWidth ? nil : 232"))
         #expect(cardSource.contains("remoteBatteryLabel("))
+        #expect(cardSource.contains("remoteVoiceLevelMeter(level: model.voiceLevel(for: profile.id))"))
         #expect(cardSource.contains("powerState: model.powerState(for: profile.id)"))
         #expect(cardSource.contains("Image(systemName: \"bolt.fill\")"))
         #expect(!cardSource.contains("Label(power.text"))
@@ -630,6 +631,8 @@ struct SettingsPageRegressionTests {
         }
         #expect(settingsSource.contains("if level <= 10 { return .red }"))
         #expect(settingsSource.contains("if level <= 25 { return .orange }"))
+        #expect(settingsSource.contains(".frame(width: 21, height: 12"))
+        #expect(settingsSource.contains("Text(\"remote.device.voice_level\")"))
 
         let panelStart = try #require(settingsSource.range(of: "private var connectionDevicePanel"))
         let panelEnd = try #require(settingsSource.range(
@@ -870,6 +873,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(
             "model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))
+        #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_CONNECTED_REMOTE"))
+        #expect(source.contains("initialRemoteVoiceLevels:"))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"))
     }

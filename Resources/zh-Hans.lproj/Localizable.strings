@@ -200,6 +200,8 @@
 "remote.device.bound_short" = "已绑定";
 "remote.device.unbound" = "待绑定";
 "remote.device.current" = "当前";
+"remote.device.voice_level" = "遥控器麦克风音量";
+"remote.device.voice_level.help" = "按住语音键说话时，显示遥控器实际采集到的声音响度";
 "remote.device.disconnected" = "未连接";
 "remote.device.battery_unavailable" = "暂时无法读取电量";
 "remote.device.power.battery" = "电池供电";

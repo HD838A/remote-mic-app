@@ -253,6 +253,9 @@
 - [x] 语音键短按定位当前 App 聊天输入框
   - 默认关闭，与 Fn 点按模式互斥；短按取消该次短音频并聚焦当前 App，长按继续使用已选语音触发键。
   - Accessibility 通用路径已覆盖 Electron / Chromium 建树重试和安全候选排名；微信仅对精确 Bundle ID 使用有尺寸门禁的窗口相对降级。Lark/飞书、Telegram 和微信已完成 RC003 真机验收。
+- [ ] 按键映射页在遥控器电量旁显示实时麦克风音量（实现与自动化验证完成，待真机验收）
+  - 仅使用实体遥控器解码并完成增益处理后的 PCM，以约 50ms 窗口计算 RMS 响度；界面只增加固定尺寸迷你音量条，不改变语音键和普通按键的映射逻辑或原有页面布局。
+  - 不保存、上传或记录原始音频；停止语音、断连和 App 退出时归零。自动化、生产页面和真实 RC003 验收边界见 [`Testing/RemoteVoiceLevelMeter.md`](Testing/RemoteVoiceLevelMeter.md)。
 - [ ] 普通遥控器语音键突破一分钟录音限制 <!-- workshop:status=阻塞;priority=P2 -->
   - 曾尝试在普通物理语音会话收到 `STREAM_START` 后每 10 秒调用 ATVV v1.0 `MIC_EXTEND`，并设置 180 秒关闭与 2 秒超时重连。
   - 2026-08-11 真机日志确认普通物理会话没有 `microphoneOpened` 状态，定时调用持续返回 `ATVV MIC_EXTEND rejected`，命令并未写入遥控器；模拟租期模型不能证明真实固件行为。

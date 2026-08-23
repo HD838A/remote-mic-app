@@ -57,6 +57,9 @@ enum SettingsScreenshotRenderer {
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
+        let showsConnectedRemote = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_CONNECTED_REMOTE"
+        ] == "1"
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -87,7 +90,23 @@ enum SettingsScreenshotRenderer {
                 ? KeyboardShortcutPreset.quitApplication.shortcut
                 : StandaloneKeyboardModifier.leftControl.shortcut
         }
-        let model = BridgeAppModel(settings: settings)
+        let simulatedProfileID: UUID? = showsConnectedRemote
+            ? settings.registerBluetoothRemote(
+                identifier: UUID(uuidString: "C4B6E236-2C5E-49D6-9D5A-5B8794DCE2E3")!
+            )
+            : nil
+        if let simulatedProfileID {
+            settings.updateRemoteProfileModel(simulatedProfileID, model: .rc003)
+            settings.selectRemoteProfile(simulatedProfileID)
+        }
+        let simulatedProfileIDs = simulatedProfileID.map { Set([$0]) } ?? []
+        let model = BridgeAppModel(
+            settings: settings,
+            initialConnectedRemoteProfileIDs: simulatedProfileIDs,
+            initialRemoteBatteryLevels: simulatedProfileID.map { [$0: 86] } ?? [:],
+            initialRemotePowerStates: simulatedProfileID.map { [$0: .onBattery] } ?? [:],
+            initialRemoteVoiceLevels: simulatedProfileID.map { [$0: 0.68] } ?? [:]
+        )
         let updateInformation = UpdateInformationStore()
         let localization = LocalizationStore(settings: settings)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)

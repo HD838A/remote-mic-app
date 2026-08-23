@@ -1477,6 +1477,7 @@ struct SettingsView: View {
                             level: batteryLevel,
                             powerState: model.powerState(for: profile.id)
                         )
+                        remoteVoiceLevelMeter(level: model.voiceLevel(for: profile.id))
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 7) {
@@ -1485,6 +1486,7 @@ struct SettingsView: View {
                                 level: batteryLevel,
                                 powerState: model.powerState(for: profile.id)
                             )
+                            remoteVoiceLevelMeter(level: model.voiceLevel(for: profile.id))
                         }
                     }
                 }
@@ -1538,6 +1540,32 @@ struct SettingsView: View {
         }
         .foregroundStyle(batteryColor(for: level))
         .help(remoteBatteryHelp(level: level, powerState: powerState))
+    }
+
+    private func remoteVoiceLevelMeter(level: Double) -> some View {
+        let clampedLevel = min(1, max(0, level))
+        let heights: [CGFloat] = [4, 6, 8, 10, 12]
+        let thresholds = [0.08, 0.25, 0.45, 0.65, 0.85]
+        return HStack(alignment: .bottom, spacing: 2) {
+            ForEach(heights.indices, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .fill(
+                        clampedLevel >= thresholds[index]
+                            ? (index == heights.indices.last ? Color.orange : Color.green)
+                            : Color.secondary.opacity(0.18)
+                    )
+                    .frame(width: 2.5, height: heights[index])
+            }
+        }
+        .frame(width: 21, height: 12, alignment: .bottomLeading)
+        .animation(
+            .easeOut(duration: clampedLevel > 0 ? 0.06 : 0.22),
+            value: clampedLevel
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("remote.device.voice_level"))
+        .accessibilityValue(Text("\(Int((clampedLevel * 100).rounded()))%"))
+        .help(localization.text("remote.device.voice_level.help"))
     }
 
     private func batterySymbol(for level: Int?) -> String {
