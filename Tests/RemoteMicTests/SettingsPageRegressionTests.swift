@@ -1011,4 +1011,34 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
     }
+
+    @Test func voiceButtonShortcutUsesAnInlineEditorAndConflictWarning() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/SettingsScreenshotRenderer.swift"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("voiceShortcutEditorPanel"))
+        #expect(settingsSource.contains("model.setVoiceTriggerShortcut(shortcut)"))
+        #expect(settingsSource.contains("VoiceShortcutConflictPolicy.warning"))
+        #expect(settingsSource.contains("settings.voiceTriggerShortcut != nil"))
+        #expect(!settingsSource.contains(".sheet(isPresented: $isVoiceShortcutEditorPresented"))
+        #expect(!settingsSource.contains(".popover(isPresented: $isVoiceShortcutEditorPresented"))
+        #expect(rendererSource.contains(
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_VOICE_SHORTCUT_EDITOR"
+        ))
+        #expect(rendererSource.contains(
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_SHORTCUT_CONFLICT"
+        ))
+    }
 }

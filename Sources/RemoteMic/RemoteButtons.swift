@@ -648,10 +648,12 @@ enum HIDPermissionGate {
         mappingEnabled: Bool,
         voiceFnTapModeEnabled: Bool = false,
         voiceKeyMode: VoiceKeyMode = .function,
+        softwareVoiceTriggerEnabled: Bool = false,
         inputMonitoringGranted: Bool,
         accessibilityGranted: Bool
     ) -> HIDPermissionRequest {
-        guard mappingEnabled || voiceFnTapModeEnabled || voiceKeyMode.requiresAccessibility else {
+        guard mappingEnabled || voiceFnTapModeEnabled ||
+                voiceKeyMode.requiresAccessibility || softwareVoiceTriggerEnabled else {
             return .none
         }
         if mappingEnabled, !inputMonitoringGranted { return .inputMonitoring }

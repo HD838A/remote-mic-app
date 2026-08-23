@@ -66,6 +66,8 @@ enum HIDDeviceMatchDecision: Equatable {
 }
 
 final class HIDRemoteMonitor {
+    static let voiceButtonUsage: UInt16 = 0x3E
+
     private let settings: AppSettings
     private let eventSuppressor: KeyboardEventSuppressor
     private let ownsEventSuppressor: Bool
@@ -105,6 +107,7 @@ final class HIDRemoteMonitor {
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
     var onButtonPressed: ((UUID?, String, RemoteButton) -> (profileID: UUID, shouldPerformAction: Bool)?)?
     var onInternalAction: ((UUID?, ButtonAction) -> Void)?
+    var onVoiceButtonEdge: ((RemoteEventEdge) -> Void)?
 
     init(
         settings: AppSettings,
@@ -615,6 +618,12 @@ final class HIDRemoteMonitor {
         }
         activeUsages = usages
         onActiveButtons?(profileID, RemoteButton.buttons(for: usages))
+        if pressed.contains(Self.voiceButtonUsage) {
+            onVoiceButtonEdge?(.down)
+        }
+        if released.contains(Self.voiceButtonUsage) {
+            onVoiceButtonEdge?(.up)
+        }
 
         for usage in pressed.sorted() {
             guard let button = RemoteButton.usageMap[usage] else { continue }
@@ -818,7 +827,7 @@ final class HIDRemoteMonitor {
     }
 
     static func shouldPromoteDiscoveryReport(usages: Set<UInt16>) -> Bool {
-        !RemoteButton.buttons(for: usages).isEmpty
+        usages.contains(voiceButtonUsage) || !RemoteButton.buttons(for: usages).isEmpty
     }
 
     static func deviceOpenFailureMessageKey(
@@ -861,7 +870,9 @@ final class HIDRemoteMonitor {
     }
 
     private static func buttonList(for usages: Set<UInt16>) -> String {
-        let buttons = usages.compactMap { RemoteButton.usageMap[$0]?.rawValue }.sorted()
+        let buttons = usages.compactMap { usage in
+            usage == voiceButtonUsage ? "voice" : RemoteButton.usageMap[usage]?.rawValue
+        }.sorted()
         return buttons.isEmpty ? "none" : buttons.joined(separator: ",")
     }
 
@@ -1204,6 +1215,9 @@ final class HIDRemoteMonitor {
         appSwitcherConfirmationProbe?.cancel()
         appSwitcherConfirmationProbe = nil
         appSwitcherOriginBundleIdentifier = nil
+        if activeUsages.contains(Self.voiceButtonUsage) {
+            onVoiceButtonEdge?(.up)
+        }
         if !activeDeviceIsSeized {
             for usage in activeUsages {
                 if let button = RemoteButton.usageMap[usage] {

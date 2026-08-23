@@ -32,6 +32,8 @@ final class ShortcutCaptureMonitor {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var didCapture = false
+    private var pendingStandaloneModifier: StandaloneKeyboardModifier?
+    private var sawMultipleStandaloneModifiers = false
 
     init(
         onCapture: @escaping (CustomKeyboardShortcut) -> Void,
@@ -53,10 +55,13 @@ final class ShortcutCaptureMonitor {
 
         lock.lock()
         didCapture = false
+        pendingStandaloneModifier = nil
+        sawMultipleStandaloneModifiers = false
         lock.unlock()
 
         let context = Unmanaged.passUnretained(self).toOpaque()
-        let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue) |
+            CGEventMask(1 << CGEventType.flagsChanged.rawValue)
         guard let eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -100,10 +105,14 @@ final class ShortcutCaptureMonitor {
             }
             return false
         }
-        guard type == .keyDown else { return false }
         guard event.getIntegerValueField(.eventSourceUserData) != KeyboardInjector.syntheticEventMarker else {
             return false
         }
+
+        if type == .flagsChanged {
+            return handleModifierFlagsChanged(event)
+        }
+        guard type == .keyDown else { return false }
 
         lock.lock()
         if didCapture {
@@ -119,9 +128,54 @@ final class ShortcutCaptureMonitor {
             return false
         }
         didCapture = true
+        pendingStandaloneModifier = nil
         lock.unlock()
 
         let shortcut = CustomKeyboardShortcut(event: nsEvent)
+        let capture = onCapture
+        dispatchCallback {
+            capture(shortcut)
+        }
+        return true
+    }
+
+    private func handleModifierFlagsChanged(_ event: CGEvent) -> Bool {
+        guard let nsEvent = NSEvent(cgEvent: event),
+              let modifier = StandaloneKeyboardModifier.allCases.first(where: {
+                  $0.keyCode == nsEvent.keyCode
+              })
+        else { return false }
+
+        lock.lock()
+        if didCapture {
+            lock.unlock()
+            return true
+        }
+        if nsEvent.modifierFlags.contains(modifier.modifierFlags) {
+            if let pendingStandaloneModifier, pendingStandaloneModifier != modifier {
+                sawMultipleStandaloneModifiers = true
+            } else if pendingStandaloneModifier == nil {
+                pendingStandaloneModifier = modifier
+            }
+            lock.unlock()
+            return true
+        }
+
+        let shouldCapture = pendingStandaloneModifier == modifier &&
+            !sawMultipleStandaloneModifiers
+        if shouldCapture {
+            didCapture = true
+            pendingStandaloneModifier = nil
+        } else if nsEvent.modifierFlags.intersection(
+            CustomKeyboardShortcut.supportedModifiers
+        ).isEmpty {
+            pendingStandaloneModifier = nil
+            sawMultipleStandaloneModifiers = false
+        }
+        lock.unlock()
+
+        guard shouldCapture else { return true }
+        let shortcut = modifier.shortcut
         let capture = onCapture
         dispatchCallback {
             capture(shortcut)

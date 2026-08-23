@@ -48,6 +48,12 @@ enum SettingsScreenshotRenderer {
         let opensShortcutEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"
         ] == "1"
+        let opensVoiceShortcutEditor = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_VOICE_SHORTCUT_EDITOR"
+        ] == "1"
+        let showsVoiceShortcutConflict = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_SHORTCUT_CONFLICT"
+        ] == "1"
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
@@ -65,14 +71,21 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
-        if opensShortcutEditor {
+        if opensShortcutEditor || opensVoiceShortcutEditor {
             settings.customMappingEnabled = true
+        }
+        if opensShortcutEditor {
             settings.setAction(.customShortcut, for: .ok, trigger: .singleClick)
             settings.setShortcut(
                 KeyboardShortcutPreset.spotlight.shortcut,
                 for: .ok,
                 trigger: .singleClick
             )
+        }
+        if opensVoiceShortcutEditor {
+            settings.voiceTriggerShortcut = showsVoiceShortcutConflict
+                ? KeyboardShortcutPreset.quitApplication.shortcut
+                : StandaloneKeyboardModifier.leftControl.shortcut
         }
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
@@ -96,6 +109,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingEditingButton: section == .mapping && opensShortcutEditor
                     ? .ok
                     : nil,
+                initialVoiceShortcutEditorPresented: section == .mapping && opensVoiceShortcutEditor,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 minimumContentSize: .zero
             )
