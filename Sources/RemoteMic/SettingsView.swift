@@ -1868,6 +1868,7 @@ struct SettingsView: View {
                         }
                         .compatibilityButtonStyle(.standard)
                         .disabled(configured.shortcut == nil)
+                    }
 
                     shortcutCaptureFeedbackView(contextID: contextID)
 
