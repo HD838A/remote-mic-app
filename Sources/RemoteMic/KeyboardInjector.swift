@@ -110,6 +110,15 @@ enum KeyboardInjector {
     }
 
     @discardableResult
+    static func postSyntheticKeyState(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags
+    ) -> Bool {
+        postKeyState(code: code, isDown: isDown, flags: flags)
+    }
+
+    @discardableResult
     static func send(
         _ action: ButtonAction,
         shortcut: CustomKeyboardShortcut? = nil,

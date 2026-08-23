@@ -22,6 +22,7 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
+    let voiceTriggerShortcut: CustomKeyboardShortcut?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -241,6 +242,7 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let voiceTriggerShortcut = "voiceTriggerShortcut"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
@@ -347,6 +349,18 @@ final class AppSettings: ObservableObject {
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
             )
+        }
+    }
+
+    @Published var voiceTriggerShortcut: CustomKeyboardShortcut? {
+        didSet {
+            guard let voiceTriggerShortcut else {
+                defaults.removeObject(forKey: Keys.voiceTriggerShortcut)
+                return
+            }
+            if let data = try? JSONEncoder().encode(voiceTriggerShortcut) {
+                defaults.set(data, forKey: Keys.voiceTriggerShortcut)
+            }
         }
     }
 
@@ -533,6 +547,9 @@ final class AppSettings: ObservableObject {
         voiceFnTapModeEnabled = defaults.bool(
             forKey: Keys.voiceFnTapModeEnabled
         )
+        voiceTriggerShortcut = defaults
+            .data(forKey: Keys.voiceTriggerShortcut)
+            .flatMap { try? JSONDecoder().decode(CustomKeyboardShortcut.self, from: $0) }
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -1286,6 +1303,7 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
+            voiceTriggerShortcut: voiceTriggerShortcut,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -1346,7 +1364,9 @@ final class AppSettings: ObservableObject {
         if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
-        voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
+        voiceTriggerShortcut = configuration.voiceTriggerShortcut
+        voiceFnTapModeEnabled = voiceTriggerShortcut == nil &&
+            (configuration.voiceFnTapModeEnabled ?? false)
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup

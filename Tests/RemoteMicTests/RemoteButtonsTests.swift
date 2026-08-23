@@ -1201,13 +1201,13 @@ struct RemoteButtonsTests {
         ) == .none)
         #expect(HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: false,
-            voiceFnTapModeEnabled: true,
+            softwareVoiceTriggerEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: false
         ) == .accessibility)
         #expect(HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: false,
-            voiceFnTapModeEnabled: true,
+            softwareVoiceTriggerEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: true
         ) == .none)
@@ -1495,6 +1495,40 @@ struct RemoteButtonsTests {
             from: try JSONSerialization.data(withJSONObject: legacyObject)
         )
         #expect(!target.voiceFnTapModeEnabled)
+    }
+
+    @Test func voiceTriggerShortcutPersistsExportsAndWinsOverFnTapMode() throws {
+        let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.voiceFnTapModeEnabled = true
+        source.voiceTriggerShortcut = StandaloneKeyboardModifier.leftControl.shortcut
+
+        let restored = AppSettings(defaults: sourceDefaults)
+        #expect(restored.voiceTriggerShortcut == StandaloneKeyboardModifier.leftControl.shortcut)
+
+        let exported = try source.exportedConfigurationData()
+        let object = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        #expect(object["voiceTriggerShortcut"] != nil)
+
+        let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.voiceTriggerShortcut == StandaloneKeyboardModifier.leftControl.shortcut)
+        #expect(!target.voiceFnTapModeEnabled)
+
+        var legacyObject = object
+        legacyObject.removeValue(forKey: "voiceTriggerShortcut")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(target.voiceTriggerShortcut == nil)
+        #expect(target.voiceFnTapModeEnabled)
     }
 
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {

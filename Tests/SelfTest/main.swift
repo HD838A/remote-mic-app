@@ -1,3 +1,5 @@
+import AppKit
+import CoreGraphics
 import Foundation
 
 private var passed = 0
@@ -288,7 +290,7 @@ check(
         ) == .none &&
         HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: false,
-            voiceFnTapModeEnabled: true,
+            softwareVoiceTriggerEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: false
         ) == .accessibility,
@@ -326,6 +328,95 @@ check(
     "voice Fn latch rolls back failed injection"
 )
 _ = voiceFunctionKeyLatch.transition(streaming: false)
+
+var voiceShortcutEvents: [String] = []
+let voiceShortcutController = VoiceShortcutHoldController { code, isDown, flags in
+    voiceShortcutEvents.append("\(code):\(isDown ? "down" : "up"):\(flags.rawValue)")
+    return true
+}
+let leftControlVoiceShortcut = StandaloneKeyboardModifier.leftControl.shortcut
+check(
+    voiceShortcutController.press(leftControlVoiceShortcut) &&
+        voiceShortcutController.press(leftControlVoiceShortcut) &&
+        voiceShortcutController.heldShortcut == leftControlVoiceShortcut &&
+        voiceShortcutEvents == ["59:down:\(CGEventFlags.maskControl.rawValue)"],
+    "custom voice shortcut holds Left Control without duplicate key-down"
+)
+check(
+    voiceShortcutController.release() &&
+        voiceShortcutController.heldShortcut == nil &&
+        voiceShortcutEvents == [
+            "59:down:\(CGEventFlags.maskControl.rawValue)",
+            "59:up:0",
+        ],
+    "custom voice shortcut releases Left Control"
+)
+check(
+    VoiceShortcutConflictPolicy.warning(for: leftControlVoiceShortcut) == nil &&
+        VoiceShortcutConflictPolicy.warning(
+            for: KeyboardShortcutPreset.quitApplication.shortcut
+        ) == .dangerousSystemAction &&
+        VoiceShortcutConflictPolicy.warning(
+            for: KeyboardShortcutPreset.spotlight.shortcut
+        ) == .knownSystemShortcut &&
+        VoiceShortcutConflictPolicy.warning(
+            for: CustomKeyboardShortcut(keyCode: 0, modifierFlags: [], keyLabel: "A")
+        ) == .unmodifiedKey,
+    "custom voice shortcut conflict warnings distinguish safe and risky choices"
+)
+
+var capturedVoiceShortcuts: [CustomKeyboardShortcut] = []
+let voiceShortcutCaptureMonitor = ShortcutCaptureMonitor(
+    onCapture: { capturedVoiceShortcuts.append($0) },
+    dispatchCallback: { $0() }
+)
+if let controlDown = CGEvent(
+    keyboardEventSource: nil,
+    virtualKey: CGKeyCode(StandaloneKeyboardModifier.leftControl.keyCode),
+    keyDown: true
+), let controlUp = CGEvent(
+    keyboardEventSource: nil,
+    virtualKey: CGKeyCode(StandaloneKeyboardModifier.leftControl.keyCode),
+    keyDown: false
+) {
+    controlDown.flags = .maskControl
+    controlUp.flags = []
+    check(
+        voiceShortcutCaptureMonitor.handle(type: .flagsChanged, event: controlDown) &&
+            capturedVoiceShortcuts.isEmpty &&
+            voiceShortcutCaptureMonitor.handle(type: .flagsChanged, event: controlUp) &&
+            capturedVoiceShortcuts == [leftControlVoiceShortcut],
+        "shortcut recorder captures standalone Left Control on release"
+    )
+} else {
+    check(false, "shortcut recorder captures standalone Left Control on release")
+}
+
+var capturedCombination: [CustomKeyboardShortcut] = []
+let combinationCaptureMonitor = ShortcutCaptureMonitor(
+    onCapture: { capturedCombination.append($0) },
+    dispatchCallback: { $0() }
+)
+if let commandDown = CGEvent(
+    keyboardEventSource: nil,
+    virtualKey: 55,
+    keyDown: true
+), let spaceDown = CGEvent(
+    keyboardEventSource: nil,
+    virtualKey: 49,
+    keyDown: true
+) {
+    commandDown.flags = .maskCommand
+    spaceDown.flags = .maskCommand
+    check(
+        combinationCaptureMonitor.handle(type: .flagsChanged, event: commandDown) &&
+            combinationCaptureMonitor.handle(type: .keyDown, event: spaceDown) &&
+            capturedCombination == [KeyboardShortcutPreset.spotlight.shortcut],
+        "shortcut recorder keeps modifier-plus-main-key combinations intact"
+    )
+} else {
+    check(false, "shortcut recorder keeps modifier-plus-main-key combinations intact")
+}
 
 let unrelatedMapping = HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 0x0000_0007_0000_0005)
 let staleVoiceMapping = HIDUsageMapping(
@@ -465,6 +556,26 @@ if let defaults = UserDefaults(suiteName: suiteName) {
             settings.action(for: .power) == .escape &&
             settings.customMappingEnabled,
         "unavailable continuous recording experiment cannot replace power binding"
+    )
+    settings.voiceFnTapModeEnabled = true
+    settings.voiceTriggerShortcut = leftControlVoiceShortcut
+    let restoredSettings = AppSettings(defaults: defaults)
+    var voiceShortcutConfigurationRoundTrips = false
+    if let exported = try? settings.exportedConfigurationData(),
+       let importDefaults = UserDefaults(suiteName: "\(suiteName).import")
+    {
+        defer { importDefaults.removePersistentDomain(forName: "\(suiteName).import") }
+        let importedSettings = AppSettings(defaults: importDefaults)
+        if (try? importedSettings.importConfiguration(from: exported)) != nil {
+            voiceShortcutConfigurationRoundTrips =
+                importedSettings.voiceTriggerShortcut == leftControlVoiceShortcut &&
+                !importedSettings.voiceFnTapModeEnabled
+        }
+    }
+    check(
+        restoredSettings.voiceTriggerShortcut == leftControlVoiceShortcut &&
+            voiceShortcutConfigurationRoundTrips,
+        "custom voice shortcut persists and configuration import disables conflicting Fn tap"
     )
     defaults.removePersistentDomain(forName: suiteName)
 } else {

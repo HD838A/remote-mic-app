@@ -217,6 +217,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     })
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
+    private let voiceShortcutHoldController = VoiceShortcutHoldController()
     private lazy var preferredInputSourceMonitor = PreferredInputSourceMonitor(
         voiceTool: { [weak self] in
             self?.settings.onboardingVoiceTool ?? .unselected
@@ -622,6 +623,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         stopLongRecording(reason: "app_stop")
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
+        _ = voiceShortcutHoldController.release()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
         bluetoothBridges.removeAll()
@@ -1268,22 +1270,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             stopLongRecording(reason: "feature_disabled")
         }
 
-        let requestedFnTapMode = settings.voiceFnTapModeEnabled
+        let requestedVoiceShortcut = settings.customMappingEnabled &&
+            settings.voiceTriggerShortcut != nil
+        if !requestedVoiceShortcut {
+            _ = voiceShortcutHoldController.release()
+        }
+        let requestedFnTapMode = !requestedVoiceShortcut && settings.voiceFnTapModeEnabled
         if !requestedFnTapMode, voiceFnTapSession.requiresCleanupBeforeMapping {
             voiceFnTapSession.setEnabled(false) { [weak self] in
                 self?.applyHIDSettings()
             }
             return
         }
-        requestNextHIDPermissionIfNeeded(voiceFnTapModeRequested: requestedFnTapMode)
+        requestNextHIDPermissionIfNeeded(
+            softwareVoiceTriggerRequested: requestedFnTapMode || requestedVoiceShortcut
+        )
         var powerKeySuppressed: Bool
-        if requestedFnTapMode, KeyboardInjector.isAccessibilityTrusted {
+        if (requestedFnTapMode || requestedVoiceShortcut), KeyboardInjector.isAccessibilityTrusted {
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
-                voiceFnTapSession.setEnabled(true)
+                voiceFnTapSession.setEnabled(requestedFnTapMode)
             } else {
-                settings.voiceFnTapModeEnabled = false
+                if requestedFnTapMode {
+                    settings.voiceFnTapModeEnabled = false
+                }
                 voiceFnTapSession.setEnabled(false)
+                _ = voiceShortcutHoldController.release()
                 powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
             }
         } else {
@@ -1291,6 +1303,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 settings.voiceFnTapModeEnabled = false
             }
             voiceFnTapSession.setEnabled(false)
+            _ = voiceShortcutHoldController.release()
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
@@ -1421,6 +1434,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             if let profileID { self.selectRemoteProfile(profileID) }
             self.performInternalAction(action)
         }
+        monitor.onVoiceButtonEdge = { [weak self] edge in
+            self?.handleVoiceButtonEdge(edge, source: "hid")
+        }
         return monitor
     }
 
@@ -1433,6 +1449,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func setVoiceFnTapModeEnabled(_ enabled: Bool) {
+        guard settings.voiceTriggerShortcut == nil else {
+            settings.voiceFnTapModeEnabled = false
+            return
+        }
         if enabled {
             enableVoiceFnTapMode()
             return
@@ -1443,10 +1463,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
+    func setVoiceTriggerShortcut(_ shortcut: CustomKeyboardShortcut?) {
+        _ = voiceShortcutHoldController.release()
+        settings.voiceTriggerShortcut = shortcut
+        if shortcut != nil {
+            settings.voiceFnTapModeEnabled = false
+        }
+        voiceFnTapSession.setEnabled(false) { [weak self] in
+            self?.applyHIDSettings()
+        }
+    }
+
     private func enableVoiceFnTapMode() {
+        guard settings.voiceTriggerShortcut == nil else {
+            settings.voiceFnTapModeEnabled = false
+            return
+        }
         guard KeyboardInjector.isAccessibilityTrusted else {
             settings.voiceFnTapModeEnabled = false
-            requestNextHIDPermissionIfNeeded(voiceFnTapModeRequested: true)
+            requestNextHIDPermissionIfNeeded(softwareVoiceTriggerRequested: true)
             applyHIDSettings()
             return
         }
@@ -1472,11 +1507,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func requestNextHIDPermissionIfNeeded(
-        voiceFnTapModeRequested: Bool? = nil
+        softwareVoiceTriggerRequested: Bool? = nil
     ) {
         let request = HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: settings.customMappingEnabled,
-            voiceFnTapModeEnabled: voiceFnTapModeRequested ?? settings.voiceFnTapModeEnabled,
+            softwareVoiceTriggerEnabled: softwareVoiceTriggerRequested ?? settings.voiceFnTapModeEnabled,
             inputMonitoringGranted: HIDRemoteMonitor.isInputMonitoringGranted,
             accessibilityGranted: KeyboardInjector.isAccessibilityTrusted
         )
@@ -1716,6 +1751,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             longRecordingOpenTimer = nil
             AppLogger.shared.write("LONG RECORDING started")
         }
+        handleVoiceButtonEdge(.down, source: "stream_start")
         _ = voiceFnTapSession.startVoice()
         beginVoiceSessionIfNeeded()
     }
@@ -1732,6 +1768,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             longRecordingCloseTimer = nil
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
+        handleVoiceButtonEdge(.up, source: "stream_stop")
         let handledByFnTapMode = voiceFnTapSession.stopVoice()
         let shouldFlushAudio = BluetoothVoiceStopPolicy.shouldFlushAudio(
             handledByFnTapMode: handledByFnTapMode
@@ -2699,11 +2736,51 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         if !isStreaming {
             isVoiceTriggerEnabled = applied
-            voiceShortcutStatus = LocalizedMessage(
-                applied ? "voice_button.status.fn_enabled" : "voice_button.status.waiting"
-            )
+            if neutralizeVoiceKey,
+               settings.customMappingEnabled,
+               settings.voiceTriggerShortcut != nil,
+               voiceFunctionMapper.isVoiceKeyNeutralized
+            {
+                voiceShortcutStatus = LocalizedMessage("voice_button.status.custom_enabled")
+            } else {
+                voiceShortcutStatus = LocalizedMessage(
+                    applied ? "voice_button.status.fn_enabled" : "voice_button.status.waiting"
+                )
+            }
         }
         return !settings.customMappingEnabled || voiceFunctionMapper.isPowerKeySuppressed
+    }
+
+    private func handleVoiceButtonEdge(_ edge: RemoteEventEdge, source: String) {
+        guard settings.customMappingEnabled,
+              let shortcut = settings.voiceTriggerShortcut,
+              voiceFunctionMapper.isVoiceKeyNeutralized
+        else {
+            if edge == .up {
+                _ = voiceShortcutHoldController.release()
+            }
+            return
+        }
+
+        let success: Bool
+        switch edge {
+        case .down:
+            success = voiceShortcutHoldController.press(shortcut)
+        case .up:
+            success = voiceShortcutHoldController.release()
+        }
+        isVoiceTriggerEnabled = success && edge == .up
+        voiceShortcutStatus = LocalizedMessage(
+            success
+                ? (edge == .down
+                    ? "voice_button.status.custom_pressed"
+                    : "voice_button.status.custom_released")
+                : "voice_button.status.custom_failed"
+        )
+        AppLogger.shared.write(
+            "VOICE SHORTCUT edge=\(edge == .down ? "down" : "up") " +
+                "source=\(source) success=\(success)"
+        )
     }
 
     @discardableResult
