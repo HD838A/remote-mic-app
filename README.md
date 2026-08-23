@@ -218,11 +218,6 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
       <br>
       微信
     </td>
-    <td align="center">
-      <img src="Screenshots/donation-alipay.jpg" alt="支付宝赞赏码" width="280">
-      <br>
-      支付宝
-    </td>
   </tr>
 </table>
 
