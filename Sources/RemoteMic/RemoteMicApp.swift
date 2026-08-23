@@ -777,6 +777,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 1020, height: 772)
+        window.setContentSize(NSSize(width: 1020, height: 772))
         window.setFrameAutosaveName("RemoteMicSettings")
         window.center()
         return NSWindowController(window: window)
