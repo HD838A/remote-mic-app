@@ -140,7 +140,7 @@ struct RemoteButtonsTests {
         })
         #expect(mappings == [
             localization.text("app.name"): "com.hd838a.RemoteMic",
-            "Codex": "com.openai.codex",
+            localization.text("application.chatgpt"): "com.openai.codex",
             "Claude": "com.anthropic.claudefordesktop",
             "cmux": "com.cmuxterm.app",
             localization.text("application.wechat"): "com.tencent.xinWeChat",
@@ -207,6 +207,27 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.openCustomApplication.allowsRepeat)
     }
 
+    @Test func weChatVoiceMessageIsAvailableForAnyButton() {
+        let installed = Set<String>()
+        let powerSelection = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installed,
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false,
+            button: .power
+        )
+        let otherSelection = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installed,
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false,
+            button: .up
+        )
+
+        #expect(powerSelection.contains(.wechatVoiceMessage))
+        #expect(otherSelection.contains(.wechatVoiceMessage))
+        #expect(ButtonAction.wechatVoiceMessage.isHoldAction)
+        #expect(!ButtonAction.wechatVoiceMessage.allowsRepeat)
+    }
+
     @Test func buttonActionsAreSeparatedIntoClearFlatCategories() {
         #expect(ButtonAction.escape.category == .basicKeys)
         #expect(ButtonAction.commandReturn.category == .basicKeys)
@@ -217,6 +238,9 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
+        #expect(ButtonAction.codexStopGeneration.category == .applicationSpecific)
+        #expect(ButtonAction.codexPageUp.category == .applicationSpecific)
+        #expect(ButtonAction.wechatVoiceMessage.category == .applicationSpecific)
         #expect(ButtonAction.customShortcut.category == .custom)
         #expect(ButtonAction.openCustomApplication.category == .custom)
         #expect(ButtonAction.openCodex.category == .applications)
@@ -242,7 +266,94 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
         #expect(ButtonAction.volumeDown.allowsRepeat)
+        #expect(ButtonAction.scrollUp.allowsRepeat)
+        #expect(ButtonAction.scrollDown.allowsRepeat)
         #expect(ButtonAction.deleteBackward.allowsRepeat)
+    }
+
+    @Test func electronComposerFocusWaitsLongEnoughForTheManualAccessibilityTree() {
+        // 真机上 Electron 收到 AXManualAccessibility 后约 1~2 秒才建好 web 内容树。
+        #expect(KeyboardInjector.manualAccessibilityAttribute == "AXManualAccessibility")
+        #expect(KeyboardInjector.enhancedUserInterfaceAttribute == "AXEnhancedUserInterface")
+        #expect(KeyboardInjector.composerFocusMaximumAttempts == 12)
+        #expect(KeyboardInjector.composerFocusRetryMilliseconds == 250)
+        let retryWindow =
+            (KeyboardInjector.composerFocusMaximumAttempts - 1) *
+            KeyboardInjector.composerFocusRetryMilliseconds
+        #expect(retryWindow >= 2_000)
+    }
+
+    @Test func manualAccessibilityFailuresAreNamedAndLoggedOnlyWhenTheyAddInformation() {
+        #expect(KeyboardInjector.manualAccessibilityResultName(.success) == "success")
+        #expect(
+            KeyboardInjector.manualAccessibilityResultName(.attributeUnsupported)
+                == "attribute_unsupported"
+        )
+        #expect(KeyboardInjector.manualAccessibilityResultName(.cannotComplete) == "cannot_complete")
+        #expect(KeyboardInjector.manualAccessibilityResultName(.apiDisabled) == "api_disabled")
+        #expect(KeyboardInjector.manualAccessibilityResultName(.actionUnsupported).hasPrefix("error_"))
+
+        // Chromium 私有属性成功时不尝试降级；只有 attribute_unsupported 才会走
+        // AXEnhancedUserInterface，日志必须说明是哪个属性回答的。
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .success,
+            fallback: nil
+        ) == "success")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .attributeUnsupported,
+            fallback: .success
+        ) == "fallback_enhanced_success")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .attributeUnsupported,
+            fallback: .cannotComplete
+        ) == "fallback_enhanced_cannot_complete")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .attributeUnsupported,
+            fallback: .attributeUnsupported
+        ) == "fallback_enhanced_attribute_unsupported")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .cannotComplete,
+            fallback: nil
+        ) == "cannot_complete")
+
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .success,
+            fallback: nil
+        ) == .success)
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .attributeUnsupported,
+            fallback: .success
+        ) == .success)
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .attributeUnsupported,
+            fallback: .attributeUnsupported
+        ) == .attributeUnsupported)
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .cannotComplete,
+            fallback: nil
+        ) == .cannotComplete)
+
+        // 首次尝试总是记录一行，之后只记录第一次真正建树成功。
+        #expect(KeyboardInjector.shouldLogManualAccessibility(
+            result: .attributeUnsupported,
+            attempt: 0,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(!KeyboardInjector.shouldLogManualAccessibility(
+            result: .attributeUnsupported,
+            attempt: 4,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(KeyboardInjector.shouldLogManualAccessibility(
+            result: .success,
+            attempt: 4,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(!KeyboardInjector.shouldLogManualAccessibility(
+            result: .success,
+            attempt: 4,
+            alreadyLoggedSuccess: true
+        ))
     }
 
     @Test func hidReportsRouteOnlyToTheirActivePhysicalRemote() {
@@ -540,6 +651,134 @@ struct RemoteButtonsTests {
         }
     }
 
+    @Test func scrollActionsPostExpectedWheelDeltas() {
+        var deltas: [Int32] = []
+        let poster: KeyboardInjector.ScrollEventPoster = { delta in
+            deltas.append(delta)
+            return true
+        }
+
+        #expect(KeyboardInjector.send(
+            .scrollUp,
+            accessibilityTrusted: { true },
+            scrollEventPoster: poster
+        ))
+        #expect(KeyboardInjector.send(
+            .scrollDown,
+            accessibilityTrusted: { true },
+            scrollEventPoster: poster
+        ))
+        #expect(deltas == [5, -5])
+    }
+
+    @Test func scrollDeltaHonorsSpeedAndDirection() {
+        #expect(KeyboardInjector.scrollDelta(for: .scrollUp, speed: 7, inverted: false) == 7)
+        #expect(KeyboardInjector.scrollDelta(for: .scrollDown, speed: 7, inverted: false) == -7)
+        #expect(KeyboardInjector.scrollDelta(for: .scrollUp, speed: 7, inverted: true) == -7)
+        #expect(KeyboardInjector.scrollDelta(for: .scrollDown, speed: 7, inverted: true) == 7)
+        #expect(KeyboardInjector.scrollDelta(for: .scrollUp, speed: 99, inverted: false) == 10)
+    }
+
+    @Test func codexActionsPostStopAndScrollToLatestShortcuts() {
+        var posted: [(CGKeyCode, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyPoster = { code, flags in
+            posted.append((code, flags))
+        }
+
+        #expect(KeyboardInjector.send(
+            .codexStopGeneration,
+            accessibilityTrusted: { true },
+            keyPoster: poster
+        ))
+        #expect(KeyboardInjector.send(
+            .codexScrollToLatest,
+            accessibilityTrusted: { true },
+            keyPoster: poster
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == 53)
+        #expect(posted[0].1 == [])
+        #expect(posted[1].0 == 119)
+        #expect(posted[1].1 == .maskCommand)
+    }
+
+    @Test func codexPageActionsPostIndependentLargeScrollDeltas() {
+        var deltas: [Int32] = []
+        var intervals: [Int32] = []
+        let poster: KeyboardInjector.PageScrollEventPoster = { delta, interval in
+            deltas.append(delta)
+            intervals.append(interval)
+            return true
+        }
+
+        #expect(KeyboardInjector.send(
+            .codexPageUp,
+            accessibilityTrusted: { true },
+            pageScrollEventPoster: poster
+        ))
+        #expect(KeyboardInjector.send(
+            .codexPageDown,
+            accessibilityTrusted: { true },
+            pageScrollEventPoster: poster,
+            pageScrollLines: 14,
+            pageScrollIntervalMilliseconds: 15
+        ))
+        #expect(deltas == [12, -14])
+        #expect(intervals == [12, 15])
+        #expect(KeyboardInjector.codexPageScrollDelta(for: .codexPageUp) == 12)
+        #expect(KeyboardInjector.codexPageScrollDelta(for: .codexPageDown) == -12)
+        #expect(KeyboardInjector.codexPageScrollDelta(for: .codexPageUp, lines: 50) == 50)
+        #expect(KeyboardInjector.codexPageScrollDelta(for: .codexPageDown, lines: 99) == -50)
+        #expect(!ButtonAction.codexPageUp.allowsRepeat)
+        #expect(!ButtonAction.codexPageDown.allowsRepeat)
+    }
+
+    @Test func codexPageScrollPreservesConfiguredStepAcrossEventBurst() {
+        #expect(KeyboardInjector.codexPageScrollEventDeltas(delta: 12) == [4, 4, 4])
+        #expect(KeyboardInjector.codexPageScrollEventDeltas(delta: -14) == [-5, -5, -4])
+        #expect(KeyboardInjector.codexPageScrollEventDeltas(delta: 2, eventCount: 3) == [1, 1])
+        #expect(KeyboardInjector.codexPageScrollEventDeltas(delta: 0).isEmpty)
+        #expect(
+            KeyboardInjector.codexPageScrollEventDeltas(delta: 14).reduce(0, +) == 14
+        )
+        #expect(
+            KeyboardInjector.codexPageScrollEventDeltas(delta: -14).reduce(0, +) == -14
+        )
+    }
+
+    @Test func accessibilityClickPointUsesComposerFrameCenter() {
+        #expect(
+            KeyboardInjector.accessibilityClickPoint(
+                for: CGRect(x: 100, y: 200, width: 400, height: 80)
+            ) == CGPoint(x: 300, y: 240)
+        )
+        #expect(KeyboardInjector.accessibilityClickPoint(for: .zero) == nil)
+    }
+
+    @Test func applicationSpecificActionsUseSelectedApplicationNameAndBundleScope() {
+        let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
+        #expect(ButtonAction.codexPageUp.isAvailable(
+            forApplicationBundleIdentifier: PresetApplication.codex.bundleIdentifier
+        ))
+        #expect(!ButtonAction.codexPageUp.isAvailable(
+            forApplicationBundleIdentifier: "com.example.other"
+        ))
+        #expect(ButtonAction.codexPageUp.displayName(
+            using: localization,
+            applicationName: "ChatGPT"
+        ).contains("ChatGPT"))
+        #expect(ButtonAction.wechatVoiceMessage.isAvailable(
+            forApplicationBundleIdentifier: PresetApplication.weChat.bundleIdentifier
+        ))
+        #expect(!ButtonAction.wechatVoiceMessage.isAvailable(
+            forApplicationBundleIdentifier: PresetApplication.codex.bundleIdentifier
+        ))
+        #expect(ButtonAction.wechatVoiceMessage.displayName(
+            using: localization,
+            applicationName: "微信"
+        ).contains("微信"))
+    }
+
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
@@ -569,6 +808,45 @@ struct RemoteButtonsTests {
     @Test func phoneVoiceFunctionKeyRequiresAccessibility() {
         var didPost = false
         #expect(!KeyboardInjector.setFunctionKeyPressed(
+            true,
+            accessibilityTrusted: { false },
+            keyStatePoster: { _, _, _ in
+                didPost = true
+                return true
+            }
+        ))
+        #expect(!didPost)
+    }
+
+    @Test func rightOptionVoiceKeyPostsRightOptionDownAndUp() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        #expect(KeyboardInjector.setRightOptionKeyPressed(
+            true,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(KeyboardInjector.setRightOptionKeyPressed(
+            false,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == KeyboardInjector.rightOptionKeyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2 == .maskAlternate)
+        #expect(posted[1].0 == KeyboardInjector.rightOptionKeyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2.isEmpty)
+    }
+
+    @Test func rightOptionVoiceKeyRequiresAccessibility() {
+        var didPost = false
+        #expect(!KeyboardInjector.setRightOptionKeyPressed(
             true,
             accessibilityTrusted: { false },
             keyStatePoster: { _, _, _ in
@@ -1290,6 +1568,71 @@ struct RemoteButtonsTests {
         ).action == .showDesktop)
     }
 
+    @Test func applicationMappingProfilesOverrideOnlyTheirBundle() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.setAction(.showDesktop, for: .menu)
+        let profileID = settings.addApplicationMappingProfile(
+            displayName: "Codex",
+            bundleIdentifier: "com.example.codex"
+        )
+        settings.setAction(
+            .codexStopGeneration,
+            for: .menu,
+            trigger: .singleClick,
+            applicationMappingProfileID: profileID
+        )
+        settings.setScrollSpeed(8, applicationMappingProfileID: profileID)
+        settings.setScrollDirectionInverted(true, applicationMappingProfileID: profileID)
+        settings.setPageScrollLines(24, applicationMappingProfileID: profileID)
+        settings.setPageScrollIntervalMilliseconds(15, applicationMappingProfileID: profileID)
+
+        let appScrollSettings = settings.scrollSettings(
+            forApplicationBundleIdentifier: "com.example.codex"
+        )
+        #expect(appScrollSettings == ApplicationScrollSettings(
+            scrollSpeed: 8,
+            scrollDirectionInverted: true,
+            pageScrollLines: 24,
+            pageScrollIntervalMilliseconds: 15
+        ))
+        #expect(settings.scrollSettings(
+            forApplicationBundleIdentifier: "com.example.other"
+        ) == settings.globalScrollSettings)
+
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: settings.selectedRemoteProfileID,
+            applicationBundleIdentifier: "com.example.codex"
+        ).action == .codexStopGeneration)
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: settings.selectedRemoteProfileID,
+            applicationBundleIdentifier: "com.example.other"
+        ).action == .showDesktop)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.applicationMappingProfiles.count == 1)
+        #expect(restored.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: restored.selectedRemoteProfileID,
+            applicationBundleIdentifier: "com.example.codex"
+        ).action == .codexStopGeneration)
+        #expect(restored.scrollSettings(
+            forApplicationBundleIdentifier: "com.example.codex"
+        ) == ApplicationScrollSettings(
+            scrollSpeed: 8,
+            scrollDirectionInverted: true,
+            pageScrollLines: 24,
+            pageScrollIntervalMilliseconds: 15
+        ))
+    }
+
     @Test func additionalBluetoothRemoteCopiesCurrentMappingsBeforeIndependentEditing() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -1495,6 +1838,34 @@ struct RemoteButtonsTests {
             from: try JSONSerialization.data(withJSONObject: legacyObject)
         )
         #expect(!target.voiceFnTapModeEnabled)
+    }
+
+    @Test func rightOptionVoiceKeyModeAlwaysFallsBackToFnGlobe() throws {
+        let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.voiceKeyMode = .rightOptionHold
+        #expect(source.voiceKeyMode == .fnGlobe)
+        let exported = try source.exportedConfigurationData()
+        let object = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        #expect(object["voiceKeyMode"] as? String == VoiceKeyMode.fnGlobe.rawValue)
+
+        let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.voiceKeyMode == .fnGlobe)
+
+        var legacyObject = object
+        legacyObject.removeValue(forKey: "voiceKeyMode")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(target.voiceKeyMode == .fnGlobe)
     }
 
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {

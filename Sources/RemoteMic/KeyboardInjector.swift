@@ -20,6 +20,9 @@ enum KeyboardInjector {
     typealias CmuxCommandRunner = (URL, [String], TimeInterval) -> CmuxCommandResult
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
+    typealias MouseClickPoster = (CGPoint) -> Bool
+    typealias ScrollEventPoster = (Int32) -> Bool
+    typealias PageScrollEventPoster = (Int32, Int32) -> Bool
 
     struct AccessibilityTextCandidate: Equatable {
         let role: String
@@ -69,8 +72,28 @@ enum KeyboardInjector {
 
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
+    static let codexPageScrollEventCount = 3
+    static let codexPageScrollLines: Int32 = 12
     static let functionKeyCode: CGKeyCode = 63
+    /// Web content shells only build the accessibility tree once an assistive
+    /// client announces itself, so the composer scan finds an empty shell until
+    /// one of these attributes is set. `AXManualAccessibility` is the Chromium
+    /// and Electron convention and is tried first, because the standard
+    /// `AXEnhancedUserInterface` that VoiceOver uses is known to distort windows
+    /// and animations on some Electron versions. Shells that are not Chromium
+    /// based answer `attributeUnsupported` for the first attribute and only
+    /// respond to the standard one, so it is used as a fallback for exactly
+    /// those apps.
+    static let manualAccessibilityAttribute = "AXManualAccessibility"
+    static let enhancedUserInterfaceAttribute = "AXEnhancedUserInterface"
+    /// The web content tree needs about one to two seconds after the attribute
+    /// is set, so the composer scan keeps retrying for longer than that.
+    static let composerFocusMaximumAttempts = 12
+    static let composerFocusRetryMilliseconds = 250
+    static let rightOptionKeyCode: CGKeyCode = 61
     private static let focusRequests = ApplicationFocusRequestGate()
+    private static let manualAccessibilityLock = NSLock()
+    private static var manualAccessibilityLoggedProcesses: Set<pid_t> = []
     private static let focusQueue = DispatchQueue(
         label: "RemoteMic.application-focus",
         qos: .userInitiated
@@ -110,6 +133,20 @@ enum KeyboardInjector {
     }
 
     @discardableResult
+    static func setRightOptionKeyPressed(
+        _ isPressed: Bool,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postKeyState
+    ) -> Bool {
+        guard accessibilityTrusted() else { return false }
+        return keyStatePoster(
+            rightOptionKeyCode,
+            isPressed,
+            isPressed ? .maskAlternate : []
+        )
+    }
+
+    @discardableResult
     static func send(
         _ action: ButtonAction,
         shortcut: CustomKeyboardShortcut? = nil,
@@ -127,7 +164,16 @@ enum KeyboardInjector {
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
-        keyStatePoster: KeyStatePoster = postKeyState
+        keyStatePoster: KeyStatePoster = postKeyState,
+        mouseClickPoster: @escaping MouseClickPoster = { postMouseClick(at: $0) },
+        scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) },
+        pageScrollEventPoster: PageScrollEventPoster = {
+            postCodexPageScroll(delta: $0, intervalMilliseconds: $1)
+        },
+        scrollSpeed: Int32 = 5,
+        scrollDirectionInverted: Bool = false,
+        pageScrollLines: Int32 = 12,
+        pageScrollIntervalMilliseconds: Int32 = 12
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -207,6 +253,49 @@ enum KeyboardInjector {
             keyPoster(123, [])
         case .arrowRight:
             keyPoster(124, [])
+        case .scrollUp:
+            return scrollEventPoster(
+                scrollDelta(
+                    for: .scrollUp,
+                    speed: scrollSpeed,
+                    inverted: scrollDirectionInverted
+                )
+            )
+        case .scrollDown:
+            return scrollEventPoster(
+                scrollDelta(
+                    for: .scrollDown,
+                    speed: scrollSpeed,
+                    inverted: scrollDirectionInverted
+                )
+            )
+        case .codexStopGeneration:
+            keyPoster(53, [])
+        case .codexFocusInput:
+            guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+                return false
+            }
+            let focusRequestID = focusRequests.begin()
+            scheduleAccessibilityComposerFocus(
+                application: .codex,
+                processIdentifier: processIdentifier,
+                requestID: focusRequestID,
+                attempt: 0,
+                mouseClickPoster: mouseClickPoster
+            )
+            return true
+        case .codexScrollToLatest:
+            keyPoster(119, .maskCommand)
+        case .codexPageUp:
+            return pageScrollEventPoster(
+                codexPageScrollDelta(for: .codexPageUp, lines: pageScrollLines),
+                pageScrollIntervalMilliseconds
+            )
+        case .codexPageDown:
+            return pageScrollEventPoster(
+                codexPageScrollDelta(for: .codexPageDown, lines: pageScrollLines),
+                pageScrollIntervalMilliseconds
+            )
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -223,6 +312,8 @@ enum KeyboardInjector {
             postSystemKey(type: 7)
         case .playPause:
             postSystemKey(type: 16)
+        case .wechatVoiceMessage:
+            break
         case .previousCommandLeft:
             keyPoster(123, .maskCommand)
         case .nextCommandRight:
@@ -379,6 +470,13 @@ enum KeyboardInjector {
         let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(0) : .milliseconds(200)
         focusQueue.asyncAfter(deadline: .now() + delay) {
             guard focusRequests.isCurrent(requestID) else { return }
+            if isAccessibilityTrusted, application.focusStrategy == .recordedAccessibility {
+                announceManualAccessibility(
+                    processIdentifier: processIdentifier,
+                    bundleIdentifier: application.bundleIdentifier,
+                    attempt: attempt
+                )
+            }
             if applicationIsFrontmost(processIdentifier) {
                 guard isAccessibilityTrusted else {
                     AppLogger.shared.write(
@@ -529,13 +627,23 @@ enum KeyboardInjector {
         application: PresetApplication,
         processIdentifier: pid_t,
         requestID: UInt64,
-        attempt: Int
+        attempt: Int,
+        mouseClickPoster: @escaping MouseClickPoster = { postMouseClick(at: $0) }
     ) {
-        let maximumAttempts = 8
-        let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(0) : .milliseconds(200)
+        let maximumAttempts = composerFocusMaximumAttempts
+        let delay: DispatchTimeInterval = attempt == 0
+            ? .milliseconds(0)
+            : .milliseconds(composerFocusRetryMilliseconds)
         focusQueue.asyncAfter(deadline: .now() + delay) {
             guard focusRequests.isCurrent(requestID) else { return }
 
+            if isAccessibilityTrusted {
+                announceManualAccessibility(
+                    processIdentifier: processIdentifier,
+                    bundleIdentifier: application.bundleIdentifier,
+                    attempt: attempt
+                )
+            }
             if applicationIsFrontmost(processIdentifier) {
                 guard isAccessibilityTrusted else {
                     AppLogger.shared.write(
@@ -543,7 +651,10 @@ enum KeyboardInjector {
                     )
                     return
                 }
-                if focusComposer(processIdentifier: processIdentifier) {
+                if focusComposer(
+                    processIdentifier: processIdentifier,
+                    mouseClickPoster: mouseClickPoster
+                ) {
                     AppLogger.shared.write(
                         "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=accessibility"
                     )
@@ -557,7 +668,8 @@ enum KeyboardInjector {
                     application: application,
                     processIdentifier: processIdentifier,
                     requestID: requestID,
-                    attempt: nextAttempt
+                    attempt: nextAttempt,
+                    mouseClickPoster: mouseClickPoster
                 )
             } else if focusRequests.isCurrent(requestID) {
                 AppLogger.shared.write(
@@ -567,11 +679,102 @@ enum KeyboardInjector {
         }
     }
 
+    static func manualAccessibilityResultName(_ result: AXError) -> String {
+        switch result {
+        case .success: return "success"
+        case .attributeUnsupported: return "attribute_unsupported"
+        case .cannotComplete: return "cannot_complete"
+        case .invalidUIElement: return "invalid_element"
+        case .apiDisabled: return "api_disabled"
+        case .notImplemented: return "not_implemented"
+        default: return "error_\(result.rawValue)"
+        }
+    }
+
+    /// The fallback only runs when the Chromium attribute is unsupported, so the
+    /// log has to name which attribute actually answered.
+    static func manualAccessibilityResultToken(primary: AXError, fallback: AXError?) -> String {
+        guard let fallback else { return manualAccessibilityResultName(primary) }
+        return "fallback_enhanced_\(manualAccessibilityResultName(fallback))"
+    }
+
+    /// The fallback answer wins whenever it was attempted, because the primary
+    /// attribute was unsupported by that app.
+    static func manualAccessibilityEffectiveResult(
+        primary: AXError,
+        fallback: AXError?
+    ) -> AXError {
+        if primary == .success { return .success }
+        return fallback ?? primary
+    }
+
+    /// The attribute is set on every attempt because it is idempotent, but only
+    /// the first attempt and the attempt that finally builds the tree carry new
+    /// information; the retries in between would repeat the same reason.
+    static func shouldLogManualAccessibility(
+        result: AXError,
+        attempt: Int,
+        alreadyLoggedSuccess: Bool
+    ) -> Bool {
+        if attempt == 0 { return true }
+        return result == .success && !alreadyLoggedSuccess
+    }
+
+    @discardableResult
+    private static func announceManualAccessibility(
+        processIdentifier: pid_t,
+        bundleIdentifier: String,
+        attempt: Int
+    ) -> Bool {
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        let primary = AXUIElementSetAttributeValue(
+            applicationElement,
+            manualAccessibilityAttribute as CFString,
+            kCFBooleanTrue
+        )
+        var fallback: AXError?
+        if primary == .attributeUnsupported {
+            fallback = AXUIElementSetAttributeValue(
+                applicationElement,
+                enhancedUserInterfaceAttribute as CFString,
+                kCFBooleanTrue
+            )
+        }
+        let result = manualAccessibilityEffectiveResult(primary: primary, fallback: fallback)
+
+        manualAccessibilityLock.lock()
+        let alreadyLoggedSuccess = manualAccessibilityLoggedProcesses.contains(processIdentifier)
+        let shouldLog = shouldLogManualAccessibility(
+            result: result,
+            attempt: attempt,
+            alreadyLoggedSuccess: alreadyLoggedSuccess
+        )
+        if result == .success {
+            if manualAccessibilityLoggedProcesses.count >= 64 {
+                manualAccessibilityLoggedProcesses.removeAll()
+            }
+            manualAccessibilityLoggedProcesses.insert(processIdentifier)
+        }
+        manualAccessibilityLock.unlock()
+
+        if shouldLog {
+            AppLogger.shared.write(
+                "APP FOCUS manual_accessibility bundle=\(bundleIdentifier) " +
+                    "attempt=\(attempt) " +
+                    "result=\(manualAccessibilityResultToken(primary: primary, fallback: fallback))"
+            )
+        }
+        return result == .success
+    }
+
     private static func applicationIsFrontmost(_ processIdentifier: pid_t) -> Bool {
         NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier
     }
 
-    private static func focusComposer(processIdentifier: pid_t) -> Bool {
+    private static func focusComposer(
+        processIdentifier: pid_t,
+        mouseClickPoster: MouseClickPoster = { postMouseClick(at: $0) }
+    ) -> Bool {
         let applicationElement = AXUIElementCreateApplication(processIdentifier)
         for window in applicationWindows(applicationElement) {
             let windowTitle = axString(window, attribute: kAXTitleAttribute).lowercased()
@@ -584,7 +787,9 @@ enum KeyboardInjector {
             ) else { continue }
             if focusAccessibilityElement(
                 candidates[candidateIndex].element,
-                applicationElement: applicationElement
+                applicationElement: applicationElement,
+                requiresPhysicalClick: true,
+                mouseClickPoster: mouseClickPoster
             ) {
                 return true
             }
@@ -914,8 +1119,18 @@ enum KeyboardInjector {
     private static func focusAccessibilityElement(
         _ element: AXUIElement,
         applicationElement: AXUIElement,
-        requiresApplicationFocusedElement: Bool = false
+        requiresApplicationFocusedElement: Bool = false,
+        requiresPhysicalClick: Bool = false,
+        mouseClickPoster: MouseClickPoster = { postMouseClick(at: $0) }
     ) -> Bool {
+        if requiresPhysicalClick {
+            guard let clickPoint = accessibilityClickPoint(for: axFrame(element)) else {
+                return false
+            }
+            guard mouseClickPoster(clickPoint) else { return false }
+            usleep(30_000)
+            return true
+        }
         if accessibilityElementIsFocused(
             element,
             applicationElement: applicationElement,
@@ -942,6 +1157,11 @@ enum KeyboardInjector {
             applicationElement: applicationElement,
             requiresApplicationFocusedElement: requiresApplicationFocusedElement
         )
+    }
+
+    static func accessibilityClickPoint(for frame: CGRect?) -> CGPoint? {
+        guard let frame, frame.width > 1, frame.height > 1 else { return nil }
+        return CGPoint(x: frame.midX, y: frame.midY)
     }
 
     private static func accessibilityElementIsFocused(
@@ -1359,6 +1579,152 @@ enum KeyboardInjector {
         event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         event.post(tap: .cghidEventTap)
         return true
+    }
+
+    private static func postMouseClick(at location: CGPoint) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseDown,
+                  mouseCursorPosition: location,
+                  mouseButton: .left
+              ),
+              let up = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseUp,
+                  mouseCursorPosition: location,
+                  mouseButton: .left
+              )
+        else { return false }
+
+        down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        return true
+    }
+
+    private static func postScrollWheel(delta: Int32) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                scrollWheelEvent2Source: source,
+                units: .line,
+                wheelCount: 1,
+                wheel1: delta,
+                wheel2: 0,
+                wheel3: 0
+              )
+        else { return false }
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
+    private static func postCodexPageScroll(
+        delta: Int32,
+        intervalMilliseconds: Int32 = 12
+    ) -> Bool {
+        let interval = min(max(intervalMilliseconds, 10), 15)
+        let eventDeltas = codexPageScrollEventDeltas(
+            delta: delta,
+            eventCount: codexPageScrollEventCount
+        )
+        guard !eventDeltas.isEmpty else { return true }
+
+        for (index, eventDelta) in eventDeltas.enumerated() {
+            guard let windowCenter = frontmostWindowCenter(),
+                  let source = CGEventSource(stateID: .hidSystemState),
+                  let event = CGEvent(
+                      scrollWheelEvent2Source: source,
+                      units: .line,
+                      wheelCount: 2,
+                      wheel1: eventDelta,
+                      wheel2: 0,
+                      wheel3: 0
+                  )
+            else {
+                AppLogger.shared.write(
+                    "CODEX PAGE SCROLL failed reason=frontmost_window_unavailable index=\(index)"
+                )
+                return false
+            }
+            event.location = windowCenter
+            // Mark the synthetic event as a discrete mouse-wheel event. Some
+            // WebKit-based apps otherwise treat repeated CGEvents as one
+            // continuous gesture and ignore later page actions.
+            event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 0)
+            event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            event.post(tap: .cghidEventTap)
+            AppLogger.shared.write(
+                "CODEX PAGE SCROLL posted delta=\(eventDelta) index=\(index + 1)/\(eventDeltas.count) " +
+                    "location=\(Int(windowCenter.x)),\(Int(windowCenter.y))"
+            )
+            if index < eventDeltas.index(before: eventDeltas.endIndex) {
+                usleep(useconds_t(interval * 1_000))
+            }
+        }
+        return true
+    }
+
+    static func codexPageScrollEventDeltas(
+        delta: Int32,
+        eventCount: Int = codexPageScrollEventCount
+    ) -> [Int32] {
+        guard delta != 0 else { return [] }
+        let count = max(eventCount, 1)
+        let magnitude = abs(delta)
+        let sign: Int32 = delta < 0 ? -1 : 1
+        let base = magnitude / Int32(count)
+        let remainder = magnitude % Int32(count)
+        return (0..<count).map { index in
+            sign * (base + (Int32(index) < remainder ? 1 : 0))
+        }.filter { $0 != 0 }
+    }
+
+    static func codexPageScrollDelta(for action: ButtonAction, lines: Int32 = codexPageScrollLines) -> Int32 {
+        let normalizedLines = min(max(abs(lines), 1), 50)
+        return action == .codexPageDown ? -normalizedLines : normalizedLines
+    }
+
+    private static func frontmostWindowCenter() -> CGPoint? {
+        guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+              let windows = CGWindowListCopyWindowInfo(
+                  [.optionOnScreenOnly, .excludeDesktopElements],
+                  kCGNullWindowID
+              ) as? [[String: Any]] else {
+            return nil
+        }
+
+        let windowFrames = windows.compactMap { window -> CGRect? in
+            guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t,
+                  ownerPID == processIdentifier,
+                  let layer = window[kCGWindowLayer as String] as? Int,
+                  layer == 0,
+                  let boundsValue = window[kCGWindowBounds as String]
+            else { return nil }
+
+            let bounds = boundsValue as! CFDictionary
+            var frame = CGRect.zero
+            guard CGRectMakeWithDictionaryRepresentation(bounds, &frame),
+                  frame.width > 0,
+                  frame.height > 0 else { return nil }
+            return frame
+        }
+
+        guard let frame = windowFrames.max(by: { $0.width * $0.height < $1.width * $1.height }) else {
+            return nil
+        }
+        return CGPoint(x: frame.midX, y: frame.midY)
+    }
+
+    static func scrollDelta(
+        for action: ButtonAction,
+        speed: Int32,
+        inverted: Bool
+    ) -> Int32 {
+        let normalizedSpeed = min(max(abs(speed), 1), 10)
+        let base = action == .scrollDown ? -normalizedSpeed : normalizedSpeed
+        return inverted ? -base : base
     }
 
     private static func postSystemKey(type: Int32) {

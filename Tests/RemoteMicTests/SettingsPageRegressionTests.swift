@@ -410,7 +410,7 @@ struct SettingsPageRegressionTests {
             "copyTestFlightPublicBetaLink()",
             "requestWebRemoteSession()",
             "settings.clearTrustedPhoneIdentities()",
-            "settings.setAction(action, for: button, trigger: trigger)",
+            "settings.setAction(",
             "settings.setShortcut(",
             "chooseCustomApplication(for:",
             "recordCustomApplicationInput(profileID:",
@@ -468,7 +468,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("ButtonActionCategory.allCases"))
         #expect(source.contains("LazyVGrid("))
         #expect(source.contains("button_mapping.action.disable_switch"))
-        #expect(source.contains(").filter { $0 != .disabled }"))
+        #expect(source.contains("$0 != .disabled"))
         #expect(source.contains("DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded)"))
         #expect(source.contains("isPresetApplicationActionsExpanded = false"))
         #expect(source.contains("custom_application.accessibility.learn_help"))
@@ -497,6 +497,9 @@ struct SettingsPageRegressionTests {
             source.range(of: voiceFnToggle)!.lowerBound >
                 source.range(of: "private var mappingPage")!.lowerBound
         )
+        #expect(!source.contains("connection.voice_key.mode"))
+        #expect(!source.contains("VoiceKeyMode.fnGlobe.displayName"))
+        #expect(!source.contains("ForEach(VoiceKeyMode.allCases)"))
     }
 
     @Test func remoteCardsShowCompleteNamesWithoutDuplicateConnectionSummary() throws {
