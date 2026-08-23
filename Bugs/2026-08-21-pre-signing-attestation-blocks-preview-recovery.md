@@ -46,3 +46,7 @@ git diff --check
 ```
 
 三项均通过。该修复只改变签名前发布编排，不涉及产品运行时、GUI、硬件、签名内容或公证内容；最终边界仍需由下一次受保护 `v1.9.6` 预览发布证明。
+
+## 现行规则（2026-08-24）
+
+本节不改写上述 `-rerun*` 历史实现。当前 request attestation 按 exact candidate SHA 隔离 attempt：同 SHA 重试复用同一 attestation 和 `release_ready_at`；候选内容、冻结 base 或 pipeline digest 确实变化且仍未进入不可变阶段时，在同一版本分支和同一 Draft PR 上建立 replacement SHA，继续复用原 `request_id` 与 `request_started_at`，但新 SHA 门禁完成后生成自己的 attempt attestation 和 `release_ready_at`。远端更新必须核对旧 head 并使用 compare-and-swap / `force-with-lease`，旧 SHA、Run 和 attestation 保留为证据。

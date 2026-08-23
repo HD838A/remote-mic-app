@@ -44,10 +44,14 @@
 
 - 功能和修复必须先通过 PR 合入 `main`；不得直接在预览候选分支开发产品功能。
 - 发布会话收到尚未合入 `origin/main` 的产品 Commit 时，必须从最新 `origin/main` 建立独立开发集成分支，只重放用户指定工作及必要依赖，通过普通 PR 和必需检查合入；机械冲突可依据代码、测试和文档解决，涉及产品取舍或行为丢失时才请求用户决策。集成完成前不得创建候选或接触 Apple 发布凭据。
-- 每个候选版本首次使用从最新 `origin/main` 创建的一次性 `release/pre-vX.Y.Z` 分支；仅在签名前失败且没有 Tag、Release、appcast 或分发资产时，才可按序创建同版本 `-rerun`、`-rerun2` 等恢复分支。旧候选不得改写、删除或 force-push。
-- 候选分支只允许修改版本号、Build、中英文版本历史和必要的测试手册目标版本；Push 后由 GitHub Actions 自动校验来源、运行完整 Mac 测试并生成临时 CI App 包。
-- 精确候选 SHA 的 Apple Silicon 与 Intel 候选 Job 成功后，可提前创建候选分支到 `main` 的 Draft 回流 PR，让受保护 PR CI 与正式签名、公证并行；公开 Release 字节、provenance 和固定候选更新验证完成前，该 PR 必须保持 Draft，禁止 Ready 或合并。
+- 每个版本只允许一个远端候选分支 `release/pre-vX.Y.Z`、一个当前冻结的候选 SHA 和一个跟随该分支当前 head 的 Draft 回流 PR。候选分支只是当前 active attempt 的唯一协调 ref；真正不可变、可审计的发布身份是候选 SHA、Run、attestation 和最终资产。禁止创建 `-rerun`、`-rerun2` 或其他指向相同内容的候选别名分支，也禁止为同一版本创建第二个回流 PR。
+- 首个候选 attempt 必须从创建时最新的 `origin/main` 建立，并冻结 `baseMainCommit`、候选 SHA、版本、Build、Release Notes 和发布流水线 digest。冻结后 `main` 可继续前进；只要 `baseMainCommit` 仍是当前 `origin/main` 的祖先且发布流水线 digest 未变，不得仅因无关的 `main` 后续提交而废弃已冻结候选。
+- 候选分支只允许修改版本号、Build、中英文版本历史和必要的测试手册目标版本；不得包含产品代码、依赖、entitlements、签名、打包或 workflow 修改。
+- 同一候选 SHA 的 Runner、GitHub、Environment 审批、Apple 或 CDN 等基础设施失败，只能使用同一分支、SHA、Draft PR、版本、Build、`request_id` 和 `release_ready_at` 重试 workflow；不得新建候选分支、提高版本或 Build，也不得通过新 SHA 清除失败检查证据。
+- 只有候选内容、冻结基线或发布流水线确实必须变更时，才允许结束旧 attempt 并在同一 `release/pre-vX.Y.Z` 分支和同一 Draft PR 上建立 replacement attempt。该版本分支仍只保留一个直接位于冻结 base 之后的 metadata-only candidate Commit；远端 head 必须先与预期旧 SHA 完全一致，再由显式 compare-and-swap / `force-with-lease` 等受控方式原子更新。禁止普通 force-push、禁止绕过旧 head 核对，也禁止并存第二个候选分支或 PR。旧 SHA、Run、attestation 和失败原因必须保留作为证据，同一时刻只能有一个 active attempt。
+- 发布流水线资格验证与产品候选解耦：仅当发布流水线 digest 变化且尚无可复用证明时，才把已有的普通流水线变更 PR exact SHA 临时映射到 `release/pipeline-qualification/<pr号或短SHA>` ref，以满足受保护 Environment 的分支策略，并以 `release_mode=qualification` 执行真实 Developer ID/Notary 路径。该 ref alias 不创建第二个 PR，也不是产品候选；资格 artifact 记录原普通 PR，后续 verifier 必须确认该 PR 已合入 `main`，再通过 `refs/pull/<n>/head` 取得原 source Commit 并重算 digest，因此证明不依赖 alias 分支永久存在。资格证明按 digest 复用，不创建版本候选、Tag、Release、appcast 或产品分发资产，也不占用版本或 Build。
+- 候选 Push 后必须立即创建唯一 exact-SHA Draft 回流 PR；`macOS Preview Candidate` 和该 PR 的无凭据检查可以并行，并且在严格 metadata-only 时复用冻结 `baseMainCommit` 已通过的双架构产品代码证明。受保护签名、公证和 Preview 发布不得与未完成的候选/PR 门禁并行；只有 exact SHA、唯一 Draft PR、双架构检查和当前 digest 资格证明全部成功后才能进入 `mac-release` Environment。
 - 公开 Pre-release 仍必须使用 Developer ID 签名、公证、Sparkle 签名和公开资产复核；GitHub CI 的 ad-hoc App 不能当作公开安装包。
-- 候选 Tag、远端候选分支和发布资产必须指向同一提交；候选分支在正式晋升完成前不得删除或 force-push。
+- 候选 Tag、远端候选分支和发布资产必须指向同一冻结 SHA。Runner、GitHub、Apple、签名、公证或其他非内容失败本身不占用版本与 Build；未产生公开不可变身份时，同一 SHA 只在同一分支原地重跑，内容确需变化时才在同一分支建立 replacement attempt。Tag、Release、appcast 或公开分发资产一旦存在，其身份与字节不可替换；后续仅恢复和验证同一批公开字节，若产品内容确需变化则选择新版本与递增 Build。候选分支在正式晋升完成前不得删除。
 - 不存在“发布正式版”命令。正式版只能由用户明确指定一个已发布并验证的 Pre-release，再将该预览版的同一 Tag、Commit 和同一批资产晋升为正式版；禁止从 `main` 重新构建正式包。
 - 完整流程与 Release Notes 规则见 [`RELEASING.md`](RELEASING.md)。
