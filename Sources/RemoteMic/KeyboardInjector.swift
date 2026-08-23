@@ -20,6 +20,8 @@ enum KeyboardInjector {
     typealias CmuxCommandRunner = (URL, [String], TimeInterval) -> CmuxCommandResult
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
+    typealias ScrollEventPoster = (Int32) -> Bool
+    typealias PageScrollEventPoster = (Int32, Int32) -> Bool
 
     struct AccessibilityTextCandidate: Equatable {
         let role: String
@@ -69,6 +71,7 @@ enum KeyboardInjector {
 
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
+    static let codexPageScrollLines: Int32 = 12
     static let functionKeyCode: CGKeyCode = 63
     /// Web content shells only build the accessibility tree once an assistive
     /// client announces itself, so the composer scan finds an empty shell until
@@ -85,6 +88,7 @@ enum KeyboardInjector {
     /// is set, so the composer scan keeps retrying for longer than that.
     static let composerFocusMaximumAttempts = 12
     static let composerFocusRetryMilliseconds = 250
+    static let rightOptionKeyCode: CGKeyCode = 61
     private static let focusRequests = ApplicationFocusRequestGate()
     private static let manualAccessibilityLock = NSLock()
     private static var manualAccessibilityLoggedProcesses: Set<pid_t> = []
@@ -127,6 +131,20 @@ enum KeyboardInjector {
     }
 
     @discardableResult
+    static func setRightOptionKeyPressed(
+        _ isPressed: Bool,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postKeyState
+    ) -> Bool {
+        guard accessibilityTrusted() else { return false }
+        return keyStatePoster(
+            rightOptionKeyCode,
+            isPressed,
+            isPressed ? .maskAlternate : []
+        )
+    }
+
+    @discardableResult
     static func send(
         _ action: ButtonAction,
         shortcut: CustomKeyboardShortcut? = nil,
@@ -144,7 +162,15 @@ enum KeyboardInjector {
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
-        keyStatePoster: KeyStatePoster = postKeyState
+        keyStatePoster: KeyStatePoster = postKeyState,
+        scrollEventPoster: ScrollEventPoster = { postScrollWheel(delta: $0) },
+        pageScrollEventPoster: PageScrollEventPoster = {
+            postCodexPageScroll(delta: $0, intervalMilliseconds: $1)
+        },
+        scrollSpeed: Int32 = 5,
+        scrollDirectionInverted: Bool = false,
+        pageScrollLines: Int32 = 12,
+        pageScrollIntervalMilliseconds: Int32 = 12
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -224,6 +250,41 @@ enum KeyboardInjector {
             keyPoster(123, [])
         case .arrowRight:
             keyPoster(124, [])
+        case .scrollUp:
+            return scrollEventPoster(
+                scrollDelta(
+                    for: .scrollUp,
+                    speed: scrollSpeed,
+                    inverted: scrollDirectionInverted
+                )
+            )
+        case .scrollDown:
+            return scrollEventPoster(
+                scrollDelta(
+                    for: .scrollDown,
+                    speed: scrollSpeed,
+                    inverted: scrollDirectionInverted
+                )
+            )
+        case .codexStopGeneration:
+            keyPoster(53, [])
+        case .codexFocusInput:
+            guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+                return false
+            }
+            return focusComposer(processIdentifier: processIdentifier)
+        case .codexScrollToLatest:
+            keyPoster(119, .maskCommand)
+        case .codexPageUp:
+            return pageScrollEventPoster(
+                codexPageScrollDelta(for: .codexPageUp, lines: pageScrollLines),
+                pageScrollIntervalMilliseconds
+            )
+        case .codexPageDown:
+            return pageScrollEventPoster(
+                codexPageScrollDelta(for: .codexPageDown, lines: pageScrollLines),
+                pageScrollIntervalMilliseconds
+            )
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -240,6 +301,8 @@ enum KeyboardInjector {
             postSystemKey(type: 7)
         case .playPause:
             postSystemKey(type: 16)
+        case .wechatVoiceMessage:
+            break
         case .previousCommandLeft:
             keyPoster(123, .maskCommand)
         case .nextCommandRight:
@@ -1480,6 +1543,97 @@ enum KeyboardInjector {
         event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         event.post(tap: .cghidEventTap)
         return true
+    }
+
+    private static func postScrollWheel(delta: Int32) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                scrollWheelEvent2Source: source,
+                units: .line,
+                wheelCount: 1,
+                wheel1: delta,
+                wheel2: 0,
+                wheel3: 0
+              )
+        else { return false }
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
+    private static func postCodexPageScroll(
+        delta: Int32,
+        intervalMilliseconds: Int32 = 12
+    ) -> Bool {
+        guard let windowCenter = frontmostWindowCenter(),
+              let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                  scrollWheelEvent2Source: source,
+                  units: .line,
+                  wheelCount: 2,
+                  wheel1: delta,
+                  wheel2: 0,
+                  wheel3: 0
+              )
+        else {
+            AppLogger.shared.write("CODEX PAGE SCROLL failed reason=frontmost_window_unavailable")
+            return false
+        }
+        event.location = windowCenter
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
+        AppLogger.shared.write(
+            "CODEX PAGE SCROLL posted delta=\(delta) location=\(Int(windowCenter.x)),\(Int(windowCenter.y))"
+        )
+        let interval = min(max(intervalMilliseconds, 10), 15)
+        usleep(useconds_t(interval * 1_000))
+        return true
+    }
+
+    static func codexPageScrollDelta(for action: ButtonAction, lines: Int32 = codexPageScrollLines) -> Int32 {
+        let normalizedLines = min(max(abs(lines), 1), 50)
+        return action == .codexPageDown ? -normalizedLines : normalizedLines
+    }
+
+    private static func frontmostWindowCenter() -> CGPoint? {
+        guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+              let windows = CGWindowListCopyWindowInfo(
+                  [.optionOnScreenOnly, .excludeDesktopElements],
+                  kCGNullWindowID
+              ) as? [[String: Any]] else {
+            return nil
+        }
+
+        let windowFrames = windows.compactMap { window -> CGRect? in
+            guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t,
+                  ownerPID == processIdentifier,
+                  let layer = window[kCGWindowLayer as String] as? Int,
+                  layer == 0,
+                  let boundsValue = window[kCGWindowBounds as String]
+            else { return nil }
+
+            let bounds = boundsValue as! CFDictionary
+            var frame = CGRect.zero
+            guard CGRectMakeWithDictionaryRepresentation(bounds, &frame),
+                  frame.width > 0,
+                  frame.height > 0 else { return nil }
+            return frame
+        }
+
+        guard let frame = windowFrames.max(by: { $0.width * $0.height < $1.width * $1.height }) else {
+            return nil
+        }
+        return CGPoint(x: frame.midX, y: frame.midY)
+    }
+
+    static func scrollDelta(
+        for action: ButtonAction,
+        speed: Int32,
+        inverted: Bool
+    ) -> Int32 {
+        let normalizedSpeed = min(max(abs(speed), 1), 10)
+        let base = action == .scrollDown ? -normalizedSpeed : normalizedSpeed
+        return inverted ? -base : base
     }
 
     private static func postSystemKey(type: Int32) {

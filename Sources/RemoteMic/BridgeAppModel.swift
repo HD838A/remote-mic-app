@@ -257,6 +257,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var transcriptHistoryToggleCancellable: AnyCancellable?
     private var testToneGeneration = 0
     private var phoneVoiceFunctionKeyLatch = VoiceFunctionKeyLatch()
+    private var weChatVoiceKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
     private var voiceSessionUsageSource: UsageEventSource?
     private var bluetoothVoiceActive = false
@@ -622,6 +623,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         stopLongRecording(reason: "app_stop")
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
+        _ = updateWeChatVoiceKeyState(pressed: false)
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
         bluetoothBridges.removeAll()
@@ -1275,7 +1277,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             return
         }
-        requestNextHIDPermissionIfNeeded(voiceFnTapModeRequested: requestedFnTapMode)
+        requestNextHIDPermissionIfNeeded(
+            voiceKeyRequiresAccessibility: requestedFnTapMode
+        )
         var powerKeySuppressed: Bool
         if requestedFnTapMode, KeyboardInjector.isAccessibilityTrusted {
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
@@ -1291,7 +1295,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 settings.voiceFnTapModeEnabled = false
             }
             voiceFnTapSession.setEnabled(false)
-            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+            powerKeySuppressed = applyVoiceFunctionMapping(
+                neutralizeVoiceKey: false
+            )
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
     }
@@ -1363,6 +1369,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             actionPerformer: { [weak self] _, _, configured in
                 self?.performExternalConfiguredAction(configured) ?? false
             },
+            holdActionPerformer: { [weak self] button, phase, configured in
+                self?.performHoldConfiguredAction(
+                    button: button,
+                    phase: phase,
+                    configured: configured
+                ) ?? false
+            },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
                 self?.macroFeature.executeBoundMacro(
                     profileID: profileID,
@@ -1433,6 +1446,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func setVoiceFnTapModeEnabled(_ enabled: Bool) {
+        guard settings.voiceKeyMode == .fnGlobe else { return }
         if enabled {
             enableVoiceFnTapMode()
             return
@@ -1443,10 +1457,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
+    func setVoiceKeyMode(_ mode: VoiceKeyMode) {
+        guard mode == .fnGlobe else { return }
+        guard settings.voiceKeyMode != mode else { return }
+        settings.voiceKeyMode = mode
+        voiceFnTapSession.setEnabled(false) { [weak self] in
+            self?.applyHIDSettings()
+        }
+    }
+
     private func enableVoiceFnTapMode() {
         guard KeyboardInjector.isAccessibilityTrusted else {
             settings.voiceFnTapModeEnabled = false
-            requestNextHIDPermissionIfNeeded(voiceFnTapModeRequested: true)
+            requestNextHIDPermissionIfNeeded(voiceKeyRequiresAccessibility: true)
             applyHIDSettings()
             return
         }
@@ -1472,11 +1495,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func requestNextHIDPermissionIfNeeded(
-        voiceFnTapModeRequested: Bool? = nil
+        voiceKeyRequiresAccessibility: Bool? = nil
     ) {
         let request = HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: settings.customMappingEnabled,
-            voiceFnTapModeEnabled: voiceFnTapModeRequested ?? settings.voiceFnTapModeEnabled,
+            voiceFnTapModeEnabled: voiceKeyRequiresAccessibility ?? settings.voiceFnTapModeEnabled,
             inputMonitoringGranted: HIDRemoteMonitor.isInputMonitoringGranted,
             accessibilityGranted: KeyboardInjector.isAccessibilityTrusted
         )
@@ -1966,10 +1989,28 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             return true
         }
+        let configured = settings.configuredAction(
+            for: button,
+            trigger: .singleClick,
+            profileID: settings.selectedRemoteProfileID,
+            applicationBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
+        if configured.action.isHoldAction {
+            guard updateWeChatVoiceKeyState(pressed: phase == .press) else {
+                return false
+            }
+            if phase == .press {
+                settings.recordButtonPress(control: .remoteButton(button), source: source)
+            }
+            return true
+        }
         let profileID = settings.selectedRemoteProfileID
+        let frontmostBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let recognizesDoubleClick = settings.configuredAction(
             for: button,
-            trigger: .doubleClick
+            trigger: .doubleClick,
+            profileID: profileID,
+            applicationBundleIdentifier: frontmostBundleIdentifier
         ).action != .disabled || macroFeature.hasActiveBinding(
             profileID: profileID,
             button: button,
@@ -1977,7 +2018,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         let recognizesLongPress = settings.configuredAction(
             for: button,
-            trigger: .longPress
+            trigger: .longPress,
+            profileID: profileID,
+            applicationBundleIdentifier: frontmostBundleIdentifier
         ).action != .disabled || macroFeature.hasActiveBinding(
             profileID: profileID,
             button: button,
@@ -2105,7 +2148,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return true
         }
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = settings.configuredAction(
+            for: button,
+            trigger: trigger,
+            profileID: settings.selectedRemoteProfileID,
+            applicationBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
+        guard !configured.action.isHoldAction else { return false }
         if configured.action.isAppInternal {
             let handled = performInternalAction(configured.action)
             if handled {
@@ -2133,6 +2182,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
+        guard !configured.action.isHoldAction else { return false }
         let applicationProfile = settings.customApplicationProfile(
             id: configured.applicationProfileID
         )
@@ -2142,15 +2192,35 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 applicationProfile: applicationProfile
             ).map { voiceInputDestinationCoordinator.beginTargetSwitch(intent: $0) }
             : nil
+        let scrollSettings = settings.scrollSettings(
+            forApplicationBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
         let handled = KeyboardInjector.send(
             configured.action,
             shortcut: configured.shortcut,
-            applicationProfile: applicationProfile
+            applicationProfile: applicationProfile,
+            scrollSpeed: Int32(scrollSettings.scrollSpeed),
+            scrollDirectionInverted: scrollSettings.scrollDirectionInverted,
+            pageScrollLines: Int32(scrollSettings.pageScrollLines),
+            pageScrollIntervalMilliseconds: Int32(
+                scrollSettings.pageScrollIntervalMilliseconds
+            )
         )
         if !handled, let requestID {
             voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
         }
         return handled
+    }
+
+    private func performHoldConfiguredAction(
+        button: RemoteButton,
+        phase: RemoteButtonPhase,
+        configured: ConfiguredButtonAction
+    ) -> Bool {
+        guard configured.action.isHoldAction else {
+            return false
+        }
+        return updateWeChatVoiceKeyState(pressed: phase == .press)
     }
 
     private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {
@@ -2704,6 +2774,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
         }
         return !settings.customMappingEnabled || voiceFunctionMapper.isPowerKeySuppressed
+    }
+
+    @discardableResult
+    private func updateWeChatVoiceKeyState(pressed: Bool) -> Bool {
+        guard let transition = weChatVoiceKeyLatch.transition(streaming: pressed) else {
+            return true
+        }
+        let shouldHold = transition == .press
+        guard KeyboardInjector.setRightOptionKeyPressed(shouldHold) else {
+            weChatVoiceKeyLatch.rollback(transition)
+            AppLogger.shared.write(
+                "WECHAT RIGHT_OPTION \(shouldHold ? "DOWN" : "UP") failed"
+            )
+            return false
+        }
+        AppLogger.shared.write(
+            "WECHAT RIGHT_OPTION \(shouldHold ? "DOWN" : "UP")"
+        )
+        return true
     }
 
     @discardableResult
