@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [设置窗口在失去焦点后被移出屏幕](./2026-08-22-settings-window-hides-on-deactivate.md)
 - [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md)
 - [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md)
 - [App 改名后 PKG 升级时旧进程未及时停止](./2026-08-21-pkg-legacy-app-process-order.md)
@@ -60,6 +61,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-22 | [设置窗口在失去焦点后被移出屏幕](./2026-08-22-settings-window-hides-on-deactivate.md) | 第三轮候选修复完成，等待可见 App 验收 |
 | 2026-08-21 | [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md) | 候选修复完成，等待真实 Intel macOS 13 图标与缓存验收 |
 | 2026-08-20 | [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md) | 候选修复完成，等待 Karabiner-Elements 与其他 HID 工具真机验收 |
 | 2026-08-21 | [App 改名后 PKG 升级时旧进程未及时停止](./2026-08-21-pkg-legacy-app-process-order.md) | 已修复，等待正式签名 PKG 与实体遥控器升级验收 |
@@ -145,7 +147,9 @@
 | 2026-08-21 | [签名前失败的 attestation 阻止同版本预览恢复](./2026-08-21-pre-signing-attestation-blocks-preview-recovery.md) | 已修复，自动化验证通过；等待受保护预览发布验证 |
 | 2026-08-21 | [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md) | 已修复，`v1.9.6` 受保护预览发布验证通过 |
 | 2026-08-21 | [Onboarding 离开输入法页后重复触发输入法确认](./2026-08-21-onboarding-input-source-confirmation-repeats.md) | 已修复，自动化通过；等待豆包/微信输入法真机验收 |
+| 2026-08-23 | [运行时切换输入法反复触发系统确认且不会恢复原输入法](./2026-08-23-runtime-input-source-confirmation-and-restore.md) | 候选修复完成，等待真实豆包/微信输入法与遥控器验收 |
 | 2026-08-21 | [设置页只展示已连接遥控器](./2026-08-21-settings-connected-remotes-only.md) | 已修复，自动化与构建通过；等待真实双遥控器和首次配对验收 |
+| 2026-08-20 | [重新授权后 HID 监听未恢复](./2026-08-20-hid-permission-recovery.md) | 候选修复完成，等待真实权限与遥控器验收 |
 
 ## 记录模板
 

@@ -143,7 +143,8 @@ enum KeyboardInjector {
         customApplicationOpener: CustomApplicationOpener = openCustomApplication,
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
-        keyPoster: KeyPoster = { postKey(code: $0, flags: $1) }
+        keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
+        keyStatePoster: KeyStatePoster = postKeyState
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -245,7 +246,27 @@ enum KeyboardInjector {
             keyPoster(124, .maskCommand)
         case .customShortcut:
             if let shortcut {
-                keyPoster(CGKeyCode(shortcut.keyCode), shortcut.cgEventFlags)
+                let eventFlags = shortcut.cgEventFlags
+                if shortcut.standaloneModifier != nil {
+                    let pressed = keyStatePoster(
+                        CGKeyCode(shortcut.keyCode),
+                        true,
+                        eventFlags
+                    )
+                    let released = keyStatePoster(CGKeyCode(shortcut.keyCode), false, [])
+                    let submitted = pressed && released
+                    AppLogger.shared.write(
+                        "SHORTCUT ACTION submitted key_code=\(shortcut.keyCode) " +
+                            "modifier_flags=\(eventFlags.rawValue) standalone=true " +
+                            "success=\(submitted)"
+                    )
+                    return submitted
+                }
+                keyPoster(CGKeyCode(shortcut.keyCode), eventFlags)
+                AppLogger.shared.write(
+                    "SHORTCUT ACTION submitted key_code=\(shortcut.keyCode) " +
+                        "modifier_flags=\(eventFlags.rawValue) standalone=false"
+                )
             }
         case .openCustomApplication:
             break

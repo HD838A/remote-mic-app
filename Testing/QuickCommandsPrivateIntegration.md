@@ -5,6 +5,37 @@
 - 分支：最新 `main` 或由其直接创建的预览候选。
 - 适用版本：当前修复分支及其后续候选；`1.8.18 (110)` 和 `1.8.22 (114)` 均存在快捷指令 SwiftPM 资源路径崩溃，不得继续分发。
 
+## 合并后私有包版本与宿主集成
+
+组合动作私有包已通过 PR [GetSayAll/sayall-macro-platform#3](https://github.com/GetSayAll/sayall-macro-platform/pull/3) 合入 `main`。本次宿主集成固定使用完整 commit：
+
+```text
+b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
+```
+
+本地开发或验证时，将私有包 checkout 到该 commit（不得使用浮动的 `main`）：
+
+```bash
+git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform fetch origin main
+git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform checkout --detach b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
+```
+
+宿主通过 `Package.swift` 的 `SAYALL_MACRO_PLATFORM_PATH` 注入本地包；最小测试命令为：
+
+```bash
+SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/sayall-macro-platform \
+REQUIRE_SAYALL_MACRO_PLATFORM=1 \
+swift test
+```
+
+构建 App 时继续使用 `./scripts/build-app.sh`，并同时设置 `SAYALL_MACRO_PLATFORM_PATH` 与 `REQUIRE_SAYALL_MACRO_PLATFORM=1`；构建后运行 `REQUIRE_SAYALL_MACRO_PLATFORM=1 ./scripts/verify-app.sh "dist/SayAll.app"` 检查模块确实被打包。CI、预览候选和签名发布 workflow 都必须使用同一个 40 位 SHA；修改 pin 后在宿主仓库执行：
+
+```bash
+./scripts/verify-release-dependency-pins.sh
+```
+
+该脚本会确认 macOS CI、预览和正式发布三条 workflow 的私有包 revision 一致且为完整 SHA。私有包缺失时，公开构建仍应保持组合动作入口隐藏并回退到原按键行为；本手册中的自动化验证不能替代最终签名包、真实遥控器、Intel Mac 和不同前后台状态的人工验收。
+
 ## 测试前准备
 
 1. 本机存在私有仓库 `sayall-macro-platform`，并通过 `SAYALL_MACRO_PLATFORM_PATH` 注入构建。

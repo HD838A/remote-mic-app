@@ -139,7 +139,7 @@ If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRe
 
 Open **Button Mapping** and enable custom mapping to change direction, OK, Back, Home, Menu, TV, Power, and volume buttons.
 
-Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, launching installed apps, and recording any custom keyboard shortcut.
+Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, launching installed apps, and custom keyboard shortcuts. A shortcut can be chosen from common combinations such as Copy, Paste, and Spotlight, assembled from an on-page standard keyboard with modifiers, F1–F20, navigation keys, a numeric keypad, or standalone left/right modifiers, or recorded from a physical keyboard as before.
 
 **Open Custom App** lets you select any local `.app`, then either open it only, send its focus shortcut after activation, or record a target input field once and focus it automatically. Re-record the target if an app update changes its interface. SayAll does not use fixed screen coordinates or save text from the input field.
 

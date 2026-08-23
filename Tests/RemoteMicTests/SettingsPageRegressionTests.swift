@@ -216,6 +216,38 @@ struct SettingsPageRegressionTests {
         #expect(settingsSource.contains("window?.performDrag(with: event)"))
     }
 
+    @Test func settingsWindowKeepsTheDockIconUntilItCloses() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+
+        #expect(appSource.contains("window.hidesOnDeactivate = false"))
+        #expect(appSource.contains("window.delegate = self"))
+        #expect(appSource.contains("SettingsWindowActivationPolicy.value("))
+        #expect(appSource.contains("func windowWillClose(_ notification: Notification)"))
+        #expect(appSource.contains("isSettingsWindowOpen = false"))
+        #expect(!appSource.contains("window.canHide = false"))
+        #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
+
+        #expect(SettingsWindowActivationPolicy.value(
+            showDockIcon: false,
+            isSettingsWindowOpen: true
+        ) == .regular)
+        #expect(SettingsWindowActivationPolicy.value(
+            showDockIcon: false,
+            isSettingsWindowOpen: false
+        ) == .accessory)
+        #expect(SettingsWindowActivationPolicy.value(
+            showDockIcon: true,
+            isSettingsWindowOpen: false
+        ) == .regular)
+    }
+
     @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
         #expect(MappingSelectionPolicy.selection(
             current: .home,
@@ -355,11 +387,15 @@ struct SettingsPageRegressionTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMappingCanvas.swift"),
             encoding: .utf8
         )
+        let shortcutPickerSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/KeyboardShortcutPicker.swift"),
+            encoding: .utf8
+        )
         let bridgeSource = try String(
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
             encoding: .utf8
         )
-        let source = settingsSource + mappingCanvasSource
+        let source = settingsSource + mappingCanvasSource + shortcutPickerSource
 
         for requiredAction in [
             "model.reconnect()",
@@ -442,6 +478,11 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("shortcut.editor.click_first_help"))
         #expect(source.contains("shortcut.editor.recording_prompt"))
         #expect(source.contains("shortcut.editor.success"))
+        #expect(source.contains("KeyboardShortcutPicker("))
+        #expect(source.contains("KeyboardShortcutPreset.allCases"))
+        #expect(source.contains("StandardKeyboardKey.mainRows"))
+        #expect(source.contains("StandaloneKeyboardModifier.allCases"))
+        #expect(source.contains(".pickerStyle(.segmented)"))
         #expect(!source.contains("NSEvent.addLocalMonitorForEvents(matching: .keyDown)"))
         #expect(!mappingCanvasSource.contains("size: 8"))
         #expect(!mappingCanvasSource.contains("size: 9"))
@@ -726,6 +767,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(
             "model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))
+        #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"))
+        #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"))
     }
 
     @Test func transcriptHistoryHasDedicatedSidebarPageAndUsesThePublicVoiceLifecycle() throws {
