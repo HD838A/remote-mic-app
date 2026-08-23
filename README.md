@@ -224,11 +224,6 @@ RC003 真机日志确认：Mac 主动 `MIC_OPEN` 只得到没有 PCM 的空流�
       <br>
       微信
     </td>
-    <td align="center">
-      <img src="Screenshots/donation-alipay.jpg" alt="支付宝赞赏码" width="280">
-      <br>
-      支付宝
-    </td>
   </tr>
 </table>
 

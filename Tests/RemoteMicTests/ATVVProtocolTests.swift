@@ -88,3 +88,55 @@ struct ATVVProtocolTests {
         #expect(accumulator.pending == Data([7]))
     }
 }
+
+@Suite("Bluetooth voice tail diagnostics")
+struct BluetoothVoiceTailDiagnosticsTests {
+    @Test func keepsOnlyTheLatestThreeHundredMillisecondsWithoutAudioContentLogging() {
+        var diagnostics = BluetoothVoiceTailDiagnostics()
+        diagnostics.append(Array(repeating: 1, count: 4_000), at: 10)
+        diagnostics.append(Array(repeating: 2, count: 2_000), at: 10.25)
+
+        let snapshot = diagnostics.snapshot(at: 10.30)
+
+        #expect(snapshot.sampleCount == 4_800)
+        #expect(snapshot.durationMilliseconds == 300)
+        #expect(snapshot.nonZeroSampleCount == 4_800)
+        #expect(snapshot.peak == 2)
+        #expect(snapshot.rms == 1)
+        #expect(snapshot.finalWindowSampleCount == 1_600)
+        #expect(snapshot.finalWindowDurationMilliseconds == 100)
+        #expect(snapshot.finalWindowNonZeroSampleCount == 1_600)
+        #expect(snapshot.finalWindowPeak == 2)
+        #expect(snapshot.finalWindowRMS == 2)
+        #expect(snapshot.lastAudioAgeMilliseconds == 50)
+    }
+
+    @Test func distinguishesTheFinalHundredMillisecondsFromEarlierTailSignal() {
+        var diagnostics = BluetoothVoiceTailDiagnostics()
+        diagnostics.append(Array(repeating: 10, count: 3_200), at: 10)
+        diagnostics.append(Array(repeating: 0, count: 1_600), at: 10.20)
+
+        let snapshot = diagnostics.snapshot(at: 10.30)
+
+        #expect(snapshot.peak == 10)
+        #expect(snapshot.nonZeroSampleCount == 3_200)
+        #expect(snapshot.finalWindowSampleCount == 1_600)
+        #expect(snapshot.finalWindowNonZeroSampleCount == 0)
+        #expect(snapshot.finalWindowPeak == 0)
+        #expect(snapshot.finalWindowRMS == 0)
+    }
+
+    @Test func resetRemovesPriorSessionSignalAndTiming() {
+        var diagnostics = BluetoothVoiceTailDiagnostics()
+        diagnostics.append([1, 2, 3], at: 10)
+        diagnostics.reset()
+
+        let snapshot = diagnostics.snapshot(at: 20)
+
+        #expect(snapshot.sampleCount == 0)
+        #expect(snapshot.durationMilliseconds == 0)
+        #expect(snapshot.finalWindowSampleCount == 0)
+        #expect(snapshot.finalWindowDurationMilliseconds == 0)
+        #expect(snapshot.lastAudioAgeMilliseconds == nil)
+    }
+}

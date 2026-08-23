@@ -734,6 +734,13 @@ final class XiaomiBluetoothBridge: NSObject {
             let predictorBits = UInt16(bytes[4]) << 8 | UInt16(bytes[5])
             let predictor = Int(Int16(bitPattern: predictorBits))
             pendingSync = (predictor, Int(bytes[6]))
+            let partialFrameBytes = accumulator.pending.count
+            if partialFrameBytes > 0 {
+                AppLogger.shared.write(
+                    "ATVV FRAME discarded session=\(sessionID) reason=sync " +
+                        "partial_frame_bytes=\(partialFrameBytes)"
+                )
+            }
             accumulator.reset()
         default:
             break
@@ -741,6 +748,13 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func startStreaming() {
+        let partialFrameBytes = accumulator.pending.count
+        if partialFrameBytes > 0 {
+            AppLogger.shared.write(
+                "ATVV FRAME discarded session=\(sessionID) reason=stream_start " +
+                    "streaming_before=\(streaming) partial_frame_bytes=\(partialFrameBytes)"
+            )
+        }
         accumulator.reset()
         pendingSync = nil
         decoder.reset()
@@ -760,9 +774,13 @@ final class XiaomiBluetoothBridge: NSObject {
         guard streaming else { return }
         streaming = false
         microphoneOpened = false
+        let partialFrameBytes = accumulator.pending.count
         accumulator.reset()
         pendingSync = nil
         lastStopAt = Date()
+        AppLogger.shared.write(
+            "ATVV STREAM STOP session=\(sessionID) partial_frame_bytes=\(partialFrameBytes)"
+        )
         delegate?.bluetoothBridgeDidStopVoice(self)
         AppLogger.shared.write(
             "ATVV STREAM STOP session=\(sessionID) origin=\(activeStreamOrigin.rawValue) " +
@@ -794,7 +812,16 @@ final class XiaomiBluetoothBridge: NSObject {
         }
         cancelledMicrophoneOpenAt = nil
         if !streaming {
-            if let lastStopAt, Date().timeIntervalSince(lastStopAt) < 0.3 {
+            let receivedAt = Date()
+            if let lastStopAt, receivedAt.timeIntervalSince(lastStopAt) < 0.3 {
+                let delayMilliseconds = max(
+                    0,
+                    Int((receivedAt.timeIntervalSince(lastStopAt) * 1_000).rounded())
+                )
+                AppLogger.shared.write(
+                    "ATVV AUDIO ignored_after_stop session=\(sessionID) " +
+                        "delay_ms=\(delayMilliseconds) bytes=\(data.count)"
+                )
                 return
             }
             activeStreamOrigin = microphoneOpened ? .hostMicrophoneOpen : .unknown
