@@ -211,25 +211,16 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func beginConnectionCycle() {
-        guard shouldRun else { return }
-        let existingCentral = central
-        if existingCentral != nil {
-            guard case .waitingReconnect = lifecycle else { return }
-        }
+        guard shouldRun, central == nil else { return }
         generationCounter &+= 1
         let generation = generationCounter
         lifecycle = .scanning(generation)
-        let manager: CBCentralManager
-        if let existingCentral {
-            manager = existingCentral
-        } else {
-            manager = CBCentralManager(
-                delegate: self,
-                queue: .main,
-                options: [CBCentralManagerOptionShowPowerAlertKey: true]
-            )
-            central = manager
-        }
+        let manager = CBCentralManager(
+            delegate: self,
+            queue: .main,
+            options: [CBCentralManagerOptionShowPowerAlertKey: true]
+        )
+        central = manager
         centralGeneration = generation
         if manager.state == .poweredOn {
             discoverOrScan(using: manager, generation: generation)
@@ -501,7 +492,7 @@ final class XiaomiBluetoothBridge: NSObject {
                   self.lifecycle == .waitingReconnect(finishedGeneration)
             else { return }
             self.reconnectWorkItem = nil
-            self.beginConnectionCycle()
+            self.startFreshConnectionCycle()
         }
         reconnectWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
@@ -802,9 +793,22 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             reconnectWorkItem = nil
         }
         lifecycle = transition.phase
+        if transition.shouldStartFreshConnectionCycle {
+            startFreshConnectionCycle()
+            return
+        }
         if transition.shouldDiscover {
             discoverOrScan(using: central, generation: generation)
         }
+    }
+
+    private func startFreshConnectionCycle() {
+        central?.stopScan()
+        central?.delegate = nil
+        central = nil
+        centralGeneration = nil
+        lifecycle = .stopped
+        beginConnectionCycle()
     }
 
     func centralManager(

@@ -130,9 +130,10 @@ struct BluetoothLifecycleTests {
         )
 
         #expect(poweredOff == BluetoothCentralRecoveryTransition(
-            phase: .scanning(generation),
+            phase: .waitingBluetoothPower(generation),
             shouldCancelScheduledReconnect: true,
-            shouldDiscover: false
+            shouldDiscover: false,
+            shouldStartFreshConnectionCycle: false
         ))
 
         let poweredOn = BluetoothCentralRecoveryPolicy.transition(
@@ -143,9 +144,10 @@ struct BluetoothLifecycleTests {
         )
 
         #expect(poweredOn == BluetoothCentralRecoveryTransition(
-            phase: .scanning(generation),
-            shouldCancelScheduledReconnect: false,
-            shouldDiscover: true
+            phase: .stopped,
+            shouldCancelScheduledReconnect: true,
+            shouldDiscover: false,
+            shouldStartFreshConnectionCycle: true
         ))
     }
 
@@ -165,15 +167,35 @@ struct BluetoothLifecycleTests {
         )
 
         #expect(resetting == BluetoothCentralRecoveryTransition(
-            phase: .scanning(generation),
+            phase: .waitingBluetoothPower(generation),
             shouldCancelScheduledReconnect: true,
-            shouldDiscover: false
+            shouldDiscover: false,
+            shouldStartFreshConnectionCycle: false
         ))
         #expect(poweredOn == BluetoothCentralRecoveryTransition(
-            phase: .scanning(generation),
+            phase: .stopped,
             shouldCancelScheduledReconnect: true,
-            shouldDiscover: true
+            shouldDiscover: false,
+            shouldStartFreshConnectionCycle: true
         ))
+    }
+
+    @Test func freshCycleBoundaryRejectsCallbacksFromTheFinishedAttempt() {
+        let finishedGeneration: UInt64 = 11
+        let recovery = BluetoothCentralRecoveryPolicy.transition(
+            from: .waitingReconnect(finishedGeneration),
+            generation: finishedGeneration,
+            event: .poweredOn,
+            shouldRun: true
+        )
+
+        #expect(recovery.shouldStartFreshConnectionCycle)
+        #expect(!recovery.shouldDiscover)
+
+        let freshPhase = BluetoothLifecyclePhase.scanning(finishedGeneration + 1)
+        #expect(!freshPhase.acceptsDidConnect(generation: finishedGeneration))
+        #expect(!freshPhase.acceptsDidFailToConnect(generation: finishedGeneration))
+        #expect(!freshPhase.acceptsDisconnect(generation: finishedGeneration))
     }
 
     @Test func microphoneRequiresConfirmed16kReadySession() {

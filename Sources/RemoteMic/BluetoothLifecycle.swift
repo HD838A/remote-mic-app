@@ -29,6 +29,7 @@ enum BluetoothLifecyclePhase: Equatable {
     case ready(UInt64)
     case disconnecting(UInt64)
     case waitingReconnect(UInt64)
+    case waitingBluetoothPower(UInt64)
 
     var generation: UInt64? {
         switch self {
@@ -38,7 +39,8 @@ enum BluetoothLifecyclePhase: Equatable {
              .awaitingCapabilities(let value),
              .ready(let value),
              .disconnecting(let value),
-             .waitingReconnect(let value):
+             .waitingReconnect(let value),
+             .waitingBluetoothPower(let value):
             return value
         case .stopped:
             return nil
@@ -134,6 +136,7 @@ struct BluetoothCentralRecoveryTransition: Equatable {
     let phase: BluetoothLifecyclePhase
     let shouldCancelScheduledReconnect: Bool
     let shouldDiscover: Bool
+    let shouldStartFreshConnectionCycle: Bool
 }
 
 enum BluetoothCentralRecoveryPolicy {
@@ -146,19 +149,20 @@ enum BluetoothCentralRecoveryPolicy {
         switch event {
         case .poweredOff, .resetting:
             return BluetoothCentralRecoveryTransition(
-                phase: .scanning(generation),
+                phase: .waitingBluetoothPower(generation),
                 shouldCancelScheduledReconnect: true,
-                shouldDiscover: false
+                shouldDiscover: false,
+                shouldStartFreshConnectionCycle: false
             )
         case .poweredOn:
-            let wasWaitingToReconnect = phase == .waitingReconnect(generation)
-            let nextPhase: BluetoothLifecyclePhase = wasWaitingToReconnect
-                ? .scanning(generation)
-                : phase
+            let requiresFreshConnectionCycle = phase == .waitingReconnect(generation) ||
+                phase == .waitingBluetoothPower(generation)
             return BluetoothCentralRecoveryTransition(
-                phase: nextPhase,
-                shouldCancelScheduledReconnect: wasWaitingToReconnect,
-                shouldDiscover: shouldRun && nextPhase == .scanning(generation)
+                phase: requiresFreshConnectionCycle ? .stopped : phase,
+                shouldCancelScheduledReconnect: requiresFreshConnectionCycle,
+                shouldDiscover: shouldRun && !requiresFreshConnectionCycle &&
+                    phase == .scanning(generation),
+                shouldStartFreshConnectionCycle: shouldRun && requiresFreshConnectionCycle
             )
         }
     }
