@@ -569,6 +569,29 @@ struct SettingsPageRegressionTests {
         #expect(!aboutPage.contains("openGlossary"))
     }
 
+    @Test func aboutPageOffersAnOptInLoginItemWithSystemApprovalRecovery() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let serviceSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/LoginItemService.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("about.preferences.launch_at_login"))
+        #expect(settingsSource.contains("loginItemService.setEnabled"))
+        #expect(settingsSource.contains("loginItemService.openLoginItemsSettings"))
+        #expect(settingsSource.contains("loginItemService.refresh()"))
+        #expect(serviceSource.contains("SMAppService.mainApp"))
+        #expect(serviceSource.contains("SMAppService.openSystemSettingsLoginItems()"))
+        #expect(!serviceSource.contains("UserDefaults"))
+    }
+
     @Test func privateFeatureUIIsDelegatedAndHiddenByDefault() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
