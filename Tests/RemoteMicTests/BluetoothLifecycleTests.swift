@@ -120,25 +120,60 @@ struct BluetoothLifecycleTests {
         ) == 3)
     }
 
-    @Test func peripheralResetClearsAnyPrecomputedReconnectDelay() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let source = try String(
-            contentsOf: root.appendingPathComponent(
-                "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
-            ),
-            encoding: .utf8
+    @Test func poweredOffCancelsWaitingReconnectUntilBluetoothReturns() {
+        let generation: UInt64 = 7
+        let poweredOff = BluetoothCentralRecoveryPolicy.transition(
+            from: .waitingReconnect(generation),
+            generation: generation,
+            event: .poweredOff,
+            shouldRun: true
         )
-        let resetStart = try #require(source.range(of: "private func resetPeripheral()"))
-        let resetEnd = try #require(source.range(
-            of: "private func isCurrent",
-            range: resetStart.upperBound..<source.endIndex
-        ))
-        let resetSource = source[resetStart.lowerBound..<resetEnd.lowerBound]
 
-        #expect(resetSource.contains("requestedReconnectDelay = nil"))
+        #expect(poweredOff == BluetoothCentralRecoveryTransition(
+            phase: .scanning(generation),
+            shouldCancelScheduledReconnect: true,
+            shouldDiscover: false
+        ))
+
+        let poweredOn = BluetoothCentralRecoveryPolicy.transition(
+            from: poweredOff.phase,
+            generation: generation,
+            event: .poweredOn,
+            shouldRun: true
+        )
+
+        #expect(poweredOn == BluetoothCentralRecoveryTransition(
+            phase: .scanning(generation),
+            shouldCancelScheduledReconnect: false,
+            shouldDiscover: true
+        ))
+    }
+
+    @Test func resettingOrDirectPowerRecoveryClearsTheCapturedWait() {
+        let generation: UInt64 = 9
+        let resetting = BluetoothCentralRecoveryPolicy.transition(
+            from: .waitingReconnect(generation),
+            generation: generation,
+            event: .resetting,
+            shouldRun: true
+        )
+        let poweredOn = BluetoothCentralRecoveryPolicy.transition(
+            from: .waitingReconnect(generation),
+            generation: generation,
+            event: .poweredOn,
+            shouldRun: true
+        )
+
+        #expect(resetting == BluetoothCentralRecoveryTransition(
+            phase: .scanning(generation),
+            shouldCancelScheduledReconnect: true,
+            shouldDiscover: false
+        ))
+        #expect(poweredOn == BluetoothCentralRecoveryTransition(
+            phase: .scanning(generation),
+            shouldCancelScheduledReconnect: true,
+            shouldDiscover: true
+        ))
     }
 
     @Test func microphoneRequiresConfirmed16kReadySession() {

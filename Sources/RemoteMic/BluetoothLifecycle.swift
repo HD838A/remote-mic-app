@@ -124,6 +124,46 @@ struct BluetoothReconnectPolicy {
     }
 }
 
+enum BluetoothCentralRecoveryEvent {
+    case poweredOn
+    case poweredOff
+    case resetting
+}
+
+struct BluetoothCentralRecoveryTransition: Equatable {
+    let phase: BluetoothLifecyclePhase
+    let shouldCancelScheduledReconnect: Bool
+    let shouldDiscover: Bool
+}
+
+enum BluetoothCentralRecoveryPolicy {
+    static func transition(
+        from phase: BluetoothLifecyclePhase,
+        generation: UInt64,
+        event: BluetoothCentralRecoveryEvent,
+        shouldRun: Bool
+    ) -> BluetoothCentralRecoveryTransition {
+        switch event {
+        case .poweredOff, .resetting:
+            return BluetoothCentralRecoveryTransition(
+                phase: .scanning(generation),
+                shouldCancelScheduledReconnect: true,
+                shouldDiscover: false
+            )
+        case .poweredOn:
+            let wasWaitingToReconnect = phase == .waitingReconnect(generation)
+            let nextPhase: BluetoothLifecyclePhase = wasWaitingToReconnect
+                ? .scanning(generation)
+                : phase
+            return BluetoothCentralRecoveryTransition(
+                phase: nextPhase,
+                shouldCancelScheduledReconnect: wasWaitingToReconnect,
+                shouldDiscover: shouldRun && nextPhase == .scanning(generation)
+            )
+        }
+    }
+}
+
 enum ATVVSessionGate {
     static let cancelledOpenSuppressionInterval: TimeInterval = 2
 

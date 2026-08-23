@@ -211,16 +211,25 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func beginConnectionCycle() {
-        guard shouldRun, central == nil else { return }
+        guard shouldRun else { return }
+        let existingCentral = central
+        if existingCentral != nil {
+            guard case .waitingReconnect = lifecycle else { return }
+        }
         generationCounter &+= 1
         let generation = generationCounter
         lifecycle = .scanning(generation)
-        let manager = CBCentralManager(
-            delegate: self,
-            queue: .main,
-            options: [CBCentralManagerOptionShowPowerAlertKey: true]
-        )
-        central = manager
+        let manager: CBCentralManager
+        if let existingCentral {
+            manager = existingCentral
+        } else {
+            manager = CBCentralManager(
+                delegate: self,
+                queue: .main,
+                options: [CBCentralManagerOptionShowPowerAlertKey: true]
+            )
+            central = manager
+        }
         centralGeneration = generation
         if manager.state == .poweredOn {
             discoverOrScan(using: manager, generation: generation)
@@ -473,13 +482,13 @@ final class XiaomiBluetoothBridge: NSObject {
     private func finishAttempt(reconnectAfter delay: TimeInterval?) {
         let finishedGeneration = lifecycle.generation ?? generationCounter
         central?.stopScan()
-        central?.delegate = nil
-        central = nil
-        centralGeneration = nil
         requestedReconnectDelay = nil
         resetPeripheral()
 
         guard shouldRun, let delay else {
+            central?.delegate = nil
+            central = nil
+            centralGeneration = nil
             lifecycle = .stopped
             return
         }
@@ -489,9 +498,9 @@ final class XiaomiBluetoothBridge: NSObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self,
                   self.shouldRun,
-                  self.central == nil,
                   self.lifecycle == .waitingReconnect(finishedGeneration)
             else { return }
+            self.reconnectWorkItem = nil
             self.beginConnectionCycle()
         }
         reconnectWorkItem = work
@@ -744,10 +753,18 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         guard self.central === central, let generation = centralGeneration else { return }
         switch central.state {
         case .poweredOn:
-            if shouldRun { discoverOrScan(using: central, generation: generation) }
+            applyCentralRecovery(
+                .poweredOn,
+                central: central,
+                generation: generation
+            )
         case .poweredOff:
+            applyCentralRecovery(
+                .poweredOff,
+                central: central,
+                generation: generation
+            )
             resetPeripheral()
-            lifecycle = .scanning(generation)
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.off"))
         case .unauthorized:
             resetSession()
@@ -755,13 +772,38 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         case .unsupported:
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.unsupported"))
         case .resetting:
+            applyCentralRecovery(
+                .resetting,
+                central: central,
+                generation: generation
+            )
             resetPeripheral()
-            lifecycle = .scanning(generation)
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.resetting"))
         case .unknown:
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.initializing"))
         @unknown default:
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.unavailable"))
+        }
+    }
+
+    private func applyCentralRecovery(
+        _ event: BluetoothCentralRecoveryEvent,
+        central: CBCentralManager,
+        generation: UInt64
+    ) {
+        let transition = BluetoothCentralRecoveryPolicy.transition(
+            from: lifecycle,
+            generation: generation,
+            event: event,
+            shouldRun: shouldRun
+        )
+        if transition.shouldCancelScheduledReconnect {
+            reconnectWorkItem?.cancel()
+            reconnectWorkItem = nil
+        }
+        lifecycle = transition.phase
+        if transition.shouldDiscover {
+            discoverOrScan(using: central, generation: generation)
         }
     }
 

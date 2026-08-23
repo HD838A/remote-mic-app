@@ -53,7 +53,7 @@
 - 缓存直连的首次连接或初始化失败后，只在当前进程内禁止再次通过 `retrievePeripherals` 主动探测；bridge 转入现有扫描路径，并继续只接受原目标 UUID。
 - 不删除或改写持久 profile、蓝牙 identifier、HID fingerprint 和按键映射。App 启动、停止、用户点击“立即重新连接”以及设备真正 Ready 时重置退避；手动操作仍可立即重新允许一次缓存探测。
 - 自动 timeout、connect failure、初始化 failure 和 disconnect 都通过同一策略计算下一次延迟；预先计算的取消延迟在 CoreBluetooth 回调中复用，不重复累计失败次数。
-- 外设状态在蓝牙断电、resetting 或新连接周期开始时会清除预计算延迟，避免旧的 48/60 秒等待跨越蓝牙恢复并污染下一次失败。
+- 自动退避期间保留同一个 `CBCentralManager` 观察系统蓝牙状态，但清除旧 peripheral 和 delegate；蓝牙断电、resetting 或直接恢复 powered-on 时会取消已捕获的 48/60 秒延迟，并在 powered-on 后立即恢复扫描。App 停止时才释放 manager。
 - 日志记录失败次数、实际延迟和是否绕过缓存，但不记录设备 UUID。
 
 ## 验证
@@ -61,7 +61,7 @@
 已执行：
 
 - `swift test --filter BluetoothLifecycleTests`
-  - 10 项通过；覆盖退避序列、60 秒上限、确定性抖动、缓存绕过、reset 后从第一级重新开始，以及外设状态重置会清除预计算延迟。
+  - 11 项通过；覆盖退避序列、60 秒上限、确定性抖动、缓存绕过、reset 后从第一级重新开始，以及 `waitingReconnect → poweredOff/resetting → poweredOn → scanning` 状态转换会取消旧延迟并立即恢复发现。
 - 设置 `REMOTE_MIC_HARDWARE_SIMULATION_PATH` 后执行 `swift test --filter HardwareSimulationIntegrationTests`
   - 21 项通过；RC001 / RC003 生产协议、首段语音、停止、双设备 generation 隔离和 HID 基线保持正常。
 - `swift test`：同步最新 `main` 后 346 项通过。
@@ -74,6 +74,6 @@
 
 ## 验证边界
 
-纯策略与接线测试可以证明延迟计算、缓存状态和预计算延迟清理，但不能驱动真实 `CBCentralManager`、验证 macOS 是否继续返回已失效的 peripheral，或证明真实遥控器恢复广播后的连接时序。
+纯策略与状态机测试可以证明延迟计算、缓存状态和等待期电源恢复决策，但不能让自动化进程切换真实系统蓝牙、验证 macOS 是否向保留的 `CBCentralManager` 发送完整 off/resetting/powered-on 序列、确认是否继续返回已失效 peripheral，或证明真实遥控器恢复广播后的连接时序。
 
 合入或发布前仍需使用真实 RC001 / RC003 复验：一个在线 profile 加两个离线历史 profile持续至少 3 分钟；手动立即重连；离线设备恢复；睡眠唤醒；蓝牙关闭再开启；同一 profile 的名称、按键映射、普通按键以及第一次 `STREAM_START → AUDIO → STREAM_STOP` 保持正常。未完成这些步骤前不能表述为已经真机验收。
