@@ -146,20 +146,3 @@ enum ATVVStreamOrigin: String, Equatable {
         }
     }
 }
-
-enum KaraokeContinuousSessionPolicy {
-    static func retryDelay(afterFailureCount failureCount: Int) -> TimeInterval {
-        let exponent = max(0, min(failureCount - 1, 3))
-        return min(5, pow(2, Double(exponent)))
-    }
-
-    static func shouldSendKeepalive(
-        modeEnabled: Bool,
-        usesKaraokeRoute: Bool,
-        streamOrigin: ATVVStreamOrigin,
-        hasDecodedAudio: Bool
-    ) -> Bool {
-        modeEnabled && usesKaraokeRoute &&
-            streamOrigin == .hostMicrophoneOpen && hasDecodedAudio
-    }
-}

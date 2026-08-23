@@ -122,33 +122,6 @@ struct KaraokeModeTests {
         ) == .unknown)
     }
 
-    @Test func continuousModeRetriesWithABoundAndKeepsAliveOnlyConfirmedHostAudio() {
-        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 1) == 1)
-        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 2) == 2)
-        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 3) == 4)
-        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 4) == 5)
-        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 20) == 5)
-
-        #expect(KaraokeContinuousSessionPolicy.shouldSendKeepalive(
-            modeEnabled: true,
-            usesKaraokeRoute: true,
-            streamOrigin: .hostMicrophoneOpen,
-            hasDecodedAudio: true
-        ))
-        #expect(!KaraokeContinuousSessionPolicy.shouldSendKeepalive(
-            modeEnabled: true,
-            usesKaraokeRoute: true,
-            streamOrigin: .remoteHoldToTalk,
-            hasDecodedAudio: true
-        ))
-        #expect(!KaraokeContinuousSessionPolicy.shouldSendKeepalive(
-            modeEnabled: true,
-            usesKaraokeRoute: true,
-            streamOrigin: .hostMicrophoneOpen,
-            hasDecodedAudio: false
-        ))
-    }
-
     @Test func productionRoutingKeepsTheFeatureOffByDefaultAndIsolatesVirtualAudio() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -168,11 +141,14 @@ struct KaraokeModeTests {
         #expect(!source.contains("voice_double_click"))
         #expect(!source.contains("KaraokeVoiceDoubleClickRecognizer"))
         #expect(source.contains("if event.isSuspending, isKaraokeModeEnabled"))
-        #expect(source.contains("prepareContinuousMicrophoneOpen"))
-        #expect(source.contains("requestMicrophoneExtend"))
-        #expect(source.contains("restoreStandardInteractionMode"))
-        #expect(!source.contains("karaokeHostAudioCapability = .manualOnly"))
-        #expect(!source.contains("karaoke.status.hold_to_sing"))
+        #expect(source.contains("beginKaraokeStream()"))
+        #expect(source.contains("karaoke.status.ready"))
+        #expect(!source.contains("scheduleKaraokeMicrophoneOpen"))
+        #expect(!source.contains("prepareContinuousMicrophoneOpen"))
+        #expect(!source.contains("requestMicrophoneExtend"))
+        #expect(!source.contains("restoreStandardInteractionMode"))
+        #expect(!source.contains("KARAOKE HOST_OPEN"))
+        #expect(!source.contains("KARAOKE KEEPALIVE"))
         #expect(!source.contains("settings.isKaraokeModeEnabled"))
     }
 }

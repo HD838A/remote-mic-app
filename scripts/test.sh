@@ -31,6 +31,7 @@ xcrun swiftc \
   "$ROOT/Tests/SelfTest/main.swift" \
   -o "$OUTPUT"
 "$OUTPUT"
+"$ROOT/scripts/test-rc003-hold-to-talk-verifier.sh"
 
 if [[ "$SKIP_SWIFT_PACKAGE_BUILD" == "0" ]]; then
   xcrun swift build
