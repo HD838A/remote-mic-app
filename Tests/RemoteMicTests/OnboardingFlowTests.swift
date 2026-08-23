@@ -538,6 +538,35 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func voiceSamplePresentationPublishesOnlyTheFirstNonemptyBatchPerSession() {
+        var hasReceivedSamples = false
+        var publicationCount = 0
+
+        #expect(!VoiceSamplePresentationPolicy.shouldPublishReceipt(
+            hasReceivedSamples: hasReceivedSamples,
+            sampleCount: 0
+        ))
+
+        for _ in 0..<4_000 {
+            if VoiceSamplePresentationPolicy.shouldPublishReceipt(
+                hasReceivedSamples: hasReceivedSamples,
+                sampleCount: 240
+            ) {
+                hasReceivedSamples = true
+                publicationCount += 1
+            }
+        }
+
+        #expect(hasReceivedSamples)
+        #expect(publicationCount == 1)
+
+        hasReceivedSamples = false
+        #expect(VoiceSamplePresentationPolicy.shouldPublishReceipt(
+            hasReceivedSamples: hasReceivedSamples,
+            sampleCount: 240
+        ))
+    }
+
     @Test func mobileControlPathsPublishButtonsAndVoiceSamplesForTheSharedGates() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -558,8 +587,21 @@ struct OnboardingFlowTests {
         #expect(modelSource.contains(
             "@Published private(set) var activeVoiceSource: UsageEventSource?"
         ))
+        #expect(modelSource.contains(
+            "@Published private(set) var hasReceivedCurrentVoiceSamples = false"
+        ))
         #expect(modelSource.components(separatedBy: "observeMobileButton(").count >= 7)
 
+        let bluetoothAudioStart = try #require(modelSource.range(
+            of: "func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16])"
+        ))
+        let bluetoothAudioEnd = try #require(modelSource.range(
+            of: "func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdateBatteryLevel",
+            range: bluetoothAudioStart.upperBound..<modelSource.endIndex
+        ))
+        let bluetoothAudioSource = modelSource[
+            bluetoothAudioStart.lowerBound..<bluetoothAudioEnd.lowerBound
+        ]
         let audioStart = try #require(modelSource.range(
             of: "private func receivePhoneAudio"
         ))
@@ -568,7 +610,10 @@ struct OnboardingFlowTests {
             range: audioStart.upperBound..<modelSource.endIndex
         ))
         let audioSource = modelSource[audioStart.lowerBound..<audioEnd.lowerBound]
-        #expect(audioSource.contains("currentVoiceSampleCount &+= UInt64(samples.count)"))
+        let receiptCall = "publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)"
+        #expect(bluetoothAudioSource.contains(receiptCall))
+        #expect(audioSource.contains(receiptCall))
+        #expect(!modelSource.contains("currentVoiceSampleCount"))
 
         #expect(viewSource.contains(
             ".onReceive(model.$lastMobileRemoteButtonObservation.compactMap { $0 })"
@@ -585,8 +630,26 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("PhoneRemoteInvitationQRCode.image"))
         #expect(viewSource.contains("if case .connected = model.webRemoteState"))
         #expect(viewSource.contains(".onReceive(model.$isConnected.removeDuplicates())"))
+        #expect(viewSource.contains(
+            ".onReceive(model.$hasReceivedCurrentVoiceSamples.removeDuplicates())"
+        ))
         #expect(viewSource.contains("routeConnectedPhysicalRemoteIfNeeded()"))
         #expect(viewSource.contains("settings.setOnboardingStep(.permissions)"))
+    }
+
+    @Test func rootViewObservesSettingsWithoutSubscribingToTheWholeBridgeModel() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicRootView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("let model: BridgeAppModel"))
+        #expect(!source.contains("@ObservedObject var model: BridgeAppModel"))
+        #expect(source.contains("@ObservedObject private var settings: AppSettings"))
     }
 
     @Test func observedRemoteButtonRequestsOnlyOneRecoveryWhileBluetoothIsDisconnected() {
