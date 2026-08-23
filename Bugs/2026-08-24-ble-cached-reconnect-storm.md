@@ -1,7 +1,7 @@
 # 历史蓝牙缓存持续固定频率重连
 
 - 时间：2026-08-24
-- 状态：候选修复完成，等待真机验证
+- 状态：候选修复完成；自动化、硬件模拟、项目自检与 Release App 验证通过，等待真机验证
 - 影响范围：macOS `1.9.8 (131)`；保存过多个 RC001 / RC003 profile，部分遥控器长期离线或 CoreBluetooth 缓存已失效的用户
 - 功能点：CoreBluetooth 缓存重连、失败退避、多遥控器 profile
 - 简单描述：失效的历史蓝牙 identifier 每约 11 秒发起一次连接，连续失败不会降频。
@@ -61,12 +61,16 @@
 已执行：
 
 - `swift test --filter BluetoothLifecycleTests`
-  - 覆盖退避序列、60 秒上限、确定性抖动、缓存绕过、reset 后从第一级重新开始，以及外设状态重置会清除预计算延迟。
+  - 10 项通过；覆盖退避序列、60 秒上限、确定性抖动、缓存绕过、reset 后从第一级重新开始，以及外设状态重置会清除预计算延迟。
+- 设置 `REMOTE_MIC_HARDWARE_SIMULATION_PATH` 后执行 `swift test --filter HardwareSimulationIntegrationTests`
+  - 21 项通过；RC001 / RC003 生产协议、首段语音、停止、双设备 generation 隔离和 HID 基线保持正常。
+- `swift test`：同步最新 `main` 后 346 项通过。
+- `./scripts/test.sh`：42 项通过。
+- `./scripts/build-app.sh`：Apple Silicon Release App 构建通过。
+- `./scripts/verify-app.sh dist/SayAll.app`：App 结构、资源与签名自检通过。
+- `git diff --check`：通过。
 
-仍需在全部修改完成后执行：
-
-- `git diff --check`
-- 完整相关测试与项目自检。
+构建只出现仓库既有的 macOS 14 `onChange(of:perform:)` 弃用警告，与本修复无关。
 
 ## 验证边界
 
