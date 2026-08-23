@@ -104,12 +104,40 @@ enum RemoteMicApp {
             }
             return
         }
+        let bundleIdentifier = Bundle.main.bundleIdentifier
+            ?? ApplicationInstanceGuard.fallbackBundleIdentifier
+        if let existingApplication = ApplicationInstanceGuard.existingApplication(
+            bundleIdentifier: bundleIdentifier
+        ) {
+            existingApplication.activate(options: [.activateAllWindows])
+            return
+        }
+
+        var instanceLock: ApplicationInstanceLock?
+        if let lockURL = ApplicationInstanceGuard.defaultLockURL() {
+            switch ApplicationInstanceLock.acquire(at: lockURL) {
+            case let .acquired(lock):
+                instanceLock = lock
+            case .alreadyLocked:
+                ApplicationInstanceGuard.existingApplication(
+                    bundleIdentifier: bundleIdentifier
+                )?.activate(options: [.activateAllWindows])
+                return
+            case let .failed(reason):
+                fputs("Single-instance lock unavailable: \(reason)\n", stderr)
+            }
+        } else {
+            fputs("Single-instance lock unavailable: application_support_missing\n", stderr)
+        }
+
         let application = NSApplication.shared
         let delegate = RemoteMicAppDelegate()
         application.delegate = delegate
         application.setActivationPolicy(delegate.activationPolicy)
-        withExtendedLifetime(delegate) {
-            application.run()
+        withExtendedLifetime(instanceLock) {
+            withExtendedLifetime(delegate) {
+                application.run()
+            }
         }
     }
 }
