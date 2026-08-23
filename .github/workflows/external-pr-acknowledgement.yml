@@ -1,0 +1,44 @@
+name: Acknowledge External Pull Requests
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  acknowledge:
+    name: Thank the external contributor
+    if: ${{ github.event.pull_request.head.repo.full_name != github.repository && github.event.pull_request.user.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check for an existing acknowledgement
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          if gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- sayall-external-pr-ack -->"))) | .id' \
+            | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post a thank-you message
+        if: steps.existing.outputs.found != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MESSAGE: |-
+            <!-- sayall-external-pr-ack -->
+            感谢你为无线麦SayAll.app 提交 PR！我们已经收到这次贡献，CI 正在自动运行。维护者会在 CI 完成后继续测试和审查；如果需要补充信息，我们会在这里留言。
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$MESSAGE"
