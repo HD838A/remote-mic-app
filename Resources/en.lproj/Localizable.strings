@@ -419,6 +419,7 @@
 "menu.check_for_updates" = "Check for Updates…";
 "common.action.quit" = "Quit";
 "menu.language" = "Language";
+"menu.lite_mode" = "Lite Mode";
 "language.system" = "System Default";
 "common.value.unknown" = "Unknown";
 "app.version_with_build" = "Version %1$@ (%2$@)";

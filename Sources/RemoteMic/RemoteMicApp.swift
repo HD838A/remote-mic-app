@@ -135,6 +135,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
     private var isSettingsWindowOpen = false
+    private var isLiteModeActive = false
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
     private var applicationShortcutMonitor: Any?
@@ -154,6 +155,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private let connectionItem = NSMenuItem()
     private let audioItem = NSMenuItem()
     private let hidItem = NSMenuItem()
+    private let liteModeItem = NSMenuItem()
 
     var activationPolicy: NSApplication.ActivationPolicy {
         SettingsWindowActivationPolicy.value(
@@ -349,6 +351,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(menuItem("about.support.github", action: #selector(openGitHub)))
         menu.addItem(menuItem("about.support.website", action: #selector(openWebsite)))
         menu.addItem(.separator())
+        liteModeItem.title = localization.text("menu.lite_mode")
+        liteModeItem.target = self
+        liteModeItem.action = #selector(toggleLiteMode)
+        liteModeItem.state = isLiteModeActive ? .on : .off
+        menu.addItem(liteModeItem)
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
         refreshMenuStatus()
@@ -683,6 +690,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             : model.audioStatus.text(using: localization)
         hidItem.title = model.hidStatus.text(using: localization)
         statusItem?.button?.image = statusImage(isStreaming: model.isStreaming)
+        liteModeItem.state = isLiteModeActive ? .on : .off
     }
 
     private func statusImage(isStreaming: Bool) -> NSImage? {
@@ -734,6 +742,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
         guard let windowController = settingsWindowController,
               let window = windowController.window else { return }
+        isLiteModeActive = false
         isSettingsWindowOpen = true
         updateDockActivationPolicy()
         windowController.showWindow(nil)
@@ -788,6 +797,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
               window === settingsWindowController?.window
         else { return }
         isSettingsWindowOpen = false
+        settingsWindowController = nil
         updateDockActivationPolicy()
     }
 
@@ -926,6 +936,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func updateDockActivationPolicy() {
+        if isLiteModeActive {
+            NSApp.setActivationPolicy(.accessory)
+            return
+        }
         NSApp.setActivationPolicy(SettingsWindowActivationPolicy.value(
             showDockIcon: model.settings.showDockIcon,
             isSettingsWindowOpen: isSettingsWindowOpen
@@ -942,6 +956,19 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func closeKeyWindow() {
         NSApp.keyWindow?.performClose(nil)
+    }
+
+    @objc private func toggleLiteMode() {
+        if isLiteModeActive {
+            isLiteModeActive = false
+            updateDockActivationPolicy()
+            showSettings()
+        } else {
+            isLiteModeActive = true
+            settingsWindowController?.window?.close()
+            settingsWindowController = nil
+            updateDockActivationPolicy()
+        }
     }
 
     @objc private func quit() {
