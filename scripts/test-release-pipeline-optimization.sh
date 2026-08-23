@@ -123,12 +123,57 @@ fi
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'Verify active preview before signed artifact handoff' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'git -C "$match_repo" update-ref refs/heads/main "$match_commit"' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'git ls-remote "file://$match_repo" refs/heads/main' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'readonly Match checkout must expose local main at its exact pinned HEAD' \
+  "$TEST_REPO/scripts/package-macos-release-in-actions.sh"
 /usr/bin/grep -Fq 'environment: mac-release' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'contents: read' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 REPOSITORY_ROOT="$TEST_REPO" \
   "$TEST_REPO/scripts/verify-release-workflow-gh-token.sh"
+
+match_fixture_source="$WORK_DIR/match-fixture-source"
+match_fixture_checkout="$WORK_DIR/match-fixture-checkout"
+match_fixture_consumer="$WORK_DIR/match-fixture-consumer"
+/usr/bin/git init -q -b main "$match_fixture_source"
+/bin/mkdir -p \
+  "$match_fixture_source/certs/developer_id_application" \
+  "$match_fixture_source/certs/developer_id_installer"
+print 'encrypted application fixture' > \
+  "$match_fixture_source/certs/developer_id_application/application.cer"
+print 'encrypted installer fixture' > \
+  "$match_fixture_source/certs/developer_id_installer/installer.cer"
+/usr/bin/git -C "$match_fixture_source" add certs
+/usr/bin/git -C "$match_fixture_source" \
+  -c user.name='Release Test' -c user.email='release-test@example.invalid' \
+  commit -q -m 'test: add encrypted Match fixtures'
+match_fixture_commit="$(/usr/bin/git -C "$match_fixture_source" rev-parse HEAD)"
+/usr/bin/git init -q "$match_fixture_checkout"
+/usr/bin/git -C "$match_fixture_checkout" remote add origin "file://$match_fixture_source"
+/usr/bin/git -C "$match_fixture_checkout" fetch -q --no-tags --depth=1 \
+  origin "$match_fixture_commit"
+/usr/bin/git -C "$match_fixture_checkout" checkout -q --force "$match_fixture_commit"
+if [[ -n "$(/usr/bin/git ls-remote "file://$match_fixture_checkout" refs/heads/main)" ]]; then
+  print -u2 "detached Match fixture unexpectedly exposed a main branch"
+  exit 1
+fi
+/usr/bin/git -C "$match_fixture_checkout" \
+  update-ref refs/heads/main "$match_fixture_commit"
+test "$(/usr/bin/git -C "$match_fixture_checkout" rev-parse refs/heads/main)" = \
+  "$match_fixture_commit"
+test "$(/usr/bin/git ls-remote "file://$match_fixture_checkout" refs/heads/main | \
+  /usr/bin/awk 'NR == 1 { print $1 }')" = "$match_fixture_commit"
+/usr/bin/git clone -q --branch main --single-branch \
+  "file://$match_fixture_checkout" "$match_fixture_consumer"
+test "$(/usr/bin/git -C "$match_fixture_consumer" rev-parse refs/remotes/origin/main)" = \
+  "$match_fixture_commit"
+test -f "$match_fixture_consumer/certs/developer_id_application/application.cer"
+test -f "$match_fixture_consumer/certs/developer_id_installer/installer.cer"
+
 package_job_source="$(/usr/bin/awk '
   /^  package:/ { capture = 1 }
   /^  publish:/ { capture = 0 }

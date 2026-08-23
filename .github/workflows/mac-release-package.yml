@@ -660,7 +660,16 @@ jobs:
           test "$(git -C .private-dependencies/sayall-macro-platform rev-parse HEAD)" = "b71482ccb3c5d3be319abe7cd61915ab90cbc3ba"
           test "$(git -C .private-dependencies/sayall-mac-remote rev-parse HEAD)" = "3f3c782180eef4024b53941c1f65d80e7cff4c66"
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"
-          test "$(git -C .private-release/apple-signing-match rev-parse HEAD)" = "2e271768593821611c54f3d1b376f39e503f53be"
+          match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
+          match_commit="2e271768593821611c54f3d1b376f39e503f53be"
+          test "$(git -C "$match_repo" rev-parse HEAD)" = "$match_commit"
+
+          # Match clones this checkout again via file:// with git_branch=main.
+          # An exact-SHA checkout is detached, so expose only that verified commit
+          # as local main instead of letting Fastlane create an empty orphan branch.
+          git -C "$match_repo" update-ref refs/heads/main "$match_commit"
+          test "$(git -C "$match_repo" rev-parse refs/heads/main)" = "$match_commit"
+          test "$(git ls-remote "file://$match_repo" refs/heads/main | /usr/bin/awk 'NR == 1 { print $1 }')" = "$match_commit"
 
       - name: Configure private feature package
         run: |

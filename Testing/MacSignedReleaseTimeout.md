@@ -88,13 +88,14 @@
 1. 在已有的同仓普通流水线变更 PR 中提交修复，记录该 PR 的 exact head Commit 和 `./scripts/release-pipeline-digest.sh` 64 位 digest。
 2. 不创建第二个 PR，只把该 exact SHA 临时映射到 `release/pipeline-qualification/<pr号或短SHA>` ref；确认 alias 远端 head、普通 PR head 和输入 exact commit 三者一致。
 3. 从该 alias ref 手动运行 `macOS Signed Release Packages`，设置 `release_mode=qualification`，显式输入 exact commit 和 digest；Tag 文本只用于匹配该 Commit 的 `Info.plist` 打包输入，不创建或占用产品版本身份。
-4. 审核 `mac-release` Environment 前检查 workflow、脚本和 digest；审批后等待双架构 Developer ID、timestamp、公证、staple 与验证完成。
-5. 检查 workflow 只上传按 digest 命名的 `release-pipeline-qualification.json` 和必要的无敏感阶段账本，没有上传可分发 App/ZIP/PKG/DMG/appcast，也没有创建或修改 GitHub Tag/Release。
-6. 原普通 PR 合入 `main` 后，运行资格证明 verifier，确认它通过记录的 PR 号读取 `refs/pull/<n>/head`、重算 source digest，并复用同 digest 证明而不重复执行资格验证。
+4. 审核 `mac-release` Environment 前检查 workflow、脚本和 digest；确认按完整 SHA 检出的 Match checkout 在读取凭据前把本地 `refs/heads/main` 绑定到同一 SHA，且 `file://` 二次 clone 能看到该 `main`。不得改为可漂移远端分支，也不得因 detached HEAD 让 Fastlane 创建空 orphan 分支。
+5. 审批后等待双架构 Developer ID、timestamp、公证、staple 与验证完成。
+6. 检查 workflow 只上传按 digest 命名的 `release-pipeline-qualification.json` 和必要的无敏感阶段账本，没有上传可分发 App/ZIP/PKG/DMG/appcast，也没有创建或修改 GitHub Tag/Release。
+7. 原普通 PR 合入 `main` 后，运行资格证明 verifier，确认它通过记录的 PR 号读取 `refs/pull/<n>/head`、重算 source digest，并复用同 digest 证明而不重复执行资格验证。
 
 预期结果：provenance gate 同时验证本地 checkout、临时 alias ref、原普通 PR exact SHA 和脚本聚合 digest；alias 不创建第二个 PR，也不是产品候选。Qualification 仍使用受保护 Environment 并检查三个私有依赖 pin 一致；真实签名公证路径通过后只留下按 digest 可复用的证明，不发布产品字节，证明也不依赖 alias ref 永久存在。
 
-失败判定：SHA/digest 不匹配仍可执行、alias 与原 PR head 不一致、为 alias 创建第二个 PR、qualification 绕过 Environment、拥有 `contents: write`、创建/修改 Tag 或 Release、上传可分发产品 artifact、原 PR 未合入或 source digest 不符仍能复用，或用 qualification 结果冒充最终候选产品验收。
+失败判定：SHA/digest 不匹配仍可执行、alias 与原 PR head 不一致、为 alias 创建第二个 PR、qualification 绕过 Environment、拥有 `contents: write`、Match 精确 SHA checkout 没有向本地 `file://` clone 暴露同 SHA `main`、创建/修改 Tag 或 Release、上传可分发产品 artifact、原 PR 未合入或 source digest 不符仍能复用，或用 qualification 结果冒充最终候选产品验收。
 
 ## 稳定功能回归
 
