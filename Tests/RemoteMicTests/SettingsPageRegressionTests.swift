@@ -216,6 +216,32 @@ struct SettingsPageRegressionTests {
         #expect(settingsSource.contains("window?.performDrag(with: event)"))
     }
 
+    @Test func settingsWindowEstablishesItsFullSizeBeforeCentering() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+
+        let contentSize = try #require(appSource.range(
+            of: "window.setContentSize(NSSize(width: 1020, height: 772))"
+        ))
+        let autosave = try #require(appSource.range(
+            of: "window.setFrameAutosaveName(\"RemoteMicSettings\")",
+            range: contentSize.upperBound..<appSource.endIndex
+        ))
+        let center = try #require(appSource.range(
+            of: "window.center()",
+            range: autosave.upperBound..<appSource.endIndex
+        ))
+
+        #expect(contentSize.upperBound <= autosave.lowerBound)
+        #expect(autosave.upperBound <= center.lowerBound)
+    }
+
     @Test func settingsWindowKeepsTheDockIconUntilItCloses() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
