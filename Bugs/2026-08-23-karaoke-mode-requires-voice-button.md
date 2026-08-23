@@ -74,7 +74,7 @@ result=requires_voice_button reason=host_open_empty_remote_htt_has_pcm
 
 - `scripts/test-rc003-hold-to-talk-verifier.sh` 覆盖：确认必须按住、主动持续 PCM 成功、缺少实体对照、只有实体流、非 RC003、对照顺序错误、只判读最近会话；七类夹具通过。
 - `scripts/verify-rc003-hold-to-talk.sh` 对当前现场日志返回 `requires_voice_button`。这是真实日志判定，不代表代理重新操作了实体硬件。
-- `swift test`：337 项、32 个 suite 全部通过；本地卡拉 OK 聚焦测试 7 项通过。
+- 合入最新 `origin/main` 后重新执行 `swift test`：347 项、34 个 suite 全部通过；本地卡拉 OK 聚焦测试 7 项通过。
 - `scripts/test.sh`：42 项自检全部通过。
 - `scripts/build-app.sh`：`1.9.8 (131)` Release App 编译成功；`codesign --verify --deep --strict` 通过，签名为用户 Developer ID，Team ID `FH5RUQGB5U`，Hardened Runtime 有效。
 - 新 App 与 `/Applications/SayAll.app` 的 bundle identifier、Team ID 和 designated requirement 一致，满足沿用现有 TCC 身份的代码签名边界；当前本地构建未提交 Apple 公证，不能当公开安装包发布。
