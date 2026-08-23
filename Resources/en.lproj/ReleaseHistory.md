@@ -1,5 +1,11 @@
 # Version History
 
+## 1.9.9 (Pre-release)
+
+- Configure remote-button shortcuts directly in Settings with standard keyboard keys, modifier choices, and reserved-key safeguards.
+- Improve permission recovery and voice-input setup: changes made in macOS Privacy settings are detected after launch, and the input method selected for a voice session is restored when the session ends.
+- Keep the Settings window and Dock presence stable while navigating or closing Settings, and correct the TV button's native key mapping.
+
 ## 1.9.8 (Pre-release)
 
 - Improved upgrades from older Remote Mic installations: the previous app now stops before the audio driver is updated, and the new SayAll.app stays at its canonical Applications location so audio setup can continue reliably after the upgrade.
