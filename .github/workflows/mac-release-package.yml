@@ -266,7 +266,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: GetSayAll/sayall-macro-platform
-          ref: 734f24be4f6ebeacadeaa41d9902bdf414807d06
+          ref: b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
           path: .private-dependencies/sayall-macro-platform
           ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false

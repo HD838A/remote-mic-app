@@ -43,6 +43,30 @@ enum MobileVoiceRestartPolicy {
     }
 }
 
+struct HIDPermissionSnapshot: Equatable {
+    let inputMonitoringGranted: Bool
+    let accessibilityGranted: Bool
+
+    static var current: HIDPermissionSnapshot {
+        HIDPermissionSnapshot(
+            inputMonitoringGranted: HIDRemoteMonitor.isInputMonitoringGranted,
+            accessibilityGranted: KeyboardInjector.isAccessibilityTrusted
+        )
+    }
+}
+
+enum HIDPermissionRecoveryPolicy {
+    static func shouldReapplySettings(
+        started: Bool,
+        customMappingEnabled: Bool,
+        previous: HIDPermissionSnapshot?,
+        current: HIDPermissionSnapshot
+    ) -> Bool {
+        guard started, customMappingEnabled, let previous else { return false }
+        return previous != current
+    }
+}
+
 enum MobileVoiceStopDisposition: Equatable {
     case ignoredInactive
     case ignoredAlreadyStopping(cancelledPendingRestart: Bool)
@@ -278,6 +302,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var hidPowerKeySuppressed = false
     private var hidAllowedLocationIDs: Set<UInt32>?
     private var started = false
+    private var appliedHIDPermissionSnapshot: HIDPermissionSnapshot?
     private var terminationObserver: NSObjectProtocol?
     private var completedUpdateHIDRecoveryWorkItem: DispatchWorkItem?
     private let audioPreparationQueue = DispatchQueue(label: "RemoteMic.audioPreparation", qos: .userInitiated)
@@ -701,6 +726,24 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         completedUpdateHIDRecoveryWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    func refreshHIDAfterPermissionChange() {
+        let current = HIDPermissionSnapshot.current
+        guard HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: started,
+            customMappingEnabled: settings.customMappingEnabled,
+            previous: appliedHIDPermissionSnapshot,
+            current: current
+        ) else { return }
+        let previous = appliedHIDPermissionSnapshot
+        AppLogger.shared.write(
+            "HID PERMISSIONS changed " +
+                "input=\(previous?.inputMonitoringGranted ?? false)->\(current.inputMonitoringGranted) " +
+                "accessibility=\(previous?.accessibilityGranted ?? false)->\(current.accessibilityGranted) " +
+                "recovery=apply_settings"
+        )
+        applyHIDSettings()
     }
 
     func reconnect() {
@@ -1214,7 +1257,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func applyHIDSettings() {
-        if started, HIDRemoteMonitor.isInputMonitoringGranted {
+        let permissionSnapshot = HIDPermissionSnapshot.current
+        appliedHIDPermissionSnapshot = permissionSnapshot
+        if started, permissionSnapshot.inputMonitoringGranted {
             preferredInputSourceMonitor.start()
         } else {
             preferredInputSourceMonitor.stop()

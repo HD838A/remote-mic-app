@@ -421,6 +421,67 @@ struct RemoteButtonsTests {
         ) == shortcut)
     }
 
+    @Test func shortcutPresetsAndStandardKeyboardExposeReservedAndUnpressableChoices() throws {
+        let spotlight = KeyboardShortcutPreset.spotlight.shortcut
+        #expect(spotlight.keyCode == 49)
+        #expect(spotlight.modifierFlags == .command)
+
+        let forceQuit = KeyboardShortcutPreset.forceQuit.shortcut
+        #expect(forceQuit.keyCode == 53)
+        #expect(forceQuit.modifierFlags == [.option, .command])
+
+        let allKeys = StandardKeyboardKey.allKeys
+        #expect(Set(allKeys.map(\.id)).count == allKeys.count)
+        #expect(allKeys.contains { $0.keyCode == 122 && $0.keyLabel == "F1" })
+        #expect(allKeys.contains { $0.keyCode == 90 && $0.keyLabel == "F20" })
+        #expect(allKeys.contains { $0.keyCode == 117 && $0.keyLabel == "⌦" })
+        #expect(allKeys.contains { $0.keyCode == 76 && $0.keyLabel == "Enter" })
+        #expect(allKeys.contains { $0.keyCode == 123 && $0.keyLabel == "←" })
+
+        let f20 = try #require(allKeys.first { $0.keyCode == 90 && $0.keyLabel == "F20" })
+        let commandF20 = f20.shortcut(modifierFlags: [.command, .function])
+        #expect(commandF20.modifierFlags == [.command, .function])
+        #expect(commandF20.keyCode == 90)
+    }
+
+    @Test func standaloneLeftAndRightModifiersPreserveSideAndReleaseCleanly() throws {
+        let leftOption = StandaloneKeyboardModifier.leftOption.shortcut
+        let rightOption = StandaloneKeyboardModifier.rightOption.shortcut
+
+        #expect(leftOption.keyCode == 58)
+        #expect(rightOption.keyCode == 61)
+        #expect(leftOption.modifierFlags == .option)
+        #expect(rightOption.modifierFlags == .option)
+        #expect(leftOption.standaloneModifier == .leftOption)
+        #expect(rightOption.standaloneModifier == .rightOption)
+        #expect(try JSONDecoder().decode(
+            CustomKeyboardShortcut.self,
+            from: JSONEncoder().encode(rightOption)
+        ) == rightOption)
+
+        var postedKeys: [(CGKeyCode, CGEventFlags)] = []
+        var postedStates: [(CGKeyCode, Bool, CGEventFlags)] = []
+        #expect(KeyboardInjector.send(
+            .customShortcut,
+            shortcut: rightOption,
+            accessibilityTrusted: { true },
+            keyPoster: { postedKeys.append(($0, $1)) },
+            keyStatePoster: {
+                postedStates.append(($0, $1, $2))
+                return true
+            }
+        ))
+
+        #expect(postedKeys.isEmpty)
+        #expect(postedStates.count == 2)
+        #expect(postedStates[0].0 == 61)
+        #expect(postedStates[0].1)
+        #expect(postedStates[0].2 == .maskAlternate)
+        #expect(postedStates[1].0 == 61)
+        #expect(!postedStates[1].1)
+        #expect(postedStates[1].2.isEmpty)
+    }
+
     @Test func customShortcutPostsRecordedKeyAndRequiresAccessibility() {
         let shortcut = CustomKeyboardShortcut(
             keyCode: 40,
@@ -1879,6 +1940,64 @@ struct RemoteButtonsTests {
         #expect(apply.lowerBound < delayedRestart.lowerBound)
     }
 
+    @Test func HIDPermissionsRecoverWhenAuthorizationChangesAfterLaunch() throws {
+        let denied = HIDPermissionSnapshot(
+            inputMonitoringGranted: true,
+            accessibilityGranted: false
+        )
+        let granted = HIDPermissionSnapshot(
+            inputMonitoringGranted: true,
+            accessibilityGranted: true
+        )
+
+        #expect(HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: true,
+            previous: denied,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: true,
+            previous: granted,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: false,
+            customMappingEnabled: true,
+            previous: denied,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: false,
+            previous: denied,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: true,
+            previous: nil,
+            current: granted
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let activeCallback = try #require(appSource.range(of: "func applicationDidBecomeActive"))
+        let callbackEnd = try #require(appSource.range(
+            of: "func applicationShouldHandleReopen",
+            range: activeCallback.upperBound..<appSource.endIndex
+        ))
+        let callbackSource = appSource[activeCallback.lowerBound..<callbackEnd.lowerBound]
+        #expect(callbackSource.contains("model.refreshHIDAfterPermissionChange()"))
+    }
+
     @Test func customShortcutsPersistAndResetWithBindings() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -2180,6 +2299,8 @@ struct RemoteButtonsTests {
     @Test func nativeEventDescriptorsCoverPotentialDuplicateEvents() {
         #expect(RemoteButton.up.nativeEvent == .keyboard(keyCode: 126))
         #expect(RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36))
+        // Real RC003 hardware emits keyCode 10 (ISO §) for the TV key.
+        #expect(RemoteButton.tv.nativeEvent == .keyboard(keyCode: 10))
         #expect(RemoteButton.power.nativeEvent == .keyboard(keyCode: 90))
         #expect(RemoteButton.menu.nativeEvent == .keyboard(keyCode: KeyboardInjector.contextualMenuKeyCode))
         #expect(RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0))
