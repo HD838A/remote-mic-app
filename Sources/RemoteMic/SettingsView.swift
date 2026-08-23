@@ -7,6 +7,12 @@ import SayAllMacRemoteUI
 import SwiftUI
 import UniformTypeIdentifiers
 
+extension Notification.Name {
+    static let remoteMicSelectSettingsSection = Notification.Name(
+        "RemoteMicSelectSettingsSection"
+    )
+}
+
 enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
     case privateFeature
@@ -275,6 +281,10 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             resumeCustomMappingIfPermissionsGranted()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .remoteMicSelectSettingsSection)) { notification in
+            guard let section = notification.object as? SettingsSection else { return }
+            selectedSection = section
         }
         .onReceive(privateFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
             if !isVisible, selectedSection == .privateFeature {
@@ -1349,12 +1359,11 @@ struct SettingsView: View {
     }
 
     private func remoteDisplayName(_ profile: RemoteDeviceProfile) -> String {
-        let base = localization.text(profile.displayNameFallbackKey)
-        let peers = settings.remoteDeviceProfiles.filter { $0.model == profile.model }
-        guard peers.count > 1,
-              let index = peers.firstIndex(where: { $0.id == profile.id })
-        else { return base }
-        return "\(base) \(index + 1)"
+        ButtonMappingPresentation.remoteDisplayName(
+            profile,
+            among: settings.remoteDeviceProfiles,
+            using: localization
+        )
     }
 
     private func mappingTriggerEditor(
@@ -1993,28 +2002,13 @@ struct SettingsView: View {
 
     private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
         let configured = settings.configuredAction(for: button, trigger: trigger)
-        guard configured.action != .disabled else {
-            return localization.text("button_mapping.action.not_set")
-        }
-        if configured.action == .customShortcut, let shortcut = configured.shortcut {
-            return shortcut.displayName(using: localization)
-        }
-        if configured.action == .openCustomApplication {
-            return settings.customApplicationProfile(id: configured.applicationProfileID)?.displayName
-                ?? localization.text("custom_application.not_configured")
-        }
-        switch configured.action {
-        case .arrowUp: return "↑"
-        case .arrowDown: return "↓"
-        case .arrowLeft: return "←"
-        case .arrowRight: return "→"
-        case .deleteBackward: return "⌫"
-        case .volumeUp: return "+"
-        case .volumeDown: return "−"
-        case .volumeMute: return "Mute"
-        default: break
-        }
-        return configured.action.displayName(using: localization)
+        return ButtonMappingPresentation.actionSummary(
+            configured: configured,
+            customApplicationName: settings.customApplicationProfile(
+                id: configured.applicationProfileID
+            )?.displayName,
+            using: localization
+        )
     }
 
     private var permissionsPage: some View {

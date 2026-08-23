@@ -419,6 +419,11 @@
 "menu.check_for_updates" = "检查更新…";
 "common.action.quit" = "退出";
 "menu.language" = "语言";
+"menu.button_mapping.title" = "按键快捷映射";
+"menu.button_mapping.remote" = "当前遥控器";
+"menu.button_mapping.no_remote" = "当前没有已连接的遥控器";
+"menu.button_mapping.button_format" = "%1$@：%2$@";
+"menu.button_mapping.open_full_editor" = "编辑完整映射…";
 "language.system" = "跟随系统";
 "common.value.unknown" = "未知";
 "app.version_with_build" = "版本 %1$@ (%2$@)";

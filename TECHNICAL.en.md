@@ -111,8 +111,10 @@ This mode only adapts the trigger semantics seen by the target app. The RC003 mu
 
 The app runs as an LSUIElement accessory and has no Dock icon. The status item receives left and right mouse-up events:
 
-- Left-click creates or brings forward a resizable 800×650 settings window.
-- Right-click shows connection, audio, and HID status plus reconnect, settings, logs, language, About, version, update, GitHub, and Quit actions.
+- In normal mode, left-click creates or brings forward the settings window. When both the Dock icon and the launch-time main window are disabled, left-click opens the status menu directly.
+- Right-click always shows connection, audio, and button status plus reconnect, settings, logs, language, About, version, update, GitHub, and Quit actions.
+- **Quick Button Mapping** is generated from current settings and can toggle mapping, select a connected remote, and change single-click actions. Actions are grouped into basic keys, system and media, custom actions, and applications. A custom shortcut or custom app appears only after its detailed configuration exists.
+- Menu changes write directly to the current remote profile and the next button press reads the new value, so the process does not need to restart. Missing Input Monitoring or Accessibility permission opens the Permissions page.
 
 On macOS 26, the settings window uses native `glassEffect`, glass button styles, and scroll-edge effects. On macOS 14/15 it uses standard buttons, system Material panels, and compatible selection states. Both paths share the same functionality and layout and follow the system light/dark appearance, reduced transparency, and increased contrast settings.
 

@@ -419,6 +419,11 @@
 "menu.check_for_updates" = "Check for Updates…";
 "common.action.quit" = "Quit";
 "menu.language" = "Language";
+"menu.button_mapping.title" = "Quick Button Mapping";
+"menu.button_mapping.remote" = "Current Remote";
+"menu.button_mapping.no_remote" = "No Remote Connected";
+"menu.button_mapping.button_format" = "%1$@: %2$@";
+"menu.button_mapping.open_full_editor" = "Edit Full Mapping…";
 "language.system" = "System Default";
 "common.value.unknown" = "Unknown";
 "app.version_with_build" = "Version %1$@ (%2$@)";

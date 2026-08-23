@@ -154,6 +154,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private let connectionItem = NSMenuItem()
     private let audioItem = NSMenuItem()
     private let hidItem = NSMenuItem()
+    private let buttonMappingItem = NSMenuItem()
 
     var activationPolicy: NSApplication.ActivationPolicy {
         SettingsWindowActivationPolicy.value(
@@ -302,7 +303,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        guard menu === statusMenu else { return }
         refreshMenuStatus()
+        refreshButtonMappingMenu()
     }
 
     private func configureStatusItem() {
@@ -331,6 +334,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         statusMenu?.removeItem(connectionItem)
         statusMenu?.removeItem(audioItem)
         statusMenu?.removeItem(hidItem)
+        statusMenu?.removeItem(buttonMappingItem)
 
         let menu = NSMenu()
         menu.delegate = self
@@ -339,6 +343,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(hidItem)
         menu.addItem(.separator())
         menu.addItem(menuItem("connection.action.reconnect", action: #selector(reconnect)))
+        refreshButtonMappingMenu()
+        menu.addItem(buttonMappingItem)
         menu.addItem(menuItem("menu.open_settings", action: #selector(showSettings)))
         menu.addItem(menuItem("menu.show_logs", action: #selector(showLog)))
         menu.addItem(languageMenuItem())
@@ -685,6 +691,29 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         statusItem?.button?.image = statusImage(isStreaming: model.isStreaming)
     }
 
+    private func refreshButtonMappingMenu() {
+        buttonMappingItem.title = localization.text("menu.button_mapping.title")
+        buttonMappingItem.isEnabled = model.settings.isOnboardingComplete
+        buttonMappingItem.submenu = model.settings.isOnboardingComplete
+            ? makeButtonMappingMenu()
+            : nil
+    }
+
+    private func makeButtonMappingMenu() -> NSMenu {
+        StatusBarButtonMappingMenuFactory.makeMenu(
+            settings: model.settings,
+            connectedRemoteProfileIDs: model.connectedRemoteProfileIDs,
+            localization: localization,
+            target: self,
+            actions: StatusBarButtonMappingMenuActions(
+                toggleMapping: #selector(toggleButtonMapping),
+                selectRemoteProfile: #selector(selectRemoteProfileFromStatusMenu(_:)),
+                selectButtonAction: #selector(selectButtonActionFromStatusMenu(_:)),
+                openFullEditor: #selector(showButtonMappingSettings)
+            )
+        )
+    }
+
     private func statusImage(isStreaming: Bool) -> NSImage? {
         let resourceName = isStreaming ? "StatusIconActiveTemplate" : "StatusIconTemplate"
         let fallbackSymbol = isStreaming ? "mic.fill" : "dot.radiowaves.left.and.right"
@@ -703,7 +732,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        if NSApp.currentEvent?.type == .rightMouseUp {
+        if StatusItemClickPolicy.opensMenu(
+            isRightClick: NSApp.currentEvent?.type == .rightMouseUp,
+            showDockIcon: model.settings.showDockIcon,
+            openMainWindowAtLaunch: model.settings.openMainWindowAtLaunch
+        ) {
             showStatusMenu()
         } else {
             showSettings()
@@ -726,7 +759,65 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         showSettingsWindow(initialSection: .connection)
     }
 
+    @objc private func showButtonMappingSettings() {
+        showSettingsWindow(initialSection: .mapping)
+    }
+
+    @objc private func toggleButtonMapping() {
+        setButtonMappingEnabled(!model.settings.customMappingEnabled)
+    }
+
+    @objc private func selectRemoteProfileFromStatusMenu(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let profileID = UUID(uuidString: rawValue),
+              model.connectedRemoteProfileIDs.contains(profileID)
+        else { return }
+        model.selectRemoteProfile(profileID)
+        refreshMenuStatus()
+    }
+
+    @objc private func selectButtonActionFromStatusMenu(_ sender: NSMenuItem) {
+        guard let selection = sender.representedObject as? StatusBarButtonActionSelection else {
+            return
+        }
+        if selection.button == .power,
+           model.settings.experimentalContinuousRecordingEnabled {
+            return
+        }
+
+        selection.apply(to: model.settings)
+        if !model.settings.customMappingEnabled {
+            setButtonMappingEnabled(true)
+        } else {
+            showMappingPermissionsIfNeeded()
+        }
+        AppLogger.shared.write(
+            "STATUS MENU MAPPING button=\(selection.button.rawValue) " +
+                "trigger=\(ButtonTrigger.singleClick.rawValue) action=\(selection.action.rawValue)"
+        )
+        refreshMenuStatus()
+    }
+
+    private func setButtonMappingEnabled(_ enabled: Bool) {
+        model.settings.customMappingEnabled = enabled
+        model.applyHIDSettings()
+        if enabled {
+            showMappingPermissionsIfNeeded()
+        }
+        refreshMenuStatus()
+    }
+
+    private func showMappingPermissionsIfNeeded() {
+        guard MappingPermissionPolicy.requiresPrompt(
+            enabled: model.settings.customMappingEnabled,
+            inputMonitoringGranted: HIDRemoteMonitor.isInputMonitoringGranted,
+            accessibilityGranted: KeyboardInjector.isAccessibilityTrusted
+        ) else { return }
+        showSettingsWindow(initialSection: .permissions)
+    }
+
     private func showSettingsWindow(initialSection: SettingsSection) {
+        let needsNavigation = settingsWindowController != nil
         if settingsWindowController == nil {
             settingsWindowController = makeSettingsWindowController(
                 initialSettingsSection: initialSection
@@ -739,6 +830,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         windowController.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        if needsNavigation {
+            NotificationCenter.default.post(
+                name: .remoteMicSelectSettingsSection,
+                object: initialSection
+            )
+        }
     }
 
     private func makeSettingsWindowController(

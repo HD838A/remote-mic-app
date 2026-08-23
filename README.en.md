@@ -103,10 +103,10 @@ Starting with v1.3.0, official release packages are signed with an Apple Develop
 SayAll appears in the Dock and remains in the menu bar after launch:
 
 - Click the Dock icon to open Settings.
-- Left-click the icon to open Settings.
-- Right-click the icon to show status, reconnect, logs, About, version, update, GitHub, language, and Quit actions.
+- Left-click the icon to open Settings in normal mode, or the menu in menu-bar-only mode.
+- Right-click the icon to show status, Quick Button Mapping, reconnect, logs, About, version, update, GitHub, language, and Quit actions.
 
-SayAll opens its main window by default on ordinary launches. The **About** page at the bottom of the Settings sidebar provides version, update, version history, glossary, GitHub, language, Dock display, and launch controls. Turn off **Open main window at launch** to keep ordinary launches in the menu bar; an update relaunch still opens the main window unconditionally. Turn off **Show app icon in the Dock** to keep SayAll available only from its menu bar entry; the Dock icon can be restored from the same page.
+SayAll opens its main window by default on ordinary launches. The **About** page at the bottom of the Settings sidebar provides version, update, version history, glossary, GitHub, language, Dock display, and launch controls. Turn off **Open main window at launch** to keep ordinary launches in the menu bar; an update relaunch still opens the main window unconditionally. Turn off **Show app icon in the Dock** to keep SayAll available only from its menu bar entry; the Dock icon can be restored from the same page. Turning off both options enables menu-bar-only behavior: left-clicking the status item opens its menu, where **Quick Button Mapping** can enable or disable mapping, select a connected remote, and change each button's single-click action immediately. Double-click, long-press, and custom actions that require captured input remain in the full mapping editor.
 
 **App Language** displays **System Default**, **简体中文**, and **English** together. The settings window, status text, menu, and built-in help follow the selection. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
 
