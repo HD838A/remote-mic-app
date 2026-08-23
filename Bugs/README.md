@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [语音流期间进程 CPU 接近占满单核](./2026-08-24-voice-stream-cpu-saturation.md)
 - [语音结束时最后一个词偶发未识别](./2026-08-24-final-word-tail-loss/DEBUG.md)
 - [设置窗口在失去焦点后被移出屏幕](./2026-08-22-settings-window-hides-on-deactivate.md)
 - [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md)
@@ -62,6 +63,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-24 | [语音流期间进程 CPU 接近占满单核](./2026-08-24-voice-stream-cpu-saturation.md) | 候选修复完成；自动化、项目自检与 Release App 验证通过，等待真实 RC003 性能对照 |
 | 2026-08-24 | [语音结束时最后一个词偶发未识别](./2026-08-24-final-word-tail-loss/DEBUG.md) | 调查中，诊断日志已补充；尚未修复，等待 RC003/豆包标记会话 |
 | 2026-08-22 | [设置窗口在失去焦点后被移出屏幕](./2026-08-22-settings-window-hides-on-deactivate.md) | 第三轮候选修复完成，等待可见 App 验收 |
 | 2026-08-21 | [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md) | 候选修复完成，等待真实 Intel macOS 13 图标与缓存验收 |
