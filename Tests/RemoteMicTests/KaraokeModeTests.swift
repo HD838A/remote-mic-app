@@ -103,6 +103,52 @@ struct KaraokeModeTests {
         ))
     }
 
+    @Test func hostAndPhysicalVoiceStreamsCannotBeConfused() {
+        #expect(ATVVStreamOrigin.resolve(
+            startReason: 0x00,
+            sessionID: 0x00
+        ) == .hostMicrophoneOpen)
+        #expect(ATVVStreamOrigin.resolve(
+            startReason: 0x03,
+            sessionID: 61
+        ) == .remoteHoldToTalk)
+        #expect(ATVVStreamOrigin.resolve(
+            startReason: 0x01,
+            sessionID: 62
+        ) == .remotePressToTalk)
+        #expect(ATVVStreamOrigin.resolve(
+            startReason: 0x00,
+            sessionID: 63
+        ) == .unknown)
+    }
+
+    @Test func continuousModeRetriesWithABoundAndKeepsAliveOnlyConfirmedHostAudio() {
+        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 1) == 1)
+        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 2) == 2)
+        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 3) == 4)
+        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 4) == 5)
+        #expect(KaraokeContinuousSessionPolicy.retryDelay(afterFailureCount: 20) == 5)
+
+        #expect(KaraokeContinuousSessionPolicy.shouldSendKeepalive(
+            modeEnabled: true,
+            usesKaraokeRoute: true,
+            streamOrigin: .hostMicrophoneOpen,
+            hasDecodedAudio: true
+        ))
+        #expect(!KaraokeContinuousSessionPolicy.shouldSendKeepalive(
+            modeEnabled: true,
+            usesKaraokeRoute: true,
+            streamOrigin: .remoteHoldToTalk,
+            hasDecodedAudio: true
+        ))
+        #expect(!KaraokeContinuousSessionPolicy.shouldSendKeepalive(
+            modeEnabled: true,
+            usesKaraokeRoute: true,
+            streamOrigin: .hostMicrophoneOpen,
+            hasDecodedAudio: false
+        ))
+    }
+
     @Test func productionRoutingKeepsTheFeatureOffByDefaultAndIsolatesVirtualAudio() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -122,7 +168,11 @@ struct KaraokeModeTests {
         #expect(!source.contains("voice_double_click"))
         #expect(!source.contains("KaraokeVoiceDoubleClickRecognizer"))
         #expect(source.contains("if event.isSuspending, isKaraokeModeEnabled"))
-        #expect(source.contains("karaokeHostAudioCapability = .manualOnly"))
+        #expect(source.contains("prepareContinuousMicrophoneOpen"))
+        #expect(source.contains("requestMicrophoneExtend"))
+        #expect(source.contains("restoreStandardInteractionMode"))
+        #expect(!source.contains("karaokeHostAudioCapability = .manualOnly"))
+        #expect(!source.contains("karaoke.status.hold_to_sing"))
         #expect(!source.contains("settings.isKaraokeModeEnabled"))
     }
 }

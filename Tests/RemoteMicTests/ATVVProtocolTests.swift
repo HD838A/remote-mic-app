@@ -37,6 +37,18 @@ struct ATVVProtocolTests {
         #expect(ATVVProtocol.microphoneExtend(version: 0x0001, sessionID: 7) == nil)
     }
 
+    @Test func capabilityRequestsCanTemporarilySelectOnRequestInteraction() {
+        #expect(ATVVProtocol.getCapabilitiesV10 == Data([0x0A, 0x01, 0x00, 0x00, 0x03, 0x03]))
+        #expect(
+            ATVVProtocol.getCapabilitiesV10OnRequestOnly ==
+                Data([0x0A, 0x01, 0x00, 0x00, 0x03, 0x00])
+        )
+        #expect(
+            ATVVProtocol.getCapabilitiesV10(interactionModels: 0xFF) ==
+                ATVVProtocol.getCapabilitiesV10
+        )
+    }
+
     @Test func audioRateGateOnlyAccepts16kHz() {
         #expect(ATVVProtocol.supportsAudio(sampleRate: 16_000))
         #expect(!ATVVProtocol.supportsAudio(sampleRate: 8_000))

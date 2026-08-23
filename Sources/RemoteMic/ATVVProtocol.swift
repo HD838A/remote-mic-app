@@ -6,7 +6,18 @@ enum ATVVProtocol {
     static let audioUUID = "AB5E0003-5A21-4F05-BC7D-AF01F617B664"
     static let controlUUID = "AB5E0004-5A21-4F05-BC7D-AF01F617B664"
 
-    static let getCapabilitiesV10 = Data([0x0A, 0x01, 0x00, 0x00, 0x03, 0x03])
+    static let standardInteractionModels: UInt8 = 0x03
+    static let onRequestOnlyInteractionModels: UInt8 = 0x00
+    static let getCapabilitiesV10 = getCapabilitiesV10(
+        interactionModels: standardInteractionModels
+    )
+    static let getCapabilitiesV10OnRequestOnly = getCapabilitiesV10(
+        interactionModels: onRequestOnlyInteractionModels
+    )
+
+    static func getCapabilitiesV10(interactionModels: UInt8) -> Data {
+        Data([0x0A, 0x01, 0x00, 0x00, 0x03, interactionModels & 0x03])
+    }
 
     static func supportsAudio(sampleRate: Double) -> Bool {
         sampleRate == 16_000

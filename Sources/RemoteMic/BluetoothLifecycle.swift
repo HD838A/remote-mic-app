@@ -130,3 +130,36 @@ enum KaraokeRoutingPolicy {
         modeEnabled && targetDeviceIdentifier == streamDeviceIdentifier
     }
 }
+
+enum ATVVStreamOrigin: String, Equatable {
+    case hostMicrophoneOpen = "host_mic_open"
+    case remotePressToTalk = "remote_ptt"
+    case remoteHoldToTalk = "remote_htt"
+    case unknown
+
+    static func resolve(startReason: UInt8, sessionID: UInt8) -> ATVVStreamOrigin {
+        switch (startReason, sessionID) {
+        case (0x00, 0x00): return .hostMicrophoneOpen
+        case (0x01, _): return .remotePressToTalk
+        case (0x03, _): return .remoteHoldToTalk
+        default: return .unknown
+        }
+    }
+}
+
+enum KaraokeContinuousSessionPolicy {
+    static func retryDelay(afterFailureCount failureCount: Int) -> TimeInterval {
+        let exponent = max(0, min(failureCount - 1, 3))
+        return min(5, pow(2, Double(exponent)))
+    }
+
+    static func shouldSendKeepalive(
+        modeEnabled: Bool,
+        usesKaraokeRoute: Bool,
+        streamOrigin: ATVVStreamOrigin,
+        hasDecodedAudio: Bool
+    ) -> Bool {
+        modeEnabled && usesKaraokeRoute &&
+            streamOrigin == .hostMicrophoneOpen && hasDecodedAudio
+    }
+}
