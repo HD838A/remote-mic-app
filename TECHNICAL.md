@@ -122,7 +122,7 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 - 语音 PCM 只存在于进程内存和用户选择的 CoreAudio 输出链路中，不落盘、不上传；
 - 测试音只在内存生成；
 - 持久化内容包括增益、音频设备 UID、自定义映射开关、按键绑定和 macOS 外设 UUID；
-- 日志位于 `~/Library/Logs/RemoteMic/runtime.log`，记录状态和错误，不记录语音内容、蓝牙地址或外设 UUID。
+- 日志位于 `~/Library/Logs/RemoteMic/runtime.log`，每行包含无线麦自身 PID、版本与 Build；单文件达到 10 MiB 后滚动到 `.1`～`.3`，最旧归档只移入 macOS 废纸篓。日志记录状态和错误，不记录语音内容、蓝牙地址、外设 UUID、前台 App 或外部事件来源 PID。
 
 ## 构建与测试
 

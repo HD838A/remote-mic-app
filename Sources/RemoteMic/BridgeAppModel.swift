@@ -177,6 +177,24 @@ enum VoiceSamplePresentationPolicy {
     }
 }
 
+struct AudioRecoveryCoalescingState {
+    private(set) var pendingEventCount = 0
+
+    mutating func recordEvent() {
+        pendingEventCount += 1
+    }
+
+    mutating func consumePendingEventCount() -> Int {
+        let count = pendingEventCount
+        pendingEventCount = 0
+        return count
+    }
+
+    mutating func reset() {
+        pendingEventCount = 0
+    }
+}
+
 struct BluetoothVoiceTailSnapshot: Equatable {
     let sampleCount: Int
     let durationMilliseconds: Int
@@ -388,6 +406,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var observedAudioHardwareAddresses: [AudioObjectPropertyAddress] = []
     private var audioRecoveryWorkItem: DispatchWorkItem?
     private var audioRecoveryGeneration: UInt64 = 0
+    private var audioRecoveryCoalescingState = AudioRecoveryCoalescingState()
     private var virtualAudioReleaseGeneration: UInt64 = 0
     private var pendingVirtualAudioRelease: (generation: UInt64, reason: String)?
     private var systemAudioSuspensionState = SystemAudioSuspensionState()
@@ -692,6 +711,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioRecoveryGeneration &+= 1
         audioRecoveryWorkItem?.cancel()
         audioRecoveryWorkItem = nil
+        audioRecoveryCoalescingState.reset()
         stopObservingAudioHardware()
         cancelTestToneIfNeeded(
             statusMessage: LocalizedMessage("app.status.stopped"),
@@ -1160,7 +1180,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             if result == noErr {
                 observedAudioHardwareAddresses.append(address)
             } else {
-                AppLogger.shared.write("AUDIO RECOVERY listener_failed selector=\(selector) error=\(result)")
+                AppLogger.shared.write(
+                    "AUDIO RECOVERY listener_failed selector=\(selector) " +
+                        AppLogger.errorFields(domain: "os_status", code: Int(result))
+                )
             }
         }
         AppLogger.shared.write("AUDIO ROUTE_MONITOR started properties=\(Self.audioHardwarePropertyNames(for: observedAudioHardwareAddresses))")
@@ -1202,17 +1225,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 )
                 return
             }
+            self.audioRecoveryCoalescingState.recordEvent()
             self.audioRecoveryGeneration &+= 1
             let generation = self.audioRecoveryGeneration
-            let replacedPendingRecovery = self.audioRecoveryWorkItem != nil
             self.audioRecoveryWorkItem?.cancel()
             let work = DispatchWorkItem { [weak self] in
                 guard let self,
                       self.started,
                       self.audioRecoveryGeneration == generation
                 else { return }
+                let coalescedEvents = self.audioRecoveryCoalescingState.consumePendingEventCount()
                 AppLogger.shared.write(
                     "AUDIO RECOVERY begin id=\(generation) reason=\(reason) detail=\(details) " +
+                        "coalesced_events=\(coalescedEvents) " +
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.refreshAudioDevices()
@@ -1225,10 +1250,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             self.audioRecoveryWorkItem = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
-            AppLogger.shared.write(
-                "AUDIO RECOVERY scheduled id=\(generation) reason=\(reason) detail=\(details) " +
-                    "replaced_pending=\(replacedPendingRecovery) state={\(self.audioOutput.diagnosticState())}"
-            )
         }
     }
 
@@ -2545,17 +2566,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
-        cancelVirtualAudioReleaseIfPending(trigger: "superseded_\(reason)", cause: "superseded")
+        guard pendingVirtualAudioRelease == nil else { return }
+        switchDefaultInputToFallbackIfNeeded(reason: reason)
+        let pendingVoiceBufferCount = audioOutput.pendingVoiceBufferCountForDiagnostics
+        guard VirtualAudioConnectionLifecyclePolicy.shouldScheduleRelease(
+            hasPendingRelease: pendingVirtualAudioRelease != nil,
+            hasAllocatedOutputResources: audioOutput.hasAllocatedOutputResources,
+            pendingVoiceBufferCount: pendingVoiceBufferCount
+        ) else {
+            isAudioOutputReady = false
+            testToneStatus = LocalizedMessage("audio.output.none_or_unavailable")
+            return
+        }
         virtualAudioReleaseGeneration &+= 1
         let generation = virtualAudioReleaseGeneration
         pendingVirtualAudioRelease = (generation, reason)
         AppLogger.shared.write(
             "AUDIO RELEASE requested reason=\(reason) generation=\(generation) " +
                 "system_suspended=\(systemAudioSuspensionState.isSuspended) " +
-                "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics) " +
+                "pending_buffers=\(pendingVoiceBufferCount) " +
                 "state={\(audioOutput.diagnosticState())}"
         )
-        switchDefaultInputToFallbackIfNeeded(reason: reason)
         audioOutput.endSessionAfterDraining { [weak self] in
             guard let self else { return }
             guard self.virtualAudioReleaseGeneration == generation else {
@@ -2617,7 +2648,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard result == noErr else {
             AppLogger.shared.write(
                 "AUDIO DEFAULT_INPUT fallback_failed reason=\(reason) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(fallback))} error=\(result)"
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(fallback))} " +
+                    AppLogger.errorFields(domain: "os_status", code: Int(result))
             )
             return
         }
@@ -2662,7 +2694,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         } else {
             AppLogger.shared.write(
                 "AUDIO DEFAULT_INPUT restore_failed reason=\(reason) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(virtualInput))} error=\(result)"
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(virtualInput))} " +
+                    AppLogger.errorFields(domain: "os_status", code: Int(result))
             )
         }
     }
