@@ -421,6 +421,67 @@ struct RemoteButtonsTests {
         ) == shortcut)
     }
 
+    @Test func shortcutPresetsAndStandardKeyboardExposeReservedAndUnpressableChoices() throws {
+        let spotlight = KeyboardShortcutPreset.spotlight.shortcut
+        #expect(spotlight.keyCode == 49)
+        #expect(spotlight.modifierFlags == .command)
+
+        let forceQuit = KeyboardShortcutPreset.forceQuit.shortcut
+        #expect(forceQuit.keyCode == 53)
+        #expect(forceQuit.modifierFlags == [.option, .command])
+
+        let allKeys = StandardKeyboardKey.allKeys
+        #expect(Set(allKeys.map(\.id)).count == allKeys.count)
+        #expect(allKeys.contains { $0.keyCode == 122 && $0.keyLabel == "F1" })
+        #expect(allKeys.contains { $0.keyCode == 90 && $0.keyLabel == "F20" })
+        #expect(allKeys.contains { $0.keyCode == 117 && $0.keyLabel == "⌦" })
+        #expect(allKeys.contains { $0.keyCode == 76 && $0.keyLabel == "Enter" })
+        #expect(allKeys.contains { $0.keyCode == 123 && $0.keyLabel == "←" })
+
+        let f20 = try #require(allKeys.first { $0.keyCode == 90 && $0.keyLabel == "F20" })
+        let commandF20 = f20.shortcut(modifierFlags: [.command, .function])
+        #expect(commandF20.modifierFlags == [.command, .function])
+        #expect(commandF20.keyCode == 90)
+    }
+
+    @Test func standaloneLeftAndRightModifiersPreserveSideAndReleaseCleanly() throws {
+        let leftOption = StandaloneKeyboardModifier.leftOption.shortcut
+        let rightOption = StandaloneKeyboardModifier.rightOption.shortcut
+
+        #expect(leftOption.keyCode == 58)
+        #expect(rightOption.keyCode == 61)
+        #expect(leftOption.modifierFlags == .option)
+        #expect(rightOption.modifierFlags == .option)
+        #expect(leftOption.standaloneModifier == .leftOption)
+        #expect(rightOption.standaloneModifier == .rightOption)
+        #expect(try JSONDecoder().decode(
+            CustomKeyboardShortcut.self,
+            from: JSONEncoder().encode(rightOption)
+        ) == rightOption)
+
+        var postedKeys: [(CGKeyCode, CGEventFlags)] = []
+        var postedStates: [(CGKeyCode, Bool, CGEventFlags)] = []
+        #expect(KeyboardInjector.send(
+            .customShortcut,
+            shortcut: rightOption,
+            accessibilityTrusted: { true },
+            keyPoster: { postedKeys.append(($0, $1)) },
+            keyStatePoster: {
+                postedStates.append(($0, $1, $2))
+                return true
+            }
+        ))
+
+        #expect(postedKeys.isEmpty)
+        #expect(postedStates.count == 2)
+        #expect(postedStates[0].0 == 61)
+        #expect(postedStates[0].1)
+        #expect(postedStates[0].2 == .maskAlternate)
+        #expect(postedStates[1].0 == 61)
+        #expect(!postedStates[1].1)
+        #expect(postedStates[1].2.isEmpty)
+    }
+
     @Test func customShortcutPostsRecordedKeyAndRequiresAccessibility() {
         let shortcut = CustomKeyboardShortcut(
             keyCode: 40,

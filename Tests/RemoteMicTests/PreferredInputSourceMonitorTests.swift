@@ -18,6 +18,14 @@ struct PreferredInputSourceMonitorTests {
         #expect(source.contains("if started, permissionSnapshot.inputMonitoringGranted"))
         #expect(source.contains("preferredInputSourceMonitor.start()"))
         #expect(source.contains("preferredInputSourceMonitor.stop()"))
+
+        let switcherSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/PreferredInputSourceMonitor.swift"),
+            encoding: .utf8
+        )
+        #expect(switcherSource.contains(
+            "OnboardingInputSourceSwitcher.prepareForVoiceSession"
+        ))
     }
 
     @Test func functionKeyDownPreparesTheRememberedInputMethodOncePerPress() {
@@ -30,6 +38,8 @@ struct PreferredInputSourceMonitorTests {
                 preparedTools.append(tool)
                 return .selected
             },
+            currentInputSourceID: { nil },
+            restoreInputSource: { _ in .selected },
             installMonitor: { callback in
                 handler = callback
                 return "monitor"
@@ -57,6 +67,8 @@ struct PreferredInputSourceMonitorTests {
                 preparationCount += 1
                 return .selected
             },
+            currentInputSourceID: { nil },
+            restoreInputSource: { _ in .selected },
             installMonitor: { _ in "monitor" },
             removeMonitor: { _ in },
             logger: { _ in }
@@ -80,6 +92,8 @@ struct PreferredInputSourceMonitorTests {
                 preparationCount += 1
                 return .failed
             },
+            currentInputSourceID: { nil },
+            restoreInputSource: { _ in .selected },
             installMonitor: { callback in
                 handler = callback
                 return "monitor"
@@ -97,5 +111,124 @@ struct PreferredInputSourceMonitorTests {
 
         #expect(removedTokens == ["monitor"])
         #expect(preparationCount == 2)
+    }
+
+    @Test func restoresTheInputSourceOwnedByTheVoiceSession() {
+        var handler: ((Bool) -> Void)?
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoredInputSourceIDs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .weixin },
+            prepareInputSource: { _ in
+                currentInputSourceID = "com.tencent.inputmethod.wetype.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            installMonitor: { callback in
+                handler = callback
+                return "monitor"
+            },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        monitor.start()
+        handler?(true)
+        handler?(false)
+
+        #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
+        #expect(currentInputSourceID == "com.apple.keylayout.ABC")
+    }
+
+    @Test func doesNotOverrideAnInputSourceChosenDuringVoiceSession() {
+        var handler: ((Bool) -> Void)?
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoreCount = 0
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                currentInputSourceID = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { _ in
+                restoreCount += 1
+                return .selected
+            },
+            installMonitor: { callback in
+                handler = callback
+                return "monitor"
+            },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        monitor.start()
+        handler?(true)
+        currentInputSourceID = "com.apple.keylayout.US"
+        handler?(false)
+
+        #expect(restoreCount == 0)
+        #expect(currentInputSourceID == "com.apple.keylayout.US")
+    }
+
+    @Test func restoresWhenTheMonitorStopsWhileVoiceInputIsPressed() {
+        var handler: ((Bool) -> Void)?
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoreCount = 0
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .weixin },
+            prepareInputSource: { _ in
+                currentInputSourceID = "com.tencent.inputmethod.wetype.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoreCount += 1
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            installMonitor: { callback in
+                handler = callback
+                return "monitor"
+            },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        monitor.start()
+        handler?(true)
+        monitor.stop()
+
+        #expect(restoreCount == 1)
+        #expect(currentInputSourceID == "com.apple.keylayout.ABC")
+    }
+
+    @Test func doesNotPrepareAnAlreadySelectedInputSource() {
+        var preparationCount = 0
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                preparationCount += 1
+                return .failed
+            },
+            currentInputSourceID: {
+                "com.bytedance.inputmethod.doubaoime.pinyin"
+            },
+            restoreInputSource: { _ in .selected },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        monitor.handleFunctionKeyPressed(true)
+        monitor.handleFunctionKeyPressed(false)
+
+        #expect(preparationCount == 0)
     }
 }

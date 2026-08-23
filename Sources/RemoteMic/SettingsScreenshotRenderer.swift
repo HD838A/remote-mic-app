@@ -45,6 +45,12 @@ enum SettingsScreenshotRenderer {
         let size = try screenshotSize(from: sizeValue)
         let appearance = try screenshotAppearance(from: appearanceName)
         let language = try screenshotLanguage(from: languageName)
+        let opensShortcutEditor = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"
+        ] == "1"
+        let showsStandardKeyboard = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
+        ] == "keyboard"
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -59,6 +65,15 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        if opensShortcutEditor {
+            settings.customMappingEnabled = true
+            settings.setAction(.customShortcut, for: .ok, trigger: .singleClick)
+            settings.setShortcut(
+                KeyboardShortcutPreset.spotlight.shortcut,
+                for: .ok,
+                trigger: .singleClick
+            )
+        }
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
         let localization = LocalizationStore(settings: settings)
@@ -78,6 +93,10 @@ enum SettingsScreenshotRenderer {
                 initialShareSection: section == .statistics || section == .about
                     ? section
                     : nil,
+                initialMappingEditingButton: section == .mapping && opensShortcutEditor
+                    ? .ok
+                    : nil,
+                initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 minimumContentSize: .zero
             )
             .environmentObject(localization)
