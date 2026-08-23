@@ -153,7 +153,7 @@ struct OnboardingView: View {
                 voiceSessionEnded = true
             }
         }
-        .onReceive(model.$currentVoiceSampleCount) { sampleCount in
+        .onReceive(model.voiceSampleCountPublisher) { sampleCount in
             guard settings.onboardingStep == .voiceTest,
                   sampleCount > 0,
                   selectedControlAcceptsVoice(model.activeVoiceSource) else { return }

@@ -797,8 +797,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
               window === settingsWindowController?.window
         else { return }
         isSettingsWindowOpen = false
-        settingsWindowController = nil
+        releaseSettingsWindowController()
         updateDockActivationPolicy()
+    }
+
+    private func releaseSettingsWindowController() {
+        settingsWindowController?.window?.contentViewController = nil
+        settingsWindowController = nil
     }
 
     @objc private func showLog() {
@@ -966,7 +971,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         } else {
             isLiteModeActive = true
             settingsWindowController?.window?.close()
-            settingsWindowController = nil
+            releaseSettingsWindowController()
             updateDockActivationPolicy()
         }
     }

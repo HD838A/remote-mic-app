@@ -193,7 +193,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
     @Published private(set) var isAudioOutputReady = false
-    @Published private(set) var currentVoiceSampleCount: UInt64 = 0
+    private(set) var currentVoiceSampleCount: UInt64 = 0 {
+        didSet { voiceSampleCountPublisher.send(currentVoiceSampleCount) }
+    }
+    let voiceSampleCountPublisher = PassthroughSubject<UInt64, Never>()
     @Published private(set) var activeVoiceSource: UsageEventSource?
     @Published private(set) var lastMobileRemoteButtonObservation: MobileRemoteButtonObservation?
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
