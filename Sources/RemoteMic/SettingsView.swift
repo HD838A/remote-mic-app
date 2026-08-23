@@ -166,6 +166,7 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
     @ObservedObject private var macroFeature: MacroFeatureIntegration
+    @ObservedObject private var loginItemService: LoginItemService
     @ObservedObject private var updateInformation: UpdateInformationStore
     @EnvironmentObject private var localization: LocalizationStore
 
@@ -226,6 +227,7 @@ struct SettingsView: View {
         settings = model.settings
         privateFeature = model.privateFeature
         macroFeature = model.macroFeature
+        loginItemService = model.loginItemService
         self.updateInformation = updateInformation
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
@@ -253,6 +255,7 @@ struct SettingsView: View {
         )
         .onAppear {
             refreshPermissionStates()
+            loginItemService.refresh()
             macroFeature.setEditorActive(selectedSection == .macros)
         }
         .onChange(of: selectedSection) { section in
@@ -263,6 +266,7 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
+            loginItemService.refresh()
             resumeCustomMappingIfPermissionsGranted()
         }
         .onReceive(privateFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
@@ -2530,6 +2534,52 @@ struct SettingsView: View {
                                 ))
                                 .labelsHidden()
                                 .toggleStyle(.switch)
+                            }
+                            .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "rectangle.portrait.and.arrow.forward")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("about.preferences.launch_at_login")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.launch_at_login_help")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if loginItemService.requiresApproval {
+                                        Text("about.preferences.launch_at_login_requires_approval")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.orange)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    } else if loginItemService.didFailToUpdate {
+                                        Text("about.preferences.launch_at_login_update_failed")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.red)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                Spacer(minLength: 16)
+                                VStack(alignment: .trailing, spacing: 8) {
+                                    Toggle("", isOn: Binding(
+                                        get: { loginItemService.isEnabled },
+                                        set: { loginItemService.setEnabled($0) }
+                                    ))
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+
+                                    if loginItemService.requiresApproval {
+                                        Button(
+                                            "about.preferences.launch_at_login_open_system_settings",
+                                            action: loginItemService.openLoginItemsSettings
+                                        )
+                                        .compatibilityButtonStyle(.standard)
+                                    }
+                                }
                             }
                             .padding(.vertical, 10)
 

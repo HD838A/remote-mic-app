@@ -469,6 +469,11 @@
 "about.version.history_load_failed" = "无法加载版本历史。";
 "about.preferences.open_main_window_at_launch" = "启动时自动打开主面板";
 "about.preferences.open_main_window_help" = "关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。";
+"about.preferences.launch_at_login" = "登录时自动启动";
+"about.preferences.launch_at_login_help" = "登录此 Mac 后自动启动无线麦。默认关闭。";
+"about.preferences.launch_at_login_requires_approval" = "macOS 需要你的允许，才能在登录时自动启动无线麦。";
+"about.preferences.launch_at_login_update_failed" = "无法更新登录项，请重试。";
+"about.preferences.launch_at_login_open_system_settings" = "打开登录项设置";
 "about.preferences.language_description" = "选择应用界面语言。";
 "update.completed.title" = "无线麦已更新";
 "update.completed.message" = "已成功更新到版本 %1$@。";

@@ -469,6 +469,11 @@
 "about.version.history_load_failed" = "Version history could not be loaded.";
 "about.preferences.open_main_window_at_launch" = "Open main window at launch";
 "about.preferences.open_main_window_help" = "When disabled, ordinary launches stay in the menu bar; the main window still appears after an update.";
+"about.preferences.launch_at_login" = "Launch at login";
+"about.preferences.launch_at_login_help" = "Start SayAll automatically after you sign in to this Mac. Disabled by default.";
+"about.preferences.launch_at_login_requires_approval" = "macOS needs your approval before SayAll can launch at login.";
+"about.preferences.launch_at_login_update_failed" = "Couldn’t update the login item. Try again.";
+"about.preferences.launch_at_login_open_system_settings" = "Open Login Items Settings";
 "about.preferences.language_description" = "Choose the app interface language.";
 "update.completed.title" = "SayAll Updated";
 "update.completed.message" = "Successfully updated to version %1$@.";
