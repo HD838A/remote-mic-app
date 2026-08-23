@@ -53,7 +53,7 @@ Onboarding 为验证“当前语音会话是否收到过任意样本”引入了
 ## Validation
 
 - `swift test --filter 'OnboardingFlowTests|ATVVProtocolTests|BluetoothVoiceTailDiagnosticsTests'`：通过，42 个测试、0 失败。
-- `swift test`：通过，341 个测试、0 失败。
+- `swift test`：同步最新 `main` 后通过，344 个测试、0 失败。
 - `./scripts/test.sh`：通过，42 项、0 失败。
 - `./scripts/build-app.sh`：Apple Silicon Release App 构建通过。
 - `./scripts/verify-app.sh dist/SayAll.app`：App 结构、资源与签名自检通过。
