@@ -104,12 +104,41 @@ enum RemoteMicApp {
             }
             return
         }
+        let bundleIdentifier = Bundle.main.bundleIdentifier
+            ?? ApplicationInstanceGuard.fallbackBundleIdentifier
+        var instanceLock: ApplicationInstanceLock?
+        if let lockURL = ApplicationInstanceGuard.defaultLockURL() {
+            switch ApplicationInstanceLock.acquire(at: lockURL) {
+            case let .acquired(lock):
+                instanceLock = lock
+            case .alreadyLocked:
+                ApplicationInstanceGuard.existingApplication(
+                    bundleIdentifier: bundleIdentifier
+                )?.activate(options: [.activateAllWindows])
+                return
+            case let .failed(reason):
+                fputs("Single-instance lock unavailable: \(reason)\n", stderr)
+            }
+        } else {
+            fputs("Single-instance lock unavailable: application_support_missing\n", stderr)
+        }
+
+        if let existingApplication = ApplicationInstanceGuard.existingApplication(
+            bundleIdentifier: bundleIdentifier,
+            requiresFinishedLaunch: true
+        ) {
+            existingApplication.activate(options: [.activateAllWindows])
+            return
+        }
+
         let application = NSApplication.shared
         let delegate = RemoteMicAppDelegate()
         application.delegate = delegate
         application.setActivationPolicy(delegate.activationPolicy)
-        withExtendedLifetime(delegate) {
-            application.run()
+        withExtendedLifetime(instanceLock) {
+            withExtendedLifetime(delegate) {
+                application.run()
+            }
         }
     }
 }
@@ -777,6 +806,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 1020, height: 772)
+        window.setContentSize(NSSize(width: 1020, height: 772))
         window.setFrameAutosaveName("RemoteMicSettings")
         window.center()
         return NSWindowController(window: window)

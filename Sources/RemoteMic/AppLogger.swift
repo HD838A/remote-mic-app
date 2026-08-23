@@ -5,7 +5,11 @@ final class AppLogger {
 
     let logURL: URL
     private let queue = DispatchQueue(label: "RemoteMic.logger")
-    private let formatter = ISO8601DateFormatter()
+    private let formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     private init() {
         let base = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]

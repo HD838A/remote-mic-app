@@ -21,6 +21,10 @@ final class PreferredInputSourceMonitor {
     private var functionKeyIsPressed = false
     private var managedInputSourceSession: ManagedInputSourceSession?
 
+    var functionKeyIsPressedForDiagnostics: Bool {
+        functionKeyIsPressed
+    }
+
     private struct ManagedInputSourceSession {
         let previousInputSourceID: String
         let targetInputSourceID: String
@@ -67,12 +71,18 @@ final class PreferredInputSourceMonitor {
     func handleFunctionKeyPressed(_ pressed: Bool) {
         guard pressed != functionKeyIsPressed else { return }
         functionKeyIsPressed = pressed
+        let selectedVoiceTool = voiceTool()
+        if selectedVoiceTool.preferredInputSourceID != nil || managedInputSourceSession != nil {
+            logger(
+                "VOICE INPUT function_key edge=\(pressed ? "down" : "up") " +
+                    "tool=\(selectedVoiceTool.rawValue)"
+            )
+        }
         if !pressed {
             finishManagedInputSourceSession(reason: "function_key_up")
             return
         }
 
-        let selectedVoiceTool = voiceTool()
         guard let targetInputSourceID = selectedVoiceTool.preferredInputSourceID else { return }
         let previousInputSourceID = currentInputSourceID()
         if previousInputSourceID == targetInputSourceID {

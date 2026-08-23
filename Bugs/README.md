@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [语音结束时最后一个词偶发未识别](./2026-08-24-final-word-tail-loss/DEBUG.md)
 - [设置窗口在失去焦点后被移出屏幕](./2026-08-22-settings-window-hides-on-deactivate.md)
 - [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md)
 - [预览发布身份校验缺少 GH_TOKEN](./2026-08-21-release-identity-missing-gh-token.md)
@@ -61,6 +62,8 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-24 | [不同版本的无线麦可同时运行](./2026-08-24-duplicate-app-instances.md) | 修复完成，等待双版本、登录项与 Sparkle 更新真实验收 |
+| 2026-08-24 | [语音结束时最后一个词偶发未识别](./2026-08-24-final-word-tail-loss/DEBUG.md) | 调查中，诊断日志已补充；尚未修复，等待 RC003/豆包标记会话 |
 | 2026-08-22 | [设置窗口在失去焦点后被移出屏幕](./2026-08-22-settings-window-hides-on-deactivate.md) | 第三轮候选修复完成，等待可见 App 验收 |
 | 2026-08-21 | [Intel macOS 13 将 SayAll App 图标显示为完整正方形](./2026-08-21-intel-macos13-square-app-icon.md) | 候选修复完成，等待真实 Intel macOS 13 图标与缓存验收 |
 | 2026-08-20 | [HID 遥控器被其他输入工具占用时 Onboarding 无法继续](./2026-08-20-hid-exclusive-access-input-tools.md) | 候选修复完成，等待 Karabiner-Elements 与其他 HID 工具真机验收 |
