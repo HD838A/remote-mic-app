@@ -2,9 +2,6 @@ import Darwin
 import Foundation
 import OSLog
 
-@_silgen_name("flock")
-private func appLoggerFlock(_ fileDescriptor: Int32, _ operation: Int32) -> Int32
-
 final class AppLogger {
     struct Metadata: Equatable {
         let processID: Int32
@@ -250,14 +247,14 @@ final class AppLogger {
         }
         defer { _ = Darwin.close(descriptor) }
 
-        while appLoggerFlock(descriptor, LOCK_EX) != 0 {
+        while flock(descriptor, LOCK_EX) != 0 {
             let errorCode = errno
             if errorCode == EINTR { continue }
             diagnosePOSIX("lock_acquire_failed", code: errorCode)
             return
         }
         defer {
-            if appLoggerFlock(descriptor, LOCK_UN) != 0 {
+            if flock(descriptor, LOCK_UN) != 0 {
                 diagnosePOSIX("lock_release_failed", code: errno)
             }
         }
