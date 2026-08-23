@@ -758,9 +758,19 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             resetPeripheral()
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.off"))
         case .unauthorized:
+            applyCentralRecovery(
+                .unauthorized,
+                central: central,
+                generation: generation
+            )
             resetSession()
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.permission_denied"))
         case .unsupported:
+            applyCentralRecovery(
+                .unsupported,
+                central: central,
+                generation: generation
+            )
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.unsupported"))
         case .resetting:
             applyCentralRecovery(
@@ -793,6 +803,15 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             reconnectWorkItem = nil
         }
         lifecycle = transition.phase
+        if transition.shouldReleaseCentral {
+            resetPeripheral()
+            central.stopScan()
+            central.delegate = nil
+            self.central = nil
+            centralGeneration = nil
+            lifecycle = .stopped
+            return
+        }
         if transition.shouldStartFreshConnectionCycle {
             startFreshConnectionCycle()
             return

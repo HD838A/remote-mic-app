@@ -53,7 +53,7 @@
 - 缓存直连的首次连接或初始化失败后，只在当前进程内禁止再次通过 `retrievePeripherals` 主动探测；bridge 转入现有扫描路径，并继续只接受原目标 UUID。
 - 不删除或改写持久 profile、蓝牙 identifier、HID fingerprint 和按键映射。App 启动、停止、用户点击“立即重新连接”以及设备真正 Ready 时重置退避；手动操作仍可立即重新允许一次缓存探测。
 - 自动 timeout、connect failure、初始化 failure 和 disconnect 都通过同一策略计算下一次延迟；预先计算的取消延迟在 CoreBluetooth 回调中复用，不重复累计失败次数。
-- 自动退避期间临时保留当前 `CBCentralManager` 观察系统蓝牙状态，但清除旧 peripheral 和 delegate；蓝牙断电、resetting 或直接恢复 powered-on 时会取消已捕获的 48/60 秒延迟。计时到期或 powered-on 恢复后先 detach 旧 manager，再用新 generation 和新 manager 恢复扫描，避免异步 cancel 的旧回调误伤新 attempt。
+- 自动退避期间临时保留当前 `CBCentralManager` 观察系统蓝牙状态，但清除旧 peripheral 和 delegate；蓝牙断电、resetting 或直接恢复 powered-on 时会取消已捕获的 48/60 秒延迟。计时到期或 powered-on 恢复后先 detach 旧 manager，再用新 generation 和新 manager 恢复扫描，避免异步 cancel 的旧回调误伤新 attempt。bridge 已停止或蓝牙进入 unauthorized/unsupported 时则取消 timer 并释放 manager，不让旧观察者阻塞后续启动或继续无效重连。
 - 日志记录失败次数、实际延迟和是否绕过缓存，但不记录设备 UUID。
 
 ## 验证
@@ -61,10 +61,10 @@
 已执行：
 
 - `swift test --filter BluetoothLifecycleTests`
-  - 12 项通过；覆盖退避序列、60 秒上限、确定性抖动、缓存绕过、reset 后从第一级重新开始，`waitingReconnect → poweredOff/resetting → poweredOn → fresh cycle` 会取消旧延迟，以及新 generation 拒绝旧 attempt 回调。
+  - 14 项通过；覆盖退避序列、60 秒上限、确定性抖动、缓存绕过、reset 后从第一级重新开始，`waitingReconnect → poweredOff/resetting → poweredOn → fresh cycle` 会取消旧延迟，新 generation 拒绝旧 attempt 回调，以及 stopped / unauthorized / unsupported 会释放保留的 manager。
 - 设置 `REMOTE_MIC_HARDWARE_SIMULATION_PATH` 后执行 `swift test --filter HardwareSimulationIntegrationTests`
   - 21 项通过；RC001 / RC003 生产协议、首段语音、停止、双设备 generation 隔离和 HID 基线保持正常。
-- `swift test`：同步最新 `main` 后 350 项通过。
+- `swift test`：同步最新 `main` 后 352 项通过。
 - `./scripts/test.sh`：42 项通过。
 - `./scripts/build-app.sh`：Apple Silicon Release App 构建通过。
 - `./scripts/verify-app.sh dist/SayAll.app`：App 结构、资源与签名自检通过。

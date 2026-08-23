@@ -130,6 +130,8 @@ enum BluetoothCentralRecoveryEvent {
     case poweredOn
     case poweredOff
     case resetting
+    case unauthorized
+    case unsupported
 }
 
 struct BluetoothCentralRecoveryTransition: Equatable {
@@ -137,6 +139,7 @@ struct BluetoothCentralRecoveryTransition: Equatable {
     let shouldCancelScheduledReconnect: Bool
     let shouldDiscover: Bool
     let shouldStartFreshConnectionCycle: Bool
+    let shouldReleaseCentral: Bool
 }
 
 enum BluetoothCentralRecoveryPolicy {
@@ -148,21 +151,49 @@ enum BluetoothCentralRecoveryPolicy {
     ) -> BluetoothCentralRecoveryTransition {
         switch event {
         case .poweredOff, .resetting:
+            guard shouldRun else {
+                return BluetoothCentralRecoveryTransition(
+                    phase: .stopped,
+                    shouldCancelScheduledReconnect: true,
+                    shouldDiscover: false,
+                    shouldStartFreshConnectionCycle: false,
+                    shouldReleaseCentral: true
+                )
+            }
             return BluetoothCentralRecoveryTransition(
                 phase: .waitingBluetoothPower(generation),
                 shouldCancelScheduledReconnect: true,
                 shouldDiscover: false,
-                shouldStartFreshConnectionCycle: false
+                shouldStartFreshConnectionCycle: false,
+                shouldReleaseCentral: false
             )
         case .poweredOn:
+            guard shouldRun else {
+                return BluetoothCentralRecoveryTransition(
+                    phase: .stopped,
+                    shouldCancelScheduledReconnect: true,
+                    shouldDiscover: false,
+                    shouldStartFreshConnectionCycle: false,
+                    shouldReleaseCentral: true
+                )
+            }
             let requiresFreshConnectionCycle = phase == .waitingReconnect(generation) ||
                 phase == .waitingBluetoothPower(generation)
             return BluetoothCentralRecoveryTransition(
                 phase: requiresFreshConnectionCycle ? .stopped : phase,
                 shouldCancelScheduledReconnect: requiresFreshConnectionCycle,
-                shouldDiscover: shouldRun && !requiresFreshConnectionCycle &&
+                shouldDiscover: !requiresFreshConnectionCycle &&
                     phase == .scanning(generation),
-                shouldStartFreshConnectionCycle: shouldRun && requiresFreshConnectionCycle
+                shouldStartFreshConnectionCycle: requiresFreshConnectionCycle,
+                shouldReleaseCentral: false
+            )
+        case .unauthorized, .unsupported:
+            return BluetoothCentralRecoveryTransition(
+                phase: .stopped,
+                shouldCancelScheduledReconnect: true,
+                shouldDiscover: false,
+                shouldStartFreshConnectionCycle: false,
+                shouldReleaseCentral: true
             )
         }
     }

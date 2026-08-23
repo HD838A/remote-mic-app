@@ -133,7 +133,8 @@ struct BluetoothLifecycleTests {
             phase: .waitingBluetoothPower(generation),
             shouldCancelScheduledReconnect: true,
             shouldDiscover: false,
-            shouldStartFreshConnectionCycle: false
+            shouldStartFreshConnectionCycle: false,
+            shouldReleaseCentral: false
         ))
 
         let poweredOn = BluetoothCentralRecoveryPolicy.transition(
@@ -147,7 +148,8 @@ struct BluetoothLifecycleTests {
             phase: .stopped,
             shouldCancelScheduledReconnect: true,
             shouldDiscover: false,
-            shouldStartFreshConnectionCycle: true
+            shouldStartFreshConnectionCycle: true,
+            shouldReleaseCentral: false
         ))
     }
 
@@ -170,14 +172,58 @@ struct BluetoothLifecycleTests {
             phase: .waitingBluetoothPower(generation),
             shouldCancelScheduledReconnect: true,
             shouldDiscover: false,
-            shouldStartFreshConnectionCycle: false
+            shouldStartFreshConnectionCycle: false,
+            shouldReleaseCentral: false
         ))
         #expect(poweredOn == BluetoothCentralRecoveryTransition(
             phase: .stopped,
             shouldCancelScheduledReconnect: true,
             shouldDiscover: false,
-            shouldStartFreshConnectionCycle: true
+            shouldStartFreshConnectionCycle: true,
+            shouldReleaseCentral: false
         ))
+    }
+
+    @Test func stoppedBridgeReleasesTheRetainedManagerAcrossPowerChanges() {
+        let generation: UInt64 = 10
+
+        for event in [BluetoothCentralRecoveryEvent.poweredOff, .resetting, .poweredOn] {
+            let transition = BluetoothCentralRecoveryPolicy.transition(
+                from: .disconnecting(generation),
+                generation: generation,
+                event: event,
+                shouldRun: false
+            )
+
+            #expect(transition == BluetoothCentralRecoveryTransition(
+                phase: .stopped,
+                shouldCancelScheduledReconnect: true,
+                shouldDiscover: false,
+                shouldStartFreshConnectionCycle: false,
+                shouldReleaseCentral: true
+            ))
+        }
+    }
+
+    @Test func unavailableBluetoothCancelsAWaitingReconnectAndReleasesTheManager() {
+        let generation: UInt64 = 12
+
+        for event in [BluetoothCentralRecoveryEvent.unauthorized, .unsupported] {
+            let transition = BluetoothCentralRecoveryPolicy.transition(
+                from: .waitingReconnect(generation),
+                generation: generation,
+                event: event,
+                shouldRun: true
+            )
+
+            #expect(transition == BluetoothCentralRecoveryTransition(
+                phase: .stopped,
+                shouldCancelScheduledReconnect: true,
+                shouldDiscover: false,
+                shouldStartFreshConnectionCycle: false,
+                shouldReleaseCentral: true
+            ))
+        }
     }
 
     @Test func freshCycleBoundaryRejectsCallbacksFromTheFinishedAttempt() {
