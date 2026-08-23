@@ -122,6 +122,8 @@ final class XiaomiBluetoothBridge: NSObject {
     private var capabilitiesRequested = false
     private var capabilitiesConfirmed = false
     private var requestedReconnectDelay: TimeInterval?
+    private var reconnectPolicy = BluetoothReconnectPolicy()
+    private var currentAttemptUsesCachedTarget = false
     private var generationCounter: UInt64 = 0
     private var lifecycle: BluetoothLifecyclePhase = .stopped
     private var shouldRun = false
@@ -172,12 +174,14 @@ final class XiaomiBluetoothBridge: NSObject {
     func start() {
         shouldRun = true
         reconnectWorkItem?.cancel()
+        reconnectPolicy.reset()
         beginConnectionCycle()
     }
 
     func stop() {
         shouldRun = false
         reconnectWorkItem?.cancel()
+        reconnectPolicy.reset()
         central?.stopScan()
         closeMicrophoneIfNeeded()
         if let central, let peripheral, peripheral.state != .disconnected {
@@ -194,6 +198,7 @@ final class XiaomiBluetoothBridge: NSObject {
     func reconnectNow() {
         guard shouldRun else { return }
         reconnectWorkItem?.cancel()
+        reconnectPolicy.reset()
         central?.stopScan()
         if let central, let peripheral, peripheral.state != .disconnected {
             requestedReconnectDelay = 0.1
@@ -294,9 +299,16 @@ final class XiaomiBluetoothBridge: NSObject {
         else { return }
         resetPeripheral()
 
-        if let identifier = targetIdentifier,
+        if reconnectPolicy.allowsCachedTargetRetrieval,
+           let identifier = targetIdentifier,
            let saved = central.retrievePeripherals(withIdentifiers: [identifier]).first {
-            connect(saved, using: central, generation: generation, source: "target_identifier")
+            connect(
+                saved,
+                using: central,
+                generation: generation,
+                source: "target_identifier",
+                usesCachedTarget: true
+            )
             return
         }
 
@@ -319,7 +331,8 @@ final class XiaomiBluetoothBridge: NSObject {
         _ candidate: CBPeripheral,
         using central: CBCentralManager,
         generation: UInt64,
-        source: String
+        source: String,
+        usesCachedTarget: Bool = false
     ) {
         guard shouldRun,
               self.central === central,
@@ -328,6 +341,7 @@ final class XiaomiBluetoothBridge: NSObject {
         else { return }
         central.stopScan()
         peripheral = candidate
+        currentAttemptUsesCachedTarget = usesCachedTarget
         let proxy = XiaomiPeripheralDelegateProxy(generation: generation, owner: self)
         peripheralDelegateProxy = proxy
         candidate.delegate = proxy
@@ -346,6 +360,7 @@ final class XiaomiBluetoothBridge: NSObject {
         peripheral?.delegate = nil
         peripheral = nil
         peripheralDelegateProxy = nil
+        requestedReconnectDelay = nil
         transmitCharacteristic = nil
         audioCharacteristic = nil
         controlCharacteristic = nil
@@ -359,6 +374,7 @@ final class XiaomiBluetoothBridge: NSObject {
         capabilitiesRequested = false
         capabilitiesConfirmed = false
         capabilities = Self.defaultCapabilities
+        currentAttemptUsesCachedTarget = false
         resetSession()
     }
 
@@ -401,7 +417,10 @@ final class XiaomiBluetoothBridge: NSObject {
                peripheral.state != .disconnected {
                 central.cancelPeripheralConnection(peripheral)
             }
-            self.finishAttempt(reconnectAfter: 3)
+            let delay = self.nextAutomaticReconnectDelay(
+                bypassCachedTarget: self.currentAttemptUsesCachedTarget
+            )
+            self.finishAttempt(reconnectAfter: delay)
         }
         connectionTimeoutWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
@@ -420,17 +439,35 @@ final class XiaomiBluetoothBridge: NSObject {
         decoder.reset()
     }
 
-    private func scheduleReconnect(discardCachedIdentity: Bool = false) {
+    private func scheduleReconnect(bypassCachedTarget: Bool = false) {
         guard shouldRun else { return }
         reconnectWorkItem?.cancel()
         state = .reconnecting
+        let delay = nextAutomaticReconnectDelay(
+            bypassCachedTarget: bypassCachedTarget || currentAttemptUsesCachedTarget
+        )
         if let central, let peripheral, peripheral.state != .disconnected {
-            requestedReconnectDelay = 3
+            requestedReconnectDelay = delay
             lifecycle = .disconnecting(lifecycle.generation ?? generationCounter)
             central.cancelPeripheralConnection(peripheral)
             return
         }
-        finishAttempt(reconnectAfter: 3)
+        finishAttempt(reconnectAfter: delay)
+    }
+
+    private func nextAutomaticReconnectDelay(bypassCachedTarget: Bool) -> TimeInterval {
+        let delay = reconnectPolicy.nextAutomaticDelay(
+            bypassCachedTarget: bypassCachedTarget,
+            jitterUnit: Double.random(in: 0 ... 1)
+        )
+        let cachedIdentifierBypassed = targetIdentifier != nil &&
+            !reconnectPolicy.allowsCachedTargetRetrieval
+        AppLogger.shared.write(
+            "BLE RECONNECT scheduled failure_count=\(reconnectPolicy.consecutiveFailureCount) " +
+                "delay_ms=\(Int((delay * 1_000).rounded())) " +
+                "cached_identifier_bypassed=\(cachedIdentifierBypassed)"
+        )
+        return delay
     }
 
     private func finishAttempt(reconnectAfter delay: TimeInterval?) {
@@ -521,6 +558,8 @@ final class XiaomiBluetoothBridge: NSObject {
             capabilitiesConfirmed = true
             initializationTimeoutWorkItem?.cancel()
             initializationTimeoutWorkItem = nil
+            reconnectPolicy.reset()
+            currentAttemptUsesCachedTarget = false
             lifecycle = .ready(generation)
             if let peripheral {
                 state = .ready(peripheral.name ?? "MI RC")
@@ -688,7 +727,7 @@ final class XiaomiBluetoothBridge: NSObject {
             pendingSync = nil
             decoder.reset()
         }
-        scheduleReconnect(discardCachedIdentity: true)
+        scheduleReconnect(bypassCachedTarget: true)
     }
 
     private func failInitialization(_ message: LocalizedMessage) {
@@ -696,7 +735,7 @@ final class XiaomiBluetoothBridge: NSObject {
         accumulator.reset()
         pendingSync = nil
         decoder.reset()
-        scheduleReconnect(discardCachedIdentity: true)
+        scheduleReconnect(bypassCachedTarget: true)
     }
 }
 
@@ -780,7 +819,11 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               lifecycle.acceptsDidFailToConnect(generation: generation)
         else { return }
         AppLogger.shared.write("BLE CONNECT FAILED error=\(error?.localizedDescription ?? "unknown")")
-        let delay = shouldRun ? (requestedReconnectDelay ?? 3) : nil
+        let delay = shouldRun
+            ? requestedReconnectDelay ?? nextAutomaticReconnectDelay(
+                bypassCachedTarget: currentAttemptUsesCachedTarget
+            )
+            : nil
         finishAttempt(reconnectAfter: delay)
         if !shouldRun { state = .stopped }
     }
@@ -814,18 +857,21 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     }
 
     private func handleDisconnect(error: Error?) {
-        let shouldDiscardCachedIdentity: Bool
+        let shouldBypassCachedTarget: Bool
         switch lifecycle {
         case .connecting, .discovering, .awaitingCapabilities:
-            shouldDiscardCachedIdentity = true
+            shouldBypassCachedTarget = true
         default:
-            shouldDiscardCachedIdentity = false
+            shouldBypassCachedTarget = false
         }
         AppLogger.shared.write(
-            "BLE DISCONNECTED phase=\(lifecycle) cached_identifier_cleared=\(shouldDiscardCachedIdentity) " +
-                "error=\(error?.localizedDescription ?? "none")"
+            "BLE DISCONNECTED phase=\(lifecycle) error=\(error?.localizedDescription ?? "none")"
         )
-        let delay = shouldRun ? (requestedReconnectDelay ?? 3) : nil
+        let delay = shouldRun
+            ? requestedReconnectDelay ?? nextAutomaticReconnectDelay(
+                bypassCachedTarget: shouldBypassCachedTarget || currentAttemptUsesCachedTarget
+            )
+            : nil
         finishAttempt(reconnectAfter: delay)
         if !shouldRun { state = .stopped }
     }
@@ -849,12 +895,12 @@ extension XiaomiBluetoothBridge {
                     arguments: [error.localizedDescription]
                 )
             )
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         guard let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else {
             state = .failed(LocalizedMessage("connection.error.voice_service_missing"))
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         peripheral.discoverCharacteristics(
@@ -943,7 +989,7 @@ extension XiaomiBluetoothBridge {
                     arguments: [error.localizedDescription]
                 )
             )
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         for characteristic in service.characteristics ?? [] {
@@ -965,7 +1011,7 @@ extension XiaomiBluetoothBridge {
               controlCharacteristic != nil
         else {
             state = .failed(LocalizedMessage("connection.error.voice_channel_incomplete"))
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         requestCapabilitiesIfPossible()
@@ -1000,7 +1046,7 @@ extension XiaomiBluetoothBridge {
                     arguments: [error.localizedDescription]
                 )
             )
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         guard characteristic.uuid == audioUUID || characteristic.uuid == controlUUID else {

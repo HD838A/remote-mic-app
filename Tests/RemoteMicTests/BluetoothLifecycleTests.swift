@@ -28,6 +28,119 @@ struct BluetoothLifecycleTests {
             .acceptsProtocolData(generation: 1))
     }
 
+    @Test func automaticReconnectBackoffDoublesAndCapsAtSixtySeconds() {
+        var policy = BluetoothReconnectPolicy()
+
+        let delays = (0 ..< 7).map { _ in
+            policy.nextAutomaticDelay(
+                bypassCachedTarget: false,
+                jitterUnit: 0.5
+            )
+        }
+
+        #expect(delays == [3, 6, 12, 24, 48, 60, 60])
+        #expect(policy.consecutiveFailureCount == 7)
+    }
+
+    @Test func automaticReconnectJitterIsBoundedAndDeterministicForTests() {
+        var firstLowJitterPolicy = BluetoothReconnectPolicy()
+        var firstHighJitterPolicy = BluetoothReconnectPolicy()
+        var lowJitterPolicy = BluetoothReconnectPolicy()
+        var highJitterPolicy = BluetoothReconnectPolicy()
+        var cappedLowJitterPolicy = BluetoothReconnectPolicy()
+        var cappedHighJitterPolicy = BluetoothReconnectPolicy()
+
+        let firstLowDelay = firstLowJitterPolicy.nextAutomaticDelay(
+            bypassCachedTarget: false,
+            jitterUnit: 0
+        )
+        let firstHighDelay = firstHighJitterPolicy.nextAutomaticDelay(
+            bypassCachedTarget: false,
+            jitterUnit: 1
+        )
+        _ = lowJitterPolicy.nextAutomaticDelay(bypassCachedTarget: false, jitterUnit: 0.5)
+        _ = highJitterPolicy.nextAutomaticDelay(bypassCachedTarget: false, jitterUnit: 0.5)
+
+        let lowDelay = lowJitterPolicy.nextAutomaticDelay(
+            bypassCachedTarget: false,
+            jitterUnit: 0
+        )
+        let highDelay = highJitterPolicy.nextAutomaticDelay(
+            bypassCachedTarget: false,
+            jitterUnit: 1
+        )
+        for _ in 0 ..< 5 {
+            _ = cappedLowJitterPolicy.nextAutomaticDelay(
+                bypassCachedTarget: false,
+                jitterUnit: 0.5
+            )
+            _ = cappedHighJitterPolicy.nextAutomaticDelay(
+                bypassCachedTarget: false,
+                jitterUnit: 0.5
+            )
+        }
+        let cappedLowDelay = cappedLowJitterPolicy.nextAutomaticDelay(
+            bypassCachedTarget: false,
+            jitterUnit: 0
+        )
+        let cappedHighDelay = cappedHighJitterPolicy.nextAutomaticDelay(
+            bypassCachedTarget: false,
+            jitterUnit: 1
+        )
+
+        #expect(abs(firstLowDelay - 2.7) < 0.000_001)
+        #expect(abs(firstHighDelay - 3.3) < 0.000_001)
+        #expect(abs(lowDelay - 5.4) < 0.000_001)
+        #expect(abs(highDelay - 6.6) < 0.000_001)
+        #expect(abs(cappedLowDelay - 54) < 0.000_001)
+        #expect(abs(cappedHighDelay - 60) < 0.000_001)
+    }
+
+    @Test func failedCachedTargetIsBypassedUntilThePolicyIsReset() {
+        var policy = BluetoothReconnectPolicy()
+        #expect(policy.allowsCachedTargetRetrieval)
+
+        let delay = policy.nextAutomaticDelay(
+            bypassCachedTarget: true,
+            jitterUnit: 0.5
+        )
+
+        #expect(delay == 3)
+        #expect(!policy.allowsCachedTargetRetrieval)
+        _ = policy.nextAutomaticDelay(bypassCachedTarget: false, jitterUnit: 0.5)
+        #expect(!policy.allowsCachedTargetRetrieval)
+
+        policy.reset()
+
+        #expect(policy.consecutiveFailureCount == 0)
+        #expect(policy.allowsCachedTargetRetrieval)
+        #expect(policy.nextAutomaticDelay(
+            bypassCachedTarget: false,
+            jitterUnit: 0.5
+        ) == 3)
+    }
+
+    @Test func peripheralResetClearsAnyPrecomputedReconnectDelay() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
+            ),
+            encoding: .utf8
+        )
+        let resetStart = try #require(source.range(of: "private func resetPeripheral()"))
+        let resetEnd = try #require(source.range(
+            of: "private func isCurrent",
+            range: resetStart.upperBound..<source.endIndex
+        ))
+        let resetSource = source[resetStart.lowerBound..<resetEnd.lowerBound]
+
+        #expect(resetSource.contains("requestedReconnectDelay = nil"))
+    }
+
     @Test func microphoneRequiresConfirmed16kReadySession() {
         #expect(!ATVVSessionGate.canOpenMicrophone(
             phase: .awaitingCapabilities(1),

@@ -90,6 +90,40 @@ enum BluetoothLifecyclePhase: Equatable {
     }
 }
 
+struct BluetoothReconnectPolicy {
+    static let baseDelay: TimeInterval = 3
+    static let maximumDelay: TimeInterval = 60
+    static let jitterRatio = 0.1
+
+    private(set) var consecutiveFailureCount = 0
+    private(set) var allowsCachedTargetRetrieval = true
+
+    mutating func nextAutomaticDelay(
+        bypassCachedTarget: Bool,
+        jitterUnit: Double
+    ) -> TimeInterval {
+        consecutiveFailureCount += 1
+        if bypassCachedTarget {
+            allowsCachedTargetRetrieval = false
+        }
+
+        let exponent = min(consecutiveFailureCount - 1, 5)
+        let nominalDelay = min(
+            Self.maximumDelay,
+            Self.baseDelay * pow(2, Double(exponent))
+        )
+        let normalizedJitter = min(1, max(0, jitterUnit))
+        let jitterFactor = (1 - Self.jitterRatio) +
+            (normalizedJitter * Self.jitterRatio * 2)
+        return min(Self.maximumDelay, nominalDelay * jitterFactor)
+    }
+
+    mutating func reset() {
+        consecutiveFailureCount = 0
+        allowsCachedTargetRetrieval = true
+    }
+}
+
 enum ATVVSessionGate {
     static let cancelledOpenSuppressionInterval: TimeInterval = 2
 
