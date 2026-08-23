@@ -1649,6 +1649,10 @@ enum KeyboardInjector {
                 return false
             }
             event.location = windowCenter
+            // Mark the synthetic event as a discrete mouse-wheel event. Some
+            // WebKit-based apps otherwise treat repeated CGEvents as one
+            // continuous gesture and ignore later page actions.
+            event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 0)
             event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
             event.post(tap: .cghidEventTap)
             AppLogger.shared.write(
