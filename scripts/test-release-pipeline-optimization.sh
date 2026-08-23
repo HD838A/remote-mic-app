@@ -72,6 +72,10 @@ fi
 /bin/mkdir -p "$TEST_REPO/Resources"
 /bin/cp "$ROOT/Resources/Info.plist" "$TEST_REPO/Resources/"
 /bin/cp "$ROOT/Package.swift" "$ROOT/Package.resolved" "$TEST_REPO/"
+if [[ ! -x "$ROOT/scripts/verify-release-pipeline-qualification-source.sh" ]]; then
+  print -u2 "release qualification source verifier must be executable in Git"
+  exit 1
+fi
 print '#!/bin/zsh' > "$TEST_REPO/scripts/verify-preview-branch.sh"
 print 'exit 0' >> "$TEST_REPO/scripts/verify-preview-branch.sh"
 print '#!/bin/zsh' > "$TEST_REPO/scripts/run-trusted-release-validation.sh"
