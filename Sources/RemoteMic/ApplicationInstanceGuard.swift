@@ -58,11 +58,14 @@ enum ApplicationInstanceGuard {
 
     static func existingApplication(
         bundleIdentifier: String,
-        currentProcessIdentifier: pid_t = getpid()
+        currentProcessIdentifier: pid_t = getpid(),
+        requiresFinishedLaunch: Bool = false
     ) -> NSRunningApplication? {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
             .first {
-                !$0.isTerminated && $0.processIdentifier != currentProcessIdentifier
+                !$0.isTerminated &&
+                    $0.processIdentifier != currentProcessIdentifier &&
+                    (!requiresFinishedLaunch || $0.isFinishedLaunching)
             }
     }
 

@@ -106,13 +106,6 @@ enum RemoteMicApp {
         }
         let bundleIdentifier = Bundle.main.bundleIdentifier
             ?? ApplicationInstanceGuard.fallbackBundleIdentifier
-        if let existingApplication = ApplicationInstanceGuard.existingApplication(
-            bundleIdentifier: bundleIdentifier
-        ) {
-            existingApplication.activate(options: [.activateAllWindows])
-            return
-        }
-
         var instanceLock: ApplicationInstanceLock?
         if let lockURL = ApplicationInstanceGuard.defaultLockURL() {
             switch ApplicationInstanceLock.acquire(at: lockURL) {
@@ -128,6 +121,14 @@ enum RemoteMicApp {
             }
         } else {
             fputs("Single-instance lock unavailable: application_support_missing\n", stderr)
+        }
+
+        if let existingApplication = ApplicationInstanceGuard.existingApplication(
+            bundleIdentifier: bundleIdentifier,
+            requiresFinishedLaunch: true
+        ) {
+            existingApplication.activate(options: [.activateAllWindows])
+            return
         }
 
         let application = NSApplication.shared

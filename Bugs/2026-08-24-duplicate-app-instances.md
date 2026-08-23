@@ -31,8 +31,8 @@
 
 ## 修复
 
-1. 在所有截图渲染专用入口之后、创建 `NSApplication.shared` 之前，按正式 Bundle ID 查询已运行实例；命中后激活其窗口并退出当前启动。
-2. 在 `~/Library/Application Support/RemoteMic/.app-instance.lock` 上持有非阻塞排他 `flock`，覆盖两个新版本几乎同时启动、都尚未完成运行实例查询的竞态。
+1. 在所有截图渲染专用入口之后、创建 `NSApplication.shared` 之前，在 `~/Library/Application Support/RemoteMic/.app-instance.lock` 上竞争非阻塞排他 `flock`；锁先裁决两个新版本几乎同时启动的竞态，避免双方互相看到尚未完成启动的进程后同时退出。
+2. 获取锁后按正式 Bundle ID 查询已经完成启动的历史实例；命中后激活其窗口并退出当前启动。未获取锁的并发启动直接让行，并尽力激活锁持有者。
 3. 锁文件描述符持有到 App 主运行循环结束；正常退出或崩溃都会由内核释放锁，不能把“锁文件存在”误当作实例仍运行。
 4. 锁目录或锁文件因本地权限异常无法使用时，向标准错误输出非敏感原因并保持 fail-open，避免一次文件系统故障让 App 永久无法启动。
 

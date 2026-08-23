@@ -45,4 +45,19 @@ struct ApplicationInstanceGuardTests {
         #expect(lockURL.lastPathComponent == ".app-instance.lock")
         #expect(lockURL.deletingLastPathComponent().lastPathComponent == "RemoteMic")
     }
+
+    @Test func startupAcquiresTheAtomicLockBeforeInspectingRunningApplications() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let lockAcquisition = try #require(source.range(of: "ApplicationInstanceLock.acquire"))
+        let existingApplicationLookup = try #require(source.range(
+            of: "requiresFinishedLaunch: true"
+        ))
+
+        #expect(lockAcquisition.lowerBound < existingApplicationLookup.lowerBound)
+    }
 }
