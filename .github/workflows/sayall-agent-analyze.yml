@@ -113,9 +113,18 @@ jobs:
           set -euo pipefail
           mkdir -p .sayall-input
           gh api "repos/$TARGET_REPOSITORY/issues/$ISSUE_NUMBER" > .sayall-input/issue.json
-          gh api --paginate --slurp "repos/$TARGET_REPOSITORY/issues?state=all&per_page=100" > .sayall-input/issues.json
-          gh api --paginate --slurp "repos/$TARGET_REPOSITORY/pulls?state=all&per_page=100" > .sayall-input/pulls.json
-          gh api "repos/$TARGET_REPOSITORY/releases?per_page=100" > .sayall-input/releases.json
+          gh api --paginate --slurp "repos/$TARGET_REPOSITORY/issues?state=all&per_page=100" \
+            | jq 'flatten | map({number,title,state,labels:[.labels[]?.name],updatedAt:.updated_at,htmlUrl:.html_url})' \
+            > .sayall-input/issues.json
+          gh api --paginate --slurp "repos/$TARGET_REPOSITORY/pulls?state=all&per_page=100" \
+            | jq 'flatten | map({number,title,state,labels:[.labels[]?.name],updatedAt:.updated_at,mergedAt:.merged_at,htmlUrl:.html_url})' \
+            > .sayall-input/pulls.json
+          gh api "repos/$TARGET_REPOSITORY/releases?per_page=100" \
+            | jq '[.[] | {tagName:.tag_name,name,publishedAt:.published_at,htmlUrl:.html_url}]' \
+            > .sayall-input/releases.json
+          gh api --paginate --slurp "repos/$TARGET_REPOSITORY/issues/$ISSUE_NUMBER/comments?per_page=100" \
+            | jq 'flatten | map({user:.user.login,createdAt:.created_at,body:.body})' \
+            > .sayall-input/comments.json
           git log --oneline --decorate -40 > .sayall-input/recent-commits.txt
           git tag --sort=-creatordate | head -40 > .sayall-input/recent-tags.txt
 
