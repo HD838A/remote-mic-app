@@ -1,5 +1,7 @@
 name: SayAll Agent Checks Report
 
+# Managed by SayAllWorkshop/agent-runtime. Re-run the onboarding command to update.
+
 on:
   workflow_run:
     workflows: ["macOS CI"]

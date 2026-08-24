@@ -1,20 +1,21 @@
 # SayAll Workshop Agent 自动化测试手册
 
-适用分支：`codex/sayall-agent-automation` 及其后通过 PR 合入 `main` 的版本。
+适用分支：`codex/centralize-sayall-agent-runtime` 及其依赖的 SayAllWorkshop Runtime 分支，二者通过 PR 按顺序合入后的版本。
 
 本手册验证仓库侧的受控闭环，不把测试自动批准当作生产权限。测试前必须使用独立的 Workshop 测试配置和专用模型 API 凭据；生产 Worker 保持 `AGENT_ENVIRONMENT=production`、`AGENT_TEST_AUTO_APPROVE=false`。
 
 ## 测试前准备
 
-1. 确认目标仓库的三个 Agent Workflow 已存在于默认分支：只读初检、批准后开发和 CI 结果回写。
+1. 确认 SayAllWorkshop 默认分支存在中心 Analyze、Develop、Cancel Runtime Workflow；目标仓库只保留 `.sayall/agent.yml` 和 `sayall-agent-checks-report.yml` CI 回调适配。
 2. 确认 Workshop Worker 的测试配置同时满足：
    - `AGENT_ENABLED=true`
    - `AGENT_ENVIRONMENT=test`
    - `AGENT_TEST_AUTO_APPROVE=true`
    - `AGENT_TEST_REPOSITORY=HD838A/remote-mic-app`
    - `AGENT_TEST_BASE_REF=main`
-3. 确认 GitHub Actions Secret/Variable 只属于测试目标：`OPENAI_API_KEY`、`WORKSHOP_AGENT_CALLBACK_SECRET`、Agent Bot App ID/私钥、Workshop API 地址、触发 Bot login、Agent Bot login、Codex 模型和可选的兼容 Responses API Endpoint。
-4. 确认 Agent Bot 只有目标仓库的 `Contents` 与 `Pull requests` 写权限，没有默认分支 bypass；测试 PR 必须保持 Draft。
+   - `AGENT_RUNTIME_REPOSITORY=GetSayAll/SayAllWorkshop`
+3. 确认 OpenAI Key、Agent Bot App ID/私钥、Workshop API 地址、回调 Secret、触发 Bot login、Agent Bot login、Codex 模型和可选 Responses API Endpoint 只配置在 SayAllWorkshop GitHub Actions。目标仓库只保留 CI 回调需要的 Workshop API 地址、回调 Secret 和 Bot login。
+4. 确认 Workshop Bot 可访问目标仓库与 Runtime 仓库；Agent Bot 只有目标仓库的 `Contents` 与 `Pull requests` 写权限，没有默认分支 bypass；测试 PR 必须保持 Draft。
 5. 记录测试开始前的 Workshop Run、D1 迁移版本和目标分支 SHA。不要把 Secret、完整 Issue 私有内容或个人 Token 写进日志。
 
 ### 模型 API 配置
@@ -32,7 +33,7 @@
 推荐使用已有 Issue #106（退格键默认配置下失灵）作为初检输入；先确认该 Issue 仍开放且没有新的修复 PR。
 
 1. 在 Workshop 管理员页面为 Issue #106 启动 Agent 初检。
-2. 预期：目标仓库收到 `repository_dispatch`，Analyze Workflow 在固定基础提交上运行，D1 Run 先后出现 `queued`、`analyzing` 和结构化初检结果。
+2. 预期：SayAllWorkshop 收到 `repository_dispatch`，中心 Analyze Runtime 用目标仓库的短期 Installation Token 在固定基础提交上运行，D1 Run 先后出现 `queued`、`analyzing` 和结构化初检结果。
 3. 预期：初检结果包含代码/Issue/测试证据、受影响路径、风险和测试计划；测试配置通过时追加 `system:test-auto` 批准事件，不能只因为 Issue 标签或正文而批准。
 4. 预期：如果计划命中私有依赖、发布、认证、Workflow 或 Secret 路径，策略必须拒绝自动批准并进入 `needs_human`；不得创建开发 PR。
 5. 如果使用 Issue #171 作为负向样例（已修复但未发布），预期分类为 `fixed_unreleased`，只回写证据和等待发布状态，不启动开发。
@@ -52,7 +53,7 @@
 1. 通过 Workshop 新建事项，确认 Worker 只创建一个 GitHub Issue，并在 Issue 正文写入提交昵称和北京时间日期。
 2. 预期：Issue 进入只读 Analyze Workflow；新反馈在分析通过前不直接物化成 `TODO.md` 完成项。
 3. 预期：测试环境只追加正式的 `system:test-auto` 审批事件，开发授权绑定 Run、Issue 哈希、计划哈希、基础分支和有效期。
-4. 预期：Develop Workflow 使用临时工作区生成 Patch Artifact；Patch 只能包含允许路径，不能包含删除、符号链接、二进制凭据或 Workflow 修改。
+4. 预期：SayAllWorkshop 的中心 Develop Runtime 使用临时工作区生成 Patch Artifact；Patch 只能包含允许路径，不能包含删除、符号链接、二进制凭据或 Workflow 修改。
 5. 预期：独立发布 Job 使用 Agent Bot 创建 `codex/sayall-agent-...` 分支和 Draft PR；Codex Job 没有 GitHub 写 Token、Agent Bot 私钥或生产 Secret。
 6. 预期：PR 的受保护检查完成后，Checks Report Workflow 将 `testing` 更新为 `ready_to_merge`（失败则写入 `failed`）；测试阶段不自动合并、不触发正式部署。
 7. 刷新 Workshop，确认 Run、Issue、Workflow、Commit、Draft PR 和 D1 事件可以互相追溯。
@@ -75,6 +76,7 @@
 - Agent PR 必须保持 Draft，默认分支规则、签名/公证和发布 Environment 不得被改变。
 - 私有依赖 CI 的人工安全门禁不能被 Agent 标签、Issue 评论或客户端字段绕过。
 - 测试完成后关闭测试自动批准，撤销测试授权并关闭/归档测试 Issue；保留 Run、Workflow、Commit 和 PR 作为可审计证据。
+- 合并顺序必须是 Workshop Runtime → Worker 配置与部署 → 目标仓库迁出；颠倒顺序会让目标仓库暂时失去 Analyze/Develop/Cancel 入口。
 
 ## 日志与验证边界
 
