@@ -25,6 +25,7 @@
 - Variable `SAYALL_CODEX_RESPONSES_API_ENDPOINT` 必须是完整的 Responses 地址，包含 `/v1/responses`，不能只填 `/v1`。
 - Variable `SAYALL_CODEX_MODEL` 设置为服务实际列出的模型 ID；本轮测试使用 `gpt-5.6-sol`。
 - Analyze 使用 `effort: medium` 且任务上限为 20 分钟，Develop 使用 `effort: medium` 并沿用现有 Job 上限。这样可以避免兼容服务长时间无回包时 Run 永久停在 `analyzing`。将来切回 OpenAI 官方 Key 时，只需替换 Secret、清空兼容 Endpoint，并把模型 Variable 改为官方账号可用的模型；Workflow 权限和审批流程不变。
+- Analyze Workflow 会把 Issues、PR、Release 和评论快照压缩为查重所需字段后再交给 Codex，避免原始 GitHub JSON 过大导致兼容服务多轮工具调用长时间无回包。
 
 ## 用例一：已有 Bug 的只读初检与安全分支
 
