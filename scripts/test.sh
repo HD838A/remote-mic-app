@@ -19,6 +19,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/RemoteDeviceProfile.swift" \
   "$ROOT/Sources/RemoteMic/FirstUseDiagnostics.swift" \
   "$ROOT/Sources/RemoteMic/OnboardingFlow.swift" \
+  "$ROOT/Sources/RemoteMic/VoiceKeyMode.swift" \
   "$ROOT/Sources/RemoteMic/AppSettings.swift" \
   "$ROOT/Sources/RemoteMic/AppLinks.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \
