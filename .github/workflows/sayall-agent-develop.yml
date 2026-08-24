@@ -122,7 +122,7 @@ jobs:
           codex-home: ${{ runner.temp }}/sayall-codex-home
           allow-bot-users: ${{ vars.SAYALL_AGENT_TRIGGER_BOT_LOGIN }}
           model: ${{ vars.SAYALL_CODEX_MODEL }}
-          effort: high
+          effort: medium
 
       - name: Package and policy-check Patch
         id: package

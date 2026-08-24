@@ -84,6 +84,7 @@ jobs:
     needs: preflight
     if: needs.preflight.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       issues: read
@@ -135,7 +136,7 @@ jobs:
           codex-home: ${{ runner.temp }}/sayall-codex-home
           allow-bot-users: ${{ vars.SAYALL_AGENT_TRIGGER_BOT_LOGIN }}
           model: ${{ vars.SAYALL_CODEX_MODEL }}
-          effort: high
+          effort: medium
 
       - name: Validate and report analysis
         if: always()
