@@ -221,12 +221,8 @@
 "connection.voice_key.mode.fn" = "Fn/Globe";
 "connection.voice_key.mode.left_command" = "Left Command";
 "connection.voice_key.mode.right_command" = "Right Command";
-"connection.voice_key_mode.fn_globe" = "Fn/Globe";
-"connection.voice_key_mode.left_command" = "Hold Left Command";
-"connection.voice_key_mode.right_command" = "Hold Right Command";
 "connection.voice_key_mode.help" = "Fn/Globe is the default. Command modes require Accessibility permission and a target voice app that supports the corresponding standalone Left or Right Command hold; many apps merge both sides into a generic Command. Pressing another key while held may trigger a Command shortcut.";
 "connection.voice_key_mode.command_permission" = "Command mode requires Accessibility permission";
-"connection.voice_key_mode.fn_tap_only" = "Fn tap mode is available only with Fn/Globe";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "iPhone, Apple Watch, and Web";
 "connection.phone.ios_title" = "iOS App (Recommended)";
@@ -551,6 +547,7 @@
 "configuration.import.prompt" = "Import";
 "configuration.import.success" = "Configuration imported and applied";
 "configuration.import.unsupported_version" = "Import failed: this configuration version is not supported";
+"configuration.import.voice_key_busy" = "Import failed: the voice key is active or could not be released safely. End voice input and try again.";
 "configuration.import.invalid_file" = "Import failed: the configuration file is invalid";
 "onboarding.phase.prepare" = "Prepare";
 "onboarding.phase.setup" = "Set Up";

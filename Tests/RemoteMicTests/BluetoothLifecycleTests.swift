@@ -4,6 +4,37 @@ import Testing
 
 @Suite("Bluetooth lifecycle")
 struct BluetoothLifecycleTests {
+    @Test func everyBridgeFirstReadyReappliesHIDMappingsButDuplicateReadyDoesNot() {
+        #expect(BridgeAppModel.shouldReapplyHIDSettings(
+            previousState: nil,
+            currentState: .ready("first")
+        ))
+        #expect(BridgeAppModel.shouldReapplyHIDSettings(
+            previousState: .connecting,
+            currentState: .ready("first")
+        ))
+        #expect(!BridgeAppModel.shouldReapplyHIDSettings(
+            previousState: .ready("first"),
+            currentState: .ready("duplicate")
+        ))
+        #expect(!BridgeAppModel.shouldReapplyHIDSettings(
+            previousState: .ready("first"),
+            currentState: .reconnecting
+        ))
+        #expect(BridgeAppModel.shouldReapplyHIDSettings(
+            previousState: .reconnecting,
+            currentState: .ready("reconnected")
+        ))
+
+        let firstBridgeState = BluetoothBridgeState.ready("first")
+        let secondBridgePreviousState: BluetoothBridgeState? = nil
+        #expect(BridgeAppModel.shouldReapplyHIDSettings(
+            previousState: secondBridgePreviousState,
+            currentState: .ready("second")
+        ))
+        #expect(firstBridgeState == .ready("first"))
+    }
+
     @Test func generationAndPhaseRejectStaleCallbacks() {
         let phase = BluetoothLifecyclePhase.connecting(1)
         #expect(phase.acceptsDidConnect(generation: 1))

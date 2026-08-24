@@ -83,6 +83,204 @@ struct VoiceKeyModeTests {
         ))
     }
 
+    @Test func softwareFnVoiceHoldParticipatesInPermissionRecovery() throws {
+        let granted = HIDPermissionSnapshot(
+            inputMonitoringGranted: true,
+            accessibilityGranted: true
+        )
+        let denied = HIDPermissionSnapshot(
+            inputMonitoringGranted: true,
+            accessibilityGranted: false
+        )
+        #expect(HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: false,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            softwareVoiceKeyHeld: true,
+            previous: granted,
+            current: denied
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: false,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            softwareVoiceKeyHeld: false,
+            previous: granted,
+            current: denied
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: false,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            softwareVoiceKeyHeld: true,
+            previous: granted,
+            current: granted
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: false,
+            customMappingEnabled: false,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            softwareVoiceKeyHeld: true,
+            previous: granted,
+            current: denied
+        ))
+        #expect(!HIDPermissionRecoveryPolicy.shouldReapplySettings(
+            started: true,
+            customMappingEnabled: false,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            softwareVoiceKeyHeld: true,
+            previous: nil,
+            current: denied
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let refreshStart = try #require(source.range(of: "func refreshHIDAfterPermissionChange()"))
+        let refreshEnd = try #require(source.range(
+            of: "func reconnect()",
+            range: refreshStart.upperBound..<source.endIndex
+        ))
+        let refreshSource = source[refreshStart.lowerBound..<refreshEnd.lowerBound]
+
+        #expect(refreshSource.contains("softwareVoiceKeyHeld: voiceKeyLatch.isHeld"))
+    }
+
+    @Test func inputMonitoringLossPreservesAnActiveExplicitCommandSession() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let applyStart = try #require(source.range(of: "func applyHIDSettings()"))
+        let applyEnd = try #require(source.range(
+            of: "private func startHIDMonitors",
+            range: applyStart.upperBound..<source.endIndex
+        ))
+        let applySource = source[applyStart.lowerBound..<applyEnd.lowerBound]
+
+        #expect(applySource.contains("preservingExplicitVoiceSession:"))
+        #expect(applySource.contains(
+            "voiceKeyLatch.isHeld && heldVoiceKeyMode?.requiresAccessibility == true"
+        ))
+    }
+
+    @Test func everyBridgeReadyTransitionRefreshesHIDSettings() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let callbackStart = try #require(source.range(of: "func bluetoothBridge(\n        _ bridge:"))
+        let callbackEnd = try #require(source.range(
+            of: "func bluetoothBridgeDidStartVoice",
+            range: callbackStart.upperBound..<source.endIndex
+        ))
+        let callbackSource = source[callbackStart.lowerBound..<callbackEnd.lowerBound]
+
+        #expect(callbackSource.contains("let previousState"))
+        #expect(callbackSource.contains("Self.shouldReapplyHIDSettings("))
+        #expect(!callbackSource.contains("let hadReadyBridge"))
+    }
+
+    @Test func bluetoothCommandVoiceRequiresNeutralizedHardwareKeyBeforeAcceptance() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let start = try #require(source.range(of: "func bluetoothBridgeDidStartVoice"))
+        let end = try #require(source.range(
+            of: "func bluetoothBridgeDidStopVoice",
+            range: start.upperBound..<source.endIndex
+        ))
+        let startSource = source[start.lowerBound..<end.lowerBound]
+        let neutralizationCheck = try #require(
+            startSource.range(of: "voiceFunctionMapper.isVoiceKeyNeutralized")
+        )
+        let acceptedState = try #require(startSource.range(of: "bluetoothVoiceActive = true"))
+
+        #expect(startSource.contains("applyHIDSettings()"))
+        #expect(neutralizationCheck.lowerBound < acceptedState.lowerBound)
+    }
+
+    @Test func voiceMappingFailureDoesNotChangeModeDuringAnActiveVoiceSession() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let applyStart = try #require(source.range(of: "func applyHIDSettings()"))
+        let applyEnd = try #require(source.range(
+            of: "private func startHIDMonitors",
+            range: applyStart.upperBound..<source.endIndex
+        ))
+        let applySource = source[applyStart.lowerBound..<applyEnd.lowerBound]
+        let activeGate = try #require(applySource.range(of: "if isStreaming"))
+        let fallback = try #require(applySource.range(of: "settings.voiceKeyMode = .function"))
+
+        #expect(activeGate.lowerBound < fallback.lowerBound)
+        #expect(applySource.contains("mode_preserved reason=voice_active_mapping_failed"))
+        #expect(applySource.contains("VOICE FN TAP mode_preserved reason=voice_active_mapping_failed"))
+    }
+
+    @Test func configurationImportUsesModelSafetyGate() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let importStart = try #require(settingsSource.range(of: "private func importConfiguration()"))
+        let importEnd = try #require(settingsSource.range(
+            of: "private func permissionRow",
+            range: importStart.upperBound..<settingsSource.endIndex
+        ))
+        let importSource = settingsSource[importStart.lowerBound..<importEnd.lowerBound]
+
+        #expect(importSource.contains("try model.importConfiguration(from:"))
+        #expect(!importSource.contains("try settings.importConfiguration(from:"))
+
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let modelImportStart = try #require(
+            modelSource.range(of: "func importConfiguration(from data: Data) throws")
+        )
+        let modelImportEnd = try #require(modelSource.range(
+            of: "func setVoiceKeyMode",
+            range: modelImportStart.upperBound..<modelSource.endIndex
+        ))
+        let modelImportSource = modelSource[modelImportStart.lowerBound..<modelImportEnd.lowerBound]
+        #expect(modelImportSource.contains("Self.importConfiguration("))
+        #expect(modelImportSource.contains("releaseVoiceKey: { releaseVoiceKeyIfNeeded() }"))
+    }
+
     @Test func explicitCommandVoiceSessionDoesNotReactToOrdinaryFunctionEdges() {
         var prepared = 0
         var restored = 0
@@ -142,5 +340,66 @@ struct VoiceKeyModeTests {
         legacy.removeValue(forKey: "voiceKeyMode")
         try target.importConfiguration(from: try JSONSerialization.data(withJSONObject: legacy))
         #expect(target.voiceKeyMode == .function)
+    }
+
+    @Test func configurationImportRejectsUnsafeVoiceKeyChangesBeforeMutation() throws {
+        let sourceSuite = "RemoteMicTests.voice-key-preflight-source.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.gainDB = 12
+        source.voiceKeyMode = .leftCommand
+        let data = try source.exportedConfigurationData()
+
+        let targetSuite = "RemoteMicTests.voice-key-preflight-target.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        target.gainDB = 3
+        target.voiceKeyMode = .function
+
+        var releaseCount = 0
+        #expect(throws: AppConfigurationError.self) {
+            try BridgeAppModel.importConfiguration(
+                from: data,
+                into: target,
+                isStreaming: true,
+                releaseVoiceKey: {
+                    releaseCount += 1
+                    return true
+                }
+            )
+        }
+        #expect(releaseCount == 0)
+        #expect(target.voiceKeyMode == .function)
+        #expect(target.gainDB == 3)
+
+        #expect(throws: AppConfigurationError.self) {
+            try BridgeAppModel.importConfiguration(
+                from: data,
+                into: target,
+                isStreaming: false,
+                releaseVoiceKey: {
+                    releaseCount += 1
+                    return false
+                }
+            )
+        }
+        #expect(releaseCount == 1)
+        #expect(target.voiceKeyMode == .function)
+        #expect(target.gainDB == 3)
+
+        #expect(try BridgeAppModel.importConfiguration(
+            from: data,
+            into: target,
+            isStreaming: false,
+            releaseVoiceKey: {
+                releaseCount += 1
+                return true
+            }
+        ))
+        #expect(releaseCount == 2)
+        #expect(target.voiceKeyMode == .leftCommand)
+        #expect(target.gainDB == 12)
     }
 }

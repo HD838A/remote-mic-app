@@ -1117,78 +1117,92 @@ struct SettingsView: View {
 
     private var mappingFooter: some View {
         GlassPanel {
-            HStack(spacing: 16) {
-                Label(
-                    model.hidStatus.text(using: localization),
-                    systemImage: "keyboard"
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                mappingHIDStatus
+                Divider()
+                mappingSelectionLockControl
+                Divider()
+                mappingVoiceKeyModeControl
+                Divider()
+                mappingVoiceFnTapControl
+                HStack {
+                    Spacer(minLength: 0)
+                    mappingRestoreDefaultsButton
+                }
+            }
+        }
+    }
+
+    private var mappingHIDStatus: some View {
+        Label(
+            model.hidStatus.text(using: localization),
+            systemImage: "keyboard"
+        )
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
+        .lineLimit(2)
+    }
+
+    private var mappingSelectionLockControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
+                .font(.system(size: 12, weight: .medium))
+                .toggleStyle(.switch)
+            Text("button_mapping.selection_lock_hint_short")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
-
-                Divider().frame(height: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
-                        .font(.system(size: 12, weight: .medium))
-                        .toggleStyle(.switch)
-                    Text("button_mapping.selection_lock_hint_short")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                .help(localization.text("button_mapping.selection_lock_help"))
-
-                Divider().frame(height: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("connection.voice_key_mode.title")
-                        .font(.system(size: 12, weight: .medium))
-                    Picker("connection.voice_key_mode.title", selection: Binding(
-                        get: { settings.voiceKeyMode },
-                        set: { model.setVoiceKeyMode($0) }
-                    )) {
-                        ForEach(VoiceKeyMode.allCases) { mode in
-                            Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .controlSize(.small)
-                    Text("connection.voice_key_mode.help")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-                .help(localization.text("connection.voice_key_mode.help"))
-
-                Divider().frame(height: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
-                        get: { settings.voiceFnTapModeEnabled },
-                        set: { model.setVoiceFnTapModeEnabled($0) }
-                    ))
-                    .font(.system(size: 12, weight: .medium))
-                    .toggleStyle(.switch)
-                    Text("connection.voice_fn_tap.hint_short")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                .help(localization.text("connection.voice_fn_tap.hint"))
-                .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
-                .disabled(settings.voiceKeyMode != .function)
-
-                Spacer(minLength: 0)
-
-                Button("common.action.restore_defaults") {
-                    settings.resetBindings()
-                    selectedRemoteButton = .ok
-                }
-                .compatibilityButtonStyle(.standard)
-            }
         }
+        .help(localization.text("button_mapping.selection_lock_help"))
+    }
+
+    private var mappingVoiceKeyModeControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("connection.voice_key_mode.title")
+                .font(.system(size: 12, weight: .medium))
+            Picker("connection.voice_key_mode.title", selection: Binding(
+                get: { settings.voiceKeyMode },
+                set: { model.setVoiceKeyMode($0) }
+            )) {
+                ForEach(VoiceKeyMode.allCases) { mode in
+                    Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            Text("connection.voice_key_mode.help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .help(localization.text("connection.voice_key_mode.help"))
+    }
+
+    private var mappingVoiceFnTapControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
+                get: { settings.voiceFnTapModeEnabled },
+                set: { model.setVoiceFnTapModeEnabled($0) }
+            ))
+            .font(.system(size: 12, weight: .medium))
+            .toggleStyle(.switch)
+            Text("connection.voice_fn_tap.hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .help(localization.text("connection.voice_fn_tap.hint"))
+        .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
+        .disabled(settings.voiceKeyMode != .function)
+    }
+
+    private var mappingRestoreDefaultsButton: some View {
+        Button("common.action.restore_defaults") {
+            settings.resetBindings()
+            selectedRemoteButton = .ok
+        }
+        .compatibilityButtonStyle(.standard)
     }
 
     @ViewBuilder
@@ -3043,11 +3057,9 @@ struct SettingsView: View {
             prompt: localization.text("configuration.import.prompt")
         ) else { return }
         do {
-            try settings.importConfiguration(from: Data(contentsOf: url))
+            try model.importConfiguration(from: Data(contentsOf: url))
             localization.select(settings.applicationLanguage)
             setDockIconVisible(settings.showDockIcon)
-            model.applyAudioSettings(reason: "configuration_import")
-            model.applyHIDSettings()
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.success"),
                 tint: .green,
@@ -3056,6 +3068,12 @@ struct SettingsView: View {
         } catch AppConfigurationError.unsupportedVersion {
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.unsupported_version"),
+                tint: .red,
+                systemImage: "exclamationmark.triangle.fill"
+            )
+        } catch AppConfigurationError.unsafeVoiceKeyChange {
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("configuration.import.voice_key_busy"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
             )

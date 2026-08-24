@@ -26,14 +26,14 @@ final class PreferredInputSourceMonitor {
     }
 
     private struct ManagedInputSourceSession {
-        enum Owner: Equatable {
+        enum Owner: Hashable {
             case functionKey
             case explicitVoice
         }
 
         let previousInputSourceID: String
         let targetInputSourceID: String
-        let owner: Owner
+        var owners: Set<Owner>
     }
 
     init(
@@ -65,8 +65,11 @@ final class PreferredInputSourceMonitor {
         }
     }
 
-    func stop() {
-        finishManagedInputSourceSession(reason: "monitor_stop", owner: nil)
+    func stop(preservingExplicitVoiceSession: Bool = false) {
+        finishManagedInputSourceSession(
+            reason: "monitor_stop",
+            owner: preservingExplicitVoiceSession ? .functionKey : nil
+        )
         if let monitor {
             removeMonitor(monitor)
             self.monitor = nil
@@ -127,7 +130,11 @@ final class PreferredInputSourceMonitor {
                     "tool=\(selectedVoiceTool.rawValue)"
             )
         }
-        guard managedInputSourceSession == nil else { return }
+        if var session = managedInputSourceSession {
+            session.owners.insert(owner)
+            managedInputSourceSession = session
+            return
+        }
 
         guard let targetInputSourceID = selectedVoiceTool.preferredInputSourceID else { return }
         let previousInputSourceID = currentInputSourceID()
@@ -147,7 +154,7 @@ final class PreferredInputSourceMonitor {
             managedInputSourceSession = ManagedInputSourceSession(
                 previousInputSourceID: previousInputSourceID,
                 targetInputSourceID: targetInputSourceID,
-                owner: owner
+                owners: [owner]
             )
         }
     }
@@ -156,8 +163,14 @@ final class PreferredInputSourceMonitor {
         reason: String,
         owner: ManagedInputSourceSession.Owner?
     ) {
-        guard let session = managedInputSourceSession else { return }
-        if let owner, session.owner != owner { return }
+        guard var session = managedInputSourceSession else { return }
+        if let owner {
+            session.owners.remove(owner)
+            guard session.owners.isEmpty else {
+                managedInputSourceSession = session
+                return
+            }
+        }
         managedInputSourceSession = nil
 
         guard currentInputSourceID() == session.targetInputSourceID else {

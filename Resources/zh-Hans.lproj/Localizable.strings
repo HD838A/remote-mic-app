@@ -221,12 +221,8 @@
 "connection.voice_key.mode.fn" = "Fn/地球键";
 "connection.voice_key.mode.left_command" = "左 Command";
 "connection.voice_key.mode.right_command" = "右 Command";
-"connection.voice_key_mode.fn_globe" = "Fn/地球键";
-"connection.voice_key_mode.left_command" = "左 Command 长按";
-"connection.voice_key_mode.right_command" = "右 Command 长按";
 "connection.voice_key_mode.help" = "默认使用 Fn/地球键。Command 模式需要辅助功能权限，并要求目标语音应用支持对应的单独左或右 Command 长按；许多应用会把左右 Command 合并为通用 Command。长按期间按其他键可能触发 Command 快捷键。";
 "connection.voice_key_mode.command_permission" = "Command 模式需要辅助功能权限";
-"connection.voice_key_mode.fn_tap_only" = "Fn 点按模式仅适用于 Fn/地球键";
 "connection.action.reconnect" = "立即重新连接";
 "connection.phone.section_title" = "iPhone、Apple Watch 与网页版";
 "connection.phone.ios_title" = "iOS App（推荐）";
@@ -551,6 +547,7 @@
 "configuration.import.prompt" = "导入";
 "configuration.import.success" = "配置已导入并应用";
 "configuration.import.unsupported_version" = "导入失败：不支持此配置版本";
+"configuration.import.voice_key_busy" = "导入失败：语音键正在使用或无法安全释放，请结束语音输入后重试";
 "configuration.import.invalid_file" = "导入失败：配置文件无效";
 "onboarding.phase.prepare" = "准备";
 "onboarding.phase.setup" = "设置";
