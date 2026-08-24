@@ -277,6 +277,7 @@ fi
 if ! /usr/bin/awk '
   $0 == "  classify_changes:" { section = 1; next }
   section && $0 ~ /^  [A-Za-z_][A-Za-z0-9_-]*:/ { exit(found ? 0 : 1) }
+  section && $0 == "    runs-on: ubuntu-latest" { exit 1 }
   section && $0 == "    runs-on: macos-15" { found = 1 }
   END { if (section && !found) exit 1 }
 ' "$TEST_REPO/.github/workflows/mac-ci.yml"; then
