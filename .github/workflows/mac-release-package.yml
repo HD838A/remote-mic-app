@@ -575,7 +575,7 @@ jobs:
                 notarySecretsCommit: "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
                 matchCommit: "2e271768593821611c54f3d1b376f39e503f53be",
                 sayAllAICommit: "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-                sayAllMacroPlatformCommit: "b71482ccb3c5d3be319abe7cd61915ab90cbc3ba",
+                sayAllMacroPlatformCommit: "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
                 sayAllMacRemoteCommit: "3f3c782180eef4024b53941c1f65d80e7cff4c66"
               }
             }' > "$toolchain_file"
@@ -640,7 +640,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-macro-platform
-          ref: b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
+          ref: 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
           path: .private-dependencies/sayall-macro-platform
           ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
@@ -675,7 +675,7 @@ jobs:
       - name: Verify immutable private dependency checkouts
         run: |
           test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"
-          test "$(git -C .private-dependencies/sayall-macro-platform rev-parse HEAD)" = "b71482ccb3c5d3be319abe7cd61915ab90cbc3ba"
+          test "$(git -C .private-dependencies/sayall-macro-platform rev-parse HEAD)" = "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c"
           test "$(git -C .private-dependencies/sayall-mac-remote rev-parse HEAD)" = "3f3c782180eef4024b53941c1f65d80e7cff4c66"
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"
           match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
