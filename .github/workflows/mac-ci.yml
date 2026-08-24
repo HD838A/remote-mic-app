@@ -18,7 +18,8 @@ permissions:
 jobs:
   classify_changes:
     name: Classify changed files
-    runs-on: ubuntu-latest
+    # The trusted release validator is a zsh script; macOS supplies /bin/zsh.
+    runs-on: macos-15
     outputs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
       reuse_parent_main_ci: ${{ steps.changes.outputs.reuse_parent_main_ci }}
