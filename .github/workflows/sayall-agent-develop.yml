@@ -147,7 +147,10 @@ jobs:
           fi
           git add -N -- .
           git diff --binary --no-ext-diff HEAD -- . ':(exclude).sayall-input/**' > "$patch_file"
-          mapfile -t changed_paths < <(git diff --name-only HEAD -- . ':(exclude).sayall-input/**')
+          changed_paths=()
+          while IFS= read -r path; do
+            changed_paths+=("$path")
+          done < <(git diff --name-only HEAD -- . ':(exclude).sayall-input/**')
           if (( ${#changed_paths[@]} == 0 )); then
             echo "outcome=no_changes" >> "$GITHUB_OUTPUT"
             echo "has_patch=false" >> "$GITHUB_OUTPUT"
@@ -183,7 +186,7 @@ jobs:
             echo "has_patch=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          sha256sum "$patch_file" > "$manifest_file"
+          shasum -a 256 "$patch_file" > "$manifest_file"
           echo "outcome=patch_ready" >> "$GITHUB_OUTPUT"
           echo "has_patch=true" >> "$GITHUB_OUTPUT"
 
