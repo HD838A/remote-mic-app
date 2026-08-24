@@ -62,6 +62,7 @@ fi
 /bin/cp "$ROOT/scripts/reconcile-release-event.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/release-variant.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/test.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/test-release-pipeline-optimization.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/test-release-resume-workflow.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-release-control-plane-diff.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-app.sh" "$TEST_REPO/scripts/"
