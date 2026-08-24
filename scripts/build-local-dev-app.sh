@@ -40,6 +40,17 @@ plutil -insert SayAllDevelopmentBuild -bool true "$INFO_PLIST"
 plutil -remove SayAllDevelopmentSourceCommit "$INFO_PLIST" 2>/dev/null || true
 plutil -insert SayAllDevelopmentSourceCommit -string "$(git -C "$ROOT" rev-parse HEAD)" "$INFO_PLIST"
 
+# System Settings and LaunchServices prefer localized bundle names over the
+# values in Info.plist. Keep every local development identity visibly distinct
+# from the installed production app so privacy entries cannot look duplicated.
+for LOCALIZED_INFO in \
+  "$DEV_APP/Contents/Resources/en.lproj/InfoPlist.strings" \
+  "$DEV_APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
+do
+  /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName SayAll Dev" "$LOCALIZED_INFO"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleName SayAll Dev" "$LOCALIZED_INFO"
+done
+
 codesign \
   --force \
   --timestamp=none \
@@ -52,6 +63,13 @@ test "$(plutil -extract CFBundleIdentifier raw -o - "$INFO_PLIST")" = "$DEV_BUND
 test "$(plutil -extract CFBundleDisplayName raw -o - "$INFO_PLIST")" = "SayAll Dev"
 test "$(plutil -extract SayAllDevelopmentBuild raw -o - "$INFO_PLIST")" = "true"
 test "$(plutil -extract SUEnableAutomaticChecks raw -o - "$INFO_PLIST")" = "false"
+for LOCALIZED_INFO in \
+  "$DEV_APP/Contents/Resources/en.lproj/InfoPlist.strings" \
+  "$DEV_APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
+do
+  test "$(plutil -extract CFBundleDisplayName raw -o - "$LOCALIZED_INFO")" = "SayAll Dev"
+  test "$(plutil -extract CFBundleName raw -o - "$LOCALIZED_INFO")" = "SayAll Dev"
+done
 
 print "$DEV_APP"
 print "LOCAL DEVELOPMENT BUILD: ad-hoc signed, update checks disabled, not for distribution"
