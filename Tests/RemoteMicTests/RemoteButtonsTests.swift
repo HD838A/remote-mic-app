@@ -245,6 +245,91 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.deleteBackward.allowsRepeat)
     }
 
+    @Test func electronComposerFocusWaitsLongEnoughForTheManualAccessibilityTree() {
+        // 真机上 Electron 收到 AXManualAccessibility 后约 1~2 秒才建好 web 内容树。
+        #expect(KeyboardInjector.manualAccessibilityAttribute == "AXManualAccessibility")
+        #expect(KeyboardInjector.enhancedUserInterfaceAttribute == "AXEnhancedUserInterface")
+        #expect(KeyboardInjector.composerFocusMaximumAttempts == 12)
+        #expect(KeyboardInjector.composerFocusRetryMilliseconds == 250)
+        let retryWindow =
+            (KeyboardInjector.composerFocusMaximumAttempts - 1) *
+            KeyboardInjector.composerFocusRetryMilliseconds
+        #expect(retryWindow >= 2_000)
+    }
+
+    @Test func manualAccessibilityFailuresAreNamedAndLoggedOnlyWhenTheyAddInformation() {
+        #expect(KeyboardInjector.manualAccessibilityResultName(.success) == "success")
+        #expect(
+            KeyboardInjector.manualAccessibilityResultName(.attributeUnsupported)
+                == "attribute_unsupported"
+        )
+        #expect(KeyboardInjector.manualAccessibilityResultName(.cannotComplete) == "cannot_complete")
+        #expect(KeyboardInjector.manualAccessibilityResultName(.apiDisabled) == "api_disabled")
+        #expect(KeyboardInjector.manualAccessibilityResultName(.actionUnsupported).hasPrefix("error_"))
+
+        // Chromium 私有属性成功时不尝试降级；只有 attribute_unsupported 才会走
+        // AXEnhancedUserInterface，日志必须说明是哪个属性回答的。
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .success,
+            fallback: nil
+        ) == "success")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .attributeUnsupported,
+            fallback: .success
+        ) == "fallback_enhanced_success")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .attributeUnsupported,
+            fallback: .cannotComplete
+        ) == "fallback_enhanced_cannot_complete")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .attributeUnsupported,
+            fallback: .attributeUnsupported
+        ) == "fallback_enhanced_attribute_unsupported")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .cannotComplete,
+            fallback: nil
+        ) == "cannot_complete")
+
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .success,
+            fallback: nil
+        ) == .success)
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .attributeUnsupported,
+            fallback: .success
+        ) == .success)
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .attributeUnsupported,
+            fallback: .attributeUnsupported
+        ) == .attributeUnsupported)
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .cannotComplete,
+            fallback: nil
+        ) == .cannotComplete)
+
+        // 首次尝试总是记录一行，之后只记录第一次真正建树成功。
+        #expect(KeyboardInjector.shouldLogManualAccessibility(
+            result: .attributeUnsupported,
+            attempt: 0,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(!KeyboardInjector.shouldLogManualAccessibility(
+            result: .attributeUnsupported,
+            attempt: 4,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(KeyboardInjector.shouldLogManualAccessibility(
+            result: .success,
+            attempt: 4,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(!KeyboardInjector.shouldLogManualAccessibility(
+            result: .success,
+            attempt: 4,
+            alreadyLoggedSuccess: true
+        ))
+    }
+
     @Test func hidReportsRouteOnlyToTheirActivePhysicalRemote() {
         #expect(HIDRemoteMonitor.acceptsReport(
             reportingFingerprint: "remote-a",
