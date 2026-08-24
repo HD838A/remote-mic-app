@@ -72,25 +72,5 @@
     "affectedPaths": { "type": "array", "maxItems": 80, "items": { "type": "string", "maxLength": 300 } },
     "implementationSteps": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 1000 } },
     "testPlan": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 1000 } }
-  },
-  "allOf": [
-    {
-      "if": { "properties": { "decision": { "enum": ["already_implemented", "fixed_unreleased"] } } },
-      "then": { "properties": { "evidence": { "minItems": 1 } } }
-    },
-    {
-      "if": { "properties": { "decision": { "enum": ["duplicate_bug", "duplicate_requirement"] } } },
-      "then": { "properties": { "duplicateCandidates": { "minItems": 1 } } }
-    },
-    {
-      "if": { "properties": { "decision": { "enum": ["valid_bug", "valid_feature", "regression"] } } },
-      "then": {
-        "properties": {
-          "affectedPaths": { "minItems": 1 },
-          "implementationSteps": { "minItems": 1 },
-          "testPlan": { "minItems": 1 }
-        }
-      }
-    }
-  ]
+  }
 }
