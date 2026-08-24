@@ -339,13 +339,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.handleVoiceFnTapFailure(failure)
         }
     )
-    private lazy var qianwenVoiceCommandSession = VoiceCommandHoldSessionController(
-        setKeyPressed: { pressed in
-            let succeeded = KeyboardInjector.setRightCommandPressed(pressed)
-            AppLogger.shared.write(
-                "QIANWEN COMMAND \(pressed ? "DOWN" : "UP")\(succeeded ? "" : " failed")"
-            )
-            return succeeded
+    private lazy var qianwenVoiceSession = QianwenVoiceSessionController(
+        setMapping: { [weak self] rightCommand in
+            self?.applyQianwenHardwareMapping(rightCommand: rightCommand) ?? false
         },
         drainAudio: { [weak self] completion in
             guard let self else {
@@ -353,6 +349,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 return
             }
             self.audioOutput.endSessionAfterDraining(completion: completion)
+        },
+        releaseCommand: {
+            let succeeded = KeyboardInjector.setRightCommandPressed(false)
+            AppLogger.shared.write("QIANWEN COMMAND UP\(succeeded ? "" : " failed")")
+            return succeeded
+        },
+        confirmVoice: {
+            let succeeded = KeyboardInjector.sendQianwenConfirmationInterrupt()
+            AppLogger.shared.write("QIANWEN CONFIRM F20\(succeeded ? "" : " failed")")
+            return succeeded
         }
     )
     private lazy var transcriptCaptureCoordinator = TranscriptCaptureCoordinator(
@@ -736,7 +742,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         stopLongRecording(reason: "app_stop")
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
-        qianwenVoiceCommandSession.shutdown()
+        qianwenVoiceSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
         bluetoothBridges.removeAll()
@@ -1402,16 +1408,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         var powerKeySuppressed: Bool
         if requestedQianwenMode, KeyboardInjector.isAccessibilityTrusted {
             voiceFnTapSession.setEnabled(false)
-            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
-            if voiceFunctionMapper.isVoiceKeyNeutralized {
-                qianwenVoiceCommandSession.setEnabled(true)
+            powerKeySuppressed = applyVoiceFunctionMapping(
+                neutralizeVoiceKey: false,
+                mapVoiceKeyToRightCommand: true
+            )
+            if voiceFunctionMapper.isApplied {
+                qianwenVoiceSession.setEnabled(true)
             } else {
                 settings.qianwenVoiceModeEnabled = false
-                qianwenVoiceCommandSession.setEnabled(false)
+                qianwenVoiceSession.setEnabled(false)
                 powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
             }
         } else if requestedFnTapMode, KeyboardInjector.isAccessibilityTrusted {
-            qianwenVoiceCommandSession.setEnabled(false)
+            qianwenVoiceSession.setEnabled(false)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
                 voiceFnTapSession.setEnabled(true)
@@ -1427,7 +1436,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             if requestedFnTapMode {
                 settings.voiceFnTapModeEnabled = false
             }
-            qianwenVoiceCommandSession.setEnabled(false)
+            qianwenVoiceSession.setEnabled(false)
             voiceFnTapSession.setEnabled(false)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
         }
@@ -1574,7 +1583,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if enabled {
             if settings.qianwenVoiceModeEnabled {
                 settings.qianwenVoiceModeEnabled = false
-                qianwenVoiceCommandSession.setEnabled(false)
+                qianwenVoiceSession.setEnabled(false)
             }
             enableVoiceFnTapMode()
             return
@@ -1589,7 +1598,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard settings.qianwenVoiceModeEnabled != enabled else { return }
         if !enabled {
             settings.qianwenVoiceModeEnabled = false
-            qianwenVoiceCommandSession.setEnabled(false)
+            qianwenVoiceSession.setEnabled(false)
             applyHIDSettings()
             return
         }
@@ -1810,7 +1819,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             if voiceWasActive {
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
-                qianwenVoiceCommandSession.cancelVoice()
+                qianwenVoiceSession.cancelVoice()
                 endVoiceSessionIfNeeded(flushAudio: false)
             }
             if longRecordingRequested {
@@ -2911,10 +2920,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     @discardableResult
-    private func applyVoiceFunctionMapping(neutralizeVoiceKey: Bool) -> Bool {
+    private func applyVoiceFunctionMapping(
+        neutralizeVoiceKey: Bool,
+        mapVoiceKeyToRightCommand: Bool = false
+    ) -> Bool {
         let applied = voiceFunctionMapper.apply(
             suppressPowerKey: settings.customMappingEnabled,
-            neutralizeVoiceKey: neutralizeVoiceKey
+            neutralizeVoiceKey: neutralizeVoiceKey,
+            mapVoiceKeyToRightCommand: mapVoiceKeyToRightCommand
         )
         if !isStreaming {
             isVoiceTriggerEnabled = applied
@@ -2933,11 +2946,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func beginQianwenRightCommandHoldIfNeeded() -> Bool {
         guard settings.qianwenVoiceModeEnabled else { return true }
-        return qianwenVoiceCommandSession.startVoice()
+        return qianwenVoiceSession.startVoice()
     }
 
     private func scheduleQianwenRightCommandReleaseIfNeeded() {
-        _ = qianwenVoiceCommandSession.stopVoice()
+        _ = qianwenVoiceSession.stopVoice()
+    }
+
+    private func applyQianwenHardwareMapping(rightCommand: Bool) -> Bool {
+        _ = applyVoiceFunctionMapping(
+            neutralizeVoiceKey: !rightCommand,
+            mapVoiceKeyToRightCommand: rightCommand
+        )
+        return rightCommand ? voiceFunctionMapper.isApplied : voiceFunctionMapper.isVoiceKeyNeutralized
     }
 
     @discardableResult

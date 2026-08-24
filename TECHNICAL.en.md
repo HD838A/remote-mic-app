@@ -37,7 +37,7 @@ The bundle contains en.lproj and zh-Hans.lproj with Localizable.strings, InfoPli
 | HIDRemoteMonitor.swift | raw RC003 HID reports, exclusive/compatibility mode, repeat behavior, and active buttons |
 | KeyboardEventSuppressor.swift | short suppression of duplicate native events in compatibility mode |
 | KeyboardInjector.swift | keyboard, media-key, and preset-app actions |
-| RemoteVoiceFunctionMapper.swift | RC003-only voice-button F5 mapping to Fn/Globe, or F5 neutralization in Qianwen mode, with restoration |
+| RemoteVoiceFunctionMapper.swift | RC003-only voice-button F5 mapping to Fn/Globe, Right Command, or a neutral usage, with restoration |
 | AppSettings.swift | persistent audio, language, HID, mapping, and peripheral settings |
 
 ## Bluetooth and ATVV
@@ -103,7 +103,7 @@ Direction, Back, and volume buttons can hold-repeat. Normal physical button acti
 
 The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. `RemoteVoiceFunctionMapper` matches only RC003 vendor/product IDs and, by default, maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03. While custom button mapping is enabled, the same component maps RC003 Keyboard Power usage 0x66 to F20 usage 0x6F.
 
-The opt-in Qianwen compatibility mode first maps the physical F5 to usage `0`, then uses `CGEvent` to press Right Command at ATVV `STREAM_START` and release it after queued audio drains at `STREAM_STOP`. Disconnect, mode disable, and app exit release it immediately. This prevents physical F5 from combining with Command into macOS's VoiceOver shortcut. The mode selects `MiRemoteV 2ch` as SayAll's output, while Qianwen must explicitly select the same microphone. It is mutually exclusive with Fn tap mode. Legacy configurations without `qianwenVoiceModeEnabled` treat it as off.
+The opt-in Qianwen compatibility mode fully maps physical F5 to Right GUI / Right Command (usage page `0x07`, usage `0xE7`) because Qianwen's global shortcut monitor ignores ordinary `CGEvent` simulation. After ATVV `STREAM_STOP` and queued audio drain, SayAll temporarily maps F5 to usage `0`, posts a Right Command key-up, then sends a harmless F20 event that makes Qianwen confirm the current voice input. It rearms the Right Command mapping 150 ms later. Disconnect, mode disable, and app exit cancel pending work and release Command. The mode selects `MiRemoteV 2ch` as SayAll's output, while Qianwen must explicitly select the same microphone. It is mutually exclusive with Fn tap mode. Legacy configurations without `qianwenVoiceModeEnabled` treat it as off.
 
 The opt-in Typeless compatibility mode first requires Accessibility permission, then transactionally maps F5 to usage 0 on every matching RC003 service. Missing targets or any partial failure roll back all changes, disable the setting, and restore the default Fn mapping. Once enabled, `VoiceFnTapSessionController` buffers pre-roll at physical voice-stream start and writes it to the loopback device only after the opening Fn tap succeeds. On release it waits for `VirtualAudioOutput.endSessionAfterDraining` before sending the matching closing Fn tap. Generations and cancellable tasks isolate rapid consecutive sessions and clean up on disable, disconnect, reconnect, or app exit; a failed opening tap never produces a closing tap.
 

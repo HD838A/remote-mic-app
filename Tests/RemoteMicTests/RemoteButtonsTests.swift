@@ -605,6 +605,44 @@ struct RemoteButtonsTests {
         #expect(posted[1].2.isEmpty)
     }
 
+    @Test func qianwenRightCommandEventOmitsTheSyntheticMarker() throws {
+        let qianwenEvent = try #require(KeyboardInjector.keyStateEvent(
+            code: KeyboardInjector.rightCommandKeyCode,
+            isDown: true,
+            flags: .maskCommand,
+            userData: nil
+        ))
+        let ordinaryInjectedEvent = try #require(KeyboardInjector.keyStateEvent(
+            code: KeyboardInjector.functionKeyCode,
+            isDown: true,
+            flags: .maskSecondaryFn,
+            userData: KeyboardInjector.syntheticEventMarker
+        ))
+
+        #expect(qianwenEvent.getIntegerValueField(.eventSourceUserData) == 0)
+        #expect(
+            ordinaryInjectedEvent.getIntegerValueField(.eventSourceUserData) ==
+                KeyboardInjector.syntheticEventMarker
+        )
+    }
+
+    @Test func qianwenConfirmationUsesAHarmlessF20Tap() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+
+        #expect(KeyboardInjector.sendQianwenConfirmationInterrupt(
+            accessibilityTrusted: { true },
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            }
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == KeyboardInjector.f20KeyCode)
+        #expect(posted[0].1)
+        #expect(!posted[1].1)
+        #expect(posted.allSatisfy { $0.2.isEmpty })
+    }
+
     @Test func unconfiguredCustomShortcutDoesNotReportPermissionFailure() {
         #expect(KeyboardInjector.send(
             .customShortcut,

@@ -71,6 +71,7 @@ enum KeyboardInjector {
     static let contextualMenuKeyCode: CGKeyCode = 110
     static let functionKeyCode: CGKeyCode = 63
     static let rightCommandKeyCode: CGKeyCode = 54
+    static let f20KeyCode: CGKeyCode = 90
     private static let focusRequests = ApplicationFocusRequestGate()
     private static let focusQueue = DispatchQueue(
         label: "RemoteMic.application-focus",
@@ -114,7 +115,7 @@ enum KeyboardInjector {
     static func setRightCommandPressed(
         _ isPressed: Bool,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
-        keyStatePoster: KeyStatePoster = postKeyState
+        keyStatePoster: KeyStatePoster = postUnmarkedKeyState
     ) -> Bool {
         guard accessibilityTrusted() else { return false }
         return keyStatePoster(
@@ -122,6 +123,16 @@ enum KeyboardInjector {
             isPressed,
             isPressed ? .maskCommand : []
         )
+    }
+
+    @discardableResult
+    static func sendQianwenConfirmationInterrupt(
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postUnmarkedKeyState
+    ) -> Bool {
+        guard accessibilityTrusted() else { return false }
+        return keyStatePoster(f20KeyCode, true, []) &&
+            keyStatePoster(f20KeyCode, false, [])
     }
 
     @discardableResult
@@ -1368,13 +1379,41 @@ enum KeyboardInjector {
         isDown: Bool,
         flags: CGEventFlags
     ) -> Bool {
-        guard let source = CGEventSource(stateID: .hidSystemState),
-              let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
-        else { return false }
-        event.flags = flags
-        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        guard let event = keyStateEvent(
+            code: code,
+            isDown: isDown,
+            flags: flags,
+            userData: syntheticEventMarker
+        ) else { return false }
         event.post(tap: .cghidEventTap)
         return true
+    }
+
+    private static func postUnmarkedKeyState(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags
+    ) -> Bool {
+        guard let event = keyStateEvent(code: code, isDown: isDown, flags: flags, userData: nil)
+        else { return false }
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
+    static func keyStateEvent(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags,
+        userData: Int64?
+    ) -> CGEvent? {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
+        else { return nil }
+        event.flags = flags
+        if let userData {
+            event.setIntegerValueField(.eventSourceUserData, value: userData)
+        }
+        return event
     }
 
     private static func postSystemKey(type: Int32) {

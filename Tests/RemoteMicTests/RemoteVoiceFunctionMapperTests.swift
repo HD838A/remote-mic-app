@@ -27,6 +27,26 @@ struct RemoteVoiceFunctionMapperTests {
         #expect(HIDUsageMapping(property: mapping.property) == mapping)
     }
 
+    @Test func qianwenModeMapsEveryRemoteF5ServiceToRightCommand() {
+        let first = MappingServiceBox(registryID: 1, mappings: [])
+        let second = MappingServiceBox(registryID: 2, mappings: [])
+        let mapper = RemoteVoiceFunctionMapper { [first.service, second.service] }
+
+        #expect(mapper.apply(mapVoiceKeyToRightCommand: true))
+        #expect(first.mappings == [RemoteVoiceFunctionMappingPolicy.rightCommandRemoteVoiceKey])
+        #expect(second.mappings == [RemoteVoiceFunctionMappingPolicy.rightCommandRemoteVoiceKey])
+    }
+
+    @Test func qianwenMappingRollsBackWhenAnyRemoteServiceFails() {
+        let original = [HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 5)]
+        let first = MappingServiceBox(registryID: 1, mappings: original)
+        let second = MappingServiceBox(registryID: 2, mappings: original, acceptsWrites: false)
+        let mapper = RemoteVoiceFunctionMapper { [first.service, second.service] }
+
+        #expect(!mapper.apply(mapVoiceKeyToRightCommand: true))
+        #expect(first.mappings == original)
+    }
+
     @Test func suppressesRemotePowerAsHarmlessF20WithoutChangingOtherMappings() {
         let unrelated = HIDUsageMapping(
             source: 0x0000_0007_0000_0004,

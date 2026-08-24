@@ -39,6 +39,11 @@ enum RemoteVoiceFunctionMappingPolicy {
         destination: 0x0000_00FF_0000_0003
     )
 
+    static let rightCommandRemoteVoiceKey = HIDUsageMapping(
+        source: 0x0000_0007_0000_003E,
+        destination: 0x0000_0007_0000_00E7
+    )
+
     // Typeless 等点按式语音工具会被 Fn 长按干扰；此模式下彻底丢弃语音键的
     // 按键事件（目标 usage 0），Fn 点按改由软件注入，避免物理按键按住时干扰注入。
     static let neutralRemoteVoiceKey = HIDUsageMapping(
@@ -135,8 +140,10 @@ final class RemoteVoiceFunctionMapper {
     @discardableResult
     func apply(
         suppressPowerKey: Bool = false,
-        neutralizeVoiceKey: Bool = false
+        neutralizeVoiceKey: Bool = false,
+        mapVoiceKeyToRightCommand: Bool = false
     ) -> Bool {
+        let requiresCompleteVoiceMapping = neutralizeVoiceKey || mapVoiceKeyToRightCommand
         let services = serviceProvider()
         let matchedCount = services.count
         guard matchedCount > 0 else {
@@ -158,7 +165,7 @@ final class RemoteVoiceFunctionMapper {
 
         for (index, service) in services.enumerated() {
             guard let registryID = service.registryID else {
-                if neutralizeVoiceKey {
+                if requiresCompleteVoiceMapping {
                     rollback(
                         services: services,
                         snapshots: snapshots,
@@ -190,13 +197,15 @@ final class RemoteVoiceFunctionMapper {
                 to: current,
                 voiceMapping: neutralizeVoiceKey
                     ? RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
-                    : RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+                    : mapVoiceKeyToRightCommand
+                        ? RemoteVoiceFunctionMappingPolicy.rightCommandRemoteVoiceKey
+                        : RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
                 powerMapping: suppressPowerKey
                     ? RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
                     : originalMappings[registryID]?.power
             )
             guard service.setMappings(desired) else {
-                if neutralizeVoiceKey {
+                if requiresCompleteVoiceMapping {
                     rollback(
                         services: services,
                         snapshots: snapshots,
@@ -219,7 +228,7 @@ final class RemoteVoiceFunctionMapper {
         let fullySuppressedLocations = Set(matchedCountsByLocation.compactMap { locationID, count in
             appliedCountsByLocation[locationID] == count ? locationID : nil
         })
-        isApplied = neutralizeVoiceKey ? allTargetsApplied : appliedCount > 0
+        isApplied = requiresCompleteVoiceMapping ? allTargetsApplied : appliedCount > 0
         isVoiceKeyNeutralized = neutralizeVoiceKey && allTargetsApplied
         if suppressPowerKey, !fullySuppressedLocations.isEmpty {
             isPowerKeySuppressed = true
