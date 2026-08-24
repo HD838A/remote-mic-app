@@ -42,12 +42,14 @@ jobs:
           API_URL: ${{ vars.WORKSHOP_AGENT_API_URL }}
           CALLBACK_SECRET: ${{ secrets.WORKSHOP_AGENT_CALLBACK_SECRET }}
           RUN_ID: ${{ steps.validate.outputs.run_id }}
-          DISPATCH_TOKEN: ${{ github.event.client_payload.dispatch_token }}
         run: |
           set -euo pipefail
           test -n "$API_URL"
           test -n "$CALLBACK_SECRET"
-          [[ "$DISPATCH_TOKEN" =~ ^sad_[A-Za-z0-9_-]{40,120}$ ]]
+          dispatch_token="$(jq -r '.client_payload.dispatch_token // empty' "$GITHUB_EVENT_PATH")"
+          test -n "$dispatch_token"
+          echo "::add-mask::$dispatch_token"
+          [[ "$dispatch_token" =~ ^sad_[A-Za-z0-9_-]{40,120}$ ]]
           body="$(jq -cn --arg phase "develop" --argjson workflowRunId "$GITHUB_RUN_ID" '{phase:$phase,workflowRunId:$workflowRunId}')"
           timestamp="$(date +%s)"
           event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_develop"
@@ -55,7 +57,7 @@ jobs:
           response_file="$RUNNER_TEMP/sayall-agent-context.json"
           curl --silent --show-error --fail-with-body \
             --request POST \
-            --url "${API_URL%/}/api/agent/dispatches/${DISPATCH_TOKEN}/redeem" \
+            --url "${API_URL%/}/api/agent/dispatches/${dispatch_token}/redeem" \
             --header "Content-Type: application/json" \
             --header "X-SayAll-Timestamp: $timestamp" \
             --header "X-SayAll-Event-Id: $event_id" \
