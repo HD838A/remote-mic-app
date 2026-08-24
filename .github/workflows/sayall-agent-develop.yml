@@ -51,7 +51,7 @@ jobs:
           body='{"phase":"develop"}'
           timestamp="$(date +%s)"
           event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_develop"
-          signature="$(printf '%s.%s' "$timestamp" "$body" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$body" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
           response_file="$RUNNER_TEMP/sayall-agent-context.json"
           curl --silent --show-error --fail-with-body \
             --request POST \
@@ -233,7 +233,7 @@ jobs:
           else
             payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),error:"Codex 修改或 Patch 策略校验失败。"}')"
           fi
-          signature="$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
           printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
           curl --silent --show-error --fail-with-body \
             --request POST \
@@ -368,7 +368,7 @@ jobs:
           else
             payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),error:"Agent Bot 发布分支或 Draft PR 失败。"}')"
           fi
-          signature="$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
           printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
           curl --silent --show-error --fail-with-body \
             --request POST \
@@ -400,7 +400,7 @@ jobs:
           timestamp="$(date +%s)"
           event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_preflight_failure"
           payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),error:"Agent 开发 Preflight 未通过。"}')"
-          signature="$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
           printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
           curl --silent --show-error --fail-with-body \
             --request POST \

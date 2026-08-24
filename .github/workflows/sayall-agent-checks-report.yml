@@ -91,7 +91,7 @@ jobs:
           else
             payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" --argjson prNumber "$PR_NUMBER" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),prNumber:$prNumber,error:"受保护 CI 的必需检查未通过。"}')"
           fi
-          signature="$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
           printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
           curl --silent --show-error --fail-with-body \
             --request POST \

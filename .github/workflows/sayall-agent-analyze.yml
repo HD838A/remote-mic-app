@@ -51,7 +51,7 @@ jobs:
           body='{"phase":"analyze"}'
           timestamp="$(date +%s)"
           event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_analyze"
-          signature="$(printf '%s.%s' "$timestamp" "$body" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$body" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
           response_file="$RUNNER_TEMP/sayall-agent-context.json"
           curl --silent --show-error --fail-with-body \
             --request POST \
@@ -155,7 +155,7 @@ jobs:
           callback() {
             local payload="$1"
             local callback_signature
-            callback_signature="$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+            callback_signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
             printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
             curl --silent --show-error --fail-with-body \
               --request POST \
@@ -222,7 +222,7 @@ jobs:
           timestamp="$(date +%s)"
           event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_preflight_failure"
           payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),error:"Agent 初检 Preflight 未通过。"}')"
-          signature="$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
           printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
           curl --silent --show-error --fail-with-body \
             --request POST \
