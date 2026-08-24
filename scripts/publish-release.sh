@@ -2,9 +2,10 @@
 set -euo pipefail
 umask 022
 
-ROOT="${0:A:h:h}"
-OUTPUT_DIR="$ROOT/dist"
-PLIST="$ROOT/Resources/Info.plist"
+SCRIPT_ROOT="${0:A:h:h}"
+SOURCE_ROOT="${RELEASE_SOURCE_ROOT:-$SCRIPT_ROOT}"
+OUTPUT_DIR="$SOURCE_ROOT/dist"
+PLIST="$SOURCE_ROOT/Resources/Info.plist"
 REPOSITORY="HD838A/remote-mic-app"
 PUBLIC_PRODUCT_NAME="无线麦SayAll.app"
 MODE="${1:-}"
@@ -43,9 +44,10 @@ SHARED_CHECKSUM_BASENAME="Remote-Mic-$VERSION.dmg.sha256"
 
 if [[ "$#" -ne 1 || \
       ( "$MODE" != "prerelease" && \
+        "$MODE" != "resume-prerelease" && \
         "$MODE" != "verify-prerelease" && \
         "$MODE" != "promote" ) ]]; then
-  print -u2 "usage: $0 prerelease|verify-prerelease|promote"
+  print -u2 "usage: $0 prerelease|resume-prerelease|verify-prerelease|promote"
   exit 1
 fi
 case "$DRY_RUN" in
@@ -65,7 +67,7 @@ if [[ ! "$EXPECTED_STABLE_TAG" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
   print -u2 "EXPECTED_STABLE_TAG must be an exact semantic version tag"
   exit 1
 fi
-if [[ "$MODE" == "prerelease" || "$MODE" == "verify-prerelease" ]]; then
+if [[ "$MODE" == "prerelease" || "$MODE" == "resume-prerelease" || "$MODE" == "verify-prerelease" ]]; then
   RELEASE_TAG="${REQUESTED_RELEASE_TAG:-v$VERSION}"
   if [[ "$RELEASE_TAG" != "v$VERSION" ]]; then
     print -u2 "RELEASE_TAG must match the version in Resources/Info.plist"
@@ -94,12 +96,15 @@ done
 if [[ "$DRY_RUN" == "0" ]]; then
   expected_workflow_path=".github/workflows/mac-release-package.yml"
   expected_head_branch="release/pre-$RELEASE_TAG"
+  if [[ "$MODE" == "resume-prerelease" ]]; then
+    expected_head_branch="main"
+  fi
   if [[ "$MODE" == "promote" ]]; then
     expected_workflow_path=".github/workflows/mac-stable-promote.yml"
     expected_head_branch="main"
   fi
   expected_workflow_ref="$REPOSITORY/$expected_workflow_path@"
-  current_commit="$(git -C "$ROOT" rev-parse HEAD)"
+  current_commit="$(git -C "$SCRIPT_ROOT" rev-parse HEAD)"
   if [[ "${GITHUB_ACTIONS:-}" != "true" || \
         "${GITHUB_REPOSITORY:-}" != "$REPOSITORY" || \
         "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" || \
@@ -167,9 +172,9 @@ verify_update_zip() {
   /bin/mkdir -p "$extract_dir"
   /usr/bin/ditto -x -k "$archive" "$extract_dir"
   if [[ "$variant" == "intel" ]]; then
-    RELEASE_VARIANT=intel "$ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
+    RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
   else
-    "$ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
+    "$SOURCE_ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
   fi
 }
 
@@ -190,10 +195,10 @@ verify_local_artifacts() {
   export EXPECTED_DEVELOPER_TEAM_ID REQUIRE_DEVELOPER_ID_SIGNING=1 REQUIRE_NOTARIZATION=1
   verify_update_zip "$UPDATE_ZIP" apple-silicon
   verify_update_zip "$INTEL_UPDATE_ZIP" intel
-  "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
-  "$ROOT/scripts/verify-dmg.sh" "$DMG"
-  RELEASE_VARIANT=intel "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INTEL_UNINSTALL_PACKAGE" uninstall
-  RELEASE_VARIANT=intel "$ROOT/scripts/verify-dmg.sh" "$INTEL_DMG"
+  "$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
+  "$SOURCE_ROOT/scripts/verify-dmg.sh" "$DMG"
+  RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh" "$INTEL_UNINSTALL_PACKAGE" uninstall
+  RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-dmg.sh" "$INTEL_DMG"
 
   rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX${UPDATE_ZIP:t}\"" "$APPCAST"
   rg -Fq "$CDN_DOWNLOAD_PREFIX${ZH_RELEASE_NOTES:t}" "$APPCAST"
@@ -253,15 +258,15 @@ generate_release_notes() {
       index($0, "## " version) == 1 { active = 1; next }
       active && /^## / { exit }
       active { print }
-    ' "$ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md"
+    ' "$SOURCE_ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md"
   } > "$RELEASE_NOTES"
 
   rg -q '^- ' "$RELEASE_NOTES"
 
   if rg -i -q \
     '((连续|连点|点击|轻点).{0,24}(版本号|当前版本).{0,24}(次|隐藏|入口))|((tap|click).{0,24}(version|build).{0,24}(times|hidden|secret|invite|enrollment))|(隐藏入口|秘密手势|secret gesture|hidden entry|invitation-code entry)' \
-    "$ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md" \
-    "$ROOT/Resources/en.lproj/ReleaseHistory.md" \
+    "$SOURCE_ROOT/Resources/zh-Hans.lproj/ReleaseHistory.md" \
+    "$SOURCE_ROOT/Resources/en.lproj/ReleaseHistory.md" \
     "$RELEASE_NOTES"; then
     print -u2 "release notes contain an internal trigger or confidential enrollment detail"
     exit 1
@@ -355,7 +360,8 @@ verify_asset_directory_matches_manifest() {
 
 generate_candidate_provenance() {
   local branch head_commit base_main_commit payload_json_file file_path file_name file_size file_sha
-  branch="$(git symbolic-ref --quiet --short HEAD)"
+  branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  branch="${branch:-${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}}"
   head_commit="$(git rev-parse HEAD)"
   base_main_commit="$(git rev-parse HEAD^)"
   validate_request_attestation "$head_commit" "$base_main_commit"
@@ -411,13 +417,16 @@ generate_candidate_provenance() {
 }
 
 verify_candidate_source() {
-  cd "$ROOT"
+  cd "$SOURCE_ROOT"
   if [[ -n "$(git status --porcelain)" ]]; then
     print -u2 "refusing to publish from a dirty worktree"
     exit 1
   fi
 
-  "$ROOT/scripts/verify-preview-branch.sh"
+  RELEASE_CANDIDATE_BRANCH="${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}" \
+    GITHUB_REF_NAME="${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}" \
+    REPOSITORY_ROOT="$SOURCE_ROOT" \
+    "$SCRIPT_ROOT/scripts/verify-preview-branch.sh"
 
   local head_commit local_tag_commit remote_tag_commit
   head_commit="$(git rev-parse HEAD)"
@@ -440,7 +449,7 @@ verify_candidate_source() {
 }
 
 verify_promotion_source() {
-  cd "$ROOT"
+  cd "$SOURCE_ROOT"
   if [[ -n "$(git status --porcelain)" ]]; then
     print -u2 "refusing to promote from a dirty worktree"
     exit 1
@@ -804,7 +813,7 @@ if [[ "$MODE" == "verify-prerelease" ]]; then
   exit 0
 fi
 
-if [[ "$MODE" == "prerelease" ]]; then
+if [[ "$MODE" == "prerelease" || "$MODE" == "resume-prerelease" ]]; then
   verify_local_artifacts
   stage_assets
   generate_release_notes
@@ -828,7 +837,12 @@ if [[ "$MODE" == "prerelease" ]]; then
   fi
 
   require_expected_stable_latest
-  active_branch="$(git symbolic-ref --quiet --short HEAD)"
+  active_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  active_branch="${active_branch:-${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}}"
+  if [[ "$active_branch" != "release/pre-$RELEASE_TAG" ]]; then
+    print -u2 "candidate branch identity is unavailable or does not match $RELEASE_TAG"
+    exit 1
+  fi
   active_head="$(git rev-parse HEAD)"
   remote_active_head="$(git ls-remote origin "refs/heads/$active_branch" | /usr/bin/awk 'NR == 1 { print $1 }')"
   if [[ "$remote_active_head" != "$active_head" ]]; then

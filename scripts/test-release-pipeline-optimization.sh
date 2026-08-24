@@ -56,11 +56,15 @@ fi
 /bin/cp "$ROOT/scripts/build-doubao-driver-pkg.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/package-macos-release-in-actions.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/publish-release.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/resume-preview-publication.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/check-repository-boundaries.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/fast-release.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/reconcile-release-event.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/release-variant.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/test.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/test-release-pipeline-optimization.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/test-release-resume-workflow.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/verify-release-control-plane-diff.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-app.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-dmg.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-doubao-driver.sh" "$TEST_REPO/scripts/"
@@ -268,15 +272,36 @@ if /usr/bin/grep -Fq -- '-canary-' \
 fi
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq 'GITHUB_REF_NAME: ${{ github.head_ref }}' \
+/usr/bin/grep -Fq 'PREVIEW_CANDIDATE_BRANCH: ${{ github.head_ref }}' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'GITHUB_REF_NAME="$PREVIEW_CANDIDATE_BRANCH" \' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+if /usr/bin/grep -Eq \
+    '^[[:space:]]+GITHUB_REF_NAME:[[:space:]]*\$\{\{[[:space:]]*github\.head_ref[[:space:]]*\}\}' \
+    "$TEST_REPO/.github/workflows/mac-ci.yml"; then
+  print -u2 "macOS CI must not try to override GitHub's reserved GITHUB_REF_NAME through YAML env"
+  exit 1
+fi
 /usr/bin/grep -Fq 'reuse_parent_main_ci=false' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'release_control_plane_only' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'name: Release control-plane tests' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq "if: needs.classify_changes.outputs.release_control_plane_only == 'true'" \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'Validate recovery control plane' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'test -r scripts/resume-preview-publication.sh' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'verify-release-control-plane-diff.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 if ! /usr/bin/awk '
   $0 == "  classify_changes:" { section = 1; next }
   section && $0 ~ /^  [A-Za-z_][A-Za-z0-9_-]*:/ { exit(found ? 0 : 1) }
+  section && $0 == "    runs-on: ubuntu-latest" { exit 1 }
   section && $0 == "    runs-on: macos-15" { found = 1 }
   END { if (section && !found) exit 1 }
 ' "$TEST_REPO/.github/workflows/mac-ci.yml"; then
@@ -666,6 +691,7 @@ fi
   print 'head_commit="$(git rev-parse HEAD)"'
   print 'case "${FAKE_QUALIFICATION_MODE:-open-pr}" in'
   print -r -- '  open-pr) print -r -- "[{\"number\":999,\"html_url\":\"https://example.invalid/pr/999\",\"draft\":true,\"state\":\"open\",\"base\":{\"ref\":\"main\"},\"head\":{\"ref\":\"release/pipeline-qualification/pr-999\",\"sha\":\"$head_commit\",\"repo\":{\"full_name\":\"HD838A/remote-mic-app\"}}}]" ;;'
+  print -r -- '  merged-pr) print -r -- "[{\"number\":999,\"html_url\":\"https://example.invalid/pr/999\",\"draft\":false,\"state\":\"closed\",\"merged_at\":\"2026-08-24T04:13:06Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"ref\":\"release/pipeline-qualification/pr-999\",\"sha\":\"$head_commit\",\"repo\":{\"full_name\":\"HD838A/remote-mic-app\"}}}]" ;;'
   print '  missing-pr) print -r -- "[]" ;;'
   print '  *) print -u2 "unexpected fake qualification mode"; exit 2 ;;'
   print 'esac'
@@ -686,6 +712,22 @@ fi
 ) > "$WORK_DIR/qualification-provenance-pass.txt"
 /usr/bin/grep -Fq 'PROTECTED RELEASE PIPELINE QUALIFICATION PASS' \
   "$WORK_DIR/qualification-provenance-pass.txt"
+
+(
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="$QUALIFICATION_BRANCH" \
+  RELEASE_QUALIFICATION_REMOTE_NAME="$QUALIFICATION_REMOTE" \
+  GH_BIN="$FAKE_QUALIFICATION_GH" \
+  FAKE_QUALIFICATION_MODE=merged-pr \
+  GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  EXPECTED_COMMIT="$HEAD_COMMIT" \
+  EXPECTED_PIPELINE_DIGEST="$QUALIFICATION_DIGEST" \
+  RELEASE_MODE=qualification \
+  RELEASE_TAG="v$QUALIFICATION_VERSION" \
+    ./scripts/verify-release-pipeline-qualification-source.sh
+) > "$WORK_DIR/qualification-merged-pr-pass.txt"
+/usr/bin/grep -Fq 'PROTECTED RELEASE PIPELINE QUALIFICATION PASS' \
+  "$WORK_DIR/qualification-merged-pr-pass.txt"
 
 if (
   cd "$TEST_REPO"
@@ -753,7 +795,7 @@ if (
   print -u2 "release qualification unexpectedly accepted a commit without an open main PR"
   exit 1
 fi
-/usr/bin/grep -Fq 'exactly one open same-repository PR targeting main' \
+/usr/bin/grep -Fq 'exactly one same-repository PR targeting main (open or merged)' \
   "$WORK_DIR/qualification-missing-pr.txt"
 
 (
@@ -957,7 +999,7 @@ jq -n \
       notarySecretsCommit:"5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
       matchCommit:"2e271768593821611c54f3d1b376f39e503f53be",
       sayAllAICommit:"01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-      sayAllMacroPlatformCommit:"b71482ccb3c5d3be319abe7cd61915ab90cbc3ba",
+      sayAllMacroPlatformCommit:"76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
       sayAllMacRemoteCommit:"3f3c782180eef4024b53941c1f65d80e7cff4c66"
     }
   }' \
@@ -1047,7 +1089,7 @@ jq -e '.externalDependencies == {
   notarySecretsCommit:"5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
   matchCommit:"2e271768593821611c54f3d1b376f39e503f53be",
   sayAllAICommit:"01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-  sayAllMacroPlatformCommit:"b71482ccb3c5d3be319abe7cd61915ab90cbc3ba",
+  sayAllMacroPlatformCommit:"76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
   sayAllMacRemoteCommit:"3f3c782180eef4024b53941c1f65d80e7cff4c66"
 }' "$WORK_DIR/release-ready-proof.json" >/dev/null
 

@@ -9,13 +9,14 @@ on:
         required: true
         type: string
       release_mode:
-        description: Qualify a changed release pipeline or publish a verified preview candidate
+        description: Qualify a changed release pipeline, publish a preview candidate, or recover a failed preview publication
         required: true
         default: qualification
         type: choice
         options:
           - qualification
           - preview
+          - resume-preview
       expected_commit:
         description: Required exact 40-character source commit
         required: true
@@ -30,6 +31,22 @@ on:
         type: string
       request_id:
         description: Immutable release-manager request identifier, reused unchanged on retry
+        required: false
+        type: string
+      source_run_id:
+        description: Exact failed preview Run to recover without re-signing
+        required: false
+        type: string
+      source_run_attempt:
+        description: Exact attempt number of the failed preview Run
+        required: false
+        type: string
+      source_artifact_id:
+        description: Exact signed artifact ID produced by the failed preview Run
+        required: false
+        type: string
+      source_artifact_digest:
+        description: API SHA-256 digest of the exact signed artifact
         required: false
         type: string
 
@@ -104,6 +121,7 @@ jobs:
           done
 
   validate-candidate:
+    if: ${{ inputs.release_mode != 'resume-preview' }}
     name: Verify exact preview candidate CI and Draft recording PR
     runs-on: macos-15
     timeout-minutes: 10
@@ -557,7 +575,7 @@ jobs:
                 notarySecretsCommit: "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
                 matchCommit: "2e271768593821611c54f3d1b376f39e503f53be",
                 sayAllAICommit: "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-                sayAllMacroPlatformCommit: "b71482ccb3c5d3be319abe7cd61915ab90cbc3ba",
+                sayAllMacroPlatformCommit: "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
                 sayAllMacRemoteCommit: "3f3c782180eef4024b53941c1f65d80e7cff4c66"
               }
             }' > "$toolchain_file"
@@ -622,7 +640,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-macro-platform
-          ref: b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
+          ref: 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
           path: .private-dependencies/sayall-macro-platform
           ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
@@ -657,7 +675,7 @@ jobs:
       - name: Verify immutable private dependency checkouts
         run: |
           test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"
-          test "$(git -C .private-dependencies/sayall-macro-platform rev-parse HEAD)" = "b71482ccb3c5d3be319abe7cd61915ab90cbc3ba"
+          test "$(git -C .private-dependencies/sayall-macro-platform rev-parse HEAD)" = "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c"
           test "$(git -C .private-dependencies/sayall-mac-remote rev-parse HEAD)" = "3f3c782180eef4024b53941c1f65d80e7cff4c66"
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"
           match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
@@ -795,7 +813,7 @@ jobs:
           source_pr="$(gh api \
             "repos/$GITHUB_REPOSITORY/commits/${{ inputs.expected_commit }}/pulls" \
             --header 'Accept: application/vnd.github+json' \
-            --jq "[.[] | select(.state == \"open\" and .base.ref == \"main\" and .head.sha == \"${{ inputs.expected_commit }}\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\") | .number] | if length == 1 then .[0] else empty end")"
+            --jq "[.[] | select((.state == \"open\" or .merged_at != null) and .base.ref == \"main\" and .head.sha == \"${{ inputs.expected_commit }}\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\") | .number] | if length == 1 then .[0] else empty end")"
           [[ "$source_pr" =~ ^[1-9][0-9]*$ ]]
           qualification_dir="$RUNNER_TEMP/release-pipeline-qualification"
           /bin/mkdir -p "$qualification_dir"
@@ -984,5 +1002,123 @@ jobs:
         with:
           name: release-slo-ledger-failed-${{ github.run_id }}
           path: ${{ runner.temp }}/release-slo/release-slo.tsv
+          if-no-files-found: error
+          retention-days: 90
+
+  resume-preview-publication:
+    name: Recover and verify failed preview publication
+    if: ${{ inputs.release_mode == 'resume-preview' }}
+    runs-on: macos-15
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
+      RELEASE_REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
+      RELEASE_REQUEST_ID: ${{ inputs.request_id }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+      SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+      SOURCE_ARTIFACT_DIGEST: ${{ inputs.source_artifact_digest }}
+      EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
+      EXPECTED_STABLE_TAG: v1.8.3
+      ALLOW_FROZEN_BASE_MAIN: 1
+      PUBLIC_DOWNLOAD_CONCURRENCY: 4
+      # This path is an explicit recovery after the original attempt failed;
+      # it preserves and reports the immutable SLO overrun instead of resetting it.
+      ALLOW_LATE_RECOVERY: 1
+    steps:
+      - name: Check out trusted recovery workflow
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate recovery control plane
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = main
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          [[ "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test -r scripts/resume-preview-publication.sh
+
+      - name: Install recovery validation tools
+        run: |
+          command -v jq >/dev/null || brew install jq
+          command -v rg >/dev/null || brew install ripgrep
+
+      - name: Recover exact signed artifact and publish without re-signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_ACTIONS: true
+          GITHUB_EVENT_NAME: workflow_dispatch
+          GITHUB_WORKFLOW_REF: HD838A/remote-mic-app/.github/workflows/mac-release-package.yml@${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ledger="$RUNNER_TEMP/release-slo.tsv"
+          ./scripts/release-slo-ledger.sh init "$ledger" "$RELEASE_REQUEST_STARTED_AT"
+          ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
+          resume_output="$RUNNER_TEMP/resume-output.txt"
+          ./scripts/resume-preview-publication.sh | tee "$resume_output"
+          candidate="$(awk -F= '$1 == "candidate" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          attestation="$(awk -F= '$1 == "request_attestation" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          candidate_digest="$(awk -F= '$1 == "candidate_pipeline_digest" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          release_ready_at="$(awk -F= '$1 == "release_ready_at" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          test -d "$candidate"; test -r "$attestation"
+          now="$(date +%s)"
+          late_recovery=0
+          if (( now - release_ready_at >= 1740 )); then
+            late_recovery=1
+            set +e
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 late-recovery-overrun
+            slo_status="$?"
+            set -e
+            [[ "$slo_status" == 124 ]] || exit "$slo_status"
+            echo "LATE RECOVERY: original release-ready preview SLO is failed and will be reported as overrun."
+          else
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 signed-artifact-recovery
+          fi
+          ./scripts/run-release-stage.sh all publication 180 -- \
+            env \
+              RELEASE_SOURCE_ROOT="$candidate" \
+              RELEASE_CANDIDATE_BRANCH="release/pre-$RELEASE_TAG" \
+              RELEASE_REQUEST_ATTESTATION="$attestation" \
+              EXPECTED_PIPELINE_DIGEST="$candidate_digest" \
+              RELEASE_TAG="$RELEASE_TAG" \
+              RELEASE_REQUEST_ID="$RELEASE_REQUEST_ID" \
+              EXPECTED_STABLE_TAG="$EXPECTED_STABLE_TAG" \
+              EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_DEVELOPER_TEAM_ID" \
+              ALLOW_FROZEN_BASE_MAIN=1 \
+              ./scripts/publish-release.sh resume-prerelease
+          if [[ "$late_recovery" == 1 ]]; then
+            ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success late-recovery-after-slo
+            echo "LATE RECOVERY PUBLICATION PASS: immutable release-ready SLO remains failed; no clock was reset."
+          else
+            ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 successful-pipeline
+          fi
+
+      - name: Upload recovered publication ledger
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-slo-ledger-published-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo.tsv
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload failed recovery ledger
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-slo-ledger-failed-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo.tsv
           if-no-files-found: error
           retention-days: 90

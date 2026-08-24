@@ -30,6 +30,7 @@ PIPELINE_FILES=(
   scripts/publish-release.sh
   scripts/reconcile-release-event.sh
   scripts/release-pipeline-digest.sh
+  scripts/resume-preview-publication.sh
   scripts/run-release-stage.sh
   scripts/release-slo-ledger.sh
   scripts/release-user-wall-watchdog.sh
@@ -38,19 +39,25 @@ PIPELINE_FILES=(
   scripts/resolve-stable-request-attestation.sh
   scripts/run-trusted-release-validation.sh
   scripts/test.sh
+  scripts/test-release-pipeline-optimization.sh
   scripts/verify-app.sh
   scripts/verify-dmg.sh
   scripts/verify-doubao-driver.sh
   scripts/verify-doubao-driver-pkg.sh
   scripts/verify-release-dependency-pins.sh
   scripts/verify-release-metadata-diff.sh
-  scripts/verify-release-ready-main-ci.sh
   scripts/verify-release-pipeline-qualification-source.sh
   scripts/verify-release-pipeline-qualification.sh
   scripts/verify-release-timeout-budgets.sh
   scripts/verify-release-workflow-gh-token.sh
   scripts/verify-preview-branch.sh
   scripts/verify-preview-candidate-ci.sh
+)
+
+CONTROL_PLANE_ONLY_SCRIPTS=(
+  scripts/test-release-resume-workflow.sh
+  scripts/verify-release-control-plane-diff.sh
+  scripts/verify-release-ready-main-ci.sh
 )
 
 PIPELINE_TREES=(
@@ -126,6 +133,9 @@ for relative_path in "${PIPELINE_PATHS[@]}"; do
   )"
   for referenced_path in "${(@f)referenced_scripts}"; do
     [[ -n "$referenced_path" ]] || continue
+    if (( ${CONTROL_PLANE_ONLY_SCRIPTS[(Ie)$referenced_path]} )); then
+      continue
+    fi
     if (( ${+PIPELINE_PATH_SET[$referenced_path]} )); then
       continue
     fi

@@ -3,21 +3,21 @@
 ## 适用版本或分支
 
 - 分支：最新 `main` 或由其直接创建的预览候选。
-- 适用版本：当前修复分支及其后续候选；`1.8.18 (110)` 和 `1.8.22 (114)` 均存在快捷指令 SwiftPM 资源路径崩溃，不得继续分发。
+- 适用版本：`1.9.10` 预览版候选及其后续版本；`1.8.18 (110)` 和 `1.8.22 (114)` 均存在快捷指令 SwiftPM 资源路径崩溃，不得继续分发。
 
 ## 合并后私有包版本与宿主集成
 
-组合动作私有包已通过 PR [GetSayAll/sayall-macro-platform#3](https://github.com/GetSayAll/sayall-macro-platform/pull/3) 合入 `main`。本次宿主集成固定使用完整 commit：
+组合动作默认开放已通过 PR [GetSayAll/sayall-macro-platform#4](https://github.com/GetSayAll/sayall-macro-platform/pull/4) 合入 `main`。本次宿主集成固定使用完整 commit：
 
 ```text
-b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
+76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
 ```
 
 本地开发或验证时，将私有包 checkout 到该 commit（不得使用浮动的 `main`）：
 
 ```bash
 git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform fetch origin main
-git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform checkout --detach b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
+git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform checkout --detach 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
 ```
 
 宿主通过 `Package.swift` 的 `SAYALL_MACRO_PLATFORM_PATH` 注入本地包；最小测试命令为：
