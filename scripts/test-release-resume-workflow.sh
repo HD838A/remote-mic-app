@@ -5,6 +5,7 @@ ROOT="${0:A:h:h}"
 WORKFLOW="$ROOT/.github/workflows/mac-release-package.yml"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-release-resume-test.XXXXXX)"
 STEP_SCRIPT="$WORK_DIR/resolve-existing-preview.sh"
+RECOVERY_CONTROL_SCRIPT="$WORK_DIR/recovery-control-plane.sh"
 FAKE_BIN="$WORK_DIR/bin"
 EXPECTED_COMMIT="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 OTHER_COMMIT="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -38,6 +39,29 @@ for required_text in \
   /usr/bin/grep -Fq -- "$required_text" "$WORKFLOW"
 done
 
+/usr/bin/grep -Fq -- '      - name: Validate recovery control plane' "$WORKFLOW"
+/usr/bin/awk '
+  $0 == "      - name: Validate recovery control plane" {
+    in_step = 1
+    next
+  }
+  in_step && $0 == "        run: |" {
+    in_run = 1
+    next
+  }
+  in_run && $0 ~ /^      - name:/ { exit }
+  in_run {
+    sub(/^          /, "")
+    print
+  }
+' "$WORKFLOW" > "$RECOVERY_CONTROL_SCRIPT"
+test -s "$RECOVERY_CONTROL_SCRIPT"
+/usr/bin/grep -Fq -- 'test -r scripts/resume-preview-publication.sh' "$RECOVERY_CONTROL_SCRIPT"
+if /usr/bin/grep -Eq 'release-pipeline-digest\.sh|verify-release-pipeline-qualification\.sh|environment: mac-release|secrets\.' "$RECOVERY_CONTROL_SCRIPT"; then
+  print -u2 "recovery control-plane validation must not require artifact qualification or release credentials"
+  exit 1
+fi
+
 /usr/bin/grep -Fq -- \
   'REPOSITORY_ROOT="$CANDIDATE_DIR" "$CANDIDATE_DIR/scripts/release-pipeline-digest.sh"' \
   "$ROOT/scripts/resume-preview-publication.sh"
@@ -47,6 +71,9 @@ done
 /usr/bin/grep -Fq -- \
   'branch="${branch:-${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}}"' \
   "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq -- '"$SOURCE_ROOT/scripts/verify-app.sh"' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq -- '"$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh"' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq -- '"$SOURCE_ROOT/scripts/verify-dmg.sh"' "$ROOT/scripts/publish-release.sh"
 
 package_if_line="$(/usr/bin/grep -nF "if: \${{ inputs.release_mode == 'qualification' || needs.validate-candidate.outputs.preview_release_action == 'package' }}" "$WORKFLOW" | /usr/bin/awk -F: 'NR == 1 { print $1 }')"
 package_environment_line="$(/usr/bin/awk '/^  package:$/ { in_package = 1; next } in_package && /environment: mac-release/ { print NR; exit }' "$WORKFLOW")"
