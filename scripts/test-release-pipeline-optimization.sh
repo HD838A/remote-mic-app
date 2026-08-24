@@ -274,6 +274,15 @@ fi
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
+if ! /usr/bin/awk '
+  $0 == "  classify_changes:" { section = 1; next }
+  section && $0 ~ /^  [A-Za-z_][A-Za-z0-9_-]*:/ { exit(found ? 0 : 1) }
+  section && $0 == "    runs-on: macos-15" { found = 1 }
+  END { if (section && !found) exit 1 }
+' "$TEST_REPO/.github/workflows/mac-ci.yml"; then
+  print -u2 "macOS CI classifier must run on a zsh-capable macOS runner"
+  exit 1
+fi
 /usr/bin/grep -Fq 'READY_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 if /usr/bin/grep -Fq 'TOTAL_SLO_SECONDS:' \
