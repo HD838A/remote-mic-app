@@ -15,6 +15,10 @@
 - [ ] 在 Mac App 提供低门槛问题反馈入口
   - “关于”页面已增加“问题反馈”，点击后由默认浏览器打开 SayAll 工作台的最低权限入口；状态栏不再重复显示，不传递账号、设备标识、Token 或动态口令。
   - 自动化已覆盖固定入口地址；真实浏览器跳转、自动进入排行榜及提交反馈仍需人工验收，通过后再标记完成。
+- [ ] 通过 SayAll Workshop 受控 Agent 处理需求与 Bug <!-- workshop:status=进行中;priority=P2 -->
+  - Agent 只能从 Workshop 生成的 Issue 和固定基础提交开始，只读初检、查重和计划完成后，必须经过管理员批准或受控测试环境的正式策略事件，才能生成 Patch、分支和 Draft PR。
+  - Agent Bot 不得直接写入 `main`，不得读取发布、签名、私有依赖或生产 Secret；完整 macOS CI 和真实用户验收仍按 `Testing/AgentAutomation.md` 执行。
+  - 当前仅接入 `remote-mic-app`，测试阶段禁止自动合并和生产部署；测试完成后恢复 `admin-required`。
 - [ ] 在 Mac App 提供官网分享入口
   - “关于”“统计”和全局侧边栏左下角均可展开同一套分享内容；二维码与复制按钮使用同一个带 `from=mac_share` 的本地化官网链接。
   - 链接和二维码完全在本机生成，不联网、不引入第三方依赖；中英文界面、真实扫码、系统剪贴板和 800×650 布局仍需按测试手册完成用户验收。
@@ -151,7 +155,7 @@
   - 需要验证全新安装、已有 App 升级、已有驱动升级、只装过 App、只装过驱动、安装取消、管理员授权失败、安装后首次启动、Sparkle 后续更新和完整卸载；新的单入口流程必须继续通过 App、PKG、DMG、签名、公证、Gatekeeper、文件权限和最终安装结果校验。
   - 2026-08-13 已完成候选代码：DMG 根目录只保留一个安装 PKG；App-only ZIP 和卸载 PKG 继续作为高级 Release 资产。驱动在 PKG 内暂存，安装后使用系统自带 `file`、`plutil`、`codesign` 和文件权限检查判断现有 `MiRemoteV 2ch` 是否健康且同版本、同架构，健康时原样保留，缺失、损坏、架构不符、签名异常或版本不匹配时才替换；安装脚本不调用开发者工具。本轮按要求未生成产物，完成真实安装矩阵后再勾选。
   - 2026-08-15 已为 Apple Silicon 与 Intel 独立安装包增加系统 Installer Distribution 门禁：使用真实硬件能力而非 `uname -m` 判断架构，中英文界面会在安装前明确提示错误包并指向另一版本；preinstall/postinstall 继续保留二次检查。双变体 ad-hoc PKG/DMG、产品归档结构及 Apple Silicon 拒绝 Intel 包的只读命令行路径已验证；最终 Developer ID 签名、公证包仍需在真实 Intel 与 Apple Silicon 上完成 Installer.app 双语言交叉验收后再勾选。
-  - 2026-08-16 已精简未来公开 Release：两套安装 PKG 继续完整保留并验证在对应 DMG 内，但不再作为 standalone 资产重复上传；两架构共享中英文更新说明并合并 DMG SHA-256 清单，公开矩阵由 17 项降为 12 项。历史 Release URL 和 15/17 项晋升兼容保持不变；下一份真实签名候选仍需验证 GitHub/CDN 12/12 字节、两架构安装与卸载。
+  - 2026-08-16 当时将公开矩阵由 17 项精简为 12 项：两套安装 PKG 继续完整保留并验证在对应 DMG 内，但不再作为 standalone 资产重复上传；两架构共享中英文更新说明并合并 DMG SHA-256 清单。现行门禁不再写死数量，而以每个 Release 的 `candidate-provenance.json` 为唯一资产集合；下一份真实签名候选仍需验证 GitHub/CDN manifest 全量字节、两架构安装与卸载。
 - [ ] 建立专用的 `SayAllMic 2ch` 虚拟麦克风并兼容旧驱动
   - 将现有 `MiRemoteV 2ch` 产品化为专用的 `SayAllMic 2ch`；新安装用户只看到并使用新名称，App、Onboarding 和排障流程不再默认提示用户安装或选择 `BlackHole 2ch`。
   - 升级必须继续识别并支持已经安装或正在使用的 `MiRemoteV 2ch`。安装器需要处理旧驱动升级、设备名称或 UID 变化、第三方 App 已保存的输入设备选择、重复设备、卸载和失败回滚，不能让升级后的用户突然无声或被迫手动重装。
@@ -266,8 +270,11 @@
   - “关于”页提供默认关闭的预发布更新开关；仅在用户主动开启后，Sparkle 自动与手动检查才会包含最新候选版本。
   - v1.7.3 修复预发布源解析失败或缓存旧地址时阻断正式版检查的问题；预发布源不可用时必须清除旧地址并回退到稳定更新源。
   - 候选版本不存在、GitHub API 限流、网络超时或候选源暂不可用时静默忽略，不显示错误弹窗；手动检查继续使用稳定源。
-  - macOS 候选统一使用从最新 `main` 创建的 `release/pre-vX.Y.Z` 分支；用户指定的产品 Commit 尚未合入时，发布主管先从最新 `origin/main` 建立独立集成分支，只重放指定工作及必要依赖，并通过普通 PR 和必需检查合入。候选分支只保留一个版本、ReleaseHistory 和测试说明提交，禁止从旧预览分支或 Tag 串联下一候选。metadata-only Push 与 Draft PR CI 复用父 `main` 精确 SHA 已通过的双架构测试、自检和 Release 构建，不再重复编译同一产品代码；出现产品代码、依赖或流水线差异时拒绝 fast path。
-  - 候选 Push 后立即创建 Draft 回流 PR；严格 metadata-only 候选复用父 main 精确 SHA 的双架构完整 CI，其他变化自动回到全量 CI。签名产物在受保护 workflow 内直接交给无 Apple 凭据的 publish Job。`request_started_at` 记录并汇报完整用户等待；Preview 和正式晋升均从 `release_ready_at` 起按 30 分钟纯发布窗口执行 watchdog，内部 29 分钟截止后明确失败且不盲目重试或重置时间戳。
+  - macOS 每个版本只使用一个从当时最新 `origin/main` 创建的 `release/pre-vX.Y.Z` 分支、一个当前冻结 SHA 和一个 Draft 回流 PR，禁止 `-rerun*`、`-canary-*` 和同版本第二 PR。用户指定的产品 Commit 尚未合入时，发布主管先从最新 `origin/main` 建立独立集成分支，只重放指定工作及必要依赖，并通过普通 PR 和必需检查合入。候选冻结后允许 main 前进，只要 frozen base 仍为当前 main 祖先且 pipeline digest 不变；metadata-only 候选复用该 base 精确 SHA 已通过的双架构测试、自检和 Release 构建，出现产品代码或依赖差异时拒绝 fast path。
+  - 同一候选 SHA 的 Runner、审批、GitHub、Apple 或 CDN 故障只重跑 workflow，复用同一分支、PR、版本、Build、`request_id` 和该 attempt 的 `release_ready_at`。只有内容、基线或 pipeline digest 真正变化且尚未进入不可变阶段时，才结束旧 attempt，并在核对远端旧 head 后以 compare-and-swap / `force-with-lease` 更新同一版本分支与 PR；旧 SHA、Run 和 attestation 必须保留。若内容变化发生在签名、公证或公开身份产生之后，则使用新版本和递增 Build。
+  - 发布流水线资格验证按 digest 独立复用：只把已有普通流水线变更 PR 的 exact SHA 临时映射为 `release/pipeline-qualification/<pr号或短SHA>` Environment alias，不创建第二个 PR，也不占用产品版本/Build。资格 artifact 记录原 PR；原 PR 合入后 verifier 从 `refs/pull/<n>/head` 重算 source digest，因此证明不依赖 alias 永久存在。Match 私有仓库继续按完整 Commit 检出，并在 Runner 临时 checkout 内把本地 `main` 明确绑定到该 Commit，避免 Fastlane 对 detached HEAD 创建空 orphan 分支。候选 Push 后唯一 Draft PR 与无凭据 Preview 检查可并行，但受保护签名、公证和公开发布必须等待 exact SHA、双架构检查、Draft PR 门禁及当前 digest 资格证明全部成功。
+  - 2026-08-24：候选 Draft PR 的 metadata-only CI 通过普通变量接收 `github.head_ref`，并在调用受信脚本时显式传入 `GITHUB_REF_NAME`；禁止依赖 YAML `env` 覆盖 GitHub 保留变量，避免 PR merge ref 被误判为非法候选分支。
+  - 签名产物在受保护 workflow 内直接交给无 Apple 凭据的 publish Job；公开资产名称和数量以 `candidate-provenance.json` / canonical manifest 为准，不写死固定项数。`request_started_at` 和 `request_id` 记录整个用户请求且不重置；每个新 candidate SHA 是独立 attempt，新 SHA 门禁完成后产生自己的 `release_ready_at`。Preview 和正式晋升均从各自 `release_ready_at` 起按 30 分钟纯发布窗口执行 watchdog，内部 29 分钟截止后明确失败且不盲目重试。
   - 不存在“发布正式版”命令。正式版只能选择已经发布并验证过的指定 Pre-release，将完全相同的 Tag、Commit、签名、公证资产和摘要晋升；候选回流 `main` 不构成正式晋升授权，禁止从 `main` 重建正式资产。
   - 2026-08-17：正式晋升工作流补充独立 `mac-stable-release` Environment 和按需安装 `ripgrep` 的工具门禁；晋升仍只复验并提升既有候选字节，不读取 Apple 签名 Secrets，也不重新打包。
   - 2026-08-19：GitHub Release 标题和 Tag 注释统一使用 `无线麦SayAll.app <版本>`，并由 Swift 与 shell 回归测试拒绝旧的 `Remote Mic` 用户可见标题。

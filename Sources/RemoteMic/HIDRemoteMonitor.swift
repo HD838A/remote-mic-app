@@ -404,10 +404,27 @@ final class HIDRemoteMonitor {
             )
         )
         if monitorResult == kIOReturnSuccess {
-            AppLogger.shared.write("HID CONNECTED mode=monitored seize_error=\(seizeResult)")
+            AppLogger.shared.write(
+                "HID CONNECTED mode=monitored " +
+                    AppLogger.errorFields(
+                        domain: "io_return",
+                        code: Int(seizeResult),
+                        fieldPrefix: "seize_error"
+                    )
+            )
         } else {
             AppLogger.shared.write(
-                "HID CONNECTED mode=manager_report seize_error=\(seizeResult) monitor_error=\(monitorResult)"
+                "HID CONNECTED mode=manager_report " +
+                    AppLogger.errorFields(
+                        domain: "io_return",
+                        code: Int(seizeResult),
+                        fieldPrefix: "seize_error"
+                    ) + " " +
+                    AppLogger.errorFields(
+                        domain: "io_return",
+                        code: Int(monitorResult),
+                        fieldPrefix: "monitor_error"
+                    )
             )
         }
         return true

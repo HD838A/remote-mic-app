@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "summary", "changedPaths", "tests", "notes"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "summary": { "type": "string", "minLength": 2, "maxLength": 3000 },
+    "changedPaths": {
+      "type": "array",
+      "maxItems": 50,
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    },
+    "tests": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "summary"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "status": { "type": "string", "enum": ["passed", "failed", "skipped", "not_run"] },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        }
+      }
+    },
+    "notes": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 1000 } }
+  }
+}

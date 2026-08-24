@@ -104,12 +104,41 @@ enum RemoteMicApp {
             }
             return
         }
+        let bundleIdentifier = Bundle.main.bundleIdentifier
+            ?? ApplicationInstanceGuard.fallbackBundleIdentifier
+        var instanceLock: ApplicationInstanceLock?
+        if let lockURL = ApplicationInstanceGuard.defaultLockURL() {
+            switch ApplicationInstanceLock.acquire(at: lockURL) {
+            case let .acquired(lock):
+                instanceLock = lock
+            case .alreadyLocked:
+                ApplicationInstanceGuard.existingApplication(
+                    bundleIdentifier: bundleIdentifier
+                )?.activate(options: [.activateAllWindows])
+                return
+            case let .failed(reason):
+                fputs("Single-instance lock unavailable: \(reason)\n", stderr)
+            }
+        } else {
+            fputs("Single-instance lock unavailable: application_support_missing\n", stderr)
+        }
+
+        if let existingApplication = ApplicationInstanceGuard.existingApplication(
+            bundleIdentifier: bundleIdentifier,
+            requiresFinishedLaunch: true
+        ) {
+            existingApplication.activate(options: [.activateAllWindows])
+            return
+        }
+
         let application = NSApplication.shared
         let delegate = RemoteMicAppDelegate()
         application.delegate = delegate
         application.setActivationPolicy(delegate.activationPolicy)
-        withExtendedLifetime(delegate) {
-            application.run()
+        withExtendedLifetime(instanceLock) {
+            withExtendedLifetime(delegate) {
+                application.run()
+            }
         }
     }
 }
@@ -245,6 +274,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         workspaceAudioLifecycleObservers.forEach(workspaceNotificationCenter.removeObserver)
         workspaceAudioLifecycleObservers.removeAll()
         AppLogger.shared.write("SYSTEM AUDIO observers_stopped")
+        AppLogger.shared.flush()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -645,8 +675,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 guard !Task.isCancelled else { return }
                 updateFeedSelection.useStableFeed()
                 AppLogger.shared.write(
-                    "UPDATE FEED prerelease_enabled=true resolved=false fallback=none "
-                        + "error=\(error.localizedDescription)"
+                    "UPDATE FEED prerelease_enabled=true resolved=false fallback=none " +
+                        AppLogger.errorFields(error)
                 )
                 if updaterStarted, resetUpdateCycleWhenChanged {
                     updaterController.updater.resetUpdateCycleAfterShortDelay()
@@ -876,8 +906,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 updateFeedSelection.useStableFeed()
                 updateInformation.setUnavailable()
                 AppLogger.shared.write(
-                    "UPDATE CHECK prerelease_enabled=\(includePreRelease) resolved=false "
-                        + "user_alert=false error=\(error.localizedDescription)"
+                    "UPDATE CHECK prerelease_enabled=\(includePreRelease) resolved=false " +
+                        "user_alert=false " + AppLogger.errorFields(error)
                 )
                 return
             }

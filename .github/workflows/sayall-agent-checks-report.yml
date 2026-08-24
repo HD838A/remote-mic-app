@@ -1,0 +1,103 @@
+name: SayAll Agent Checks Report
+
+on:
+  workflow_run:
+    workflows: ["macOS CI"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  report:
+    name: Report protected CI result
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Resolve Agent PR and required checks
+        id: resolve
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EXPECTED_BOT: ${{ vars.SAYALL_AGENT_BOT_LOGIN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_BRANCH" =~ ^codex/sayall-agent-[1-9][0-9]{0,8}-[A-Za-z0-9_-]{12,80}$ ]]
+          test -n "$EXPECTED_BOT"
+          suffix="${HEAD_BRANCH#codex/sayall-agent-}"
+          run_suffix="${suffix#*-}"
+          RUN_ID="run_${run_suffix}"
+          [[ "$RUN_ID" =~ ^run_[A-Za-z0-9_-]{12,80}$ ]]
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$WORKFLOW_RUN_ID/pull_requests")"
+          pr_number="$(jq -r '.[0].number // empty' <<< "$pr_json")"
+          test -n "$pr_number"
+          pr_details="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr_number")"
+          test "$(jq -r '.base.ref' <<< "$pr_details")" = "main"
+          test "$(jq -r '.head.sha' <<< "$pr_details")" = "$HEAD_SHA"
+          test "$(jq -r '.head.repo.full_name' <<< "$pr_details")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r '.user.login' <<< "$pr_details")" = "$EXPECTED_BOT"
+          test "$(jq -r '.draft' <<< "$pr_details")" = "true"
+          checks="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100")"
+          required='["Swift tests and build (Apple Silicon)","Swift tests and build (Intel Ventura)"]'
+          missing="$(jq -r --argjson required "$required" '
+            def latest($name):
+              ([.check_runs[] | select(.name == $name)]
+               | sort_by([(.completed_at // .started_at // .created_at // ""), (.id // 0)])
+               | if length == 0 then null else .[-1] end);
+            [ $required[] as $name
+              | latest($name) as $latest
+              | select(($latest == null) or ($latest.status != "completed"))
+            ] | length' <<< "$checks")"
+          failed="$(jq -r --argjson required "$required" '
+            def latest($name):
+              ([.check_runs[] | select(.name == $name)]
+               | sort_by([(.completed_at // .started_at // .created_at // ""), (.id // 0)])
+               | if length == 0 then null else .[-1] end);
+            [ $required[] as $name
+              | latest($name) as $latest
+              | select(($latest != null) and ($latest.status == "completed") and (($latest.conclusion // "") != "success"))
+            ] | length' <<< "$checks")"
+          {
+            echo "run_id=$RUN_ID"
+            echo "pr_number=$pr_number"
+            echo "missing=$missing"
+            echo "failed=$failed"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Report checks result to Workshop
+        if: steps.resolve.outputs.missing == '0'
+        shell: bash
+        env:
+          API_URL: ${{ vars.WORKSHOP_AGENT_API_URL }}
+          CALLBACK_SECRET: ${{ secrets.WORKSHOP_AGENT_CALLBACK_SECRET }}
+          RUN_ID: ${{ steps.resolve.outputs.run_id }}
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+          FAILED: ${{ steps.resolve.outputs.failed }}
+        run: |
+          set -euo pipefail
+          test -n "$API_URL"
+          test -n "$CALLBACK_SECRET"
+          timestamp="$(date +%s)"
+          event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_checks"
+          if [[ "$FAILED" == "0" ]]; then
+            payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" --argjson prNumber "$PR_NUMBER" '{runId:$run,eventType:"checks_passed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),prNumber:$prNumber,summary:"受保护 CI 的必需检查已通过。"}')"
+          else
+            payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" --argjson prNumber "$PR_NUMBER" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),prNumber:$prNumber,error:"受保护 CI 的必需检查未通过。"}')"
+          fi
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "${API_URL%/}/api/agent/events" \
+            --header "Content-Type: application/json" \
+            --header "X-SayAll-Timestamp: $timestamp" \
+            --header "X-SayAll-Event-Id: $event_id" \
+            --header "X-SayAll-Signature: $signature" \
+            --data-binary @"$RUNNER_TEMP/sayall-agent-callback.json" > /dev/null

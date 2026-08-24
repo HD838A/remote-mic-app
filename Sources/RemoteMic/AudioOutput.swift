@@ -302,6 +302,14 @@ enum VirtualAudioConnectionLifecyclePolicy {
         }
         return readyBluetoothBridgeCount > 0 && !systemSuspended
     }
+
+    static func shouldScheduleRelease(
+        hasPendingRelease: Bool,
+        hasAllocatedOutputResources: Bool,
+        pendingVoiceBufferCount: Int
+    ) -> Bool {
+        !hasPendingRelease && (hasAllocatedOutputResources || pendingVoiceBufferCount > 0)
+    }
 }
 
 enum VirtualAudioHealthPolicy {
@@ -376,6 +384,10 @@ final class VirtualAudioOutput {
         return pendingVoiceBufferCount
     }
 
+    var hasAllocatedOutputResources: Bool {
+        engine != nil || player != nil || selectedDevice != nil
+    }
+
     @discardableResult
     func configure(deviceUID: String) -> Bool {
         let previousState = diagnosticState()
@@ -422,7 +434,8 @@ final class VirtualAudioOutput {
             status = LocalizedMessage("audio.output.select_failed", arguments: [String(result)])
             AppLogger.shared.write(
                 "AUDIO CONFIGURE failed reason=set_current_device " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} error=\(result)"
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
+                    AppLogger.errorFields(domain: "os_status", code: Int(result))
             )
             return false
         }
@@ -453,7 +466,7 @@ final class VirtualAudioOutput {
                 arguments: [error.localizedDescription]
             )
             AppLogger.shared.write(
-                "AUDIO ERROR start_failed=\(error.localizedDescription) " +
+                "AUDIO ERROR start_failed " + AppLogger.errorFields(error) + " " +
                     "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} state={\(diagnosticState())}"
             )
             return false

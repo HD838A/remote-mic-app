@@ -11,7 +11,7 @@ Mac 安装包和 Sparkle 更新资产当前直接从 GitHub Releases 下载。Gi
 - 官网“下载 macOS 版”直接打开固定下载入口。
 - 固定入口只下载最新正式版 DMG，不会把预览版误当作正式版。
 - Sparkle 的 ZIP 和本地化更新说明使用固定标签 CDN URL。
-- GitHub Releases 页面和全部源文件继续保留；未来 macOS Release 的公开矩阵固定为 12 项，安装 PKG 只在对应 DMG 内保留，不再重复上传。
+- GitHub Releases 页面和全部源文件继续保留；macOS Release 的公开矩阵由 `candidate-provenance.json` 唯一定义，安装 PKG 只在对应 DMG 内保留，不再重复上传。
 
 ## 范围与非目标
 
@@ -21,7 +21,7 @@ Mac 安装包和 Sparkle 更新资产当前直接从 GitHub Releases 下载。Gi
 - 官网中英文下载链接与匿名点击事件；
 - appcast enclosure 和本地化说明 URL；
 - 发布后的 GitHub/CDN 双路径字节回验；
-- 12 项新资产矩阵和历史 15/17 项 Release 的只读兼容；
+- provenance 驱动的新资产矩阵和历史 Release 自身 provenance 的只读兼容；
 - `GET`、`HEAD` 和 `Range` 下载行为。
 
 本次不做：

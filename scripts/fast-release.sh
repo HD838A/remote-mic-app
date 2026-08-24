@@ -4,54 +4,33 @@ umask 077
 
 ROOT="${0:A:h:h}"
 PLIST="$ROOT/Resources/Info.plist"
-REPOSITORY="HD838A/remote-mic-app"
-PUBLIC_PRODUCT_NAME="无线麦SayAll.app"
-EXPECTED_TEAM_ID="L3QHLDRPAY"
-VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
-BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
-RELEASE_TAG="v$VERSION"
-SECRETS_REPO="${REMOTEMIC_NOTARY_SECRETS_REPO:-${ROOT:h}/remotemic-notary-secrets}"
-SECRETS_VALIDATOR="$SECRETS_REPO/skills/remotemic-notary-secrets/scripts/validate-notary-secrets-repo.sh"
-ISOLATED_KEYCHAIN_RUNNER="$SECRETS_REPO/run-with-isolated-release-keychain.sh"
-SPARKLE_KEY="${SPARKLE_PRIVATE_KEY_FILE:-$HOME/.config/RemoteMic/sparkle-ed25519.key}"
-PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
-WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-fast-release.XXXXXX)"
-
-cleanup() {
-  case "$WORK_DIR" in
-    /private/tmp/remotemic-fast-release.*) /bin/rm -rf -- "$WORK_DIR" ;;
-    *) print -u2 "refusing to clean unexpected fast-release path: $WORK_DIR" ;;
-  esac
-}
-trap cleanup EXIT
+REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
+WORKFLOW_FILE="mac-release-package.yml"
+GH_BIN="${GH_BIN:-gh}"
+REQUEST_STARTED_AT="${RELEASE_REQUEST_STARTED_AT:-}"
+REQUEST_ID="${RELEASE_REQUEST_ID:-}"
 
 if [[ "$#" -ne 0 ]]; then
-  print -u2 "usage: ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 $0"
-  exit 1
+  print -u2 "usage: RELEASE_REQUEST_STARTED_AT=<unix-epoch> RELEASE_REQUEST_ID=<immutable-id> $0"
+  exit 2
 fi
-if [[ "${ALLOW_ISOLATED_RELEASE_KEYCHAIN:-0}" != "1" ]]; then
-  print -u2 "Set ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 to authorize the temporary release Keychain"
-  exit 1
+if [[ ! "$REQUEST_STARTED_AT" =~ '^[0-9]+$' ]]; then
+  print -u2 "fast release requires RELEASE_REQUEST_STARTED_AT as the original Unix epoch seconds"
+  exit 2
 fi
-if [[ ! "$VERSION" =~ '^[0-9]+\.[0-9]+\.[0-9]+$' || ! "$BUILD" =~ '^[0-9]+$' ]]; then
-  print -u2 "fast release requires a stable semantic version and numeric build"
-  exit 1
+if [[ ! "$REQUEST_ID" =~ '^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$' ]]; then
+  print -u2 "fast release requires RELEASE_REQUEST_ID as an immutable 8-64 character identifier"
+  exit 2
 fi
-for command in cmp curl gh git plutil rg xcrun; do
-  command -v "$command" >/dev/null 2>&1 || {
-    print -u2 "Missing required command: $command"
+if (( REQUEST_STARTED_AT > $(/bin/date +%s) )); then
+  print -u2 "RELEASE_REQUEST_STARTED_AT cannot be in the future"
+  exit 2
+fi
+for command_name in git jq plutil unzip "$GH_BIN"; do
+  command -v "$command_name" >/dev/null 2>&1 || {
+    print -u2 "Missing required command: $command_name"
     exit 1
   }
-done
-for required_file in \
-  "$SECRETS_VALIDATOR" \
-  "$ISOLATED_KEYCHAIN_RUNNER" \
-  "$SPARKLE_KEY" \
-  "$PRODUCTION_ENV"; do
-  if [[ ! -r "$required_file" ]]; then
-    print -u2 "Required local release file is unavailable: $required_file"
-    exit 1
-  fi
 done
 
 cd "$ROOT"
@@ -63,109 +42,175 @@ BRANCH="$(git symbolic-ref --quiet --short HEAD)" || {
   print -u2 "fast release requires a branch, not detached HEAD"
   exit 1
 }
-if [[ ! "$BRANCH" =~ '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+(-rerun([2-9][0-9]*)?)?$' ]]; then
-  print -u2 "fast release requires release/pre-v$VERSION or a numbered recovery form"
+if [[ ! "$BRANCH" =~ '^release/pre-v([0-9]+\.[0-9]+\.[0-9]+)$' ]]; then
+  print -u2 "fast release requires the single candidate branch release/pre-vX.Y.Z"
   exit 1
 fi
-BRANCH_VERSION="${BRANCH#release/pre-v}"
-BRANCH_VERSION="${BRANCH_VERSION%%-rerun*}"
+BRANCH_VERSION="${match[1]}"
+VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
+BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
 if [[ "$BRANCH_VERSION" != "$VERSION" ]]; then
   print -u2 "fast release branch version $BRANCH_VERSION does not match $VERSION"
   exit 1
 fi
-
-git fetch origin main --tags
-"$ROOT/scripts/verify-preview-branch.sh"
-if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
-  print -u2 "release $RELEASE_TAG already exists"
+if [[ ! "$BUILD" =~ '^[0-9]+$' ]]; then
+  print -u2 "fast release requires a numeric CFBundleVersion"
   exit 1
 fi
-
-CHANGED_FILES=("${(@f)$(git diff --name-only origin/main..HEAD)}")
-if [[ -z "${CHANGED_FILES[1]:-}" ]]; then
-  print -u2 "no release metadata changes exist after origin/main"
-  exit 1
-fi
-for changed_file in "${CHANGED_FILES[@]}"; do
-  case "$changed_file" in
-    Resources/Info.plist|\
-    Resources/*.lproj/Localizable.strings|\
-    Resources/*.lproj/ReleaseHistory.md|\
-    Resources/*.lproj/Glossary.md|\
-    Resources/首次安装说明*.md|\
-    README.md|README.en.md|\
-    TECHNICAL.md|TECHNICAL.en.md|\
-    TROUBLESHOOTING.md|TROUBLESHOOTING.en.md|\
-    COPYRIGHT.md|COPYRIGHT.en.md|\
-    LICENSE.md|LOGO-LICENSE.md|THIRD_PARTY_NOTICES.md|TODO.md)
-      ;;
-    *)
-      print -u2 "fast release rejected non-document/resource change: $changed_file"
-      print -u2 "Use the full candidate release workflow for this version"
-      exit 1
-      ;;
-  esac
-done
-
-git diff --check origin/main..HEAD
-if git diff origin/main..HEAD | \
-   rg -n '^\+.*(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|MATCH_PASSWORD=|APPLE_APPLICATION_SPECIFIC_PASSWORD=|AuthKey_[A-Z0-9]+\.p8)'; then
-  print -u2 "fast release rejected a possible plaintext credential in the release diff"
-  exit 1
-fi
-for release_history in \
-  Resources/zh-Hans.lproj/ReleaseHistory.md \
-  Resources/en.lproj/ReleaseHistory.md; do
-  if ! print -l -- "${CHANGED_FILES[@]}" | rg -Fxq "$release_history" || \
-     ! rg -Fq "## $VERSION" "$release_history"; then
-    print -u2 "fast release requires a $VERSION entry in $release_history"
-    exit 1
-  fi
-done
-
-OLD_PLIST="$WORK_DIR/previous-Info.plist"
-CURRENT_PLIST="$WORK_DIR/current-Info.plist"
-git show "origin/main:Resources/Info.plist" > "$OLD_PLIST"
-/bin/cp "$PLIST" "$CURRENT_PLIST"
-for plist_copy in "$OLD_PLIST" "$CURRENT_PLIST"; do
-  /usr/bin/plutil -remove CFBundleShortVersionString "$plist_copy"
-  /usr/bin/plutil -remove CFBundleVersion "$plist_copy"
-done
-if ! cmp -s "$OLD_PLIST" "$CURRENT_PLIST"; then
-  print -u2 "fast release allows only version/build changes in Resources/Info.plist"
-  exit 1
-fi
-
-"$SECRETS_VALIDATOR" "$SECRETS_REPO"
-xcrun swift test
-
-SPARKLE_PRIVATE_KEY_FILE="$SPARKLE_KEY" \
-PARALLEL_PACKAGE_NOTARIZATION=1 \
-EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_TEAM_ID" \
-ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 \
-  "$ISOLATED_KEYCHAIN_RUNNER" -- "$ROOT/scripts/package-macos-release-variants.sh"
-
+RELEASE_TAG="v$VERSION"
 HEAD_COMMIT="$(git rev-parse HEAD)"
-if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
-  if [[ "$(git rev-parse "$RELEASE_TAG^{commit}")" != "$HEAD_COMMIT" ]]; then
-    print -u2 "local tag $RELEASE_TAG points to another commit"
-    exit 1
-  fi
-else
-  git tag -a "$RELEASE_TAG" -m "$PUBLIC_PRODUCT_NAME $VERSION"
-fi
-
-REMOTE_TAG_COMMIT="$(git ls-remote origin "refs/tags/$RELEASE_TAG^{}" | \
-  /usr/bin/awk 'NR == 1 { print $1 }')"
-if [[ -z "$REMOTE_TAG_COMMIT" ]]; then
-  git push origin "refs/tags/$RELEASE_TAG"
-elif [[ "$REMOTE_TAG_COMMIT" != "$HEAD_COMMIT" ]]; then
-  print -u2 "remote tag $RELEASE_TAG points to another commit"
+EXPECTED_RUN_TITLE="mac-release preview $RELEASE_TAG $REQUEST_ID $HEAD_COMMIT"
+if [[ ! "$HEAD_COMMIT" =~ '^[0-9a-f]{40}$' ]]; then
+  print -u2 "fast release requires an exact 40-character candidate commit"
   exit 1
 fi
 
-SPARKLE_PRIVATE_KEY_FILE="$SPARKLE_KEY" \
-EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_TEAM_ID" \
-  "$ROOT/scripts/publish-release.sh" prerelease
+verify_remote_candidate_identity() {
+  local remote_records remote_sha remote_ref candidate_record
+  local -a matching_records
 
-print "FAST PRE-RELEASE PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
+  remote_records="$(git ls-remote --heads origin 'refs/heads/release/pre-v*')"
+  matching_records=()
+  while IFS=$'\t' read -r remote_sha remote_ref; do
+    [[ -n "$remote_sha" && -n "$remote_ref" ]] || continue
+    case "$remote_ref" in
+      "refs/heads/$BRANCH"|"refs/heads/$BRANCH"-*)
+        matching_records+=("$remote_sha"$'\t'"$remote_ref")
+        ;;
+    esac
+  done <<< "$remote_records"
+
+  if (( ${#matching_records[@]} != 1 )); then
+    print -u2 "fast release requires exactly one remote candidate branch for $RELEASE_TAG"
+    exit 1
+  fi
+  candidate_record="${matching_records[1]}"
+  IFS=$'\t' read -r remote_sha remote_ref <<< "$candidate_record"
+  if [[ "$remote_ref" != "refs/heads/$BRANCH" || "$remote_sha" != "$HEAD_COMMIT" ]]; then
+    print -u2 "fast release requires origin/$BRANCH to equal the exact local candidate commit"
+    exit 1
+  fi
+}
+
+GITHUB_REF_NAME="$BRANCH" ALLOW_FROZEN_BASE_MAIN=1 \
+  "$ROOT/scripts/verify-preview-branch.sh"
+verify_remote_candidate_identity
+
+GITHUB_REPOSITORY="$REPOSITORY" \
+GITHUB_REF_NAME="$BRANCH" \
+GH_BIN="$GH_BIN" \
+EXPECTED_COMMIT="$HEAD_COMMIT" \
+RELEASE_TAG="$RELEASE_TAG" \
+REQUIRE_PREVIEW_RECORDING_PR=1 \
+  "$ROOT/scripts/verify-preview-candidate-ci.sh"
+
+PIPELINE_DIGEST="$("$ROOT/scripts/release-pipeline-digest.sh")"
+if [[ ! "$PIPELINE_DIGEST" =~ '^[0-9a-f]{64}$' ]]; then
+  print -u2 "fast release requires an exact release pipeline SHA-256 digest"
+  exit 1
+fi
+GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
+  "$ROOT/scripts/verify-release-pipeline-qualification.sh" "$PIPELINE_DIGEST"
+
+# Close the local/remote identity race immediately before the only mutation.
+git fetch --no-tags origin "refs/heads/$BRANCH" >/dev/null
+if [[ -n "$(git status --porcelain)" ||
+      "$(git rev-parse HEAD)" != "$HEAD_COMMIT" ||
+      "$(git rev-parse FETCH_HEAD)" != "$HEAD_COMMIT" ]]; then
+  print -u2 "fast release candidate changed during preflight"
+  exit 1
+fi
+verify_remote_candidate_identity
+if [[ "$("$ROOT/scripts/release-pipeline-digest.sh")" != "$PIPELINE_DIGEST" ]]; then
+  print -u2 "fast release pipeline changed during preflight"
+  exit 1
+fi
+
+print "FAST RELEASE PREFLIGHT PASS: $RELEASE_TAG ($BUILD) at $HEAD_COMMIT"
+print "Dispatching the sole protected preview workflow for request $REQUEST_ID"
+DISPATCH_STARTED_AT="$(/bin/date -u +'%Y-%m-%dT%H:%M:%SZ')"
+"$GH_BIN" workflow run "$WORKFLOW_FILE" \
+  --repo "$REPOSITORY" \
+  --ref "$BRANCH" \
+  --raw-field "tag=$RELEASE_TAG" \
+  --raw-field "release_mode=preview" \
+  --raw-field "expected_commit=$HEAD_COMMIT" \
+  --raw-field "expected_pipeline_digest=$PIPELINE_DIGEST" \
+  --raw-field "request_started_at=$REQUEST_STARTED_AT" \
+  --raw-field "request_id=$REQUEST_ID"
+
+RUN_ID=""
+RUN_URL=""
+for lookup_attempt in {1..6}; do
+  runs_json=""
+  if runs_json="$(
+    "$GH_BIN" run list \
+      --repo "$REPOSITORY" \
+      --workflow "$WORKFLOW_FILE" \
+      --branch "$BRANCH" \
+      --commit "$HEAD_COMMIT" \
+      --event workflow_dispatch \
+      --limit 20 \
+      --json databaseId,createdAt,displayTitle,event,headBranch,headSha,url
+  )"; then
+    matching_runs="$(
+      print -r -- "$runs_json" | jq -c \
+        --arg branch "$BRANCH" \
+        --arg headSha "$HEAD_COMMIT" \
+        --arg runTitle "$EXPECTED_RUN_TITLE" \
+        --arg dispatchedAt "$DISPATCH_STARTED_AT" '
+          [.[] | select(
+            .event == "workflow_dispatch" and
+            .headBranch == $branch and
+            .headSha == $headSha and
+            .displayTitle == $runTitle and
+            .createdAt >= $dispatchedAt
+          )]
+        '
+    )"
+    matching_count="$(print -r -- "$matching_runs" | jq -r 'length')"
+    if (( matching_count > 1 )); then
+      print -u2 "Preview workflow dispatch succeeded, but multiple new exact-identity Runs were found."
+      print -u2 "Do not redispatch automatically; reconcile the existing workflow_dispatch Runs for $BRANCH at $HEAD_COMMIT."
+      exit 3
+    fi
+    if (( matching_count == 1 )); then
+      candidate_run_id="$(print -r -- "$matching_runs" | jq -r '.[0].databaseId')"
+      run_json=""
+      if run_json="$(
+        "$GH_BIN" api "repos/$REPOSITORY/actions/runs/$candidate_run_id"
+      )" && print -r -- "$run_json" | jq -e \
+        --arg workflowPath ".github/workflows/$WORKFLOW_FILE" \
+        --arg branch "$BRANCH" \
+        --arg headSha "$HEAD_COMMIT" \
+        --arg runTitle "$EXPECTED_RUN_TITLE" \
+        --arg dispatchedAt "$DISPATCH_STARTED_AT" \
+        --argjson runId "$candidate_run_id" '
+          .id == $runId and
+          .path == $workflowPath and
+          .event == "workflow_dispatch" and
+          .head_branch == $branch and
+          .head_sha == $headSha and
+          .display_title == $runTitle and
+          .created_at >= $dispatchedAt and
+          (.html_url | type == "string" and length > 0)
+        ' >/dev/null; then
+        RUN_ID="$candidate_run_id"
+        RUN_URL="$(print -r -- "$run_json" | jq -r '.html_url')"
+        break
+      fi
+    fi
+  fi
+  if (( lookup_attempt < 6 )); then
+    /bin/sleep 5
+  fi
+done
+
+if [[ -z "$RUN_ID" || -z "$RUN_URL" ]]; then
+  print -u2 "Preview workflow dispatch succeeded, but its Run identity was not resolved within 25 seconds."
+  print -u2 "Do not redispatch automatically; reconcile the existing workflow_dispatch Run for $BRANCH at $HEAD_COMMIT."
+  exit 3
+fi
+
+print "RUN_ID: $RUN_ID"
+print "RUN_URL: $RUN_URL"

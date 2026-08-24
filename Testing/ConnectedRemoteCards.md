@@ -1,6 +1,6 @@
 # 已连接遥控器设备卡测试手册
 
-- 适用版本/分支：`codex/fix-connected-remote-list`；合入版本以目标 `main` 为准
+- 适用版本/分支：`codex/ble-reconnect-backoff-20260824`；合入版本以目标 `main` 为准
 - 适用页面：设置 → 连接与语音；设置 → 按键映射
 
 ## 测试前准备
@@ -39,6 +39,26 @@
 3. 重新连接同一遥控器。
    - 预期：同一 profile 卡片重新出现，名称、电量、选中状态和按键映射保持不变。
 
+## 用例 4：历史蓝牙缓存失败后停止主动连接风暴
+
+1. 在同一偏好域保留至少 3 个带蓝牙 identifier 的 profile，只让其中 1 个遥控器在线，另外 2 个历史遥控器保持离线。
+2. 启动无线麦并记录至少 3 分钟日志。
+   - 预期：在线遥控器正常进入 `BLE READY`；每个离线 profile 最多进行一次 `source=target_identifier` 缓存直连，失败后日志出现 `cached_identifier_bypassed=true` 并转入 `BLE SCANNING`，不会继续每约 11 秒重复 `BLE CONNECT TIMEOUT`。
+3. 在在线遥控器上完成一次普通按键和一次完整语音。
+   - 预期：历史 profile 的扫描不影响当前设备；普通按键只执行一次，语音第一次即完成 `STREAM_START → AUDIO → STREAM_STOP`。
+4. 选中一个离线 profile 并点击“立即重新连接”。
+   - 预期：用户操作会重置退避并立即允许一次缓存探测；如果仍失败，再次回到被动扫描，不恢复无限固定间隔重试。
+5. 让该遥控器重新进入可发现状态。
+   - 预期：扫描发现后使用原 profile 恢复 Ready，名称、HID 绑定和全部按键映射不变，不生成重复 profile。
+6. 对能够连续制造连接失败的真机环境核对 `BLE RECONNECT scheduled`。
+   - 预期：`failure_count` 逐次增长；`delay_ms` 围绕 3、6、12、24、48 秒加入 ±10% 抖动，封顶档为 54～60 秒且永不超过 60 秒。Ready 后下一次失败重新从第一级开始。
+7. 在已经调度较长退避后关闭并重新打开系统蓝牙，再让遥控器恢复 Ready，随后制造一次新的普通断连。
+   - 预期：退避等待期间仍能收到系统蓝牙状态变化；关闭或 resetting 会取消旧的长延迟，重新开启后由新的连接周期立即出现 `BLE SCANNING`，不会继续等待原 48/60 秒，也不会接受断电前 attempt 的晚到回调。Ready 后的新失败从第一级退避开始。
+8. 在已连接时停止 bridge 并立即关闭/重开蓝牙，再重新启动连接；另在长退避期间撤销蓝牙权限或制造 unsupported 状态。
+   - 预期：停止态会释放保留的 manager，重新启动后仍能扫描；unauthorized/unsupported 会取消旧 timer，不会继续创建新 manager 或自动重连。
+
+失败判定：离线缓存仍持续按固定 3 秒等待主动连接；日志声称绕过缓存后仍出现连续 `source=target_identifier`；用户手动重连不能立即尝试；设备恢复后丢失原 profile 或映射；一个设备恢复导致其他在线设备断开或重复执行按键。
+
 ## 稳定功能回归
 
 - 连接页的语音状态、音频输出、手机/Apple Watch/网页版入口和重连按钮仍可用。
@@ -48,10 +68,10 @@
 
 ## 日志收集
 
-记录每个用例的本地开始/结束时间，并复制对应时间段的 `~/Library/Logs/RemoteMic/runtime.log`。重点核对 `BLE` Ready/断开、发现和重连事件；日志不包含遥控器名称以外的用户内容或按键映射正文。
+记录每个用例的本地开始/结束时间，并复制对应时间段的 `~/Library/Logs/RemoteMic/runtime.log`。重点核对 `BLE` Ready/断开、发现、`failure_count`、`delay_ms` 和 `cached_identifier_bypassed`；日志不包含设备 UUID、遥控器名称以外的用户内容或按键映射正文。
 
 ## 验证边界
 
-- 自动化、源码回归测试和构建只证明过滤条件、空状态接线和编译正确。
+- 自动化状态机测试覆盖退避等待期的 off/resetting/powered-on 恢复决策，但不能实际切换系统蓝牙或驱动真实 CoreBluetooth 回调。
 - 代理离屏截图不能替代真实 CoreBluetooth、HID、系统权限和第三方语音工具验收。
 - 双遥控器隔离、首次配对、系统设置返回后的重新发现、电池读数和充电状态必须在真实 RC001/RC003 上完成。

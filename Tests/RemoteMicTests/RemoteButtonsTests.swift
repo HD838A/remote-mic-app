@@ -2382,5 +2382,9 @@ struct RemoteButtonsTests {
         #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x65, 0x00])) == .unknown)
         #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x00, 0x00])) == .unknown)
         #expect(RemotePowerState.decodeBatteryLevelStatus(Data([0x00, 0x61])) == nil)
+        #expect(RemotePowerState.onBattery.logValue == "on_battery")
+        #expect(RemotePowerState.externalPower.logValue == "external_power")
+        #expect(RemotePowerState.charging.logValue == "charging")
+        #expect(RemotePowerState.unknown.logValue == "unknown")
     }
 }

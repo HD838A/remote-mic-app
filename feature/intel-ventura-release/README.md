@@ -56,7 +56,7 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - `arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` Release 构建。
 - App、Sparkle、MiRemoteV、PKG 和 DMG 的架构、最低系统版本、权限、签名、公证和 Gatekeeper 校验。
 - 安装器架构回归脚本校验 Distribution 的双架构可评估范围、`hw.optional.arm64`、Fatal 本地化消息、另一版本提示，以及内层脚本不再依赖 `uname -m`。
-- 两套 appcast、共享说明 URL、12 项资产名和候选溯源隔离校验。
+- 两套 appcast、共享说明 URL、provenance 驱动的完整资产集合和候选溯源隔离校验。
 - 发布流水线回归脚本覆盖私有依赖 Commit 漂移、候选 SHA/Job 不匹配、Draft PR 门禁、双架构真实并行和任一架构失败传播。
 
 ## 人工测试手册

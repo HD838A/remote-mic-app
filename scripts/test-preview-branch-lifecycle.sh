@@ -10,10 +10,7 @@ TEST_REPO="$WORK_DIR/repo"
 FAKE_BIN="$WORK_DIR/bin"
 
 cleanup() {
-  case "$WORK_DIR" in
-    /private/tmp/remotemic-preview-lifecycle.*) /bin/rm -rf -- "$WORK_DIR" ;;
-    *) print -u2 "refusing to clean unexpected preview lifecycle path: $WORK_DIR" ;;
-  esac
+  print -u2 "preview branch lifecycle evidence retained at: $WORK_DIR"
 }
 trap cleanup EXIT
 
@@ -50,7 +47,7 @@ git -C "$TEST_REPO" commit -m "main baseline" >/dev/null
 git -C "$TEST_REPO" tag v1.8.14
 git -C "$TEST_REPO" push -u origin main --tags >/dev/null
 
-for tool_name in awk cmp grep mktemp plutil rm; do
+for tool_name in awk cmp grep mktemp plutil; do
   /bin/ln -s "/usr/bin/$tool_name" "$FAKE_BIN/$tool_name" 2>/dev/null || \
     /bin/ln -s "/bin/$tool_name" "$FAKE_BIN/$tool_name"
 done
@@ -92,13 +89,52 @@ prepare_candidate "release/pre-v1.8.15" "1.8.15" "107" "prepare 1.8.15"
 /usr/bin/grep -Fq "PREVIEW BRANCH PASS" "$WORK_DIR/valid-output.txt"
 
 git -C "$TEST_REPO" switch main >/dev/null
-prepare_candidate "release/pre-v1.8.15-rerun2" "1.8.15" "107" "recover 1.8.15"
-(
+print "main advanced after candidate freeze" > "$TEST_REPO/main-advanced.txt"
+git -C "$TEST_REPO" add main-advanced.txt
+git -C "$TEST_REPO" commit -m "advance main without changing release pipeline" >/dev/null
+git -C "$TEST_REPO" push origin main >/dev/null
+git -C "$TEST_REPO" switch release/pre-v1.8.15 >/dev/null
+if (
   cd "$TEST_REPO"
   GITHUB_REF_NAME="" PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
-) > "$WORK_DIR/recovery-output.txt"
-/usr/bin/grep -Fq "PREVIEW BRANCH PASS" "$WORK_DIR/recovery-output.txt"
+) > "$WORK_DIR/frozen-candidate-without-approval.txt" 2>&1; then
+  print -u2 "frozen candidate unexpectedly passed without explicit approval"
+  exit 1
+fi
+/usr/bin/grep -Fq "must be created from the current origin/main" \
+  "$WORK_DIR/frozen-candidate-without-approval.txt"
+(
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="" ALLOW_FROZEN_BASE_MAIN=1 \
+    PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
+) > "$WORK_DIR/frozen-candidate-pass.txt"
+/usr/bin/grep -Fq "PREVIEW BRANCH PASS" "$WORK_DIR/frozen-candidate-pass.txt"
 
+git -C "$TEST_REPO" switch main >/dev/null
+prepare_candidate "release/pre-v1.8.15-rerun2" "1.8.15" "107" "recover 1.8.15"
+if (
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="" PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
+) > "$WORK_DIR/rerun-rejected.txt" 2>&1; then
+  print -u2 "numbered rerun branch unexpectedly passed the single-candidate gate"
+  exit 1
+fi
+/usr/bin/grep -Fq "single candidate branch release/pre-vX.Y.Z" \
+  "$WORK_DIR/rerun-rejected.txt"
+
+git -C "$TEST_REPO" switch release/pre-v1.8.15 >/dev/null
+if (
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="" ALLOW_FROZEN_BASE_MAIN=1 \
+    PATH="$FAKE_BIN:/usr/bin:/bin" ./scripts/verify-preview-branch.sh
+) > "$WORK_DIR/duplicate-remote-candidate-rejected.txt" 2>&1; then
+  print -u2 "original candidate unexpectedly passed while a same-version alias existed"
+  exit 1
+fi
+/usr/bin/grep -Fq "must have exactly one remote candidate branch" \
+  "$WORK_DIR/duplicate-remote-candidate-rejected.txt"
+
+git -C "$TEST_REPO" switch release/pre-v1.8.15-rerun2 >/dev/null
 prepare_candidate "release/pre-v1.8.16" "1.8.16" "108" "prepare 1.8.16"
 if (
   cd "$TEST_REPO"
@@ -107,6 +143,6 @@ if (
   print -u2 "chained preview candidate unexpectedly passed"
   exit 1
 fi
-/usr/bin/grep -Fq "must exactly equal the latest origin/main" "$WORK_DIR/chained-output.txt"
+/usr/bin/grep -Fq "must be created from the current origin/main" "$WORK_DIR/chained-output.txt"
 
 print "PREVIEW BRANCH LIFECYCLE TEST PASS"

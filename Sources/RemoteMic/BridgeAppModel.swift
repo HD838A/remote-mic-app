@@ -168,6 +168,98 @@ enum BluetoothVoiceStopPolicy {
     }
 }
 
+enum VoiceSamplePresentationPolicy {
+    static func shouldPublishReceipt(
+        hasReceivedSamples: Bool,
+        sampleCount: Int
+    ) -> Bool {
+        sampleCount > 0 && !hasReceivedSamples
+    }
+}
+
+struct AudioRecoveryCoalescingState {
+    private(set) var pendingEventCount = 0
+
+    mutating func recordEvent() {
+        pendingEventCount += 1
+    }
+
+    mutating func consumePendingEventCount() -> Int {
+        let count = pendingEventCount
+        pendingEventCount = 0
+        return count
+    }
+
+    mutating func reset() {
+        pendingEventCount = 0
+    }
+}
+
+struct BluetoothVoiceTailSnapshot: Equatable {
+    let sampleCount: Int
+    let durationMilliseconds: Int
+    let nonZeroSampleCount: Int
+    let peak: Int
+    let rms: Int
+    let finalWindowSampleCount: Int
+    let finalWindowDurationMilliseconds: Int
+    let finalWindowNonZeroSampleCount: Int
+    let finalWindowPeak: Int
+    let finalWindowRMS: Int
+    let lastAudioAgeMilliseconds: Int?
+}
+
+struct BluetoothVoiceTailDiagnostics {
+    static let sampleRate = 16_000
+    static let maximumSampleCount = 4_800
+
+    private var recentSamples: [Int16] = []
+    private var lastAudioUptime: TimeInterval?
+
+    mutating func reset() {
+        recentSamples.removeAll(keepingCapacity: true)
+        lastAudioUptime = nil
+    }
+
+    mutating func append(_ samples: [Int16], at uptime: TimeInterval) {
+        guard !samples.isEmpty else { return }
+        lastAudioUptime = uptime
+        if samples.count >= Self.maximumSampleCount {
+            recentSamples = Array(samples.suffix(Self.maximumSampleCount))
+            return
+        }
+        let overflow = max(0, recentSamples.count + samples.count - Self.maximumSampleCount)
+        if overflow > 0 {
+            recentSamples.removeFirst(overflow)
+        }
+        recentSamples.append(contentsOf: samples)
+    }
+
+    func snapshot(at stopUptime: TimeInterval) -> BluetoothVoiceTailSnapshot {
+        var metrics = WatchBluetoothAudioSignalMetrics()
+        metrics.append(recentSamples)
+        let finalWindowSamples = Array(recentSamples.suffix(Self.sampleRate / 10))
+        var finalWindowMetrics = WatchBluetoothAudioSignalMetrics()
+        finalWindowMetrics.append(finalWindowSamples)
+        return BluetoothVoiceTailSnapshot(
+            sampleCount: metrics.sampleCount,
+            durationMilliseconds: metrics.sampleCount * 1_000 / Self.sampleRate,
+            nonZeroSampleCount: metrics.nonZeroSampleCount,
+            peak: metrics.peak,
+            rms: metrics.rms,
+            finalWindowSampleCount: finalWindowMetrics.sampleCount,
+            finalWindowDurationMilliseconds:
+                finalWindowMetrics.sampleCount * 1_000 / Self.sampleRate,
+            finalWindowNonZeroSampleCount: finalWindowMetrics.nonZeroSampleCount,
+            finalWindowPeak: finalWindowMetrics.peak,
+            finalWindowRMS: finalWindowMetrics.rms,
+            lastAudioAgeMilliseconds: lastAudioUptime.map {
+                max(0, Int(((stopUptime - $0) * 1_000).rounded()))
+            }
+        )
+    }
+}
+
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
@@ -193,10 +285,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
     @Published private(set) var isAudioOutputReady = false
-    private(set) var currentVoiceSampleCount: UInt64 = 0 {
-        didSet { voiceSampleCountPublisher.send(currentVoiceSampleCount) }
-    }
-    let voiceSampleCountPublisher = PassthroughSubject<UInt64, Never>()
+    @Published private(set) var hasReceivedCurrentVoiceSamples = false
     @Published private(set) var activeVoiceSource: UsageEventSource?
     @Published private(set) var lastMobileRemoteButtonObservation: MobileRemoteButtonObservation?
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
@@ -299,6 +388,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var bluetoothVoiceDecodedSampleCount = 0
     private var bluetoothVoiceEnqueueFailureCount = 0
     private var bluetoothVoiceTraceRoute = "none"
+    private var bluetoothVoiceTailDiagnostics = BluetoothVoiceTailDiagnostics()
     private let hidEventSuppressor = KeyboardEventSuppressor()
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
@@ -316,6 +406,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var observedAudioHardwareAddresses: [AudioObjectPropertyAddress] = []
     private var audioRecoveryWorkItem: DispatchWorkItem?
     private var audioRecoveryGeneration: UInt64 = 0
+    private var audioRecoveryCoalescingState = AudioRecoveryCoalescingState()
     private var virtualAudioReleaseGeneration: UInt64 = 0
     private var pendingVirtualAudioRelease: (generation: UInt64, reason: String)?
     private var systemAudioSuspensionState = SystemAudioSuspensionState()
@@ -620,6 +711,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioRecoveryGeneration &+= 1
         audioRecoveryWorkItem?.cancel()
         audioRecoveryWorkItem = nil
+        audioRecoveryCoalescingState.reset()
         stopObservingAudioHardware()
         cancelTestToneIfNeeded(
             statusMessage: LocalizedMessage("app.status.stopped"),
@@ -1088,7 +1180,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             if result == noErr {
                 observedAudioHardwareAddresses.append(address)
             } else {
-                AppLogger.shared.write("AUDIO RECOVERY listener_failed selector=\(selector) error=\(result)")
+                AppLogger.shared.write(
+                    "AUDIO RECOVERY listener_failed selector=\(selector) " +
+                        AppLogger.errorFields(domain: "os_status", code: Int(result))
+                )
             }
         }
         AppLogger.shared.write("AUDIO ROUTE_MONITOR started properties=\(Self.audioHardwarePropertyNames(for: observedAudioHardwareAddresses))")
@@ -1130,17 +1225,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 )
                 return
             }
+            self.audioRecoveryCoalescingState.recordEvent()
             self.audioRecoveryGeneration &+= 1
             let generation = self.audioRecoveryGeneration
-            let replacedPendingRecovery = self.audioRecoveryWorkItem != nil
             self.audioRecoveryWorkItem?.cancel()
             let work = DispatchWorkItem { [weak self] in
                 guard let self,
                       self.started,
                       self.audioRecoveryGeneration == generation
                 else { return }
+                let coalescedEvents = self.audioRecoveryCoalescingState.consumePendingEventCount()
                 AppLogger.shared.write(
                     "AUDIO RECOVERY begin id=\(generation) reason=\(reason) detail=\(details) " +
+                        "coalesced_events=\(coalescedEvents) " +
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.refreshAudioDevices()
@@ -1153,10 +1250,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             self.audioRecoveryWorkItem = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
-            AppLogger.shared.write(
-                "AUDIO RECOVERY scheduled id=\(generation) reason=\(reason) detail=\(details) " +
-                    "replaced_pending=\(replacedPendingRecovery) state={\(self.audioOutput.diagnosticState())}"
-            )
         }
     }
 
@@ -1702,9 +1795,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothVoiceTraceModel = model
         bluetoothVoiceDecodedBatchCount = 0
         bluetoothVoiceDecodedSampleCount = 0
-        currentVoiceSampleCount = 0
+        resetCurrentVoiceSampleReceipt()
         bluetoothVoiceEnqueueFailureCount = 0
         bluetoothVoiceTraceRoute = "none"
+        bluetoothVoiceTailDiagnostics.reset()
         AppLogger.shared.write(
             "ATVV STREAM accepted trace=\(bluetoothVoiceTraceCounter) model=\(model.rawValue)"
         )
@@ -1747,6 +1841,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             max(0, Int(Date().timeIntervalSince($0) * 1_000))
         } ?? 0
         let pendingBuffers = audioOutput.pendingVoiceBufferCountForDiagnostics
+        let tailSnapshot = bluetoothVoiceTailDiagnostics.snapshot(
+            at: ProcessInfo.processInfo.systemUptime
+        )
         AppLogger.shared.write(
             "ATVV STREAM summary trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue) " +
                 "duration_ms=\(durationMilliseconds) batches=\(bluetoothVoiceDecodedBatchCount) " +
@@ -1755,11 +1852,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "route=\(bluetoothVoiceTraceRoute) pending_buffers=\(pendingBuffers) " +
                 "flush=\(shouldFlushAudio)"
         )
+        AppLogger.shared.write(
+            "ATVV STREAM tail trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue) " +
+                "route=\(bluetoothVoiceTraceRoute) " +
+                "fn_pressed_at_stop=\(preferredInputSourceMonitor.functionKeyIsPressedForDiagnostics) " +
+                "last_audio_age_ms=\(tailSnapshot.lastAudioAgeMilliseconds.map(String.init) ?? "none") " +
+                "tail_ms=\(tailSnapshot.durationMilliseconds) " +
+                "tail_samples=\(tailSnapshot.sampleCount) " +
+                "tail_nonzero=\(tailSnapshot.nonZeroSampleCount) " +
+                "tail_peak=\(tailSnapshot.peak) tail_rms=\(tailSnapshot.rms) " +
+                "final_window_ms=\(tailSnapshot.finalWindowDurationMilliseconds) " +
+                "final_window_samples=\(tailSnapshot.finalWindowSampleCount) " +
+                "final_window_nonzero=\(tailSnapshot.finalWindowNonZeroSampleCount) " +
+                "final_window_peak=\(tailSnapshot.finalWindowPeak) " +
+                "final_window_rms=\(tailSnapshot.finalWindowRMS)"
+        )
         audioOutput.logWhenPendingVoiceAudioDrains(
             context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
         )
         activeBluetoothVoiceTraceID = nil
         bluetoothVoiceTraceStartedAt = nil
+        bluetoothVoiceTailDiagnostics.reset()
         endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
         if systemAudioSuspensionState.isSuspended {
             releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
@@ -1774,7 +1887,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let enqueued = handledByFnTapMode || audioOutput.enqueue(samples: samples)
         bluetoothVoiceDecodedBatchCount += 1
         bluetoothVoiceDecodedSampleCount += samples.count
-        currentVoiceSampleCount &+= UInt64(samples.count)
+        bluetoothVoiceTailDiagnostics.append(samples, at: ProcessInfo.processInfo.systemUptime)
+        publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
         if !enqueued {
             bluetoothVoiceEnqueueFailureCount += 1
         }
@@ -2305,7 +2419,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_function_key_failed")
             return .unavailable
         }
-        currentVoiceSampleCount = 0
+        resetCurrentVoiceSampleReceipt()
         mobileVoiceLifecycle.markStarted(source)
         mobileVoiceAudioBatchCount = 0
         mobileVoiceAudioEnqueueFailureCount = 0
@@ -2452,17 +2566,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
-        cancelVirtualAudioReleaseIfPending(trigger: "superseded_\(reason)", cause: "superseded")
+        guard pendingVirtualAudioRelease == nil else { return }
+        switchDefaultInputToFallbackIfNeeded(reason: reason)
+        let pendingVoiceBufferCount = audioOutput.pendingVoiceBufferCountForDiagnostics
+        guard VirtualAudioConnectionLifecyclePolicy.shouldScheduleRelease(
+            hasPendingRelease: pendingVirtualAudioRelease != nil,
+            hasAllocatedOutputResources: audioOutput.hasAllocatedOutputResources,
+            pendingVoiceBufferCount: pendingVoiceBufferCount
+        ) else {
+            isAudioOutputReady = false
+            testToneStatus = LocalizedMessage("audio.output.none_or_unavailable")
+            return
+        }
         virtualAudioReleaseGeneration &+= 1
         let generation = virtualAudioReleaseGeneration
         pendingVirtualAudioRelease = (generation, reason)
         AppLogger.shared.write(
             "AUDIO RELEASE requested reason=\(reason) generation=\(generation) " +
                 "system_suspended=\(systemAudioSuspensionState.isSuspended) " +
-                "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics) " +
+                "pending_buffers=\(pendingVoiceBufferCount) " +
                 "state={\(audioOutput.diagnosticState())}"
         )
-        switchDefaultInputToFallbackIfNeeded(reason: reason)
         audioOutput.endSessionAfterDraining { [weak self] in
             guard let self else { return }
             guard self.virtualAudioReleaseGeneration == generation else {
@@ -2524,7 +2648,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard result == noErr else {
             AppLogger.shared.write(
                 "AUDIO DEFAULT_INPUT fallback_failed reason=\(reason) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(fallback))} error=\(result)"
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(fallback))} " +
+                    AppLogger.errorFields(domain: "os_status", code: Int(result))
             )
             return
         }
@@ -2569,7 +2694,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         } else {
             AppLogger.shared.write(
                 "AUDIO DEFAULT_INPUT restore_failed reason=\(reason) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(virtualInput))} error=\(result)"
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(virtualInput))} " +
+                    AppLogger.errorFields(domain: "os_status", code: Int(result))
             )
         }
     }
@@ -2587,7 +2713,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             return
         }
-        currentVoiceSampleCount &+= UInt64(samples.count)
+        publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
         mobileVoiceAudioBatchCount += 1
         mobileVoiceAudioSignalMetrics.append(samples)
         let accepted = audioOutput.enqueue(samples: samples)
@@ -2615,6 +2741,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "source_mismatches=\(mobileVoiceAudioSourceMismatchCount) " +
                 "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
         )
+    }
+
+    private func resetCurrentVoiceSampleReceipt() {
+        guard hasReceivedCurrentVoiceSamples else { return }
+        hasReceivedCurrentVoiceSamples = false
+    }
+
+    private func publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: Int) {
+        guard VoiceSamplePresentationPolicy.shouldPublishReceipt(
+            hasReceivedSamples: hasReceivedCurrentVoiceSamples,
+            sampleCount: sampleCount
+        ) else { return }
+        hasReceivedCurrentVoiceSamples = true
     }
 
     private func archiveCapturedTranscript(_ capture: CapturedTranscript) {

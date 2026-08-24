@@ -13,8 +13,8 @@ if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ || ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; the
   echo "release metadata verification requires full base and head SHAs" >&2
   exit 2
 fi
-if [[ ! "$BRANCH" =~ ^release/pre-v[0-9]+\.[0-9]+\.[0-9]+(-rerun([2-9][0-9]*)?)?$ ]]; then
-  echo "release metadata verification requires release/pre-vX.Y.Z or a numbered recovery form" >&2
+if [[ ! "$BRANCH" =~ ^release/pre-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "release metadata verification requires the single candidate branch release/pre-vX.Y.Z" >&2
   exit 1
 fi
 if [[ "$(git rev-parse "$HEAD_SHA^")" != "$BASE_SHA" ||

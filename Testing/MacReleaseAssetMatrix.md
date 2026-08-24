@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 适用分支：包含 12 项 macOS 公开资产矩阵的 `main`、开发分支及其后续 `release/pre-v*` 候选，也适用于私有 GitHub Draft 中的可安装 macOS 测试资产。
+- 适用分支：使用 `candidate-provenance.json` 定义 macOS 公开资产矩阵的 `main`、开发分支及其后续 `release/pre-v*` 候选，也适用于私有 GitHub Draft 中的可安装 macOS 测试资产。
 - Apple Silicon：`arm64`、macOS 14 及以上。
 - Intel：`x86_64`、macOS 13 及以上。
 - 本手册验证发布资产、安装入口、Sparkle、CDN 与历史兼容；不授权创建 Tag、Release、签名或公证。
@@ -14,15 +14,15 @@
 3. 安装 `jq`、`rg`、`gh`，并确认可访问 GitHub Releases 与 `https://download.sayall.app`。
 4. 不输出或复制 Apple 私钥、P8、Match 密码、Keychain 密码、Sparkle 私钥或部署密钥。
 
-## 用例 1：新候选固定为 12 项
+## 用例 1：新候选资产集合由 provenance 唯一定义
 
 1. 运行发布 dry-run 或检查 staging manifest。
 2. 核对资产名称：两套 DMG、两套 ZIP、`appcast.xml`、`appcast-intel.xml`、两套架构卸载 PKG、共享 `.zh.txt`/`.en.txt`、一个合并的 `Remote-Mic-<版本>.dmg.sha256` 和 `candidate-provenance.json`。
 3. 确认没有 `Remote-Mic-<版本>-Installer.pkg` 或 `Remote-Mic-<版本>-Intel-Installer.pkg` standalone 资产，也没有 `-Intel.zh.txt` / `-Intel.en.txt` 重复说明。
 
-预期结果：公开资产总数严格为 12，provenance 的 `payloadAssets` 严格为 11，并完整覆盖除自身外的每个资产。
+预期结果：`payloadAssets` 中名称唯一、路径安全并完整覆盖除 provenance 自身外的每个公开资产；GitHub 上传集合严格等于 `payloadAssets + candidate-provenance.json`，实际数量由该 manifest 报告。
 
-失败判定：数量不是 12、存在未记录资产、缺少任一架构更新链，或 standalone Installer PKG 再次进入公开清单。
+失败判定：存在缺少、额外或重复资产，provenance 自引用、名称包含路径分隔符，缺少任一架构更新链，或 standalone Installer PKG 再次进入公开清单。
 
 ## 用例 2：DMG 内安装器仍完整可用
 
@@ -60,23 +60,23 @@
 
 ## 用例 5：GitHub/CDN 公开字节
 
-1. 从 GitHub 固定 Tag URL 下载全部 12 项。
-2. 从 CDN 固定 Tag URL 下载同名 12 项，使用最多四路有界并发。
+1. 从 provenance 生成唯一排序的公开资产 manifest，并从 GitHub 固定 Tag URL 下载其中全部资产。
+2. 从 CDN 固定 Tag URL 下载 manifest 中的同名全部资产，使用最多四路有界并发。
 3. 对每一项执行逐字节比较和 SHA-256；对 Apple Silicon DMG额外验证 `HEAD`、`Range` 和 CDN 响应标记。
 
-预期结果：GitHub 与 CDN 为 12/12 完全相同字节，任一下载失败会使父流程失败。
+预期结果：GitHub、CDN 与 staging 均和 manifest 精确同集合且全部为相同字节；任一下载或集合比较失败会使父流程失败。
 
 失败判定：抽样验证、忽略单项失败、CDN 名称白名单拒绝合并校验文件，或公开字节与 provenance 不一致。
 
 ## 用例 6：历史 Release 兼容
 
-1. 读取历史 `v1.8.25` 的 17 项资产清单与 `candidate-provenance.json`。
+1. 读取历史 `v1.8.25` 的资产清单与 `candidate-provenance.json`。
 2. 从 GitHub 与 CDN 固定 Tag URL 下载历史资产，不修改、删除或替换该 Release。
-3. 使用当前发布解析函数确认 17 项 Release / 16 payload 仍被接受；同时覆盖更早的 15 项 / 14 payload 结构。
+3. 使用当前发布解析函数确认 Release 资产严格等于该历史 provenance 自身记录的 payload 加 provenance；已晋升的历史 Release 还必须存在且验证 `stable-promotion.json`。
 
-预期结果：旧 URL 继续返回原字节，旧候选仍可按原 provenance 晋升；只有未来新候选必须严格使用 12/11。
+预期结果：旧 URL 继续返回原字节，旧候选仍可按其自身 provenance 晋升；新旧候选都不依赖当前实现的固定数量常量。
 
-失败判定：新代码要求所有历史 Release 都是 12 项、旧 URL 404、或为兼容而放宽新候选数量门禁。
+失败判定：新代码把当前数量强加给历史 Release、旧 URL 404、忽略历史 provenance 的缺少/额外资产，或为兼容而放宽新候选的精确集合门禁。
 
 ## 用例 7：私有 Draft 远端复验
 
@@ -98,13 +98,13 @@
 
 ## 日志收集
 
-- 保存 staging 文件名、数量、大小和 SHA-256；不要记录凭据值。
+- 保存 provenance、staging 文件名、manifest 报告的数量、大小和 SHA-256；不要记录凭据值。
 - 保存 GitHub/CDN 每项下载结果、比较结果和失败的 URL 文件名。
 - 保存 appcast enclosure、版本/Build、架构、最低系统和签名验证结果。
 - 安装失败时保存 Installer 日志、目标架构、系统版本和最终结果，不只记录“收到事件”或“开始安装”。
 
 ## 自动化、代理实测和用户实测边界
 
-- 自动化可证明 12/11 数量、历史 17/16 与 15/14 解析兼容、文件名、摘要、appcast URL、失败传播和 DMG/PKG 静态信任链。
+- 自动化可证明 manifest/provenance 精确集合、历史 provenance 解析兼容、文件名、摘要、appcast URL、失败传播和 DMG/PKG 静态信任链。
 - 代理可在无凭据环境完成脚本 dry-run、历史公开资产下载和结构验证；这些结果不等于新的 Developer ID 候选已经签名、公证。
 - 只有受保护工作流能证明最终签名、公证字节；只有真实 Apple Silicon 与 Intel Mac 的 Installer.app、Sparkle UI、安装、卸载和错误架构界面才能完成真实环境验收。

@@ -20,28 +20,15 @@ env:
   SAYALL_MAC_REMOTE_RELEASE_REF: 3f3c782180eef4024b53941c1f65d80e7cff4c66
 
 jobs:
-  skip-release-canary:
-    name: Skip preview packaging for protected release canary
-    if: ${{ contains(github.ref_name, '-canary-') }}
-    runs-on: macos-15
-    timeout-minutes: 5
-    steps:
-      - name: Confirm dedicated canary ref
-        run: |
-          printf '%s' "$GITHUB_REF_NAME" | \
-            grep -Eq '^release/pre-v[0-9]+\.[0-9]+\.[0-9]+-canary-[a-z0-9][a-z0-9._-]*$'
-          echo "PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY"
-
   classify-candidate:
     name: Classify exact parent-main CI reuse
-    if: ${{ !contains(github.ref_name, '-canary-') }}
     runs-on: macos-15
     timeout-minutes: 3
     outputs:
       reuse_parent_main_ci: ${{ steps.reuse.outputs.eligible }}
     steps:
       - name: Check out candidate
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
@@ -55,7 +42,8 @@ jobs:
           trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
           if git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner" &&
              chmod 755 "$trusted_runner" &&
-             REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"; then
+             REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 \
+               "$trusted_runner"; then
             eligible=true
           fi
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
@@ -63,7 +51,7 @@ jobs:
 
   validate-and-package:
     name: Validate and package preview candidate (${{ matrix.label }})
-    if: ${{ !contains(github.ref_name, '-canary-') && needs.classify-candidate.outputs.reuse_parent_main_ci == 'true' }}
+    if: ${{ needs.classify-candidate.outputs.reuse_parent_main_ci == 'true' }}
     needs: classify-candidate
     runs-on: macos-15
     timeout-minutes: 75
@@ -82,7 +70,7 @@ jobs:
       RELEASE_VARIANT: ${{ matrix.variant }}
     steps:
       - name: Check out candidate
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
@@ -102,10 +90,11 @@ jobs:
           trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
           git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
           chmod 755 "$trusted_runner"
-          REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 \
+            "$trusted_runner"
 
       - name: Upload exact-SHA release-ready proof
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artifact }}-${{ github.sha }}-release-ready-proof
           path: ${{ runner.temp }}/release-ready-main-ci-${{ matrix.variant }}.json
@@ -114,7 +103,7 @@ jobs:
 
   reject-ineligible-candidate:
     name: Reject preview candidate without reusable parent-main proof
-    if: ${{ !contains(github.ref_name, '-canary-') && needs.classify-candidate.outputs.reuse_parent_main_ci != 'true' }}
+    if: ${{ needs.classify-candidate.outputs.reuse_parent_main_ci != 'true' }}
     needs: classify-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 1

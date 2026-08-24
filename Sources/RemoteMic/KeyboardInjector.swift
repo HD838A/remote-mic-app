@@ -277,7 +277,8 @@ enum KeyboardInjector {
         applicationOpener(url, application) { processIdentifier, error in
             if let error {
                 AppLogger.shared.write(
-                    "APP ACTION failed bundle=\(application.bundleIdentifier) error=\(error.localizedDescription)"
+                    "APP ACTION failed bundle=\(application.bundleIdentifier) " +
+                        AppLogger.errorFields(error)
                 )
             } else {
                 AppLogger.shared.write("APP ACTION opened bundle=\(application.bundleIdentifier)")
@@ -319,7 +320,7 @@ enum KeyboardInjector {
             if let error {
                 AppLogger.shared.write(
                     "APP ACTION failed bundle=\(application.bundleIdentifier) custom=true " +
-                        "error=\(error.localizedDescription)"
+                        AppLogger.errorFields(error)
                 )
                 return
             }
