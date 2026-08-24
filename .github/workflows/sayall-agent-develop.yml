@@ -1,0 +1,415 @@
+name: SayAll Agent Develop
+
+run-name: SayAll Agent develop ${{ github.event.client_payload.run_id || github.run_id }}
+
+on:
+  repository_dispatch:
+    types: [sayall-agent-develop]
+
+permissions: {}
+
+concurrency:
+  group: sayall-agent-develop-${{ github.repository_id }}-${{ github.event.client_payload.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Redeem one-time development authorization
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      run_id: ${{ steps.validate.outputs.run_id }}
+      issue_number: ${{ steps.redeem.outputs.issue_number }}
+      base_ref: ${{ steps.redeem.outputs.base_ref }}
+      base_sha: ${{ steps.redeem.outputs.base_sha }}
+      repository: ${{ steps.redeem.outputs.repository }}
+    steps:
+      - name: Validate dispatch envelope
+        id: validate
+        shell: bash
+        env:
+          RUN_ID: ${{ github.event.client_payload.run_id }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2129
+          [[ "$RUN_ID" =~ ^run_[A-Za-z0-9_-]{12,80}$ ]]
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Redeem authorization at Workshop
+        id: redeem
+        shell: bash
+        env:
+          API_URL: ${{ vars.WORKSHOP_AGENT_API_URL }}
+          CALLBACK_SECRET: ${{ secrets.WORKSHOP_AGENT_CALLBACK_SECRET }}
+          RUN_ID: ${{ steps.validate.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "$API_URL"
+          test -n "$CALLBACK_SECRET"
+          dispatch_token="$(jq -r '.client_payload.dispatch_token // empty' "$GITHUB_EVENT_PATH")"
+          test -n "$dispatch_token"
+          echo "::add-mask::$dispatch_token"
+          [[ "$dispatch_token" =~ ^sad_[A-Za-z0-9_-]{40,120}$ ]]
+          body="$(jq -cn --arg phase "develop" --argjson workflowRunId "$GITHUB_RUN_ID" '{phase:$phase,workflowRunId:$workflowRunId}')"
+          timestamp="$(date +%s)"
+          event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_develop"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$body" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          response_file="$RUNNER_TEMP/sayall-agent-context.json"
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "${API_URL%/}/api/agent/dispatches/${dispatch_token}/redeem" \
+            --header "Content-Type: application/json" \
+            --header "X-SayAll-Timestamp: $timestamp" \
+            --header "X-SayAll-Event-Id: $event_id" \
+            --header "X-SayAll-Signature: $signature" \
+            --data-binary "$body" > "$response_file"
+          jq -e --arg run "$RUN_ID" --arg repository "$GITHUB_REPOSITORY" '.runId == $run and .phase == "develop" and .repository == $repository and (.issueNumber | type == "number" and . > 0)' "$response_file" > /dev/null
+          jq -r '.baseRef' "$response_file" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$'
+          jq -r '.baseSha' "$response_file" | grep -Eq '^[0-9a-f]{40}$'
+          jq -e '.planHash and (.planHash | test("^[0-9a-f]{64}$"))' "$response_file" > /dev/null
+          {
+            echo "base_ref=$(jq -r '.baseRef' "$response_file")"
+            echo "base_sha=$(jq -r '.baseSha' "$response_file")"
+            echo "repository=$(jq -r '.repository' "$response_file")"
+            echo "issue_number=$(jq -r '.issueNumber' "$response_file")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload approved context
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sayall-agent-develop-context-${{ github.run_id }}
+          path: ${{ runner.temp }}/sayall-agent-context.json
+          if-no-files-found: error
+          retention-days: 1
+
+  implement:
+    name: Codex workspace patch
+    needs: preflight
+    if: needs.preflight.result == 'success'
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      outcome: ${{ steps.package.outputs.outcome }}
+      has_patch: ${{ steps.package.outputs.has_patch }}
+    steps:
+      - name: Check out fixed base commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.preflight.outputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download approved context
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5
+        with:
+          name: sayall-agent-develop-context-${{ github.run_id }}
+          path: .sayall-input
+
+      - name: Run workspace Codex
+        id: codex
+        continue-on-error: true
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # codex-action v1 / CLI 0.149.0
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          responses-api-endpoint: ${{ vars.SAYALL_CODEX_RESPONSES_API_ENDPOINT }}
+          prompt-file: .github/codex/prompts/implement.md
+          output-schema-file: .github/codex/schemas/result.schema.json
+          output-file: ${{ runner.temp }}/sayall-agent-result.json
+          permission-profile: :workspace
+          safety-strategy: drop-sudo
+          codex-version: "0.149.0"
+          codex-args: '["--ephemeral"]'
+          codex-home: ${{ runner.temp }}/sayall-codex-home
+          allow-bot-users: ${{ vars.SAYALL_AGENT_TRIGGER_BOT_LOGIN }}
+          model: ${{ vars.SAYALL_CODEX_MODEL }}
+          effort: medium
+
+      - name: Package and policy-check Patch
+        id: package
+        if: always()
+        shell: bash
+        env:
+          CODEX_OUTCOME: ${{ steps.codex.outcome }}
+          RESULT_FILE: ${{ runner.temp }}/sayall-agent-result.json
+        run: |
+          set -euo pipefail
+          patch_file="$RUNNER_TEMP/sayall-agent.patch"
+          manifest_file="$RUNNER_TEMP/sayall-agent-manifest.sha256"
+          if [[ "$CODEX_OUTCOME" != "success" || ! -s "$RESULT_FILE" ]]; then
+            echo "outcome=failed" >> "$GITHUB_OUTPUT"
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! jq -e '.schemaVersion == 1 and (.summary | type == "string" and length >= 2) and (.changedPaths | type == "array") and (.tests | type == "array") and (.notes | type == "array")' "$RESULT_FILE" > /dev/null; then
+            echo "outcome=failed" >> "$GITHUB_OUTPUT"
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git add -N -- .
+          git diff --binary --no-ext-diff HEAD -- . ':(exclude).sayall-input/**' > "$patch_file"
+          changed_paths=()
+          while IFS= read -r path; do
+            changed_paths+=("$path")
+          done < <(git diff --name-only HEAD -- . ':(exclude).sayall-input/**')
+          if (( ${#changed_paths[@]} == 0 )); then
+            echo "outcome=no_changes" >> "$GITHUB_OUTPUT"
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if (( ${#changed_paths[@]} > 30 )); then
+            echo "outcome=failed" >> "$GITHUB_OUTPUT"
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          for path in "${changed_paths[@]}"; do
+            case "$path" in
+              .github/*|.sayall/*|packaging/*|scripts/*|Package.swift|Package.resolved|Resources/Info.plist|*.entitlements|*.p12|*.p8|*.pem|*.key|*.mobileprovision|../*|*"\""*)
+                echo "Denied Agent path: $path" >&2
+                echo "outcome=failed" >> "$GITHUB_OUTPUT"
+                echo "has_patch=false" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+          done
+          if git diff --summary HEAD -- . ':(exclude).sayall-input/**' | grep -Eq 'delete mode|create mode 120000|Submodule'; then
+            echo "outcome=failed" >> "$GITHUB_OUTPUT"
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --numstat HEAD -- . ':(exclude).sayall-input/**' | awk '$1 == "-" || $2 == "-" { found=1 } END { exit found ? 0 : 1 }'; then
+            echo "outcome=failed" >> "$GITHUB_OUTPUT"
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if (( $(wc -c < "$patch_file") > 262144 )); then
+            echo "outcome=failed" >> "$GITHUB_OUTPUT"
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          shasum -a 256 "$patch_file" > "$manifest_file"
+          echo "outcome=patch_ready" >> "$GITHUB_OUTPUT"
+          echo "has_patch=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Patch artifact
+        if: steps.package.outputs.has_patch == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sayall-agent-patch-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/sayall-agent.patch
+            ${{ runner.temp }}/sayall-agent-result.json
+            ${{ runner.temp }}/sayall-agent-manifest.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  report-implementation:
+    name: Report implementation stage
+    needs: [preflight, implement]
+    if: always() && needs.preflight.result == 'success'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Report implementation event
+        shell: bash
+        env:
+          API_URL: ${{ vars.WORKSHOP_AGENT_API_URL }}
+          CALLBACK_SECRET: ${{ secrets.WORKSHOP_AGENT_CALLBACK_SECRET }}
+          RUN_ID: ${{ needs.preflight.outputs.run_id }}
+          OUTCOME: ${{ needs.implement.outputs.outcome }}
+        run: |
+          set -euo pipefail
+          test -n "$API_URL"
+          test -n "$CALLBACK_SECRET"
+          case "$OUTCOME" in
+            patch_ready|no_changes|failed) ;;
+            *) OUTCOME=failed ;;
+          esac
+          timestamp="$(date +%s)"
+          event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_implementation_result"
+          if [[ "$OUTCOME" == "patch_ready" ]]; then
+            payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"patch_ready",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),summary:"Patch 已通过固定路径、大小和格式策略校验。"}')"
+          elif [[ "$OUTCOME" == "no_changes" ]]; then
+            payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"no_changes",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),summary:"批准计划未产生文件修改。"}')"
+          else
+            payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),error:"Codex 修改或 Patch 策略校验失败。"}')"
+          fi
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "${API_URL%/}/api/agent/events" \
+            --header "Content-Type: application/json" \
+            --header "X-SayAll-Timestamp: $timestamp" \
+            --header "X-SayAll-Event-Id: $event_id" \
+            --header "X-SayAll-Signature: $signature" \
+            --data-binary @"$RUNNER_TEMP/sayall-agent-callback.json" > /dev/null
+
+  publish:
+    name: Bot branch and Draft PR
+    needs: [preflight, implement, report-implementation]
+    if: needs.preflight.result == 'success' && needs.implement.outputs.has_patch == 'true' && needs.report-implementation.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: sayall-agent-pr-${{ github.run_id }}
+    steps:
+      - name: Check out fixed base commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.preflight.outputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download Patch artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5
+        with:
+          name: sayall-agent-patch-${{ github.run_id }}
+          path: ${{ runner.temp }}/sayall-agent-patch
+
+      - name: Verify and apply Patch
+        shell: bash
+        env:
+          BASE_SHA: ${{ needs.preflight.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          test -s "$RUNNER_TEMP/sayall-agent-patch/sayall-agent.patch"
+          expected_hash="$(awk '{print $1}' "$RUNNER_TEMP/sayall-agent-patch/sayall-agent-manifest.sha256")"
+          actual_hash="$(sha256sum "$RUNNER_TEMP/sayall-agent-patch/sayall-agent.patch" | awk '{print $1}')"
+          test "$expected_hash" = "$actual_hash"
+          git apply --check "$RUNNER_TEMP/sayall-agent-patch/sayall-agent.patch"
+          git apply --index "$RUNNER_TEMP/sayall-agent-patch/sayall-agent.patch"
+          if git diff --cached --summary | grep -Eq 'delete mode|create mode 120000|Submodule'; then
+            echo "Patch contains a denied file operation" >&2
+            exit 1
+          fi
+
+      - name: Create scoped Agent Bot token
+        id: agent-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.SAYALL_AGENT_GITHUB_APP_ID }}
+          private-key: ${{ secrets.SAYALL_AGENT_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Push Bot branch and create Draft PR
+        shell: bash
+        env:
+          AGENT_TOKEN: ${{ steps.agent-token.outputs.token }}
+          RUN_ID: ${{ needs.preflight.outputs.run_id }}
+          ISSUE_NUMBER: ${{ needs.preflight.outputs.issue_number }}
+          ISSUE_TITLE: ${{ needs.preflight.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          branch="codex/sayall-agent-${ISSUE_NUMBER}-${RUN_ID#run_}"
+          [[ "$branch" =~ ^codex/sayall-agent-[1-9][0-9]{0,8}-[A-Za-z0-9_-]{12,80}$ ]]
+          result_file="$RUNNER_TEMP/sayall-agent-patch/sayall-agent-result.json"
+          title="$(jq -r '.summary' "$result_file" | tr '\n' ' ' | cut -c1-100)"
+          test -n "$title"
+          git config user.name "SayAll Agent Bot"
+          git config user.email "sayall-agent-bot@users.noreply.github.com"
+          git commit -m "agent: implement issue #$ISSUE_NUMBER"
+          set +x
+          auth_header="$(printf 'x-access-token:%s' "$AGENT_TOKEN" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic $auth_header" push --set-upstream origin "HEAD:refs/heads/$branch"
+          printf '%s\n' "SayAll Agent generated this Draft PR from approved Run $RUN_ID." > "$RUNNER_TEMP/sayall-agent-pr-body.md"
+          printf '%s\n' "Issue: #$ISSUE_NUMBER" >> "$RUNNER_TEMP/sayall-agent-pr-body.md"
+          printf '%s\n' "The PR remains Draft until a maintainer reviews the patch and the protected CI gate." >> "$RUNNER_TEMP/sayall-agent-pr-body.md"
+          export GH_TOKEN="$AGENT_TOKEN"
+          pr_url="$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --draft --title "[SayAll Agent] $title" --body-file "$RUNNER_TEMP/sayall-agent-pr-body.md")"
+          [[ "$pr_url" =~ ^https://github\.com/[^/]+/[^/]+/pull/[1-9][0-9]*$ ]]
+          gh pr view "$pr_url" --json number,url,headRefName --jq '{number:.number,url:.url,branch:.headRefName}' > "$RUNNER_TEMP/sayall-agent-pr.json"
+          unset AGENT_TOKEN GH_TOKEN
+
+      - name: Upload PR result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sayall-agent-pr-${{ github.run_id }}
+          path: ${{ runner.temp }}/sayall-agent-pr.json
+          if-no-files-found: error
+          retention-days: 1
+
+  report-pr:
+    name: Report Draft PR
+    needs: [preflight, implement, report-implementation, publish]
+    if: always() && needs.preflight.result == 'success' && needs.report-implementation.result == 'success' && needs.implement.outputs.has_patch == 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Download PR result when available
+        id: download
+        if: needs.publish.result == 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v5
+        with:
+          name: sayall-agent-pr-${{ github.run_id }}
+          path: ${{ runner.temp }}/sayall-agent-pr
+
+      - name: Report PR event
+        shell: bash
+        env:
+          API_URL: ${{ vars.WORKSHOP_AGENT_API_URL }}
+          CALLBACK_SECRET: ${{ secrets.WORKSHOP_AGENT_CALLBACK_SECRET }}
+          RUN_ID: ${{ needs.preflight.outputs.run_id }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+        run: |
+          set -euo pipefail
+          test -n "$API_URL"
+          test -n "$CALLBACK_SECRET"
+          timestamp="$(date +%s)"
+          event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_pr_result"
+          result_file="$RUNNER_TEMP/sayall-agent-pr/sayall-agent-pr.json"
+          if [[ "$PUBLISH_RESULT" == "success" && -s "$result_file" ]] && jq -e '.number > 0 and (.url | startswith("https://github.com/")) and (.branch | startswith("codex/sayall-agent-"))' "$result_file" > /dev/null; then
+            payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" --arg branch "$(jq -r '.branch' "$result_file")" --arg url "$(jq -r '.url' "$result_file")" --argjson number "$(jq -r '.number' "$result_file")" '{runId:$run,eventType:"pr_created",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),branch:$branch,prNumber:$number,prUrl:$url,summary:"Agent Bot 已创建 Draft PR。"}')"
+          else
+            payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),error:"Agent Bot 发布分支或 Draft PR 失败。"}')"
+          fi
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "${API_URL%/}/api/agent/events" \
+            --header "Content-Type: application/json" \
+            --header "X-SayAll-Timestamp: $timestamp" \
+            --header "X-SayAll-Event-Id: $event_id" \
+            --header "X-SayAll-Signature: $signature" \
+            --data-binary @"$RUNNER_TEMP/sayall-agent-callback.json" > /dev/null
+
+  report-preflight-failure:
+    name: Report development preflight failure
+    needs: preflight
+    if: always() && needs.preflight.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Report failure to Workshop
+        shell: bash
+        env:
+          API_URL: ${{ vars.WORKSHOP_AGENT_API_URL }}
+          CALLBACK_SECRET: ${{ secrets.WORKSHOP_AGENT_CALLBACK_SECRET }}
+          RUN_ID: ${{ github.event.client_payload.run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^run_[A-Za-z0-9_-]{12,80}$ ]]
+          test -n "$API_URL"
+          test -n "$CALLBACK_SECRET"
+          timestamp="$(date +%s)"
+          event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_preflight_failure"
+          payload="$(jq -cn --arg run "$RUN_ID" --argjson workflowRunId "$GITHUB_RUN_ID" '{runId:$run,eventType:"failed",workflowRunId:$workflowRunId,occurredAt:(now|todateiso8601),error:"Agent 开发 Preflight 未通过。"}')"
+          signature="v1=$(printf '%s.%s' "$timestamp" "$payload" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
+          printf '%s' "$payload" > "$RUNNER_TEMP/sayall-agent-callback.json"
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "${API_URL%/}/api/agent/events" \
+            --header "Content-Type: application/json" \
+            --header "X-SayAll-Timestamp: $timestamp" \
+            --header "X-SayAll-Event-Id: $event_id" \
+            --header "X-SayAll-Signature: $signature" \
+            --data-binary @"$RUNNER_TEMP/sayall-agent-callback.json" > /dev/null

@@ -55,7 +55,10 @@ struct PreferredInputSourceMonitorTests {
         handler?(true)
 
         #expect(preparedTools == [.doubao, .doubao])
-        #expect(logs.count == 2)
+        #expect(logs.filter { $0.contains("source_prepare") }.count == 2)
+        #expect(logs.filter { $0.contains("function_key edge=down") }.count == 2)
+        #expect(logs.filter { $0.contains("function_key edge=up") }.count == 1)
+        #expect(monitor.functionKeyIsPressedForDiagnostics)
     }
 
     @Test func toolsWithoutAnInputSourceKeepTheExistingFnBehavior() {

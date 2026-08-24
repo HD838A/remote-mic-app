@@ -122,6 +122,8 @@ final class XiaomiBluetoothBridge: NSObject {
     private var capabilitiesRequested = false
     private var capabilitiesConfirmed = false
     private var requestedReconnectDelay: TimeInterval?
+    private var reconnectPolicy = BluetoothReconnectPolicy()
+    private var currentAttemptUsesCachedTarget = false
     private var generationCounter: UInt64 = 0
     private var lifecycle: BluetoothLifecyclePhase = .stopped
     private var shouldRun = false
@@ -172,12 +174,14 @@ final class XiaomiBluetoothBridge: NSObject {
     func start() {
         shouldRun = true
         reconnectWorkItem?.cancel()
+        reconnectPolicy.reset()
         beginConnectionCycle()
     }
 
     func stop() {
         shouldRun = false
         reconnectWorkItem?.cancel()
+        reconnectPolicy.reset()
         central?.stopScan()
         closeMicrophoneIfNeeded()
         if let central, let peripheral, peripheral.state != .disconnected {
@@ -194,6 +198,7 @@ final class XiaomiBluetoothBridge: NSObject {
     func reconnectNow() {
         guard shouldRun else { return }
         reconnectWorkItem?.cancel()
+        reconnectPolicy.reset()
         central?.stopScan()
         if let central, let peripheral, peripheral.state != .disconnected {
             requestedReconnectDelay = 0.1
@@ -294,9 +299,16 @@ final class XiaomiBluetoothBridge: NSObject {
         else { return }
         resetPeripheral()
 
-        if let identifier = targetIdentifier,
+        if reconnectPolicy.allowsCachedTargetRetrieval,
+           let identifier = targetIdentifier,
            let saved = central.retrievePeripherals(withIdentifiers: [identifier]).first {
-            connect(saved, using: central, generation: generation, source: "target_identifier")
+            connect(
+                saved,
+                using: central,
+                generation: generation,
+                source: "target_identifier",
+                usesCachedTarget: true
+            )
             return
         }
 
@@ -319,7 +331,8 @@ final class XiaomiBluetoothBridge: NSObject {
         _ candidate: CBPeripheral,
         using central: CBCentralManager,
         generation: UInt64,
-        source: String
+        source: String,
+        usesCachedTarget: Bool = false
     ) {
         guard shouldRun,
               self.central === central,
@@ -328,6 +341,7 @@ final class XiaomiBluetoothBridge: NSObject {
         else { return }
         central.stopScan()
         peripheral = candidate
+        currentAttemptUsesCachedTarget = usesCachedTarget
         let proxy = XiaomiPeripheralDelegateProxy(generation: generation, owner: self)
         peripheralDelegateProxy = proxy
         candidate.delegate = proxy
@@ -346,6 +360,7 @@ final class XiaomiBluetoothBridge: NSObject {
         peripheral?.delegate = nil
         peripheral = nil
         peripheralDelegateProxy = nil
+        requestedReconnectDelay = nil
         transmitCharacteristic = nil
         audioCharacteristic = nil
         controlCharacteristic = nil
@@ -359,6 +374,7 @@ final class XiaomiBluetoothBridge: NSObject {
         capabilitiesRequested = false
         capabilitiesConfirmed = false
         capabilities = Self.defaultCapabilities
+        currentAttemptUsesCachedTarget = false
         resetSession()
     }
 
@@ -401,7 +417,10 @@ final class XiaomiBluetoothBridge: NSObject {
                peripheral.state != .disconnected {
                 central.cancelPeripheralConnection(peripheral)
             }
-            self.finishAttempt(reconnectAfter: 3)
+            let delay = self.nextAutomaticReconnectDelay(
+                bypassCachedTarget: self.currentAttemptUsesCachedTarget
+            )
+            self.finishAttempt(reconnectAfter: delay)
         }
         connectionTimeoutWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
@@ -420,29 +439,47 @@ final class XiaomiBluetoothBridge: NSObject {
         decoder.reset()
     }
 
-    private func scheduleReconnect(discardCachedIdentity: Bool = false) {
+    private func scheduleReconnect(bypassCachedTarget: Bool = false) {
         guard shouldRun else { return }
         reconnectWorkItem?.cancel()
         state = .reconnecting
+        let delay = nextAutomaticReconnectDelay(
+            bypassCachedTarget: bypassCachedTarget || currentAttemptUsesCachedTarget
+        )
         if let central, let peripheral, peripheral.state != .disconnected {
-            requestedReconnectDelay = 3
+            requestedReconnectDelay = delay
             lifecycle = .disconnecting(lifecycle.generation ?? generationCounter)
             central.cancelPeripheralConnection(peripheral)
             return
         }
-        finishAttempt(reconnectAfter: 3)
+        finishAttempt(reconnectAfter: delay)
+    }
+
+    private func nextAutomaticReconnectDelay(bypassCachedTarget: Bool) -> TimeInterval {
+        let delay = reconnectPolicy.nextAutomaticDelay(
+            bypassCachedTarget: bypassCachedTarget,
+            jitterUnit: Double.random(in: 0 ... 1)
+        )
+        let cachedIdentifierBypassed = targetIdentifier != nil &&
+            !reconnectPolicy.allowsCachedTargetRetrieval
+        AppLogger.shared.write(
+            "BLE RECONNECT scheduled failure_count=\(reconnectPolicy.consecutiveFailureCount) " +
+                "delay_ms=\(Int((delay * 1_000).rounded())) " +
+                "cached_identifier_bypassed=\(cachedIdentifierBypassed)"
+        )
+        return delay
     }
 
     private func finishAttempt(reconnectAfter delay: TimeInterval?) {
         let finishedGeneration = lifecycle.generation ?? generationCounter
         central?.stopScan()
-        central?.delegate = nil
-        central = nil
-        centralGeneration = nil
         requestedReconnectDelay = nil
         resetPeripheral()
 
         guard shouldRun, let delay else {
+            central?.delegate = nil
+            central = nil
+            centralGeneration = nil
             lifecycle = .stopped
             return
         }
@@ -452,10 +489,10 @@ final class XiaomiBluetoothBridge: NSObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self,
                   self.shouldRun,
-                  self.central == nil,
                   self.lifecycle == .waitingReconnect(finishedGeneration)
             else { return }
-            self.beginConnectionCycle()
+            self.reconnectWorkItem = nil
+            self.startFreshConnectionCycle()
         }
         reconnectWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
@@ -521,6 +558,8 @@ final class XiaomiBluetoothBridge: NSObject {
             capabilitiesConfirmed = true
             initializationTimeoutWorkItem?.cancel()
             initializationTimeoutWorkItem = nil
+            reconnectPolicy.reset()
+            currentAttemptUsesCachedTarget = false
             lifecycle = .ready(generation)
             if let peripheral {
                 state = .ready(peripheral.name ?? "MI RC")
@@ -582,6 +621,13 @@ final class XiaomiBluetoothBridge: NSObject {
             let predictorBits = UInt16(bytes[4]) << 8 | UInt16(bytes[5])
             let predictor = Int(Int16(bitPattern: predictorBits))
             pendingSync = (predictor, Int(bytes[6]))
+            let partialFrameBytes = accumulator.pending.count
+            if partialFrameBytes > 0 {
+                AppLogger.shared.write(
+                    "ATVV FRAME discarded session=\(sessionID) reason=sync " +
+                        "partial_frame_bytes=\(partialFrameBytes)"
+                )
+            }
             accumulator.reset()
         default:
             break
@@ -589,6 +635,13 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func startStreaming() {
+        let partialFrameBytes = accumulator.pending.count
+        if partialFrameBytes > 0 {
+            AppLogger.shared.write(
+                "ATVV FRAME discarded session=\(sessionID) reason=stream_start " +
+                    "streaming_before=\(streaming) partial_frame_bytes=\(partialFrameBytes)"
+            )
+        }
         accumulator.reset()
         pendingSync = nil
         decoder.reset()
@@ -603,11 +656,14 @@ final class XiaomiBluetoothBridge: NSObject {
         guard streaming else { return }
         streaming = false
         microphoneOpened = false
+        let partialFrameBytes = accumulator.pending.count
         accumulator.reset()
         pendingSync = nil
         lastStopAt = Date()
+        AppLogger.shared.write(
+            "ATVV STREAM STOP session=\(sessionID) partial_frame_bytes=\(partialFrameBytes)"
+        )
         delegate?.bluetoothBridgeDidStopVoice(self)
-        AppLogger.shared.write("ATVV STREAM STOP session=\(sessionID)")
     }
 
     private func handleAudio(_ data: Data) {
@@ -630,7 +686,16 @@ final class XiaomiBluetoothBridge: NSObject {
         }
         cancelledMicrophoneOpenAt = nil
         if !streaming {
-            if let lastStopAt, Date().timeIntervalSince(lastStopAt) < 0.3 {
+            let receivedAt = Date()
+            if let lastStopAt, receivedAt.timeIntervalSince(lastStopAt) < 0.3 {
+                let delayMilliseconds = max(
+                    0,
+                    Int((receivedAt.timeIntervalSince(lastStopAt) * 1_000).rounded())
+                )
+                AppLogger.shared.write(
+                    "ATVV AUDIO ignored_after_stop session=\(sessionID) " +
+                        "delay_ms=\(delayMilliseconds) bytes=\(data.count)"
+                )
                 return
             }
             startStreaming()
@@ -662,7 +727,7 @@ final class XiaomiBluetoothBridge: NSObject {
             pendingSync = nil
             decoder.reset()
         }
-        scheduleReconnect(discardCachedIdentity: true)
+        scheduleReconnect(bypassCachedTarget: true)
     }
 
     private func failInitialization(_ message: LocalizedMessage) {
@@ -670,7 +735,7 @@ final class XiaomiBluetoothBridge: NSObject {
         accumulator.reset()
         pendingSync = nil
         decoder.reset()
-        scheduleReconnect(discardCachedIdentity: true)
+        scheduleReconnect(bypassCachedTarget: true)
     }
 }
 
@@ -679,25 +744,90 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         guard self.central === central, let generation = centralGeneration else { return }
         switch central.state {
         case .poweredOn:
-            if shouldRun { discoverOrScan(using: central, generation: generation) }
+            applyCentralRecovery(
+                .poweredOn,
+                central: central,
+                generation: generation
+            )
         case .poweredOff:
+            applyCentralRecovery(
+                .poweredOff,
+                central: central,
+                generation: generation
+            )
             resetPeripheral()
-            lifecycle = .scanning(generation)
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.off"))
         case .unauthorized:
+            applyCentralRecovery(
+                .unauthorized,
+                central: central,
+                generation: generation
+            )
             resetSession()
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.permission_denied"))
         case .unsupported:
+            applyCentralRecovery(
+                .unsupported,
+                central: central,
+                generation: generation
+            )
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.unsupported"))
         case .resetting:
+            applyCentralRecovery(
+                .resetting,
+                central: central,
+                generation: generation
+            )
             resetPeripheral()
-            lifecycle = .scanning(generation)
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.resetting"))
         case .unknown:
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.initializing"))
         @unknown default:
             state = .bluetoothUnavailable(LocalizedMessage("bluetooth.status.unavailable"))
         }
+    }
+
+    private func applyCentralRecovery(
+        _ event: BluetoothCentralRecoveryEvent,
+        central: CBCentralManager,
+        generation: UInt64
+    ) {
+        let transition = BluetoothCentralRecoveryPolicy.transition(
+            from: lifecycle,
+            generation: generation,
+            event: event,
+            shouldRun: shouldRun
+        )
+        if transition.shouldCancelScheduledReconnect {
+            reconnectWorkItem?.cancel()
+            reconnectWorkItem = nil
+        }
+        lifecycle = transition.phase
+        if transition.shouldReleaseCentral {
+            resetPeripheral()
+            central.stopScan()
+            central.delegate = nil
+            self.central = nil
+            centralGeneration = nil
+            lifecycle = .stopped
+            return
+        }
+        if transition.shouldStartFreshConnectionCycle {
+            startFreshConnectionCycle()
+            return
+        }
+        if transition.shouldDiscover {
+            discoverOrScan(using: central, generation: generation)
+        }
+    }
+
+    private func startFreshConnectionCycle() {
+        central?.stopScan()
+        central?.delegate = nil
+        central = nil
+        centralGeneration = nil
+        lifecycle = .stopped
+        beginConnectionCycle()
     }
 
     func centralManager(
@@ -753,8 +883,14 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               let generation = centralGeneration,
               lifecycle.acceptsDidFailToConnect(generation: generation)
         else { return }
-        AppLogger.shared.write("BLE CONNECT FAILED error=\(error?.localizedDescription ?? "unknown")")
-        let delay = shouldRun ? (requestedReconnectDelay ?? 3) : nil
+        AppLogger.shared.write(
+            "BLE CONNECT FAILED " + AppLogger.optionalErrorFields(error)
+        )
+        let delay = shouldRun
+            ? requestedReconnectDelay ?? nextAutomaticReconnectDelay(
+                bypassCachedTarget: currentAttemptUsesCachedTarget
+            )
+            : nil
         finishAttempt(reconnectAfter: delay)
         if !shouldRun { state = .stopped }
     }
@@ -788,18 +924,21 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     }
 
     private func handleDisconnect(error: Error?) {
-        let shouldDiscardCachedIdentity: Bool
+        let shouldBypassCachedTarget: Bool
         switch lifecycle {
         case .connecting, .discovering, .awaitingCapabilities:
-            shouldDiscardCachedIdentity = true
+            shouldBypassCachedTarget = true
         default:
-            shouldDiscardCachedIdentity = false
+            shouldBypassCachedTarget = false
         }
         AppLogger.shared.write(
-            "BLE DISCONNECTED phase=\(lifecycle) cached_identifier_cleared=\(shouldDiscardCachedIdentity) " +
-                "error=\(error?.localizedDescription ?? "none")"
+            "BLE DISCONNECTED phase=\(lifecycle) " + AppLogger.optionalErrorFields(error)
         )
-        let delay = shouldRun ? (requestedReconnectDelay ?? 3) : nil
+        let delay = shouldRun
+            ? requestedReconnectDelay ?? nextAutomaticReconnectDelay(
+                bypassCachedTarget: shouldBypassCachedTarget || currentAttemptUsesCachedTarget
+            )
+            : nil
         finishAttempt(reconnectAfter: delay)
         if !shouldRun { state = .stopped }
     }
@@ -823,12 +962,12 @@ extension XiaomiBluetoothBridge {
                     arguments: [error.localizedDescription]
                 )
             )
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         guard let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else {
             state = .failed(LocalizedMessage("connection.error.voice_service_missing"))
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         peripheral.discoverCharacteristics(
@@ -866,7 +1005,8 @@ extension XiaomiBluetoothBridge {
         if service.uuid == batteryServiceUUID {
             if let error {
                 AppLogger.shared.write(
-                    "BLE BATTERY characteristic_discovery_failed error=\(error.localizedDescription)"
+                    "BLE BATTERY characteristic_discovery_failed " +
+                        AppLogger.errorFields(error)
                 )
                 delegate?.bluetoothBridge(self, didUpdateBatteryLevel: nil)
                 delegate?.bluetoothBridge(self, didUpdatePowerState: nil)
@@ -900,7 +1040,8 @@ extension XiaomiBluetoothBridge {
         if service.uuid == deviceInformationServiceUUID {
             if let error {
                 AppLogger.shared.write(
-                    "BLE MODEL characteristic_discovery_failed error=\(error.localizedDescription)"
+                    "BLE MODEL characteristic_discovery_failed " +
+                        AppLogger.errorFields(error)
                 )
                 return
             }
@@ -917,7 +1058,7 @@ extension XiaomiBluetoothBridge {
                     arguments: [error.localizedDescription]
                 )
             )
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         for characteristic in service.characteristics ?? [] {
@@ -939,7 +1080,7 @@ extension XiaomiBluetoothBridge {
               controlCharacteristic != nil
         else {
             state = .failed(LocalizedMessage("connection.error.voice_channel_incomplete"))
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         requestCapabilitiesIfPossible()
@@ -962,7 +1103,7 @@ extension XiaomiBluetoothBridge {
             if let error {
                 AppLogger.shared.write(
                     "BLE BATTERY notification_failed uuid=\(characteristic.uuid.uuidString) " +
-                        "error=\(error.localizedDescription)"
+                        AppLogger.errorFields(error)
                 )
             }
             return
@@ -974,7 +1115,7 @@ extension XiaomiBluetoothBridge {
                     arguments: [error.localizedDescription]
                 )
             )
-            scheduleReconnect(discardCachedIdentity: true)
+            scheduleReconnect(bypassCachedTarget: true)
             return
         }
         guard characteristic.uuid == audioUUID || characteristic.uuid == controlUUID else {
@@ -1001,13 +1142,19 @@ extension XiaomiBluetoothBridge {
         else { return }
         if let error {
             if characteristic.uuid == batteryLevelUUID {
-                AppLogger.shared.write("BLE BATTERY read_failed error=\(error.localizedDescription)")
+                AppLogger.shared.write(
+                    "BLE BATTERY read_failed " + AppLogger.errorFields(error)
+                )
                 delegate?.bluetoothBridge(self, didUpdateBatteryLevel: nil)
             } else if characteristic.uuid == batteryLevelStatusUUID {
-                AppLogger.shared.write("BLE POWER read_failed error=\(error.localizedDescription)")
+                AppLogger.shared.write(
+                    "BLE POWER read_failed " + AppLogger.errorFields(error)
+                )
                 delegate?.bluetoothBridge(self, didUpdatePowerState: nil)
             } else if characteristic.uuid == modelNumberUUID {
-                AppLogger.shared.write("BLE MODEL read_failed error=\(error.localizedDescription)")
+                AppLogger.shared.write(
+                    "BLE MODEL read_failed " + AppLogger.errorFields(error)
+                )
             }
             return
         }
@@ -1020,7 +1167,9 @@ extension XiaomiBluetoothBridge {
         }
         if characteristic.uuid == batteryLevelStatusUUID {
             let powerState = RemotePowerState.decodeBatteryLevelStatus(data)
-            AppLogger.shared.write("BLE POWER state=\(String(describing: powerState))")
+            AppLogger.shared.write(
+                "BLE POWER state=\(powerState?.logValue ?? "unavailable")"
+            )
             delegate?.bluetoothBridge(self, didUpdatePowerState: powerState)
             return
         }

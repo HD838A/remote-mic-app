@@ -1,4 +1,5 @@
 name: macOS Signed Release Packages
+run-name: mac-release ${{ inputs.release_mode }} ${{ inputs.tag }} ${{ inputs.request_id || inputs.expected_pipeline_digest }} ${{ inputs.expected_commit }}
 
 on:
   workflow_dispatch:
@@ -7,18 +8,22 @@ on:
         description: Release tag matching Resources/Info.plist, for example v1.8.13
         required: true
         type: string
-      canary:
-        description: Run protected Developer ID packaging without uploading artifacts
+      release_mode:
+        description: Qualify a changed release pipeline, publish a preview candidate, or recover a failed preview publication
         required: true
-        default: false
-        type: boolean
+        default: qualification
+        type: choice
+        options:
+          - qualification
+          - preview
+          - resume-preview
       expected_commit:
-        description: Required exact 40-character commit for canary mode
-        required: false
+        description: Required exact 40-character source commit
+        required: true
         type: string
       expected_pipeline_digest:
-        description: Required release pipeline SHA-256 digest for canary mode
-        required: false
+        description: Required qualified release pipeline SHA-256 digest
+        required: true
         type: string
       request_started_at:
         description: Unix epoch seconds when the user requested this preview release
@@ -28,9 +33,26 @@ on:
         description: Immutable release-manager request identifier, reused unchanged on retry
         required: false
         type: string
+      source_run_id:
+        description: Exact failed preview Run to recover without re-signing
+        required: false
+        type: string
+      source_run_attempt:
+        description: Exact attempt number of the failed preview Run
+        required: false
+        type: string
+      source_artifact_id:
+        description: Exact signed artifact ID produced by the failed preview Run
+        required: false
+        type: string
+      source_artifact_digest:
+        description: API SHA-256 digest of the exact signed artifact
+        required: false
+        type: string
 
 concurrency:
-  group: ${{ inputs.canary && format('mac-signed-canary-{0}', inputs.expected_commit) || format('mac-signed-package-{0}', inputs.tag) }}
+  # Preview locks its external Tag; qualification locks the reviewed pipeline digest.
+  group: ${{ inputs.release_mode == 'qualification' && format('mac-release-qualification-{0}', inputs.expected_pipeline_digest) || format('mac-signed-tag-{0}', inputs.tag) }}
   cancel-in-progress: false
 
 permissions:
@@ -38,21 +60,23 @@ permissions:
   actions: read
   pull-requests: read
 
+env:
+  EXPECTED_STABLE_TAG: v1.8.3
+
 jobs:
   preview-slo-watchdog:
     name: Enforce 30-minute release-ready preview SLO
-    if: ${{ !inputs.canary }}
+    if: ${{ inputs.release_mode == 'preview' }}
     needs: validate-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       actions: write
-      contents: read
     steps:
       - name: Download immutable request attestation
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          name: release-request-attestation-${{ inputs.tag }}
+          name: release-request-attestation-${{ inputs.tag }}-${{ inputs.expected_commit }}
           path: ${{ runner.temp }}/release-request
 
       - name: Cancel an over-budget release once, without retrying
@@ -97,23 +121,60 @@ jobs:
           done
 
   validate-candidate:
+    if: ${{ inputs.release_mode != 'resume-preview' }}
     name: Verify exact preview candidate CI and Draft recording PR
     runs-on: macos-15
     timeout-minutes: 10
+    outputs:
+      preview_release_action: ${{ steps.preview-publication-state.outputs.action }}
 
     steps:
+      - name: Validate immutable dispatch inputs before checkout
+        env:
+          RELEASE_MODE: ${{ inputs.release_mode }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
+          REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          TRIGGER_COMMIT: ${{ github.sha }}
+          TRIGGER_REF_NAME: ${{ github.ref_name }}
+          TRIGGER_REF_TYPE: ${{ github.ref_type }}
+        run: |
+          case "$RELEASE_MODE" in
+            qualification|preview) ;;
+            *) echo "release_mode must be qualification or preview" >&2; exit 2 ;;
+          esac
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test "$TRIGGER_COMMIT" = "$EXPECTED_COMMIT"
+          test "$TRIGGER_REF_TYPE" = "branch"
+          if [[ "$RELEASE_MODE" == "qualification" ]]; then
+            [[ "$TRIGGER_REF_NAME" =~ ^release/pipeline-qualification/[a-z0-9][a-z0-9._-]*$ ]]
+            if [[ -n "$REQUEST_STARTED_AT" ]]; then
+              [[ "$REQUEST_STARTED_AT" =~ ^[0-9]+$ ]]
+            fi
+          else
+            test "$TRIGGER_REF_NAME" = "release/pre-$RELEASE_TAG"
+            [[ "$REQUEST_STARTED_AT" =~ ^[0-9]+$ ]]
+            [[ "$REQUEST_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$ ]]
+          fi
+
       - name: Check out release candidate
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          ref: ${{ inputs.expected_commit }}
+          persist-credentials: false
 
       - name: Initialize user-wall release ledger
         env:
           REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
-          CANARY_MODE: ${{ inputs.canary }}
+          RELEASE_MODE: ${{ inputs.release_mode }}
         run: |
           request_started_at="$REQUEST_STARTED_AT_INPUT"
-          if [[ "$CANARY_MODE" == "true" && -z "$request_started_at" ]]; then
+          if [[ "$RELEASE_MODE" == "qualification" && -z "$request_started_at" ]]; then
             request_started_at="$(date +%s)"
           fi
           if [[ ! "$request_started_at" =~ ^[0-9]+$ ]]; then
@@ -132,27 +193,29 @@ jobs:
           command -v jq >/dev/null || brew install jq
           command -v rg >/dev/null || brew install ripgrep
 
-      - name: Verify exact candidate or canary provenance
+      - name: Verify exact candidate or pipeline qualification provenance
         env:
           GH_TOKEN: ${{ github.token }}
           REQUIRE_PREVIEW_RECORDING_PR: 1
           RELEASE_READY_PROOF_OUTPUT: ${{ runner.temp }}/release-ready-main-ci.json
           RELEASE_TAG: ${{ inputs.tag }}
-          CANARY_MODE: ${{ inputs.canary }}
+          RELEASE_MODE: ${{ inputs.release_mode }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
         run: |
-          if [[ "$CANARY_MODE" == "true" ]]; then
-            ./scripts/verify-release-canary-provenance.sh
+          if [[ "$RELEASE_MODE" == "qualification" ]]; then
+            ./scripts/verify-release-pipeline-qualification-source.sh
           else
-            test -z "$EXPECTED_COMMIT"
-            test -z "$EXPECTED_PIPELINE_DIGEST"
+            [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+            test "$(./scripts/release-pipeline-digest.sh)" = "$EXPECTED_PIPELINE_DIGEST"
             ./scripts/verify-release-timeout-budgets.sh
             ./scripts/verify-preview-candidate-ci.sh
+            ./scripts/verify-release-pipeline-qualification.sh "$EXPECTED_PIPELINE_DIGEST"
           fi
 
       - name: Resolve immutable request attestation
-        if: ${{ !inputs.canary }}
+        if: ${{ inputs.release_mode == 'preview' }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REQUEST_ID: ${{ inputs.request_id }}
@@ -163,11 +226,153 @@ jobs:
             "$(git rev-parse HEAD)" "$RUNNER_TEMP/release-ready-main-ci.json" \
             "$RUNNER_TEMP/release-request-attestation.json"
 
+      - name: Resolve existing Preview publication state
+        id: preview-publication-state
+        if: ${{ inputs.release_mode == 'preview' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
+          RELEASE_REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          set -euo pipefail
+          expected_branch="release/pre-$RELEASE_TAG"
+          release_endpoint="repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG"
+          response_file="$RUNNER_TEMP/existing-preview-response.txt"
+          release_json="$RUNNER_TEMP/existing-preview-release.json"
+
+          actual_stable_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [[ "$actual_stable_tag" != "$EXPECTED_STABLE_TAG" ]]; then
+            echo "Preview requires stable latest $EXPECTED_STABLE_TAG; found $actual_stable_tag" >&2
+            exit 1
+          fi
+
+          set +e
+          gh api --include "$release_endpoint" > "$response_file"
+          api_status="$?"
+          set -e
+          http_code="$(/usr/bin/awk '$1 ~ /^HTTP\// { code = $2 } END { print code }' "$response_file")"
+          case "$http_code" in
+            404)
+              if [[ "$api_status" == "0" ]]; then
+                echo "GitHub returned an inconsistent not-found response for $RELEASE_TAG" >&2
+                exit 1
+              fi
+              echo "action=package" >> "$GITHUB_OUTPUT"
+              echo "No existing GitHub Release for $RELEASE_TAG; protected packaging is required."
+              exit 0
+              ;;
+            200)
+              if [[ "$api_status" != "0" ]]; then
+                echo "GitHub returned HTTP 200 with a failing CLI status for $RELEASE_TAG" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unable to determine existing Release state for $RELEASE_TAG (HTTP ${http_code:-unknown}, gh=$api_status)" >&2
+              exit 1
+              ;;
+          esac
+
+          gh api "$release_endpoint" > "$release_json"
+          jq -e \
+            --arg tag "$RELEASE_TAG" \
+            '(.tag_name == $tag) and
+             (.draft == false) and
+             (.prerelease == true) and
+             ([.assets[] | select(.name == "candidate-provenance.json")] | length == 1)' \
+            "$release_json" >/dev/null || {
+              echo "Existing $RELEASE_TAG is not one exact non-draft Pre-release with candidate provenance" >&2
+              exit 1
+            }
+
+          branch_head="$(gh api \
+            "repos/$GITHUB_REPOSITORY/git/ref/heads/$expected_branch" \
+            --jq '.object.sha')"
+          if [[ "$branch_head" != "$EXPECTED_COMMIT" ]]; then
+            echo "Existing Preview branch no longer points to the expected candidate commit" >&2
+            exit 1
+          fi
+
+          tag_object="$(gh api \
+            "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" \
+            --jq '.object | [.type, .sha] | @tsv')"
+          IFS=$'\t' read -r tag_type tag_sha <<< "$tag_object"
+          for _ in 1 2 3 4; do
+            [[ "$tag_type" == "tag" ]] || break
+            tag_object="$(gh api \
+              "repos/$GITHUB_REPOSITORY/git/tags/$tag_sha" \
+              --jq '.object | [.type, .sha] | @tsv')"
+            IFS=$'\t' read -r tag_type tag_sha <<< "$tag_object"
+          done
+          if [[ "$tag_type" != "commit" || "$tag_sha" != "$EXPECTED_COMMIT" ]]; then
+            echo "Existing Preview tag does not resolve to the expected candidate commit" >&2
+            exit 1
+          fi
+
+          provenance_dir="$RUNNER_TEMP/existing-preview-provenance"
+          /bin/mkdir -p "$provenance_dir"
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern candidate-provenance.json \
+            --dir "$provenance_dir"
+          provenance="$provenance_dir/candidate-provenance.json"
+          test -f "$provenance"
+          jq -e \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg tag "$RELEASE_TAG" \
+            --arg commit "$EXPECTED_COMMIT" \
+            --arg branch "$expected_branch" \
+            --arg version "${RELEASE_TAG#v}" \
+            --arg requestId "$RELEASE_REQUEST_ID" \
+            --arg pipelineDigest "$EXPECTED_PIPELINE_DIGEST" \
+            --slurpfile requestAttestation "$RUNNER_TEMP/release-request-attestation.json" \
+            '(.schemaVersion == 2 or .schemaVersion == 3) and
+             (.repository == $repository) and
+             (.tag == $tag) and
+             (.tagCommit == $commit) and
+             (.candidateBranch == $branch) and
+             (.version == $version) and
+             (.build | type == "string" and test("^[0-9]+$")) and
+             (.baseMainCommit | type == "string" and test("^[0-9a-f]{40}$")) and
+             (.payloadAssets | type == "array" and length > 0) and
+             ([.payloadAssets[].name] | length == (unique | length)) and
+             all(.payloadAssets[];
+               (.name | type == "string" and length > 0 and test("^[A-Za-z0-9][A-Za-z0-9._-]*$") and
+                 . != "candidate-provenance.json" and
+                 . != "stable-promotion.json") and
+               (.size | type == "number" and . >= 0 and floor == .) and
+               (.sha256 | type == "string" and test("^[0-9a-f]{64}$"))) and
+             (if .schemaVersion == 3 then
+                .requestId == $requestId and
+                .attemptId == $commit and
+                .requestId == $requestAttestation[0].requestId and
+                .attemptId == $requestAttestation[0].attemptId and
+                .requestStartedAt == $requestAttestation[0].requestStartedAt and
+                .releaseReadyAt == $requestAttestation[0].releaseReadyAt and
+                .pipelineDigest == $pipelineDigest and
+                .pipelineDigest == $requestAttestation[0].pipelineDigest and
+                .pipelineQualifiedAt == $requestAttestation[0].pipelineQualifiedAt and
+                .pipelineQualificationRunId == $requestAttestation[0].pipelineQualificationRunId and
+                .pipelineQualificationArtifactId == $requestAttestation[0].pipelineQualificationArtifactId and
+                .pipelineQualificationArtifactDigest == $requestAttestation[0].pipelineQualificationArtifactDigest and
+                (.requestAttestationRunId | type == "number" and . > 0) and
+                (.requestAttestationRunAttempt | type == "number" and . > 0)
+              else true end)' \
+            "$provenance" >/dev/null || {
+              echo "Existing Preview provenance is not bound to the requested branch, commit, and version" >&2
+              exit 1
+            }
+
+          echo "action=verify-only" >> "$GITHUB_OUTPUT"
+          echo "Existing exact Pre-release found; protected packaging will be skipped and public bytes verified in place."
+
       - name: Persist first request timestamps
-        if: ${{ !inputs.canary }}
-        uses: actions/upload-artifact@v4
+        if: ${{ inputs.release_mode == 'preview' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-request-attestation-${{ inputs.tag }}
+          name: release-request-attestation-${{ inputs.tag }}-${{ inputs.expected_commit }}
           path: ${{ runner.temp }}/release-request-attestation.json
           if-no-files-found: error
           retention-days: 90
@@ -183,7 +388,7 @@ jobs:
 
       - name: Upload release ledger handoff
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-slo-ledger-${{ github.run_id }}
           path: ${{ env.RELEASE_SLO_LEDGER }}
@@ -193,6 +398,7 @@ jobs:
   package:
     name: Sign and notarize Apple Silicon and Intel packages
     needs: validate-candidate
+    if: ${{ inputs.release_mode == 'qualification' || needs.validate-candidate.outputs.preview_release_action == 'package' }}
     runs-on: macos-15
     timeout-minutes: 180
     environment: mac-release
@@ -205,27 +411,72 @@ jobs:
       RELEASE_STAGE_TIMEOUTS: 1
       SIGNED_RELEASE_TIMEOUT_SECONDS: 540
       PREVIEW_READY_SLO_SECONDS: 1740
-      CANARY_MODE: ${{ inputs.canary }}
-      REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
-      EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
+      RELEASE_MODE: ${{ inputs.release_mode }}
 
     steps:
+      - name: Verify protected dispatch identity before checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_MODE_INPUT: ${{ inputs.release_mode }}
+          RELEASE_TAG_INPUT: ${{ inputs.tag }}
+          EXPECTED_COMMIT_INPUT: ${{ inputs.expected_commit }}
+          EXPECTED_PIPELINE_DIGEST_INPUT: ${{ inputs.expected_pipeline_digest }}
+          REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
+          REQUEST_ID_INPUT: ${{ inputs.request_id }}
+          TRIGGER_COMMIT: ${{ github.sha }}
+          TRIGGER_REF_NAME: ${{ github.ref_name }}
+          TRIGGER_REF_TYPE: ${{ github.ref_type }}
+        run: |
+          case "$RELEASE_MODE_INPUT" in
+            qualification|preview) ;;
+            *) echo "release_mode must be qualification or preview" >&2; exit 2 ;;
+          esac
+          [[ "$RELEASE_TAG_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$EXPECTED_COMMIT_INPUT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_PIPELINE_DIGEST_INPUT" =~ ^[0-9a-f]{64}$ ]]
+          test "$TRIGGER_COMMIT" = "$EXPECTED_COMMIT_INPUT"
+          test "$TRIGGER_REF_TYPE" = "branch"
+          if [[ "$RELEASE_MODE_INPUT" == "qualification" ]]; then
+            [[ "$TRIGGER_REF_NAME" =~ ^release/pipeline-qualification/[a-z0-9][a-z0-9._-]*$ ]]
+            if [[ -n "$REQUEST_STARTED_AT_INPUT" ]]; then
+              [[ "$REQUEST_STARTED_AT_INPUT" =~ ^[0-9]+$ ]]
+            fi
+          else
+            test "$TRIGGER_REF_NAME" = "release/pre-$RELEASE_TAG_INPUT"
+            [[ "$REQUEST_STARTED_AT_INPUT" =~ ^[0-9]+$ ]]
+            [[ "$REQUEST_ID_INPUT" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$ ]]
+          fi
+          remote_head="$(gh api \
+            "repos/$GITHUB_REPOSITORY/git/ref/heads/$TRIGGER_REF_NAME" \
+            --jq '.object.sha')"
+          test "$remote_head" = "$EXPECTED_COMMIT_INPUT"
+
       - name: Check out release candidate
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          ref: ${{ inputs.expected_commit }}
+          persist-credentials: false
+
+      - name: Verify checked-out source identity
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          git diff --quiet
+          git diff --cached --quiet
 
       - name: Download release ledger handoff
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: release-slo-ledger-${{ github.run_id }}
           path: ${{ runner.temp }}/release-slo
 
       - name: Download immutable request attestation
-        if: ${{ !inputs.canary }}
-        uses: actions/download-artifact@v5
+        if: ${{ inputs.release_mode == 'preview' }}
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          name: release-request-attestation-${{ inputs.tag }}
+          name: release-request-attestation-${{ inputs.tag }}-${{ inputs.expected_commit }}
           path: ${{ runner.temp }}/release-request
 
       - name: Enforce preview user-wall budget before credentials
@@ -233,7 +484,7 @@ jobs:
           REQUEST_STARTED_AT_INPUT: ${{ inputs.request_started_at }}
         run: |
           request_started_at="$REQUEST_STARTED_AT_INPUT"
-          if [[ "$CANARY_MODE" == "true" ]]; then
+          if [[ "$RELEASE_MODE" == "qualification" ]]; then
             if [[ -z "$request_started_at" ]]; then
               request_started_at="$(date +%s)"
             fi
@@ -253,8 +504,131 @@ jobs:
           ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" "$PREVIEW_READY_SLO_SECONDS" external-approval-wait
           ./scripts/release-slo-ledger.sh start "$ledger" "$request_started_at" signed-build-notarization
 
+      - name: Verify active source before protected credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          if [[ "$RELEASE_MODE" == "qualification" ]]; then
+            ./scripts/verify-release-pipeline-qualification-source.sh
+          else
+            base_sha="$(git rev-parse HEAD^)"
+            trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+            git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
+            chmod 755 "$trusted_runner"
+            REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 \
+              "$trusted_runner"
+          fi
+
+      - name: Install and record qualified release toolchain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          missing_formulae=()
+          command -v age >/dev/null || missing_formulae+=(age)
+          command -v fastlane >/dev/null || missing_formulae+=(fastlane)
+          command -v rg >/dev/null || missing_formulae+=(ripgrep)
+          if (( ${#missing_formulae[@]} != 0 )); then
+            brew install "${missing_formulae[@]}"
+          fi
+
+          age_version="$(age --version 2>&1 | /usr/bin/sed -n '1p')"
+          fastlane_version="$(fastlane --version 2>&1 | /usr/bin/awk '/^fastlane [0-9]/{ print $2; exit }')"
+          xcode_version="$(xcodebuild -version | /usr/bin/awk 'NR == 1 { print $2 }')"
+          xcode_build="$(xcodebuild -version | /usr/bin/awk 'NR == 2 { print $3 }')"
+          jq_version="$(jq --version)"
+          ripgrep_version="$(rg --version | /usr/bin/awk 'NR == 1 { print $2 }')"
+          gh_version="$(gh --version | /usr/bin/awk 'NR == 1 { print $3 }')"
+          git_version="$(git --version)"
+          swift_version="$(swift --version 2>&1 | /usr/bin/sed -n '1p')"
+          toolchain_file="$RUNNER_TEMP/release-toolchain.json"
+          jq -n \
+            --arg ageVersion "$age_version" \
+            --arg fastlaneVersion "$fastlane_version" \
+            --arg xcodeVersion "$xcode_version" \
+            --arg xcodeBuild "$xcode_build" \
+            --arg imageOS "${ImageOS:-}" \
+            --arg imageVersion "${ImageVersion:-}" \
+            --arg jqVersion "$jq_version" \
+            --arg ripgrepVersion "$ripgrep_version" \
+            --arg ghVersion "$gh_version" \
+            --arg gitVersion "$git_version" \
+            --arg swiftVersion "$swift_version" \
+            '{
+              ageVersion: $ageVersion,
+              fastlaneVersion: $fastlaneVersion,
+              xcodeVersion: $xcodeVersion,
+              xcodeBuild: $xcodeBuild,
+              imageOS: $imageOS,
+              imageVersion: $imageVersion,
+              jqVersion: $jqVersion,
+              ripgrepVersion: $ripgrepVersion,
+              ghVersion: $ghVersion,
+              gitVersion: $gitVersion,
+              swiftVersion: $swiftVersion,
+              externalDependencies: {
+                actionsCheckoutCommit: "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+                actionsDownloadArtifactCommit: "634f93cb2916e3fdff6788551b99b062d0335ce0",
+                actionsUploadArtifactCommit: "ea165f8d65b6e75b540449e92b4886f43607fa02",
+                notarySecretsCommit: "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
+                matchCommit: "2e271768593821611c54f3d1b376f39e503f53be",
+                sayAllAICommit: "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
+                sayAllMacroPlatformCommit: "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
+                sayAllMacRemoteCommit: "3f3c782180eef4024b53941c1f65d80e7cff4c66"
+              }
+            }' > "$toolchain_file"
+          jq -e '
+            ([.ageVersion, .fastlaneVersion, .xcodeVersion, .xcodeBuild,
+              .imageOS, .imageVersion, .jqVersion, .ripgrepVersion,
+              .ghVersion, .gitVersion, .swiftVersion] |
+              all(.[]; type == "string" and length > 0)) and
+            (.externalDependencies | type == "object" and length == 8 and
+              ([.[]] | all(.[]; test("^[0-9a-f]{40}$"))))
+          ' "$toolchain_file" >/dev/null
+          echo "RELEASE_TOOLCHAIN_ATTESTATION=$toolchain_file" >> "$GITHUB_ENV"
+          jq . "$toolchain_file"
+
+      - name: Match qualified release toolchain exactly
+        if: ${{ inputs.release_mode == 'preview' }}
+        run: |
+          request_attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
+          test -r "$request_attestation"
+          actual_toolchain="$(jq -S -c . "$RELEASE_TOOLCHAIN_ATTESTATION")"
+          qualified_toolchain="$(jq -S -c '{
+            ageVersion,
+            fastlaneVersion,
+            xcodeVersion,
+            xcodeBuild,
+            imageOS,
+            imageVersion,
+            jqVersion,
+            ripgrepVersion,
+            ghVersion,
+            gitVersion,
+            swiftVersion,
+            externalDependencies
+          }' "$request_attestation")"
+          if [[ "$actual_toolchain" != "$qualified_toolchain" ]]; then
+            echo "Current release toolchain does not exactly match the protected qualification." >&2
+            exit 1
+          fi
+
+      - name: Reconfirm active protected ref before private secrets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          TRIGGER_REF_NAME: ${{ github.ref_name }}
+        run: |
+          remote_head="$(gh api \
+            "repos/$GITHUB_REPOSITORY/git/ref/heads/$TRIGGER_REF_NAME" \
+            --jq '.object.sha')"
+          test "$remote_head" = "$EXPECTED_COMMIT"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+
       - name: Check out private feature package
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-ai
           ref: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
@@ -263,16 +637,16 @@ jobs:
           persist-credentials: false
 
       - name: Check out private macro package
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-macro-platform
-          ref: b71482ccb3c5d3be319abe7cd61915ab90cbc3ba
+          ref: 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
           path: .private-dependencies/sayall-macro-platform
           ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
       - name: Check out shared Mac remote package
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-mac-remote
           ref: 3f3c782180eef4024b53941c1f65d80e7cff4c66
@@ -281,20 +655,39 @@ jobs:
           persist-credentials: false
 
       - name: Check out readonly release credentials
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: HD838A/remotemic-notary-secrets
+          ref: 5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d
           path: .private-release/remotemic-notary-secrets
           ssh-key: ${{ secrets.RELEASE_CREDENTIALS_DEPLOY_KEY }}
           persist-credentials: false
 
       - name: Check out readonly Match signing identities
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: HD838A/apple-signing-match
+          ref: 2e271768593821611c54f3d1b376f39e503f53be
           path: .private-release/apple-signing-match
           ssh-key: ${{ secrets.APPLE_SIGNING_MATCH_DEPLOY_KEY }}
           persist-credentials: false
+
+      - name: Verify immutable private dependency checkouts
+        run: |
+          test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"
+          test "$(git -C .private-dependencies/sayall-macro-platform rev-parse HEAD)" = "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c"
+          test "$(git -C .private-dependencies/sayall-mac-remote rev-parse HEAD)" = "3f3c782180eef4024b53941c1f65d80e7cff4c66"
+          test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"
+          match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
+          match_commit="2e271768593821611c54f3d1b376f39e503f53be"
+          test "$(git -C "$match_repo" rev-parse HEAD)" = "$match_commit"
+
+          # Match clones this checkout again via file:// with git_branch=main.
+          # An exact-SHA checkout is detached, so expose only that verified commit
+          # as local main instead of letting Fastlane create an empty orphan branch.
+          git -C "$match_repo" update-ref refs/heads/main "$match_commit"
+          test "$(git -C "$match_repo" rev-parse refs/heads/main)" = "$match_commit"
+          test "$(git ls-remote "file://$match_repo" refs/heads/main | /usr/bin/awk 'NR == 1 { print $1 }')" = "$match_commit"
 
       - name: Configure private feature package
         run: |
@@ -305,19 +698,6 @@ jobs:
             echo "REQUIRE_SAYALL_MACRO_PLATFORM=1"
           } >> "$GITHUB_ENV"
           swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
-
-      - name: Install required tools
-        run: |
-          missing_formulae=()
-          command -v age >/dev/null || missing_formulae+=(age)
-          command -v fastlane >/dev/null || missing_formulae+=(fastlane)
-          command -v rg >/dev/null || missing_formulae+=(ripgrep)
-          if (( ${#missing_formulae[@]} != 0 )); then
-            brew install "${missing_formulae[@]}"
-          fi
-          age --version
-          fastlane --version
-          rg --version
 
       - name: Prepare protected release identity
         env:
@@ -340,20 +720,21 @@ jobs:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
         run: |
-          if [[ "$CANARY_MODE" == "true" ]]; then
-            ./scripts/verify-release-canary-provenance.sh
+          if [[ "$RELEASE_MODE" == "qualification" ]]; then
+            ./scripts/verify-release-pipeline-qualification-source.sh
           else
             version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - Resources/Info.plist)"
             test "$RELEASE_TAG" = "v$version"
+            test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
             base_sha="$(git rev-parse HEAD^)"
             trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
             git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
             chmod 755 "$trusted_runner"
-            REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
+            REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 "$trusted_runner"
           fi
 
       - name: Compute remaining signed-build budget
-        if: ${{ !inputs.canary }}
+        if: ${{ inputs.release_mode == 'preview' }}
         run: |
           now="$(date +%s)"
           remaining=$(( PREVIEW_READY_SLO_SECONDS - (now - RELEASE_READY_AT) - 45 ))
@@ -368,6 +749,9 @@ jobs:
 
       - name: Sign, notarize, staple, and verify both variants
         timeout-minutes: 10
+        env:
+          REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
+          EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
         run: |
           ./scripts/run-release-stage.sh \
             all signed-release "$SIGNED_RELEASE_TIMEOUT_SECONDS" -- \
@@ -378,13 +762,27 @@ jobs:
         run: |
           result="${{ job.status }}"
           ./scripts/release-slo-ledger.sh finish "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" signed-build-notarization "$result"
-          if [[ "$result" == "success" && "$CANARY_MODE" != "true" ]]; then
+          if [[ "$result" == "success" && "$RELEASE_MODE" == "preview" ]]; then
             ./scripts/release-slo-ledger.sh check "$RELEASE_SLO_LEDGER" "$RELEASE_READY_AT" "$PREVIEW_READY_SLO_SECONDS" successful-pipeline
           fi
 
+      - name: Verify active preview before signed artifact handoff
+        if: ${{ inputs.release_mode == 'preview' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          base_sha="$(git rev-parse HEAD^)"
+          trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
+          git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
+          chmod 755 "$trusted_runner"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 \
+            "$trusted_runner"
+
       - name: Upload signed release packages
-        if: ${{ !inputs.canary }}
-        uses: actions/upload-artifact@v4
+        if: ${{ inputs.release_mode == 'preview' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: remote-mic-${{ inputs.tag }}-signed-macos
           path: |
@@ -402,17 +800,50 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Record protected canary completion
-        if: ${{ inputs.canary }}
+      - name: Record protected release pipeline qualification
+        if: ${{ inputs.release_mode == 'qualification' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
         run: |
+          ./scripts/verify-release-pipeline-qualification-source.sh
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
           test "$(./scripts/release-pipeline-digest.sh)" = "${{ inputs.expected_pipeline_digest }}"
-          echo "PROTECTED DEVELOPER ID CANARY PASS"
-          echo "No Tag, Release, or downloadable artifact was created."
+          source_pr="$(gh api \
+            "repos/$GITHUB_REPOSITORY/commits/${{ inputs.expected_commit }}/pulls" \
+            --header 'Accept: application/vnd.github+json' \
+            --jq "[.[] | select((.state == \"open\" or .merged_at != null) and .base.ref == \"main\" and .head.sha == \"${{ inputs.expected_commit }}\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\") | .number] | if length == 1 then .[0] else empty end")"
+          [[ "$source_pr" =~ ^[1-9][0-9]*$ ]]
+          qualification_dir="$RUNNER_TEMP/release-pipeline-qualification"
+          /bin/mkdir -p "$qualification_dir"
+          jq -n \
+            --arg pipelineDigest "${{ inputs.expected_pipeline_digest }}" \
+            --arg sourceCommit "${{ inputs.expected_commit }}" \
+            --arg sourceBranch "$GITHUB_REF_NAME" \
+            --argjson sourcePullRequest "$source_pr" \
+            --argjson workflowRunId "$GITHUB_RUN_ID" \
+            --argjson workflowRunAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg qualifiedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --arg expectedTeamId "$EXPECTED_DEVELOPER_TEAM_ID" \
+            --slurpfile releaseToolchain "$RELEASE_TOOLCHAIN_ATTESTATION" \
+            '{schemaVersion:2,pipelineDigest:$pipelineDigest,sourceCommit:$sourceCommit,sourceBranch:$sourceBranch,sourcePullRequest:$sourcePullRequest,workflowRunId:$workflowRunId,workflowRunAttempt:$workflowRunAttempt,qualifiedAt:$qualifiedAt,expectedTeamId:$expectedTeamId} + $releaseToolchain[0]' \
+            > "$qualification_dir/release-pipeline-qualification.json"
+          echo "PROTECTED RELEASE PIPELINE QUALIFICATION PASS"
+          echo "No Tag, GitHub Release, appcast, or distributable App asset was created."
+
+      - name: Upload protected release pipeline qualification
+        if: ${{ inputs.release_mode == 'qualification' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-release-pipeline-qualification-${{ inputs.expected_pipeline_digest }}
+          path: ${{ runner.temp }}/release-pipeline-qualification/release-pipeline-qualification.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Upload final release stage ledger
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-slo-ledger-final-${{ github.run_id }}
           path: ${{ env.RELEASE_SLO_LEDGER }}
@@ -421,43 +852,59 @@ jobs:
 
   publish:
     name: Publish and verify exact signed preview bytes
-    if: ${{ !inputs.canary }}
-    needs: package
+    if: ${{ always() && inputs.release_mode == 'preview' && needs.validate-candidate.result == 'success' && (needs.package.result == 'success' || (needs.package.result == 'skipped' && needs.validate-candidate.outputs.preview_release_action == 'verify-only')) }}
+    needs:
+      - validate-candidate
+      - package
     runs-on: macos-15
     timeout-minutes: 5
     permissions:
       actions: write
       contents: write
-      pull-requests: read
     env:
       RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
+      PREVIEW_RELEASE_ACTION: ${{ needs.validate-candidate.outputs.preview_release_action }}
       RELEASE_REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
+      RELEASE_REQUEST_ID: ${{ inputs.request_id }}
+      ALLOW_FROZEN_BASE_MAIN: 1
       PREVIEW_READY_SLO_SECONDS: 1740
       PUBLICATION_MAX_SECONDS: 180
       EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
       PUBLIC_DOWNLOAD_CONCURRENCY: 4
     steps:
       - name: Check out exact candidate
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          ref: ${{ inputs.expected_commit }}
 
       - name: Download exact signed package artifact
-        uses: actions/download-artifact@v5
+        if: ${{ needs.validate-candidate.outputs.preview_release_action == 'package' }}
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: remote-mic-${{ inputs.tag }}-signed-macos
           path: dist
 
       - name: Download signed-stage ledger
-        uses: actions/download-artifact@v5
+        if: ${{ needs.validate-candidate.outputs.preview_release_action == 'package' }}
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: release-slo-ledger-final-${{ github.run_id }}
           path: ${{ runner.temp }}/release-slo
 
-      - name: Download immutable request attestation
-        uses: actions/download-artifact@v5
+      - name: Download verification-resume ledger
+        if: ${{ needs.validate-candidate.outputs.preview_release_action == 'verify-only' }}
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
-          name: release-request-attestation-${{ inputs.tag }}
+          name: release-slo-ledger-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo
+
+      - name: Download immutable request attestation
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-request-attestation-${{ inputs.tag }}-${{ inputs.expected_commit }}
           path: ${{ runner.temp }}/release-request
 
       - name: Install publication tools only when missing
@@ -472,11 +919,19 @@ jobs:
       - name: Publish and verify within the remaining user-wall budget
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_REQUEST_ATTESTATION: ${{ runner.temp }}/release-request/release-request-attestation.json
         run: |
+          case "$PREVIEW_RELEASE_ACTION" in
+            package|verify-only) ;;
+            *) echo "preview release action must be package or verify-only" >&2; exit 2 ;;
+          esac
           ledger="$RUNNER_TEMP/release-slo/release-slo.tsv"
           attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
           RELEASE_REQUEST_STARTED_AT="$(jq -r '.requestStartedAt' "$attestation")"
           RELEASE_READY_AT="$(jq -r '.releaseReadyAt' "$attestation")"
+          if [[ "$PREVIEW_RELEASE_ACTION" == "verify-only" ]]; then
+            ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" environment-approval-and-runner-wait success existing-preview-recovery
+          fi
           ./scripts/release-slo-ledger.sh check "$ledger" "$RELEASE_READY_AT" "$PREVIEW_READY_SLO_SECONDS" signed-artifact-transfer
           ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
 
@@ -495,21 +950,33 @@ jobs:
           trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
           git show "${base_sha}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
           chmod 755 "$trusted_runner"
-          REPOSITORY_ROOT="$GITHUB_WORKSPACE" "$trusted_runner"
-          if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
-            git tag -a "$RELEASE_TAG" -m "无线麦SayAll.app $RELEASE_TAG"
-          fi
-          test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$head_commit"
-          remote_tag_commit="$(git ls-remote origin "refs/tags/$RELEASE_TAG^{}" | awk 'NR == 1 { print $1 }')"
-          if [[ -z "$remote_tag_commit" ]]; then
-            git push origin "refs/tags/$RELEASE_TAG"
+          test "$head_commit" = "${{ inputs.expected_commit }}"
+          REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 "$trusted_runner"
+          remote_branch_head="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk 'NR == 1 { print $1 }')"
+          test "$remote_branch_head" = "$head_commit"
+          if [[ "$PREVIEW_RELEASE_ACTION" == "package" ]]; then
+            if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+              git tag -a "$RELEASE_TAG" -m "无线麦SayAll.app $RELEASE_TAG"
+            fi
+            test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$head_commit"
+            remote_tag_commit="$(git ls-remote origin "refs/tags/$RELEASE_TAG^{}" | awk 'NR == 1 { print $1 }')"
+            if [[ -z "$remote_tag_commit" ]]; then
+              git push origin "refs/tags/$RELEASE_TAG"
+            else
+              test "$remote_tag_commit" = "$head_commit"
+            fi
           else
-            test "$remote_tag_commit" = "$head_commit"
+            test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$head_commit"
           fi
 
           set +e
-          ./scripts/run-release-stage.sh all publication "$remaining" -- \
-            ./scripts/publish-release.sh prerelease
+          if [[ "$PREVIEW_RELEASE_ACTION" == "verify-only" ]]; then
+            ./scripts/run-release-stage.sh all publication "$remaining" -- \
+              ./scripts/publish-release.sh verify-prerelease
+          else
+            ./scripts/run-release-stage.sh all publication "$remaining" -- \
+              ./scripts/publish-release.sh prerelease
+          fi
           publish_status="$?"
           set -e
           if [[ "$publish_status" == "0" ]]; then
@@ -522,7 +989,7 @@ jobs:
 
       - name: Upload published release ledger
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-slo-ledger-published-${{ github.run_id }}
           path: ${{ runner.temp }}/release-slo/release-slo.tsv
@@ -531,9 +998,127 @@ jobs:
 
       - name: Upload failed publication ledger
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-slo-ledger-failed-${{ github.run_id }}
           path: ${{ runner.temp }}/release-slo/release-slo.tsv
+          if-no-files-found: error
+          retention-days: 90
+
+  resume-preview-publication:
+    name: Recover and verify failed preview publication
+    if: ${{ inputs.release_mode == 'resume-preview' }}
+    runs-on: macos-15
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
+      RELEASE_REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
+      RELEASE_REQUEST_ID: ${{ inputs.request_id }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+      SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+      SOURCE_ARTIFACT_DIGEST: ${{ inputs.source_artifact_digest }}
+      EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
+      EXPECTED_STABLE_TAG: v1.8.3
+      ALLOW_FROZEN_BASE_MAIN: 1
+      PUBLIC_DOWNLOAD_CONCURRENCY: 4
+      # This path is an explicit recovery after the original attempt failed;
+      # it preserves and reports the immutable SLO overrun instead of resetting it.
+      ALLOW_LATE_RECOVERY: 1
+    steps:
+      - name: Check out trusted recovery workflow
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate recovery control plane
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = main
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          [[ "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test -r scripts/resume-preview-publication.sh
+
+      - name: Install recovery validation tools
+        run: |
+          command -v jq >/dev/null || brew install jq
+          command -v rg >/dev/null || brew install ripgrep
+
+      - name: Recover exact signed artifact and publish without re-signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_ACTIONS: true
+          GITHUB_EVENT_NAME: workflow_dispatch
+          GITHUB_WORKFLOW_REF: HD838A/remote-mic-app/.github/workflows/mac-release-package.yml@${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ledger="$RUNNER_TEMP/release-slo.tsv"
+          ./scripts/release-slo-ledger.sh init "$ledger" "$RELEASE_REQUEST_STARTED_AT"
+          ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
+          resume_output="$RUNNER_TEMP/resume-output.txt"
+          ./scripts/resume-preview-publication.sh | tee "$resume_output"
+          candidate="$(awk -F= '$1 == "candidate" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          attestation="$(awk -F= '$1 == "request_attestation" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          candidate_digest="$(awk -F= '$1 == "candidate_pipeline_digest" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          release_ready_at="$(awk -F= '$1 == "release_ready_at" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          test -d "$candidate"; test -r "$attestation"
+          now="$(date +%s)"
+          late_recovery=0
+          if (( now - release_ready_at >= 1740 )); then
+            late_recovery=1
+            set +e
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 late-recovery-overrun
+            slo_status="$?"
+            set -e
+            [[ "$slo_status" == 124 ]] || exit "$slo_status"
+            echo "LATE RECOVERY: original release-ready preview SLO is failed and will be reported as overrun."
+          else
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 signed-artifact-recovery
+          fi
+          ./scripts/run-release-stage.sh all publication 180 -- \
+            env \
+              RELEASE_SOURCE_ROOT="$candidate" \
+              RELEASE_CANDIDATE_BRANCH="release/pre-$RELEASE_TAG" \
+              RELEASE_REQUEST_ATTESTATION="$attestation" \
+              EXPECTED_PIPELINE_DIGEST="$candidate_digest" \
+              RELEASE_TAG="$RELEASE_TAG" \
+              RELEASE_REQUEST_ID="$RELEASE_REQUEST_ID" \
+              EXPECTED_STABLE_TAG="$EXPECTED_STABLE_TAG" \
+              EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_DEVELOPER_TEAM_ID" \
+              ALLOW_FROZEN_BASE_MAIN=1 \
+              ./scripts/publish-release.sh resume-prerelease
+          if [[ "$late_recovery" == 1 ]]; then
+            ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success late-recovery-after-slo
+            echo "LATE RECOVERY PUBLICATION PASS: immutable release-ready SLO remains failed; no clock was reset."
+          else
+            ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 successful-pipeline
+          fi
+
+      - name: Upload recovered publication ledger
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-slo-ledger-published-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo.tsv
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload failed recovery ledger
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-slo-ledger-failed-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo.tsv
           if-no-files-found: error
           retention-days: 90
