@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "summary", "changedPaths", "tests", "notes"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "type": "integer", "enum": [1] },
     "summary": { "type": "string", "minLength": 2, "maxLength": 3000 },
     "changedPaths": {
       "type": "array",
@@ -20,7 +20,7 @@
         "required": ["name", "status", "summary"],
         "properties": {
           "name": { "type": "string", "minLength": 1, "maxLength": 300 },
-          "status": { "enum": ["passed", "failed", "skipped", "not_run"] },
+          "status": { "type": "string", "enum": ["passed", "failed", "skipped", "not_run"] },
           "summary": { "type": "string", "minLength": 1, "maxLength": 1000 }
         }
       }

@@ -18,8 +18,9 @@
     "testPlan"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "type": "integer", "enum": [1] },
     "decision": {
+      "type": "string",
       "enum": [
         "already_implemented",
         "fixed_unreleased",
@@ -46,7 +47,7 @@
         "additionalProperties": false,
         "required": ["kind", "reference", "summary"],
         "properties": {
-          "kind": { "enum": ["code", "test", "issue", "pull_request", "commit", "release"] },
+          "kind": { "type": "string", "enum": ["code", "test", "issue", "pull_request", "commit", "release"] },
           "reference": { "type": "string", "minLength": 1, "maxLength": 500 },
           "summary": { "type": "string", "minLength": 1, "maxLength": 1000 }
         }
@@ -67,7 +68,7 @@
       }
     },
     "questions": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 500 } },
-    "riskLevel": { "enum": ["low", "medium", "high", "forbidden"] },
+    "riskLevel": { "type": "string", "enum": ["low", "medium", "high", "forbidden"] },
     "riskReasons": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 500 } },
     "affectedPaths": { "type": "array", "maxItems": 80, "items": { "type": "string", "maxLength": 300 } },
     "implementationSteps": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 1000 } },
