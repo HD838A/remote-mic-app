@@ -7,7 +7,7 @@
 "bluetooth.status.initializing" = "正在初始化蓝牙";
 "button_mapping.status.disabled" = "按键映射未启用";
 "audio.compatibility.checking" = "正在检查豆包兼容音频设备";
-"voice_button.status.preparing" = "正在准备遥控器 Fn 硬件映射";
+"voice_button.status.preparing" = "正在准备遥控器语音键映射";
 "app.status.stopped" = "应用已停止";
 "audio.compatibility.device_missing" = "未检测到 %1$@，请先安装兼容驱动";
 "audio.compatibility.device_selected" = "已选择 %1$@ 作为遥控器语音输出";
@@ -21,9 +21,15 @@
 "audio.test_tone.completed" = "测试音已完成";
 "audio.test_tone.cancelled" = "测试音已取消";
 "voice_button.status.fn_enabled" = "遥控器语音键已硬件映射为 Fn";
-"voice_button.status.waiting" = "等待遥控器 Fn 硬件映射";
+"voice_button.status.left_command_enabled" = "遥控器语音键将按住左 Command";
+"voice_button.status.right_command_enabled" = "遥控器语音键将按住右 Command";
+"voice_button.status.waiting" = "等待遥控器语音键映射";
 "voice_button.status.fn_pressed" = "硬件 Fn 已按下；松开语音键即释放";
 "voice_button.status.fn_released" = "硬件 Fn 已释放";
+"voice_button.status.left_command_pressed" = "左 Command 已按下；松开语音键即释放";
+"voice_button.status.left_command_released" = "左 Command 已释放";
+"voice_button.status.right_command_pressed" = "右 Command 已按下；松开语音键即释放";
+"voice_button.status.right_command_released" = "右 Command 已释放";
 "voice_button.status.waiting_for_input" = "正在等待目标输入位置准备完成";
 "voice_button.status.input_ready" = "目标输入位置已准备完成";
 "voice_button.status.input_unavailable" = "目标输入位置未准备完成，已取消本次语音输入";
@@ -211,6 +217,12 @@
 "connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";
 "connection.voice_fn_tap.hint" = "适配点按式语音输入（如 Typeless）：按下语音键注入一次 Fn 开始，松开再注入一次结束，音频在按住期间照常传输。需要辅助功能权限；开启后语音键不再直接发 Fn。";
 "connection.voice_fn_tap.hint_short" = "用于需要点按 Fn 开始和结束的语音工具；遥控器仍需按住说话。";
+"connection.voice_key_mode.title" = "语音触发键";
+"connection.voice_key.mode.fn" = "Fn/地球键";
+"connection.voice_key.mode.left_command" = "左 Command";
+"connection.voice_key.mode.right_command" = "右 Command";
+"connection.voice_key_mode.help" = "默认使用 Fn/地球键。Command 模式需要辅助功能权限，并要求目标语音应用支持对应的单独左或右 Command 长按；许多应用会把左右 Command 合并为通用 Command。长按期间按其他键可能触发 Command 快捷键。";
+"connection.voice_key_mode.command_permission" = "Command 模式需要辅助功能权限";
 "connection.action.reconnect" = "立即重新连接";
 "connection.phone.section_title" = "iPhone、Apple Watch 与网页版";
 "connection.phone.ios_title" = "iOS App（推荐）";
@@ -316,8 +328,8 @@
 "button_mapping.selection_lock_help" = "开启后，操作实体遥控器不会切换正在编辑的按键。";
 "button_mapping.selection_lock_hint_short" = "按遥控器时保持当前编辑项。";
 "button_mapping.voice_button.title" = "语音键";
-"button_mapping.voice_button.fixed" = "固定";
-"button_mapping.voice_button.detail" = "按住说话；语音输入与 Fn 功能不参与自定义映射。";
+"button_mapping.voice_button.fixed" = "语音触发键";
+"button_mapping.voice_button.detail" = "按住说话；可选择 Fn/地球键、左 Command 或右 Command 长按，不参与普通按键动作映射。";
 "button_mapping.action.not_set" = "未设置";
 "button_mapping.single_click.help" = "按一下立即执行；设置双击后会稍等片刻再确认。";
 "button_mapping.double_click.effect" = "单击会稍等片刻以区分双击；按住重复同时停用。";
@@ -535,6 +547,7 @@
 "configuration.import.prompt" = "导入";
 "configuration.import.success" = "配置已导入并应用";
 "configuration.import.unsupported_version" = "导入失败：不支持此配置版本";
+"configuration.import.voice_key_busy" = "导入失败：语音键正在使用或无法安全释放，请结束语音输入后重试";
 "configuration.import.invalid_file" = "导入失败：配置文件无效";
 "onboarding.phase.prepare" = "准备";
 "onboarding.phase.setup" = "设置";

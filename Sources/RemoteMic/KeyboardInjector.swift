@@ -70,6 +70,8 @@ enum KeyboardInjector {
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
     static let functionKeyCode: CGKeyCode = 63
+    static let leftCommandKeyCode: CGKeyCode = 55
+    static let rightCommandKeyCode: CGKeyCode = 54
     /// Web content shells only build the accessibility tree once an assistive
     /// client announces itself, so the composer scan finds an empty shell until
     /// one of these attributes is set. `AXManualAccessibility` is the Chromium
@@ -118,11 +120,33 @@ enum KeyboardInjector {
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyStatePoster: KeyStatePoster = postKeyState
     ) -> Bool {
+        setVoiceKeyPressed(
+            .function,
+            isPressed: isPressed,
+            accessibilityTrusted: accessibilityTrusted,
+            keyStatePoster: keyStatePoster
+        )
+    }
+
+    @discardableResult
+    static func setVoiceKeyPressed(
+        _ mode: VoiceKeyMode,
+        isPressed: Bool,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postKeyState
+    ) -> Bool {
         guard accessibilityTrusted() else { return false }
+        let flags: CGEventFlags
+        switch mode {
+        case .function:
+            flags = isPressed ? .maskSecondaryFn : []
+        case .leftCommand, .rightCommand:
+            flags = isPressed ? .maskCommand : []
+        }
         return keyStatePoster(
-            functionKeyCode,
+            mode.keyCode,
             isPressed,
-            isPressed ? .maskSecondaryFn : []
+            flags
         )
     }
 

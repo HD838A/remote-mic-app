@@ -212,6 +212,141 @@ struct PreferredInputSourceMonitorTests {
         #expect(currentInputSourceID == "com.apple.keylayout.ABC")
     }
 
+    @Test func overlappingFunctionKeyAndExplicitVoiceRestoreOnlyAfterLastOwnerEnds() {
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var preparationCount = 0
+        var restoredInputSourceIDs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .weixin },
+            prepareInputSource: { _ in
+                preparationCount += 1
+                currentInputSourceID = "com.tencent.inputmethod.wetype.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        monitor.handleFunctionKeyPressed(true)
+        monitor.beginVoiceSession()
+        monitor.handleFunctionKeyPressed(false)
+
+        #expect(preparationCount == 1)
+        #expect(restoredInputSourceIDs.isEmpty)
+        #expect(currentInputSourceID == "com.tencent.inputmethod.wetype.pinyin")
+
+        monitor.endVoiceSession()
+
+        #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
+        #expect(currentInputSourceID == "com.apple.keylayout.ABC")
+    }
+
+    @Test func overlappingExplicitVoiceAndFunctionKeyRestoreOnlyAfterLastOwnerEnds() {
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var preparationCount = 0
+        var restoredInputSourceIDs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                preparationCount += 1
+                currentInputSourceID = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        monitor.beginVoiceSession()
+        monitor.handleFunctionKeyPressed(true)
+        monitor.endVoiceSession()
+
+        #expect(preparationCount == 1)
+        #expect(restoredInputSourceIDs.isEmpty)
+        #expect(currentInputSourceID == "com.bytedance.inputmethod.doubaoime.pinyin")
+
+        monitor.handleFunctionKeyPressed(false)
+
+        #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
+        #expect(currentInputSourceID == "com.apple.keylayout.ABC")
+    }
+
+    @Test func stopForcesOverlappingInputSourceOwnersToRestoreOnce() {
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoreCount = 0
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                currentInputSourceID = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoreCount += 1
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        monitor.handleFunctionKeyPressed(true)
+        monitor.beginVoiceSession()
+        monitor.stop()
+        monitor.endVoiceSession()
+
+        #expect(restoreCount == 1)
+        #expect(currentInputSourceID == "com.apple.keylayout.ABC")
+    }
+
+    @Test func stoppingFunctionMonitoringPreservesAnExplicitCommandVoiceSession() {
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoredInputSourceIDs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                currentInputSourceID = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        monitor.beginVoiceSession()
+        monitor.handleFunctionKeyPressed(true)
+        monitor.stop(preservingExplicitVoiceSession: true)
+
+        #expect(restoredInputSourceIDs.isEmpty)
+        #expect(currentInputSourceID == "com.bytedance.inputmethod.doubaoime.pinyin")
+        #expect(!monitor.functionKeyIsPressedForDiagnostics)
+
+        monitor.endVoiceSession()
+
+        #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
+        #expect(currentInputSourceID == "com.apple.keylayout.ABC")
+    }
+
     @Test func doesNotPrepareAnAlreadySelectedInputSource() {
         var preparationCount = 0
         let monitor = PreferredInputSourceMonitor(
