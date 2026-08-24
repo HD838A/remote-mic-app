@@ -13,6 +13,7 @@ SOURCE_ARTIFACT_ID="${SOURCE_ARTIFACT_ID:?SOURCE_ARTIFACT_ID is required}"
 SOURCE_ARTIFACT_DIGEST="${SOURCE_ARTIFACT_DIGEST:?SOURCE_ARTIFACT_DIGEST is required}"
 REQUEST_STARTED_AT="${RELEASE_REQUEST_STARTED_AT:?RELEASE_REQUEST_STARTED_AT is required}"
 BRANCH="release/pre-$TAG"
+ALLOW_LATE_RECOVERY="${ALLOW_LATE_RECOVERY:-0}"
 
 [[ "$TAG" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]
 [[ "$EXPECTED_COMMIT" =~ '^[0-9a-f]{40}$' ]]
@@ -21,6 +22,7 @@ BRANCH="release/pre-$TAG"
 [[ "$SOURCE_RUN_ATTEMPT" =~ '^[1-9][0-9]*$' ]]
 [[ "$SOURCE_ARTIFACT_ID" =~ '^[1-9][0-9]*$' ]]
 [[ "$SOURCE_ARTIFACT_DIGEST" =~ '^sha256:[0-9a-f]{64}$' ]]
+[[ "$ALLOW_LATE_RECOVERY" == 0 || "$ALLOW_LATE_RECOVERY" == 1 ]]
 
 for command_name in gh git jq shasum unzip sort uniq find; do
   command -v "$command_name" >/dev/null 2>&1 || {
@@ -125,7 +127,11 @@ jq -e \
   '(.requestId == $requestId) and (.tag == $tag) and (.candidateCommit == $commit) and (.requestStartedAt == $started) and (.releaseReadyAt | type == "number" and floor == .)' \
   "$attestation" >/dev/null || fail "request attestation does not match the requested candidate"
 release_ready_at="$(jq -r '.releaseReadyAt' "$attestation")"
-(( now - release_ready_at >= 0 && now - release_ready_at < 1740 )) || fail "the original release-ready preview budget is exhausted"
+(( now - release_ready_at >= 0 )) || fail "release_ready_at is in the future"
+if (( now - release_ready_at >= 1740 )); then
+  [[ "$ALLOW_LATE_RECOVERY" == 1 ]] || fail "the original release-ready preview budget is exhausted"
+  print -u2 "LATE RECOVERY: original release-ready preview budget is exhausted; immutable clocks remain unchanged"
+fi
 
 candidate_pipeline_digest="$(jq -r '.pipelineDigest' "$attestation")"
 [[ "$candidate_pipeline_digest" =~ '^[0-9a-f]{64}$' ]] || fail "candidate pipeline digest is invalid"
