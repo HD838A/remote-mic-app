@@ -1351,7 +1351,7 @@ struct RemoteButtonsTests {
         #expect(!source.contains("DispatchQueue.main.async"))
     }
 
-    @Test func powerSuppressionIsArmedBeforeButtonCallbacksAndMonitoring() throws {
+    @Test func nativeButtonSuppressionIsArmedBeforeButtonCallbacksAndMonitoring() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let monitor = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
         let model = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"), encoding: .utf8)
@@ -1367,11 +1367,13 @@ struct RemoteButtonsTests {
         let applySettings = model[applySettingsStart.lowerBound..<applySettingsEnd.lowerBound]
         let map = try #require(
             applySettings.range(
-                of: "powerKeySuppressed = applyVoiceFunctionMapping(mode: hardwareVoiceMappingMode)"
+                of: "nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: hardwareVoiceMappingMode)"
             )
         )
         let start = try #require(
-            applySettings.range(of: "startHIDMonitors(powerKeySuppressed: powerKeySuppressed)")
+            applySettings.range(
+                of: "startHIDMonitors(nativeButtonEventsSuppressed: nativeButtonEventsSuppressed)"
+            )
         )
         #expect(arm.lowerBound < callback.lowerBound)
         #expect(map.lowerBound < start.lowerBound)
@@ -1421,25 +1423,25 @@ struct RemoteButtonsTests {
             mappingEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
         #expect(!HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: false,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
         #expect(!HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: false
+            nativeButtonEventsSuppressed: false
         ))
         #expect(HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
     }
 

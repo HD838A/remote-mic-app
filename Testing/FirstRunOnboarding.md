@@ -168,7 +168,7 @@
 3. 不退出 App，直接切回 Onboarding，观察页面是否开始新的 discovery 并显示新遥控器。
 4. 按方向、确定和音量键，确认无线麦均收到普通按键；再按语音键完成一次普通 `STREAM_START → AUDIO → STREAM_STOP`。
 5. 如同时保留 RC001 与 RC003，交替按两只遥控器，确认各自只驱动自己的配置。
-6. 检查日志：允许出现某个旧 service 写入失败，但当前安全设备应出现 `power_suppressed=true suppression_scope=locations=`，且不再因 `matched=2 applied=1` 拒绝全部 HID。
+6. 检查日志：允许出现某个旧 service 写入失败，但当前安全设备应出现 `native_buttons_suppressed=true native_button_mappings=12 suppression_scope=locations=`，且不再因 `matched=2 applied=1` 拒绝全部 HID。
 7. 按一次已映射的电源键，确认只执行配置动作且系统不锁屏、不弹关机确认。
 8. 制造按键监听失败或撤销权限，确认“等待实体按键”卡片显示生产 HID 错误；恢复条件后点击“重新检测按键”，无需重启 App 即重新建立监听。
 

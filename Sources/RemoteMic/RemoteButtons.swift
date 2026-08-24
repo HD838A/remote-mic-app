@@ -639,9 +639,10 @@ enum HIDPermissionGate {
         mappingEnabled: Bool,
         inputMonitoringGranted: Bool,
         accessibilityGranted: Bool,
-        powerKeySuppressed: Bool
+        nativeButtonEventsSuppressed: Bool
     ) -> Bool {
-        mappingEnabled && inputMonitoringGranted && accessibilityGranted && powerKeySuppressed
+        mappingEnabled && inputMonitoringGranted && accessibilityGranted &&
+            nativeButtonEventsSuppressed
     }
 
     static func nextPermissionRequest(

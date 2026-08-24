@@ -184,7 +184,7 @@ final class HIDRemoteMonitor {
         IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
     }
 
-    func start(powerKeySuppressed: Bool, allowedLocationIDs: Set<UInt32>? = nil) {
+    func start(nativeButtonEventsSuppressed: Bool, allowedLocationIDs: Set<UInt32>? = nil) {
         stop()
         self.allowedLocationIDs = allowedLocationIDs
         guard settings.customMappingEnabled else {
@@ -200,7 +200,7 @@ final class HIDRemoteMonitor {
             mappingEnabled: settings.customMappingEnabled,
             inputMonitoringGranted: inputGranted,
             accessibilityGranted: accessibilityGranted,
-            powerKeySuppressed: powerKeySuppressed
+            nativeButtonEventsSuppressed: nativeButtonEventsSuppressed
         ) else {
             if !inputGranted {
                 updateStatus(LocalizedMessage("button_mapping.permission.input_monitoring_required"))
@@ -208,7 +208,7 @@ final class HIDRemoteMonitor {
                 updateStatus(LocalizedMessage("button_mapping.permission.accessibility_required"))
             } else {
                 updateStatus(LocalizedMessage("button_mapping.error.power_suppression_failed"))
-                AppLogger.shared.write("HID START rejected power_suppressed=false")
+                AppLogger.shared.write("HID START rejected native_buttons_suppressed=false")
             }
             return
         }

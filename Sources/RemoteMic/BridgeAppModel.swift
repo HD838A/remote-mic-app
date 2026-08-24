@@ -413,7 +413,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private let hidEventSuppressor = KeyboardEventSuppressor()
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
-    private var hidPowerKeySuppressed = false
+    private var hidNativeButtonEventsSuppressed = false
     private var hidAllowedLocationIDs: Set<UInt32>?
     private var started = false
     private var appliedHIDPermissionSnapshot: HIDPermissionSnapshot?
@@ -1489,32 +1489,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             isStreaming: isStreaming,
             allowVoiceKeyModeFallback: allowVoiceKeyModeFallback
         )
-        var powerKeySuppressed: Bool
+        var nativeButtonEventsSuppressed: Bool
         if let hardwareVoiceMappingMode {
             // Prefer the remote's own HID service for standalone modifiers so
             // strict hotkey tools receive a physical-equivalent key edge.
             voiceFnTapSession.setEnabled(false)
             _ = voiceShortcutHoldController.release()
-            powerKeySuppressed = applyVoiceFunctionMapping(mode: hardwareVoiceMappingMode)
+            nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: hardwareVoiceMappingMode)
             if voiceFunctionMapper.appliedVoiceKeyMappingMode != hardwareVoiceMappingMode ||
                 !voiceFunctionMapper.isVoiceKeyMappingComplete
             {
                 if KeyboardInjector.isAccessibilityTrusted {
-                    powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
+                    nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: .neutralized)
                 } else {
-                    powerKeySuppressed = applyVoiceFunctionMapping()
+                    nativeButtonEventsSuppressed = applyVoiceFunctionMapping()
                 }
             }
         } else if softwareVoiceTriggerRequested, KeyboardInjector.isAccessibilityTrusted {
-            powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
+            nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: .neutralized)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
                 voiceFnTapSession.setEnabled(requestedFnTapMode)
             } else {
                 _ = voiceShortcutHoldController.release()
-                powerKeySuppressed = applyVoiceFunctionMapping()
+                nativeButtonEventsSuppressed = applyVoiceFunctionMapping()
             }
         } else if requestedFnTapMode, accessibilityGranted {
-            powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
+            nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: .neutralized)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
                 voiceFnTapSession.setEnabled(true)
             } else if !canFallbackVoiceKeyMode, isStreaming {
@@ -1531,10 +1531,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 }
                 voiceFnTapSession.setEnabled(false)
                 _ = voiceShortcutHoldController.release()
-                powerKeySuppressed = applyVoiceFunctionMapping()
+                nativeButtonEventsSuppressed = applyVoiceFunctionMapping()
             }
         } else if requestedVoiceKeyMode != .function {
-            powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
+            nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: .neutralized)
             if !voiceFunctionMapper.isVoiceKeyNeutralized {
                 if voiceFunctionMapper.hasMatchingServices {
                     if isStreaming {
@@ -1545,7 +1545,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                         )
                     } else if canFallbackVoiceKeyMode {
                         settings.voiceKeyMode = .function
-                        powerKeySuppressed = applyVoiceFunctionMapping()
+                        nativeButtonEventsSuppressed = applyVoiceFunctionMapping()
                         AppLogger.shared.write(
                             "VOICE KEY mode_fallback reason=voice_mapping_failed " +
                                 "mode=\(requestedVoiceKeyMode.rawValue)"
@@ -1586,16 +1586,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             voiceFnTapSession.setEnabled(false)
             _ = voiceShortcutHoldController.release()
-            powerKeySuppressed = applyVoiceFunctionMapping()
+            nativeButtonEventsSuppressed = applyVoiceFunctionMapping()
         }
-        startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+        startHIDMonitors(nativeButtonEventsSuppressed: nativeButtonEventsSuppressed)
     }
 
-    private func startHIDMonitors(powerKeySuppressed: Bool) {
+    private func startHIDMonitors(nativeButtonEventsSuppressed: Bool) {
         stopHIDMonitors()
-        hidPowerKeySuppressed = powerKeySuppressed
+        hidNativeButtonEventsSuppressed = nativeButtonEventsSuppressed
         hidAllowedLocationIDs = settings.customMappingEnabled
-            ? voiceFunctionMapper.powerSuppressedLocationIDs
+            ? voiceFunctionMapper.nativeButtonSuppressedLocationIDs
             : nil
         guard settings.customMappingEnabled else {
             hidStatus = LocalizedMessage("button_mapping.status.system_managed")
@@ -1610,7 +1610,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             hidMonitors[fingerprint] = monitor
             monitor.start(
-                powerKeySuppressed: powerKeySuppressed,
+                nativeButtonEventsSuppressed: nativeButtonEventsSuppressed,
                 allowedLocationIDs: hidAllowedLocationIDs
             )
         }
@@ -1638,7 +1638,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         discoveryHIDMonitor = monitor
         monitor.start(
-            powerKeySuppressed: hidPowerKeySuppressed,
+            nativeButtonEventsSuppressed: hidNativeButtonEventsSuppressed,
             allowedLocationIDs: hidAllowedLocationIDs
         )
     }
@@ -1838,17 +1838,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
 
-        var powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
+        var nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: .neutralized)
         guard voiceFunctionMapper.isVoiceKeyNeutralized else {
             settings.voiceFnTapModeEnabled = false
             voiceFnTapSession.setEnabled(false)
-            powerKeySuppressed = applyVoiceFunctionMapping()
-            startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+            nativeButtonEventsSuppressed = applyVoiceFunctionMapping()
+            startHIDMonitors(
+                nativeButtonEventsSuppressed: nativeButtonEventsSuppressed
+            )
             return
         }
         settings.voiceFnTapModeEnabled = true
         voiceFnTapSession.setEnabled(true)
-        startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+        startHIDMonitors(nativeButtonEventsSuppressed: nativeButtonEventsSuppressed)
     }
 
     private func handleVoiceFnTapFailure(_ failure: VoiceFnTapFailure) {
@@ -3213,7 +3215,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         mode: RemoteVoiceKeyMappingMode = .function
     ) -> Bool {
         let applied = voiceFunctionMapper.apply(
-            suppressPowerKey: settings.customMappingEnabled,
+            suppressNativeButtonEvents: settings.customMappingEnabled,
             voiceKeyMappingMode: mode
         )
         if !isStreaming {
@@ -3232,7 +3234,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 )
             }
         }
-        return !settings.customMappingEnabled || voiceFunctionMapper.isPowerKeySuppressed
+        return !settings.customMappingEnabled ||
+            voiceFunctionMapper.areNativeButtonEventsSuppressed
     }
 
     private func handleVoiceButtonEdge(_ edge: RemoteEventEdge, source: String) {

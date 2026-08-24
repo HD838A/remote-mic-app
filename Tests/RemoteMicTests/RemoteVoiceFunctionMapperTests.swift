@@ -105,28 +105,28 @@ struct RemoteVoiceFunctionMapperTests {
         #expect(HIDUsageMapping(property: mapping.property) == mapping)
     }
 
-    @Test func suppressesRemotePowerAsHarmlessF20WithoutChangingOtherMappings() {
+    @Test func neutralizesEveryNativeRemoteButtonWithoutChangingOtherMappings() {
         let unrelated = HIDUsageMapping(
             source: 0x0000_0007_0000_0004,
             destination: 0x0000_0007_0000_0005
         )
-        let stalePower = HIDUsageMapping(
-            source: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey.source,
-            destination: 0x0000_0007_0000_006E
+        let staleTV = HIDUsageMapping(
+            source: 0x0000_0007_0000_0035,
+            destination: 0x0000_0007_0000_0036
         )
 
-        #expect(RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey == HIDUsageMapping(
-            source: 0x0000_0007_0000_0066,
-            destination: 0x0000_0007_0000_006F
-        ))
+        let neutralMappings = RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings
+        #expect(neutralMappings.count == RemoteButton.allCases.count)
+        #expect(Set(neutralMappings.map(\.source)).count == RemoteButton.allCases.count)
+        #expect(neutralMappings.allSatisfy { $0.destination == 0 })
+        #expect(neutralMappings.contains(HIDUsageMapping(
+            source: 0x0000_0007_0000_0035,
+            destination: 0
+        )))
         #expect(RemoteVoiceFunctionMappingPolicy.applying(
-            to: [unrelated, stalePower],
-            powerMapping: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
-        ) == [
-            unrelated,
-            RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
-            RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
-        ])
+            to: [unrelated, staleTV],
+            nativeButtonMappings: neutralMappings
+        ) == [unrelated, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey] + neutralMappings)
     }
 
     @Test func restorePreservesUnrelatedChangesMadeWhileRunning() {
@@ -138,33 +138,55 @@ struct RemoteVoiceFunctionMapperTests {
             source: 0x0000_0007_0000_0004,
             destination: 0x0000_0007_0000_0006
         )
-        let originalPower = HIDUsageMapping(
-            source: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey.source,
+        let originalTV = HIDUsageMapping(
+            source: 0x0000_0007_0000_0035,
             destination: 0x0000_0007_0000_006D
         )
+        let neutralMappings = RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings
 
         #expect(
             RemoteVoiceFunctionMappingPolicy.restoring(
                 originalVoiceMapping: originalVoice,
-                originalPowerMapping: originalPower,
+                originalNativeButtonMappings: [originalTV],
                 in: [
                     changedUnrelated,
                     RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
-                    RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
-                ]
-            ) == [changedUnrelated, originalVoice, originalPower]
+                ] + neutralMappings
+            ) == [changedUnrelated, originalVoice, originalTV]
         )
         #expect(
             RemoteVoiceFunctionMappingPolicy.restoring(
                 originalVoiceMapping: nil,
-                originalPowerMapping: nil,
+                originalNativeButtonMappings: [],
                 in: [
                     changedUnrelated,
                     RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
-                    RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
-                ]
+                ] + neutralMappings
             ) == [changedUnrelated]
         )
+    }
+
+    @Test func rejectsAWriteThatIsNotVisibleInTheServiceReadback() {
+        let original = [HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 5)]
+        var writeCount = 0
+        let service = RemoteVoiceMappingService(
+            registryID: 1,
+            locationID: 101,
+            readMappings: { original },
+            setMappings: { _ in
+                writeCount += 1
+                return true
+            }
+        )
+        let mapper = RemoteVoiceFunctionMapper { [service] }
+
+        #expect(!mapper.apply(
+            suppressNativeButtonEvents: true,
+            voiceKeyMappingMode: .standaloneModifier(.leftControl)
+        ))
+        #expect(!mapper.isApplied)
+        #expect(!mapper.areNativeButtonEventsSuppressed)
+        #expect(writeCount == 2)
     }
 
     @Test func neutralizationRequiresEveryTargetAndRollsBackPartialSuccess() {
@@ -241,7 +263,7 @@ struct RemoteVoiceFunctionMapperTests {
         #expect(second.mappings == [leftControlMode.mapping])
     }
 
-    @Test func partialPowerSuppressionOnlyAllowsFullyMappedDeviceLocations() {
+    @Test func partialNativeButtonSuppressionOnlyAllowsFullyMappedDeviceLocations() {
         let first = MappingServiceBox(registryID: 1, locationID: 101, mappings: [])
         let duplicateFailure = MappingServiceBox(
             registryID: 2,
@@ -255,18 +277,18 @@ struct RemoteVoiceFunctionMapperTests {
             [first.service, duplicateFailure.service, safe.service, unknown.service]
         }
 
-        #expect(mapper.apply(suppressPowerKey: true))
-        #expect(mapper.isPowerKeySuppressed)
-        #expect(mapper.powerSuppressedLocationIDs == Set([202]))
+        #expect(mapper.apply(suppressNativeButtonEvents: true))
+        #expect(mapper.areNativeButtonEventsSuppressed)
+        #expect(mapper.nativeButtonSuppressedLocationIDs == Set([202]))
     }
 
-    @Test func powerSuppressionWithoutADeviceLocationFailsClosed() {
+    @Test func nativeButtonSuppressionWithoutADeviceLocationFailsClosed() {
         let unknown = MappingServiceBox(registryID: 1, locationID: nil, mappings: [])
         let mapper = RemoteVoiceFunctionMapper { [unknown.service] }
 
-        #expect(mapper.apply(suppressPowerKey: true))
-        #expect(!mapper.isPowerKeySuppressed)
-        #expect(mapper.powerSuppressedLocationIDs == nil)
+        #expect(mapper.apply(suppressNativeButtonEvents: true))
+        #expect(!mapper.areNativeButtonEventsSuppressed)
+        #expect(mapper.nativeButtonSuppressedLocationIDs == nil)
     }
 
     @Test func mappingServiceRetainsItsHIDClientOwnerForItsLifetime() {

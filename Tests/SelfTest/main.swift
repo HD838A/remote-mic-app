@@ -239,25 +239,25 @@ check(
         mappingEnabled: true,
         inputMonitoringGranted: false,
         accessibilityGranted: true,
-        powerKeySuppressed: true
+        nativeButtonEventsSuppressed: true
     ) &&
         !HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: false,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ) &&
         !HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: false
+            nativeButtonEventsSuppressed: false
         ) &&
         HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ),
     "HID permission gate fails closed"
 )
@@ -267,15 +267,22 @@ let unrelatedKeyMapping = HIDUsageMapping(
     destination: 0x0000_0007_0000_0005
 )
 check(
-    RemoteVoiceFunctionMappingPolicy.applying(
-        to: [unrelatedKeyMapping],
-        powerMapping: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
-    ) == [
-        unrelatedKeyMapping,
-        RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
-        RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
-    ],
-    "RC003 power is remapped to harmless F20"
+    RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings.count ==
+        RemoteButton.allCases.count &&
+        RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings.allSatisfy {
+            $0.destination == 0
+        } &&
+        RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings.contains(
+            HIDUsageMapping(source: 0x0000_0007_0000_0035, destination: 0)
+        ) &&
+        RemoteVoiceFunctionMappingPolicy.applying(
+            to: [unrelatedKeyMapping],
+            nativeButtonMappings: RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings
+        ) == [
+            unrelatedKeyMapping,
+            RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+        ] + RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings,
+    "all RC003 native button events are neutralized, including TV"
 )
 
 check(
@@ -521,6 +528,29 @@ check(
         transactionalFirstWrites == 2,
     "RC003 neutralization rolls back partial HID mapping success"
 )
+var ignoredMappingWriteCount = 0
+let ignoredMappingWriteMapper = RemoteVoiceFunctionMapper {
+    [
+        RemoteVoiceMappingService(
+            registryID: 1,
+            locationID: 101,
+            readMappings: { [unrelatedMapping] },
+            setMappings: { _ in
+                ignoredMappingWriteCount += 1
+                return true
+            }
+        ),
+    ]
+}
+check(
+    !ignoredMappingWriteMapper.apply(
+        suppressNativeButtonEvents: true,
+        voiceKeyMappingMode: .standaloneModifier(.leftControl)
+    ) &&
+        !ignoredMappingWriteMapper.areNativeButtonEventsSuppressed &&
+        ignoredMappingWriteCount == 2,
+    "RC003 HID mapping fails closed when the system readback omits the write"
+)
 let changedUnrelatedMapping = HIDUsageMapping(
     source: unrelatedMapping.source,
     destination: 0x0000_0007_0000_0006
@@ -528,12 +558,12 @@ let changedUnrelatedMapping = HIDUsageMapping(
 check(
     RemoteVoiceFunctionMappingPolicy.restoring(
         originalVoiceMapping: staleVoiceMapping,
-        originalPowerMapping: nil,
+        originalNativeButtonMappings: [],
         in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
     ) == [changedUnrelatedMapping, staleVoiceMapping] &&
         RemoteVoiceFunctionMappingPolicy.restoring(
             originalVoiceMapping: nil,
-            originalPowerMapping: nil,
+            originalNativeButtonMappings: [],
             in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
         ) == [changedUnrelatedMapping],
     "RC003 hardware voice mapping restore preserves unrelated runtime changes"
