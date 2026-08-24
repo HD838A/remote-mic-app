@@ -676,6 +676,7 @@ fi
   print 'head_commit="$(git rev-parse HEAD)"'
   print 'case "${FAKE_QUALIFICATION_MODE:-open-pr}" in'
   print -r -- '  open-pr) print -r -- "[{\"number\":999,\"html_url\":\"https://example.invalid/pr/999\",\"draft\":true,\"state\":\"open\",\"base\":{\"ref\":\"main\"},\"head\":{\"ref\":\"release/pipeline-qualification/pr-999\",\"sha\":\"$head_commit\",\"repo\":{\"full_name\":\"HD838A/remote-mic-app\"}}}]" ;;'
+  print -r -- '  merged-pr) print -r -- "[{\"number\":999,\"html_url\":\"https://example.invalid/pr/999\",\"draft\":false,\"state\":\"closed\",\"merged_at\":\"2026-08-24T04:13:06Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"ref\":\"release/pipeline-qualification/pr-999\",\"sha\":\"$head_commit\",\"repo\":{\"full_name\":\"HD838A/remote-mic-app\"}}}]" ;;'
   print '  missing-pr) print -r -- "[]" ;;'
   print '  *) print -u2 "unexpected fake qualification mode"; exit 2 ;;'
   print 'esac'
@@ -696,6 +697,22 @@ fi
 ) > "$WORK_DIR/qualification-provenance-pass.txt"
 /usr/bin/grep -Fq 'PROTECTED RELEASE PIPELINE QUALIFICATION PASS' \
   "$WORK_DIR/qualification-provenance-pass.txt"
+
+(
+  cd "$TEST_REPO"
+  GITHUB_REF_NAME="$QUALIFICATION_BRANCH" \
+  RELEASE_QUALIFICATION_REMOTE_NAME="$QUALIFICATION_REMOTE" \
+  GH_BIN="$FAKE_QUALIFICATION_GH" \
+  FAKE_QUALIFICATION_MODE=merged-pr \
+  GITHUB_REPOSITORY=HD838A/remote-mic-app \
+  EXPECTED_COMMIT="$HEAD_COMMIT" \
+  EXPECTED_PIPELINE_DIGEST="$QUALIFICATION_DIGEST" \
+  RELEASE_MODE=qualification \
+  RELEASE_TAG="v$QUALIFICATION_VERSION" \
+    ./scripts/verify-release-pipeline-qualification-source.sh
+) > "$WORK_DIR/qualification-merged-pr-pass.txt"
+/usr/bin/grep -Fq 'PROTECTED RELEASE PIPELINE QUALIFICATION PASS' \
+  "$WORK_DIR/qualification-merged-pr-pass.txt"
 
 if (
   cd "$TEST_REPO"
@@ -763,7 +780,7 @@ if (
   print -u2 "release qualification unexpectedly accepted a commit without an open main PR"
   exit 1
 fi
-/usr/bin/grep -Fq 'exactly one open same-repository PR targeting main' \
+/usr/bin/grep -Fq 'exactly one same-repository PR targeting main (open or merged)' \
   "$WORK_DIR/qualification-missing-pr.txt"
 
 (

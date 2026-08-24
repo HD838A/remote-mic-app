@@ -71,13 +71,13 @@ if ! print -r -- "$PULLS_JSON" | jq -e \
   --arg repository "$REPOSITORY" \
   --arg headSha "$EXPECTED_COMMIT" '
     [.[] | select(
-      .state == "open" and
+      (.state == "open" or .merged_at != null) and
       .base.ref == "main" and
       .head.sha == $headSha and
       .head.repo.full_name == $repository
     )] | length == 1
   ' >/dev/null; then
-  print -u2 "release qualification commit must belong to exactly one open same-repository PR targeting main"
+  print -u2 "release qualification commit must belong to exactly one same-repository PR targeting main (open or merged)"
   exit 1
 fi
 if [[ "$(./scripts/release-pipeline-digest.sh)" != "$EXPECTED_PIPELINE_DIGEST" ]]; then
