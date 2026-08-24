@@ -165,7 +165,7 @@ struct VoiceKeyModeTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
             encoding: .utf8
         )
-        let applyStart = try #require(source.range(of: "func applyHIDSettings()"))
+        let applyStart = try #require(source.range(of: "func applyHIDSettings("))
         let applyEnd = try #require(source.range(
             of: "private func startHIDMonitors",
             range: applyStart.upperBound..<source.endIndex
@@ -219,8 +219,23 @@ struct VoiceKeyModeTests {
         )
         let acceptedState = try #require(startSource.range(of: "bluetoothVoiceActive = true"))
 
-        #expect(startSource.contains("applyHIDSettings()"))
+        #expect(startSource.contains("applyHIDSettings(allowVoiceKeyModeFallback: false)"))
         #expect(neutralizationCheck.lowerBound < acceptedState.lowerBound)
+    }
+
+    @Test func voiceMappingFallbackIsDisabledDuringAStreamStartAttempt() {
+        #expect(BridgeAppModel.canFallbackVoiceKeyMode(
+            isStreaming: false,
+            allowVoiceKeyModeFallback: true
+        ))
+        #expect(!BridgeAppModel.canFallbackVoiceKeyMode(
+            isStreaming: true,
+            allowVoiceKeyModeFallback: true
+        ))
+        #expect(!BridgeAppModel.canFallbackVoiceKeyMode(
+            isStreaming: false,
+            allowVoiceKeyModeFallback: false
+        ))
     }
 
     @Test func voiceMappingFailureDoesNotChangeModeDuringAnActiveVoiceSession() throws {
@@ -232,7 +247,7 @@ struct VoiceKeyModeTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
             encoding: .utf8
         )
-        let applyStart = try #require(source.range(of: "func applyHIDSettings()"))
+        let applyStart = try #require(source.range(of: "func applyHIDSettings("))
         let applyEnd = try #require(source.range(
             of: "private func startHIDMonitors",
             range: applyStart.upperBound..<source.endIndex

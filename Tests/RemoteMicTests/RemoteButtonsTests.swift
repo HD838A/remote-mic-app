@@ -1094,7 +1094,7 @@ struct RemoteButtonsTests {
         let model = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"), encoding: .utf8)
         let arm = try #require(monitor.range(of: "eventSuppressor.arm(button: button, edge: .down)"))
         let callback = try #require(monitor.range(of: "onButtonPressed?(profileID, deviceFingerprint, button)"))
-        let applySettingsStart = try #require(model.range(of: "func applyHIDSettings()"))
+        let applySettingsStart = try #require(model.range(of: "func applyHIDSettings("))
         let applySettingsEnd = try #require(
             model.range(
                 of: "func setExperimentalContinuousRecordingEnabled",

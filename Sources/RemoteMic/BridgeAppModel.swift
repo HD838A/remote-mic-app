@@ -838,6 +838,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         (mode == .function && !voiceFnTapModeEnabled) || isVoiceKeyNeutralized
     }
 
+    static func canFallbackVoiceKeyMode(
+        isStreaming: Bool,
+        allowVoiceKeyModeFallback: Bool
+    ) -> Bool {
+        !isStreaming && allowVoiceKeyModeFallback
+    }
+
     @discardableResult
     static func importConfiguration(
         from data: Data,
@@ -1404,7 +1411,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write("AUDIO TEST_TONE cancelled reason=\(logReason)")
     }
 
-    func applyHIDSettings() {
+    func applyHIDSettings(allowVoiceKeyModeFallback: Bool = true) {
         let permissionSnapshot = HIDPermissionSnapshot.current
         appliedHIDPermissionSnapshot = permissionSnapshot
         if !permissionSnapshot.accessibilityGranted {
@@ -1433,7 +1440,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         if !requestedFnTapMode, voiceFnTapSession.requiresCleanupBeforeMapping {
             voiceFnTapSession.setEnabled(false) { [weak self] in
-                self?.applyHIDSettings()
+                self?.applyHIDSettings(
+                    allowVoiceKeyModeFallback: allowVoiceKeyModeFallback
+                )
             }
             return
         }
@@ -1441,14 +1450,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             voiceFnTapModeRequested: requestedFnTapMode,
             voiceKeyModeRequested: requestedVoiceKeyMode
         )
+        let canFallbackVoiceKeyMode = Self.canFallbackVoiceKeyMode(
+            isStreaming: isStreaming,
+            allowVoiceKeyModeFallback: allowVoiceKeyModeFallback
+        )
         var powerKeySuppressed: Bool
         if requestedFnTapMode, accessibilityGranted {
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
                 voiceFnTapSession.setEnabled(true)
-            } else if isStreaming {
+            } else if !canFallbackVoiceKeyMode, isStreaming {
                 AppLogger.shared.write(
                     "VOICE FN TAP mode_preserved reason=voice_active_mapping_failed"
+                )
+            } else if !canFallbackVoiceKeyMode {
+                AppLogger.shared.write(
+                    "VOICE FN TAP mode_preserved reason=voice_start_mapping_failed"
                 )
             } else {
                 settings.voiceFnTapModeEnabled = false
@@ -1465,11 +1482,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                             "VOICE KEY mode_preserved reason=voice_active_mapping_failed " +
                                 "mode=\(requestedVoiceKeyMode.rawValue)"
                         )
-                    } else {
+                    } else if canFallbackVoiceKeyMode {
                         settings.voiceKeyMode = .function
                         powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
                         AppLogger.shared.write(
                             "VOICE KEY mode_fallback reason=voice_mapping_failed " +
+                                "mode=\(requestedVoiceKeyMode.rawValue)"
+                        )
+                    } else {
+                        voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting")
+                        AppLogger.shared.write(
+                            "VOICE KEY mode_preserved reason=voice_start_mapping_failed " +
                                 "mode=\(requestedVoiceKeyMode.rawValue)"
                         )
                     }
@@ -1951,7 +1974,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         if settings.voiceKeyMode != .function || settings.voiceFnTapModeEnabled {
-            applyHIDSettings()
+            applyHIDSettings(allowVoiceKeyModeFallback: false)
         }
         guard Self.canStartBluetoothVoice(
             mode: settings.voiceKeyMode,
