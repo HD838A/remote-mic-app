@@ -29,7 +29,8 @@ jobs:
           [[ "$TARGET_WORKFLOW_RUN_ID" =~ ^[1-9][0-9]{0,18}$ ]]
           workflow="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_WORKFLOW_RUN_ID")"
           jq -e --arg run "$RUN_ID" '
-            (.name == "SayAll Agent Analyze" or .name == "SayAll Agent Develop")
+            (.path == ".github/workflows/sayall-agent-analyze.yml"
+              or .path == ".github/workflows/sayall-agent-develop.yml")
             and .event == "repository_dispatch"
             and ((.display_title // "") | contains($run))
           ' <<< "$workflow" > /dev/null
