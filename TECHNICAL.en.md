@@ -37,7 +37,7 @@ The bundle contains en.lproj and zh-Hans.lproj with Localizable.strings, InfoPli
 | HIDRemoteMonitor.swift | raw RC003 HID reports, exclusive/compatibility mode, repeat behavior, and active buttons |
 | KeyboardEventSuppressor.swift | short suppression of duplicate native events in compatibility mode |
 | KeyboardInjector.swift | keyboard, media-key, and preset-app actions |
-| RemoteVoiceFunctionMapper.swift | RC003-only voice-button F5 to Fn/Globe mapping and restoration |
+| RemoteVoiceFunctionMapper.swift | RC003-only voice-button F5 mapping to Fn/Globe or Qianwen mode's Right Command, with restoration |
 | AppSettings.swift | persistent audio, language, HID, mapping, and peripheral settings |
 
 ## Bluetooth and ATVV
@@ -62,7 +62,7 @@ Voice data is accumulated by the remote-declared frame size and decoded with hig
 
 ## Audio output
 
-VirtualAudioOutput uses AVAudioEngine and AVAudioPlayerNode with 16 kHz mono Float32 audio. The app enumerates CoreAudio devices that have output channels and writes voice directly to the selected device without changing the system default input or output.
+VirtualAudioOutput uses AVAudioEngine and AVAudioPlayerNode with 16 kHz mono Float32 audio. The app enumerates CoreAudio devices that have output channels and writes voice directly to the selected device. It does not change the system defaults by default. When Qianwen compatibility mode is explicitly enabled, it temporarily uses `MiRemoteV 2ch` as the default input while the remote is available and restores the previous device only while that default remains under SayAll's control.
 
 Test tone audio is generated in memory. It is permitted only when an audio device is configured, RC003 is not streaming voice, and no other test tone is playing. A real voice session or device reconfiguration cancels the tone to avoid blocking voice buffers.
 
@@ -102,6 +102,8 @@ Direction, Back, and volume buttons can hold-repeat. Normal physical button acti
 ## Voice-button Fn mapping
 
 The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. `RemoteVoiceFunctionMapper` matches only RC003 vendor/product IDs and, by default, maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03. While custom button mapping is enabled, the same component maps RC003 Keyboard Power usage 0x66 to F20 usage 0x6F.
+
+The opt-in Qianwen compatibility mode maps the same voice button to Right GUI / Right Command on usage page 0x07, usage 0xE7, selects `MiRemoteV 2ch`, and reversibly manages the system default input while the audio path is available. It is mutually exclusive with Fn tap mode. Legacy configurations without `qianwenVoiceModeEnabled` treat it as off.
 
 The opt-in Typeless compatibility mode first requires Accessibility permission, then transactionally maps F5 to usage 0 on every matching RC003 service. Missing targets or any partial failure roll back all changes, disable the setting, and restore the default Fn mapping. Once enabled, `VoiceFnTapSessionController` buffers pre-roll at physical voice-stream start and writes it to the loopback device only after the opening Fn tap succeeds. On release it waits for `VirtualAudioOutput.endSessionAfterDraining` before sending the matching closing Fn tap. Generations and cancellable tasks isolate rapid consecutive sessions and clean up on disable, disconnect, reconnect, or app exit; a failed opening tap never produces a closing tap.
 

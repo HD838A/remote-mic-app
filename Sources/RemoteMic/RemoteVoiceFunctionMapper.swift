@@ -39,6 +39,13 @@ enum RemoteVoiceFunctionMappingPolicy {
         destination: 0x0000_00FF_0000_0003
     )
 
+    // Qianwen's default macOS voice shortcut is Right Command. Keep the
+    // physical hold-to-talk lifecycle while changing only the key macOS sees.
+    static let rightCommandRemoteVoiceKey = HIDUsageMapping(
+        source: 0x0000_0007_0000_003E,
+        destination: 0x0000_0007_0000_00E7
+    )
+
     // Typeless 等点按式语音工具会被 Fn 长按干扰；此模式下彻底丢弃语音键的
     // 按键事件（目标 usage 0），Fn 点按改由软件注入，避免物理按键按住时干扰注入。
     static let neutralRemoteVoiceKey = HIDUsageMapping(
@@ -135,7 +142,8 @@ final class RemoteVoiceFunctionMapper {
     @discardableResult
     func apply(
         suppressPowerKey: Bool = false,
-        neutralizeVoiceKey: Bool = false
+        neutralizeVoiceKey: Bool = false,
+        mapVoiceKeyToRightCommand: Bool = false
     ) -> Bool {
         let services = serviceProvider()
         let matchedCount = services.count
@@ -190,7 +198,9 @@ final class RemoteVoiceFunctionMapper {
                 to: current,
                 voiceMapping: neutralizeVoiceKey
                     ? RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
-                    : RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+                    : mapVoiceKeyToRightCommand
+                        ? RemoteVoiceFunctionMappingPolicy.rightCommandRemoteVoiceKey
+                        : RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
                 powerMapping: suppressPowerKey
                     ? RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
                     : originalMappings[registryID]?.power

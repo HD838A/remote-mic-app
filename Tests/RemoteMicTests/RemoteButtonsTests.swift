@@ -1497,6 +1497,37 @@ struct RemoteButtonsTests {
         #expect(!target.voiceFnTapModeEnabled)
     }
 
+    @Test func qianwenVoiceModePersistsExportsAndWinsOverFnTapMode() throws {
+        let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.qianwenVoiceModeEnabled = true
+        source.voiceFnTapModeEnabled = true
+
+        let restarted = AppSettings(defaults: sourceDefaults)
+        #expect(restarted.qianwenVoiceModeEnabled)
+        #expect(!restarted.voiceFnTapModeEnabled)
+
+        let exported = try restarted.exportedConfigurationData()
+        let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.qianwenVoiceModeEnabled)
+        #expect(!target.voiceFnTapModeEnabled)
+
+        var legacyObject = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "qianwenVoiceModeEnabled")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(!target.qianwenVoiceModeEnabled)
+    }
+
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

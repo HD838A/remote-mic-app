@@ -22,6 +22,7 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
+    let qianwenVoiceModeEnabled: Bool?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -241,6 +242,7 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let qianwenVoiceModeEnabled = "qianwenVoiceModeEnabled"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
@@ -346,6 +348,15 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
+            )
+        }
+    }
+
+    @Published var qianwenVoiceModeEnabled: Bool {
+        didSet {
+            defaults.set(
+                qianwenVoiceModeEnabled,
+                forKey: Keys.qianwenVoiceModeEnabled
             )
         }
     }
@@ -530,9 +541,11 @@ final class AppSettings: ObservableObject {
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
-        voiceFnTapModeEnabled = defaults.bool(
-            forKey: Keys.voiceFnTapModeEnabled
-        )
+        let savedQianwenVoiceModeEnabled = defaults.bool(forKey: Keys.qianwenVoiceModeEnabled)
+        qianwenVoiceModeEnabled = savedQianwenVoiceModeEnabled
+        voiceFnTapModeEnabled = savedQianwenVoiceModeEnabled
+            ? false
+            : defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -1286,6 +1299,7 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
+            qianwenVoiceModeEnabled: qianwenVoiceModeEnabled,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -1346,7 +1360,10 @@ final class AppSettings: ObservableObject {
         if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
-        voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
+        qianwenVoiceModeEnabled = configuration.qianwenVoiceModeEnabled ?? false
+        voiceFnTapModeEnabled = qianwenVoiceModeEnabled
+            ? false
+            : configuration.voiceFnTapModeEnabled ?? false
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup

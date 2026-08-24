@@ -53,7 +53,7 @@ SayAll is built natively with SwiftUI. While running in the background, it uses 
 
 ### Speak to type
 
-Hold to speak and release to stop. Add text to the app you are using without interrupting a meeting or pausing your music. SayAll does not automatically change the Mac's default input or output devices.
+Hold to speak and release to stop. Add text to the app you are using without interrupting a meeting or pausing your music. SayAll does not change the Mac's default input or output devices by default; only the explicitly enabled Qianwen compatibility mode temporarily manages the default input.
 
 ### Press once to do more (new capability, real-world validation in progress)
 
@@ -122,6 +122,12 @@ The app checks for updates once per day and asks before installing a newer versi
 
 To confirm the audio path, send a one-second test tone or inspect input level in QuickTime Player's **New Audio Recording** window.
 
+### Qianwen Input Method compatibility
+
+To keep Qianwen Input Method's default Right Command voice shortcut, enable **Qianwen Compatibility Mode** under **Connection & Voice**. SayAll maps the RC003 voice button to Right Command, selects `MiRemoteV 2ch`, and temporarily makes it the system default microphone only while the remote and audio output are available. It restores the previous input when the mode is disabled, the remote disconnects, or SayAll quits. If you manually choose another system default microphone while the mode is active, SayAll does not overwrite that choice.
+
+You must still hold the remote voice button while speaking and release it to finish. Qianwen mode and **Simulate Fn Tap on Voice Key** are mutually exclusive; enabling either one disables the other.
+
 ### Typeless compatibility
 
 Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝牙遥控器 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** under **Connection & Voice** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
@@ -171,7 +177,7 @@ For AI-assisted installation, consent, client connection, and verification, give
 - Input Monitoring: identify ordinary remote buttons.
 - Accessibility: send mapped button actions to the active app.
 
-SayAll does not upload or store voice, does not change the system default input or output device, and does not log voice content, Bluetooth addresses, or peripheral identifiers.
+SayAll does not upload or store voice and does not change the system default input or output device by default. Only the explicitly enabled Qianwen compatibility mode temporarily manages the default input while the remote is available, restoring it on disable, disconnect, or exit. Voice content, Bluetooth addresses, and peripheral identifiers are never logged.
 
 ## Uninstall
 

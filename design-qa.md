@@ -105,6 +105,14 @@ final result: passed（上述人工状态与窗口边界除外）
 
 final result: passed（真实遥控器与真实系统快捷键验收除外）
 
+## 2026-08-24 千问兼容模式
+
+- “连接与语音”的既有兼容面板内增加单一开关，不新增下拉列表、Popover、Sheet 或确认弹窗；标题、说明固定不小于 12pt。
+- 开关说明同时写明右 Command、`MiRemoteV 2ch`、临时默认输入和自动恢复，不把修改系统输入隐藏为后台副作用。
+- 自动化已覆盖开关入口、字号、配置兼容和互斥状态。中文/英文、浅色/深色、`800 × 650`、真实 RC003、千问输入法和系统默认麦克风恢复仍按 `Testing/QianwenInputMethodCompatibility.md` 人工验收。
+
+final result: automated checks passed; real desktop acceptance pending.
+
 ### 快速连接补充约束
 
 - Codex、Claude Code、Cursor、OpenCode 使用页面内两列卡片，不使用下拉列表、Popover 或 Sheet；每张卡显示客户端图标或回退图标、名称、检测/连接状态和单一主操作。

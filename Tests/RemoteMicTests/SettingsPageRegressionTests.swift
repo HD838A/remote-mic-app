@@ -196,6 +196,23 @@ struct SettingsPageRegressionTests {
         #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
     }
 
+    @Test func qianwenCompatibilityStaysInlineAndReadable() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("model.setQianwenVoiceModeEnabled($0)"))
+        let title = try #require(source.range(of: "audio.compatibility.qianwen_mode.title"))
+        let labelBlock = source[title.lowerBound...].prefix(600)
+        #expect(labelBlock.contains(".font(.system(size: 12"))
+        #expect(!labelBlock.contains(".sheet"))
+        #expect(!labelBlock.contains("Popover"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -425,12 +442,13 @@ struct SettingsPageRegressionTests {
 
         for requiredAction in [
             "model.reconnect()",
-            "model.applyAudioSettings()",
+            "model.selectAudioDevice(value)",
             "model.refreshAudioDevices()",
             "model.sendTestTone()",
             "model.selectDoubaoAudioDevice()",
             "model.openDoubaoDriverInstructions(using: localization)",
             "model.setVoiceFnTapModeEnabled",
+            "model.setQianwenVoiceModeEnabled",
             "model.togglePhoneRemoteConnection()",
             "model.toggleWatchRemoteConnection()",
             "copyTestFlightPublicBetaLink()",
