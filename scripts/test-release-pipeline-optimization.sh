@@ -62,6 +62,8 @@ fi
 /bin/cp "$ROOT/scripts/reconcile-release-event.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/release-variant.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/test.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/test-release-resume-workflow.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/verify-release-control-plane-diff.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-app.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-dmg.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-doubao-driver.sh" "$TEST_REPO/scripts/"
@@ -280,6 +282,18 @@ if /usr/bin/grep -Eq \
   exit 1
 fi
 /usr/bin/grep -Fq 'reuse_parent_main_ci=false' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'release_control_plane_only' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'name: Release control-plane tests' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq "if: needs.classify_changes.outputs.release_control_plane_only == 'true'" \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'Validate recovery control plane' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'test -r scripts/resume-preview-publication.sh' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'verify-release-control-plane-diff.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"

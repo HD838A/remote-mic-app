@@ -17,9 +17,9 @@
 - 首个候选 attempt 必须从创建时最新 `origin/main` 创建，只允许包含版本号、Build、对应版本历史和测试手册目标版本等发布元数据。创建后冻结 `baseMainCommit`、候选 SHA、版本、Build、Release Notes 和发布流水线 digest。
 - 不得在候选分支直接开发功能、合入其他开发分支或混入尚未验收的工作树内容。
 - 同一 SHA 发生基础设施、Runner、审批、Apple、GitHub 或 CDN 失败时，只能在同一分支和 Draft PR 上重试同一 attempt；候选 SHA、版本、Build、`request_id` 和该 attempt 的 `release_ready_at` 均不得改变。
-- 只有候选内容、基线或发布流水线确实变化时，才能结束旧 attempt，并在同一版本分支和同一 Draft PR 上建立新 SHA 的 replacement attempt。该版本分支仍只保留一个直接位于冻结 base 之后的 metadata-only candidate Commit；更新前必须核对远端 head 等于预期旧 SHA，并使用显式 compare-and-swap / `force-with-lease` 等受控更新。不得普通 force-push，也不得并存第二个 active 候选分支或 PR；旧 SHA、Run、attestation 和失败原因必须保留。
-- 冻结后 `main` 可继续前进。只要 `baseMainCommit` 仍是当前 `origin/main` 的祖先，且基线与当前 `main` 的发布流水线 digest 一致，候选仍有效；只有 digest 变化等发布关键差异才要求 replacement attempt。
-- 发布流水线资格验证与产品候选解耦。仅当 `release-pipeline-digest.sh` 的结果变化且尚无对应的成功资格证明时，才把已有普通流水线变更 PR 的 exact SHA 临时映射为 `release/pipeline-qualification/<pr号或短SHA>` ref，以满足 `mac-release` Environment 的分支策略并执行 `release_mode=qualification`。该 alias 不创建第二个 PR，也不是产品候选；资格 artifact 记录原普通 PR、完整执行闭包 digest、外部 Action/私有仓库 Commit 和实际 Runner 工具链，后续 verifier 要求该 PR 已合入 `main`，并从 `refs/pull/<n>/head` 取得原 source Commit 重算 digest。Preview 必须与这些 Commit 和工具链逐项完全一致。证明按 digest 复用，不依赖 alias 永久存在，不创建版本候选、Tag、Release、appcast 或产品分发资产，也不占用版本或 Build。
+- 只有候选内容、基线或制品闭包确实变化时，才能结束旧 attempt，并在同一版本分支和同一 Draft PR 上建立新 SHA 的 replacement attempt。该版本分支仍只保留一个直接位于冻结 base 之后的 metadata-only candidate Commit；更新前必须核对远端 head 等于预期旧 SHA，并使用显式 compare-and-swap / `force-with-lease` 等受控更新。不得普通 force-push，也不得并存第二个 active 候选分支或 PR；旧 SHA、Run、attestation 和失败原因必须保留。
+- 冻结后 `main` 可继续前进。候选的签名/打包制品闭包由原始 attestation 和候选 digest 固定；只要 `baseMainCommit` 仍是当前 `origin/main` 的祖先，候选仍有效。仅影响恢复、Release/API 编排、SLO/watchdog、provenance 读取或公开字节协调的控制面修复，不改变已签名制品，也不要求 replacement candidate、双架构产品 CI 或 protected qualification。
+- 发布流水线资格验证只适用于会改变 App/PKG/DMG 生成、签名、公证、Sparkle 元数据、制品清单或最终字节验收闭包的变更。恢复控制面变更必须通过普通 PR、单机 macOS 静态/fixture 测试和主线保护检查；`resume-preview` 只验证原始候选的历史 pipeline digest 与签名 artifact，不得要求当前 main 为该 digest 重新生成 qualification artifact。资格证明按制品闭包 digest 复用，不依赖恢复脚本的每次修复，也不创建版本候选、Tag、Release、appcast 或产品分发资产，也不占用版本或 Build。
 - 候选分支在正式晋升完成前必须保留在远端，供来源校验、自动合并和 Release 守卫使用。
 
 ## 发布交接清单
@@ -45,10 +45,17 @@
 - 硬指标：Preview 和正式晋升从 `release_ready_at` 起均须在 30 分钟内成功或明确失败。达到内部 29 分钟截止仍未完成时，watchdog 必须取消本次登记的 Run 并明确失败，不得盲目重试、延长签名门限或继续静默等待。`request_started_at` 到最终结果的总耗时必须完整汇报，但不会截短尚未开始的 30 分钟纯发布窗口。
 - Preview 优化目标继续保持候选元数据尽快完成、双架构签名与公证并行、GitHub/CDN 公开验证并行；这些是缩短发布时间的目标，不再构成额外的更短硬取消条件。签名 composite step 继续保留 10 分钟硬限，内部 supervisor 限 540 秒；publication supervisor 限 180 秒。
 
+## 发布控制面快速路径
+
+- 发布控制面包括恢复已签名 artifact、生成/校验 provenance、GitHub Release/Tag/API 操作、SLO ledger、watchdog、Release Guard 和公开字节协调；这些步骤不得重新构建、签名、公证或修改制品字节。
+- 仅修改控制面脚本和对应 fixture/静态测试时，PR 使用 `release-control-plane-only` CI 快速路径：一次 macOS shell/fixture 测试即可，不启动 Apple Silicon/Intel Swift 双架构矩阵，不进入 `mac-release` Environment。
+- 控制面 PR 合入 `main` 后，可以直接恢复同一候选 SHA、同一 Tag、同一签名 artifact 和同一 request ID；不得因为控制面 digest 变化而新建 qualification ref、重新签名或提高版本号。
+- 如果控制面改动触及 `package-macos-release*`、签名/公证、DMG/PKG、Sparkle appcast、制品清单或改变签名/来源信任边界的 verifier，必须重新归类为制品闭包变更，恢复快速路径立即失效并按完整 qualification 处理。只读取既有已签名资产、校验版本/摘要/公开下载字节的 verifier 修复，仍属于控制面，但必须用固定 signed-artifact fixture 覆盖。
+
 ## 预览候选流程
 
 1. 将计划发布的功能通过 PR 合入 `main`，等待 macOS CI 通过。
-2. 计算当前发布流水线 digest。若已有同 digest 的成功受保护资格证明，直接复用。流水线变更应在其普通 PR 合入 `main` 前，将该 PR exact SHA 临时映射为 `release/pipeline-qualification/<pr号或短SHA>` ref，并执行 `release_mode=qualification`；不得为 alias 再建 PR。资格验证使用真实 Developer ID/Notary 路径，但只上传按 digest 命名的资格证明和必要的无敏感账本，不创建版本候选、Tag、Release、appcast 或产品分发资产。普通 PR 合入后，产品候选 verifier 还必须通过原 PR ref 重算 source digest，确认资格证明精确覆盖当前流水线。
+2. 计算制品闭包 digest。若已有同 digest 的成功受保护资格证明，直接复用。只有影响 App/PKG/DMG 生成、签名、公证、Sparkle 元数据、制品清单或最终字节验收的流水线变更，才在其普通 PR 合入 `main` 前，将该 PR exact SHA 临时映射为 `release/pipeline-qualification/<pr号或短SHA>` ref，并执行 `release_mode=qualification`；不得为 alias 再建 PR。恢复/Release/API/SLO 控制面变更走单机 macOS fixture 快速路径，不进入该 Environment。资格验证使用真实 Developer ID/Notary 路径，但只上传按 digest 命名的资格证明和必要的无敏感账本，不创建版本候选、Tag、Release、appcast 或产品分发资产。普通 PR 合入后，产品候选 verifier 还必须通过原 PR ref 重算制品闭包 digest，确认资格证明精确覆盖当前流水线。
 3. 从当时最新 `origin/main` 创建唯一 `release/pre-vX.Y.Z` 分支，只修改 `Resources/Info.plist`、中英文 `ReleaseHistory.md`，以及确有必要的 `Testing/*.md` 目标版本。候选必须是冻结 `baseMainCommit` 之后的单个 metadata-only Commit，并冻结 exact SHA、版本、Build、Release Notes 与 pipeline digest。
 4. Push 候选后立即运行 `scripts/prepare-preview-recording-pr.sh`，只创建一个指向 exact SHA 的 Draft 回流 PR。`macOS Preview Candidate` 与 Draft PR CI 可同时运行；两者在严格 metadata-only 时复用冻结 `baseMainCommit` 已通过的 Apple Silicon/Intel Swift tests、项目自检和 Release build 证明，不重复编译同一产品代码。产品代码、依赖、workflow、entitlements 或打包差异必须返回开发，不得以 fast path 发布。
 5. Preview 候选结构检查和 Draft PR CI 可并行；受保护签名、公证与公开 Preview 发布不能与它们并行。只有 exact SHA、唯一 Draft PR、两个架构必需检查、冻结 base 的 main CI 以及当前 digest 资格证明全部成功后，才能冻结该 attempt 的 `release_ready_at` 并进入 `mac-release` Environment。

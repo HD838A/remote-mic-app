@@ -54,6 +54,11 @@ PIPELINE_FILES=(
   scripts/verify-preview-candidate-ci.sh
 )
 
+CONTROL_PLANE_ONLY_SCRIPTS=(
+  scripts/test-release-resume-workflow.sh
+  scripts/verify-release-control-plane-diff.sh
+)
+
 PIPELINE_TREES=(
   packaging/release-variants
   packaging/doubao-driver
@@ -127,6 +132,9 @@ for relative_path in "${PIPELINE_PATHS[@]}"; do
   )"
   for referenced_path in "${(@f)referenced_scripts}"; do
     [[ -n "$referenced_path" ]] || continue
+    if (( ${CONTROL_PLANE_ONLY_SCRIPTS[(Ie)$referenced_path]} )); then
+      continue
+    fi
     if (( ${+PIPELINE_PATH_SET[$referenced_path]} )); then
       continue
     fi
