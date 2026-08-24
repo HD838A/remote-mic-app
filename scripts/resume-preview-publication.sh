@@ -98,14 +98,14 @@ done
 git -C "$CANDIDATE_DIR" init -q
 git -C "$CANDIDATE_DIR" remote add origin "https://github.com/$REPOSITORY.git"
 git -C "$CANDIDATE_DIR" fetch --quiet --no-tags origin \
-  "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" \
+  "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" \
   "refs/heads/main:refs/remotes/origin/main" \
-  "refs/tags/$TAG:refs/tags/$TAG"
+  "refs/tags/${TAG}:refs/tags/${TAG}"
 git -C "$CANDIDATE_DIR" checkout -q --detach "$EXPECTED_COMMIT"
 git -C "$CANDIDATE_DIR" rev-parse --verify "refs/remotes/origin/$BRANCH" | grep -Fxq "$EXPECTED_COMMIT" || fail "candidate branch changed"
 git -C "$CANDIDATE_DIR" rev-parse --verify "$TAG^{commit}" | grep -Fxq "$EXPECTED_COMMIT" || fail "candidate tag changed"
 
-attestation_name="release-request-attestation-${TAG#v}-$EXPECTED_COMMIT"
+attestation_name="release-request-attestation-$TAG-$EXPECTED_COMMIT"
 attestation_records="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" | jq -r --arg name "$attestation_name" '.artifacts[] | select(.name == $name and .expired == false) | [.id, (.digest // "")] | @tsv')"
 [[ "$(print -r -- "$attestation_records" | awk 'NF {n++} END {print n+0}')" == 1 ]] || fail "source request attestation artifact is not unique"
 IFS=$'\t' read -r attestation_id attestation_digest <<< "$attestation_records"
