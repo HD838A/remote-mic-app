@@ -3,6 +3,64 @@ import Testing
 
 @Suite("RC003 hardware Fn mapping")
 struct RemoteVoiceFunctionMapperTests {
+    @Test func commandBluetoothStreamRequiresCompleteCurrentNeutralization() {
+        let original = [HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 5)]
+        let first = MappingServiceBox(registryID: 1, mappings: original)
+        let second = MappingServiceBox(registryID: 2, mappings: original, acceptsWrites: false)
+        var services: [RemoteVoiceMappingService] = []
+        let mapper = RemoteVoiceFunctionMapper { services }
+
+        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!BridgeAppModel.canStartBluetoothVoice(
+            mode: .leftCommand,
+            isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
+        ))
+        #expect(BridgeAppModel.canStartBluetoothVoice(
+            mode: .function,
+            isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
+        ))
+        #expect(!BridgeAppModel.canStartBluetoothVoice(
+            mode: .function,
+            voiceFnTapModeEnabled: true,
+            isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
+        ))
+
+        services = [first.service, second.service]
+        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!BridgeAppModel.canStartBluetoothVoice(
+            mode: .rightCommand,
+            isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
+        ))
+
+        second.acceptsWrites = true
+        #expect(mapper.apply(neutralizeVoiceKey: true))
+        #expect(BridgeAppModel.canStartBluetoothVoice(
+            mode: .leftCommand,
+            isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
+        ))
+        #expect(BridgeAppModel.canStartBluetoothVoice(
+            mode: .rightCommand,
+            isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
+        ))
+        #expect(BridgeAppModel.canStartBluetoothVoice(
+            mode: .function,
+            voiceFnTapModeEnabled: true,
+            isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
+        ))
+
+        let newlyEnumeratedFailure = MappingServiceBox(
+            registryID: 3,
+            mappings: original,
+            acceptsWrites: false
+        )
+        services.append(newlyEnumeratedFailure.service)
+        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!BridgeAppModel.canStartBluetoothVoice(
+            mode: .rightCommand,
+            isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
+        ))
+    }
+
     @Test func replacesOnlyTheRemoteF5Mapping() {
         let unrelated = HIDUsageMapping(
             source: 0x0000_0007_0000_0004,
@@ -107,9 +165,19 @@ struct RemoteVoiceFunctionMapperTests {
         let mapper = RemoteVoiceFunctionMapper { [missingID.service] }
 
         #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(mapper.hasMatchingServices)
         #expect(!mapper.isApplied)
         #expect(!mapper.isVoiceKeyNeutralized)
         #expect(missingID.writeCount == 0)
+    }
+
+    @Test func reportsWhenNoMatchingRemoteServiceIsPresent() {
+        let mapper = RemoteVoiceFunctionMapper { [] }
+
+        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.hasMatchingServices)
+        #expect(mapper.matchedServiceCount == 0)
+        #expect(!mapper.isVoiceKeyNeutralized)
     }
 
     @Test func failedRollbackKeepsTheOriginalMappingForLaterRestore() {

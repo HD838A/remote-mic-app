@@ -6,26 +6,43 @@ enum VoiceFunctionKeyTransition: Equatable {
 }
 
 struct VoiceFunctionKeyLatch {
-    private(set) var isHeld = false
-
-    mutating func transition(streaming: Bool) -> VoiceFunctionKeyTransition? {
-        if streaming {
-            guard !isHeld else { return nil }
-            isHeld = true
-            return .press
-        }
-
-        guard isHeld else { return nil }
-        isHeld = false
-        return .release
+    enum Owner: Hashable {
+        case bluetooth
+        case mobile
     }
 
-    mutating func rollback(_ transition: VoiceFunctionKeyTransition) {
+    private var owners: Set<Owner> = []
+
+    var isHeld: Bool {
+        !owners.isEmpty
+    }
+
+    mutating func transition(
+        streaming: Bool,
+        owner: Owner
+    ) -> VoiceFunctionKeyTransition? {
+        if streaming {
+            guard owners.insert(owner).inserted else { return nil }
+            return owners.count == 1 ? .press : nil
+        }
+
+        guard owners.remove(owner) != nil else { return nil }
+        return owners.isEmpty ? .release : nil
+    }
+
+    mutating func rollback(
+        _ transition: VoiceFunctionKeyTransition,
+        owner: Owner
+    ) {
         switch transition {
         case .press:
-            isHeld = false
+            owners.remove(owner)
         case .release:
-            isHeld = true
+            owners.insert(owner)
         }
+    }
+
+    mutating func reset() {
+        owners.removeAll()
     }
 }

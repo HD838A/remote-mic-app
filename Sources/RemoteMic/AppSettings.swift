@@ -4,6 +4,12 @@ import Foundation
 enum AppConfigurationError: Error {
     case unsupportedVersion
     case invalidValues
+    case unsafeVoiceKeyChange
+}
+
+struct VoiceKeyConfigurationState: Equatable {
+    let mode: VoiceKeyMode
+    let fnTapModeEnabled: Bool
 }
 
 private struct PersonalizedConfiguration: Codable {
@@ -22,6 +28,7 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
+    let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -241,6 +248,7 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let voiceKeyMode = "voiceKeyMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
@@ -347,6 +355,12 @@ final class AppSettings: ObservableObject {
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
             )
+        }
+    }
+
+    @Published var voiceKeyMode: VoiceKeyMode {
+        didSet {
+            defaults.set(voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
         }
     }
 
@@ -533,6 +547,9 @@ final class AppSettings: ObservableObject {
         voiceFnTapModeEnabled = defaults.bool(
             forKey: Keys.voiceFnTapModeEnabled
         )
+        voiceKeyMode = VoiceKeyMode(
+            rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
+        ) ?? .function
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -670,7 +687,7 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
-        let shouldEnableFnTap = voiceTool == .typeless
+        let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
         if voiceFnTapModeEnabled != shouldEnableFnTap {
             voiceFnTapModeEnabled = shouldEnableFnTap
         }
@@ -1286,6 +1303,7 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
+            voiceKeyMode: voiceKeyMode,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -1293,14 +1311,28 @@ final class AppSettings: ObservableObject {
         return try encoder.encode(configuration)
     }
 
+    var voiceKeyConfigurationState: VoiceKeyConfigurationState {
+        VoiceKeyConfigurationState(
+            mode: voiceKeyMode,
+            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function
+        )
+    }
+
+    func voiceKeyConfigurationState(in data: Data) throws -> VoiceKeyConfigurationState {
+        let configuration = try Self.validatedConfiguration(from: data)
+        let mode = configuration.voiceKeyMode ?? .function
+        return VoiceKeyConfigurationState(
+            mode: mode,
+            fnTapModeEnabled: (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
+        )
+    }
+
     func importConfiguration(from data: Data) throws {
-        let configuration = try JSONDecoder().decode(PersonalizedConfiguration.self, from: data)
-        guard configuration.formatVersion == 1 else {
-            throw AppConfigurationError.unsupportedVersion
-        }
-        guard configuration.gainDB.isFinite, (0...24).contains(configuration.gainDB) else {
-            throw AppConfigurationError.invalidValues
-        }
+        let configuration = try Self.validatedConfiguration(from: data)
+        let importedVoiceKeyConfiguration = VoiceKeyConfigurationState(
+            mode: configuration.voiceKeyMode ?? .function,
+            fnTapModeEnabled: configuration.voiceFnTapModeEnabled ?? false
+        )
 
         let importedBindings = Dictionary(
             uniqueKeysWithValues: configuration.buttonBindings.compactMap { key, value in
@@ -1346,11 +1378,23 @@ final class AppSettings: ObservableObject {
         if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
-        voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
+        voiceKeyMode = importedVoiceKeyConfiguration.mode
+        voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup
         )
+    }
+
+    private static func validatedConfiguration(from data: Data) throws -> PersonalizedConfiguration {
+        let configuration = try JSONDecoder().decode(PersonalizedConfiguration.self, from: data)
+        guard configuration.formatVersion == 1 else {
+            throw AppConfigurationError.unsupportedVersion
+        }
+        guard configuration.gainDB.isFinite, (0...24).contains(configuration.gainDB) else {
+            throw AppConfigurationError.invalidValues
+        }
+        return configuration
     }
 
     private func saveBindings() {
