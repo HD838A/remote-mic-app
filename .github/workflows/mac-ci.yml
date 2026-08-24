@@ -171,13 +171,14 @@ jobs:
         if: needs.classify_changes.outputs.reuse_parent_main_ci == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          GITHUB_REF_NAME: ${{ github.head_ref }}
+          PREVIEW_CANDIDATE_BRANCH: ${{ github.head_ref }}
         run: |
           git checkout --detach "${{ github.event.pull_request.head.sha }}"
           trusted_runner="$RUNNER_TEMP/run-trusted-release-validation.sh"
           git show "${{ github.event.pull_request.base.sha }}:scripts/run-trusted-release-validation.sh" > "$trusted_runner"
           chmod 755 "$trusted_runner"
-          REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 "$trusted_runner"
+          GITHUB_REF_NAME="$PREVIEW_CANDIDATE_BRANCH" \
+            REPOSITORY_ROOT="$GITHUB_WORKSPACE" ALLOW_FROZEN_BASE_MAIN=1 "$trusted_runner"
           echo "Release metadata-only PR; exact parent main already passed both architecture lanes."
 
       - name: Enforce extracted repository boundaries

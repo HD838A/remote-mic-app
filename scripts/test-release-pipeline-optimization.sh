@@ -268,8 +268,16 @@ if /usr/bin/grep -Fq -- '-canary-' \
 fi
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
-/usr/bin/grep -Fq 'GITHUB_REF_NAME: ${{ github.head_ref }}' \
+/usr/bin/grep -Fq 'PREVIEW_CANDIDATE_BRANCH: ${{ github.head_ref }}' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'GITHUB_REF_NAME="$PREVIEW_CANDIDATE_BRANCH" \' \
+  "$TEST_REPO/.github/workflows/mac-ci.yml"
+if /usr/bin/grep -Eq \
+    '^[[:space:]]+GITHUB_REF_NAME:[[:space:]]*\$\{\{[[:space:]]*github\.head_ref[[:space:]]*\}\}' \
+    "$TEST_REPO/.github/workflows/mac-ci.yml"; then
+  print -u2 "macOS CI must not try to override GitHub's reserved GITHUB_REF_NAME through YAML env"
+  exit 1
+fi
 /usr/bin/grep -Fq 'reuse_parent_main_ci=false' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
