@@ -39,6 +39,7 @@ PIPELINE_FILES=(
   scripts/resolve-stable-request-attestation.sh
   scripts/run-trusted-release-validation.sh
   scripts/test.sh
+  scripts/test-release-pipeline-optimization.sh
   scripts/verify-app.sh
   scripts/verify-dmg.sh
   scripts/verify-doubao-driver.sh
