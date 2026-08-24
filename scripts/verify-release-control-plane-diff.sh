@@ -47,7 +47,7 @@ normalize_mac_ci() {
       skipping_case = 0
       next
     }
-    !skipping_classifier && !skipping_case && $0 ~ /scripts\/publish-release\.sh\|/ {
+    !skipping_classifier && !skipping_case && ($0 ~ /scripts\/publish-release\.sh\|/ || $0 ~ /\.github\/workflows\/mac-ci\.yml\)/) {
       skipping_case = 1
       next
     }

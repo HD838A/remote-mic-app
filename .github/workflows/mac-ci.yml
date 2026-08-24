@@ -94,9 +94,7 @@ jobs:
                 docs_only=false
                 ;;
               .github/workflows/mac-ci.yml)
-                release_control_plane_changed=true
-                docs_only=false
-                ;;
+                release_control_plane_changed=true; docs_only=false ;;
               *)
                 docs_only=false
                 release_control_plane_only=false
