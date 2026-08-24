@@ -1,5 +1,9 @@
 # Version History
 
+## 1.9.10 (Pre-release)
+
+- Combination Actions are now available by default, with no invitation code required to view, create, bind, or use them.
+
 ## 1.9.9 (Pre-release)
 
 - Added an opt-in “Launch at login” setting under About → App Preferences, with a direct link to macOS Login Items Settings when approval is required.
