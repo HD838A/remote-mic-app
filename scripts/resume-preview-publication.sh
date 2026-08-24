@@ -135,7 +135,8 @@ fi
 
 candidate_pipeline_digest="$(jq -r '.pipelineDigest' "$attestation")"
 [[ "$candidate_pipeline_digest" =~ '^[0-9a-f]{64}$' ]] || fail "candidate pipeline digest is invalid"
-REPOSITORY_ROOT="$CANDIDATE_DIR" "$ROOT/scripts/release-pipeline-digest.sh" | grep -Fxq "$candidate_pipeline_digest" || fail "candidate pipeline digest changed"
+# Recompute with the exact candidate manifest; main may have added release files since it was signed.
+REPOSITORY_ROOT="$CANDIDATE_DIR" "$CANDIDATE_DIR/scripts/release-pipeline-digest.sh" | grep -Fxq "$candidate_pipeline_digest" || fail "candidate pipeline digest changed"
 
 /bin/mkdir -p "$CANDIDATE_DIR/dist"
 /usr/bin/ditto --norsrc --noqtn --noacl "$ARTIFACT_DIR/" "$CANDIDATE_DIR/dist/"

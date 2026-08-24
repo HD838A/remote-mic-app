@@ -38,6 +38,10 @@ for required_text in \
   /usr/bin/grep -Fq -- "$required_text" "$WORKFLOW"
 done
 
+/usr/bin/grep -Fq -- \
+  'REPOSITORY_ROOT="$CANDIDATE_DIR" "$CANDIDATE_DIR/scripts/release-pipeline-digest.sh"' \
+  "$ROOT/scripts/resume-preview-publication.sh"
+
 package_if_line="$(/usr/bin/grep -nF "if: \${{ inputs.release_mode == 'qualification' || needs.validate-candidate.outputs.preview_release_action == 'package' }}" "$WORKFLOW" | /usr/bin/awk -F: 'NR == 1 { print $1 }')"
 package_environment_line="$(/usr/bin/awk '/^  package:$/ { in_package = 1; next } in_package && /environment: mac-release/ { print NR; exit }' "$WORKFLOW")"
 if [[ ! "$package_if_line" =~ ^[0-9]+$ ||
