@@ -26,9 +26,22 @@ CONTROL_PLANE_SCRIPTS=(
 
 normalize_workflow() {
   /usr/bin/awk '
+    function replace_once(line, old, replacement, position) {
+      position = index(line, old)
+      if (position == 0) return line
+      return substr(line, 1, position - 1) replacement substr(line, position + length(old))
+    }
+    BEGIN {
+      qualification_open_only = "select(.state == \\\"open\\\" and"
+      qualification_open_or_merged = "select((.state == \\\"open\\\" or .merged_at != null) and"
+    }
     $0 == "  resume-preview-publication:" { skipping = 1; next }
     skipping && $0 ~ /^  [A-Za-z0-9_-]+:/ { skipping = 0 }
-    !skipping { print }
+    !skipping {
+      line = replace_once($0, qualification_open_only, "select(PR_STATE and")
+      line = replace_once(line, qualification_open_or_merged, "select(PR_STATE and")
+      print line
+    }
   '
 }
 

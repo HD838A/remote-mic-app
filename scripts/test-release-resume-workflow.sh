@@ -39,6 +39,10 @@ for required_text in \
   /usr/bin/grep -Fq -- "$required_text" "$WORKFLOW"
 done
 
+/usr/bin/grep -Fq -- '(.state == \"open\" or .merged_at != null)' "$WORKFLOW"
+/usr/bin/grep -Fq -- 'qualification_open_or_merged' \
+  "$ROOT/scripts/verify-release-control-plane-diff.sh"
+
 /usr/bin/grep -Fq -- '      - name: Validate recovery control plane' "$WORKFLOW"
 /usr/bin/awk '
   $0 == "      - name: Validate recovery control plane" {

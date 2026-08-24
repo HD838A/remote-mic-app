@@ -813,7 +813,7 @@ jobs:
           source_pr="$(gh api \
             "repos/$GITHUB_REPOSITORY/commits/${{ inputs.expected_commit }}/pulls" \
             --header 'Accept: application/vnd.github+json' \
-            --jq "[.[] | select(.state == \"open\" and .base.ref == \"main\" and .head.sha == \"${{ inputs.expected_commit }}\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\") | .number] | if length == 1 then .[0] else empty end")"
+            --jq "[.[] | select((.state == \"open\" or .merged_at != null) and .base.ref == \"main\" and .head.sha == \"${{ inputs.expected_commit }}\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\") | .number] | if length == 1 then .[0] else empty end")"
           [[ "$source_pr" =~ ^[1-9][0-9]*$ ]]
           qualification_dir="$RUNNER_TEMP/release-pipeline-qualification"
           /bin/mkdir -p "$qualification_dir"
