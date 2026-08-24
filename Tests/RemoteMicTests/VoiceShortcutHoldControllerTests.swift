@@ -5,6 +5,14 @@ import Testing
 
 @Suite("Voice shortcut hold controller")
 struct VoiceShortcutHoldControllerTests {
+    @Test func syntheticModifiersUseFlagsChangedEvents() {
+        #expect(KeyboardInjector.syntheticKeyEvent(code: 59, isDown: true, flags: .maskControl)?.type == .flagsChanged)
+        #expect(KeyboardInjector.syntheticKeyEvent(code: 59, isDown: false, flags: [])?.type == .flagsChanged)
+        #expect(KeyboardInjector.syntheticKeyEvent(code: 62, isDown: true, flags: .maskControl)?.type == .flagsChanged)
+        #expect(KeyboardInjector.syntheticKeyEvent(code: 9, isDown: true, flags: [])?.type == .keyDown)
+        #expect(KeyboardInjector.syntheticKeyEvent(code: 9, isDown: false, flags: [])?.type == .keyUp)
+    }
+
     @Test func standaloneLeftControlStaysDownUntilRelease() {
         var events: [PostedKeyState] = []
         let controller = VoiceShortcutHoldController { code, isDown, flags in

@@ -366,6 +366,13 @@ let voiceShortcutController = VoiceShortcutHoldController { code, isDown, flags 
 }
 let leftControlVoiceShortcut = StandaloneKeyboardModifier.leftControl.shortcut
 check(
+    KeyboardInjector.syntheticKeyEvent(code: 59, isDown: true, flags: .maskControl)?.type == .flagsChanged &&
+        KeyboardInjector.syntheticKeyEvent(code: 59, isDown: false, flags: [])?.type == .flagsChanged &&
+        KeyboardInjector.syntheticKeyEvent(code: 9, isDown: true, flags: [])?.type == .keyDown &&
+        KeyboardInjector.syntheticKeyEvent(code: 9, isDown: false, flags: [])?.type == .keyUp,
+    "synthetic modifier keys use flags-changed events"
+)
+check(
     voiceShortcutController.press(leftControlVoiceShortcut) &&
         voiceShortcutController.press(leftControlVoiceShortcut) &&
         voiceShortcutController.heldShortcut == leftControlVoiceShortcut &&
