@@ -9,13 +9,14 @@ on:
         required: true
         type: string
       release_mode:
-        description: Qualify a changed release pipeline or publish a verified preview candidate
+        description: Qualify a changed release pipeline, publish a preview candidate, or recover a failed preview publication
         required: true
         default: qualification
         type: choice
         options:
           - qualification
           - preview
+          - resume-preview
       expected_commit:
         description: Required exact 40-character source commit
         required: true
@@ -30,6 +31,22 @@ on:
         type: string
       request_id:
         description: Immutable release-manager request identifier, reused unchanged on retry
+        required: false
+        type: string
+      source_run_id:
+        description: Exact failed preview Run to recover without re-signing
+        required: false
+        type: string
+      source_run_attempt:
+        description: Exact attempt number of the failed preview Run
+        required: false
+        type: string
+      source_artifact_id:
+        description: Exact signed artifact ID produced by the failed preview Run
+        required: false
+        type: string
+      source_artifact_digest:
+        description: API SHA-256 digest of the exact signed artifact
         required: false
         type: string
 
@@ -104,6 +121,7 @@ jobs:
           done
 
   validate-candidate:
+    if: ${{ inputs.release_mode != 'resume-preview' }}
     name: Verify exact preview candidate CI and Draft recording PR
     runs-on: macos-15
     timeout-minutes: 10
@@ -984,5 +1002,104 @@ jobs:
         with:
           name: release-slo-ledger-failed-${{ github.run_id }}
           path: ${{ runner.temp }}/release-slo/release-slo.tsv
+          if-no-files-found: error
+          retention-days: 90
+
+  resume-preview-publication:
+    name: Recover and verify failed preview publication
+    if: ${{ inputs.release_mode == 'resume-preview' }}
+    runs-on: macos-15
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
+      RELEASE_REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
+      RELEASE_REQUEST_ID: ${{ inputs.request_id }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+      SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+      SOURCE_ARTIFACT_DIGEST: ${{ inputs.source_artifact_digest }}
+      EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
+      EXPECTED_STABLE_TAG: v1.8.3
+      ALLOW_FROZEN_BASE_MAIN: 1
+      PUBLIC_DOWNLOAD_CONCURRENCY: 4
+    steps:
+      - name: Check out trusted recovery workflow
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate recovery workflow qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = main
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          [[ "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test "$(./scripts/release-pipeline-digest.sh)" = "$EXPECTED_PIPELINE_DIGEST"
+          ./scripts/verify-release-pipeline-qualification.sh "$EXPECTED_PIPELINE_DIGEST"
+
+      - name: Install recovery validation tools
+        run: |
+          command -v jq >/dev/null || brew install jq
+          command -v rg >/dev/null || brew install ripgrep
+
+      - name: Recover exact signed artifact and publish without re-signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_ACTIONS: true
+          GITHUB_EVENT_NAME: workflow_dispatch
+          GITHUB_WORKFLOW_REF: HD838A/remote-mic-app/.github/workflows/mac-release-package.yml@${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ledger="$RUNNER_TEMP/release-slo.tsv"
+          ./scripts/release-slo-ledger.sh init "$ledger" "$RELEASE_REQUEST_STARTED_AT"
+          ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
+          resume_output="$RUNNER_TEMP/resume-output.txt"
+          ./scripts/resume-preview-publication.sh | tee "$resume_output"
+          candidate="$(awk -F= '$1 == "candidate" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          attestation="$(awk -F= '$1 == "request_attestation" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          candidate_digest="$(awk -F= '$1 == "candidate_pipeline_digest" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          release_ready_at="$(awk -F= '$1 == "release_ready_at" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
+          test -d "$candidate"; test -r "$attestation"
+          ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 signed-artifact-recovery
+          ./scripts/run-release-stage.sh all publication 180 -- \
+            env \
+              RELEASE_SOURCE_ROOT="$candidate" \
+              RELEASE_CANDIDATE_BRANCH="release/pre-$RELEASE_TAG" \
+              RELEASE_REQUEST_ATTESTATION="$attestation" \
+              EXPECTED_PIPELINE_DIGEST="$candidate_digest" \
+              RELEASE_TAG="$RELEASE_TAG" \
+              RELEASE_REQUEST_ID="$RELEASE_REQUEST_ID" \
+              EXPECTED_STABLE_TAG="$EXPECTED_STABLE_TAG" \
+              EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_DEVELOPER_TEAM_ID" \
+              ALLOW_FROZEN_BASE_MAIN=1 \
+              ./scripts/publish-release.sh resume-prerelease
+          ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
+          ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 successful-pipeline
+
+      - name: Upload recovered publication ledger
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-slo-ledger-published-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo.tsv
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload failed recovery ledger
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-slo-ledger-failed-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo.tsv
           if-no-files-found: error
           retention-days: 90

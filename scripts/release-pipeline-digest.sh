@@ -30,6 +30,7 @@ PIPELINE_FILES=(
   scripts/publish-release.sh
   scripts/reconcile-release-event.sh
   scripts/release-pipeline-digest.sh
+  scripts/resume-preview-publication.sh
   scripts/run-release-stage.sh
   scripts/release-slo-ledger.sh
   scripts/release-user-wall-watchdog.sh

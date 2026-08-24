@@ -260,7 +260,7 @@ struct BuildSigningTests {
         #expect(!fastReleaseSource.contains("git push origin main"))
         #expect(notarizeSource.contains("wait \"$install_notary_pid\""))
         #expect(notarizeSource.contains("wait \"$uninstall_notary_pid\""))
-        #expect(publishSource.contains("usage: $0 prerelease|verify-prerelease|promote"))
+        #expect(publishSource.contains("usage: $0 prerelease|resume-prerelease|verify-prerelease|promote"))
         #expect(!publishSource.contains("prerelease|promote|release"))
         #expect(publishSource.contains("EXISTING PRE-RELEASE VERIFICATION PASS"))
         #expect(publishSource.contains("stable promotion is restricted to main"))

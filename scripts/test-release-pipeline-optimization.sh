@@ -56,6 +56,7 @@ fi
 /bin/cp "$ROOT/scripts/build-doubao-driver-pkg.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/package-macos-release-in-actions.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/publish-release.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/resume-preview-publication.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/check-repository-boundaries.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/fast-release.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/reconcile-release-event.sh" "$TEST_REPO/scripts/"
