@@ -180,6 +180,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         userDriverDelegate: nil
     )
 
+    private var updatesEnabled: Bool {
+        !AppBuildMode.isLocalDevelopmentBuild
+    }
+
     private let connectionItem = NSMenuItem()
     private let audioItem = NSMenuItem()
     private let hidItem = NSMenuItem()
@@ -197,8 +201,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             currentBuild: currentBuild,
             sparkleHadLaunchedBefore: UserDefaults.standard.bool(forKey: "SUHasLaunchedBefore")
         )
-        observeUpdatePreferences()
-        configureUpdater()
+        if updatesEnabled {
+            observeUpdatePreferences()
+            configureUpdater()
+        } else {
+            updateInformation.setUnavailable()
+            AppLogger.shared.write("LOCAL DEVELOPMENT BUILD updates_enabled=false")
+        }
         installTerminationSignalHandlers()
         configureApplicationMenu()
         installApplicationKeyboardShortcuts()
@@ -375,7 +384,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(.separator())
         menu.addItem(menuItem("menu.about", action: #selector(showAbout)))
         menu.addItem(versionMenuItem())
-        menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
+        if updatesEnabled {
+            menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
+        }
         menu.addItem(menuItem("about.support.github", action: #selector(openGitHub)))
         menu.addItem(menuItem("about.support.website", action: #selector(openWebsite)))
         menu.addItem(.separator())
@@ -857,6 +868,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func performUpdateCheck(_ purpose: UpdateCheckPurpose) {
+        guard updatesEnabled else {
+            updateInformation.setUnavailable()
+            return
+        }
         updateFeedRefreshTask?.cancel()
         updateFeedRefreshTask = Task { [weak self] in
             guard let self else { return }

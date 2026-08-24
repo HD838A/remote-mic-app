@@ -15,6 +15,13 @@ private func check(_ condition: @autoclosure () -> Bool, _ name: String) {
     }
 }
 
+check(
+    AppBuildMode.isLocalDevelopmentBuild(in: ["SayAllDevelopmentBuild": true]) &&
+        !AppBuildMode.isLocalDevelopmentBuild(in: [:]) &&
+        !AppBuildMode.isLocalDevelopmentBuild(in: ["SayAllDevelopmentBuild": "true"]),
+    "local development build mode is opt-in and type-safe"
+)
+
 let versionOne = ATVVCapabilities.parse(Data([0x0B, 0x01, 0x00, 0x02, 0x03, 0x00, 0x78]))
 check(
     versionOne?.version == 0x0100 &&

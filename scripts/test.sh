@@ -24,6 +24,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/VoiceKeyMode.swift" \
   "$ROOT/Sources/RemoteMic/AppSettings.swift" \
   "$ROOT/Sources/RemoteMic/AppLinks.swift" \
+  "$ROOT/Sources/RemoteMic/AppBuildMode.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFunctionKeyLatch.swift" \
   "$ROOT/Sources/RemoteMic/VoiceAudioLevelMeter.swift" \
