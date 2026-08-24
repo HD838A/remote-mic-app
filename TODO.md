@@ -18,6 +18,7 @@
 - [ ] 通过 SayAll Workshop 受控 Agent 处理需求与 Bug <!-- workshop:status=进行中;priority=P2 -->
   - Agent 只能从 Workshop 生成的 Issue 和固定基础提交开始，只读初检、查重和计划完成后，必须经过管理员批准或受控测试环境的正式策略事件，才能生成 Patch、分支和 Draft PR。
   - Agent Bot 不得直接写入 `main`，不得读取发布、签名、私有依赖或生产 Secret；完整 macOS CI 和真实用户验收仍按 `Testing/AgentAutomation.md` 执行。
+  - 通用 Analyze、Develop、Cancel、Prompt 和 Schema 已迁往 SayAllWorkshop 的中心 `agent-runtime`；本仓库只保留项目策略和受保护 CI 回调适配。合并迁出 PR 前必须先合并、部署并真实 E2E 验证中心 Runtime。
   - 当前仅接入 `remote-mic-app`，测试阶段禁止自动合并和生产部署；测试完成后恢复 `admin-required`。
 - [ ] 在 Mac App 提供官网分享入口
   - “关于”“统计”和全局侧边栏左下角均可展开同一套分享内容；二维码与复制按钮使用同一个带 `from=mac_share` 的本地化官网链接。
