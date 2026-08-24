@@ -212,7 +212,7 @@ struct BuildSigningTests {
         #expect(fastReleaseSource.contains("verify-release-pipeline-qualification.sh"))
         #expect(fastReleaseSource.contains("\"$GH_BIN\" workflow run \"$WORKFLOW_FILE\""))
         #expect(fastReleaseSource.contains("--ref \"$BRANCH\""))
-        #expect(fastReleaseSource.contains("release_mode=preview"))
+        #expect(fastReleaseSource.contains("release_mode=stage-preview"))
         #expect(fastReleaseSource.contains("expected_commit=$HEAD_COMMIT"))
         #expect(fastReleaseSource.contains("expected_pipeline_digest=$PIPELINE_DIGEST"))
         #expect(fastReleaseSource.contains("request_started_at=$REQUEST_STARTED_AT"))
@@ -323,9 +323,7 @@ struct BuildSigningTests {
         #expect(!workflowSource.contains("./scripts/build-dmg.sh"))
         #expect(!workflowSource.contains("swift build -c release"))
         #expect(workflowSource.contains("${{ github.sha }}"))
-        #expect(workflowSource.contains("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"))
-        #expect(workflowSource.contains("76344d4d1a2d477e8f473c901a9f4d3d7b0f107c"))
-        #expect(workflowSource.contains("3f3c782180eef4024b53941c1f65d80e7cff4c66"))
+        #expect(workflowSource.contains("resolve-release-dependencies.sh json"))
         #expect(!workflowSource.contains("SAYALL_AI_DEPLOY_KEY"))
         #expect(!workflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
         #expect(!workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
@@ -347,12 +345,14 @@ struct BuildSigningTests {
             encoding: .utf8
         )
         #expect(ciWorkflowSource.contains("workflow_dispatch:"))
-        #expect(ciWorkflowSource.contains("GetSayAll/sayall-ai"))
-        #expect(ciWorkflowSource.contains("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"))
-        #expect(ciWorkflowSource.contains("GetSayAll/sayall-macro-platform"))
-        #expect(ciWorkflowSource.contains("76344d4d1a2d477e8f473c901a9f4d3d7b0f107c"))
+        #expect(ciWorkflowSource.contains("resolve-release-dependencies.sh github-output"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_ai_repository"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_ai_commit"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_macro_platform_repository"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_macro_platform_commit"))
         #expect(ciWorkflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
-        #expect(ciWorkflowSource.contains("GetSayAll/sayall-mac-remote"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_mac_remote_repository"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_mac_remote_commit"))
         #expect(ciWorkflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(ciWorkflowSource.contains("swift package config set-mirror"))
         #expect(ciWorkflowSource.contains("classify_changes:"))
@@ -373,6 +373,7 @@ struct BuildSigningTests {
             ".github/workflows/mac-ci.yml",
             ".github/workflows/mac-preview-candidate.yml",
             ".github/workflows/mac-release-package.yml",
+            ".github/workflows/mac-preview-publication.yml",
             ".github/workflows/mac-stable-promote.yml",
             ".github/workflows/release-guard.yml",
         ]
@@ -464,6 +465,18 @@ struct BuildSigningTests {
             ),
             encoding: .utf8
         )
+        let publicationWorkflowSource = try String(
+            contentsOf: root.appendingPathComponent(
+                ".github/workflows/mac-preview-publication.yml"
+            ),
+            encoding: .utf8
+        )
+        let requestAttestationSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/resolve-release-request-attestation.sh"
+            ),
+            encoding: .utf8
+        )
         let releasingSource = try String(
             contentsOf: root.appendingPathComponent("RELEASING.md"),
             encoding: .utf8
@@ -515,6 +528,7 @@ struct BuildSigningTests {
         #expect(regressionSource.contains("stable request attestation allowed a retry to reset its timestamp"))
         #expect(regressionSource.contains("--draft"))
         #expect(regressionSource.contains("PARALLEL_RELEASE_VARIANTS=1"))
+        #expect(regressionSource.contains("test-prepare-preview-candidate.sh"))
         #expect(releaseWorkflowSource.contains("validate-candidate:"))
         #expect(releaseWorkflowSource.contains("verify-preview-candidate-ci.sh"))
         #expect(releaseWorkflowSource.contains("REQUIRE_PREVIEW_RECORDING_PR: 1"))
@@ -541,18 +555,18 @@ struct BuildSigningTests {
         #expect(releaseWorkflowSource.contains("release_mode:"))
         #expect(releaseWorkflowSource.contains("run-name: mac-release ${{ inputs.release_mode }}"))
         #expect(releaseWorkflowSource.contains("- qualification"))
-        #expect(releaseWorkflowSource.contains("- preview"))
+        #expect(releaseWorkflowSource.contains("- stage-preview"))
         #expect(releaseWorkflowSource.contains("inputs.release_mode == 'qualification'"))
-        #expect(releaseWorkflowSource.contains("inputs.release_mode == 'preview'"))
+        #expect(releaseWorkflowSource.contains("inputs.release_mode == 'stage-preview'"))
         #expect(!releaseWorkflowSource.contains("inputs.canary"))
         #expect(releaseWorkflowSource.contains("mac-signed-tag-{0}"))
         #expect(releaseWorkflowSource.contains("verify-release-pipeline-qualification.sh"))
         #expect(releaseWorkflowSource.contains("mac-release-pipeline-qualification-${{ inputs.expected_pipeline_digest }}"))
-        #expect(releaseWorkflowSource.contains("{schemaVersion:2"))
-        #expect(releaseWorkflowSource.contains(".schemaVersion == 2 or .schemaVersion == 3"))
-        #expect(releaseWorkflowSource.contains("--slurpfile requestAttestation"))
-        #expect(releaseWorkflowSource.contains(".pipelineQualificationArtifactDigest == $requestAttestation[0].pipelineQualificationArtifactDigest"))
+        #expect(releaseWorkflowSource.contains("{schemaVersion:3"))
+        #expect(requestAttestationSource.contains("{schemaVersion:5"))
+        #expect(requestAttestationSource.contains("productDependencies:$productDependencies"))
         #expect(releaseWorkflowSource.contains("externalDependencies"))
+        #expect(releaseWorkflowSource.contains("observedProductDependencies"))
         #expect(releaseWorkflowSource.contains("ageVersion"))
         #expect(releaseWorkflowSource.contains("fastlaneVersion"))
         #expect(releaseWorkflowSource.contains("xcodeVersion"))
@@ -561,15 +575,22 @@ struct BuildSigningTests {
         #expect(releaseWorkflowSource.contains("release_ready_at=\"$request_started_at\""))
         #expect(releaseWorkflowSource.contains(".releaseReadyAt"))
         #expect(!releaseWorkflowSource.contains("release_ready_at:"))
-        #expect(releaseWorkflowSource.contains("PUBLICATION_MAX_SECONDS: 180"))
-        #expect(releaseWorkflowSource.contains("release-slo-ledger-published-${{ github.run_id }}"))
-        #expect(releaseWorkflowSource.contains("release-slo-ledger-failed-${{ github.run_id }}"))
-        #expect(releaseWorkflowSource.contains("Publish and verify exact signed preview bytes"))
-        #expect(releaseWorkflowSource.contains("./scripts/publish-release.sh prerelease"))
+        #expect(releaseWorkflowSource.contains("Record staged preview identity"))
+        #expect(releaseWorkflowSource.contains("Upload staged preview identity"))
+        #expect(!releaseWorkflowSource.contains("publish-release.sh"))
+        #expect(!releaseWorkflowSource.contains("gh release"))
+        #expect(publicationWorkflowSource.contains("Publish exact UI-tested staged Preview bytes"))
+        #expect(publicationWorkflowSource.contains("test \"$GITHUB_REF_NAME\" = main"))
+        #expect(publicationWorkflowSource.contains("verify-preview-ui-attestation.sh"))
+        #expect(publicationWorkflowSource.contains("publish-release.sh\" resume-prerelease"))
+        #expect(publicationWorkflowSource.contains("release-slo-ledger-published-${{ github.run_id }}"))
+        #expect(publicationWorkflowSource.contains("release-slo-ledger-failed-${{ github.run_id }}"))
+        #expect(!publicationWorkflowSource.contains("environment: mac-release"))
+        #expect(!publicationWorkflowSource.contains("secrets."))
         #expect(releaseWorkflowSource.contains("EXPECTED_STABLE_TAG: v1.8.3"))
         #expect(releaseWorkflowSource.contains("Preview requires stable latest $EXPECTED_STABLE_TAG"))
-        #expect(releaseWorkflowSource.contains("git ls-remote origin \"refs/tags/$RELEASE_TAG^{}\""))
-        #expect(releaseWorkflowSource.contains("test \"$remote_tag_commit\" = \"$head_commit\""))
+        #expect(publicationWorkflowSource.contains("git ls-remote origin \"refs/tags/$RELEASE_TAG\""))
+        #expect(publicationWorkflowSource.contains("test \"$remote_tag_commit\" = \"$EXPECTED_COMMIT\""))
         #expect(releaseWorkflowSource.contains("verify-release-pipeline-qualification-source.sh"))
         #expect(!releaseWorkflowSource.contains("verify-release-canary-provenance.sh"))
         #expect(releasingSource.contains("“发布正式版”不是合法命令"))

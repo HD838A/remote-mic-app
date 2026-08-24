@@ -14,11 +14,6 @@ permissions:
   contents: read
   actions: read
 
-env:
-  SAYALL_AI_RELEASE_REF: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
-  SAYALL_MACRO_PLATFORM_RELEASE_REF: 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
-  SAYALL_MAC_REMOTE_RELEASE_REF: 3f3c782180eef4024b53941c1f65d80e7cff4c66
-
 jobs:
   classify-candidate:
     name: Classify exact parent-main CI reuse
@@ -80,6 +75,9 @@ jobs:
           command -v rg >/dev/null || {
             if [[ "$RUNNER_OS" == "macOS" ]]; then brew install ripgrep; else exit 1; fi
           }
+
+      - name: Validate versioned release dependencies
+        run: ./scripts/resolve-release-dependencies.sh json >/dev/null
 
       - name: Reuse exact parent main product-code proof
         env:

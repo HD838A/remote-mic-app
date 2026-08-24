@@ -303,6 +303,7 @@ jobs:
         shell: bash
         env:
           AGENT_TOKEN: ${{ steps.agent-token.outputs.token }}
+          GH_TOKEN: ${{ steps.agent-token.outputs.token }}
           RUN_ID: ${{ needs.preflight.outputs.run_id }}
           ISSUE_NUMBER: ${{ needs.preflight.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.preflight.outputs.run_id }}
@@ -322,11 +323,10 @@ jobs:
           printf '%s\n' "SayAll Agent generated this Draft PR from approved Run $RUN_ID." > "$RUNNER_TEMP/sayall-agent-pr-body.md"
           printf '%s\n' "Issue: #$ISSUE_NUMBER" >> "$RUNNER_TEMP/sayall-agent-pr-body.md"
           printf '%s\n' "The PR remains Draft until a maintainer reviews the patch and the protected CI gate." >> "$RUNNER_TEMP/sayall-agent-pr-body.md"
-          export GH_TOKEN="$AGENT_TOKEN"
           pr_url="$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --draft --title "[SayAll Agent] $title" --body-file "$RUNNER_TEMP/sayall-agent-pr-body.md")"
           [[ "$pr_url" =~ ^https://github\.com/[^/]+/[^/]+/pull/[1-9][0-9]*$ ]]
           gh pr view "$pr_url" --json number,url,headRefName --jq '{number:.number,url:.url,branch:.headRefName}' > "$RUNNER_TEMP/sayall-agent-pr.json"
-          unset AGENT_TOKEN GH_TOKEN
+          unset AGENT_TOKEN
 
       - name: Upload PR result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

@@ -19,10 +19,11 @@ jobs:
     env:
       RUN_ID: ${{ github.event.client_payload.run_id }}
       TARGET_WORKFLOW_RUN_ID: ${{ github.event.client_payload.workflow_run_id }}
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Validate and cancel Agent workflow
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [[ "$RUN_ID" =~ ^run_[A-Za-z0-9_-]{12,80}$ ]]

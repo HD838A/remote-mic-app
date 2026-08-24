@@ -94,11 +94,8 @@ for command_name in cmp curl gh git jq plutil rg shasum stat; do
 done
 
 if [[ "$DRY_RUN" == "0" ]]; then
-  expected_workflow_path=".github/workflows/mac-release-package.yml"
-  expected_head_branch="release/pre-$RELEASE_TAG"
-  if [[ "$MODE" == "resume-prerelease" ]]; then
-    expected_head_branch="main"
-  fi
+  expected_workflow_path=".github/workflows/mac-preview-publication.yml"
+  expected_head_branch="main"
   if [[ "$MODE" == "promote" ]]; then
     expected_workflow_path=".github/workflows/mac-stable-promote.yml"
     expected_head_branch="main"
@@ -301,7 +298,7 @@ validate_request_attestation() {
     --arg commit "$expected_commit" \
     --arg base "$expected_base" \
     --arg pipelineDigest "$EXPECTED_PIPELINE_DIGEST" '
-      .schemaVersion == 4 and
+      .schemaVersion == 5 and
       .requestId == $requestId and
       .attemptId == $commit and
       .tag == $tag and
@@ -318,7 +315,9 @@ validate_request_attestation() {
       (.pipelineQualificationArtifactDigest | type == "string" and
         test("^sha256:[0-9a-f]{64}$")) and
       (.attestationRunId | type == "number" and . > 0) and
-      (.attestationRunAttempt | type == "number" and . > 0)
+      (.attestationRunAttempt | type == "number" and . > 0) and
+      (.productDependencies | type == "object" and length == 3 and
+        ([.[] | .commit] | all(.[]; test("^[0-9a-f]{40}$"))))
     ' "$REQUEST_ATTESTATION" >/dev/null
 }
 
@@ -408,6 +407,7 @@ generate_candidate_provenance() {
       pipelineQualificationArtifactDigest: $requestAttestation[0].pipelineQualificationArtifactDigest,
       requestAttestationRunId: $requestAttestation[0].attestationRunId,
       requestAttestationRunAttempt: $requestAttestation[0].attestationRunAttempt,
+      productDependencies: $requestAttestation[0].productDependencies,
       payloadAssets: .
   }' "$payload_json_file" > "$CANDIDATE_PROVENANCE"
   write_candidate_release_manifest \
@@ -795,6 +795,49 @@ dispatch_preview_recording_guard() {
   print "PREVIEW MAIN RECORDING DISPATCHED: $RELEASE_TAG"
 }
 
+resume_existing_prerelease_assets() {
+  local release_json remote_assets expected_name remote_record
+  local expected_path expected_size expected_sha remote_size remote_digest
+  local -a missing_assets=()
+
+  release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,isPrerelease,assets)"
+  print -r -- "$release_json" | jq -e \
+    '.isDraft == false and .isPrerelease == true' >/dev/null || {
+      print -u2 "existing release $RELEASE_TAG is not the expected public Pre-release"
+      return 1
+    }
+  remote_assets="$(print -r -- "$release_json" | jq -r '.assets[] | [.name, (.size | tostring), (.digest // "")] | @tsv')"
+
+  while IFS=$'\t' read -r expected_name remote_size remote_digest; do
+    [[ -n "$expected_name" ]] || continue
+    if ! /usr/bin/grep -Fxq "$expected_name" "$CANDIDATE_RELEASE_MANIFEST"; then
+      print -u2 "existing Pre-release contains an unexpected asset: $expected_name"
+      return 1
+    fi
+  done <<< "$remote_assets"
+
+  while IFS= read -r expected_name; do
+    [[ -n "$expected_name" ]] || continue
+    expected_path="$STAGING_DIR/$expected_name"
+    expected_size="$(/usr/bin/stat -f '%z' "$expected_path")"
+    expected_sha="$(/usr/bin/shasum -a 256 "$expected_path" | /usr/bin/awk '{print $1}')"
+    remote_record="$(print -r -- "$remote_assets" | /usr/bin/awk -F '\t' -v name="$expected_name" '$1 == name {print; exit}')"
+    if [[ -z "$remote_record" ]]; then
+      missing_assets+=("$expected_path")
+      continue
+    fi
+    IFS=$'\t' read -r _ remote_size remote_digest <<< "$remote_record"
+    if [[ "$remote_size" != "$expected_size" || "$remote_digest" != "sha256:$expected_sha" ]]; then
+      print -u2 "existing Pre-release asset differs from the exact staged bytes: $expected_name"
+      return 1
+    fi
+  done < "$CANDIDATE_RELEASE_MANIFEST"
+
+  if (( ${#missing_assets[@]} > 0 )); then
+    gh release upload "$RELEASE_TAG" "${missing_assets[@]}" --repo "$REPOSITORY"
+  fi
+}
+
 if [[ "$MODE" == "verify-prerelease" ]]; then
   if [[ "$DRY_RUN" == "1" ]]; then
     print -u2 "verify-prerelease requires the existing public Pre-release"
@@ -831,9 +874,13 @@ if [[ "$MODE" == "prerelease" || "$MODE" == "resume-prerelease" ]]; then
 
   verify_candidate_source
   generate_candidate_provenance
+  release_exists=0
   if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
-    print -u2 "release $RELEASE_TAG already exists"
-    exit 1
+    release_exists=1
+    if [[ "$MODE" == "prerelease" ]]; then
+      print -u2 "release $RELEASE_TAG already exists"
+      exit 1
+    fi
   fi
 
   require_expected_stable_latest
@@ -849,19 +896,23 @@ if [[ "$MODE" == "prerelease" || "$MODE" == "resume-prerelease" ]]; then
     print -u2 "candidate branch changed before GitHub Release creation"
     exit 1
   fi
-  typeset -a release_uploads=()
-  while IFS= read -r asset_name; do
-    [[ -n "$asset_name" ]] || continue
-    release_uploads+=("$STAGING_DIR/$asset_name")
-  done < "$CANDIDATE_RELEASE_MANIFEST"
-  (( ${#release_uploads[@]} > 1 ))
-  gh release create "$RELEASE_TAG" "${release_uploads[@]}" \
-    --repo "$REPOSITORY" \
-    --verify-tag \
-    --prerelease \
-    --latest=false \
-    --title "$PUBLIC_PRODUCT_NAME $VERSION" \
-    --notes-file "$RELEASE_NOTES"
+  if (( release_exists == 0 )); then
+    typeset -a release_uploads=()
+    while IFS= read -r asset_name; do
+      [[ -n "$asset_name" ]] || continue
+      release_uploads+=("$STAGING_DIR/$asset_name")
+    done < "$CANDIDATE_RELEASE_MANIFEST"
+    (( ${#release_uploads[@]} > 1 ))
+    gh release create "$RELEASE_TAG" "${release_uploads[@]}" \
+      --repo "$REPOSITORY" \
+      --verify-tag \
+      --prerelease \
+      --latest=false \
+      --title "$PUBLIC_PRODUCT_NAME $VERSION" \
+      --notes-file "$RELEASE_NOTES"
+  else
+    resume_existing_prerelease_assets
+  fi
 
   RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.draft, .prerelease] | @tsv')"
   test "$RELEASE_STATE" = $'false\ttrue'

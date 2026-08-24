@@ -14,6 +14,9 @@ SOURCE_ARTIFACT_DIGEST="${SOURCE_ARTIFACT_DIGEST:?SOURCE_ARTIFACT_DIGEST is requ
 REQUEST_STARTED_AT="${RELEASE_REQUEST_STARTED_AT:?RELEASE_REQUEST_STARTED_AT is required}"
 BRANCH="release/pre-$TAG"
 ALLOW_LATE_RECOVERY="${ALLOW_LATE_RECOVERY:-0}"
+SOURCE_RUN_REQUIRED_CONCLUSION="${SOURCE_RUN_REQUIRED_CONCLUSION:-failure}"
+REQUIRE_EXISTING_TAG="${REQUIRE_EXISTING_TAG:-1}"
+REQUIRE_STAGED_SOURCE="${REQUIRE_STAGED_SOURCE:-0}"
 
 [[ "$TAG" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]
 [[ "$EXPECTED_COMMIT" =~ '^[0-9a-f]{40}$' ]]
@@ -23,6 +26,9 @@ ALLOW_LATE_RECOVERY="${ALLOW_LATE_RECOVERY:-0}"
 [[ "$SOURCE_ARTIFACT_ID" =~ '^[1-9][0-9]*$' ]]
 [[ "$SOURCE_ARTIFACT_DIGEST" =~ '^sha256:[0-9a-f]{64}$' ]]
 [[ "$ALLOW_LATE_RECOVERY" == 0 || "$ALLOW_LATE_RECOVERY" == 1 ]]
+[[ "$SOURCE_RUN_REQUIRED_CONCLUSION" == failure || "$SOURCE_RUN_REQUIRED_CONCLUSION" == success ]]
+[[ "$REQUIRE_EXISTING_TAG" == 0 || "$REQUIRE_EXISTING_TAG" == 1 ]]
+[[ "$REQUIRE_STAGED_SOURCE" == 0 || "$REQUIRE_STAGED_SOURCE" == 1 ]]
 
 for command_name in gh git jq shasum unzip sort uniq find; do
   command -v "$command_name" >/dev/null 2>&1 || {
@@ -36,6 +42,7 @@ CANDIDATE_DIR="$WORK_DIR/candidate"
 ARTIFACT_ZIP="$WORK_DIR/signed-artifact.zip"
 ARTIFACT_DIR="$WORK_DIR/signed-artifact"
 ATTESTATION_DIR="$WORK_DIR/request-attestation"
+STAGE_DIR="$WORK_DIR/preview-stage"
 
 fail() { print -u2 -- "$*"; exit 1; }
 
@@ -47,6 +54,7 @@ print -r -- "$source_run_json" | jq -e \
   --arg repository "$REPOSITORY" \
   --arg branch "$BRANCH" \
   --arg commit "$EXPECTED_COMMIT" \
+  --arg conclusion "$SOURCE_RUN_REQUIRED_CONCLUSION" \
   --argjson attempt "$SOURCE_RUN_ATTEMPT" '
     .repository.full_name == $repository and
     .event == "workflow_dispatch" and
@@ -55,8 +63,8 @@ print -r -- "$source_run_json" | jq -e \
     .head_sha == $commit and
     .run_attempt == $attempt and
     .status == "completed" and
-    .conclusion == "failure"
-  ' >/dev/null || fail "source release Run is not the exact failed candidate Run"
+    .conclusion == $conclusion
+  ' >/dev/null || fail "source release Run is not the exact candidate Run with conclusion $SOURCE_RUN_REQUIRED_CONCLUSION"
 
 artifact_json="$(gh api "repos/$REPOSITORY/actions/artifacts/$SOURCE_ARTIFACT_ID")"
 print -r -- "$artifact_json" | jq -e \
@@ -81,6 +89,51 @@ print -r -- "$jobs_json" | jq -e '
   )] | length) == 1
 ' >/dev/null || fail "source Run did not produce a successful signed package Job"
 
+if [[ "$REQUIRE_STAGED_SOURCE" == 1 ]]; then
+  print -r -- "$jobs_json" | jq -e '
+    ([.jobs[] | select(
+      .name == "Sign and notarize Apple Silicon and Intel packages" and
+      ([.steps[] | select(.name == "Record staged preview identity" and .conclusion == "success")] | length) == 1 and
+      ([.steps[] | select(.name == "Upload staged preview identity" and .conclusion == "success")] | length) == 1
+    )] | length) == 1
+  ' >/dev/null || fail "source Run did not complete the staged preview identity handoff"
+
+  stage_name="preview-stage-$TAG-$EXPECTED_COMMIT"
+  stage_records="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" | jq -r --arg name "$stage_name" '.artifacts[] | select(.name == $name and .expired == false) | [.id, (.digest // "")] | @tsv')"
+  [[ "$(print -r -- "$stage_records" | awk 'NF {n++} END {print n+0}')" == 1 ]] || fail "staged preview identity artifact is not unique"
+  IFS=$'\t' read -r stage_artifact_id stage_artifact_digest <<< "$stage_records"
+  [[ "$stage_artifact_id" =~ ^[1-9][0-9]*$ && "$stage_artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "staged preview identity metadata is invalid"
+  stage_zip="$WORK_DIR/preview-stage.zip"
+  gh api "repos/$REPOSITORY/actions/artifacts/$stage_artifact_id/zip" > "$stage_zip"
+  [[ "sha256:$(shasum -a 256 "$stage_zip" | awk '{print $1}')" == "$stage_artifact_digest" ]] || fail "staged preview identity download digest mismatch"
+  /bin/mkdir -p "$STAGE_DIR"
+  unzip -q "$stage_zip" -d "$STAGE_DIR"
+  stage_file="$STAGE_DIR/preview-stage.json"
+  test -r "$stage_file" || fail "preview-stage.json is missing"
+  jq -e \
+    --arg tag "$TAG" \
+    --arg branch "$BRANCH" \
+    --arg commit "$EXPECTED_COMMIT" \
+    --arg requestId "$REQUEST_ID" \
+    --argjson run "$SOURCE_RUN_ID" \
+    --argjson attempt "$SOURCE_RUN_ATTEMPT" \
+    --argjson signedArtifactId "$SOURCE_ARTIFACT_ID" \
+    --arg signedArtifactDigest "$SOURCE_ARTIFACT_DIGEST" '
+      .schemaVersion == 1 and
+      .tag == $tag and .candidateBranch == $branch and .candidateCommit == $commit and
+      .requestId == $requestId and
+      .sourceRunId == $run and .sourceRunAttempt == $attempt and
+      .signedArtifactId == $signedArtifactId and
+      .signedArtifactDigest == $signedArtifactDigest and
+      (.pipelineDigest | test("^[0-9a-f]{64}$")) and
+      (.version | type == "string" and length > 0) and
+      (.build | test("^[0-9]+$")) and
+      (.requestStartedAt | type == "number") and
+      (.releaseReadyAt | type == "number") and
+      (.stagedAt | type == "string")
+    ' "$stage_file" >/dev/null || fail "staged preview identity does not match the signed artifact"
+fi
+
 gh api "repos/$REPOSITORY/actions/artifacts/$SOURCE_ARTIFACT_ID/zip" > "$ARTIFACT_ZIP"
 actual_digest="sha256:$(shasum -a 256 "$ARTIFACT_ZIP" | awk '{print $1}')"
 [[ "$actual_digest" == "$SOURCE_ARTIFACT_DIGEST" ]] || fail "signed artifact download digest mismatch"
@@ -99,13 +152,24 @@ done
 /bin/mkdir -p "$CANDIDATE_DIR"
 git -C "$CANDIDATE_DIR" init -q
 git -C "$CANDIDATE_DIR" remote add origin "https://github.com/$REPOSITORY.git"
-git -C "$CANDIDATE_DIR" fetch --quiet --no-tags origin \
-  "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" \
-  "refs/heads/main:refs/remotes/origin/main" \
-  "refs/tags/${TAG}:refs/tags/${TAG}"
+if [[ "$REQUIRE_EXISTING_TAG" == 1 ]]; then
+  git -C "$CANDIDATE_DIR" fetch --quiet --no-tags origin \
+    "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" \
+    "refs/heads/main:refs/remotes/origin/main" \
+    "refs/tags/${TAG}:refs/tags/${TAG}"
+else
+  git -C "$CANDIDATE_DIR" fetch --quiet --no-tags origin \
+    "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" \
+    "refs/heads/main:refs/remotes/origin/main"
+fi
 git -C "$CANDIDATE_DIR" checkout -q --detach "$EXPECTED_COMMIT"
 git -C "$CANDIDATE_DIR" rev-parse --verify "refs/remotes/origin/$BRANCH" | grep -Fxq "$EXPECTED_COMMIT" || fail "candidate branch changed"
-git -C "$CANDIDATE_DIR" rev-parse --verify "$TAG^{commit}" | grep -Fxq "$EXPECTED_COMMIT" || fail "candidate tag changed"
+if [[ "$REQUIRE_EXISTING_TAG" == 1 ]]; then
+  git -C "$CANDIDATE_DIR" rev-parse --verify "$TAG^{commit}" | grep -Fxq "$EXPECTED_COMMIT" || fail "candidate tag changed"
+else
+  remote_tag="$(git -C "$CANDIDATE_DIR" ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}")"
+  [[ -z "$remote_tag" ]] || fail "staged candidate unexpectedly already has an immutable tag"
+fi
 
 attestation_name="release-request-attestation-$TAG-$EXPECTED_COMMIT"
 attestation_records="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" | jq -r --arg name "$attestation_name" '.artifacts[] | select(.name == $name and .expired == false) | [.id, (.digest // "")] | @tsv')"
@@ -145,3 +209,6 @@ print -r -- "candidate=$CANDIDATE_DIR"
 print -r -- "request_attestation=$attestation"
 print -r -- "candidate_pipeline_digest=$candidate_pipeline_digest"
 print -r -- "release_ready_at=$release_ready_at"
+if [[ "$REQUIRE_STAGED_SOURCE" == 1 ]]; then
+  print -r -- "preview_stage=$stage_file"
+fi
