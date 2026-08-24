@@ -42,6 +42,10 @@ done
 /usr/bin/grep -Fq -- '(.state == \"open\" or .merged_at != null)' "$WORKFLOW"
 /usr/bin/grep -Fq -- 'qualification_open_or_merged' \
   "$ROOT/scripts/verify-release-control-plane-diff.sh"
+/usr/bin/grep -Fq -- 'PRODUCT_PROOF_COMMIT' \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh"
+/usr/bin/grep -Fq -- 'verify-release-control-plane-diff.sh' \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh"
 
 /usr/bin/grep -Fq -- '      - name: Validate recovery control plane' "$WORKFLOW"
 /usr/bin/awk '

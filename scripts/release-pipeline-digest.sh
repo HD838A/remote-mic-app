@@ -46,7 +46,6 @@ PIPELINE_FILES=(
   scripts/verify-doubao-driver-pkg.sh
   scripts/verify-release-dependency-pins.sh
   scripts/verify-release-metadata-diff.sh
-  scripts/verify-release-ready-main-ci.sh
   scripts/verify-release-pipeline-qualification-source.sh
   scripts/verify-release-pipeline-qualification.sh
   scripts/verify-release-timeout-budgets.sh
@@ -58,6 +57,7 @@ PIPELINE_FILES=(
 CONTROL_PLANE_ONLY_SCRIPTS=(
   scripts/test-release-resume-workflow.sh
   scripts/verify-release-control-plane-diff.sh
+  scripts/verify-release-ready-main-ci.sh
 )
 
 PIPELINE_TREES=(
