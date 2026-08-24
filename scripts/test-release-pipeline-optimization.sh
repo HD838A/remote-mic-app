@@ -999,7 +999,7 @@ jq -n \
       notarySecretsCommit:"5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
       matchCommit:"2e271768593821611c54f3d1b376f39e503f53be",
       sayAllAICommit:"01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-      sayAllMacroPlatformCommit:"76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
+      sayAllMacroPlatformCommit:"5801ec92d937e20d1d05945a27212168298db554",
       sayAllMacRemoteCommit:"3f3c782180eef4024b53941c1f65d80e7cff4c66"
     }
   }' \
@@ -1089,7 +1089,7 @@ jq -e '.externalDependencies == {
   notarySecretsCommit:"5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
   matchCommit:"2e271768593821611c54f3d1b376f39e503f53be",
   sayAllAICommit:"01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-  sayAllMacroPlatformCommit:"76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
+  sayAllMacroPlatformCommit:"5801ec92d937e20d1d05945a27212168298db554",
   sayAllMacRemoteCommit:"3f3c782180eef4024b53941c1f65d80e7cff4c66"
 }' "$WORK_DIR/release-ready-proof.json" >/dev/null
 
