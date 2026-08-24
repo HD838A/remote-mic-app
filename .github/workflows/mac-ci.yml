@@ -93,6 +93,7 @@ jobs:
                 release_control_plane_changed=true
                 docs_only=false
                 ;;
+              .github/workflows/mac-release-package.yml|\
               .github/workflows/mac-ci.yml)
                 release_control_plane_changed=true; docs_only=false ;;
               *)
