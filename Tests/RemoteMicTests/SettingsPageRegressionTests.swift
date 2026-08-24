@@ -1032,6 +1032,12 @@ struct SettingsPageRegressionTests {
             ),
             encoding: .utf8
         )
+        let canvasSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/RemoteMappingCanvas.swift"
+            ),
+            encoding: .utf8
+        )
 
         #expect(settingsSource.contains("voiceShortcutEditorPanel"))
         #expect(settingsSource.contains("model.setVoiceTriggerShortcut(shortcut)"))
@@ -1045,5 +1051,9 @@ struct SettingsPageRegressionTests {
         #expect(rendererSource.contains(
             "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_SHORTCUT_CONFLICT"
         ))
+        #expect(canvasSource.contains("ForEach(ButtonTrigger.allCases)"))
+        #expect(canvasSource.contains("if trigger == .longPress"))
+        #expect(canvasSource.contains("Button(action: onEditVoice)"))
+        #expect(canvasSource.contains("button_mapping.action.not_set"))
     }
 }
