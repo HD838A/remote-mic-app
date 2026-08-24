@@ -484,6 +484,16 @@ check(
     ],
     "RC003 neutralized voice key drops the F5 event for tap-style voice tools"
 )
+let leftControlHardwareMapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey(for: .leftControl)
+check(
+    leftControlHardwareMapping == HIDUsageMapping(
+        source: 0x0000_0007_0000_003E,
+        destination: 0x0000_0007_0000_00E0
+    ) &&
+        RemoteVoiceKeyMappingMode.standaloneModifier(.leftControl).mapping ==
+        leftControlHardwareMapping,
+    "RC003 voice key maps directly to the Left Control HID usage"
+)
 var transactionalFirstMappings = [unrelatedMapping]
 var transactionalFirstWrites = 0
 let transactionalMapper = RemoteVoiceFunctionMapper {
@@ -505,7 +515,7 @@ let transactionalMapper = RemoteVoiceFunctionMapper {
     ]
 }
 check(
-    !transactionalMapper.apply(neutralizeVoiceKey: true) &&
+    !transactionalMapper.apply(voiceKeyMappingMode: .neutralized) &&
         !transactionalMapper.isVoiceKeyNeutralized &&
         transactionalFirstMappings == [unrelatedMapping] &&
         transactionalFirstWrites == 2,

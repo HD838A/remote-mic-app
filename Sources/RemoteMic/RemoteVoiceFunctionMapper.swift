@@ -46,6 +46,28 @@ enum RemoteVoiceFunctionMappingPolicy {
         destination: 0x0
     )
 
+    static func remoteVoiceKey(
+        for modifier: StandaloneKeyboardModifier
+    ) -> HIDUsageMapping {
+        // Keyboard usage page 0x07 reserves 0xE0...0xE7 for the eight
+        // left/right modifier keys. Mapping the RC003 service here produces
+        // a hardware-level modifier edge that strict global hotkey listeners
+        // accept, unlike a synthesized CGEvent.
+        let destination: UInt64
+        switch modifier {
+        case .leftControl: destination = 0x0000_0007_0000_00E0
+        case .leftShift: destination = 0x0000_0007_0000_00E1
+        case .leftOption: destination = 0x0000_0007_0000_00E2
+        case .leftCommand: destination = 0x0000_0007_0000_00E3
+        case .rightControl: destination = 0x0000_0007_0000_00E4
+        case .rightShift: destination = 0x0000_0007_0000_00E5
+        case .rightOption: destination = 0x0000_0007_0000_00E6
+        case .rightCommand: destination = 0x0000_0007_0000_00E7
+        case .function: destination = remoteVoiceKey.destination
+        }
+        return HIDUsageMapping(source: remoteVoiceKey.source, destination: destination)
+    }
+
     // RC003 exposes its power button as keyboard Power (usage 0x66).
     // Remap it to harmless F20 before macOS can turn it into a sleep event.
     static let suppressedRemotePowerKey = HIDUsageMapping(
@@ -84,6 +106,35 @@ enum RemoteVoiceFunctionMappingPolicy {
             restored.append(originalPowerMapping)
         }
         return restored
+    }
+}
+
+enum RemoteVoiceKeyMappingMode: Equatable {
+    case function
+    case neutralized
+    case standaloneModifier(StandaloneKeyboardModifier)
+
+    var mapping: HIDUsageMapping {
+        switch self {
+        case .function:
+            return RemoteVoiceFunctionMappingPolicy.remoteVoiceKey
+        case .neutralized:
+            return RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
+        case let .standaloneModifier(modifier):
+            return RemoteVoiceFunctionMappingPolicy.remoteVoiceKey(for: modifier)
+        }
+    }
+
+    var requiresCompleteApplication: Bool {
+        self != .function
+    }
+
+    var logName: String {
+        switch self {
+        case .function: return "function"
+        case .neutralized: return "neutralized"
+        case let .standaloneModifier(modifier): return "modifier_\(modifier.rawValue)"
+        }
     }
 }
 
@@ -132,6 +183,8 @@ final class RemoteVoiceFunctionMapper {
     var hasMatchingServices: Bool {
         matchedServiceCount > 0
     }
+    private(set) var isVoiceKeyMappingComplete = false
+    private(set) var appliedVoiceKeyMappingMode: RemoteVoiceKeyMappingMode?
 
     init(serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices) {
         self.serviceProvider = serviceProvider
@@ -140,15 +193,18 @@ final class RemoteVoiceFunctionMapper {
     @discardableResult
     func apply(
         suppressPowerKey: Bool = false,
-        neutralizeVoiceKey: Bool = false
+        voiceKeyMappingMode: RemoteVoiceKeyMappingMode = .function
     ) -> Bool {
+        let voiceMapping = voiceKeyMappingMode.mapping
+        let requiresCompleteVoiceMapping = voiceKeyMappingMode.requiresCompleteApplication
         let services = serviceProvider()
         let matchedCount = services.count
         matchedServiceCount = matchedCount
         guard matchedCount > 0 else {
             resetAppliedState()
             AppLogger.shared.write(
-                "VOICE FN MAPPING applied=false neutralized=false power_suppressed=false matched=0"
+                "VOICE FN MAPPING applied=false mode=\(voiceKeyMappingMode.logName) " +
+                    "power_suppressed=false matched=0"
             )
             return false
         }
@@ -164,7 +220,7 @@ final class RemoteVoiceFunctionMapper {
 
         for (index, service) in services.enumerated() {
             guard let registryID = service.registryID else {
-                if neutralizeVoiceKey {
+                if requiresCompleteVoiceMapping {
                     rollback(
                         services: services,
                         snapshots: snapshots,
@@ -194,15 +250,13 @@ final class RemoteVoiceFunctionMapper {
             }
             let desired = RemoteVoiceFunctionMappingPolicy.applying(
                 to: current,
-                voiceMapping: neutralizeVoiceKey
-                    ? RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
-                    : RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+                voiceMapping: voiceMapping,
                 powerMapping: suppressPowerKey
                     ? RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
                     : originalMappings[registryID]?.power
             )
             guard service.setMappings(desired) else {
-                if neutralizeVoiceKey {
+                if requiresCompleteVoiceMapping {
                     rollback(
                         services: services,
                         snapshots: snapshots,
@@ -225,8 +279,10 @@ final class RemoteVoiceFunctionMapper {
         let fullySuppressedLocations = Set(matchedCountsByLocation.compactMap { locationID, count in
             appliedCountsByLocation[locationID] == count ? locationID : nil
         })
-        isApplied = neutralizeVoiceKey ? allTargetsApplied : appliedCount > 0
-        isVoiceKeyNeutralized = neutralizeVoiceKey && allTargetsApplied
+        isApplied = requiresCompleteVoiceMapping ? allTargetsApplied : appliedCount > 0
+        isVoiceKeyMappingComplete = allTargetsApplied
+        appliedVoiceKeyMappingMode = isApplied ? voiceKeyMappingMode : nil
+        isVoiceKeyNeutralized = appliedVoiceKeyMappingMode == .neutralized
         if suppressPowerKey, !fullySuppressedLocations.isEmpty {
             isPowerKeySuppressed = true
             powerSuppressedLocationIDs = fullySuppressedLocations
@@ -238,7 +294,9 @@ final class RemoteVoiceFunctionMapper {
             ? "locations=\(powerSuppressedLocationIDs?.count ?? 0)"
             : "none"
         AppLogger.shared.write(
-            "VOICE FN MAPPING applied=\(isApplied) neutralized=\(isVoiceKeyNeutralized) " +
+            "VOICE FN MAPPING applied=\(isApplied) mode=\(voiceKeyMappingMode.logName) " +
+                "destination=0x\(String(voiceMapping.destination, radix: 16)) " +
+                "complete=\(isVoiceKeyMappingComplete) neutralized=\(isVoiceKeyNeutralized) " +
                 "power_suppressed=\(isPowerKeySuppressed) suppression_scope=\(suppressionScope) " +
                 "matched=\(matchedCount) applied=\(appliedCount)"
         )
@@ -304,6 +362,8 @@ final class RemoteVoiceFunctionMapper {
         isPowerKeySuppressed = false
         powerSuppressedLocationIDs = nil
         isVoiceKeyNeutralized = false
+        isVoiceKeyMappingComplete = false
+        appliedVoiceKeyMappingMode = nil
     }
 
     private static func systemServices() -> [RemoteVoiceMappingService] {

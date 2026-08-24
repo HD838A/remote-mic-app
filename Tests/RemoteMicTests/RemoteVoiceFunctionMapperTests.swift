@@ -1,7 +1,7 @@
 import Testing
 @testable import RemoteMic
 
-@Suite("RC003 hardware Fn mapping")
+@Suite("RC003 hardware voice-key mapping")
 struct RemoteVoiceFunctionMapperTests {
     @Test func commandBluetoothStreamRequiresCompleteCurrentNeutralization() {
         let original = [HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 5)]
@@ -10,7 +10,7 @@ struct RemoteVoiceFunctionMapperTests {
         var services: [RemoteVoiceMappingService] = []
         let mapper = RemoteVoiceFunctionMapper { services }
 
-        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.apply(voiceKeyMappingMode: .neutralized))
         #expect(!BridgeAppModel.canStartBluetoothVoice(
             mode: .leftCommand,
             isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
@@ -26,14 +26,14 @@ struct RemoteVoiceFunctionMapperTests {
         ))
 
         services = [first.service, second.service]
-        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.apply(voiceKeyMappingMode: .neutralized))
         #expect(!BridgeAppModel.canStartBluetoothVoice(
             mode: .rightCommand,
             isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
         ))
 
         second.acceptsWrites = true
-        #expect(mapper.apply(neutralizeVoiceKey: true))
+        #expect(mapper.apply(voiceKeyMappingMode: .neutralized))
         #expect(BridgeAppModel.canStartBluetoothVoice(
             mode: .leftCommand,
             isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
@@ -54,11 +54,31 @@ struct RemoteVoiceFunctionMapperTests {
             acceptsWrites: false
         )
         services.append(newlyEnumeratedFailure.service)
-        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.apply(voiceKeyMappingMode: .neutralized))
         #expect(!BridgeAppModel.canStartBluetoothVoice(
             mode: .rightCommand,
             isVoiceKeyNeutralized: mapper.isVoiceKeyNeutralized
         ))
+    }
+
+    @Test func mapsStandaloneModifiersToTheirKeyboardHIDUsages() {
+        let expectedDestinations: [StandaloneKeyboardModifier: UInt64] = [
+            .leftControl: 0x0000_0007_0000_00E0,
+            .leftShift: 0x0000_0007_0000_00E1,
+            .leftOption: 0x0000_0007_0000_00E2,
+            .leftCommand: 0x0000_0007_0000_00E3,
+            .rightControl: 0x0000_0007_0000_00E4,
+            .rightShift: 0x0000_0007_0000_00E5,
+            .rightOption: 0x0000_0007_0000_00E6,
+            .rightCommand: 0x0000_0007_0000_00E7,
+            .function: RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.destination,
+        ]
+
+        for modifier in StandaloneKeyboardModifier.allCases {
+            let mapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey(for: modifier)
+            #expect(mapping.source == RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.source)
+            #expect(mapping.destination == expectedDestinations[modifier])
+        }
     }
 
     @Test func replacesOnlyTheRemoteF5Mapping() {
@@ -153,7 +173,7 @@ struct RemoteVoiceFunctionMapperTests {
         let second = MappingServiceBox(registryID: 2, mappings: original, acceptsWrites: false)
         let mapper = RemoteVoiceFunctionMapper { [first.service, second.service] }
 
-        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.apply(voiceKeyMappingMode: .neutralized))
         #expect(!mapper.isVoiceKeyNeutralized)
         #expect(first.mappings == original)
         #expect(first.writeCount == 2)
@@ -164,7 +184,7 @@ struct RemoteVoiceFunctionMapperTests {
         let missingID = MappingServiceBox(registryID: nil, mappings: [])
         let mapper = RemoteVoiceFunctionMapper { [missingID.service] }
 
-        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.apply(voiceKeyMappingMode: .neutralized))
         #expect(mapper.hasMatchingServices)
         #expect(!mapper.isApplied)
         #expect(!mapper.isVoiceKeyNeutralized)
@@ -174,7 +194,7 @@ struct RemoteVoiceFunctionMapperTests {
     @Test func reportsWhenNoMatchingRemoteServiceIsPresent() {
         let mapper = RemoteVoiceFunctionMapper { [] }
 
-        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.apply(voiceKeyMappingMode: .neutralized))
         #expect(!mapper.hasMatchingServices)
         #expect(mapper.matchedServiceCount == 0)
         #expect(!mapper.isVoiceKeyNeutralized)
@@ -197,7 +217,7 @@ struct RemoteVoiceFunctionMapperTests {
         let second = MappingServiceBox(registryID: 2, mappings: original, acceptsWrites: false)
         let mapper = RemoteVoiceFunctionMapper { [first, second.service] }
 
-        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.apply(voiceKeyMappingMode: .neutralized))
         #expect(firstMappings == [
             original[0],
             RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey,
@@ -206,6 +226,19 @@ struct RemoteVoiceFunctionMapperTests {
         mapper.restore()
 
         #expect(firstMappings == original)
+    }
+
+    @Test func hardwareModifierMappingRequiresEveryTargetAndReportsItsMode() {
+        let leftControlMode = RemoteVoiceKeyMappingMode.standaloneModifier(.leftControl)
+        let first = MappingServiceBox(registryID: 1, mappings: [])
+        let second = MappingServiceBox(registryID: 2, mappings: [])
+        let mapper = RemoteVoiceFunctionMapper { [first.service, second.service] }
+
+        #expect(mapper.apply(voiceKeyMappingMode: leftControlMode))
+        #expect(mapper.isVoiceKeyMappingComplete)
+        #expect(mapper.appliedVoiceKeyMappingMode == leftControlMode)
+        #expect(first.mappings == [leftControlMode.mapping])
+        #expect(second.mappings == [leftControlMode.mapping])
     }
 
     @Test func partialPowerSuppressionOnlyAllowsFullyMappedDeviceLocations() {

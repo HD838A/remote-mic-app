@@ -1366,7 +1366,9 @@ struct RemoteButtonsTests {
         )
         let applySettings = model[applySettingsStart.lowerBound..<applySettingsEnd.lowerBound]
         let map = try #require(
-            applySettings.range(of: "powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)")
+            applySettings.range(
+                of: "powerKeySuppressed = applyVoiceFunctionMapping(mode: hardwareVoiceMappingMode)"
+            )
         )
         let start = try #require(
             applySettings.range(of: "startHIDMonitors(powerKeySuppressed: powerKeySuppressed)")

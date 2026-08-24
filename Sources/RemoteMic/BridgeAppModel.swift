@@ -1464,6 +1464,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if settings.voiceFnTapModeEnabled != requestedFnTapMode {
             settings.voiceFnTapModeEnabled = requestedFnTapMode
         }
+        let hardwareVoiceMappingMode: RemoteVoiceKeyMappingMode? = {
+            guard requestedVoiceShortcut,
+                  let modifier = settings.voiceTriggerShortcut?.standaloneModifier
+            else { return nil }
+            return .standaloneModifier(modifier)
+        }()
+        let softwareVoiceTriggerRequested = requestedVoiceShortcut &&
+            hardwareVoiceMappingMode == nil
         if !requestedFnTapMode, voiceFnTapSession.requiresCleanupBeforeMapping {
             voiceFnTapSession.setEnabled(false) { [weak self] in
                 self?.applyHIDSettings(
@@ -1475,23 +1483,38 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         requestNextHIDPermissionIfNeeded(
             voiceFnTapModeRequested: requestedFnTapMode,
             voiceKeyModeRequested: requestedVoiceKeyMode,
-            softwareVoiceTriggerRequested: requestedVoiceShortcut
+            softwareVoiceTriggerRequested: softwareVoiceTriggerRequested
         )
         let canFallbackVoiceKeyMode = Self.canFallbackVoiceKeyMode(
             isStreaming: isStreaming,
             allowVoiceKeyModeFallback: allowVoiceKeyModeFallback
         )
         var powerKeySuppressed: Bool
-        if requestedVoiceShortcut, accessibilityGranted {
-            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
+        if let hardwareVoiceMappingMode {
+            // Prefer the remote's own HID service for standalone modifiers so
+            // strict hotkey tools receive a physical-equivalent key edge.
+            voiceFnTapSession.setEnabled(false)
+            _ = voiceShortcutHoldController.release()
+            powerKeySuppressed = applyVoiceFunctionMapping(mode: hardwareVoiceMappingMode)
+            if voiceFunctionMapper.appliedVoiceKeyMappingMode != hardwareVoiceMappingMode ||
+                !voiceFunctionMapper.isVoiceKeyMappingComplete
+            {
+                if KeyboardInjector.isAccessibilityTrusted {
+                    powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
+                } else {
+                    powerKeySuppressed = applyVoiceFunctionMapping()
+                }
+            }
+        } else if softwareVoiceTriggerRequested, KeyboardInjector.isAccessibilityTrusted {
+            powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
-                voiceFnTapSession.setEnabled(false)
+                voiceFnTapSession.setEnabled(requestedFnTapMode)
             } else {
                 _ = voiceShortcutHoldController.release()
-                powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+                powerKeySuppressed = applyVoiceFunctionMapping()
             }
         } else if requestedFnTapMode, accessibilityGranted {
-            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
+            powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
                 voiceFnTapSession.setEnabled(true)
             } else if !canFallbackVoiceKeyMode, isStreaming {
@@ -1508,10 +1531,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 }
                 voiceFnTapSession.setEnabled(false)
                 _ = voiceShortcutHoldController.release()
-                powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+                powerKeySuppressed = applyVoiceFunctionMapping()
             }
         } else if requestedVoiceKeyMode != .function {
-            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
+            powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
             if !voiceFunctionMapper.isVoiceKeyNeutralized {
                 if voiceFunctionMapper.hasMatchingServices {
                     if isStreaming {
@@ -1522,7 +1545,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                         )
                     } else if canFallbackVoiceKeyMode {
                         settings.voiceKeyMode = .function
-                        powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+                        powerKeySuppressed = applyVoiceFunctionMapping()
                         AppLogger.shared.write(
                             "VOICE KEY mode_fallback reason=voice_mapping_failed " +
                                 "mode=\(requestedVoiceKeyMode.rawValue)"
@@ -1563,7 +1586,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             voiceFnTapSession.setEnabled(false)
             _ = voiceShortcutHoldController.release()
-            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+            powerKeySuppressed = applyVoiceFunctionMapping()
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
     }
@@ -1815,11 +1838,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
 
-        var powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
+        var powerKeySuppressed = applyVoiceFunctionMapping(mode: .neutralized)
         guard voiceFunctionMapper.isVoiceKeyNeutralized else {
             settings.voiceFnTapModeEnabled = false
             voiceFnTapSession.setEnabled(false)
-            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+            powerKeySuppressed = applyVoiceFunctionMapping()
             startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
             return
         }
@@ -3186,17 +3209,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     @discardableResult
-    private func applyVoiceFunctionMapping(neutralizeVoiceKey: Bool) -> Bool {
+    private func applyVoiceFunctionMapping(
+        mode: RemoteVoiceKeyMappingMode = .function
+    ) -> Bool {
         let applied = voiceFunctionMapper.apply(
             suppressPowerKey: settings.customMappingEnabled,
-            neutralizeVoiceKey: neutralizeVoiceKey
+            voiceKeyMappingMode: mode
         )
         if !isStreaming {
             isVoiceTriggerEnabled = applied
-            if neutralizeVoiceKey,
+            if mode != .function,
                settings.customMappingEnabled,
                settings.voiceTriggerShortcut != nil,
-               voiceFunctionMapper.isVoiceKeyNeutralized
+               voiceFunctionMapper.appliedVoiceKeyMappingMode == mode
             {
                 voiceShortcutStatus = LocalizedMessage("voice_button.status.custom_enabled")
             } else {
