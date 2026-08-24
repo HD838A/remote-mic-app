@@ -360,7 +360,8 @@ verify_asset_directory_matches_manifest() {
 
 generate_candidate_provenance() {
   local branch head_commit base_main_commit payload_json_file file_path file_name file_size file_sha
-  branch="$(git symbolic-ref --quiet --short HEAD)"
+  branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  branch="${branch:-${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}}"
   head_commit="$(git rev-parse HEAD)"
   base_main_commit="$(git rev-parse HEAD^)"
   validate_request_attestation "$head_commit" "$base_main_commit"

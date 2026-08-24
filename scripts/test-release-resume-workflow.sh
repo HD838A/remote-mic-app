@@ -41,6 +41,12 @@ done
 /usr/bin/grep -Fq -- \
   'REPOSITORY_ROOT="$CANDIDATE_DIR" "$CANDIDATE_DIR/scripts/release-pipeline-digest.sh"' \
   "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq -- \
+  'branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq -- \
+  'branch="${branch:-${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}}"' \
+  "$ROOT/scripts/publish-release.sh"
 
 package_if_line="$(/usr/bin/grep -nF "if: \${{ inputs.release_mode == 'qualification' || needs.validate-candidate.outputs.preview_release_action == 'package' }}" "$WORKFLOW" | /usr/bin/awk -F: 'NR == 1 { print $1 }')"
 package_environment_line="$(/usr/bin/awk '/^  package:$/ { in_package = 1; next } in_package && /environment: mac-release/ { print NR; exit }' "$WORKFLOW")"
