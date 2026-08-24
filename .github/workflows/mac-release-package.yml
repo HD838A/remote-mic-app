@@ -1028,6 +1028,9 @@ jobs:
       EXPECTED_STABLE_TAG: v1.8.3
       ALLOW_FROZEN_BASE_MAIN: 1
       PUBLIC_DOWNLOAD_CONCURRENCY: 4
+      # This path is an explicit recovery after the original attempt failed;
+      # it preserves and reports the immutable SLO overrun instead of resetting it.
+      ALLOW_LATE_RECOVERY: 1
     steps:
       - name: Check out trusted recovery workflow
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -1070,7 +1073,19 @@ jobs:
           candidate_digest="$(awk -F= '$1 == "candidate_pipeline_digest" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
           release_ready_at="$(awk -F= '$1 == "release_ready_at" { print substr($0, index($0, "=") + 1) }' "$resume_output")"
           test -d "$candidate"; test -r "$attestation"
-          ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 signed-artifact-recovery
+          now="$(date +%s)"
+          late_recovery=0
+          if (( now - release_ready_at >= 1740 )); then
+            late_recovery=1
+            set +e
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 late-recovery-overrun
+            slo_status="$?"
+            set -e
+            [[ "$slo_status" == 124 ]] || exit "$slo_status"
+            echo "LATE RECOVERY: original release-ready preview SLO is failed and will be reported as overrun."
+          else
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 signed-artifact-recovery
+          fi
           ./scripts/run-release-stage.sh all publication 180 -- \
             env \
               RELEASE_SOURCE_ROOT="$candidate" \
@@ -1083,8 +1098,13 @@ jobs:
               EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_DEVELOPER_TEAM_ID" \
               ALLOW_FROZEN_BASE_MAIN=1 \
               ./scripts/publish-release.sh resume-prerelease
-          ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
-          ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 successful-pipeline
+          if [[ "$late_recovery" == 1 ]]; then
+            ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success late-recovery-after-slo
+            echo "LATE RECOVERY PUBLICATION PASS: immutable release-ready SLO remains failed; no clock was reset."
+          else
+            ./scripts/release-slo-ledger.sh finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 successful-pipeline
+          fi
 
       - name: Upload recovered publication ledger
         if: success()

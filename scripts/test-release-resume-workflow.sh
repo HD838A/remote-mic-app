@@ -30,6 +30,9 @@ for required_text in \
   'needs.validate-candidate.outputs.preview_release_action == '\''verify-only'\''' \
   'Download verification-resume ledger' \
   './scripts/publish-release.sh verify-prerelease' \
+  'ALLOW_LATE_RECOVERY: 1' \
+  'LATE RECOVERY: original release-ready preview SLO is failed and will be reported as overrun.' \
+  'late-recovery-after-slo' \
   'Preview requires stable latest $EXPECTED_STABLE_TAG; found $actual_stable_tag' \
   'Existing exact Pre-release found; protected packaging will be skipped and public bytes verified in place.'; do
   /usr/bin/grep -Fq -- "$required_text" "$WORKFLOW"
