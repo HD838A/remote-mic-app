@@ -1,23 +1,15 @@
 #!/bin/zsh
 set -euo pipefail
+umask 077
 
 ROOT="${0:A:h:h}"
-WORKFLOW="$ROOT/.github/workflows/mac-release-package.yml"
+PACKAGE_WORKFLOW="$ROOT/.github/workflows/mac-release-package.yml"
+PUBLICATION_WORKFLOW="$ROOT/.github/workflows/mac-preview-publication.yml"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-release-resume-test.XXXXXX)"
-STEP_SCRIPT="$WORK_DIR/resolve-existing-preview.sh"
-RECOVERY_CONTROL_SCRIPT="$WORK_DIR/recovery-control-plane.sh"
-FAKE_BIN="$WORK_DIR/bin"
-EXPECTED_COMMIT="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-OTHER_COMMIT="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-RELEASE_TAG="v9.9.9"
-REQUEST_ID="request-9999"
-PIPELINE_DIGEST="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-QUALIFICATION_ARTIFACT_DIGEST="sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
 cleanup() {
   local trash_root="$HOME/.Trash"
-  local trash_target
-  trash_target="$trash_root/remotemic-release-resume-test.$(/bin/date +%s).$$.$RANDOM"
+  local trash_target="$trash_root/remotemic-release-resume-test.$(/bin/date +%s).$$.$RANDOM"
   /bin/mkdir -p "$trash_root"
   if [[ -d "$WORK_DIR" ]]; then
     /bin/mv "$WORK_DIR" "$trash_target"
@@ -25,294 +17,167 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for required_text in \
-  'preview_release_action: ${{ steps.preview-publication-state.outputs.action }}' \
-  "if: \${{ inputs.release_mode == 'qualification' || needs.validate-candidate.outputs.preview_release_action == 'package' }}" \
-  'needs.validate-candidate.outputs.preview_release_action == '\''verify-only'\''' \
-  'Download verification-resume ledger' \
-  './scripts/publish-release.sh verify-prerelease' \
-  'ALLOW_LATE_RECOVERY: 1' \
-  'LATE RECOVERY: original release-ready preview SLO is failed and will be reported as overrun.' \
-  'late-recovery-after-slo' \
-  'Preview requires stable latest $EXPECTED_STABLE_TAG; found $actual_stable_tag' \
-  'Existing exact Pre-release found; protected packaging will be skipped and public bytes verified in place.'; do
-  /usr/bin/grep -Fq -- "$required_text" "$WORKFLOW"
+for required in \
+  '- stage-preview' \
+  'Record staged preview identity' \
+  'Upload staged preview identity' \
+  'preview-stage-${{ inputs.tag }}-${{ inputs.expected_commit }}'; do
+  /usr/bin/grep -Fq -- "$required" "$PACKAGE_WORKFLOW"
 done
-
-/usr/bin/grep -Fq -- '(.state == \"open\" or .merged_at != null)' "$WORKFLOW"
-/usr/bin/grep -Fq -- 'qualification_open_or_merged' \
-  "$ROOT/scripts/verify-release-control-plane-diff.sh"
-/usr/bin/grep -Fq -- 'PRODUCT_PROOF_COMMIT' \
-  "$ROOT/scripts/verify-release-ready-main-ci.sh"
-/usr/bin/grep -Fq -- 'verify-release-control-plane-diff.sh' \
-  "$ROOT/scripts/verify-release-ready-main-ci.sh"
-
-/usr/bin/grep -Fq -- '      - name: Validate recovery control plane' "$WORKFLOW"
-/usr/bin/awk '
-  $0 == "      - name: Validate recovery control plane" {
-    in_step = 1
-    next
-  }
-  in_step && $0 == "        run: |" {
-    in_run = 1
-    next
-  }
-  in_run && $0 ~ /^      - name:/ { exit }
-  in_run {
-    sub(/^          /, "")
-    print
-  }
-' "$WORKFLOW" > "$RECOVERY_CONTROL_SCRIPT"
-test -s "$RECOVERY_CONTROL_SCRIPT"
-/usr/bin/grep -Fq -- 'test -r scripts/resume-preview-publication.sh' "$RECOVERY_CONTROL_SCRIPT"
-if /usr/bin/grep -Eq 'release-pipeline-digest\.sh|verify-release-pipeline-qualification\.sh|environment: mac-release|secrets\.' "$RECOVERY_CONTROL_SCRIPT"; then
-  print -u2 "recovery control-plane validation must not require artifact qualification or release credentials"
+if /usr/bin/grep -Eq 'publish-release[.]sh|resume-preview-publication[.]sh|contents:[[:space:]]*write|gh release|git tag' "$PACKAGE_WORKFLOW"; then
+  print -u2 "protected signing workflow still contains publication control-plane mutations"
   exit 1
 fi
 
-/usr/bin/grep -Fq -- \
-  'REPOSITORY_ROOT="$CANDIDATE_DIR" "$CANDIDATE_DIR/scripts/release-pipeline-digest.sh"' \
+for required in \
+  'Publish exact UI-tested staged Preview bytes' \
+  'test "$GITHUB_REF_NAME" = main' \
+  'SOURCE_RUN_REQUIRED_CONCLUSION=success' \
+  'REQUIRE_EXISTING_TAG=0 REQUIRE_STAGED_SOURCE=1' \
+  'verify-preview-ui-attestation.sh' \
+  'publish-release.sh" resume-prerelease' \
+  'Publish or resume the exact staged bytes'; do
+  /usr/bin/grep -Fq -- "$required" "$PUBLICATION_WORKFLOW"
+done
+if /usr/bin/grep -Eq 'environment:[[:space:]]*mac-release|secrets[.]' "$PUBLICATION_WORKFLOW"; then
+  print -u2 "publication control plane unexpectedly enters the credential Environment"
+  exit 1
+fi
+/usr/bin/grep -Fq -- '--ref main' "$ROOT/scripts/publish-staged-preview.sh"
+if /usr/bin/grep -Fq 'release_mode=' "$ROOT/scripts/publish-staged-preview.sh"; then
+  print -u2 "staged publication dispatcher still exposes a second publication mode"
+  exit 1
+fi
+/usr/bin/grep -Fq 'resume_existing_prerelease_assets' "$ROOT/scripts/publish-release.sh"
+
+/usr/bin/grep -Fq 'SOURCE_RUN_REQUIRED_CONCLUSION="${SOURCE_RUN_REQUIRED_CONCLUSION:-failure}"' \
   "$ROOT/scripts/resume-preview-publication.sh"
-/usr/bin/grep -Fq -- \
-  'branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"' \
-  "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq -- \
-  'branch="${branch:-${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}}"' \
-  "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq -- '"$SOURCE_ROOT/scripts/verify-app.sh"' "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq -- '"$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh"' "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq -- '"$SOURCE_ROOT/scripts/verify-dmg.sh"' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'REQUIRE_EXISTING_TAG="${REQUIRE_EXISTING_TAG:-1}"' \
+  "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq 'REQUIRE_STAGED_SOURCE="${REQUIRE_STAGED_SOURCE:-0}"' \
+  "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq '.conclusion == $conclusion' "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq 'staged candidate unexpectedly already has an immutable tag' \
+  "$ROOT/scripts/resume-preview-publication.sh"
 
-package_if_line="$(/usr/bin/grep -nF "if: \${{ inputs.release_mode == 'qualification' || needs.validate-candidate.outputs.preview_release_action == 'package' }}" "$WORKFLOW" | /usr/bin/awk -F: 'NR == 1 { print $1 }')"
-package_environment_line="$(/usr/bin/awk '/^  package:$/ { in_package = 1; next } in_package && /environment: mac-release/ { print NR; exit }' "$WORKFLOW")"
-if [[ ! "$package_if_line" =~ ^[0-9]+$ ||
-      ! "$package_environment_line" =~ ^[0-9]+$ ||
-      "$package_if_line" -ge "$package_environment_line" ]]; then
-  print -u2 "protected package job is not gated before the mac-release Environment"
+/usr/bin/grep -Fq '.github/workflows/mac-preview-publication.yml' \
+  "$ROOT/scripts/verify-release-control-plane-diff.sh"
+if /usr/bin/grep -Fq '.github/workflows/mac-preview-publication.yml' \
+    "$ROOT/scripts/release-pipeline-digest.sh"; then
+  print -u2 "publication workflow unexpectedly changes the artifact-closure digest"
+  exit 1
+fi
+if /usr/bin/grep -Fq 'config/release-dependencies.json' \
+    "$ROOT/scripts/release-pipeline-digest.sh"; then
+  print -u2 "product dependency values unexpectedly invalidate toolchain qualification"
   exit 1
 fi
 
-/usr/bin/awk '
-  $0 == "      - name: Resolve existing Preview publication state" {
-    in_step = 1
-    next
-  }
-  in_step && $0 == "        run: |" {
-    in_run = 1
-    next
-  }
-  in_run && $0 ~ /^      - name:/ { exit }
-  in_run {
-    sub(/^          /, "")
-    print
-  }
-' "$WORKFLOW" > "$STEP_SCRIPT"
-test -s "$STEP_SCRIPT"
+stage="$WORK_DIR/preview-stage.json"
+attestation="$WORK_DIR/preview-ui-attestation.json"
+dist="$WORK_DIR/dist"
+/bin/mkdir -p "$dist"
+print -rn -- 'exact staged archive bytes' > "$dist/Remote-Mic-9.9.9.zip"
+print -r -- '<enclosure url="https://download.sayall.app/mac/releases/v9.9.9/Remote-Mic-9.9.9.zip" />' \
+  > "$dist/appcast.xml"
+archive_sha="$(/usr/bin/shasum -a 256 "$dist/Remote-Mic-9.9.9.zip" | /usr/bin/awk '{print $1}')"
+appcast_sha="$(/usr/bin/shasum -a 256 "$dist/appcast.xml" | /usr/bin/awk '{print $1}')"
+test_appcast_sha="$(/usr/bin/sed 's#https://download.sayall.app/mac/releases/v9.9.9/#http://127.0.0.1:8765/#g' "$dist/appcast.xml" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+jq -n '{
+  schemaVersion:1,
+  tag:"v9.9.9",
+  candidateBranch:"release/pre-v9.9.9",
+  candidateCommit:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  pipelineDigest:"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  requestId:"request-9999",
+  version:"9.9.9",
+  build:"999",
+  sourceRunId:101,
+  sourceRunAttempt:1,
+  signedArtifactId:202,
+  signedArtifactDigest:"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  requestStartedAt:1787590000,
+  releaseReadyAt:1787590060,
+  stagedAt:"2026-08-24T10:00:00Z"
+}' > "$stage"
 
-if /usr/bin/grep -Eq 'secrets\.|RELEASE_AGE_IDENTITY|DEPLOY_KEY|MATCH_PASSWORD|notary' "$STEP_SCRIPT"; then
-  print -u2 "pre-credential Preview recovery step unexpectedly references release credentials"
+jq -n \
+  --arg archiveSHA256 "$archive_sha" \
+  --arg productionAppcastSHA256 "$appcast_sha" \
+  --arg testAppcastSHA256 "$test_appcast_sha" '{
+  schemaVersion:2,
+  result:"passed",
+  requestId:"request-9999",
+  tag:"v9.9.9",
+  candidateBranch:"release/pre-v9.9.9",
+  candidateCommit:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  pipelineDigest:"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  sourceRunId:101,
+  sourceRunAttempt:1,
+  signedArtifactId:202,
+  signedArtifactDigest:"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  requestStartedAt:1787590000,
+  releaseReadyAt:1787590060,
+  target:{version:"9.9.9",build:"999"},
+  baseline:{
+    tag:"v1.8.3",assetId:303,
+    assetDigest:"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    version:"1.8.3",build:"64",developerTeamId:"L3QHLDRPAY",
+    signatureVerified:true,notarizationValidated:true,gatekeeperAccepted:true,
+    launched:true,launchedAt:"2026-08-24T10:00:30Z"
+  },
+  testedArtifact:{
+    lane:"apple-silicon",
+    feedURL:"http://127.0.0.1:8765/appcast.xml",
+    productionURLPrefix:"https://download.sayall.app/mac/releases/v9.9.9/",
+    testURLPrefix:"http://127.0.0.1:8765/",
+    productionAppcast:"appcast.xml",
+    productionAppcastSHA256:$productionAppcastSHA256,
+    testAppcastSHA256:$testAppcastSHA256,
+    archiveName:"Remote-Mic-9.9.9.zip",
+    archiveSHA256:$archiveSHA256
+  },
+  update:{
+    usedSparkleUI:true,
+    feedURL:"http://127.0.0.1:8765/appcast.xml",
+    checkStartedAt:"2026-08-24T10:01:00Z",
+    downloadConfirmedAt:"2026-08-24T10:02:00Z",
+    installConfirmedAt:"2026-08-24T10:03:00Z"
+  },
+  launches:{
+    first:{startedAt:"2026-08-24T10:04:00Z",quitAt:"2026-08-24T10:05:00Z",succeeded:true},
+    second:{startedAt:"2026-08-24T10:06:00Z",succeeded:true}
+  },
+  installedApp:{
+    developerTeamId:"L3QHLDRPAY",
+    codesignDeepStrict:true,
+    notarizationValidated:true,
+    gatekeeperAccepted:true,
+    sparkleHelpersExecutable:true,
+    sparkleLinksValid:true,
+    mainExecutableSHA256:"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    infoPlistSHA256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  crashReports:{checkedAt:"2026-08-24T10:07:00Z",newReports:[]},
+  recordedAt:"2026-08-24T10:08:00Z"
+}' > "$attestation"
+
+"$ROOT/scripts/verify-preview-ui-attestation.sh" "$attestation" "$stage" "$dist" \
+  > "$WORK_DIR/ui-pass.txt"
+/usr/bin/grep -Fq 'PREVIEW UI ATTESTATION PASS' "$WORK_DIR/ui-pass.txt"
+
+jq '.signedArtifactId = 999' "$attestation" > "$WORK_DIR/ui-wrong-artifact.json"
+if "$ROOT/scripts/verify-preview-ui-attestation.sh" \
+    "$WORK_DIR/ui-wrong-artifact.json" "$stage" "$dist" \
+    > "$WORK_DIR/ui-wrong-artifact.txt" 2>&1; then
+  print -u2 "UI attestation unexpectedly accepted another signed artifact"
   exit 1
 fi
 
-/bin/mkdir -p "$FAKE_BIN"
-{
-  print '#!/bin/bash'
-  print 'set -euo pipefail'
-  print 'scenario="${FAKE_GH_SCENARIO:?}"'
-  print 'expected_commit="${EXPECTED_COMMIT:?}"'
-  print 'other_commit="${OTHER_COMMIT:?}"'
-  print 'if [[ "${1:-}" == "api" ]]; then'
-  print '  shift'
-  print '  if [[ "${1:-}" == "--include" ]]; then'
-  print '    case "$scenario" in'
-  print '      not-found) printf '\''HTTP/2.0 404 Not Found\n\n{}\n'\''; exit 1 ;;'
-  print '      api-error) printf '\''HTTP/2.0 500 Internal Server Error\n\n{}\n'\''; exit 1 ;;'
-  print '      *) printf '\''HTTP/2.0 200 OK\n\n{}\n'\''; exit 0 ;;'
-  print '    esac'
-  print '  fi'
-  print '  endpoint="${1:-}"'
-  print '  case "$endpoint" in'
-  print '    */releases/latest)'
-  print '      if [[ "$scenario" == "wrong-latest" ]]; then printf '\''v1.9.9\n'\''; else printf '\''v1.8.3\n'\''; fi'
-  print '      ;;'
-  print '    */releases/tags/*)'
-  print '      case "$scenario" in'
-  print '        stable) draft=false; prerelease=false; asset_name=candidate-provenance.json ;;'
-  print '        draft) draft=true; prerelease=true; asset_name=candidate-provenance.json ;;'
-  print '        missing-provenance) draft=false; prerelease=true; asset_name=other.txt ;;'
-  print '        *) draft=false; prerelease=true; asset_name=candidate-provenance.json ;;'
-  print '      esac'
-  print '      printf '\''{"tag_name":"v9.9.9","draft":%s,"prerelease":%s,"assets":[{"name":"%s"}]}\n'\'' "$draft" "$prerelease" "$asset_name"'
-  print '      ;;'
-  print '    */git/ref/heads/*)'
-  print '      if [[ "$scenario" == "branch-mismatch" ]]; then printf '\''%s\n'\'' "$other_commit"; else printf '\''%s\n'\'' "$expected_commit"; fi'
-  print '      ;;'
-  print '    */git/ref/tags/*)'
-  print '      if [[ "$scenario" == "tag-mismatch" ]]; then printf '\''commit\t%s\n'\'' "$other_commit"; else printf '\''commit\t%s\n'\'' "$expected_commit"; fi'
-  print '      ;;'
-  print '    *) printf '\''unexpected gh api endpoint: %s\n'\'' "$endpoint" >&2; exit 2 ;;'
-  print '  esac'
-  print '  exit 0'
-  print 'fi'
-  print 'if [[ "${1:-}" == "release" && "${2:-}" == "download" ]]; then'
-  print '  destination=""'
-  print '  while (( $# != 0 )); do'
-  print '    if [[ "$1" == "--dir" ]]; then destination="$2"; shift 2; else shift; fi'
-  print '  done'
-  print '  test -n "$destination"'
-  print '  /bin/cp "$FAKE_PROVENANCE" "$destination/candidate-provenance.json"'
-  print '  exit 0'
-  print 'fi'
-  print 'printf '\''unexpected gh invocation: %s\n'\'' "$*" >&2'
-  print 'exit 2'
-} > "$FAKE_BIN/gh"
-/bin/chmod 755 "$FAKE_BIN/gh"
+zsh -n \
+  "$ROOT/scripts/resume-preview-publication.sh" \
+  "$ROOT/scripts/prepare-staged-preview-ui-test.sh" \
+  "$ROOT/scripts/record-preview-ui-attestation.sh" \
+  "$ROOT/scripts/publish-staged-preview.sh"
 
-write_provenance() {
-  local scenario="$1"
-  local commit="$EXPECTED_COMMIT"
-  local branch="release/pre-$RELEASE_TAG"
-  local version="${RELEASE_TAG#v}"
-  local schema_version=3
-  local request_id="$REQUEST_ID"
-  local pipeline_digest="$PIPELINE_DIGEST"
-  local qualification_artifact_id=202
-  case "$scenario" in
-    matching-legacy-schema2) schema_version=2 ;;
-    provenance-commit-mismatch) commit="$OTHER_COMMIT" ;;
-    provenance-branch-mismatch) branch="release/pre-$RELEASE_TAG-rerun2" ;;
-    provenance-version-mismatch) version="9.9.8" ;;
-    provenance-request-id-mismatch) request_id="different-request" ;;
-    provenance-pipeline-digest-mismatch)
-      pipeline_digest="abababababababababababababababababababababababababababababababab"
-      ;;
-    provenance-qualification-artifact-mismatch) qualification_artifact_id=999 ;;
-  esac
-  jq -n \
-    --argjson schemaVersion "$schema_version" \
-    --arg commit "$commit" \
-    --arg branch "$branch" \
-    --arg tag "$RELEASE_TAG" \
-    --arg version "$version" \
-    --arg requestId "$request_id" \
-    --arg pipelineDigest "$pipeline_digest" \
-    --arg qualificationArtifactDigest "$QUALIFICATION_ARTIFACT_DIGEST" \
-    --argjson qualificationArtifactId "$qualification_artifact_id" \
-    '{
-      schemaVersion: $schemaVersion,
-      repository: "HD838A/remote-mic-app",
-      candidateBranch: $branch,
-      tag: $tag,
-      tagCommit: $commit,
-      baseMainCommit: "cccccccccccccccccccccccccccccccccccccccc",
-      version: $version,
-      build: "999",
-      payloadAssets: [{
-        name: "Remote-Mic-9.9.9.zip",
-        size: 123,
-        sha256: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-      }]
-    } + (if $schemaVersion == 3 then {
-      requestId: $requestId,
-      attemptId: $commit,
-      requestStartedAt: 1777777000,
-      releaseReadyAt: 1777777060,
-      pipelineDigest: $pipelineDigest,
-      pipelineQualifiedAt: "2026-08-24T10:00:00Z",
-      pipelineQualificationRunId: 101,
-      pipelineQualificationArtifactId: $qualificationArtifactId,
-      pipelineQualificationArtifactDigest: $qualificationArtifactDigest,
-      requestAttestationRunId: 303,
-      requestAttestationRunAttempt: 1
-    } else {} end)' > "$WORK_DIR/provenance-$scenario.json"
-}
-
-write_request_attestation() {
-  local output_file="$1"
-  jq -n \
-    --arg requestId "$REQUEST_ID" \
-    --arg tag "$RELEASE_TAG" \
-    --arg commit "$EXPECTED_COMMIT" \
-    --arg pipelineDigest "$PIPELINE_DIGEST" \
-    --arg qualificationArtifactDigest "$QUALIFICATION_ARTIFACT_DIGEST" \
-    '{
-      schemaVersion: 4,
-      requestId: $requestId,
-      attemptId: $commit,
-      tag: $tag,
-      candidateCommit: $commit,
-      baseMainCommit: "cccccccccccccccccccccccccccccccccccccccc",
-      requestStartedAt: 1777777000,
-      releaseReadyAt: 1777777060,
-      pipelineDigest: $pipelineDigest,
-      pipelineQualifiedAt: "2026-08-24T10:00:00Z",
-      pipelineQualificationRunId: 101,
-      pipelineQualificationArtifactId: 202,
-      pipelineQualificationArtifactDigest: $qualificationArtifactDigest,
-      attestationRunId: 404,
-      attestationRunAttempt: 2
-    }' > "$output_file"
-}
-
-run_case() {
-  local scenario="$1"
-  local expected_result="$2"
-  local expected_action="${3:-}"
-  local case_dir="$WORK_DIR/case-$scenario"
-  local output_file="$case_dir/github-output.txt"
-  /bin/mkdir -p "$case_dir/runner-temp"
-  write_request_attestation "$case_dir/runner-temp/release-request-attestation.json"
-  : > "$output_file"
-  write_provenance "$scenario"
-
-  set +e
-  PATH="$FAKE_BIN:$PATH" \
-    FAKE_GH_SCENARIO="$scenario" \
-    FAKE_PROVENANCE="$WORK_DIR/provenance-$scenario.json" \
-    EXPECTED_COMMIT="$EXPECTED_COMMIT" \
-    OTHER_COMMIT="$OTHER_COMMIT" \
-    GITHUB_OUTPUT="$output_file" \
-    GITHUB_REPOSITORY="HD838A/remote-mic-app" \
-    RUNNER_TEMP="$case_dir/runner-temp" \
-    RELEASE_TAG="$RELEASE_TAG" \
-    RELEASE_REQUEST_ID="$REQUEST_ID" \
-    EXPECTED_PIPELINE_DIGEST="$PIPELINE_DIGEST" \
-    EXPECTED_STABLE_TAG=v1.8.3 \
-    /bin/bash "$STEP_SCRIPT" > "$case_dir/stdout.txt" 2> "$case_dir/stderr.txt"
-  local command_status="$?"
-  set -e
-
-  if [[ "$expected_result" == "pass" ]]; then
-    if [[ "$command_status" != "0" ]]; then
-      print -u2 "Preview recovery case $scenario unexpectedly failed"
-      /bin/cat "$case_dir/stderr.txt" >&2
-      exit 1
-    fi
-    /usr/bin/grep -Fxq "action=$expected_action" "$output_file"
-  elif [[ "$command_status" == "0" ]]; then
-    print -u2 "Preview recovery case $scenario unexpectedly passed"
-    exit 1
-  fi
-}
-
-run_case not-found pass package
-run_case matching pass verify-only
-run_case matching-legacy-schema2 pass verify-only
-for rejected_case in \
-  api-error \
-  wrong-latest \
-  stable \
-  draft \
-  missing-provenance \
-  branch-mismatch \
-  tag-mismatch \
-  provenance-commit-mismatch \
-  provenance-branch-mismatch \
-  provenance-version-mismatch \
-  provenance-request-id-mismatch \
-  provenance-pipeline-digest-mismatch \
-  provenance-qualification-artifact-mismatch; do
-  run_case "$rejected_case" fail
-done
-
-print "RELEASE RESUME WORKFLOW TEST PASS"
+print "RELEASE RESUME AND STAGED PUBLICATION TESTS PASS"

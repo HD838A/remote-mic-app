@@ -59,7 +59,7 @@ if [[ ! "$BUILD" =~ '^[0-9]+$' ]]; then
 fi
 RELEASE_TAG="v$VERSION"
 HEAD_COMMIT="$(git rev-parse HEAD)"
-EXPECTED_RUN_TITLE="mac-release preview $RELEASE_TAG $REQUEST_ID $HEAD_COMMIT"
+EXPECTED_RUN_TITLE="mac-release stage-preview $RELEASE_TAG $REQUEST_ID $HEAD_COMMIT"
 if [[ ! "$HEAD_COMMIT" =~ '^[0-9a-f]{40}$' ]]; then
   print -u2 "fast release requires an exact 40-character candidate commit"
   exit 1
@@ -127,13 +127,13 @@ if [[ "$("$ROOT/scripts/release-pipeline-digest.sh")" != "$PIPELINE_DIGEST" ]]; 
 fi
 
 print "FAST RELEASE PREFLIGHT PASS: $RELEASE_TAG ($BUILD) at $HEAD_COMMIT"
-print "Dispatching the sole protected preview workflow for request $REQUEST_ID"
+print "Dispatching protected signing and notarization staging for request $REQUEST_ID"
 DISPATCH_STARTED_AT="$(/bin/date -u +'%Y-%m-%dT%H:%M:%SZ')"
 "$GH_BIN" workflow run "$WORKFLOW_FILE" \
   --repo "$REPOSITORY" \
   --ref "$BRANCH" \
   --raw-field "tag=$RELEASE_TAG" \
-  --raw-field "release_mode=preview" \
+  --raw-field "release_mode=stage-preview" \
   --raw-field "expected_commit=$HEAD_COMMIT" \
   --raw-field "expected_pipeline_digest=$PIPELINE_DIGEST" \
   --raw-field "request_started_at=$REQUEST_STARTED_AT" \

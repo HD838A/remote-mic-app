@@ -30,6 +30,7 @@ fi
 /bin/cp "$ROOT/.github/workflows/mac-ci.yml" "$TEST_REPO/.github/workflows/"
 /bin/cp "$ROOT/.github/workflows/mac-preview-candidate.yml" "$TEST_REPO/.github/workflows/"
 /bin/cp "$ROOT/.github/workflows/mac-release-package.yml" "$TEST_REPO/.github/workflows/"
+/bin/cp "$ROOT/.github/workflows/mac-preview-publication.yml" "$TEST_REPO/.github/workflows/"
 /bin/cp "$ROOT/.github/workflows/mac-stable-promote.yml" "$TEST_REPO/.github/workflows/"
 /bin/cp "$ROOT/.github/workflows/release-guard.yml" "$TEST_REPO/.github/workflows/"
 /bin/cp "$ROOT/scripts/verify-release-dependency-pins.sh" "$TEST_REPO/scripts/"
@@ -42,6 +43,7 @@ fi
 /bin/cp "$ROOT/scripts/release-user-wall-watchdog.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-release-metadata-diff.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/prepare-preview-recording-pr.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/prepare-preview-candidate.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/package-macos-release-variants.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/run-release-stage.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/build-app.sh" "$TEST_REPO/scripts/"
@@ -56,7 +58,12 @@ fi
 /bin/cp "$ROOT/scripts/build-doubao-driver-pkg.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/package-macos-release-in-actions.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/publish-release.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/publish-staged-preview.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/prepare-staged-preview-ui-test.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/record-preview-ui-attestation.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/verify-preview-ui-attestation.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/resume-preview-publication.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/resolve-release-dependencies.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/check-repository-boundaries.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/fast-release.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/reconcile-release-event.sh" "$TEST_REPO/scripts/"
@@ -64,6 +71,7 @@ fi
 /bin/cp "$ROOT/scripts/test.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/test-release-pipeline-optimization.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/test-release-resume-workflow.sh" "$TEST_REPO/scripts/"
+/bin/cp "$ROOT/scripts/test-prepare-preview-candidate.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-release-control-plane-diff.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-app.sh" "$TEST_REPO/scripts/"
 /bin/cp "$ROOT/scripts/verify-dmg.sh" "$TEST_REPO/scripts/"
@@ -76,6 +84,8 @@ fi
 /bin/mkdir -p "$TEST_REPO/Resources"
 /bin/cp "$ROOT/Resources/Info.plist" "$TEST_REPO/Resources/"
 /bin/cp "$ROOT/Package.swift" "$ROOT/Package.resolved" "$TEST_REPO/"
+/bin/mkdir -p "$TEST_REPO/config"
+/bin/cp "$ROOT/config/release-dependencies.json" "$TEST_REPO/config/"
 if [[ ! -x "$ROOT/scripts/verify-release-pipeline-qualification-source.sh" ]]; then
   print -u2 "release qualification source verifier must be executable in Git"
   exit 1
@@ -96,12 +106,16 @@ print 'exit 0' >> "$TEST_REPO/scripts/run-trusted-release-validation.sh"
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq -- '- qualification' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq -- '- preview' \
+/usr/bin/grep -Fq -- '- stage-preview' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq "if: \${{ inputs.release_mode == 'qualification' }}" \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq "if: \${{ inputs.release_mode == 'preview' }}" \
+/usr/bin/grep -Fq "if: \${{ inputs.release_mode == 'stage-preview' }}" \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'Publish exact UI-tested staged Preview bytes' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+/usr/bin/grep -Fq 'test "$GITHUB_REF_NAME" = main' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 if /usr/bin/grep -Fq 'inputs.canary' \
     "$TEST_REPO/.github/workflows/mac-release-package.yml"; then
   print -u2 "signed release workflow still exposes the ambiguous canary boolean"
@@ -195,6 +209,7 @@ release_critical_workflows=(
   "$TEST_REPO/.github/workflows/mac-ci.yml"
   "$TEST_REPO/.github/workflows/mac-preview-candidate.yml"
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
   "$TEST_REPO/.github/workflows/release-guard.yml"
 )
@@ -290,10 +305,8 @@ fi
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq "if: needs.classify_changes.outputs.release_control_plane_only == 'true'" \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
-/usr/bin/grep -Fq 'Validate recovery control plane' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'test -r scripts/resume-preview-publication.sh' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'Recover exact stage and validate real Sparkle UI attestation' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq 'verify-release-control-plane-diff.sh' \
   "$TEST_REPO/.github/workflows/mac-ci.yml"
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
@@ -323,20 +336,23 @@ fi
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'PREVIEW_READY_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'PUBLICATION_MAX_SECONDS: 180' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'run-release-stage.sh" all publication 180' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq 'release-slo-ledger-published-${{ github.run_id }}' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq 'release-slo-ledger-failed-${{ github.run_id }}' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'release-user-wall-watchdog.sh' \
-  "$TEST_REPO/scripts/release-pipeline-digest.sh"
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+if /usr/bin/grep -Fq 'mac-preview-publication.yml' \
+    "$TEST_REPO/scripts/release-pipeline-digest.sh"; then
+  print -u2 "publication control plane unexpectedly changes the artifact-closure digest"
+  exit 1
+fi
 /usr/bin/grep -Fq 'run-trusted-release-validation.sh' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'git ls-remote origin "refs/tags/$RELEASE_TAG^{}"' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
-/usr/bin/grep -Fq 'test "$remote_tag_commit" = "$head_commit"' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'verify-preview-ui-attestation.sh' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+/usr/bin/grep -Fq 'SOURCE_ARTIFACT_DIGEST' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq 'READY_SLO_SECONDS: 1740' \
   "$TEST_REPO/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq 'STABLE_READY_SLO_SECONDS: 1740' \
@@ -378,8 +394,8 @@ fi
   "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'verify_cdn_assets "$STAGING_DIR" "$CANDIDATE_RELEASE_MANIFEST" &' \
   "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq './scripts/publish-release.sh verify-prerelease' \
-  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'publish-release.sh" resume-prerelease' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq '/usr/bin/cmp -s "$source_file" "$downloaded_file"' \
   "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'downloaded_sha="$(/usr/bin/shasum -a 256' \
@@ -429,8 +445,18 @@ fi
   "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'PUBLIC_PRODUCT_NAME="无线麦SayAll.app"' \
   "$ROOT/scripts/publish-release.sh" "$ROOT/scripts/fast-release.sh"
-/usr/bin/grep -Fq 'EXPECTED_RUN_TITLE="mac-release preview $RELEASE_TAG $REQUEST_ID $HEAD_COMMIT"' \
+/usr/bin/grep -Fq 'EXPECTED_RUN_TITLE="mac-release stage-preview $RELEASE_TAG $REQUEST_ID $HEAD_COMMIT"' \
   "$ROOT/scripts/fast-release.sh"
+/usr/bin/grep -Fq 'release_mode=stage-preview' "$ROOT/scripts/fast-release.sh"
+/usr/bin/grep -Fq -- '--ref main' "$ROOT/scripts/publish-staged-preview.sh"
+if /usr/bin/grep -Fq 'release_mode=' "$ROOT/scripts/publish-staged-preview.sh"; then
+  print -u2 "staged publication dispatcher unexpectedly exposes another mode"
+  exit 1
+fi
+/usr/bin/grep -Fq '.baseline.version == "1.8.3"' "$ROOT/scripts/verify-preview-ui-attestation.sh"
+/usr/bin/grep -Fq 'productionURLPrefix' "$ROOT/scripts/verify-preview-ui-attestation.sh"
+/usr/bin/grep -Fq 'http://127[.]0[.]0[.]1' "$ROOT/scripts/verify-preview-ui-attestation.sh"
+/usr/bin/grep -Fq 'resume_existing_prerelease_assets' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq '.displayTitle == $runTitle' "$ROOT/scripts/fast-release.sh"
 /usr/bin/grep -Fq '.display_title == $runTitle' "$ROOT/scripts/fast-release.sh"
 /usr/bin/grep -Fq -- '--title "$PUBLIC_PRODUCT_NAME $VERSION"' \
@@ -804,15 +830,15 @@ fi
 ) > "$WORK_DIR/pins-pass.txt"
 /usr/bin/grep -Fq "RELEASE DEPENDENCY PINS PASS" "$WORK_DIR/pins-pass.txt"
 
-/bin/cp "$TEST_REPO/.github/workflows/mac-ci.yml" "$WORK_DIR/mac-ci.yml"
+/bin/cp "$TEST_REPO/config/release-dependencies.json" "$WORK_DIR/release-dependencies.json"
 /usr/bin/awk '
   !changed && index($0, "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c") {
-    sub("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c", "1111111111111111111111111111111111111111")
+    sub("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c", "111")
     changed = 1
   }
   { print }
-' "$TEST_REPO/.github/workflows/mac-ci.yml" > "$WORK_DIR/mac-ci-mismatch.yml"
-/bin/mv "$WORK_DIR/mac-ci-mismatch.yml" "$TEST_REPO/.github/workflows/mac-ci.yml"
+' "$TEST_REPO/config/release-dependencies.json" > "$WORK_DIR/release-dependencies-mismatch.json"
+/bin/mv "$WORK_DIR/release-dependencies-mismatch.json" "$TEST_REPO/config/release-dependencies.json"
 if (
   cd "$TEST_REPO"
   ./scripts/verify-release-dependency-pins.sh
@@ -820,9 +846,9 @@ if (
   print -u2 "mismatched private dependency pins unexpectedly passed"
   exit 1
 fi
-/usr/bin/grep -Fq "commit differs across macOS CI, preview, and signed release workflows" \
+/usr/bin/grep -Fq "release dependency manifest has an invalid schema, repository, or commit" \
   "$WORK_DIR/pins-mismatch.txt"
-/bin/cp "$WORK_DIR/mac-ci.yml" "$TEST_REPO/.github/workflows/mac-ci.yml"
+/bin/cp "$WORK_DIR/release-dependencies.json" "$TEST_REPO/config/release-dependencies.json"
 
 {
   print -r -- '#!/bin/zsh'
@@ -972,7 +998,7 @@ jq -n \
   --arg gitVersion "git version 2.50.1" \
   --arg swiftVersion "Apple Swift version 6.2" \
   '{
-    schemaVersion:2,
+    schemaVersion:3,
     pipelineDigest:$pipelineDigest,
     sourceCommit:$sourceCommit,
     sourceBranch:$sourceBranch,
@@ -997,10 +1023,12 @@ jq -n \
       actionsDownloadArtifactCommit:"634f93cb2916e3fdff6788551b99b062d0335ce0",
       actionsUploadArtifactCommit:"ea165f8d65b6e75b540449e92b4886f43607fa02",
       notarySecretsCommit:"5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
-      matchCommit:"2e271768593821611c54f3d1b376f39e503f53be",
-      sayAllAICommit:"01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-      sayAllMacroPlatformCommit:"76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
-      sayAllMacRemoteCommit:"3f3c782180eef4024b53941c1f65d80e7cff4c66"
+      matchCommit:"2e271768593821611c54f3d1b376f39e503f53be"
+    },
+    observedProductDependencies:{
+      sayAllAI:{repository:"GetSayAll/sayall-ai",commit:"01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"},
+      sayAllMacroPlatform:{repository:"GetSayAll/sayall-macro-platform",commit:"76344d4d1a2d477e8f473c901a9f4d3d7b0f107c"},
+      sayAllMacRemote:{repository:"GetSayAll/sayall-mac-remote",commit:"3f3c782180eef4024b53941c1f65d80e7cff4c66"}
     }
   }' \
   > "$WORK_DIR/qualification-artifact/release-pipeline-qualification.json"
@@ -1087,10 +1115,7 @@ jq -e '.externalDependencies == {
   actionsDownloadArtifactCommit:"634f93cb2916e3fdff6788551b99b062d0335ce0",
   actionsUploadArtifactCommit:"ea165f8d65b6e75b540449e92b4886f43607fa02",
   notarySecretsCommit:"5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
-  matchCommit:"2e271768593821611c54f3d1b376f39e503f53be",
-  sayAllAICommit:"01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-  sayAllMacroPlatformCommit:"76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
-  sayAllMacRemoteCommit:"3f3c782180eef4024b53941c1f65d80e7cff4c66"
+  matchCommit:"2e271768593821611c54f3d1b376f39e503f53be"
 }' "$WORK_DIR/release-ready-proof.json" >/dev/null
 
 for qualification_failure_mode in \
@@ -1152,7 +1177,9 @@ GH_BIN="$FAKE_ATTEST_GH" GITHUB_REPOSITORY=HD838A/remote-mic-app \
     "$WORK_DIR/release-ready-proof.json" "$WORK_DIR/release-request-attestation.json" \
     > "$WORK_DIR/attestation-first.txt"
 /usr/bin/grep -Fq 'RELEASE REQUEST ATTESTATION PASS' "$WORK_DIR/attestation-first.txt"
-test "$(jq -r '.schemaVersion' "$WORK_DIR/release-request-attestation.json")" = "4"
+test "$(jq -r '.schemaVersion' "$WORK_DIR/release-request-attestation.json")" = "5"
+jq -e '.productDependencies.sayAllMacRemote.commit == "3f3c782180eef4024b53941c1f65d80e7cff4c66"' \
+  "$WORK_DIR/release-request-attestation.json" >/dev/null
 test "$(jq -r '.attemptId' "$WORK_DIR/release-request-attestation.json")" = "$HEAD_COMMIT"
 test "$(jq -r '.releaseReadyAt' "$WORK_DIR/release-request-attestation.json")" = "1787220390"
 test "$(jq -r '.candidateGateCompletedAt' "$WORK_DIR/release-request-attestation.json")" = "2026-08-20T10:05:00Z"
@@ -1767,6 +1794,7 @@ for pid_file in "$WORK_DIR/stage-timeout/"*.pid(N); do
 done
 
 "$ROOT/scripts/test-release-resume-workflow.sh"
+"$ROOT/scripts/test-prepare-preview-candidate.sh"
 
 print "RELEASE PIPELINE OPTIMIZATION TEST PASS"
 print "HEAD: $HEAD_COMMIT"

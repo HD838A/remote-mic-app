@@ -2,6 +2,7 @@
 set -euo pipefail
 umask 077
 
+ROOT="${REPOSITORY_ROOT:-${0:A:h:h}}"
 REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 GH_BIN="${GH_BIN:-gh}"
 REQUEST_ID="${1:-}"
@@ -38,6 +39,7 @@ done
 for required in "$MAIN_CI_PROOF"; do
   [[ -r "$required" ]] || { print -u2 "release request proof is unreadable"; exit 1; }
 done
+product_dependencies="$(REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/resolve-release-dependencies.sh" json)"
 
 completed_at="$(jq -r '.mainCiCompletedAt // empty' "$MAIN_CI_PROOF")"
 candidate_gate_completed_at="$(jq -r '.candidateGateCompletedAt // empty' "$MAIN_CI_PROOF")"
@@ -68,10 +70,7 @@ if ! jq -e '
     actionsDownloadArtifactCommit: "634f93cb2916e3fdff6788551b99b062d0335ce0",
     actionsUploadArtifactCommit: "ea165f8d65b6e75b540449e92b4886f43607fa02",
     notarySecretsCommit: "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
-    matchCommit: "2e271768593821611c54f3d1b376f39e503f53be",
-    sayAllAICommit: "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-    sayAllMacroPlatformCommit: "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
-    sayAllMacRemoteCommit: "3f3c782180eef4024b53941c1f65d80e7cff4c66"
+    matchCommit: "2e271768593821611c54f3d1b376f39e503f53be"
   }
 ' "$MAIN_CI_PROOF" >/dev/null; then
   print -u2 "release proof lacks the exact qualified toolchain or external dependency commits"
@@ -141,10 +140,11 @@ expected_json="$(jq -n \
   --argjson pipelineQualificationArtifactId "$pipeline_qualification_artifact_id" \
   --arg pipelineQualificationArtifactDigest "$pipeline_qualification_artifact_digest" \
   --argjson qualifiedToolchain "$qualified_toolchain" \
+  --argjson productDependencies "$product_dependencies" \
   --argjson attestationRunId "$ATTESTATION_RUN_ID" \
   --argjson attestationRunAttempt "$ATTESTATION_RUN_ATTEMPT" \
   --arg attestationBranch "$ATTESTATION_BRANCH" \
-  '({schemaVersion:4,requestId:$requestId,attemptId:$attemptId,tag:$tag,requestStartedAt:$requestStartedAt,releaseReadyAt:$releaseReadyAt,candidateCommit:$candidateCommit,baseMainCommit:$baseMainCommit,mainCiCompletedAt:$mainCiCompletedAt,candidateGateCompletedAt:$candidateGateCompletedAt,pipelineDigest:$pipelineDigest,pipelineQualifiedAt:$pipelineQualifiedAt,pipelineQualificationRunId:$pipelineQualificationRunId,pipelineQualificationArtifactId:$pipelineQualificationArtifactId,pipelineQualificationArtifactDigest:$pipelineQualificationArtifactDigest,attestationRunId:$attestationRunId,attestationRunAttempt:$attestationRunAttempt,attestationBranch:$attestationBranch} + $qualifiedToolchain)')"
+  '({schemaVersion:5,requestId:$requestId,attemptId:$attemptId,tag:$tag,requestStartedAt:$requestStartedAt,releaseReadyAt:$releaseReadyAt,candidateCommit:$candidateCommit,baseMainCommit:$baseMainCommit,mainCiCompletedAt:$mainCiCompletedAt,candidateGateCompletedAt:$candidateGateCompletedAt,pipelineDigest:$pipelineDigest,pipelineQualifiedAt:$pipelineQualifiedAt,pipelineQualificationRunId:$pipelineQualificationRunId,pipelineQualificationArtifactId:$pipelineQualificationArtifactId,pipelineQualificationArtifactDigest:$pipelineQualificationArtifactDigest,productDependencies:$productDependencies,attestationRunId:$attestationRunId,attestationRunAttempt:$attestationRunAttempt,attestationBranch:$attestationBranch} + $qualifiedToolchain)')"
 
 locked_payload=""
 for artifact_record in "${artifact_records[@]}"; do
@@ -165,7 +165,7 @@ for artifact_record in "${artifact_records[@]}"; do
     print -u2 "existing release attestation artifact is malformed"
     exit 1
   }
-  if [[ "$(print -r -- "$existing_json" | jq -r '.schemaVersion // empty')" != "4" ]]; then
+  if [[ "$(print -r -- "$existing_json" | jq -r '.schemaVersion // empty')" != "5" ]]; then
     print -u2 "legacy exact-candidate request attestation requires explicit migration; refusing to reset its clock"
     exit 1
   fi
@@ -230,8 +230,9 @@ if [[ -n "$locked_payload" ]]; then
     --arg pipelineDigest "$pipeline_digest" \
     --argjson pipelineQualificationArtifactId "$pipeline_qualification_artifact_id" \
     --arg pipelineQualificationArtifactDigest "$pipeline_qualification_artifact_digest" \
-    --argjson qualifiedToolchain "$qualified_toolchain" '
-      .schemaVersion == 4 and
+    --argjson qualifiedToolchain "$qualified_toolchain" \
+    --argjson productDependencies "$product_dependencies" '
+      .schemaVersion == 5 and
       .requestId == $requestId and .tag == $tag and
       .requestStartedAt == $requestStartedAt and
       .attemptId == $candidateCommit and
@@ -240,6 +241,7 @@ if [[ -n "$locked_payload" ]]; then
       .pipelineDigest == $pipelineDigest and
       .pipelineQualificationArtifactId == $pipelineQualificationArtifactId and
       .pipelineQualificationArtifactDigest == $pipelineQualificationArtifactDigest and
+      .productDependencies == $productDependencies and
       ({ageVersion,fastlaneVersion,xcodeVersion,xcodeBuild,imageOS,imageVersion,
         jqVersion,ripgrepVersion,ghVersion,gitVersion,swiftVersion,externalDependencies} == $qualifiedToolchain) and
       (.releaseReadyAt | type) == "number" and

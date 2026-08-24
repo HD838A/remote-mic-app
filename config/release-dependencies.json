@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "dependencies": {
+    "sayAllAI": {
+      "repository": "GetSayAll/sayall-ai",
+      "commit": "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"
+    },
+    "sayAllMacroPlatform": {
+      "repository": "GetSayAll/sayall-macro-platform",
+      "commit": "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c"
+    },
+    "sayAllMacRemote": {
+      "repository": "GetSayAll/sayall-mac-remote",
+      "commit": "3f3c782180eef4024b53941c1f65d80e7cff4c66"
+    }
+  }
+}
