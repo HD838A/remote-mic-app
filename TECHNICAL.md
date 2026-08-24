@@ -28,7 +28,7 @@
 | `HIDRemoteMonitor.swift` | RC003 原始 HID 报告、独占/兼容模式、按键重复和活动状态 |
 | `KeyboardEventSuppressor.swift` | 兼容模式下对同一遥控器原生系统事件的短时抑制 |
 | `KeyboardInjector.swift` | 键盘、媒体键和预置应用启动动作 |
-| `RemoteVoiceFunctionMapper.swift` | 只对 RC003 把语音键的 F5 usage 映射为 Fn/Globe 或千问模式的右 Command，并在退出时恢复 |
+| `RemoteVoiceFunctionMapper.swift` | 只对 RC003 把语音键的 F5 usage 映射为 Fn/Globe，或在千问模式中屏蔽 F5，并在退出时恢复 |
 | `AppSettings.swift` | 音频设备、增益、HID 开关、按键映射和外设标识持久化 |
 
 ## 国际化
@@ -61,7 +61,7 @@ ATVV 通道为：
 
 ## 音频输出
 
-`VirtualAudioOutput` 使用 `AVAudioEngine` 和 `AVAudioPlayerNode`，内部格式固定为 16 kHz、单声道、Float32。应用枚举所有具有输出声道的 CoreAudio 设备，并把语音直接写入用户选择的设备。默认不修改系统默认输入或输出；用户主动开启千问兼容模式后，连接期间会临时把默认输入设为 `MiRemoteV 2ch`，并只在默认输入仍由本次模式管理时恢复此前设备。
+`VirtualAudioOutput` 使用 `AVAudioEngine` 和 `AVAudioPlayerNode`，内部格式固定为 16 kHz、单声道、Float32。应用枚举所有具有输出声道的 CoreAudio 设备，并把语音直接写入用户选择的设备，不修改系统默认输入或输出。
 
 测试音同样只在内存中生成。只有音频设备已经配置、RC003 未在传输语音且没有其他测试音播放时才允许发送；真实语音开始或设备重新配置时会取消测试音，避免阻塞语音缓冲。
 
@@ -104,7 +104,7 @@ ATVV 通道为：
 
 RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`RemoteVoiceFunctionMapper` 只匹配 RC003 的 Vendor ID/Product ID；默认把该 usage 映射为 Apple vendor top-case Fn/Globe（usage page `0xFF`、usage `0x03`）。自定义按键映射启用时，同一组件还会把 RC003 的 Keyboard Power（usage `0x66`）映射为 F20（usage `0x6F`）。
 
-默认关闭的千问兼容模式把同一语音键映射为 Right GUI / 右 Command（usage page `0x07`、usage `0xE7`），自动选中 `MiRemoteV 2ch`，并在音频链路可用期间可逆管理系统默认输入。模式与 Fn 点按互斥；旧配置缺少 `qianwenVoiceModeEnabled` 时按关闭处理。
+默认关闭的千问兼容模式先把实体 F5 映射为 usage `0`，再在 ATVV `STREAM_START` 时用 `CGEvent` 单独按下右 Command，在 `STREAM_STOP` 且尾音排空后松开；断连、关闭模式和退出都会立即释放。这样避免实体 F5 与 Command 组合成 macOS 的 VoiceOver 快捷键。模式自动选中 `MiRemoteV 2ch` 作为 SayAll 输出，但千问必须在自身设置中明确选择同一麦克风；模式与 Fn 点按互斥，旧配置缺少 `qianwenVoiceModeEnabled` 时按关闭处理。
 
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的 F5 映射为 usage `0`；任一目标失败或目标不完整时立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 

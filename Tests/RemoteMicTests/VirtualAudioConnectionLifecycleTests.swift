@@ -254,46 +254,4 @@ struct VirtualAudioConnectionLifecycleTests {
         ))
     }
 
-    @Test func qianwenModeChangesOnlyTheDefaultInputStillManagedBySayAll() {
-        #expect(DefaultInputFallbackPolicy.shouldActivateQianwenInput(
-            modeEnabled: true,
-            managedVirtualUID: "virtual",
-            selectedVirtualUID: "virtual",
-            managedFallbackUID: "built-in",
-            currentDefaultUID: "built-in"
-        ))
-        #expect(!DefaultInputFallbackPolicy.shouldActivateQianwenInput(
-            modeEnabled: true,
-            managedVirtualUID: "virtual",
-            selectedVirtualUID: "virtual",
-            managedFallbackUID: "built-in",
-            currentDefaultUID: "usb-user-choice"
-        ))
-        #expect(DefaultInputFallbackPolicy.shouldRestoreQianwenFallback(
-            managedVirtualUID: "virtual",
-            currentDefaultUID: "virtual"
-        ))
-        #expect(!DefaultInputFallbackPolicy.shouldRestoreQianwenFallback(
-            managedVirtualUID: "virtual",
-            currentDefaultUID: "usb-user-choice"
-        ))
-        #expect(DefaultInputFallbackPolicy.shouldReleaseQianwenManagement(
-            managedVirtualUID: "virtual",
-            managedFallbackUID: "built-in",
-            currentDefaultUID: "usb-user-choice",
-            virtualAudioActive: true
-        ))
-        #expect(DefaultInputFallbackPolicy.shouldReleaseQianwenManagement(
-            managedVirtualUID: "virtual",
-            managedFallbackUID: "built-in",
-            currentDefaultUID: "built-in",
-            virtualAudioActive: true
-        ))
-        #expect(!DefaultInputFallbackPolicy.shouldReleaseQianwenManagement(
-            managedVirtualUID: "virtual",
-            managedFallbackUID: "built-in",
-            currentDefaultUID: "built-in",
-            virtualAudioActive: false
-        ))
-    }
 }

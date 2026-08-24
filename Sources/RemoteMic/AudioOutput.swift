@@ -354,34 +354,6 @@ enum DefaultInputFallbackPolicy {
         managedVirtualUID == selectedVirtualUID && currentDefaultUID == managedFallbackUID
     }
 
-    static func shouldActivateQianwenInput(
-        modeEnabled: Bool,
-        managedVirtualUID: String,
-        selectedVirtualUID: String,
-        managedFallbackUID: String,
-        currentDefaultUID: String?
-    ) -> Bool {
-        modeEnabled &&
-            managedVirtualUID == selectedVirtualUID &&
-            currentDefaultUID == managedFallbackUID
-    }
-
-    static func shouldRestoreQianwenFallback(
-        managedVirtualUID: String,
-        currentDefaultUID: String?
-    ) -> Bool {
-        currentDefaultUID == managedVirtualUID
-    }
-
-    static func shouldReleaseQianwenManagement(
-        managedVirtualUID: String,
-        managedFallbackUID: String,
-        currentDefaultUID: String?,
-        virtualAudioActive: Bool
-    ) -> Bool {
-        currentDefaultUID != managedVirtualUID &&
-            (currentDefaultUID != managedFallbackUID || virtualAudioActive)
-    }
 }
 
 final class VirtualAudioOutput {

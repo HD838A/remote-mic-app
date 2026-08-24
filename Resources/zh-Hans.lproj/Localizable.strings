@@ -21,8 +21,8 @@
 "audio.test_tone.completed" = "测试音已完成";
 "audio.test_tone.cancelled" = "测试音已取消";
 "voice_button.status.fn_enabled" = "遥控器语音键已硬件映射为 Fn";
-"voice_button.status.right_command_enabled" = "遥控器语音键已硬件映射为右 Command";
-"voice_button.status.right_command_waiting" = "等待遥控器右 Command 硬件映射";
+"voice_button.status.right_command_enabled" = "语音键已由千问兼容模式接管";
+"voice_button.status.right_command_waiting" = "等待千问语音键接管";
 "voice_button.status.waiting" = "等待遥控器 Fn 硬件映射";
 "voice_button.status.fn_pressed" = "硬件 Fn 已按下；松开语音键即释放";
 "voice_button.status.fn_released" = "硬件 Fn 已释放";
@@ -289,7 +289,7 @@
 "audio.action.refresh_devices" = "刷新音频设备";
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";
 "audio.action.send_test_tone" = "发送 1 秒测试音";
-"audio.output.privacy_help" = "应用只把遥控器语音写到所选设备。千问兼容模式开启时会临时管理系统默认输入；断连、关闭或用户手动改选后停止管理。系统默认输出不会被修改。";
+"audio.output.privacy_help" = "应用只把遥控器语音写到所选设备，不修改系统默认输入或输出。";
 "audio.compatibility.title" = "豆包输入法兼容";
 "audio.compatibility.section_title" = "语音输入与兼容";
 "audio.compatibility.microphone_label" = "兼容虚拟麦克风";
@@ -298,7 +298,7 @@
 "audio.compatibility.help" = "豆包可能无法识别普通虚拟音频设备。安装独立的兼容麦克风 MiRemoteV 2ch 后在这里选中；原 BlackHole 不会被修改或替换。";
 "audio.compatibility.help_plain" = "如果常用的语音工具收不到声音，可选择随安装包提供的兼容麦克风；已有音频设备不会被替换。";
 "audio.compatibility.qianwen_mode.title" = "千问兼容模式";
-"audio.compatibility.qianwen_mode.detail" = "把语音键改为右 Command，并在遥控器连接时临时将系统默认麦克风切换到 MiRemoteV 2ch；关闭、断连或退出时恢复，手动改选麦克风会关闭本模式。";
+"audio.compatibility.qianwen_mode.detail" = "按住语音键时触发右 Command，松开并排空尾音后自动结束。请在千问中把麦克风选择为 MiRemoteV 2ch。";
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "自定义遥控器按键功能，并保留语音输入与 Fn 功能";
 "button_mapping.toggle.enabled" = "启用自定义按键功能";

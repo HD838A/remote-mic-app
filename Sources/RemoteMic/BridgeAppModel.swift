@@ -339,6 +339,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.handleVoiceFnTapFailure(failure)
         }
     )
+    private lazy var qianwenVoiceCommandSession = VoiceCommandHoldSessionController(
+        setKeyPressed: { pressed in
+            let succeeded = KeyboardInjector.setRightCommandPressed(pressed)
+            AppLogger.shared.write(
+                "QIANWEN COMMAND \(pressed ? "DOWN" : "UP")\(succeeded ? "" : " failed")"
+            )
+            return succeeded
+        },
+        drainAudio: { [weak self] completion in
+            guard let self else {
+                completion()
+                return
+            }
+            self.audioOutput.endSessionAfterDraining(completion: completion)
+        }
+    )
     private lazy var transcriptCaptureCoordinator = TranscriptCaptureCoordinator(
         isEnabled: { [weak self] in
             self?.settings.localTranscriptHistoryEnabled ?? false
@@ -411,7 +427,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var pendingVirtualAudioRelease: (generation: UInt64, reason: String)?
     private var systemAudioSuspensionState = SystemAudioSuspensionState()
     private var managedDefaultInputTransition: ManagedDefaultInputTransition?
-    private var qianwenDefaultInputTransition: ManagedDefaultInputTransition?
     private lazy var audioHardwareListener: AudioObjectPropertyListenerBlock = { [weak self] count, addresses in
         let properties = Self.audioHardwarePropertyNames(count: count, addresses: addresses)
         self?.scheduleAudioRecovery(reason: "hardware_change", details: "properties=\(properties)")
@@ -721,6 +736,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         stopLongRecording(reason: "app_stop")
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
+        qianwenVoiceCommandSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
         bluetoothBridges.removeAll()
@@ -747,7 +763,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isAudioOutputReady = false
         virtualAudioReleaseGeneration &+= 1
         pendingVirtualAudioRelease = nil
-        restoreQianwenDefaultInputIfNeeded(reason: "app_stop")
         managedDefaultInputTransition = nil
         if shouldStopAudioOnPreparationQueue {
             audioPreparationQueue.async { [weak self] in
@@ -1047,7 +1062,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func selectAudioDevice(_ deviceUID: String, reason: String = "settings_change") {
-        restoreQianwenDefaultInputIfNeeded(reason: "audio_device_change")
         settings.selectedAudioDeviceUID = deviceUID
         applyAudioSettings(reason: reason)
     }
@@ -1079,9 +1093,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func applyAudioSettings(reason: String = "settings_change") {
         stopLongRecording(reason: "audio_reconfigure")
-        if !settings.qianwenVoiceModeEnabled {
-            restoreQianwenDefaultInputIfNeeded(reason: "qianwen_mode_disabled")
-        }
         guard shouldKeepVirtualAudioActive else {
             releaseVirtualAudioOutputIfUnused(reason: reason)
             return
@@ -1154,9 +1165,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         if configured {
             restoreManagedDefaultInputIfAppropriate(reason: reason)
-            activateQianwenDefaultInputIfNeeded(reason: reason)
-        } else {
-            suspendQianwenDefaultInputIfNeeded(reason: reason)
         }
         return configured
     }
@@ -1223,9 +1231,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             guard !self.settings.selectedAudioDeviceUID.isEmpty else {
                 AppLogger.shared.write("AUDIO RECOVERY ignored reason=\(reason) detail=\(details) no_selected_device")
                 return
-            }
-            if details.contains("default_input") {
-                self.releaseQianwenDefaultInputManagementIfUserChangedIt(reason: reason)
             }
             guard details != "properties=default_input" else {
                 self.refreshAudioDevices()
@@ -1384,15 +1389,29 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
 
         let requestedFnTapMode = settings.voiceFnTapModeEnabled
+        let requestedQianwenMode = settings.qianwenVoiceModeEnabled
         if !requestedFnTapMode, voiceFnTapSession.requiresCleanupBeforeMapping {
             voiceFnTapSession.setEnabled(false) { [weak self] in
                 self?.applyHIDSettings()
             }
             return
         }
-        requestNextHIDPermissionIfNeeded(voiceFnTapModeRequested: requestedFnTapMode)
+        requestNextHIDPermissionIfNeeded(
+            voiceFnTapModeRequested: requestedFnTapMode || requestedQianwenMode
+        )
         var powerKeySuppressed: Bool
-        if requestedFnTapMode, KeyboardInjector.isAccessibilityTrusted {
+        if requestedQianwenMode, KeyboardInjector.isAccessibilityTrusted {
+            voiceFnTapSession.setEnabled(false)
+            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
+            if voiceFunctionMapper.isVoiceKeyNeutralized {
+                qianwenVoiceCommandSession.setEnabled(true)
+            } else {
+                settings.qianwenVoiceModeEnabled = false
+                qianwenVoiceCommandSession.setEnabled(false)
+                powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+            }
+        } else if requestedFnTapMode, KeyboardInjector.isAccessibilityTrusted {
+            qianwenVoiceCommandSession.setEnabled(false)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
                 voiceFnTapSession.setEnabled(true)
@@ -1402,9 +1421,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
             }
         } else {
+            if requestedQianwenMode {
+                settings.qianwenVoiceModeEnabled = false
+            }
             if requestedFnTapMode {
                 settings.voiceFnTapModeEnabled = false
             }
+            qianwenVoiceCommandSession.setEnabled(false)
             voiceFnTapSession.setEnabled(false)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
         }
@@ -1551,7 +1574,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if enabled {
             if settings.qianwenVoiceModeEnabled {
                 settings.qianwenVoiceModeEnabled = false
-                restoreQianwenDefaultInputIfNeeded(reason: "fn_tap_enabled")
+                qianwenVoiceCommandSession.setEnabled(false)
             }
             enableVoiceFnTapMode()
             return
@@ -1566,7 +1589,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard settings.qianwenVoiceModeEnabled != enabled else { return }
         if !enabled {
             settings.qianwenVoiceModeEnabled = false
-            restoreQianwenDefaultInputIfNeeded(reason: "qianwen_mode_disabled")
+            qianwenVoiceCommandSession.setEnabled(false)
             applyHIDSettings()
             return
         }
@@ -1787,6 +1810,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             if voiceWasActive {
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
+                qianwenVoiceCommandSession.cancelVoice()
                 endVoiceSessionIfNeeded(flushAudio: false)
             }
             if longRecordingRequested {
@@ -1825,6 +1849,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard ensureVirtualAudioOutputReady(reason: "bluetooth_voice_start") else {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write("ATVV STREAM rejected_audio_output")
+            return
+        }
+        guard beginQianwenRightCommandHoldIfNeeded() else {
+            _ = bridge.requestMicrophoneClose()
+            AppLogger.shared.write("ATVV STREAM rejected_qianwen_command")
             return
         }
         activeBluetoothVoiceDeviceIdentifier = identifier
@@ -1877,6 +1906,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
         let handledByFnTapMode = voiceFnTapSession.stopVoice()
+        scheduleQianwenRightCommandReleaseIfNeeded()
         let shouldFlushAudio = BluetoothVoiceStopPolicy.shouldFlushAudio(
             handledByFnTapMode: handledByFnTapMode
         )
@@ -2611,7 +2641,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         guard pendingVirtualAudioRelease == nil else { return }
-        suspendQianwenDefaultInputIfNeeded(reason: reason)
         switchDefaultInputToFallbackIfNeeded(reason: reason)
         let pendingVoiceBufferCount = audioOutput.pendingVoiceBufferCountForDiagnostics
         guard VirtualAudioConnectionLifecyclePolicy.shouldScheduleRelease(
@@ -2743,136 +2772,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     AppLogger.errorFields(domain: "os_status", code: Int(result))
             )
         }
-    }
-
-    private func activateQianwenDefaultInputIfNeeded(reason: String) {
-        guard settings.qianwenVoiceModeEnabled else { return }
-        let selectedUID = settings.selectedAudioDeviceUID
-        guard !selectedUID.isEmpty,
-              let virtualInput = CoreAudioDeviceCatalog.inputDevices().first(where: {
-                  $0.uid == selectedUID
-              }),
-              let currentDefault = CoreAudioDeviceCatalog.defaultInputDevice()
-        else {
-            AppLogger.shared.write("QIANWEN MODE default_input unavailable reason=\(reason)")
-            return
-        }
-        if currentDefault.uid == selectedUID { return }
-
-        if let transition = qianwenDefaultInputTransition {
-            guard DefaultInputFallbackPolicy.shouldActivateQianwenInput(
-                modeEnabled: settings.qianwenVoiceModeEnabled,
-                managedVirtualUID: transition.virtualUID,
-                selectedVirtualUID: selectedUID,
-                managedFallbackUID: transition.fallbackUID,
-                currentDefaultUID: currentDefault.uid
-            )
-            else {
-                qianwenDefaultInputTransition = nil
-                AppLogger.shared.write(
-                    "QIANWEN MODE default_input abandoned reason=\(reason) " +
-                        "current={\(CoreAudioDeviceCatalog.deviceDiagnostic(currentDefault))}"
-                )
-                return
-            }
-        } else {
-            qianwenDefaultInputTransition = ManagedDefaultInputTransition(
-                virtualUID: selectedUID,
-                fallbackUID: currentDefault.uid
-            )
-        }
-
-        let result = CoreAudioDeviceCatalog.setDefaultInputDevice(virtualInput)
-        guard result == noErr else {
-            qianwenDefaultInputTransition = nil
-            AppLogger.shared.write(
-                "QIANWEN MODE default_input failed reason=\(reason) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(virtualInput))} " +
-                    AppLogger.errorFields(domain: "os_status", code: Int(result))
-            )
-            return
-        }
-        AppLogger.shared.write(
-            "QIANWEN MODE default_input applied reason=\(reason) " +
-                "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(virtualInput))}"
-        )
-    }
-
-    private func suspendQianwenDefaultInputIfNeeded(reason: String) {
-        restoreQianwenDefaultInputIfNeeded(reason: reason, keepTransition: true)
-    }
-
-    private func releaseQianwenDefaultInputManagementIfUserChangedIt(reason: String) {
-        guard settings.qianwenVoiceModeEnabled,
-              let transition = qianwenDefaultInputTransition,
-              let currentDefault = CoreAudioDeviceCatalog.defaultInputDevice(),
-              DefaultInputFallbackPolicy.shouldReleaseQianwenManagement(
-                  managedVirtualUID: transition.virtualUID,
-                  managedFallbackUID: transition.fallbackUID,
-                  currentDefaultUID: currentDefault.uid,
-                  virtualAudioActive: shouldKeepVirtualAudioActive
-              )
-        else { return }
-
-        qianwenDefaultInputTransition = nil
-        settings.qianwenVoiceModeEnabled = false
-        applyHIDSettings()
-        AppLogger.shared.write(
-            "QIANWEN MODE disabled reason=default_input_changed trigger=\(reason) " +
-                "current={\(CoreAudioDeviceCatalog.deviceDiagnostic(currentDefault))}"
-        )
-    }
-
-    private func restoreQianwenDefaultInputIfNeeded(
-        reason: String,
-        keepTransition: Bool = false
-    ) {
-        guard let transition = qianwenDefaultInputTransition else { return }
-        let currentDefault = CoreAudioDeviceCatalog.defaultInputDevice()
-        guard DefaultInputFallbackPolicy.shouldRestoreQianwenFallback(
-            managedVirtualUID: transition.virtualUID,
-            currentDefaultUID: currentDefault?.uid
-        ) else {
-            if currentDefault?.uid != transition.fallbackUID {
-                AppLogger.shared.write(
-                    "QIANWEN MODE default_input restore_skipped reason=\(reason) " +
-                        "current={\(CoreAudioDeviceCatalog.deviceDiagnostic(currentDefault))}"
-                )
-                qianwenDefaultInputTransition = nil
-            } else if !keepTransition {
-                qianwenDefaultInputTransition = nil
-            }
-            return
-        }
-
-        let inputs = CoreAudioDeviceCatalog.inputDevices()
-        guard let fallback = inputs.first(where: { $0.uid == transition.fallbackUID })
-                ?? CoreAudioDeviceCatalog.preferredFallbackInput(excludingUID: transition.virtualUID)
-        else {
-            AppLogger.shared.write("QIANWEN MODE default_input restore_failed reason=\(reason) no_candidate")
-            qianwenDefaultInputTransition = nil
-            return
-        }
-        let result = CoreAudioDeviceCatalog.setDefaultInputDevice(fallback)
-        guard result == noErr else {
-            AppLogger.shared.write(
-                "QIANWEN MODE default_input restore_failed reason=\(reason) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(fallback))} " +
-                    AppLogger.errorFields(domain: "os_status", code: Int(result))
-            )
-            if !keepTransition { qianwenDefaultInputTransition = nil }
-            return
-        }
-        qianwenDefaultInputTransition = keepTransition
-            ? ManagedDefaultInputTransition(
-                virtualUID: transition.virtualUID,
-                fallbackUID: fallback.uid
-            )
-            : nil
-        AppLogger.shared.write(
-            "QIANWEN MODE default_input restored reason=\(reason) " +
-                "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(fallback))}"
-        )
     }
 
     private func receivePhoneAudio(_ samples: [Int16], source: MobileVoiceSource) {
@@ -3015,8 +2914,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func applyVoiceFunctionMapping(neutralizeVoiceKey: Bool) -> Bool {
         let applied = voiceFunctionMapper.apply(
             suppressPowerKey: settings.customMappingEnabled,
-            neutralizeVoiceKey: neutralizeVoiceKey,
-            mapVoiceKeyToRightCommand: settings.qianwenVoiceModeEnabled
+            neutralizeVoiceKey: neutralizeVoiceKey
         )
         if !isStreaming {
             isVoiceTriggerEnabled = applied
@@ -3031,6 +2929,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
         }
         return !settings.customMappingEnabled || voiceFunctionMapper.isPowerKeySuppressed
+    }
+
+    private func beginQianwenRightCommandHoldIfNeeded() -> Bool {
+        guard settings.qianwenVoiceModeEnabled else { return true }
+        return qianwenVoiceCommandSession.startVoice()
+    }
+
+    private func scheduleQianwenRightCommandReleaseIfNeeded() {
+        _ = qianwenVoiceCommandSession.stopVoice()
     }
 
     @discardableResult
