@@ -120,7 +120,6 @@ jobs:
   test:
     name: Swift tests and build (${{ matrix.label }})
     needs: classify_changes
-    if: needs.classify_changes.outputs.release_control_plane_only != 'true'
     runs-on: ${{ needs.classify_changes.outputs.docs_only == 'true' && 'ubuntu-latest' || 'macos-15' }}
     timeout-minutes: 45
     strategy:
@@ -144,7 +143,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check out private feature package
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-ai
@@ -154,7 +153,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out private macro package
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-macro-platform
@@ -164,13 +163,13 @@ jobs:
           persist-credentials: false
 
       - name: Configure private feature package
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
           echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
           echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform" >> "$GITHUB_ENV"
 
       - name: Check out shared Mac remote package
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: GetSayAll/sayall-mac-remote
@@ -180,11 +179,11 @@ jobs:
           persist-credentials: false
 
       - name: Configure shared Mac remote package
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: swift package config set-mirror --original https://github.com/GetSayAll/sayall-mac-remote.git --mirror "file://$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
 
       - name: Show toolchain
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true'
         run: swift --version
 
       - name: Check patch formatting
@@ -200,7 +199,7 @@ jobs:
         run: echo "Documentation-only change; skipping private dependencies, Swift tests, and macOS builds."
 
       - name: Reuse exact parent main CI for release metadata
-        if: needs.classify_changes.outputs.reuse_parent_main_ci == 'true'
+        if: needs.classify_changes.outputs.reuse_parent_main_ci == 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIEW_CANDIDATE_BRANCH: ${{ github.head_ref }}
@@ -214,29 +213,29 @@ jobs:
           echo "Release metadata-only PR; exact parent main already passed both architecture lanes."
 
       - name: Enforce extracted repository boundaries
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true'
         run: ./scripts/check-repository-boundaries.sh
 
       - name: Verify release dependency pins stay aligned
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true'
         run: ./scripts/verify-release-dependency-pins.sh
 
       - name: Run Swift tests
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true'
         run: swift test
 
       - name: Run core first-voice journey gate
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true'
         run: |
           swift test --filter VoiceInputDestinationCoordinatorTests
           swift test --filter CoreVoiceInputJourneyTests
 
       - name: Run project self-test
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true'
         run: SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
 
       - name: Build release configuration
-        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true'
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true'
         run: swift build -c release --triple "${{ matrix.triple }}"
 
   release-control-plane:
