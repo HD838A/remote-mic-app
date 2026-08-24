@@ -2,7 +2,7 @@
 
 适用分支：`codex/sayall-agent-automation` 及其后通过 PR 合入 `main` 的版本。
 
-本手册验证仓库侧的受控闭环，不把测试自动批准当作生产权限。测试前必须使用独立的 Workshop 测试配置、独立 OpenAI Project 和测试分支；生产 Worker 保持 `AGENT_ENVIRONMENT=production`、`AGENT_TEST_AUTO_APPROVE=false`。
+本手册验证仓库侧的受控闭环，不把测试自动批准当作生产权限。测试前必须使用独立的 Workshop 测试配置和专用模型 API 凭据；生产 Worker 保持 `AGENT_ENVIRONMENT=production`、`AGENT_TEST_AUTO_APPROVE=false`。
 
 ## 测试前准备
 
@@ -12,10 +12,19 @@
    - `AGENT_ENVIRONMENT=test`
    - `AGENT_TEST_AUTO_APPROVE=true`
    - `AGENT_TEST_REPOSITORY=HD838A/remote-mic-app`
-   - `AGENT_TEST_BASE_REF=agent-test`
-3. 确认 GitHub Actions Secret/Variable 只属于测试目标：`OPENAI_API_KEY`、`WORKSHOP_AGENT_CALLBACK_SECRET`、Agent Bot App ID/私钥、Workshop API 地址、触发 Bot login 和 Agent Bot login。
+   - `AGENT_TEST_BASE_REF=main`
+3. 确认 GitHub Actions Secret/Variable 只属于测试目标：`OPENAI_API_KEY`、`WORKSHOP_AGENT_CALLBACK_SECRET`、Agent Bot App ID/私钥、Workshop API 地址、触发 Bot login、Agent Bot login、Codex 模型和可选的兼容 Responses API Endpoint。
 4. 确认 Agent Bot 只有目标仓库的 `Contents` 与 `Pull requests` 写权限，没有默认分支 bypass；测试 PR 必须保持 Draft。
 5. 记录测试开始前的 Workshop Run、D1 迁移版本和目标分支 SHA。不要把 Secret、完整 Issue 私有内容或个人 Token 写进日志。
+
+### 模型 API 配置
+
+默认使用 OpenAI 官方 Responses API 时不设置 `SAYALL_CODEX_RESPONSES_API_ENDPOINT`，仅配置专用 `OPENAI_API_KEY`。测试阶段也可使用实现兼容 Responses API 的服务：
+
+- Secret `OPENAI_API_KEY` 保存兼容服务的专用 Key，不能写入 Workflow、Issue、Artifact 或日志。
+- Variable `SAYALL_CODEX_RESPONSES_API_ENDPOINT` 必须是完整的 Responses 地址，包含 `/v1/responses`，不能只填 `/v1`。
+- Variable `SAYALL_CODEX_MODEL` 设置为服务实际列出的模型 ID；本轮测试使用 `gpt-5.6-sol`。
+- Analyze 与 Develop 均使用 `effort: high`。将来切回 OpenAI 官方 Key 时，只需替换 Secret、清空兼容 Endpoint，并把模型 Variable 改为官方账号可用的模型；Workflow 权限和审批流程不变。
 
 ## 用例一：已有 Bug 的只读初检与安全分支
 

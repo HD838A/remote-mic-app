@@ -111,6 +111,7 @@ jobs:
         uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # codex-action v1 / CLI 0.149.0
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          responses-api-endpoint: ${{ vars.SAYALL_CODEX_RESPONSES_API_ENDPOINT }}
           prompt-file: .github/codex/prompts/implement.md
           output-schema-file: .github/codex/schemas/result.schema.json
           output-file: ${{ runner.temp }}/sayall-agent-result.json
