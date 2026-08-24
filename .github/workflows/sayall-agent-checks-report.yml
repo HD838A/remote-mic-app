@@ -35,7 +35,9 @@ jobs:
           run_suffix="${suffix#*-}"
           RUN_ID="run_${run_suffix}"
           [[ "$RUN_ID" =~ ^run_[A-Za-z0-9_-]{12,80}$ ]]
-          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$WORKFLOW_RUN_ID/pull_requests")"
+          pr_json="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/pulls")"
           pr_number="$(jq -r '.[0].number // empty' <<< "$pr_json")"
           test -n "$pr_number"
           pr_details="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr_number")"
