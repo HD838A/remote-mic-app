@@ -172,9 +172,9 @@ verify_update_zip() {
   /bin/mkdir -p "$extract_dir"
   /usr/bin/ditto -x -k "$archive" "$extract_dir"
   if [[ "$variant" == "intel" ]]; then
-    RELEASE_VARIANT=intel "$SCRIPT_ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
+    RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
   else
-    "$SCRIPT_ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
+    "$SOURCE_ROOT/scripts/verify-app.sh" "$extract_dir/SayAll.app"
   fi
 }
 
@@ -195,10 +195,10 @@ verify_local_artifacts() {
   export EXPECTED_DEVELOPER_TEAM_ID REQUIRE_DEVELOPER_ID_SIGNING=1 REQUIRE_NOTARIZATION=1
   verify_update_zip "$UPDATE_ZIP" apple-silicon
   verify_update_zip "$INTEL_UPDATE_ZIP" intel
-  "$SCRIPT_ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
-  "$SCRIPT_ROOT/scripts/verify-dmg.sh" "$DMG"
-  RELEASE_VARIANT=intel "$SCRIPT_ROOT/scripts/verify-doubao-driver-pkg.sh" "$INTEL_UNINSTALL_PACKAGE" uninstall
-  RELEASE_VARIANT=intel "$SCRIPT_ROOT/scripts/verify-dmg.sh" "$INTEL_DMG"
+  "$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
+  "$SOURCE_ROOT/scripts/verify-dmg.sh" "$DMG"
+  RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh" "$INTEL_UNINSTALL_PACKAGE" uninstall
+  RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-dmg.sh" "$INTEL_DMG"
 
   rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX${UPDATE_ZIP:t}\"" "$APPCAST"
   rg -Fq "$CDN_DOWNLOAD_PREFIX${ZH_RELEASE_NOTES:t}" "$APPCAST"
