@@ -21,14 +21,14 @@
 | --- | --- |
 | `RemoteMicApp.swift` | AppKit 生命周期、菜单栏图标、左键设置窗口、右键菜单、关于与版本菜单项、Sparkle 手动更新入口 |
 | `SettingsView.swift` | 设置界面、状态展示、音频选择、按键映射和权限入口；macOS 26 使用 Liquid Glass，macOS 14/15 使用兼容样式 |
-| `BridgeAppModel.swift` | 蓝牙、音频、HID、Fn 映射和 UI 状态的协调层 |
+| `BridgeAppModel.swift` | 蓝牙、音频、HID、语音键映射和 UI 状态的协调层 |
 | `XiaomiBluetoothBridge.swift` | CoreBluetooth 扫描、连接、能力协商、语音会话和自动重连 |
 | `ATVVProtocol.swift` | ATVV 命令、能力解析、IMA/DVI ADPCM 解码、帧累积与 PCM 后处理 |
 | `AudioOutput.swift` | CoreAudio 输出设备枚举和 16 kHz 单声道语音写入 |
 | `HIDRemoteMonitor.swift` | RC003 原始 HID 报告、独占/兼容模式、按键重复和活动状态 |
 | `KeyboardEventSuppressor.swift` | 兼容模式下对同一遥控器原生系统事件的短时抑制 |
 | `KeyboardInjector.swift` | 键盘、媒体键和预置应用启动动作 |
-| `RemoteVoiceFunctionMapper.swift` | 只对 RC003 把语音键的 F5 usage 映射为 Fn/Globe，并在退出时恢复 |
+| `RemoteVoiceFunctionMapper.swift` | RC003 语音键 F5 的 Fn 映射或 Command 模式中和，并在退出时恢复 |
 | `AppSettings.swift` | 音频设备、增益、HID 开关、按键映射和外设标识持久化 |
 
 ## 国际化
@@ -100,13 +100,15 @@ ATVV 通道为：
 
 方向、返回和音量键支持长按重复；打开应用动作不重复。普通实体按键活动状态会发布到 SwiftUI，用于高亮遥控器示意图和定位映射行。
 
-## 语音键 Fn 映射
+## 语音键触发方式与 Fn 映射
 
 RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`RemoteVoiceFunctionMapper` 只匹配 RC003 的 Vendor ID/Product ID；默认把该 usage 映射为 Apple vendor top-case Fn/Globe（usage page `0xFF`、usage `0x03`）。自定义按键映射启用时，同一组件还会把 RC003 的 Keyboard Power（usage `0x66`）映射为 F20（usage `0x6F`）。
 
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的 F5 映射为 usage `0`；任一目标失败或目标不完整时立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 
-该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceFnTapModeEnabled`；旧配置缺少字段时按关闭处理。应用退出时恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
+该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceKeyMode` 和 `voiceFnTapModeEnabled`；旧配置缺少 `voiceKeyMode` 时回退为 Fn/地球键。切换到 Command 模式会停用 Fn 点按，避免同一会话发送两套触发键；切回 Fn 后才可重新启用 Fn 点按。应用退出、断连或模式切换时会释放尚未释放的 Command 按键，并恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
+
+语音键模式由统一的语音会话状态机驱动：`fn`（默认）、`left_command`、`right_command`。Command 模式在 RC003、iPhone、Apple Watch 和网页版语音开始时发送所选 Command 的 keyDown，在结束时发送配对的 keyUp。普通键盘 Command 不会触发输入源切换；只有真实语音会话才会显式开始和结束输入源会话。
 
 ## 菜单栏与窗口
 

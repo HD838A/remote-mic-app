@@ -30,14 +30,14 @@ The bundle contains en.lproj and zh-Hans.lproj with Localizable.strings, InfoPli
 | RemoteMicApp.swift | AppKit lifecycle, status item, settings window, right-click menu, About/version, language menu, and Sparkle manual update entry |
 | SettingsView.swift | Settings UI, status, audio selection, button mapping, and permissions; Liquid Glass on macOS 26 with compatibility styling on macOS 14/15 |
 | Localization.swift | language selection, locale resolution, localized resources, and dynamic message rendering |
-| BridgeAppModel.swift | coordination of Bluetooth, audio, HID, Fn mapping, and UI state |
+| BridgeAppModel.swift | coordination of Bluetooth, audio, HID, voice-key mapping, and UI state |
 | XiaomiBluetoothBridge.swift | CoreBluetooth scan, connection, capability negotiation, voice session, and reconnect |
 | ATVVProtocol.swift | ATVV commands, capabilities, IMA/DVI ADPCM decoding, frame accumulation, and PCM post-processing |
 | AudioOutput.swift | CoreAudio output discovery and 16 kHz mono voice delivery |
 | HIDRemoteMonitor.swift | raw RC003 HID reports, exclusive/compatibility mode, repeat behavior, and active buttons |
 | KeyboardEventSuppressor.swift | short suppression of duplicate native events in compatibility mode |
 | KeyboardInjector.swift | keyboard, media-key, and preset-app actions |
-| RemoteVoiceFunctionMapper.swift | RC003-only voice-button F5 to Fn/Globe mapping and restoration |
+| RemoteVoiceFunctionMapper.swift | RC003 voice-button F5 Fn mapping or Command-mode neutralization and restoration |
 | AppSettings.swift | persistent audio, language, HID, mapping, and peripheral settings |
 
 ## Bluetooth and ATVV
@@ -99,13 +99,15 @@ Users can also choose mute, play/pause, or launch Codex, Claude, cmux, WeChat, C
 
 Direction, Back, and volume buttons can hold-repeat. Normal physical button activity is published to SwiftUI to highlight the remote diagram and select its mapping row.
 
-## Voice-button Fn mapping
+## Voice-button trigger modes and Fn mapping
 
 The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. `RemoteVoiceFunctionMapper` matches only RC003 vendor/product IDs and, by default, maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03. While custom button mapping is enabled, the same component maps RC003 Keyboard Power usage 0x66 to F20 usage 0x6F.
 
 The opt-in Typeless compatibility mode first requires Accessibility permission, then transactionally maps F5 to usage 0 on every matching RC003 service. Missing targets or any partial failure roll back all changes, disable the setting, and restore the default Fn mapping. Once enabled, `VoiceFnTapSessionController` buffers pre-roll at physical voice-stream start and writes it to the loopback device only after the opening Fn tap succeeds. On release it waits for `VirtualAudioOutput.endSessionAfterDraining` before sending the matching closing Fn tap. Generations and cancellable tasks isolate rapid consecutive sessions and clean up on disable, disconnect, reconnect, or app exit; a failed opening tap never produces a closing tap.
 
-This mode only adapts the trigger semantics seen by the target app. The RC003 must still be physically held to capture audio; it does not provide continuous recording or independent transcription. Configuration import/export includes optional `voiceFnTapModeEnabled`, with missing legacy fields treated as off. On exit, the app restores the managed source usages' prior mappings while preserving unrelated runtime changes.
+This mode only adapts the trigger semantics seen by the target app. The RC003 must still be physically held to capture audio; it does not provide continuous recording or independent transcription. Configuration import/export includes optional `voiceKeyMode` and `voiceFnTapModeEnabled`; a missing legacy `voiceKeyMode` falls back to Fn/Globe. Selecting a Command mode disables Fn tap mode for that session family so one voice session cannot emit two trigger keys. Mode changes, disconnects, and app exit release any held Command and restore the managed source usages while preserving unrelated runtime changes.
+
+The supported `voiceKeyMode` values are `fn` (default), `left_command`, and `right_command`. Command mode uses one shared voice-session lifecycle for RC003, iPhone, Apple Watch, and Web voice sources: voice start sends keyDown for the selected Command and voice end sends the matching keyUp. Ordinary keyboard Command events do not start input-source switching; only a confirmed voice session opens and closes the explicit input-source session.
 
 ## Menu bar and window
 

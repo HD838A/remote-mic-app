@@ -107,9 +107,19 @@ struct RemoteVoiceFunctionMapperTests {
         let mapper = RemoteVoiceFunctionMapper { [missingID.service] }
 
         #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(mapper.hasMatchingServices)
         #expect(!mapper.isApplied)
         #expect(!mapper.isVoiceKeyNeutralized)
         #expect(missingID.writeCount == 0)
+    }
+
+    @Test func reportsWhenNoMatchingRemoteServiceIsPresent() {
+        let mapper = RemoteVoiceFunctionMapper { [] }
+
+        #expect(!mapper.apply(neutralizeVoiceKey: true))
+        #expect(!mapper.hasMatchingServices)
+        #expect(mapper.matchedServiceCount == 0)
+        #expect(!mapper.isVoiceKeyNeutralized)
     }
 
     @Test func failedRollbackKeepsTheOriginalMappingForLaterRestore() {

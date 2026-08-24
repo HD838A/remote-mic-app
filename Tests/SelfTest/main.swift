@@ -294,6 +294,18 @@ check(
         ) == .accessibility,
     "HID permission requests are sequential and opt-in"
 )
+check(
+    VoiceKeyMode.function.keyCode == 63 &&
+        VoiceKeyMode.leftCommand.keyCode == 55 &&
+        VoiceKeyMode.rightCommand.keyCode == 54 &&
+        HIDPermissionGate.nextPermissionRequest(
+            mappingEnabled: false,
+            voiceKeyMode: .leftCommand,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ) == .accessibility,
+    "voice key modes keep Fn default and gate Command on Accessibility"
+)
 
 var voiceFunctionKeyLatch = VoiceFunctionKeyLatch()
 let firstVoicePress = voiceFunctionKeyLatch.transition(streaming: true)

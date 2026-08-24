@@ -28,4 +28,8 @@ struct VoiceFunctionKeyLatch {
             isHeld = true
         }
     }
+
+    mutating func reset() {
+        isHeld = false
+    }
 }
