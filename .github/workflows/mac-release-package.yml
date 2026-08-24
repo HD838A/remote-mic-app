@@ -639,10 +639,10 @@ jobs:
       - name: Check out private macro package
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          repository: GetSayAll/sayall-macro-platform
-          ref: 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
-          path: .private-dependencies/sayall-macro-platform
-          ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
+          repository: GetSayAll/sayall-private-platform
+          ref: 5801ec92d937e20d1d05945a27212168298db554
+          path: .private-dependencies/sayall-private-platform
+          ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
       - name: Check out shared Mac remote package
@@ -675,7 +675,7 @@ jobs:
       - name: Verify immutable private dependency checkouts
         run: |
           test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"
-          test "$(git -C .private-dependencies/sayall-macro-platform rev-parse HEAD)" = "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c"
+          test "$(git -C .private-dependencies/sayall-private-platform rev-parse HEAD)" = "5801ec92d937e20d1d05945a27212168298db554"
           test "$(git -C .private-dependencies/sayall-mac-remote rev-parse HEAD)" = "3f3c782180eef4024b53941c1f65d80e7cff4c66"
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"
           match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
@@ -693,7 +693,7 @@ jobs:
         run: |
           {
             echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai"
-            echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform"
+            echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-button-profiles"
             echo "REQUIRE_SAYALL_AI_PACKAGE=1"
             echo "REQUIRE_SAYALL_MACRO_PLATFORM=1"
           } >> "$GITHUB_ENV"

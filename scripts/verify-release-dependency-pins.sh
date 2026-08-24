@@ -18,7 +18,7 @@ RELEASE_CRITICAL_WORKFLOWS=(
 )
 DEPENDENCIES=(
   "SayAllAI|GetSayAll/sayall-ai|SAYALL_AI_RELEASE_REF"
-  "SayAllMacroPlatform|GetSayAll/sayall-macro-platform|SAYALL_MACRO_PLATFORM_RELEASE_REF"
+  "SayAllMacroPlatform|GetSayAll/sayall-private-platform|SAYALL_MACRO_PLATFORM_RELEASE_REF"
   "SayAllMacRemote|GetSayAll/sayall-mac-remote|SAYALL_MAC_REMOTE_RELEASE_REF"
 )
 CREDENTIAL_REPOSITORIES=(

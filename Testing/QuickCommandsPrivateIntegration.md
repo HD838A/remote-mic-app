@@ -7,23 +7,23 @@
 
 ## 合并后私有包版本与宿主集成
 
-组合动作默认开放已通过 PR [GetSayAll/sayall-macro-platform#4](https://github.com/GetSayAll/sayall-macro-platform/pull/4) 合入 `main`。本次宿主集成固定使用完整 commit：
+组合动作 Package 已迁入私有 Monorepo `GetSayAll/sayall-private-platform` 的 `packages/macos-button-profiles`。本次宿主集成固定使用完整私有平台 commit：
 
 ```text
-76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
+5801ec92d937e20d1d05945a27212168298db554
 ```
 
 本地开发或验证时，将私有包 checkout 到该 commit（不得使用浮动的 `main`）：
 
 ```bash
-git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform fetch origin main
-git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform checkout --detach 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
+git -C /Users/andy/Develop/Src/AISrc/GetSayAll/sayall-private-platform fetch origin
+git -C /Users/andy/Develop/Src/AISrc/GetSayAll/sayall-private-platform checkout --detach 5801ec92d937e20d1d05945a27212168298db554
 ```
 
 宿主通过 `Package.swift` 的 `SAYALL_MACRO_PLATFORM_PATH` 注入本地包；最小测试命令为：
 
 ```bash
-SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/sayall-macro-platform \
+SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/GetSayAll/sayall-private-platform/packages/macos-button-profiles \
 REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 swift test
 ```
@@ -38,7 +38,7 @@ swift test
 
 ## 测试前准备
 
-1. 本机存在私有仓库 `sayall-macro-platform`，并通过 `SAYALL_MACRO_PLATFORM_PATH` 注入构建。
+1. 本机存在私有仓库 `sayall-private-platform`，并把 `SAYALL_MACRO_PLATFORM_PATH` 指向其中的 `packages/macos-button-profiles`。
 2. 无线麦已获得输入监控和辅助功能权限。
 3. 准备一个没有组合动作资格数据的新 macOS 测试账户，以及一个保留旧组合动作资格数据的升级测试账户。
 4. 准备真实遥控器；另准备 iOS 或 Web Remote 检查同一绑定入口。
@@ -47,7 +47,7 @@ swift test
 本地构建命令：
 
 ```bash
-SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/sayall-macro-platform \
+SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/GetSayAll/sayall-private-platform/packages/macos-button-profiles \
 EARLY_ACCESS_SERVICE_URL=https://config.sayall.app \
 REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 REQUIRE_EARLY_ACCESS_CONFIGURATION=1 \
