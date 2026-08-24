@@ -1,0 +1,42 @@
+name: SayAll Agent Cancel
+
+run-name: SayAll Agent cancel ${{ github.event.client_payload.run_id || github.run_id }}
+
+on:
+  repository_dispatch:
+    types: [sayall-agent-cancel]
+
+permissions: {}
+
+jobs:
+  cancel:
+    name: Cancel Agent workflow
+    if: github.actor == vars.SAYALL_AGENT_TRIGGER_BOT_LOGIN
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    env:
+      RUN_ID: ${{ github.event.client_payload.run_id }}
+      TARGET_WORKFLOW_RUN_ID: ${{ github.event.client_payload.workflow_run_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate and cancel Agent workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^run_[A-Za-z0-9_-]{12,80}$ ]]
+          [[ "$TARGET_WORKFLOW_RUN_ID" =~ ^[1-9][0-9]{0,18}$ ]]
+          workflow="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_WORKFLOW_RUN_ID")"
+          jq -e --arg run "$RUN_ID" '
+            (.name == "SayAll Agent Analyze" or .name == "SayAll Agent Develop")
+            and .event == "repository_dispatch"
+            and ((.display_title // "") | contains($run))
+          ' <<< "$workflow" > /dev/null
+          status="$(jq -r '.status' <<< "$workflow")"
+          if [[ "$status" == "completed" ]]; then
+            exit 0
+          fi
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_WORKFLOW_RUN_ID/cancel"
