@@ -315,7 +315,8 @@ jobs:
           git config user.email "sayall-agent-bot@users.noreply.github.com"
           git commit -m "agent: implement issue #$ISSUE_NUMBER"
           set +x
-          git -c http.extraheader="AUTHORIZATION: bearer $AGENT_TOKEN" push --set-upstream origin "HEAD:$branch"
+          auth_header="$(printf 'x-access-token:%s' "$AGENT_TOKEN" | base64 | tr -d '\n')"
+          git -c http.extraheader="AUTHORIZATION: basic $auth_header" push --set-upstream origin "HEAD:$branch"
           printf '%s\n' "SayAll Agent generated this Draft PR from approved Run $RUN_ID." > "$RUNNER_TEMP/sayall-agent-pr-body.md"
           printf '%s\n' "Issue: #$ISSUE_NUMBER" >> "$RUNNER_TEMP/sayall-agent-pr-body.md"
           printf '%s\n' "The PR remains Draft until a maintainer reviews the patch and the protected CI gate." >> "$RUNNER_TEMP/sayall-agent-pr-body.md"
