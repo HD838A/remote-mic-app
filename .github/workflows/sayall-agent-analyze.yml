@@ -48,7 +48,7 @@ jobs:
           test -n "$API_URL"
           test -n "$CALLBACK_SECRET"
           [[ "$DISPATCH_TOKEN" =~ ^sad_[A-Za-z0-9_-]{40,120}$ ]]
-          body='{"phase":"analyze"}'
+          body="$(jq -cn --arg phase "analyze" --argjson workflowRunId "$GITHUB_RUN_ID" '{phase:$phase,workflowRunId:$workflowRunId}')"
           timestamp="$(date +%s)"
           event_id="evt_${RUN_ID}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_analyze"
           signature="v1=$(printf '%s.%s' "$timestamp" "$body" | openssl dgst -sha256 -hmac "$CALLBACK_SECRET" -hex | awk '{print $2}')"
