@@ -1026,6 +1026,15 @@ struct RemoteButtonsTests {
         #expect(KeyboardInjector.composerCandidateScore(terminal, windowFrame: windowFrame) == nil)
     }
 
+    @Test func weChatComposerFallbackUsesOnlyALargeWindowRelativePoint() {
+        let frame = CGRect(x: 250, y: 40, width: 1_000, height: 1_000)
+        let point = KeyboardInjector.weChatComposerFocusPoint(windowFrame: frame)
+        #expect(point == CGPoint(x: 930, y: 890))
+        #expect(KeyboardInjector.weChatComposerFocusPoint(
+            windowFrame: CGRect(x: 0, y: 0, width: 600, height: 400)
+        ) == nil)
+    }
+
     @Test func codexComposerSemanticsAndTraversalPriorityReachTheVisibleEditor() {
         let codexComposer = KeyboardInjector.AccessibilityTextCandidate(
             role: "AXTextArea",

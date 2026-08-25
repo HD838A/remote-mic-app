@@ -19,6 +19,15 @@ struct QianwenVoiceSessionControllerTests {
         ))
     }
 
+    @Test func weChatCanAcceptVoiceDespiteItsOpaqueAccessibilityTree() {
+        #expect(QianwenVoiceFocusPolicy.acceptsOpaqueDestination(
+            bundleIdentifier: QianwenVoiceFocusPolicy.weChatBundleIdentifier
+        ))
+        #expect(!QianwenVoiceFocusPolicy.acceptsOpaqueDestination(
+            bundleIdentifier: PresetApplication.codex.bundleIdentifier
+        ))
+    }
+
     @Test func drainsThenNeutralizesConfirmsAndRearmsHardwareMapping() {
         var events: [String] = []
         var drainCompletion: (() -> Void)?

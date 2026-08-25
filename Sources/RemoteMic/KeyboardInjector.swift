@@ -88,6 +88,8 @@ enum KeyboardInjector {
     /// is set, so the composer scan keeps retrying for longer than that.
     static let composerFocusMaximumAttempts = 12
     static let composerFocusRetryMilliseconds = 250
+    static let weChatComposerHorizontalRatio = 0.68
+    static let weChatComposerVerticalRatio = 0.85
     private static let focusRequests = ApplicationFocusRequestGate()
     private static let frontmostFocusRequests = ApplicationFocusRequestGate()
     private static let manualAccessibilityLock = NSLock()
@@ -633,6 +635,21 @@ enum KeyboardInjector {
         focusQueue.asyncAfter(deadline: .now() + delay) {
             guard requestGate.isCurrent(requestID) else { return }
 
+            if attempt == 0,
+               bundleIdentifier == QianwenVoiceFocusPolicy.weChatBundleIdentifier,
+               applicationIsFrontmost(processIdentifier),
+               focusWeChatComposer(processIdentifier: processIdentifier) {
+                AppLogger.shared.write(
+                    "APP FOCUS succeeded bundle=\(bundleIdentifier) method=wechat_window_click"
+                )
+                completeComposerFocus(
+                    true,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
+                )
+                return
+            }
             if isAccessibilityTrusted {
                 announceManualAccessibility(
                     processIdentifier: processIdentifier,
@@ -803,6 +820,46 @@ enum KeyboardInjector {
             }
         }
         return false
+    }
+
+    static func weChatComposerFocusPoint(windowFrame: CGRect) -> CGPoint? {
+        guard windowFrame.width >= 700, windowFrame.height >= 500 else { return nil }
+        return CGPoint(
+            x: windowFrame.minX + windowFrame.width * weChatComposerHorizontalRatio,
+            y: windowFrame.minY + windowFrame.height * weChatComposerVerticalRatio
+        )
+    }
+
+    private static func focusWeChatComposer(processIdentifier: pid_t) -> Bool {
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        let candidate = applicationWindows(applicationElement)
+            .compactMap { window -> (frame: CGRect, area: CGFloat)? in
+                guard let frame = axFrame(window), weChatComposerFocusPoint(windowFrame: frame) != nil
+                else { return nil }
+                return (frame, frame.width * frame.height)
+            }
+            .max { $0.area < $1.area }
+        guard let frame = candidate?.frame,
+              let point = weChatComposerFocusPoint(windowFrame: frame),
+              let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseDown,
+                  mouseCursorPosition: point,
+                  mouseButton: .left
+              ),
+              let up = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseUp,
+                  mouseCursorPosition: point,
+                  mouseButton: .left
+              )
+        else { return false }
+        down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        return true
     }
 
     static func captureFocusedAccessibilityTarget(

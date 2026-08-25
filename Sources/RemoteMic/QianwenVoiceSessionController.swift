@@ -1,11 +1,17 @@
 import Foundation
 
 enum QianwenVoiceFocusPolicy {
+    static let weChatBundleIdentifier = "com.tencent.xinWeChat"
+
     static func shouldFocusInput(
         modeEnabled: Bool,
         durationMilliseconds: Int
     ) -> Bool {
         modeEnabled && durationMilliseconds < HIDRemoteTiming.longPressMilliseconds
+    }
+
+    static func acceptsOpaqueDestination(bundleIdentifier: String?) -> Bool {
+        bundleIdentifier == weChatBundleIdentifier
     }
 }
 

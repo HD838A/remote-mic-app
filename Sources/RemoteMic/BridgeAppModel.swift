@@ -3212,8 +3212,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func prepareQianwenVoiceDestinationIfNeeded(_ bridge: XiaomiBluetoothBridge) -> Bool {
         guard settings.qianwenVoiceModeEnabled else { return false }
         let destination = VoiceInputDestinationSnapshot.system()
+        let acceptsOpaqueDestination = QianwenVoiceFocusPolicy.acceptsOpaqueDestination(
+            bundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
         guard qianwenVoiceSession.prepareDestinationIfNeeded(
-            destinationIsReady: destination.isSafeEditableDestination
+            destinationIsReady: destination.isSafeEditableDestination || acceptsOpaqueDestination
         ) else { return false }
 
         _ = bridge.requestMicrophoneClose()
