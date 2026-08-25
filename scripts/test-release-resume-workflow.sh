@@ -84,6 +84,8 @@ fi
   "$ROOT/scripts/resume-preview-publication.sh"
 /usr/bin/grep -Fq 'staged candidate tag points to a different commit' \
   "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq 'refs/tags/${TAG}:refs/tags/${TAG}' \
+  "$ROOT/scripts/resume-preview-publication.sh"
 
 /usr/bin/grep -Fq '.github/workflows/mac-preview-publication.yml' \
   "$ROOT/scripts/verify-release-control-plane-diff.sh"
@@ -97,6 +99,29 @@ if /usr/bin/grep -Fq 'config/release-dependencies.json' \
   print -u2 "product dependency values unexpectedly invalidate toolchain qualification"
   exit 1
 fi
+
+TAG_ORIGIN="$WORK_DIR/tag-origin.git"
+TAG_SOURCE="$WORK_DIR/tag-source"
+TAG_CANDIDATE="$WORK_DIR/tag-candidate"
+FIXTURE_TAG="v9.9.9"
+/usr/bin/git init -q --bare "$TAG_ORIGIN"
+/usr/bin/git clone -q "$TAG_ORIGIN" "$TAG_SOURCE"
+print -r -- 'exact tag fixture' > "$TAG_SOURCE/fixture.txt"
+/usr/bin/git -C "$TAG_SOURCE" add fixture.txt
+/usr/bin/git -C "$TAG_SOURCE" \
+  -c user.name=Fixture -c user.email=fixture@example.invalid \
+  commit -q -m fixture
+/usr/bin/git -C "$TAG_SOURCE" tag "$FIXTURE_TAG"
+/usr/bin/git -C "$TAG_SOURCE" push -q origin HEAD:main "$FIXTURE_TAG"
+fixture_commit="$(/usr/bin/git -C "$TAG_SOURCE" rev-parse HEAD)"
+/usr/bin/git init -q "$TAG_CANDIDATE"
+/usr/bin/git -C "$TAG_CANDIDATE" remote add origin "$TAG_ORIGIN"
+remote_tag_commit="$(/usr/bin/git -C "$TAG_CANDIDATE" ls-remote origin \
+  "refs/tags/$FIXTURE_TAG" | /usr/bin/awk 'NR == 1 { print $1 }')"
+test "$remote_tag_commit" = "$fixture_commit"
+/usr/bin/git -C "$TAG_CANDIDATE" fetch --quiet --no-tags origin \
+  "refs/tags/${FIXTURE_TAG}:refs/tags/${FIXTURE_TAG}"
+test "$(/usr/bin/git -C "$TAG_CANDIDATE" rev-parse --verify "$FIXTURE_TAG^{commit}")" = "$fixture_commit"
 
 stage="$WORK_DIR/preview-stage.json"
 attestation="$WORK_DIR/preview-ui-attestation.json"
