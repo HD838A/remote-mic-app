@@ -30,7 +30,7 @@ Originally developed from SayAll 1.9.8 and integrated with the latest upstream `
 ### Reflections and temporary original audio
 
 - Keep a local voice-session record even when a third-party input method prevents SayAll from safely reading the final transcript text.
-- Improve transcript capture around third-party composition changes without storing the surrounding input-field contents.
+- Improve transcript capture around third-party composition changes without storing the surrounding input-field contents, preserve recomposed sentence punctuation, and reject unanchored whole-field takeovers until a stable result appears.
 - Add an opt-in setting to retain the original voice-session audio locally and play it from Reflections.
 - Automatically expire retained audio after a maximum of four hours; deletion of a record, application group, or all history also deletes the corresponding audio.
 - Keep transcript and audio storage local, exclude passwords and other protected input fields, and expose only safe history metadata through the existing MCP boundary.
@@ -43,8 +43,9 @@ Originally developed from SayAll 1.9.8 and integrated with the latest upstream `
 
 ### Verification status
 
-- Project self-test: 67 passed, 0 failed on the integrated branch.
+- Project self-test: 69 passed, 0 failed on the integrated branch.
 - Debug build and isolated local app build: passed on the integrated branch.
+- GitHub macOS CI: complete Swift tests and builds passed on Apple Silicon and Intel Ventura.
 - Earlier pre-integration RC003 validation reached `BLE READY`; the active ordinary-key voice shortcut and all 12 native-button mappings passed four delayed HID registry audits. The final integrated branch still requires the hardware checks below.
-- The local Command Line Tools environment cannot load Swift's `Testing` module, so the complete Swift Testing matrix must run in GitHub CI.
+- The local Command Line Tools environment cannot load Swift's `Testing` module; the complete Swift Testing matrix was therefore verified in GitHub CI.
 - Real RC003 checks for every button/gesture, sleep/wake, permission revocation, and multiple third-party speech tools remain release-acceptance requirements rather than claimed automated results.
