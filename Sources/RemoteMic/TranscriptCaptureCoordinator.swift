@@ -214,7 +214,11 @@ final class TranscriptCaptureCoordinator {
         self.log = log
     }
 
-    func startSession(startedAt: Date, source: UsageEventSource) {
+    func startSession(
+        sessionID: UUID = UUID(),
+        startedAt: Date,
+        source: UsageEventSource
+    ) {
         settleExistingSessionBeforeNextStart()
         guard isEnabled() else {
             log("TRANSCRIPT CAPTURE skipped reason=feature_disabled")
@@ -222,7 +226,7 @@ final class TranscriptCaptureCoordinator {
         }
         generation &+= 1
         let pending = PendingSession(
-            id: UUID(),
+            id: sessionID,
             generation: generation,
             startedAt: startedAt,
             source: source,

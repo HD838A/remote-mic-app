@@ -2270,6 +2270,13 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .font(.system(size: 13, weight: .medium))
                 .fixedSize()
+                Toggle(
+                    "statistics.transcripts.recording_enable",
+                    isOn: $settings.localOriginalAudioRecordingEnabled
+                )
+                .toggleStyle(.switch)
+                .font(.system(size: 13, weight: .medium))
+                .fixedSize()
             }
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
