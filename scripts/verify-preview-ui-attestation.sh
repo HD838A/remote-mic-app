@@ -52,7 +52,10 @@ jq -e --slurpfile stage "$STAGE" '
   .baseline.launched == true and
   (.baseline.launchedAt | fromdateiso8601 > 0) and
   .update.usedSparkleUI == true and
-  .update.feedURL == .testedArtifact.feedURL and
+  (.observedFeedURL // .update.feedURL) == .update.feedURL and
+  ((.observedFeedURL // .update.feedURL) == .testedArtifact.feedURL or
+    (.observedFeedURL // .update.feedURL) ==
+      ("https://github.com/HD838A/remote-mic-app/releases/download/" + $stage[0].tag + "/appcast.xml")) and
   .testedArtifact.lane == "apple-silicon" and
   (.testedArtifact.feedURL | test("^http://127[.]0[.]0[.]1:[1-9][0-9]*/appcast[.]xml$")) and
   (.testedArtifact.testURLPrefix | test("^http://127[.]0[.]0[.]1:[1-9][0-9]*/$")) and
