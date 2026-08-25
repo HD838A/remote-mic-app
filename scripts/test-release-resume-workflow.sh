@@ -33,6 +33,7 @@ for required in \
   'Publish exact UI-tested staged Preview bytes' \
   'publication_mode' \
   'PUBLICATION_MODE' \
+  'gh auth setup-git --hostname github.com' \
   'test "$GITHUB_REF_NAME" = main' \
   'SOURCE_RUN_REQUIRED_CONCLUSION=success' \
   'REQUIRE_EXISTING_TAG=0 REQUIRE_STAGED_SOURCE=1' \
@@ -79,7 +80,9 @@ fi
 /usr/bin/grep -Fq 'REQUIRE_STAGED_SOURCE="${REQUIRE_STAGED_SOURCE:-0}"' \
   "$ROOT/scripts/resume-preview-publication.sh"
 /usr/bin/grep -Fq '.conclusion == $conclusion' "$ROOT/scripts/resume-preview-publication.sh"
-/usr/bin/grep -Fq 'staged candidate unexpectedly already has an immutable tag' \
+/usr/bin/grep -Fq 'remote_tag_commit' \
+  "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq 'staged candidate tag points to a different commit' \
   "$ROOT/scripts/resume-preview-publication.sh"
 
 /usr/bin/grep -Fq '.github/workflows/mac-preview-publication.yml' \
