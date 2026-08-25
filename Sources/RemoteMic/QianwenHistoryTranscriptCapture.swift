@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct QianwenHistoryTranscript: Decodable, Equatable {
@@ -7,41 +8,103 @@ struct QianwenHistoryTranscript: Decodable, Equatable {
     let text: String
 }
 
+struct QianwenHistoryProcessResult: Equatable {
+    let terminationStatus: Int32
+    let output: Data
+    let timedOut: Bool
+    let forceKilled: Bool
+}
+
 final class QianwenHistoryReader {
     typealias Completion = (QianwenHistoryTranscript?) -> Void
+    typealias ProcessRunner = (
+        _ executableURL: URL,
+        _ arguments: [String],
+        _ currentDirectoryURL: URL,
+        _ timeout: TimeInterval
+    ) -> QianwenHistoryProcessResult
 
     private static let sandboxProfile =
         "(version 1)(allow default)(deny network*)(deny file-write*)"
+    private static let processTimeout: TimeInterval = 3
+    private let processRunner: ProcessRunner
+
+    init(processRunner: @escaping ProcessRunner = QianwenHistoryReader.runProcess) {
+        self.processRunner = processRunner
+    }
 
     func readLatest(after startedAt: Date, before date: Date, completion: @escaping Completion) {
         let helperURL = Bundle.main.bundleURL
             .appendingPathComponent("Contents/Helpers/QianwenHistoryReader")
         DispatchQueue.global(qos: .utility).async {
-            let process = Process()
-            let output = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
-            process.arguments = [
-                "-p", Self.sandboxProfile,
-                helperURL.path,
-                "--after-ms", String(Int64(startedAt.timeIntervalSince1970 * 1_000)),
-                "--before-ms", String(Int64(date.timeIntervalSince1970 * 1_000)),
-            ]
-            process.currentDirectoryURL = URL(fileURLWithPath: "/private/var/empty")
-            process.standardOutput = output
-            process.standardError = FileHandle.nullDevice
-            let result: QianwenHistoryTranscript?
-            do {
-                try process.run()
-                process.waitUntilExit()
-                let data = output.fileHandleForReading.readDataToEndOfFile()
-                result = process.terminationStatus == 0
-                    ? try? JSONDecoder().decode(QianwenHistoryTranscript.self, from: data)
-                    : nil
-            } catch {
-                result = nil
-            }
-            DispatchQueue.main.async { completion(result) }
+            let result = self.processRunner(
+                URL(fileURLWithPath: "/usr/bin/sandbox-exec"),
+                [
+                    "-p", Self.sandboxProfile,
+                    helperURL.path,
+                    "--after-ms", String(Int64(startedAt.timeIntervalSince1970 * 1_000)),
+                    "--before-ms", String(Int64(date.timeIntervalSince1970 * 1_000)),
+                ],
+                URL(fileURLWithPath: "/private/var/empty"),
+                Self.processTimeout
+            )
+            let transcript = !result.timedOut && result.terminationStatus == 0
+                ? try? JSONDecoder().decode(QianwenHistoryTranscript.self, from: result.output)
+                : nil
+            DispatchQueue.main.async { completion(transcript) }
         }
+    }
+
+    static func runProcess(
+        executableURL: URL,
+        arguments: [String],
+        currentDirectoryURL: URL,
+        timeout: TimeInterval
+    ) -> QianwenHistoryProcessResult {
+        let process = Process()
+        let output = Pipe()
+        let finished = DispatchSemaphore(value: 0)
+        process.executableURL = executableURL
+        process.arguments = arguments
+        process.currentDirectoryURL = currentDirectoryURL
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        process.terminationHandler = { _ in finished.signal() }
+
+        do {
+            try process.run()
+        } catch {
+            return QianwenHistoryProcessResult(
+                terminationStatus: -1,
+                output: Data(),
+                timedOut: false,
+                forceKilled: false
+            )
+        }
+
+        guard finished.wait(timeout: .now() + timeout) == .timedOut else {
+            return QianwenHistoryProcessResult(
+                terminationStatus: process.terminationStatus,
+                output: output.fileHandleForReading.readDataToEndOfFile(),
+                timedOut: false,
+                forceKilled: false
+            )
+        }
+
+        process.terminate()
+        var forceKilled = false
+        if finished.wait(timeout: .now() + .milliseconds(100)) == .timedOut,
+           process.isRunning {
+            forceKilled = Darwin.kill(process.processIdentifier, SIGKILL) == 0
+            _ = finished.wait(timeout: .now() + .milliseconds(100))
+        }
+        return QianwenHistoryProcessResult(
+            terminationStatus: -1,
+            output: Data(),
+            timedOut: true,
+            forceKilled: forceKilled
+        )
     }
 }
 

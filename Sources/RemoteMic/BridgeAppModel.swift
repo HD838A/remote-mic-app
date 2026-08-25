@@ -1097,6 +1097,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 qianwenModeEnabled: qianwenModeEnabled,
                 devices: devices
             )
+            let persistedDeviceUID = DoubaoAudioDevicePolicy.persistedDeviceUID(
+                resolvedDeviceUID: selectedDeviceUID,
+                qianwenModeEnabled: qianwenModeEnabled
+            )
             let devicesDiagnostic = Self.audioDevicesDiagnostic(devices)
             AppLogger.shared.write("AUDIO DEVICES startup id=\(generation) \(devicesDiagnostic)")
             AppLogger.shared.write(
@@ -1118,10 +1122,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     return
                 }
                 self.audioStartupPending = false
-                if self.settings.selectedAudioDeviceUID != selectedDeviceUID {
-                    self.settings.selectedAudioDeviceUID = selectedDeviceUID
+                if self.settings.selectedAudioDeviceUID != persistedDeviceUID {
+                    self.settings.selectedAudioDeviceUID = persistedDeviceUID
                     AppLogger.shared.write(
-                        "QIANWEN AUDIO route_locked reason=startup target_uid=\(selectedDeviceUID)"
+                        "QIANWEN AUDIO route_locked reason=startup " +
+                            "available=\(!selectedDeviceUID.isEmpty)"
                     )
                 }
                 self.publishAudioDevices(devices)
@@ -1165,12 +1170,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             qianwenModeEnabled: settings.qianwenVoiceModeEnabled,
             devices: audioDevices
         )
-        if selectedDeviceUID != deviceUID {
+        let persistedDeviceUID = DoubaoAudioDevicePolicy.persistedDeviceUID(
+            resolvedDeviceUID: selectedDeviceUID,
+            qianwenModeEnabled: settings.qianwenVoiceModeEnabled
+        )
+        if persistedDeviceUID != deviceUID {
             AppLogger.shared.write(
-                "QIANWEN AUDIO route_locked reason=\(reason) target_uid=\(selectedDeviceUID)"
+                "QIANWEN AUDIO route_locked reason=\(reason) " +
+                    "available=\(!selectedDeviceUID.isEmpty)"
             )
         }
-        settings.selectedAudioDeviceUID = selectedDeviceUID
+        settings.selectedAudioDeviceUID = persistedDeviceUID
         applyAudioSettings(reason: reason)
     }
 
@@ -1261,7 +1271,24 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             statusMessage: LocalizedMessage("audio.test_tone.cancelled_device_changed"),
             logReason: "device_reconfigure"
         )
-        let configured = audioOutput.configure(deviceUID: settings.selectedAudioDeviceUID)
+        let devices = CoreAudioDeviceCatalog.outputDevices()
+        let selectedDeviceUID = DoubaoAudioDevicePolicy.resolvedDeviceUID(
+            requestedUID: settings.selectedAudioDeviceUID,
+            qianwenModeEnabled: settings.qianwenVoiceModeEnabled,
+            devices: devices
+        )
+        let persistedDeviceUID = DoubaoAudioDevicePolicy.persistedDeviceUID(
+            resolvedDeviceUID: selectedDeviceUID,
+            qianwenModeEnabled: settings.qianwenVoiceModeEnabled
+        )
+        if settings.selectedAudioDeviceUID != persistedDeviceUID {
+            settings.selectedAudioDeviceUID = persistedDeviceUID
+            AppLogger.shared.write(
+                "QIANWEN AUDIO route_locked reason=\(reason) " +
+                    "available=\(!selectedDeviceUID.isEmpty)"
+            )
+        }
+        let configured = audioOutput.configure(deviceUID: selectedDeviceUID)
         audioStatus = audioOutput.status
         isAudioOutputReady = audioOutput.isReadyForTestTone
         testToneStatus = isAudioOutputReady
@@ -1831,7 +1858,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if changedVoiceKeyConfiguration {
             preferredInputSourceMonitor.endVoiceSession()
         }
-        applyAudioSettings(reason: "configuration_import")
+        if settings.qianwenVoiceModeEnabled {
+            selectAudioDevice(
+                settings.selectedAudioDeviceUID,
+                reason: "configuration_import"
+            )
+        } else {
+            applyAudioSettings(reason: "configuration_import")
+        }
         applyHIDSettings()
     }
 

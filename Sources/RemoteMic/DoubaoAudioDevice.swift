@@ -22,9 +22,17 @@ enum DoubaoAudioDevicePolicy {
         qianwenModeEnabled: Bool,
         devices: [AudioDeviceInfo]
     ) -> String {
-        guard qianwenModeEnabled, let device = device(in: devices) else {
-            return requestedUID
+        guard qianwenModeEnabled else { return requestedUID }
+        return device(in: devices)?.uid ?? ""
+    }
+
+    static func persistedDeviceUID(
+        resolvedDeviceUID: String,
+        qianwenModeEnabled: Bool
+    ) -> String {
+        guard qianwenModeEnabled, resolvedDeviceUID.isEmpty else {
+            return resolvedDeviceUID
         }
-        return device.uid
+        return deviceUID
     }
 }

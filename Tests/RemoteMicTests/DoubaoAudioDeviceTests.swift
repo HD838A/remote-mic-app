@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import RemoteMic
 
@@ -49,5 +50,63 @@ struct DoubaoAudioDeviceTests {
             qianwenModeEnabled: false,
             devices: [speaker, miRemote]
         ) == speaker.uid)
+    }
+
+    @Test func qianwenModeFailsClosedWhileMiRemoteIsMissing() {
+        let speaker = AudioDeviceInfo(
+            id: 3,
+            uid: "BuiltInSpeakerDevice",
+            name: "MacBook Air Speakers"
+        )
+        let resolvedDeviceUID = DoubaoAudioDevicePolicy.resolvedDeviceUID(
+            requestedUID: speaker.uid,
+            qianwenModeEnabled: true,
+            devices: [speaker]
+        )
+
+        #expect(resolvedDeviceUID.isEmpty)
+        #expect(DoubaoAudioDevicePolicy.persistedDeviceUID(
+            resolvedDeviceUID: resolvedDeviceUID,
+            qianwenModeEnabled: true
+        ) == DoubaoAudioDevicePolicy.deviceUID)
+        #expect(DoubaoAudioDevicePolicy.resolvedDeviceUID(
+            requestedUID: speaker.uid,
+            qianwenModeEnabled: false,
+            devices: [speaker]
+        ) == speaker.uid)
+    }
+
+    @Test func everyRuntimeRebindReappliesTheQianwenAudioPolicy() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let start = try #require(source.range(of: "private func configureVirtualAudioOutput"))
+        let end = try #require(source.range(
+            of: "private func ensureVirtualAudioOutputReady",
+            range: start.upperBound..<source.endIndex
+        ))
+        let body = String(source[start.lowerBound..<end.lowerBound])
+
+        let policy = try #require(body.range(
+            of: "DoubaoAudioDevicePolicy.resolvedDeviceUID"
+        ))
+        let configure = try #require(body.range(
+            of: "audioOutput.configure(deviceUID: selectedDeviceUID)"
+        ))
+        #expect(policy.lowerBound < configure.lowerBound)
+
+        let importStart = try #require(source.range(
+            of: "func importConfiguration(from data: Data) throws"
+        ))
+        let importEnd = try #require(source.range(
+            of: "func setVoiceKeyMode",
+            range: importStart.upperBound..<source.endIndex
+        ))
+        let importBody = String(source[importStart.lowerBound..<importEnd.lowerBound])
+        #expect(importBody.contains("if settings.qianwenVoiceModeEnabled"))
+        #expect(importBody.contains("selectAudioDevice("))
     }
 }
