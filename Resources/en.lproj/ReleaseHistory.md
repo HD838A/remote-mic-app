@@ -1,5 +1,10 @@
 # Version History
 
+## 1.9.12 (Pre-release)
+
+- Added Left Command and Right Command voice trigger modes while keeping the Fn/Globe key as the default.
+- Improved automatic input-field focusing after opening apps such as Claude Desktop.
+
 ## 1.9.10 (Pre-release)
 
 - Combination Actions are now available by default, with no invitation code required to view, create, bind, or use them.
