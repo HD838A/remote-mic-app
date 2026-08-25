@@ -253,5 +253,4 @@ struct VirtualAudioConnectionLifecycleTests {
             currentDefaultUID: "built-in"
         ))
     }
-
 }

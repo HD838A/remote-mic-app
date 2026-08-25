@@ -353,7 +353,6 @@ enum DefaultInputFallbackPolicy {
     ) -> Bool {
         managedVirtualUID == selectedVirtualUID && currentDefaultUID == managedFallbackUID
     }
-
 }
 
 final class VirtualAudioOutput {

@@ -52,6 +52,33 @@ struct QianwenVoiceSessionControllerTests {
         #expect(events == ["neutral", "release", "confirm", "right-command"])
     }
 
+    @Test func neutralizationFailureStillReleasesAndConfirmsWithoutRearming() {
+        var events: [String] = []
+        var scheduled = false
+        let controller = QianwenVoiceSessionController(
+            setMapping: {
+                events.append($0 ? "right-command" : "neutral")
+                return $0
+            },
+            drainAudio: { $0() },
+            releaseCommand: {
+                events.append("release")
+                return true
+            },
+            confirmVoice: {
+                events.append("confirm")
+                return true
+            },
+            schedule: { _, _ in scheduled = true }
+        )
+
+        controller.setEnabled(true)
+        #expect(controller.startVoice())
+        #expect(controller.stopVoice())
+        #expect(events == ["neutral", "release", "confirm"])
+        #expect(!scheduled)
+    }
+
     @Test func aNewSessionInvalidatesTheOldDrainAndRearm() {
         var events: [String] = []
         var drains: [() -> Void] = []

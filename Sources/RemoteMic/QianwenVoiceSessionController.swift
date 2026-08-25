@@ -85,9 +85,10 @@ final class QianwenVoiceSessionController {
     }
 
     private func finishVoice(generation sessionGeneration: UInt64) {
-        guard setMapping(false) else { return }
+        let neutralized = setMapping(false)
         _ = releaseCommand()
         _ = confirmVoice()
+        guard neutralized else { return }
         schedule(0.15) { [weak self] in
             guard let self,
                   self.isEnabled,
