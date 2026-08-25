@@ -54,6 +54,10 @@ if /usr/bin/grep -Fq 'release_mode=' "$ROOT/scripts/publish-staged-preview.sh"; 
 fi
 /usr/bin/grep -Fq 'resume_existing_release_assets' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'download_draft_release_assets' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'intel_dmg_checksum="$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel.dmg.sha256"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq '/usr/bin/awk -v name="$intel_dmg_name"' \
+  "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq -- '--draft' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'resume-draft' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'gh release download "$RELEASE_TAG"' "$ROOT/scripts/publish-release.sh"
