@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased contributor update (based on SayAll 1.9.8)
+## Unreleased contributor update
+
+Originally developed from SayAll 1.9.8 and integrated with the latest upstream `main` before submission.
 
 ### Voice-button shortcuts
 
@@ -41,8 +43,8 @@
 
 ### Verification status
 
-- Project self-test: 66 passed, 0 failed.
-- Debug build and isolated local app build: passed.
-- Installed local app: code signature structure verified; Bluetooth reached `BLE READY`; the active ordinary-key voice shortcut and all 12 native-button mappings passed four delayed HID registry audits.
+- Project self-test: 67 passed, 0 failed on the integrated branch.
+- Debug build and isolated local app build: passed on the integrated branch.
+- Earlier pre-integration RC003 validation reached `BLE READY`; the active ordinary-key voice shortcut and all 12 native-button mappings passed four delayed HID registry audits. The final integrated branch still requires the hardware checks below.
 - The local Command Line Tools environment cannot load Swift's `Testing` module, so the complete Swift Testing matrix must run in GitHub CI.
 - Real RC003 checks for every button/gesture, sleep/wake, permission revocation, and multiple third-party speech tools remain release-acceptance requirements rather than claimed automated results.

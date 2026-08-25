@@ -1987,6 +1987,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("VOICE SHORT FOCUS change_rejected reason=voice_active")
             return
         }
+        guard settings.voiceTriggerShortcut == nil else {
+            settings.voiceShortTapFocusEnabled = false
+            return
+        }
         settings.voiceShortTapFocusEnabled = enabled
         if enabled, settings.voiceFnTapModeEnabled {
             settings.voiceFnTapModeEnabled = false

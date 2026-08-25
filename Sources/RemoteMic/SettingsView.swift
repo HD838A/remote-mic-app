@@ -1350,6 +1350,8 @@ struct SettingsView: View {
                 .lineLimit(3)
         }
         .help(localization.text("connection.voice_key_mode.help"))
+        .opacity(settings.voiceTriggerShortcut == nil ? 1 : 0.55)
+        .disabled(settings.voiceTriggerShortcut != nil)
     }
 
     private var mappingVoiceFnTapControl: some View {
@@ -1366,8 +1368,8 @@ struct SettingsView: View {
                 .lineLimit(2)
         }
         .help(localization.text("connection.voice_fn_tap.hint"))
-        .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
-        .disabled(settings.voiceKeyMode != .function)
+        .opacity(settings.voiceKeyMode == .function && settings.voiceTriggerShortcut == nil ? 1 : 0.55)
+        .disabled(settings.voiceKeyMode != .function || settings.voiceTriggerShortcut != nil)
     }
 
     private var mappingVoiceShortTapFocusControl: some View {
@@ -1384,10 +1386,13 @@ struct SettingsView: View {
                 .lineLimit(3)
         }
         .help(localization.text("connection.voice_short_focus.help"))
+        .opacity(settings.voiceTriggerShortcut == nil ? 1 : 0.55)
+        .disabled(settings.voiceTriggerShortcut != nil)
     }
 
     private var mappingRestoreDefaultsButton: some View {
         Button("common.action.restore_defaults") {
+            model.setVoiceTriggerShortcut(nil)
             settings.resetBindings()
             selectedRemoteButton = .ok
         }

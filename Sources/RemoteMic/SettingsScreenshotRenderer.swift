@@ -157,6 +157,9 @@ enum SettingsScreenshotRenderer {
         if let simulatedProfileID {
             settings.updateRemoteProfileModel(simulatedProfileID, model: .rc003)
             settings.selectRemoteProfile(simulatedProfileID)
+            if opensShortcutEditor || opensVoiceShortcutEditor {
+                settings.customMappingEnabled = true
+            }
         }
         let simulatedProfileIDs = simulatedProfileID.map { Set([$0]) } ?? []
         let model = BridgeAppModel(
