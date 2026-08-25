@@ -137,9 +137,13 @@ while true; do
     "$COMPONENT_PLIST" 2>/dev/null || true)"
   [[ -z "$bundle_path" ]] && break
   if [[ "$bundle_path" == "Applications/SayAll.app" ]]; then
-    /usr/libexec/PlistBuddy \
+    if ! /usr/libexec/PlistBuddy \
       -c "Set :$component_index:BundleIsRelocatable false" \
-      "$COMPONENT_PLIST"
+      "$COMPONENT_PLIST" 2>/dev/null; then
+      /usr/libexec/PlistBuddy \
+        -c "Add :$component_index:BundleIsRelocatable bool false" \
+        "$COMPONENT_PLIST"
+    fi
     APP_COMPONENT_INDEX="$component_index"
     break
   fi
