@@ -1,3 +1,5 @@
+import AppKit
+import CoreGraphics
 import Foundation
 
 private var passed = 0
@@ -12,6 +14,13 @@ private func check(_ condition: @autoclosure () -> Bool, _ name: String) {
         print("FAIL \(name)")
     }
 }
+
+check(
+    AppBuildMode.isLocalDevelopmentBuild(in: ["SayAllDevelopmentBuild": true]) &&
+        !AppBuildMode.isLocalDevelopmentBuild(in: [:]) &&
+        !AppBuildMode.isLocalDevelopmentBuild(in: ["SayAllDevelopmentBuild": "true"]),
+    "local development build mode is opt-in and type-safe"
+)
 
 let versionOne = ATVVCapabilities.parse(Data([0x0B, 0x01, 0x00, 0x02, 0x03, 0x00, 0x78]))
 check(
@@ -48,6 +57,108 @@ check(
     ATVVProtocol.supportsAudio(sampleRate: 16_000) &&
         !ATVVProtocol.supportsAudio(sampleRate: 8_000),
     "ATVV audio rate gate"
+)
+
+let hidMappingRetryDelays = HIDMappingRecoveryPolicy.delays
+let hidMappingRetrySequenceMatches = hidMappingRetryDelays.indices.allSatisfy { attempt in
+    HIDMappingRecoveryPolicy.nextDelay(
+        afterFailedAttempt: attempt,
+        started: true,
+        customMappingEnabled: true,
+        mappingReady: false
+    ) == hidMappingRetryDelays[attempt]
+}
+check(
+    hidMappingRetryDelays == [0.5, 1, 2, 4, 8] &&
+        HIDMappingRecoveryPolicy.verificationDelays == [0.75, 2, 5, 10] &&
+        hidMappingRetrySequenceMatches &&
+        HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: hidMappingRetryDelays.count,
+            started: true,
+            customMappingEnabled: true,
+            mappingReady: false
+        ) == nil,
+    "HID mapping recovery is bounded and verifies delayed services"
+)
+check(
+    HIDMappingRecoveryPolicy.nextDelay(
+        afterFailedAttempt: 0,
+        started: false,
+        customMappingEnabled: true,
+        mappingReady: false
+    ) == nil &&
+        HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: 0,
+            started: true,
+            customMappingEnabled: false,
+            mappingReady: false
+        ) == nil &&
+        HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: 0,
+            started: true,
+            customMappingEnabled: true,
+            mappingReady: true
+        ) == nil,
+    "HID mapping recovery stops when prerequisites disappear or mapping succeeds"
+)
+let ordinaryVoiceShortcut = CustomKeyboardShortcut(
+    keyCode: 50,
+    modifierFlags: [],
+    keyLabel: "·"
+)
+let comboVoiceShortcut = CustomKeyboardShortcut(
+    keyCode: 8,
+    modifierFlags: [.command, .shift],
+    keyLabel: "C"
+)
+check(
+    HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+        shortcut: StandaloneKeyboardModifier.leftControl.shortcut,
+        fnTapModeEnabled: false,
+        accessibilityGranted: false
+    ) == .standaloneModifier(.leftControl) &&
+        HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: StandaloneKeyboardModifier.rightOption.shortcut,
+            fnTapModeEnabled: false,
+            accessibilityGranted: true
+        ) == .standaloneModifier(.rightOption) &&
+        HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: ordinaryVoiceShortcut,
+            fnTapModeEnabled: false,
+            accessibilityGranted: true
+        ) == .neutralized &&
+        HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: comboVoiceShortcut,
+            fnTapModeEnabled: false,
+            accessibilityGranted: true
+        ) == .neutralized &&
+        HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: ordinaryVoiceShortcut,
+            fnTapModeEnabled: false,
+            accessibilityGranted: false
+        ) == .function,
+    "HID mapping recovery covers modifiers, ordinary keys, and combinations"
+)
+check(
+    HIDMappingRecoveryPolicy.isMappingReady(
+        expectedMode: .neutralized,
+        appliedMode: .neutralized,
+        voiceMappingComplete: true,
+        nativeButtonsSuppressed: true
+    ) &&
+        !HIDMappingRecoveryPolicy.isMappingReady(
+            expectedMode: .neutralized,
+            appliedMode: .function,
+            voiceMappingComplete: true,
+            nativeButtonsSuppressed: true
+        ) &&
+        !HIDMappingRecoveryPolicy.isMappingReady(
+            expectedMode: .function,
+            appliedMode: .function,
+            voiceMappingComplete: true,
+            nativeButtonsSuppressed: false
+        ),
+    "HID mapping recovery requires the requested voice mode and all-button suppression"
 )
 
 check(
@@ -230,25 +341,25 @@ check(
         mappingEnabled: true,
         inputMonitoringGranted: false,
         accessibilityGranted: true,
-        powerKeySuppressed: true
+        nativeButtonEventsSuppressed: true
     ) &&
         !HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: false,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ) &&
         !HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: false
+            nativeButtonEventsSuppressed: false
         ) &&
         HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ),
     "HID permission gate fails closed"
 )
@@ -258,15 +369,22 @@ let unrelatedKeyMapping = HIDUsageMapping(
     destination: 0x0000_0007_0000_0005
 )
 check(
-    RemoteVoiceFunctionMappingPolicy.applying(
-        to: [unrelatedKeyMapping],
-        powerMapping: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
-    ) == [
-        unrelatedKeyMapping,
-        RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
-        RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
-    ],
-    "RC003 power is remapped to harmless F20"
+    RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings.count ==
+        RemoteButton.allCases.count &&
+        RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings.allSatisfy {
+            $0.destination == 0
+        } &&
+        RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings.contains(
+            HIDUsageMapping(source: 0x0000_0007_0000_0035, destination: 0)
+        ) &&
+        RemoteVoiceFunctionMappingPolicy.applying(
+            to: [unrelatedKeyMapping],
+            nativeButtonMappings: RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings
+        ) == [
+            unrelatedKeyMapping,
+            RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+        ] + RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings,
+    "all RC003 native button events are neutralized, including TV"
 )
 
 check(
@@ -292,7 +410,7 @@ check(
         ) == .none &&
         HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: false,
-            voiceFnTapModeEnabled: true,
+            softwareVoiceTriggerEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: false
         ) == .accessibility,
@@ -350,6 +468,102 @@ check(
 )
 _ = voiceFunctionKeyLatch.transition(streaming: false, owner: .mobile)
 
+var voiceShortcutEvents: [String] = []
+let voiceShortcutController = VoiceShortcutHoldController { code, isDown, flags in
+    voiceShortcutEvents.append("\(code):\(isDown ? "down" : "up"):\(flags.rawValue)")
+    return true
+}
+let leftControlVoiceShortcut = StandaloneKeyboardModifier.leftControl.shortcut
+check(
+    KeyboardInjector.syntheticKeyEvent(code: 59, isDown: true, flags: .maskControl)?.type == .flagsChanged &&
+        KeyboardInjector.syntheticKeyEvent(code: 59, isDown: false, flags: [])?.type == .flagsChanged &&
+        KeyboardInjector.syntheticKeyEvent(code: 9, isDown: true, flags: [])?.type == .keyDown &&
+        KeyboardInjector.syntheticKeyEvent(code: 9, isDown: false, flags: [])?.type == .keyUp,
+    "synthetic modifier keys use flags-changed events"
+)
+check(
+    voiceShortcutController.press(leftControlVoiceShortcut) &&
+        voiceShortcutController.press(leftControlVoiceShortcut) &&
+        voiceShortcutController.heldShortcut == leftControlVoiceShortcut &&
+        voiceShortcutEvents == ["59:down:\(CGEventFlags.maskControl.rawValue)"],
+    "custom voice shortcut holds Left Control without duplicate key-down"
+)
+check(
+    voiceShortcutController.release() &&
+        voiceShortcutController.heldShortcut == nil &&
+        voiceShortcutEvents == [
+            "59:down:\(CGEventFlags.maskControl.rawValue)",
+            "59:up:0",
+        ],
+    "custom voice shortcut releases Left Control"
+)
+check(
+    VoiceShortcutConflictPolicy.warning(for: leftControlVoiceShortcut) == nil &&
+        VoiceShortcutConflictPolicy.warning(
+            for: KeyboardShortcutPreset.quitApplication.shortcut
+        ) == .dangerousSystemAction &&
+        VoiceShortcutConflictPolicy.warning(
+            for: KeyboardShortcutPreset.spotlight.shortcut
+        ) == .knownSystemShortcut &&
+        VoiceShortcutConflictPolicy.warning(
+            for: CustomKeyboardShortcut(keyCode: 0, modifierFlags: [], keyLabel: "A")
+        ) == .unmodifiedKey,
+    "custom voice shortcut conflict warnings distinguish safe and risky choices"
+)
+
+var capturedVoiceShortcuts: [CustomKeyboardShortcut] = []
+let voiceShortcutCaptureMonitor = ShortcutCaptureMonitor(
+    onCapture: { capturedVoiceShortcuts.append($0) },
+    dispatchCallback: { $0() }
+)
+if let controlDown = CGEvent(
+    keyboardEventSource: nil,
+    virtualKey: CGKeyCode(StandaloneKeyboardModifier.leftControl.keyCode),
+    keyDown: true
+), let controlUp = CGEvent(
+    keyboardEventSource: nil,
+    virtualKey: CGKeyCode(StandaloneKeyboardModifier.leftControl.keyCode),
+    keyDown: false
+) {
+    controlDown.flags = .maskControl
+    controlUp.flags = []
+    check(
+        voiceShortcutCaptureMonitor.handle(type: .flagsChanged, event: controlDown) &&
+            capturedVoiceShortcuts.isEmpty &&
+            voiceShortcutCaptureMonitor.handle(type: .flagsChanged, event: controlUp) &&
+            capturedVoiceShortcuts == [leftControlVoiceShortcut],
+        "shortcut recorder captures standalone Left Control on release"
+    )
+} else {
+    check(false, "shortcut recorder captures standalone Left Control on release")
+}
+
+var capturedCombination: [CustomKeyboardShortcut] = []
+let combinationCaptureMonitor = ShortcutCaptureMonitor(
+    onCapture: { capturedCombination.append($0) },
+    dispatchCallback: { $0() }
+)
+if let commandDown = CGEvent(
+    keyboardEventSource: nil,
+    virtualKey: 55,
+    keyDown: true
+), let spaceDown = CGEvent(
+    keyboardEventSource: nil,
+    virtualKey: 49,
+    keyDown: true
+) {
+    commandDown.flags = .maskCommand
+    spaceDown.flags = .maskCommand
+    check(
+        combinationCaptureMonitor.handle(type: .flagsChanged, event: commandDown) &&
+            combinationCaptureMonitor.handle(type: .keyDown, event: spaceDown) &&
+            capturedCombination == [KeyboardShortcutPreset.spotlight.shortcut],
+        "shortcut recorder keeps modifier-plus-main-key combinations intact"
+    )
+} else {
+    check(false, "shortcut recorder keeps modifier-plus-main-key combinations intact")
+}
+
 let unrelatedMapping = HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 0x0000_0007_0000_0005)
 let staleVoiceMapping = HIDUsageMapping(
     source: RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.source,
@@ -379,6 +593,23 @@ check(
     ],
     "RC003 neutralized voice key drops the F5 event for tap-style voice tools"
 )
+let leftControlHardwareMapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey(for: .leftControl)
+let rightOptionHardwareMapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey(for: .rightOption)
+check(
+    leftControlHardwareMapping == HIDUsageMapping(
+        source: 0x0000_0007_0000_003E,
+        destination: 0x0000_0007_0000_00E0
+    ) &&
+        RemoteVoiceKeyMappingMode.standaloneModifier(.leftControl).mapping ==
+        leftControlHardwareMapping &&
+        rightOptionHardwareMapping == HIDUsageMapping(
+            source: 0x0000_0007_0000_003E,
+            destination: 0x0000_0007_0000_00E6
+        ) &&
+        RemoteVoiceKeyMappingMode.standaloneModifier(.rightOption).mapping ==
+        rightOptionHardwareMapping,
+    "RC003 voice key maps to the currently configured standalone modifier HID usage"
+)
 var transactionalFirstMappings = [unrelatedMapping]
 var transactionalFirstWrites = 0
 let transactionalMapper = RemoteVoiceFunctionMapper {
@@ -400,11 +631,86 @@ let transactionalMapper = RemoteVoiceFunctionMapper {
     ]
 }
 check(
-    !transactionalMapper.apply(neutralizeVoiceKey: true) &&
+    !transactionalMapper.apply(voiceKeyMappingMode: .neutralized) &&
         !transactionalMapper.isVoiceKeyNeutralized &&
         transactionalFirstMappings == [unrelatedMapping] &&
         transactionalFirstWrites == 2,
     "RC003 neutralization rolls back partial HID mapping success"
+)
+var ignoredMappingWriteCount = 0
+let ignoredMappingWriteMapper = RemoteVoiceFunctionMapper {
+    [
+        RemoteVoiceMappingService(
+            registryID: 1,
+            locationID: 101,
+            readMappings: { [unrelatedMapping] },
+            setMappings: { _ in
+                ignoredMappingWriteCount += 1
+                return true
+            }
+        ),
+    ]
+}
+check(
+    !ignoredMappingWriteMapper.apply(
+        suppressNativeButtonEvents: true,
+        voiceKeyMappingMode: .standaloneModifier(.leftControl)
+    ) &&
+        !ignoredMappingWriteMapper.areNativeButtonEventsSuppressed &&
+        ignoredMappingWriteCount == 2,
+    "RC003 HID mapping fails closed when the system readback omits the write"
+)
+var earlyServiceMappings: [HIDUsageMapping] = []
+var delayedServiceMappings: [HIDUsageMapping] = []
+var delayedServiceVisible = false
+let earlyService = RemoteVoiceMappingService(
+    registryID: 11,
+    locationID: 303,
+    readMappings: { earlyServiceMappings },
+    setMappings: { mappings in
+        earlyServiceMappings = mappings
+        return true
+    }
+)
+let delayedService = RemoteVoiceMappingService(
+    registryID: 12,
+    locationID: 303,
+    readMappings: { delayedServiceMappings },
+    setMappings: { mappings in
+        delayedServiceMappings = mappings
+        return true
+    }
+)
+let delayedServiceMapper = RemoteVoiceFunctionMapper {
+    delayedServiceVisible ? [earlyService, delayedService] : [earlyService]
+}
+let initialMappingApplied = delayedServiceMapper.apply(
+    suppressNativeButtonEvents: true,
+    voiceKeyMappingMode: .neutralized
+)
+delayedServiceVisible = true
+let incompleteDelayedAudit = delayedServiceMapper.audit(
+    suppressNativeButtonEvents: true,
+    voiceKeyMappingMode: .neutralized
+)
+let recoveredDelayedMapping = delayedServiceMapper.apply(
+    suppressNativeButtonEvents: true,
+    voiceKeyMappingMode: .neutralized
+)
+let completeDelayedAudit = delayedServiceMapper.audit(
+    suppressNativeButtonEvents: true,
+    voiceKeyMappingMode: .neutralized
+)
+check(
+    initialMappingApplied &&
+        incompleteDelayedAudit.matchedServiceCount == 2 &&
+        incompleteDelayedAudit.correctlyMappedServiceCount == 1 &&
+        !incompleteDelayedAudit.isComplete &&
+        recoveredDelayedMapping &&
+        completeDelayedAudit.isComplete &&
+        completeDelayedAudit.areNativeButtonEventsSuppressed &&
+        completeDelayedAudit.nativeButtonSuppressedLocationIDs == Set([303]),
+    "RC003 delayed HID services are detected and fully remapped"
 )
 let changedUnrelatedMapping = HIDUsageMapping(
     source: unrelatedMapping.source,
@@ -413,12 +719,12 @@ let changedUnrelatedMapping = HIDUsageMapping(
 check(
     RemoteVoiceFunctionMappingPolicy.restoring(
         originalVoiceMapping: staleVoiceMapping,
-        originalPowerMapping: nil,
+        originalNativeButtonMappings: [],
         in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
     ) == [changedUnrelatedMapping, staleVoiceMapping] &&
         RemoteVoiceFunctionMappingPolicy.restoring(
             originalVoiceMapping: nil,
-            originalPowerMapping: nil,
+            originalNativeButtonMappings: [],
             in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
         ) == [changedUnrelatedMapping],
     "RC003 hardware voice mapping restore preserves unrelated runtime changes"
@@ -466,6 +772,33 @@ check(
     "test tone safety gate rejects missing device, active RC003 voice stream, or in-flight playback"
 )
 
+var quietVoiceLevelMeter = VoiceAudioLevelMeter()
+var loudVoiceLevelMeter = VoiceAudioLevelMeter()
+let voiceLevelWindow = VoiceAudioLevelMeter.updateWindowSampleCount
+let quietVoiceLevel = quietVoiceLevelMeter.append(
+    Array(repeating: Int16(500), count: voiceLevelWindow)
+) ?? -1
+let loudVoiceLevel = loudVoiceLevelMeter.append(
+    Array(repeating: Int16(12_000), count: voiceLevelWindow)
+) ?? -1
+check(
+    quietVoiceLevel > 0 && loudVoiceLevel > quietVoiceLevel && loudVoiceLevel <= 1,
+    "remote voice level meter follows post-gain PCM loudness"
+)
+let releasedVoiceLevel = loudVoiceLevelMeter.append(
+    Array(repeating: Int16(0), count: voiceLevelWindow)
+) ?? -1
+check(
+    releasedVoiceLevel > 0 && releasedVoiceLevel < loudVoiceLevel,
+    "remote voice level meter releases smoothly toward silence"
+)
+loudVoiceLevelMeter.reset()
+check(
+    loudVoiceLevelMeter.level == 0 &&
+        loudVoiceLevelMeter.append(Array(repeating: Int16(1), count: voiceLevelWindow - 1)) == nil,
+    "remote voice level meter resets session state and throttles UI publication"
+)
+
 let suiteName = "RemoteMicSelfTest.\(UUID().uuidString)"
 if let defaults = UserDefaults(suiteName: suiteName) {
     let saved = try JSONEncoder().encode([
@@ -488,6 +821,35 @@ if let defaults = UserDefaults(suiteName: suiteName) {
             settings.action(for: .power) == .escape &&
             settings.customMappingEnabled,
         "unavailable continuous recording experiment cannot replace power binding"
+    )
+    settings.voiceFnTapModeEnabled = true
+    settings.voiceTriggerShortcut = leftControlVoiceShortcut
+    let restoredSettings = AppSettings(defaults: defaults)
+    var voiceShortcutConfigurationRoundTrips = false
+    if let exported = try? settings.exportedConfigurationData(),
+       let importDefaults = UserDefaults(suiteName: "\(suiteName).import")
+    {
+        defer { importDefaults.removePersistentDomain(forName: "\(suiteName).import") }
+        let importedSettings = AppSettings(defaults: importDefaults)
+        if (try? importedSettings.importConfiguration(from: exported)) != nil {
+            voiceShortcutConfigurationRoundTrips =
+                importedSettings.voiceTriggerShortcut == leftControlVoiceShortcut &&
+                !importedSettings.voiceFnTapModeEnabled
+        }
+    }
+    check(
+        restoredSettings.voiceTriggerShortcut == leftControlVoiceShortcut &&
+            voiceShortcutConfigurationRoundTrips,
+        "custom voice shortcut persists and configuration import disables conflicting Fn tap"
+    )
+    check(
+        !settings.localTranscriptAudioRetentionEnabled,
+        "temporary original audio defaults off"
+    )
+    settings.localTranscriptAudioRetentionEnabled = true
+    check(
+        AppSettings(defaults: defaults).localTranscriptAudioRetentionEnabled,
+        "temporary original audio preference persists"
     )
     defaults.removePersistentDomain(forName: suiteName)
 } else {
@@ -528,6 +890,102 @@ check(
         fnTapController.phase == .idle,
     "Typeless Fn tap session buffers pre-roll and stops after drain"
 )
+
+let recomposedVoiceChange = TranscriptCaptureCoordinator.localizedVoiceChange(
+    original: "草稿。后文",
+    updated: "草稿，这是语音。后文",
+    originalSelection: NSRange(location: 3, length: 0)
+)
+check(
+    recomposedVoiceChange?.newText == "，这是语音。",
+    "localized input method recomposition keeps transcript punctuation"
+)
+check(
+    TranscriptCaptureCoordinator.localizedVoiceChange(
+        original: "草稿。",
+        updated: "输入法临时接管了整个字段",
+        originalSelection: NSRange(location: 2, length: 0)
+    ) == nil,
+    "unanchored input method takeover waits for a stable transcript"
+)
+
+var historyScheduledOperation: (() -> Void)?
+var completedHistorySession: CompletedVoiceHistorySession?
+let historySessionID = UUID()
+let historyCoordinator = VoiceHistorySessionCoordinator(
+    schedule: { _, operation in
+        historyScheduledOperation = operation
+        return VoiceFnTapScheduledTask { historyScheduledOperation = nil }
+    },
+    onComplete: { completedHistorySession = $0 }
+)
+historyCoordinator.begin(
+    sessionID: historySessionID,
+    startedAt: Date(timeIntervalSince1970: 100),
+    source: .bluetoothRemote,
+    applicationName: "Qianwen",
+    bundleIdentifier: "com.example.qianwen",
+    expectsAudio: false
+)
+historyCoordinator.finish(
+    sessionID: historySessionID,
+    endedAt: Date(timeIntervalSince1970: 103)
+)
+historyScheduledOperation?()
+check(
+    completedHistorySession?.sessionID == historySessionID &&
+        completedHistorySession?.transcript == nil &&
+        completedHistorySession?.applicationName == "Qianwen",
+    "voice history keeps a session when third-party transcript text is unavailable"
+)
+
+let audioArchiveRoot = FileManager.default.temporaryDirectory
+    .appendingPathComponent("RemoteMicSelfTestAudio-\(UUID().uuidString)")
+let audioEndedAt = Date()
+let audioSessionID = UUID()
+let audioArchive = VoiceAudioArchiveStore(
+    rootDirectoryURL: audioArchiveRoot,
+    now: { audioEndedAt }
+)
+var audioAttachment: TranscriptAudioAttachment?
+check(audioArchive.start(sessionID: audioSessionID), "temporary audio archive starts")
+audioArchive.append(
+    sessionID: audioSessionID,
+    samples: TestToneGenerator.samples(sampleRate: VoiceAudioArchiveStore.sampleRate)
+)
+audioArchive.finish(sessionID: audioSessionID, endedAt: audioEndedAt) {
+    audioAttachment = $0
+}
+let audioFinishDeadline = Date().addingTimeInterval(5)
+while audioAttachment == nil && Date() < audioFinishDeadline {
+    RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+}
+let savedAudioURL = audioAttachment.flatMap {
+    audioArchive.playableURL(for: $0, at: audioEndedAt)
+}
+check(
+    audioAttachment?.duration == 1 &&
+        audioAttachment?.expiresAt == audioEndedAt.addingTimeInterval(4 * 60 * 60) &&
+        savedAudioURL?.pathExtension == "m4a" &&
+        savedAudioURL.map { FileManager.default.fileExists(atPath: $0.path) } == true,
+    "temporary audio archive writes M4A with an exact four-hour expiry"
+)
+var audioPruneFinished = false
+if let attachment = audioAttachment {
+    audioArchive.pruneExpiredAudio(referenceDate: attachment.expiresAt) {
+        audioPruneFinished = true
+    }
+}
+let audioPruneDeadline = Date().addingTimeInterval(5)
+while !audioPruneFinished && Date() < audioPruneDeadline {
+    RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+}
+check(
+    audioPruneFinished &&
+        savedAudioURL.map { !FileManager.default.fileExists(atPath: $0.path) } == true,
+    "temporary audio archive prunes files at the four-hour boundary"
+)
+try? FileManager.default.removeItem(at: audioArchiveRoot)
 
 print("RESULT passed=\(passed) failed=\(failed)")
 if failed > 0 {

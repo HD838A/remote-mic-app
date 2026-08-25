@@ -94,8 +94,10 @@ struct RemoteMappingCanvas: View {
     @Binding var selectedButton: RemoteButton
     let activeButtons: Set<RemoteButton>
     let voiceActive: Bool
+    let voiceShortcutSummary: String
     let actionSummary: (RemoteButton, ButtonTrigger) -> String
     let onEdit: (RemoteButton, ButtonTrigger) -> Void
+    let onEditVoice: () -> Void
 
     var body: some View {
         GeometryReader { geometry in
@@ -272,20 +274,25 @@ struct RemoteMappingCanvas: View {
                 Text("button_mapping.voice_button.title")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 0)
-                Text("button_mapping.voice_button.fixed")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(voiceActive ? Color.orange : Color.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        (voiceActive ? Color.orange : Color.secondary).opacity(0.12),
-                        in: Capsule()
-                    )
             }
-            Text("button_mapping.voice_button.detail")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+
+            HStack(spacing: 4) {
+                ForEach(ButtonTrigger.allCases) { trigger in
+                    if trigger == .longPress {
+                        Button(action: onEditVoice) {
+                            voiceTriggerCell(trigger, summary: voiceShortcutSummary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("button_mapping.voice_button.detail")
+                    } else {
+                        voiceTriggerCell(
+                            trigger,
+                            summary: localization.text("button_mapping.action.not_set")
+                        )
+                        .accessibilityHidden(true)
+                    }
+                }
+            }
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
@@ -297,7 +304,24 @@ struct RemoteMappingCanvas: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(voiceActive ? Color.orange.opacity(0.65) : Color.secondary.opacity(0.15))
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("remote.voice_button.accessibility_label"))
+    }
+
+    private func voiceTriggerCell(_ trigger: ButtonTrigger, summary: String) -> some View {
+        VStack(spacing: 1) {
+            Text(trigger.displayName(using: localization))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text(summary)
+                .font(.system(size: 12, weight: trigger == .longPress ? .semibold : .regular))
+                .foregroundStyle(trigger == .longPress ? .primary : .secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 5)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 
     private func symbol(for button: RemoteButton) -> String {

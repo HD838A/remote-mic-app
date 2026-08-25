@@ -209,6 +209,41 @@ enum KeyboardInjector {
     }
 
     @discardableResult
+    static func postSyntheticKeyState(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags
+    ) -> Bool {
+        postKeyState(code: code, isDown: isDown, flags: flags)
+    }
+
+    static func syntheticKeyEventType(
+        code: CGKeyCode,
+        isDown: Bool
+    ) -> CGEventType {
+        switch code {
+        case 54, 55, 56, 57, 58, 59, 60, 61, 62, 63:
+            return .flagsChanged
+        default:
+            return isDown ? .keyDown : .keyUp
+        }
+    }
+
+    static func syntheticKeyEvent(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags
+    ) -> CGEvent? {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
+        else { return nil }
+        event.flags = flags
+        event.type = syntheticKeyEventType(code: code, isDown: isDown)
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        return event
+    }
+
+    @discardableResult
     static func send(
         _ action: ButtonAction,
         shortcut: CustomKeyboardShortcut? = nil,
@@ -1691,11 +1726,9 @@ enum KeyboardInjector {
         isDown: Bool,
         flags: CGEventFlags
     ) -> Bool {
-        guard let source = CGEventSource(stateID: .hidSystemState),
-              let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
-        else { return false }
-        event.flags = flags
-        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        guard let event = syntheticKeyEvent(code: code, isDown: isDown, flags: flags) else {
+            return false
+        }
         event.post(tap: .cghidEventTap)
         return true
     }

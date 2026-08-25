@@ -95,6 +95,8 @@ struct TranscriptHistorySection: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            audioRetentionPanel
+
             if model.transcriptRecords.isEmpty {
                 GlassPanel {
                     emptyState
@@ -121,6 +123,43 @@ struct TranscriptHistorySection: View {
             normalizeExpandedDays()
         }
         .alert(item: $deletionRequest, content: deletionAlert)
+    }
+
+    private var audioRetentionPanel: some View {
+        GlassPanel {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "waveform.badge.mic")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Color.accentColor.opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("statistics.transcripts.audio_retention.title")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("statistics.transcripts.audio_retention.description")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 18)
+
+                Toggle(
+                    "statistics.transcripts.audio_retention.toggle",
+                    isOn: $settings.localTranscriptAudioRetentionEnabled
+                )
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .disabled(!settings.localTranscriptHistoryEnabled)
+                .accessibilityLabel(
+                    localization.text("statistics.transcripts.audio_retention.toggle")
+                )
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -475,25 +514,61 @@ struct TranscriptHistorySection: View {
             }
             .frame(width: 126, alignment: .leading)
 
-            Text(record.originalTranscript)
-                .font(.system(size: 13))
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 7) {
+                Text(record.originalTranscript.isEmpty
+                    ? localization.text("statistics.transcripts.transcript_unavailable")
+                    : record.originalTranscript)
+                    .font(.system(size: 13))
+                    .foregroundStyle(record.originalTranscript.isEmpty ? .secondary : .primary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Button {
-                guard model.copyTranscript(record) else { return }
-                copiedRecordID = record.id
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    if copiedRecordID == record.id {
-                        copiedRecordID = nil
+                if let attachment = record.audio {
+                    let audioAvailable = model.isTranscriptAudioAvailable(record)
+                    HStack(spacing: 7) {
+                        if audioAvailable {
+                            Button {
+                                _ = model.toggleTranscriptAudioPlayback(record)
+                            } label: {
+                                Image(systemName: model.playingTranscriptAudioRecordID == record.id
+                                    ? "pause.fill"
+                                    : "play.fill")
+                                Text(model.playingTranscriptAudioRecordID == record.id
+                                    ? "statistics.transcripts.audio.pause"
+                                    : "statistics.transcripts.audio.play")
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .buttonStyle(.borderless)
+
+                            Text(localizedAudioDuration(attachment.duration))
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Image(systemName: "clock")
+                            Text("statistics.transcripts.audio.expired")
+                        }
                     }
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
                 }
-            } label: {
-                Image(systemName: copiedRecordID == record.id ? "checkmark" : "doc.on.doc")
             }
-            .buttonStyle(.borderless)
-            .help(localization.text("statistics.transcripts.copy"))
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !record.originalTranscript.isEmpty {
+                Button {
+                    guard model.copyTranscript(record) else { return }
+                    copiedRecordID = record.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        if copiedRecordID == record.id {
+                            copiedRecordID = nil
+                        }
+                    }
+                } label: {
+                    Image(systemName: copiedRecordID == record.id ? "checkmark" : "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .help(localization.text("statistics.transcripts.copy"))
+            }
 
             Button(role: .destructive) {
                 deletionRequest = .record(record)
@@ -612,6 +687,16 @@ struct TranscriptHistorySection: View {
             format: localization.text("statistics.transcripts.entry_count"),
             locale: localization.locale,
             localizedCount(count)
+        )
+    }
+
+    private func localizedAudioDuration(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        return String(
+            format: localization.text("statistics.transcripts.audio.duration"),
+            locale: localization.locale,
+            totalSeconds / 60,
+            totalSeconds % 60
         )
     }
 }

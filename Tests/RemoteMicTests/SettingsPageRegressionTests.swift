@@ -615,6 +615,7 @@ struct SettingsPageRegressionTests {
         #expect(cardSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(cardSource.contains("fillsWidth ? nil : 232"))
         #expect(cardSource.contains("remoteBatteryLabel("))
+        #expect(cardSource.contains("remoteVoiceLevelMeter(level: model.voiceLevel(for: profile.id))"))
         #expect(cardSource.contains("powerState: model.powerState(for: profile.id)"))
         #expect(cardSource.contains("Image(systemName: \"bolt.fill\")"))
         #expect(!cardSource.contains("Label(power.text"))
@@ -630,6 +631,8 @@ struct SettingsPageRegressionTests {
         }
         #expect(settingsSource.contains("if level <= 10 { return .red }"))
         #expect(settingsSource.contains("if level <= 25 { return .orange }"))
+        #expect(settingsSource.contains(".frame(width: 21, height: 12"))
+        #expect(settingsSource.contains("Text(\"remote.device.voice_level\")"))
 
         let panelStart = try #require(settingsSource.range(of: "private var connectionDevicePanel"))
         let panelEnd = try #require(settingsSource.range(
@@ -870,6 +873,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(
             "model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))
+        #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_CONNECTED_REMOTE"))
+        #expect(source.contains("initialRemoteVoiceLevels:"))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"))
     }
@@ -983,9 +988,12 @@ struct SettingsPageRegressionTests {
         #expect(!agentAccessSource.contains(".sheet("))
         #expect(!agentAccessSource.contains("Popover"))
 
+        #expect(modelSource.contains("voiceHistorySessionCoordinator.begin("))
         #expect(modelSource.contains(
-            "transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)"
+            "voiceHistorySessionCoordinator.finish(sessionID: sessionID, endedAt: endedAt)"
         ))
+        #expect(modelSource.contains("transcriptCaptureCoordinator.startSession("))
+        #expect(modelSource.contains("sessionID: sessionID,"))
         #expect(modelSource.contains(
             "transcriptCaptureCoordinator.finishSession(endedAt: endedAt)"
         ))
@@ -1010,5 +1018,45 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("expandedShareSection = .about"))
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
+    }
+
+    @Test func voiceButtonShortcutUsesAnInlineEditorAndConflictWarning() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/SettingsScreenshotRenderer.swift"
+            ),
+            encoding: .utf8
+        )
+        let canvasSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/RemoteMappingCanvas.swift"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("voiceShortcutEditorPanel"))
+        #expect(settingsSource.contains("model.setVoiceTriggerShortcut(shortcut)"))
+        #expect(settingsSource.contains("VoiceShortcutConflictPolicy.warning"))
+        #expect(settingsSource.contains("settings.voiceTriggerShortcut != nil"))
+        #expect(!settingsSource.contains(".sheet(isPresented: $isVoiceShortcutEditorPresented"))
+        #expect(!settingsSource.contains(".popover(isPresented: $isVoiceShortcutEditorPresented"))
+        #expect(rendererSource.contains(
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_VOICE_SHORTCUT_EDITOR"
+        ))
+        #expect(rendererSource.contains(
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_SHORTCUT_CONFLICT"
+        ))
+        #expect(canvasSource.contains("ForEach(ButtonTrigger.allCases)"))
+        #expect(canvasSource.contains("if trigger == .longPress"))
+        #expect(canvasSource.contains("Button(action: onEditVoice)"))
+        #expect(canvasSource.contains("button_mapping.action.not_set"))
     }
 }

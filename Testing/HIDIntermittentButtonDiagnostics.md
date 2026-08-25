@@ -12,6 +12,7 @@
 2. 为 OK 键配置一个结果明确、可重复执行的普通动作，例如回车。
 3. 打开 `~/Library/Logs/RemoteMic/runtime.log`，记录测试开始时间，不要清空其他用户日志。
 4. 同时确认遥控器语音键可正常开始、传输并停止，以区分 BLE 语音链路与 HID 按键链路。
+5. 可运行 `./scripts/hid-button-acceptance.sh prepare` 建立本轮日志边界；每个用例前运行 `./scripts/hid-button-acceptance.sh mark <步骤说明>`，结束后运行 `finish`，证据保存在 `.build/hid-button-acceptance/`。
 
 ## 用例 1：正常 OK 单击基线
 
@@ -42,11 +43,21 @@
 
 ## 稳定功能回归
 
-- RC003 普通方向、返回、菜单、主页、TV 和音量键。
-- 单击、双击、长按及允许连发的方向键。
+- RC003 的电源、上、左、确定、右、下、返回、音量加、主页、音量减、菜单、TV 共 12 个普通按键。
+- 每个普通按键分别验证单击、双击、长按，共 36 个手势；一次操作只能出现一条对应 `HID BUTTON`，不得同时触发系统原始键或第三方全局快捷键。
 - 遥控器语音 `STREAM_START → AUDIO → STREAM_STOP`。
 - MacBook 实体方向键与普通键盘输入。
-- 断连、重连、权限关闭后重新授权。
+- App 冷启动、遥控器断连/重连、Mac 睡眠/唤醒、权限关闭后重新授权、关闭再开启自定义映射。
+
+每次生命周期变化后的正常启动应最终出现：
+
+```text
+VOICE FN MAPPING ... complete=true native_buttons_suppressed=true native_button_mappings=12 ...
+HID MAPPING VERIFY pass=true ...
+HID START mode=adaptive ...
+```
+
+允许最初短暂出现 `matched=0`，但必须随后出现 `HID MAPPING RECOVERY scheduled/running` 并恢复；只有失败、没有恢复成功日志时判为初始化故障。
 
 ## 日志与隐私
 

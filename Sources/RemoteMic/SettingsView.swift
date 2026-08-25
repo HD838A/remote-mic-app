@@ -193,6 +193,8 @@ struct SettingsView: View {
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
+    @State private var isVoiceShortcutEditorPresented = false
+    @State private var isVoiceShortcutCapturing = false
     @State private var applicationShortcutCaptureProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
@@ -224,6 +226,7 @@ struct SettingsView: View {
         initialShareSection: SettingsSection? = nil,
         initialMappingEditingButton: RemoteButton? = nil,
         initialMappingEditingTrigger: ButtonTrigger = .singleClick,
+        initialVoiceShortcutEditorPresented: Bool = false,
         initialShortcutPickerShowsKeyboard: Bool = false,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
@@ -245,6 +248,9 @@ struct SettingsView: View {
             initialValue: initialMappingEditingButton.map {
                 ShortcutEditingTarget(button: $0, trigger: initialMappingEditingTrigger)
             }
+        )
+        _isVoiceShortcutEditorPresented = State(
+            initialValue: initialVoiceShortcutEditorPresented
         )
     }
 
@@ -994,14 +1000,23 @@ struct SettingsView: View {
                             selectedButton: $selectedRemoteButton,
                             activeButtons: model.activeRemoteButtons,
                             voiceActive: model.isStreaming,
+                            voiceShortcutSummary: voiceShortcutSummary,
                             actionSummary: mappingActionSummary,
                             onEdit: { button, trigger in
+                                isVoiceShortcutEditorPresented = false
+                                isVoiceShortcutCapturing = false
                                 selectedRemoteButton = button
                                 isPresetApplicationActionsExpanded = false
                                 mappingEditingTarget = ShortcutEditingTarget(
                                     button: button,
                                     trigger: trigger
                                 )
+                            },
+                            onEditVoice: {
+                                mappingEditingTarget = nil
+                                shortcutCaptureTarget = nil
+                                applicationShortcutCaptureProfileID = nil
+                                isVoiceShortcutEditorPresented = true
                             }
                         )
                         .onReceive(model.$activeRemoteButtons) { buttons in
@@ -1017,6 +1032,11 @@ struct SettingsView: View {
                                 .id("mapping-action-editor")
                         }
 
+                        if isVoiceShortcutEditorPresented {
+                            voiceShortcutEditorPanel
+                                .id("voice-shortcut-editor")
+                        }
+
                         mappingFooter
                     }
                     .padding(22)
@@ -1024,6 +1044,12 @@ struct SettingsView: View {
                 }
                 .compatibilityScrollEdgeEffect()
                 .onAppear {
+                    if isVoiceShortcutEditorPresented {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo("voice-shortcut-editor", anchor: .top)
+                        }
+                        return
+                    }
                     guard let target = mappingEditingTarget else { return }
                     let scrollTarget = settings.configuredAction(
                         for: target.button,
@@ -1040,6 +1066,14 @@ struct SettingsView: View {
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             proxy.scrollTo("mapping-action-editor", anchor: .top)
+                        }
+                    }
+                }
+                .onChange(of: isVoiceShortcutEditorPresented) { isPresented in
+                    guard isPresented else { return }
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo("voice-shortcut-editor", anchor: .top)
                         }
                     }
                 }
@@ -1115,6 +1149,143 @@ struct SettingsView: View {
         }
     }
 
+    private var voiceShortcutSummary: String {
+        settings.voiceTriggerShortcut?.displayName(using: localization) ??
+            localization.text("button_mapping.voice_shortcut.default_fn")
+    }
+
+    private var voiceShortcutEditorPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Label("button_mapping.voice_shortcut.title", systemImage: "mic.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                    Spacer(minLength: 10)
+                    Button("common.action.close") {
+                        isVoiceShortcutCapturing = false
+                        isVoiceShortcutEditorPresented = false
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+
+                Text("button_mapping.voice_shortcut.help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !settings.customMappingEnabled {
+                    Label(
+                        "button_mapping.voice_shortcut.mapping_disabled",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.orange)
+                }
+
+                if isVoiceShortcutCapturing {
+                    HStack(spacing: 10) {
+                        Label("shortcut.editor.recording_prompt", systemImage: "keyboard.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                        Spacer(minLength: 10)
+                        Button("common.action.cancel") {
+                            isVoiceShortcutCapturing = false
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                    .padding(12)
+                    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+
+                    ShortcutCaptureView(
+                        onCapture: { shortcut in
+                            model.setVoiceTriggerShortcut(shortcut)
+                            shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                                contextID: "voice-trigger",
+                                result: .succeeded
+                            )
+                            isVoiceShortcutCapturing = false
+                        },
+                        onFailure: { failure in
+                            shortcutCaptureFeedback = ShortcutCaptureFeedback(
+                                contextID: "voice-trigger",
+                                result: .failed(failure)
+                            )
+                            isVoiceShortcutCapturing = false
+                            if failure == .accessibilityPermissionRequired {
+                                _ = KeyboardInjector.requestAccessibilityAccess()
+                            }
+                        }
+                    )
+                    .frame(height: 1)
+                } else {
+                    HStack(spacing: 10) {
+                        Label {
+                            Text(voiceShortcutSummary)
+                        } icon: {
+                            Image(systemName: settings.voiceTriggerShortcut == nil
+                                ? "globe"
+                                : "keyboard.badge.checkmark")
+                                .foregroundStyle(settings.voiceTriggerShortcut == nil
+                                    ? Color.secondary
+                                    : Color.green)
+                        }
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+
+                        Button("shortcut.action.record") {
+                            mappingEditingTarget = nil
+                            shortcutCaptureTarget = nil
+                            applicationShortcutCaptureProfileID = nil
+                            shortcutCaptureFeedback = nil
+                            isVoiceShortcutCapturing = true
+                        }
+                        .compatibilityButtonStyle(.standard)
+
+                        Button("button_mapping.voice_shortcut.restore_fn") {
+                            model.setVoiceTriggerShortcut(nil)
+                            shortcutCaptureFeedback = nil
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .disabled(settings.voiceTriggerShortcut == nil)
+                    }
+
+                    shortcutCaptureFeedbackView(contextID: "voice-trigger")
+
+                    if let warning = VoiceShortcutConflictPolicy.warning(
+                        for: settings.voiceTriggerShortcut
+                    ) {
+                        Label(
+                            localization.text(warning.localizationKey),
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(
+                            warning == .dangerousSystemAction ? Color.red : Color.orange
+                        )
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            (warning == .dangerousSystemAction ? Color.red : Color.orange).opacity(0.09),
+                            in: RoundedRectangle(cornerRadius: 9)
+                        )
+                    }
+
+                    KeyboardShortcutPicker(
+                        shortcut: settings.voiceTriggerShortcut,
+                        showsStandardKeyboardInitially: initialShortcutPickerShowsKeyboard,
+                        onSelect: { shortcut in
+                            model.setVoiceTriggerShortcut(shortcut)
+                            shortcutCaptureFeedback = nil
+                        }
+                    )
+                    .id("voice-trigger-shortcut-picker")
+                }
+            }
+        }
+    }
+
     private var mappingFooter: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
@@ -1179,6 +1350,8 @@ struct SettingsView: View {
                 .lineLimit(3)
         }
         .help(localization.text("connection.voice_key_mode.help"))
+        .opacity(settings.voiceTriggerShortcut == nil ? 1 : 0.55)
+        .disabled(settings.voiceTriggerShortcut != nil)
     }
 
     private var mappingVoiceFnTapControl: some View {
@@ -1195,8 +1368,8 @@ struct SettingsView: View {
                 .lineLimit(2)
         }
         .help(localization.text("connection.voice_fn_tap.hint"))
-        .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
-        .disabled(settings.voiceKeyMode != .function)
+        .opacity(settings.voiceKeyMode == .function && settings.voiceTriggerShortcut == nil ? 1 : 0.55)
+        .disabled(settings.voiceKeyMode != .function || settings.voiceTriggerShortcut != nil)
     }
 
     private var mappingVoiceShortTapFocusControl: some View {
@@ -1213,10 +1386,13 @@ struct SettingsView: View {
                 .lineLimit(3)
         }
         .help(localization.text("connection.voice_short_focus.help"))
+        .opacity(settings.voiceTriggerShortcut == nil ? 1 : 0.55)
+        .disabled(settings.voiceTriggerShortcut != nil)
     }
 
     private var mappingRestoreDefaultsButton: some View {
         Button("common.action.restore_defaults") {
+            model.setVoiceTriggerShortcut(nil)
             settings.resetBindings()
             selectedRemoteButton = .ok
         }
@@ -1306,6 +1482,7 @@ struct SettingsView: View {
                             level: batteryLevel,
                             powerState: model.powerState(for: profile.id)
                         )
+                        remoteVoiceLevelMeter(level: model.voiceLevel(for: profile.id))
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 7) {
@@ -1314,6 +1491,7 @@ struct SettingsView: View {
                                 level: batteryLevel,
                                 powerState: model.powerState(for: profile.id)
                             )
+                            remoteVoiceLevelMeter(level: model.voiceLevel(for: profile.id))
                         }
                     }
                 }
@@ -1367,6 +1545,32 @@ struct SettingsView: View {
         }
         .foregroundStyle(batteryColor(for: level))
         .help(remoteBatteryHelp(level: level, powerState: powerState))
+    }
+
+    private func remoteVoiceLevelMeter(level: Double) -> some View {
+        let clampedLevel = min(1, max(0, level))
+        let heights: [CGFloat] = [4, 6, 8, 10, 12]
+        let thresholds = [0.08, 0.25, 0.45, 0.65, 0.85]
+        return HStack(alignment: .bottom, spacing: 2) {
+            ForEach(heights.indices, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .fill(
+                        clampedLevel >= thresholds[index]
+                            ? (index == heights.indices.last ? Color.orange : Color.green)
+                            : Color.secondary.opacity(0.18)
+                    )
+                    .frame(width: 2.5, height: heights[index])
+            }
+        }
+        .frame(width: 21, height: 12, alignment: .bottomLeading)
+        .animation(
+            .easeOut(duration: clampedLevel > 0 ? 0.06 : 0.22),
+            value: clampedLevel
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("remote.device.voice_level"))
+        .accessibilityValue(Text("\(Int((clampedLevel * 100).rounded()))%"))
+        .help(localization.text("remote.device.voice_level.help"))
     }
 
     private func batterySymbol(for level: Int?) -> String {

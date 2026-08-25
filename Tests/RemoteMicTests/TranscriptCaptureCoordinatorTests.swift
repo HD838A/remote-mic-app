@@ -89,6 +89,49 @@ struct TranscriptCaptureCoordinatorTests {
         ) == nil)
     }
 
+    @Test func localizedVoiceChangeAcceptsNearbyInputMethodRecomposition() {
+        let change = TranscriptCaptureCoordinator.localizedVoiceChange(
+            original: "草稿。后文",
+            updated: "草稿，这是语音。后文",
+            originalSelection: NSRange(location: 3, length: 0)
+        )
+
+        #expect(change?.newText == "，这是语音。")
+        #expect(TranscriptCaptureCoordinator.localizedVoiceChange(
+            original: "远处内容以及当前光标",
+            updated: "完全无关的远处修改以及当前光标语音",
+            originalSelection: NSRange(location: 10, length: 0)
+        ) == nil)
+    }
+
+    @Test func transientDiscontinuousInputWaitsForStableVoiceResult() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "草稿。",
+            selection: NSRange(location: 2, length: 0)
+        )
+        harness.coordinator.startSession(startedAt: Date(), source: .bluetoothRemote)
+        harness.coordinator.finishSession(endedAt: Date())
+
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "输入法临时接管了整个字段",
+            selection: NSRange(location: 11, length: 0)
+        )
+        harness.scheduler.advance(by: 0.25)
+        #expect(harness.captures.isEmpty)
+
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "草稿语音。",
+            selection: NSRange(location: 4, length: 0)
+        )
+        harness.scheduler.advance(by: 1.25)
+
+        #expect(try #require(harness.captures.first).text == "语音")
+        #expect(harness.logs.contains {
+            $0.contains("transient_discontinuous_text_change")
+        })
+    }
+
     @Test func quickSendKeepsTheLastAcceptedTranscriptCandidate() throws {
         let harness = CaptureHarness()
         harness.snapshot = CaptureHarness.safeSnapshot(

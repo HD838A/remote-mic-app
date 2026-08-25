@@ -1351,7 +1351,7 @@ struct RemoteButtonsTests {
         #expect(!source.contains("DispatchQueue.main.async"))
     }
 
-    @Test func powerSuppressionIsArmedBeforeButtonCallbacksAndMonitoring() throws {
+    @Test func nativeButtonSuppressionIsArmedBeforeButtonCallbacksAndMonitoring() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let monitor = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
         let model = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"), encoding: .utf8)
@@ -1366,10 +1366,14 @@ struct RemoteButtonsTests {
         )
         let applySettings = model[applySettingsStart.lowerBound..<applySettingsEnd.lowerBound]
         let map = try #require(
-            applySettings.range(of: "powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)")
+            applySettings.range(
+                of: "nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: requestedVoiceMappingMode)"
+            )
         )
         let start = try #require(
-            applySettings.range(of: "startHIDMonitors(powerKeySuppressed: powerKeySuppressed)")
+            applySettings.range(
+                of: "startHIDMonitors(nativeButtonEventsSuppressed: nativeButtonEventsSuppressed)"
+            )
         )
         #expect(arm.lowerBound < callback.lowerBound)
         #expect(map.lowerBound < start.lowerBound)
@@ -1419,25 +1423,25 @@ struct RemoteButtonsTests {
             mappingEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
         #expect(!HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: false,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
         #expect(!HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: false
+            nativeButtonEventsSuppressed: false
         ))
         #expect(HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
     }
 
@@ -1464,13 +1468,13 @@ struct RemoteButtonsTests {
         ) == .none)
         #expect(HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: false,
-            voiceFnTapModeEnabled: true,
+            softwareVoiceTriggerEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: false
         ) == .accessibility)
         #expect(HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: false,
-            voiceFnTapModeEnabled: true,
+            softwareVoiceTriggerEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: true
         ) == .none)
@@ -1798,6 +1802,40 @@ struct RemoteButtonsTests {
             x: 930,
             y: 890
         ))
+    }
+
+    @Test func voiceTriggerShortcutPersistsExportsAndWinsOverFnTapMode() throws {
+        let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.voiceFnTapModeEnabled = true
+        source.voiceTriggerShortcut = StandaloneKeyboardModifier.leftControl.shortcut
+
+        let restored = AppSettings(defaults: sourceDefaults)
+        #expect(restored.voiceTriggerShortcut == StandaloneKeyboardModifier.leftControl.shortcut)
+
+        let exported = try source.exportedConfigurationData()
+        let object = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        #expect(object["voiceTriggerShortcut"] != nil)
+
+        let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.voiceTriggerShortcut == StandaloneKeyboardModifier.leftControl.shortcut)
+        #expect(!target.voiceFnTapModeEnabled)
+
+        var legacyObject = object
+        legacyObject.removeValue(forKey: "voiceTriggerShortcut")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(target.voiceTriggerShortcut == nil)
+        #expect(target.voiceFnTapModeEnabled)
     }
 
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {
@@ -2299,6 +2337,66 @@ struct RemoteButtonsTests {
         ))
         let callbackSource = appSource[activeCallback.lowerBound..<callbackEnd.lowerBound]
         #expect(callbackSource.contains("model.refreshHIDAfterPermissionChange()"))
+    }
+
+    @Test func hidMappingRecoveryIsBoundedForEveryShortcutMode() {
+        let delays = HIDMappingRecoveryPolicy.delays
+        #expect(delays == [0.5, 1, 2, 4, 8])
+        #expect(HIDMappingRecoveryPolicy.verificationDelays == [0.75, 2, 5, 10])
+        for attempt in delays.indices {
+            #expect(HIDMappingRecoveryPolicy.nextDelay(
+                afterFailedAttempt: attempt,
+                started: true,
+                customMappingEnabled: true,
+                mappingReady: false
+            ) == delays[attempt])
+        }
+        #expect(HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: delays.count,
+            started: true,
+            customMappingEnabled: true,
+            mappingReady: false
+        ) == nil)
+        #expect(HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: 0,
+            started: false,
+            customMappingEnabled: true,
+            mappingReady: false
+        ) == nil)
+        #expect(HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: 0,
+            started: true,
+            customMappingEnabled: false,
+            mappingReady: false
+        ) == nil)
+        #expect(HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: 0,
+            started: true,
+            customMappingEnabled: true,
+            mappingReady: true
+        ) == nil)
+
+        let ordinary = CustomKeyboardShortcut(keyCode: 50, modifierFlags: [], keyLabel: "·")
+        let combo = CustomKeyboardShortcut(
+            keyCode: 8,
+            modifierFlags: [.command, .shift],
+            keyLabel: "C"
+        )
+        #expect(HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: ordinary,
+            fnTapModeEnabled: false,
+            accessibilityGranted: true
+        ) == .neutralized)
+        #expect(HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: combo,
+            fnTapModeEnabled: false,
+            accessibilityGranted: true
+        ) == .neutralized)
+        #expect(HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: StandaloneKeyboardModifier.rightOption.shortcut,
+            fnTapModeEnabled: false,
+            accessibilityGranted: false
+        ) == .standaloneModifier(.rightOption))
     }
 
     @Test func customShortcutsPersistAndResetWithBindings() throws {

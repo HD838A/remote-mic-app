@@ -11,6 +11,7 @@ struct VoiceKeyConfigurationState: Equatable {
     let mode: VoiceKeyMode
     let fnTapModeEnabled: Bool
     let shortTapFocusEnabled: Bool
+    let shortcut: CustomKeyboardShortcut?
 }
 
 private struct PersonalizedConfiguration: Codable {
@@ -31,6 +32,7 @@ private struct PersonalizedConfiguration: Codable {
     let voiceFnTapModeEnabled: Bool?
     let voiceShortTapFocusEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
+    let voiceTriggerShortcut: CustomKeyboardShortcut?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -252,7 +254,9 @@ final class AppSettings: ObservableObject {
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
         static let voiceShortTapFocusEnabled = "voiceShortTapFocusEnabled"
         static let voiceKeyMode = "voiceKeyMode"
+        static let voiceTriggerShortcut = "voiceTriggerShortcut"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
+        static let localTranscriptAudioRetentionEnabled = "localTranscriptAudioRetentionEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
@@ -376,11 +380,32 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published var voiceTriggerShortcut: CustomKeyboardShortcut? {
+        didSet {
+            guard let voiceTriggerShortcut else {
+                defaults.removeObject(forKey: Keys.voiceTriggerShortcut)
+                return
+            }
+            if let data = try? JSONEncoder().encode(voiceTriggerShortcut) {
+                defaults.set(data, forKey: Keys.voiceTriggerShortcut)
+            }
+        }
+    }
+
     @Published var localTranscriptHistoryEnabled: Bool {
         didSet {
             defaults.set(
                 localTranscriptHistoryEnabled,
                 forKey: Keys.localTranscriptHistoryEnabled
+            )
+        }
+    }
+
+    @Published var localTranscriptAudioRetentionEnabled: Bool {
+        didSet {
+            defaults.set(
+                localTranscriptAudioRetentionEnabled,
+                forKey: Keys.localTranscriptAudioRetentionEnabled
             )
         }
     }
@@ -564,8 +589,14 @@ final class AppSettings: ObservableObject {
         voiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
+        voiceTriggerShortcut = defaults
+            .data(forKey: Keys.voiceTriggerShortcut)
+            .flatMap { try? JSONDecoder().decode(CustomKeyboardShortcut.self, from: $0) }
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
+        )
+        localTranscriptAudioRetentionEnabled = defaults.bool(
+            forKey: Keys.localTranscriptAudioRetentionEnabled
         )
         continuousRecordingPowerBindingBackup = defaults
             .data(forKey: Keys.continuousRecordingPowerBindingBackup)
@@ -1322,6 +1353,7 @@ final class AppSettings: ObservableObject {
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
             voiceShortTapFocusEnabled: voiceShortTapFocusEnabled,
             voiceKeyMode: voiceKeyMode,
+            voiceTriggerShortcut: voiceTriggerShortcut,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -1332,33 +1364,40 @@ final class AppSettings: ObservableObject {
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {
         VoiceKeyConfigurationState(
             mode: voiceKeyMode,
-            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function,
-            shortTapFocusEnabled: voiceShortTapFocusEnabled && !voiceFnTapModeEnabled
+            fnTapModeEnabled: voiceTriggerShortcut == nil && voiceFnTapModeEnabled && voiceKeyMode == .function,
+            shortTapFocusEnabled: voiceTriggerShortcut == nil && voiceShortTapFocusEnabled && !voiceFnTapModeEnabled,
+            shortcut: voiceTriggerShortcut
         )
     }
 
     func voiceKeyConfigurationState(in data: Data) throws -> VoiceKeyConfigurationState {
         let configuration = try Self.validatedConfiguration(from: data)
         let mode = configuration.voiceKeyMode ?? .function
-        let fnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
+        let shortcut = configuration.voiceTriggerShortcut
+        let fnTapModeEnabled = shortcut == nil &&
+            (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
         return VoiceKeyConfigurationState(
             mode: mode,
             fnTapModeEnabled: fnTapModeEnabled,
-            shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
-                !fnTapModeEnabled
+            shortTapFocusEnabled: shortcut == nil &&
+                (configuration.voiceShortTapFocusEnabled ?? false) && !fnTapModeEnabled,
+            shortcut: shortcut
         )
     }
 
     func importConfiguration(from data: Data) throws {
         let configuration = try Self.validatedConfiguration(from: data)
         let importedMode = configuration.voiceKeyMode ?? .function
-        let importedFnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) &&
+        let importedShortcut = configuration.voiceTriggerShortcut
+        let importedFnTapModeEnabled = importedShortcut == nil &&
+            (configuration.voiceFnTapModeEnabled ?? false) &&
             importedMode == .function
         let importedVoiceKeyConfiguration = VoiceKeyConfigurationState(
             mode: importedMode,
             fnTapModeEnabled: importedFnTapModeEnabled,
-            shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
-                !importedFnTapModeEnabled
+            shortTapFocusEnabled: importedShortcut == nil &&
+                (configuration.voiceShortTapFocusEnabled ?? false) && !importedFnTapModeEnabled,
+            shortcut: importedShortcut
         )
 
         let importedBindings = Dictionary(
@@ -1406,7 +1445,9 @@ final class AppSettings: ObservableObject {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
         voiceKeyMode = importedVoiceKeyConfiguration.mode
-        voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
+        voiceTriggerShortcut = importedVoiceKeyConfiguration.shortcut
+        voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled &&
+            voiceTriggerShortcut == nil && voiceKeyMode == .function
         voiceShortTapFocusEnabled = importedVoiceKeyConfiguration.shortTapFocusEnabled
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,

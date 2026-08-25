@@ -639,19 +639,22 @@ enum HIDPermissionGate {
         mappingEnabled: Bool,
         inputMonitoringGranted: Bool,
         accessibilityGranted: Bool,
-        powerKeySuppressed: Bool
+        nativeButtonEventsSuppressed: Bool
     ) -> Bool {
-        mappingEnabled && inputMonitoringGranted && accessibilityGranted && powerKeySuppressed
+        mappingEnabled && inputMonitoringGranted && accessibilityGranted &&
+            nativeButtonEventsSuppressed
     }
 
     static func nextPermissionRequest(
         mappingEnabled: Bool,
         voiceFnTapModeEnabled: Bool = false,
         voiceKeyMode: VoiceKeyMode = .function,
+        softwareVoiceTriggerEnabled: Bool = false,
         inputMonitoringGranted: Bool,
         accessibilityGranted: Bool
     ) -> HIDPermissionRequest {
-        guard mappingEnabled || voiceFnTapModeEnabled || voiceKeyMode.requiresAccessibility else {
+        guard mappingEnabled || voiceFnTapModeEnabled ||
+                voiceKeyMode.requiresAccessibility || softwareVoiceTriggerEnabled else {
             return .none
         }
         if mappingEnabled, !inputMonitoringGranted { return .inputMonitoring }

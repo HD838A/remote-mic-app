@@ -68,7 +68,8 @@ struct ATVVProtocolTests {
 
     @Test func frameAccumulatorPreservesPartialData() {
         var accumulator = FrameAccumulator()
-        #expect(accumulator.append(Data([1, 2]), frameSize: 3).isEmpty)
+        let partialFrames = accumulator.append(Data([1, 2]), frameSize: 3)
+        #expect(partialFrames.isEmpty)
         #expect(accumulator.pending == Data([1, 2]))
 
         let frames = accumulator.append(Data([3, 4, 5, 6, 7]), frameSize: 3)

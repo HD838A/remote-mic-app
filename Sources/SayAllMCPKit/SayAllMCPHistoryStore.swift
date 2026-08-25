@@ -242,7 +242,12 @@ public final class SayAllMCPHistoryStore: @unchecked Sendable {
                         skippedFileCount += 1
                         continue
                     }
-                    records.append(contentsOf: dayFile.records)
+                    // Audio-only fallback entries remain visible in the local
+                    // Reflections UI, but the read-only text MCP intentionally
+                    // exposes transcript text only.
+                    records.append(contentsOf: dayFile.records.filter {
+                        !$0.originalTranscript.isEmpty
+                    })
                 } catch {
                     skippedFileCount += 1
                 }
@@ -259,7 +264,7 @@ public final class SayAllMCPHistoryStore: @unchecked Sendable {
             record.applicationKey == dayFile.applicationKey &&
             record.localDateKey == dayFile.localDateKey &&
             record.applicationKey.count <= maximumApplicationKeyCharacters &&
-            !record.originalTranscript.isEmpty &&
+            (!record.originalTranscript.isEmpty || record.transcriptStatus == "unavailable") &&
             record.originalTranscript.count <= maximumTranscriptCharacters &&
             record.applicationName.count <= 500 &&
             record.bundleIdentifier.count <= 500 &&
@@ -401,6 +406,7 @@ private struct StoredTranscriptRecord: Decodable {
     let bundleIdentifier: String
     let source: String
     let originalTranscript: String
+    let transcriptStatus: String?
     let captureMethodVersion: Int
 }
 
