@@ -70,6 +70,18 @@ struct SayAllMCPHistoryStoreTests {
         #expect(try store.query(SayAllMCPTranscriptQuery()).records.isEmpty)
     }
 
+    @Test func audioOnlyFallbackDoesNotInvalidateTextHistory() throws {
+        let root = try makeHistoryFixture(includeAudioOnlyFallback: true)
+        let store = SayAllMCPHistoryStore(transcriptRoot: root)
+
+        let applications = try store.listApplications()
+        let page = try store.query(SayAllMCPTranscriptQuery())
+
+        #expect(applications.skippedFileCount == 0)
+        #expect(applications.applications.first?.recordCount == 2)
+        #expect(page.records.map(\.text).sorted() == ["first", "second"])
+    }
+
     @Test func transcriptRootRejectsSymbolicLinks() throws {
         let actualRoot = try makeHistoryFixture()
         let symbolicRoot = FileManager.default.temporaryDirectory
@@ -84,7 +96,7 @@ struct SayAllMCPHistoryStoreTests {
         }
     }
 
-    private func makeHistoryFixture() throws -> URL {
+    private func makeHistoryFixture(includeAudioOnlyFallback: Bool = false) throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("sayall-mcp-history-\(UUID().uuidString)", isDirectory: true)
         let applicationKey = "com.openai.codex-abc123"
@@ -98,30 +110,43 @@ struct SayAllMCPHistoryStoreTests {
         let secondID = UUID()
         let firstSession = UUID()
         let secondSession = UUID()
+        var records = [
+            record(
+                id: firstID,
+                sessionID: firstSession,
+                startedAt: 5,
+                endedAt: 10,
+                applicationKey: applicationKey,
+                text: "first"
+            ),
+            record(
+                id: secondID,
+                sessionID: secondSession,
+                startedAt: 15,
+                endedAt: 20,
+                applicationKey: applicationKey,
+                text: "second"
+            ),
+        ]
+        if includeAudioOnlyFallback {
+            var fallback = record(
+                id: UUID(),
+                sessionID: UUID(),
+                startedAt: 25,
+                endedAt: 30,
+                applicationKey: applicationKey,
+                text: ""
+            )
+            fallback["transcriptStatus"] = "unavailable"
+            records.append(fallback)
+        }
         let dayFile: [String: Any] = [
             "formatVersion": 1,
             "applicationKey": applicationKey,
             "applicationName": "Codex",
             "bundleIdentifier": "com.openai.codex",
             "localDateKey": "2001-01-01",
-            "records": [
-                record(
-                    id: firstID,
-                    sessionID: firstSession,
-                    startedAt: 5,
-                    endedAt: 10,
-                    applicationKey: applicationKey,
-                    text: "first"
-                ),
-                record(
-                    id: secondID,
-                    sessionID: secondSession,
-                    startedAt: 15,
-                    endedAt: 20,
-                    applicationKey: applicationKey,
-                    text: "second"
-                ),
-            ],
+            "records": records,
         ]
         let data = try JSONSerialization.data(withJSONObject: dayFile, options: [.sortedKeys])
         try data.write(to: directory.appendingPathComponent("2001-01-01.json"))

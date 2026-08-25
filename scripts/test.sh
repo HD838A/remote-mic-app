@@ -28,9 +28,14 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/Localization.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFunctionKeyLatch.swift" \
   "$ROOT/Sources/RemoteMic/VoiceAudioLevelMeter.swift" \
+  "$ROOT/Sources/RemoteMic/TranscriptArchiveStore.swift" \
+  "$ROOT/Sources/RemoteMic/TranscriptCaptureCoordinator.swift" \
+  "$ROOT/Sources/RemoteMic/VoiceAudioArchiveStore.swift" \
+  "$ROOT/Sources/RemoteMic/VoiceHistorySessionCoordinator.swift" \
   "$ROOT/Sources/RemoteMic/VoiceInputDestinationCoordinator.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFnTapSessionController.swift" \
   "$ROOT/Sources/RemoteMic/VoiceShortcutHoldController.swift" \
+  "$ROOT/Sources/RemoteMic/HIDMappingRecoveryPolicy.swift" \
   "$ROOT/Sources/RemoteMic/RemoteVoiceFunctionMapper.swift" \
   "$ROOT/Sources/RemoteMic/AppLogger.swift" \
   "$ROOT/Sources/RemoteMic/TestTone.swift" \

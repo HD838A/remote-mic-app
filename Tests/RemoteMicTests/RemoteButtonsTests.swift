@@ -2339,6 +2339,66 @@ struct RemoteButtonsTests {
         #expect(callbackSource.contains("model.refreshHIDAfterPermissionChange()"))
     }
 
+    @Test func hidMappingRecoveryIsBoundedForEveryShortcutMode() {
+        let delays = HIDMappingRecoveryPolicy.delays
+        #expect(delays == [0.5, 1, 2, 4, 8])
+        #expect(HIDMappingRecoveryPolicy.verificationDelays == [0.75, 2, 5, 10])
+        for attempt in delays.indices {
+            #expect(HIDMappingRecoveryPolicy.nextDelay(
+                afterFailedAttempt: attempt,
+                started: true,
+                customMappingEnabled: true,
+                mappingReady: false
+            ) == delays[attempt])
+        }
+        #expect(HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: delays.count,
+            started: true,
+            customMappingEnabled: true,
+            mappingReady: false
+        ) == nil)
+        #expect(HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: 0,
+            started: false,
+            customMappingEnabled: true,
+            mappingReady: false
+        ) == nil)
+        #expect(HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: 0,
+            started: true,
+            customMappingEnabled: false,
+            mappingReady: false
+        ) == nil)
+        #expect(HIDMappingRecoveryPolicy.nextDelay(
+            afterFailedAttempt: 0,
+            started: true,
+            customMappingEnabled: true,
+            mappingReady: true
+        ) == nil)
+
+        let ordinary = CustomKeyboardShortcut(keyCode: 50, modifierFlags: [], keyLabel: "·")
+        let combo = CustomKeyboardShortcut(
+            keyCode: 8,
+            modifierFlags: [.command, .shift],
+            keyLabel: "C"
+        )
+        #expect(HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: ordinary,
+            fnTapModeEnabled: false,
+            accessibilityGranted: true
+        ) == .neutralized)
+        #expect(HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: combo,
+            fnTapModeEnabled: false,
+            accessibilityGranted: true
+        ) == .neutralized)
+        #expect(HIDMappingRecoveryPolicy.requestedVoiceMappingMode(
+            shortcut: StandaloneKeyboardModifier.rightOption.shortcut,
+            fnTapModeEnabled: false,
+            accessibilityGranted: false
+        ) == .standaloneModifier(.rightOption))
+    }
+
     @Test func customShortcutsPersistAndResetWithBindings() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

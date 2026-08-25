@@ -256,6 +256,7 @@ final class AppSettings: ObservableObject {
         static let voiceKeyMode = "voiceKeyMode"
         static let voiceTriggerShortcut = "voiceTriggerShortcut"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
+        static let localTranscriptAudioRetentionEnabled = "localTranscriptAudioRetentionEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
@@ -396,6 +397,15 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 localTranscriptHistoryEnabled,
                 forKey: Keys.localTranscriptHistoryEnabled
+            )
+        }
+    }
+
+    @Published var localTranscriptAudioRetentionEnabled: Bool {
+        didSet {
+            defaults.set(
+                localTranscriptAudioRetentionEnabled,
+                forKey: Keys.localTranscriptAudioRetentionEnabled
             )
         }
     }
@@ -584,6 +594,9 @@ final class AppSettings: ObservableObject {
             .flatMap { try? JSONDecoder().decode(CustomKeyboardShortcut.self, from: $0) }
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
+        )
+        localTranscriptAudioRetentionEnabled = defaults.bool(
+            forKey: Keys.localTranscriptAudioRetentionEnabled
         )
         continuousRecordingPowerBindingBackup = defaults
             .data(forKey: Keys.continuousRecordingPowerBindingBackup)

@@ -21,6 +21,7 @@
 3. 若 Finder 阻止启动，右键应用并选择“打开”；不要把它当作公开安装包转发。
 4. 按首次使用流程重新授予权限并连接遥控器。输入监控和辅助功能列表中的名称必须明确显示为 `SayAll Dev`。
 5. 打开“按键映射”，确认语音键可设置为左 Control，电量右侧出现迷你音量条。
+6. 运行 `./scripts/hid-button-acceptance.sh prepare`，按 `Testing/HIDIntermittentButtonDiagnostics.md` 测试 12 个按键、语音键和生命周期；每个步骤前用 `mark` 记录，完成后运行 `finish`。
 
 ## 预期结果
 

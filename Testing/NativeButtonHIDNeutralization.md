@@ -19,6 +19,7 @@
 4. 依次测试电源、上、下、左、右、确定、返回、音量加、音量减、主页、菜单、TV，分别确认单击、双击和长按只执行所配置的动作。
 5. 临时关闭自定义映射：遥控器恢复系统原始行为；重新开启后恢复 SayAll 映射。
 6. 退出 SayAll 后检查 MacBook 内置键盘的方向、Return、Home、音量、符号键和左 Control 均正常。
+7. 保持遥控器已配对，依次执行 App 冷启动、遥控器断连/重连、Mac 睡眠/唤醒、撤销再授予输入监控与辅助功能；每次恢复后重复 TV 与确定键测试，不得漏触发或双重触发。
 
 ## 日志判定
 
@@ -26,6 +27,9 @@
 
 ```text
 VOICE FN MAPPING ... native_buttons_suppressed=true native_button_mappings=12 suppression_scope=locations=...
+HID MAPPING VERIFY pass=true ...
 ```
 
 `applied` 只表示写入请求成功不够；本版本的该日志在系统读回全部受管映射后才会计入 `applied`。真机屏幕最终行为仍是发布前的最终判据。
+
+如果启动时先出现 `matched=0`，应随后看到 `HID MAPPING RECOVERY scheduled/running`。恢复最终仍要求 12 条中和映射完整读回；普通键、语音键或组合键中的任一路径成功都不能代替这个全量条件。

@@ -99,13 +99,44 @@ struct TranscriptArchiveStoreTests {
 
         let settings = AppSettings(defaults: defaults)
         #expect(!settings.localTranscriptHistoryEnabled)
+        #expect(!settings.localTranscriptAudioRetentionEnabled)
         settings.localTranscriptHistoryEnabled = true
+        settings.localTranscriptAudioRetentionEnabled = true
 
         let restored = AppSettings(defaults: defaults)
         #expect(restored.localTranscriptHistoryEnabled)
+        #expect(restored.localTranscriptAudioRetentionEnabled)
         #expect(defaults.dictionaryRepresentation().values.allSatisfy {
             !String(describing: $0).contains("private transcript body")
         })
+    }
+
+    @Test func unavailableTranscriptCanKeepTemporaryAudioMetadata() throws {
+        let harness = try ArchiveHarness()
+        let sessionID = UUID()
+        let endedAt = Date(timeIntervalSince1970: 1_767_268_800)
+        let record = TranscriptRecord(
+            sessionID: sessionID,
+            startedAt: endedAt.addingTimeInterval(-2),
+            endedAt: endedAt,
+            applicationName: "Qianwen",
+            bundleIdentifier: "com.example.qianwen",
+            source: .bluetoothRemote,
+            originalTranscript: "",
+            transcriptStatus: .unavailable,
+            audio: TranscriptAudioAttachment(
+                fileName: "\(sessionID.uuidString).m4a",
+                duration: 2,
+                expiresAt: endedAt.addingTimeInterval(4 * 60 * 60)
+            )
+        )
+
+        try harness.store.append(record)
+
+        let loaded = try #require(harness.store.loadAll().first)
+        #expect(loaded.transcriptStatus == .unavailable)
+        #expect(loaded.originalTranscript.isEmpty)
+        #expect(loaded.audio?.duration == 2)
     }
 
     @Test func applicationDeletionRejectsPathsOutsideTheArchiveRoot() throws {

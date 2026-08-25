@@ -60,6 +60,9 @@ enum SettingsScreenshotRenderer {
         let showsConnectedRemote = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_CONNECTED_REMOTE"
         ] == "1"
+        let showsTranscriptAudio = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_TRANSCRIPT_AUDIO"
+        ] == "1"
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -74,6 +77,62 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        let fixtureRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemoteMic.SettingsScreenshot.\(UUID().uuidString)")
+        let transcriptArchiveStore = TranscriptArchiveStore(
+            rootDirectoryURL: fixtureRoot.appendingPathComponent("Transcripts/v1")
+        )
+        let voiceAudioRoot = fixtureRoot.appendingPathComponent("TranscriptAudio/v1")
+        let voiceAudioArchiveStore = VoiceAudioArchiveStore(rootDirectoryURL: voiceAudioRoot)
+        defer { try? FileManager.default.removeItem(at: fixtureRoot) }
+        if showsTranscriptAudio {
+            settings.localTranscriptHistoryEnabled = true
+            settings.localTranscriptAudioRetentionEnabled = true
+            let now = Date()
+            let availableSessionID = UUID()
+            let availableFileName = "\(availableSessionID.uuidString).m4a"
+            try FileManager.default.createDirectory(
+                at: voiceAudioRoot,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+            try Data([0]).write(
+                to: voiceAudioRoot.appendingPathComponent(availableFileName)
+            )
+            let sampleText = language == .english
+                ? "A voice entry captured from the remote."
+                : "这是一次使用遥控器完成的语音输入。"
+            try transcriptArchiveStore.append(TranscriptRecord(
+                sessionID: availableSessionID,
+                startedAt: now.addingTimeInterval(-14),
+                endedAt: now.addingTimeInterval(-10),
+                applicationName: "Notes",
+                bundleIdentifier: "com.apple.Notes",
+                source: .bluetoothRemote,
+                originalTranscript: sampleText,
+                audio: TranscriptAudioAttachment(
+                    fileName: availableFileName,
+                    duration: 4,
+                    expiresAt: now.addingTimeInterval(4 * 60 * 60 - 10)
+                )
+            ))
+            let expiredSessionID = UUID()
+            try transcriptArchiveStore.append(TranscriptRecord(
+                sessionID: expiredSessionID,
+                startedAt: now.addingTimeInterval(-34),
+                endedAt: now.addingTimeInterval(-30),
+                applicationName: "Notes",
+                bundleIdentifier: "com.apple.Notes",
+                source: .bluetoothRemote,
+                originalTranscript: "",
+                transcriptStatus: .unavailable,
+                audio: TranscriptAudioAttachment(
+                    fileName: "\(expiredSessionID.uuidString).m4a",
+                    duration: 4,
+                    expiresAt: now.addingTimeInterval(-1)
+                )
+            ))
+        }
         if opensShortcutEditor || opensVoiceShortcutEditor {
             settings.customMappingEnabled = true
         }
@@ -105,7 +164,9 @@ enum SettingsScreenshotRenderer {
             initialConnectedRemoteProfileIDs: simulatedProfileIDs,
             initialRemoteBatteryLevels: simulatedProfileID.map { [$0: 86] } ?? [:],
             initialRemotePowerStates: simulatedProfileID.map { [$0: .onBattery] } ?? [:],
-            initialRemoteVoiceLevels: simulatedProfileID.map { [$0: 0.68] } ?? [:]
+            initialRemoteVoiceLevels: simulatedProfileID.map { [$0: 0.68] } ?? [:],
+            transcriptArchiveStore: transcriptArchiveStore,
+            voiceAudioArchiveStore: voiceAudioArchiveStore
         )
         let updateInformation = UpdateInformationStore()
         let localization = LocalizationStore(settings: settings)

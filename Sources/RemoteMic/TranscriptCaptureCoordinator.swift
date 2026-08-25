@@ -160,6 +160,7 @@ final class TranscriptCaptureCoordinator {
         var stableText: String?
         var stableSince: TimeInterval?
         var acceptedChange: TranscriptTextChange?
+        var sawTransientDiscontinuousChange = false
     }
 
     private struct PendingSession {
@@ -213,7 +214,11 @@ final class TranscriptCaptureCoordinator {
         self.log = log
     }
 
-    func startSession(startedAt: Date, source: UsageEventSource) {
+    func startSession(
+        sessionID: UUID = UUID(),
+        startedAt: Date,
+        source: UsageEventSource
+    ) {
         settleExistingSessionBeforeNextStart()
         guard isEnabled() else {
             log("TRANSCRIPT CAPTURE skipped reason=feature_disabled")
@@ -221,7 +226,7 @@ final class TranscriptCaptureCoordinator {
         }
         generation &+= 1
         let pending = PendingSession(
-            id: UUID(),
+            id: sessionID,
             generation: generation,
             startedAt: startedAt,
             source: source,
@@ -277,8 +282,11 @@ final class TranscriptCaptureCoordinator {
     private func scheduleFinishedSession(generation: UInt64) {
         timeoutTask?.cancel()
         timeoutTask = schedule(totalTimeout) { [weak self] in
-            guard self?.activeSession?.generation == generation else { return }
-            self?.cancel(reason: "timeout")
+            guard let self,
+                  let session = self.activeSession,
+                  session.generation == generation
+            else { return }
+            self.completeAcceptedChangeOrCancel(session, reason: "timeout")
         }
         poll(generation: generation)
     }
@@ -356,12 +364,11 @@ final class TranscriptCaptureCoordinator {
               current.isSafeEditableDestination,
               current.focusIdentity == session.target.focusIdentity,
               current.bundleIdentifier == session.target.bundleIdentifier,
-              let change = Self.continuousChange(
+              let change = Self.localizedVoiceChange(
                   original: session.target.text,
                   updated: current.text,
                   originalSelection: session.target.selection
               ),
-              change.oldRange == session.target.selection,
               !change.newText.isEmpty,
               change.newText.count <= Self.maximumTranscriptCharacters
         else { return nil }
@@ -399,12 +406,11 @@ final class TranscriptCaptureCoordinator {
             session.stableText = nil
             session.stableSince = nil
             session.acceptedChange = nil
-        } else if let change = Self.continuousChange(
+        } else if let change = Self.localizedVoiceChange(
             original: session.target.text,
             updated: current.text,
             originalSelection: session.target.selection
-        ), change.oldRange == session.target.selection,
-           !change.newText.isEmpty,
+        ), !change.newText.isEmpty,
            change.newText.count <= Self.maximumTranscriptCharacters {
             if session.stableText != current.text {
                 session.stableText = current.text
@@ -422,8 +428,16 @@ final class TranscriptCaptureCoordinator {
             complete(session, reason: "destination_cleared")
             return
         } else {
-            cancel(reason: "discontinuous_text_change")
-            return
+            // Third-party voice tools can briefly replace marked text or nearby
+            // punctuation while committing their final result. Do not discard
+            // the whole session on that transient state; keep polling until a
+            // safe localized change becomes stable or the normal timeout wins.
+            session.stableText = nil
+            session.stableSince = nil
+            if !session.sawTransientDiscontinuousChange {
+                session.sawTransientDiscontinuousChange = true
+                log("TRANSCRIPT CAPTURE waiting reason=transient_discontinuous_text_change")
+            }
         }
 
         activeSession = session
@@ -492,6 +506,67 @@ final class TranscriptCaptureCoordinator {
             oldRange: originalSelection,
             newRange: newRange,
             newText: updatedNSString.substring(with: newRange)
+        )
+    }
+
+    static func localizedVoiceChange(
+        original: String,
+        updated: String,
+        originalSelection: NSRange,
+        maximumContextCharacters: Int = 8
+    ) -> TranscriptTextChange? {
+        if let exact = continuousChange(
+            original: original,
+            updated: updated,
+            originalSelection: originalSelection
+        ) {
+            return exact
+        }
+
+        let originalText = original as NSString
+        let updatedText = updated as NSString
+        guard originalSelection.location >= 0,
+              NSMaxRange(originalSelection) <= originalText.length
+        else { return nil }
+
+        var prefixLength = 0
+        let sharedLength = min(originalText.length, updatedText.length)
+        while prefixLength < sharedLength,
+              originalText.character(at: prefixLength) == updatedText.character(at: prefixLength) {
+            prefixLength += 1
+        }
+
+        var suffixLength = 0
+        while suffixLength < originalText.length - prefixLength,
+              suffixLength < updatedText.length - prefixLength,
+              originalText.character(at: originalText.length - suffixLength - 1) ==
+                updatedText.character(at: updatedText.length - suffixLength - 1) {
+            suffixLength += 1
+        }
+
+        let oldRange = NSRange(
+            location: prefixLength,
+            length: originalText.length - prefixLength - suffixLength
+        )
+        let newRange = NSRange(
+            location: prefixLength,
+            length: updatedText.length - prefixLength - suffixLength
+        )
+        guard oldRange.length > 0 || newRange.length > 0 else { return nil }
+
+        let allowedStart = max(0, originalSelection.location - maximumContextCharacters)
+        let allowedEnd = min(
+            originalText.length,
+            NSMaxRange(originalSelection) + maximumContextCharacters
+        )
+        guard oldRange.location >= allowedStart,
+              NSMaxRange(oldRange) <= allowedEnd
+        else { return nil }
+
+        return TranscriptTextChange(
+            oldRange: oldRange,
+            newRange: newRange,
+            newText: updatedText.substring(with: newRange)
         )
     }
 }

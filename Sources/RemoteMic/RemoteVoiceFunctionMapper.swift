@@ -151,6 +151,20 @@ enum RemoteVoiceKeyMappingMode: Equatable {
     }
 }
 
+struct RemoteHIDMappingAudit: Equatable {
+    let matchedServiceCount: Int
+    let correctlyMappedServiceCount: Int
+    let nativeButtonSuppressedLocationIDs: Set<UInt32>?
+
+    var isComplete: Bool {
+        matchedServiceCount > 0 && correctlyMappedServiceCount == matchedServiceCount
+    }
+
+    var areNativeButtonEventsSuppressed: Bool {
+        isComplete && nativeButtonSuppressedLocationIDs?.isEmpty == false
+    }
+}
+
 struct RemoteVoiceMappingService {
     let registryID: UInt64?
     let locationID: UInt32?
@@ -345,6 +359,66 @@ final class RemoteVoiceFunctionMapper {
                 "matched=\(matchedCount) applied=\(appliedCount)"
         )
         return isApplied
+    }
+
+    /// Verifies the live HID registry without mutating it. A delayed keyboard
+    /// service can appear after the first successful write, so cached apply
+    /// state alone is not sufficient to decide that every physical button is
+    /// safely mapped.
+    func audit(
+        suppressNativeButtonEvents: Bool = false,
+        voiceKeyMappingMode: RemoteVoiceKeyMappingMode = .function
+    ) -> RemoteHIDMappingAudit {
+        let services = serviceProvider()
+        let matchedCountsByLocation = services.reduce(into: [UInt32: Int]()) { counts, service in
+            guard let locationID = service.locationID else { return }
+            counts[locationID, default: 0] += 1
+        }
+        var correctCountsByLocation: [UInt32: Int] = [:]
+        var correctlyMappedServiceCount = 0
+
+        for service in services {
+            guard service.registryID != nil else { continue }
+            let actual = service.readMappings()
+            let expected = RemoteVoiceFunctionMappingPolicy.applying(
+                to: actual,
+                voiceMapping: voiceKeyMappingMode.mapping,
+                nativeButtonMappings: suppressNativeButtonEvents
+                    ? RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings
+                    : []
+            )
+            guard RemoteVoiceFunctionMappingPolicy.managedMappingsMatch(expected, in: actual) else {
+                continue
+            }
+            correctlyMappedServiceCount += 1
+            if let locationID = service.locationID {
+                correctCountsByLocation[locationID, default: 0] += 1
+            }
+        }
+
+        let fullySuppressedLocations = Set(matchedCountsByLocation.compactMap { locationID, count in
+            correctCountsByLocation[locationID] == count ? locationID : nil
+        })
+        return RemoteHIDMappingAudit(
+            matchedServiceCount: services.count,
+            correctlyMappedServiceCount: correctlyMappedServiceCount,
+            nativeButtonSuppressedLocationIDs: suppressNativeButtonEvents && !fullySuppressedLocations.isEmpty
+                ? fullySuppressedLocations
+                : nil
+        )
+    }
+
+    func adoptVerifiedAudit(
+        _ audit: RemoteHIDMappingAudit,
+        voiceKeyMappingMode: RemoteVoiceKeyMappingMode
+    ) {
+        guard audit.isComplete else { return }
+        isApplied = true
+        isVoiceKeyMappingComplete = true
+        appliedVoiceKeyMappingMode = voiceKeyMappingMode
+        isVoiceKeyNeutralized = voiceKeyMappingMode == .neutralized
+        areNativeButtonEventsSuppressed = audit.areNativeButtonEventsSuppressed
+        nativeButtonSuppressedLocationIDs = audit.nativeButtonSuppressedLocationIDs
     }
 
     func restore() {

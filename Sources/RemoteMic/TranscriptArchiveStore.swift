@@ -1,5 +1,16 @@
 import Foundation
 
+enum TranscriptCaptureStatus: String, Codable, Equatable {
+    case captured
+    case unavailable
+}
+
+struct TranscriptAudioAttachment: Codable, Equatable {
+    let fileName: String
+    let duration: TimeInterval
+    let expiresAt: Date
+}
+
 struct TranscriptRecord: Codable, Equatable, Identifiable {
     static let currentSchemaVersion = 1
 
@@ -15,6 +26,8 @@ struct TranscriptRecord: Codable, Equatable, Identifiable {
     let bundleIdentifier: String
     let source: UsageEventSource
     let originalTranscript: String
+    let transcriptStatus: TranscriptCaptureStatus?
+    let audio: TranscriptAudioAttachment?
     let captureMethodVersion: Int
 
     init(
@@ -26,6 +39,9 @@ struct TranscriptRecord: Codable, Equatable, Identifiable {
         bundleIdentifier: String,
         source: UsageEventSource,
         originalTranscript: String,
+        transcriptStatus: TranscriptCaptureStatus = .captured,
+        audio: TranscriptAudioAttachment? = nil,
+        captureMethodVersion: Int = 2,
         calendar: Calendar = .current
     ) {
         schemaVersion = Self.currentSchemaVersion
@@ -43,7 +59,9 @@ struct TranscriptRecord: Codable, Equatable, Identifiable {
         self.bundleIdentifier = bundleIdentifier
         self.source = source
         self.originalTranscript = originalTranscript
-        captureMethodVersion = 1
+        self.transcriptStatus = transcriptStatus
+        self.audio = audio
+        self.captureMethodVersion = captureMethodVersion
     }
 
     private static func localDateKey(for date: Date, calendar: Calendar) -> String {
@@ -93,10 +111,15 @@ final class TranscriptArchiveStore {
 
     func append(_ record: TranscriptRecord) throws {
         try queue.sync {
+            let hasTranscript = !record.originalTranscript
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+            let isUnavailable = record.transcriptStatus == .unavailable
             guard record.schemaVersion == TranscriptRecord.currentSchemaVersion,
-                  !record.originalTranscript.isEmpty,
+                  hasTranscript || isUnavailable,
                   Self.isSafePathComponent(record.applicationKey),
-                  Self.isLocalDateKey(record.localDateKey)
+                  Self.isLocalDateKey(record.localDateKey),
+                  record.audio.map(Self.isValidAudioAttachment) ?? true
             else { throw TranscriptArchiveStoreError.invalidRecord }
 
             let fileURL = dayFileURL(
@@ -148,7 +171,10 @@ final class TranscriptArchiveStore {
                     records.append(contentsOf: dayFile.records.filter {
                         $0.schemaVersion == TranscriptRecord.currentSchemaVersion &&
                             $0.applicationKey == applicationKey &&
-                            $0.localDateKey == localDateKey
+                            $0.localDateKey == localDateKey &&
+                            (!$0.originalTranscript.isEmpty ||
+                                $0.transcriptStatus == .unavailable) &&
+                            ($0.audio.map(Self.isValidAudioAttachment) ?? true)
                     })
                 }
             }
@@ -286,6 +312,13 @@ final class TranscriptArchiveStore {
             CharacterSet(charactersIn: ".-_")
         )
         return value.unicodeScalars.allSatisfy(allowed.contains)
+    }
+
+    private static func isValidAudioAttachment(_ attachment: TranscriptAudioAttachment) -> Bool {
+        isSafePathComponent(attachment.fileName) &&
+            attachment.fileName.hasSuffix(".m4a") &&
+            attachment.duration.isFinite &&
+            attachment.duration >= 0
     }
 
     private static func isLocalDateKey(_ value: String) -> Bool {
