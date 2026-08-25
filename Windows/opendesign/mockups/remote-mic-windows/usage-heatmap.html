@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Remote Mic · Windows 使用统计</title>
+  <link rel="stylesheet" href="../../design-systems/remote-mic-product/tokens/colors_and_type.css">
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#e9eaec;color:var(--text-primary);font:var(--body);font-family:var(--font-ui)}
+    button{font:inherit}.window{width:900px;height:680px;margin:20px auto;display:grid;grid-template-columns:120px 1fr;background:var(--surface-secondary);border:1px solid var(--border-subtle);border-radius:14px;overflow:hidden;box-shadow:0 18px 60px #0002}
+    aside{padding:14px 12px;background:var(--bg-nav);border-right:1px solid var(--border-subtle)}.brand{height:42px;display:grid;place-items:center;font-weight:700;color:var(--text-primary)}
+    .nav{height:72px;width:100%;margin:3px 0;border:0;border-radius:14px;background:transparent;color:var(--text-primary);font-weight:600;display:grid;place-items:center;gap:2px}.nav.selected{background:var(--selection-fill);color:var(--selection-text)}.nav b{font-size:21px;line-height:1}
+    main{padding:24px;overflow:hidden}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}h1{margin:0;font:var(--h1)}.private{padding:6px 11px;border-radius:999px;background:var(--success-soft);color:var(--success-1);font-weight:600;font-size:12pt}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}.card{background:var(--surface-primary);border:1px solid var(--border-subtle);border-radius:var(--radius-card);padding:17px}.metric-label{font-size:12pt;color:var(--text-primary)}.metric-value{display:block;margin-top:5px;font-size:22px;font-weight:700}.metric-note{font-size:12pt;color:var(--text-primary)}
+    .heatmap-card{padding:18px 20px}.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.card-head h2{margin:0;font:var(--h2)}.segmented{display:flex;background:#eeeef0;border-radius:9px;padding:3px}.segment{border:0;background:transparent;border-radius:7px;padding:7px 13px;color:var(--text-primary);font-weight:600}.segment.active{background:white;color:var(--text-primary);box-shadow:0 1px 4px #0002}
+    .map{display:grid;grid-template-columns:28px 1fr;gap:8px}.weekdays{padding-top:22px;display:grid;grid-template-rows:repeat(7,13px);gap:3px;font-size:10pt;color:var(--text-primary)}.weekdays span:nth-child(1){grid-row:2}.weekdays span:nth-child(2){grid-row:4}.weekdays span:nth-child(3){grid-row:6}
+    .months{height:18px;display:flex;justify-content:space-between;color:var(--text-primary);font-size:10pt}.cells{display:grid;grid-template-columns:repeat(53,10px);grid-template-rows:repeat(7,10px);grid-auto-flow:column;gap:3px}.cell{border-radius:2px;background:#e8eaed;border:1px solid #0000000a}.l1{background:#bfe0ff}.l2{background:#76baff}.l3{background:#2d94f4}.l4{background:#0878d1}
+    .legend{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:var(--text-primary);font-size:12pt}.scale{display:flex;align-items:center;gap:5px}.swatch{width:11px;height:11px;border-radius:2px}.empty{background:#e8eaed}.privacy-note{margin:12px 2px 0;color:var(--text-primary);font-size:12pt}.privacy-note strong{color:var(--text-primary)}
+  </style>
+</head>
+<body>
+  <div class="window">
+    <aside>
+      <div class="brand">Remote Mic</div>
+      <button class="nav"><b>⌁</b><span>连接</span></button>
+      <button class="nav"><b>⌨</b><span>按键映射</span></button>
+      <button class="nav selected"><b>▥</b><span>统计</span></button>
+      <button class="nav"><b>◈</b><span>权限</span></button>
+      <button class="nav"><b>✓</b><span>检查</span></button>
+    </aside>
+    <main>
+      <header><h1>使用统计</h1><span class="private">仅保存在本机</span></header>
+      <section class="summary">
+        <div class="card"><span class="metric-label">今天使用</span><strong class="metric-value">18 分 42 秒</strong><span class="metric-note">23 次触发</span></div>
+        <div class="card"><span class="metric-label">最近 365 天</span><strong class="metric-value">42 小时</strong><span class="metric-note">1,286 次触发</span></div>
+        <div class="card"><span class="metric-label">活跃天数</span><strong class="metric-value">96 天</strong><span class="metric-note">过去一年</span></div>
+      </section>
+      <section class="card heatmap-card">
+        <div class="card-head"><div><h2>每日使用</h2><span class="metric-note">颜色越深，当天使用越多</span></div><div class="segmented"><button class="segment active" data-mode="duration">使用时长</button><button class="segment" data-mode="frequency">触发次数</button></div></div>
+        <div class="map"><div class="weekdays"><span>周一</span><span>周三</span><span>周五</span></div><div><div class="months"><span>9月</span><span>10月</span><span>11月</span><span>12月</span><span>1月</span><span>2月</span><span>3月</span><span>4月</span><span>5月</span><span>6月</span><span>7月</span><span>8月</span></div><div class="cells" id="cells"></div></div></div>
+        <div class="legend"><span id="range">过去一年 · 2025年8月23日—2026年8月22日</span><span class="scale">少 <i class="swatch empty"></i><i class="swatch l1"></i><i class="swatch l2"></i><i class="swatch l3"></i><i class="swatch l4"></i> 多</span></div>
+      </section>
+      <p class="privacy-note"><strong>隐私说明：</strong>只记录每天的累计时长和触发次数，不保存文字、音频、应用名称或设备标识。</p>
+    </main>
+  </div>
+  <script>
+    const cells=document.querySelector('#cells');const levelsDuration=[0,0,1,0,2,0,0,0,1,0,2,3,0,0,1,0,0,2,0,0,0,1,0,3,2,0,0,0,1,1,0,0,0,4,2,1,0,0,1,0,2,0,0,3,1,0,0,0,2,4,2,0,1,0,0,0,3,1,0,0,2,0,0,4,3,2,0,1,0,0,0,2,3,0,1,0,0,4,2,1,0,0,1,2,0,0,3,4,2,0,1,0,0,2,1,0,0,0,3,1,0,0,2,4,3,0,1,0,2,0,0,3,2,1,0,0,4,2,0,1,0,0,2,3,1,0,0,4,3,2,0,1,0,0,2,1,0,0,3,4,2,1,0,0,1,3,2,0,0,4,2,1,0,0,3,2,0,1,0,4,3,2,0,1,0,2,4,3,1,0,0,2,1,0,3,4,2,0,1,0,0,3,2,1,0,4,3,0,1,2,0,0,2,4,3,1,0,0,1,2,0,3,4,2,1,0,0,2,3,1,0,4,2,0,1,3,0,0,2,4,1,0,3,2,0,1,0,4,3,2,0,1,0,2,3,4,1,0,0,2,1,0,3,4,0,2,1,0,0,3,2,4,1,0,0,2,3,1,0,4,2,0,1,3,0,2,4,1,0,3,2,0,1,0,4,3,2,1,0,2,3,4,1,0,0,2,1,3,0,4,2,0,1,0,3,2,4,1,0,0,2,3,1,4,0,2,0,1,3,0,2,4,1,3,0,2,1,0,4,3,2,0,1,2,3,4,1,0,2,0,1,3,4,2,0,1,3,2,4,1,0,2,3,1,4,0,2,1,3,0,2,4,1,0,3,2,1,4,3,2,0,1,2,4,3,1,0,2,1,3,4,2,0,1];
+    function render(mode){cells.innerHTML='';for(let i=0;i<371;i++){const d=document.createElement('i');const base=levelsDuration[i%levelsDuration.length]||0;const level=mode==='frequency'?Math.min(4,(base+(i%11===0?1:0))):base;d.className='cell '+(level?'l'+level:'');d.title=`第 ${i+1} 天 · ${level===0?'无使用':level+' 级'}`;cells.appendChild(d)}}render('duration');document.querySelectorAll('.segment').forEach(b=>b.onclick=()=>{document.querySelectorAll('.segment').forEach(x=>x.classList.toggle('active',x===b));render(b.dataset.mode)})
+  </script>
+</body>
+</html>

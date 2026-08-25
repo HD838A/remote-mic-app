@@ -1,0 +1,10 @@
+{
+  "source": "synthetic; contains no captured device or voice data",
+  "capabilities_hex": "0b010002030078",
+  "expected_version": 256,
+  "expected_codec": 2,
+  "expected_sample_rate": 16000,
+  "expected_frame_size": 120,
+  "adpcm_hex": "007f80ff",
+  "expected_pcm": [0, 0, 11, -19, -23, -20, -72, -184]
+}

@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+build/third_party/
+build/pyinstaller-work/
+src/ovb_rc003/frida_assets/*.xz
+artifacts/

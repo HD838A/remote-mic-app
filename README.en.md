@@ -88,6 +88,8 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 
 The Apple Silicon installer is named `Remote-Mic-<version>.dmg`; the Intel installer is named `Remote-Mic-<version>-Intel.dmg`. They are not interchangeable.
 
+Windows and Mac are built and released independently. [`Windows/`](Windows/) contains a separately maintained Windows RC003 implementation with its own source, tests, build, and installer flow. It does not depend on the Mac source and is not a continuation of the old Community Preview or PR #3. Any future Windows artifacts must be validated and released from this source line independently.
+
 The DMG has one ordinary installation entry: double-click **Install Remote Mic.pkg** on Apple Silicon, or **Install Remote Mic Intel.pkg** on Intel Macs. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
 Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only through the official Cloudflare CDN entry or this project's GitHub Releases. To verify a DMG, use `Remote-Mic-<version>.dmg.sha256` from the same GitHub Release; it lists both architecture-specific DMGs by filename.

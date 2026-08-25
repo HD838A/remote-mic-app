@@ -1,0 +1,406 @@
+name: windows-rc003-ci
+
+# Candidate CI for the Remote Mic · RC003 Windows client
+# (Windows/apps/windows/rc003). This runs the cross-platform pure-Python test suite
+# and a public-boundary scan on a real Windows runner, builds an unsigned
+# PyInstaller artifact, smoke-checks the built executable with --dry-run
+# (imports every module, touches no GUI/BLE/HID/audio, exits 0), compiles
+# the Inno Setup installer SOURCE into an unsigned installer .exe, and
+# packages a deterministic unsigned portable ZIP (a versioned staging
+# folder containing the built app plus LICENSE.txt/COPYRIGHT.txt/
+# THIRD_PARTY_NOTICES.md/ATTRIBUTION.md/README.txt - the same provenance
+# and instructional content the installer itself carries) + installer +
+# SHA256SUMS.txt artifact set.
+#
+# Honest disclosure of what this CI run DOES touch: the Windows-only tests
+# under tests/windows/ (self-skipping everywhere else) exercise a real,
+# harmless, runner-local Win32 SendInput call and a real hidden Raw Input
+# listener's start/stop/restart lifecycle - both entirely local to the
+# runner process, with no observable OS-wide effect asserted beyond the
+# call/listener itself succeeding. What this job never does, anywhere: pair
+# with, connect to, or control any real RC003 hardware; open any GUI window;
+# perform BLE discovery/pairing; route real audio; install/enable any audio
+# driver; or RUN the compiled installer .exe - runner-based CI has no RC003
+# device attached anyway, so real-device behavior remains a manual
+# verification step (see this subtree's README.md "Known gaps" section).
+#
+# All gates below are required (XRBM-018: the Inno Setup compile step was
+# promoted from best-effort/continue-on-error to a required gate, matching
+# every other step) - a failure at any step fails the whole job.
+#
+# Exit-code gating (XRBM-014 review RETRY P2 #3): pwsh steps below check
+# $LASTEXITCODE explicitly after every native command, since a non-zero
+# native exit code does not automatically fail a GitHub Actions step unless
+# it is the last command in the script block.
+
+# XRBM-022 controller pre-review correction: the installer (.iss) and the
+# PyInstaller spec both consume these repository-root files directly
+# (COPYRIGHT/LICENSE/THIRD_PARTY_NOTICES.md are packaged into the installed
+# app; Windows/device-profiles/xiaomi-rc003.json documents the identity/HID facts
+# the Windows adapter's own device_profile.py mirrors), so a change to any
+# of them must re-run this workflow even though none of them live under
+# Windows/apps/windows/rc003/.
+on:
+  push:
+    paths:
+      - "Windows/apps/windows/rc003/**"
+      - ".github/workflows/windows-rc003-ci.yml"
+      - "COPYRIGHT.md"
+      - "LICENSE.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "Windows/device-profiles/xiaomi-rc003.json"
+      - "Windows/device-profiles/dji-mic-2.json"
+  pull_request:
+    paths:
+      - "Windows/apps/windows/rc003/**"
+      - ".github/workflows/windows-rc003-ci.yml"
+      - "COPYRIGHT.md"
+      - "LICENSE.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "Windows/device-profiles/xiaomi-rc003.json"
+      - "Windows/device-profiles/dji-mic-2.json"
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Windows/apps/windows/rc003
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Windows/apps/windows/rc003/requirements-dev.txt
+
+      - name: Public boundary scan
+        shell: pwsh
+        run: |
+          ./build/check-public-boundary.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install -r requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Compile check
+        shell: pwsh
+        run: |
+          python -m compileall -q src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # XRBM-023: verbose (-v) so each test name streams out as it starts/
+      # finishes, PYTHONUNBUFFERED so that output actually streams instead
+      # of sitting in Python's default full-buffering-when-not-a-tty mode
+      # (which is exactly why the XRBM-023 hang's canceled-run logs showed
+      # zero test names - only a single buffered E.......F<dots> line, with
+      # nothing for the hung test ever flushed), and a bounded step-level
+      # timeout so a future platform-specific hang cancels just this step
+      # instead of silently consuming the runner up to the 360-minute job
+      # default - the last test name printed before a timeout cancellation
+      # is then the hung test.
+      # XRBM-026 hard gate: a real Windows run (29644660267) completed 425
+      # tests with "OK (skipped=3)", then printed an ignored ResourceWarning
+      # for one unclosed ProactorEventLoop and two unclosed self-pipe
+      # sockets - AFTER unittest's own summary, so this step still exited 0
+      # even under -W error::ResourceWarning. Root cause fixed in
+      # tests/test_app_wiring.py (test-only: RC003App's ConnectionSupervisor
+      # now always captures a per-test OWNED event loop instead of the
+      # implicit, never-closed default). This gate is the second,
+      # independent layer: -W error::ResourceWarning only turns a warning
+      # into an exception at the moment it's raised DURING normal test
+      # execution - a ResourceWarning raised inside a __del__/finalizer at
+      # CPython interpreter shutdown is unraisable (Python can only print it
+      # via sys.unraisablehook) and can never change unittest's own,
+      # already-computed exit code. Capturing the full step output to a file
+      # (via Tee-Object, so the -v/unbuffered live stream to the Actions log
+      # is unaffected) and scanning its CONTENT for these forbidden markers
+      # closes that loophole structurally: it fails the step even if some
+      # future regression again produces a late, exit-code-invisible
+      # warning, from this cause or any other unclosed-resource cause.
+      - name: Run test suite
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          PYTHONPATH: src
+          PYTHONUNBUFFERED: "1"
+        run: |
+          $logPath = "test-output.log"
+          python -u -W error::ResourceWarning -m unittest discover -s tests -t . -p "test_*.py" -v 2>&1 | Tee-Object -FilePath $logPath
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -ne 0) { exit $testExitCode }
+
+          # Patterns match Python's own exact warning-output text, colon
+          # included ("ResourceWarning:" - never a bare "ResourceWarning"):
+          # unittest's own -v output prints fully-qualified test names as
+          # "module.ClassName) ... ok", and this suite's own regression
+          # coverage for THIS gate legitimately names a test class
+          # "ResourceWarningGateReplayTests" - a bare substring match would
+          # make this gate fail on its own passing regression tests. Real
+          # CPython warning/exception output always renders as
+          # "ResourceWarning: <message>" (either "<file>:<line>:
+          # ResourceWarning: ..." from a plain warning, or a bare
+          # "ResourceWarning: <message>" line from an unraisable-exception
+          # traceback dump at interpreter shutdown) - the colon never
+          # appears directly after "ResourceWarning" in any test name.
+          $logContent = Get-Content -Path $logPath -Raw
+          $forbiddenPatterns = @("ResourceWarning:", "unclosed event loop", "unclosed <socket.socket")
+          foreach ($pattern in $forbiddenPatterns) {
+            if ($logContent -match [regex]::Escape($pattern)) {
+              Write-Error "Windows test step log contains forbidden pattern '$pattern' - a late/unraisable ResourceWarning or unclosed resource must never leave this step green (XRBM-026)."
+              exit 1
+            }
+          }
+
+      # XRBM-031: fetches and hash-verifies the official VB-CABLE base
+      # package BEFORE PyInstaller runs, so the frozen build deterministically
+      # bundles it (see build/RemoteMicRC003.spec) and an end user of
+      # the built candidate never needs their own network access to install
+      # the optional driver. A download failure or hash mismatch here is a
+      # required gate - it fails this whole job closed, exactly like every
+      # other step above.
+      - name: Fetch and verify VB-CABLE driver pack
+        shell: pwsh
+        run: |
+          ./build/fetch-vb-cable.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: PyInstaller build (unsigned candidate)
+        shell: pwsh
+        run: |
+          python -m PyInstaller build/RemoteMicRC003.spec --distpath dist --workpath build/pyinstaller-work --noconfirm
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Built-artifact dry-run smoke check (no GUI/BLE/HID/audio)
+        shell: pwsh
+        run: |
+          $builtExe = "dist/RemoteMicRC003/RemoteMicRC003.exe"
+          if (-not (Test-Path $builtExe)) {
+            Write-Error "expected built executable not found: $builtExe"
+            exit 1
+          }
+          & $builtExe --dry-run
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # XRBM-018: promoted from best-effort to a required gate - this
+      # SOURCE-compiles the Inno Setup script into an installer .exe
+      # artifact and must pass like every other gate above. It still never
+      # runs or installs anything: ISCC.exe only compiles, and the
+      # resulting installer .exe is uploaded as unsigned CI evidence, never
+      # executed here or anywhere else in this task.
+      - name: Compile Inno Setup installer (required gate, never run/installed)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            Write-Error "ISCC.exe not found after installing Inno Setup"
+            exit 1
+          }
+          & $iscc installer\RemoteMicRC003Setup.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package deterministic unsigned release directory (ZIP + installer + SHA256SUMS)
+        shell: pwsh
+        run: |
+          # "Deterministic" here means deterministic, non-random/non-timestamped
+          # OUTPUT FILENAMES (derived from the .iss AppVersion, not a build
+          # number or GUID) plus a checksum manifest generated in sorted
+          # order - not bit-for-bit reproducible-build byte equality, which
+          # PyInstaller does not guarantee upstream. Never signed, never
+          # published, never installed here.
+          $issText = Get-Content -Raw installer\RemoteMicRC003Setup.iss
+          $versionMatch = [regex]::Match($issText, '#define AppVersion "([^"]+)"')
+          if (-not $versionMatch.Success) {
+            Write-Error "could not determine AppVersion from installer\RemoteMicRC003Setup.iss"
+            exit 1
+          }
+          $version = $versionMatch.Groups[1].Value
+
+          # XRBM-022 controller pre-review correction: the installer
+          # packages LICENSE/COPYRIGHT/THIRD_PARTY_NOTICES.md and ships an
+          # instructional readme, but the portable ZIP previously
+          # compressed only dist/RemoteMicRC003/* (the bare
+          # PyInstaller one-dir output) - so a user who only downloaded the
+          # portable ZIP, never the installer, got no license, copyright,
+          # third-party attribution/provenance, or usage instructions at
+          # all. Fixed by staging a versioned COPY of the built app plus
+          # those same files before compressing, so both distribution forms
+          # carry the same provenance/legal/instructional content. Staging
+          # into "dist/portable/$stagingName" (rather than compressing
+          # dist/RemoteMicRC003/ in place) also means Compress-Archive
+          # is given the staging FOLDER itself (not a "/*" content glob), so
+          # the resulting ZIP has exactly one top-level versioned folder to
+          # extract into - never loose files scattered at the archive root.
+          $stagingName = "RemoteMicRC003-$version"
+          $stagingDir = "dist/portable/$stagingName"
+          if (Test-Path $stagingDir) { Remove-Item $stagingDir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+
+          Copy-Item -Path "dist/RemoteMicRC003/*" -Destination $stagingDir -Recurse -Force
+
+          Copy-Item -Path "../../../LICENSE.md" -Destination (Join-Path $stagingDir "LICENSE.txt") -Force
+          Copy-Item -Path "../../../COPYRIGHT.md" -Destination (Join-Path $stagingDir "COPYRIGHT.txt") -Force
+          Copy-Item -Path "../../../THIRD_PARTY_NOTICES.md" -Destination (Join-Path $stagingDir "THIRD_PARTY_NOTICES.md") -Force
+          Copy-Item -Path "ATTRIBUTION.md" -Destination (Join-Path $stagingDir "ATTRIBUTION.md") -Force
+          Copy-Item -Path "installer/readme-rc003.txt" -Destination (Join-Path $stagingDir "README.txt") -Force
+
+          $zipPath = "dist/portable/RemoteMicRC003-$version-portable-unsigned.zip"
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+
+          # XRBM-025 RETRY 1 (controller-accepted self-found blocker):
+          # Compress-Archive is a PowerShell CMDLET, not a native/external
+          # command, so it never sets $LASTEXITCODE - a stale/unset
+          # $LASTEXITCODE from before this step (here, always $null, since
+          # nothing native/script-based ran earlier in this same step) made
+          # `if ($LASTEXITCODE -ne 0)` unconditionally true ($null -ne 0),
+          # so `exit $LASTEXITCODE` silently exited 0 right here, before
+          # the release directory was ever staged or preflighted - the step
+          # still reported green. The correct way to fail this step on a
+          # cmdlet error is `-ErrorAction Stop` (promotes any error this
+          # cmdlet raises to a terminating one) plus an explicit try/catch,
+          # never a $LASTEXITCODE inspection.
+          try {
+            Compress-Archive -Path $stagingDir -DestinationPath $zipPath -CompressionLevel Optimal -ErrorAction Stop
+          } catch {
+            Write-Error "Compress-Archive failed: $_"
+            exit 1
+          }
+
+          $installerExe = Get-ChildItem -Path dist/installer -Filter "RemoteMicRC003Setup-*-unsigned.exe" | Select-Object -First 1
+          if (-not $installerExe) {
+            Write-Error "expected compiled installer .exe not found under dist/installer"
+            exit 1
+          }
+
+          # XRBM-024 RETRY: stage the final ZIP, installer, and a manifest
+          # covering both into one CLEAN release directory, then upload
+          # ONLY that single directory below - never a multi-pattern path
+          # list. Red evidence this fixes: a real Windows run
+          # (29643494504) reported every step green, including this one,
+          # but the upload-artifact log itself said "With the provided
+          # path, there will be 2 files uploaded" and the downloaded
+          # artifact was missing SHA256SUMS.txt entirely - because
+          # `if-no-files-found: error` only proves at least one of several
+          # independent glob patterns matched something, never that every
+          # declared input matched. A single pre-verified directory cannot
+          # silently drop one of its members the way an unverified
+          # multi-pattern path list can.
+          # XRBM-025 RETRY: workspace-absolute, not working-directory-
+          # relative. Red evidence this fixes: run 29643870781's
+          # upload-artifact@v7 step failed "No files were found with the
+          # provided path: Windows/apps/windows/rc003/dist/release" - a relative
+          # producer path and the consumer's relative path input carry no
+          # guarantee of resolving to the same directory. Anchoring both
+          # ends on $env:GITHUB_WORKSPACE / ${{ github.workspace }}
+          # (GitHub Actions documents these as the same absolute value)
+          # removes that ambiguity entirely.
+          $releaseDir = "$env:GITHUB_WORKSPACE/Windows/apps/windows/rc003/dist/release"
+          if (Test-Path $releaseDir) { Remove-Item $releaseDir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+
+          $zipName = Split-Path $zipPath -Leaf
+          $installerName = $installerExe.Name
+          $releaseZipPath = Join-Path $releaseDir $zipName
+          $releaseInstallerPath = Join-Path $releaseDir $installerName
+          $releaseManifestPath = Join-Path $releaseDir "SHA256SUMS.txt"
+
+          Copy-Item -Path $zipPath -Destination $releaseZipPath -Force
+          Copy-Item -Path $installerExe.FullName -Destination $releaseInstallerPath -Force
+
+          # The manifest is generated from, and verified against, the
+          # STAGED release-directory copies below - not the original
+          # dist/portable|installer files - so a copy failure or a
+          # mismatch between the two locations can never pass unnoticed.
+          $hashed = @(
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseZipPath),
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseInstallerPath)
+          )
+          $lines = $hashed |
+            Sort-Object { Split-Path $_.Path -Leaf } |
+            ForEach-Object { "{0}  {1}" -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf) }
+          Set-Content -Path $releaseManifestPath -Value $lines -Encoding ascii
+
+          # Hard preflight, BEFORE upload: exactly three files, exactly the
+          # expected deterministic filenames, exactly two well-formed
+          # manifest lines, every listed file present, and every hash
+          # independently recomputed and compared against the manifest.
+          # Any mismatch fails this step - and therefore the job - instead
+          # of silently uploading an incomplete or inconsistent set.
+          $releaseFiles = @(Get-ChildItem -Path $releaseDir -File)
+          if ($releaseFiles.Count -ne 3) {
+            Write-Error "release directory must contain exactly 3 files, found $($releaseFiles.Count): $($releaseFiles.Name -join ', ')"
+            exit 1
+          }
+
+          $expectedNames = @($zipName, $installerName, "SHA256SUMS.txt") | Sort-Object
+          $actualNames = @($releaseFiles.Name) | Sort-Object
+          $nameDiff = Compare-Object -ReferenceObject $expectedNames -DifferenceObject $actualNames
+          if ($nameDiff) {
+            Write-Error "release directory file set does not match the expected deterministic names. expected: $($expectedNames -join ', '); actual: $($actualNames -join ', ')"
+            exit 1
+          }
+
+          $manifestLines = @(Get-Content -Path $releaseManifestPath)
+          if ($manifestLines.Count -ne 2) {
+            Write-Error "SHA256SUMS.txt must contain exactly 2 lines, found $($manifestLines.Count)"
+            exit 1
+          }
+
+          foreach ($line in $manifestLines) {
+            if ($line -notmatch '^(?<hash>[0-9a-f]{64})  (?<name>\S.*)$') {
+              Write-Error "malformed SHA256SUMS.txt line: $line"
+              exit 1
+            }
+            $expectedHash = $Matches['hash']
+            $fileName = $Matches['name']
+            $filePath = Join-Path $releaseDir $fileName
+            if (-not (Test-Path $filePath)) {
+              Write-Error "SHA256SUMS.txt references a file that does not exist in the release directory: $fileName"
+              exit 1
+            }
+            $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $filePath).Hash.ToLowerInvariant()
+            if ($actualHash -ne $expectedHash) {
+              Write-Error "SHA256 mismatch for ${fileName}: manifest=$expectedHash actual=$actualHash"
+              exit 1
+            }
+          }
+
+          Write-Host "release directory preflight passed: 3 files, 2 well-formed manifest lines, all hashes verified"
+
+      # XRBM-022 controller pre-review correction: this is the ONLY
+      # upload-artifact step in this job, and it runs LAST, after every
+      # required gate above (test suite, PyInstaller build, dry-run smoke
+      # check, and - critically - the Inno Setup compile) has already
+      # succeeded. An earlier round uploaded the raw PyInstaller output
+      # right after the dry-run smoke check, i.e. BEFORE the Inno compile
+      # gate ran - so a job whose Inno step then failed could still leave a
+      # published artifact behind. No artifact may be published before
+      # every required gate has passed.
+      #
+      # XRBM-024 RETRY: path is the single, already hard-verified
+      # dist/release directory - not a multi-pattern list - so the
+      # uploaded artifact is exactly and only that directory's flat
+      # contents (see the packaging step's preflight above).
+      #
+      # XRBM-025 RETRY: the path input is now the workspace-absolute
+      # equivalent of the producer's $releaseDir plus a single trailing
+      # "/*" wildcard, matching this action's official documentation for
+      # absolute-path/wildcard inputs - still exactly one pattern, never a
+      # multi-pattern list.
+      - name: Upload deterministic distribution artifacts (unsigned, never installed/signed/published)
+        uses: actions/upload-artifact@v7
+        with:
+          name: RemoteMicRC003-distribution-unsigned
+          path: ${{ github.workspace }}/Windows/apps/windows/rc003/dist/release/*
+          if-no-files-found: error

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "xiaomi-rc003",
+  "displayName": "Xiaomi Bluetooth Remote 2 Pro / RC003",
+  "vendor": "Xiaomi",
+  "model": "RC003",
+  "support": {
+    "status": "research",
+    "notes": "The Windows client has a source/build candidate; real RC003 pairing, button and voice-link acceptance is still pending."
+  },
+  "identity": {
+    "bluetoothNames": [
+      "MI RC",
+      "Xiaomi Bluetooth Remote 2 Pro",
+      "小米蓝牙语音遥控器"
+    ],
+    "hid": {
+      "vendorId": 10007,
+      "productId": 12984
+    }
+  },
+  "transports": [
+    {
+      "kind": "ble-gatt",
+      "role": "voice-input",
+      "status": "research",
+      "notes": "The Windows client contains WinRT BLE ATVV capability negotiation, microphone control and compressed voice decoding; real-device acceptance is pending."
+    },
+    {
+      "kind": "bluetooth-hid",
+      "role": "button-input",
+      "status": "research",
+      "notes": "The Windows client contains Raw Input matching and button mapping; real-device acceptance is pending."
+    }
+  ],
+  "capabilities": [
+    "voice-capture",
+    "press-to-talk",
+    "button-input",
+    "host-key-mapping"
+  ],
+  "protocols": [
+    {
+      "id": "android-tv-voice-over-ble",
+      "status": "research",
+      "notes": "The Windows candidate implements capability negotiation, microphone control, IMA/DVI ADPCM decode and session gates."
+    }
+  ],
+  "platforms": [
+    {
+      "platform": "windows",
+      "status": "research",
+      "notes": "A source/build candidate exists at apps/windows/rc003; real RC003 pairing, button and voice-link acceptance remains pending."
+    }
+  ],
+  "sources": [
+    "https://github.com/xxb26553663-star/remote-bridge-hub",
+    "https://github.com/nijez/open-voice-bridge"
+  ]
+}

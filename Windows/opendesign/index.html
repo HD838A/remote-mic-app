@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenDesign Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sidebar-width: 240px;
+      --sidebar-bg: #1a1a1a;
+      --sidebar-text: #c8c8c8;
+      --sidebar-muted: #666;
+      --sidebar-hover: #2a2a2a;
+      --sidebar-active-bg: #2d2d2d;
+      --sidebar-active-text: #fff;
+      --accent: #4a9eff;
+      --border: #2e2e2e;
+      --preview-bg: #f0f0f0;
+      --header-height: 40px;
+      --preview-bar-bg: #242424;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      background: var(--sidebar-bg);
+      color: var(--sidebar-text);
+    }
+
+    .layout {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-width);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      height: var(--header-height);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--sidebar-muted);
+      flex-shrink: 0;
+    }
+
+    .sidebar-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    /* Section label (Mockups / Design Systems) */
+    .section-label {
+      padding: 12px 12px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--sidebar-muted);
+    }
+
+    /* Group = collapsible folder */
+    details.group {
+      margin-bottom: 2px;
+    }
+
+    details.group > summary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      list-style: none;
+      color: var(--sidebar-text);
+      font-weight: 500;
+      user-select: none;
+    }
+
+    details.group > summary::-webkit-details-marker { display: none; }
+
+    details.group > summary:hover {
+      background: var(--sidebar-hover);
+    }
+
+    details.group > summary::before {
+      content: "▶";
+      font-size: 8px;
+      color: var(--sidebar-muted);
+      transition: transform 0.15s;
+      flex-shrink: 0;
+    }
+
+    details.group[open] > summary::before {
+      transform: rotate(90deg);
+    }
+
+    /* File item */
+    .file-item {
+      display: block;
+      padding: 4px 12px 4px 28px;
+      color: var(--sidebar-text);
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+    }
+
+    .file-item:hover {
+      background: var(--sidebar-hover);
+    }
+
+    .file-item.active {
+      background: var(--sidebar-active-bg);
+      color: var(--sidebar-active-text);
+      border-left-color: var(--accent);
+    }
+
+    /* ── Preview ── */
+    .preview {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--preview-bg);
+    }
+
+    .preview-bar {
+      height: var(--header-height);
+      background: var(--preview-bar-bg);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .preview-bar-path {
+      font-size: 12px;
+      color: var(--sidebar-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .preview-bar-open {
+      margin-left: auto;
+      flex-shrink: 0;
+      font-size: 11px;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 3px 8px;
+      border: 1px solid var(--accent);
+      border-radius: 3px;
+    }
+
+    .preview-bar-open:hover { background: rgba(74,158,255,0.1); }
+
+    iframe#preview {
+      flex: 1;
+      border: none;
+      background: #fff;
+    }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--sidebar-muted);
+      gap: 8px;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .empty-state strong {
+      font-size: 15px;
+      color: var(--sidebar-text);
+    }
+
+    .empty-state code {
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 12px;
+      background: #222;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .sidebar-empty {
+      padding: 16px 12px;
+      color: var(--sidebar-muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav class="sidebar">
+      <div class="sidebar-header">OpenDesign</div>
+      <div class="sidebar-content" id="sidebar-content">
+        <div class="sidebar-empty">Loading…</div>
+      </div>
+    </nav>
+
+    <main class="preview" id="preview-pane">
+      <div class="preview-bar" id="preview-bar" style="display:none">
+        <span class="preview-bar-path" id="preview-path"></span>
+        <a class="preview-bar-open" id="preview-open" href="#" target="_blank">Open ↗</a>
+      </div>
+      <iframe id="preview" title="Preview" style="display:none"></iframe>
+      <div class="empty-state" id="empty-state">
+        <strong>No file selected</strong>
+        <span>Pick a file from the sidebar to preview it here.</span>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const sidebar = document.getElementById('sidebar-content');
+    const previewFrame = document.getElementById('preview');
+    const previewBar = document.getElementById('preview-bar');
+    const previewPath = document.getElementById('preview-path');
+    const previewOpen = document.getElementById('preview-open');
+    const emptyState = document.getElementById('empty-state');
+
+    let activeItem = null;
+
+    function loadFile(path, label, el) {
+      if (activeItem) activeItem.classList.remove('active');
+      activeItem = el;
+      el.classList.add('active');
+
+      previewFrame.src = path;
+      previewPath.textContent = path;
+      previewOpen.href = path;
+      previewBar.style.display = 'flex';
+      emptyState.style.display = 'none';
+      previewFrame.style.display = 'block';
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderSidebar(manifest) {
+      const sections = manifest.sections || [];
+      if (sections.length === 0 || sections.every(s => (s.groups || []).length === 0)) {
+        sidebar.innerHTML = '<div class="sidebar-empty">No mockups yet.<br>Run the <code>opendesign</code> skill to create one.</div>';
+        return;
+      }
+
+      let html = '';
+      for (const section of sections) {
+        const groups = section.groups || [];
+        if (groups.length === 0) continue;
+
+        html += `<div class="section-label">${esc(section.label)}</div>`;
+
+        for (const group of groups) {
+          const files = group.files || [];
+          if (files.length === 0) continue;
+
+          html += `<details class="group" open><summary>${esc(group.slug)}</summary>`;
+          for (const file of files) {
+            // Use data attributes; attach listeners after inserting
+            html += `<span class="file-item" tabindex="0" data-path="${esc(file.path)}" data-label="${esc(file.label)}">${esc(file.label)}</span>`;
+          }
+          html += `</details>`;
+        }
+      }
+
+      sidebar.innerHTML = html;
+
+      // Attach click and keyboard listeners
+      sidebar.querySelectorAll('.file-item').forEach(el => {
+        el.addEventListener('click', () => loadFile(el.dataset.path, el.dataset.label, el));
+        el.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            loadFile(el.dataset.path, el.dataset.label, el);
+          }
+        });
+      });
+    }
+
+    async function init() {
+      try {
+        const res = await fetch('./manifest.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('not found');
+        const manifest = await res.json();
+        renderSidebar(manifest);
+      } catch (err) {
+        console.warn('[OpenDesign viewer] Failed to load manifest:', err);
+        sidebar.innerHTML = '<div class="sidebar-empty">No mockups yet.<br>Run the <code>opendesign</code> skill to create one.</div>';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

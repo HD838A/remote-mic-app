@@ -1,0 +1,37 @@
+# Local planning discussions are intentionally kept outside version control.
+/讨论/
+/docs/tasks/
+/docs/reports/
+/docs/reviews/
+/docs/releases/
+
+# Build and IDE output
+/build/
+/out/
+/.vs/
+/.vscode/
+/cmake-build-*/
+CMakeUserPresets.json
+
+# Generated runtime/test data
+*.log
+*.wav
+*.pcm
+*.adpcm
+/artifacts/
+/test-results/
+dist/
+build/third_party/
+build/pyinstaller-work/
+
+# Python helper caches
+__pycache__/
+*.py[cod]
+.venv/
+
+# Claude Code local session state
+/.claude/
+
+# Windows noise
+Thumbs.db
+Desktop.ini
