@@ -30,4 +30,24 @@ struct DoubaoAudioDeviceTests {
         #expect(DoubaoAudioDevicePolicy.device(in: [physicalDevice]) == nil)
         #expect(DoubaoAudioDevicePolicy.status(in: [physicalDevice]).key == "audio.compatibility.device_not_detected")
     }
+
+    @Test func qianwenModeLocksVoiceOutputToMiRemote() {
+        let speaker = AudioDeviceInfo(id: 3, uid: "BuiltInSpeakerDevice", name: "MacBook Air Speakers")
+        let miRemote = AudioDeviceInfo(
+            id: 4,
+            uid: DoubaoAudioDevicePolicy.deviceUID,
+            name: DoubaoAudioDevicePolicy.deviceName
+        )
+
+        #expect(DoubaoAudioDevicePolicy.resolvedDeviceUID(
+            requestedUID: speaker.uid,
+            qianwenModeEnabled: true,
+            devices: [speaker, miRemote]
+        ) == miRemote.uid)
+        #expect(DoubaoAudioDevicePolicy.resolvedDeviceUID(
+            requestedUID: speaker.uid,
+            qianwenModeEnabled: false,
+            devices: [speaker, miRemote]
+        ) == speaker.uid)
+    }
 }

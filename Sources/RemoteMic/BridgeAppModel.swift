@@ -1085,12 +1085,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func startAudioSubsystem() {
         audioStartupGeneration &+= 1
         let generation = audioStartupGeneration
-        let selectedDeviceUID = settings.selectedAudioDeviceUID
+        let requestedDeviceUID = settings.selectedAudioDeviceUID
+        let qianwenModeEnabled = settings.qianwenVoiceModeEnabled
         audioStartupPending = true
         AppLogger.shared.write("AUDIO STARTUP scheduled id=\(generation)")
         audioPreparationQueue.async { [weak self] in
             guard let self else { return }
             let devices = CoreAudioDeviceCatalog.outputDevices()
+            let selectedDeviceUID = DoubaoAudioDevicePolicy.resolvedDeviceUID(
+                requestedUID: requestedDeviceUID,
+                qianwenModeEnabled: qianwenModeEnabled,
+                devices: devices
+            )
             let devicesDiagnostic = Self.audioDevicesDiagnostic(devices)
             AppLogger.shared.write("AUDIO DEVICES startup id=\(generation) \(devicesDiagnostic)")
             AppLogger.shared.write(
@@ -1112,6 +1118,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     return
                 }
                 self.audioStartupPending = false
+                if self.settings.selectedAudioDeviceUID != selectedDeviceUID {
+                    self.settings.selectedAudioDeviceUID = selectedDeviceUID
+                    AppLogger.shared.write(
+                        "QIANWEN AUDIO route_locked reason=startup target_uid=\(selectedDeviceUID)"
+                    )
+                }
                 self.publishAudioDevices(devices)
                 self.audioStatus = audioStatus
                 self.isAudioOutputReady = isAudioOutputReady
@@ -1148,7 +1160,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func selectAudioDevice(_ deviceUID: String, reason: String = "settings_change") {
-        settings.selectedAudioDeviceUID = deviceUID
+        let selectedDeviceUID = DoubaoAudioDevicePolicy.resolvedDeviceUID(
+            requestedUID: deviceUID,
+            qianwenModeEnabled: settings.qianwenVoiceModeEnabled,
+            devices: audioDevices
+        )
+        if selectedDeviceUID != deviceUID {
+            AppLogger.shared.write(
+                "QIANWEN AUDIO route_locked reason=\(reason) target_uid=\(selectedDeviceUID)"
+            )
+        }
+        settings.selectedAudioDeviceUID = selectedDeviceUID
         applyAudioSettings(reason: reason)
     }
 
