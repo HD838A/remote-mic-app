@@ -83,4 +83,30 @@ struct QianwenVoiceSessionControllerTests {
         #expect(releases == 2)
         #expect(confirms == 0)
     }
+
+    @Test func missingDestinationNeutralizesTheVoiceKeyUntilFocusIsReady() {
+        var events: [String] = []
+        let controller = QianwenVoiceSessionController(
+            setMapping: {
+                events.append($0 ? "right-command" : "neutral")
+                return true
+            },
+            drainAudio: { $0() },
+            releaseCommand: {
+                events.append("release")
+                return true
+            },
+            confirmVoice: { true }
+        )
+
+        controller.setEnabled(true)
+        #expect(!controller.prepareDestinationIfNeeded(destinationIsReady: true))
+        #expect(events.isEmpty)
+
+        #expect(controller.prepareDestinationIfNeeded(destinationIsReady: false))
+        #expect(events == ["neutral", "release"])
+
+        #expect(controller.armHardwareMapping())
+        #expect(events == ["neutral", "release", "right-command"])
+    }
 }

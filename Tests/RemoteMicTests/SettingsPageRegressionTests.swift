@@ -213,6 +213,43 @@ struct SettingsPageRegressionTests {
         #expect(!labelBlock.contains("Popover"))
     }
 
+    @Test func qianwenVoiceFocusTapPreparesCodexBeforeAcceptingAudio() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let voiceStart = try #require(source.range(of: "func bluetoothBridgeDidStartVoice"))
+        let voiceStop = try #require(source.range(
+            of: "func bluetoothBridgeDidStopVoice",
+            range: voiceStart.upperBound..<source.endIndex
+        ))
+        let startSource = source[voiceStart.lowerBound..<voiceStop.lowerBound]
+
+        let focusGate = try #require(startSource.range(
+            of: "prepareQianwenVoiceDestinationIfNeeded(bridge)"
+        ))
+        let audioGate = try #require(startSource.range(
+            of: "ensureVirtualAudioOutputReady(reason: \"bluetooth_voice_start\")"
+        ))
+        #expect(focusGate.lowerBound < audioGate.lowerBound)
+        #expect(source.contains("KeyboardInjector.send(.openCodex)"))
+        #expect(source.contains("qianwenVoiceSession.armHardwareMapping()"))
+        let helper = try #require(source.range(of: "private func prepareQianwenVoiceDestinationIfNeeded"))
+        let helperEnd = try #require(source.range(
+            of: "private func finishQianwenVoiceDestinationPreparation",
+            range: helper.upperBound..<source.endIndex
+        ))
+        let helperSource = source[helper.lowerBound..<helperEnd.lowerBound]
+        #expect(helperSource.contains(
+            "NSWorkspace.shared.frontmostApplication?.bundleIdentifier == codexBundleIdentifier"
+        ))
+        #expect(!helperSource.contains("KeyboardInjector.send(.escape)"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

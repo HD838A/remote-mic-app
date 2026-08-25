@@ -298,7 +298,7 @@
 "audio.compatibility.help" = "豆包可能无法识别普通虚拟音频设备。安装独立的兼容麦克风 MiRemoteV 2ch 后在这里选中；原 BlackHole 不会被修改或替换。";
 "audio.compatibility.help_plain" = "如果常用的语音工具收不到声音，可选择随安装包提供的兼容麦克风；已有音频设备不会被替换。";
 "audio.compatibility.qianwen_mode.title" = "千问兼容模式";
-"audio.compatibility.qianwen_mode.detail" = "语音键用硬件右 Command 启动千问，松开并排空尾音后自动确认和释放。请在千问中把麦克风选择为 MiRemoteV 2ch。";
+"audio.compatibility.qianwen_mode.detail" = "语音键用硬件右 Command 启动千问；Codex 在最前面但输入框没有光标时，先点按一次定位输入框，再长按即可说话。其他 App 保持原行为。松开并排空尾音后自动确认和释放。请在千问中把麦克风选择为 MiRemoteV 2ch。";
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "自定义遥控器按键功能，并保留语音输入与 Fn 功能";
 "button_mapping.toggle.enabled" = "启用自定义按键功能";

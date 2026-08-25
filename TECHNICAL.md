@@ -104,7 +104,7 @@ ATVV 通道为：
 
 RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`RemoteVoiceFunctionMapper` 只匹配 RC003 的 Vendor ID/Product ID；默认把该 usage 映射为 Apple vendor top-case Fn/Globe（usage page `0xFF`、usage `0x03`）。自定义按键映射启用时，同一组件还会把 RC003 的 Keyboard Power（usage `0x66`）映射为 F20（usage `0x6F`）。
 
-默认关闭的千问兼容模式把实体 F5 完整映射为 Right GUI / 右 Command（usage page `0x07`、usage `0xE7`），因为千问的全局快捷键监听不会响应普通 `CGEvent` 模拟。ATVV `STREAM_STOP` 且尾音排空后，应用把 F5 临时映射为 usage `0`、补发右 Command key-up，再发送无系统动作的 F20 触发千问确认；150 ms 后重新装载右 Command 映射供下一次使用。断连、关闭模式和退出会取消待完成会话并释放 Command。模式自动选中 `MiRemoteV 2ch` 作为 SayAll 输出，但千问必须在自身设置中明确选择同一麦克风；模式与 Fn 点按互斥，旧配置缺少 `qianwenVoiceModeEnabled` 时按关闭处理。
+默认关闭的千问兼容模式把实体 F5 完整映射为 Right GUI / 右 Command（usage page `0x07`、usage `0xE7`），因为千问的全局快捷键监听不会响应普通 `CGEvent` 模拟。ATVV 开始时只在 Codex 为最前台 App 且 `VoiceInputDestinationSnapshot.system()` 没有安全可编辑焦点时拦截本次音频：把 F5 临时映射为 usage `0`、释放右 Command，并复用 `VoiceInputDestinationCoordinator` 在当前 Codex 窗口定位编辑框；就绪后重新装载右 Command，下一次长按才进入语音。其他 App 不进入这条自动聚焦分支。ATVV `STREAM_STOP` 且尾音排空后，应用再次临时屏蔽 F5、补发右 Command key-up，再发送无系统动作的 F20 触发千问确认；150 ms 后重新装载右 Command 映射。断连、关闭模式和退出会取消待完成会话并释放 Command。模式自动选中 `MiRemoteV 2ch` 作为 SayAll 输出，但千问必须在自身设置中明确选择同一麦克风；模式与 Fn 点按互斥，旧配置缺少 `qianwenVoiceModeEnabled` 时按关闭处理。
 
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的 F5 映射为 usage `0`；任一目标失败或目标不完整时立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 

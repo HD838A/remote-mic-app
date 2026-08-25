@@ -41,6 +41,20 @@ final class QianwenVoiceSessionController {
         return true
     }
 
+    func prepareDestinationIfNeeded(destinationIsReady: Bool) -> Bool {
+        guard isEnabled, !destinationIsReady else { return false }
+        generation &+= 1
+        _ = setMapping(false)
+        _ = releaseCommand()
+        return true
+    }
+
+    @discardableResult
+    func armHardwareMapping() -> Bool {
+        guard isEnabled else { return false }
+        return setMapping(true)
+    }
+
     func stopVoice() -> Bool {
         guard isEnabled else { return false }
         let sessionGeneration = generation

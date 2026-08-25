@@ -1855,6 +1855,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("ATVV STREAM rejected_busy")
             return
         }
+        if prepareQianwenVoiceDestinationIfNeeded(bridge) {
+            return
+        }
         guard ensureVirtualAudioOutputReady(reason: "bluetooth_voice_start") else {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write("ATVV STREAM rejected_audio_output")
@@ -2357,7 +2360,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {
-        guard settings.voiceFnTapModeEnabled else { return }
+        guard settings.voiceFnTapModeEnabled || settings.qianwenVoiceModeEnabled else { return }
         switch state {
         case .waiting:
             voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
@@ -2947,6 +2950,67 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func beginQianwenRightCommandHoldIfNeeded() -> Bool {
         guard settings.qianwenVoiceModeEnabled else { return true }
         return qianwenVoiceSession.startVoice()
+    }
+
+    private func prepareQianwenVoiceDestinationIfNeeded(_ bridge: XiaomiBluetoothBridge) -> Bool {
+        guard settings.qianwenVoiceModeEnabled else { return false }
+        let codexBundleIdentifier = PresetApplication.codex.bundleIdentifier
+        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == codexBundleIdentifier else {
+            return false
+        }
+        let destination = VoiceInputDestinationSnapshot.system()
+        let destinationIsReady = destination.bundleIdentifier == codexBundleIdentifier &&
+            destination.isSafeEditableDestination
+        guard qianwenVoiceSession.prepareDestinationIfNeeded(
+            destinationIsReady: destinationIsReady
+        ) else { return false }
+
+        _ = bridge.requestMicrophoneClose()
+        isVoiceTriggerEnabled = false
+        voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
+        let requestID = voiceInputDestinationCoordinator.beginTargetSwitch(
+            intent: .application(bundleIdentifier: codexBundleIdentifier)
+        )
+        guard KeyboardInjector.send(.openCodex) else {
+            voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
+            AppLogger.shared.write("QIANWEN FOCUS failed reason=open_codex")
+            return true
+        }
+
+        let completion: (VoiceInputDestinationWaitResult) -> Void = { [weak self] result in
+            self?.finishQianwenVoiceDestinationPreparation(result)
+        }
+        switch voiceInputDestinationCoordinator.waitUntilReady(completion: completion) {
+        case .immediate:
+            completion(.ready)
+        case let .cancelled(reason):
+            completion(.cancelled(reason))
+        case .waiting:
+            break
+        }
+        AppLogger.shared.write("QIANWEN FOCUS requested target=codex")
+        return true
+    }
+
+    private func finishQianwenVoiceDestinationPreparation(
+        _ result: VoiceInputDestinationWaitResult
+    ) {
+        guard settings.qianwenVoiceModeEnabled else { return }
+        switch result {
+        case .ready:
+            let armed = qianwenVoiceSession.armHardwareMapping()
+            isVoiceTriggerEnabled = armed
+            voiceShortcutStatus = LocalizedMessage(
+                armed
+                    ? "voice_button.status.right_command_enabled"
+                    : "voice_button.status.right_command_waiting"
+            )
+            AppLogger.shared.write("QIANWEN FOCUS ready armed=\(armed)")
+        case let .cancelled(reason):
+            isVoiceTriggerEnabled = false
+            voiceShortcutStatus = LocalizedMessage("voice_button.status.input_unavailable")
+            AppLogger.shared.write("QIANWEN FOCUS cancelled reason=\(reason.rawValue)")
+        }
     }
 
     private func scheduleQianwenRightCommandReleaseIfNeeded() {
