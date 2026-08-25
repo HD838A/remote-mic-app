@@ -364,7 +364,21 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.archiveCapturedTranscript(capture)
         }
     )
+    private let qianwenHistoryReader = QianwenHistoryReader()
+    private lazy var weChatHistoryTranscriptCapture = QianwenHistoryTranscriptCapture(
+        reader: { [weak self] startedAt, date, completion in
+            self?.qianwenHistoryReader.readLatest(
+                after: startedAt,
+                before: date,
+                completion: completion
+            ) ?? completion(nil)
+        },
+        onCapture: { [weak self] capture in
+            self?.archiveCapturedTranscript(capture)
+        }
+    )
     private var transcriptHistoryToggleCancellable: AnyCancellable?
+    private var voiceSessionUsesWeChatHistory = false
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
     private var heldVoiceKeyMode: VoiceKeyMode?
@@ -691,6 +705,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     refreshTranscriptRecords()
                 } else {
                     transcriptCaptureCoordinator.cancel()
+                    weChatHistoryTranscriptCapture.cancel(reason: "feature_disabled")
                 }
             }
     }
@@ -718,6 +733,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         macroFeature.stop()
         preferredInputSourceMonitor.stop()
         transcriptCaptureCoordinator.cancel()
+        weChatHistoryTranscriptCapture.cancel(reason: "app_stop")
         guard started else { return }
         started = false
         completedUpdateHIDRecoveryWorkItem?.cancel()
@@ -2088,6 +2104,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         if shouldFocusInput {
             transcriptCaptureCoordinator.cancel(reason: "voice_short_tap_focus")
+            weChatHistoryTranscriptCapture.cancel(reason: "voice_short_tap_focus")
             voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
             let started = KeyboardInjector.focusFrontmostComposer { [weak self] focused in
                 self?.voiceShortcutStatus = LocalizedMessage(
@@ -3070,7 +3087,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         settings.recordButtonPress(control: .voice, source: source, at: startedAt)
         voiceSessionStartedAt = startedAt
         voiceSessionUsageSource = source
-        transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)
+        let application = NSWorkspace.shared.frontmostApplication
+        voiceSessionUsesWeChatHistory = settings.localTranscriptHistoryEnabled &&
+            application?.bundleIdentifier == WeChatHistoryPolicy.weChatBundleIdentifier
+        if voiceSessionUsesWeChatHistory {
+            weChatHistoryTranscriptCapture.startSession(
+                startedAt: startedAt,
+                source: source,
+                applicationName: application?.localizedName ?? "微信",
+                bundleIdentifier: application?.bundleIdentifier ?? ""
+            )
+        } else {
+            transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)
+        }
         isStreaming = true
     }
 
@@ -3093,7 +3122,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             audioOutput.endSession()
         }
         privateFeature.finishVoiceSession()
-        transcriptCaptureCoordinator.finishSession(endedAt: endedAt)
+        if voiceSessionUsesWeChatHistory {
+            weChatHistoryTranscriptCapture.finishSession(endedAt: endedAt)
+        } else {
+            transcriptCaptureCoordinator.finishSession(endedAt: endedAt)
+        }
+        voiceSessionUsesWeChatHistory = false
     }
 
     private var currentVoiceUsageSource: UsageEventSource {

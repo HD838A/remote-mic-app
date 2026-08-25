@@ -146,6 +146,7 @@ BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
   --show-bin-path)"
 BIN_PATH="$BIN_DIR/$APP_NAME"
 MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
+QIANWEN_HISTORY_HELPER_PATH="$BIN_DIR/QianwenHistoryReader"
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;
@@ -155,6 +156,7 @@ rm -rf -- "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$MCP_HELPER_PATH"
+test -x "$QIANWEN_HISTORY_HELPER_PATH"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$BIN_PATH" "$APP_DIR/Contents/MacOS/$APP_NAME"
 strip -S -x "$APP_DIR/Contents/MacOS/$APP_NAME"
@@ -163,6 +165,9 @@ install_name_tool -add_rpath @executable_path/../Frameworks \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$MCP_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllMCP"
 strip -S -x "$APP_DIR/Contents/Helpers/SayAllMCP"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$QIANWEN_HISTORY_HELPER_PATH" "$APP_DIR/Contents/Helpers/QianwenHistoryReader"
+strip -S -x "$APP_DIR/Contents/Helpers/QianwenHistoryReader"
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllAIIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
@@ -295,6 +300,12 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
     --options runtime \
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
+    "$APP_DIR/Contents/Helpers/QianwenHistoryReader"
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGNING_IDENTITY" \
     "$SPARKLE_VERSION_DIR/XPCServices/Installer.xpc"
   run_release_stage app-codesign-downloader-xpc "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
     codesign \
@@ -340,6 +351,11 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
     --timestamp=none \
     --sign - \
     "$APP_DIR/Contents/Helpers/SayAllMCP"
+  codesign \
+    --force \
+    --timestamp=none \
+    --sign - \
+    "$APP_DIR/Contents/Helpers/QianwenHistoryReader"
   codesign \
     --force \
     --timestamp=none \
