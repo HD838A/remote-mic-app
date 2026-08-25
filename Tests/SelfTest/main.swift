@@ -900,6 +900,14 @@ check(
     recomposedVoiceChange?.newText == "，这是语音。",
     "localized input method recomposition keeps transcript punctuation"
 )
+check(
+    TranscriptCaptureCoordinator.localizedVoiceChange(
+        original: "草稿。",
+        updated: "输入法临时接管了整个字段",
+        originalSelection: NSRange(location: 2, length: 0)
+    ) == nil,
+    "unanchored input method takeover waits for a stable transcript"
+)
 
 var historyScheduledOperation: (() -> Void)?
 var completedHistorySession: CompletedVoiceHistorySession?

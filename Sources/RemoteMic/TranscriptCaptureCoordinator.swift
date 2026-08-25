@@ -544,6 +544,11 @@ final class TranscriptCaptureCoordinator {
             suffixLength += 1
         }
 
+        // A localized input-method recomposition must retain an original-text
+        // anchor on at least one side. A completely unrelated field takeover is
+        // transient and should remain pending until a stable voice result lands.
+        guard prefixLength > 0 || suffixLength > 0 else { return nil }
+
         // Some input methods replace the punctuation immediately before the
         // caret, then reuse the same sentence-ending punctuation after the
         // committed voice text. Treat that boundary punctuation as part of the
