@@ -134,6 +134,15 @@ enum BluetoothCentralRecoveryEvent {
     case unsupported
 }
 
+enum BluetoothWakeRecoveryPolicy {
+    static func shouldForceReconnect(
+        event: SystemAudioLifecycleEvent,
+        started: Bool
+    ) -> Bool {
+        started && event == .systemDidWake
+    }
+}
+
 struct BluetoothCentralRecoveryTransition: Equatable {
     let phase: BluetoothLifecyclePhase
     let shouldCancelScheduledReconnect: Bool

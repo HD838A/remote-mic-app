@@ -937,6 +937,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
+    private func recoverBluetoothAfterSystemWake() {
+        let targets: [XiaomiBluetoothBridge]
+        if let selectedBluetoothBridge {
+            targets = [selectedBluetoothBridge]
+        } else {
+            targets = Array(bluetoothBridges.values)
+        }
+        AppLogger.shared.write(
+            "BLE WAKE recovery_begin target_bridges=\(targets.count) " +
+                "discovery=\(discoveryBluetoothBridge != nil) " +
+                "ready_bridges=\(readyBluetoothBridgeCount)"
+        )
+        if targets.isEmpty, discoveryBluetoothBridge == nil {
+            startBluetoothConnections()
+            AppLogger.shared.write("BLE WAKE recovery_started_missing_bridges")
+            return
+        }
+        targets.forEach { $0.recoverAfterSystemWake() }
+        discoveryBluetoothBridge?.recoverAfterSystemWake()
+    }
+
     func refreshRemoteDiscovery() {
         guard started else { return }
         if discoveryBluetoothBridge == nil {
@@ -1202,6 +1223,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         resumeVirtualAudioOutputIfNeeded(reason: "system_\(event.rawValue)")
+        if BluetoothWakeRecoveryPolicy.shouldForceReconnect(event: event, started: started) {
+            recoverBluetoothAfterSystemWake()
+        }
     }
 
     @discardableResult
@@ -1221,6 +1245,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             : LocalizedMessage("audio.output.none_or_unavailable")
         AppLogger.shared.write(
             "AUDIO REBIND finished reason=\(reason) success=\(configured) status=\(audioStatus.key) " +
+                "ready=\(isAudioOutputReady) selected_available=\(selectedAudioDeviceIsAvailable) " +
                 "state={\(audioOutput.diagnosticState())}"
         )
         if configured {
@@ -1232,7 +1257,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @discardableResult
     private func ensureVirtualAudioOutputReady(reason: String) -> Bool {
         isAudioOutputReady = audioOutput.isReadyForTestTone
-        guard !isAudioOutputReady else { return true }
+        guard !isAudioOutputReady else {
+            AppLogger.shared.write(
+                "AUDIO HEALTH ready reason=\(reason) state={\(audioOutput.diagnosticState())}"
+            )
+            return true
+        }
         AppLogger.shared.write(
             "AUDIO HEALTH stale reason=\(reason) state={\(audioOutput.diagnosticState())}"
         )
@@ -1296,6 +1326,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self.refreshAudioDevices()
                 AppLogger.shared.write(
                     "AUDIO RECOVERY ignored reason=\(reason) detail=\(details) explicit_output_unchanged"
+                )
+                return
+            }
+            let configurationHealthy = self.audioOutput.isConfigurationHealthyForDiagnostics
+            guard !VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
+                details: details,
+                configurationHealthy: configurationHealthy
+            ) else {
+                self.refreshAudioDevices()
+                AppLogger.shared.write(
+                    "AUDIO RECOVERY ignored reason=\(reason) detail=\(details) " +
+                        "explicit_output_healthy=true state={\(self.audioOutput.diagnosticState())}"
                 )
                 return
             }
@@ -2130,7 +2172,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "samples=\(bluetoothVoiceDecodedSampleCount) " +
                 "enqueue_failures=\(bluetoothVoiceEnqueueFailureCount) " +
                 "route=\(bluetoothVoiceTraceRoute) pending_buffers=\(pendingBuffers) " +
-                "flush=\(shouldFlushAudio)"
+                "flush=\(shouldFlushAudio) audio_ready=\(audioOutput.isReadyForTestTone) " +
+                "audio_state={\(audioOutput.diagnosticState())}"
         )
         AppLogger.shared.write(
             "ATVV STREAM tail trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue) " +
