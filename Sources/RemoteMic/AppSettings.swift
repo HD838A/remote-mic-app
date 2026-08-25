@@ -22,6 +22,7 @@ private struct PersonalizedConfiguration: Codable {
     let buttonShortcuts: [String: CustomKeyboardShortcut]
     let buttonApplicationProfileIDs: [String: UUID]?
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
+    let buttonRapidPressEnabled: [String: Bool]?
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let showDockIcon: Bool
@@ -240,6 +241,7 @@ final class AppSettings: ObservableObject {
         static let buttonShortcuts = "buttonShortcuts"
         static let buttonApplicationProfileIDs = "buttonApplicationProfileIDs"
         static let secondaryButtonBindings = "secondaryButtonBindings"
+        static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let customApplicationProfiles = "customApplicationProfiles"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
@@ -309,6 +311,13 @@ final class AppSettings: ObservableObject {
     @Published var secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] {
         didSet {
             saveSecondaryBindings()
+            saveSelectedRemoteProfileMappings()
+        }
+    }
+
+    @Published var buttonRapidPressEnabled: [RemoteButton: Bool] {
+        didSet {
+            saveButtonRapidPressEnabled()
             saveSelectedRemoteProfileMappings()
         }
     }
@@ -521,6 +530,19 @@ final class AppSettings: ObservableObject {
         }
 
         if
+            let data = defaults.data(forKey: Keys.buttonRapidPressEnabled),
+            let decoded = try? JSONDecoder().decode([String: Bool].self, from: data)
+        {
+            buttonRapidPressEnabled = Dictionary(
+                uniqueKeysWithValues: decoded.compactMap { key, value in
+                    RemoteButton(rawValue: key).map { ($0, value) }
+                }
+            )
+        } else {
+            buttonRapidPressEnabled = [:]
+        }
+
+        if
             let data = defaults.data(forKey: Keys.secondaryButtonBindings),
             let decoded = try? JSONDecoder().decode(
                 [String: [String: ConfiguredButtonAction]].self,
@@ -622,7 +644,8 @@ final class AppSettings: ObservableObject {
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
-            secondaryButtonBindings: secondaryButtonBindings
+            secondaryButtonBindings: secondaryButtonBindings,
+            buttonRapidPressEnabled: buttonRapidPressEnabled
         )
         if
             let data = defaults.data(forKey: Keys.remoteDeviceProfiles),
@@ -642,6 +665,7 @@ final class AppSettings: ObservableObject {
                 buttonShortcuts = selected.mappings.parsedButtonShortcuts
                 buttonApplicationProfileIDs = selected.mappings.parsedButtonApplicationProfileIDs
                 secondaryButtonBindings = selected.mappings.parsedSecondaryButtonBindings
+                buttonRapidPressEnabled = selected.mappings.parsedButtonRapidPressEnabled
             }
         } else {
             let migrated = RemoteDeviceProfile(
@@ -779,6 +803,25 @@ final class AppSettings: ObservableObject {
         return profile.mappings.parsedButtonApplicationProfileIDs[button]
     }
 
+    func allowsRapidPress(for button: RemoteButton) -> Bool {
+        buttonRapidPressEnabled[button] ?? false
+    }
+
+    func allowsRapidPress(for button: RemoteButton, profileID: UUID?) -> Bool {
+        guard let profileID, profileID != selectedRemoteProfileID,
+              let profile = remoteDeviceProfiles.first(where: { $0.id == profileID })
+        else { return allowsRapidPress(for: button) }
+        return profile.mappings.parsedButtonRapidPressEnabled[button] ?? false
+    }
+
+    func setAllowsRapidPress(_ enabled: Bool, for button: RemoteButton) {
+        if enabled {
+            buttonRapidPressEnabled[button] = true
+        } else {
+            buttonRapidPressEnabled.removeValue(forKey: button)
+        }
+    }
+
     func customApplicationProfile(id: UUID?) -> CustomApplicationProfile? {
         guard let id else { return nil }
         return customApplicationProfiles.first(where: { $0.id == id })
@@ -848,6 +891,7 @@ final class AppSettings: ObservableObject {
         buttonShortcuts = profile.mappings.parsedButtonShortcuts
         buttonApplicationProfileIDs = profile.mappings.parsedButtonApplicationProfileIDs
         secondaryButtonBindings = profile.mappings.parsedSecondaryButtonBindings
+        buttonRapidPressEnabled = profile.mappings.parsedButtonRapidPressEnabled
         isLoadingRemoteProfile = false
     }
 
@@ -922,7 +966,8 @@ final class AppSettings: ObservableObject {
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
-            secondaryButtonBindings: secondaryButtonBindings
+            secondaryButtonBindings: secondaryButtonBindings,
+            buttonRapidPressEnabled: buttonRapidPressEnabled
         )
     }
 
@@ -1019,6 +1064,7 @@ final class AppSettings: ObservableObject {
         buttonShortcuts = [:]
         buttonApplicationProfileIDs = [:]
         secondaryButtonBindings = [:]
+        buttonRapidPressEnabled = [:]
         if experimentalContinuousRecordingEnabled {
             continuousRecordingPowerBindingBackup = ConfiguredButtonAction(
                 action: .escape,
@@ -1313,6 +1359,11 @@ final class AppSettings: ObservableObject {
                     )
                 }
             ),
+            buttonRapidPressEnabled: buttonRapidPressEnabled.isEmpty
+                ? nil
+                : Dictionary(
+                    uniqueKeysWithValues: buttonRapidPressEnabled.map { ($0.key.rawValue, $0.value) }
+                ),
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             showDockIcon: showDockIcon,
@@ -1376,6 +1427,11 @@ final class AppSettings: ObservableObject {
                 RemoteButton(rawValue: key).map { ($0, value) }
             }
         )
+        let importedRapidPressEnabled = Dictionary(
+            uniqueKeysWithValues: (configuration.buttonRapidPressEnabled ?? [:]).compactMap { key, value in
+                RemoteButton(rawValue: key).map { ($0, value) }
+            }
+        )
         let importedSecondaryBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] =
             Dictionary(
                 uniqueKeysWithValues: configuration.secondaryButtonBindings.compactMap { buttonKey, bindings in
@@ -1396,6 +1452,7 @@ final class AppSettings: ObservableObject {
         buttonShortcuts = importedShortcuts
         buttonApplicationProfileIDs = importedApplicationProfileIDs
         secondaryButtonBindings = importedSecondaryBindings
+        buttonRapidPressEnabled = importedRapidPressEnabled
         customApplicationProfiles = configuration.customApplicationProfiles ?? []
         applicationLanguage = configuration.applicationLanguage
         showDockIcon = configuration.showDockIcon
@@ -1448,6 +1505,15 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    private func saveButtonRapidPressEnabled() {
+        let raw = Dictionary(
+            uniqueKeysWithValues: buttonRapidPressEnabled.map { ($0.key.rawValue, $0.value) }
+        )
+        if let data = try? JSONEncoder().encode(raw) {
+            defaults.set(data, forKey: Keys.buttonRapidPressEnabled)
+        }
+    }
+
     private func saveSecondaryBindings() {
         let raw = Dictionary(uniqueKeysWithValues: secondaryButtonBindings.map { button, bindings in
             (
@@ -1469,7 +1535,8 @@ final class AppSettings: ObservableObject {
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
-            secondaryButtonBindings: secondaryButtonBindings
+            secondaryButtonBindings: secondaryButtonBindings,
+            buttonRapidPressEnabled: buttonRapidPressEnabled
         )
     }
 
