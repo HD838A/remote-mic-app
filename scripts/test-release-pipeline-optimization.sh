@@ -116,6 +116,13 @@ print 'exit 0' >> "$TEST_REPO/scripts/run-trusted-release-validation.sh"
   "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq 'test "$GITHUB_REF_NAME" = main' \
   "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+/usr/bin/grep -Fq 'printf '\''%s'\'' "$UI_ATTESTATION_B64" | /usr/bin/base64 -D' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+if /usr/bin/grep -Fq 'print -rn -- "$UI_ATTESTATION_B64"' \
+    "$TEST_REPO/.github/workflows/mac-preview-publication.yml"; then
+  print -u2 "Preview publication workflow still uses the Zsh-only print builtin"
+  exit 1
+fi
 if /usr/bin/grep -Fq 'inputs.canary' \
     "$TEST_REPO/.github/workflows/mac-release-package.yml"; then
   print -u2 "signed release workflow still exposes the ambiguous canary boolean"
