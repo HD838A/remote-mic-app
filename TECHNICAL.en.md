@@ -30,14 +30,14 @@ The bundle contains en.lproj and zh-Hans.lproj with Localizable.strings, InfoPli
 | RemoteMicApp.swift | AppKit lifecycle, status item, settings window, right-click menu, About/version, language menu, and Sparkle manual update entry |
 | SettingsView.swift | Settings UI, status, audio selection, button mapping, and permissions; Liquid Glass on macOS 26 with compatibility styling on macOS 14/15 |
 | Localization.swift | language selection, locale resolution, localized resources, and dynamic message rendering |
-| BridgeAppModel.swift | coordination of Bluetooth, audio, HID, Fn mapping, and UI state |
+| BridgeAppModel.swift | coordination of Bluetooth, audio, HID, voice-key mapping, and UI state |
 | XiaomiBluetoothBridge.swift | CoreBluetooth scan, connection, capability negotiation, voice session, and reconnect |
 | ATVVProtocol.swift | ATVV commands, capabilities, IMA/DVI ADPCM decoding, frame accumulation, and PCM post-processing |
 | AudioOutput.swift | CoreAudio output discovery and 16 kHz mono voice delivery |
 | HIDRemoteMonitor.swift | raw RC003 HID reports, exclusive/compatibility mode, repeat behavior, and active buttons |
 | KeyboardEventSuppressor.swift | short suppression of duplicate native events in compatibility mode |
 | KeyboardInjector.swift | keyboard, media-key, and preset-app actions |
-| RemoteVoiceFunctionMapper.swift | RC003-only voice-button F5 to Fn/Globe mapping and restoration |
+| RemoteVoiceFunctionMapper.swift | RC003 voice-button F5 Fn mapping or Command-mode neutralization and restoration |
 | AppSettings.swift | persistent audio, language, HID, mapping, and peripheral settings |
 
 ## Bluetooth and ATVV
@@ -99,19 +99,23 @@ Users can also choose mute, play/pause, or launch Codex, Claude, cmux, WeChat, C
 
 Direction, Back, and volume buttons can hold-repeat. Normal physical button activity is published to SwiftUI to highlight the remote diagram and select its mapping row.
 
-## Voice-button Fn mapping
+## Voice-button trigger modes and Fn mapping
 
 The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. `RemoteVoiceFunctionMapper` matches only RC003 vendor/product IDs and, by default, maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03. While custom button mapping is enabled, the same component maps RC003 Keyboard Power usage 0x66 to F20 usage 0x6F.
 
 The opt-in Typeless compatibility mode first requires Accessibility permission, then transactionally maps F5 to usage 0 on every matching RC003 service. Missing targets or any partial failure roll back all changes, disable the setting, and restore the default Fn mapping. Once enabled, `VoiceFnTapSessionController` buffers pre-roll at physical voice-stream start and writes it to the loopback device only after the opening Fn tap succeeds. On release it waits for `VirtualAudioOutput.endSessionAfterDraining` before sending the matching closing Fn tap. Generations and cancellable tasks isolate rapid consecutive sessions and clean up on disable, disconnect, reconnect, or app exit; a failed opening tap never produces a closing tap.
 
-This mode only adapts the trigger semantics seen by the target app. The RC003 must still be physically held to capture audio; it does not provide continuous recording or independent transcription. Configuration import/export includes optional `voiceFnTapModeEnabled`, with missing legacy fields treated as off. On exit, the app restores the managed source usages' prior mappings while preserving unrelated runtime changes.
+This mode only adapts the trigger semantics seen by the target app. The RC003 must still be physically held to capture audio; it does not provide continuous recording or independent transcription. Configuration import/export includes optional `voiceKeyMode`, `voiceFnTapModeEnabled`, and `voiceShortTapFocusEnabled`; legacy configurations keep new behavior off. Fn tap and short-tap focus are mutually exclusive. Mode changes, disconnects, and app exit release any held Command and restore the managed source usages while preserving unrelated runtime changes.
+
+The supported `voiceKeyMode` values are `fn` (default), `left_command`, and `right_command`. Command mode uses one shared voice-session lifecycle for RC003, iPhone, Apple Watch, and Web voice sources: voice start sends keyDown for the selected Command and voice end sends the matching keyUp. Ordinary keyboard Command events do not start input-source switching; only a confirmed voice session opens and closes the explicit input-source session.
+
+`VoiceShortTapFocusPolicy` reuses `HIDRemoteTiming.longPressMilliseconds`. When enabled, a session below that boundary cancels transcript capture, flushes the short audio attempt, and asynchronously calls `KeyboardInjector.focusFrontmostComposer`. Candidate ranking rejects search, settings, password, token, terminal, and code-editor fields. Electron and Chromium reuse the existing accessibility-tree activation and bounded retry path. WeChat exposes no composer, so only its exact bundle identifier uses a minimum-window-size gate and a window-relative click fallback.
 
 ## Menu bar and window
 
 The app runs as an LSUIElement accessory and has no Dock icon. The status item receives left and right mouse-up events:
 
-- Left-click creates or brings forward a resizable 800×650 settings window.
+- Left-click creates or brings forward the resizable settings window, whose default and minimum size is 1020×772.
 - Right-click shows connection, audio, and HID status plus reconnect, settings, logs, language, About, version, update, GitHub, and Quit actions.
 
 On macOS 26, the settings window uses native `glassEffect`, glass button styles, and scroll-edge effects. On macOS 14/15 it uses standard buttons, system Material panels, and compatible selection states. Both paths share the same functionality and layout and follow the system light/dark appearance, reduced transparency, and increased contrast settings.
@@ -163,15 +167,23 @@ verify-dmg.sh validates the SHA-256, HFS+ image, single root entry, and install-
 
 Sparkle 2.9.4 is embedded through SwiftPM. Its feed URL and EdDSA public key are in Info.plist; the private key remains in the publisher's restricted local storage and never enters the project or a release. SUEnableAutomaticChecks=true with SUScheduledCheckInterval=86400 enables daily checks, while SUAutomaticallyUpdate=false and SUAllowsAutomaticUpdates=false prevent silent downloads or automatic installation. The menu command remains available for immediate checks. Sparkle updates the app bundle only and never installs or replaces the compatibility microphone driver.
 
-Official publishing uses scripts/notarize-release.sh. It accepts only the existing Developer ID identities synchronized to the release Mac, a local Keychain notarization profile, and a reference to the restricted Sparkle private-key file. The script notarizes and staples the app, both PKGs, and the DMG in order, then creates the Sparkle ZIP and signed appcast from the stapled app. It never writes certificates, P12 files, API keys, or private keys into the repository or a Release.
+Official Preview publication can run only through the protected `.github/workflows/mac-release-package.yml` workflow. Inside its protected Environment, the workflow invokes `scripts/notarize-release.sh` with the existing Developer ID identities, notarization credentials, and restricted Sparkle private key to sign, notarize, and staple both architecture lanes and generate the ZIPs and appcasts. Local commands must not read those credentials or publish directly.
 
 Candidate builds are published as GitHub pre-releases first. `notarize-release.sh` keeps the appcast release page on the fixed GitHub `RELEASE_TAG`, while the enclosure ZIP and localized update notes use immutable `download.sayall.app/mac/releases/<tag>/` Cloudflare CDN URLs. After GitHub assets become public, the publication script downloads the same assets through the CDN, compares them byte for byte, and verifies `HEAD` and `Range` behavior. The application's `SUFeedURL` remains fixed at GitHub `releases/latest/download/appcast.xml`, so existing installations do not need a feed migration. GitHub excludes drafts and pre-releases from the latest full release, so users who keep pre-release checks disabled continue to receive the production appcast. When a user explicitly enables pre-release checks on About, the app resolves the newest non-draft GitHub Release containing `appcast.xml` through the public Releases API and supplies that immutable asset URL to Sparkle as a dynamic feed. It refreshes before manual checks and periodically while the app remains running.
 
-`scripts/publish-release.sh prerelease` accepts only a clean, pushed source commit referenced by the same remote tag. The public matrix contains 12 assets: two DMGs, two Sparkle ZIPs, two appcasts, two architecture-specific uninstall PKGs, shared Chinese and English release notes, one combined SHA-256 manifest, and candidate provenance. Each install PKG remains inside its architecture-matched DMG instead of being uploaded again as a standalone asset. The script verifies that the pre-release did not change the latest full release, then downloads all 12 assets from GitHub and the CDN and compares them byte for byte; promotion remains compatible with historical 15- and 17-asset releases. A test Mac should use the architecture-matched Sparkle CLI one-shot `--feed-url <candidate appcast URL>` override for candidate discovery or installation without persisting an `SUFeedURL` preference. Installing the candidate requires an unlocked graphical session.
+The protected workflow's Apple-credential-free publish job invokes `scripts/publish-release.sh prerelease` and accepts only a clean, pushed source commit referenced by the same remote tag. The candidate provenance / canonical manifest determines the complete asset set and count; neither the command nor this document hard-codes a production count. Each install PKG remains inside its architecture-matched DMG instead of being uploaded again as a standalone asset. The job verifies that the pre-release did not change the latest full release, then downloads every manifest-listed asset from GitHub and the CDN and compares it byte for byte while retaining promotion-verification compatibility with historical asset matrices. A test Mac should use the architecture-matched Sparkle CLI one-shot `--feed-url <candidate appcast URL>` override for candidate discovery or installation without persisting an `SUFeedURL` preference. Installing the candidate requires an unlocked graphical session.
 
-For a low-risk release that changes only localization copy or bundled documentation, update the version and release history on `release/pre-v<version>`, commit and push that candidate branch, then run `ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 ./scripts/fast-release.sh`. It runs the full Swift test suite, signs and notarizes separate Apple Silicon and Intel artifacts through the temporary Keychain workflow, publishes a pre-release, and compares every public asset byte for byte. Stable promotion remains a separate authorization after the unchanged candidate commit enters `main`, and it reuses the exact candidate bytes. The fast command accepts only an explicit documentation/resource allowlist and permits only display-version and build-number changes in `Info.plist`. Swift, Bluetooth, audio, installer, or release-pipeline changes are rejected and must use the complete candidate acceptance workflow.
+`scripts/fast-release.sh` is only a no-secret candidate preflight and dispatcher. After the sole `release/pre-vX.Y.Z` branch, exact-SHA Draft PR, candidate CI, and release-pipeline qualification proof already exist, invoke it with the original request time and immutable request ID:
 
-After the candidate passes clean installation, runtime, and end-to-end Sparkle update testing, run `scripts/publish-release.sh promote` to promote the same tag and the same assets to a full release. The promotion gate verifies that the latest appcast is byte-identical to the tested candidate appcast. Never replace or promote a failed candidate; increment both the display version and `CFBundleVersion`, then rebuild, sign, notarize, and publish a new pre-release.
+```bash
+RELEASE_REQUEST_STARTED_AT=<original-request-unix-seconds> \
+RELEASE_REQUEST_ID=<immutable-request-id> \
+./scripts/fast-release.sh
+```
+
+The command verifies the clean worktree, exact remote head, candidate CI, sole Draft PR, and qualification proof, then dispatches the protected workflow and resolves and prints the new Run ID/URL within a bounded 25-second window. If dispatch succeeded but the Run identity is not yet resolved, it explicitly tells the operator to reconcile the existing Run and never dispatches again automatically. It does not read Apple, Match, Notary, or Sparkle credentials; sign or notarize locally; create or push a tag; create or edit a Release; upload assets; or publish an appcast. A non-content failure on the same SHA must re-dispatch the identical branch, PR, version, Build, request ID, and original clocks.
+
+After the candidate passes clean installation, runtime, and end-to-end Sparkle update testing, only an explicit request naming that existing Pre-release may dispatch the protected stable-promotion workflow to promote the same tag and exact assets. The promotion gate verifies that the latest appcast is byte-identical to the tested candidate appcast. Never replace or promote a failed candidate; choose a new display version and `CFBundleVersion` only when the published bytes actually need to change, then run the complete protected pipeline again.
 
 ### Release incident review and mandatory checks
 

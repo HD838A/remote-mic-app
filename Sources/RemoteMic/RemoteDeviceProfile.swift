@@ -33,6 +33,15 @@ enum RemotePowerState: Equatable {
     case charging
     case unknown
 
+    var logValue: String {
+        switch self {
+        case .onBattery: return "on_battery"
+        case .externalPower: return "external_power"
+        case .charging: return "charging"
+        case .unknown: return "unknown"
+        }
+    }
+
     static func decodeBatteryLevelStatus(_ data: Data) -> RemotePowerState? {
         guard data.count >= 3 else { return nil }
         let powerState = UInt16(data[data.startIndex + 1]) |

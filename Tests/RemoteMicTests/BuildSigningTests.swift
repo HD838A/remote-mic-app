@@ -172,7 +172,7 @@ struct BuildSigningTests {
         #expect(!source.contains("showPreReleaseFeedUnavailableAlert"))
     }
 
-    @Test func fastReleaseKeepsMandatorySafetyGates() throws {
+    @Test func fastReleaseOnlyPreflightsAndDispatchesTheProtectedWorkflow() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -200,35 +200,86 @@ struct BuildSigningTests {
             encoding: .utf8
         )
 
+        #expect(fastReleaseSource.contains("RELEASE_REQUEST_STARTED_AT"))
+        #expect(fastReleaseSource.contains("RELEASE_REQUEST_ID"))
         #expect(fastReleaseSource.contains("fast release requires a clean committed worktree"))
-        #expect(fastReleaseSource.contains("fast release requires release/pre-v$VERSION"))
+        #expect(fastReleaseSource.contains("fast release requires the single candidate branch release/pre-vX.Y.Z"))
         #expect(fastReleaseSource.contains("verify-preview-branch.sh"))
-        #expect(fastReleaseSource.contains("fast release rejected non-document/resource change"))
-        #expect(fastReleaseSource.contains("fast release rejected a possible plaintext credential"))
-        #expect(fastReleaseSource.contains("fast release requires a $VERSION entry"))
-        #expect(fastReleaseSource.contains("xcrun swift test"))
-        #expect(fastReleaseSource.contains("validate-notary-secrets-repo.sh"))
-        #expect(fastReleaseSource.contains("ALLOW_ISOLATED_RELEASE_KEYCHAIN=1"))
-        #expect(fastReleaseSource.contains("PARALLEL_PACKAGE_NOTARIZATION=1"))
-        #expect(fastReleaseSource.contains("package-macos-release-variants.sh"))
-        #expect(fastReleaseSource.contains("publish-release.sh\" prerelease"))
+        #expect(fastReleaseSource.contains("verify_remote_candidate_identity"))
+        #expect(fastReleaseSource.contains("verify-preview-candidate-ci.sh"))
+        #expect(fastReleaseSource.contains("REQUIRE_PREVIEW_RECORDING_PR=1"))
+        #expect(fastReleaseSource.contains("release-pipeline-digest.sh"))
+        #expect(fastReleaseSource.contains("verify-release-pipeline-qualification.sh"))
+        #expect(fastReleaseSource.contains("\"$GH_BIN\" workflow run \"$WORKFLOW_FILE\""))
+        #expect(fastReleaseSource.contains("--ref \"$BRANCH\""))
+        #expect(fastReleaseSource.contains("release_mode=stage-preview"))
+        #expect(fastReleaseSource.contains("expected_commit=$HEAD_COMMIT"))
+        #expect(fastReleaseSource.contains("expected_pipeline_digest=$PIPELINE_DIGEST"))
+        #expect(fastReleaseSource.contains("request_started_at=$REQUEST_STARTED_AT"))
+        #expect(fastReleaseSource.contains("request_id=$REQUEST_ID"))
+        #expect(fastReleaseSource.contains("DISPATCH_STARTED_AT"))
+        #expect(fastReleaseSource.contains("EXPECTED_RUN_TITLE"))
+        #expect(fastReleaseSource.contains(".displayTitle == $runTitle"))
+        #expect(fastReleaseSource.contains(".display_title == $runTitle"))
+        #expect(fastReleaseSource.contains("for lookup_attempt in {1..6}"))
+        #expect(fastReleaseSource.contains("--workflow \"$WORKFLOW_FILE\""))
+        #expect(fastReleaseSource.contains("--commit \"$HEAD_COMMIT\""))
+        #expect(fastReleaseSource.contains("--event workflow_dispatch"))
+        #expect(fastReleaseSource.contains(".path == $workflowPath"))
+        #expect(fastReleaseSource.contains("RUN_ID: $RUN_ID"))
+        #expect(fastReleaseSource.contains("RUN_URL: $RUN_URL"))
+        #expect(fastReleaseSource.contains("dispatch succeeded, but its Run identity was not resolved within 25 seconds"))
+        #expect(fastReleaseSource.contains("Do not redispatch automatically"))
+        #expect(!fastReleaseSource.contains("gh run watch"))
+        #expect(!fastReleaseSource.contains("while true"))
+        #expect(!fastReleaseSource.contains("SPARKLE_PRIVATE_KEY"))
+        #expect(!fastReleaseSource.contains("MATCH_PASSWORD"))
+        #expect(!fastReleaseSource.contains("RELEASE_AGE_IDENTITY"))
+        #expect(!fastReleaseSource.contains("validate-notary-secrets-repo.sh"))
+        #expect(!fastReleaseSource.contains("run-with-isolated-release-keychain.sh"))
+        #expect(!fastReleaseSource.contains("xcrun"))
+        #expect(!fastReleaseSource.contains("swift test"))
+        #expect(!fastReleaseSource.contains("security "))
+        #expect(!fastReleaseSource.contains("codesign"))
+        #expect(!fastReleaseSource.contains("productsign"))
+        #expect(!fastReleaseSource.contains("notarytool"))
+        #expect(!fastReleaseSource.contains("stapler"))
+        #expect(!fastReleaseSource.contains("git tag"))
+        #expect(!fastReleaseSource.contains("git push"))
+        #expect(!fastReleaseSource.contains("gh release"))
+        #expect(!fastReleaseSource.contains("notarize-release.sh"))
+        #expect(!fastReleaseSource.contains("publish-release.sh"))
+        #expect(!fastReleaseSource.contains("package-macos-release-variants.sh"))
+        #expect(!fastReleaseSource.contains("build-dmg.sh"))
+        #expect(!fastReleaseSource.contains("upload-artifact"))
+        #expect(!fastReleaseSource.contains("appcast"))
+        #expect(!fastReleaseSource.contains("/bin/rm"))
+        #expect(!fastReleaseSource.contains("rmdir "))
+        #expect(!fastReleaseSource.contains("unlink "))
+        #expect(!fastReleaseSource.contains("find -delete"))
         #expect(!fastReleaseSource.contains("git push origin main"))
         #expect(notarizeSource.contains("wait \"$install_notary_pid\""))
         #expect(notarizeSource.contains("wait \"$uninstall_notary_pid\""))
-        #expect(publishSource.contains("usage: $0 prerelease|promote"))
+        #expect(publishSource.contains("usage: $0 prerelease|resume-prerelease|verify-prerelease|draft|resume-draft|promote"))
+        #expect(publishSource.contains("gh release view \"$RELEASE_TAG\" --repo \"$REPOSITORY\" --json isDraft,isPrerelease"))
         #expect(!publishSource.contains("prerelease|promote|release"))
+        #expect(publishSource.contains("EXISTING PRE-RELEASE VERIFICATION PASS"))
         #expect(publishSource.contains("stable promotion is restricted to main"))
         #expect(publishSource.contains("candidate-provenance.json"))
-        #expect(publishSource.contains("schemaVersion: 2"))
+        #expect(publishSource.contains("schemaVersion: 3"))
         #expect(publishSource.contains("baseMainCommit"))
+        #expect(publishSource.contains("requestId: $requestAttestation[0].requestId"))
+        #expect(publishSource.contains("pipelineDigest: $requestAttestation[0].pipelineDigest"))
+        #expect(publishSource.contains("pipelineQualificationArtifactDigest"))
+        #expect(publishSource.contains("requestAttestationRunAttempt"))
         #expect(publishSource.contains("stable-promotion.json"))
         #expect(publishSource.contains("verify_cdn_assets"))
+        #expect(publishSource.contains("EXPECTED_STABLE_TAG=\"${EXPECTED_STABLE_TAG:-v1.8.3}\""))
+        #expect(publishSource.contains("require_expected_stable_latest"))
+        #expect(publishSource.contains("stable latest must remain $EXPECTED_STABLE_TAG during Preview publication"))
         #expect(publishSource.contains("PUBLIC_PRODUCT_NAME=\"无线麦SayAll.app\""))
         #expect(publishSource.contains("--title \"$PUBLIC_PRODUCT_NAME $VERSION\""))
-        #expect(fastReleaseSource.contains("PUBLIC_PRODUCT_NAME=\"无线麦SayAll.app\""))
-        #expect(fastReleaseSource.contains("git tag -a \"$RELEASE_TAG\" -m \"$PUBLIC_PRODUCT_NAME $VERSION\""))
         #expect(!publishSource.contains("--title \"Remote Mic $VERSION\""))
-        #expect(!fastReleaseSource.contains("-m \"Remote Mic $VERSION\""))
         #expect(publishSource.contains("https://download.sayall.app/mac/releases/$RELEASE_TAG/"))
         #expect(publishSource.contains("gh workflow run release-guard.yml"))
         #expect(publishSource.contains("confidential enrollment detail"))
@@ -236,8 +287,9 @@ struct BuildSigningTests {
         #expect(previewVerifierSource.contains("release/pre-vX.Y.Z"))
         #expect(previewVerifierSource.contains("preview candidate contains a non-release change"))
         #expect(previewVerifierSource.contains("git rev-parse HEAD^"))
-        #expect(previewVerifierSource.contains("must exactly equal the latest origin/main"))
-        #expect(previewVerifierSource.contains("must contain exactly one release metadata commit"))
+        #expect(previewVerifierSource.contains("must be created from the current origin/main"))
+        #expect(previewVerifierSource.contains("must contain exactly one release metadata commit after its frozen base main"))
+        #expect(previewVerifierSource.contains("single candidate branch release/pre-vX.Y.Z"))
         #expect(previewVerifierSource.contains("BASE_MAIN_COMMIT:"))
         #expect(previewVerifierSource.contains("confidential enrollment detail"))
         #expect(previewVerifierSource.contains("secret gesture|hidden entry"))
@@ -260,8 +312,8 @@ struct BuildSigningTests {
         )
 
         #expect(workflowSource.contains("release/pre-v*"))
-        #expect(workflowSource.contains("!contains(github.ref_name, '-canary-')"))
-        #expect(workflowSource.contains("PREVIEW CANDIDATE PACKAGING SKIPPED FOR RELEASE CANARY"))
+        #expect(!workflowSource.contains("-canary-"))
+        #expect(!workflowSource.contains("skip-release-canary:"))
         #expect(workflowSource.contains("run-trusted-release-validation.sh"))
         #expect(workflowSource.contains("timeout-minutes: 3"))
         #expect(workflowSource.contains("reuse_parent_main_ci == 'true'"))
@@ -272,13 +324,11 @@ struct BuildSigningTests {
         #expect(!workflowSource.contains("./scripts/build-dmg.sh"))
         #expect(!workflowSource.contains("swift build -c release"))
         #expect(workflowSource.contains("${{ github.sha }}"))
-        #expect(workflowSource.contains("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"))
-        #expect(workflowSource.contains("b71482ccb3c5d3be319abe7cd61915ab90cbc3ba"))
-        #expect(workflowSource.contains("3f3c782180eef4024b53941c1f65d80e7cff4c66"))
+        #expect(workflowSource.contains("resolve-release-dependencies.sh json"))
         #expect(!workflowSource.contains("SAYALL_AI_DEPLOY_KEY"))
         #expect(!workflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
         #expect(!workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
-        #expect(workflowSource.contains("actions/upload-artifact@v4"))
+        #expect(workflowSource.contains("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"))
         #expect(workflowSource.contains("contents: read"))
         #expect(!workflowSource.contains("environment: mac-release"))
         #expect(!workflowSource.contains("RELEASE_AGE_IDENTITY"))
@@ -296,12 +346,14 @@ struct BuildSigningTests {
             encoding: .utf8
         )
         #expect(ciWorkflowSource.contains("workflow_dispatch:"))
-        #expect(ciWorkflowSource.contains("GetSayAll/sayall-ai"))
-        #expect(ciWorkflowSource.contains("01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"))
-        #expect(ciWorkflowSource.contains("GetSayAll/sayall-macro-platform"))
-        #expect(ciWorkflowSource.contains("b71482ccb3c5d3be319abe7cd61915ab90cbc3ba"))
+        #expect(ciWorkflowSource.contains("resolve-release-dependencies.sh github-output"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_ai_repository"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_ai_commit"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_macro_platform_repository"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_macro_platform_commit"))
         #expect(ciWorkflowSource.contains("SAYALL_MACRO_PLATFORM_DEPLOY_KEY"))
-        #expect(ciWorkflowSource.contains("GetSayAll/sayall-mac-remote"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_mac_remote_repository"))
+        #expect(ciWorkflowSource.contains("steps.release-dependencies.outputs.sayall_mac_remote_commit"))
         #expect(ciWorkflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(ciWorkflowSource.contains("swift package config set-mirror"))
         #expect(ciWorkflowSource.contains("classify_changes:"))
@@ -311,6 +363,51 @@ struct BuildSigningTests {
         #expect(ciWorkflowSource.contains("needs.classify_changes.outputs.docs_only == 'true' && 'ubuntu-latest' || 'macos-15'"))
         #expect(ciWorkflowSource.contains("Confirm documentation-only fast path"))
         #expect(ciWorkflowSource.contains("needs.classify_changes.outputs.docs_only != 'true'"))
+    }
+
+    @Test func releaseCriticalWorkflowsPinActionsToFullCommits() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let workflowPaths = [
+            ".github/workflows/mac-ci.yml",
+            ".github/workflows/mac-preview-candidate.yml",
+            ".github/workflows/mac-release-package.yml",
+            ".github/workflows/mac-preview-publication.yml",
+            ".github/workflows/mac-stable-promote.yml",
+            ".github/workflows/release-guard.yml",
+        ]
+        let approvedActionReferences = [
+            "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+            "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0",
+            "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+        ]
+        var combinedSource = ""
+
+        for workflowPath in workflowPaths {
+            let source = try String(
+                contentsOf: root.appendingPathComponent(workflowPath),
+                encoding: .utf8
+            )
+            combinedSource += source
+            let actionUseLines = source.split(separator: "\n").filter {
+                $0.contains("uses: actions/")
+            }
+            #expect(!actionUseLines.isEmpty)
+            for actionUseLine in actionUseLines {
+                #expect(
+                    approvedActionReferences.contains {
+                        actionUseLine.contains($0)
+                    }
+                )
+                #expect(!actionUseLine.contains("@v"))
+            }
+        }
+
+        for approvedActionReference in approvedActionReferences {
+            #expect(combinedSource.contains(approvedActionReference))
+        }
     }
 
     @Test func previewBranchLifecycleHasExecutableRegressionCoverage() throws {
@@ -327,9 +424,18 @@ struct BuildSigningTests {
         )
 
         #expect(lifecycleSource.contains("release/pre-v1.8.15"))
+        #expect(lifecycleSource.contains("release/pre-v1.8.15-rerun2"))
         #expect(lifecycleSource.contains("release/pre-v1.8.16"))
         #expect(lifecycleSource.contains("PREVIEW BRANCH PASS"))
-        #expect(lifecycleSource.contains("must exactly equal the latest origin/main"))
+        #expect(lifecycleSource.contains("ALLOW_FROZEN_BASE_MAIN=1"))
+        #expect(lifecycleSource.contains("numbered rerun branch unexpectedly passed the single-candidate gate"))
+        #expect(lifecycleSource.contains("must be created from the current origin/main"))
+        #expect(lifecycleSource.contains("evidence retained at:"))
+        #expect(!lifecycleSource.contains("/bin/rm"))
+        #expect(!lifecycleSource.contains("/usr/bin/rm"))
+        #expect(!lifecycleSource.contains("rmdir "))
+        #expect(!lifecycleSource.contains("unlink "))
+        #expect(!lifecycleSource.contains("find -delete"))
         #expect(lifecycleSource.contains("PREVIEW BRANCH LIFECYCLE TEST PASS"))
 
         let process = Process()
@@ -357,6 +463,18 @@ struct BuildSigningTests {
         let releaseWorkflowSource = try String(
             contentsOf: root.appendingPathComponent(
                 ".github/workflows/mac-release-package.yml"
+            ),
+            encoding: .utf8
+        )
+        let publicationWorkflowSource = try String(
+            contentsOf: root.appendingPathComponent(
+                ".github/workflows/mac-preview-publication.yml"
+            ),
+            encoding: .utf8
+        )
+        let requestAttestationSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "scripts/resolve-release-request-attestation.sh"
             ),
             encoding: .utf8
         )
@@ -396,9 +514,22 @@ struct BuildSigningTests {
         #expect(regressionSource.contains("mismatched private dependency pins unexpectedly passed"))
         #expect(regressionSource.contains("candidate verification unexpectedly passed"))
         #expect(regressionSource.contains("release request attestation accepted a missing candidate gate timestamp"))
+        #expect(regressionSource.contains("release qualification unexpectedly accepted artifact/run mismatch"))
+        #expect(regressionSource.contains("checks-old-failure-new-success"))
+        #expect(regressionSource.contains("checks-old-success-new-failure"))
+        #expect(regressionSource.contains("html_url"))
+        #expect(regressionSource.contains("draft"))
+        #expect(regressionSource.contains("numbered rerun branch unexpectedly passed"))
+        #expect(regressionSource.contains("evidence retained at:"))
+        #expect(!regressionSource.contains("/bin/rm"))
+        #expect(!regressionSource.contains("/usr/bin/rm"))
+        #expect(!regressionSource.contains("rmdir "))
+        #expect(!regressionSource.contains("unlink "))
+        #expect(!regressionSource.contains("find -delete"))
         #expect(regressionSource.contains("stable request attestation allowed a retry to reset its timestamp"))
         #expect(regressionSource.contains("--draft"))
         #expect(regressionSource.contains("PARALLEL_RELEASE_VARIANTS=1"))
+        #expect(regressionSource.contains("test-prepare-preview-candidate.sh"))
         #expect(releaseWorkflowSource.contains("validate-candidate:"))
         #expect(releaseWorkflowSource.contains("verify-preview-candidate-ci.sh"))
         #expect(releaseWorkflowSource.contains("REQUIRE_PREVIEW_RECORDING_PR: 1"))
@@ -421,20 +552,48 @@ struct BuildSigningTests {
         #expect(releaseWorkflowSource.contains("PREVIEW_READY_SLO_SECONDS: 1740"))
         #expect(releaseWorkflowSource.contains("request_id:"))
         #expect(releaseWorkflowSource.contains("resolve-release-request-attestation.sh"))
-        #expect(releaseWorkflowSource.contains("release-request-attestation-${{ inputs.tag }}"))
-        #expect(releaseWorkflowSource.contains("if [[ \"$CANARY_MODE\" == \"true\" ]]; then"))
+        #expect(releaseWorkflowSource.contains("release-request-attestation-${{ inputs.tag }}-${{ inputs.expected_commit }}"))
+        #expect(releaseWorkflowSource.contains("release_mode:"))
+        #expect(releaseWorkflowSource.contains("run-name: mac-release ${{ inputs.release_mode }}"))
+        #expect(releaseWorkflowSource.contains("- qualification"))
+        #expect(releaseWorkflowSource.contains("- stage-preview"))
+        #expect(releaseWorkflowSource.contains("inputs.release_mode == 'qualification'"))
+        #expect(releaseWorkflowSource.contains("inputs.release_mode == 'stage-preview'"))
+        #expect(!releaseWorkflowSource.contains("inputs.canary"))
+        #expect(releaseWorkflowSource.contains("mac-signed-tag-{0}"))
+        #expect(releaseWorkflowSource.contains("verify-release-pipeline-qualification.sh"))
+        #expect(releaseWorkflowSource.contains("mac-release-pipeline-qualification-${{ inputs.expected_pipeline_digest }}"))
+        #expect(releaseWorkflowSource.contains("{schemaVersion:3"))
+        #expect(requestAttestationSource.contains("{schemaVersion:5"))
+        #expect(requestAttestationSource.contains("productDependencies:$productDependencies"))
+        #expect(releaseWorkflowSource.contains("externalDependencies"))
+        #expect(releaseWorkflowSource.contains("observedProductDependencies"))
+        #expect(releaseWorkflowSource.contains("ageVersion"))
+        #expect(releaseWorkflowSource.contains("fastlaneVersion"))
+        #expect(releaseWorkflowSource.contains("xcodeVersion"))
+        #expect(releaseWorkflowSource.contains("RELEASE_MODE"))
+        #expect(!releaseWorkflowSource.contains("CANARY_MODE"))
         #expect(releaseWorkflowSource.contains("release_ready_at=\"$request_started_at\""))
         #expect(releaseWorkflowSource.contains(".releaseReadyAt"))
         #expect(!releaseWorkflowSource.contains("release_ready_at:"))
-        #expect(releaseWorkflowSource.contains("PUBLICATION_MAX_SECONDS: 180"))
-        #expect(releaseWorkflowSource.contains("release-slo-ledger-published-${{ github.run_id }}"))
-        #expect(releaseWorkflowSource.contains("release-slo-ledger-failed-${{ github.run_id }}"))
-        #expect(releaseWorkflowSource.contains("Publish and verify exact signed preview bytes"))
-        #expect(releaseWorkflowSource.contains("./scripts/publish-release.sh prerelease"))
-        #expect(releaseWorkflowSource.contains("git ls-remote origin \"refs/tags/$RELEASE_TAG^{}\""))
-        #expect(releaseWorkflowSource.contains("test \"$remote_tag_commit\" = \"$head_commit\""))
-        #expect(releaseWorkflowSource.contains("verify-release-canary-provenance.sh"))
-        #expect(releaseWorkflowSource.contains("if: ${{ !inputs.canary }}"))
+        #expect(releaseWorkflowSource.contains("Record staged preview identity"))
+        #expect(releaseWorkflowSource.contains("Upload staged preview identity"))
+        #expect(!releaseWorkflowSource.contains("publish-release.sh"))
+        #expect(!releaseWorkflowSource.contains("gh release"))
+        #expect(publicationWorkflowSource.contains("Publish exact UI-tested staged Preview bytes"))
+        #expect(publicationWorkflowSource.contains("test \"$GITHUB_REF_NAME\" = main"))
+        #expect(publicationWorkflowSource.contains("verify-preview-ui-attestation.sh"))
+        #expect(publicationWorkflowSource.contains("publish-release.sh\" \"$publication_command\""))
+        #expect(publicationWorkflowSource.contains("release-slo-ledger-published-${{ github.run_id }}"))
+        #expect(publicationWorkflowSource.contains("release-slo-ledger-failed-${{ github.run_id }}"))
+        #expect(!publicationWorkflowSource.contains("environment: mac-release"))
+        #expect(!publicationWorkflowSource.contains("secrets."))
+        #expect(releaseWorkflowSource.contains("EXPECTED_STABLE_TAG: v1.8.3"))
+        #expect(releaseWorkflowSource.contains("Preview requires stable latest $EXPECTED_STABLE_TAG"))
+        #expect(publicationWorkflowSource.contains("git ls-remote origin \"refs/tags/$RELEASE_TAG\""))
+        #expect(publicationWorkflowSource.contains("test \"$remote_tag_commit\" = \"$EXPECTED_COMMIT\""))
+        #expect(releaseWorkflowSource.contains("verify-release-pipeline-qualification-source.sh"))
+        #expect(!releaseWorkflowSource.contains("verify-release-canary-provenance.sh"))
         #expect(releasingSource.contains("“发布正式版”不是合法命令"))
         #expect(releasingSource.contains("将用户明确指定的现有 Pre-release `vX.Y.Z` 晋升为正式版"))
         #expect(buildSource.contains("RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300"))
@@ -759,8 +918,10 @@ struct BuildSigningTests {
         #expect(reconciliationSource.contains("restored $RELEASE_TAG to pre-release"))
         #expect(reconciliationSource.contains("candidate-provenance.json"))
         #expect(reconciliationSource.contains("stable-promotion.json"))
-        #expect(reconciliationSource.contains(".candidateBranch == (\"release/pre-\" + $tag)"))
-        #expect(reconciliationSource.contains(".schemaVersion == 1 or .schemaVersion == 2"))
+        #expect(reconciliationSource.contains("release guard schema 3 provenance must use release/pre-$RELEASE_TAG"))
+        #expect(reconciliationSource.contains(".schemaVersion == 1 or .schemaVersion == 2 or .schemaVersion == 3"))
+        #expect(reconciliationSource.contains("pipelineQualificationArtifactDigest"))
+        #expect(reconciliationSource.contains("requestAttestationRunAttempt"))
         #expect(reconciliationSource.contains("baseMainCommit"))
         #expect(reconciliationSource.contains("Record $RELEASE_TAG preview candidate in main"))
         #expect(reconciliationSource.contains("This PR does not promote the GitHub Release to stable"))
@@ -820,7 +981,8 @@ struct BuildSigningTests {
         }
         return source.contains("stable promotion requires an explicit RELEASE_TAG") &&
             source.contains("VERSION=\"$(jq -r '.version' \"$provenance\")\"") &&
-            source.contains(".candidateBranch == (\"release/pre-\" + $tag)")
+            source.contains("candidate_branch=\"$(jq -r '.candidateBranch' \"$provenance\")\"") &&
+            source.contains("schema 3 candidate provenance must use release/pre-$RELEASE_TAG")
     }
 
     @Test func releasePublishesLocalizedUpdateNotesWithImmutableURLs() throws {
@@ -855,20 +1017,32 @@ struct BuildSigningTests {
         #expect(publishSource.contains("$STAGING_DIR/${EN_RELEASE_NOTES:t}"))
         #expect(!publishSource.contains("$STAGING_DIR/${INTEL_ZH_RELEASE_NOTES:t}"))
         #expect(!publishSource.contains("$STAGING_DIR/${INTEL_EN_RELEASE_NOTES:t}"))
-        #expect(publishSource.contains("PUBLIC_PAYLOAD_ASSET_COUNT=11"))
-        #expect(publishSource.contains("PUBLIC_RELEASE_ASSET_COUNT=12"))
-        #expect(publishSource.contains("11|14|16"))
-        #expect(publishSource.contains("12|15|17"))
+        #expect(!publishSource.contains("PUBLIC_PAYLOAD_ASSET_COUNT"))
+        #expect(!publishSource.contains("PUBLIC_RELEASE_ASSET_COUNT"))
+        #expect(!publishSource.contains("11|14|16"))
+        #expect(!publishSource.contains("12|15|17"))
+        #expect(publishSource.contains("write_candidate_release_manifest"))
+        #expect(publishSource.contains("asset set does not exactly match candidate provenance"))
+        #expect(publishSource.contains("release_uploads+=(\"$STAGING_DIR/$asset_name\")"))
+        #expect(publishSource.contains("release mutation is restricted to the expected protected GitHub workflow"))
+        #expect(publishSource.contains("actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"))
+        #expect(publishSource.contains(".path == $workflowPath"))
+        #expect(publishSource.contains(".event == $event"))
+        #expect(publishSource.contains(".head_sha == $headSha"))
+        #expect(publishSource.contains(".head_branch == $headBranch"))
         #expect(publishSource.contains("Remote-Mic-$VERSION.dmg.sha256"))
         #expect(publishSource.contains("candidate-provenance.json"))
         let releaseUploadSource = try #require(
-            publishSource.components(separatedBy: "gh release create").last?
+            publishSource.components(separatedBy: "typeset -a release_uploads=()").last?
                 .components(separatedBy: "--repo \"$REPOSITORY\"").first
         )
         #expect(!releaseUploadSource.contains("Remote-Mic-$VERSION-Installer.pkg"))
         #expect(!releaseUploadSource.contains("Remote-Mic-$VERSION-Intel-Installer.pkg"))
-        #expect(releaseUploadSource.contains("Remote-Mic-$VERSION-Uninstaller.pkg"))
-        #expect(releaseUploadSource.contains("Remote-Mic-$VERSION-Intel-Uninstaller.pkg"))
+        #expect(!releaseUploadSource.contains("Remote-Mic-$VERSION-Uninstaller.pkg"))
+        #expect(!releaseUploadSource.contains("Remote-Mic-$VERSION-Intel-Uninstaller.pkg"))
+        #expect(releaseUploadSource.contains("release_uploads+=(\"$STAGING_DIR/$asset_name\")"))
+        #expect(publishSource.contains("$STAGING_DIR/Remote-Mic-$VERSION-Uninstaller.pkg"))
+        #expect(publishSource.contains("$STAGING_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg"))
         #expect(notarizeSource.contains("https://download.sayall.app/mac/releases/$RELEASE_TAG/"))
         #expect(publishSource.contains("appcast-intel.xml"))
         #expect(publishSource.contains("--range 0-1023"))
@@ -901,6 +1075,8 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("swift package config set-mirror"))
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
+        #expect(workflowSource.contains("update-ref refs/heads/main \"$match_commit\""))
+        #expect(workflowSource.contains("git ls-remote \"file://$match_repo\" refs/heads/main"))
         #expect(workflowSource.contains("package-macos-release-in-actions.sh"))
         #expect(!workflowSource.contains("dist/Install Remote Mic.pkg"))
         #expect(!workflowSource.contains("dist/intel/Install Remote Mic Intel.pkg"))
@@ -915,6 +1091,8 @@ struct BuildSigningTests {
         #expect(bootstrapSource.contains("validate-notary-secrets-repo.sh"))
         #expect(bootstrapSource.contains("validate-signing-repo.sh"))
         #expect(bootstrapSource.contains("MATCH_GIT_URL=\"file://$MATCH_REPO\""))
+        #expect(bootstrapSource.contains("rev-parse refs/heads/main"))
+        #expect(bootstrapSource.contains("readonly Match checkout must expose local main at its exact pinned HEAD"))
         #expect(bootstrapSource.contains("SPARKLE_PRIVATE_KEY_ENCRYPTED_FILE"))
         #expect(!workflowSource.contains("CERTIFICATE_BASE64"))
         #expect(!workflowSource.contains("NOTARY_API_KEY_BASE64"))

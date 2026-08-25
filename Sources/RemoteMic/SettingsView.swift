@@ -166,6 +166,7 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
     @ObservedObject private var macroFeature: MacroFeatureIntegration
+    @ObservedObject private var loginItemService: LoginItemService
     @ObservedObject private var updateInformation: UpdateInformationStore
     @EnvironmentObject private var localization: LocalizationStore
 
@@ -192,8 +193,6 @@ struct SettingsView: View {
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
-    @State private var isVoiceShortcutEditorPresented = false
-    @State private var isVoiceShortcutCapturing = false
     @State private var applicationShortcutCaptureProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
@@ -225,7 +224,6 @@ struct SettingsView: View {
         initialShareSection: SettingsSection? = nil,
         initialMappingEditingButton: RemoteButton? = nil,
         initialMappingEditingTrigger: ButtonTrigger = .singleClick,
-        initialVoiceShortcutEditorPresented: Bool = false,
         initialShortcutPickerShowsKeyboard: Bool = false,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
@@ -233,6 +231,7 @@ struct SettingsView: View {
         settings = model.settings
         privateFeature = model.privateFeature
         macroFeature = model.macroFeature
+        loginItemService = model.loginItemService
         self.updateInformation = updateInformation
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
@@ -246,9 +245,6 @@ struct SettingsView: View {
             initialValue: initialMappingEditingButton.map {
                 ShortcutEditingTarget(button: $0, trigger: initialMappingEditingTrigger)
             }
-        )
-        _isVoiceShortcutEditorPresented = State(
-            initialValue: initialVoiceShortcutEditorPresented
         )
     }
 
@@ -270,6 +266,7 @@ struct SettingsView: View {
         )
         .onAppear {
             refreshPermissionStates()
+            loginItemService.refresh()
             macroFeature.setEditorActive(selectedSection == .macros)
         }
         .onChange(of: selectedSection) { section in
@@ -280,6 +277,7 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
+            loginItemService.refresh()
             resumeCustomMappingIfPermissionsGranted()
         }
         .onReceive(privateFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
@@ -996,23 +994,14 @@ struct SettingsView: View {
                             selectedButton: $selectedRemoteButton,
                             activeButtons: model.activeRemoteButtons,
                             voiceActive: model.isStreaming,
-                            voiceShortcutSummary: voiceShortcutSummary,
                             actionSummary: mappingActionSummary,
                             onEdit: { button, trigger in
-                                isVoiceShortcutEditorPresented = false
-                                isVoiceShortcutCapturing = false
                                 selectedRemoteButton = button
                                 isPresetApplicationActionsExpanded = false
                                 mappingEditingTarget = ShortcutEditingTarget(
                                     button: button,
                                     trigger: trigger
                                 )
-                            },
-                            onEditVoice: {
-                                mappingEditingTarget = nil
-                                shortcutCaptureTarget = nil
-                                applicationShortcutCaptureProfileID = nil
-                                isVoiceShortcutEditorPresented = true
                             }
                         )
                         .onReceive(model.$activeRemoteButtons) { buttons in
@@ -1028,11 +1017,6 @@ struct SettingsView: View {
                                 .id("mapping-action-editor")
                         }
 
-                        if isVoiceShortcutEditorPresented {
-                            voiceShortcutEditorPanel
-                                .id("voice-shortcut-editor")
-                        }
-
                         mappingFooter
                     }
                     .padding(22)
@@ -1040,12 +1024,6 @@ struct SettingsView: View {
                 }
                 .compatibilityScrollEdgeEffect()
                 .onAppear {
-                    if isVoiceShortcutEditorPresented {
-                        DispatchQueue.main.async {
-                            proxy.scrollTo("voice-shortcut-editor", anchor: .top)
-                        }
-                        return
-                    }
                     guard let target = mappingEditingTarget else { return }
                     let scrollTarget = settings.configuredAction(
                         for: target.button,
@@ -1062,14 +1040,6 @@ struct SettingsView: View {
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             proxy.scrollTo("mapping-action-editor", anchor: .top)
-                        }
-                    }
-                }
-                .onChange(of: isVoiceShortcutEditorPresented) { isPresented in
-                    guard isPresented else { return }
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            proxy.scrollTo("voice-shortcut-editor", anchor: .top)
                         }
                     }
                 }
@@ -1145,194 +1115,112 @@ struct SettingsView: View {
         }
     }
 
-    private var voiceShortcutSummary: String {
-        settings.voiceTriggerShortcut?.displayName(using: localization) ??
-            localization.text("button_mapping.voice_shortcut.default_fn")
-    }
-
-    private var voiceShortcutEditorPanel: some View {
+    private var mappingFooter: some View {
         GlassPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Label("button_mapping.voice_shortcut.title", systemImage: "mic.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                    Spacer(minLength: 10)
-                    Button("common.action.close") {
-                        isVoiceShortcutCapturing = false
-                        isVoiceShortcutEditorPresented = false
-                    }
-                    .compatibilityButtonStyle(.standard)
-                }
-
-                Text("button_mapping.voice_shortcut.help")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if !settings.customMappingEnabled {
-                    Label(
-                        "button_mapping.voice_shortcut.mapping_disabled",
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.orange)
-                }
-
-                if isVoiceShortcutCapturing {
-                    HStack(spacing: 10) {
-                        Label("shortcut.editor.recording_prompt", systemImage: "keyboard.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                        Spacer(minLength: 10)
-                        Button("common.action.cancel") {
-                            isVoiceShortcutCapturing = false
-                        }
-                        .compatibilityButtonStyle(.standard)
-                    }
-                    .padding(12)
-                    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
-
-                    ShortcutCaptureView(
-                        onCapture: { shortcut in
-                            model.setVoiceTriggerShortcut(shortcut)
-                            shortcutCaptureFeedback = ShortcutCaptureFeedback(
-                                contextID: "voice-trigger",
-                                result: .succeeded
-                            )
-                            isVoiceShortcutCapturing = false
-                        },
-                        onFailure: { failure in
-                            shortcutCaptureFeedback = ShortcutCaptureFeedback(
-                                contextID: "voice-trigger",
-                                result: .failed(failure)
-                            )
-                            isVoiceShortcutCapturing = false
-                            if failure == .accessibilityPermissionRequired {
-                                _ = KeyboardInjector.requestAccessibilityAccess()
-                            }
-                        }
-                    )
-                    .frame(height: 1)
-                } else {
-                    HStack(spacing: 10) {
-                        Label {
-                            Text(voiceShortcutSummary)
-                        } icon: {
-                            Image(systemName: settings.voiceTriggerShortcut == nil
-                                ? "globe"
-                                : "keyboard.badge.checkmark")
-                                .foregroundStyle(settings.voiceTriggerShortcut == nil
-                                    ? Color.secondary
-                                    : Color.green)
-                        }
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
-
-                        Button("shortcut.action.record") {
-                            mappingEditingTarget = nil
-                            shortcutCaptureTarget = nil
-                            applicationShortcutCaptureProfileID = nil
-                            shortcutCaptureFeedback = nil
-                            isVoiceShortcutCapturing = true
-                        }
-                        .compatibilityButtonStyle(.standard)
-
-                        Button("button_mapping.voice_shortcut.restore_fn") {
-                            model.setVoiceTriggerShortcut(nil)
-                            shortcutCaptureFeedback = nil
-                        }
-                        .compatibilityButtonStyle(.standard)
-                        .disabled(settings.voiceTriggerShortcut == nil)
-                    }
-
-                    shortcutCaptureFeedbackView(contextID: "voice-trigger")
-
-                    if let warning = VoiceShortcutConflictPolicy.warning(
-                        for: settings.voiceTriggerShortcut
-                    ) {
-                        Label(
-                            localization.text(warning.localizationKey),
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(
-                            warning == .dangerousSystemAction ? Color.red : Color.orange
-                        )
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            (warning == .dangerousSystemAction ? Color.red : Color.orange).opacity(0.09),
-                            in: RoundedRectangle(cornerRadius: 9)
-                        )
-                    }
-
-                    KeyboardShortcutPicker(
-                        shortcut: settings.voiceTriggerShortcut,
-                        showsStandardKeyboardInitially: initialShortcutPickerShowsKeyboard,
-                        onSelect: { shortcut in
-                            model.setVoiceTriggerShortcut(shortcut)
-                            shortcutCaptureFeedback = nil
-                        }
-                    )
-                    .id("voice-trigger-shortcut-picker")
+            VStack(alignment: .leading, spacing: 12) {
+                mappingHIDStatus
+                Divider()
+                mappingSelectionLockControl
+                Divider()
+                mappingVoiceKeyModeControl
+                Divider()
+                mappingVoiceFnTapControl
+                Divider()
+                mappingVoiceShortTapFocusControl
+                HStack {
+                    Spacer(minLength: 0)
+                    mappingRestoreDefaultsButton
                 }
             }
         }
     }
 
-    private var mappingFooter: some View {
-        GlassPanel {
-            HStack(spacing: 16) {
-                Label(
-                    model.hidStatus.text(using: localization),
-                    systemImage: "keyboard"
-                )
+    private var mappingHIDStatus: some View {
+        Label(
+            model.hidStatus.text(using: localization),
+            systemImage: "keyboard"
+        )
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
+        .lineLimit(2)
+    }
+
+    private var mappingSelectionLockControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
+                .font(.system(size: 12, weight: .medium))
+                .toggleStyle(.switch)
+            Text("button_mapping.selection_lock_hint_short")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
-
-                Divider().frame(height: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
-                        .font(.system(size: 12, weight: .medium))
-                        .toggleStyle(.switch)
-                    Text("button_mapping.selection_lock_hint_short")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                .help(localization.text("button_mapping.selection_lock_help"))
-
-                Divider().frame(height: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
-                        get: { settings.voiceFnTapModeEnabled },
-                        set: { model.setVoiceFnTapModeEnabled($0) }
-                    ))
-                    .font(.system(size: 12, weight: .medium))
-                    .toggleStyle(.switch)
-                    .disabled(settings.voiceTriggerShortcut != nil)
-                    Text("connection.voice_fn_tap.hint_short")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                .help(localization.text("connection.voice_fn_tap.hint"))
-
-                Spacer(minLength: 0)
-
-                Button("common.action.restore_defaults") {
-                    model.setVoiceTriggerShortcut(nil)
-                    settings.resetBindings()
-                    selectedRemoteButton = .ok
-                }
-                .compatibilityButtonStyle(.standard)
-            }
         }
+        .help(localization.text("button_mapping.selection_lock_help"))
+    }
+
+    private var mappingVoiceKeyModeControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("connection.voice_key_mode.title")
+                .font(.system(size: 12, weight: .medium))
+            Picker("connection.voice_key_mode.title", selection: Binding(
+                get: { settings.voiceKeyMode },
+                set: { model.setVoiceKeyMode($0) }
+            )) {
+                ForEach(VoiceKeyMode.allCases) { mode in
+                    Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            Text("connection.voice_key_mode.help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .help(localization.text("connection.voice_key_mode.help"))
+    }
+
+    private var mappingVoiceFnTapControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
+                get: { settings.voiceFnTapModeEnabled },
+                set: { model.setVoiceFnTapModeEnabled($0) }
+            ))
+            .font(.system(size: 12, weight: .medium))
+            .toggleStyle(.switch)
+            Text("connection.voice_fn_tap.hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .help(localization.text("connection.voice_fn_tap.hint"))
+        .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
+        .disabled(settings.voiceKeyMode != .function)
+    }
+
+    private var mappingVoiceShortTapFocusControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("connection.voice_short_focus.enabled", isOn: Binding(
+                get: { settings.voiceShortTapFocusEnabled },
+                set: { model.setVoiceShortTapFocusEnabled($0) }
+            ))
+            .font(.system(size: 12, weight: .medium))
+            .toggleStyle(.switch)
+            Text("connection.voice_short_focus.hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .help(localization.text("connection.voice_short_focus.help"))
+    }
+
+    private var mappingRestoreDefaultsButton: some View {
+        Button("common.action.restore_defaults") {
+            settings.resetBindings()
+            selectedRemoteButton = .ok
+        }
+        .compatibilityButtonStyle(.standard)
     }
 
     @ViewBuilder
@@ -2744,6 +2632,52 @@ struct SettingsView: View {
                             Divider()
 
                             HStack(spacing: 14) {
+                                Image(systemName: "rectangle.portrait.and.arrow.forward")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("about.preferences.launch_at_login")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.launch_at_login_help")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if loginItemService.requiresApproval {
+                                        Text("about.preferences.launch_at_login_requires_approval")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.orange)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    } else if loginItemService.didFailToUpdate {
+                                        Text("about.preferences.launch_at_login_update_failed")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.red)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                Spacer(minLength: 16)
+                                VStack(alignment: .trailing, spacing: 8) {
+                                    Toggle("", isOn: Binding(
+                                        get: { loginItemService.isEnabled },
+                                        set: { loginItemService.setEnabled($0) }
+                                    ))
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+
+                                    if loginItemService.requiresApproval {
+                                        Button(
+                                            "about.preferences.launch_at_login_open_system_settings",
+                                            action: loginItemService.openLoginItemsSettings
+                                        )
+                                        .compatibilityButtonStyle(.standard)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
                                 Image(systemName: "macwindow")
                                     .font(.title3)
                                     .foregroundStyle(Color.accentColor)
@@ -3141,11 +3075,9 @@ struct SettingsView: View {
             prompt: localization.text("configuration.import.prompt")
         ) else { return }
         do {
-            try settings.importConfiguration(from: Data(contentsOf: url))
+            try model.importConfiguration(from: Data(contentsOf: url))
             localization.select(settings.applicationLanguage)
             setDockIconVisible(settings.showDockIcon)
-            model.applyAudioSettings(reason: "configuration_import")
-            model.applyHIDSettings()
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.success"),
                 tint: .green,
@@ -3154,6 +3086,12 @@ struct SettingsView: View {
         } catch AppConfigurationError.unsupportedVersion {
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.unsupported_version"),
+                tint: .red,
+                systemImage: "exclamationmark.triangle.fill"
+            )
+        } catch AppConfigurationError.unsafeVoiceKeyChange {
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("configuration.import.voice_key_busy"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
             )

@@ -85,35 +85,38 @@ final class KeyboardEventSuppressor {
     }
 
     func arm(button: RemoteButton, edge: RemoteEventEdge) {
-        guard let nativeEvent = button.nativeEvent else { return }
+        let nativeEvents = button.nativeEvents
+        guard !nativeEvents.isEmpty else { return }
         let now = ProcessInfo.processInfo.systemUptime
         lock.lock()
         pendingEvents.removeAll { $0.expiresAt <= now }
-        switch edge {
-        case .down:
-            heldEventCounts[nativeEvent, default: 0] += 1
-            pendingEvents.append(PendingEvent(
-                event: nativeEvent,
-                edge: edge,
-                expiresAt: now + 0.18
-            ))
-        case .up:
-            if let pendingDownIndex = pendingEvents.firstIndex(where: {
-                $0.event == nativeEvent && $0.edge == .down
-            }) {
-                pendingEvents.remove(at: pendingDownIndex)
+        for nativeEvent in nativeEvents {
+            switch edge {
+            case .down:
+                heldEventCounts[nativeEvent, default: 0] += 1
+                pendingEvents.append(PendingEvent(
+                    event: nativeEvent,
+                    edge: edge,
+                    expiresAt: now + 0.18
+                ))
+            case .up:
+                if let pendingDownIndex = pendingEvents.firstIndex(where: {
+                    $0.event == nativeEvent && $0.edge == .down
+                }) {
+                    pendingEvents.remove(at: pendingDownIndex)
+                }
+                let remaining = (heldEventCounts[nativeEvent] ?? 0) - 1
+                if remaining > 0 {
+                    heldEventCounts[nativeEvent] = remaining
+                } else {
+                    heldEventCounts.removeValue(forKey: nativeEvent)
+                }
+                pendingEvents.append(PendingEvent(
+                    event: nativeEvent,
+                    edge: edge,
+                    expiresAt: now + 0.18
+                ))
             }
-            let remaining = (heldEventCounts[nativeEvent] ?? 0) - 1
-            if remaining > 0 {
-                heldEventCounts[nativeEvent] = remaining
-            } else {
-                heldEventCounts.removeValue(forKey: nativeEvent)
-            }
-            pendingEvents.append(PendingEvent(
-                event: nativeEvent,
-                edge: edge,
-                expiresAt: now + 0.18
-            ))
         }
         if pendingEvents.count > 32 {
             pendingEvents.removeFirst(pendingEvents.count - 32)

@@ -21,9 +21,19 @@ final class PreferredInputSourceMonitor {
     private var functionKeyIsPressed = false
     private var managedInputSourceSession: ManagedInputSourceSession?
 
+    var functionKeyIsPressedForDiagnostics: Bool {
+        functionKeyIsPressed
+    }
+
     private struct ManagedInputSourceSession {
+        enum Owner: Hashable {
+            case functionKey
+            case explicitVoice
+        }
+
         let previousInputSourceID: String
         let targetInputSourceID: String
+        var owners: Set<Owner>
     }
 
     init(
@@ -55,8 +65,11 @@ final class PreferredInputSourceMonitor {
         }
     }
 
-    func stop() {
-        finishManagedInputSourceSession(reason: "monitor_stop")
+    func stop(preservingExplicitVoiceSession: Bool = false) {
+        finishManagedInputSourceSession(
+            reason: "monitor_stop",
+            owner: preservingExplicitVoiceSession ? .functionKey : nil
+        )
         if let monitor {
             removeMonitor(monitor)
             self.monitor = nil
@@ -68,11 +81,61 @@ final class PreferredInputSourceMonitor {
         guard pressed != functionKeyIsPressed else { return }
         functionKeyIsPressed = pressed
         if !pressed {
-            finishManagedInputSourceSession(reason: "function_key_up")
+            let selectedVoiceTool = voiceTool()
+            if selectedVoiceTool.preferredInputSourceID != nil || managedInputSourceSession != nil {
+                logger(
+                    "VOICE INPUT function_key edge=up tool=\(selectedVoiceTool.rawValue)"
+                )
+            }
+            finishManagedInputSourceSession(
+                reason: "function_key_up",
+                owner: .functionKey
+            )
             return
         }
 
         let selectedVoiceTool = voiceTool()
+        if selectedVoiceTool.preferredInputSourceID != nil || managedInputSourceSession != nil {
+            logger(
+                "VOICE INPUT function_key edge=down tool=\(selectedVoiceTool.rawValue)"
+            )
+        }
+        beginVoiceSession(reason: "function_key_down", owner: .functionKey)
+    }
+
+    /// Starts the input-source session for a software-emitted voice key.
+    /// Command keys do not produce the Fn `flagsChanged` event that the legacy
+    /// monitor observes, so their lifecycle is driven explicitly by the voice
+    /// session instead of by every ordinary Command press on the Mac keyboard.
+    func beginVoiceSession() {
+        beginVoiceSession(reason: "voice_session_start", owner: .explicitVoice)
+    }
+
+    /// Ends an input-source session previously started for a voice key.
+    func endVoiceSession() {
+        finishManagedInputSourceSession(
+            reason: "voice_session_end",
+            owner: .explicitVoice
+        )
+    }
+
+    private func beginVoiceSession(
+        reason: String,
+        owner: ManagedInputSourceSession.Owner
+    ) {
+        let selectedVoiceTool = voiceTool()
+        if selectedVoiceTool.preferredInputSourceID != nil || managedInputSourceSession != nil {
+            logger(
+                "VOICE INPUT session edge=down reason=\(reason) " +
+                    "tool=\(selectedVoiceTool.rawValue)"
+            )
+        }
+        if var session = managedInputSourceSession {
+            session.owners.insert(owner)
+            managedInputSourceSession = session
+            return
+        }
+
         guard let targetInputSourceID = selectedVoiceTool.preferredInputSourceID else { return }
         let previousInputSourceID = currentInputSourceID()
         if previousInputSourceID == targetInputSourceID {
@@ -90,13 +153,24 @@ final class PreferredInputSourceMonitor {
         if result == .selected, let previousInputSourceID {
             managedInputSourceSession = ManagedInputSourceSession(
                 previousInputSourceID: previousInputSourceID,
-                targetInputSourceID: targetInputSourceID
+                targetInputSourceID: targetInputSourceID,
+                owners: [owner]
             )
         }
     }
 
-    private func finishManagedInputSourceSession(reason: String) {
-        guard let session = managedInputSourceSession else { return }
+    private func finishManagedInputSourceSession(
+        reason: String,
+        owner: ManagedInputSourceSession.Owner?
+    ) {
+        guard var session = managedInputSourceSession else { return }
+        if let owner {
+            session.owners.remove(owner)
+            guard session.owners.isEmpty else {
+                managedInputSourceSession = session
+                return
+            }
+        }
         managedInputSourceSession = nil
 
         guard currentInputSourceID() == session.targetInputSourceID else {

@@ -94,10 +94,8 @@ struct RemoteMappingCanvas: View {
     @Binding var selectedButton: RemoteButton
     let activeButtons: Set<RemoteButton>
     let voiceActive: Bool
-    let voiceShortcutSummary: String
     let actionSummary: (RemoteButton, ButtonTrigger) -> String
     let onEdit: (RemoteButton, ButtonTrigger) -> Void
-    let onEditVoice: () -> Void
 
     var body: some View {
         GeometryReader { geometry in
@@ -267,42 +265,39 @@ struct RemoteMappingCanvas: View {
     }
 
     private var voiceCard: some View {
-        Button(action: onEditVoice) {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    Image(systemName: "mic.fill")
-                        .frame(width: 14)
-                    Text("button_mapping.voice_button.title")
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer(minLength: 0)
-                    Text("button_mapping.voice_button.customizable")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(voiceActive ? Color.orange : Color.accentColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            (voiceActive ? Color.orange : Color.accentColor).opacity(0.12),
-                            in: Capsule()
-                        )
-                }
-                Text(voiceShortcutSummary)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Image(systemName: "mic.fill")
+                    .frame(width: 14)
+                Text("button_mapping.voice_button.title")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 0)
+                Text("button_mapping.voice_button.fixed")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(voiceActive ? Color.orange : Color.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        (voiceActive ? Color.orange : Color.secondary).opacity(0.12),
+                        in: Capsule()
+                    )
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .background(
-                voiceActive ? Color.orange.opacity(0.12) : Color.primary.opacity(0.035),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(voiceActive ? Color.orange.opacity(0.65) : Color.secondary.opacity(0.15))
-            }
+            Text("button_mapping.voice_button.detail")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("remote.voice_button.accessibility_label"))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(
+            voiceActive ? Color.orange.opacity(0.12) : Color.primary.opacity(0.035),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(voiceActive ? Color.orange.opacity(0.65) : Color.secondary.opacity(0.15))
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func symbol(for button: RemoteButton) -> String {

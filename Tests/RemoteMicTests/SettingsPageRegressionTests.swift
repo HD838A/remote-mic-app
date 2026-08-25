@@ -196,6 +196,60 @@ struct SettingsPageRegressionTests {
         #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
     }
 
+    @Test func mappingFooterUsesCompactLayoutAtMinimumWindowWidth() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let footer = try #require(settingsSource.range(of: "private var mappingFooter"))
+        let selector = try #require(settingsSource.range(
+            of: "private func remoteDeviceSelector",
+            range: footer.upperBound..<settingsSource.endIndex
+        ))
+        let footerSource = settingsSource[footer.lowerBound..<selector.lowerBound]
+
+        #expect(footerSource.contains("VStack(alignment: .leading, spacing: 12)"))
+        #expect(!footerSource.contains("HStack(spacing: 16)"))
+        #expect(footerSource.contains("mappingVoiceKeyModeControl"))
+        #expect(footerSource.contains("mappingVoiceFnTapControl"))
+        #expect(footerSource.contains("mappingVoiceShortTapFocusControl"))
+        #expect(footerSource.contains("mappingRestoreDefaultsButton"))
+    }
+
+    @Test func voiceShortTapFocusIsWiredOnlyAfterTheVoiceSessionStops() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let voiceStart = try #require(source.range(of: "func bluetoothBridgeDidStartVoice"))
+        let voiceStop = try #require(source.range(
+            of: "func bluetoothBridgeDidStopVoice",
+            range: voiceStart.upperBound..<source.endIndex
+        ))
+        let nextDelegate = try #require(source.range(
+            of: "func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode",
+            range: voiceStop.upperBound..<source.endIndex
+        ))
+        let startSource = source[voiceStart.lowerBound..<voiceStop.lowerBound]
+        let stopSource = source[voiceStop.lowerBound..<nextDelegate.lowerBound]
+
+        #expect(!startSource.contains("focusFrontmostComposer"))
+        #expect(stopSource.contains("VoiceShortTapFocusPolicy.shouldFocus"))
+        #expect(stopSource.contains("KeyboardInjector.focusFrontmostComposer"))
+        #expect(stopSource.contains("voice_short_tap_focus"))
+        #expect(source.contains("settings.voiceShortTapFocusEnabled = false"))
+        #expect(source.contains("if enabled, settings.voiceFnTapModeEnabled"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -214,6 +268,32 @@ struct SettingsPageRegressionTests {
         #expect(!appSource.contains("window.isMovableByWindowBackground = true"))
         #expect(settingsSource.contains("WindowDragArea()"))
         #expect(settingsSource.contains("window?.performDrag(with: event)"))
+    }
+
+    @Test func settingsWindowEstablishesItsFullSizeBeforeCentering() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+
+        let contentSize = try #require(appSource.range(
+            of: "window.setContentSize(NSSize(width: 1020, height: 772))"
+        ))
+        let autosave = try #require(appSource.range(
+            of: "window.setFrameAutosaveName(\"RemoteMicSettings\")",
+            range: contentSize.upperBound..<appSource.endIndex
+        ))
+        let center = try #require(appSource.range(
+            of: "window.center()",
+            range: autosave.upperBound..<appSource.endIndex
+        ))
+
+        #expect(contentSize.upperBound <= autosave.lowerBound)
+        #expect(autosave.upperBound <= center.lowerBound)
     }
 
     @Test func settingsWindowKeepsTheDockIconUntilItCloses() throws {
@@ -610,6 +690,29 @@ struct SettingsPageRegressionTests {
         #expect(!aboutPage.contains("openGlossary"))
     }
 
+    @Test func aboutPageOffersAnOptInLoginItemWithSystemApprovalRecovery() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let serviceSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/LoginItemService.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("about.preferences.launch_at_login"))
+        #expect(settingsSource.contains("loginItemService.setEnabled"))
+        #expect(settingsSource.contains("loginItemService.openLoginItemsSettings"))
+        #expect(settingsSource.contains("loginItemService.refresh()"))
+        #expect(serviceSource.contains("SMAppService.mainApp"))
+        #expect(serviceSource.contains("SMAppService.openSystemSettingsLoginItems()"))
+        #expect(!serviceSource.contains("UserDefaults"))
+    }
+
     @Test func privateFeatureUIIsDelegatedAndHiddenByDefault() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -907,35 +1010,5 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("expandedShareSection = .about"))
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
-    }
-
-    @Test func voiceButtonShortcutUsesAnInlineEditorAndConflictWarning() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let settingsSource = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
-            encoding: .utf8
-        )
-        let rendererSource = try String(
-            contentsOf: root.appendingPathComponent(
-                "Sources/RemoteMic/SettingsScreenshotRenderer.swift"
-            ),
-            encoding: .utf8
-        )
-
-        #expect(settingsSource.contains("voiceShortcutEditorPanel"))
-        #expect(settingsSource.contains("model.setVoiceTriggerShortcut(shortcut)"))
-        #expect(settingsSource.contains("VoiceShortcutConflictPolicy.warning"))
-        #expect(settingsSource.contains("settings.voiceTriggerShortcut != nil"))
-        #expect(!settingsSource.contains(".sheet(isPresented: $isVoiceShortcutEditorPresented"))
-        #expect(!settingsSource.contains(".popover(isPresented: $isVoiceShortcutEditorPresented"))
-        #expect(rendererSource.contains(
-            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_VOICE_SHORTCUT_EDITOR"
-        ))
-        #expect(rendererSource.contains(
-            "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_SHORTCUT_CONFLICT"
-        ))
     }
 }

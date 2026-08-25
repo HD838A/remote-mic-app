@@ -60,41 +60,6 @@ struct ShortcutCaptureMonitorTests {
         #expect(captureCount == 0)
     }
 
-    @Test func capturesAStandaloneLeftControlWhenItIsReleasedWithoutAMainKey() throws {
-        var captured: [CustomKeyboardShortcut] = []
-        let monitor = ShortcutCaptureMonitor(
-            onCapture: { captured.append($0) },
-            dispatchCallback: { $0() }
-        )
-        let down = try #require(keyEvent(
-            keyCode: CGKeyCode(StandaloneKeyboardModifier.leftControl.keyCode),
-            flags: .maskControl
-        ))
-        let up = try #require(keyEvent(
-            keyCode: CGKeyCode(StandaloneKeyboardModifier.leftControl.keyCode),
-            flags: []
-        ))
-
-        #expect(monitor.handle(type: .flagsChanged, event: down))
-        #expect(captured.isEmpty)
-        #expect(monitor.handle(type: .flagsChanged, event: up))
-        #expect(captured == [StandaloneKeyboardModifier.leftControl.shortcut])
-    }
-
-    @Test func modifierThenMainKeyCapturesTheCombinationInsteadOfTheModifier() throws {
-        var captured: [CustomKeyboardShortcut] = []
-        let monitor = ShortcutCaptureMonitor(
-            onCapture: { captured.append($0) },
-            dispatchCallback: { $0() }
-        )
-        let commandDown = try #require(keyEvent(keyCode: 55, flags: .maskCommand))
-        let spaceDown = try #require(keyEvent(keyCode: 49, flags: .maskCommand))
-
-        #expect(monitor.handle(type: .flagsChanged, event: commandDown))
-        #expect(monitor.handle(type: .keyDown, event: spaceDown))
-        #expect(captured == [KeyboardShortcutPreset.spotlight.shortcut])
-    }
-
     @Test func missingAccessibilityPermissionFailsBeforeCreatingAnEventTap() {
         let monitor = ShortcutCaptureMonitor(
             onCapture: { _ in },

@@ -42,7 +42,7 @@ jobs:
       contents: read
     steps:
       - name: Check out main
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: main
 
@@ -56,7 +56,7 @@ jobs:
             "$RUNNER_TEMP/stable-request-attestation.json"
 
       - name: Persist immutable stable request timestamp
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: stable-request-attestation-${{ inputs.tag }}
           path: ${{ runner.temp }}/stable-request-attestation.json
@@ -74,7 +74,7 @@ jobs:
       contents: read
     steps:
       - name: Download immutable stable request attestation
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: stable-request-attestation-${{ inputs.tag }}
           path: ${{ runner.temp }}/stable-request
@@ -143,13 +143,13 @@ jobs:
 
     steps:
       - name: Check out main
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: main
           fetch-depth: 0
 
       - name: Download immutable stable request attestation
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: stable-request-attestation-${{ inputs.tag }}
           path: ${{ runner.temp }}/stable-request
@@ -219,7 +219,7 @@ jobs:
 
       - name: Upload completed stable ledger
         if: success() && steps.release.outputs.should_promote == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: stable-slo-ledger-complete-${{ github.run_id }}
           path: ${{ env.RELEASE_SLO_LEDGER }}
@@ -228,7 +228,7 @@ jobs:
 
       - name: Upload failed stable ledger
         if: failure() && env.RELEASE_SLO_LEDGER != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: stable-slo-ledger-failed-${{ github.run_id }}
           path: ${{ env.RELEASE_SLO_LEDGER }}

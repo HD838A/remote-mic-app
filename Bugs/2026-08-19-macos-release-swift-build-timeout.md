@@ -56,3 +56,7 @@ GitHub Actions Run `32176710841`、Job `95840322389` 在候选提交 `58a37af409
 - Canary 只证明修订后的真实签名、公证路径和时间预算可完成，不创建候选发布，也不代替 1.9.0 最终 exact-SHA 产品门禁。
 
 `TODO.md` 没有对应的独立发布超时条目，因此本次不修改 TODO 状态。
+
+## 现行规则（2026-08-24）
+
+本节不改写上述历史 canary 分支和 `560/590/600` 秒证据。当前实现已将完整签名阶段收紧为 `525/540/600` 秒，并把真实 Developer ID 流水线验证改为按 pipeline digest 复用的 qualification：已有普通流水线变更 PR 的 exact SHA 只临时映射到 `release/pipeline-qualification/<pr号或短SHA>` Environment alias，不创建第二个 PR，也不使用产品 `release/pre-vX.Y.Z-canary-*` 分支。Qualification 仅上传按 digest 命名的证明和必要账本，不创建 Tag、Release、appcast 或可分发产品资产；原普通 PR 合入后，verifier 通过记录的 PR ref 重算 source digest。

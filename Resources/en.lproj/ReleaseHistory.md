@@ -1,5 +1,21 @@
 # Version History
 
+## 1.9.10 (Pre-release)
+
+- Combination Actions are now available by default, with no invitation code required to view, create, bind, or use them.
+
+## 1.9.9 (Pre-release)
+
+- Added an opt-in “Launch at login” setting under About → App Preferences, with a direct link to macOS Login Items Settings when approval is required.
+- Added in-page keyboard shortcut selection for common keys, navigation keys, F1–F20, the numeric keypad, and independent left/right modifiers while retaining physical-key recording.
+- Improved first-run and permission recovery: onboarding centers after sizing, and enabled custom button mappings are reapplied after Input Monitoring or Accessibility permissions change.
+- Runtime voice input now selects only an enabled preferred input source, avoids repeated confirmation prompts, and restores the previous input source unless you changed it during the session.
+- Improved Bluetooth recovery for stale cached remotes with bounded backoff and power-recovery handling without losing saved profiles or mappings.
+- Reduced unnecessary UI invalidation during voice streaming while preserving audio processing and diagnostics.
+- Prevented duplicate SayAll instances; reopening the app activates the existing instance instead of starting another Bluetooth, audio, or HID stack.
+- Kept the Settings window visible when switching apps and retained its Dock presence until the window is actually closed.
+- Fixed the RC003 monitored-mode TV button leaking a “§” character into the frontmost text field when mapped to a custom action.
+
 ## 1.9.8 (Pre-release)
 
 - Improved upgrades from older Remote Mic installations: the previous app now stops before the audio driver is updated, and the new SayAll.app stays at its canonical Applications location so audio setup can continue reliably after the upgrade.
