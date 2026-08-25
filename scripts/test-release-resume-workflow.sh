@@ -62,6 +62,11 @@ draft_block="$(/usr/bin/sed -n '/^if \[\[ "$MODE" == "draft"/,/^if \[\[ "$MODE" 
   "$ROOT/scripts/publish-release.sh")"
 print -r -- "$draft_block" | /usr/bin/grep -Fq -- '--draft'
 print -r -- "$draft_block" | /usr/bin/grep -Fq 'download_and_compare_draft_candidate'
+print -r -- "$draft_block" | /usr/bin/grep -Fq 'gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,isPrerelease'
+if print -r -- "$draft_block" | /usr/bin/grep -Fq 'gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG"'; then
+  print -u2 "private Draft path still queries the REST release-by-tag endpoint"
+  exit 1
+fi
 if print -r -- "$draft_block" | /usr/bin/grep -Eq 'dispatch_preview_recording_guard|verify_cdn_assets'; then
   print -u2 "private Draft path unexpectedly publishes to the public Preview delivery plane"
   exit 1

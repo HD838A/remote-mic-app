@@ -1041,7 +1041,7 @@ if [[ "$MODE" == "draft" || "$MODE" == "resume-draft" ]]; then
     resume_existing_release_assets
   fi
 
-  RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.draft, .prerelease] | @tsv')"
+  RELEASE_STATE="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,isPrerelease --jq '[.isDraft, .isPrerelease] | @tsv')"
   test "$RELEASE_STATE" = $'true\tfalse'
   require_expected_stable_latest
   download_and_compare_draft_candidate

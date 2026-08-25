@@ -98,6 +98,7 @@ jobs:
               scripts/test-release-pipeline-optimization.sh|\
               scripts/test-release-resume-workflow.sh|\
               scripts/test-prepare-preview-candidate.sh|\
+              Tests/RemoteMicTests/BuildSigningTests.swift|\
               scripts/verify-release-control-plane-diff.sh)
                 release_control_plane_changed=true
                 docs_only=false
@@ -258,6 +259,8 @@ jobs:
     if: needs.classify_changes.outputs.release_control_plane_only == 'true'
     runs-on: macos-15
     timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -272,3 +275,6 @@ jobs:
 
       - name: Run idempotent candidate preparation tests
         run: ./scripts/test-prepare-preview-candidate.sh
+
+      - name: Run release control-plane Swift tests
+        run: swift test --filter BuildSigningTests
