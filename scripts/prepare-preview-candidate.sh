@@ -92,8 +92,41 @@ fi
 git worktree add -b "$branch" "$CANDIDATE_WORKTREE" "$base_main_commit"
 candidate_root="$CANDIDATE_WORKTREE"
 
-plutil -replace CFBundleShortVersionString -string "$version" "$candidate_root/Resources/Info.plist"
-plutil -replace CFBundleVersion -string "$BUILD" "$candidate_root/Resources/Info.plist"
+python3 - "$candidate_root/Resources/Info.plist" "$version" "$BUILD" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+plist_path = Path(sys.argv[1])
+updates = (
+    (b"CFBundleShortVersionString", sys.argv[2].encode("ascii")),
+    (b"CFBundleVersion", sys.argv[3].encode("ascii")),
+)
+data = plist_path.read_bytes()
+
+for key, value in updates:
+    pattern = re.compile(
+        rb"(?P<before><key>" + re.escape(key) +
+        rb"</key>)(?P<between>[ \t\r\n]*<string>)[^<]*(?P<suffix></string>)"
+    )
+    matches = list(pattern.finditer(data))
+    if len(matches) != 1:
+        raise SystemExit(
+            f"expected exactly one {key.decode('ascii')} string in {plist_path}, found {len(matches)}"
+        )
+
+    def replace(match: re.Match[bytes]) -> bytes:
+        return (
+            match.group("before")
+            + match.group("between")
+            + value
+            + match.group("suffix")
+        )
+
+    data = pattern.sub(replace, data, count=1)
+
+plist_path.write_bytes(data)
+PY
 prepend_history() {
   local history="$1"
   local notes="$2"
