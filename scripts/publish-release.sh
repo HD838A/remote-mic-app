@@ -862,6 +862,9 @@ download_and_compare_local_candidate() {
 }
 
 download_and_compare_draft_candidate() {
+  local shared_dmg_checksum="$DOWNLOAD_DIR/Remote-Mic-$VERSION.dmg.sha256"
+  local intel_dmg_name="Remote-Mic-$VERSION-Intel.dmg"
+  local intel_dmg_checksum="$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel.dmg.sha256"
   download_draft_release_assets
   verify_downloaded_candidate
   export EXPECTED_DEVELOPER_TEAM_ID REQUIRE_DEVELOPER_ID_SIGNING=1 REQUIRE_NOTARIZATION=1
@@ -872,6 +875,9 @@ download_and_compare_draft_candidate() {
   "$SOURCE_ROOT/scripts/verify-dmg.sh" "$DOWNLOAD_DIR/Remote-Mic-$VERSION.dmg"
   RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh" \
     "$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg" uninstall
+  /usr/bin/awk -v name="$intel_dmg_name" '$2 == name { print }' \
+    "$shared_dmg_checksum" > "$intel_dmg_checksum"
+  test "$(/usr/bin/wc -l < "$intel_dmg_checksum" | /usr/bin/tr -d ' ')" = 1
   RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-dmg.sh" \
     "$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel.dmg"
   (
