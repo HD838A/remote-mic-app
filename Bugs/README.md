@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md)
 - [历史蓝牙缓存持续固定频率重连](./2026-08-24-ble-cached-reconnect-storm.md)
 - [运行日志缺少实例归属、轮转与有效降噪](./2026-08-24-runtime-log-operational-quality.md)
 - [语音流期间进程 CPU 接近占满单核](./2026-08-24-voice-stream-cpu-saturation.md)
@@ -66,6 +67,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-25 | [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md) | 候选修复完成，等待真实 Mac、遥控器和豆包输入验收 |
 | 2026-08-24 | [历史蓝牙缓存持续固定频率重连](./2026-08-24-ble-cached-reconnect-storm.md) | 自动化、硬件模拟与 Release App 验证通过，等待 RC001 / RC003 真机重连验收 |
 | 2026-08-24 | [运行日志缺少实例归属、轮转与有效降噪](./2026-08-24-runtime-log-operational-quality.md) | 候选修复完成；自动化、事务故障夹具与 Release App 验证通过，等待真实 BLE / CoreAudio、废纸篓权限与长时间运行验收 |
 | 2026-08-24 | [语音流期间进程 CPU 接近占满单核](./2026-08-24-voice-stream-cpu-saturation.md) | 候选修复完成；自动化、项目自检与 Release App 验证通过，等待真实 RC003 性能对照 |

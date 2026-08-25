@@ -4,6 +4,21 @@ import Testing
 
 @Suite("Bluetooth lifecycle")
 struct BluetoothLifecycleTests {
+    @Test func onlySystemWakeForcesBluetoothRecovery() {
+        #expect(BluetoothWakeRecoveryPolicy.shouldForceReconnect(
+            event: .systemDidWake,
+            started: true
+        ))
+        #expect(!BluetoothWakeRecoveryPolicy.shouldForceReconnect(
+            event: .screenDidWake,
+            started: true
+        ))
+        #expect(!BluetoothWakeRecoveryPolicy.shouldForceReconnect(
+            event: .systemDidWake,
+            started: false
+        ))
+    }
+
     @Test func everyBridgeFirstReadyReappliesHIDMappingsButDuplicateReadyDoesNot() {
         #expect(BridgeAppModel.shouldReapplyHIDSettings(
             previousState: nil,

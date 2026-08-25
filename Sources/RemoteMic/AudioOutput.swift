@@ -239,7 +239,7 @@ enum SystemAudioSuspensionReason: String, Hashable {
     case systemSleeping = "system_sleeping"
 }
 
-enum SystemAudioLifecycleEvent: String {
+enum SystemAudioLifecycleEvent: String, Equatable {
     case screenDidSleep = "screen_did_sleep"
     case screenDidWake = "screen_did_wake"
     case sessionDidResignActive = "session_did_resign_active"
@@ -309,6 +309,15 @@ enum VirtualAudioConnectionLifecyclePolicy {
         pendingVoiceBufferCount: Int
     ) -> Bool {
         !hasPendingRelease && (hasAllocatedOutputResources || pendingVoiceBufferCount > 0)
+    }
+}
+
+enum VirtualAudioRecoveryPolicy {
+    static func shouldIgnoreDefaultSystemOutputChange(
+        details: String,
+        configurationHealthy: Bool
+    ) -> Bool {
+        details == "properties=default_system_output" && configurationHealthy
     }
 }
 
@@ -386,6 +395,10 @@ final class VirtualAudioOutput {
 
     var hasAllocatedOutputResources: Bool {
         engine != nil || player != nil || selectedDevice != nil
+    }
+
+    var isConfigurationHealthyForDiagnostics: Bool {
+        isConfigurationHealthy
     }
 
     @discardableResult
@@ -522,11 +535,20 @@ final class VirtualAudioOutput {
 
     @discardableResult
     func enqueue(samples: [Int16]) -> Bool {
-        guard isPlaybackReady,
-              let player,
-              let buffer = makeBuffer(samples: samples)
-        else {
-            logRejectedWrite()
+        guard !samples.isEmpty else {
+            logRejectedWrite(reason: "empty_samples")
+            return false
+        }
+        guard let player else {
+            logRejectedWrite(reason: "player_missing")
+            return false
+        }
+        guard isPlaybackReady else {
+            logRejectedWrite(reason: "playback_not_ready")
+            return false
+        }
+        guard let buffer = makeBuffer(samples: samples) else {
+            logRejectedWrite(reason: "buffer_creation_failed")
             return false
         }
         if rejectedWriteCount > 0 {
@@ -774,11 +796,14 @@ final class VirtualAudioOutput {
         return CoreAudioDeviceCatalog.deviceInfo(for: deviceID)
     }
 
-    private func logRejectedWrite() {
+    private func logRejectedWrite(reason: String) {
         rejectedWriteCount += 1
         let now = Date()
         guard now.timeIntervalSince(lastRejectedWriteLogDate) >= 1 else { return }
         lastRejectedWriteLogDate = now
-        AppLogger.shared.write("AUDIO WRITE rejected count=\(rejectedWriteCount) state={\(basicDiagnosticState())}")
+        AppLogger.shared.write(
+            "AUDIO WRITE rejected count=\(rejectedWriteCount) reason=\(reason) " +
+                "state={\(diagnosticState())}"
+        )
     }
 }
