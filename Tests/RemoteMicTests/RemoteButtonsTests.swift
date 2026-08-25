@@ -1760,6 +1760,46 @@ struct RemoteButtonsTests {
         #expect(!target.voiceFnTapModeEnabled)
     }
 
+    @Test func importedFnTapModeWinsOverShortTapFocus() throws {
+        let suite = "RemoteMicTests.voice-focus-mutual.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.voiceFnTapModeEnabled = true
+        settings.voiceShortTapFocusEnabled = true
+
+        let data = try settings.exportedConfigurationData()
+        let targetSuite = "RemoteMicTests.voice-focus-mutual-target.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: data)
+
+        #expect(target.voiceFnTapModeEnabled)
+        #expect(!target.voiceShortTapFocusEnabled)
+    }
+
+    @Test func weChatComposerFallbackUsesTheLargestEligibleWindow() {
+        let mainWindow = CGRect(x: 250, y: 40, width: 1_000, height: 1_000)
+        let updateWindow = CGRect(x: 100, y: 100, width: 1_200, height: 900)
+        #expect(KeyboardInjector.usesWeChatComposerFallback(
+            bundleIdentifier: KeyboardInjector.weChatBundleIdentifier
+        ))
+        #expect(!KeyboardInjector.usesWeChatComposerFallback(
+            bundleIdentifier: PresetApplication.codex.bundleIdentifier
+        ))
+        #expect(KeyboardInjector.weChatComposerWindowFrame(
+            [
+                (title: "Software Update", frame: updateWindow),
+                (title: "微信", frame: mainWindow),
+            ]
+        ) == mainWindow)
+        #expect(KeyboardInjector.weChatComposerFocusPoint(windowFrame: mainWindow) == CGPoint(
+            x: 930,
+            y: 890
+        ))
+    }
+
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

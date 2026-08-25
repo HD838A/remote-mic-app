@@ -217,7 +217,37 @@ struct SettingsPageRegressionTests {
         #expect(!footerSource.contains("HStack(spacing: 16)"))
         #expect(footerSource.contains("mappingVoiceKeyModeControl"))
         #expect(footerSource.contains("mappingVoiceFnTapControl"))
+        #expect(footerSource.contains("mappingVoiceShortTapFocusControl"))
         #expect(footerSource.contains("mappingRestoreDefaultsButton"))
+    }
+
+    @Test func voiceShortTapFocusIsWiredOnlyAfterTheVoiceSessionStops() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let voiceStart = try #require(source.range(of: "func bluetoothBridgeDidStartVoice"))
+        let voiceStop = try #require(source.range(
+            of: "func bluetoothBridgeDidStopVoice",
+            range: voiceStart.upperBound..<source.endIndex
+        ))
+        let nextDelegate = try #require(source.range(
+            of: "func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode",
+            range: voiceStop.upperBound..<source.endIndex
+        ))
+        let startSource = source[voiceStart.lowerBound..<voiceStop.lowerBound]
+        let stopSource = source[voiceStop.lowerBound..<nextDelegate.lowerBound]
+
+        #expect(!startSource.contains("focusFrontmostComposer"))
+        #expect(stopSource.contains("VoiceShortTapFocusPolicy.shouldFocus"))
+        #expect(stopSource.contains("KeyboardInjector.focusFrontmostComposer"))
+        #expect(stopSource.contains("voice_short_tap_focus"))
+        #expect(source.contains("settings.voiceShortTapFocusEnabled = false"))
+        #expect(source.contains("if enabled, settings.voiceFnTapModeEnabled"))
     }
 
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {

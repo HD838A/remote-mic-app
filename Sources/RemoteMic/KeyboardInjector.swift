@@ -141,7 +141,11 @@ enum KeyboardInjector {
     /// is set, so the composer scan keeps retrying for longer than that.
     static let composerFocusMaximumAttempts = 12
     static let composerFocusRetryMilliseconds = 250
+    static let weChatBundleIdentifier = "com.tencent.xinWeChat"
+    static let weChatComposerHorizontalRatio = 0.68
+    static let weChatComposerVerticalRatio = 0.85
     private static let focusRequests = ApplicationFocusRequestGate()
+    private static let frontmostFocusRequests = ApplicationFocusRequestGate()
     private static let manualAccessibilityLock = NSLock()
     private static var manualAccessibilityLoggedProcesses: Set<pid_t> = []
     private static let focusQueue = DispatchQueue(
@@ -546,9 +550,10 @@ enum KeyboardInjector {
         switch strategy {
         case .accessibilityComposer:
             scheduleAccessibilityComposerFocus(
-                application: application,
+                bundleIdentifier: application.bundleIdentifier,
                 processIdentifier: processIdentifier,
                 requestID: requestID,
+                requestGate: focusRequests,
                 attempt: 0
             )
         case .cmuxSurfaceAPI:
@@ -560,6 +565,23 @@ enum KeyboardInjector {
                 attempt: 0
             )
         }
+    }
+
+    @discardableResult
+    static func focusFrontmostComposer(completion: @escaping (Bool) -> Void) -> Bool {
+        guard isAccessibilityTrusted,
+              let application = NSWorkspace.shared.frontmostApplication
+        else { return false }
+        let requestID = frontmostFocusRequests.begin()
+        scheduleAccessibilityComposerFocus(
+            bundleIdentifier: application.bundleIdentifier ?? "unknown",
+            processIdentifier: application.processIdentifier,
+            requestID: requestID,
+            requestGate: frontmostFocusRequests,
+            attempt: 0,
+            completion: completion
+        )
+        return true
     }
 
     private static func scheduleCmuxFocus(
@@ -629,53 +651,102 @@ enum KeyboardInjector {
     }
 
     private static func scheduleAccessibilityComposerFocus(
-        application: PresetApplication,
+        bundleIdentifier: String,
         processIdentifier: pid_t,
         requestID: UInt64,
-        attempt: Int
+        requestGate: ApplicationFocusRequestGate,
+        attempt: Int,
+        completion: ((Bool) -> Void)? = nil
     ) {
-        let maximumAttempts = composerFocusMaximumAttempts
         let delay: DispatchTimeInterval = attempt == 0
             ? .milliseconds(0)
             : .milliseconds(composerFocusRetryMilliseconds)
         focusQueue.asyncAfter(deadline: .now() + delay) {
-            guard focusRequests.isCurrent(requestID) else { return }
+            guard requestGate.isCurrent(requestID) else { return }
 
+            if applicationIsFrontmost(processIdentifier), !isAccessibilityTrusted {
+                AppLogger.shared.write(
+                    "APP FOCUS skipped bundle=\(bundleIdentifier) method=accessibility reason=not_trusted"
+                )
+                completeComposerFocus(
+                    false,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
+                )
+                return
+            }
+            if attempt == 0,
+               usesWeChatComposerFallback(bundleIdentifier: bundleIdentifier),
+               applicationIsFrontmost(processIdentifier),
+               focusWeChatComposer(processIdentifier: processIdentifier) {
+                AppLogger.shared.write(
+                    "APP FOCUS succeeded bundle=\(bundleIdentifier) method=wechat_window_click"
+                )
+                completeComposerFocus(
+                    true,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
+                )
+                return
+            }
             if isAccessibilityTrusted {
                 announceManualAccessibility(
                     processIdentifier: processIdentifier,
-                    bundleIdentifier: application.bundleIdentifier,
+                    bundleIdentifier: bundleIdentifier,
                     attempt: attempt
                 )
             }
-            if applicationIsFrontmost(processIdentifier) {
-                guard isAccessibilityTrusted else {
-                    AppLogger.shared.write(
-                        "APP FOCUS skipped bundle=\(application.bundleIdentifier) method=accessibility reason=not_trusted"
-                    )
-                    return
-                }
+            if applicationIsFrontmost(processIdentifier), isAccessibilityTrusted {
                 if focusComposer(processIdentifier: processIdentifier) {
                     AppLogger.shared.write(
-                        "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=accessibility"
+                        "APP FOCUS succeeded bundle=\(bundleIdentifier) method=accessibility"
+                    )
+                    completeComposerFocus(
+                        true,
+                        requestID: requestID,
+                        requestGate: requestGate,
+                        completion: completion
                     )
                     return
                 }
             }
 
             let nextAttempt = attempt + 1
-            if nextAttempt < maximumAttempts {
+            if nextAttempt < composerFocusMaximumAttempts {
                 scheduleAccessibilityComposerFocus(
-                    application: application,
+                    bundleIdentifier: bundleIdentifier,
                     processIdentifier: processIdentifier,
                     requestID: requestID,
-                    attempt: nextAttempt
+                    requestGate: requestGate,
+                    attempt: nextAttempt,
+                    completion: completion
                 )
-            } else if focusRequests.isCurrent(requestID) {
+            } else if requestGate.isCurrent(requestID) {
                 AppLogger.shared.write(
-                    "APP FOCUS failed bundle=\(application.bundleIdentifier) method=accessibility reason=composer_not_found"
+                    "APP FOCUS failed bundle=\(bundleIdentifier) method=accessibility reason=composer_not_found"
+                )
+                completeComposerFocus(
+                    false,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
                 )
             }
+        }
+    }
+
+    private static func completeComposerFocus(
+        _ focused: Bool,
+        requestID: UInt64,
+        requestGate: ApplicationFocusRequestGate,
+        completion: ((Bool) -> Void)?
+    ) {
+        guard let completion else { return }
+        DispatchQueue.main.async {
+            guard requestGate.isCurrent(requestID) else { return }
+            completion(focused)
         }
     }
 
@@ -790,6 +861,74 @@ enum KeyboardInjector {
             }
         }
         return false
+    }
+
+    static func weChatComposerFocusPoint(windowFrame: CGRect) -> CGPoint? {
+        guard windowFrame.width >= 700, windowFrame.height >= 500 else { return nil }
+        return CGPoint(
+            x: windowFrame.minX + windowFrame.width * weChatComposerHorizontalRatio,
+            y: windowFrame.minY + windowFrame.height * weChatComposerVerticalRatio
+        )
+    }
+
+    static func usesWeChatComposerFallback(bundleIdentifier: String?) -> Bool {
+        bundleIdentifier == weChatBundleIdentifier
+    }
+
+    static func weChatComposerWindowFrame(
+        _ windows: [(title: String, frame: CGRect)]
+    ) -> CGRect? {
+        windows
+            .filter {
+                ($0.title == "微信" || $0.title == "WeChat") &&
+                    weChatComposerFocusPoint(windowFrame: $0.frame) != nil
+            }
+            .map(\.frame)
+            .max { $0.width * $0.height < $1.width * $1.height }
+    }
+
+    private static func focusWeChatComposer(processIdentifier: pid_t) -> Bool {
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        guard let frame = weChatComposerWindowFrame(
+            applicationWindows(applicationElement).compactMap { window in
+                guard let frame = axFrame(window) else { return nil }
+                return (
+                    title: axString(window, attribute: kAXTitleAttribute),
+                    frame: frame
+                )
+            }
+        ),
+              let point = weChatComposerFocusPoint(windowFrame: frame),
+              let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseDown,
+                  mouseCursorPosition: point,
+                  mouseButton: .left
+              ),
+              let up = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseUp,
+                  mouseCursorPosition: point,
+                  mouseButton: .left
+              )
+        else { return false }
+        let previousPointerLocation = CGEvent(source: nil)?.location
+        down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        if let previousPointerLocation,
+           let restore = CGEvent(
+               mouseEventSource: source,
+               mouseType: .mouseMoved,
+               mouseCursorPosition: previousPointerLocation,
+               mouseButton: .left
+           ) {
+            restore.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            restore.post(tap: .cghidEventTap)
+        }
+        return true
     }
 
     static func captureFocusedAccessibilityTarget(

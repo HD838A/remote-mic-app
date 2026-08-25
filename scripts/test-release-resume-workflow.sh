@@ -31,47 +31,38 @@ fi
 
 for required in \
   'Publish exact UI-tested staged Preview bytes' \
-  'publication_mode' \
-  'PUBLICATION_MODE' \
   'gh auth setup-git --hostname github.com' \
   'test "$GITHUB_REF_NAME" = main' \
   'SOURCE_RUN_REQUIRED_CONCLUSION=success' \
   'REQUIRE_EXISTING_TAG=0 REQUIRE_STAGED_SOURCE=1' \
   'verify-preview-ui-attestation.sh' \
-  'publication_command=resume-draft' \
   'publication_command=resume-prerelease' \
   'Publish or resume the exact staged bytes'; do
   /usr/bin/grep -Fq -- "$required" "$PUBLICATION_WORKFLOW"
 done
+if /usr/bin/grep -Eq 'publication_mode|PUBLICATION_MODE|resume-draft' "$PUBLICATION_WORKFLOW"; then
+  print -u2 "public Preview publication still exposes private Draft routing"
+  exit 1
+fi
 if /usr/bin/grep -Eq 'environment:[[:space:]]*mac-release|secrets[.]' "$PUBLICATION_WORKFLOW"; then
   print -u2 "publication control plane unexpectedly enters the credential Environment"
   exit 1
 fi
 /usr/bin/grep -Fq -- '--ref main' "$ROOT/scripts/publish-staged-preview.sh"
-if /usr/bin/grep -Fq 'release_mode=' "$ROOT/scripts/publish-staged-preview.sh"; then
+if /usr/bin/grep -Eq 'release_mode=|publication_mode=|PUBLICATION_MODE|draft' \
+  "$ROOT/scripts/publish-staged-preview.sh"; then
   print -u2 "staged publication dispatcher still exposes a second publication mode"
   exit 1
 fi
 /usr/bin/grep -Fq 'resume_existing_release_assets' "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq 'download_draft_release_assets' "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq -- '--draft' "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq 'resume-draft' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'intel_dmg_checksum="$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel.dmg.sha256"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq '/usr/bin/awk -v name="$intel_dmg_name"' \
+  "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'gh release download "$RELEASE_TAG"' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'test "$remote_digest" = "sha256:$staged_sha"' "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq 'publication_mode=' "$ROOT/scripts/publish-staged-preview.sh"
-draft_block="$(/usr/bin/sed -n '/^if \[\[ "$MODE" == "draft"/,/^if \[\[ "$MODE" == "prerelease"/p' \
-  "$ROOT/scripts/publish-release.sh")"
-print -r -- "$draft_block" | /usr/bin/grep -Fq -- '--draft'
-print -r -- "$draft_block" | /usr/bin/grep -Fq 'download_and_compare_draft_candidate'
-print -r -- "$draft_block" | /usr/bin/grep -Fq 'gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,isPrerelease'
-if print -r -- "$draft_block" | /usr/bin/grep -Fq 'gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG"'; then
-  print -u2 "private Draft path still queries the REST release-by-tag endpoint"
-  exit 1
-fi
-if print -r -- "$draft_block" | /usr/bin/grep -Eq 'dispatch_preview_recording_guard|verify_cdn_assets'; then
-  print -u2 "private Draft path unexpectedly publishes to the public Preview delivery plane"
-  exit 1
-fi
+/usr/bin/grep -Fq 'private Drafts must be published to GetSayAll/SayAll' \
+  "$ROOT/scripts/publish-release.sh"
 
 /usr/bin/grep -Fq 'SOURCE_RUN_REQUIRED_CONCLUSION="${SOURCE_RUN_REQUIRED_CONCLUSION:-failure}"' \
   "$ROOT/scripts/resume-preview-publication.sh"
