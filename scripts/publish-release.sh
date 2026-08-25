@@ -42,6 +42,10 @@ INTEL_ZH_RELEASE_NOTES="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.zh.txt"
 INTEL_EN_RELEASE_NOTES="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.en.txt"
 SHARED_CHECKSUM_BASENAME="Remote-Mic-$VERSION.dmg.sha256"
 
+if [[ "$MODE" == "draft" || "$MODE" == "resume-draft" ]]; then
+  print -u2 "private Drafts must be published to GetSayAll/SayAll through the private Draft release path"
+  exit 1
+fi
 if [[ "$#" -ne 1 || \
       ( "$MODE" != "prerelease" && \
         "$MODE" != "resume-prerelease" && \
