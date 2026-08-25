@@ -72,6 +72,7 @@ final class HIDRemoteMonitor {
     private let scheduler: HIDRemoteScheduling
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
+    private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
@@ -129,7 +130,8 @@ final class HIDRemoteMonitor {
         diagnosticLogger: @escaping (String) -> Void = AppLogger.shared.write,
         karabinerElementsInstalled: @escaping () -> Bool = {
             HIDRemoteMonitor.isKarabinerElementsInstalled()
-        }
+        },
+        appSwitcherKeyStatePoster: @escaping KeyboardInjector.KeyStatePoster = KeyboardInjector.postKeyState
     ) {
         self.settings = settings
         self.profileID = profileID
@@ -139,6 +141,9 @@ final class HIDRemoteMonitor {
         self.ownsEventSuppressor = ownsEventSuppressor
         self.scheduler = scheduler
         self.runtimePermissions = runtimePermissions
+        self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: appSwitcherKeyStatePoster
+        )
         self.actionPerformer = actionPerformer ?? { _, _, configured in
             KeyboardInjector.send(
                 configured.action,
@@ -664,6 +669,32 @@ final class HIDRemoteMonitor {
                 profileID: profileID
             ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
             let action = settings.action(for: button, profileID: profileID)
+            if appSwitcherSession.isActive, button == .tv {
+                diagnosticLogger(
+                    "HID GESTURE button=tv trigger=singleClick path=app_switcher"
+                )
+                guard performAppSwitcherAction(for: button, trigger: .singleClick) else {
+                    return
+                }
+                continue
+            }
+            if appSwitcherSession.isActive, action == .appSwitcher,
+               !recognizesDoubleClick, !recognizesLongPress {
+                diagnosticLogger(
+                    "HID GESTURE button=\(button.rawValue) trigger=singleClick " +
+                        "path=app_switcher"
+                )
+                guard performAppSwitcherAction(for: button, trigger: .singleClick) else {
+                    return
+                }
+                continue
+            }
+            if appSwitcherSession.isActive, action != .appSwitcher {
+                _ = appSwitcherSession.cancel()
+                diagnosticLogger(
+                    "HID APP SWITCHER cancelled reason=unrelated_button button=\(button.rawValue)"
+                )
+            }
             if usesNativePassthrough {
                 nativePassthroughUsages.insert(usage)
                 AppLogger.shared.write(
@@ -891,6 +922,7 @@ final class HIDRemoteMonitor {
         guard
             !settings.hasSecondaryAction(for: button, profileID: profileID),
             action != .disabled,
+            action != .appSwitcher,
             Self.shouldRepeat(
                 action: action,
                 frontmostBundleIdentifier: frontmostBundleIdentifier()
@@ -993,6 +1025,18 @@ final class HIDRemoteMonitor {
             trigger: trigger,
             profileID: profileID
         )
+        if appSwitcherSession.isActive, button == .tv {
+            return performAppSwitcherAction(for: button, trigger: trigger)
+        }
+        if configured.action == .appSwitcher {
+            return performAppSwitcherAction(for: button, trigger: trigger)
+        }
+        if appSwitcherSession.isActive {
+            _ = appSwitcherSession.cancel()
+            diagnosticLogger(
+                "HID APP SWITCHER cancelled reason=unrelated_action action=\(configured.action.rawValue)"
+            )
+        }
         if configured.action.isAppInternal {
             onInternalAction?(profileID, configured.action)
             AppLogger.shared.write(
@@ -1015,6 +1059,19 @@ final class HIDRemoteMonitor {
         return true
     }
 
+    private func performAppSwitcherAction(
+        for button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> Bool {
+        let phase = appSwitcherSession.isActive ? "tab" : "start"
+        let submitted = appSwitcherSession.trigger()
+        diagnosticLogger(
+            "HID APP SWITCHER button=\(button.rawValue) trigger=\(trigger.rawValue) " +
+                "phase=\(phase) success=\(submitted)"
+        )
+        return submitted
+    }
+
     private func resetGestureRecognition() {
         doubleClickTimers.values.forEach { $0.cancel() }
         doubleClickTimers.removeAll()
@@ -1024,6 +1081,10 @@ final class HIDRemoteMonitor {
     }
 
     private func resetInputState() {
+        if appSwitcherSession.isActive {
+            _ = appSwitcherSession.cancel()
+            diagnosticLogger("HID APP SWITCHER cancelled reason=input_reset")
+        }
         if !activeDeviceIsSeized {
             for usage in activeUsages {
                 if let button = RemoteButton.usageMap[usage] {

@@ -21,6 +21,46 @@ enum KeyboardInjector {
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
 
+    final class AppSwitcherSession {
+        private let keyStatePoster: KeyStatePoster
+        private(set) var isActive = false
+
+        init(keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState) {
+            self.keyStatePoster = keyStatePoster
+        }
+
+        @discardableResult
+        func trigger() -> Bool {
+            if isActive {
+                return postTab()
+            }
+
+            guard keyStatePoster(leftCommandKeyCode, true, .maskCommand) else {
+                return false
+            }
+            guard postTab() else {
+                _ = keyStatePoster(leftCommandKeyCode, false, [])
+                return false
+            }
+            isActive = true
+            return true
+        }
+
+        @discardableResult
+        func cancel() -> Bool {
+            guard isActive else { return true }
+            let released = keyStatePoster(leftCommandKeyCode, false, [])
+            isActive = false
+            return released
+        }
+
+        private func postTab() -> Bool {
+            let pressed = keyStatePoster(48, true, .maskCommand)
+            let released = keyStatePoster(48, false, .maskCommand)
+            return pressed && released
+        }
+    }
+
     struct AccessibilityTextCandidate: Equatable {
         let role: String
         let identifier: String
@@ -1493,7 +1533,7 @@ enum KeyboardInjector {
         up.post(tap: .cghidEventTap)
     }
 
-    private static func postKeyState(
+    static func postKeyState(
         code: CGKeyCode,
         isDown: Bool,
         flags: CGEventFlags

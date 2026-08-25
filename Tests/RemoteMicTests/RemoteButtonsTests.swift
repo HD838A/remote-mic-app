@@ -567,6 +567,43 @@ struct RemoteButtonsTests {
         #expect(postedStates[1].2.isEmpty)
     }
 
+    @Test func appSwitcherSessionKeepsCommandHeldAcrossTabSelections() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            }
+        )
+
+        #expect(session.trigger())
+        #expect(session.isActive)
+        #expect(session.trigger())
+        #expect(session.cancel())
+        #expect(!session.isActive)
+        #expect(session.cancel())
+
+        #expect(posted.count == 6)
+        #expect(posted[0].0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2 == .maskCommand)
+        #expect(posted[1].0 == 48)
+        #expect(posted[1].1)
+        #expect(posted[1].2 == .maskCommand)
+        #expect(posted[2].0 == 48)
+        #expect(!posted[2].1)
+        #expect(posted[2].2 == .maskCommand)
+        #expect(posted[3].0 == 48)
+        #expect(posted[3].1)
+        #expect(posted[3].2 == .maskCommand)
+        #expect(posted[4].0 == 48)
+        #expect(!posted[4].1)
+        #expect(posted[4].2 == .maskCommand)
+        #expect(posted[5].0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(!posted[5].1)
+        #expect(posted[5].2.isEmpty)
+    }
+
     @Test func customShortcutPostsRecordedKeyAndRequiresAccessibility() {
         let shortcut = CustomKeyboardShortcut(
             keyCode: 40,
