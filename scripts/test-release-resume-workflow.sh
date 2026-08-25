@@ -79,6 +79,8 @@ fi
   "$ROOT/scripts/resume-preview-publication.sh"
 /usr/bin/grep -Fq 'REQUIRE_STAGED_SOURCE="${REQUIRE_STAGED_SOURCE:-0}"' \
   "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq '/bin/mkdir -p "$WORK_DIR"' \
+  "$ROOT/scripts/resume-preview-publication.sh"
 /usr/bin/grep -Fq '.conclusion == $conclusion' "$ROOT/scripts/resume-preview-publication.sh"
 /usr/bin/grep -Fq 'remote_tag_commit' \
   "$ROOT/scripts/resume-preview-publication.sh"
