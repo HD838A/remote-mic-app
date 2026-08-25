@@ -1,7 +1,7 @@
 # 千问短按只能聚焦 Codex，其他 App 找不到输入框
 
 - 时间：2026-08-25
-- 状态：通用主路径已通过 Lark / 飞书 / Telegram 真机验收；微信专用降级已实现，待真机验收
+- 状态：已通过 Lark / 飞书 / Telegram / 微信真机验收
 - 影响范围：macOS；开启千问兼容模式后的“短按定位、长按说话”
 
 ## 复现与日志
@@ -31,3 +31,4 @@
 - 自动化不能代替真实 Electron / Chromium App 的建树时间和最终光标。用户验收需至少覆盖 Codex 与另一个聊天 App；多输入框页面聚焦错误时再补该 App 的定向规则。
 - 2026-08-25 安装包真机日志：飞书 `com.larksuite.larkApp` 经有界重试后出现 `APP FOCUS succeeded`和 `QIANWEN FOCUS ready armed=true`，证明 Codex 白名单已取消且通用路径成立。微信 `com.tencent.xinWeChat` 仍以 `composer_not_found` 结束，需在用户确认的具体聊天页面采集 Accessibility 候选特征后再加定向规则。
 - 后续只读结构确认：微信主聊天窗口只暴露标题栏，聊天区和输入框均不在 Accessibility 树中；唯一 `AXWebArea` 属于“版本更新”窗口，不能当作聊天框。因此微信前台时直接允许长按进入千问；短按在松开时仅对微信主窗口使用有最小尺寸门禁的窗口相对点击。
+- 2026-08-25 微信真机验收通过：用户确认短按可定位聊天输入框，光标已在输入框时长按可立即启动千问。日志两次连续长按分别录得 2.465 秒和 7.318 秒，均为 `STREAM accepted → START → STOP → COMMAND UP → CONFIRM F20`，没有 `MIC_CLOSE` 或 `QIANWEN FOCUS`。
