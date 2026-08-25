@@ -45,7 +45,7 @@ validate_mac_ci_diff() {
         fi
         [[ "$release_job" == true && "$diff_line" == +* ]] && continue
         case "$content" in
-          *release_control_plane*|*release-control-plane*|*"Release control-plane"*|*verify-release-control-plane-diff.sh*|\
+          *release_control_plane*|*release-control-plane*|*"Release control-plane"*|*"release control-plane"*|*verify-release-control-plane-diff.sh*|\
           *.github/workflows/mac-preview-publication.yml*|*.github/workflows/mac-ci.yml*|\
           *scripts/fast-release.sh*|*scripts/prepare-preview-recording-pr.sh*|*scripts/prepare-preview-candidate.sh*|\
           *scripts/publish-release.sh*|*scripts/publish-staged-preview.sh*|\
@@ -54,7 +54,8 @@ validate_mac_ci_diff() {
           *scripts/release-slo-ledger.sh*|*scripts/release-user-wall-watchdog.sh*|\
           *scripts/reconcile-release-event.sh*|*scripts/resolve-stable-request-attestation.sh*|\
           *scripts/verify-release-ready-main-ci.sh*|\
-          *scripts/test-release-pipeline-optimization.sh*|*scripts/test-release-resume-workflow.sh*|*docs_only=false*|*";;"*|*GITHUB_EVENT_NAME*|*GITHUB_WORKSPACE*|*needs.classify_changes.outputs.docs_only*|*needs.classify_changes.outputs.reuse_parent_main_ci*|*"needs: classify_changes"*) ;;
+          *scripts/test-release-pipeline-optimization.sh*|*scripts/test-release-resume-workflow.sh*|\
+          *Tests/RemoteMicTests/BuildSigningTests.swift*|*"swift test --filter BuildSigningTests"*|*DEVELOPER_DIR*|*env:*|*docs_only=false*|*";;"*|*GITHUB_EVENT_NAME*|*GITHUB_WORKSPACE*|*needs.classify_changes.outputs.docs_only*|*needs.classify_changes.outputs.reuse_parent_main_ci*|*"needs: classify_changes"*) ;;
           *)
             print -u2 "macOS CI change is outside the release control-plane classifier: $content"
             return 1
@@ -77,6 +78,9 @@ while IFS= read -r changed_path; do
       ;;
     .github/workflows/mac-ci.yml)
       validate_mac_ci_diff || exit 1
+      control_changed=true
+      ;;
+    Tests/RemoteMicTests/BuildSigningTests.swift)
       control_changed=true
       ;;
     *)
