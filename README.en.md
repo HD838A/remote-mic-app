@@ -120,6 +120,10 @@ The app checks for updates once per day and asks before installing a newer versi
 4. Choose the same device as the microphone in the app that receives dictation or voice input.
 5. Click the target text field, hold the remote voice button to speak, then release it to finish.
 
+Under **Button Mapping**, the voice-button area lets you choose the default Fn/Globe behavior, a Left Command hold, or a Right Command hold. Command modes require SayAll Accessibility permission and press the selected Command side when voice starts, then release it when voice ends. The target voice app must support that standalone side; many apps merge both sides into a generic Command, so verify the target app directly. Pressing another key while Command is held may trigger a Command shortcut.
+
+Fn remains the default because it directly matches Fn-hold voice entry in apps such as Doubao and Weixin, Fn-tap entry in Typeless, and the remote's hold-to-capture/release-to-stop lifecycle. F18, F19, F20, or other uncommon keys could be added technically, but this version does not offer an arbitrary voice-key binding: the target voice app must use the same key, and RC003, iPhone, Apple Watch, Web, permissions, and input-source switching must all share one paired press/release lifecycle. Ordinary remote buttons can still use F1–F20 shortcuts.
+
 To confirm the audio path, send a one-second test tone or inspect input level in QuickTime Player's **New Audio Recording** window.
 
 ### Qianwen Input Method compatibility
@@ -130,7 +134,7 @@ You must still hold the remote voice button while speaking and release it to fin
 
 ### Typeless compatibility
 
-Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝牙遥控器 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** under **Connection & Voice** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
+Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝牙遥控器 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
 
 You must still **hold the 小米蓝牙遥控器 2 Pro voice key while speaking and release it to finish**. The 小米蓝牙遥控器 2 Pro firmware stops microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete 小米蓝牙遥控器 2 Pro HID mapping automatically disables the mode and restores the default Fn-hold mapping.
 
@@ -154,7 +158,7 @@ Each ordinary button supports a single-click action and optional double-click an
 - A long press triggers after about 0.55 seconds and suppresses the single-click action.
 - Buttons with a configured double-click or long-press do not hold-repeat, preventing multiple actions from firing at once.
 
-The voice button is always reserved for voice input and Fn functions and does not participate in ordinary button mapping.
+The voice button is always reserved for voice input and does not participate in ordinary button mapping; choose Fn/Globe, Left Command, or Right Command hold in its dedicated area.
 
 ## Usage statistics
 

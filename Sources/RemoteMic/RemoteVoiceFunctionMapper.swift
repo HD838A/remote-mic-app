@@ -132,6 +132,11 @@ final class RemoteVoiceFunctionMapper {
     private(set) var isPowerKeySuppressed = false
     private(set) var powerSuppressedLocationIDs: Set<UInt32>?
     private(set) var isVoiceKeyNeutralized = false
+    private(set) var matchedServiceCount = 0
+
+    var hasMatchingServices: Bool {
+        matchedServiceCount > 0
+    }
 
     init(serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices) {
         self.serviceProvider = serviceProvider
@@ -146,6 +151,7 @@ final class RemoteVoiceFunctionMapper {
         let requiresCompleteVoiceMapping = neutralizeVoiceKey || mapVoiceKeyToRightCommand
         let services = serviceProvider()
         let matchedCount = services.count
+        matchedServiceCount = matchedCount
         guard matchedCount > 0 else {
             resetAppliedState()
             AppLogger.shared.write(

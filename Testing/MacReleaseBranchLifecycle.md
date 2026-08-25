@@ -109,7 +109,7 @@
 
 1. 在一个已有的同仓普通流水线变更 PR 中修改会进入 `release-pipeline-digest.sh` 的发布路径，记录该 PR 的 exact head Commit 和 digest。
 2. 不创建第二个 PR，只把该 exact SHA 临时映射到 `release/pipeline-qualification/<pr号或短SHA>` ref，以满足受保护 Environment 的分支策略，并以 exact commit/digest 运行 `release_mode=qualification`。
-3. 检查 `release-pipeline-qualification.json` 为 schema 2，并记录 workflow path、Run/attempt、artifact ID/digest、原 PR/source Commit、完整 pipeline digest、外部 Action/私有仓库 full Commit，以及 age、Fastlane、Xcode/Build、Runner image 和验证 CLI 的实际版本。
+3. 检查 `release-pipeline-qualification.json` 为 schema 3，并记录 workflow path、Run/attempt、artifact ID/digest、原 PR/source Commit、完整 pipeline digest、外部 Action/凭据仓库 full Commit，以及 age、Fastlane、Xcode/Build、Runner image 和验证 CLI 的实际版本。产品依赖清单值记录为观察输入，但不参与未变化工具链的资格失效判断。
 4. 资格验证成功后合入原普通 PR；再让产品候选 verifier 确认该 PR 已合入 `main`，从 `refs/pull/<n>/head` 取得原 source Commit并重算 digest。
 5. 对未改变的 digest 查询并复用既有成功资格证明，确认 Preview Runner 的上述 Commit 与工具链逐项完全一致，再使用唯一 `release/pre-vX.Y.Z` 候选分支发布产品版本。
 
@@ -127,15 +127,17 @@
 
 失败判定：把“候选 CI 与受保护发布并行”当成快路径，在 PR 检查尚未成功时接触 Apple 凭据。
 
-## 用例 12：同 SHA 复用可信签名 artifact
+## 用例 12：签名 staging、真实 UI 验收与幂等 publication
 
-1. 让一次 Preview Run 完成双架构签名、公证、staple、最终验证和 Actions artifact 上传，但在创建 GitHub Pre-release 之前失败。
-2. 使用完全相同的候选分支、SHA、版本、Build、`request_id`、pipeline digest 和时间戳重新 dispatch。
-3. 检查恢复器精确验证旧 artifact ID、API digest、下载 ZIP 摘要、workflow path、Run/attempt、候选 branch/SHA、package Job/关键 step、request attestation 和内部资产 manifest。
+1. 使用 `release_mode=stage-preview` 让受保护 workflow 完成双架构签名、公证、staple、最终验证，并上传唯一 signed artifact 与 `preview-stage.json`；确认此时没有 Tag、GitHub Release 或公开 appcast。
+2. 使用 `prepare-staged-preview-ui-test.sh` 下载 exact Run/Artifact，从公开稳定版 `v1.8.3` 建立基线，并通过本地固定 feed 运行真实 Sparkle UI 下载、安装、首次启动、退出和二次启动。
+3. 使用 `record-preview-ui-attestation.sh` 记录生产 appcast SHA、仅替换 URL 的测试 appcast SHA、candidate ZIP SHA、稳定基线 asset ID/digest、安装后签名/公证/Gatekeeper、Sparkle helper `0755`、链接、启动顺序和崩溃检查。
+4. 从 `main` dispatch `macOS Preview Publication`，确认它精确恢复 staged Run/Artifact、重新计算上述摘要、创建或复用 exact Tag，并发布逐字节相同的 staged assets。
+5. 在 Tag 创建后或部分资产上传后注入一次 publication 失败，再运行同一个 publication workflow，确认只补传缺失的 exact assets，既有资产大小或 GitHub digest 不一致时 fail closed。
 
-预期结果：workflow 输出 `reuse-artifact`，不进入 `mac-release` Environment、不读取 Apple/Notary 凭据、不重新签名或公证；publish Job 下载该精确旧 artifact，并继续 Tag、Pre-release 和公开字节验证。
+预期结果：真实 UI 更新发生在公开之前；staging 只运行一次签名/公证；publication 不进入 `mac-release` Environment、不读取 Apple/Notary/Match/Sparkle 私钥；首次发布和恢复共用同一控制面，不新建分支、版本、Build 或签名字节。
 
-失败判定：存在可信 artifact 仍重新打包；只按 artifact 名称或最新 Run 猜测来源；Run、SHA、请求、pipeline digest 或任一摘要不一致仍复用；多个候选 artifact 时任意选择一个。
+失败判定：没有真实 Sparkle UI 安装就公开；先公开最终 appcast 再测试；只按 artifact 名称或最新 Run 猜测来源；Run、SHA、请求、pipeline digest、appcast/ZIP 摘要或任一安装证据不一致仍发布；控制面失败后重新签名、升版本或创建第二候选分支。
 
 ## 用例 13：Preview 固定稳定 latest 基线
 
@@ -150,12 +152,12 @@
 
 - `mac-preview-candidate.yml` 的普通候选 Push 仍不读取 Apple 发布证书。
 - `release_mode=qualification` 只在 pipeline digest 变化且无可复用证明时执行；qualification ref 必须只是已有普通 PR exact SHA 的 Environment alias，不能创建第二个 PR，只产生 digest 资格证明和必要账本，不创建 Tag、Release、appcast 或产品分发包。
-- `release_mode=preview` 只接受唯一 `release/pre-vX.Y.Z` 分支的 exact SHA，且必须复用对应 pipeline digest 资格证明。
-- 签名 Job 继续只有 `contents: read`，签名密钥仅在受保护 Environment 中使用；只有无 Apple 凭据的 publish Job 取得发布所需写权限。
+- `release_mode=stage-preview` 只接受唯一 `release/pre-vX.Y.Z` 分支的 exact SHA，且必须复用对应 pipeline digest 资格证明；受保护 workflow 不创建 Tag、Release 或公开 appcast。
+- 签名 Job 继续只有 `contents: read`，签名密钥仅在受保护 Environment 中使用；独立 `macOS Preview Publication` workflow 从 `main` 运行，不进入该 Environment、不引用 Apple secrets，只取得发布所需写权限。
 - main PR 仍要求 Apple Silicon 与 Intel Ventura 两项必需检查。
 - 重试产生多个同名 check 时，候选验证器使用 exact PR/SHA 的最新已完成成功结果，不以“同名 check 数量必须等于 1”拒绝合法重试。
 - 普通候选回流 PR 的 CI 不得触发 Stable Promotion；只有正式晋升流程显式调度的候选 CI 才可进入晋升 workflow，且没有 `stable-promotion-approved` 时必须明确跳过。
-- 历史 schema 1/2 候选仍可按既有正式晋升流程验证，但新预览候选的 request attestation 必须按 exact candidate SHA/attempt 隔离。
+- 历史 schema 1/2 候选仍可按既有正式晋升流程验证，但新预览候选的 request attestation 使用 schema 5，并必须按 exact candidate SHA/attempt 隔离且记录三个产品依赖 Commit。
 - 当前 Preview 的稳定 `latest` 必须在凭据前、发布/恢复和最终公开验证阶段精确等于 `v1.8.3`；未来正式晋升后必须通过独立普通 PR 更新该受审基线。
 
 ## 日志收集
@@ -163,7 +165,8 @@
 - 候选来源：保存 `verify-preview-branch.sh` 的完整输出、候选 SHA、`BASE_MAIN_COMMIT`、pipeline digest 和 `git log -1 --format='%H %P'`。
 - 资格验证：保存 qualification Run URL/attempt、artifact ID/digest、原普通 PR 号、exact source Commit、临时 alias ref、pipeline digest、外部依赖 Commit、工具链版本、完成时间和 `release-pipeline-qualification.json`；复用时记录原 PR 已合入、`refs/pull/<n>/head` 重算结果和 Preview exact-match 结果，不记录凭据值。
 - attempt：保存 `request_id`、`request_started_at`、candidate SHA、`release_ready_at`、Run manifest 和完成 JSON。replacement 时同时保存旧新 SHA 的关系和变更原因。
-- 发布资产：保存 `candidate-provenance.json`、canonical asset manifest、Release Guard Run URL、回流 PR URL和两项必需检查结果；资产数量以 manifest 为准。
+- UI 验收：保存 `preview-stage.json`、`preview-ui-attestation.json`、稳定基线 asset ID/digest、production/test appcast SHA、candidate ZIP SHA、两次启动和崩溃检查结果。
+- 发布资产：保存 publication Run、`candidate-provenance.json`、canonical asset manifest、Release Guard Run URL、回流 PR URL和两项必需检查结果；资产数量以 manifest 为准。
 - 正式晋升：保存晋升前后 Release 状态、`stable-promotion.json` 和资产 SHA-256 对比。
 - 失败时不得粘贴 Apple 证书、私钥、API key、Match 密码或 Environment secret；只记录脱敏错误和 workflow step。
 
@@ -172,4 +175,4 @@
 - 自动化可验证分支命名、单候选 SHA、frozen base 祖先关系、pipeline digest、允许文件范围、唯一 PR、attempt attestation 和 manifest 资产摘要。
 - 本地回归应覆盖“从当时最新 main 创建通过”、“无关 main 前进后 frozen base 继续有效”、“pipeline digest 变化拒绝”、“重复 PR 拒绝”和“同 SHA 重试不变身份”，不会修改真实远端。
 - 代理可只读检查 GitHub Release、workflow、PR 和提交关系；没有用户明确发布授权时不得创建分支、Tag、Release 或执行晋升。
-- Environment 审批、真实签名/公证、Intel Ventura 安装和可见 App 行为仍需各自真实环境验收；这些结果不能由静态脚本测试替代。
+- Environment 审批、真实签名/公证、Intel Ventura 安装和真实 Sparkle UI 升级仍需各自真实环境验收；这些结果不能由静态脚本测试替代，UI 升级未完成时阻断 Preview publication。

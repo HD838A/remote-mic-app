@@ -64,7 +64,7 @@ for artifact_record in "${artifact_records[@]}"; do
   if ! jq -e \
     --arg digest "$EXPECTED_DIGEST" \
     --arg branchPrefix "$QUALIFICATION_BRANCH_PREFIX" '
-      .schemaVersion == 2 and
+      .schemaVersion == 3 and
       .pipelineDigest == $digest and
       (.sourceBranch | startswith($branchPrefix)) and
       (.sourceCommit | test("^[0-9a-f]{40}$")) and
@@ -82,11 +82,15 @@ for artifact_record in "${artifact_records[@]}"; do
         actionsDownloadArtifactCommit: "634f93cb2916e3fdff6788551b99b062d0335ce0",
         actionsUploadArtifactCommit: "ea165f8d65b6e75b540449e92b4886f43607fa02",
         notarySecretsCommit: "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d",
-        matchCommit: "2e271768593821611c54f3d1b376f39e503f53be",
-        sayAllAICommit: "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c",
-        sayAllMacroPlatformCommit: "76344d4d1a2d477e8f473c901a9f4d3d7b0f107c",
-        sayAllMacRemoteCommit: "3f3c782180eef4024b53941c1f65d80e7cff4c66"
-      }
+        matchCommit: "2e271768593821611c54f3d1b376f39e503f53be"
+      } and
+      (.observedProductDependencies | type == "object" and length == 3 and
+        ([.[] | .repository] | sort) == [
+          "GetSayAll/sayall-ai",
+          "GetSayAll/sayall-mac-remote",
+          "GetSayAll/sayall-macro-platform"
+        ] and
+        ([.[] | .commit] | all(.[]; test("^[0-9a-f]{40}$"))))
     ' "$attestation" >/dev/null; then
     continue
   fi

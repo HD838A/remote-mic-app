@@ -250,6 +250,30 @@ struct SettingsPageRegressionTests {
         #expect(!helperSource.contains("KeyboardInjector.send(.escape)"))
     }
 
+    @Test func mappingFooterUsesCompactLayoutAtMinimumWindowWidth() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let footer = try #require(settingsSource.range(of: "private var mappingFooter"))
+        let selector = try #require(settingsSource.range(
+            of: "private func remoteDeviceSelector",
+            range: footer.upperBound..<settingsSource.endIndex
+        ))
+        let footerSource = settingsSource[footer.lowerBound..<selector.lowerBound]
+
+        #expect(footerSource.contains("VStack(alignment: .leading, spacing: 12)"))
+        #expect(!footerSource.contains("HStack(spacing: 16)"))
+        #expect(footerSource.contains("mappingVoiceKeyModeControl"))
+        #expect(footerSource.contains("mappingVoiceFnTapControl"))
+        #expect(footerSource.contains("mappingRestoreDefaultsButton"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

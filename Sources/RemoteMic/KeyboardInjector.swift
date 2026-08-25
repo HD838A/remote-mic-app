@@ -70,10 +70,22 @@ enum KeyboardInjector {
     static let syntheticEventMarker: Int64 = 0x5849_414F
     static let contextualMenuKeyCode: CGKeyCode = 110
     static let functionKeyCode: CGKeyCode = 63
+    static let leftCommandKeyCode: CGKeyCode = 55
     static let rightCommandKeyCode: CGKeyCode = 54
     static let f20KeyCode: CGKeyCode = 90
+    /// Web content shells only build the accessibility tree once an assistive
+    /// client announces itself, so the composer scan finds an empty shell until
+    /// one of these attributes is set. `AXManualAccessibility` is the Chromium
+    /// and Electron convention and is tried first, because the standard
+    /// `AXEnhancedUserInterface` that VoiceOver uses is known to distort windows
+    /// and animations on some Electron versions. Shells that are not Chromium
+    /// based answer `attributeUnsupported` for the first attribute and only
+    /// respond to the standard one, so it is used as a fallback for exactly
+    /// those apps.
     static let manualAccessibilityAttribute = "AXManualAccessibility"
     static let enhancedUserInterfaceAttribute = "AXEnhancedUserInterface"
+    /// The web content tree needs about one to two seconds after the attribute
+    /// is set, so the composer scan keeps retrying for longer than that.
     static let composerFocusMaximumAttempts = 12
     static let composerFocusRetryMilliseconds = 250
     private static let focusRequests = ApplicationFocusRequestGate()
@@ -110,11 +122,33 @@ enum KeyboardInjector {
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyStatePoster: KeyStatePoster = postKeyState
     ) -> Bool {
+        setVoiceKeyPressed(
+            .function,
+            isPressed: isPressed,
+            accessibilityTrusted: accessibilityTrusted,
+            keyStatePoster: keyStatePoster
+        )
+    }
+
+    @discardableResult
+    static func setVoiceKeyPressed(
+        _ mode: VoiceKeyMode,
+        isPressed: Bool,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postKeyState
+    ) -> Bool {
         guard accessibilityTrusted() else { return false }
+        let flags: CGEventFlags
+        switch mode {
+        case .function:
+            flags = isPressed ? .maskSecondaryFn : []
+        case .leftCommand, .rightCommand:
+            flags = isPressed ? .maskCommand : []
+        }
         return keyStatePoster(
-            functionKeyCode,
+            mode.keyCode,
             isPressed,
-            isPressed ? .maskSecondaryFn : []
+            flags
         )
     }
 
@@ -670,11 +704,15 @@ enum KeyboardInjector {
         }
     }
 
+    /// The fallback only runs when the Chromium attribute is unsupported, so the
+    /// log has to name which attribute actually answered.
     static func manualAccessibilityResultToken(primary: AXError, fallback: AXError?) -> String {
         guard let fallback else { return manualAccessibilityResultName(primary) }
         return "fallback_enhanced_\(manualAccessibilityResultName(fallback))"
     }
 
+    /// The fallback answer wins whenever it was attempted, because the primary
+    /// attribute was unsupported by that app.
     static func manualAccessibilityEffectiveResult(
         primary: AXError,
         fallback: AXError?
@@ -683,6 +721,9 @@ enum KeyboardInjector {
         return fallback ?? primary
     }
 
+    /// The attribute is set on every attempt because it is idempotent, but only
+    /// the first attempt and the attempt that finally builds the tree carry new
+    /// information; the retries in between would repeat the same reason.
     static func shouldLogManualAccessibility(
         result: AXError,
         attempt: Int,

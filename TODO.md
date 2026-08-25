@@ -179,7 +179,7 @@
   - 真实语音测试分别确认语音会话开始、实际 PCM 样本到达、所选语音输出设备就绪、松开后会话结束和文字实际出现在向导输入框；测试内容不由无线麦保存或上传。
   - 已完成 Onboarding 后权限被撤销或设备失效时，只在主面板显示对应修复提示并直接打开失败步骤，不强迫老用户重跑完整向导；流程使用版本化状态，新版本只补跑新增或失败的必要检查。
   - 重新布局“连接”页面，按“RC003 连接与语音状态 → 主要连接/重连操作 → 手机 App 与网页版等备用入口 → 对应排障信息”的顺序组织；当前状态和最常用操作优先显示，错误信息直接关联可执行的解决步骤，避免设备状态、语音触发和多种手机连接入口混在同一视觉层级。
-  - 重新布局“按键映射”页面，按“遥控器实物图与当前选中按键 → 当前按键动作配置 → 映射启用状态与必要说明 → 高级或实验选项”组织；保留全部现有映射能力、麦克风键固定行为和实物图点击定位，不因布局调整改变按键含义、默认配置或持久化格式。
+  - 重新布局“按键映射”页面，按“遥控器实物图与当前选中按键 → 当前按键动作配置 → 映射启用状态与必要说明 → 高级或实验选项”组织；保留全部现有映射能力、语音键独立触发模式和实物图点击定位，不因布局调整改变普通按键含义、默认配置或持久化格式。
   - [x] 已按确认设计完成“连接”和“按键映射”两个现有设置页的重布局：连接页保留实体遥控器、语音输出、MiRemoteV 2ch、Nearby、TestFlight、受信任设备和网页版全部入口；按键页同时展示所有按键的单击、双击、长按，并默认锁定正在编辑的按键。
   - [x] 已实现 Typeless 式双栏 Onboarding：顶部仅显示“准备 › 设置 › 试一下”，不显示步骤编号、总数、百分比或强制提示；流程状态版本化持久保存，完成前启动时强制显示向导且不启动完整运行时，进入设置阶段后才启动蓝牙和音频服务。
   - [x] 自动化已覆盖步骤顺序、前后导航、启动窗口与延迟运行时门禁、所有能力门禁、退出续接、完成版本和重新运行；Onboarding 定向测试通过。完整 Swift 测试 178 项、18 个 suite 以及 42 项项目自检全部通过，Release 构建和测试 App 代码签名校验通过。无需屏幕解锁，已用生产视图离屏生成并逐页检查浅色、深色各 8 张真实实现截图，`1020 × 772` 页面无裁切且两种外观左右视觉体系一致；截图能力保留为 App 隐藏入口和本机 Skill。`v1.8.8 (100)` 已作为公开 Pre-release 发布，最终 ZIP 锁屏启动存活且无新增崩溃，公开下载资产逐字节校验和从已安装 `1.8.7 (68)` 发现候选更新均通过。
@@ -207,6 +207,7 @@
   - 仍需在 macOS 14、15 和当前系统上验证全新安装、逐项拒绝后恢复、退出后续接、App 重启、权限被撤销、实体遥控器/iPhone Nearby/手机 Safari 网页版断连、音频设备缺失、豆包/Typeless/其他工具及完成后的首次真实使用；使用 `1020 × 772` 窗口逐步检查 Onboarding 和“连接、按键映射、权限”页面，确保页头、状态、主要操作、滚动和底部导航均不裁切，也不改变窗口几何。
   - 详细步骤、状态模型、错误分支、导航结构、实现切片和验收矩阵保存在私有产品资料库；公开 TODO 只保留产品行为和兼容边界。
 - [x] ~~自动聚焦输入框~~（已完成：打开 Codex、Claude、cmux 后自动聚焦其输入区域；内置 App、自定义 App和自定义快捷键现统一等待 system-wide Accessibility 最终焦点成为安全可编辑位置，再允许第一次 Fn 语音启动）
+  - 2026-08-22 真机发现该能力对 Claude Desktop 和 ChatGPT 稳定失效（`composer_not_found`）：web 内容的辅助功能树是懒加载的，必须由辅助技术客户端先声明自己。已在聚焦流程中设置 `AXManualAccessibility`，对不认该 Chromium 约定的外壳降级为标准的 `AXEnhancedUserInterface`，并把 composer 重试窗口放宽到 12 × 250ms。Claude Desktop 已真机验收通过；ChatGPT 的降级路径仍待复验。根因与步骤见 `Bugs/2026-08-22-electron-composer-focus-needs-manual-accessibility.md`。
 - [ ] 支持通过遥控器按键一键唤起 Codex 并启动其语音功能（仅记录，暂不开发）
   - 第一层“打开或切换到 Codex，并聚焦输入框”已经具备技术基础；目标是将其与“启动 Codex 自带语音输入”组合为一个可配置动作，用户按一次遥控器按键即可开始说话。
   - 实现前先确认 Codex 是否提供稳定的全局快捷键、菜单命令、URL Scheme、App Intent 或其他公开入口。若存在，优先调用公开入口；若只有可访问性树中的麦克风按钮，可评估通过辅助功能执行 `AXPress`，但不得依赖固定屏幕坐标。
@@ -244,6 +245,10 @@
   - 功能入口位于“按键映射”页遥控器下方，与语音键的固定按住说话行为放在一起说明；连接页不再重复展示该设置。
   - 已完成辅助功能权限门、全目标 HID neutralize 与失败回滚、generation 会话状态、开头 pre-roll、结尾排空、配置兼容及自动化测试；新增跨组件首次语音门禁，覆盖目标延迟 0～3 秒、5 秒缓存、提前松开、超时、目标切换、敏感字段以及 RC001/RC003 模拟 `STREAM_START → AUDIO → STREAM_STOP`，不再把第三次成功视为通过。待实体遥控器复验默认豆包路径、Typeless 路径、录音中关闭开关、断连恢复和唤起目标后的第一次文字上屏，再标记完成。
   - `1.7.6` 预览版已因 macOS 26 启动阶段的 HID 服务生命周期崩溃撤回；修复后服务对象会在映射读取和写入期间持续持有所属 HID 客户端，并由生命周期回归测试覆盖。`1.7.7` 已在 RC003 连接和代表性持久化设置下通过最终 ZIP App 的首次启动、正常退出、二次启动、四种功能状态及无新增崩溃报告门禁；PKG 内嵌 App 与已启动验证的 App 完全一致，已发布为 Pre-release。Typeless 等实验路径仍按本条后续真机范围继续验证。
+- [ ] 语音键支持 Fn/左 Command/右 Command 长按模式
+  - 默认保持 Fn/地球键；可在“按键映射”页选择左 Command 或右 Command 长按。Command 模式需要辅助功能权限，并覆盖 RC003、iPhone、Apple Watch 和网页版语音入口。
+  - Command 模式不得通过全局 Command flagsChanged 监听普通键盘；只在真实语音会话开始/结束时发送成对 keyDown/keyUp。Fn 点按模式仅在 Fn/地球键模式有效。
+  - 组件和策略自动化已覆盖配置迁移与原子导入门禁、左右键码、跨来源 owner latch、输入源多 owner、每个 Bridge Ready 策略、F5 映射事务和设置页紧凑布局；部分 BridgeAppModel 接线仍由源码范围断言保护，未启用硬件模拟依赖，不能替代回调级事件回放。待 RC003、iPhone、Apple Watch、网页版、系统权限及目标第三方语音应用真实环境验收后再标记完成。详细测试步骤见 [`Testing/VoiceKeyModes.md`](Testing/VoiceKeyModes.md)。
 - [ ] 普通遥控器语音键突破一分钟录音限制 <!-- workshop:status=阻塞;priority=P2 -->
   - 曾尝试在普通物理语音会话收到 `STREAM_START` 后每 10 秒调用 ATVV v1.0 `MIC_EXTEND`，并设置 180 秒关闭与 2 秒超时重连。
   - 2026-08-11 真机日志确认普通物理会话没有 `microphoneOpened` 状态，定时调用持续返回 `ATVV MIC_EXTEND rejected`，命令并未写入遥控器；模拟租期模型不能证明真实固件行为。
@@ -282,9 +287,10 @@
   - 候选版本不存在、GitHub API 限流、网络超时或候选源暂不可用时静默忽略，不显示错误弹窗；手动检查继续使用稳定源。
   - macOS 每个版本只使用一个从当时最新 `origin/main` 创建的 `release/pre-vX.Y.Z` 分支、一个当前冻结 SHA 和一个 Draft 回流 PR，禁止 `-rerun*`、`-canary-*` 和同版本第二 PR。用户指定的产品 Commit 尚未合入时，发布主管先从最新 `origin/main` 建立独立集成分支，只重放指定工作及必要依赖，并通过普通 PR 和必需检查合入。候选冻结后允许 main 前进，只要 frozen base 仍为当前 main 祖先且 pipeline digest 不变；metadata-only 候选复用该 base 精确 SHA 已通过的双架构测试、自检和 Release 构建，出现产品代码或依赖差异时拒绝 fast path。
   - 同一候选 SHA 的 Runner、审批、GitHub、Apple 或 CDN 故障只重跑 workflow，复用同一分支、PR、版本、Build、`request_id` 和该 attempt 的 `release_ready_at`。只有内容、基线或 pipeline digest 真正变化且尚未进入不可变阶段时，才结束旧 attempt，并在核对远端旧 head 后以 compare-and-swap / `force-with-lease` 更新同一版本分支与 PR；旧 SHA、Run 和 attestation 必须保留。若内容变化发生在签名、公证或公开身份产生之后，则使用新版本和递增 Build。
-  - 发布流水线资格验证按 digest 独立复用：只把已有普通流水线变更 PR 的 exact SHA 临时映射为 `release/pipeline-qualification/<pr号或短SHA>` Environment alias，不创建第二个 PR，也不占用产品版本/Build。资格 artifact 记录原 PR；原 PR 合入后 verifier 从 `refs/pull/<n>/head` 重算 source digest，因此证明不依赖 alias 永久存在。Match 私有仓库继续按完整 Commit 检出，并在 Runner 临时 checkout 内把本地 `main` 明确绑定到该 Commit，避免 Fastlane 对 detached HEAD 创建空 orphan 分支。候选 Push 后唯一 Draft PR 与无凭据 Preview 检查可并行，但受保护签名、公证和公开发布必须等待 exact SHA、双架构检查、Draft PR 门禁及当前 digest 资格证明全部成功。
+  - 发布流水线资格验证按 artifact-closure digest 独立复用：只把已有普通流水线变更 PR 的 exact SHA 临时映射为 `release/pipeline-qualification/<pr号或短SHA>` Environment alias，不创建第二个 PR，也不占用产品版本/Build。SayAllAI、SayAllMacroPlatform、SayAllMacRemote 的产品 Commit 统一写入 `config/release-dependencies.json`，由三个 workflow 通过同一解析器加载并进入 request attestation；只更新产品依赖值不再使未变化的签名/打包工具链 qualification 失效。Match 私有仓库继续按完整 Commit 检出，并在 Runner 临时 checkout 内把本地 `main` 明确绑定到该 Commit，避免 Fastlane 对 detached HEAD 创建空 orphan 分支。
   - 2026-08-24：候选 Draft PR 的 metadata-only CI 通过普通变量接收 `github.head_ref`，并在调用受信脚本时显式传入 `GITHUB_REF_NAME`；禁止依赖 YAML `env` 覆盖 GitHub 保留变量，避免 PR merge ref 被误判为非法候选分支。
-  - 签名产物在受保护 workflow 内直接交给无 Apple 凭据的 publish Job；公开资产名称和数量以 `candidate-provenance.json` / canonical manifest 为准，不写死固定项数。`request_started_at` 和 `request_id` 记录整个用户请求且不重置；每个新 candidate SHA 是独立 attempt，新 SHA 门禁完成后产生自己的 `release_ready_at`。Preview 和正式晋升均从各自 `release_ready_at` 起按 30 分钟纯发布窗口执行 watchdog，内部 29 分钟截止后明确失败且不盲目重试。
+  - Preview 改为两阶段：受保护 `macOS Signed Release Packages` 使用 `stage-preview` 只生成一次双架构签名、公证、staple 后的不可变 artifact 和 `preview-stage.json`，不创建 Tag/Release；当前授权会话从公开稳定版 `v1.8.3` 通过本地固定 feed 完成真实 Sparkle UI 下载、安装、首次启动、退出和二次启动，结构化 attestation 通过后，再由 `main` 上不读取 Apple 凭据的 `macOS Preview Publication` 幂等公开同一字节。publication 控制面修复合入 main 后直接重试，不重新签名、公证、升版本或新建分支。公开资产名称和数量继续以 `candidate-provenance.json` / canonical manifest 为准，不写死固定项数。
+  - `request_started_at` 和 `request_id` 记录整个用户请求且不重置；每个新 candidate SHA 是独立 attempt，新 SHA 门禁完成后产生自己的 `release_ready_at`。Preview 和正式晋升均从各自 `release_ready_at` 起按 30 分钟纯发布窗口执行 watchdog，staging、真实 UI 验收、publication 和公开验证分别记时，内部 29 分钟截止后明确失败且不盲目重试。
   - 不存在“发布正式版”命令。正式版只能选择已经发布并验证过的指定 Pre-release，将完全相同的 Tag、Commit、签名、公证资产和摘要晋升；候选回流 `main` 不构成正式晋升授权，禁止从 `main` 重建正式资产。
   - 2026-08-17：正式晋升工作流补充独立 `mac-stable-release` Environment 和按需安装 `ripgrep` 的工具门禁；晋升仍只复验并提升既有候选字节，不读取 Apple 签名 Secrets，也不重新打包。
   - 2026-08-19：GitHub Release 标题和 Tag 注释统一使用 `无线麦SayAll.app <版本>`，并由 Swift 与 shell 回归测试拒绝旧的 `Remote Mic` 用户可见标题。

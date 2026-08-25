@@ -41,9 +41,11 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "docs_only=false" >> "$GITHUB_OUTPUT"
-            echo "reuse_parent_main_ci=false" >> "$GITHUB_OUTPUT"
-            echo "release_control_plane_only=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "docs_only=false"
+              echo "reuse_parent_main_ci=false"
+              echo "release_control_plane_only=false"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -80,21 +82,27 @@ jobs:
             case "$changed_path" in
               *.md|Screenshots/*) ;;
               scripts/publish-release.sh|\
+              scripts/fast-release.sh|\
+              scripts/prepare-preview-recording-pr.sh|\
+              scripts/prepare-preview-candidate.sh|\
+              scripts/publish-staged-preview.sh|\
+              scripts/prepare-staged-preview-ui-test.sh|\
+              scripts/record-preview-ui-attestation.sh|\
+              scripts/verify-preview-ui-attestation.sh|\
               scripts/resume-preview-publication.sh|\
               scripts/release-slo-ledger.sh|\
               scripts/release-user-wall-watchdog.sh|\
               scripts/reconcile-release-event.sh|\
-              scripts/resolve-release-request-attestation.sh|\
               scripts/resolve-stable-request-attestation.sh|\
-              scripts/release-pipeline-digest.sh|\
               scripts/verify-release-ready-main-ci.sh|\
               scripts/test-release-pipeline-optimization.sh|\
               scripts/test-release-resume-workflow.sh|\
+              scripts/test-prepare-preview-candidate.sh|\
               scripts/verify-release-control-plane-diff.sh)
                 release_control_plane_changed=true
                 docs_only=false
                 ;;
-              .github/workflows/mac-release-package.yml|\
+              .github/workflows/mac-preview-publication.yml|\
               .github/workflows/mac-ci.yml)
                 release_control_plane_changed=true; docs_only=false ;;
               *)
@@ -143,12 +151,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve versioned release dependencies
+        id: release-dependencies
+        if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: ./scripts/resolve-release-dependencies.sh github-output
+
       - name: Check out private feature package
         if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          repository: GetSayAll/sayall-ai
-          ref: 01beeceac9c4091e7e8e122ad1e840ac5e5cee1c
+          repository: ${{ steps.release-dependencies.outputs.sayall_ai_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_ai_commit }}
           path: .private-dependencies/sayall-ai
           ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
           persist-credentials: false
@@ -157,8 +170,8 @@ jobs:
         if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          repository: GetSayAll/sayall-macro-platform
-          ref: 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
+          repository: ${{ steps.release-dependencies.outputs.sayall_macro_platform_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}
           path: .private-dependencies/sayall-macro-platform
           ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
@@ -173,8 +186,8 @@ jobs:
         if: needs.classify_changes.outputs.docs_only != 'true' && needs.classify_changes.outputs.reuse_parent_main_ci != 'true' && needs.classify_changes.outputs.release_control_plane_only != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          repository: GetSayAll/sayall-mac-remote
-          ref: 3f3c782180eef4024b53941c1f65d80e7cff4c66
+          repository: ${{ steps.release-dependencies.outputs.sayall_mac_remote_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}
           path: .private-dependencies/sayall-mac-remote
           ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
           persist-credentials: false
@@ -256,3 +269,6 @@ jobs:
 
       - name: Run recovery control-plane tests
         run: ./scripts/test-release-resume-workflow.sh
+
+      - name: Run idempotent candidate preparation tests
+        run: ./scripts/test-prepare-preview-candidate.sh

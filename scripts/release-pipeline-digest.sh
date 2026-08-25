@@ -10,36 +10,21 @@ if [[ "$#" -gt 1 ]]; then
 fi
 
 PIPELINE_FILES=(
-  Package.swift
-  Package.resolved
   .github/workflows/mac-release-package.yml
-  .github/workflows/mac-preview-candidate.yml
-  .github/workflows/mac-ci.yml
-  .github/workflows/mac-stable-promote.yml
-  .github/workflows/release-guard.yml
   scripts/build-app.sh
   scripts/build-dmg.sh
   scripts/build-doubao-driver.sh
   scripts/build-doubao-driver-pkg.sh
   scripts/check-repository-boundaries.sh
-  scripts/fast-release.sh
   scripts/notarize-release.sh
   scripts/package-macos-release-in-actions.sh
   scripts/package-macos-release-variants.sh
-  scripts/prepare-preview-recording-pr.sh
-  scripts/publish-release.sh
-  scripts/reconcile-release-event.sh
   scripts/release-pipeline-digest.sh
-  scripts/resume-preview-publication.sh
+  scripts/resolve-release-dependencies.sh
   scripts/run-release-stage.sh
-  scripts/release-slo-ledger.sh
-  scripts/release-user-wall-watchdog.sh
   scripts/release-variant.sh
   scripts/resolve-release-request-attestation.sh
-  scripts/resolve-stable-request-attestation.sh
   scripts/run-trusted-release-validation.sh
-  scripts/test.sh
-  scripts/test-release-pipeline-optimization.sh
   scripts/verify-app.sh
   scripts/verify-dmg.sh
   scripts/verify-doubao-driver.sh
@@ -55,7 +40,23 @@ PIPELINE_FILES=(
 )
 
 CONTROL_PLANE_ONLY_SCRIPTS=(
+  scripts/fast-release.sh
+  scripts/prepare-preview-recording-pr.sh
+  scripts/prepare-preview-candidate.sh
+  scripts/publish-release.sh
+  scripts/publish-staged-preview.sh
+  scripts/prepare-staged-preview-ui-test.sh
+  scripts/record-preview-ui-attestation.sh
+  scripts/verify-preview-ui-attestation.sh
+  scripts/reconcile-release-event.sh
+  scripts/release-slo-ledger.sh
+  scripts/release-user-wall-watchdog.sh
+  scripts/resume-preview-publication.sh
+  scripts/resolve-stable-request-attestation.sh
+  scripts/test.sh
+  scripts/test-release-pipeline-optimization.sh
   scripts/test-release-resume-workflow.sh
+  scripts/test-prepare-preview-candidate.sh
   scripts/verify-release-control-plane-diff.sh
   scripts/verify-release-ready-main-ci.sh
 )

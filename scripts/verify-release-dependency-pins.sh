@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="${REPOSITORY_ROOT:-${0:A:h:h}}"
 PACKAGE_MANIFEST="$ROOT/Package.swift"
 PACKAGE_RESOLVED="$ROOT/Package.resolved"
+DEPENDENCY_MANIFEST="$ROOT/config/release-dependencies.json"
 WORKFLOWS=(
   "$ROOT/.github/workflows/mac-ci.yml"
   "$ROOT/.github/workflows/mac-preview-candidate.yml"
@@ -13,13 +14,9 @@ RELEASE_CRITICAL_WORKFLOWS=(
   "$ROOT/.github/workflows/mac-ci.yml"
   "$ROOT/.github/workflows/mac-preview-candidate.yml"
   "$ROOT/.github/workflows/mac-release-package.yml"
+  "$ROOT/.github/workflows/mac-preview-publication.yml"
   "$ROOT/.github/workflows/mac-stable-promote.yml"
   "$ROOT/.github/workflows/release-guard.yml"
-)
-DEPENDENCIES=(
-  "SayAllAI|GetSayAll/sayall-ai|SAYALL_AI_RELEASE_REF"
-  "SayAllMacroPlatform|GetSayAll/sayall-macro-platform|SAYALL_MACRO_PLATFORM_RELEASE_REF"
-  "SayAllMacRemote|GetSayAll/sayall-mac-remote|SAYALL_MAC_REMOTE_RELEASE_REF"
 )
 CREDENTIAL_REPOSITORIES=(
   "ReleaseNotarySecrets|HD838A/remotemic-notary-secrets|5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"
@@ -35,6 +32,12 @@ if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
   exit 1
 fi
+for command_name in jq grep; do
+  command -v "$command_name" >/dev/null 2>&1 || {
+    print -u2 "Missing required command: $command_name"
+    exit 1
+  }
+done
 
 extract_ref() {
   local workflow="$1"
@@ -103,46 +106,43 @@ done
 test -f "$PACKAGE_MANIFEST"
 test -f "$PACKAGE_RESOLVED"
 
-for dependency in "${DEPENDENCIES[@]}"; do
-  label="${dependency%%|*}"
-  remainder="${dependency#*|}"
-  repository="${remainder%%|*}"
-  variable_name="${remainder#*|}"
-  expected_ref=""
+test -f "$DEPENDENCY_MANIFEST"
+test -x "$ROOT/scripts/resolve-release-dependencies.sh"
+dependencies_json="$(REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/resolve-release-dependencies.sh" json)"
+sayall_ai_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllAI.commit')"
+sayall_macro_platform_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllMacroPlatform.commit')"
+sayall_mac_remote_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllMacRemote.commit')"
 
-  for workflow in "${WORKFLOWS[@]}"; do
-    pinned_ref="$(extract_ref "$workflow" "$repository" "$variable_name")"
-    if [[ ! "$pinned_ref" =~ '^[0-9a-f]{40}$' ]]; then
-      print -u2 "$label must use a full 40-character commit in ${workflow:t}"
-      exit 1
-    fi
-    if [[ -z "$expected_ref" ]]; then
-      expected_ref="$pinned_ref"
-    elif [[ "$pinned_ref" != "$expected_ref" ]]; then
-      print -u2 "$label commit differs across macOS CI, preview, and signed release workflows"
+for workflow in "${WORKFLOWS[@]}"; do
+  grep -Fq 'resolve-release-dependencies.sh' "$workflow" || {
+    print -u2 "${workflow:t} must resolve the versioned release dependency manifest"
+    exit 1
+  }
+  for commit in "$sayall_ai_commit" "$sayall_macro_platform_commit" "$sayall_mac_remote_commit"; do
+    if grep -Fq "$commit" "$workflow"; then
+      print -u2 "${workflow:t} must not duplicate a product dependency commit outside the versioned manifest"
       exit 1
     fi
   done
-
-  if [[ "$label" == "SayAllMacRemote" ]]; then
-    manifest_ref="$(extract_manifest_ref)"
-    resolved_ref="$(extract_resolved_ref)"
-    if [[ ! "$manifest_ref" =~ '^[0-9a-f]{40}$' ]]; then
-      print -u2 "$label must use a full 40-character revision in Package.swift"
-      exit 1
-    fi
-    if [[ ! "$resolved_ref" =~ '^[0-9a-f]{40}$' ]]; then
-      print -u2 "$label must use a full 40-character revision in Package.resolved"
-      exit 1
-    fi
-    if [[ "$manifest_ref" != "$expected_ref" || "$resolved_ref" != "$expected_ref" ]]; then
-      print -u2 "$label commit differs across Package.swift, Package.resolved, and macOS workflows"
-      exit 1
-    fi
-  fi
-
-  print "$label: $expected_ref"
 done
+
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}' "$ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$ROOT/.github/workflows/mac-release-package.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}' "$ROOT/.github/workflows/mac-release-package.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$ROOT/.github/workflows/mac-release-package.yml"
+
+manifest_ref="$(extract_manifest_ref)"
+resolved_ref="$(extract_resolved_ref)"
+if [[ "$manifest_ref" != "$sayall_mac_remote_commit" || "$resolved_ref" != "$sayall_mac_remote_commit" ]]; then
+  print -u2 "SayAllMacRemote commit differs across the versioned manifest, Package.swift, and Package.resolved"
+  exit 1
+fi
+
+print "SayAllAI: $sayall_ai_commit"
+print "SayAllMacroPlatform: $sayall_macro_platform_commit"
+print "SayAllMacRemote: $sayall_mac_remote_commit"
 
 for credential_repository in "${CREDENTIAL_REPOSITORIES[@]}"; do
   label="${credential_repository%%|*}"

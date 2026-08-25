@@ -1,0 +1,216 @@
+name: macOS Preview Publication
+run-name: mac-preview-publication ${{ inputs.tag }} ${{ inputs.request_id }} ${{ inputs.expected_commit }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact staged Preview tag
+        required: true
+        type: string
+      expected_commit:
+        description: Exact candidate commit
+        required: true
+        type: string
+      expected_pipeline_digest:
+        description: Historical artifact-closure digest of the staged candidate
+        required: true
+        type: string
+      request_started_at:
+        description: Immutable original request epoch
+        required: true
+        type: string
+      request_id:
+        description: Immutable release request identifier
+        required: true
+        type: string
+      source_run_id:
+        description: Exact successful staging Run
+        required: true
+        type: string
+      source_run_attempt:
+        description: Exact staging Run attempt
+        required: true
+        type: string
+      source_artifact_id:
+        description: Exact signed artifact ID
+        required: true
+        type: string
+      source_artifact_digest:
+        description: Exact signed artifact API digest
+        required: true
+        type: string
+      ui_attestation_b64:
+        description: Structured real Sparkle UI upgrade attestation
+        required: true
+        type: string
+
+concurrency:
+  group: mac-preview-publication-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_STABLE_TAG: v1.8.3
+
+jobs:
+  publish-staged-preview:
+    name: Publish exact UI-tested staged Preview bytes
+    runs-on: macos-15
+    timeout-minutes: 8
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
+      RELEASE_REQUEST_STARTED_AT: ${{ inputs.request_started_at }}
+      RELEASE_REQUEST_ID: ${{ inputs.request_id }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+      SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+      SOURCE_ARTIFACT_DIGEST: ${{ inputs.source_artifact_digest }}
+      EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
+      EXPECTED_STABLE_TAG: v1.8.3
+      ALLOW_FROZEN_BASE_MAIN: 1
+      ALLOW_LATE_RECOVERY: 1
+      PUBLIC_DOWNLOAD_CONCURRENCY: 4
+    steps:
+      - name: Validate staged publication inputs before checkout
+        env:
+          UI_ATTESTATION_B64: ${{ inputs.ui_attestation_b64 }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$RELEASE_REQUEST_STARTED_AT" =~ ^[0-9]+$ ]]
+          [[ "$RELEASE_REQUEST_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SOURCE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SOURCE_ARTIFACT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$GITHUB_REF_NAME" = main
+          test -n "$UI_ATTESTATION_B64"
+
+      - name: Check out trusted publication control plane
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install staged publication tools
+        run: |
+          command -v jq >/dev/null || brew install jq
+          command -v rg >/dev/null || brew install ripgrep
+
+      - name: Recover exact stage and validate real Sparkle UI attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UI_ATTESTATION_B64: ${{ inputs.ui_attestation_b64 }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = main
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          ui_attestation="$RUNNER_TEMP/preview-ui-attestation.json"
+          print -rn -- "$UI_ATTESTATION_B64" | /usr/bin/base64 -D > "$ui_attestation"
+          jq -e . "$ui_attestation" >/dev/null
+          resume_output="$RUNNER_TEMP/staged-resume-output.txt"
+          SOURCE_RUN_REQUIRED_CONCLUSION=success \
+          REQUIRE_EXISTING_TAG=0 REQUIRE_STAGED_SOURCE=1 \
+          RESUME_WORK_DIR="$RUNNER_TEMP/staged-preview" \
+            ./scripts/resume-preview-publication.sh | tee "$resume_output"
+          candidate="$(awk -F= '$1 == "candidate" {print substr($0,index($0,"=")+1)}' "$resume_output")"
+          request_attestation="$(awk -F= '$1 == "request_attestation" {print substr($0,index($0,"=")+1)}' "$resume_output")"
+          candidate_digest="$(awk -F= '$1 == "candidate_pipeline_digest" {print substr($0,index($0,"=")+1)}' "$resume_output")"
+          preview_stage="$(awk -F= '$1 == "preview_stage" {print substr($0,index($0,"=")+1)}' "$resume_output")"
+          test "$candidate_digest" = "$EXPECTED_PIPELINE_DIGEST"
+          ./scripts/verify-preview-ui-attestation.sh \
+            "$ui_attestation" "$preview_stage" "$candidate/dist"
+          cp "$ui_attestation" "$RUNNER_TEMP/staged-preview/preview-ui-attestation.json"
+          {
+            echo "STAGED_CANDIDATE=$candidate"
+            echo "STAGED_REQUEST_ATTESTATION=$request_attestation"
+            echo "STAGED_UI_ATTESTATION=$RUNNER_TEMP/staged-preview/preview-ui-attestation.json"
+          } >> "$GITHUB_ENV"
+
+      - name: Publish or resume the exact staged bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ledger="$RUNNER_TEMP/release-slo.tsv"
+          release_ready_at="$(jq -r '.releaseReadyAt' "$STAGED_REQUEST_ATTESTATION")"
+          ./scripts/release-slo-ledger.sh init "$ledger" "$RELEASE_REQUEST_STARTED_AT"
+          now="$(date +%s)"
+          if (( now - release_ready_at >= 1740 )); then
+            set +e
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 late-publication-overrun
+            slo_status="$?"
+            set -e
+            [[ "$slo_status" == 124 ]] || exit "$slo_status"
+            echo "LATE PUBLICATION: the immutable release-ready SLO remains failed; no clock was reset."
+          else
+            ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 ui-tested-stage-publication
+          fi
+          ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
+
+          cd "$STAGED_CANDIDATE"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          remote_tag_commit="$(git ls-remote origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" | awk '$2 ~ /\^\{\}$/ {print $1; found=1; exit} $2 !~ /\^\{\}$/ {fallback=$1} END {if (!found && fallback != "") print fallback}')"
+          if [[ -z "$remote_tag_commit" ]]; then
+            git -c user.name='SayAll Release Manager' -c user.email='release-manager@sayall.app' \
+              tag -a "$RELEASE_TAG" -m "无线麦SayAll.app $RELEASE_TAG"
+            test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_COMMIT"
+            git push origin "refs/tags/$RELEASE_TAG"
+          else
+            test "$remote_tag_commit" = "$EXPECTED_COMMIT"
+          fi
+
+          "$GITHUB_WORKSPACE/scripts/run-release-stage.sh" all publication 180 -- \
+            env \
+              RELEASE_SOURCE_ROOT="$STAGED_CANDIDATE" \
+              RELEASE_CANDIDATE_BRANCH="release/pre-$RELEASE_TAG" \
+              RELEASE_REQUEST_ATTESTATION="$STAGED_REQUEST_ATTESTATION" \
+              EXPECTED_PIPELINE_DIGEST="$EXPECTED_PIPELINE_DIGEST" \
+              RELEASE_TAG="$RELEASE_TAG" \
+              RELEASE_REQUEST_ID="$RELEASE_REQUEST_ID" \
+              EXPECTED_STABLE_TAG="$EXPECTED_STABLE_TAG" \
+              EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_DEVELOPER_TEAM_ID" \
+              ALLOW_FROZEN_BASE_MAIN=1 \
+              "$GITHUB_WORKSPACE/scripts/publish-release.sh" resume-prerelease
+          "$GITHUB_WORKSPACE/scripts/release-slo-ledger.sh" finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
+          if (( $(date +%s) - release_ready_at < 1740 )); then
+            "$GITHUB_WORKSPACE/scripts/release-slo-ledger.sh" check "$ledger" "$release_ready_at" 1740 successful-pipeline
+          fi
+
+      - name: Upload accepted Preview UI attestation
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: preview-ui-attestation-${{ inputs.tag }}-${{ inputs.expected_commit }}
+          path: ${{ env.STAGED_UI_ATTESTATION }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload published release ledger
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-slo-ledger-published-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo.tsv
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload failed publication ledger
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-slo-ledger-failed-${{ github.run_id }}
+          path: ${{ runner.temp }}/release-slo.tsv
+          if-no-files-found: error
+          retention-days: 90
