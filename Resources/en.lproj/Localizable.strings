@@ -334,6 +334,9 @@
 "button_mapping.single_click.help" = "Runs after one press. It waits briefly when a double-click action is set.";
 "button_mapping.double_click.effect" = "Single-click waits briefly to distinguish a double-click, and hold-to-repeat is disabled.";
 "button_mapping.long_press.effect" = "Setting a long-press action disables hold-to-repeat for this button.";
+"button_mapping.rapid_press" = "Allow Rapid Repeated Presses";
+"button_mapping.rapid_press_hint_short" = "Every quick press runs the action instead of only the first one.";
+"button_mapping.rapid_press_help" = "By default an action that cannot hold-to-repeat runs once until the button has stayed released for a moment, so the remote cannot flood the target app while the button is held down. Turn this on for a button you want to tap several times in a row; holding that button down may then run the action repeatedly.";
 "common.suffix.not_installed" = " (Not installed)";
 "common.suffix.experimental_disabled" = " (Experiment disabled)";
 "shortcut.action.record" = "Click to Record a Shortcut";

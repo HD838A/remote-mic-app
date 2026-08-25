@@ -1449,6 +1449,12 @@ struct SettingsView: View {
                 )
             }
 
+            if trigger == .singleClick,
+               configured.action != .disabled,
+               !configured.action.allowsRepeat {
+                mappingRapidPressControl(button: button)
+            }
+
             if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
                 Text("button_mapping.continuous_recording_experiment.power_managed")
                     .font(.system(size: 12))
@@ -1467,6 +1473,24 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func mappingRapidPressControl(button: RemoteButton) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("button_mapping.rapid_press", isOn: Binding(
+                get: { settings.allowsRapidPress(for: button) },
+                set: { settings.setAllowsRapidPress($0, for: button) }
+            ))
+            .font(.system(size: 13, weight: .medium))
+            .toggleStyle(.switch)
+            Text("button_mapping.rapid_press_hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+        .help(localization.text("button_mapping.rapid_press_help"))
     }
 
     @ViewBuilder

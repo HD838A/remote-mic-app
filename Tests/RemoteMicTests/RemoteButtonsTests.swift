@@ -399,6 +399,121 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func rapidPressOptInLetsNonRepeatableActionsFireOnEveryRawPress() throws {
+        let suiteName = "RemoteButtonsTests.rapidPress.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let monitor = HIDRemoteMonitor(settings: AppSettings(defaults: defaults))
+        let otherApp = PresetApplication.codex.bundleIdentifier
+
+        #expect(monitor.shouldAcceptRawPress(
+            button: .volumeDown,
+            action: .customShortcut,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(!monitor.shouldAcceptRawPress(
+            button: .volumeDown,
+            action: .customShortcut,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+
+        for _ in 0..<5 {
+            #expect(monitor.shouldAcceptRawPress(
+                button: .volumeDown,
+                action: .customShortcut,
+                allowsRapidPress: true,
+                frontmostBundleIdentifier: otherApp
+            ))
+        }
+
+        #expect(monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(!monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            allowsRapidPress: true,
+            frontmostBundleIdentifier: otherApp
+        ))
+
+        #expect(monitor.shouldAcceptRawPress(
+            button: .volumeDown,
+            action: .commandQuit,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(!monitor.shouldAcceptRawPress(
+            button: .volumeDown,
+            action: .commandQuit,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+    }
+
+    @Test func rapidPressOptInDefaultsOffAndPersistsWithMappings() throws {
+        let suiteName = "RemoteButtonsTests.rapidPressSettings.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        #expect(!settings.allowsRapidPress(for: .volumeDown))
+        #expect(settings.buttonRapidPressEnabled.isEmpty)
+
+        settings.setAllowsRapidPress(true, for: .volumeDown)
+        #expect(settings.allowsRapidPress(for: .volumeDown))
+        #expect(!settings.allowsRapidPress(for: .up))
+        #expect(AppSettings(defaults: defaults).allowsRapidPress(for: .volumeDown))
+
+        let mappings = try #require(settings.selectedRemoteProfile?.mappings)
+        #expect(mappings.buttonRapidPressEnabled?["volume_down"] == true)
+        #expect(mappings.parsedButtonRapidPressEnabled[.volumeDown] == true)
+
+        settings.setAllowsRapidPress(false, for: .volumeDown)
+        #expect(!settings.allowsRapidPress(for: .volumeDown))
+        #expect(settings.selectedRemoteProfile?.mappings.buttonRapidPressEnabled == nil)
+        #expect(!AppSettings(defaults: defaults).allowsRapidPress(for: .volumeDown))
+
+        settings.setAllowsRapidPress(true, for: .volumeDown)
+        settings.resetBindings()
+        #expect(!settings.allowsRapidPress(for: .volumeDown))
+    }
+
+    @Test func rapidPressOptInTravelsWithExportedConfigurationAndToleratesOlderFiles() throws {
+        let sourceSuiteName = "RemoteButtonsTests.rapidPressExport.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.setAllowsRapidPress(true, for: .volumeDown)
+        let exported = try source.exportedConfigurationData()
+
+        let targetSuiteName = "RemoteButtonsTests.rapidPressImport.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuiteName))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuiteName) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.allowsRapidPress(for: .volumeDown))
+        #expect(!target.allowsRapidPress(for: .up))
+
+        var legacyObject = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "buttonRapidPressEnabled")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(!target.allowsRapidPress(for: .volumeDown))
+    }
+
     @Test func navigationRepeatStopsOnlyWhileRemoteMicIsFrontmost() throws {
         let remoteMic = PresetApplication.remoteMic.bundleIdentifier
         for action in [
