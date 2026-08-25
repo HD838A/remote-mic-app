@@ -31,11 +31,14 @@ fi
 
 for required in \
   'Publish exact UI-tested staged Preview bytes' \
+  'publication_mode' \
+  'PUBLICATION_MODE' \
   'test "$GITHUB_REF_NAME" = main' \
   'SOURCE_RUN_REQUIRED_CONCLUSION=success' \
   'REQUIRE_EXISTING_TAG=0 REQUIRE_STAGED_SOURCE=1' \
   'verify-preview-ui-attestation.sh' \
-  'publish-release.sh" resume-prerelease' \
+  'publication_command=resume-draft' \
+  'publication_command=resume-prerelease' \
   'Publish or resume the exact staged bytes'; do
   /usr/bin/grep -Fq -- "$required" "$PUBLICATION_WORKFLOW"
 done
@@ -48,7 +51,21 @@ if /usr/bin/grep -Fq 'release_mode=' "$ROOT/scripts/publish-staged-preview.sh"; 
   print -u2 "staged publication dispatcher still exposes a second publication mode"
   exit 1
 fi
-/usr/bin/grep -Fq 'resume_existing_prerelease_assets' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'resume_existing_release_assets' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'download_draft_release_assets' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq -- '--draft' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'resume-draft' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'gh release download "$RELEASE_TAG"' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'test "$remote_digest" = "sha256:$staged_sha"' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'publication_mode=' "$ROOT/scripts/publish-staged-preview.sh"
+draft_block="$(/usr/bin/sed -n '/^if \[\[ "$MODE" == "draft"/,/^if \[\[ "$MODE" == "prerelease"/p' \
+  "$ROOT/scripts/publish-release.sh")"
+print -r -- "$draft_block" | /usr/bin/grep -Fq -- '--draft'
+print -r -- "$draft_block" | /usr/bin/grep -Fq 'download_and_compare_draft_candidate'
+if print -r -- "$draft_block" | /usr/bin/grep -Eq 'dispatch_preview_recording_guard|verify_cdn_assets'; then
+  print -u2 "private Draft path unexpectedly publishes to the public Preview delivery plane"
+  exit 1
+fi
 
 /usr/bin/grep -Fq 'SOURCE_RUN_REQUIRED_CONCLUSION="${SOURCE_RUN_REQUIRED_CONCLUSION:-failure}"' \
   "$ROOT/scripts/resume-preview-publication.sh"

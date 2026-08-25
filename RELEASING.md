@@ -3,7 +3,7 @@
 ## 发布主管职责与合法命令
 
 - 无线麦SayAll.app 的每个 macOS 公开版本都由当前获得用户明确授权、并通过会话身份与工作目录校验的发布会话执行；不依赖名为“SayAllMac 发布管理”的固定任务。发布主管负责从用户指定的 Commit、分支或最新 `origin/main` 完成发布就绪整合、候选发布、公开字节验证和结果汇报。
-- 合法的公开发布命令只有两类：发布一个新的 Pre-release；或将用户明确指定的现有 Pre-release `vX.Y.Z` 晋升为正式版。
+- 合法的发布目标包括：创建一个私有 Draft 内部测试包、发布一个新的公开 Pre-release；或将用户明确指定的现有 Pre-release `vX.Y.Z` 晋升为正式版。
 - “发布正式版”不是合法命令。正式版不能凭空构建或发布，只能由已经发布并完成候选验证的指定 Pre-release 晋升产生。
 - 正式晋升必须复用该 Pre-release 的同一 Tag、Tag Commit、`candidate-provenance.json` 和全部已验证资产；不得重新构建、重新签名、重新公证、替换资产或移动 Tag。
 - 当前受审的稳定 `latest` 基线是 `v1.8.3`。每次 Preview 在凭据前、Release 创建或恢复前以及公开字节验证完成后都必须精确校验该值；“执行前后没有变化”不能替代对正确基线的校验。未来成功晋升新的正式版时，必须在独立普通 PR 中同步更新这项受审基线后，才能发布下一个 Preview。
@@ -64,10 +64,10 @@
 7. 同 SHA 的基础设施失败只生成新 workflow run，不新建分支/PR，不改版本、Build、`request_id` 或 `release_ready_at`；若已存在可信签名 artifact、正确的 Tag/Release 字节或仅剩公开交付验证，必须从已确认失败的阶段继续，不得重建或覆盖已生成字节。只有内容确实变化且尚未产生 Tag、Release、appcast 或公开分发资产时，才建立新 SHA 的 replacement attempt：保留原 `request_started_at` 和 `request_id`，保留旧证据，核对旧远端 head 后以 compare-and-swap / `force-with-lease` 更新唯一版本分支与 Draft PR，并在新 SHA 门禁完成后生成新的 attempt attestation 和 `release_ready_at`。公开身份或公开字节已经存在后，内容变化才必须改用新版本和递增 Build；单纯的签名、公证、Runner 或外部服务失败不占用版本。
 8. Environment 审批后，Apple Silicon 与 Intel 使用独立 SwiftPM scratch 并行构建、签名和公证；每种架构的安装与卸载 PKG 也并行提交公证。签名失败或 540 秒 supervisor 到期只失败一次，不自动重建或静默重试。受保护 workflow 只上传不可变 signed artifact、request attestation 和 `preview-stage.json`，不创建 Tag、Release 或公开 appcast。
 9. 当前授权发布会话使用 `scripts/prepare-staged-preview-ui-test.sh` 下载 exact staging Run 的 exact artifact，并从公开稳定版 `v1.8.3` 建立已验证基线。通过仅替换 URL 前缀的本地固定 feed，让稳定版 App 使用真实 Sparkle UI 下载、安装这份逐字节相同的 staged ZIP；随后验证版本/Build、Developer ID、公证、Gatekeeper、Sparkle helper `0755`、符号链接、首次启动、退出、二次启动和新增崩溃报告，并由 `scripts/record-preview-ui-attestation.sh` 生成结构化证明。未完成真实 UI 安装升级时不得发布 Preview。
-10. 使用 `scripts/publish-staged-preview.sh` 始终从 `main` dispatch `macOS Preview Publication`。该 workflow 不进入 `mac-release` Environment、不读取 Apple/Notary/Match/Sparkle 私钥，只下载并验证 exact staged artifact 和 UI attestation，然后创建或复用 exact Tag，将同一批字节发布为 Pre-release，并按 `candidate-provenance.json`/canonical manifest 从 GitHub 与 CDN 并行逐字节复核。首次发布和失败恢复使用同一个幂等 publication workflow；控制面修复合入 `main` 后直接重试，不重新签名、公证、升版本或新建候选分支。
-11. 只有公开字节、provenance、feeds 和更新路径全部验证通过，publication workflow 才上传 `release-slo-ledger-published-*` 完成标志，watchdog 才结束；Release Guard 随后将同一 Draft PR 转 Ready 并启用 Auto-merge。稳定 `latest` 在整个预览发布和验证期间必须始终精确等于当前受审基线 `v1.8.3`，而不只是相对执行前保持不变。
+10. 使用 `scripts/publish-staged-preview.sh <attestation> draft|prerelease` 始终从 `main` dispatch `macOS Preview Publication`。该 workflow 不进入 `mac-release` Environment、不读取 Apple/Notary/Match/Sparkle 私钥，只下载并验证 exact staged artifact 和 UI attestation，然后创建或复用 exact Tag。`draft` 模式保持 `Draft=true, Pre-release=false`，使用 GitHub 认证下载重新校验远端摘要、字节、签名、公证和嵌套资产，不触发 Release Guard；`prerelease` 模式才公开为 Pre-release，并按 `candidate-provenance.json`/canonical manifest 从 GitHub 与 CDN 并行逐字节复核。首次发布和失败恢复使用同一个幂等 publication workflow；控制面修复合入 `main` 后直接重试，不重新签名、公证、升版本或新建候选分支。
+11. Draft 模式只有认证下载字节、GitHub digest、provenance、签名、公证和嵌套资产复验全部通过，publication workflow 才上传 `release-slo-ledger-published-*` 完成标志；不触发 Release Guard，候选回流 PR 继续保持 Draft。公开 Pre-release 模式还必须完成公开 GitHub/CDN 字节、feeds 和更新路径验证，之后 Release Guard 才能将同一 Draft PR 转 Ready 并启用 Auto-merge。稳定 `latest` 在两种模式的整个发布和验证期间都必须始终精确等于当前受审基线 `v1.8.3`，而不只是相对执行前保持不变。
 
-GitHub 自动生成的 CI App 只用于验证打包结构，不是已签名、公证的公开安装包。Preview 使用两个职责单一的权威 workflow：受保护的 `macOS Signed Release Packages` 只生成并暂存最终签名字节；`main` 上无 Apple 凭据的 `macOS Preview Publication` 只在真实 Sparkle UI attestation 通过后公开同一字节。本地命令只能做无秘密预检、真实 UI 验收和 dispatch，不得本地签名、公证、创建 Release 或上传资产。
+GitHub 自动生成的 CI App 只用于验证打包结构，不是已签名、公证的公开安装包。Preview/Draft 使用两个职责单一的权威 workflow：受保护的 `macOS Signed Release Packages` 只生成并暂存最终签名字节；`main` 上无 Apple 凭据的 `macOS Preview Publication` 只在真实 Sparkle UI attestation 通过后创建私有 Draft 或公开 Pre-release。本地命令只能做无秘密预检、真实 UI 验收和 dispatch，不得本地签名、公证、创建 Release 或上传资产。
 
 候选结构检查与 Draft PR 无凭据 CI 可以并行；它们必须全部完成后才能开始受保护签名。Developer ID 签名、公证、staple、Gatekeeper、公开前真实 Sparkle UI 更新、公开字节和 feed 验证均不得省略。下一次预览发布应分别记录 staging、UI 验收、publication 和公开验证耗时，用真实数据确认优化效果。
 

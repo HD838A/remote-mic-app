@@ -394,7 +394,11 @@ fi
   "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'verify_cdn_assets "$STAGING_DIR" "$CANDIDATE_RELEASE_MANIFEST" &' \
   "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq 'publish-release.sh" resume-prerelease' \
+/usr/bin/grep -Fq 'publication_command=resume-prerelease' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+/usr/bin/grep -Fq 'publication_command=resume-draft' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+/usr/bin/grep -Fq 'publish-release.sh" "$publication_command"' \
   "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq '/usr/bin/cmp -s "$source_file" "$downloaded_file"' \
   "$ROOT/scripts/publish-release.sh"
@@ -456,7 +460,7 @@ fi
 /usr/bin/grep -Fq '.baseline.version == "1.8.3"' "$ROOT/scripts/verify-preview-ui-attestation.sh"
 /usr/bin/grep -Fq 'productionURLPrefix' "$ROOT/scripts/verify-preview-ui-attestation.sh"
 /usr/bin/grep -Fq 'http://127[.]0[.]0[.]1' "$ROOT/scripts/verify-preview-ui-attestation.sh"
-/usr/bin/grep -Fq 'resume_existing_prerelease_assets' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'resume_existing_release_assets' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq '.displayTitle == $runTitle' "$ROOT/scripts/fast-release.sh"
 /usr/bin/grep -Fq '.display_title == $runTitle' "$ROOT/scripts/fast-release.sh"
 /usr/bin/grep -Fq -- '--title "$PUBLIC_PRODUCT_NAME $VERSION"' \
