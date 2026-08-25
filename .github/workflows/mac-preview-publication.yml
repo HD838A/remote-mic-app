@@ -127,7 +127,7 @@ jobs:
           test "$GITHUB_REF_NAME" = main
           test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
           ui_attestation="$RUNNER_TEMP/preview-ui-attestation.json"
-          print -rn -- "$UI_ATTESTATION_B64" | /usr/bin/base64 -D > "$ui_attestation"
+          printf '%s' "$UI_ATTESTATION_B64" | /usr/bin/base64 -D > "$ui_attestation"
           jq -e . "$ui_attestation" >/dev/null
           resume_output="$RUNNER_TEMP/staged-resume-output.txt"
           SOURCE_RUN_REQUIRED_CONCLUSION=success \
