@@ -2386,10 +2386,35 @@ struct RemoteButtonsTests {
         #expect(RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36))
         // Real RC003 hardware emits keyCode 10 (ISO §) for the TV key.
         #expect(RemoteButton.tv.nativeEvent == .keyboard(keyCode: 10))
+        #expect(RemoteButton.tv.nativeEvents == [
+            .keyboard(keyCode: 10),
+            .keyboard(keyCode: 50),
+        ])
         #expect(RemoteButton.power.nativeEvent == .keyboard(keyCode: 90))
         #expect(RemoteButton.menu.nativeEvent == .keyboard(keyCode: KeyboardInjector.contextualMenuKeyCode))
         #expect(RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0))
         #expect(RemoteButton.back.nativeEvent == nil)
+    }
+
+    @Test(arguments: [UInt16(10), UInt16(50)])
+    func tvNativeEventIsSuppressedForISOAndANSIKeyboardLayouts(_ keyCode: UInt16) throws {
+        let suppressor = KeyboardEventSuppressor()
+        let down = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: CGKeyCode(keyCode),
+            keyDown: true
+        ))
+        let up = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: CGKeyCode(keyCode),
+            keyDown: false
+        ))
+
+        suppressor.arm(button: .tv, edge: .down)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        suppressor.arm(button: .tv, edge: .up)
+        #expect(suppressor.handle(type: .keyUp, event: up))
+        #expect(!suppressor.handle(type: .keyDown, event: down))
     }
 
     @Test func nativeKeyAutoRepeatIsSuppressedUntilEveryRemoteReleases() throws {

@@ -1,4 +1,4 @@
-# TV 键原生键码与实际硬件不符导致 § 泄漏
+# TV 键在不同键盘布局下的原生键码泄漏
 
 ## 触发条件
 
@@ -10,8 +10,9 @@
 
 - 真机：小米遥控器 2 Pro（BLE 识别 rc003），monitored 模式。
 - 会话层事件 tap 实测：TV 键的键盘接口实际向系统发送 `keyCode=10`（ISO § 键），`flags=0x100`，连按 30 次全部到达会话层。
-- 对照实测：合成 keyCode 50 的键盘事件产出的是 · 而非 §，证实 50 不是 TV 键的真实原生键码。
+- 当时的对照实测只能证明该台 Mac 在当时键盘布局下使用 keyCode 10，不能排除其他布局使用 keyCode 50。
 - 对照实测：电源键走独立的 power_suppressed 机制，不存在同类泄漏。
+- 2026-08-25 现场再现：当前键盘布局下，TV 键打开目标 App 后会输入反引号。运行日志同时证明事件过滤器已启动且设备处于 monitored 模式。本机键盘布局只读翻译证明 keyCode 10 产生 `§`，keyCode 50 产生反引号。
 
 ## 日志结论
 
@@ -19,12 +20,13 @@
 
 ## 根因
 
-`Sources/RemoteMic/RemoteButtons.swift` 的 `RemoteButton.nativeEvent` 表把 `.tv` 映射为 `keyboard(keyCode: 50)`。该值来自 initial public release，与 rc003 键盘接口实际发射的 keyCode 10 不符，可能一直就错。monitored 模式下原生事件能否被抑制完全取决于这张表与硬件实际发射是否一致。
+TV 键的 HID usage 在 macOS 上会根据 ISO/ANSI 键盘布局表现为 keyCode 10 或 50。`RemoteButton.nativeEvent` 只能记一个虚拟键码；只防其中一个时，另一布局下的原生事件会被静默放行。
 
 ## 修复
 
-- `RemoteButtons.swift`：`.tv` 的 `nativeEvent` 改为 `keyboard(keyCode: 10)`，并加注释标明实测依据。
-- 测试：`RemoteButtonsTests.nativeEventDescriptorsCoverPotentialDuplicateEvents` 与 SelfTest 的 "native duplicate-event descriptors" 断言组各补 TV==10 一项。
+- `RemoteButtons.swift`：保留已实测的 keyCode 10 为主描述符，同时把 keyCode 10 和 50 都列为 TV 键可能的原生事件。
+- `KeyboardEventSuppressor.swift`：同一个 TV 按下/松开边缘同时布防两个键码，其他按键仍只布防原有单一描述符。
+- 测试：新增 ISO/ANSI 两个 TV 键码都被抑制、松开后恢复实体键盘的回归。
 
 ## 验证
 
