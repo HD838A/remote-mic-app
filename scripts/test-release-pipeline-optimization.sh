@@ -145,6 +145,13 @@ fi
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'git ls-remote "file://$match_repo" refs/heads/main' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'test "$(printf '\''%s\n'\'' "$actual_product_dependencies" | jq -S -c .)" = "$expected_product_dependencies"' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+if /usr/bin/grep -Fq 'test "$(print -r -- "$actual_product_dependencies"' \
+    "$TEST_REPO/.github/workflows/mac-release-package.yml"; then
+  print -u2 "Bash dependency verification step still uses the Zsh-only print builtin"
+  exit 1
+fi
 /usr/bin/grep -Fq 'readonly Match checkout must expose local main at its exact pinned HEAD' \
   "$TEST_REPO/scripts/package-macos-release-in-actions.sh"
 /usr/bin/grep -Fq 'environment: mac-release' \
