@@ -44,6 +44,8 @@ ARTIFACT_DIR="$WORK_DIR/signed-artifact"
 ATTESTATION_DIR="$WORK_DIR/request-attestation"
 STAGE_DIR="$WORK_DIR/preview-stage"
 
+/bin/mkdir -p "$WORK_DIR"
+
 fail() { print -u2 -- "$*"; exit 1; }
 
 now="$(date +%s)"
