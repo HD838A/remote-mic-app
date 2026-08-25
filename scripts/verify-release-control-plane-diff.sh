@@ -55,7 +55,7 @@ validate_mac_ci_diff() {
           *scripts/reconcile-release-event.sh*|*scripts/resolve-stable-request-attestation.sh*|\
           *scripts/verify-release-ready-main-ci.sh*|\
           *scripts/test-release-pipeline-optimization.sh*|*scripts/test-release-resume-workflow.sh*|\
-          *Tests/RemoteMicTests/BuildSigningTests.swift*|*"swift test --filter BuildSigningTests"*|*docs_only=false*|*";;"*|*GITHUB_EVENT_NAME*|*GITHUB_WORKSPACE*|*needs.classify_changes.outputs.docs_only*|*needs.classify_changes.outputs.reuse_parent_main_ci*|*"needs: classify_changes"*) ;;
+          *Tests/RemoteMicTests/BuildSigningTests.swift*|*"swift test --filter BuildSigningTests"*|*DEVELOPER_DIR*|*env:*|*docs_only=false*|*";;"*|*GITHUB_EVENT_NAME*|*GITHUB_WORKSPACE*|*needs.classify_changes.outputs.docs_only*|*needs.classify_changes.outputs.reuse_parent_main_ci*|*"needs: classify_changes"*) ;;
           *)
             print -u2 "macOS CI change is outside the release control-plane classifier: $content"
             return 1
