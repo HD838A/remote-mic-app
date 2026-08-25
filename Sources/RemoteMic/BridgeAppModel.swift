@@ -1918,14 +1918,24 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
         let handledByFnTapMode = voiceFnTapSession.stopVoice()
-        scheduleQianwenRightCommandReleaseIfNeeded()
-        let shouldFlushAudio = BluetoothVoiceStopPolicy.shouldFlushAudio(
-            handledByFnTapMode: handledByFnTapMode
-        )
         let traceID = activeBluetoothVoiceTraceID ?? 0
         let durationMilliseconds = bluetoothVoiceTraceStartedAt.map {
             max(0, Int(Date().timeIntervalSince($0) * 1_000))
         } ?? 0
+        let qianwenFocusTap = QianwenVoiceFocusPolicy.shouldFocusInput(
+            modeEnabled: settings.qianwenVoiceModeEnabled,
+            durationMilliseconds: durationMilliseconds
+        )
+        if qianwenFocusTap {
+            _ = qianwenVoiceSession.prepareDestinationIfNeeded(destinationIsReady: false)
+            transcriptCaptureCoordinator.cancel(reason: "qianwen_focus_tap")
+            beginQianwenInputFocusPreparation()
+        } else {
+            scheduleQianwenRightCommandReleaseIfNeeded()
+        }
+        let shouldFlushAudio = qianwenFocusTap || BluetoothVoiceStopPolicy.shouldFlushAudio(
+            handledByFnTapMode: handledByFnTapMode
+        )
         let pendingBuffers = audioOutput.pendingVoiceBufferCountForDiagnostics
         let tailSnapshot = bluetoothVoiceTailDiagnostics.snapshot(
             at: ProcessInfo.processInfo.systemUptime
@@ -1953,9 +1963,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "final_window_peak=\(tailSnapshot.finalWindowPeak) " +
                 "final_window_rms=\(tailSnapshot.finalWindowRMS)"
         )
-        audioOutput.logWhenPendingVoiceAudioDrains(
-            context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
-        )
+        if !qianwenFocusTap {
+            audioOutput.logWhenPendingVoiceAudioDrains(
+                context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
+            )
+        }
         activeBluetoothVoiceTraceID = nil
         bluetoothVoiceTraceStartedAt = nil
         bluetoothVoiceTailDiagnostics.reset()
@@ -2360,7 +2372,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {
-        guard settings.voiceFnTapModeEnabled || settings.qianwenVoiceModeEnabled else { return }
+        guard settings.voiceFnTapModeEnabled else { return }
         switch state {
         case .waiting:
             voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
@@ -2954,62 +2966,44 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func prepareQianwenVoiceDestinationIfNeeded(_ bridge: XiaomiBluetoothBridge) -> Bool {
         guard settings.qianwenVoiceModeEnabled else { return false }
-        let codexBundleIdentifier = PresetApplication.codex.bundleIdentifier
-        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == codexBundleIdentifier else {
-            return false
-        }
         let destination = VoiceInputDestinationSnapshot.system()
-        let destinationIsReady = destination.bundleIdentifier == codexBundleIdentifier &&
-            destination.isSafeEditableDestination
         guard qianwenVoiceSession.prepareDestinationIfNeeded(
-            destinationIsReady: destinationIsReady
+            destinationIsReady: destination.isSafeEditableDestination
         ) else { return false }
 
         _ = bridge.requestMicrophoneClose()
-        isVoiceTriggerEnabled = false
-        voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
-        let requestID = voiceInputDestinationCoordinator.beginTargetSwitch(
-            intent: .application(bundleIdentifier: codexBundleIdentifier)
-        )
-        guard KeyboardInjector.send(.openCodex) else {
-            voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
-            AppLogger.shared.write("QIANWEN FOCUS failed reason=open_codex")
-            return true
-        }
-
-        let completion: (VoiceInputDestinationWaitResult) -> Void = { [weak self] result in
-            self?.finishQianwenVoiceDestinationPreparation(result)
-        }
-        switch voiceInputDestinationCoordinator.waitUntilReady(completion: completion) {
-        case .immediate:
-            completion(.ready)
-        case let .cancelled(reason):
-            completion(.cancelled(reason))
-        case .waiting:
-            break
-        }
-        AppLogger.shared.write("QIANWEN FOCUS requested target=codex")
+        beginQianwenInputFocusPreparation()
         return true
     }
 
-    private func finishQianwenVoiceDestinationPreparation(
-        _ result: VoiceInputDestinationWaitResult
-    ) {
+    private func beginQianwenInputFocusPreparation() {
+        isVoiceTriggerEnabled = false
+        voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
+        guard KeyboardInjector.focusFrontmostComposer(completion: { [weak self] focused in
+            self?.finishQianwenInputFocusPreparation(focused: focused)
+        }) else {
+            finishQianwenInputFocusPreparation(focused: false)
+            return
+        }
+        AppLogger.shared.write("QIANWEN FOCUS requested target=frontmost")
+    }
+
+    private func finishQianwenInputFocusPreparation(focused: Bool) {
         guard settings.qianwenVoiceModeEnabled else { return }
-        switch result {
-        case .ready:
-            let armed = qianwenVoiceSession.armHardwareMapping()
-            isVoiceTriggerEnabled = armed
+        let armed = qianwenVoiceSession.armHardwareMapping()
+        isVoiceTriggerEnabled = armed
+        if focused {
             voiceShortcutStatus = LocalizedMessage(
                 armed
                     ? "voice_button.status.right_command_enabled"
                     : "voice_button.status.right_command_waiting"
             )
             AppLogger.shared.write("QIANWEN FOCUS ready armed=\(armed)")
-        case let .cancelled(reason):
-            isVoiceTriggerEnabled = false
+        } else {
             voiceShortcutStatus = LocalizedMessage("voice_button.status.input_unavailable")
-            AppLogger.shared.write("QIANWEN FOCUS cancelled reason=\(reason.rawValue)")
+            AppLogger.shared.write(
+                "QIANWEN FOCUS cancelled reason=composer_not_found armed=\(armed)"
+            )
         }
     }
 

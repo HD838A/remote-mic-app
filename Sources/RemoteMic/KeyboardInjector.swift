@@ -72,7 +72,14 @@ enum KeyboardInjector {
     static let functionKeyCode: CGKeyCode = 63
     static let rightCommandKeyCode: CGKeyCode = 54
     static let f20KeyCode: CGKeyCode = 90
+    static let manualAccessibilityAttribute = "AXManualAccessibility"
+    static let enhancedUserInterfaceAttribute = "AXEnhancedUserInterface"
+    static let composerFocusMaximumAttempts = 12
+    static let composerFocusRetryMilliseconds = 250
     private static let focusRequests = ApplicationFocusRequestGate()
+    private static let frontmostFocusRequests = ApplicationFocusRequestGate()
+    private static let manualAccessibilityLock = NSLock()
+    private static var manualAccessibilityLoggedProcesses: Set<pid_t> = []
     private static let focusQueue = DispatchQueue(
         label: "RemoteMic.application-focus",
         qos: .userInitiated
@@ -406,6 +413,13 @@ enum KeyboardInjector {
         let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(0) : .milliseconds(200)
         focusQueue.asyncAfter(deadline: .now() + delay) {
             guard focusRequests.isCurrent(requestID) else { return }
+            if isAccessibilityTrusted, application.focusStrategy == .recordedAccessibility {
+                announceManualAccessibility(
+                    processIdentifier: processIdentifier,
+                    bundleIdentifier: application.bundleIdentifier,
+                    attempt: attempt
+                )
+            }
             if applicationIsFrontmost(processIdentifier) {
                 guard isAccessibilityTrusted else {
                     AppLogger.shared.write(
@@ -470,9 +484,10 @@ enum KeyboardInjector {
         switch strategy {
         case .accessibilityComposer:
             scheduleAccessibilityComposerFocus(
-                application: application,
+                bundleIdentifier: application.bundleIdentifier,
                 processIdentifier: processIdentifier,
                 requestID: requestID,
+                requestGate: focusRequests,
                 attempt: 0
             )
         case .cmuxSurfaceAPI:
@@ -484,6 +499,24 @@ enum KeyboardInjector {
                 attempt: 0
             )
         }
+    }
+
+    @discardableResult
+    static func focusFrontmostComposer(completion: @escaping (Bool) -> Void) -> Bool {
+        guard isAccessibilityTrusted,
+              let application = NSWorkspace.shared.frontmostApplication
+        else { return false }
+        let processIdentifier = application.processIdentifier
+        let requestID = frontmostFocusRequests.begin()
+        scheduleAccessibilityComposerFocus(
+            bundleIdentifier: application.bundleIdentifier ?? "unknown",
+            processIdentifier: processIdentifier,
+            requestID: requestID,
+            requestGate: frontmostFocusRequests,
+            attempt: 0,
+            completion: completion
+        )
+        return true
     }
 
     private static func scheduleCmuxFocus(
@@ -553,45 +586,157 @@ enum KeyboardInjector {
     }
 
     private static func scheduleAccessibilityComposerFocus(
-        application: PresetApplication,
+        bundleIdentifier: String,
         processIdentifier: pid_t,
         requestID: UInt64,
-        attempt: Int
+        requestGate: ApplicationFocusRequestGate,
+        attempt: Int,
+        completion: ((Bool) -> Void)? = nil
     ) {
-        let maximumAttempts = 8
-        let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(0) : .milliseconds(200)
+        let delay: DispatchTimeInterval = attempt == 0
+            ? .milliseconds(0)
+            : .milliseconds(composerFocusRetryMilliseconds)
         focusQueue.asyncAfter(deadline: .now() + delay) {
-            guard focusRequests.isCurrent(requestID) else { return }
+            guard requestGate.isCurrent(requestID) else { return }
 
-            if applicationIsFrontmost(processIdentifier) {
-                guard isAccessibilityTrusted else {
-                    AppLogger.shared.write(
-                        "APP FOCUS skipped bundle=\(application.bundleIdentifier) method=accessibility reason=not_trusted"
-                    )
-                    return
-                }
+            if isAccessibilityTrusted {
+                announceManualAccessibility(
+                    processIdentifier: processIdentifier,
+                    bundleIdentifier: bundleIdentifier,
+                    attempt: attempt
+                )
+            }
+            if applicationIsFrontmost(processIdentifier), isAccessibilityTrusted {
                 if focusComposer(processIdentifier: processIdentifier) {
                     AppLogger.shared.write(
-                        "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=accessibility"
+                        "APP FOCUS succeeded bundle=\(bundleIdentifier) method=accessibility"
+                    )
+                    completeComposerFocus(
+                        true,
+                        requestID: requestID,
+                        requestGate: requestGate,
+                        completion: completion
                     )
                     return
                 }
             }
 
             let nextAttempt = attempt + 1
-            if nextAttempt < maximumAttempts {
+            if nextAttempt < composerFocusMaximumAttempts {
                 scheduleAccessibilityComposerFocus(
-                    application: application,
+                    bundleIdentifier: bundleIdentifier,
                     processIdentifier: processIdentifier,
                     requestID: requestID,
-                    attempt: nextAttempt
+                    requestGate: requestGate,
+                    attempt: nextAttempt,
+                    completion: completion
                 )
-            } else if focusRequests.isCurrent(requestID) {
+            } else if requestGate.isCurrent(requestID) {
                 AppLogger.shared.write(
-                    "APP FOCUS failed bundle=\(application.bundleIdentifier) method=accessibility reason=composer_not_found"
+                    "APP FOCUS failed bundle=\(bundleIdentifier) method=accessibility reason=composer_not_found"
+                )
+                completeComposerFocus(
+                    false,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
                 )
             }
         }
+    }
+
+    private static func completeComposerFocus(
+        _ focused: Bool,
+        requestID: UInt64,
+        requestGate: ApplicationFocusRequestGate,
+        completion: ((Bool) -> Void)?
+    ) {
+        guard let completion else { return }
+        DispatchQueue.main.async {
+            guard requestGate.isCurrent(requestID) else { return }
+            completion(focused)
+        }
+    }
+
+    static func manualAccessibilityResultName(_ result: AXError) -> String {
+        switch result {
+        case .success: return "success"
+        case .attributeUnsupported: return "attribute_unsupported"
+        case .cannotComplete: return "cannot_complete"
+        case .invalidUIElement: return "invalid_element"
+        case .apiDisabled: return "api_disabled"
+        case .notImplemented: return "not_implemented"
+        default: return "error_\(result.rawValue)"
+        }
+    }
+
+    static func manualAccessibilityResultToken(primary: AXError, fallback: AXError?) -> String {
+        guard let fallback else { return manualAccessibilityResultName(primary) }
+        return "fallback_enhanced_\(manualAccessibilityResultName(fallback))"
+    }
+
+    static func manualAccessibilityEffectiveResult(
+        primary: AXError,
+        fallback: AXError?
+    ) -> AXError {
+        if primary == .success { return .success }
+        return fallback ?? primary
+    }
+
+    static func shouldLogManualAccessibility(
+        result: AXError,
+        attempt: Int,
+        alreadyLoggedSuccess: Bool
+    ) -> Bool {
+        if attempt == 0 { return true }
+        return result == .success && !alreadyLoggedSuccess
+    }
+
+    @discardableResult
+    private static func announceManualAccessibility(
+        processIdentifier: pid_t,
+        bundleIdentifier: String,
+        attempt: Int
+    ) -> Bool {
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        let primary = AXUIElementSetAttributeValue(
+            applicationElement,
+            manualAccessibilityAttribute as CFString,
+            kCFBooleanTrue
+        )
+        var fallback: AXError?
+        if primary == .attributeUnsupported {
+            fallback = AXUIElementSetAttributeValue(
+                applicationElement,
+                enhancedUserInterfaceAttribute as CFString,
+                kCFBooleanTrue
+            )
+        }
+        let result = manualAccessibilityEffectiveResult(primary: primary, fallback: fallback)
+
+        manualAccessibilityLock.lock()
+        let alreadyLoggedSuccess = manualAccessibilityLoggedProcesses.contains(processIdentifier)
+        let shouldLog = shouldLogManualAccessibility(
+            result: result,
+            attempt: attempt,
+            alreadyLoggedSuccess: alreadyLoggedSuccess
+        )
+        if result == .success {
+            if manualAccessibilityLoggedProcesses.count >= 64 {
+                manualAccessibilityLoggedProcesses.removeAll()
+            }
+            manualAccessibilityLoggedProcesses.insert(processIdentifier)
+        }
+        manualAccessibilityLock.unlock()
+
+        if shouldLog {
+            AppLogger.shared.write(
+                "APP FOCUS manual_accessibility bundle=\(bundleIdentifier) " +
+                    "attempt=\(attempt) " +
+                    "result=\(manualAccessibilityResultToken(primary: primary, fallback: fallback))"
+            )
+        }
+        return result == .success
     }
 
     private static func applicationIsFrontmost(_ processIdentifier: pid_t) -> Bool {

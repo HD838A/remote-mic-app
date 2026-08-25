@@ -3,6 +3,22 @@ import Testing
 
 @Suite("Qianwen voice session")
 struct QianwenVoiceSessionControllerTests {
+    @Test func shortTapFocusesWhileLongPressKeepsVoice() {
+        let threshold = Int(clamping: HIDRemoteTiming.longPressMilliseconds)
+        #expect(QianwenVoiceFocusPolicy.shouldFocusInput(
+            modeEnabled: true,
+            durationMilliseconds: threshold - 1
+        ))
+        #expect(!QianwenVoiceFocusPolicy.shouldFocusInput(
+            modeEnabled: true,
+            durationMilliseconds: threshold
+        ))
+        #expect(!QianwenVoiceFocusPolicy.shouldFocusInput(
+            modeEnabled: false,
+            durationMilliseconds: 100
+        ))
+    }
+
     @Test func drainsThenNeutralizesConfirmsAndRearmsHardwareMapping() {
         var events: [String] = []
         var drainCompletion: (() -> Void)?

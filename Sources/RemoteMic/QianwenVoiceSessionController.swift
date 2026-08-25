@@ -1,5 +1,14 @@
 import Foundation
 
+enum QianwenVoiceFocusPolicy {
+    static func shouldFocusInput(
+        modeEnabled: Bool,
+        durationMilliseconds: Int
+    ) -> Bool {
+        modeEnabled && durationMilliseconds < HIDRemoteTiming.longPressMilliseconds
+    }
+}
+
 final class QianwenVoiceSessionController {
     typealias MappingSetter = (_ rightCommand: Bool) -> Bool
     typealias AudioDrainer = (@escaping () -> Void) -> Void

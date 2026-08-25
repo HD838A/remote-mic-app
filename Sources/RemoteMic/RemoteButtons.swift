@@ -96,6 +96,11 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         case .back: return nil
         }
     }
+
+    var nativeEvents: Set<RemoteNativeEvent> {
+        guard let nativeEvent else { return [] }
+        return self == .tv ? [nativeEvent, .keyboard(keyCode: 50)] : [nativeEvent]
+    }
 }
 
 enum RemoteNativeEvent: Hashable {

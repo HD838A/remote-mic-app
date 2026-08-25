@@ -213,7 +213,7 @@ struct SettingsPageRegressionTests {
         #expect(!labelBlock.contains("Popover"))
     }
 
-    @Test func qianwenVoiceFocusTapPreparesCodexBeforeAcceptingAudio() throws {
+    @Test func qianwenVoiceFocusTapPreparesTheFrontmostAppBeforeAcceptingAudio() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -236,17 +236,17 @@ struct SettingsPageRegressionTests {
             of: "ensureVirtualAudioOutputReady(reason: \"bluetooth_voice_start\")"
         ))
         #expect(focusGate.lowerBound < audioGate.lowerBound)
-        #expect(source.contains("KeyboardInjector.send(.openCodex)"))
+        #expect(source.contains("KeyboardInjector.focusFrontmostComposer"))
+        #expect(!source.contains("KeyboardInjector.send(.openCodex)"))
         #expect(source.contains("qianwenVoiceSession.armHardwareMapping()"))
         let helper = try #require(source.range(of: "private func prepareQianwenVoiceDestinationIfNeeded"))
         let helperEnd = try #require(source.range(
-            of: "private func finishQianwenVoiceDestinationPreparation",
+            of: "private func scheduleQianwenRightCommandReleaseIfNeeded",
             range: helper.upperBound..<source.endIndex
         ))
         let helperSource = source[helper.lowerBound..<helperEnd.lowerBound]
-        #expect(helperSource.contains(
-            "NSWorkspace.shared.frontmostApplication?.bundleIdentifier == codexBundleIdentifier"
-        ))
+        #expect(helperSource.contains("QIANWEN FOCUS requested target=frontmost"))
+        #expect(!helperSource.contains("PresetApplication.codex"))
         #expect(!helperSource.contains("KeyboardInjector.send(.escape)"))
     }
 

@@ -1,0 +1,31 @@
+# 千问短按只能聚焦 Codex，其他 App 找不到输入框
+
+- 时间：2026-08-25
+- 状态：源码已修复，自动化通过，待用户真机验收
+- 影响范围：macOS；开启千问兼容模式后的“短按定位、长按说话”
+
+## 复现与日志
+
+1. 千问关闭“短按也能开始输入”。
+2. 在 Codex 以外的聊天 App 中让输入框失去光标。
+3. 点按一次 RC003 语音键。
+
+现场结果：App 没有获得输入焦点。替换后的真机日志连续出现
+`QIANWEN FOCUS requested target=frontmost` 与
+`QIANWEN FOCUS cancelled reason=composer_not_found armed=true`，证明语音键映射已恢复，但输入框扫描没有找到候选项。
+
+## 根因
+
+通用路径直接扫描最前面 App 的 Accessibility 树，但当前定制分支比官方主分支早 15 个提交，没有合入已验证的 web 内容树唤醒逻辑。Chromium / Electron 类 App 默认只暴露空外壳；未声明 `AXManualAccessibility` 或兼容的 `AXEnhancedUserInterface` 时，`focusComposer` 无论如何排名都没有可选输入框。原通用路径还只扫描一次，没有等待约 1–2 秒的建树时间。
+
+## 修复
+
+- 复用官方主分支的 `AXManualAccessibility` 主路径和 `AXEnhancedUserInterface` 降级路径。
+- 通用最前面 App、预置 App 和自定义记录输入框共用同一声明函数。
+- 通用路径使用 12 次、每次 250 ms 的有界重试；成功、失败或页面切换都会最终恢复语音键硬件映射。
+- 不切换 App、不关闭弹窗、不使用固定屏幕坐标。
+
+## 验证边界
+
+- 定向自动化已覆盖两种声明属性、降级结果、日志节流、至少 2 秒的重试窗口、输入框排名与千问聚焦接线。
+- 自动化不能代替真实 Electron / Chromium App 的建树时间和最终光标。用户验收需至少覆盖 Codex 与另一个聊天 App；多输入框页面聚焦错误时再补该 App 的定向规则。

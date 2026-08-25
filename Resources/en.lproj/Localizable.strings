@@ -298,7 +298,7 @@
 "audio.compatibility.help" = "Doubao may not recognize ordinary virtual audio devices. Install the separate compatible microphone MiRemoteV 2ch and select it here; BlackHole is not changed or replaced.";
 "audio.compatibility.help_plain" = "If your preferred voice tool cannot hear audio, choose the compatible microphone included with the installer. Existing audio devices are not replaced.";
 "audio.compatibility.qianwen_mode.title" = "Qianwen Compatibility Mode";
-"audio.compatibility.qianwen_mode.detail" = "The hardware Right Command mapping starts Qianwen. When Codex is frontmost but its composer has no cursor, tap once to focus it, then hold to speak. Other apps keep their existing behavior. Releasing confirms after queued audio drains. Select MiRemoteV 2ch as Qianwen's microphone.";
+"audio.compatibility.qianwen_mode.detail" = "The hardware Right Command mapping starts Qianwen. Turn off Qianwen's short-press voice option, then tap once to focus an input field in the current app and hold to speak. SayAll does not switch apps or dismiss dialogs. Releasing confirms after queued audio drains. Select MiRemoteV 2ch as Qianwen's microphone.";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Customize remote button actions while preserving voice input and Fn functions";
 "button_mapping.toggle.enabled" = "Enable Custom Button Controls";
