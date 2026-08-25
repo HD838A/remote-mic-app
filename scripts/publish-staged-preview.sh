@@ -7,11 +7,16 @@ REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 GH_BIN="${GH_BIN:-gh}"
 WORKFLOW_FILE="mac-preview-publication.yml"
 ATTESTATION="${1:-}"
+PUBLICATION_MODE="${2:-prerelease}"
 
-if [[ "$#" -ne 1 || ! -r "$ATTESTATION" ]]; then
-  print -u2 "usage: $0 <preview-ui-attestation.json>"
+if [[ "$#" -lt 1 || "$#" -gt 2 || ! -r "$ATTESTATION" ]]; then
+  print -u2 "usage: $0 <preview-ui-attestation.json> [draft|prerelease]"
   exit 2
 fi
+[[ "$PUBLICATION_MODE" == draft || "$PUBLICATION_MODE" == prerelease ]] || {
+  print -u2 "publication mode must be draft or prerelease"
+  exit 2
+}
 for command_name in git jq base64 "$GH_BIN"; do
   command -v "$command_name" >/dev/null 2>&1 || { print -u2 "Missing required command: $command_name"; exit 1; }
 done
@@ -45,6 +50,7 @@ ui_attestation_b64="$(base64 < "$ATTESTATION" | tr -d '\n')"
 [[ ${#ui_attestation_b64} -le 60000 ]] || { print -u2 "UI attestation exceeds workflow input limit"; exit 1; }
 
 $GH_BIN workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref main \
+  --raw-field "publication_mode=$PUBLICATION_MODE" \
   --raw-field "tag=$tag" \
   --raw-field "expected_commit=$commit" \
   --raw-field "expected_pipeline_digest=$pipeline_digest" \
@@ -56,4 +62,4 @@ $GH_BIN workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref main \
   --raw-field "source_artifact_digest=$source_artifact_digest" \
   --raw-field "ui_attestation_b64=$ui_attestation_b64"
 
-print "PUBLISH STAGED PREVIEW DISPATCHED: $tag at $commit"
+print "PUBLISH STAGED PREVIEW DISPATCHED: $PUBLICATION_MODE $tag at $commit"

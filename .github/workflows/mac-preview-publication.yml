@@ -1,9 +1,17 @@
 name: macOS Preview Publication
-run-name: mac-preview-publication ${{ inputs.tag }} ${{ inputs.request_id }} ${{ inputs.expected_commit }}
+run-name: mac-preview-publication ${{ inputs.publication_mode }} ${{ inputs.tag }} ${{ inputs.request_id }} ${{ inputs.expected_commit }}
 
 on:
   workflow_dispatch:
     inputs:
+      publication_mode:
+        description: Release visibility (private Draft or public Pre-release)
+        required: true
+        default: prerelease
+        type: choice
+        options:
+          - draft
+          - prerelease
       tag:
         description: Exact staged Preview tag
         required: true
@@ -65,6 +73,7 @@ jobs:
       contents: write
       pull-requests: read
     env:
+      PUBLICATION_MODE: ${{ inputs.publication_mode }}
       RELEASE_TAG: ${{ inputs.tag }}
       EXPECTED_COMMIT: ${{ inputs.expected_commit }}
       EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
@@ -84,6 +93,7 @@ jobs:
         env:
           UI_ATTESTATION_B64: ${{ inputs.ui_attestation_b64 }}
         run: |
+          [[ "$PUBLICATION_MODE" == draft || "$PUBLICATION_MODE" == prerelease ]]
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           [[ "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ]]
@@ -159,6 +169,12 @@ jobs:
           fi
           ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
 
+          case "$PUBLICATION_MODE" in
+            draft) publication_command=resume-draft ;;
+            prerelease) publication_command=resume-prerelease ;;
+            *) echo "unsupported publication mode: $PUBLICATION_MODE" >&2; exit 1 ;;
+          esac
+
           cd "$STAGED_CANDIDATE"
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           remote_tag_commit="$(git ls-remote origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" | awk '$2 ~ /\^\{\}$/ {print $1; found=1; exit} $2 !~ /\^\{\}$/ {fallback=$1} END {if (!found && fallback != "") print fallback}')"
@@ -182,7 +198,7 @@ jobs:
               EXPECTED_STABLE_TAG="$EXPECTED_STABLE_TAG" \
               EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_DEVELOPER_TEAM_ID" \
               ALLOW_FROZEN_BASE_MAIN=1 \
-              "$GITHUB_WORKSPACE/scripts/publish-release.sh" resume-prerelease
+              "$GITHUB_WORKSPACE/scripts/publish-release.sh" "$publication_command"
           "$GITHUB_WORKSPACE/scripts/release-slo-ledger.sh" finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
           if (( $(date +%s) - release_ready_at < 1740 )); then
             "$GITHUB_WORKSPACE/scripts/release-slo-ledger.sh" check "$ledger" "$release_ready_at" 1740 successful-pipeline
