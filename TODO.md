@@ -245,6 +245,9 @@
   - 默认保持 Fn/地球键；可在“按键映射”页选择左 Command 或右 Command 长按。Command 模式需要辅助功能权限，并覆盖 RC003、iPhone、Apple Watch 和网页版语音入口。
   - Command 模式不得通过全局 Command flagsChanged 监听普通键盘；只在真实语音会话开始/结束时发送成对 keyDown/keyUp。Fn 点按模式仅在 Fn/地球键模式有效。
   - 组件和策略自动化已覆盖配置迁移与原子导入门禁、左右键码、跨来源 owner latch、输入源多 owner、每个 Bridge Ready 策略、F5 映射事务和设置页紧凑布局；部分 BridgeAppModel 接线仍由源码范围断言保护，未启用硬件模拟依赖，不能替代回调级事件回放。待 RC003、iPhone、Apple Watch、网页版、系统权限及目标第三方语音应用真实环境验收后再标记完成。详细测试步骤见 [`Testing/VoiceKeyModes.md`](Testing/VoiceKeyModes.md)。
+- [x] 语音键短按定位当前 App 聊天输入框
+  - 默认关闭，与 Fn 点按模式互斥；短按取消该次短音频并聚焦当前 App，长按继续使用已选语音触发键。
+  - Accessibility 通用路径已覆盖 Electron / Chromium 建树重试和安全候选排名；微信仅对精确 Bundle ID 使用有尺寸门禁的窗口相对降级。Lark/飞书、Telegram 和微信已完成 RC003 真机验收。
 - [ ] 普通遥控器语音键突破一分钟录音限制 <!-- workshop:status=阻塞;priority=P2 -->
   - 曾尝试在普通物理语音会话收到 `STREAM_START` 后每 10 秒调用 ATVV v1.0 `MIC_EXTEND`，并设置 180 秒关闭与 2 秒超时重连。
   - 2026-08-11 真机日志确认普通物理会话没有 `microphoneOpened` 状态，定时调用持续返回 `ATVV MIC_EXTEND rejected`，命令并未写入遥控器；模拟租期模型不能证明真实固件行为。

@@ -179,6 +179,12 @@ enum BluetoothVoiceStopPolicy {
     }
 }
 
+enum VoiceShortTapFocusPolicy {
+    static func shouldFocus(enabled: Bool, durationMilliseconds: Int) -> Bool {
+        enabled && durationMilliseconds < HIDRemoteTiming.longPressMilliseconds
+    }
+}
+
 enum VoiceSamplePresentationPolicy {
     static func shouldPublishReceipt(
         hasReceivedSamples: Bool,
@@ -1671,12 +1677,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         if enabled {
+            settings.voiceShortTapFocusEnabled = false
             enableVoiceFnTapMode()
             return
         }
         settings.voiceFnTapModeEnabled = false
         voiceFnTapSession.setEnabled(false) { [weak self] in
             self?.applyHIDSettings()
+        }
+    }
+
+    func setVoiceShortTapFocusEnabled(_ enabled: Bool) {
+        guard !isStreaming else {
+            AppLogger.shared.write("VOICE SHORT FOCUS change_rejected reason=voice_active")
+            return
+        }
+        settings.voiceShortTapFocusEnabled = enabled
+        if enabled, settings.voiceFnTapModeEnabled {
+            settings.voiceFnTapModeEnabled = false
+            voiceFnTapSession.setEnabled(false) { [weak self] in
+                self?.applyHIDSettings()
+            }
         }
     }
 
@@ -2057,13 +2078,31 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
         let handledByFnTapMode = voiceFnTapSession.stopVoice()
-        let shouldFlushAudio = BluetoothVoiceStopPolicy.shouldFlushAudio(
-            handledByFnTapMode: handledByFnTapMode
-        )
         let traceID = activeBluetoothVoiceTraceID ?? 0
         let durationMilliseconds = bluetoothVoiceTraceStartedAt.map {
             max(0, Int(Date().timeIntervalSince($0) * 1_000))
         } ?? 0
+        let shouldFocusInput = VoiceShortTapFocusPolicy.shouldFocus(
+            enabled: settings.voiceShortTapFocusEnabled,
+            durationMilliseconds: durationMilliseconds
+        )
+        if shouldFocusInput {
+            transcriptCaptureCoordinator.cancel(reason: "voice_short_tap_focus")
+            voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
+            let started = KeyboardInjector.focusFrontmostComposer { [weak self] focused in
+                self?.voiceShortcutStatus = LocalizedMessage(
+                    focused
+                        ? "voice_button.status.input_ready"
+                        : "voice_button.status.input_unavailable"
+                )
+            }
+            if !started {
+                voiceShortcutStatus = LocalizedMessage("voice_button.status.input_unavailable")
+            }
+        }
+        let shouldFlushAudio = shouldFocusInput || BluetoothVoiceStopPolicy.shouldFlushAudio(
+            handledByFnTapMode: handledByFnTapMode
+        )
         let pendingBuffers = audioOutput.pendingVoiceBufferCountForDiagnostics
         let tailSnapshot = bluetoothVoiceTailDiagnostics.snapshot(
             at: ProcessInfo.processInfo.systemUptime
@@ -2091,9 +2130,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "final_window_peak=\(tailSnapshot.finalWindowPeak) " +
                 "final_window_rms=\(tailSnapshot.finalWindowRMS)"
         )
-        audioOutput.logWhenPendingVoiceAudioDrains(
-            context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
-        )
+        if !shouldFocusInput {
+            audioOutput.logWhenPendingVoiceAudioDrains(
+                context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
+            )
+        }
         activeBluetoothVoiceTraceID = nil
         bluetoothVoiceTraceStartedAt = nil
         bluetoothVoiceTailDiagnostics.reset()
