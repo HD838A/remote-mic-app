@@ -31,10 +31,16 @@ print -r -- '<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleShortVersionString</key>
-  <string>1.9.4</string>
+   <key>CFBundleDisplayName</key>
+    <string>Fixture</string>
   <key>CFBundleVersion</key>
-  <string>199</string>
+     <string>199</string>
+    <key>CFBundleShortVersionString</key>
+  <string>1.9.4</string>
+ <key>NSBonjourServices</key>
+    <array>
+      <string>_fixture._tcp</string>
+    </array>
 </dict>
 </plist>' > "$ORCHESTRATOR/Resources/Info.plist"
 print -r -- '# 版本历史
@@ -104,6 +110,33 @@ test "$(/usr/bin/git -C "$WORK_DIR/candidate-195" rev-parse HEAD^)" = "$main_sha
 test "$(/usr/bin/git -C "$WORK_DIR/candidate-195" rev-list --count "$main_sha"..HEAD)" = 1
 test "$(/usr/bin/git -C "$WORK_DIR/candidate-195" diff-tree --no-commit-id --name-only -r HEAD | LC_ALL=C /usr/bin/sort)" = \
   $'Resources/Info.plist\nResources/en.lproj/ReleaseHistory.md\nResources/zh-Hans.lproj/ReleaseHistory.md'
+/usr/bin/python3 - "$ORCHESTRATOR/Resources/Info.plist" \
+  "$WORK_DIR/candidate-195/Resources/Info.plist" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+base = Path(sys.argv[1]).read_bytes()
+candidate = Path(sys.argv[2]).read_bytes()
+expected = base
+for key, old, new in (
+    (b"CFBundleShortVersionString", b"1.9.4", b"1.9.5"),
+    (b"CFBundleVersion", b"199", b"200"),
+):
+    pattern = re.compile(
+        rb"(<key>" + re.escape(key) + rb"</key>[ \t\r\n]*<string>)" +
+        re.escape(old) + rb"(</string>)"
+    )
+    expected, count = pattern.subn(
+        lambda match: match.group(1) + new + match.group(2),
+        expected,
+        count=1,
+    )
+    if count != 1:
+        raise SystemExit(f"fixture key replacement count for {key!r}: {count}")
+if candidate != expected:
+    raise SystemExit("candidate plist changed bytes other than version/build values")
+PY
 /usr/bin/grep -Fq '## 1.9.5（预发布）' \
   "$WORK_DIR/candidate-195/Resources/zh-Hans.lproj/ReleaseHistory.md"
 /usr/bin/grep -Fq '## 1.9.5 (Pre-release)' \

@@ -1,5 +1,5 @@
 name: macOS Preview Publication
-run-name: mac-preview-publication ${{ inputs.tag }} ${{ inputs.request_id }} ${{ inputs.expected_commit }}
+run-name: mac-preview-publication prerelease ${{ inputs.tag }} ${{ inputs.request_id }} ${{ inputs.expected_commit }}
 
 on:
   workflow_dispatch:
@@ -117,7 +117,7 @@ jobs:
           test "$GITHUB_REF_NAME" = main
           test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
           ui_attestation="$RUNNER_TEMP/preview-ui-attestation.json"
-          print -rn -- "$UI_ATTESTATION_B64" | /usr/bin/base64 -D > "$ui_attestation"
+          printf '%s' "$UI_ATTESTATION_B64" | /usr/bin/base64 -D > "$ui_attestation"
           jq -e . "$ui_attestation" >/dev/null
           resume_output="$RUNNER_TEMP/staged-resume-output.txt"
           SOURCE_RUN_REQUIRED_CONCLUSION=success \
@@ -158,11 +158,13 @@ jobs:
             ./scripts/release-slo-ledger.sh check "$ledger" "$release_ready_at" 1740 ui-tested-stage-publication
           fi
           ./scripts/release-slo-ledger.sh start "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification
+          publication_command=resume-prerelease
 
           cd "$STAGED_CANDIDATE"
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           remote_tag_commit="$(git ls-remote origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" | awk '$2 ~ /\^\{\}$/ {print $1; found=1; exit} $2 !~ /\^\{\}$/ {fallback=$1} END {if (!found && fallback != "") print fallback}')"
           if [[ -z "$remote_tag_commit" ]]; then
+            gh auth setup-git --hostname github.com
             git -c user.name='SayAll Release Manager' -c user.email='release-manager@sayall.app' \
               tag -a "$RELEASE_TAG" -m "无线麦SayAll.app $RELEASE_TAG"
             test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_COMMIT"
@@ -182,7 +184,7 @@ jobs:
               EXPECTED_STABLE_TAG="$EXPECTED_STABLE_TAG" \
               EXPECTED_DEVELOPER_TEAM_ID="$EXPECTED_DEVELOPER_TEAM_ID" \
               ALLOW_FROZEN_BASE_MAIN=1 \
-              "$GITHUB_WORKSPACE/scripts/publish-release.sh" resume-prerelease
+              "$GITHUB_WORKSPACE/scripts/publish-release.sh" "$publication_command"
           "$GITHUB_WORKSPACE/scripts/release-slo-ledger.sh" finish "$ledger" "$RELEASE_REQUEST_STARTED_AT" publication-and-public-byte-verification success
           if (( $(date +%s) - release_ready_at < 1740 )); then
             "$GITHUB_WORKSPACE/scripts/release-slo-ledger.sh" check "$ledger" "$release_ready_at" 1740 successful-pipeline

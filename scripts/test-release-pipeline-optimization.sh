@@ -116,6 +116,13 @@ print 'exit 0' >> "$TEST_REPO/scripts/run-trusted-release-validation.sh"
   "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq 'test "$GITHUB_REF_NAME" = main' \
   "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+/usr/bin/grep -Fq 'printf '\''%s'\'' "$UI_ATTESTATION_B64" | /usr/bin/base64 -D' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+if /usr/bin/grep -Fq 'print -rn -- "$UI_ATTESTATION_B64"' \
+    "$TEST_REPO/.github/workflows/mac-preview-publication.yml"; then
+  print -u2 "Preview publication workflow still uses the Zsh-only print builtin"
+  exit 1
+fi
 if /usr/bin/grep -Fq 'inputs.canary' \
     "$TEST_REPO/.github/workflows/mac-release-package.yml"; then
   print -u2 "signed release workflow still exposes the ambiguous canary boolean"
@@ -145,6 +152,13 @@ fi
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
 /usr/bin/grep -Fq 'git ls-remote "file://$match_repo" refs/heads/main' \
   "$TEST_REPO/.github/workflows/mac-release-package.yml"
+/usr/bin/grep -Fq 'test "$(printf '\''%s\n'\'' "$actual_product_dependencies" | jq -S -c .)" = "$expected_product_dependencies"' \
+  "$TEST_REPO/.github/workflows/mac-release-package.yml"
+if /usr/bin/grep -Fq 'test "$(print -r -- "$actual_product_dependencies"' \
+    "$TEST_REPO/.github/workflows/mac-release-package.yml"; then
+  print -u2 "Bash dependency verification step still uses the Zsh-only print builtin"
+  exit 1
+fi
 /usr/bin/grep -Fq 'readonly Match checkout must expose local main at its exact pinned HEAD' \
   "$TEST_REPO/scripts/package-macos-release-in-actions.sh"
 /usr/bin/grep -Fq 'environment: mac-release' \
@@ -394,7 +408,14 @@ fi
   "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq 'verify_cdn_assets "$STAGING_DIR" "$CANDIDATE_RELEASE_MANIFEST" &' \
   "$ROOT/scripts/publish-release.sh"
-/usr/bin/grep -Fq 'publish-release.sh" resume-prerelease' \
+/usr/bin/grep -Fq 'publication_command=resume-prerelease' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
+if /usr/bin/grep -Eq 'publication_mode|PUBLICATION_MODE|resume-draft' \
+  "$TEST_REPO/.github/workflows/mac-preview-publication.yml"; then
+  print -u2 "public Preview publication still exposes private Draft routing"
+  exit 1
+fi
+/usr/bin/grep -Fq 'publish-release.sh" "$publication_command"' \
   "$TEST_REPO/.github/workflows/mac-preview-publication.yml"
 /usr/bin/grep -Fq '/usr/bin/cmp -s "$source_file" "$downloaded_file"' \
   "$ROOT/scripts/publish-release.sh"
@@ -449,14 +470,19 @@ fi
   "$ROOT/scripts/fast-release.sh"
 /usr/bin/grep -Fq 'release_mode=stage-preview' "$ROOT/scripts/fast-release.sh"
 /usr/bin/grep -Fq -- '--ref main' "$ROOT/scripts/publish-staged-preview.sh"
-if /usr/bin/grep -Fq 'release_mode=' "$ROOT/scripts/publish-staged-preview.sh"; then
+if /usr/bin/grep -Eq 'release_mode=|publication_mode=|PUBLICATION_MODE|draft' \
+  "$ROOT/scripts/publish-staged-preview.sh"; then
   print -u2 "staged publication dispatcher unexpectedly exposes another mode"
   exit 1
 fi
+/usr/bin/grep -Fq 'public Pre-release dispatch is restricted to HD838A/remote-mic-app' \
+  "$ROOT/scripts/publish-staged-preview.sh"
+/usr/bin/grep -Fq 'private Drafts must be published to GetSayAll/SayAll' \
+  "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq '.baseline.version == "1.8.3"' "$ROOT/scripts/verify-preview-ui-attestation.sh"
 /usr/bin/grep -Fq 'productionURLPrefix' "$ROOT/scripts/verify-preview-ui-attestation.sh"
 /usr/bin/grep -Fq 'http://127[.]0[.]0[.]1' "$ROOT/scripts/verify-preview-ui-attestation.sh"
-/usr/bin/grep -Fq 'resume_existing_prerelease_assets' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'resume_existing_release_assets' "$ROOT/scripts/publish-release.sh"
 /usr/bin/grep -Fq '.displayTitle == $runTitle' "$ROOT/scripts/fast-release.sh"
 /usr/bin/grep -Fq '.display_title == $runTitle' "$ROOT/scripts/fast-release.sh"
 /usr/bin/grep -Fq -- '--title "$PUBLIC_PRODUCT_NAME $VERSION"' \

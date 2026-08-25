@@ -31,24 +31,38 @@ fi
 
 for required in \
   'Publish exact UI-tested staged Preview bytes' \
+  'gh auth setup-git --hostname github.com' \
   'test "$GITHUB_REF_NAME" = main' \
   'SOURCE_RUN_REQUIRED_CONCLUSION=success' \
   'REQUIRE_EXISTING_TAG=0 REQUIRE_STAGED_SOURCE=1' \
   'verify-preview-ui-attestation.sh' \
-  'publish-release.sh" resume-prerelease' \
+  'publication_command=resume-prerelease' \
   'Publish or resume the exact staged bytes'; do
   /usr/bin/grep -Fq -- "$required" "$PUBLICATION_WORKFLOW"
 done
+if /usr/bin/grep -Eq 'publication_mode|PUBLICATION_MODE|resume-draft' "$PUBLICATION_WORKFLOW"; then
+  print -u2 "public Preview publication still exposes private Draft routing"
+  exit 1
+fi
 if /usr/bin/grep -Eq 'environment:[[:space:]]*mac-release|secrets[.]' "$PUBLICATION_WORKFLOW"; then
   print -u2 "publication control plane unexpectedly enters the credential Environment"
   exit 1
 fi
 /usr/bin/grep -Fq -- '--ref main' "$ROOT/scripts/publish-staged-preview.sh"
-if /usr/bin/grep -Fq 'release_mode=' "$ROOT/scripts/publish-staged-preview.sh"; then
+if /usr/bin/grep -Eq 'release_mode=|publication_mode=|PUBLICATION_MODE|draft' \
+  "$ROOT/scripts/publish-staged-preview.sh"; then
   print -u2 "staged publication dispatcher still exposes a second publication mode"
   exit 1
 fi
-/usr/bin/grep -Fq 'resume_existing_prerelease_assets' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'resume_existing_release_assets' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'intel_dmg_checksum="$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel.dmg.sha256"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq '/usr/bin/awk -v name="$intel_dmg_name"' \
+  "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'gh release download "$RELEASE_TAG"' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'test "$remote_digest" = "sha256:$staged_sha"' "$ROOT/scripts/publish-release.sh"
+/usr/bin/grep -Fq 'private Drafts must be published to GetSayAll/SayAll' \
+  "$ROOT/scripts/publish-release.sh"
 
 /usr/bin/grep -Fq 'SOURCE_RUN_REQUIRED_CONCLUSION="${SOURCE_RUN_REQUIRED_CONCLUSION:-failure}"' \
   "$ROOT/scripts/resume-preview-publication.sh"
@@ -56,8 +70,14 @@ fi
   "$ROOT/scripts/resume-preview-publication.sh"
 /usr/bin/grep -Fq 'REQUIRE_STAGED_SOURCE="${REQUIRE_STAGED_SOURCE:-0}"' \
   "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq '/bin/mkdir -p "$WORK_DIR"' \
+  "$ROOT/scripts/resume-preview-publication.sh"
 /usr/bin/grep -Fq '.conclusion == $conclusion' "$ROOT/scripts/resume-preview-publication.sh"
-/usr/bin/grep -Fq 'staged candidate unexpectedly already has an immutable tag' \
+/usr/bin/grep -Fq 'remote_tag_commit' \
+  "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq 'staged candidate tag points to a different commit' \
+  "$ROOT/scripts/resume-preview-publication.sh"
+/usr/bin/grep -Fq 'refs/tags/${TAG}:refs/tags/${TAG}' \
   "$ROOT/scripts/resume-preview-publication.sh"
 
 /usr/bin/grep -Fq '.github/workflows/mac-preview-publication.yml' \
@@ -72,6 +92,29 @@ if /usr/bin/grep -Fq 'config/release-dependencies.json' \
   print -u2 "product dependency values unexpectedly invalidate toolchain qualification"
   exit 1
 fi
+
+TAG_ORIGIN="$WORK_DIR/tag-origin.git"
+TAG_SOURCE="$WORK_DIR/tag-source"
+TAG_CANDIDATE="$WORK_DIR/tag-candidate"
+FIXTURE_TAG="v9.9.9"
+/usr/bin/git init -q --bare "$TAG_ORIGIN"
+/usr/bin/git clone -q "$TAG_ORIGIN" "$TAG_SOURCE"
+print -r -- 'exact tag fixture' > "$TAG_SOURCE/fixture.txt"
+/usr/bin/git -C "$TAG_SOURCE" add fixture.txt
+/usr/bin/git -C "$TAG_SOURCE" \
+  -c user.name=Fixture -c user.email=fixture@example.invalid \
+  commit -q -m fixture
+/usr/bin/git -C "$TAG_SOURCE" tag "$FIXTURE_TAG"
+/usr/bin/git -C "$TAG_SOURCE" push -q origin HEAD:main "$FIXTURE_TAG"
+fixture_commit="$(/usr/bin/git -C "$TAG_SOURCE" rev-parse HEAD)"
+/usr/bin/git init -q "$TAG_CANDIDATE"
+/usr/bin/git -C "$TAG_CANDIDATE" remote add origin "$TAG_ORIGIN"
+remote_tag_commit="$(/usr/bin/git -C "$TAG_CANDIDATE" ls-remote origin \
+  "refs/tags/$FIXTURE_TAG" | /usr/bin/awk 'NR == 1 { print $1 }')"
+test "$remote_tag_commit" = "$fixture_commit"
+/usr/bin/git -C "$TAG_CANDIDATE" fetch --quiet --no-tags origin \
+  "refs/tags/${FIXTURE_TAG}:refs/tags/${FIXTURE_TAG}"
+test "$(/usr/bin/git -C "$TAG_CANDIDATE" rev-parse --verify "$FIXTURE_TAG^{commit}")" = "$fixture_commit"
 
 stage="$WORK_DIR/preview-stage.json"
 attestation="$WORK_DIR/preview-ui-attestation.json"
@@ -119,6 +162,7 @@ jq -n \
   requestStartedAt:1787590000,
   releaseReadyAt:1787590060,
   target:{version:"9.9.9",build:"999"},
+  observedFeedURL:"http://127.0.0.1:8765/appcast.xml",
   baseline:{
     tag:"v1.8.3",assetId:303,
     assetDigest:"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -165,6 +209,13 @@ jq -n \
 "$ROOT/scripts/verify-preview-ui-attestation.sh" "$attestation" "$stage" "$dist" \
   > "$WORK_DIR/ui-pass.txt"
 /usr/bin/grep -Fq 'PREVIEW UI ATTESTATION PASS' "$WORK_DIR/ui-pass.txt"
+
+jq '.observedFeedURL = "https://github.com/HD838A/remote-mic-app/releases/download/v9.9.9/appcast.xml" | .update.feedURL = .observedFeedURL' \
+  "$attestation" > "$WORK_DIR/ui-github-feed.json"
+"$ROOT/scripts/verify-preview-ui-attestation.sh" \
+  "$WORK_DIR/ui-github-feed.json" "$stage" "$dist" \
+  > "$WORK_DIR/ui-github-feed-pass.txt"
+/usr/bin/grep -Fq 'PREVIEW UI ATTESTATION PASS' "$WORK_DIR/ui-github-feed-pass.txt"
 
 jq '.signedArtifactId = 999' "$attestation" > "$WORK_DIR/ui-wrong-artifact.json"
 if "$ROOT/scripts/verify-preview-ui-attestation.sh" \

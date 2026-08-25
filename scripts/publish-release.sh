@@ -42,12 +42,18 @@ INTEL_ZH_RELEASE_NOTES="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.zh.txt"
 INTEL_EN_RELEASE_NOTES="$INTEL_OUTPUT_DIR/Remote-Mic-$VERSION-Intel.en.txt"
 SHARED_CHECKSUM_BASENAME="Remote-Mic-$VERSION.dmg.sha256"
 
+if [[ "$MODE" == "draft" || "$MODE" == "resume-draft" ]]; then
+  print -u2 "private Drafts must be published to GetSayAll/SayAll through the private Draft release path"
+  exit 1
+fi
 if [[ "$#" -ne 1 || \
       ( "$MODE" != "prerelease" && \
         "$MODE" != "resume-prerelease" && \
         "$MODE" != "verify-prerelease" && \
+        "$MODE" != "draft" && \
+        "$MODE" != "resume-draft" && \
         "$MODE" != "promote" ) ]]; then
-  print -u2 "usage: $0 prerelease|resume-prerelease|verify-prerelease|promote"
+  print -u2 "usage: $0 prerelease|resume-prerelease|verify-prerelease|draft|resume-draft|promote"
   exit 1
 fi
 case "$DRY_RUN" in
@@ -67,7 +73,9 @@ if [[ ! "$EXPECTED_STABLE_TAG" =~ '^v[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
   print -u2 "EXPECTED_STABLE_TAG must be an exact semantic version tag"
   exit 1
 fi
-if [[ "$MODE" == "prerelease" || "$MODE" == "resume-prerelease" || "$MODE" == "verify-prerelease" ]]; then
+if [[ "$MODE" == "prerelease" || "$MODE" == "resume-prerelease" || \
+      "$MODE" == "verify-prerelease" || "$MODE" == "draft" || \
+      "$MODE" == "resume-draft" ]]; then
   RELEASE_TAG="${REQUESTED_RELEASE_TAG:-v$VERSION}"
   if [[ "$RELEASE_TAG" != "v$VERSION" ]]; then
     print -u2 "RELEASE_TAG must match the version in Resources/Info.plist"
@@ -259,6 +267,20 @@ generate_release_notes() {
   } > "$RELEASE_NOTES"
 
   rg -q '^- ' "$RELEASE_NOTES"
+
+  if [[ "$MODE" == "draft" || "$MODE" == "resume-draft" ]]; then
+    local draft_notes="$RELEASE_NOTES.draft"
+    {
+      print "## 内部测试 Draft"
+      print
+      print "这是供内部验收的私有 Draft，不会改变稳定版或公开更新源。"
+      print
+      print "This private Draft is for internal validation and does not change the stable feed."
+      print
+      /bin/cat "$RELEASE_NOTES"
+    } > "$draft_notes"
+    /bin/mv "$draft_notes" "$RELEASE_NOTES"
+  fi
 
   if rg -i -q \
     '((连续|连点|点击|轻点).{0,24}(版本号|当前版本).{0,24}(次|隐藏|入口))|((tap|click).{0,24}(version|build).{0,24}(times|hidden|secret|invite|enrollment))|(隐藏入口|秘密手势|secret gesture|hidden entry|invitation-code entry)' \
@@ -599,6 +621,84 @@ download_release_assets() {
     "$DOWNLOAD_DIR" "$CANDIDATE_RELEASE_MANIFEST" github-origin-download
 }
 
+download_draft_asset() {
+  local asset_name="$1"
+  local destination_dir="$2"
+  gh release download "$RELEASE_TAG" \
+    --repo "$REPOSITORY" \
+    --pattern "$asset_name" \
+    --dir "$destination_dir" \
+    --clobber >/dev/null
+  print "github-draft DOWNLOAD PASS: $asset_name"
+}
+
+download_draft_assets_from_manifest() {
+  local manifest_file="$1"
+  local destination_dir="$2"
+  local asset_name
+  local -a batch_pids=()
+
+  for asset_name in "${(@f)$(<"$manifest_file")}"; do
+    [[ -n "$asset_name" ]] || continue
+    if [[ -f "$destination_dir/$asset_name" ]]; then
+      continue
+    fi
+    download_draft_asset "$asset_name" "$destination_dir" &
+    batch_pids+=("$!")
+    if (( ${#batch_pids[@]} >= PUBLIC_DOWNLOAD_CONCURRENCY )); then
+      wait_for_download_batch github-draft "${batch_pids[@]}"
+      batch_pids=()
+    fi
+  done
+  if (( ${#batch_pids[@]} != 0 )); then
+    wait_for_download_batch github-draft "${batch_pids[@]}"
+  fi
+}
+
+download_draft_release_assets() {
+  local remote_manifest="$WORK_DIR/github-draft-assets.txt"
+  local release_json
+  /bin/mkdir -p "$DOWNLOAD_DIR"
+  test "$(/usr/bin/find "$DOWNLOAD_DIR" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')" = "0"
+  release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,isPrerelease,assets)"
+  print -r -- "$release_json" | jq -e '.isDraft == true and .isPrerelease == false' >/dev/null || {
+    print -u2 "release $RELEASE_TAG is not the expected private Draft"
+    return 1
+  }
+  print -r -- "$release_json" | jq -r '.assets[].name' | LC_ALL=C /usr/bin/sort > "$remote_manifest"
+  if ! rg -Fxq 'candidate-provenance.json' "$remote_manifest"; then
+    print -u2 "Draft release is missing candidate-provenance.json"
+    return 1
+  fi
+  download_draft_asset candidate-provenance.json "$DOWNLOAD_DIR"
+  validate_payload_asset_manifest "$DOWNLOAD_DIR/candidate-provenance.json"
+  write_candidate_release_manifest \
+    "$DOWNLOAD_DIR/candidate-provenance.json" "$CANDIDATE_RELEASE_MANIFEST"
+  if ! /usr/bin/cmp -s "$remote_manifest" "$CANDIDATE_RELEASE_MANIFEST"; then
+    print -u2 "Draft Release asset set does not exactly match candidate provenance"
+    return 1
+  fi
+  download_draft_assets_from_manifest "$CANDIDATE_RELEASE_MANIFEST" "$DOWNLOAD_DIR"
+  local asset_name remote_record remote_size remote_digest staged_size staged_sha downloaded_size downloaded_sha
+  while IFS= read -r asset_name; do
+    [[ -n "$asset_name" ]] || continue
+    remote_record="$(print -r -- "$release_json" | jq -r --arg name "$asset_name" \
+      '.assets[] | select(.name == $name) | [.size, (.digest // "")] | @tsv')"
+    IFS=$'\t' read -r remote_size remote_digest <<< "$remote_record"
+    staged_size="$(/usr/bin/stat -f '%z' "$STAGING_DIR/$asset_name")"
+    staged_sha="$(/usr/bin/shasum -a 256 "$STAGING_DIR/$asset_name" | /usr/bin/awk '{print $1}')"
+    downloaded_size="$(/usr/bin/stat -f '%z' "$DOWNLOAD_DIR/$asset_name")"
+    downloaded_sha="$(/usr/bin/shasum -a 256 "$DOWNLOAD_DIR/$asset_name" | /usr/bin/awk '{print $1}')"
+    /usr/bin/cmp -s "$STAGING_DIR/$asset_name" "$DOWNLOAD_DIR/$asset_name"
+    test "$remote_size" = "$staged_size"
+    test "$downloaded_size" = "$staged_size"
+    test "$downloaded_sha" = "$staged_sha"
+    test "$remote_digest" = "sha256:$staged_sha"
+  done < "$CANDIDATE_RELEASE_MANIFEST"
+  verify_asset_directory_matches_manifest \
+    "$DOWNLOAD_DIR" "$CANDIDATE_RELEASE_MANIFEST" github-draft-download
+}
+
 verify_cdn_assets() {
   local source_dir="$1"
   local manifest_file="$2"
@@ -679,7 +779,8 @@ verify_downloaded_candidate() {
     print -u2 "candidate provenance contains an invalid branch ref"
     exit 1
   fi
-  if [[ "$MODE" == "prerelease" || "$MODE" == "verify-prerelease" ]]; then
+  if [[ "$MODE" == "prerelease" || "$MODE" == "verify-prerelease" || \
+        "$MODE" == "draft" || "$MODE" == "resume-draft" ]]; then
     if [[ "$candidate_branch" != "release/pre-$RELEASE_TAG" ]]; then
       print -u2 "new Preview provenance must use the single branch release/pre-$RELEASE_TAG"
       exit 1
@@ -721,7 +822,8 @@ verify_downloaded_candidate() {
   fi
 
   if [[ "$schema_version" == "3" && \
-        ( "$MODE" == "prerelease" || "$MODE" == "verify-prerelease" ) ]]; then
+        ( "$MODE" == "prerelease" || "$MODE" == "verify-prerelease" || \
+          "$MODE" == "draft" || "$MODE" == "resume-draft" ) ]]; then
     validate_request_attestation "$tag_commit" "$(jq -r '.baseMainCommit' "$provenance")"
     if ! /usr/bin/cmp -s \
       <(jq -S '{requestId,attemptId,requestStartedAt,releaseReadyAt,pipelineDigest,pipelineQualifiedAt,pipelineQualificationRunId,pipelineQualificationArtifactId,pipelineQualificationArtifactDigest}' "$REQUEST_ATTESTATION") \
@@ -763,6 +865,31 @@ download_and_compare_local_candidate() {
   verify_downloaded_candidate
 }
 
+download_and_compare_draft_candidate() {
+  local shared_dmg_checksum="$DOWNLOAD_DIR/Remote-Mic-$VERSION.dmg.sha256"
+  local intel_dmg_name="Remote-Mic-$VERSION-Intel.dmg"
+  local intel_dmg_checksum="$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel.dmg.sha256"
+  download_draft_release_assets
+  verify_downloaded_candidate
+  export EXPECTED_DEVELOPER_TEAM_ID REQUIRE_DEVELOPER_ID_SIGNING=1 REQUIRE_NOTARIZATION=1
+  verify_update_zip "$DOWNLOAD_DIR/Remote-Mic-$VERSION.zip" apple-silicon
+  verify_update_zip "$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel.zip" intel
+  "$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh" \
+    "$DOWNLOAD_DIR/Remote-Mic-$VERSION-Uninstaller.pkg" uninstall
+  "$SOURCE_ROOT/scripts/verify-dmg.sh" "$DOWNLOAD_DIR/Remote-Mic-$VERSION.dmg"
+  RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-doubao-driver-pkg.sh" \
+    "$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel-Uninstaller.pkg" uninstall
+  /usr/bin/awk -v name="$intel_dmg_name" '$2 == name { print }' \
+    "$shared_dmg_checksum" > "$intel_dmg_checksum"
+  test "$(/usr/bin/wc -l < "$intel_dmg_checksum" | /usr/bin/tr -d ' ')" = 1
+  RELEASE_VARIANT=intel "$SOURCE_ROOT/scripts/verify-dmg.sh" \
+    "$DOWNLOAD_DIR/Remote-Mic-$VERSION-Intel.dmg"
+  (
+    cd "$DOWNLOAD_DIR"
+    /usr/bin/shasum -a 256 -c "Remote-Mic-$VERSION.dmg.sha256"
+  )
+}
+
 generate_stable_promotion() {
   local provenance="$DOWNLOAD_DIR/candidate-provenance.json"
   local tag_commit main_commit promoted_at
@@ -795,23 +922,33 @@ dispatch_preview_recording_guard() {
   print "PREVIEW MAIN RECORDING DISPATCHED: $RELEASE_TAG"
 }
 
-resume_existing_prerelease_assets() {
-  local release_json remote_assets expected_name remote_record
+resume_existing_release_assets() {
+  local release_json remote_assets expected_name remote_record release_label
   local expected_path expected_size expected_sha remote_size remote_digest
   local -a missing_assets=()
 
   release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,isPrerelease,assets)"
-  print -r -- "$release_json" | jq -e \
-    '.isDraft == false and .isPrerelease == true' >/dev/null || {
-      print -u2 "existing release $RELEASE_TAG is not the expected public Pre-release"
-      return 1
-    }
+  if [[ "$MODE" == "draft" || "$MODE" == "resume-draft" ]]; then
+    release_label="private Draft"
+    print -r -- "$release_json" | jq -e \
+      '.isDraft == true and .isPrerelease == false' >/dev/null || {
+        print -u2 "existing release $RELEASE_TAG is not the expected private Draft"
+        return 1
+      }
+  else
+    release_label="public Pre-release"
+    print -r -- "$release_json" | jq -e \
+      '.isDraft == false and .isPrerelease == true' >/dev/null || {
+        print -u2 "existing release $RELEASE_TAG is not the expected public Pre-release"
+        return 1
+      }
+  fi
   remote_assets="$(print -r -- "$release_json" | jq -r '.assets[] | [.name, (.size | tostring), (.digest // "")] | @tsv')"
 
   while IFS=$'\t' read -r expected_name remote_size remote_digest; do
     [[ -n "$expected_name" ]] || continue
     if ! /usr/bin/grep -Fxq "$expected_name" "$CANDIDATE_RELEASE_MANIFEST"; then
-      print -u2 "existing Pre-release contains an unexpected asset: $expected_name"
+      print -u2 "existing $release_label contains an unexpected asset: $expected_name"
       return 1
     fi
   done <<< "$remote_assets"
@@ -828,7 +965,7 @@ resume_existing_prerelease_assets() {
     fi
     IFS=$'\t' read -r _ remote_size remote_digest <<< "$remote_record"
     if [[ "$remote_size" != "$expected_size" || "$remote_digest" != "sha256:$expected_sha" ]]; then
-      print -u2 "existing Pre-release asset differs from the exact staged bytes: $expected_name"
+      print -u2 "existing $release_label asset differs from the exact staged bytes: $expected_name"
       return 1
     fi
   done < "$CANDIDATE_RELEASE_MANIFEST"
@@ -853,6 +990,72 @@ if [[ "$MODE" == "verify-prerelease" ]]; then
   require_expected_stable_latest
   dispatch_preview_recording_guard
   print "EXISTING PRE-RELEASE VERIFICATION PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
+  exit 0
+fi
+
+if [[ "$MODE" == "draft" || "$MODE" == "resume-draft" ]]; then
+  verify_local_artifacts
+  stage_assets
+  generate_release_notes
+
+  if [[ "$DRY_RUN" == "1" ]]; then
+    generate_candidate_provenance
+    print "RELEASE NOTES:"
+    /bin/cat "$RELEASE_NOTES"
+    print "PUBLISH DRY RUN PASS"
+    print "MODE: draft"
+    print "TAG: $RELEASE_TAG"
+    print "VERSION: $VERSION ($BUILD)"
+    exit 0
+  fi
+
+  verify_candidate_source
+  generate_candidate_provenance
+  release_exists=0
+  if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+    release_exists=1
+    if [[ "$MODE" == "draft" ]]; then
+      print -u2 "release $RELEASE_TAG already exists"
+      exit 1
+    fi
+  fi
+
+  require_expected_stable_latest
+  active_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  active_branch="${active_branch:-${RELEASE_CANDIDATE_BRANCH:-${GITHUB_REF_NAME:-}}}"
+  if [[ "$active_branch" != "release/pre-$RELEASE_TAG" ]]; then
+    print -u2 "candidate branch identity is unavailable or does not match $RELEASE_TAG"
+    exit 1
+  fi
+  active_head="$(git rev-parse HEAD)"
+  remote_active_head="$(git ls-remote origin "refs/heads/$active_branch" | /usr/bin/awk 'NR == 1 { print $1 }')"
+  if [[ "$remote_active_head" != "$active_head" ]]; then
+    print -u2 "candidate branch changed before GitHub Draft creation"
+    exit 1
+  fi
+  if (( release_exists == 0 )); then
+    typeset -a release_uploads=()
+    while IFS= read -r asset_name; do
+      [[ -n "$asset_name" ]] || continue
+      release_uploads+=("$STAGING_DIR/$asset_name")
+    done < "$CANDIDATE_RELEASE_MANIFEST"
+    (( ${#release_uploads[@]} > 1 ))
+    gh release create "$RELEASE_TAG" "${release_uploads[@]}" \
+      --repo "$REPOSITORY" \
+      --verify-tag \
+      --draft \
+      --latest=false \
+      --title "$PUBLIC_PRODUCT_NAME $VERSION (Draft)" \
+      --notes-file "$RELEASE_NOTES"
+  else
+    resume_existing_release_assets
+  fi
+
+  RELEASE_STATE="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,isPrerelease --jq '[.isDraft, .isPrerelease] | @tsv')"
+  test "$RELEASE_STATE" = $'true\tfalse'
+  require_expected_stable_latest
+  download_and_compare_draft_candidate
+  print "DRAFT RELEASE PASS: https://github.com/$REPOSITORY/releases/tag/$RELEASE_TAG"
   exit 0
 fi
 
@@ -911,7 +1114,7 @@ if [[ "$MODE" == "prerelease" || "$MODE" == "resume-prerelease" ]]; then
       --title "$PUBLIC_PRODUCT_NAME $VERSION" \
       --notes-file "$RELEASE_NOTES"
   else
-    resume_existing_prerelease_assets
+    resume_existing_release_assets
   fi
 
   RELEASE_STATE="$(gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.draft, .prerelease] | @tsv')"

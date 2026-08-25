@@ -216,6 +216,10 @@ check(
         RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36) &&
         // Real RC003 hardware emits keyCode 10 (ISO §) for the TV key.
         RemoteButton.tv.nativeEvent == .keyboard(keyCode: 10) &&
+        RemoteButton.tv.nativeEvents == [
+            .keyboard(keyCode: 10),
+            .keyboard(keyCode: 50),
+        ] &&
         RemoteButton.power.nativeEvent == .keyboard(keyCode: 90) &&
         RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0) &&
         RemoteButton.back.nativeEvent == nil,

@@ -16,6 +16,16 @@ for command_name in git jq base64 "$GH_BIN"; do
   command -v "$command_name" >/dev/null 2>&1 || { print -u2 "Missing required command: $command_name"; exit 1; }
 done
 
+[[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
+  print -u2 "public Pre-release dispatch is restricted to HD838A/remote-mic-app"
+  exit 1
+}
+repository_visibility="$($GH_BIN repo view "$REPOSITORY" --json visibility --jq '.visibility')"
+[[ "$repository_visibility" == "PUBLIC" ]] || {
+  print -u2 "public Pre-release dispatch requires a public source repository"
+  exit 1
+}
+
 tag="$(jq -r '.tag' "$ATTESTATION")"
 branch="$(jq -r '.candidateBranch' "$ATTESTATION")"
 commit="$(jq -r '.candidateCommit' "$ATTESTATION")"
@@ -56,4 +66,4 @@ $GH_BIN workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref main \
   --raw-field "source_artifact_digest=$source_artifact_digest" \
   --raw-field "ui_attestation_b64=$ui_attestation_b64"
 
-print "PUBLISH STAGED PREVIEW DISPATCHED: $tag at $commit"
+print "PUBLISH STAGED PRE-RELEASE DISPATCHED: $tag at $commit"

@@ -34,6 +34,8 @@ version="$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/In
 build="$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")"
 expected_version="$(jq -r '.version' "$STAGE")"
 expected_build="$(jq -r '.build' "$STAGE")"
+expected_tag="$(jq -r '.tag' "$STAGE")"
+expected_github_feed="https://github.com/HD838A/remote-mic-app/releases/download/$expected_tag/appcast.xml"
 [[ "$version" == "$expected_version" && "$build" == "$expected_build" ]] || {
   print -u2 "installed App version/build does not match the staged Preview"
   exit 1
@@ -71,11 +73,13 @@ done
   exit 1
 }
 
-jq -e --slurpfile session "$SESSION" '
+jq -e \
+  --slurpfile session "$SESSION" \
+  --arg expectedGitHubFeed "$expected_github_feed" '
   .baseline.launched == true and
   (.baseline.launchedAt | fromdateiso8601 > 0) and
   .update.usedSparkleUI == true and
-  .update.feedURL == $session[0].feedURL and
+  (.update.feedURL == $session[0].feedURL or .update.feedURL == $expectedGitHubFeed) and
   ([.update.checkStartedAt,.update.downloadConfirmedAt,.update.installConfirmedAt,
     .launches.first.startedAt,.launches.first.quitAt,.launches.second.startedAt,
     .crashReports.checkedAt,.recordedAt] | all(.[]; fromdateiso8601 > 0)) and
@@ -109,6 +113,7 @@ jq -S \
       requestStartedAt: $stage[0].requestStartedAt,
       releaseReadyAt: $stage[0].releaseReadyAt,
       target: {version:$stage[0].version,build:$stage[0].build},
+      observedFeedURL: $observation[0].update.feedURL,
       testedArtifact: {
         lane:$session[0].lane,
         feedURL:$session[0].feedURL,
@@ -120,7 +125,7 @@ jq -S \
         archiveName:$session[0].archiveName,
         archiveSHA256:$session[0].archiveSHA256
       },
-      baseline: $session[0].stable + $observation[0].baseline,
+      baseline: ($session[0].stable + $observation[0].baseline),
       installedApp: {
         path:$appPath,
         developerTeamId:$teamId,
@@ -133,7 +138,7 @@ jq -S \
         infoPlistSHA256:$infoPlistSHA256
       }
     }
-  ' > "$OUTPUT"
+  ' "$OBSERVATION" > "$OUTPUT"
 
 "$ROOT/scripts/verify-preview-ui-attestation.sh" \
   "$OUTPUT" "$STAGE" "$(dirname "$SESSION")/resolved/candidate/dist"
