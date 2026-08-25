@@ -124,7 +124,7 @@ struct TranscriptCaptureCoordinatorTests {
             text: "草稿语音。",
             selection: NSRange(location: 4, length: 0)
         )
-        harness.scheduler.advance(by: 1)
+        harness.scheduler.advance(by: 1.25)
 
         #expect(try #require(harness.captures.first).text == "语音")
         #expect(harness.logs.contains {

@@ -1367,7 +1367,7 @@ struct RemoteButtonsTests {
         let applySettings = model[applySettingsStart.lowerBound..<applySettingsEnd.lowerBound]
         let map = try #require(
             applySettings.range(
-                of: "nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: hardwareVoiceMappingMode)"
+                of: "nativeButtonEventsSuppressed = applyVoiceFunctionMapping(mode: requestedVoiceMappingMode)"
             )
         )
         let start = try #require(

@@ -544,6 +544,19 @@ final class TranscriptCaptureCoordinator {
             suffixLength += 1
         }
 
+        // Some input methods replace the punctuation immediately before the
+        // caret, then reuse the same sentence-ending punctuation after the
+        // committed voice text. Treat that boundary punctuation as part of the
+        // localized recomposition so the archived transcript stays complete.
+        if suffixLength > 0 {
+            let suffixStart = originalText.length - suffixLength
+            if suffixStart < originalSelection.location,
+               originalSelection.location - suffixStart == 1,
+               Self.isPunctuation(originalText.character(at: suffixStart)) {
+                suffixLength -= 1
+            }
+        }
+
         let oldRange = NSRange(
             location: prefixLength,
             length: originalText.length - prefixLength - suffixLength
@@ -568,5 +581,10 @@ final class TranscriptCaptureCoordinator {
             newRange: newRange,
             newText: updatedText.substring(with: newRange)
         )
+    }
+
+    private static func isPunctuation(_ codeUnit: unichar) -> Bool {
+        guard let scalar = UnicodeScalar(UInt32(codeUnit)) else { return false }
+        return CharacterSet.punctuationCharacters.contains(scalar)
     }
 }

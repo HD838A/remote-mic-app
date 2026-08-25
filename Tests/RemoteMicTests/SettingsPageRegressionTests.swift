@@ -988,9 +988,12 @@ struct SettingsPageRegressionTests {
         #expect(!agentAccessSource.contains(".sheet("))
         #expect(!agentAccessSource.contains("Popover"))
 
+        #expect(modelSource.contains("voiceHistorySessionCoordinator.begin("))
         #expect(modelSource.contains(
-            "transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)"
+            "voiceHistorySessionCoordinator.finish(sessionID: sessionID, endedAt: endedAt)"
         ))
+        #expect(modelSource.contains("transcriptCaptureCoordinator.startSession("))
+        #expect(modelSource.contains("sessionID: sessionID,"))
         #expect(modelSource.contains(
             "transcriptCaptureCoordinator.finishSession(endedAt: endedAt)"
         ))

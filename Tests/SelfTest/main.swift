@@ -891,6 +891,16 @@ check(
     "Typeless Fn tap session buffers pre-roll and stops after drain"
 )
 
+let recomposedVoiceChange = TranscriptCaptureCoordinator.localizedVoiceChange(
+    original: "草稿。后文",
+    updated: "草稿，这是语音。后文",
+    originalSelection: NSRange(location: 3, length: 0)
+)
+check(
+    recomposedVoiceChange?.newText == "，这是语音。",
+    "localized input method recomposition keeps transcript punctuation"
+)
+
 var historyScheduledOperation: (() -> Void)?
 var completedHistorySession: CompletedVoiceHistorySession?
 let historySessionID = UUID()
