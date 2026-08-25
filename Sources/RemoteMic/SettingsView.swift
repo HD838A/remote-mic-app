@@ -1125,6 +1125,8 @@ struct SettingsView: View {
                 mappingVoiceKeyModeControl
                 Divider()
                 mappingVoiceFnTapControl
+                Divider()
+                mappingVoiceShortTapFocusControl
                 HStack {
                     Spacer(minLength: 0)
                     mappingRestoreDefaultsButton
@@ -1195,6 +1197,22 @@ struct SettingsView: View {
         .help(localization.text("connection.voice_fn_tap.hint"))
         .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
         .disabled(settings.voiceKeyMode != .function)
+    }
+
+    private var mappingVoiceShortTapFocusControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("connection.voice_short_focus.enabled", isOn: Binding(
+                get: { settings.voiceShortTapFocusEnabled },
+                set: { model.setVoiceShortTapFocusEnabled($0) }
+            ))
+            .font(.system(size: 12, weight: .medium))
+            .toggleStyle(.switch)
+            Text("connection.voice_short_focus.hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .help(localization.text("connection.voice_short_focus.help"))
     }
 
     private var mappingRestoreDefaultsButton: some View {
