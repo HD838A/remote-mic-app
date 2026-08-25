@@ -71,6 +71,10 @@ let package = Package(
         .executable(
             name: "SayAllMCP",
             targets: ["SayAllMCP"]
+        ),
+        .executable(
+            name: "QianwenHistoryReader",
+            targets: ["QianwenHistoryReader"]
         )
     ],
     dependencies: packageDependencies,
@@ -93,6 +97,10 @@ let package = Package(
             name: "SayAllMCP",
             dependencies: ["SayAllMCPKit"],
             path: "Sources/SayAllMCP"
+        ),
+        .executableTarget(
+            name: "QianwenHistoryReader",
+            path: "Sources/QianwenHistoryReader"
         ),
         .testTarget(
             name: "RemoteMicTests",

@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [千问历史读取进程无超时可能阻塞微信回眸](./2026-08-25-qianwen-history-reader-timeout.md)
 - [历史蓝牙缓存持续固定频率重连](./2026-08-24-ble-cached-reconnect-storm.md)
 - [运行日志缺少实例归属、轮转与有效降噪](./2026-08-24-runtime-log-operational-quality.md)
 - [语音流期间进程 CPU 接近占满单核](./2026-08-24-voice-stream-cpu-saturation.md)
@@ -66,6 +67,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-25 | [千问历史读取进程无超时可能阻塞微信回眸](./2026-08-25-qianwen-history-reader-timeout.md) | 自动化与双架构 Release 编译通过，等待安装包微信回眸复验 |
 | 2026-08-24 | [历史蓝牙缓存持续固定频率重连](./2026-08-24-ble-cached-reconnect-storm.md) | 自动化、硬件模拟与 Release App 验证通过，等待 RC001 / RC003 真机重连验收 |
 | 2026-08-24 | [运行日志缺少实例归属、轮转与有效降噪](./2026-08-24-runtime-log-operational-quality.md) | 候选修复完成；自动化、事务故障夹具与 Release App 验证通过，等待真实 BLE / CoreAudio、废纸篓权限与长时间运行验收 |
 | 2026-08-24 | [语音流期间进程 CPU 接近占满单核](./2026-08-24-voice-stream-cpu-saturation.md) | 候选修复完成；自动化、项目自检与 Release App 验证通过，等待真实 RC003 性能对照 |
