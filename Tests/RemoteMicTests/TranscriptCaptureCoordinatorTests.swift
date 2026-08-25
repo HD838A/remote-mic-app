@@ -87,6 +87,14 @@ struct TranscriptCaptureCoordinatorTests {
             updated: "changed voice XYZ",
             originalSelection: NSRange(location: 3, length: 0)
         ) == nil)
+        #expect(TranscriptCaptureCoordinator.insertedTextChange(
+            original: "已有草稿",
+            updated: "已有草稿语音"
+        )?.newText == "语音")
+        #expect(TranscriptCaptureCoordinator.insertedTextChange(
+            original: "已有草稿",
+            updated: "完全替换"
+        ) == nil)
     }
 
     @Test func quickSendKeepsTheLastAcceptedTranscriptCandidate() throws {
@@ -111,6 +119,80 @@ struct TranscriptCaptureCoordinatorTests {
 
         let capture = try #require(harness.captures.first)
         #expect(capture.text == "快速发送")
+    }
+
+    @Test func qianwenConfirmationCapturesTheCurrentCandidateBeforeTheEditorClears() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "已有草稿",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.coordinator.startSession(
+            startedAt: Date(timeIntervalSince1970: 100),
+            source: .bluetoothRemote
+        )
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "已有草稿确认前文字",
+            selection: NSRange(location: 9, length: 0)
+        )
+        harness.coordinator.finishSession(
+            endedAt: Date(timeIntervalSince1970: 103),
+            allowsInsertionOutsideReportedSelection: true
+        )
+
+        harness.coordinator.captureCurrentCandidateBeforeDestinationChange(
+            reason: "qianwen_confirm"
+        )
+
+        let capture = try #require(harness.captures.first)
+        #expect(capture.text == "确认前文字")
+        #expect(harness.logs.contains { $0.contains("saved reason=qianwen_confirm") })
+    }
+
+    @Test func qianwenWaitsForAStableReplacementWhenTheReportedSelectionIsStale() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "已有草稿",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.coordinator.startSession(
+            startedAt: Date(timeIntervalSince1970: 100),
+            source: .bluetoothRemote
+        )
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "已有新语音",
+            selection: NSRange(location: 5, length: 0)
+        )
+        harness.coordinator.finishSession(
+            endedAt: Date(timeIntervalSince1970: 103),
+            allowsInsertionOutsideReportedSelection: true
+        )
+
+        #expect(harness.captures.isEmpty)
+        harness.scheduler.advance(by: 1)
+
+        let capture = try #require(harness.captures.first)
+        #expect(capture.text == "新语音")
+        #expect(harness.logs.contains { $0.contains("saved reason=stable") })
+    }
+
+    @Test func ordinaryVoiceStillRejectsAReplacementOutsideTheReportedSelection() {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "已有草稿",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.coordinator.startSession(startedAt: Date(), source: .bluetoothRemote)
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "已有新语音",
+            selection: NSRange(location: 5, length: 0)
+        )
+
+        harness.coordinator.finishSession(endedAt: Date())
+        harness.scheduler.advance(by: 1)
+
+        #expect(harness.captures.isEmpty)
+        #expect(harness.logs.contains("TRANSCRIPT CAPTURE canceled reason=discontinuous_text_change"))
     }
 
     @Test func nextVoiceSessionCommitsThePreviousAcceptedCandidate() throws {

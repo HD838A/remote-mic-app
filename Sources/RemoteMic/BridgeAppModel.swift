@@ -366,6 +366,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("QIANWEN COMMAND UP\(succeeded ? "" : " failed")")
             return succeeded
         },
+        beforeConfirm: { [weak self] in
+            self?.transcriptCaptureCoordinator.captureCurrentCandidateBeforeDestinationChange(
+                reason: "qianwen_confirm"
+            )
+        },
         confirmVoice: {
             let succeeded = KeyboardInjector.sendQianwenConfirmationInterrupt()
             AppLogger.shared.write("QIANWEN CONFIRM F20\(succeeded ? "" : " failed")")
@@ -2173,8 +2178,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             _ = qianwenVoiceSession.prepareDestinationIfNeeded(destinationIsReady: false)
             transcriptCaptureCoordinator.cancel(reason: "qianwen_focus_tap")
             beginQianwenInputFocusPreparation()
-        } else {
-            scheduleQianwenRightCommandReleaseIfNeeded()
         }
         let shouldFlushAudio = qianwenFocusTap || BluetoothVoiceStopPolicy.shouldFlushAudio(
             handledByFnTapMode: handledByFnTapMode
@@ -2215,6 +2218,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothVoiceTraceStartedAt = nil
         bluetoothVoiceTailDiagnostics.reset()
         endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
+        if !qianwenFocusTap {
+            scheduleQianwenRightCommandReleaseIfNeeded()
+        }
         if systemAudioSuspensionState.isSuspended {
             releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
         }
@@ -3169,7 +3175,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             audioOutput.endSession()
         }
         privateFeature.finishVoiceSession()
-        transcriptCaptureCoordinator.finishSession(endedAt: endedAt)
+        transcriptCaptureCoordinator.finishSession(
+            endedAt: endedAt,
+            allowsInsertionOutsideReportedSelection: settings.qianwenVoiceModeEnabled
+        )
     }
 
     private var currentVoiceUsageSource: UsageEventSource {

@@ -42,6 +42,7 @@ struct QianwenVoiceSessionControllerTests {
                 events.append("release")
                 return true
             },
+            beforeConfirm: { events.append("capture") },
             confirmVoice: {
                 events.append("confirm")
                 return true
@@ -55,10 +56,10 @@ struct QianwenVoiceSessionControllerTests {
         #expect(events.isEmpty)
 
         drainCompletion?()
-        #expect(events == ["neutral", "release", "confirm"])
+        #expect(events == ["neutral", "release", "capture", "confirm"])
 
         scheduledAction?()
-        #expect(events == ["neutral", "release", "confirm", "right-command"])
+        #expect(events == ["neutral", "release", "capture", "confirm", "right-command"])
     }
 
     @Test func neutralizationFailureStillReleasesAndConfirmsWithoutRearming() {

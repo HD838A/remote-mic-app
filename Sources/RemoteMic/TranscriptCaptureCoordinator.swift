@@ -160,6 +160,7 @@ final class TranscriptCaptureCoordinator {
         var stableText: String?
         var stableSince: TimeInterval?
         var acceptedChange: TranscriptTextChange?
+        var allowsInsertionOutsideReportedSelection = false
     }
 
     private struct PendingSession {
@@ -169,6 +170,7 @@ final class TranscriptCaptureCoordinator {
         let source: UsageEventSource
         let snapshotDeadline: TimeInterval
         var endedAt: Date?
+        var allowsInsertionOutsideReportedSelection = false
     }
 
     private let initialSnapshotTimeout: TimeInterval
@@ -254,7 +256,9 @@ final class TranscriptCaptureCoordinator {
             startedAt: pending.startedAt,
             source: pending.source,
             target: target,
-            endedAt: pending.endedAt
+            endedAt: pending.endedAt,
+            allowsInsertionOutsideReportedSelection:
+                pending.allowsInsertionOutsideReportedSelection
         )
         log("TRANSCRIPT CAPTURE target_ready retry=\(recoveredAfterRetry)")
         if pending.endedAt != nil {
@@ -262,16 +266,35 @@ final class TranscriptCaptureCoordinator {
         }
     }
 
-    func finishSession(endedAt: Date) {
+    func finishSession(
+        endedAt: Date,
+        allowsInsertionOutsideReportedSelection: Bool = false
+    ) {
         if var pending = pendingSession, pending.endedAt == nil {
             pending.endedAt = endedAt
+            pending.allowsInsertionOutsideReportedSelection =
+                allowsInsertionOutsideReportedSelection
             pendingSession = pending
             return
         }
         guard isEnabled(), var session = activeSession, session.endedAt == nil else { return }
         session.endedAt = endedAt
+        session.allowsInsertionOutsideReportedSelection =
+            allowsInsertionOutsideReportedSelection
         activeSession = session
         scheduleFinishedSession(generation: session.generation)
+    }
+
+    func captureCurrentCandidateBeforeDestinationChange(reason: String) {
+        guard isEnabled(), let session = activeSession, session.endedAt != nil else { return }
+        if let updated = sessionAcceptingCurrentSnapshot(
+            session,
+            allowsInsertionOutsideReportedSelection: true
+        ) {
+            complete(updated, reason: reason)
+        } else if session.acceptedChange != nil {
+            complete(session, reason: reason)
+        }
     }
 
     private func scheduleFinishedSession(generation: UInt64) {
@@ -351,17 +374,25 @@ final class TranscriptCaptureCoordinator {
         }
     }
 
-    private func sessionAcceptingCurrentSnapshot(_ session: ActiveSession) -> ActiveSession? {
+    private func sessionAcceptingCurrentSnapshot(
+        _ session: ActiveSession,
+        allowsInsertionOutsideReportedSelection: Bool = false
+    ) -> ActiveSession? {
         guard let current = snapshot(),
               current.isSafeEditableDestination,
               current.focusIdentity == session.target.focusIdentity,
-              current.bundleIdentifier == session.target.bundleIdentifier,
-              let change = Self.continuousChange(
-                  original: session.target.text,
-                  updated: current.text,
-                  originalSelection: session.target.selection
-              ),
-              change.oldRange == session.target.selection,
+              current.bundleIdentifier == session.target.bundleIdentifier
+        else { return nil }
+        let exactChange = Self.continuousChange(
+            original: session.target.text,
+            updated: current.text,
+            originalSelection: session.target.selection
+        ).flatMap { change in
+            change.oldRange == session.target.selection ? change : nil
+        }
+        guard let change = exactChange ?? (allowsInsertionOutsideReportedSelection
+            ? Self.insertedTextChange(original: session.target.text, updated: current.text)
+            : nil),
               !change.newText.isEmpty,
               change.newText.count <= Self.maximumTranscriptCharacters
         else { return nil }
@@ -399,11 +430,15 @@ final class TranscriptCaptureCoordinator {
             session.stableText = nil
             session.stableSince = nil
             session.acceptedChange = nil
-        } else if let change = Self.continuousChange(
+        } else if let change = Self.acceptedChange(
             original: session.target.text,
             updated: current.text,
-            originalSelection: session.target.selection
-        ), change.oldRange == session.target.selection,
+            originalSelection: session.target.selection,
+            allowsInsertionOutsideReportedSelection:
+                session.allowsInsertionOutsideReportedSelection
+        ) ?? (session.allowsInsertionOutsideReportedSelection
+            ? Self.replacedTextChange(original: session.target.text, updated: current.text)
+            : nil),
            !change.newText.isEmpty,
            change.newText.count <= Self.maximumTranscriptCharacters {
             if session.stableText != current.text {
@@ -492,6 +527,72 @@ final class TranscriptCaptureCoordinator {
             oldRange: originalSelection,
             newRange: newRange,
             newText: updatedNSString.substring(with: newRange)
+        )
+    }
+
+    private static func acceptedChange(
+        original: String,
+        updated: String,
+        originalSelection: NSRange,
+        allowsInsertionOutsideReportedSelection: Bool
+    ) -> TranscriptTextChange? {
+        if let change = continuousChange(
+            original: original,
+            updated: updated,
+            originalSelection: originalSelection
+        ), change.oldRange == originalSelection {
+            return change
+        }
+        guard allowsInsertionOutsideReportedSelection else { return nil }
+        return insertedTextChange(original: original, updated: updated)
+    }
+
+    static func insertedTextChange(original: String, updated: String) -> TranscriptTextChange? {
+        changedTextChange(original: original, updated: updated, allowsReplacement: false)
+    }
+
+    private static func replacedTextChange(
+        original: String,
+        updated: String
+    ) -> TranscriptTextChange? {
+        changedTextChange(original: original, updated: updated, allowsReplacement: true)
+    }
+
+    private static func changedTextChange(
+        original: String,
+        updated: String,
+        allowsReplacement: Bool
+    ) -> TranscriptTextChange? {
+        let originalText = original as NSString
+        let updatedText = updated as NSString
+        let commonLimit = min(originalText.length, updatedText.length)
+        var prefixLength = 0
+        while prefixLength < commonLimit,
+              originalText.character(at: prefixLength) == updatedText.character(at: prefixLength) {
+            prefixLength += 1
+        }
+
+        var suffixLength = 0
+        while suffixLength < originalText.length - prefixLength,
+              suffixLength < updatedText.length - prefixLength,
+              originalText.character(at: originalText.length - suffixLength - 1) ==
+                updatedText.character(at: updatedText.length - suffixLength - 1) {
+            suffixLength += 1
+        }
+
+        let oldRange = NSRange(
+            location: prefixLength,
+            length: originalText.length - prefixLength - suffixLength
+        )
+        let newRange = NSRange(
+            location: prefixLength,
+            length: updatedText.length - prefixLength - suffixLength
+        )
+        guard (allowsReplacement || oldRange.length == 0), newRange.length > 0 else { return nil }
+        return TranscriptTextChange(
+            oldRange: oldRange,
+            newRange: newRange,
+            newText: updatedText.substring(with: newRange)
         )
     }
 }

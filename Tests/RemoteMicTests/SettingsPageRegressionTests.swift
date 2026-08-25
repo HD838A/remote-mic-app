@@ -1012,7 +1012,10 @@ struct SettingsPageRegressionTests {
             "transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)"
         ))
         #expect(modelSource.contains(
-            "transcriptCaptureCoordinator.finishSession(endedAt: endedAt)"
+            "transcriptCaptureCoordinator.finishSession("
+        ))
+        #expect(modelSource.contains(
+            "allowsInsertionOutsideReportedSelection: settings.qianwenVoiceModeEnabled"
         ))
         #expect(modelSource.contains("transcriptCaptureCoordinator.cancel()"))
         #expect(!captureSource.contains("PrivateFeatureIntegration"))

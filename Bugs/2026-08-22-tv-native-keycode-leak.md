@@ -39,3 +39,10 @@
 - 实测证据仍只来自一台 rc003；RC001 及其他固件版本未验证。当前修复针对已观测的 macOS ISO/ANSI 虚拟键码差异，不假设固件改变。
 - seized（独占）模式本就不受影响：系统 HID 不消费遥控器事件。
 - 本机工具链为 Swift 6.1（Xcode 16.4），仓库要求 6.2；单元测试通过手工等效链路执行，CI 上的完整 `swift test` 以 PR 检查为准。
+
+## 2026-08-25 本地安装后再次出现
+
+- TV 的单击绑定仍为 `openCodex`，ISO/ANSI 双键码修复也仍在安装包中。
+- 实际原因是 `customMappingEnabled=false`：关闭自定义按键后，App 不执行 TV 绑定，也不会拦截系统原生键码，因此特殊符号重新进入前台输入框。
+- 已恢复 App 自己的“启用自定义按键功能”开关并重启。新进程确认 `power_suppressed=true`、`HID FILTER ready=true`，没有修改 macOS 权限。
+- 用户真机复验通过：TV 可以正常打开 Codex，输入框不再出现特殊符号。

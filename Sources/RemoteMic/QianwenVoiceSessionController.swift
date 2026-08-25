@@ -24,6 +24,7 @@ final class QianwenVoiceSessionController {
     private let setMapping: MappingSetter
     private let drainAudio: AudioDrainer
     private let releaseCommand: Action
+    private let beforeConfirm: () -> Void
     private let confirmVoice: Action
     private let schedule: Scheduler
     private var generation: UInt64 = 0
@@ -33,6 +34,7 @@ final class QianwenVoiceSessionController {
         setMapping: @escaping MappingSetter,
         drainAudio: @escaping AudioDrainer,
         releaseCommand: @escaping Action,
+        beforeConfirm: @escaping () -> Void = {},
         confirmVoice: @escaping Action,
         schedule: @escaping Scheduler = { delay, action in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
@@ -41,6 +43,7 @@ final class QianwenVoiceSessionController {
         self.setMapping = setMapping
         self.drainAudio = drainAudio
         self.releaseCommand = releaseCommand
+        self.beforeConfirm = beforeConfirm
         self.confirmVoice = confirmVoice
         self.schedule = schedule
     }
@@ -93,6 +96,7 @@ final class QianwenVoiceSessionController {
     private func finishVoice(generation sessionGeneration: UInt64) {
         let neutralized = setMapping(false)
         _ = releaseCommand()
+        beforeConfirm()
         _ = confirmVoice()
         guard neutralized else { return }
         schedule(0.15) { [weak self] in
