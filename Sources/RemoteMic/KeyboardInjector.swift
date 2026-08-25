@@ -54,6 +54,20 @@ enum KeyboardInjector {
             return released
         }
 
+        @discardableResult
+        func confirm() -> Bool {
+            cancel()
+        }
+
+        @discardableResult
+        func moveSelection(left: Bool) -> Bool {
+            guard isActive else { return false }
+            let keyCode: CGKeyCode = left ? 123 : 124
+            let pressed = keyStatePoster(keyCode, true, .maskCommand)
+            let released = keyStatePoster(keyCode, false, .maskCommand)
+            return pressed && released
+        }
+
         private func postTab() -> Bool {
             let pressed = keyStatePoster(48, true, .maskCommand)
             let released = keyStatePoster(48, false, .maskCommand)
