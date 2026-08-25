@@ -1,7 +1,7 @@
 # 千问短按只能聚焦 Codex，其他 App 找不到输入框
 
 - 时间：2026-08-25
-- 状态：源码已修复，自动化通过，待用户真机验收
+- 状态：通用主路径已在飞书真机日志成功，待用户确认可见光标；微信仍需定向适配
 - 影响范围：macOS；开启千问兼容模式后的“短按定位、长按说话”
 
 ## 复现与日志
@@ -29,3 +29,4 @@
 
 - 定向自动化已覆盖两种声明属性、降级结果、日志节流、至少 2 秒的重试窗口、输入框排名与千问聚焦接线。
 - 自动化不能代替真实 Electron / Chromium App 的建树时间和最终光标。用户验收需至少覆盖 Codex 与另一个聊天 App；多输入框页面聚焦错误时再补该 App 的定向规则。
+- 2026-08-25 安装包真机日志：飞书 `com.larksuite.larkApp` 经有界重试后出现 `APP FOCUS succeeded`和 `QIANWEN FOCUS ready armed=true`，证明 Codex 白名单已取消且通用路径成立。微信 `com.tencent.xinWeChat` 仍以 `composer_not_found` 结束，需在用户确认的具体聊天页面采集 Accessibility 候选特征后再加定向规则。

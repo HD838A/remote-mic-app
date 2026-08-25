@@ -32,7 +32,7 @@
 
 - `SKIP_SWIFT_PACKAGE_BUILD=1 scripts/test.sh`：42 项通过（含更新后的 "native duplicate-event descriptors" 断言）。
 - 手工单元测试链路（本机 Swift 6.1 等效 runner）：`RemoteButtonsTests.nativeEventDescriptorsCoverPotentialDuplicateEvents` 通过。
-- 真机回归（待做）：monitored 模式下把 TV 绑定为非原生动作，连按 TV，确认前台输入框不再出现 §，且绑定动作正常执行。
+- 2026-08-25 真机回归通过：用户在 monitored 模式下使用 TV “打开 Codex”动作，确认 Codex 正常打开且输入框不再出现反引号或其他奇怪符号。
 
 ## 验证边界
 
