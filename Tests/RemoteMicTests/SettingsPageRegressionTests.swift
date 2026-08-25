@@ -154,26 +154,29 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        let noInvite = try #require(settingsSource.range(
-            of: "Text(\"connection.phone.qr_badge\")"
-        ))
-        let noInviteBlock = settingsSource[noInvite.lowerBound...]
-            .prefix(180)
-        #expect(noInviteBlock.contains(".font(.system(size: 12, weight: .semibold))"))
+        let optionLabel = try #require(settingsSource.range(of: "private func connectionOptionLabel"))
+        let optionLabelBlock = settingsSource[optionLabel.lowerBound...]
+            .prefix(900)
+        #expect(optionLabelBlock.contains(".font(.callout)"))
+        #expect(optionLabelBlock.contains(".font(.body.weight(.medium))"))
 
-        let statusPill = try #require(settingsSource.range(of: "private struct StatusPill"))
-        let statusPillBlock = settingsSource[statusPill.lowerBound...]
+        let statusLabel = try #require(settingsSource.range(of: "private func connectionStatusLabel"))
+        let statusLabelBlock = settingsSource[statusLabel.lowerBound...]
             .prefix(420)
-        #expect(statusPillBlock.contains(".font(.system(size: 12, weight: .semibold))"))
+        #expect(statusLabelBlock.contains(".font(.callout.weight(.medium))"))
         #expect(appSource.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"))
         #expect(rendererSource.contains("width >= 800"))
         #expect(rendererSource.contains("height >= 650"))
+        #expect(rendererSource.contains("window.appearance = appearance"))
+        #expect(rendererSource.contains(".fullSizeContentView"))
+        #expect(rendererSource.contains("window.toolbarStyle = .unified"))
+        #expect(rendererSource.contains("NSApp.activate(ignoringOtherApps: true)"))
         for section in ["connection", "mapping", "statistics", "permissions", "about"] {
             #expect(rendererSource.contains(".\(section)"))
         }
     }
 
-    @Test func mappingHeaderUsesCompactLayoutAtMinimumWindowWidth() throws {
+    @Test func mappingPageUsesGroupedFormSpacingAndKeepsRemoteCardFullWidth() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -190,10 +193,43 @@ struct SettingsPageRegressionTests {
         ))
         let mappingSource = settingsSource[mappingPage.lowerBound..<editorPanel.lowerBound]
 
-        #expect(mappingSource.contains("ViewThatFits(in: .horizontal)"))
-        #expect(mappingSource.contains("private var mappingHeaderToggle"))
-        #expect(mappingSource.contains(".frame(width: 320)"))
-        #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
+        #expect(mappingSource.contains("Form {"))
+        #expect(mappingSource.contains("Section {"))
+        #expect(mappingSource.contains(".formStyle(.grouped)"))
+        #expect(!mappingSource.contains(".compatibilityScrollEdgeEffect()"))
+        #expect(!settingsSource.contains("CompatibilityScrollEdgeEffectModifier"))
+        #expect(!settingsSource.contains(".scrollEdgeEffectStyle("))
+        #expect(!mappingSource.contains(".contentMargins("))
+        #expect(!mappingSource.contains("ScrollView(.vertical"))
+        #expect(!mappingSource.contains("GroupBox {"))
+        #expect(!mappingSource.contains(".padding(.horizontal, 20)"))
+        #expect(!mappingSource.contains(".padding(.vertical, 16)"))
+        #expect(mappingSource.contains("Toggle(\"button_mapping.toggle.enabled\""))
+        #expect(!mappingSource.contains("LabeledContent(\"button_mapping.toggle.enabled\")"))
+        #expect(!mappingSource.contains("LabeledContent(\"remote.device.selector\")"))
+        #expect(mappingSource.contains("mappingRemoteDeviceBlock"))
+        #expect(mappingSource.contains("private var mappingRemoteDeviceBlock"))
+        #expect(mappingSource.contains("VStack(alignment: .leading, spacing: 8)"))
+        #expect(mappingSource.contains("Text(\"remote.device.selector\")"))
+        #expect(mappingSource.contains("remoteDeviceSelector(vertical: true)"))
+        #expect(mappingSource.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+        #expect(!mappingSource.contains(".frame(maxWidth: 420"))
+        #expect(mappingSource.contains(".listRowInsets(EdgeInsets())"))
+        #expect(mappingSource.contains(".listRowBackground(Color.clear)"))
+
+        let mappingFooter = try #require(settingsSource.range(of: "private var mappingFooter"))
+        let deviceSelector = try #require(settingsSource.range(
+            of: "private func remoteDeviceSelector",
+            range: mappingFooter.upperBound..<settingsSource.endIndex
+        ))
+        let footerSource = settingsSource[mappingFooter.lowerBound..<deviceSelector.lowerBound]
+        #expect(footerSource.contains("VStack(spacing: 0)"))
+        #expect(footerSource.components(separatedBy: "HStack(alignment: .top, spacing: 20)").count == 4)
+        #expect(!footerSource.contains("LabeledContent {"))
+        #expect(footerSource.contains("Text(\"button_mapping.selection_lock_hint_short\")"))
+        #expect(footerSource.contains("Text(\"connection.voice_key_mode.title\")"))
+        #expect(footerSource.contains("Text(\"connection.voice_fn_tap.hint_short\")"))
+        #expect(!footerSource.contains("Divider().frame(height: 28)"))
     }
 
     @Test func mappingFooterUsesCompactLayoutAtMinimumWindowWidth() throws {
@@ -213,12 +249,14 @@ struct SettingsPageRegressionTests {
         ))
         let footerSource = settingsSource[footer.lowerBound..<selector.lowerBound]
 
-        #expect(footerSource.contains("VStack(alignment: .leading, spacing: 12)"))
-        #expect(!footerSource.contains("HStack(spacing: 16)"))
-        #expect(footerSource.contains("mappingVoiceKeyModeControl"))
-        #expect(footerSource.contains("mappingVoiceFnTapControl"))
+        #expect(footerSource.contains("VStack(spacing: 0)"))
+        #expect(
+            footerSource.components(separatedBy: "HStack(alignment: .top, spacing: 20)").count == 4
+        )
+        #expect(footerSource.contains("Text(\"connection.voice_key_mode.title\")"))
+        #expect(footerSource.contains("Text(\"connection.voice_fn_tap.enabled\")"))
         #expect(!footerSource.contains("mappingVoiceShortTapFocusControl"))
-        #expect(footerSource.contains("mappingRestoreDefaultsButton"))
+        #expect(footerSource.contains("Button(\"common.action.restore_defaults\")"))
     }
 
     @Test func voiceSessionStopDoesNotTriggerInputFocus() throws {
@@ -249,7 +287,7 @@ struct SettingsPageRegressionTests {
         #expect(!source.contains("settings.voiceShortTapFocusEnabled"))
     }
 
-    @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
+    @Test func settingsWindowUsesTheNativeTitlebarDragRegion() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -265,8 +303,12 @@ struct SettingsPageRegressionTests {
 
         #expect(appSource.contains("window.isMovableByWindowBackground = false"))
         #expect(!appSource.contains("window.isMovableByWindowBackground = true"))
-        #expect(settingsSource.contains("WindowDragArea()"))
-        #expect(settingsSource.contains("window?.performDrag(with: event)"))
+        #expect(appSource.contains("window.titleVisibility = .visible"))
+        #expect(!appSource.contains("window.titlebarAppearsTransparent = true"))
+        #expect(!appSource.contains("window.titlebarSeparatorStyle = .none"))
+        #expect(appSource.contains("window.toolbarStyle = .unified"))
+        #expect(!settingsSource.contains("WindowDragArea"))
+        #expect(!settingsSource.contains("performDrag(with:"))
     }
 
     @Test func settingsWindowEstablishesItsFullSizeBeforeCentering() throws {
@@ -280,7 +322,7 @@ struct SettingsPageRegressionTests {
         )
 
         let contentSize = try #require(appSource.range(
-            of: "window.setContentSize(NSSize(width: 1020, height: 772))"
+            of: "window.setContentSize(NSSize(width: 920, height: 700))"
         ))
         let autosave = try #require(appSource.range(
             of: "window.setFrameAutosaveName(\"RemoteMicSettings\")",
@@ -293,6 +335,7 @@ struct SettingsPageRegressionTests {
 
         #expect(contentSize.upperBound <= autosave.lowerBound)
         #expect(autosave.upperBound <= center.lowerBound)
+        #expect(appSource.contains("window.minSize = NSSize(width: 800, height: 650)"))
     }
 
     @Test func settingsWindowKeepsTheDockIconUntilItCloses() throws {
@@ -411,7 +454,8 @@ struct SettingsPageRegressionTests {
         #expect(leftEnd == CGPoint(x: cardWidth, y: RemoteMappingLayout.canvasHeight / 2))
         #expect(rightEnd == CGPoint(x: canvasWidth - cardWidth, y: RemoteMappingLayout.canvasHeight / 2))
         #expect(RemoteMappingLayout.voiceAnchor == UnitPoint(x: 0.630, y: 0.099))
-        #expect(RemoteMappingLayout.cardWidth(for: canvasWidth) == 300)
+        #expect(RemoteMappingLayout.cardWidth(for: canvasWidth) == 250)
+        #expect(RemoteMappingLayout.cardWidth(for: 600) == 215)
 
         let menuPlacement = try #require(placements.first { $0.button == .menu })
         let tvPlacement = try #require(placements.first { $0.button == .tv })
@@ -451,6 +495,34 @@ struct SettingsPageRegressionTests {
 
         #expect(RemoteMappingLayout.arrowTip(cardEdge: leftEndPoint, side: .left).x == leftEndPoint.x + 7)
         #expect(RemoteMappingLayout.arrowTip(cardEdge: rightEndPoint, side: .right).x == rightEndPoint.x - 7)
+    }
+
+    @Test func remoteMappingCardsKeepNativeVerticalRhythmAndStayInsideCanvas() {
+        let placements = RemoteMappingLayout.buttonPlacements
+        let targetGroups = [
+            placements
+                .filter { $0.side == .left }
+                .map(\.targetY)
+                .sorted(),
+            ([RemoteMappingLayout.voiceTargetY] + placements
+                .filter { $0.side == .right }
+                .map(\.targetY))
+                .sorted(),
+        ]
+
+        for targets in targetGroups {
+            for (upperTarget, lowerTarget) in zip(targets, targets.dropFirst()) {
+                let gap = (lowerTarget - upperTarget) * RemoteMappingLayout.canvasHeight
+                    - RemoteMappingLayout.cardHeight
+                #expect(gap >= RemoteMappingLayout.minimumCardGap)
+            }
+
+            for target in targets {
+                let centerY = target * RemoteMappingLayout.canvasHeight
+                #expect(centerY - RemoteMappingLayout.cardHeight / 2 >= 0)
+                #expect(centerY + RemoteMappingLayout.cardHeight / 2 <= RemoteMappingLayout.canvasHeight)
+            }
+        }
     }
 
     @Test func redesignedPagesKeepEveryExistingUserAction() throws {
@@ -501,15 +573,28 @@ struct SettingsPageRegressionTests {
         }
 
         #expect(source.contains("AppLinks.testFlightPublicBeta"))
-        let phoneEntry = try #require(source.range(of: "connection.phone.ios_title"))
-        let watchEntry = try #require(source.range(of: "connection.watch.title"))
+        let phonePanel = try #require(source.range(of: "private var phoneConnectionsPanel"))
+        let phoneEntry = try #require(source.range(
+            of: "connection.phone.ios_title",
+            range: phonePanel.upperBound..<source.endIndex
+        ))
+        let watchEntry = try #require(source.range(
+            of: "connection.watch.title",
+            range: phoneEntry.upperBound..<source.endIndex
+        ))
         let webEntry = try #require(source.range(
             of: "connection.web.title",
             range: watchEntry.upperBound..<source.endIndex
         ))
         #expect(phoneEntry.lowerBound < watchEntry.lowerBound)
         #expect(watchEntry.lowerBound < webEntry.lowerBound)
+        let phoneEntrySource = source[phoneEntry.lowerBound..<watchEntry.lowerBound]
         let mobileEntrySource = source[phoneEntry.lowerBound..<webEntry.lowerBound]
+        #expect(phoneEntrySource.contains("auxiliaryActions: {"))
+        #expect(phoneEntrySource.contains("connection.web.invite.testflight_open"))
+        #expect(phoneEntrySource.contains("copyTestFlightPublicBetaLink()"))
+        #expect(source.contains("private func connectionOptionRow<Actions: View, AuxiliaryActions: View>"))
+        #expect(source.contains("auxiliaryActions()"))
         #expect(mobileEntrySource.contains("connection.phone.cancel_waiting"))
         #expect(mobileEntrySource.contains("connection.phone.connected"))
         #expect(mobileEntrySource.contains("connection.phone.disconnect"))
@@ -521,8 +606,8 @@ struct SettingsPageRegressionTests {
         #expect(!mobileEntrySource.contains(".disabled(model.isPhoneRemoteConnectionEnabled)"))
         #expect(!mobileEntrySource.contains(".disabled(model.isWatchRemoteConnectionEnabled)"))
         #expect(!mobileEntrySource.contains(".foregroundStyle(.green)"))
-        #expect(mobileEntrySource.contains("tint: model.isPhoneRemoteConnected"))
-        #expect(mobileEntrySource.contains("tint: model.isWatchRemoteConnected"))
+        #expect(mobileEntrySource.contains("statusTint: model.isPhoneRemoteConnected"))
+        #expect(mobileEntrySource.contains("statusTint: model.isWatchRemoteConnected"))
         #expect(mobileEntrySource.contains("? .green"))
         #expect(mobileEntrySource.contains("model.isPhoneRemoteConnectionEnabled ? .orange"))
         #expect(mobileEntrySource.contains("model.isWatchRemoteConnectionEnabled ? .orange"))
@@ -536,9 +621,107 @@ struct SettingsPageRegressionTests {
         #expect(!source.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(!source.contains("remoteDeviceBindingPanel"))
         #expect(!source.contains("SidebarGlassModifier"))
-        #expect(source.contains(".focusEffectDisabled()"))
-        #expect(source.contains(".frame(height: 56)"))
-        #expect(source.contains(".ignoresSafeArea(.container, edges: .top)"))
+        #expect(source.contains("NavigationSplitView"))
+        #expect(source.contains(".listStyle(.sidebar)"))
+        #expect(source.contains(".searchable("))
+        #expect(source.contains("placement: .sidebar"))
+        #expect(source.contains("private struct SettingsSidebarIcon"))
+        #expect(source.contains("private struct SettingsSidebarRow"))
+        #expect(source.contains("SettingsSidebarIcon("))
+        #expect(source.contains(".fill(color.gradient)"))
+        let sidebarIcon = try #require(
+            source.components(separatedBy: "private struct SettingsSidebarIcon").last?
+                .components(separatedBy: "extension BridgeAppModel").first
+        )
+        #expect(sidebarIcon.contains(".font(.system(size: 12, weight: .semibold))"))
+        #expect(sidebarIcon.contains(".frame(width: 20, height: 20)"))
+        #expect(sidebarIcon.contains("cornerRadius: 5"))
+        #expect(sidebarIcon.contains(
+            ".shadow(color: .black.opacity(0.16), radius: 0.75, y: 0.5)"
+        ))
+        #expect(!sidebarIcon.contains(".stroke("))
+        let sidebarStart = try #require(source.range(of: "    private var sidebar: some View"))
+        let visibleSectionsStart = try #require(source.range(
+            of: "    private var visibleSections: [SettingsSection]",
+            range: sidebarStart.upperBound..<source.endIndex
+        ))
+        let sidebarSource = source[sidebarStart.lowerBound..<visibleSectionsStart.lowerBound]
+        #expect(sidebarSource.contains("SettingsSidebarRow("))
+        #expect(sidebarSource.contains(".listRowInsets(sidebarRowInsets)"))
+        #expect(sidebarSource.contains("private var searchResultList"))
+        #expect(sidebarSource.contains("ContentUnavailableView.search"))
+        #expect(sidebarSource.contains(".font(.body)"))
+        #expect(sidebarSource.contains(".font(.callout)"))
+        let settingsBodyStart = try #require(source.range(of: "    var body: some View {"))
+        let settingsSidebarStart = try #require(source.range(
+            of: "    private var sidebar: some View",
+            range: settingsBodyStart.upperBound..<source.endIndex
+        ))
+        let settingsBodySource = source[
+            settingsBodyStart.lowerBound..<settingsSidebarStart.lowerBound
+        ]
+        #expect(settingsBodySource.contains(".searchable("))
+        #expect(settingsBodySource.contains(
+            "prompt: Text(localization.text(\"settings.search.placeholder\"))\n"
+                + "                )\n"
+                + "                .searchFocusedWhenAvailable($isSearchFocused)\n"
+                + "                .onSubmit(of: .search) {"
+        ))
+        #expect(settingsBodySource.contains("                }\n                .controlSize(.large)"))
+        #expect(settingsBodySource.contains(".toolbar(removing: .sidebarToggle)"))
+        #expect(settingsBodySource.contains(
+            ".toolbar(removing: .sidebarToggle)\n"
+                + "                .navigationSplitViewColumnWidth(min: 232, ideal: 232, max: 232)"
+        ))
+        #expect(settingsBodySource.contains("ToolbarItem(placement: .navigation)"))
+        #expect(settingsBodySource.contains("navigationControlGroup"))
+        #expect(!settingsBodySource.contains("sidebarToggleButton"))
+        #expect(!settingsBodySource.contains("NSSplitViewController.toggleSidebar"))
+        #expect(settingsBodySource.contains(
+            ".navigationSplitViewStyle(.balanced)\n"
+                + "        .controlSize(.regular)"
+        ))
+        #expect(!settingsBodySource.contains(
+            ".navigationSplitViewStyle(.balanced)\n"
+                + "        .searchable("
+        ))
+        #expect(source.contains(
+            "selectedPage\n"
+                + "                .navigationTitle(sectionTitle(selectedSection))\n"
+                + "                .controlSize(.regular)"
+        ))
+        #expect(source.contains(".navigationTitle(sectionTitle(selectedSection))"))
+        #expect(source.contains(".navigationSplitViewColumnWidth(min: 232, ideal: 232, max: 232)"))
+        #expect(source.contains("private var navigationControlGroup"))
+        #expect(source.contains("if #available(macOS 26.0, *)"))
+        #expect(source.contains("nativeNavigationControlGroup"))
+        #expect(source.contains("ControlGroup {"))
+        #expect(source.contains(".controlGroupStyle(.navigation)"))
+        #expect(source.contains(".controlSize(.extraLarge)"))
+        #expect(source.contains(".buttonStyle(.glass)"))
+        #expect(source.contains(".controlSize(.large)"))
+        #expect(source.contains("primaryAction:"))
+        #expect(!source.contains("SettingsNavigationControl: NSViewRepresentable"))
+        #expect(!source.contains(".glassEffect(.regular.interactive(), in: .capsule)"))
+        #expect(source.contains("settings.navigation.back"))
+        #expect(source.contains("settings.navigation.forward"))
+        #expect(source.contains("private var backwardHistoryIndices"))
+        #expect(source.contains("private var settingsSearchItems"))
+        #expect(source.contains("activateSearchResult"))
+        #expect(source.contains("scrollToSearchResult"))
+        #expect(source.contains("flashSearchResultHighlight"))
+        #expect(source.contains("List(searchResults, selection: $selectedSearchResultID)"))
+        #expect(source.contains(".onKeyPress(.return)"))
+        #expect(source.contains("func searchAnchor(_ anchor: String, highlighted: String?)"))
+        #expect(source.contains("\"mapping.voice-fn\""))
+        #expect(source.contains("\"mapping.restore-defaults\""))
+        #expect(!source.contains("\"statistics.share\""))
+        #expect(source.contains("\"about.share\""))
+        #expect(source.contains("\"transcripts.delete-all\""))
+        #expect(source.contains("\"about.website\""))
+        #expect(source.contains("\"about.github\""))
+        #expect(!source.contains("localizedShareTitle.localizedCaseInsensitiveContains"))
+        #expect(!source.contains("WindowDragArea"))
         #expect(source.contains("showsAnchor: activeButtons.contains(placement.button)"))
         #expect(source.contains(".toggleStyle(.switch)"))
         #expect(source.contains("button_mapping.permission_prompt.open"))
@@ -574,12 +757,267 @@ struct SettingsPageRegressionTests {
         #expect(!mappingCanvasSource.contains("minimumScaleFactor"))
         #expect(source.range(of: "MappingRemotePhoto()")!.lowerBound < source.range(of: "connectionLines(metrics: metrics)")!.lowerBound)
 
-        let voiceFnToggle = "Toggle(\"connection.voice_fn_tap.enabled\""
+        let voiceFnToggle = "\"connection.voice_fn_tap.enabled\",\n                        isOn: Binding("
         #expect(source.components(separatedBy: voiceFnToggle).count == 2)
         #expect(
             source.range(of: voiceFnToggle)!.lowerBound >
                 source.range(of: "private var mappingPage")!.lowerBound
         )
+    }
+
+    @Test func settingsUseNativeSidebarAndGroupedConnectionForm() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("NavigationSplitView"))
+        #expect(source.contains("List(selection:"))
+        #expect(source.contains(".listStyle(.sidebar)"))
+        #expect(source.contains(".searchable("))
+        #expect(source.contains("placement: .sidebar"))
+        #expect(source.contains(".navigationTitle(sectionTitle(selectedSection))"))
+        #expect(source.contains(".navigationSplitViewColumnWidth(min: 232, ideal: 232, max: 232)"))
+        #expect(!source.contains("private func sidebarButton"))
+        #expect(!source.contains("WindowDragArea"))
+
+        let connectionStart = try #require(source.range(of: "private var connectionPage"))
+        let mappingStart = try #require(source.range(
+            of: "private var mappingPage",
+            range: connectionStart.upperBound..<source.endIndex
+        ))
+        let connectionSource = source[connectionStart.lowerBound..<mappingStart.lowerBound]
+        #expect(connectionSource.contains("Form {"))
+        #expect(connectionSource.contains(".formStyle(.grouped)"))
+        #expect(connectionSource.contains("Section {"))
+        #expect(connectionSource.contains("LabeledContent"))
+        #expect(connectionSource.contains(".pickerStyle(.radioGroup)"))
+        #expect(connectionSource.contains("model.isStreaming ? Color.orange : Color.secondary"))
+        #expect(!connectionSource.contains("model.isStreaming ? .orange : Color.accentColor"))
+        #expect(!connectionSource.contains("model.voiceShortcutStatus.text(using: localization),\n                    systemImage: \"mic.fill\"\n                )\n                .foregroundStyle(Color.accentColor)"))
+        #expect(!connectionSource.contains("GlassPanel"))
+        #expect(!connectionSource.contains("CompatibilityGlassContainer"))
+
+        let permissionsStart = try #require(source.range(of: "private var permissionsPage"))
+        let statisticsStart = try #require(source.range(
+            of: "private var statisticsPage",
+            range: permissionsStart.upperBound..<source.endIndex
+        ))
+        let permissionsSource = source[permissionsStart.lowerBound..<statisticsStart.lowerBound]
+        #expect(permissionsSource.contains("Form {"))
+        #expect(permissionsSource.contains(".formStyle(.grouped)"))
+        #expect(!permissionsSource.contains("PermissionStepRow"))
+
+        let permissionRowStart = try #require(source.range(of: "private func permissionRow"))
+        let permissionRowEnd = try #require(source.range(
+            of: "private var webRemoteStatusText",
+            range: permissionRowStart.upperBound..<source.endIndex
+        ))
+        let permissionRowSource = source[permissionRowStart.lowerBound..<permissionRowEnd.lowerBound]
+        #expect(permissionRowSource.contains(") -> some View {\n        LabeledContent {"))
+    }
+
+    @Test func audioGainHelpRemainsInsideItsOwningFormRow() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let audioPanelStart = try #require(source.range(of: "private var audioSettingsPanel"))
+        let gainRowStart = try #require(source.range(
+            of: "private var audioGainSettingsRow",
+            range: audioPanelStart.upperBound..<source.endIndex
+        ))
+        let compatibilityStart = try #require(source.range(
+            of: "private var audioCompatibilityPanel",
+            range: gainRowStart.upperBound..<source.endIndex
+        ))
+        let audioPanelSource = source[audioPanelStart.lowerBound..<gainRowStart.lowerBound]
+        let gainRowSource = source[gainRowStart.lowerBound..<compatibilityStart.lowerBound]
+
+        #expect(audioPanelSource.contains("audioGainSettingsRow"))
+        #expect(!audioPanelSource.contains("Text(\"audio.gain.help\")"))
+        #expect(gainRowSource.contains("VStack(alignment: .leading, spacing: 8)"))
+        #expect(gainRowSource.contains("LabeledContent(\"audio.gain.title\")"))
+        #expect(gainRowSource.contains("Text(\"audio.gain.help\")"))
+    }
+
+    @Test func aboutVersionStatusAndReleaseNotesUseSeparateRows() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let statusViewStart = try #require(source.range(of: "private var aboutUpdateStatusView"))
+        let currentRowStart = try #require(source.range(
+            of: "private var aboutCurrentVersionRow",
+            range: statusViewStart.upperBound..<source.endIndex
+        ))
+        let releaseRowStart = try #require(source.range(
+            of: "private var aboutReleaseNotesRow",
+            range: currentRowStart.upperBound..<source.endIndex
+        ))
+        let releaseNotesStart = try #require(source.range(
+            of: "private var aboutReleaseNotesView",
+            range: releaseRowStart.upperBound..<source.endIndex
+        ))
+        let statusViewSource = source[statusViewStart.lowerBound..<currentRowStart.lowerBound]
+        let currentRowSource = source[currentRowStart.lowerBound..<releaseRowStart.lowerBound]
+        let releaseRowSource = source[releaseRowStart.lowerBound..<releaseNotesStart.lowerBound]
+
+        #expect(statusViewSource.contains("case let .available(update)"))
+        #expect(statusViewSource.contains("Text(\"about.version.latest\")"))
+        #expect(currentRowSource.contains("LabeledContent {"))
+        #expect(currentRowSource.contains("Text(\"about.version.current\")"))
+        #expect(currentRowSource.contains("aboutUpdateStatusView"))
+        let currentRowLabelStart = try #require(currentRowSource.range(of: "} label: {"))
+        let currentRowStatus = try #require(currentRowSource.range(of: "aboutUpdateStatusView"))
+        #expect(currentRowStatus.lowerBound > currentRowLabelStart.lowerBound)
+        #expect(currentRowSource.contains("if case .available = updateInformation.state"))
+        #expect(currentRowSource.contains("checkForUpdates()"))
+        #expect(currentRowSource.contains("refreshUpdateInformation()"))
+        #expect(currentRowSource.contains("case .upToDate, .unavailable:"))
+        #expect(currentRowSource.contains("\"about.version.recheck\""))
+        #expect(!currentRowSource.contains("Button(\"about.version.recheck\""))
+        #expect(!currentRowSource.contains(
+            ".frame(maxWidth: .infinity, alignment: .leading)"
+        ))
+        #expect(!statusViewSource.contains("about.version.up_to_date_description"))
+        #expect(releaseRowSource.contains("LabeledContent(\"about.version.information_title\")"))
+        #expect(releaseRowSource.contains("aboutReleaseNotesView"))
+        #expect(releaseRowSource.contains("if case .available = updateInformation.state"))
+        #expect(!releaseRowSource.contains("aboutUpdateStatusView"))
+    }
+
+    @Test func everyNonConnectionPageKeepsDescriptionsWithItsOwningSection() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let permissionsStart = try #require(source.range(of: "private var permissionsPage"))
+        let statisticsStart = try #require(source.range(
+            of: "private var statisticsPage",
+            range: permissionsStart.upperBound..<source.endIndex
+        ))
+        let transcriptsStart = try #require(source.range(
+            of: "private var transcriptHistoryPage",
+            range: statisticsStart.upperBound..<source.endIndex
+        ))
+        let aboutStart = try #require(source.range(
+            of: "private var aboutPage",
+            range: transcriptsStart.upperBound..<source.endIndex
+        ))
+        let shareStart = try #require(source.range(
+            of: "private var aboutShareSectionContent",
+            range: aboutStart.upperBound..<source.endIndex
+        ))
+
+        let permissionsSource = source[permissionsStart.lowerBound..<statisticsStart.lowerBound]
+        #expect(permissionsSource.contains("} footer: {"))
+        #expect(permissionsSource.contains("Text(\"permissions.upgrade_identity_help\")"))
+        #expect(!permissionsSource.contains("Label(\"permissions.upgrade_identity_help\""))
+
+        let statisticsSource = source[statisticsStart.lowerBound..<transcriptsStart.lowerBound]
+        #expect(statisticsSource.contains("Form {"))
+        #expect(statisticsSource.contains(".formStyle(.grouped)"))
+        #expect(!statisticsSource.contains(".safeAreaBar("))
+        #expect(!statisticsSource.contains(".safeAreaInset("))
+        #expect(!statisticsSource.contains("LabeledContent(\"statistics.page.title\")"))
+        #expect(statisticsSource.contains(".frame(maxWidth: .infinity)"))
+        let periodPickerStart = try #require(statisticsSource.range(
+            of: "private var statisticsPeriodPicker"
+        ))
+        let periodPickerEnd = try #require(statisticsSource.range(
+            of: "private var statisticsPrivacyLabel",
+            range: periodPickerStart.upperBound..<statisticsSource.endIndex
+        ))
+        let periodPickerSource = statisticsSource[
+            periodPickerStart.lowerBound..<periodPickerEnd.lowerBound
+        ]
+        #expect(periodPickerSource.contains("Picker("))
+        #expect(periodPickerSource.contains("ForEach(UsageStatisticsPeriod.allCases)"))
+        #expect(periodPickerSource.contains(".labelsHidden()"))
+        #expect(periodPickerSource.contains(".pickerStyle(.segmented)"))
+        #expect(periodPickerSource.contains("if #available(macOS 26.0, *)"))
+        #expect(periodPickerSource.contains(".controlSize(.extraLarge)"))
+        #expect(periodPickerSource.contains(".controlSize(.large)"))
+        #expect(periodPickerSource.contains(".frame(width: 480)"))
+        #expect(!periodPickerSource.contains("height: 32"))
+        #expect(!periodPickerSource.contains("Button {"))
+        #expect(statisticsSource.contains("statisticsPeriodPicker"))
+        #expect(statisticsSource.contains("private var statisticsForm"))
+        #expect(!statisticsSource.contains("private var statisticsPeriodControls"))
+        #expect(statisticsSource.contains("VStack(alignment: .leading, spacing: 16)"))
+        #expect(statisticsSource.contains("statisticsPrivacyLabel"))
+        #expect(statisticsSource.contains("\"statistics-period\""))
+        #expect(!statisticsSource.contains(".listRowBackground(Color.clear)"))
+        #expect(!source.contains("private struct StatisticsPeriodSegmentedControl"))
+        #expect(!source.contains("selectedSegmentBezelColor"))
+        #expect(statisticsSource.contains("statisticsPrivacyLabel"))
+        let voiceRankingStart = try #require(source.range(
+            of: "private var voiceSessionRankingCard"
+        ))
+        let voiceRankingEnd = try #require(source.range(
+            of: "private var statisticsPeriodContent",
+            range: voiceRankingStart.upperBound..<source.endIndex
+        ))
+        let voiceRankingSource = source[
+            voiceRankingStart.lowerBound..<voiceRankingEnd.lowerBound
+        ]
+        #expect(voiceRankingSource.contains(
+            "Text(localization.text(\"statistics.voice_ranking.title\"))"
+        ))
+        #expect(voiceRankingSource.contains(
+            "Text(localization.text(\"statistics.voice_ranking.description\"))"
+        ))
+        #expect(voiceRankingSource.contains(
+            "Text(localization.text(\"statistics.voice_ranking.empty\"))"
+        ))
+        #expect(!statisticsSource.contains("aboutShareSectionContent"))
+        #expect(!statisticsSource.contains("settingsPage("))
+        #expect(!statisticsSource.contains("GroupBox {"))
+
+        let transcriptSource = source[transcriptsStart.lowerBound..<aboutStart.lowerBound]
+        #expect(transcriptSource.contains("Form {"))
+        #expect(transcriptSource.contains("Toggle("))
+        #expect(transcriptSource.contains("\"statistics.transcripts.enable\""))
+        #expect(!transcriptSource.contains("LabeledContent(\"statistics.transcripts.enable\")"))
+        #expect(transcriptSource.contains("Text(\"statistics.transcripts.description\")"))
+        #expect(transcriptSource.contains("Text(\"statistics.transcripts.privacy\")"))
+        #expect(!transcriptSource.contains("settingsPage("))
+        #expect(!transcriptSource.contains("GroupBox {"))
+
+        let aboutSource = source[aboutStart.lowerBound..<shareStart.lowerBound]
+        let currentVersionRow = try #require(aboutSource.range(
+            of: "private var aboutCurrentVersionRow"
+        ))
+        let newestContentRow = try #require(aboutSource.range(
+            of: "LabeledContent(\"about.version.information_title\")",
+            range: currentVersionRow.upperBound..<aboutSource.endIndex
+        ))
+        let currentVersionSource = aboutSource[currentVersionRow.lowerBound..<newestContentRow.lowerBound]
+        #expect(currentVersionSource.contains("if case .available = updateInformation.state"))
+        #expect(currentVersionSource.contains("checkForUpdates()"))
+        #expect(currentVersionSource.contains("refreshUpdateInformation()"))
+        #expect(!currentVersionSource.contains("Button(\"about.version.recheck\""))
+        #expect(aboutSource.contains("Image(systemName: \"chevron.forward\")"))
     }
 
     @Test func remoteCardsShowCompleteNamesWithoutDuplicateConnectionSummary() throws {
@@ -641,11 +1079,24 @@ struct SettingsPageRegressionTests {
         ))
         let panelSource = settingsSource[panelStart.lowerBound..<panelEnd.lowerBound]
         #expect(!panelSource.contains("Text(selectedRemoteDisplayName)"))
-        #expect(!panelSource.contains("StatusPill(text: connectionBadge"))
+        #expect(!settingsSource.contains("private struct StatusPill"))
+        #expect(!settingsSource.contains("private struct DeviceStatusStep"))
+        #expect(!settingsSource.contains("private var connectionBadge"))
+        #expect(!settingsSource.contains("private var voiceTriggerBadge"))
 
         #expect(appSource.contains(
             "fileMenu.addItem(menuItem(\"menu.open_log_folder\", action: #selector(showLog)))"
         ))
+        #expect(appSource.contains("NSApp.windowsMenu = windowMenu"))
+        #expect(appSource.contains("settingsNavigationCoordinator"))
+        #expect(appSource.contains("#selector(goBackInSettings)"))
+        #expect(appSource.contains("#selector(goForwardInSettings)"))
+        #expect(appSource.contains("#selector(focusSettingsSearch)"))
+        #expect(appSource.contains("setFrameUsingName(window.frameAutosaveName)"))
+        #expect(appSource.contains("hideOtherApplications:"))
+        #expect(appSource.contains("performMiniaturize:"))
+        #expect(appSource.contains("showSettingsWindow(initialSection: .about)"))
+        #expect(!appSource.contains("about.alert.description_with_version"))
     }
 
     @Test func remoteSelectorsOnlyShowConnectedProfilesAndKeepDiscoveryFallback() throws {
@@ -682,25 +1133,25 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        let aboutPage = try #require(source.components(separatedBy: "private var aboutPage").last)
-        #expect(aboutPage.contains("updateInformationContent"))
+        let aboutPage = try #require(
+            source.components(separatedBy: "private var aboutPage").last?
+                .components(separatedBy: "private func shareSectionContent").first
+        )
+        #expect(aboutPage.contains("Form {"))
+        #expect(aboutPage.contains(".formStyle(.grouped)"))
+        #expect(aboutPage.contains("LabeledContent"))
+        #expect(aboutPage.contains("aboutCurrentVersionRow"))
+        #expect(aboutPage.contains("aboutReleaseNotesRow"))
+        #expect(aboutPage.contains("aboutUpdateStatusView"))
+        #expect(aboutPage.contains("aboutReleaseNotesView"))
         #expect(aboutPage.contains("about.version.check_prerelease"))
         #expect(aboutPage.contains("about.version.update_to"))
         #expect(!aboutPage.contains("about.version.history"))
         #expect(aboutPage.contains("ForEach(AppLanguage.allCases)"))
         #expect(aboutPage.contains(".pickerStyle(.segmented)"))
-        let languageSectionStart = try #require(
-            aboutPage.range(of: "Text(\"about.preferences.language\")")
-        )
-        let languageSectionEnd = try #require(
-            aboutPage.range(
-                of: "Text(\"about.preferences.restart_onboarding\")",
-                range: languageSectionStart.upperBound..<aboutPage.endIndex
-            )
-        )
-        let languageSection = aboutPage[languageSectionStart.lowerBound..<languageSectionEnd.lowerBound]
-        #expect(languageSection.contains(".frame(width: 300)"))
-        #expect(languageSection.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+        #expect(!aboutPage.contains(".frame(width: 280)"))
+        #expect(!aboutPage.contains(".font(.system(size: 28"))
+        #expect(!aboutPage.contains(".frame(width: 34)"))
         #expect(!aboutPage.contains("help.glossary.open"))
         #expect(!aboutPage.contains("openGlossary"))
 
@@ -802,7 +1253,7 @@ struct SettingsPageRegressionTests {
         #expect(integration.contains("@Published private(set) var isEditorActive"))
         #expect(settings.contains("macroFeature.settingsView"))
         #expect(settings.contains("macro.integration.focus_mcp_boundary"))
-        #expect(settings.contains(".font(.system(size: 12))"))
+        #expect(settings.contains(".font(.callout)"))
         #expect(settings.contains("macroFeature.enrollmentView"))
         #expect(settings.contains("macroFeature.setEditorActive(false)"))
         #expect(settings.contains("if section != .macros"))
@@ -898,6 +1349,9 @@ struct SettingsPageRegressionTests {
         ))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"))
+        #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_UPDATE_STATE"))
+        #expect(!source.contains("window.titlebarAppearsTransparent = true"))
+        #expect(!source.contains("window.titlebarSeparatorStyle = .none"))
     }
 
     @Test func transcriptHistoryHasDedicatedSidebarPageAndUsesThePublicVoiceLifecycle() throws {
@@ -944,26 +1398,17 @@ struct SettingsPageRegressionTests {
         #expect(settingsSource.contains("case transcripts"))
         #expect(settingsSource.contains("case .transcripts: return \"settings.section.transcripts\""))
         #expect(transcriptPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
-        #expect(transcriptPage.contains(
-            "PageHeader(title: localization.text(\"statistics.transcripts.title\"))\n"
-                + "                    .fixedSize(horizontal: true, vertical: false)\n"
-                + "                    .layoutPriority(2)"
-        ))
-        let titlePosition = try #require(transcriptPage.range(
-            of: "PageHeader(title: localization.text(\"statistics.transcripts.title\"))"
-        ))
-        let privacyPosition = try #require(transcriptPage.range(
-            of: "Text(localization.text(\"statistics.transcripts.privacy\"))"
-        ))
-        let spacerPosition = try #require(transcriptPage.range(of: "Spacer(minLength: 16)"))
-        let togglePosition = try #require(transcriptPage.range(
-            of: "Toggle(\n                    \"statistics.transcripts.enable\""
-        ))
-        #expect(titlePosition.lowerBound < privacyPosition.lowerBound)
-        #expect(privacyPosition.lowerBound < spacerPosition.lowerBound)
-        #expect(spacerPosition.lowerBound < togglePosition.lowerBound)
+        #expect(transcriptPage.contains("Form {"))
+        #expect(transcriptPage.contains("Section {"))
+        #expect(transcriptPage.contains("Toggle("))
+        #expect(transcriptPage.contains("\"statistics.transcripts.enable\""))
+        #expect(!transcriptPage.contains("LabeledContent(\"statistics.transcripts.enable\")"))
+        #expect(transcriptPage.contains("Text(\"statistics.transcripts.privacy\")"))
+        #expect(transcriptPage.contains(".toggleStyle(.switch)"))
+        #expect(transcriptPage.contains(".formStyle(.grouped)"))
+        #expect(!transcriptPage.contains("GroupBox {"))
+        #expect(!transcriptPage.contains("PageHeader"))
         #expect(transcriptPage.contains("$settings.localTranscriptHistoryEnabled"))
-        #expect(transcriptPage.contains(".lineLimit(2)"))
         #expect(transcriptPage.contains(".fixedSize(horizontal: false, vertical: true)"))
         #expect(!transcriptPage.contains("StatusPill("))
         #expect(historySource.contains("model.transcriptRecords.map(\\.applicationKey)"))
@@ -986,6 +1431,9 @@ struct SettingsPageRegressionTests {
         #expect(historySource.contains("dayGroupView(group)"))
         #expect(!historySource.contains(".frame(width: 250, alignment: .topLeading)"))
         #expect(historySource.contains("private var deleteAllRow"))
+        #expect(historySource.contains("Section {"))
+        #expect(!historySource.contains("Text(\"statistics.transcripts.description\")"))
+        #expect(!historySource.contains("GroupBox {\n                    emptyState"))
         let agentAccessPosition = try #require(
             historySource.range(of: "TranscriptAgentAccessSection()")
         )
@@ -995,6 +1443,9 @@ struct SettingsPageRegressionTests {
         #expect(!historySource.contains("private var overviewPanel"))
         #expect(!historySource.contains("private var privacyPanel"))
         #expect(historySource.contains("settings.localTranscriptHistoryEnabled"))
+        #expect(historySource.contains("HStack(alignment: .top, spacing: 12)"))
+        #expect(historySource.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+        #expect(!historySource.contains("minHeight: 116"))
         #expect(historySource.contains("NSWorkspace.shared.urlForApplication"))
         #expect(historySource.contains("NSWorkspace.shared.icon(forFile:"))
         #expect(historySource.contains("model.copyTranscript(record)"))
@@ -1006,6 +1457,11 @@ struct SettingsPageRegressionTests {
         #expect(historySource.contains("reason = \"date_groups_collapsed\""))
         #expect(historySource.contains("displayed_count=\\(displayedCount)"))
         #expect(agentAccessSource.contains("statistics.transcripts.agent_access.enable"))
+        #expect(agentAccessSource.contains("Section {"))
+        #expect(agentAccessSource.contains("} header: {"))
+        #expect(agentAccessSource.contains("Text(\"statistics.transcripts.agent_access.title\")"))
+        #expect(agentAccessSource.contains("} footer: {"))
+        #expect(!agentAccessSource.contains("GroupBox {\n            VStack"))
         #expect(agentAccessSource.contains("model.copyStandardConfiguration()"))
         #expect(agentAccessSource.contains("model.copyCodexConfiguration()"))
         #expect(agentAccessSource.contains("model.revoke(authorization)"))
@@ -1037,7 +1493,104 @@ struct SettingsPageRegressionTests {
         #expect(!captureSource.contains("API"))
     }
 
-    @Test func sharingUsesOneInlinePanelAcrossAboutStatisticsAndSidebar() throws {
+    @Test func systemSettingsInteractionAlignmentRound() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        let transcriptSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/TranscriptHistorySection.swift"),
+            encoding: .utf8
+        )
+
+        // The misleading version-history action remains absent from About.
+        #expect(!settingsSource.contains("case releaseHistory"))
+        #expect(!settingsSource.contains("private var releaseHistoryPage"))
+        #expect(!settingsSource.contains("navigate(to: .releaseHistory)"))
+        #expect(!settingsSource.contains("ReleaseHistoryContent()"))
+        #expect(!settingsSource.contains("isReleaseHistoryPresented"))
+        #expect(!settingsSource.contains("ReleaseHistorySheet"))
+
+        // The single stateful update action cannot be re-triggered while a check is in flight.
+        #expect(settingsSource.contains("private var isCheckingForUpdates"))
+        #expect(settingsSource.components(separatedBy: ".disabled(isCheckingForUpdates)").count == 2)
+
+        // Waiting connection states expose a system spinner.
+        #expect(settingsSource.contains("isWaiting: Bool = false"))
+        #expect(settingsSource.contains("isWaiting: model.isPhoneRemoteConnectionEnabled && !model.isPhoneRemoteConnected"))
+        #expect(settingsSource.contains("isWaiting: model.isWatchRemoteConnectionEnabled && !model.isWatchRemoteConnected"))
+        #expect(settingsSource.contains("isWaiting: isWebRemoteWaiting"))
+        #expect(!settingsSource.contains("Spacer(minLength: 42)"))
+
+        // Card-style pickers share one selectable button with hover and focus ring.
+        #expect(settingsSource.contains("private struct SelectableCardButton<Label: View>: View"))
+        #expect(settingsSource.contains("SelectableCardButton(isSelected: selected, cornerRadius: 10)"))
+        #expect(settingsSource.components(separatedBy: "SelectableCardButton(").count >= 5)
+
+        // Statistics values use semantic sizing instead of scale-factor shrinking.
+        #expect(!settingsSource.contains("minimumScaleFactor(0.75)"))
+        #expect(settingsSource.contains(".font(.system(.title2, design: .rounded).weight(.semibold))"))
+
+        // Transcript page drops the deprecated alert API and names its icon buttons.
+        #expect(!transcriptSource.contains(".alert(item:"))
+        #expect(transcriptSource.contains("presenting: deletionRequest"))
+        #expect(transcriptSource.contains(".accessibilityLabel(Text(localization.text(\"statistics.transcripts.copy\")))"))
+        #expect(transcriptSource.contains(".accessibilityLabel(Text(localization.text(\"statistics.transcripts.delete_record\")))"))
+        #expect(!transcriptSource.contains(".font(.system(size: 22, weight: .semibold))"))
+
+        // The main menu carries the standard window and navigation shortcuts.
+        #expect(appSource.contains("NSApp.windowsMenu = windowMenu"))
+        #expect(appSource.contains("setFrameUsingName(window.frameAutosaveName)"))
+        #expect(appSource.contains("settingsNavigationCoordinator"))
+    }
+
+    @Test func settingsAvoidDuplicateHealthyStatusAndActionLabels() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+
+        #expect(!source.contains("Text(\"audio.voice_output.section_title\")"))
+        #expect(source.contains("if model.audioStatus.key != \"audio.output.current_format\""))
+        #expect(source.contains(
+            "model.testToneStatus.key != \"audio.test_tone.ready\""
+        ))
+        #expect(source.contains("testToneStatusText != audioStatusText"))
+        #expect(source.contains("if shouldShowTestToneStatus"))
+        #expect(!source.contains("if !testToneStatusText.isEmpty,"))
+        #expect(source.contains("Button(\"about.configuration.export\""))
+        #expect(!source.contains("Text(\"about.configuration.export\")"))
+        #expect(source.contains("Button(\"about.configuration.import\""))
+        #expect(!source.contains("Text(\"about.configuration.import\")"))
+        #expect(chinese.contains(
+            "\"statistics.voice_ranking.description\" = \"展示时长最长的 10 次语音。\";"
+        ))
+        #expect(english.contains(
+            "\"statistics.voice_ranking.description\" = \"Shows your 10 longest voice sessions.\";"
+        ))
+    }
+
+    @Test func sharingUsesOneInlinePanelOnlyInAbout() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1047,10 +1600,14 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(source.contains("sharePanel(for: .about)"))
-        #expect(source.contains("sharePanel(for: .statistics)"))
-        #expect(source.contains("selectedSection = .about"))
-        #expect(source.contains("expandedShareSection = .about"))
+        #expect(source.contains("aboutShareSectionContent"))
+        #expect(source.contains("private var aboutShareSectionContent"))
+        #expect(!source.contains("shareSectionContent(for: .statistics)"))
+        #expect(!source.contains("\"statistics.share\""))
+        #expect(!source.contains("share.sidebar.accessibility_label"))
+        #expect(!source.contains("initialShareSection"))
+        #expect(!source.contains("private func sharePanel"))
+        #expect(source.contains("isAboutShareExpanded.toggle()"))
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
     }

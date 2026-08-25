@@ -118,7 +118,7 @@ The app runs as an LSUIElement accessory and has no Dock icon. The status item r
 - Left-click creates or brings forward the resizable settings window, whose default and minimum size is 1020×772.
 - Right-click shows connection, audio, and HID status plus reconnect, settings, logs, language, About, version, update, GitHub, and Quit actions.
 
-On macOS 26, the settings window uses native `glassEffect`, glass button styles, and scroll-edge effects. On macOS 14/15 it uses standard buttons, system Material panels, and compatible selection states. Both paths share the same functionality and layout and follow the system light/dark appearance, reduced transparency, and increased contrast settings.
+On macOS 26, the settings window uses the system `ControlGroup(.navigation)`, glass button style, and scroll-edge effects without drawing a control shell with `glassEffect`. macOS 14/15 render the same native structure using their corresponding system buttons, Material panels, and selection states. The build preserves its deployment target while linking the selected Xcode SDK, and both paths share the same functionality and layout while following system appearance, reduced-transparency, and increased-contrast settings.
 
 ## Data and logs
 

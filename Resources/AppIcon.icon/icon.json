@@ -1,0 +1,38 @@
+{
+  "fill" : {
+    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "03-microphone.svg",
+          "name" : "03-microphone"
+        },
+        {
+          "image-name" : "02-duck.svg",
+          "name" : "02-duck"
+        },
+        {
+          "image-name" : "01-signal.svg",
+          "name" : "01-signal"
+        }
+      ],
+      "name" : "SayAll",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

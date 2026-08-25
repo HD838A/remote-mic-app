@@ -8,6 +8,7 @@ struct RemoteMicRootView: View {
     let refreshUpdateInformation: () -> Void
     let setDockIconVisible: (Bool) -> Void
     private let initialSettingsSection: SettingsSection
+    private let navigationCoordinator: SettingsNavigationCoordinator
 
     init(
         model: BridgeAppModel,
@@ -15,7 +16,8 @@ struct RemoteMicRootView: View {
         checkForUpdates: @escaping () -> Void,
         refreshUpdateInformation: @escaping () -> Void,
         setDockIconVisible: @escaping (Bool) -> Void,
-        initialSettingsSection: SettingsSection = .connection
+        initialSettingsSection: SettingsSection = .connection,
+        navigationCoordinator: SettingsNavigationCoordinator = SettingsNavigationCoordinator()
     ) {
         self.model = model
         settings = model.settings
@@ -24,6 +26,7 @@ struct RemoteMicRootView: View {
         self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
         self.initialSettingsSection = initialSettingsSection
+        self.navigationCoordinator = navigationCoordinator
     }
 
     var body: some View {
@@ -35,7 +38,8 @@ struct RemoteMicRootView: View {
                     checkForUpdates: checkForUpdates,
                     refreshUpdateInformation: refreshUpdateInformation,
                     setDockIconVisible: setDockIconVisible,
-                    initialSection: initialSettingsSection
+                    initialSection: initialSettingsSection,
+                    navigationCoordinator: navigationCoordinator
                 )
             } else {
                 OnboardingView(model: model)

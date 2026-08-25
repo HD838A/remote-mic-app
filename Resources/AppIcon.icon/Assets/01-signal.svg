@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <g fill="none" stroke="#69E5FF" stroke-linecap="round">
+    <path d="M342 169C272 213 224 291 216 379" stroke-width="54"/>
+    <path d="M682 169C752 213 800 291 808 379" stroke-width="54"/>
+    <path d="M300 115C197 178 132 282 126 399" stroke-width="32" opacity="0.66"/>
+    <path d="M724 115C827 178 892 282 898 399" stroke-width="32" opacity="0.66"/>
+  </g>
+</svg>

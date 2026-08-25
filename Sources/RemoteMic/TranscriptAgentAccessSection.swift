@@ -6,58 +6,54 @@ struct TranscriptAgentAccessSection: View {
     @EnvironmentObject private var localization: LocalizationStore
 
     var body: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("statistics.transcripts.agent_access.title")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("statistics.transcripts.agent_access.description")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 16)
-                    Toggle(
-                        "statistics.transcripts.agent_access.enable",
-                        isOn: Binding(
-                            get: { model.isEnabled },
-                            set: model.setEnabled
-                        )
+        Section {
+            LabeledContent {
+                Toggle(
+                    "statistics.transcripts.agent_access.enable",
+                    isOn: Binding(
+                        get: { model.isEnabled },
+                        set: model.setEnabled
                     )
-                    .toggleStyle(.switch)
-                    .font(.system(size: 13, weight: .medium))
-                    .fixedSize()
-                    .disabled(model.integrationInProgress != nil)
-                }
-
-                Text("statistics.transcripts.agent_access.privacy")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if model.isEnabled {
-                    Divider()
-                    quickConnections
-
-                    Divider()
-                    authorizationCreator
-
-                    if let configuration = model.generatedConfiguration {
-                        generatedConfiguration(configuration)
-                    }
-                }
-
-                Divider()
-                authorizationList
-
-                if let error = model.error {
-                    Text(errorText(error))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.red)
+                )
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .fixedSize()
+                .disabled(model.integrationInProgress != nil)
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("statistics.transcripts.agent_access.enable")
+                        .font(.body.weight(.medium))
+                    Text("statistics.transcripts.agent_access.description")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            if model.isEnabled {
+                quickConnections
+                authorizationCreator
+
+                if let configuration = model.generatedConfiguration {
+                    generatedConfiguration(configuration)
+                }
+            }
+
+            authorizationList
+
+            if let error = model.error {
+                Text(errorText(error))
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Text("statistics.transcripts.agent_access.title")
+        } footer: {
+            Text("statistics.transcripts.agent_access.privacy")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear(perform: model.refresh)
     }
@@ -65,9 +61,9 @@ struct TranscriptAgentAccessSection: View {
     private var quickConnections: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("statistics.transcripts.agent_access.quick_connect")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
             Text("statistics.transcripts.agent_access.quick_connect_description")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -124,10 +120,10 @@ struct TranscriptAgentAccessSection: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(client.displayName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.body.weight(.semibold))
                     .lineLimit(1)
                 Text(status)
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(needsReconnect ? Color.orange : (connected ? Color.green : .secondary))
             }
 
@@ -141,13 +137,13 @@ struct TranscriptAgentAccessSection: View {
                     model.removeConnection(client)
                 }
                 .buttonStyle(.bordered)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
             } else {
                 Button("statistics.transcripts.agent_access.connect") {
                     model.connect(client)
                 }
                 .buttonStyle(.borderedProminent)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .disabled(!available || model.integrationInProgress != nil)
             }
         }
@@ -161,9 +157,9 @@ struct TranscriptAgentAccessSection: View {
     private var authorizationCreator: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("statistics.transcripts.agent_access.manual_setup")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
             Text("statistics.transcripts.agent_access.manual_setup_description")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) {
@@ -172,14 +168,14 @@ struct TranscriptAgentAccessSection: View {
                     text: $model.clientName
                 )
                 .textFieldStyle(.roundedBorder)
-                .font(.system(size: 13))
+                .font(.body)
                 .onSubmit(model.createAuthorization)
 
                 Button("statistics.transcripts.agent_access.create") {
                     model.createAuthorization()
                 }
                 .buttonStyle(.borderedProminent)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .disabled(model.clientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
@@ -201,10 +197,10 @@ struct TranscriptAgentAccessSection: View {
                         configuration.authorization.displayName
                     )
                 )
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
             }
             Text("statistics.transcripts.agent_access.configuration_once")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) {
@@ -236,7 +232,7 @@ struct TranscriptAgentAccessSection: View {
                 }
                 .buttonStyle(.bordered)
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(.callout.weight(.medium))
         }
         .padding(12)
         .background(
@@ -248,11 +244,11 @@ struct TranscriptAgentAccessSection: View {
     private var authorizationList: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("statistics.transcripts.agent_access.authorizations")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
 
             if model.authorizations.isEmpty {
                 Text("statistics.transcripts.agent_access.no_authorizations")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(model.authorizations) { authorization in
@@ -268,19 +264,19 @@ struct TranscriptAgentAccessSection: View {
     private func authorizationRow(_ authorization: SayAllMCPAuthorizationRecord) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: authorization.revokedAt == nil ? "cpu" : "cpu.fill")
-                .font(.system(size: 15))
+                .font(.body)
                 .foregroundStyle(authorization.revokedAt == nil ? Color.accentColor : .secondary)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(authorization.displayName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
                 Text(authorizationDate(authorization.createdAt))
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                 if model.needsReconnect(authorization) {
                     Text("statistics.transcripts.agent_access.path_changed")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.callout.weight(.medium))
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -291,10 +287,10 @@ struct TranscriptAgentAccessSection: View {
                     model.revoke(authorization)
                 }
                 .buttonStyle(.borderless)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
             } else {
                 Text("statistics.transcripts.agent_access.revoked")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
             }
         }

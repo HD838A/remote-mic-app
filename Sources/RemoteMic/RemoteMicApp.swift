@@ -163,6 +163,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
+    private let settingsNavigationCoordinator = SettingsNavigationCoordinator()
     private var isSettingsWindowOpen = false
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
@@ -389,6 +390,31 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         let applicationMenuItem = NSMenuItem()
         let applicationMenu = NSMenu(title: localization.text("app.name"))
+        applicationMenu.addItem(menuItem("menu.about", action: #selector(showAbout)))
+        applicationMenu.addItem(.separator())
+        let hideItem = NSMenuItem(
+            title: String(
+                format: localization.text("menu.hide_app"),
+                locale: localization.locale,
+                localization.text("app.name")
+            ),
+            action: Selector("hide:"),
+            keyEquivalent: "h"
+        )
+        hideItem.target = nil
+        applicationMenu.addItem(hideItem)
+        applicationMenu.addItem(responderMenuItem(
+            "menu.hide_others",
+            action: "hideOtherApplications:",
+            keyEquivalent: "h",
+            modifiers: [.command, .option]
+        ))
+        applicationMenu.addItem(responderMenuItem(
+            "menu.show_all",
+            action: "unhideAllApplications:",
+            keyEquivalent: ""
+        ))
+        applicationMenu.addItem(.separator())
         let quitItem = NSMenuItem(
             title: localization.text("common.action.quit"),
             action: #selector(quit),
@@ -425,24 +451,104 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         editMenu.addItem(responderMenuItem("common.action.paste", action: "paste:", keyEquivalent: "v"))
         editMenu.addItem(.separator())
         editMenu.addItem(responderMenuItem("common.action.select_all", action: "selectAll:", keyEquivalent: "a"))
+        editMenu.addItem(.separator())
+        let findItem = NSMenuItem(
+            title: localization.text("menu.find"),
+            action: #selector(focusSettingsSearch),
+            keyEquivalent: "f"
+        )
+        findItem.keyEquivalentModifierMask = .command
+        findItem.target = self
+        editMenu.addItem(findItem)
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
+        let viewMenuItem = NSMenuItem()
+        let viewMenu = NSMenu(title: localization.text("menu.view"))
+        let backItem = NSMenuItem(
+            title: localization.text("settings.navigation.back"),
+            action: #selector(goBackInSettings),
+            keyEquivalent: "["
+        )
+        backItem.keyEquivalentModifierMask = .command
+        backItem.target = self
+        viewMenu.addItem(backItem)
+        let forwardItem = NSMenuItem(
+            title: localization.text("settings.navigation.forward"),
+            action: #selector(goForwardInSettings),
+            keyEquivalent: "]"
+        )
+        forwardItem.keyEquivalentModifierMask = .command
+        forwardItem.target = self
+        viewMenu.addItem(forwardItem)
+        viewMenuItem.submenu = viewMenu
+        mainMenu.addItem(viewMenuItem)
+
+        let windowMenuItem = NSMenuItem()
+        let windowMenu = NSMenu(title: localization.text("menu.window"))
+        windowMenu.addItem(responderMenuItem(
+            "menu.minimize",
+            action: "performMiniaturize:",
+            keyEquivalent: "m"
+        ))
+        windowMenu.addItem(responderMenuItem(
+            "menu.zoom",
+            action: "performZoom:",
+            keyEquivalent: ""
+        ))
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(responderMenuItem(
+            "menu.bring_all_to_front",
+            action: "arrangeInFront:",
+            keyEquivalent: ""
+        ))
+        windowMenuItem.submenu = windowMenu
+        mainMenu.addItem(windowMenuItem)
+
         NSApp.mainMenu = mainMenu
+        NSApp.windowsMenu = windowMenu
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(goBackInSettings):
+            return isSettingsWindowOpen && settingsNavigationCoordinator.canGoBack
+        case #selector(goForwardInSettings):
+            return isSettingsWindowOpen && settingsNavigationCoordinator.canGoForward
+        case #selector(focusSettingsSearch):
+            // `.searchFocused` only exists on macOS 15+; keep the shortcut honest on 14.
+            guard #available(macOS 15.0, *) else { return false }
+            return isSettingsWindowOpen
+        default:
+            return true
+        }
+    }
+
+    @objc private func goBackInSettings() {
+        settingsNavigationCoordinator.goBack()
+    }
+
+    @objc private func goForwardInSettings() {
+        settingsNavigationCoordinator.goForward()
+    }
+
+    @objc private func focusSettingsSearch() {
+        settingsNavigationCoordinator.focusSearch()
     }
 
     private func responderMenuItem(
         _ titleKey: String,
         action: String,
-        keyEquivalent: String
+        keyEquivalent: String,
+        modifiers: NSEvent.ModifierFlags = [.command]
     ) -> NSMenuItem {
         let item = NSMenuItem(
             title: localization.text(titleKey),
             action: Selector(action),
             keyEquivalent: keyEquivalent
         )
-        item.keyEquivalentModifierMask = [.command]
-        // A nil target lets AppKit route the standard editing action to the focused text field.
+        item.keyEquivalentModifierMask = modifiers
+        // A nil target lets AppKit route the standard action to the focused responder.
         item.target = nil
         return item
     }
@@ -800,20 +906,20 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 setDockIconVisible: { [weak self] isVisible in
                     self?.setDockIconVisible(isVisible)
                 },
-                initialSettingsSection: initialSettingsSection
+                initialSettingsSection: initialSettingsSection,
+                navigationCoordinator: settingsNavigationCoordinator
             )
             .environmentObject(localization)
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1020, height: 772),
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 700),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = localization.text("app.name")
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none
+        window.titleVisibility = .visible
+        window.toolbarStyle = .unified
         window.isMovableByWindowBackground = false
         // A settings window must remain visible when the user switches to another app.
         // Closing it remains an explicit red-button or Command-W action.
@@ -821,10 +927,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.delegate = self
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 1020, height: 772)
-        window.setContentSize(NSSize(width: 1020, height: 772))
+        window.minSize = NSSize(width: 800, height: 650)
+        window.setContentSize(NSSize(width: 920, height: 700))
         window.setFrameAutosaveName("RemoteMicSettings")
-        window.center()
+        // Keep the system-restored frame when one exists; only center on first launch.
+        if !window.setFrameUsingName(window.frameAutosaveName) {
+            window.center()
+        }
         return NSWindowController(window: window)
     }
 
@@ -846,19 +955,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     @objc private func showAbout() {
-        NSApp.activate(ignoringOtherApps: true)
-        let shortVersion = Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? localization.text("common.value.unknown")
-        let alert = NSAlert()
-        alert.messageText = localization.text("app.name")
-        alert.informativeText = String(
-            format: localization.text("about.alert.description_with_version"),
-            locale: localization.locale,
-            arguments: [shortVersion]
-        )
-        alert.addButton(withTitle: localization.text("common.action.ok"))
-        alert.runModal()
+        showSettingsWindow(initialSection: .about)
+        settingsNavigationCoordinator.selectSection(.about)
     }
 
     @objc private func selectLanguage(_ sender: NSMenuItem) {

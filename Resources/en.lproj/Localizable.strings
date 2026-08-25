@@ -433,6 +433,15 @@
 "menu.about" = "About SayAll";
 "menu.file" = "File";
 "menu.edit" = "Edit";
+"menu.view" = "View";
+"menu.window" = "Window";
+"menu.find" = "Find";
+"menu.hide_app" = "Hide %@";
+"menu.hide_others" = "Hide Others";
+"menu.show_all" = "Show All";
+"menu.minimize" = "Minimize";
+"menu.zoom" = "Zoom";
+"menu.bring_all_to_front" = "Bring All to Front";
 "menu.open_log_folder" = "Open Log Folder";
 "menu.check_for_updates" = "Check for Updates…";
 "common.action.quit" = "Quit";
@@ -443,7 +452,6 @@
 "app.version" = "Version %1$@";
 "status_item.voice_active_accessibility" = "Xiaomi Bluetooth Remote 2 Pro voice active";
 "status_item.accessibility_label" = "Xiaomi Bluetooth Remote 2 Pro";
-"about.alert.description_with_version" = "Version %1$@\nWireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro.";
 "common.action.ok" = "OK";
 "common.action.copy_link" = "Copy Link";
 "common.status.copied" = "Copied";
@@ -472,7 +480,7 @@
 "statistics.chart.weekly_history" = "Recent 7 Weeks + Earlier";
 "statistics.chart.earlier" = "Earlier";
 "statistics.voice_ranking.title" = "Single Voice Session Ranking";
-"statistics.voice_ranking.description" = "Stored only on this Mac. Shows your 10 longest voice sessions.";
+"statistics.voice_ranking.description" = "Shows your 10 longest voice sessions.";
 "statistics.voice_ranking.empty" = "Complete a voice session to start your local ranking.";
 "about.configuration.title" = "Personalized Configuration";
 "about.configuration.description" = "Move gain, audio device, button mapping, shortcuts, language, Dock display, launch, and update channel settings.";
@@ -492,7 +500,6 @@
 "about.version.information_idle" = "Available updates are checked automatically when this page opens.";
 "about.version.checking" = "Checking for available updates…";
 "about.version.up_to_date" = "You're Up to Date";
-"about.version.up_to_date_description" = "There is no newer version on the selected update channel.";
 "about.version.information_unavailable" = "Update Information Unavailable";
 "about.version.information_unavailable_description" = "Check again later. Your installed version is unaffected.";
 "about.version.release_notes_title" = "What's New in %1$@";
@@ -842,3 +849,6 @@
 "about.preferences.restart_onboarding_help" = "Recheck permissions, the remote, voice output device, and voice input without clearing existing connections, button mappings, or other settings.";
 "about.preferences.restart_onboarding_action" = "Run Again";
 "common.action.copy" = "Copy";
+"settings.search.placeholder" = "Search";
+"settings.navigation.back" = "Go Back";
+"settings.navigation.forward" = "Go Forward";

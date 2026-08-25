@@ -16,8 +16,10 @@ struct RemoteMappingPlacement: Identifiable {
 }
 
 enum RemoteMappingLayout {
-    static let canvasHeight: CGFloat = 570
-    static let remoteSize = CGSize(width: 202, height: 410)
+    static let canvasHeight: CGFloat = 552
+    static let remoteSize = CGSize(width: 160, height: 325)
+    static let cardHeight: CGFloat = 64
+    static let minimumCardGap: CGFloat = 16
     static let arrowCardGap: CGFloat = 7
 
     static let buttonPlacements: [RemoteMappingPlacement] = [
@@ -62,7 +64,7 @@ enum RemoteMappingLayout {
     }
 
     static func cardWidth(for canvasWidth: CGFloat) -> CGFloat {
-        min(300, max(270, (canvasWidth - 260) / 2))
+        min(250, max(190, (canvasWidth - 170) / 2))
     }
 
     static func connectionControlPoints(
@@ -107,7 +109,7 @@ struct RemoteMappingCanvas: View {
                         height: RemoteMappingLayout.remoteSize.height
                     )
                     .position(x: metrics.remoteCenterX, y: RemoteMappingLayout.canvasHeight / 2)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                 connectionLines(metrics: metrics)
 
@@ -207,7 +209,7 @@ struct RemoteMappingCanvas: View {
                 Image(systemName: symbol(for: button))
                     .frame(width: 14)
                 Text(button.displayName(using: localization))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.body.weight(.semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -220,10 +222,10 @@ struct RemoteMappingCanvas: View {
                     } label: {
                         VStack(spacing: 1) {
                             Text(trigger.displayName(using: localization))
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.callout.weight(.medium))
                                 .foregroundStyle(.secondary)
                             Text(actionSummary(button, trigger))
-                                .font(.system(size: 12, weight: trigger == .singleClick ? .semibold : .regular))
+                                .font(.callout.weight(trigger == .singleClick ? .semibold : .regular))
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
@@ -238,9 +240,9 @@ struct RemoteMappingCanvas: View {
                 }
             }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .onTapGesture { selectedButton = button }
         .background(
             active
@@ -248,10 +250,10 @@ struct RemoteMappingCanvas: View {
                 : selected
                     ? Color.accentColor.opacity(0.10)
                     : Color.primary.opacity(0.035),
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(
                     active
                         ? Color.orange.opacity(0.65)
@@ -262,6 +264,7 @@ struct RemoteMappingCanvas: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(button.displayName(using: localization)))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var voiceCard: some View {
@@ -270,10 +273,10 @@ struct RemoteMappingCanvas: View {
                 Image(systemName: "mic.fill")
                     .frame(width: 14)
                 Text("button_mapping.voice_button.title")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.body.weight(.semibold))
                 Spacer(minLength: 0)
                 Text("button_mapping.voice_button.fixed")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(voiceActive ? Color.orange : Color.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -283,18 +286,18 @@ struct RemoteMappingCanvas: View {
                     )
             }
             Text("button_mapping.voice_button.detail")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
         .background(
             voiceActive ? Color.orange.opacity(0.12) : Color.primary.opacity(0.035),
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(voiceActive ? Color.orange.opacity(0.65) : Color.secondary.opacity(0.15))
         }
         .accessibilityElement(children: .combine)
@@ -320,7 +323,7 @@ struct RemoteMappingCanvas: View {
     private struct Metrics {
         let width: CGFloat
         let cardWidth: CGFloat
-        let cardHeight: CGFloat = 72
+        let cardHeight: CGFloat = RemoteMappingLayout.cardHeight
 
         init(width: CGFloat) {
             self.width = width
@@ -369,11 +372,11 @@ private struct MappingRemotePhoto: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(.quaternary)
                     .overlay {
                         Text("remote.photo.missing")
-                            .font(.caption)
+                            .font(.callout)
                             .foregroundStyle(.secondary)
                     }
             }

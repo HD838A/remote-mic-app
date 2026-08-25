@@ -130,22 +130,44 @@ DEFAULT_CACHE_PATH="/private/tmp/remote-mic-swiftpm-cache/$VERSION-$BUILD/$RELEA
 BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_SCRATCH_PATH}"
 BUILD_CACHE_PATH="${REMOTE_MIC_BUILD_CACHE_PATH:-$DEFAULT_CACHE_PATH}"
 SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+MACOS_SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+MACOS_SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+SWIFT_SDK_LINK_ARGUMENTS=(
+  --sdk "$MACOS_SDK_PATH"
+  -Xlinker -platform_version
+  -Xlinker macos
+  -Xlinker "$RELEASE_MIN_SYSTEM_VERSION"
+  -Xlinker "$MACOS_SDK_VERSION"
+)
 
 run_release_stage app-swift-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
   xcrun swift build \
   --scratch-path "$BUILD_SCRATCH_PATH" \
   --cache-path "$BUILD_CACHE_PATH" \
   -c "$CONFIGURATION" \
-  --triple "$RELEASE_TRIPLE"
+  --triple "$RELEASE_TRIPLE" \
+  "${SWIFT_SDK_LINK_ARGUMENTS[@]}"
 BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
   xcrun swift build \
   --scratch-path "$BUILD_SCRATCH_PATH" \
   --cache-path "$BUILD_CACHE_PATH" \
   -c "$CONFIGURATION" \
   --triple "$RELEASE_TRIPLE" \
+  "${SWIFT_SDK_LINK_ARGUMENTS[@]}" \
   --show-bin-path)"
 BIN_PATH="$BIN_DIR/$APP_NAME"
 MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
+LINKED_BUILD_VERSION="$(vtool -show-build "$BIN_PATH")"
+LINKED_MIN_SYSTEM_VERSION="$(print -r -- "$LINKED_BUILD_VERSION" | awk '$1 == "minos" { print $2; exit }')"
+LINKED_SDK_VERSION="$(print -r -- "$LINKED_BUILD_VERSION" | awk '$1 == "sdk" { print $2; exit }')"
+if [[ "$LINKED_MIN_SYSTEM_VERSION" != "$RELEASE_MIN_SYSTEM_VERSION" ]]; then
+  print -u2 "App deployment target mismatch: expected $RELEASE_MIN_SYSTEM_VERSION, linked $LINKED_MIN_SYSTEM_VERSION"
+  exit 1
+fi
+if [[ "$LINKED_SDK_VERSION" != "$MACOS_SDK_VERSION" ]]; then
+  print -u2 "App SDK mismatch: expected $MACOS_SDK_VERSION, linked $LINKED_SDK_VERSION"
+  exit 1
+fi
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;

@@ -367,7 +367,7 @@ struct KeyboardShortcutPicker: View {
             }
             .labelsHidden()
             .pickerStyle(.segmented)
-            .font(.system(size: 13, weight: .medium))
+            .font(.body.weight(.medium))
 
             switch selectionMode {
             case .presets:
@@ -385,7 +385,7 @@ struct KeyboardShortcutPicker: View {
     private var presetGrid: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("shortcut.picker.presets.help")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
             LazyVGrid(
@@ -412,9 +412,9 @@ struct KeyboardShortcutPicker: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("shortcut.picker.modifiers.title")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.body.weight(.semibold))
                 Text("shortcut.picker.modifiers.help")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
 
                 LazyVGrid(
@@ -461,9 +461,9 @@ struct KeyboardShortcutPicker: View {
         } label: {
             HStack(spacing: 7) {
                 Text(modifier.symbol)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.system(.body, design: .rounded).weight(.semibold))
                 Text(modifier.displayName(using: localization))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -484,7 +484,7 @@ struct KeyboardShortcutPicker: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(localization.text(titleKey))
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
 
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 4) {
@@ -504,7 +504,7 @@ struct KeyboardShortcutPicker: View {
             onSelect(candidate)
         } label: {
             Text(key.keyLabel)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular, design: .rounded))
+                .font(.system(.callout, design: .rounded).weight(selected ? .semibold : .regular))
                 .lineLimit(1)
                 .frame(
                     minWidth: max(34, 34 * key.widthUnits),
@@ -535,9 +535,9 @@ struct KeyboardShortcutPicker: View {
     private var standaloneModifierSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("shortcut.picker.standalone_modifiers.title")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
             Text("shortcut.picker.standalone_modifiers.help")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
             LazyVGrid(
@@ -572,11 +572,11 @@ struct KeyboardShortcutPicker: View {
                     .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                        .font(.body.weight(selected ? .semibold : .medium))
                         .lineLimit(1)
                     if !shortcutName.isEmpty {
                         Text(shortcutName)
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(.system(.callout, design: .rounded).weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
                 }

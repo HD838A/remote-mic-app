@@ -9,7 +9,11 @@ Copyright (C) 2026 HD838A. All rights reserved.
 本许可仅适用于以下品牌资产以及由它们生成或演绎的版本：
 
 - `Resources/AppIcon.png`；
-- `Resources/AppIcon.icns`。
+- `Resources/AppIcon.icns`；
+- `Resources/AppIcon.icon`；
+- `Resources/AppIconLayers/01-signal.svg`；
+- `Resources/AppIconLayers/02-duck.svg`；
+- `Resources/AppIconLayers/03-microphone.svg`。
 
 上述品牌资产不适用 macOS 软件代码的 `GPL-3.0-only` 许可。菜单栏状态图标、程序代码和其他未在本节列出的资源不属于本许可的保护范围。
 

@@ -119,7 +119,7 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 - 左键：创建或置前默认及最小尺寸为 1020×772 的可缩放设置窗口；
 - 右键：显示连接、音频、HID 状态，以及重新连接、打开设置、日志、关于、版本号、检查更新、GitHub 和退出菜单。
 
-设置窗口在 macOS 26 使用原生 `glassEffect`、glass button style 和滚动边缘效果；macOS 14/15 使用标准按钮、系统 Material 面板和兼容选中状态。两套样式共用相同功能与布局，并跟随系统浅色、深色、降低透明度与增强对比度设置。
+设置窗口在 macOS 26 使用系统 `ControlGroup(.navigation)`、glass button style 和滚动边缘效果，不用 `glassEffect` 绘制控件外壳；macOS 14/15 使用同一原生结构的对应系统按钮、Material 面板和选中状态。构建保留最低系统版本，同时链接所选 Xcode 的当前 SDK，使两套样式共用相同功能与布局，并跟随系统浅色、深色、降低透明度与增强对比度设置。
 
 ## 数据与日志
 

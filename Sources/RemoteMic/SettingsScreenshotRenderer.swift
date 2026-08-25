@@ -76,6 +76,11 @@ enum SettingsScreenshotRenderer {
         }
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
+        if ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_UPDATE_STATE"
+        ] == "up-to-date" {
+            updateInformation.setUpToDate()
+        }
         let localization = LocalizationStore(settings: settings)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
@@ -83,6 +88,8 @@ enum SettingsScreenshotRenderer {
         _ = NSApplication.shared
         let previousAppearance = NSApp.appearance
         NSApp.appearance = appearance
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         defer { NSApp.appearance = previousAppearance }
 
         for section in sections {
@@ -90,9 +97,7 @@ enum SettingsScreenshotRenderer {
                 model: model,
                 updateInformation: updateInformation,
                 initialSection: section,
-                initialShareSection: section == .statistics || section == .about
-                    ? section
-                    : nil,
+                initialShareExpanded: section == .about,
                 initialMappingEditingButton: section == .mapping && opensShortcutEditor
                     ? .ok
                     : nil,
@@ -100,33 +105,36 @@ enum SettingsScreenshotRenderer {
                 minimumContentSize: .zero
             )
             .environmentObject(localization)
-            .frame(width: size.width, height: size.height)
             let hostingController = NSHostingController(rootView: rootView)
+            let styleMask: NSWindow.StyleMask = [
+                .titled,
+                .closable,
+                .miniaturizable,
+                .resizable,
+                .fullSizeContentView,
+            ]
+            let frameRect = NSRect(origin: .zero, size: size)
             let window = NSWindow(
-                contentRect: NSRect(origin: .zero, size: size),
-                styleMask: [.borderless],
+                contentRect: NSWindow.contentRect(
+                    forFrameRect: frameRect,
+                    styleMask: styleMask
+                ),
+                styleMask: styleMask,
                 backing: .buffered,
                 defer: false
             )
+            window.appearance = appearance
+            window.title = localization.text("app.name")
+            window.titleVisibility = .visible
+            window.toolbarStyle = .unified
             window.contentViewController = hostingController
-            window.setContentSize(size)
-            window.orderFront(nil)
+            window.setFrame(frameRect, display: false)
+            window.makeKeyAndOrderFront(nil)
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
             window.contentView?.layoutSubtreeIfNeeded()
             window.contentView?.displayIfNeeded()
 
-            guard let contentView = window.contentView,
-                  contentView.bounds.size == size,
-                  let representation = contentView.bitmapImageRepForCachingDisplay(
-                      in: contentView.bounds
-                  )
-            else {
-                throw RenderingError.bitmapCreationFailed
-            }
-            contentView.cacheDisplay(in: contentView.bounds, to: representation)
-            guard let png = representation.representation(using: .png, properties: [:]) else {
-                throw RenderingError.pngCreationFailed
-            }
+            let png = try windowPNG(window)
             let filename = String(
                 format: "%@-%dx%d.png",
                 section.rawValue,
@@ -140,7 +148,7 @@ enum SettingsScreenshotRenderer {
     }
 
     private static func screenshotSize(from value: String?) throws -> NSSize {
-        let value = value ?? "1020x772"
+        let value = value ?? "920x700"
         let components = value.lowercased().split(separator: "x")
         guard components.count == 2,
               let width = Double(components[0]),
@@ -151,6 +159,35 @@ enum SettingsScreenshotRenderer {
             throw RenderingError.invalidSize(value)
         }
         return NSSize(width: width, height: height)
+    }
+
+    private static func windowPNG(_ window: NSWindow) throws -> Data {
+        if let image = CGWindowListCreateImage(
+            .null,
+            .optionIncludingWindow,
+            CGWindowID(window.windowNumber),
+            [.boundsIgnoreFraming, .bestResolution]
+        ) {
+            let representation = NSBitmapImageRep(cgImage: image)
+            guard let png = representation.representation(using: .png, properties: [:]) else {
+                throw RenderingError.pngCreationFailed
+            }
+            return png
+        }
+
+        guard let contentView = window.contentView,
+              !contentView.bounds.isEmpty,
+              let representation = contentView.bitmapImageRepForCachingDisplay(
+                  in: contentView.bounds
+              )
+        else {
+            throw RenderingError.bitmapCreationFailed
+        }
+        contentView.cacheDisplay(in: contentView.bounds, to: representation)
+        guard let png = representation.representation(using: .png, properties: [:]) else {
+            throw RenderingError.pngCreationFailed
+        }
+        return png
     }
 
     private static func screenshotAppearance(from value: String?) throws -> NSAppearance? {

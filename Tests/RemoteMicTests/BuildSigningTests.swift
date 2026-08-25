@@ -40,6 +40,54 @@ struct BuildSigningTests {
         #expect(verifySource.contains("app icon corner is not transparent"))
     }
 
+    @Test func appIconRetainsItsIconComposerSources() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let documentURL = root.appendingPathComponent("Resources/AppIcon.icon")
+        let manifestURL = documentURL.appendingPathComponent("icon.json")
+        let manifest = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL))
+                as? [String: Any]
+        )
+        let groups = try #require(manifest["groups"] as? [[String: Any]])
+        let group = try #require(groups.first)
+        let layers = try #require(group["layers"] as? [[String: Any]])
+        let layerNames = layers.compactMap { $0["image-name"] as? String }
+        let renderSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/render-app-icon.sh"),
+            encoding: .utf8
+        )
+        let embeddedLayersExist = layerNames.allSatisfy { layerName in
+            FileManager.default.fileExists(
+                atPath: documentURL
+                    .appendingPathComponent("Assets")
+                    .appendingPathComponent(layerName)
+                    .path
+            )
+        }
+        let authoringLayersExist = layerNames.allSatisfy { layerName in
+            FileManager.default.fileExists(
+                atPath: root
+                    .appendingPathComponent("Resources/AppIconLayers")
+                    .appendingPathComponent(layerName)
+                    .path
+            )
+        }
+
+        #expect(FileManager.default.fileExists(atPath: documentURL.path))
+        #expect(groups.count == 1)
+        #expect(group["name"] as? String == "SayAll")
+        #expect(layerNames == ["03-microphone.svg", "02-duck.svg", "01-signal.svg"])
+        #expect(embeddedLayersExist)
+        #expect(authoringLayersExist)
+        #expect(renderSource.contains("Icon Composer.app/Contents/Executables/ictool"))
+        #expect(renderSource.contains("--platform macOS"))
+        #expect(renderSource.contains("--rendition Default"))
+        #expect(renderSource.contains("/usr/bin/iconutil --convert icns"))
+    }
+
     @Test func buildDefaultsToStableAdHocSigning() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -71,6 +119,27 @@ struct BuildSigningTests {
             ).last
         )
         #expect(!adHocSigningSource.contains("--options runtime"))
+    }
+
+    @Test func appBuildLinksAgainstTheSelectedXcodeSDKWithoutRaisingDeploymentTarget() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("xcrun --sdk macosx --show-sdk-path"))
+        #expect(source.contains("xcrun --sdk macosx --show-sdk-version"))
+        #expect(source.contains("-Xlinker -platform_version"))
+        #expect(source.contains("-Xlinker \"$RELEASE_MIN_SYSTEM_VERSION\""))
+        #expect(source.contains("-Xlinker \"$MACOS_SDK_VERSION\""))
+        #expect(source.contains("\"${SWIFT_SDK_LINK_ARGUMENTS[@]}\""))
+        #expect(source.contains("vtool -show-build \"$BIN_PATH\""))
+        #expect(source.contains("App deployment target mismatch"))
+        #expect(source.contains("App SDK mismatch"))
     }
 
     @Test func productionReleaseRequiresAndVerifiesWebRemoteConfiguration() throws {

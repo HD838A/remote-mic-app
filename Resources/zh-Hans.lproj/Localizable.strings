@@ -433,6 +433,15 @@
 "menu.about" = "关于无线麦";
 "menu.file" = "文件";
 "menu.edit" = "编辑";
+"menu.view" = "显示";
+"menu.window" = "窗口";
+"menu.find" = "查找";
+"menu.hide_app" = "隐藏%@";
+"menu.hide_others" = "隐藏其他";
+"menu.show_all" = "全部显示";
+"menu.minimize" = "最小化";
+"menu.zoom" = "缩放";
+"menu.bring_all_to_front" = "全部移到前台";
 "menu.open_log_folder" = "打开日志所在文件夹";
 "menu.check_for_updates" = "检查更新…";
 "common.action.quit" = "退出";
@@ -443,7 +452,6 @@
 "app.version" = "版本 %1$@";
 "status_item.voice_active_accessibility" = "小米蓝牙遥控器 2 Pro 正在传输语音";
 "status_item.accessibility_label" = "小米蓝牙遥控器 2 Pro";
-"about.alert.description_with_version" = "版本 %1$@\n小米蓝牙遥控器 2 Pro 的无线语音与快捷操作工具。";
 "common.action.ok" = "好";
 "common.action.copy_link" = "复制链接";
 "common.status.copied" = "已复制";
@@ -472,7 +480,7 @@
 "statistics.chart.weekly_history" = "最近 7 周与更早累计";
 "statistics.chart.earlier" = "更早";
 "statistics.voice_ranking.title" = "单次语音时长排行";
-"statistics.voice_ranking.description" = "数据仅保存在本机，展示时长最长的 10 次语音。";
+"statistics.voice_ranking.description" = "展示时长最长的 10 次语音。";
 "statistics.voice_ranking.empty" = "完成一次语音输入后，这里会显示本机排行。";
 "about.configuration.title" = "个性化配置";
 "about.configuration.description" = "迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示、启动与更新通道设置。";
@@ -492,7 +500,6 @@
 "about.version.information_idle" = "打开此页面后会自动检查可用更新。";
 "about.version.checking" = "正在检查可用更新…";
 "about.version.up_to_date" = "已是最新版本";
-"about.version.up_to_date_description" = "当前更新通道没有更高版本。";
 "about.version.information_unavailable" = "暂时无法获取更新信息";
 "about.version.information_unavailable_description" = "可以稍后重新检查；已安装版本不受影响。";
 "about.version.release_notes_title" = "%1$@ 更新内容";
@@ -842,3 +849,6 @@
 "about.preferences.restart_onboarding_help" = "重新检查权限、遥控器、语音输出设备和语音输入；不会清除现有连接、按键映射或其他设置。";
 "about.preferences.restart_onboarding_action" = "重新运行";
 "common.action.copy" = "复制";
+"settings.search.placeholder" = "搜索";
+"settings.navigation.back" = "返回";
+"settings.navigation.forward" = "前进";

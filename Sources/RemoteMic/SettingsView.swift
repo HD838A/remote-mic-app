@@ -19,7 +19,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: LocalizedStringKey {
+    var titleKey: String {
         switch self {
         case .connection: return "settings.section.connection"
         case .privateFeature: return ""
@@ -44,6 +44,70 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .about: return "info.circle"
         }
     }
+}
+
+private struct SettingsSidebarIcon: View {
+    let systemName: String
+    let color: Color
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 12, weight: .semibold))
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(.white)
+            .frame(width: 20, height: 20)
+            .background {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(color.gradient)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 0.75, y: 0.5)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct SettingsSidebarRow: View {
+    let title: Text
+    let systemName: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 7) {
+            SettingsSidebarIcon(systemName: systemName, color: color)
+            title
+                .font(.body)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SettingsSearchItem: Identifiable {
+    let id: String
+    let section: SettingsSection
+    let title: String
+    let anchor: String
+    let keywords: [String]
+
+    init(
+        _ id: String,
+        section: SettingsSection,
+        title: String,
+        anchor: String,
+        keywords: [String] = []
+    ) {
+        self.id = id
+        self.section = section
+        self.title = title
+        self.anchor = anchor
+        self.keywords = keywords
+    }
+}
+
+private struct SettingsSearchNavigationRequest: Equatable {
+    let id = UUID()
+    let section: SettingsSection
+    let anchor: String
 }
 
 extension BridgeAppModel: WebRemoteSessionModel {}
@@ -175,6 +239,7 @@ struct SettingsView: View {
     private let setDockIconVisible: (Bool) -> Void
     private let minimumContentSize: CGSize
     private let initialShortcutPickerShowsKeyboard: Bool
+    private let navigationCoordinator: SettingsNavigationCoordinator
     private static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
         .macros,
@@ -187,6 +252,13 @@ struct SettingsView: View {
     ]
 
     @State private var selectedSection: SettingsSection
+    @State private var sidebarSearchText = ""
+    @FocusState private var isSearchFocused: Bool
+    @State private var selectedSearchResultID: String?
+    @State private var highlightedSearchAnchor: String?
+    @State private var navigationHistory: [SettingsSection]
+    @State private var navigationHistoryIndex: Int
+    @State private var searchNavigationRequest: SettingsSearchNavigationRequest?
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var isMappingSelectionLocked = true
     @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
@@ -208,7 +280,7 @@ struct SettingsView: View {
     @State private var isTestFlightLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
-    @State private var expandedShareSection: SettingsSection?
+    @State private var isAboutShareExpanded: Bool
     @State private var webRemoteInviteCode = ""
     @State private var versionTapRevealCounter = VersionTapRevealCounter()
     private static let requiredWebRemoteInviteCode = "8586"
@@ -220,11 +292,12 @@ struct SettingsView: View {
         refreshUpdateInformation: @escaping () -> Void = {},
         setDockIconVisible: @escaping (Bool) -> Void = { _ in },
         initialSection: SettingsSection = .connection,
-        initialShareSection: SettingsSection? = nil,
+        initialShareExpanded: Bool = false,
         initialMappingEditingButton: RemoteButton? = nil,
         initialMappingEditingTrigger: ButtonTrigger = .singleClick,
         initialShortcutPickerShowsKeyboard: Bool = false,
-        minimumContentSize: CGSize = CGSize(width: 980, height: 732)
+        minimumContentSize: CGSize = .zero,
+        navigationCoordinator: SettingsNavigationCoordinator = SettingsNavigationCoordinator()
     ) {
         self.model = model
         settings = model.settings
@@ -237,8 +310,11 @@ struct SettingsView: View {
         self.setDockIconVisible = setDockIconVisible
         self.minimumContentSize = minimumContentSize
         self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
+        self.navigationCoordinator = navigationCoordinator
         _selectedSection = State(initialValue: initialSection)
-        _expandedShareSection = State(initialValue: initialShareSection)
+        _navigationHistory = State(initialValue: [initialSection])
+        _navigationHistoryIndex = State(initialValue: 0)
+        _isAboutShareExpanded = State(initialValue: initialShareExpanded)
         _selectedRemoteButton = State(initialValue: initialMappingEditingButton ?? .ok)
         _mappingEditingTarget = State(
             initialValue: initialMappingEditingButton.map {
@@ -248,16 +324,34 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        NavigationSplitView {
             sidebar
-                .frame(width: 108)
-            Color(nsColor: .separatorColor)
-                .frame(width: 1)
-                .frame(maxHeight: .infinity)
-                .ignoresSafeArea(.container, edges: .top)
+                .searchable(
+                    text: $sidebarSearchText,
+                    placement: .sidebar,
+                    prompt: Text(localization.text("settings.search.placeholder"))
+                )
+                .searchFocusedWhenAvailable($isSearchFocused)
+                .onSubmit(of: .search) {
+                    if let first = searchResults.first {
+                        activateSearchResult(first)
+                    }
+                }
+                .controlSize(.large)
+                .toolbar(removing: .sidebarToggle)
+                .navigationSplitViewColumnWidth(min: 232, ideal: 232, max: 232)
+        } detail: {
             selectedPage
+                .navigationTitle(sectionTitle(selectedSection))
+                .controlSize(.regular)
         }
-        .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                navigationControlGroup
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .controlSize(.regular)
         .environment(\.locale, localization.locale)
         .frame(
             minWidth: minimumContentSize.width,
@@ -267,6 +361,7 @@ struct SettingsView: View {
             refreshPermissionStates()
             loginItemService.refresh()
             macroFeature.setEditorActive(false)
+            syncNavigationStateWithCoordinator()
         }
         .onChange(of: selectedSection) { section in
             if section != .macros {
@@ -276,6 +371,18 @@ struct SettingsView: View {
         .onDisappear {
             macroFeature.setEditorActive(false)
         }
+        .onReceive(navigationCoordinator.commands) { command in
+            switch command {
+            case .goBack:
+                goBack()
+            case .goForward:
+                goForward()
+            case .focusSearch:
+                isSearchFocused = true
+            case .selectSection(let section):
+                navigate(to: section)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             loginItemService.refresh()
@@ -283,12 +390,12 @@ struct SettingsView: View {
         }
         .onReceive(privateFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
             if !isVisible, selectedSection == .privateFeature {
-                selectedSection = .about
+                navigate(to: .about)
             }
         }
         .onReceive(macroFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
             if !isVisible, selectedSection == .macros {
-                selectedSection = .about
+                navigate(to: .about)
             }
         }
         .sheet(isPresented: $isWebRemoteSessionPresented) {
@@ -329,7 +436,7 @@ struct SettingsView: View {
         ) {
             Button("button_mapping.permission_prompt.open") {
                 isWaitingForMappingPermissions = true
-                selectedSection = .permissions
+                navigate(to: .permissions)
                 model.applyHIDSettings()
             }
             Button("common.action.cancel", role: .cancel) {
@@ -353,7 +460,7 @@ struct SettingsView: View {
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text("connection.web.invite.ios_eyebrow")
-                            .font(.caption.weight(.bold))
+                            .font(.callout.weight(.bold))
                             .foregroundStyle(Color.accentColor)
                         Text("connection.web.invite.ios_title")
                             .font(.title3.weight(.semibold))
@@ -368,7 +475,7 @@ struct SettingsView: View {
                     Link(destination: AppLinks.testFlightPublicBeta) {
                         Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
                     }
-                    .compatibilityButtonStyle(.prominent)
+                    .buttonStyle(.borderedProminent)
 
                     Button {
                         copyTestFlightPublicBetaLink()
@@ -382,7 +489,7 @@ struct SettingsView: View {
                             systemImage: isTestFlightLinkCopied ? "checkmark" : "doc.on.doc"
                         )
                     }
-                    .compatibilityButtonStyle(.standard)
+                    .buttonStyle(.bordered)
                 }
             }
             .padding(18)
@@ -422,7 +529,7 @@ struct SettingsView: View {
                 Button("connection.web.invite.unlock") {
                     validateWebRemoteInviteCode()
                 }
-                .compatibilityButtonStyle(.prominent)
+                .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
             }
         }
@@ -440,71 +547,541 @@ struct SettingsView: View {
         )
     }
 
+    @ViewBuilder
     private var sidebar: some View {
-        VStack(spacing: 0) {
-            WindowDragArea()
-                .frame(height: 56)
-                .accessibilityHidden(true)
-            ForEach(visibleSections) { section in
-                sidebarButton(section)
+        if trimmedSidebarSearchText.isEmpty {
+            settingsSectionList
+        } else if searchResults.isEmpty {
+            ContentUnavailableView.search(text: trimmedSidebarSearchText)
+        } else {
+            searchResultList
+        }
+    }
+
+    private var settingsSectionList: some View {
+        List(selection: Binding(
+            get: { Optional(selectedSection) },
+            set: { section in
+                guard let section else { return }
+                navigate(to: section)
             }
-            Spacer(minLength: 0)
-            Button {
-                selectedSection = .about
-                expandedShareSection = .about
-            } label: {
-                VStack(spacing: 7) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 21, weight: .semibold))
-                    Text("share.action")
-                        .font(.system(size: 13, weight: .semibold))
+        )) {
+            Section {
+                ForEach(visibleSections) { section in
+                    SettingsSidebarRow(
+                        title: Text(sectionTitle(section)),
+                        systemName: sectionSystemImage(section),
+                        color: sectionIconColor(section)
+                    )
+                    .tag(section)
+                    .listRowInsets(sidebarRowInsets)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+            }
+
+        }
+        .listStyle(.sidebar)
+    }
+
+    private var searchResultList: some View {
+        List(searchResults, selection: $selectedSearchResultID) { item in
+            Button {
+                activateSearchResult(item)
+            } label: {
+                HStack(spacing: 7) {
+                    SettingsSidebarIcon(
+                        systemName: sectionSystemImage(item.section),
+                        color: sectionIconColor(item.section)
+                    )
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.title)
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(sectionTitle(item.section))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .compatibilityFocusEffectDisabled()
-            .foregroundStyle(Color.secondary)
-            .accessibilityLabel(Text("share.sidebar.accessibility_label"))
+            .listRowInsets(EdgeInsets(top: 5, leading: 9, bottom: 5, trailing: 8))
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .listStyle(.sidebar)
+        .onKeyPress(.return) {
+            guard let selectedSearchResultID,
+                  let item = searchResults.first(where: { $0.id == selectedSearchResultID })
+            else { return .ignored }
+            activateSearchResult(item)
+            return .handled
+        }
+    }
+
+    private var sidebarRowInsets: EdgeInsets {
+        EdgeInsets(top: 0, leading: 9, bottom: 0, trailing: 8)
     }
 
     private var visibleSections: [SettingsSection] {
-        Self.sidebarSectionOrder.filter {
-            switch $0 {
-            case .privateFeature: privateFeature.isFeatureVisible
-            case .macros: macroFeature.isFeatureVisible
-            default: true
+        Self.sidebarSectionOrder.filter(isSectionVisible)
+    }
+
+    private func isSectionVisible(_ section: SettingsSection) -> Bool {
+        switch section {
+        case .privateFeature: return privateFeature.isFeatureVisible
+        case .macros: return macroFeature.isFeatureVisible
+        default: return true
+        }
+    }
+
+    private var trimmedSidebarSearchText: String {
+        sidebarSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var searchResults: [SettingsSearchItem] {
+        let query = trimmedSidebarSearchText
+        guard !query.isEmpty else { return [] }
+        return settingsSearchItems.filter { item in
+            ([item.title, sectionTitle(item.section)] + item.keywords).contains { text in
+                text.localizedCaseInsensitiveContains(query)
             }
         }
     }
 
-    private func sidebarButton(_ section: SettingsSection) -> some View {
-        Button {
-            selectedSection = section
-        } label: {
-            VStack(spacing: 7) {
-                Image(systemName: sectionSystemImage(section))
-                    .font(.system(size: 21, weight: .semibold))
-                if section == .privateFeature || section == .macros {
-                    Text(sectionTitle(section))
-                        .font(.system(size: 13, weight: .semibold))
-                } else {
-                    Text(section.title)
-                        .font(.system(size: 13, weight: .semibold))
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
+    private var settingsSearchItems: [SettingsSearchItem] {
+        var items: [SettingsSearchItem] = []
+
+        for section in visibleSections {
+            items.append(SettingsSearchItem(
+                "page.\(section.rawValue)",
+                section: section,
+                title: sectionTitle(section),
+                anchor: pageTopAnchor(for: section)
+            ))
         }
-        .buttonStyle(.plain)
-        .compatibilityFocusEffectDisabled()
-        .foregroundStyle(selectedSection == section ? Color.accentColor : Color.secondary)
-        .background(selectedSection == section ? Color.accentColor.opacity(0.10) : Color.clear)
-        .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
+
+        items.append(contentsOf: [
+            searchItem(
+                "connection.remote",
+                section: .connection,
+                titleKey: "remote.device.selector",
+                anchor: "connection-remote"
+            ),
+            searchItem(
+                "connection.audio-output",
+                section: .connection,
+                titleKey: "audio.voice_output.section_title",
+                anchor: "connection-audio-output",
+                keywordKeys: ["audio.output.title", "audio.gain.title", "audio.status.title"]
+            ),
+            searchItem(
+                "connection.gain",
+                section: .connection,
+                titleKey: "audio.gain.title",
+                anchor: "connection-audio-output",
+                keywordKeys: ["audio.gain.help"]
+            ),
+            searchItem(
+                "connection.audio-status",
+                section: .connection,
+                titleKey: "audio.status.title",
+                anchor: "connection-audio-output"
+            ),
+            searchItem(
+                "connection.compatibility",
+                section: .connection,
+                titleKey: "audio.compatibility.section_title",
+                anchor: "connection-compatibility",
+                keywordKeys: [
+                    "audio.compatibility.microphone_label",
+                    "audio.compatibility.select_microphone",
+                ]
+            ),
+            searchItem(
+                "connection.iphone",
+                section: .connection,
+                titleKey: "connection.phone.ios_title",
+                anchor: "connection-mobile"
+            ),
+            searchItem(
+                "connection.watch",
+                section: .connection,
+                titleKey: "connection.watch.title",
+                anchor: "connection-mobile"
+            ),
+            searchItem(
+                "connection.web",
+                section: .connection,
+                titleKey: "connection.web.title",
+                anchor: "connection-mobile"
+            ),
+            searchItem(
+                "mapping.enable",
+                section: .mapping,
+                titleKey: "button_mapping.toggle.enabled",
+                anchor: "mapping-controls"
+            ),
+            searchItem(
+                "mapping.remote",
+                section: .mapping,
+                titleKey: "remote.device.selector",
+                anchor: "mapping-controls"
+            ),
+            searchItem(
+                "mapping.actions",
+                section: .mapping,
+                titleKey: "button_mapping.actions.title",
+                anchor: "mapping-actions"
+            ),
+            searchItem(
+                "mapping.all-buttons",
+                section: .mapping,
+                titleKey: "button_mapping.all_buttons.title",
+                anchor: "mapping-actions"
+            ),
+            searchItem(
+                "mapping.selection-lock",
+                section: .mapping,
+                titleKey: "button_mapping.selection_lock",
+                anchor: "mapping-footer"
+            ),
+            searchItem(
+                "mapping.voice-button",
+                section: .mapping,
+                titleKey: "button_mapping.voice_button.title",
+                anchor: "mapping-footer"
+            ),
+            searchItem(
+                "mapping.voice-fn",
+                section: .mapping,
+                titleKey: "connection.voice_fn_tap.enabled",
+                anchor: "mapping-footer"
+            ),
+            searchItem(
+                "mapping.restore-defaults",
+                section: .mapping,
+                titleKey: "common.action.restore_defaults",
+                anchor: "mapping-footer"
+            ),
+            searchItem(
+                "statistics.button-count",
+                section: .statistics,
+                titleKey: "statistics.metric.button_count",
+                anchor: "statistics-charts"
+            ),
+            searchItem(
+                "statistics.voice-duration",
+                section: .statistics,
+                titleKey: "statistics.metric.voice_duration",
+                anchor: "statistics-charts"
+            ),
+            searchItem(
+                "statistics.voice-ranking",
+                section: .statistics,
+                titleKey: "statistics.voice_ranking.title",
+                anchor: "statistics-ranking"
+            ),
+            searchItem(
+                "transcripts.enable",
+                section: .transcripts,
+                titleKey: "statistics.transcripts.enable",
+                anchor: "transcripts-enable"
+            ),
+            searchItem(
+                "transcripts.records",
+                section: .transcripts,
+                titleKey: "statistics.transcripts.all_records",
+                anchor: "transcripts-records",
+                keywordKeys: ["statistics.transcripts.applications"]
+            ),
+            searchItem(
+                "transcripts.delete-all",
+                section: .transcripts,
+                titleKey: "statistics.transcripts.delete_all",
+                anchor: "transcripts-records"
+            ),
+            searchItem(
+                "transcripts.agent-access",
+                section: .transcripts,
+                titleKey: "statistics.transcripts.agent_access.title",
+                anchor: "transcripts-records",
+                keywordKeys: ["statistics.transcripts.agent_access.quick_connect"]
+            ),
+            searchItem(
+                "permissions.bluetooth",
+                section: .permissions,
+                titleKey: "permission.bluetooth.title",
+                anchor: "permissions-required"
+            ),
+            searchItem(
+                "permissions.input-monitoring",
+                section: .permissions,
+                titleKey: "permission.input_monitoring.title",
+                anchor: "permissions-required"
+            ),
+            searchItem(
+                "permissions.accessibility",
+                section: .permissions,
+                titleKey: "permission.accessibility.title",
+                anchor: "permissions-required"
+            ),
+            searchItem(
+                "permissions.logs",
+                section: .permissions,
+                titleKey: "diagnostics.logs.title",
+                anchor: "permissions-diagnostics"
+            ),
+            searchItem(
+                "about.feedback",
+                section: .about,
+                titleKey: "about.support.feedback",
+                anchor: "about-support"
+            ),
+            searchItem(
+                "about.share",
+                section: .about,
+                titleKey: "share.action",
+                anchor: "about-support"
+            ),
+            searchItem(
+                "about.website",
+                section: .about,
+                titleKey: "about.support.website",
+                anchor: "about-support"
+            ),
+            searchItem(
+                "about.github",
+                section: .about,
+                titleKey: "about.support.github",
+                anchor: "about-support"
+            ),
+            searchItem(
+                "about.version",
+                section: .about,
+                titleKey: "about.version.title",
+                anchor: "about-version",
+                keywordKeys: ["about.version.current", "about.version.latest"]
+            ),
+            searchItem(
+                "about.prerelease",
+                section: .about,
+                titleKey: "about.version.check_prerelease",
+                anchor: "about-version"
+            ),
+            searchItem(
+                "about.configuration",
+                section: .about,
+                titleKey: "about.configuration.title",
+                anchor: "about-configuration",
+                keywordKeys: ["about.configuration.export", "about.configuration.import"]
+            ),
+            searchItem(
+                "about.dock",
+                section: .about,
+                titleKey: "about.preferences.show_dock_icon",
+                anchor: "about-preferences"
+            ),
+            searchItem(
+                "about.login-item",
+                section: .about,
+                titleKey: "about.preferences.launch_at_login",
+                anchor: "about-preferences"
+            ),
+            searchItem(
+                "about.main-window",
+                section: .about,
+                titleKey: "about.preferences.open_main_window_at_launch",
+                anchor: "about-preferences"
+            ),
+            searchItem(
+                "about.language",
+                section: .about,
+                titleKey: "about.preferences.language",
+                anchor: "about-preferences"
+            ),
+            searchItem(
+                "about.onboarding",
+                section: .about,
+                titleKey: "about.preferences.restart_onboarding",
+                anchor: "about-preferences"
+            ),
+        ])
+
+        return items.filter { isSectionVisible($0.section) }
+    }
+
+    private func searchItem(
+        _ id: String,
+        section: SettingsSection,
+        titleKey: String,
+        anchor: String,
+        keywordKeys: [String] = []
+    ) -> SettingsSearchItem {
+        SettingsSearchItem(
+            id,
+            section: section,
+            title: localization.text(titleKey),
+            anchor: anchor,
+            keywords: keywordKeys.map(localization.text)
+        )
+    }
+
+    private func pageTopAnchor(for section: SettingsSection) -> String {
+        switch section {
+        case .connection: return "connection-remote"
+        case .mapping: return "mapping-controls"
+        case .statistics: return "statistics-period"
+        case .transcripts: return "transcripts-enable"
+        case .permissions: return "permissions-required"
+        case .about: return "about-summary"
+        case .privateFeature, .macros: return "page-top"
+        }
+    }
+
+    @ViewBuilder
+    private var navigationControlGroup: some View {
+        if #available(macOS 26.0, *) {
+            nativeNavigationControlGroup
+                .controlSize(.extraLarge)
+                .buttonStyle(.glass)
+        } else {
+            nativeNavigationControlGroup
+                .controlSize(.large)
+        }
+    }
+
+    private var nativeNavigationControlGroup: some View {
+        ControlGroup {
+            Menu {
+                ForEach(backwardHistoryIndices, id: \.self) { index in
+                    Button(sectionTitle(navigationHistory[index])) {
+                        moveInHistory(to: index)
+                    }
+                }
+            } label: {
+                Image(systemName: "chevron.backward")
+            } primaryAction: {
+                goBack()
+            }
+            .disabled(previousHistoryIndex == nil)
+            .menuIndicator(.hidden)
+            .help(localization.text("settings.navigation.back"))
+
+            Menu {
+                ForEach(forwardHistoryIndices, id: \.self) { index in
+                    Button(sectionTitle(navigationHistory[index])) {
+                        moveInHistory(to: index)
+                    }
+                }
+            } label: {
+                Image(systemName: "chevron.forward")
+            } primaryAction: {
+                goForward()
+            }
+            .disabled(nextHistoryIndex == nil)
+            .menuIndicator(.hidden)
+            .help(localization.text("settings.navigation.forward"))
+        }
+        .controlGroupStyle(.navigation)
+    }
+
+    private var backwardHistoryIndices: [Int] {
+        guard navigationHistoryIndex > 0 else { return [] }
+        return stride(from: navigationHistoryIndex - 1, through: 0, by: -1)
+            .filter { isSectionVisible(navigationHistory[$0]) }
+    }
+
+    private var previousHistoryIndex: Int? {
+        guard navigationHistoryIndex > 0 else { return nil }
+        return stride(from: navigationHistoryIndex - 1, through: 0, by: -1)
+            .first { isSectionVisible(navigationHistory[$0]) }
+    }
+
+    private var nextHistoryIndex: Int? {
+        guard navigationHistoryIndex < navigationHistory.count - 1 else { return nil }
+        return (navigationHistoryIndex + 1..<navigationHistory.count)
+            .first { isSectionVisible(navigationHistory[$0]) }
+    }
+
+    private var forwardHistoryIndices: [Int] {
+        guard navigationHistoryIndex < navigationHistory.count - 1 else { return [] }
+        return (navigationHistoryIndex + 1..<navigationHistory.count)
+            .filter { isSectionVisible(navigationHistory[$0]) }
+    }
+
+    private func navigate(to section: SettingsSection, searchAnchor: String? = nil) {
+        if let searchAnchor {
+            searchNavigationRequest = SettingsSearchNavigationRequest(
+                section: section,
+                anchor: searchAnchor
+            )
+        } else {
+            searchNavigationRequest = nil
+        }
+
+        guard selectedSection != section else { return }
+        navigationHistory = Array(navigationHistory.prefix(navigationHistoryIndex + 1)) + [section]
+        navigationHistoryIndex = navigationHistory.count - 1
+        selectedSection = section
+        syncNavigationStateWithCoordinator()
+    }
+
+    private func activateSearchResult(_ item: SettingsSearchItem) {
+        navigate(to: item.section, searchAnchor: item.anchor)
+    }
+
+    private func goBack() {
+        guard let previousHistoryIndex else { return }
+        moveInHistory(to: previousHistoryIndex)
+    }
+
+    private func goForward() {
+        guard let nextHistoryIndex else { return }
+        moveInHistory(to: nextHistoryIndex)
+    }
+
+    private func moveInHistory(to index: Int) {
+        guard navigationHistory.indices.contains(index) else { return }
+        navigationHistoryIndex = index
+        searchNavigationRequest = nil
+        selectedSection = navigationHistory[index]
+        syncNavigationStateWithCoordinator()
+    }
+
+    private func syncNavigationStateWithCoordinator() {
+        navigationCoordinator.canGoBack = previousHistoryIndex != nil
+        navigationCoordinator.canGoForward = nextHistoryIndex != nil
+    }
+
+    private func scrollToSearchResult(
+        in section: SettingsSection,
+        using proxy: ScrollViewProxy,
+        animated: Bool
+    ) {
+        guard let request = searchNavigationRequest, request.section == section else { return }
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    proxy.scrollTo(request.anchor, anchor: .top)
+                }
+            } else {
+                proxy.scrollTo(request.anchor, anchor: .top)
+            }
+            flashSearchResultHighlight(request.anchor)
+        }
+    }
+
+    private func flashSearchResultHighlight(_ anchor: String) {
+        highlightedSearchAnchor = anchor
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            guard highlightedSearchAnchor == anchor else { return }
+            withAnimation(.easeOut(duration: 0.6)) {
+                highlightedSearchAnchor = nil
+            }
+        }
     }
 
     @ViewBuilder
@@ -535,7 +1112,7 @@ struct SettingsView: View {
                         localization.text("macro.integration.focus_mcp_boundary"),
                         systemImage: "info.circle"
                     )
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -558,108 +1135,78 @@ struct SettingsView: View {
         }
     }
 
-    private func settingsPage<Header: View, Content: View>(
-        @ViewBuilder header: () -> Header,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(spacing: 0) {
-            header()
-                .padding(.horizontal, 22)
-                .padding(.top, 18)
-                .padding(.bottom, 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Divider()
-
-            ScrollView(.vertical, showsIndicators: false) {
-                content()
-                    .padding(22)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .compatibilityScrollEdgeEffect()
-        }
-    }
-
     private var connectionPage: some View {
-        settingsPage {
-            PageHeader(title: localization.text("connection.page.title"))
-        } content: {
-            CompatibilityGlassContainer(spacing: 14) {
-                HStack(alignment: .top, spacing: 14) {
+        ScrollViewReader { proxy in
+            Form {
+                Section("remote.device.selector") {
                     connectionDevicePanel
-                        .frame(width: 230)
-                    VStack(spacing: 14) {
-                        audioSettingsPanel
-                        audioCompatibilityPanel
-                        phoneConnectionsPanel
-                    }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+                .searchAnchor("connection-remote", highlighted: highlightedSearchAnchor)
+
+                Section {
+                    audioSettingsPanel
+                } footer: {
+                    Text("audio.output.privacy_help")
+                }
+                .searchAnchor("connection-audio-output", highlighted: highlightedSearchAnchor)
+
+                Section {
+                    audioCompatibilityPanel
+                } header: {
+                    Text("audio.compatibility.section_title")
+                } footer: {
+                    Text("audio.compatibility.help_plain")
+                }
+                .searchAnchor("connection-compatibility", highlighted: highlightedSearchAnchor)
+
+                Section {
+                    phoneConnectionsPanel
+                } header: {
+                    Text("connection.phone.section_title")
+                } footer: {
+                    Text("connection.trusted_devices.help")
+                }
+                .searchAnchor("connection-mobile", highlighted: highlightedSearchAnchor)
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .scrollIndicators(.hidden)
+            .onAppear {
+                scrollToSearchResult(in: .connection, using: proxy, animated: false)
+            }
+            .onChange(of: searchNavigationRequest?.id) {
+                scrollToSearchResult(in: .connection, using: proxy, animated: true)
             }
         }
     }
 
     private var phoneConnectionsPanel: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("connection.phone.section_title")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: "iphone")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width: 34)
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text("connection.phone.ios_title")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("connection.phone.qr_badge")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text("connection.phone.ios_help")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        Spacer(minLength: 8)
-
-                        StatusPill(
-                            text: localization.text(
-                                model.isPhoneRemoteConnected
-                                    ? "connection.phone.connected"
-                                    : model.isPhoneRemoteConnectionEnabled
-                                        ? "connection.phone.enabled"
-                                        : "connection.phone.not_enabled"
-                            ),
-                            tint: model.isPhoneRemoteConnected
-                                ? .green
-                                : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary
-                        )
-                    }
-
+        Group {
+            connectionOptionRow(
+                systemImage: "iphone",
+                title: "connection.phone.ios_title",
+                detail: "connection.phone.ios_help",
+                status: localization.text(
+                    model.isPhoneRemoteConnected
+                        ? "connection.phone.connected"
+                        : model.isPhoneRemoteConnectionEnabled
+                            ? "connection.phone.enabled"
+                            : "connection.phone.not_enabled"
+                ),
+                statusTint: model.isPhoneRemoteConnected
+                    ? .green
+                    : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary,
+                isWaiting: model.isPhoneRemoteConnectionEnabled && !model.isPhoneRemoteConnected,
+                auxiliaryActions: {
                     HStack(spacing: 8) {
-                        Button(
-                            model.isPhoneRemoteConnected
-                                ? "connection.phone.disconnect"
-                                : model.isPhoneRemoteConnectionEnabled
-                                    ? "connection.phone.cancel_waiting"
-                                    : "connection.phone.connect"
-                        ) {
-                            model.togglePhoneRemoteConnection()
-                        }
-                        .compatibilityButtonStyle(
-                            model.isPhoneRemoteConnectionEnabled ? .standard : .prominent
-                        )
-
                         Link(destination: AppLinks.testFlightPublicBeta) {
-                            Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
+                            Label(
+                                "connection.web.invite.testflight_open",
+                                systemImage: "arrow.up.right.square"
+                            )
                         }
-                        .compatibilityButtonStyle(.standard)
+                        .buttonStyle(.bordered)
 
                         Button {
                             copyTestFlightPublicBetaLink()
@@ -673,534 +1220,660 @@ struct SettingsView: View {
                                 systemImage: isTestFlightLinkCopied ? "checkmark" : "doc.on.doc"
                             )
                         }
-                        .compatibilityButtonStyle(.standard)
-                    }
-
-                    if let invitation = model.phoneRemoteInvitation {
-                        Divider()
-                        PhoneRemoteInvitationCard(invitation: invitation)
+                        .buttonStyle(.bordered)
                     }
                 }
-
-                Divider()
-
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: "applewatch")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 34)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("connection.watch.title")
-                            .font(.subheadline.weight(.semibold))
-                        Text("connection.watch.help")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    StatusPill(
-                        text: localization.text(
-                            model.isWatchRemoteConnected
-                                ? "connection.watch.connected"
-                                : model.isWatchRemoteConnectionEnabled
-                                    ? "connection.watch.enabled"
-                                    : "connection.phone.not_enabled"
-                        ),
-                        tint: model.isWatchRemoteConnected
-                            ? .green
-                            : model.isWatchRemoteConnectionEnabled ? .orange : .secondary
-                    )
-
-                    Button(
-                        model.isWatchRemoteConnected
-                            ? "connection.watch.disconnect"
-                            : model.isWatchRemoteConnectionEnabled
-                                ? "connection.watch.cancel_waiting"
-                                : "connection.watch.connect"
-                    ) {
-                        model.toggleWatchRemoteConnection()
-                    }
-                    .compatibilityButtonStyle(.standard)
+            ) {
+                Button(
+                    model.isPhoneRemoteConnected
+                        ? "connection.phone.disconnect"
+                        : model.isPhoneRemoteConnectionEnabled
+                            ? "connection.phone.cancel_waiting"
+                            : "connection.phone.connect"
+                ) {
+                    model.togglePhoneRemoteConnection()
                 }
-
-                Divider()
-
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: "globe")
-                        .font(.system(size: 21, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 34)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("connection.web.title")
-                            .font(.subheadline.weight(.semibold))
-                        Text("connection.web.help_short")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 8)
-                    Text(webRemoteStatusText)
-                        .font(.caption)
-                        .foregroundStyle(webRemoteStatusTint)
-                        .lineLimit(1)
-                    Button(
-                        model.webRemoteState.isEnabled
-                            ? "connection.web.show_qr"
-                            : "connection.web.connect"
-                    ) {
-                        requestWebRemoteSession()
-                    }
-                    .compatibilityButtonStyle(.standard)
-                }
-
-                Divider()
-
-                HStack(spacing: 10) {
-                    Label(
-                        LocalizedMessage(
-                            "connection.trusted_devices.count_long",
-                            arguments: [String(settings.trustedPhoneIdentityFingerprints.count)]
-                        ).text(using: localization),
-                        systemImage: "checkmark.shield"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("connection.trusted_devices.clear") {
-                        isClearTrustedPhonesConfirmationPresented = true
-                    }
-                    .compatibilityButtonStyle(.standard)
-                    .disabled(settings.trustedPhoneIdentityFingerprints.isEmpty)
-                }
+                .buttonStyle(.bordered)
             }
+
+            if let invitation = model.phoneRemoteInvitation {
+                PhoneRemoteInvitationCard(invitation: invitation)
+            }
+
+            connectionOptionRow(
+                systemImage: "applewatch",
+                title: "connection.watch.title",
+                detail: "connection.watch.help",
+                status: localization.text(
+                    model.isWatchRemoteConnected
+                        ? "connection.watch.connected"
+                        : model.isWatchRemoteConnectionEnabled
+                            ? "connection.watch.enabled"
+                            : "connection.phone.not_enabled"
+                ),
+                statusTint: model.isWatchRemoteConnected
+                    ? .green
+                    : model.isWatchRemoteConnectionEnabled ? .orange : .secondary,
+                isWaiting: model.isWatchRemoteConnectionEnabled && !model.isWatchRemoteConnected
+            ) {
+                Button(
+                    model.isWatchRemoteConnected
+                        ? "connection.watch.disconnect"
+                        : model.isWatchRemoteConnectionEnabled
+                            ? "connection.watch.cancel_waiting"
+                            : "connection.watch.connect"
+                ) {
+                    model.toggleWatchRemoteConnection()
+                }
+                .buttonStyle(.bordered)
+            }
+
+            connectionOptionRow(
+                systemImage: "globe",
+                title: "connection.web.title",
+                detail: "connection.web.help_short",
+                status: webRemoteStatusText,
+                statusTint: webRemoteStatusTint,
+                isWaiting: isWebRemoteWaiting
+            ) {
+                Button(
+                    model.webRemoteState.isEnabled
+                        ? "connection.web.show_qr"
+                        : "connection.web.connect"
+                ) {
+                    requestWebRemoteSession()
+                }
+                .buttonStyle(.bordered)
+            }
+
+            LabeledContent {
+                Button("connection.trusted_devices.clear") {
+                    isClearTrustedPhonesConfirmationPresented = true
+                }
+                .buttonStyle(.bordered)
+                .disabled(settings.trustedPhoneIdentityFingerprints.isEmpty)
+            } label: {
+                Label(
+                    LocalizedMessage(
+                        "connection.trusted_devices.count_long",
+                        arguments: [String(settings.trustedPhoneIdentityFingerprints.count)]
+                    ).text(using: localization),
+                    systemImage: "checkmark.shield"
+                )
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func connectionOptionRow<Actions: View>(
+        systemImage: String,
+        title: LocalizedStringKey,
+        detail: LocalizedStringKey,
+        status: String,
+        statusTint: Color,
+        isWaiting: Bool = false,
+        @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        LabeledContent {
+            connectionOptionControls(
+                status: status,
+                statusTint: statusTint,
+                isWaiting: isWaiting,
+                actions: actions
+            )
+        } label: {
+            connectionOptionLabel(systemImage: systemImage, title: title, detail: detail)
+        }
+    }
+
+    private func connectionOptionRow<Actions: View, AuxiliaryActions: View>(
+        systemImage: String,
+        title: LocalizedStringKey,
+        detail: LocalizedStringKey,
+        status: String,
+        statusTint: Color,
+        isWaiting: Bool = false,
+        @ViewBuilder auxiliaryActions: () -> AuxiliaryActions,
+        @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabeledContent {
+                connectionOptionControls(
+                    status: status,
+                    statusTint: statusTint,
+                    isWaiting: isWaiting,
+                    actions: actions
+                )
+            } label: {
+                connectionOptionLabel(systemImage: systemImage, title: title, detail: detail)
+            }
+
+            HStack(spacing: 8) {
+                Spacer()
+                auxiliaryActions()
+            }
+        }
+    }
+
+    private func connectionOptionControls<Actions: View>(
+        status: String,
+        statusTint: Color,
+        isWaiting: Bool,
+        @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                connectionStatusLabel(status, tint: statusTint, isWaiting: isWaiting)
+                actions()
+            }
+            VStack(alignment: .trailing, spacing: 8) {
+                connectionStatusLabel(status, tint: statusTint, isWaiting: isWaiting)
+                actions()
+            }
+        }
+    }
+
+    private func connectionOptionLabel(
+        systemImage: String,
+        title: LocalizedStringKey,
+        detail: LocalizedStringKey
+    ) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.body.weight(.medium))
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+        } icon: {
+            Image(systemName: systemImage)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+        }
+    }
+
+    private func connectionStatusLabel(_ text: String, tint: Color, isWaiting: Bool) -> some View {
+        HStack(spacing: 6) {
+            if isWaiting {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityHidden(true)
+            }
+            Text(text)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(tint)
+                .lineLimit(1)
         }
     }
 
     private var connectionDevicePanel: some View {
-        GlassPanel {
-            VStack(spacing: 16) {
-                remoteDeviceSelector(vertical: true)
-
+        Group {
+            HStack(alignment: .top, spacing: 20) {
+                connectionRemotePicker
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 RC003Photo()
-                    .frame(width: 82, height: 166)
+                    .frame(width: 48, height: 98)
+                    .accessibilityHidden(true)
+            }
 
-                VStack(alignment: .leading, spacing: 9) {
-                    connectionStatusLine(
-                        symbol: "antenna.radiowaves.left.and.right",
-                        text: model.connectionStatus.text(using: localization),
-                        tint: connectionTint
-                    )
-                    connectionStatusLine(
-                        symbol: "waveform",
-                        text: localization.text(
-                            model.isStreaming
-                                ? "connection.status.voice_streaming"
-                                : "connection.status.voice_ready"
-                        ),
-                        tint: model.isStreaming ? .orange : .blue
-                    )
-                    connectionStatusLine(
-                        symbol: "mic.fill",
-                        text: model.voiceShortcutStatus.text(using: localization),
-                        tint: .blue
-                    )
-                }
+            LabeledContent("connection.status.bluetooth_title") {
+                Label(
+                    model.connectionStatus.text(using: localization),
+                    systemImage: "antenna.radiowaves.left.and.right"
+                )
+                .foregroundStyle(connectionTint)
+            }
 
-                Button {
+            LabeledContent("connection.status.voice_title") {
+                Label(
+                    localization.text(
+                        model.isStreaming
+                            ? "connection.status.voice_streaming"
+                            : "connection.status.voice_ready"
+                    ),
+                    systemImage: "waveform"
+                )
+                .foregroundStyle(model.isStreaming ? Color.orange : Color.secondary)
+            }
+
+            LabeledContent("connection.status.voice_trigger") {
+                Label(
+                    model.voiceShortcutStatus.text(using: localization),
+                    systemImage: "mic.fill"
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Spacer()
+                Button("connection.action.reconnect") {
                     model.reconnect()
-                } label: {
-                    Text("connection.action.reconnect")
-                        .foregroundStyle(.white)
                 }
-                    .compatibilityButtonStyle(.prominent)
-                    .compatibilityRoundedButtonBorderShape(radius: 10)
-                    .frame(maxWidth: .infinity)
-
+                .buttonStyle(.bordered)
             }
         }
     }
 
-    private func connectionStatusLine(symbol: String, text: String, tint: Color) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: symbol)
-                .foregroundStyle(tint)
-                .frame(width: 18)
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+    @ViewBuilder
+    private var connectionRemotePicker: some View {
+        let connectedProfiles = settings.remoteDeviceProfiles.filter {
+            model.isRemoteConnected($0.id)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        if connectedProfiles.isEmpty {
+            Label(
+                model.connectionStatus.text(using: localization),
+                systemImage: "appletvremote.gen4.fill"
+            )
+            .foregroundStyle(.secondary)
+        } else {
+            Picker("remote.device.current", selection: Binding(
+                get: { settings.selectedRemoteProfileID },
+                set: { profileID in
+                    guard let profileID else { return }
+                    model.selectRemoteProfile(profileID)
+                }
+            )) {
+                ForEach(connectedProfiles) { profile in
+                    Text(remoteDisplayName(profile))
+                        .tag(Optional(profile.id))
+                }
+            }
+            .pickerStyle(.radioGroup)
+
+            if let selectedProfile = connectedProfiles.first(where: {
+                $0.id == settings.selectedRemoteProfileID
+            }) {
+                HStack(spacing: 10) {
+                    remoteConnectionLabel(connected: true)
+                    remoteBatteryLabel(
+                        level: model.batteryLevel(for: selectedProfile.id),
+                        powerState: model.powerState(for: selectedProfile.id)
+                    )
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private var audioSettingsPanel: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 13) {
-                Text("audio.voice_output.section_title")
-                    .font(.headline)
+        let audioStatusText = model.audioStatus.text(using: localization)
+        let testToneStatusText = model.testToneStatus.text(using: localization)
+        let shouldShowTestToneStatus = !testToneStatusText.isEmpty
+            && model.testToneStatus.key != "audio.test_tone.ready"
+            && (
+                model.audioStatus.key == "audio.output.current_format"
+                    || testToneStatusText != audioStatusText
+            )
 
-                HStack(spacing: 14) {
-                    Text("audio.output.title")
-                        .frame(width: 92, alignment: .leading)
-                    Picker("", selection: Binding(
-                        get: { settings.selectedAudioDeviceUID },
-                        set: { value in
-                            settings.selectedAudioDeviceUID = value
-                            model.applyAudioSettings()
-                        }
-                    )) {
-                        Text("audio.output.disabled").tag("")
-                        ForEach(model.audioDevices, id: \.uid) { device in
-                            Text(device.name).tag(device.uid)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 270)
+        return Group {
+            Picker("audio.output.title", selection: Binding(
+                get: { settings.selectedAudioDeviceUID },
+                set: { value in
+                    settings.selectedAudioDeviceUID = value
+                    model.applyAudioSettings()
                 }
-
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 14) {
-                        Text("audio.gain.title")
-                            .frame(width: 92, alignment: .leading)
-                        Slider(value: Binding(
-                            get: { settings.gainDB },
-                            set: { settings.gainDB = $0 }
-                        ), in: 0...24, step: 1)
-                        Text("\(Int(settings.gainDB)) dB")
-                            .font(.system(.body, design: .monospaced))
-                            .frame(width: 54, alignment: .trailing)
-                    }
-
-                    Text("audio.gain.help")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, 106)
-                        .fixedSize(horizontal: false, vertical: true)
+            )) {
+                Text("audio.output.disabled").tag("")
+                ForEach(model.audioDevices, id: \.uid) { device in
+                    Text(device.name).tag(device.uid)
                 }
+            }
 
-                HStack(alignment: .firstTextBaseline) {
-                    Text("audio.status.title")
-                        .frame(width: 92, alignment: .leading)
-                    Spacer(minLength: 10)
-                    Text(model.audioStatus.text(using: localization))
+            audioGainSettingsRow
+
+            if model.audioStatus.key != "audio.output.current_format" {
+                LabeledContent("audio.status.title") {
+                    Text(audioStatusText)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)
                 }
+            }
 
-                HStack(spacing: 10) {
-                    Button {
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button("audio.action.refresh_devices") {
                         model.refreshAudioDevices()
-                    } label: {
-                        Text("audio.action.refresh_devices")
                     }
-                        .compatibilityButtonStyle(.standard)
-                    Link("audio.action.learn_virtual_microphones", destination: URL(string: "https://existential.audio/blackhole/")!)
-                        .compatibilityButtonStyle(.standard)
-                    Button("audio.action.send_test_tone") { model.sendTestTone() }
-                        .compatibilityButtonStyle(.standard)
-                        .disabled(!model.canSendTestTone)
+                    .buttonStyle(.bordered)
+                    Link(
+                        "audio.action.learn_virtual_microphones",
+                        destination: URL(string: "https://existential.audio/blackhole/")!
+                    )
+                    .buttonStyle(.bordered)
+                    Button("audio.action.send_test_tone") {
+                        model.sendTestTone()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!model.canSendTestTone)
                 }
 
-                Text("audio.output.privacy_help")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Text(model.testToneStatus.text(using: localization))
-                        .font(.caption)
+                if shouldShowTestToneStatus {
+                    Text(testToneStatusText)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                    Spacer()
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    private var audioGainSettingsRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabeledContent("audio.gain.title") {
+                HStack(spacing: 12) {
+                    Slider(value: Binding(
+                        get: { settings.gainDB },
+                        set: { settings.gainDB = $0 }
+                    ), in: 0...24, step: 1)
+                    .frame(minWidth: 220)
+                    Text("\(Int(settings.gainDB)) dB")
+                        .font(.system(.body, design: .monospaced))
+                        .frame(width: 54, alignment: .trailing)
+                }
+            }
+
+            Text("audio.gain.help")
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 
     private var audioCompatibilityPanel: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("audio.compatibility.section_title")
-                            .font(.headline)
-                        Text("audio.compatibility.microphone_label")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 16)
-                    Text(model.doubaoAudioStatus.text(using: localization))
-                        .font(.caption)
-                        .foregroundStyle(model.hasDoubaoAudioDevice ? .green : .orange)
-                        .multilineTextAlignment(.trailing)
-                }
+        Group {
+            LabeledContent("audio.compatibility.microphone_label") {
+                Label(
+                    model.doubaoAudioStatus.text(using: localization),
+                    systemImage: model.hasDoubaoAudioDevice
+                        ? "checkmark.circle.fill"
+                        : "exclamationmark.triangle.fill"
+                )
+                .foregroundStyle(model.hasDoubaoAudioDevice ? .green : .orange)
+                .multilineTextAlignment(.trailing)
+            }
 
-                HStack(spacing: 10) {
-                    Button("audio.compatibility.select_microphone") { model.selectDoubaoAudioDevice() }
-                        .compatibilityButtonStyle(.prominent)
-                        .disabled(!model.hasDoubaoAudioDevice)
-                    Button("audio.compatibility.open_install_guide") {
-                        model.openDoubaoDriverInstructions(using: localization)
-                    }
-                    .compatibilityButtonStyle(.standard)
+            HStack(spacing: 8) {
+                Spacer()
+                Button("audio.compatibility.select_microphone") {
+                    model.selectDoubaoAudioDevice()
                 }
-
-                Text("audio.compatibility.help_plain")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .buttonStyle(.borderedProminent)
+                .disabled(!model.hasDoubaoAudioDevice)
+                Button("audio.compatibility.open_install_guide") {
+                    model.openDoubaoDriverInstructions(using: localization)
+                }
+                .buttonStyle(.bordered)
             }
         }
     }
 
     private var mappingPage: some View {
-        VStack(spacing: 0) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 14) {
-                    PageHeader(title: localization.text("button_mapping.page.title"))
-                        .fixedSize(horizontal: true, vertical: false)
-                    mappingHeaderToggle
-                    Spacer()
-                    remoteDeviceSelector()
-                        .frame(width: 400)
+        ScrollViewReader { proxy in
+            Form {
+                Section {
+                    Toggle("button_mapping.toggle.enabled", isOn: Binding(
+                        get: { settings.customMappingEnabled },
+                        set: setCustomMappingEnabled
+                    ))
+                    .toggleStyle(.switch)
+
+                    mappingRemoteDeviceBlock
                 }
+                .searchAnchor("mapping-controls", highlighted: highlightedSearchAnchor)
 
-                HStack(alignment: .center, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        PageHeader(title: localization.text("button_mapping.page.title"))
-                            .fixedSize(horizontal: true, vertical: false)
-                        mappingHeaderToggle
-                    }
-                    Spacer(minLength: 14)
-                    remoteDeviceSelector()
-                        .frame(width: 320)
-                }
-            }
-            .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Divider()
-
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        RemoteMappingCanvas(
-                            selectedButton: $selectedRemoteButton,
-                            activeButtons: model.activeRemoteButtons,
-                            voiceActive: model.isStreaming,
-                            actionSummary: mappingActionSummary,
-                            onEdit: { button, trigger in
-                                selectedRemoteButton = button
-                                isPresetApplicationActionsExpanded = false
-                                mappingEditingTarget = ShortcutEditingTarget(
-                                    button: button,
-                                    trigger: trigger
-                                )
-                            }
-                        )
-                        .onReceive(model.$activeRemoteButtons) { buttons in
-                            selectedRemoteButton = MappingSelectionPolicy.selection(
-                                current: selectedRemoteButton,
-                                activeButtons: buttons,
-                                isLocked: isMappingSelectionLocked
+                Section {
+                    RemoteMappingCanvas(
+                        selectedButton: $selectedRemoteButton,
+                        activeButtons: model.activeRemoteButtons,
+                        voiceActive: model.isStreaming,
+                        actionSummary: mappingActionSummary,
+                        onEdit: { button, trigger in
+                            selectedRemoteButton = button
+                            isPresetApplicationActionsExpanded = false
+                            mappingEditingTarget = ShortcutEditingTarget(
+                                button: button,
+                                trigger: trigger
                             )
                         }
+                    )
+                    .onReceive(model.$activeRemoteButtons) { buttons in
+                        selectedRemoteButton = MappingSelectionPolicy.selection(
+                            current: selectedRemoteButton,
+                            activeButtons: buttons,
+                            isLocked: isMappingSelectionLocked
+                        )
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
+                .searchAnchor("mapping-actions", highlighted: highlightedSearchAnchor)
 
-                        if let target = mappingEditingTarget {
-                            mappingEditorPanel(target)
-                                .id("mapping-action-editor")
-                        }
+                if let target = mappingEditingTarget {
+                    Section {
+                        mappingEditorPanel(target)
+                            .id("mapping-action-editor")
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .top)),
+                                removal: .opacity
+                            ))
+                    }
+                }
 
-                        mappingFooter
-                    }
-                    .padding(22)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                Section {
+                    mappingFooter
                 }
-                .compatibilityScrollEdgeEffect()
-                .onAppear {
-                    guard let target = mappingEditingTarget else { return }
-                    let scrollTarget = settings.configuredAction(
-                        for: target.button,
-                        trigger: target.trigger
-                    ).action == .customShortcut
-                        ? "mapping-shortcut-editor-\(target.id)"
-                        : "mapping-action-editor"
-                    DispatchQueue.main.async {
-                        proxy.scrollTo(scrollTarget, anchor: .top)
+                .searchAnchor("mapping-footer", highlighted: highlightedSearchAnchor)
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .scrollIndicators(.hidden)
+            .animation(.easeInOut(duration: 0.2), value: mappingEditingTarget == nil)
+            .onAppear {
+                guard let target = mappingEditingTarget else { return }
+                let scrollTarget = settings.configuredAction(
+                    for: target.button,
+                    trigger: target.trigger
+                ).action == .customShortcut
+                    ? "mapping-shortcut-editor-\(target.id)"
+                    : "mapping-action-editor"
+                DispatchQueue.main.async {
+                    proxy.scrollTo(scrollTarget, anchor: .top)
+                }
+            }
+            .onChange(of: mappingEditingTarget?.id) { _, targetID in
+                guard targetID != nil else { return }
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo("mapping-action-editor", anchor: .top)
                     }
                 }
-                .onChange(of: mappingEditingTarget?.id) { targetID in
-                    guard targetID != nil else { return }
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            proxy.scrollTo("mapping-action-editor", anchor: .top)
-                        }
-                    }
-                }
+            }
+            .onAppear {
+                scrollToSearchResult(in: .mapping, using: proxy, animated: false)
+            }
+            .onChange(of: searchNavigationRequest?.id) {
+                scrollToSearchResult(in: .mapping, using: proxy, animated: true)
             }
         }
     }
 
-    private var mappingHeaderToggle: some View {
-        Toggle("button_mapping.toggle.enabled", isOn: Binding(
-            get: { settings.customMappingEnabled },
-            set: setCustomMappingEnabled
-        ))
-        .font(.system(size: 14, weight: .medium))
-        .toggleStyle(.switch)
-        .fixedSize(horizontal: true, vertical: false)
+    private var mappingRemoteDeviceBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("remote.device.selector")
+            mappingHeaderDeviceContent
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var mappingHeaderDeviceContent: some View {
+        remoteDeviceSelector(vertical: true)
     }
 
     private func mappingEditorPanel(_ target: ShortcutEditingTarget) -> some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(target.button.displayName(using: localization))
-                        .font(.system(size: 18, weight: .semibold))
-                    Text(target.trigger.displayName(using: localization))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(Color.accentColor.opacity(0.12), in: Capsule())
-                    Spacer()
-                    Toggle(
-                        "button_mapping.action.disable_switch",
-                        isOn: Binding(
-                            get: {
-                                settings.configuredAction(
-                                    for: target.button,
-                                    trigger: target.trigger
-                                ).action == .disabled
-                            },
-                            set: { disabled in
-                                settings.setAction(
-                                    disabled ? .disabled : .escape,
-                                    for: target.button,
-                                    trigger: target.trigger
-                                )
-                                shortcutCaptureTarget = nil
-                                applicationShortcutCaptureProfileID = nil
-                            }
-                        )
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(target.button.displayName(using: localization))
+                    .font(.headline)
+                Text(target.trigger.displayName(using: localization))
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                Spacer()
+                Toggle(
+                    "button_mapping.action.disable_switch",
+                    isOn: Binding(
+                        get: {
+                            settings.configuredAction(
+                                for: target.button,
+                                trigger: target.trigger
+                            ).action == .disabled
+                        },
+                        set: { disabled in
+                            settings.setAction(
+                                disabled ? .disabled : .escape,
+                                for: target.button,
+                                trigger: target.trigger
+                            )
+                            shortcutCaptureTarget = nil
+                            applicationShortcutCaptureProfileID = nil
+                        }
                     )
-                    .font(.system(size: 15, weight: .semibold))
-                    .toggleStyle(.switch)
-                    .controlSize(.large)
-                    .tint(.red)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.red.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
-                    .disabled(
-                        target.button == .power &&
-                            target.trigger == .singleClick &&
-                            settings.experimentalContinuousRecordingEnabled
-                    )
-                    Button("common.action.close") {
-                        mappingEditingTarget = nil
-                        shortcutCaptureTarget = nil
-                        applicationShortcutCaptureProfileID = nil
-                    }
-                    .compatibilityButtonStyle(.standard)
+                )
+                .font(.body.weight(.semibold))
+                .toggleStyle(.switch)
+                .controlSize(.regular)
+                .disabled(
+                    target.button == .power &&
+                        target.trigger == .singleClick &&
+                        settings.experimentalContinuousRecordingEnabled
+                )
+                Button("common.action.close") {
+                    mappingEditingTarget = nil
+                    shortcutCaptureTarget = nil
+                    applicationShortcutCaptureProfileID = nil
                 }
-
-                mappingTriggerEditor(target.button, trigger: target.trigger)
+                .buttonStyle(.bordered)
             }
+
+            mappingTriggerEditor(target.button, trigger: target.trigger)
         }
     }
 
     private var mappingFooter: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 12) {
-                mappingHIDStatus
-                Divider()
-                mappingSelectionLockControl
-                Divider()
-                mappingVoiceKeyModeControl
-                Divider()
-                mappingVoiceFnTapControl
-                HStack {
-                    Spacer(minLength: 0)
-                    mappingRestoreDefaultsButton
+        VStack(spacing: 0) {
+            Label(
+                model.hidStatus.text(using: localization),
+                systemImage: "keyboard"
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Divider()
+                .padding(.vertical, 10)
+
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("button_mapping.selection_lock")
+                        .font(.body.weight(.medium))
+                    Text("button_mapping.selection_lock_hint_short")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-        }
-    }
 
-    private var mappingHIDStatus: some View {
-        Label(
-            model.hidStatus.text(using: localization),
-            systemImage: "keyboard"
-        )
-        .font(.system(size: 12))
-        .foregroundStyle(.secondary)
-        .lineLimit(2)
-    }
+                Spacer(minLength: 20)
 
-    private var mappingSelectionLockControl: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
-                .font(.system(size: 12, weight: .medium))
+                Toggle(
+                    "button_mapping.selection_lock",
+                    isOn: $isMappingSelectionLocked
+                )
+                .labelsHidden()
                 .toggleStyle(.switch)
-            Text("button_mapping.selection_lock_hint_short")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-        .help(localization.text("button_mapping.selection_lock_help"))
-    }
-
-    private var mappingVoiceKeyModeControl: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("connection.voice_key_mode.title")
-                .font(.system(size: 12, weight: .medium))
-            Picker("connection.voice_key_mode.title", selection: Binding(
-                get: { settings.voiceKeyMode },
-                set: { model.setVoiceKeyMode($0) }
-            )) {
-                ForEach(VoiceKeyMode.allCases) { mode in
-                    Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
-                }
+                .fixedSize()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            Text("connection.voice_key_mode.help")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
-        }
-        .help(localization.text("connection.voice_key_mode.help"))
-    }
+            .help(localization.text("button_mapping.selection_lock_help"))
 
-    private var mappingVoiceFnTapControl: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
-                get: { settings.voiceFnTapModeEnabled },
-                set: { model.setVoiceFnTapModeEnabled($0) }
-            ))
-            .font(.system(size: 12, weight: .medium))
-            .toggleStyle(.switch)
-            Text("connection.voice_fn_tap.hint_short")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-        .help(localization.text("connection.voice_fn_tap.hint"))
-        .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
-        .disabled(settings.voiceKeyMode != .function)
-    }
+            Divider()
+                .padding(.vertical, 10)
 
-    private var mappingRestoreDefaultsButton: some View {
-        Button("common.action.restore_defaults") {
-            settings.resetBindings()
-            selectedRemoteButton = .ok
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("connection.voice_key_mode.title")
+                        .font(.body.weight(.medium))
+                    Text("connection.voice_key_mode.help")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 20)
+
+                Picker("connection.voice_key_mode.title", selection: Binding(
+                    get: { settings.voiceKeyMode },
+                    set: { model.setVoiceKeyMode($0) }
+                )) {
+                    ForEach(VoiceKeyMode.allCases) { mode in
+                        Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .fixedSize()
+            }
+            .help(localization.text("connection.voice_key_mode.help"))
+
+            Divider()
+                .padding(.vertical, 10)
+
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("connection.voice_fn_tap.enabled")
+                        .font(.body.weight(.medium))
+                    Text("connection.voice_fn_tap.hint_short")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 20)
+
+                Toggle(
+                    "connection.voice_fn_tap.enabled",
+                    isOn: Binding(
+                        get: { settings.voiceFnTapModeEnabled },
+                        set: { model.setVoiceFnTapModeEnabled($0) }
+                    )
+                )
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .fixedSize()
+            }
+            .help(localization.text("connection.voice_fn_tap.hint"))
+            .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
+            .disabled(settings.voiceKeyMode != .function)
+
+            Divider()
+                .padding(.vertical, 10)
+
+            HStack {
+                Spacer()
+                Button("common.action.restore_defaults") {
+                    settings.resetBindings()
+                    selectedRemoteButton = .ok
+                }
+                .buttonStyle(.bordered)
+            }
         }
-        .compatibilityButtonStyle(.standard)
     }
 
     @ViewBuilder
@@ -1226,35 +1899,37 @@ struct SettingsView: View {
     }
 
     private func remoteDeviceEmptyState(vertical: Bool) -> some View {
-        VStack(alignment: vertical ? .leading : .center, spacing: 8) {
-            Image(systemName: "appletvremote.gen4.fill")
-                .font(.system(size: vertical ? 24 : 18, weight: .semibold))
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                Label(
+                    model.connectionStatus.text(using: localization),
+                    systemImage: "appletvremote.gen4.fill"
+                )
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
-            Text(model.connectionStatus.text(using: localization))
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(vertical ? .leading : .center)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if !vertical {
                 Button("connection.action.reconnect") {
                     model.reconnect()
                 }
-                .compatibilityButtonStyle(.standard)
+                .buttonStyle(.bordered)
+            }
+
+            VStack(alignment: vertical ? .trailing : .leading, spacing: 8) {
+                Label(
+                    model.connectionStatus.text(using: localization),
+                    systemImage: "appletvremote.gen4.fill"
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                Button("connection.action.reconnect") {
+                    model.reconnect()
+                }
+                .buttonStyle(.bordered)
             }
         }
-        .frame(maxWidth: .infinity, alignment: vertical ? .leading : .center)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(
-            Color.primary.opacity(0.045),
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.secondary.opacity(0.18))
-        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private func remoteDeviceCard(
@@ -1264,13 +1939,13 @@ struct SettingsView: View {
         let selected = settings.selectedRemoteProfileID == profile.id
         let connected = model.isRemoteConnected(profile.id)
         let batteryLevel = model.batteryLevel(for: profile.id)
-        return Button {
+        return SelectableCardButton(isSelected: selected, cornerRadius: 10) {
             model.selectRemoteProfile(profile.id)
         } label: {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(remoteDisplayName(profile))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.body.weight(.semibold))
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     if selected {
@@ -1297,23 +1972,13 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .font(.system(size: 12))
+                .font(.callout)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .frame(width: fillsWidth ? nil : 232, alignment: .leading)
             .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
-            .background(
-                selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
-            }
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func remoteConnectionLabel(connected: Bool) -> some View {
@@ -1331,7 +1996,7 @@ struct SettingsView: View {
         HStack(spacing: 4) {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: batterySymbol(for: level))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                 if powerState == .charging || powerState == .externalPower {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 7, weight: .bold))
@@ -1455,19 +2120,19 @@ struct SettingsView: View {
 
             if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
                 Text("button_mapping.continuous_recording_experiment.power_managed")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.orange)
             } else if trigger == .doubleClick && configured.action != .disabled {
                 Text("button_mapping.double_click.effect")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.orange)
             } else if trigger == .longPress && configured.action != .disabled {
                 Text("button_mapping.long_press.effect")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.orange)
             } else if trigger == .singleClick {
                 Text("button_mapping.single_click.help")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
         }
@@ -1512,12 +2177,12 @@ struct SettingsView: View {
                 .padding(.top, 8)
             } label: {
                 Text(localization.text(category.localizationKey))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.body.weight(.semibold))
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Text(localization.text(category.localizationKey))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.body.weight(.semibold))
 
                 mappingActionGrid(
                     actions: actions,
@@ -1548,7 +2213,7 @@ struct SettingsView: View {
                 } ?? false
                 let unavailableExperiment = action == .toggleLongRecording &&
                     !settings.experimentalContinuousRecordingEnabled
-                Button {
+                SelectableCardButton(isSelected: selectedAction == action, cornerRadius: 8) {
                     onSelect(action)
                 } label: {
                     HStack(spacing: 7) {
@@ -1566,25 +2231,10 @@ struct SettingsView: View {
                         .truncationMode(.tail)
                         Spacer(minLength: 0)
                     }
-                    .font(.system(size: 13, weight: selectedAction == action ? .semibold : .regular))
+                    .font(.body.weight(selectedAction == action ? .semibold : .regular))
                     .padding(.horizontal, 10)
                     .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                    .background(
-                        selectedAction == action
-                            ? Color.accentColor.opacity(0.13)
-                            : Color.primary.opacity(0.045),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(
-                                selectedAction == action
-                                    ? Color.accentColor.opacity(0.55)
-                                    : Color.secondary.opacity(0.16)
-                            )
-                    }
                 }
-                .buttonStyle(.plain)
                 .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
             }
         }
@@ -1600,13 +2250,13 @@ struct SettingsView: View {
         let contextID = target.id
         VStack(alignment: .leading, spacing: 10) {
             Text("shortcut.editor.click_first_help")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
             if shortcutCaptureTarget == target {
                 HStack(spacing: 10) {
                     Label("shortcut.editor.recording_prompt", systemImage: "keyboard.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(Color.accentColor)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -1615,7 +2265,7 @@ struct SettingsView: View {
                     Button("common.action.cancel") {
                         shortcutCaptureTarget = nil
                     }
-                    .compatibilityButtonStyle(.standard)
+                    .buttonStyle(.bordered)
                 }
                 .padding(12)
                 .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
@@ -1655,7 +2305,7 @@ struct SettingsView: View {
                             Image(systemName: configured.shortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
                                 .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.green)
                         }
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(.system(.body, design: .rounded).weight(.semibold))
                         .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.primary)
                         .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                         .padding(.horizontal, 12)
@@ -1666,13 +2316,13 @@ struct SettingsView: View {
                             shortcutCaptureFeedback = nil
                             shortcutCaptureTarget = target
                         }
-                        .compatibilityButtonStyle(.standard)
+                        .buttonStyle(.bordered)
 
                         Button("common.action.clear") {
                             settings.setShortcut(nil, for: button, trigger: trigger)
                             shortcutCaptureFeedback = nil
                         }
-                        .compatibilityButtonStyle(.standard)
+                        .buttonStyle(.bordered)
                         .disabled(configured.shortcut == nil)
                     }
 
@@ -1702,7 +2352,7 @@ struct SettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("custom_application.target")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.body.weight(.semibold))
 
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
@@ -1722,21 +2372,24 @@ struct SettingsView: View {
                     chooseCustomApplication(for: button, trigger: trigger)
                 } label: {
                     Label("custom_application.add", systemImage: "plus")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.body.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 36)
                 }
-                .compatibilityButtonStyle(.standard)
+                .buttonStyle(.bordered)
             }
 
             if let profile = settings.customApplicationProfile(id: configured.applicationProfileID) {
                 Divider()
 
                 Text("custom_application.focus_strategy")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.body.weight(.semibold))
 
                 HStack(spacing: 8) {
                     ForEach(CustomApplicationFocusStrategy.allCases) { strategy in
-                        Button {
+                        SelectableCardButton(
+                            isSelected: profile.focusStrategy == strategy,
+                            cornerRadius: 8
+                        ) {
                             var updated = profile
                             updated.focusStrategy = strategy
                             settings.updateCustomApplicationProfile(updated)
@@ -1747,25 +2400,10 @@ struct SettingsView: View {
                                 Text(strategy.displayName(using: localization))
                                     .lineLimit(1)
                             }
-                            .font(.system(size: 13, weight: profile.focusStrategy == strategy ? .semibold : .regular))
+                            .font(.body.weight(profile.focusStrategy == strategy ? .semibold : .regular))
                             .frame(maxWidth: .infinity, minHeight: 36)
                         }
-                        .buttonStyle(.plain)
                         .foregroundStyle(profile.focusStrategy == strategy ? Color.accentColor : Color.primary)
-                        .background(
-                            profile.focusStrategy == strategy
-                                ? Color.accentColor.opacity(0.12)
-                                : Color.primary.opacity(0.04),
-                            in: RoundedRectangle(cornerRadius: 8)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(
-                                    profile.focusStrategy == strategy
-                                        ? Color.accentColor.opacity(0.5)
-                                        : Color.secondary.opacity(0.16)
-                                )
-                        }
                     }
                 }
 
@@ -1785,11 +2423,11 @@ struct SettingsView: View {
                             applicationProfile: profile
                         )
                     }
-                    .compatibilityButtonStyle(.prominent)
+                    .buttonStyle(.borderedProminent)
                 }
             } else {
                 Text("custom_application.not_configured")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.orange)
             }
         }
@@ -1802,7 +2440,7 @@ struct SettingsView: View {
         selected: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        SelectableCardButton(isSelected: selected, cornerRadius: 8, action: action) {
             HStack(spacing: 7) {
                 Image(systemName: selected ? "checkmark.circle.fill" : "app")
                     .foregroundStyle(selected ? Color.accentColor : Color.secondary)
@@ -1811,19 +2449,10 @@ struct SettingsView: View {
                     .truncationMode(.tail)
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+            .font(.body.weight(selected ? .semibold : .regular))
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-            .background(
-                selected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
-                in: RoundedRectangle(cornerRadius: 8)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(selected ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.16))
-            }
         }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -1831,13 +2460,13 @@ struct SettingsView: View {
         let contextID = "application-\(profile.id.uuidString)"
         VStack(alignment: .leading, spacing: 10) {
             Text("custom_application.shortcut.editor_instructions")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
             if applicationShortcutCaptureProfileID == profile.id {
                 HStack(spacing: 10) {
                     Label("shortcut.editor.recording_prompt", systemImage: "keyboard.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(Color.accentColor)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -1846,7 +2475,7 @@ struct SettingsView: View {
                     Button("common.action.cancel") {
                         applicationShortcutCaptureProfileID = nil
                     }
-                    .compatibilityButtonStyle(.standard)
+                    .buttonStyle(.bordered)
                 }
                 .padding(12)
                 .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
@@ -1887,7 +2516,7 @@ struct SettingsView: View {
                         Image(systemName: profile.focusShortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
                             .foregroundStyle(profile.focusShortcut == nil ? Color.secondary : Color.green)
                     }
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(.system(.body, design: .rounded).weight(.semibold))
                     .foregroundStyle(profile.focusShortcut == nil ? Color.secondary : Color.primary)
                     .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                     .padding(.horizontal, 12)
@@ -1898,7 +2527,7 @@ struct SettingsView: View {
                         shortcutCaptureFeedback = nil
                         applicationShortcutCaptureProfileID = profile.id
                     }
-                    .compatibilityButtonStyle(.prominent)
+                    .buttonStyle(.borderedProminent)
 
                     Button("common.action.clear") {
                         var updated = profile
@@ -1906,7 +2535,7 @@ struct SettingsView: View {
                         settings.updateCustomApplicationProfile(updated)
                         shortcutCaptureFeedback = nil
                     }
-                    .compatibilityButtonStyle(.standard)
+                    .buttonStyle(.bordered)
                     .disabled(profile.focusShortcut == nil)
                 }
 
@@ -1922,16 +2551,16 @@ struct SettingsView: View {
             switch result {
             case .succeeded:
                 Label("shortcut.editor.success", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(.green)
             case .failed(.accessibilityPermissionRequired):
                 Label("shortcut.editor.permission_required", systemImage: "lock.trianglebadge.exclamationmark")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             case .failed(.eventTapUnavailable):
                 Label("shortcut.editor.capture_unavailable", systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1942,7 +2571,7 @@ struct SettingsView: View {
     private func accessibilityLearningEditor(_ profile: CustomApplicationProfile) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("custom_application.accessibility.learn_help")
-                .font(.system(size: 12))
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -1950,7 +2579,7 @@ struct SettingsView: View {
                 Button("custom_application.accessibility.learn") {
                     recordCustomApplicationInput(profileID: profile.id)
                 }
-                .compatibilityButtonStyle(.prominent)
+                .buttonStyle(.borderedProminent)
                 .disabled(customApplicationLearningStates[profile.id] == .recording)
 
                 Text(
@@ -1958,7 +2587,7 @@ struct SettingsView: View {
                         ? localization.text("custom_application.accessibility.not_recorded")
                         : localization.text("custom_application.accessibility.recorded")
                 )
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(profile.accessibilityTarget == nil ? Color.orange : Color.green)
             }
 
@@ -1967,7 +2596,7 @@ struct SettingsView: View {
                     localization.text(learningState.messageKey),
                     systemImage: learningState.systemImage
                 )
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(learningState.tint)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -2083,239 +2712,254 @@ struct SettingsView: View {
     }
 
     private var permissionsPage: some View {
-        settingsPage {
-            PageHeader(title: localization.text("permissions.page.title"))
-        } content: {
-            CompatibilityGlassContainer(spacing: 14) {
-                GlassPanel {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("permissions.required.title")
-                            .font(.headline)
-                            .padding(.bottom, 8)
-
-                        permissionRow(
-                            index: 1,
-                            symbol: "antenna.radiowaves.left.and.right",
-                            title: localization.text("permission.bluetooth.title"),
-                            detail: localization.text("permission.bluetooth.description"),
-                            state: bluetoothPermissionState,
-                            actionTitle: localization.text("permission.bluetooth.open_settings")
-                        ) {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        }
-
-                        Divider().padding(.leading, 62)
-
-                        permissionRow(
-                            index: 2,
-                            symbol: "keyboard",
-                            title: localization.text("permission.input_monitoring.title"),
-                            detail: localization.text("permission.input_monitoring.description"),
-                            state: inputMonitoringGranted ? .granted : .pending,
-                            actionTitle: localization.text("permission.action.request")
-                        ) {
-                            model.requestInputMonitoringPermission()
-                        }
-
-                        Divider().padding(.leading, 62)
-
-                        permissionRow(
-                            index: 3,
-                            symbol: "accessibility",
-                            title: localization.text("permission.accessibility.title"),
-                            detail: localization.text("permission.accessibility.description"),
-                            state: accessibilityGranted ? .granted : .pending,
-                            actionTitle: localization.text("permission.action.request")
-                        ) {
-                            model.requestAccessibilityPermission()
-                        }
-
-                        if settings.isOnboardingComplete,
-                           !inputMonitoringGranted || !accessibilityGranted {
-                            Divider().padding(.leading, 62)
-                            Label("permissions.upgrade_identity_help", systemImage: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.vertical, 12)
-                        }
+        ScrollViewReader { proxy in
+            Form {
+                Section {
+                    permissionRow(
+                    symbol: "antenna.radiowaves.left.and.right",
+                    title: localization.text("permission.bluetooth.title"),
+                    detail: localization.text("permission.bluetooth.description"),
+                    state: bluetoothPermissionState,
+                    actionTitle: localization.text("permission.bluetooth.open_settings")
+                ) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
+                        NSWorkspace.shared.open(url)
                     }
                 }
 
-                GlassPanel {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("diagnostics.title")
-                            .font(.headline)
-                        HStack(spacing: 12) {
-                            Image(systemName: "doc.text.magnifyingglass")
-                                .font(.title3)
-                                .foregroundStyle(Color.accentColor)
-                                .frame(width: 34, height: 34)
-                                .compatibilityTintedGlass(
-                                    tint: Color.accentColor.opacity(0.14),
-                                    in: Circle()
-                                )
+                    permissionRow(
+                    symbol: "keyboard",
+                    title: localization.text("permission.input_monitoring.title"),
+                    detail: localization.text("permission.input_monitoring.description"),
+                    state: inputMonitoringGranted ? .granted : .pending,
+                    actionTitle: localization.text("permission.action.request")
+                ) {
+                    model.requestInputMonitoringPermission()
+                }
+
+                    permissionRow(
+                    symbol: "accessibility",
+                    title: localization.text("permission.accessibility.title"),
+                    detail: localization.text("permission.accessibility.description"),
+                    state: accessibilityGranted ? .granted : .pending,
+                    actionTitle: localization.text("permission.action.request")
+                ) {
+                    model.requestAccessibilityPermission()
+                }
+
+                } header: {
+                    Text("permissions.required.title")
+                } footer: {
+                    if settings.isOnboardingComplete,
+                       !inputMonitoringGranted || !accessibilityGranted {
+                        Text("permissions.upgrade_identity_help")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .searchAnchor("permissions-required", highlighted: highlightedSearchAnchor)
+
+                Section("diagnostics.title") {
+                    LabeledContent {
+                        Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
+                            .buttonStyle(.bordered)
+                    } label: {
+                        Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("diagnostics.logs.title")
+                                    .font(.body.weight(.medium))
                                 Text("diagnostics.logs.privacy")
-                                    .font(.caption)
+                                    .font(.callout)
                                     .foregroundStyle(.secondary)
                             }
-                            Spacer()
-                            Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
-                                .compatibilityButtonStyle(.standard)
+                        } icon: {
+                            Image(systemName: "doc.text.magnifyingglass")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
                         }
                     }
                 }
+                .searchAnchor("permissions-diagnostics", highlighted: highlightedSearchAnchor)
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .scrollIndicators(.hidden)
+            .onAppear {
+                scrollToSearchResult(in: .permissions, using: proxy, animated: false)
+            }
+            .onChange(of: searchNavigationRequest?.id) {
+                scrollToSearchResult(in: .permissions, using: proxy, animated: true)
             }
         }
     }
 
     private var statisticsPage: some View {
-        settingsPage {
-            HStack(spacing: 14) {
-                PageHeader(title: localization.text("statistics.page.title"))
-                Spacer(minLength: 20)
-                HStack(spacing: 8) {
-                    ForEach(UsageStatisticsPeriod.allCases) { period in
-                        Button {
-                            selectedUsagePeriod = period
-                        } label: {
-                            Text(localization.text(usagePeriodLocalizationKey(period)))
-                                .font(.system(size: 15, weight: .semibold))
-                                .frame(width: 92, height: 38)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(
-                            selectedUsagePeriod == period ? Color.white : Color.primary
-                        )
-                        .background(
-                            selectedUsagePeriod == period
-                                ? Color.accentColor
-                                : Color(nsColor: .controlBackgroundColor),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(
-                                    selectedUsagePeriod == period
-                                        ? Color.accentColor
-                                        : Color(nsColor: .separatorColor).opacity(0.65),
-                                    lineWidth: 1
-                                )
-                        }
-                        .accessibilityAddTraits(
-                            selectedUsagePeriod == period ? .isSelected : []
-                        )
-                    }
-                }
-                StatusPill(
-                    text: localization.text("about.privacy.local_only"),
-                    tint: .green
-                )
+        ScrollViewReader { proxy in
+            statisticsForm
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .onAppear {
+                scrollToSearchResult(in: .statistics, using: proxy, animated: false)
             }
-        } content: {
-            CompatibilityGlassContainer(spacing: 14) {
-                VStack(spacing: 14) {
-                    sharePanel(for: .statistics)
-                    statisticsPeriodContent
-                    voiceSessionRankingCard
-                }
+            .onChange(of: searchNavigationRequest?.id) {
+                scrollToSearchResult(in: .statistics, using: proxy, animated: true)
             }
         }
     }
 
-    private var transcriptHistoryPage: some View {
-        settingsPage {
-            HStack(alignment: .center, spacing: 14) {
-                PageHeader(title: localization.text("statistics.transcripts.title"))
-                    .fixedSize(horizontal: true, vertical: false)
-                    .layoutPriority(2)
-                Text(localization.text("statistics.transcripts.privacy"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                Spacer(minLength: 16)
-                Toggle(
-                    "statistics.transcripts.enable",
-                    isOn: $settings.localTranscriptHistoryEnabled
-                )
-                .toggleStyle(.switch)
-                .font(.system(size: 13, weight: .medium))
-                .fixedSize()
-                Toggle(
-                    "statistics.transcripts.recording_enable",
-                    isOn: $settings.localOriginalAudioRecordingEnabled
-                )
-                .toggleStyle(.switch)
-                .font(.system(size: 13, weight: .medium))
-                .fixedSize()
+    private var statisticsForm: some View {
+        Form {
+            Section {
+                statisticsPeriodContent
+            } header: {
+                VStack(alignment: .leading, spacing: 16) {
+                    statisticsPeriodPicker
+                        .searchAnchor(
+                            "statistics-period",
+                            highlighted: highlightedSearchAnchor
+                        )
+                    statisticsPrivacyLabel
+                }
             }
-        } content: {
-            CompatibilityGlassContainer(spacing: 14) {
+            .searchAnchor("statistics-charts", highlighted: highlightedSearchAnchor)
+
+            Section {
+                voiceSessionRankingCard
+            }
+            .searchAnchor("statistics-ranking", highlighted: highlightedSearchAnchor)
+
+        }
+        .formStyle(.grouped)
+        .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private var statisticsPeriodPicker: some View {
+        if #available(macOS 26.0, *) {
+            nativeStatisticsPeriodPicker
+                .controlSize(.extraLarge)
+        } else {
+            nativeStatisticsPeriodPicker
+                .controlSize(.large)
+        }
+    }
+
+    private var nativeStatisticsPeriodPicker: some View {
+        Picker(
+            localization.text("statistics.page.title"),
+            selection: $selectedUsagePeriod
+        ) {
+            ForEach(UsageStatisticsPeriod.allCases) { period in
+                Text(localization.text(usagePeriodLocalizationKey(period)))
+                    .tag(period)
+            }
+        }
+        .labelsHidden()
+        .frame(width: 480)
+        .pickerStyle(.segmented)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var statisticsPrivacyLabel: some View {
+        Label(
+            localization.text("about.privacy.local_only"),
+            systemImage: "lock.fill"
+        )
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .lineLimit(2)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var transcriptHistoryPage: some View {
+        ScrollViewReader { proxy in
+            Form {
+                Section {
+                    Toggle(
+                        "statistics.transcripts.enable",
+                        isOn: $settings.localTranscriptHistoryEnabled
+                    )
+                    .toggleStyle(.switch)
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("statistics.transcripts.description")
+                        Text("statistics.transcripts.privacy")
+                    }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .searchAnchor("transcripts-enable", highlighted: highlightedSearchAnchor)
+
                 TranscriptHistorySection(model: model, settings: settings)
+                    .searchAnchor("transcripts-records", highlighted: highlightedSearchAnchor)
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .scrollIndicators(.hidden)
+            .onAppear {
+                scrollToSearchResult(in: .transcripts, using: proxy, animated: false)
+            }
+            .onChange(of: searchNavigationRequest?.id) {
+                scrollToSearchResult(in: .transcripts, using: proxy, animated: true)
             }
         }
     }
 
     private var voiceSessionRankingCard: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Image(systemName: "trophy.fill")
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "trophy.fill")
+                    .font(.body)
+                    .foregroundStyle(.orange)
+                    .frame(width: 24, height: 24)
+                    .semanticTintedBackground(tint: Color.orange.opacity(0.12), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(localization.text("statistics.voice_ranking.title"))
                         .font(.headline)
-                        .foregroundStyle(.orange)
-                        .frame(width: 32, height: 32)
-                        .compatibilityTintedGlass(tint: Color.orange.opacity(0.14), in: Circle())
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("statistics.voice_ranking.title")
-                            .font(.headline)
-                        Text("statistics.voice_ranking.description")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if settings.voiceSessionRanking.isEmpty {
-                    Text("statistics.voice_ranking.empty")
+                    Text(localization.text("statistics.voice_ranking.description"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(settings.voiceSessionRanking.enumerated()), id: \.element.id) {
-                            index, record in
-                            HStack(spacing: 12) {
-                                Text("#\(index + 1)")
-                                    .font(.system(.body, design: .rounded).weight(.semibold))
-                                    .foregroundStyle(index < 3 ? Color.orange : Color.secondary)
-                                    .monospacedDigit()
-                                    .frame(width: 36, alignment: .leading)
+                }
+            }
 
-                                Text(chartDurationText(
-                                    seconds: UsageStatisticsPresentation.wholeSeconds(
-                                        record.duration
-                                    )
-                                ))
+            if settings.voiceSessionRanking.isEmpty {
+                Text(localization.text("statistics.voice_ranking.empty"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(settings.voiceSessionRanking.enumerated()), id: \.element.id) {
+                        index, record in
+                        HStack(spacing: 12) {
+                            Text("#\(index + 1)")
                                 .font(.system(.body, design: .rounded).weight(.semibold))
+                                .foregroundStyle(index < 3 ? Color.orange : Color.secondary)
                                 .monospacedDigit()
+                                .frame(width: 36, alignment: .leading)
 
-                                Spacer(minLength: 12)
+                            Text(chartDurationText(
+                                seconds: UsageStatisticsPresentation.wholeSeconds(
+                                    record.duration
+                                )
+                            ))
+                            .font(.system(.body, design: .rounded).weight(.semibold))
+                            .monospacedDigit()
 
-                                Text(voiceSessionDateText(record.endedAt))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 9)
+                            Spacer(minLength: 12)
 
-                            if index < settings.voiceSessionRanking.count - 1 {
-                                Divider()
-                            }
+                            Text(voiceSessionDateText(record.endedAt))
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 9)
+
+                        if index < settings.voiceSessionRanking.count - 1 {
+                            Divider()
                         }
                     }
                 }
@@ -2367,391 +3011,414 @@ struct SettingsView: View {
             }
 
         case .total:
-            GlassPanel {
-                HStack(spacing: 14) {
-                    UsageStatisticCard(
-                        systemImage: "button.programmable",
-                        title: localization.text("statistics.metric.button_count"),
-                        value: buttonPressCountText(for: .total),
-                        tint: .blue
-                    )
-                    UsageStatisticCard(
-                        systemImage: "waveform",
-                        title: localization.text("statistics.metric.voice_duration"),
-                        value: voiceDurationText(for: .total),
-                        tint: .orange
-                    )
-                }
+            HStack(spacing: 14) {
+                UsageStatisticCard(
+                    systemImage: "button.programmable",
+                    title: localization.text("statistics.metric.button_count"),
+                    value: buttonPressCountText(for: .total),
+                    tint: .blue
+                )
+                UsageStatisticCard(
+                    systemImage: "waveform",
+                    title: localization.text("statistics.metric.voice_duration"),
+                    value: voiceDurationText(for: .total),
+                    tint: .orange
+                )
             }
             .frame(minHeight: 330, alignment: .top)
         }
     }
 
     private var aboutPage: some View {
-        settingsPage {
-            PageHeader(title: localization.text("menu.about"))
-        } content: {
-            CompatibilityGlassContainer(spacing: 14) {
-                VStack(spacing: 14) {
-                    HStack(spacing: 18) {
-                        Image(nsImage: NSApp.applicationIconImage)
-                            .resizable()
-                            .frame(width: 72, height: 72)
-                            .shadow(color: .black.opacity(0.14), radius: 10, y: 5)
+        ScrollViewReader { proxy in
+            Form {
+                Section {
+                HStack(spacing: 14) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 48, height: 48)
 
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("app.name")
-                                .font(.system(size: 28, weight: .semibold))
-                            Text("about.page.hero_description")
-                                .font(.subheadline)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("app.name")
+                            .font(.title2.weight(.semibold))
+                        Text("about.page.hero_description")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 16)
+
+                    Link(destination: localization.localizedWebsiteURL) {
+                        Label("about.support.website", systemImage: "globe")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Link(destination: AppLinks.githubRepository) {
+                        Label("about.support.github", systemImage: "arrow.up.right")
+                    }
+                    .buttonStyle(.bordered)
+                }
+                }
+                .searchAnchor("about-summary", highlighted: highlightedSearchAnchor)
+
+                Section("about.support.title") {
+                LabeledContent {
+                    Link(destination: AppLinks.feedback) {
+                        Text("about.support.feedback_action")
+                    }
+                    .buttonStyle(.bordered)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("about.support.feedback")
+                            .font(.body.weight(.medium))
+                        Text("about.support.feedback_description")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                aboutShareSectionContent
+                }
+                .searchAnchor("about-support", highlighted: highlightedSearchAnchor)
+
+                Section("about.version.title") {
+                aboutCurrentVersionRow
+                aboutReleaseNotesRow
+
+                LabeledContent {
+                    Toggle(
+                        "about.version.check_prerelease",
+                        isOn: $settings.checksForPreReleaseUpdates
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("about.version.check_prerelease")
+                            .font(.body.weight(.medium))
+                        Text("about.version.check_prerelease_help_short")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                }
+                .searchAnchor("about-version", highlighted: highlightedSearchAnchor)
+
+            if privateFeature.shouldShowEnrollment {
+                Section {
+                    privateFeature.enrollmentView()
+                }
+            }
+
+            if macroFeature.shouldShowEnrollment {
+                Section {
+                    macroFeature.enrollmentView()
+                }
+            }
+
+                Section {
+                LabeledContent {
+                    Button("about.configuration.export", action: exportConfiguration)
+                        .buttonStyle(.bordered)
+                } label: {
+                    Text("about.configuration.export_description")
+                        .font(.body)
+                }
+
+                LabeledContent {
+                    Button("about.configuration.import", action: importConfiguration)
+                        .buttonStyle(.bordered)
+                } label: {
+                    Text("about.configuration.import_description")
+                        .font(.body)
+                }
+
+                if let configurationStatus {
+                    Label(
+                        configurationStatus.message.text(using: localization),
+                        systemImage: configurationStatus.systemImage
+                    )
+                    .font(.callout)
+                    .foregroundStyle(configurationStatus.tint)
+                }
+                } header: {
+                    Text("about.configuration.title")
+                } footer: {
+                    Text("about.configuration.description")
+                }
+                .searchAnchor("about-configuration", highlighted: highlightedSearchAnchor)
+
+                Section("about.preferences.title") {
+                LabeledContent {
+                    Toggle("", isOn: Binding(
+                        get: { settings.showDockIcon },
+                        set: { setDockIconVisible($0) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("about.preferences.show_dock_icon")
+                            .font(.body.weight(.medium))
+                        Text("about.preferences.show_dock_icon_help")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                LabeledContent {
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Toggle("", isOn: Binding(
+                            get: { loginItemService.isEnabled },
+                            set: { loginItemService.setEnabled($0) }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+
+                        if loginItemService.requiresApproval {
+                            Button(
+                                "about.preferences.launch_at_login_open_system_settings",
+                                action: loginItemService.openLoginItemsSettings
+                            )
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("about.preferences.launch_at_login")
+                            .font(.body.weight(.medium))
+                        Text("about.preferences.launch_at_login_help")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        if loginItemService.requiresApproval {
+                            Text("about.preferences.launch_at_login_requires_approval")
+                                .font(.callout)
+                                .foregroundStyle(.orange)
+                        } else if loginItemService.didFailToUpdate {
+                            Text("about.preferences.launch_at_login_update_failed")
+                                .font(.callout)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+
+                LabeledContent {
+                    Toggle("", isOn: $settings.openMainWindowAtLaunch)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("about.preferences.open_main_window_at_launch")
+                            .font(.body.weight(.medium))
+                        Text("about.preferences.open_main_window_help")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                LabeledContent {
+                    Picker("about.preferences.language", selection: Binding(
+                        get: { localization.language },
+                        set: { localization.select($0) }
+                    )) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(languageTitle(language)).tag(language)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("about.preferences.language")
+                            .font(.body.weight(.medium))
+                        Text("about.preferences.language_description")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                LabeledContent {
+                    Button("about.preferences.restart_onboarding_action") {
+                        settings.restartOnboarding()
+                    }
+                    .buttonStyle(.bordered)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("about.preferences.restart_onboarding")
+                            .font(.body.weight(.medium))
+                        Text("about.preferences.restart_onboarding_help")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                }
+                .searchAnchor("about-preferences", highlighted: highlightedSearchAnchor)
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: 700)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .scrollIndicators(.hidden)
+            .onAppear {
+                if UpdateCheckPolicy(
+                    checksForPreReleaseUpdates: settings.checksForPreReleaseUpdates
+                ).refreshesAboutInformationOnAppear {
+                    refreshUpdateInformation()
+                }
+                scrollToSearchResult(in: .about, using: proxy, animated: false)
+            }
+            .onChange(of: searchNavigationRequest?.id) {
+                scrollToSearchResult(in: .about, using: proxy, animated: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var aboutUpdateStatusView: some View {
+        switch updateInformation.state {
+        case .idle:
+            Text("about.version.information_idle")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        case .checking:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("about.version.checking")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        case .upToDate:
+            Label {
+                Text("about.version.up_to_date")
+                    .foregroundStyle(.secondary)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+            .font(.callout)
+        case .unavailable:
+            VStack(alignment: .leading, spacing: 3) {
+                Label(
+                    "about.version.information_unavailable",
+                    systemImage: "wifi.exclamationmark"
+                )
+                .font(.body.weight(.medium))
+                .foregroundStyle(.orange)
+                Text("about.version.information_unavailable_description")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        case let .available(update):
+            HStack(spacing: 8) {
+                Label("about.version.available", systemImage: "arrow.down.circle.fill")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.green)
+                Text("about.version.latest")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text(update.displayVersion)
+                    .font(.body.weight(.semibold))
+                    .monospacedDigit()
+            }
+        }
+    }
+
+    private var isCheckingForUpdates: Bool {
+        if case .checking = updateInformation.state { return true }
+        return false
+    }
+
+    private var aboutCurrentVersionRow: some View {
+        LabeledContent {
+            HStack(spacing: 10) {
+                Button(action: revealPrivateEnrollmentIfNeeded) {
+                    Text(currentVersion)
+                        .font(.body.weight(.semibold))
+                        .monospacedDigit()
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+
+                Button {
+                    if case .available = updateInformation.state {
+                        checkForUpdates()
+                    } else {
+                        refreshUpdateInformation()
+                    }
+                } label: {
+                    switch updateInformation.state {
+                    case let .available(update):
+                        Text(String(
+                            format: localization.text("about.version.update_to"),
+                            locale: localization.locale,
+                            arguments: [update.displayVersion]
+                        ))
+                    case .idle:
+                        Label(
+                            "menu.check_for_updates",
+                            systemImage: "arrow.triangle.2.circlepath"
+                        )
+                    case .checking:
+                        Label(
+                            "about.version.checking",
+                            systemImage: "arrow.triangle.2.circlepath"
+                        )
+                    case .upToDate, .unavailable:
+                        Label(
+                            "about.version.recheck",
+                            systemImage: "arrow.triangle.2.circlepath"
+                        )
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isCheckingForUpdates)
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("about.version.current")
+                    .font(.body.weight(.medium))
+                aboutUpdateStatusView
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var aboutReleaseNotesRow: some View {
+        if case .available = updateInformation.state {
+            LabeledContent("about.version.information_title") {
+                aboutReleaseNotesView
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var aboutReleaseNotesView: some View {
+        if case let .available(update) = updateInformation.state {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(
+                    format: localization.text("about.version.release_notes_title"),
+                    locale: localization.locale,
+                    arguments: [update.displayVersion]
+                ))
+                .font(.body.weight(.medium))
+
+                if update.releaseNotes.isEmpty {
+                    Text("about.version.release_notes_unavailable")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(update.releaseNotes.enumerated()), id: \.offset) { index, note in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text("\(index + 1)")
+                                .font(.callout.weight(.bold))
                                 .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 20)
-
-                        Link(destination: localization.localizedWebsiteURL) {
-                            Label("about.support.website", systemImage: "globe")
-                                .frame(minWidth: 104)
-                        }
-                        .compatibilityButtonStyle(.prominent)
-
-                        Link(destination: AppLinks.githubRepository) {
-                            Label("about.support.github", systemImage: "link")
-                                .frame(minWidth: 104)
-                        }
-                        .compatibilityButtonStyle(.standard)
-                    }
-                    .padding(.horizontal, 6)
-
-                    GlassPanel {
-                        HStack(spacing: 14) {
-                            Image(systemName: "bubble.left.and.bubble.right")
-                                .font(.title3)
-                                .foregroundStyle(Color.accentColor)
-                                .frame(width: 34)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("about.support.feedback")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("about.support.feedback_description")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: 20)
-                            Link(destination: AppLinks.feedback) {
-                                Label("about.support.feedback_action", systemImage: "arrow.up.right")
-                            }
-                            .compatibilityButtonStyle(.standard)
-                        }
-                    }
-
-                    sharePanel(for: .about)
-
-                    GlassPanel {
-                        VStack(spacing: 16) {
-                            HStack(alignment: .top, spacing: 24) {
-                                VStack(alignment: .leading, spacing: 14) {
-                                    Text("about.version.title")
-                                        .font(.headline)
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("about.version.current")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                        Button(action: revealPrivateEnrollmentIfNeeded) {
-                                            Text(currentVersion)
-                                                .font(.system(size: 28, weight: .semibold))
-                                                .monospacedDigit()
-                                        }
-                                        .buttonStyle(.plain)
-                                        .contentShape(Rectangle())
-                                    }
-
-                                    if case let .available(update) = updateInformation.state {
-                                        HStack(spacing: 8) {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text("about.version.latest")
-                                                    .font(.subheadline)
-                                                    .foregroundStyle(.secondary)
-                                                Text(update.displayVersion)
-                                                    .font(.system(size: 28, weight: .semibold))
-                                                    .monospacedDigit()
-                                            }
-                                            StatusPill(
-                                                text: localization.text("about.version.available"),
-                                                tint: .green
-                                            )
-                                        }
-
-                                        HStack(spacing: 10) {
-                                            Button(action: checkForUpdates) {
-                                                Text(String(
-                                                    format: localization.text("about.version.update_to"),
-                                                    locale: localization.locale,
-                                                    arguments: [update.displayVersion]
-                                                ))
-                                                .frame(maxWidth: .infinity)
-                                            }
-                                            .compatibilityButtonStyle(.prominent)
-
-                                            Button(
-                                                "about.version.recheck",
-                                                action: refreshUpdateInformation
-                                            )
-                                            .compatibilityButtonStyle(.standard)
-                                        }
-                                    } else {
-                                        HStack(spacing: 10) {
-                                            Button(action: checkForUpdates) {
-                                                Label(
-                                                    "menu.check_for_updates",
-                                                    systemImage: "arrow.triangle.2.circlepath"
-                                                )
-                                                .frame(maxWidth: .infinity)
-                                            }
-                                            .compatibilityButtonStyle(.prominent)
-
-                                            Button(
-                                                "about.version.recheck",
-                                                action: refreshUpdateInformation
-                                            )
-                                            .compatibilityButtonStyle(.standard)
-                                        }
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Divider()
-
-                                VStack(alignment: .leading, spacing: 12) {
-                                    updateInformationContent
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-
-                            Divider()
-
-                            HStack(spacing: 20) {
-                                Spacer()
-
-                                VStack(alignment: .trailing, spacing: 3) {
-                                    Toggle(
-                                        "about.version.check_prerelease",
-                                        isOn: $settings.checksForPreReleaseUpdates
-                                    )
-                                    .toggleStyle(.switch)
-                                    Text("about.version.check_prerelease_help_short")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-
-                    if privateFeature.shouldShowEnrollment {
-                        privateFeature.enrollmentView()
-                    }
-
-                    if macroFeature.shouldShowEnrollment {
-                        macroFeature.enrollmentView()
-                    }
-
-                    GlassPanel {
-                        VStack(spacing: 0) {
-                            HStack(spacing: 14) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.configuration.export")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.configuration.export_description")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Button("about.configuration.export", action: exportConfiguration)
-                                    .compatibilityButtonStyle(.standard)
-                                    .frame(width: 92)
-                            }
-                            .padding(.vertical, 10)
-
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Image(systemName: "square.and.arrow.down")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.configuration.import")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.configuration.import_description")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Button("about.configuration.import", action: importConfiguration)
-                                    .compatibilityButtonStyle(.standard)
-                                    .frame(width: 92)
-                            }
-                            .padding(.vertical, 10)
-
-                            if let configurationStatus {
-                                Divider()
-                                Label(
-                                    configurationStatus.message.text(using: localization),
-                                    systemImage: configurationStatus.systemImage
-                                )
-                                .font(.caption)
-                                .foregroundStyle(configurationStatus.tint)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 8)
-                            }
-
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Image(systemName: "dock.rectangle")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.preferences.show_dock_icon")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.preferences.show_dock_icon_help")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Toggle("", isOn: Binding(
-                                    get: { settings.showDockIcon },
-                                    set: { setDockIconVisible($0) }
-                                ))
-                                .labelsHidden()
-                                .toggleStyle(.switch)
-                            }
-                            .padding(.vertical, 10)
-
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Image(systemName: "rectangle.portrait.and.arrow.forward")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("about.preferences.launch_at_login")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.preferences.launch_at_login_help")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                    if loginItemService.requiresApproval {
-                                        Text("about.preferences.launch_at_login_requires_approval")
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(.orange)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    } else if loginItemService.didFailToUpdate {
-                                        Text("about.preferences.launch_at_login_update_failed")
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(.red)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                }
-                                Spacer(minLength: 16)
-                                VStack(alignment: .trailing, spacing: 8) {
-                                    Toggle("", isOn: Binding(
-                                        get: { loginItemService.isEnabled },
-                                        set: { loginItemService.setEnabled($0) }
-                                    ))
-                                    .labelsHidden()
-                                    .toggleStyle(.switch)
-
-                                    if loginItemService.requiresApproval {
-                                        Button(
-                                            "about.preferences.launch_at_login_open_system_settings",
-                                            action: loginItemService.openLoginItemsSettings
-                                        )
-                                        .compatibilityButtonStyle(.standard)
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 10)
-
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Image(systemName: "macwindow")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.preferences.open_main_window_at_launch")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.preferences.open_main_window_help")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Toggle("", isOn: $settings.openMainWindowAtLaunch)
-                                    .labelsHidden()
-                                    .toggleStyle(.switch)
-                            }
-                            .padding(.vertical, 10)
-
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Image(systemName: "globe")
-                                    .font(.title3)
-                                    .foregroundStyle(.green)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.preferences.language")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.preferences.language_description")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 20)
-                                Picker("about.preferences.language", selection: Binding(
-                                    get: { localization.language },
-                                    set: { localization.select($0) }
-                                )) {
-                                    ForEach(AppLanguage.allCases) { language in
-                                        Text(languageTitle(language)).tag(language)
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.segmented)
-                                .frame(width: 300)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 10)
-
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Image(systemName: "arrow.counterclockwise.circle")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.preferences.restart_onboarding")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.preferences.restart_onboarding_help")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                Spacer(minLength: 20)
-                                Button("about.preferences.restart_onboarding_action") {
-                                    settings.restartOnboarding()
-                                }
-                                .compatibilityButtonStyle(.standard)
-                            }
-                            .padding(.vertical, 10)
+                                .frame(width: 24, height: 24)
+                                .background(Color.secondary.opacity(0.12), in: Circle())
+                            Text(note)
+                                .font(.callout)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
 
@@ -2765,49 +3432,36 @@ struct SettingsView: View {
                 }
             }
         }
-        .onAppear {
-            guard UpdateCheckPolicy(
-                checksForPreReleaseUpdates: settings.checksForPreReleaseUpdates
-            ).refreshesAboutInformationOnAppear else { return }
-            refreshUpdateInformation()
-        }
     }
 
-    private func sharePanel(for section: SettingsSection) -> some View {
-        let isExpanded = expandedShareSection == section
+    private var aboutShareSectionContent: some View {
         let shareURL = AppShareLink.url(for: localization.locale)
 
-        return GlassPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 14) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title3)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 34)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("share.title")
-                            .font(.subheadline.weight(.semibold))
-                        Text("share.description")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 20)
-                    Button {
-                        expandedShareSection = isExpanded ? nil : section
-                    } label: {
-                        Label(
-                            isExpanded ? "share.hide_action" : "share.show_action",
-                            systemImage: isExpanded ? "chevron.up" : "qrcode"
-                        )
-                    }
-                    .compatibilityButtonStyle(.standard)
+        return VStack(alignment: .leading, spacing: 14) {
+            LabeledContent {
+                Button {
+                    isAboutShareExpanded.toggle()
+                } label: {
+                    Label(
+                        isAboutShareExpanded ? "share.hide_action" : "share.show_action",
+                        systemImage: isAboutShareExpanded ? "chevron.up" : "qrcode"
+                    )
                 }
+                .buttonStyle(.bordered)
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("share.title")
+                        .font(.body.weight(.medium))
+                    Text("share.description")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
-                if isExpanded {
-                    Divider()
-                    ShareCard(url: shareURL)
-                        .id(shareURL)
-                }
+            if isAboutShareExpanded {
+                Divider()
+                ShareCard(url: shareURL)
+                    .id(shareURL)
             }
         }
     }
@@ -2816,7 +3470,7 @@ struct SettingsView: View {
         switch section {
         case .privateFeature: privateFeature.sectionTitle
         case .macros: macroFeature.sectionTitle
-        default: ""
+        default: localization.text(section.titleKey)
         }
     }
 
@@ -2828,65 +3482,24 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var updateInformationContent: some View {
-        switch updateInformation.state {
-        case .idle:
-            Text("about.version.information_title")
-                .font(.headline)
-            Text("about.version.information_idle")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        case .checking:
-            Text("about.version.information_title")
-                .font(.headline)
-            HStack(spacing: 10) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("about.version.checking")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        case .upToDate:
-            Label("about.version.up_to_date", systemImage: "checkmark.circle.fill")
-                .font(.headline)
-                .foregroundStyle(.green)
-            Text("about.version.up_to_date_description")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        case .unavailable:
-            Label("about.version.information_unavailable", systemImage: "wifi.exclamationmark")
-                .font(.headline)
-                .foregroundStyle(.orange)
-            Text("about.version.information_unavailable_description")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        case let .available(update):
-            Text(String(
-                format: localization.text("about.version.release_notes_title"),
-                locale: localization.locale,
-                arguments: [update.displayVersion]
-            ))
-            .font(.headline)
-
-            if update.releaseNotes.isEmpty {
-                Text("about.version.release_notes_unavailable")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(update.releaseNotes.enumerated()), id: \.offset) { index, note in
-                    HStack(alignment: .top, spacing: 10) {
-                        Text("\(index + 1)")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width: 24, height: 24)
-                            .background(Color.accentColor.opacity(0.13), in: Circle())
-                        Text(note)
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
+    private func sectionIconColor(_ section: SettingsSection) -> Color {
+        switch section {
+        case .connection:
+            return Color(nsColor: .systemBlue)
+        case .privateFeature:
+            return Color(nsColor: .systemPurple)
+        case .macros:
+            return Color(nsColor: .systemIndigo)
+        case .mapping:
+            return Color(nsColor: .systemGray)
+        case .statistics:
+            return Color(nsColor: .systemCyan)
+        case .transcripts:
+            return Color(nsColor: .systemTeal)
+        case .permissions:
+            return Color(nsColor: .systemIndigo)
+        case .about:
+            return Color(nsColor: .systemGray)
         }
     }
 
@@ -3118,7 +3731,6 @@ struct SettingsView: View {
     }
 
     private func permissionRow(
-        index: Int,
         symbol: String,
         title: String,
         detail: String,
@@ -3126,44 +3738,34 @@ struct SettingsView: View {
         actionTitle: String,
         action: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 14) {
-            Text("\(index)")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(Color.accentColor, in: Circle())
-
-            Image(systemName: symbol)
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 42, height: 42)
-                .compatibilityTintedGlass(
-                    tint: Color.accentColor.opacity(0.14),
-                    in: Circle()
-                )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        LabeledContent {
+            HStack(spacing: 10) {
+                Text(state.title(using: localization))
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(state.tint)
+                if state != .granted {
+                    Button(actionTitle, action: action)
+                        .buttonStyle(.bordered)
+                }
             }
-
-            Spacer(minLength: 16)
-            StatusPill(text: state.title(using: localization), tint: state.tint)
-            if state != .granted {
-                Button(actionTitle, action: action)
-                    .compatibilityButtonStyle(.standard)
-                    .frame(width: 112)
+        } label: {
+            Label {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.body.weight(.medium))
+                    Text(detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } icon: {
+                Image(systemName: symbol)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
             }
         }
-        .padding(.vertical, 12)
-    }
-
-    private var connectionBadge: String {
-        localization.text(model.isConnected ? "common.status.connected" : "common.status.connecting")
+        .padding(.vertical, 4)
     }
 
     private var webRemoteStatusText: String {
@@ -3193,6 +3795,15 @@ struct SettingsView: View {
             return .orange
         default:
             return .secondary
+        }
+    }
+
+    private var isWebRemoteWaiting: Bool {
+        switch model.webRemoteState {
+        case .connecting, .waitingForPhone, .awaitingApproval:
+            return true
+        case .disabled, .unavailable, .connected, .failed:
+            return false
         }
     }
 
@@ -3246,10 +3857,6 @@ struct SettingsView: View {
 
     private var connectionTint: Color {
         model.isConnected ? .green : .orange
-    }
-
-    private var voiceTriggerBadge: String {
-        localization.text(model.isVoiceTriggerEnabled ? "common.status.enabled" : "common.status.preparing")
     }
 
     private var bluetoothPermissionState: PermissionVisualState {
@@ -3335,20 +3942,6 @@ enum UsageStatisticsPresentation {
     }
 }
 
-private final class WindowDragNSView: NSView {
-    override func mouseDown(with event: NSEvent) {
-        window?.performDrag(with: event)
-    }
-}
-
-private struct WindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> WindowDragNSView {
-        WindowDragNSView()
-    }
-
-    func updateNSView(_ nsView: WindowDragNSView, context: Context) {}
-}
-
 private struct ShortcutCaptureView: NSViewRepresentable {
     let onCapture: (CustomKeyboardShortcut) -> Void
     let onFailure: (ShortcutCaptureStartFailure) -> Void
@@ -3409,199 +4002,110 @@ private struct ShortcutCaptureView: NSViewRepresentable {
     }
 }
 
-private enum CompatibilityButtonStyle {
-    case standard
-    case prominent
-}
-
-private enum SettingsVisualRenderingPolicy {
-    static let isScreenshotHarness = ProcessInfo.processInfo.environment[
-        "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
-    ] != nil
-
-    static var usesNativeGlass: Bool { !isScreenshotHarness }
-}
-
-private struct CompatibilityGlassContainer<Content: View>: View {
-    let spacing: CGFloat
-    private let content: Content
-
-    init(spacing: CGFloat, @ViewBuilder content: () -> Content) {
-        self.spacing = spacing
-        self.content = content()
-    }
-
-    @ViewBuilder
-    var body: some View {
-        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
-            GlassEffectContainer(spacing: spacing) {
-                content
-            }
-        } else {
-            content
-        }
-    }
-}
-
-private struct CompatibilityButtonStyleModifier: ViewModifier {
-    let style: CompatibilityButtonStyle
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
-            switch style {
-            case .standard:
-                content.buttonStyle(.glass)
-            case .prominent:
-                content.buttonStyle(.glassProminent)
-            }
-        } else {
-            switch style {
-            case .standard:
-                content.buttonStyle(.bordered)
-            case .prominent:
-                content.buttonStyle(.borderedProminent)
-            }
-        }
-    }
-}
-
-private struct CompatibilityScrollEdgeEffectModifier: ViewModifier {
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
-            content.scrollEdgeEffectStyle(.soft, for: .top)
-        } else {
-            content
-        }
-    }
-}
-
-private struct CompatibilityFocusEffectDisabledModifier: ViewModifier {
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(macOS 14.0, *) {
-            content.focusEffectDisabled()
-        } else {
-            content
-        }
-    }
-}
-
-private struct CompatibilityRoundedButtonBorderShapeModifier: ViewModifier {
-    let radius: CGFloat
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(macOS 14.0, *) {
-            content.buttonBorderShape(.roundedRectangle(radius: radius))
-        } else {
-            content
-        }
-    }
-}
-
-private struct CompatibilityTintedGlassModifier<GlassShape: Shape>: ViewModifier {
+private struct SemanticTintedBackgroundModifier<BackgroundShape: Shape>: ViewModifier {
     let tint: Color
-    let shape: GlassShape
+    let shape: BackgroundShape
     let interactive: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
-            if interactive {
-                content.glassEffect(.clear.tint(tint).interactive(), in: shape)
-            } else {
-                content.glassEffect(.clear.tint(tint), in: shape)
-            }
-        } else {
-            content
-                .background(tint, in: shape)
-                .overlay(
-                    shape.stroke(
-                        Color(nsColor: .separatorColor).opacity(0.45),
-                        lineWidth: 1
-                    )
+        content
+            .background(tint, in: shape)
+            .overlay(
+                shape.stroke(
+                    Color(nsColor: .separatorColor).opacity(interactive ? 0.55 : 0.35),
+                    lineWidth: 0.5
                 )
-        }
+            )
     }
 }
 
 private extension View {
-    func compatibilityButtonStyle(_ style: CompatibilityButtonStyle) -> some View {
-        modifier(CompatibilityButtonStyleModifier(style: style))
-    }
-
-    func compatibilityScrollEdgeEffect() -> some View {
-        modifier(CompatibilityScrollEdgeEffectModifier())
-    }
-
-    func compatibilityFocusEffectDisabled() -> some View {
-        modifier(CompatibilityFocusEffectDisabledModifier())
-    }
-
-    func compatibilityRoundedButtonBorderShape(radius: CGFloat) -> some View {
-        modifier(CompatibilityRoundedButtonBorderShapeModifier(radius: radius))
-    }
-
-    func compatibilityTintedGlass<GlassShape: Shape>(
+    func semanticTintedBackground<BackgroundShape: Shape>(
         tint: Color,
-        in shape: GlassShape,
+        in shape: BackgroundShape,
         interactive: Bool = false
     ) -> some View {
         modifier(
-            CompatibilityTintedGlassModifier(
+            SemanticTintedBackgroundModifier(
                 tint: tint,
                 shape: shape,
                 interactive: interactive
             )
         )
     }
-}
 
-private struct PageHeader: View {
-    let title: String
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 25, weight: .semibold))
-    }
-}
-
-struct GlassPanel<Content: View>: View {
-    private let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-        if #available(macOS 26.0, *), SettingsVisualRenderingPolicy.usesNativeGlass {
-            content
-                .padding(16)
-                .glassEffect(.regular, in: shape)
-        } else if SettingsVisualRenderingPolicy.isScreenshotHarness {
-            content
-                .padding(16)
-                .background(Color(nsColor: .controlBackgroundColor), in: shape)
-                .overlay(
-                    shape.stroke(
-                        Color(nsColor: .separatorColor).opacity(0.45),
-                        lineWidth: 1
-                    )
-                )
+    /// `.searchFocused` requires macOS 15; on macOS 14 the search field simply
+    /// cannot be focused programmatically, so the menu shortcut is disabled there.
+    @ViewBuilder
+    func searchFocusedWhenAvailable(_ binding: FocusState<Bool>.Binding) -> some View {
+        if #available(macOS 15.0, *) {
+            self.searchFocused(binding)
         } else {
-            content
-                .padding(16)
-                .background(.regularMaterial, in: shape)
-                .overlay(
-                    shape.stroke(
-                        Color(nsColor: .separatorColor).opacity(0.45),
-                        lineWidth: 1
-                    )
-                )
+            self
         }
+    }
+
+    /// Tags a section with its search anchor and draws a short accent outline
+    /// when a search result just navigated to it, like System Settings does.
+    func searchAnchor(_ anchor: String, highlighted: String?) -> some View {
+        modifier(SearchAnchorModifier(anchor: anchor, isHighlighted: highlighted == anchor))
+    }
+}
+
+private struct SearchAnchorModifier: ViewModifier {
+    let anchor: String
+    let isHighlighted: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .id(anchor)
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.65), lineWidth: 2)
+                    .opacity(isHighlighted ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+/// Shared look and interaction for card-style selection buttons (device cards,
+/// action grid, strategy and profile pickers): low-opacity semantic-blue selection,
+/// hover feedback and a system-style keyboard focus ring.
+private struct SelectableCardButton<Label: View>: View {
+    let isSelected: Bool
+    var cornerRadius: CGFloat = 8
+    let action: () -> Void
+    @ViewBuilder let label: () -> Label
+
+    @State private var isHovered = false
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button(action: action, label: label)
+            .buttonStyle(.plain)
+            .focusable()
+            .focused($isFocused)
+            .onHover { isHovered = $0 }
+            .background(
+                isSelected
+                    ? Color.accentColor.opacity(0.13)
+                    : Color.primary.opacity(isHovered ? 0.08 : 0.045),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        isFocused
+                            ? Color.accentColor.opacity(0.65)
+                            : isSelected
+                                ? Color.accentColor.opacity(0.55)
+                                : Color.secondary.opacity(0.16),
+                        lineWidth: isFocused ? 2 : 1
+                    )
+                    .allowsHitTesting(false)
+            }
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -3634,11 +4138,11 @@ private struct ShareCard: View {
                 Text("share.card.title")
                     .font(.headline)
                 Text("share.card.description")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(url.absoluteString)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(.callout, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .lineLimit(2)
@@ -3647,7 +4151,7 @@ private struct ShareCard: View {
                 } label: {
                     Label("share.copy_action", systemImage: "doc.on.doc")
                 }
-                .compatibilityButtonStyle(.prominent)
+                .buttonStyle(.borderedProminent)
                 .accessibilityHint(Text("share.copy.accessibility_hint"))
 
                 if let copySucceeded {
@@ -3657,7 +4161,7 @@ private struct ShareCard: View {
                             ? "checkmark.circle.fill"
                             : "exclamationmark.triangle.fill"
                     )
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(copySucceeded ? Color.green : Color.red)
                 }
             }
@@ -3678,23 +4182,22 @@ private struct UsageStatisticCard: View {
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 44, height: 44)
-                .compatibilityTintedGlass(tint: tint.opacity(0.14), in: Circle())
+                .semanticTintedBackground(tint: tint.opacity(0.14), in: Circle())
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                 Text(value)
-                    .font(.system(size: 21, weight: .semibold, design: .rounded))
+                    .font(.system(.title2, design: .rounded).weight(.semibold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
             }
 
             Spacer(minLength: 8)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .compatibilityTintedGlass(
+        .semanticTintedBackground(
             tint: tint.opacity(0.08),
             in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
@@ -3744,41 +4247,39 @@ private struct UsageBarChart: View {
     }
 
     var body: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 10) {
-                    Image(systemName: systemImage)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.body)
+                    .foregroundStyle(tint)
+                    .frame(width: 24, height: 24)
+                    .semanticTintedBackground(tint: tint.opacity(0.12), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
                         .font(.headline)
-                        .foregroundStyle(tint)
-                        .frame(width: 32, height: 32)
-                        .compatibilityTintedGlass(tint: tint.opacity(0.14), in: Circle())
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                            .font(.headline)
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(subtitle)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
-
-                Chart(points) { point in
-                    BarMark(
-                        x: .value(subtitle, point.label),
-                        y: .value(title, metric.value(for: point))
-                    )
-                    .foregroundStyle(tint.gradient)
-                    .cornerRadius(5)
-                    .annotation(position: .top, spacing: 4) {
-                        Text(metric.label(for: point))
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .chartYScale(domain: 0...maximumValue)
-                .chartYAxis(.hidden)
-                .frame(height: 250)
             }
+
+            Chart(points) { point in
+                BarMark(
+                    x: .value(subtitle, point.label),
+                    y: .value(title, metric.value(for: point))
+                )
+                .foregroundStyle(tint.gradient)
+                .cornerRadius(5)
+                .annotation(position: .top, spacing: 4) {
+                    Text(metric.label(for: point))
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .chartYScale(domain: 0...maximumValue)
+            .chartYAxis(.hidden)
+            .frame(height: 250)
         }
         .frame(maxWidth: .infinity, alignment: .top)
     }
@@ -3808,50 +4309,6 @@ private enum ConfigurationFilePanel {
     }
 }
 
-private struct StatusPill: View {
-    let text: String
-    let tint: Color
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .compatibilityTintedGlass(tint: tint.opacity(0.14), in: Capsule())
-    }
-}
-
-private struct DeviceStatusStep: View {
-    let symbol: String
-    let title: String
-    let detail: String
-    let badge: String
-    let tint: Color
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 9) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 28, height: 28)
-                .compatibilityTintedGlass(tint: tint.opacity(0.14), in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(.caption.weight(.semibold))
-                    Spacer(minLength: 4)
-                    StatusPill(text: badge, tint: tint)
-                }
-                Text(detail)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
-
 private enum RC003ImageResource {
     static let image: NSImage? = {
         guard let url = Bundle.main.url(
@@ -3874,7 +4331,7 @@ private struct RC003Photo: View {
                     .fill(.quaternary)
                     .overlay {
                         Text("remote.photo.missing")
-                            .font(.caption)
+                            .font(.callout)
                             .foregroundStyle(.secondary)
                     }
             }
