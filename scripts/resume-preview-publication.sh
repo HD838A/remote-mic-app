@@ -44,6 +44,8 @@ ARTIFACT_DIR="$WORK_DIR/signed-artifact"
 ATTESTATION_DIR="$WORK_DIR/request-attestation"
 STAGE_DIR="$WORK_DIR/preview-stage"
 
+/bin/mkdir -p "$WORK_DIR"
+
 fail() { print -u2 -- "$*"; exit 1; }
 
 now="$(date +%s)"
@@ -170,6 +172,10 @@ else
   remote_tag_commit="$(git -C "$CANDIDATE_DIR" ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}" | awk '$2 ~ /\^\{\}$/ {print $1; found=1; exit} $2 !~ /\^\{\}$/ {fallback=$1} END {if (!found && fallback != "") print fallback}')"
   if [[ -n "$remote_tag_commit" ]]; then
     [[ "$remote_tag_commit" == "$EXPECTED_COMMIT" ]] || fail "staged candidate tag points to a different commit"
+    git -C "$CANDIDATE_DIR" fetch --quiet --no-tags origin \
+      "refs/tags/${TAG}:refs/tags/${TAG}"
+    git -C "$CANDIDATE_DIR" rev-parse --verify "$TAG^{commit}" | grep -Fxq "$EXPECTED_COMMIT" || \
+      fail "staged candidate tag could not be fetched locally"
   fi
 fi
 

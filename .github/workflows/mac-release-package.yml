@@ -594,7 +594,7 @@ jobs:
             request_attestation="$RUNNER_TEMP/release-request/release-request-attestation.json"
             actual_product_dependencies="$(./scripts/resolve-release-dependencies.sh json)"
             expected_product_dependencies="$(jq -S -c '.productDependencies' "$request_attestation")"
-            test "$(print -r -- "$actual_product_dependencies" | jq -S -c .)" = "$expected_product_dependencies"
+            test "$(printf '%s\n' "$actual_product_dependencies" | jq -S -c .)" = "$expected_product_dependencies"
           fi
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = "5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"
           match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
