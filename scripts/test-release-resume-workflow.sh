@@ -171,6 +171,7 @@ jq -n \
   requestStartedAt:1787590000,
   releaseReadyAt:1787590060,
   target:{version:"9.9.9",build:"999"},
+  observedFeedURL:"http://127.0.0.1:8765/appcast.xml",
   baseline:{
     tag:"v1.8.3",assetId:303,
     assetDigest:"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -217,6 +218,13 @@ jq -n \
 "$ROOT/scripts/verify-preview-ui-attestation.sh" "$attestation" "$stage" "$dist" \
   > "$WORK_DIR/ui-pass.txt"
 /usr/bin/grep -Fq 'PREVIEW UI ATTESTATION PASS' "$WORK_DIR/ui-pass.txt"
+
+jq '.observedFeedURL = "https://github.com/HD838A/remote-mic-app/releases/download/v9.9.9/appcast.xml" | .update.feedURL = .observedFeedURL' \
+  "$attestation" > "$WORK_DIR/ui-github-feed.json"
+"$ROOT/scripts/verify-preview-ui-attestation.sh" \
+  "$WORK_DIR/ui-github-feed.json" "$stage" "$dist" \
+  > "$WORK_DIR/ui-github-feed-pass.txt"
+/usr/bin/grep -Fq 'PREVIEW UI ATTESTATION PASS' "$WORK_DIR/ui-github-feed-pass.txt"
 
 jq '.signedArtifactId = 999' "$attestation" > "$WORK_DIR/ui-wrong-artifact.json"
 if "$ROOT/scripts/verify-preview-ui-attestation.sh" \
