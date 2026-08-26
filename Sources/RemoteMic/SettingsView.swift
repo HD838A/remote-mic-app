@@ -2747,8 +2747,9 @@ struct SettingsView: View {
                                 }
                                 .labelsHidden()
                                 .pickerStyle(.segmented)
-                                .frame(width: 400)
+                                .frame(width: 300)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 10)
 
                             Divider()
