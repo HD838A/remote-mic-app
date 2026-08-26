@@ -893,14 +893,9 @@ enum KeyboardInjector {
         var windowCount = 0
         var candidateCount = 0
         var eligibleCount = 0
-        var excludedSearchCount = 0
-        var excludedTerminalCount = 0
         var excludedSensitiveCount = 0
         for window in applicationWindows(applicationElement) {
             windowCount += 1
-            let windowTitle = axString(window, attribute: kAXTitleAttribute).lowercased()
-            let excludedWindowTerms = ["settings", "preferences", "设置", "偏好设置"]
-            guard !excludedWindowTerms.contains(where: windowTitle.contains) else { continue }
             let candidates = accessibilityTextCandidates(in: window)
             candidateCount += candidates.count
             for candidate in candidates.map(\.snapshot) {
@@ -914,12 +909,6 @@ enum KeyboardInjector {
                 ].joined(separator: " ").lowercased()
                 if composerCandidateScore(candidate, windowFrame: axFrame(window)) != nil {
                     eligibleCount += 1
-                } else if ["search", "find", "filter", "搜索", "查找", "筛选"]
-                    .contains(where: semanticText.contains) {
-                    excludedSearchCount += 1
-                } else if ["terminal", "console", "shell", "xterm", "终端", "控制台"]
-                    .contains(where: semanticText.contains) {
-                    excludedTerminalCount += 1
                 } else if containsSensitiveAccessibilityTerms(semanticText) {
                     excludedSensitiveCount += 1
                 }
@@ -939,7 +928,6 @@ enum KeyboardInjector {
             AppLogger.shared.write(
                 "APP FOCUS scan bundle=\(NSRunningApplication(processIdentifier: processIdentifier)?.bundleIdentifier ?? "unknown") " +
                     "windows=\(windowCount) candidates=\(candidateCount) eligible=\(eligibleCount) " +
-                    "excluded_search=\(excludedSearchCount) excluded_terminal=\(excludedTerminalCount) " +
                     "excluded_sensitive=\(excludedSensitiveCount)"
             )
         }
@@ -1218,8 +1206,7 @@ enum KeyboardInjector {
         let value = value.lowercased()
         let terms = [
             "password", "passcode", "secret", "api key", "apikey", "token", "credit card",
-            "search", "find", "filter", "address bar", "settings", "preferences",
-            "密码", "口令", "密钥", "令牌", "银行卡", "搜索", "查找", "筛选", "设置", "偏好",
+            "密码", "口令", "密钥", "令牌", "银行卡",
         ]
         return terms.contains(where: value.contains)
     }
@@ -1429,11 +1416,9 @@ enum KeyboardInjector {
         .lowercased()
 
         let excludedTerms = [
-            "search", "find", "filter", "title", "rename", "api key", "apikey", "token",
-            "password", "secret", "settings", "preferences", "command palette", "address bar",
-            "terminal", "console", "shell", "xterm", "approval", "permission", "code editor", "monaco",
-            "搜索", "查找", "筛选", "标题", "重命名", "密钥", "令牌", "密码", "设置", "偏好",
-            "终端", "控制台", "审批", "权限", "代码编辑器",
+            "title", "rename", "api key", "apikey", "token", "password", "secret",
+            "command palette", "address bar", "approval", "permission", "code editor", "monaco",
+            "标题", "重命名", "密钥", "令牌", "密码", "审批", "权限", "代码编辑器",
         ]
         guard !excludedTerms.contains(where: semanticText.contains) else { return nil }
 
@@ -1445,9 +1430,15 @@ enum KeyboardInjector {
         let supportingTerms = [
             "message", "prompt", "reply", "ask claude", "ask anything", "chat", "提问", "回复",
         ]
+        let explicitlyAllowedTerms = [
+            "search", "find", "filter", "settings", "preferences", "terminal", "console", "shell", "xterm",
+            "搜索", "查找", "筛选", "设置", "偏好", "终端", "控制台",
+        ]
         let hasStrongSemanticMatch = strongTerms.contains(where: semanticText.contains)
         let hasSupportingSemanticMatch = supportingTerms.contains(where: semanticText.contains)
-        guard candidate.role == "AXTextArea" || hasStrongSemanticMatch || hasSupportingSemanticMatch else {
+        let hasExplicitlyAllowedMatch = explicitlyAllowedTerms.contains(where: semanticText.contains)
+        guard candidate.role == "AXTextArea" || hasStrongSemanticMatch || hasSupportingSemanticMatch ||
+                hasExplicitlyAllowedMatch else {
             return nil
         }
 
@@ -1456,6 +1447,8 @@ enum KeyboardInjector {
             score += 120
         } else if hasSupportingSemanticMatch {
             score += 70
+        } else if hasExplicitlyAllowedMatch {
+            score += 80
         }
 
         if let frame = candidate.frame {
