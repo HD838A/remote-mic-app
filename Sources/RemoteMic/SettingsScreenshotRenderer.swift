@@ -74,7 +74,18 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
-        let model = BridgeAppModel(settings: settings)
+        let model = BridgeAppModel(
+            settings: settings,
+            initialKaraokeAudioDevices: [
+                AudioDeviceInfo(id: 101, uid: "screenshot-built-in", name: "Built-in Speakers"),
+                AudioDeviceInfo(id: 102, uid: "screenshot-headphones", name: "USB Headphones"),
+                AudioDeviceInfo(
+                    id: 103,
+                    uid: "screenshot-interface",
+                    name: "Studio Audio Interface Output"
+                ),
+            ]
+        )
         let updateInformation = UpdateInformationStore()
         let localization = LocalizationStore(settings: settings)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)

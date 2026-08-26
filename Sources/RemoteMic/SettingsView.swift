@@ -941,6 +941,31 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("karaoke.output.title")
+                            .font(.system(size: 13, weight: .semibold))
+
+                        karaokeOutputButton(
+                            title: localization.text("karaoke.output.system_default"),
+                            deviceUID: ""
+                        )
+
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 156), spacing: 8)],
+                            alignment: .leading,
+                            spacing: 8
+                        ) {
+                            ForEach(model.karaokeAudioDevices, id: \.uid) { device in
+                                karaokeOutputButton(title: device.name, deviceUID: device.uid)
+                            }
+                        }
+
+                        Text("karaoke.output.help")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     Text(model.karaokeStatus.text(using: localization))
                         .font(.caption)
                         .foregroundStyle(model.isKaraokeModeEnabled ? Color.orange : Color.secondary)
@@ -960,6 +985,39 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private func karaokeOutputButton(title: String, deviceUID: String) -> some View {
+        let selected = settings.karaokeOutputDeviceUID == deviceUID
+        return Button {
+            model.setKaraokeOutputDeviceUID(deviceUID)
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            .background(
+                selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(
+                        selected
+                            ? Color.accentColor.opacity(0.55)
+                            : Color.secondary.opacity(0.16)
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isStreaming)
     }
 
     private var audioCompatibilityPanel: some View {

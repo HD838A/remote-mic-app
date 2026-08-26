@@ -151,6 +151,38 @@ enum CoreAudioDeviceCatalog {
         }
     }
 
+    static func localPlaybackOutputs() -> [AudioDeviceInfo] {
+        withPropertyLock {
+            let devices = devicesLocked(scope: kAudioDevicePropertyScopeOutput)
+            let virtualDeviceIDs = Set(devices.compactMap { device in
+                transportType(for: device.id) == kAudioDeviceTransportTypeVirtual ? device.id : nil
+            })
+            return devices.filter { !virtualDeviceIDs.contains($0.id) }
+        }
+    }
+
+    static func selectedLocalPlaybackOutput(preferredUID: String) -> AudioDeviceInfo? {
+        withPropertyLock {
+            let devices = devicesLocked(scope: kAudioDevicePropertyScopeOutput)
+            let defaultOutputID = defaultDevice(
+                selector: kAudioHardwarePropertyDefaultOutputDevice
+            )?.id
+            let builtInDeviceIDs = Set(devices.compactMap { device in
+                transportType(for: device.id) == kAudioDeviceTransportTypeBuiltIn ? device.id : nil
+            })
+            let virtualDeviceIDs = Set(devices.compactMap { device in
+                transportType(for: device.id) == kAudioDeviceTransportTypeVirtual ? device.id : nil
+            })
+            return LocalPlaybackOutputPolicy.selectedOutput(
+                in: devices,
+                preferredUID: preferredUID,
+                defaultOutputID: defaultOutputID,
+                builtInDeviceIDs: builtInDeviceIDs,
+                virtualDeviceIDs: virtualDeviceIDs
+            )
+        }
+    }
+
     static func outputDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
         devices.map(deviceDiagnostic).joined(separator: " | ")
     }
@@ -361,6 +393,25 @@ enum LocalPlaybackOutputPolicy {
     ) -> AudioDeviceInfo? {
         let physicalDevices = devices.filter {
             $0.uid != excludedUID && !virtualDeviceIDs.contains($0.id)
+        }
+        if let defaultOutputID,
+           let systemDefault = physicalDevices.first(where: { $0.id == defaultOutputID }) {
+            return systemDefault
+        }
+        return physicalDevices.first { builtInDeviceIDs.contains($0.id) } ?? physicalDevices.first
+    }
+
+    static func selectedOutput(
+        in devices: [AudioDeviceInfo],
+        preferredUID: String,
+        defaultOutputID: AudioDeviceID?,
+        builtInDeviceIDs: Set<AudioDeviceID>,
+        virtualDeviceIDs: Set<AudioDeviceID>
+    ) -> AudioDeviceInfo? {
+        let physicalDevices = devices.filter { !virtualDeviceIDs.contains($0.id) }
+        if !preferredUID.isEmpty,
+           let preferred = physicalDevices.first(where: { $0.uid == preferredUID }) {
+            return preferred
         }
         if let defaultOutputID,
            let systemDefault = physicalDevices.first(where: { $0.id == defaultOutputID }) {

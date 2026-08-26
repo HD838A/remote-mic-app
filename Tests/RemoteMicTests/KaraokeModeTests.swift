@@ -72,6 +72,57 @@ struct KaraokeModeTests {
         ) == nil)
     }
 
+    @Test func explicitKaraokeOutputOverridesSystemDefaultAndRejectsVirtualDevices() {
+        let speakers = AudioDeviceInfo(id: 1, uid: "speakers", name: "Mac Speakers")
+        let headphones = AudioDeviceInfo(id: 2, uid: "headphones", name: "USB Headphones")
+        let virtual = AudioDeviceInfo(id: 3, uid: "virtual", name: "MiRemoteV 2ch")
+        let devices = [speakers, headphones, virtual]
+
+        #expect(LocalPlaybackOutputPolicy.selectedOutput(
+            in: devices,
+            preferredUID: headphones.uid,
+            defaultOutputID: speakers.id,
+            builtInDeviceIDs: [speakers.id],
+            virtualDeviceIDs: [virtual.id]
+        ) == headphones)
+        #expect(LocalPlaybackOutputPolicy.selectedOutput(
+            in: devices,
+            preferredUID: "missing",
+            defaultOutputID: speakers.id,
+            builtInDeviceIDs: [speakers.id],
+            virtualDeviceIDs: [virtual.id]
+        ) == speakers)
+        #expect(LocalPlaybackOutputPolicy.selectedOutput(
+            in: devices,
+            preferredUID: virtual.uid,
+            defaultOutputID: speakers.id,
+            builtInDeviceIDs: [speakers.id],
+            virtualDeviceIDs: [virtual.id]
+        ) == speakers)
+    }
+
+    @Test func karaokeOutputSelectionPersistsWithoutChangingNormalVoiceOutput() throws {
+        let suiteName = "KaraokeModeTests.output.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.selectedAudioDeviceUID = "normal-voice-output"
+        settings.karaokeOutputDeviceUID = "karaoke-headphones"
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.selectedAudioDeviceUID == "normal-voice-output")
+        #expect(restored.karaokeOutputDeviceUID == "karaoke-headphones")
+
+        let exported = try settings.exportedConfigurationData()
+        let importedSuiteName = "KaraokeModeTests.output.import.\(UUID().uuidString)"
+        let importedDefaults = try #require(UserDefaults(suiteName: importedSuiteName))
+        defer { importedDefaults.removePersistentDomain(forName: importedSuiteName) }
+        let imported = AppSettings(defaults: importedDefaults)
+        try imported.importConfiguration(from: exported)
+        #expect(imported.selectedAudioDeviceUID == "normal-voice-output")
+        #expect(imported.karaokeOutputDeviceUID == "karaoke-headphones")
+    }
+
     @Test func missingOffOnAndUsedThenOffStatesKeepRoutingIsolated() {
         let target = UUID()
         let other = UUID()
@@ -150,5 +201,38 @@ struct KaraokeModeTests {
         #expect(!source.contains("KARAOKE HOST_OPEN"))
         #expect(!source.contains("KARAOKE KEEPALIVE"))
         #expect(!source.contains("settings.isKaraokeModeEnabled"))
+    }
+
+    @Test func productionKaraokeNeutralizesVoiceKeyAndUsesIndependentOutputPicker() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(modelSource.contains("prepareKaraokeVoiceKeyNeutralization(trigger: trigger)"))
+        #expect(modelSource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: true)"))
+        #expect(modelSource.contains("KARAOKE STREAM rejected reason=voice_key_not_neutralized"))
+        #expect(modelSource.contains(
+            "if wasEnabled, started, !karaokeStreamActive {\n            applyHIDSettings()"
+        ))
+        #expect(modelSource.contains(
+            "if usedKaraoke, !isKaraokeModeEnabled {\n" +
+                "            stopKaraokeOutputAfterDraining()\n" +
+                "            applyHIDSettings()"
+        ))
+        #expect(modelSource.contains(
+            "selectedLocalPlaybackOutput(\n            preferredUID: settings.karaokeOutputDeviceUID"
+        ))
+        #expect(settingsSource.contains("ForEach(model.karaokeAudioDevices"))
+        #expect(settingsSource.contains("model.setKaraokeOutputDeviceUID(deviceUID)"))
+        #expect(settingsSource.contains("karaoke.output.system_default"))
     }
 }
