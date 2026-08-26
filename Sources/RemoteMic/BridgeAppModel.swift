@@ -391,21 +391,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.archiveCapturedTranscript(capture)
         }
     )
-    private let qianwenHistoryReader = QianwenHistoryReader()
-    private lazy var qianwenHistoryTranscriptCapture = QianwenHistoryTranscriptCapture(
-        reader: { [weak self] startedAt, date, completion in
-            self?.qianwenHistoryReader.readLatest(
-                after: startedAt,
-                before: date,
-                completion: completion
-            ) ?? completion(nil)
-        },
-        onCapture: { [weak self] capture in
-            self?.archiveCapturedTranscript(capture)
-        }
-    )
     private var transcriptHistoryToggleCancellable: AnyCancellable?
-    private var voiceSessionUsesQianwenHistory = false
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
     private var heldVoiceKeyMode: VoiceKeyMode?
@@ -732,7 +718,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     refreshTranscriptRecords()
                 } else {
                     transcriptCaptureCoordinator.cancel()
-                    qianwenHistoryTranscriptCapture.cancel(reason: "feature_disabled")
                 }
             }
     }
@@ -760,7 +745,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         macroFeature.stop()
         preferredInputSourceMonitor.stop()
         transcriptCaptureCoordinator.cancel()
-        qianwenHistoryTranscriptCapture.cancel(reason: "app_stop")
         guard started else { return }
         started = false
         completedUpdateHIDRecoveryWorkItem?.cancel()
@@ -2322,7 +2306,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if qianwenFocusTap {
             _ = qianwenVoiceSession.prepareDestinationIfNeeded(destinationIsReady: false)
             transcriptCaptureCoordinator.cancel(reason: "qianwen_focus_tap")
-            qianwenHistoryTranscriptCapture.cancel(reason: "qianwen_focus_tap")
             beginQianwenInputFocusPreparation()
         } else if genericFocusTap {
             transcriptCaptureCoordinator.cancel(reason: "voice_short_tap_focus")
@@ -3313,20 +3296,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         settings.recordButtonPress(control: .voice, source: source, at: startedAt)
         voiceSessionStartedAt = startedAt
         voiceSessionUsageSource = source
-        let application = NSWorkspace.shared.frontmostApplication
-        voiceSessionUsesQianwenHistory = settings.qianwenVoiceModeEnabled &&
-            settings.localTranscriptHistoryEnabled &&
-            application?.bundleIdentifier == QianwenVoiceFocusPolicy.weChatBundleIdentifier
-        if voiceSessionUsesQianwenHistory {
-            qianwenHistoryTranscriptCapture.startSession(
-                startedAt: startedAt,
-                source: source,
-                applicationName: application?.localizedName ?? "微信",
-                bundleIdentifier: application?.bundleIdentifier ?? ""
-            )
-        } else {
-            transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)
-        }
+        transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)
         isStreaming = true
     }
 
@@ -3349,15 +3319,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             audioOutput.endSession()
         }
         privateFeature.finishVoiceSession()
-        if voiceSessionUsesQianwenHistory {
-            qianwenHistoryTranscriptCapture.finishSession(endedAt: endedAt)
-        } else {
-            transcriptCaptureCoordinator.finishSession(
-                endedAt: endedAt,
-                allowsInsertionOutsideReportedSelection: settings.qianwenVoiceModeEnabled
-            )
-        }
-        voiceSessionUsesQianwenHistory = false
+        transcriptCaptureCoordinator.finishSession(
+            endedAt: endedAt,
+            allowsInsertionOutsideReportedSelection: settings.qianwenVoiceModeEnabled
+        )
     }
 
     private var currentVoiceUsageSource: UsageEventSource {

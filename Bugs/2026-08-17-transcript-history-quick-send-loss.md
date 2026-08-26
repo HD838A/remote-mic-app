@@ -92,7 +92,7 @@
 - 同一安装包中，Codex、Ego Lite 和 Telegram 均能取得输入框快照并保存回眸记录。
 - 微信四个有效长按会话全部先等待 1.25 秒，随后以 `initial_focus_unavailable` 跳过；语音输入和 F20 确认本身正常。
 - 微信聊天主窗口只向 Accessibility 暴露窗口级结构，不暴露聊天输入框的文字、选区或可编辑元素。既有短按定位依赖窗口相对点击，因此“能聚焦、能说话”不等于“能读取文字”。
-- 千问输入法本地 `VoiceUsage/voice_usage.json` 含完整语音历史，但 payload 标记为 `unet_internal_wsg_base64`；千问二进制明确限制解密能力只在其输入法服务进程内，SayAll 没有公开读取接口。
+- 千问没有提供可供 SayAll 使用的公开转写结果接口。
 
 ### 结论与边界
 
@@ -106,10 +106,3 @@
 - 公开回眸实现与回归明确要求 `TranscriptCaptureCoordinator` 不依赖 `PrivateFeatureIntegration` 或 API；官方与本地二进制也包含同一套 `TRANSCRIPT CAPTURE` 诊断。因此私有组件能解释界面差异，但没有证据证明它是微信记录来源。
 - 当前最强假设是社区机器使用仍暴露可编辑输入框的微信旧版本、不同安装渠道或界面灰度。需要对方提供微信“关于”版本、安装来源、macOS 版本和 SayAll 版本，才能继续区分版本回归与灰度差异；仅凭回眸截图不能确定。
 - 本机微信没有 Mac App Store receipt，属于官网或其他渠道安装的 `4.1.12`；Apple 当前 Mac App Store 页面仍列 `4.1.11`。因此“官网 4.1.12 与 App Store 4.1.11 的 Accessibility 差异”是可验证的首要分支，但在拿到社区用户版本前仍只是强假设，不建议直接降级微信。
-
-### 千问本地历史 Helper 修复与真机验收
-
-- 新增独立 `QianwenHistoryReader`，只在“千问模式＋微信＋已开启回眸”时使用；普通 App 继续走 Accessibility 差异捕获。
-- Helper 由 `sandbox-exec` 禁止网络和文件写入，只读取千问本地加密语音历史，使用千问已安装的本地运行库解密，并按当前语音时间窗返回一条最终文字；正文只通过父子进程管道传给 SayAll，不写日志。
-- Helper 单独签名并进入 App 验证清单；千问版本、运行库、格式或字段不匹配时失败关闭，不影响语音、按键和其他 App 回眸。
-- 真实 RC003 / 微信验收：`ATVV STREAM accepted → AUDIO PLAYBACK drained → QIANWEN CONFIRM F20 → QIANWEN HISTORY saved`；最终保存 10 个字符，回眸落盘出现微信第 1 条记录。用户确认微信文字可记录，手机不再出现“断开 Mac”提示。

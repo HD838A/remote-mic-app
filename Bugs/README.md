@@ -1,6 +1,5 @@
 # Bug 记录
 
-- [千问历史读取进程无超时可能阻塞微信回眸](./2026-08-25-qianwen-history-reader-timeout.md)
 - [千问语音输出误选 Mac 扬声器产生电流声](./2026-08-25-qianwen-speaker-route-current-noise.md)
 - [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md)
 - [自定义快捷键连续快速按只有第一次生效](./2026-08-25-custom-shortcut-rapid-press-dropped.md)
@@ -70,7 +69,6 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
-| 2026-08-25 | [千问历史读取进程无超时可能阻塞微信回眸](./2026-08-25-qianwen-history-reader-timeout.md) | 自动化通过，等待安装包微信回眸复验 |
 | 2026-08-25 | [千问语音输出误选 Mac 扬声器产生电流声](./2026-08-25-qianwen-speaker-route-current-noise.md) | 失败关闭自动化通过，等待设备暂时不可用的真机复验 |
 | 2026-08-25 | [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md) | 候选修复完成，等待真实 Mac、遥控器和豆包输入验收 |
 | 2026-08-25 | [自定义快捷键连续快速按只有第一次生效](./2026-08-25-custom-shortcut-rapid-press-dropped.md) | 候选修复完成；自动化与项目自检通过，等待 RC001 / RC003 真机连按验收 |
