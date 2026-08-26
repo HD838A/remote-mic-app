@@ -7,17 +7,17 @@
 
 ## 合并后私有包版本与宿主集成
 
-组合动作默认开放已通过 PR [GetSayAll/sayall-macro-platform#4](https://github.com/GetSayAll/sayall-macro-platform/pull/4) 合入 `main`。本次宿主集成固定使用完整 commit：
+组合动作默认开放已通过 PR [GetSayAll/sayall-macro-platform#4](https://github.com/GetSayAll/sayall-macro-platform/pull/4) 合入 `main`；本次按键捕获修复对应私有包 Draft PR [#5](https://github.com/GetSayAll/sayall-macro-platform/pull/5)。宿主验证固定使用修复提交的完整 commit：
 
 ```text
-76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
+19080aa9e9f1289f9ab4cc5715f2067cb50c546e
 ```
 
 本地开发或验证时，将私有包 checkout 到该 commit（不得使用浮动的 `main`）：
 
 ```bash
 git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform fetch origin main
-git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform checkout --detach 76344d4d1a2d477e8f473c901a9f4d3d7b0f107c
+git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform checkout --detach 19080aa9e9f1289f9ab4cc5715f2067cb50c546e
 ```
 
 宿主通过 `Package.swift` 的 `SAYALL_MACRO_PLATFORM_PATH` 注入本地包；最小测试命令为：
@@ -144,6 +144,24 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 预期：文字位于遥控器左侧时右对齐，位于右侧时左对齐，文字和遥控器向页面中间靠拢。首次勾选时页面直接显示“左键单击目前执行：打开 Codex”和“保存后将改为：组合动作 A”；准备替换时显示当前组合动作 A 和保存后的组合动作 B；取消绑定时显示保存后恢复的按键动作。提示只在存在未保存的绑定变化时出现，保存或撤回变化后消失，全程不弹出额外窗口。
 
 失败判定：不显示保存前后的动作、显示错误的按键或触发方式、替换其他组合动作时仍显示按键页动作、保存后提示不消失、左右文字对齐方向错误，或提示遮挡遥控器和触发选项。
+
+### 用例三 G：组合动作按键选择模式与动作路由
+
+步骤：
+
+1. 打开“组合动作”页面，选择一个已保存动作；在未打开“选择遥控器按键”开关时，使用实体遥控器、Nearby 和 Web Remote 触发已绑定动作，并分别覆盖页面内测试成功后、切换到其他页面前后的场景。
+2. 打开“选择遥控器按键”开关，按下目标实体遥控器按键；观察当前绑定选择，再关闭开关并再次按键。
+3. 在开关打开时切换侧边栏、关闭设置窗口、隐藏无线麦 App，然后重新按键。
+4. 回到“按键映射”页面，验证原有“按键确定位置 / 选择锁定”流程；再返回组合动作页面重复步骤 1。
+
+预期：
+
+- 开关默认关闭；仅浏览、测试或编辑步骤时，遥控器和手机 / 网页按键继续执行原来的动作或已绑定的组合动作。
+- 开关打开时，按键只更新组合动作的当前绑定选择，不执行该按键动作；关闭后立即恢复动作执行。
+- 页面切换、视图销毁、设置窗口关闭和 App 隐藏都会退出捕获模式；恢复后按键不需要重启 App 即可执行。
+- “按键确定位置 / 选择锁定”原有功能仍可用，不被组合动作页面的显式模式改写。
+
+失败判定：开关关闭时按键仍被吞掉、开关打开时误执行动作、关闭或隐藏后仍持续捕获、手机 / 网页与实体遥控器行为不一致，或原按键确定位置流程失效。
 
 ### 用例三 A：最终 App 脱离构建缓存打开快捷指令
 

@@ -1678,7 +1678,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 ?? self.settings.profileID(forHIDFingerprint: fingerprint)
             let resolvedProfileID = existingProfileID
                 ?? self.settings.registerHIDRemote(fingerprint: fingerprint)
-            if resolvedProfileID == self.settings.selectedRemoteProfileID {
+            if resolvedProfileID == self.settings.selectedRemoteProfileID,
+               self.macroFeature.isEditorActive {
                 self.macroFeature.noteButtonInteraction(button: button)
             }
             let isNewBinding = existingProfileID == nil
@@ -1695,6 +1696,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 control: .remoteButton(button),
                 source: .bluetoothRemote
             )
+            if self.macroFeature.isEditorActive {
+                AppLogger.shared.write(
+                    "HID BUTTON button=\(button.rawValue) path=binding_editor_capture"
+                )
+            }
             return (resolvedProfileID, !self.macroFeature.isEditorActive)
         }
         monitor.onInternalAction = { [weak self] profileID, action in
@@ -2392,6 +2398,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             if phase == .press {
                 macroFeature.noteButtonInteraction(button: button)
             }
+            AppLogger.shared.write(
+                "PHONE REMOTE button=\(button.rawValue) phase=\(phase.rawValue) " +
+                    "path=binding_editor_capture"
+            )
             return true
         }
         let profileID = settings.selectedRemoteProfileID

@@ -267,10 +267,12 @@ struct SettingsView: View {
         .onAppear {
             refreshPermissionStates()
             loginItemService.refresh()
-            macroFeature.setEditorActive(selectedSection == .macros)
+            macroFeature.setEditorActive(false)
         }
         .onChange(of: selectedSection) { section in
-            macroFeature.setEditorActive(section == .macros)
+            if section != .macros {
+                macroFeature.setEditorActive(false)
+            }
         }
         .onDisappear {
             macroFeature.setEditorActive(false)
