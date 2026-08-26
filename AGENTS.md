@@ -14,7 +14,7 @@
 
 ## 分支与提交管理
 
-- 分支、worktree、独立提交、预览候选分支和大文件提交门禁统一见 [`BRANCH_MANAGEMENT.md`](BRANCH_MANAGEMENT.md)。
+- 分支、worktree、独立提交、Preview staging 和大文件提交门禁统一见 [`BRANCH_MANAGEMENT.md`](BRANCH_MANAGEMENT.md)。
 - 涉及分支创建、切换、commit、合并、Push 或发布前，必须先读取并遵守该文件。
 
 ## 跨应用数据访问边界

@@ -22,9 +22,9 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - Distribution 与内层安装脚本使用 `hw.optional.arm64` 判断真实硬件，避免 Rosetta 环境下 `uname -m` 把 Apple Silicon 误判为 Intel；preinstall 与 postinstall 继续保留删除或替换前的二次防御。
 - Sparkle Framework 在 Intel 包中只保留 `x86_64` slice，`appcast-intel.xml` 防止跨架构更新串包。
 - GitHub Actions 日常验证两种架构；受保护的正式打包任务在临时 Keychain 中导入既有 Developer ID 证书，并分别完成签名、公证和 staple。
-- 正式打包只复用精确候选 SHA 上已经成功的 Apple Silicon、Intel 候选测试；进入 Apple 凭据环境前会核对候选 push run、两种架构 Job、私有依赖钉定和精确 SHA 的 Draft 回流 PR。
+- 受保护 Preview staging 只接受精确 origin/main SHA；进入 Apple 凭据环境前会核对 main push CI、两种架构 Job、私有依赖钉定和 source SHA。staging 不创建候选分支或公开 Release。
 - Apple Silicon 与 Intel 使用按版本、Build 和架构区分的 SwiftPM scratch，可并行完成 Release 构建、签名与公证；每种架构的安装、卸载 PKG 也可并行提交公证，任何一条失败都会使整个正式打包失败。
-- 一个 Release 同时携带两套产物，候选溯源记录并校验全部资产；中英文更新说明由两套 appcast 共享，DMG 校验值合并到同一清单，稳定晋升不重新构建。
+- 一个 Release 同时携带两套产物，staged-assets.json 和 candidate-provenance.json 校验全部资产；中英文更新说明由两套 appcast 共享，DMG 校验值合并到同一清单，Stable promotion 不重新构建。
 
 ## 涉及文件
 
@@ -40,10 +40,11 @@ Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，�
 - `scripts/build-*.sh`、`scripts/verify-*.sh`
 - `scripts/notarize-release.sh`
 - `scripts/package-macos-release-in-actions.sh`
-- `scripts/publish-release.sh`
+- `scripts/publish-preview-release.sh`
+- `scripts/promote-preview-release.sh`
 - `.github/workflows/mac-ci.yml`
-- `.github/workflows/mac-preview-candidate.yml`
 - `.github/workflows/mac-release-package.yml`
+- `.github/workflows/mac-preview-publication.yml`
 
 ## 隐私与兼容边界
 

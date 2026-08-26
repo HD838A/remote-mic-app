@@ -2,7 +2,7 @@
 
 ## 适用版本或分支
 
-- 分支：最新 `main` 或由其直接创建的预览候选。
+- 分支：最新 `main`；测试包来自对应的受保护 staging artifact，不创建预览候选分支。
 - 适用版本：`1.9.10` 预览版候选及其后续版本；`1.8.18 (110)` 和 `1.8.22 (114)` 均存在快捷指令 SwiftPM 资源路径崩溃，不得继续分发。
 
 ## 合并后私有包版本与宿主集成
@@ -28,7 +28,7 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 swift test
 ```
 
-构建 App 时继续使用 `./scripts/build-app.sh`，并同时设置 `SAYALL_MACRO_PLATFORM_PATH` 与 `REQUIRE_SAYALL_MACRO_PLATFORM=1`；构建后运行 `REQUIRE_SAYALL_MACRO_PLATFORM=1 ./scripts/verify-app.sh "dist/SayAll.app"` 检查模块确实被打包。CI、预览候选和签名发布 workflow 都必须使用同一个 40 位 SHA；修改 pin 后在宿主仓库执行：
+构建 App 时继续使用 `./scripts/build-app.sh`，并同时设置 `SAYALL_MACRO_PLATFORM_PATH` 与 `REQUIRE_SAYALL_MACRO_PLATFORM=1`；构建后运行 `REQUIRE_SAYALL_MACRO_PLATFORM=1 ./scripts/verify-app.sh "dist/SayAll.app"` 检查模块确实被打包。CI、Preview staging 和签名发布 workflow 都必须使用同一个 40 位 SHA；修改 pin 后在宿主仓库执行：
 
 ```bash
 ./scripts/verify-release-dependency-pins.sh

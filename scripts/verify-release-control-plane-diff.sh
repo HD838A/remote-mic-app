@@ -11,60 +11,25 @@ HEAD_COMMIT="${2:-HEAD}"
 }
 
 CONTROL_PLANE_SCRIPTS=(
-  scripts/fast-release.sh
-  scripts/prepare-preview-recording-pr.sh
-  scripts/prepare-preview-candidate.sh
-  scripts/publish-release.sh
+  scripts/prepare-preview-release.sh
+  scripts/stage-macos-preview.sh
+  scripts/prepare-public-release-assets.sh
+  scripts/verify-preview-cdn-availability.sh
+  scripts/verify-staged-release-assets.sh
+  scripts/recover-preview-stage.sh
   scripts/publish-staged-preview.sh
+  scripts/publish-preview-release.sh
+  scripts/promote-preview-release.sh
   scripts/prepare-staged-preview-ui-test.sh
   scripts/record-preview-ui-attestation.sh
   scripts/verify-preview-ui-attestation.sh
-  scripts/resume-preview-publication.sh
-  scripts/release-slo-ledger.sh
-  scripts/release-user-wall-watchdog.sh
-  scripts/reconcile-release-event.sh
-  scripts/resolve-stable-request-attestation.sh
   scripts/verify-release-ready-main-ci.sh
-  scripts/test-release-pipeline-optimization.sh
-  scripts/test-release-resume-workflow.sh
-  scripts/test-prepare-preview-candidate.sh
+  scripts/verify-release-dependency-pins.sh
+  scripts/verify-release-workflow-gh-token.sh
+  scripts/test-macos-release-flow.sh
+  scripts/test-prepare-preview-release.sh
   scripts/verify-release-control-plane-diff.sh
 )
-
-validate_mac_ci_diff() {
-  local diff_line content release_job=false
-  while IFS= read -r diff_line; do
-    case "$diff_line" in
-      +++*|---*|@@*) continue ;;
-      +*|-*)
-        content="${diff_line#?}"
-        [[ -z "$content" ]] && continue
-        if [[ "$diff_line" == +* && "$content" == *"name: Release control-plane tests"* ]]; then
-          release_job=true
-          continue
-        fi
-        [[ "$release_job" == true && "$diff_line" == +* ]] && continue
-        case "$content" in
-          *release_control_plane*|*release-control-plane*|*"Release control-plane"*|*"release control-plane"*|*verify-release-control-plane-diff.sh*|\
-          *.github/workflows/mac-preview-publication.yml*|*.github/workflows/mac-ci.yml*|\
-          *scripts/fast-release.sh*|*scripts/prepare-preview-recording-pr.sh*|*scripts/prepare-preview-candidate.sh*|\
-          *scripts/publish-release.sh*|*scripts/publish-staged-preview.sh*|\
-          *scripts/prepare-staged-preview-ui-test.sh*|*scripts/record-preview-ui-attestation.sh*|\
-          *scripts/verify-preview-ui-attestation.sh*|*scripts/resume-preview-publication.sh*|\
-          *scripts/release-slo-ledger.sh*|*scripts/release-user-wall-watchdog.sh*|\
-          *scripts/reconcile-release-event.sh*|*scripts/resolve-stable-request-attestation.sh*|\
-          *scripts/verify-release-ready-main-ci.sh*|\
-          *scripts/test-release-pipeline-optimization.sh*|*scripts/test-release-resume-workflow.sh*|\
-          *Tests/RemoteMicTests/BuildSigningTests.swift*|*"swift test --filter BuildSigningTests"*|*DEVELOPER_DIR*|*env:*|*docs_only=false*|*";;"*|*GITHUB_EVENT_NAME*|*GITHUB_WORKSPACE*|*needs.classify_changes.outputs.docs_only*|*needs.classify_changes.outputs.reuse_parent_main_ci*|*"needs: classify_changes"*) ;;
-          *)
-            print -u2 "macOS CI change is outside the release control-plane classifier: $content"
-            return 1
-            ;;
-        esac
-        ;;
-    esac
-  done < <(git -C "$ROOT" diff --unified=0 "$BASE_COMMIT...$HEAD_COMMIT" -- .github/workflows/mac-ci.yml)
-}
 
 control_changed=false
 while IFS= read -r changed_path; do
@@ -73,12 +38,14 @@ while IFS= read -r changed_path; do
     *.md|Screenshots/*)
       continue
       ;;
-    .github/workflows/mac-preview-publication.yml)
+    .github/workflows/mac-release-package.yml|\
+    .github/workflows/mac-preview-publication.yml|\
+    .github/workflows/mac-stable-promote.yml)
       control_changed=true
       ;;
     .github/workflows/mac-ci.yml)
-      validate_mac_ci_diff || exit 1
-      control_changed=true
+      print -u2 "mac-ci.yml changes require the full two-architecture CI path"
+      exit 1
       ;;
     Tests/RemoteMicTests/BuildSigningTests.swift)
       control_changed=true

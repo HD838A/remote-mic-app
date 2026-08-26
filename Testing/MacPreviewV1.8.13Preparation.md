@@ -1,11 +1,13 @@
 # Mac v1.8.13 预览候选准备
 
+> 历史记录：本文件描述旧版候选准备，不是当前发布入口。当前流程见 RELEASING.md。
+
 ## 状态与范围
 
 - 目标版本：`1.8.13 (105)`。
 - 当前分支：`codex/integrate-mac-v1.8.13`。
-- 本阶段只准备产品代码、版本说明和验证记录，不修改 `Resources/Info.plist`，不创建 `release/pre-v1.8.13`，不打包或发布。
-- 产品代码进入 `main` 后，才能从 `main` 创建正式的预览发布分支并写入版本号。
+- 本阶段只准备产品代码、版本说明和验证记录，不修改 `Resources/Info.plist`，不创建旧流程的 `release/pre-v1.8.13`，不打包或发布。
+- 按当前流程，产品代码进入 `main` 后，版本号和 Build 通过普通元数据 PR 合入；不再创建预览发布分支。
 
 本候选计划包含：
 
@@ -36,7 +38,7 @@
 - `swift test --filter SettingsPageRegressionTests`
 - Apple Silicon 与 Intel 配置变体的完整 Swift 测试和 `scripts/test.sh`
 - Apple Silicon `arm64-apple-macosx14.0` 与 Intel `x86_64-apple-macosx13.0` 的非打包 Release 编译
-- 确认 `scripts/verify-preview-branch.sh` 的产品代码先进入 `main` 门禁仍然成立
+- 确认 `scripts/verify-release-ready-main-ci.sh` 的产品代码先进入 `main` 门禁仍然成立
 
 ## 人工与真实环境边界
 
