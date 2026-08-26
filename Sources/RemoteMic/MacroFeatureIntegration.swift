@@ -79,7 +79,10 @@ final class MacroFeatureIntegration: ObservableObject {
         #if canImport(SayAllMacroRemoteMic)
         feature.settingsView(
             selectedRemoteProfileID: selectedRemoteProfileID,
-            configuredActionTitle: configuredActionTitle
+            configuredActionTitle: configuredActionTitle,
+            onBindingEditorActivityChanged: { [weak self] active in
+                self?.setEditorActive(active)
+            }
         )
         #else
         AnyView(EmptyView())

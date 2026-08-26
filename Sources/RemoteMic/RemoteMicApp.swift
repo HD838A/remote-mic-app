@@ -817,8 +817,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         guard let window = notification.object as? NSWindow,
               window === settingsWindowController?.window
         else { return }
+        model.macroFeature.setEditorActive(false)
         isSettingsWindowOpen = false
         updateDockActivationPolicy()
+    }
+
+    func applicationDidHide(_ notification: Notification) {
+        model.macroFeature.setEditorActive(false)
     }
 
     @objc private func showLog() {
