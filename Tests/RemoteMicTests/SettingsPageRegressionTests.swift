@@ -690,6 +690,18 @@ struct SettingsPageRegressionTests {
         #expect(aboutPage.contains("about.version.update_to"))
         #expect(aboutPage.contains("ForEach(AppLanguage.allCases)"))
         #expect(aboutPage.contains(".pickerStyle(.segmented)"))
+        let languageSectionStart = try #require(
+            aboutPage.range(of: "Text(\"about.preferences.language\")")
+        )
+        let languageSectionEnd = try #require(
+            aboutPage.range(
+                of: "Text(\"about.preferences.restart_onboarding\")",
+                range: languageSectionStart.upperBound..<aboutPage.endIndex
+            )
+        )
+        let languageSection = aboutPage[languageSectionStart.lowerBound..<languageSectionEnd.lowerBound]
+        #expect(languageSection.contains(".frame(width: 300)"))
+        #expect(languageSection.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
         #expect(!aboutPage.contains("help.glossary.open"))
         #expect(!aboutPage.contains("openGlossary"))
     }
