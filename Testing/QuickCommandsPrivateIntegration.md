@@ -10,7 +10,7 @@
 组合动作默认开放已通过 PR [GetSayAll/sayall-macro-platform#4](https://github.com/GetSayAll/sayall-macro-platform/pull/4) 合入 `main`；本次按键捕获修复对应私有包 Draft PR [#5](https://github.com/GetSayAll/sayall-macro-platform/pull/5)。宿主验证固定使用修复提交的完整 commit：
 
 ```text
-19080aa9e9f1289f9ab4cc5715f2067cb50c546e
+60db6940d89bd401fe1c4a3563fe33113a436c8c
 ```
 
 本地开发或验证时，将私有包 checkout 到该 commit（不得使用浮动的 `main`）：
