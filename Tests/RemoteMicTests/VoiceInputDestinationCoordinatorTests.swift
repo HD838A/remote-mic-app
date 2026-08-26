@@ -148,13 +148,20 @@ struct VoiceInputDestinationCoordinatorTests {
         #expect(result == .ready)
     }
 
-    @Test func safeEditableClassificationRejectsSensitiveAndNonEditableElements() {
+    @Test func safeEditableClassificationAllowsSearchAndCustomEditorsButRejectsSecrets() {
         #expect(voiceInputTestSnapshot().isSafeEditableDestination)
         #expect(!voiceInputTestSnapshot(role: "AXButton", editable: false).isSafeEditableDestination)
+        #expect(voiceInputTestSnapshot(
+            role: "AXGroup",
+            editable: true,
+            semanticText: "Sublime editor"
+        ).isSafeEditableDestination)
+        #expect(voiceInputTestSnapshot(semanticText: "Search").isSafeEditableDestination)
+        #expect(voiceInputTestSnapshot(semanticText: "搜索").isSafeEditableDestination)
         #expect(!voiceInputTestSnapshot(subrole: "AXSecureTextField").isSafeEditableDestination)
         #expect(!voiceInputTestSnapshot(protectedContent: true).isSafeEditableDestination)
         #expect(!voiceInputTestSnapshot(semanticText: "Password").isSafeEditableDestination)
-        #expect(!voiceInputTestSnapshot(semanticText: "Search").isSafeEditableDestination)
+        #expect(!voiceInputTestSnapshot(semanticText: "API Token").isSafeEditableDestination)
         #expect(!voiceInputTestSnapshot(enabled: false).isSafeEditableDestination)
     }
 
