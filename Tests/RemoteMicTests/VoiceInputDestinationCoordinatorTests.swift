@@ -165,6 +165,39 @@ struct VoiceInputDestinationCoordinatorTests {
         #expect(!voiceInputTestSnapshot(enabled: false).isSafeEditableDestination)
     }
 
+    @Test func opaqueKeyboardDestinationsPassThroughWithoutAllowingKnownUnsafeControls() {
+        #expect(voiceInputTestSnapshot(
+            role: "AXWindow",
+            editable: false,
+            semanticText: "Sublime editor"
+        ).allowsOpaqueVoiceShortcutPassThrough)
+        #expect(voiceInputTestSnapshot(
+            role: "",
+            editable: false,
+            semanticText: ""
+        ).allowsOpaqueVoiceShortcutPassThrough)
+        #expect(!voiceInputTestSnapshot(
+            role: "AXButton",
+            editable: false
+        ).allowsOpaqueVoiceShortcutPassThrough)
+        #expect(!voiceInputTestSnapshot(
+            bundleIdentifier: nil,
+            role: "",
+            editable: false,
+            semanticText: ""
+        ).allowsOpaqueVoiceShortcutPassThrough)
+        #expect(!voiceInputTestSnapshot(
+            role: "AXWindow",
+            editable: false,
+            protectedContent: true
+        ).allowsOpaqueVoiceShortcutPassThrough)
+        #expect(!voiceInputTestSnapshot(
+            role: "AXWindow",
+            editable: false,
+            semanticText: "Password"
+        ).allowsOpaqueVoiceShortcutPassThrough)
+    }
+
     @Test func intentResolutionCoversPresetCustomRecordedAndShortcutPaths() {
         let shortcut = CustomKeyboardShortcut(
             keyCode: 49,

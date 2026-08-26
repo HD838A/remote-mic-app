@@ -78,14 +78,25 @@ struct VoiceInputDestinationSnapshot: Equatable {
     }
 
     var isSafeEditableDestination: Bool {
-        guard enabled, editable, !protectedContent else { return false }
-        guard role != "AXSecureTextField", subrole != "AXSecureTextField" else { return false }
+        enabled && editable && !isSensitiveDestination
+    }
+
+    var allowsOpaqueVoiceShortcutPassThrough: Bool {
+        guard enabled, bundleIdentifier != nil, !isSensitiveDestination else { return false }
+        return role.isEmpty || role == "AXWindow" || role == "AXApplication"
+    }
+
+    private var isSensitiveDestination: Bool {
+        guard !protectedContent,
+              role != "AXSecureTextField",
+              subrole != "AXSecureTextField"
+        else { return true }
         let normalized = semanticText.lowercased()
         let sensitiveTerms = [
             "password", "passcode", "secret", "api key", "apikey", "token",
             "credit card", "密码", "口令", "密钥", "令牌", "信用卡", "银行卡",
         ]
-        return !sensitiveTerms.contains(where: normalized.contains)
+        return sensitiveTerms.contains(where: normalized.contains)
     }
 
     static func system() -> VoiceInputDestinationSnapshot {
@@ -98,7 +109,7 @@ struct VoiceInputDestinationSnapshot: Equatable {
             systemWideElement,
             attribute: kAXFocusedUIElementAttribute as CFString
         ) else {
-            return empty(bundleIdentifier: frontmostBundleIdentifier)
+            return empty(bundleIdentifier: frontmostBundleIdentifier, enabled: true)
         }
 
         var processIdentifier: pid_t = 0
@@ -141,12 +152,15 @@ struct VoiceInputDestinationSnapshot: Equatable {
         )
     }
 
-    private static func empty(bundleIdentifier: String?) -> VoiceInputDestinationSnapshot {
+    private static func empty(
+        bundleIdentifier: String?,
+        enabled: Bool = false
+    ) -> VoiceInputDestinationSnapshot {
         VoiceInputDestinationSnapshot(
             bundleIdentifier: bundleIdentifier,
             role: "",
             subrole: "",
-            enabled: false,
+            enabled: enabled,
             editable: false,
             protectedContent: false,
             semanticText: ""

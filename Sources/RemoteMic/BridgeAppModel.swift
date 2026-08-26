@@ -3369,7 +3369,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             bundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         )
         guard qianwenVoiceSession.prepareDestinationIfNeeded(
-            destinationIsReady: destination.isSafeEditableDestination || acceptsOpaqueDestination
+            destinationIsReady: destination.isSafeEditableDestination ||
+                destination.allowsOpaqueVoiceShortcutPassThrough ||
+                acceptsOpaqueDestination
         ) else { return false }
 
         _ = bridge.requestMicrophoneClose()
