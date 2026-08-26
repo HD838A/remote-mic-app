@@ -573,6 +573,21 @@ enum KeyboardInjector {
               let application = NSWorkspace.shared.frontmostApplication
         else { return false }
         let requestID = frontmostFocusRequests.begin()
+        if application.bundleIdentifier == PresetApplication.cmux.bundleIdentifier,
+           let applicationURL = NSWorkspace.shared.urlForApplication(
+               withBundleIdentifier: PresetApplication.cmux.bundleIdentifier
+           ) {
+            scheduleCmuxFocus(
+                applicationURL: applicationURL,
+                application: .cmux,
+                processIdentifier: application.processIdentifier,
+                requestID: requestID,
+                attempt: 0,
+                requestGate: frontmostFocusRequests,
+                completion: completion
+            )
+            return true
+        }
         scheduleAccessibilityComposerFocus(
             bundleIdentifier: application.bundleIdentifier ?? "unknown",
             processIdentifier: application.processIdentifier,
@@ -589,12 +604,14 @@ enum KeyboardInjector {
         application: PresetApplication,
         processIdentifier: pid_t,
         requestID: UInt64,
-        attempt: Int
+        attempt: Int,
+        requestGate: ApplicationFocusRequestGate = focusRequests,
+        completion: ((Bool) -> Void)? = nil
     ) {
         let maximumAttempts = 4
         let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(100) : .milliseconds(200)
         focusQueue.asyncAfter(deadline: .now() + delay) {
-            guard focusRequests.isCurrent(requestID) else { return }
+            guard requestGate.isCurrent(requestID) else { return }
             let nextAttempt = attempt + 1
             if !applicationIsFrontmost(processIdentifier) {
                 if nextAttempt < maximumAttempts {
@@ -603,13 +620,22 @@ enum KeyboardInjector {
                         application: application,
                         processIdentifier: processIdentifier,
                         requestID: requestID,
-                        attempt: nextAttempt
+                        attempt: nextAttempt,
+                        requestGate: requestGate,
+                        completion: completion
+                    )
+                } else {
+                    completeComposerFocus(
+                        false,
+                        requestID: requestID,
+                        requestGate: requestGate,
+                        completion: completion
                     )
                 }
                 return
             }
             let canContinue = {
-                focusRequests.isCurrent(requestID) && applicationIsFrontmost(processIdentifier)
+                requestGate.isCurrent(requestID) && applicationIsFrontmost(processIdentifier)
             }
             let focused = focusCmux(
                 applicationURL: applicationURL,
@@ -631,6 +657,12 @@ enum KeyboardInjector {
                 AppLogger.shared.write(
                     "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=cmux_api_accessibility"
                 )
+                completeComposerFocus(
+                    true,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
+                )
                 return
             }
 
@@ -640,11 +672,19 @@ enum KeyboardInjector {
                     application: application,
                     processIdentifier: processIdentifier,
                     requestID: requestID,
-                    attempt: nextAttempt
+                    attempt: nextAttempt,
+                    requestGate: requestGate,
+                    completion: completion
                 )
-            } else if focusRequests.isCurrent(requestID) {
+            } else if requestGate.isCurrent(requestID) {
                 AppLogger.shared.write(
                     "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=terminal_not_focused"
+                )
+                completeComposerFocus(
+                    false,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
                 )
             }
         }
@@ -699,7 +739,10 @@ enum KeyboardInjector {
                 )
             }
             if applicationIsFrontmost(processIdentifier), isAccessibilityTrusted {
-                if focusComposer(processIdentifier: processIdentifier) {
+                if focusComposer(
+                    processIdentifier: processIdentifier,
+                    emitDiagnostics: attempt == 0 || attempt + 1 == composerFocusMaximumAttempts
+                ) {
                     AppLogger.shared.write(
                         "APP FOCUS succeeded bundle=\(bundleIdentifier) method=accessibility"
                     )
@@ -842,13 +885,45 @@ enum KeyboardInjector {
         NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier
     }
 
-    private static func focusComposer(processIdentifier: pid_t) -> Bool {
+    private static func focusComposer(
+        processIdentifier: pid_t,
+        emitDiagnostics: Bool = false
+    ) -> Bool {
         let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        var windowCount = 0
+        var candidateCount = 0
+        var eligibleCount = 0
+        var excludedSearchCount = 0
+        var excludedTerminalCount = 0
+        var excludedSensitiveCount = 0
         for window in applicationWindows(applicationElement) {
+            windowCount += 1
             let windowTitle = axString(window, attribute: kAXTitleAttribute).lowercased()
             let excludedWindowTerms = ["settings", "preferences", "设置", "偏好设置"]
             guard !excludedWindowTerms.contains(where: windowTitle.contains) else { continue }
             let candidates = accessibilityTextCandidates(in: window)
+            candidateCount += candidates.count
+            for candidate in candidates.map(\.snapshot) {
+                let semanticText = [
+                    candidate.identifier,
+                    candidate.title,
+                    candidate.description,
+                    candidate.help,
+                    candidate.placeholder,
+                    candidate.context,
+                ].joined(separator: " ").lowercased()
+                if composerCandidateScore(candidate, windowFrame: axFrame(window)) != nil {
+                    eligibleCount += 1
+                } else if ["search", "find", "filter", "搜索", "查找", "筛选"]
+                    .contains(where: semanticText.contains) {
+                    excludedSearchCount += 1
+                } else if ["terminal", "console", "shell", "xterm", "终端", "控制台"]
+                    .contains(where: semanticText.contains) {
+                    excludedTerminalCount += 1
+                } else if containsSensitiveAccessibilityTerms(semanticText) {
+                    excludedSensitiveCount += 1
+                }
+            }
             guard let candidateIndex = bestComposerCandidateIndex(
                 candidates.map(\.snapshot),
                 windowFrame: axFrame(window)
@@ -859,6 +934,14 @@ enum KeyboardInjector {
             ) {
                 return true
             }
+        }
+        if emitDiagnostics {
+            AppLogger.shared.write(
+                "APP FOCUS scan bundle=\(NSRunningApplication(processIdentifier: processIdentifier)?.bundleIdentifier ?? "unknown") " +
+                    "windows=\(windowCount) candidates=\(candidateCount) eligible=\(eligibleCount) " +
+                    "excluded_search=\(excludedSearchCount) excluded_terminal=\(excludedTerminalCount) " +
+                    "excluded_sensitive=\(excludedSensitiveCount)"
+            )
         }
         return false
     }
