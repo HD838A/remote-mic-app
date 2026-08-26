@@ -12,7 +12,7 @@
 - 会话层事件 tap 实测：TV 键的键盘接口实际向系统发送 `keyCode=10`（ISO § 键），`flags=0x100`，连按 30 次全部到达会话层。
 - 当时的对照实测只能证明该台 Mac 在当时键盘布局下使用 keyCode 10，不能排除其他布局使用 keyCode 50。
 - 对照实测：电源键走独立的 power_suppressed 机制，不存在同类泄漏。
-- 2026-08-25 现场再现：在当前键盘布局下，TV 键打开 Codex 后输入反引号。运行日志同时证明 `HID FILTER ready=true`、`mode=monitored`和 `action=openCodex`。本机键盘布局只读翻译证明 keyCode 10 产生 `§`，keyCode 50 产生反引号。
+- 2026-08-25 现场再现：当前键盘布局下，TV 键打开目标 App 后会输入反引号。运行日志同时证明事件过滤器已启动且设备处于 monitored 模式。本机键盘布局只读翻译证明 keyCode 10 产生 `§`，keyCode 50 产生反引号。
 
 ## 日志结论
 
@@ -20,7 +20,7 @@
 
 ## 根因
 
-`RemoteButton.nativeEvent` 只能记一个虚拟键码。TV 键的 HID usage 在 macOS 上会根据 ISO/ANSI 键盘布局表现为 keyCode 10 或 50；只防其中一个时，另一布局下的原生事件会被静默放行。
+TV 键的 HID usage 在 macOS 上会根据 ISO/ANSI 键盘布局表现为 keyCode 10 或 50。`RemoteButton.nativeEvent` 只能记一个虚拟键码；只防其中一个时，另一布局下的原生事件会被静默放行。
 
 ## 修复
 
@@ -32,17 +32,10 @@
 
 - `SKIP_SWIFT_PACKAGE_BUILD=1 scripts/test.sh`：42 项通过（含更新后的 "native duplicate-event descriptors" 断言）。
 - 手工单元测试链路（本机 Swift 6.1 等效 runner）：`RemoteButtonsTests.nativeEventDescriptorsCoverPotentialDuplicateEvents` 通过。
-- 2026-08-25 真机回归通过：用户在 monitored 模式下使用 TV “打开 Codex”动作，确认 Codex 正常打开且输入框不再出现反引号或其他奇怪符号。
+- 真机回归（待做）：monitored 模式下把 TV 绑定为非原生动作，连按 TV，确认前台输入框不再出现 §，且绑定动作正常执行。
 
 ## 验证边界
 
-- 实测证据仍只来自一台 rc003；RC001 及其他固件版本未验证。当前修复针对已观测的 macOS ISO/ANSI 虚拟键码差异，不假设固件改变。
+- 实测证据只来自一台 rc003；RC001 及其他固件版本的 TV 键原生键码未验证（若不同固件发射不同键码，需要按设备指纹分别建表，当前无证据表明存在这种差异）。
 - seized（独占）模式本就不受影响：系统 HID 不消费遥控器事件。
 - 本机工具链为 Swift 6.1（Xcode 16.4），仓库要求 6.2；单元测试通过手工等效链路执行，CI 上的完整 `swift test` 以 PR 检查为准。
-
-## 2026-08-25 本地安装后再次出现
-
-- TV 的单击绑定仍为 `openCodex`，ISO/ANSI 双键码修复也仍在安装包中。
-- 实际原因是 `customMappingEnabled=false`：关闭自定义按键后，App 不执行 TV 绑定，也不会拦截系统原生键码，因此特殊符号重新进入前台输入框。
-- 已恢复 App 自己的“启用自定义按键功能”开关并重启。新进程确认 `power_suppressed=true`、`HID FILTER ready=true`，没有修改 macOS 权限。
-- 用户真机复验通过：TV 可以正常打开 Codex，输入框不再出现特殊符号。
