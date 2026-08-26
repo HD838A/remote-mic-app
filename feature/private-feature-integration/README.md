@@ -32,7 +32,7 @@
 - `Sources/RemoteMic/SettingsView.swift`
 - `Sources/RemoteMic/RemoteMicApp.swift`
 - `.github/workflows/mac-ci.yml`
-- `.github/workflows/mac-preview-candidate.yml`
+- `.github/workflows/mac-release-package.yml`
 - `scripts/build-app.sh`
 - `scripts/verify-app.sh`
 - `scripts/notarize-release.sh`

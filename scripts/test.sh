@@ -13,12 +13,14 @@ esac
 mkdir -p "${OUTPUT:h}"
 xcrun swiftc \
   "$ROOT/Sources/RemoteMic/ATVVProtocol.swift" \
+  "$ROOT/Sources/RemoteMic/SystemAudioLifecycle.swift" \
   "$ROOT/Sources/RemoteMic/BluetoothLifecycle.swift" \
   "$ROOT/Sources/RemoteMic/RemoteButtons.swift" \
   "$ROOT/Sources/RemoteMic/KeyboardShortcutPicker.swift" \
   "$ROOT/Sources/RemoteMic/RemoteDeviceProfile.swift" \
   "$ROOT/Sources/RemoteMic/FirstUseDiagnostics.swift" \
   "$ROOT/Sources/RemoteMic/OnboardingFlow.swift" \
+  "$ROOT/Sources/RemoteMic/VoiceKeyMode.swift" \
   "$ROOT/Sources/RemoteMic/AppSettings.swift" \
   "$ROOT/Sources/RemoteMic/AppLinks.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \

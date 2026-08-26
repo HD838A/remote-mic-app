@@ -33,3 +33,7 @@
 - 无秘密：workflow 静态检查、发布管线回归脚本、`BuildSigningTests`。
 - 受保护：`v1.9.6` 完成双架构 Developer ID 签名、公证、staple、provenance 和 GitHub/CDN 公开字节验证。
 - 本记录不把 CI ad-hoc 包当作公开安装包，也不记录任何 token、证书、私钥或 Notary 凭据值。
+
+## 现行规则（2026-08-24）
+
+本节保留上述 `-rerun` 历史恢复事实。现行流程不再创建同版本恢复分支：无内容变化的基础设施失败只在同一 `release/pre-vX.Y.Z`、candidate SHA 和 Draft PR 上重跑，并保持版本、Build、`request_id` 与该 attempt 的 `release_ready_at` 不变。像本问题这样需要修改 workflow 的情况会先通过普通 PR 修复并按新 pipeline digest 完成 qualification，再在未进入不可变阶段时，以核对旧远端 head 的 compare-and-swap / `force-with-lease` 方式把同一版本分支和 PR 更新为 replacement attempt；版本和 Build 不因该编排故障递增。

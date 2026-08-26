@@ -4,6 +4,13 @@ import Foundation
 enum AppConfigurationError: Error {
     case unsupportedVersion
     case invalidValues
+    case unsafeVoiceKeyChange
+}
+
+struct VoiceKeyConfigurationState: Equatable {
+    let mode: VoiceKeyMode
+    let fnTapModeEnabled: Bool
+    let shortTapFocusEnabled: Bool
 }
 
 private struct PersonalizedConfiguration: Codable {
@@ -15,6 +22,7 @@ private struct PersonalizedConfiguration: Codable {
     let buttonShortcuts: [String: CustomKeyboardShortcut]
     let buttonApplicationProfileIDs: [String: UUID]?
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
+    let buttonRapidPressEnabled: [String: Bool]?
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let showDockIcon: Bool
@@ -22,6 +30,8 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
+    let voiceShortTapFocusEnabled: Bool?
+    let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -231,6 +241,7 @@ final class AppSettings: ObservableObject {
         static let buttonShortcuts = "buttonShortcuts"
         static let buttonApplicationProfileIDs = "buttonApplicationProfileIDs"
         static let secondaryButtonBindings = "secondaryButtonBindings"
+        static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let customApplicationProfiles = "customApplicationProfiles"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
@@ -241,6 +252,8 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let voiceShortTapFocusEnabled = "voiceShortTapFocusEnabled"
+        static let voiceKeyMode = "voiceKeyMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
@@ -302,6 +315,13 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published var buttonRapidPressEnabled: [RemoteButton: Bool] {
+        didSet {
+            saveButtonRapidPressEnabled()
+            saveSelectedRemoteProfileMappings()
+        }
+    }
+
     @Published private(set) var customApplicationProfiles: [CustomApplicationProfile] {
         didSet { saveCustomApplicationProfiles() }
     }
@@ -347,6 +367,21 @@ final class AppSettings: ObservableObject {
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
             )
+        }
+    }
+
+    @Published var voiceShortTapFocusEnabled: Bool {
+        didSet {
+            defaults.set(
+                voiceShortTapFocusEnabled,
+                forKey: Keys.voiceShortTapFocusEnabled
+            )
+        }
+    }
+
+    @Published var voiceKeyMode: VoiceKeyMode {
+        didSet {
+            defaults.set(voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
         }
     }
 
@@ -495,6 +530,19 @@ final class AppSettings: ObservableObject {
         }
 
         if
+            let data = defaults.data(forKey: Keys.buttonRapidPressEnabled),
+            let decoded = try? JSONDecoder().decode([String: Bool].self, from: data)
+        {
+            buttonRapidPressEnabled = Dictionary(
+                uniqueKeysWithValues: decoded.compactMap { key, value in
+                    RemoteButton(rawValue: key).map { ($0, value) }
+                }
+            )
+        } else {
+            buttonRapidPressEnabled = [:]
+        }
+
+        if
             let data = defaults.data(forKey: Keys.secondaryButtonBindings),
             let decoded = try? JSONDecoder().decode(
                 [String: [String: ConfiguredButtonAction]].self,
@@ -530,9 +578,14 @@ final class AppSettings: ObservableObject {
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
-        voiceFnTapModeEnabled = defaults.bool(
-            forKey: Keys.voiceFnTapModeEnabled
+        let savedVoiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
+        voiceFnTapModeEnabled = savedVoiceFnTapModeEnabled
+        voiceShortTapFocusEnabled = !savedVoiceFnTapModeEnabled && defaults.bool(
+            forKey: Keys.voiceShortTapFocusEnabled
         )
+        voiceKeyMode = VoiceKeyMode(
+            rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
+        ) ?? .function
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -591,7 +644,8 @@ final class AppSettings: ObservableObject {
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
-            secondaryButtonBindings: secondaryButtonBindings
+            secondaryButtonBindings: secondaryButtonBindings,
+            buttonRapidPressEnabled: buttonRapidPressEnabled
         )
         if
             let data = defaults.data(forKey: Keys.remoteDeviceProfiles),
@@ -611,6 +665,7 @@ final class AppSettings: ObservableObject {
                 buttonShortcuts = selected.mappings.parsedButtonShortcuts
                 buttonApplicationProfileIDs = selected.mappings.parsedButtonApplicationProfileIDs
                 secondaryButtonBindings = selected.mappings.parsedSecondaryButtonBindings
+                buttonRapidPressEnabled = selected.mappings.parsedButtonRapidPressEnabled
             }
         } else {
             let migrated = RemoteDeviceProfile(
@@ -670,9 +725,12 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
-        let shouldEnableFnTap = voiceTool == .typeless
+        let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
         if voiceFnTapModeEnabled != shouldEnableFnTap {
             voiceFnTapModeEnabled = shouldEnableFnTap
+        }
+        if shouldEnableFnTap {
+            voiceShortTapFocusEnabled = false
         }
         guard onboardingVoiceTool != voiceTool else { return }
         onboardingVoiceTool = voiceTool
@@ -745,6 +803,25 @@ final class AppSettings: ObservableObject {
         return profile.mappings.parsedButtonApplicationProfileIDs[button]
     }
 
+    func allowsRapidPress(for button: RemoteButton) -> Bool {
+        buttonRapidPressEnabled[button] ?? false
+    }
+
+    func allowsRapidPress(for button: RemoteButton, profileID: UUID?) -> Bool {
+        guard let profileID, profileID != selectedRemoteProfileID,
+              let profile = remoteDeviceProfiles.first(where: { $0.id == profileID })
+        else { return allowsRapidPress(for: button) }
+        return profile.mappings.parsedButtonRapidPressEnabled[button] ?? false
+    }
+
+    func setAllowsRapidPress(_ enabled: Bool, for button: RemoteButton) {
+        if enabled {
+            buttonRapidPressEnabled[button] = true
+        } else {
+            buttonRapidPressEnabled.removeValue(forKey: button)
+        }
+    }
+
     func customApplicationProfile(id: UUID?) -> CustomApplicationProfile? {
         guard let id else { return nil }
         return customApplicationProfiles.first(where: { $0.id == id })
@@ -814,6 +891,7 @@ final class AppSettings: ObservableObject {
         buttonShortcuts = profile.mappings.parsedButtonShortcuts
         buttonApplicationProfileIDs = profile.mappings.parsedButtonApplicationProfileIDs
         secondaryButtonBindings = profile.mappings.parsedSecondaryButtonBindings
+        buttonRapidPressEnabled = profile.mappings.parsedButtonRapidPressEnabled
         isLoadingRemoteProfile = false
     }
 
@@ -888,7 +966,8 @@ final class AppSettings: ObservableObject {
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
-            secondaryButtonBindings: secondaryButtonBindings
+            secondaryButtonBindings: secondaryButtonBindings,
+            buttonRapidPressEnabled: buttonRapidPressEnabled
         )
     }
 
@@ -985,6 +1064,7 @@ final class AppSettings: ObservableObject {
         buttonShortcuts = [:]
         buttonApplicationProfileIDs = [:]
         secondaryButtonBindings = [:]
+        buttonRapidPressEnabled = [:]
         if experimentalContinuousRecordingEnabled {
             continuousRecordingPowerBindingBackup = ConfiguredButtonAction(
                 action: .escape,
@@ -1279,6 +1359,11 @@ final class AppSettings: ObservableObject {
                     )
                 }
             ),
+            buttonRapidPressEnabled: buttonRapidPressEnabled.isEmpty
+                ? nil
+                : Dictionary(
+                    uniqueKeysWithValues: buttonRapidPressEnabled.map { ($0.key.rawValue, $0.value) }
+                ),
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             showDockIcon: showDockIcon,
@@ -1286,6 +1371,8 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
+            voiceShortTapFocusEnabled: voiceShortTapFocusEnabled,
+            voiceKeyMode: voiceKeyMode,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -1293,14 +1380,37 @@ final class AppSettings: ObservableObject {
         return try encoder.encode(configuration)
     }
 
+    var voiceKeyConfigurationState: VoiceKeyConfigurationState {
+        VoiceKeyConfigurationState(
+            mode: voiceKeyMode,
+            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function,
+            shortTapFocusEnabled: voiceShortTapFocusEnabled && !voiceFnTapModeEnabled
+        )
+    }
+
+    func voiceKeyConfigurationState(in data: Data) throws -> VoiceKeyConfigurationState {
+        let configuration = try Self.validatedConfiguration(from: data)
+        let mode = configuration.voiceKeyMode ?? .function
+        let fnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
+        return VoiceKeyConfigurationState(
+            mode: mode,
+            fnTapModeEnabled: fnTapModeEnabled,
+            shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
+                !fnTapModeEnabled
+        )
+    }
+
     func importConfiguration(from data: Data) throws {
-        let configuration = try JSONDecoder().decode(PersonalizedConfiguration.self, from: data)
-        guard configuration.formatVersion == 1 else {
-            throw AppConfigurationError.unsupportedVersion
-        }
-        guard configuration.gainDB.isFinite, (0...24).contains(configuration.gainDB) else {
-            throw AppConfigurationError.invalidValues
-        }
+        let configuration = try Self.validatedConfiguration(from: data)
+        let importedMode = configuration.voiceKeyMode ?? .function
+        let importedFnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) &&
+            importedMode == .function
+        let importedVoiceKeyConfiguration = VoiceKeyConfigurationState(
+            mode: importedMode,
+            fnTapModeEnabled: importedFnTapModeEnabled,
+            shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
+                !importedFnTapModeEnabled
+        )
 
         let importedBindings = Dictionary(
             uniqueKeysWithValues: configuration.buttonBindings.compactMap { key, value in
@@ -1314,6 +1424,11 @@ final class AppSettings: ObservableObject {
         )
         let importedApplicationProfileIDs = Dictionary(
             uniqueKeysWithValues: (configuration.buttonApplicationProfileIDs ?? [:]).compactMap { key, value in
+                RemoteButton(rawValue: key).map { ($0, value) }
+            }
+        )
+        let importedRapidPressEnabled = Dictionary(
+            uniqueKeysWithValues: (configuration.buttonRapidPressEnabled ?? [:]).compactMap { key, value in
                 RemoteButton(rawValue: key).map { ($0, value) }
             }
         )
@@ -1337,6 +1452,7 @@ final class AppSettings: ObservableObject {
         buttonShortcuts = importedShortcuts
         buttonApplicationProfileIDs = importedApplicationProfileIDs
         secondaryButtonBindings = importedSecondaryBindings
+        buttonRapidPressEnabled = importedRapidPressEnabled
         customApplicationProfiles = configuration.customApplicationProfiles ?? []
         applicationLanguage = configuration.applicationLanguage
         showDockIcon = configuration.showDockIcon
@@ -1346,11 +1462,24 @@ final class AppSettings: ObservableObject {
         if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
-        voiceFnTapModeEnabled = configuration.voiceFnTapModeEnabled ?? false
+        voiceKeyMode = importedVoiceKeyConfiguration.mode
+        voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
+        voiceShortTapFocusEnabled = importedVoiceKeyConfiguration.shortTapFocusEnabled
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup
         )
+    }
+
+    private static func validatedConfiguration(from data: Data) throws -> PersonalizedConfiguration {
+        let configuration = try JSONDecoder().decode(PersonalizedConfiguration.self, from: data)
+        guard configuration.formatVersion == 1 else {
+            throw AppConfigurationError.unsupportedVersion
+        }
+        guard configuration.gainDB.isFinite, (0...24).contains(configuration.gainDB) else {
+            throw AppConfigurationError.invalidValues
+        }
+        return configuration
     }
 
     private func saveBindings() {
@@ -1376,6 +1505,15 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    private func saveButtonRapidPressEnabled() {
+        let raw = Dictionary(
+            uniqueKeysWithValues: buttonRapidPressEnabled.map { ($0.key.rawValue, $0.value) }
+        )
+        if let data = try? JSONEncoder().encode(raw) {
+            defaults.set(data, forKey: Keys.buttonRapidPressEnabled)
+        }
+    }
+
     private func saveSecondaryBindings() {
         let raw = Dictionary(uniqueKeysWithValues: secondaryButtonBindings.map { button, bindings in
             (
@@ -1397,7 +1535,8 @@ final class AppSettings: ObservableObject {
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
-            secondaryButtonBindings: secondaryButtonBindings
+            secondaryButtonBindings: secondaryButtonBindings,
+            buttonRapidPressEnabled: buttonRapidPressEnabled
         )
     }
 

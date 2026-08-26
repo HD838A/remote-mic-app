@@ -1,30 +1,18 @@
 name: macOS Stable Promotion
+run-name: mac-stable-promote ${{ inputs.tag }}
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing pre-release tag to promote, for example v1.8.8
+        description: Existing public Preview tag to promote, for example v1.9.11
         required: true
         type: string
-      request_started_at:
-        description: Unix epoch seconds when the user requested this stable promotion
-        required: true
-        type: string
-      request_id:
-        description: Immutable release-manager request identifier, reused unchanged on retry
-        required: true
-        type: string
-      expected_pipeline_digest:
-        description: Reviewed release pipeline SHA-256 digest
-        required: true
-        type: string
-  workflow_run:
-    workflows: ["macOS CI"]
-    types: [completed]
 
 concurrency:
-  group: mac-stable-promotion-${{ inputs.tag || github.event.workflow_run.head_branch }}
+  # Every promotion mutates the single releases/latest pointer; serialize all
+  # candidate promotions, not just repeated attempts for one Tag.
+  group: mac-stable-promotion
   cancel-in-progress: false
 
 permissions:
@@ -32,205 +20,36 @@ permissions:
   actions: read
 
 jobs:
-  resolve-stable-request:
-    name: Resolve immutable stable request attestation
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      actions: read
-      contents: read
-    steps:
-      - name: Check out main
-        uses: actions/checkout@v5
-        with:
-          ref: main
-
-      - name: Resolve first stable request timestamp
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/resolve-stable-request-attestation.sh \
-            "${{ inputs.request_id }}" "${{ inputs.tag }}" \
-            "${{ inputs.request_started_at }}" \
-            "$RUNNER_TEMP/stable-request-attestation.json"
-
-      - name: Persist immutable stable request timestamp
-        uses: actions/upload-artifact@v4
-        with:
-          name: stable-request-attestation-${{ inputs.tag }}
-          path: ${{ runner.temp }}/stable-request-attestation.json
-          if-no-files-found: error
-          retention-days: 90
-
-  stable-slo-watchdog:
-    name: Enforce 30-minute release-ready stable promotion SLO
-    if: github.event_name == 'workflow_dispatch'
-    needs: resolve-stable-request
-    runs-on: ubuntu-latest
-    timeout-minutes: 31
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Download immutable stable request attestation
-        uses: actions/download-artifact@v5
-        with:
-          name: stable-request-attestation-${{ inputs.tag }}
-          path: ${{ runner.temp }}/stable-request
-
-      - name: Cancel an over-budget promotion once, without rebuilding or retrying
-        env:
-          GH_TOKEN: ${{ github.token }}
-          READY_SLO_SECONDS: 1740
-        run: |
-          attestation="$RUNNER_TEMP/stable-request/stable-request-attestation.json"
-          request_started_at="$(jq -r '.requestStartedAt' "$attestation")"
-          release_ready_at="$(jq -r '.releaseReadyAt' "$attestation")"
-          if [[ ! "$request_started_at" =~ ^[0-9]+$ ||
-                ! "$release_ready_at" =~ ^[0-9]+$ ||
-                "$release_ready_at" -lt "$request_started_at" ]]; then
-            echo "stable request/ready timestamps must be ordered Unix epoch seconds" >&2
-            exit 2
-          fi
-          while true; do
-            now="$(date +%s)"
-            total_elapsed=$(( now - request_started_at ))
-            ready_elapsed=$(( now - release_ready_at ))
-            artifact_count="$(gh api \
-              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=stable-slo-ledger-complete-$GITHUB_RUN_ID" \
-              --jq '.total_count')"
-            if [[ "$artifact_count" == "1" ]]; then
-              echo "STABLE SLO WATCHDOG PASS total=${total_elapsed}s ready=${ready_elapsed}s"
-              exit 0
-            fi
-            failed_jobs="$(gh api \
-              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest" \
-              --jq '[.jobs[] | select(.name != "Enforce 30-minute release-ready stable promotion SLO" and .conclusion != null and .conclusion != "success" and .conclusion != "skipped")] | length')"
-            if (( failed_jobs != 0 )); then
-              echo "A promotion job already failed; watchdog will not retry or rebuild it."
-              exit 0
-            fi
-            if (( ready_elapsed >= READY_SLO_SECONDS )); then
-              echo "STABLE SLO EXCEEDED total=${total_elapsed}s(reported-only) ready=${ready_elapsed}s/${READY_SLO_SECONDS}s; cancelling run once." >&2
-              gh api --method POST \
-                "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"
-              exit 124
-            fi
-            sleep 15
-          done
-
-  reconciliation-requires-release-manager:
-    if: github.event_name == 'workflow_run'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Refuse untimed automatic stable promotion
-        run: |
-          echo "workflow_run reconciliation has no authoritative command to promote a specified pre-release."
-          echo "Return to the allowlisted release-manager task and request promotion of the exact pre-release tag."
-
   promote:
-    if: github.event_name == 'workflow_dispatch'
-    needs: resolve-stable-request
+    name: Promote an existing Preview without rebuilding
+    if: ${{ github.ref_name == 'main' }}
     runs-on: macos-15
     timeout-minutes: 20
     environment: mac-stable-release
-    env:
-      STABLE_READY_SLO_SECONDS: 1740
-      STABLE_PROMOTION_STAGE_TIMEOUT_SECONDS: 600
-
     steps:
-      - name: Check out main
-        uses: actions/checkout@v5
+      - name: Validate promotion dispatch
+        env:
+          TAG: ${{ inputs.tag }}
+          TRIGGER_REF_NAME: ${{ github.ref_name }}
+          TRIGGER_REF_TYPE: ${{ github.ref_type }}
+          TRIGGER_REPOSITORY: ${{ github.repository }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$TRIGGER_REF_NAME" = main
+          test "$TRIGGER_REF_TYPE" = branch
+          test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
+
+      - name: Check out exact main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: main
           fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
-      - name: Download immutable stable request attestation
-        uses: actions/download-artifact@v5
-        with:
-          name: stable-request-attestation-${{ inputs.tag }}
-          path: ${{ runner.temp }}/stable-request
-
-      - name: Initialize stable release-ready ledger
-        run: |
-          attestation="$RUNNER_TEMP/stable-request/stable-request-attestation.json"
-          request_started_at="$(jq -r '.requestStartedAt' "$attestation")"
-          release_ready_at="$(jq -r '.releaseReadyAt' "$attestation")"
-          test -n "$request_started_at"
-          test -n "$release_ready_at"
-          {
-            echo "STABLE_SLO_CLOCK=release-ready"
-            echo "RELEASE_REQUEST_STARTED_AT=$request_started_at"
-            echo "RELEASE_READY_AT=$release_ready_at"
-            echo "RELEASE_SLO_LEDGER=$RUNNER_TEMP/stable-slo.tsv"
-          } >> "$GITHUB_ENV"
-          ./scripts/release-slo-ledger.sh init "$RUNNER_TEMP/stable-slo.tsv" "$request_started_at"
-          ./scripts/release-slo-ledger.sh check "$RUNNER_TEMP/stable-slo.tsv" "$release_ready_at" "$STABLE_READY_SLO_SECONDS" environment-approval-wait
-          ./scripts/release-slo-ledger.sh start "$RUNNER_TEMP/stable-slo.tsv" "$request_started_at" unchanged-byte-promotion
-
-      - name: Ensure required promotion tools
-        run: |
-          if ! command -v rg >/dev/null 2>&1; then
-            brew install ripgrep
-          fi
-          rg --version
-
-      - name: Resolve requested candidate
-        id: release
+      - name: Promote and verify the selected Preview
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUESTED_TAG: ${{ inputs.tag }}
-          EXPECTED_PIPELINE_DIGEST: ${{ inputs.expected_pipeline_digest }}
-        run: |
-          tag="$REQUESTED_TAG"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "invalid stable promotion tag: $tag" >&2
-            exit 1
-          fi
-          git fetch origin main --tags
-          git merge --ff-only origin/main
-          if [[ ! "$EXPECTED_PIPELINE_DIGEST" =~ ^[0-9a-f]{64}$ ||
-                "$(./scripts/release-pipeline-digest.sh)" != "$EXPECTED_PIPELINE_DIGEST" ]]; then
-            echo "stable promotion pipeline digest does not match reviewed input" >&2
-            exit 1
-          fi
-          echo "should_promote=true" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-      - name: Promote unchanged candidate assets
-        if: steps.release.outputs.should_promote == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-        run: |
-          ./scripts/run-release-stage.sh all stable-promotion \
-            "$STABLE_PROMOTION_STAGE_TIMEOUT_SECONDS" -- \
-            ./scripts/publish-release.sh promote
-          ./scripts/release-slo-ledger.sh finish "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" unchanged-byte-promotion success
-          ./scripts/release-slo-ledger.sh check "$RELEASE_SLO_LEDGER" "$RELEASE_READY_AT" "$STABLE_READY_SLO_SECONDS" successful-pipeline
-
-      - name: Record failed stable promotion
-        if: failure()
-        run: |
-          ./scripts/release-slo-ledger.sh finish "$RELEASE_SLO_LEDGER" "$RELEASE_REQUEST_STARTED_AT" unchanged-byte-promotion failed external-github-or-cdn
-
-      - name: Upload completed stable ledger
-        if: success() && steps.release.outputs.should_promote == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: stable-slo-ledger-complete-${{ github.run_id }}
-          path: ${{ env.RELEASE_SLO_LEDGER }}
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Upload failed stable ledger
-        if: failure() && env.RELEASE_SLO_LEDGER != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: stable-slo-ledger-failed-${{ github.run_id }}
-          path: ${{ env.RELEASE_SLO_LEDGER }}
-          if-no-files-found: error
-          retention-days: 90
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          REPOSITORY_ROOT: ${{ github.workspace }}
+          GH_BIN: gh
+        run: ./scripts/promote-preview-release.sh "${{ inputs.tag }}"

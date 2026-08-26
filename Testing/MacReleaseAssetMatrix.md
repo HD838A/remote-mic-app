@@ -1,110 +1,79 @@
-# macOS Release 资产矩阵测试手册
+# macOS 公开资产矩阵测试手册
 
 ## 适用范围
 
-- 适用分支：包含 12 项 macOS 公开资产矩阵的 `main`、开发分支及其后续 `release/pre-v*` 候选，也适用于私有 GitHub Draft 中的可安装 macOS 测试资产。
-- Apple Silicon：`arm64`、macOS 14 及以上。
-- Intel：`x86_64`、macOS 13 及以上。
-- 本手册验证发布资产、安装入口、Sparkle、CDN 与历史兼容；不授权创建 Tag、Release、签名或公证。
+验证 macOS Preview publication 生成的固定 Tag 资产、appcast 和 CDN 路径。当前公开源码仓库为 HD838A/remote-mic-app；私有 Draft 另走 GetSayAll/SayAll。
 
-## 测试前准备
+## Canonical 资产集合
 
-1. 使用干净的独立 worktree，并固定到待测提交。
-2. 准备两架构已完成 Developer ID 签名、公证和 staple 的产物；无凭据开发回归可使用结构等价的 ad-hoc 产物检查脚本结构，但 ad-hoc 产物不得上传为私有 Draft、公开 Pre-release 或正式版。
-3. 安装 `jq`、`rg`、`gh`，并确认可访问 GitHub Releases 与 `https://download.sayall.app`。
-4. 不输出或复制 Apple 私钥、P8、Match 密码、Keychain 密码、Sparkle 私钥或部署密钥。
+每个公开 Preview 必须有以下 11 项 payload，另加 1 项 candidate-provenance.json：
 
-## 用例 1：新候选固定为 12 项
+| 类别 | 文件 |
+| --- | --- |
+| Apple Silicon | Remote-Mic-VERSION.zip、Remote-Mic-VERSION.dmg、Remote-Mic-VERSION-Uninstaller.pkg、appcast.xml |
+| Intel Ventura | Remote-Mic-VERSION-Intel.zip、Remote-Mic-VERSION-Intel.dmg、Remote-Mic-VERSION-Intel-Uninstaller.pkg、appcast-intel.xml |
+| 共享 | Remote-Mic-VERSION.zh.txt、Remote-Mic-VERSION.en.txt、Remote-Mic-VERSION.dmg.sha256 |
+| 来源证明 | candidate-provenance.json |
 
-1. 运行发布 dry-run 或检查 staging manifest。
-2. 核对资产名称：两套 DMG、两套 ZIP、`appcast.xml`、`appcast-intel.xml`、两套架构卸载 PKG、共享 `.zh.txt`/`.en.txt`、一个合并的 `Remote-Mic-<版本>.dmg.sha256` 和 `candidate-provenance.json`。
-3. 确认没有 `Remote-Mic-<版本>-Installer.pkg` 或 `Remote-Mic-<版本>-Intel-Installer.pkg` standalone 资产，也没有 `-Intel.zh.txt` / `-Intel.en.txt` 重复说明。
+内嵌 Install PKG 保留在对应 DMG 内，不重复作为公开独立资产上传。
 
-预期结果：公开资产总数严格为 12，provenance 的 `payloadAssets` 严格为 11，并完整覆盖除自身外的每个资产。
+## 用例 1：生成与 manifest
 
-失败判定：数量不是 12、存在未记录资产、缺少任一架构更新链，或 standalone Installer PKG 再次进入公开清单。
+1. 从受保护 staging 的 dist 目录运行 scripts/prepare-public-release-assets.sh。
+2. 运行 scripts/verify-staged-release-assets.sh。
+3. 检查 staged-assets.json。
 
-## 用例 2：DMG 内安装器仍完整可用
+预期：manifest schemaVersion 为 1，版本/tag/sourceCommit/build 合法，payload 恰好 11 项、名称唯一、无路径分隔符、无 symlink/非普通文件；每项 size 和 SHA-256 与文件完全一致。
 
-分别对 Apple Silicon 与 Intel DMG：
+失败判定：缺少任一架构、额外文件、重复名称、standalone Install PKG、空 manifest 或摘要不一致。
 
-1. 验证 DMG 签名、公证、staple、Gatekeeper 和 HFS+ 结构。
-2. 只读挂载 DMG，确认根目录仅有对应的 `Install Remote Mic.pkg`。
-3. 对内嵌 PKG 验证 Developer ID Installer、架构 Distribution、最低系统提示、payload 中 App/驱动、权限和符号链接。
-4. 在对应真实架构 Mac 上打开 Installer.app，检查正常安装；再在错误架构 Mac 上确认安装前显示中英文架构提示且不删除现有 App。
+## 用例 2：appcast 与说明
 
-预期结果：移除 standalone 上传不改变 DMG 内安装器字节、信任链或安装行为。
+1. 检查 appcast.xml 引用 Apple Silicon ZIP，appcast-intel.xml 引用 Intel ZIP。
+2. 检查两份 appcast 都使用固定 Tag 的 CDN URL，并包含版本、Build 和 Ed25519 签名。
+3. 检查共享中英文说明的 URL 和文件名。
 
-失败判定：DMG 缺少安装 PKG、出现第二个普通入口、内嵌 PKG 未签名/未公证、错误架构未被拒绝，或安装前删除已有 App。
+预期：不使用 latest-release enclosure URL；两个 appcast 的版本/Build 相同且不会交叉下载错误架构。
 
-## 用例 3：两套 Sparkle 更新链与共享说明
+## 用例 3：DMG/PKG 静态信任链
 
-1. 确认 Apple Silicon appcast enclosure 指向无 `Intel` 后缀的 ZIP，Intel appcast 指向 `-Intel.zip`。
-2. 确认两个 appcast 都只引用共享的 `Remote-Mic-<版本>.zh.txt` 与 `.en.txt`。
-3. 验证两个 enclosure 的 Ed25519 签名及 appcast 整体签名。
-4. 从当前正式版分别用架构匹配的固定候选 feed 发现更新，检查版本、Build、最低系统和更新说明。
+对两个架构分别执行：
 
-预期结果：两架构不会串包，共享说明按中英文显示，旧稳定 feed 保持不变。
+1. hdiutil verify 和只读挂载。
+2. 确认 DMG 根目录只有 Install Remote Mic.pkg。
+3. 验证外层 Developer ID Installer、staple、spctl -t install 和内嵌 App/driver 结构。
+4. 解压 ZIP，验证 Developer ID Application、Hardened Runtime、Sparkle helper 0755、Versions/Current 符号链接、最低系统和架构。
 
-失败判定：Intel appcast 引用已不发布的 `-Intel.zh.txt`/`.en.txt`、任一说明 404、签名失败或 Sparkle 选择错误架构 ZIP。
+预期：Apple Silicon 为 arm64/macOS 14，Intel 为 x86_64/macOS 13；安装 PKG 和 DMG 不含不匹配架构或开发机绝对路径。
 
-## 用例 4：合并 SHA-256 清单
+## 用例 4：GitHub、CDN 和 appcast 字节
 
-1. 下载两个 DMG 和 `Remote-Mic-<版本>.dmg.sha256`。
-2. 确认清单恰好包含两个 DMG 的精确文件名和 SHA-256。
-3. 运行 `shasum -a 256 -c`，确认两项都通过。
+1. 从 GitHub fixed-tag URL 下载 11 项 payload。
+2. 从 download.sayall.app/mac/releases/TAG/ 下载同名 payload。
+3. 对每项执行 SHA-256 和 cmp；对 appcast 再检查 enclosure URL。
+4. 检查 releases/latest 仍为 v1.8.3。
 
-预期结果：清单稳定排序并同时验证两架构 DMG；provenance 还应记录清单自身及所有其他 payload 的摘要。
+预期：本地 staging、GitHub 和 CDN 三方字节完全一致；Preview 不改变稳定 latest。
 
-失败判定：遗漏架构、文件名与 Release 不一致、摘要不匹配或清单引用 standalone Installer PKG。
+失败判定：只抽样下载、CDN 缺少新文件、缓存代理返回不同内容、appcast 指向 latest 或 latest 被改动。
 
-## 用例 5：GitHub/CDN 公开字节
+版本首次占用检查还必须对上述 11 个 CDN 固定路径执行 HEAD（必要时 Range GET）探测：只有 HTTP 404 算可用，2xx/3xx 算已占用，认证/权限/5xx/超时或未知响应必须 fail closed。
 
-1. 从 GitHub 固定 Tag URL 下载全部 12 项。
-2. 从 CDN 固定 Tag URL 下载同名 12 项，使用最多四路有界并发。
-3. 对每一项执行逐字节比较和 SHA-256；对 Apple Silicon DMG额外验证 `HEAD`、`Range` 和 CDN 响应标记。
+## 用例 5：publication 重试
 
-预期结果：GitHub 与 CDN 为 12/12 完全相同字节，任一下载失败会使父流程失败。
+1. 在上传或 CDN 验证阶段故意制造一次失败。
+2. 使用相同 sourceCommit、Run/attempt、artifact digest 和 UI attestation 重试。
 
-失败判定：抽样验证、忽略单项失败、CDN 名称白名单拒绝合并校验文件，或公开字节与 provenance 不一致。
-
-## 用例 6：历史 Release 兼容
-
-1. 读取历史 `v1.8.25` 的 17 项资产清单与 `candidate-provenance.json`。
-2. 从 GitHub 与 CDN 固定 Tag URL 下载历史资产，不修改、删除或替换该 Release。
-3. 使用当前发布解析函数确认 17 项 Release / 16 payload 仍被接受；同时覆盖更早的 15 项 / 14 payload 结构。
-
-预期结果：旧 URL 继续返回原字节，旧候选仍可按原 provenance 晋升；只有未来新候选必须严格使用 12/11。
-
-失败判定：新代码要求所有历史 Release 都是 12 项、旧 URL 404、或为兼容而放宽新候选数量门禁。
-
-## 用例 7：私有 Draft 远端复验
-
-1. 使用私有仓库创建保持 `Draft=true`、`Pre-release=false` 的内部测试版本，不发布、不改变稳定 `latest`。
-2. 上传前对最终 DMG/PKG/App 验证 Developer ID Application / Installer、Team ID `L3QHLDRPAY`、Hardened Runtime、嵌套 `codesign --deep --strict`、`stapler validate` 与对应类型的 `spctl`；ZIP 解压后验证内部资产，不对 ZIP 自身执行 staple。
-3. 创建 Draft 后重新下载每项资产，比较 GitHub digest、本地 SHA-256 和完整字节，再对下载副本重复步骤 2。
-4. 分别使用 ad-hoc App、错误 Team ID、缺少 Hardened Runtime 和无 staple 票据的夹具运行门禁，确认均在上传前失败；再使用纯非 macOS 资产确认不会被错误要求 Apple Team ID。
-
-预期结果：只有正确签名、公证且远端字节一致的 macOS 资产能进入私有 Draft 保留清理阶段；证书、私钥和 notary 凭据值不出现在输出中。
-
-失败判定：私有 Draft 允许 ad-hoc、只验证本地不验证下载副本、只比较摘要不验证签名公证、ZIP 不解压，或纯非 macOS Draft 被 Apple 门禁误伤。
+预期：只补缺失资产或重新验证；既有资产大小和 digest 不变，不重新签名、不创建新 Tag/版本。
 
 ## 稳定功能回归
 
-- README 与故障排查不再引导用户下载未来不存在的 standalone Installer PKG 或单架构 `.dmg.sha256`。
-- 两架构卸载 PKG 仍独立签名、公证、可下载，并只移除兼容麦克风边界内的内容。
-- 正式晋升继续复用候选 Tag 和原字节，不重建、不替换资产。
-- stable latest 与预览版分类规则不变。
+- candidate-provenance.json 不参与自身 digest 计算，上传后单独校验。
+- 下载后的 ZIP/DMG/PKG 必须再次执行签名、公证、权限和结构检查。
+- Stable promotion 前后所有资产摘要保持一致。
+- Stable promotion 还要从 GitHub API 核对 provenance 绑定的成功 staging Run/attempt、payload artifact 和唯一未过期 Preview stage-record artifact；stage record 必须为 `mode=preview` 并与 Tag、SHA、manifest 和时间戳一致。
+- 不合法名称、路径遍历、未知扩展名和缺失架构名称必须被 verifier 拒绝。
 
-## 日志收集
+## 日志与边界
 
-- 保存 staging 文件名、数量、大小和 SHA-256；不要记录凭据值。
-- 保存 GitHub/CDN 每项下载结果、比较结果和失败的 URL 文件名。
-- 保存 appcast enclosure、版本/Build、架构、最低系统和签名验证结果。
-- 安装失败时保存 Installer 日志、目标架构、系统版本和最终结果，不只记录“收到事件”或“开始安装”。
-
-## 自动化、代理实测和用户实测边界
-
-- 自动化可证明 12/11 数量、历史 17/16 与 15/14 解析兼容、文件名、摘要、appcast URL、失败传播和 DMG/PKG 静态信任链。
-- 代理可在无凭据环境完成脚本 dry-run、历史公开资产下载和结构验证；这些结果不等于新的 Developer ID 候选已经签名、公证。
-- 只有受保护工作流能证明最终签名、公证字节；只有真实 Apple Silicon 与 Intel Mac 的 Installer.app、Sparkle UI、安装、卸载和错误架构界面才能完成真实环境验收。
+保存 manifest、文件名、size、SHA-256、HTTP 状态和比较结果；不要保存凭据。自动化矩阵不等于真实安装、卸载、Sparkle UI 或实体硬件验收。

@@ -1,37 +1,57 @@
-# macOS 发布墙钟 SLO 验证
+# macOS 发布 30 分钟目标测试手册
 
-## 适用范围
+## 目标与边界
 
-- `macOS Preview Candidate`
-- `macOS Signed Release Packages`
-- `macOS Stable Promotion`
-- metadata-only `release/pre-vX.Y.Z` 候选
+- Preview 和 Stable promotion 都从 T_ready 起使用 30 分钟纯发布目标。
+- T_request 是用户首次发出本次发布指令的时间，统计完整用户等待；T_ready 是代码、main CI、依赖 pin、版本、Build 和必要发布输入全部就绪并冻结的时间。
+- 30 分钟是发布目标和报告指标，不允许跳过签名、公证、staple、真实 Sparkle UI 或下载字节验证。
+- 不再使用候选分支、编号 rerun、qualification、watchdog 或 ledger 状态机。失败要立即分类并继续可安全的同 SHA 恢复。
 
-## 自动化验证
+## 测试前准备
 
-1. 运行 `actionlint` 检查四条 macOS workflow。
-2. 运行 `./scripts/verify-release-workflow-gh-token.sh`，对每个包含 `gh`/GitHub API 调用的 workflow step 做无秘密静态检查，确认显式设置 `GH_TOKEN: ${{ github.token }}`；特别覆盖 `Validate release identity`，并确认该步骤位于任何 Apple 凭据读取之前。
-3. 运行 `./scripts/test-release-pipeline-optimization.sh`。
-4. 运行 `swift test --filter BuildSigningTests`。
-5. 确认 Preview 和 Draft PR 的 metadata-only 路径调用 `verify-release-ready-main-ci.sh`；符合资格时不执行完整产品 CI，不符合时自动执行 Swift tests、Self Test、双架构 Release build 与 ad-hoc DMG 验证。
-6. 确认父 `main` 证明必须是精确 SHA 的 push run，并且 Apple Silicon、Intel Job 内的 Swift tests、Self Test 和 Release build 均成功；文档-only main run不得被误复用。
-7. 确认真实预览 dispatch 缺少 `request_started_at` 或 `release_ready_at` 会立即失败；两者必须有序且不可由重试重置。
-8. 在 workflow 尚未获得 Runner 的场景启动本机 watchdog；确认 Preview 和正式晋升都只在 ready 后 1740 秒内部截止取消本次显式登记的运行，并在 30 分钟前留下明确失败信息。使用 `scripts/release-user-wall-watchdog.sh`，为每个 Run 登记完整的 `requestId`/workflow/SHA/branch/target，轮询间隔有界；不要只依赖 GitHub 队列内 watchdog。
-9. 将 Draft PR 的 Apple Silicon 或 Intel required check 分别置为 pending/failed，确认签名 workflow 在接触 Apple 凭据前拒绝继续。
-10. 确认双架构签名 composite step 仍为 10 分钟硬限，内部 signed-release supervisor 为 540 秒，publication supervisor 最多 180 秒。
-11. 确认 publish Job 不持有 Apple 凭据，签名 Job 没有 `contents: write`；publish Job 才拥有创建 Tag、Release 和 dispatch Guard 所需的最小写权限。
-12. 确认正式晋升只调用 `publish-release.sh promote`，不调用任何 build、sign、notary 或 package 脚本。
+1. 记录 UTC 的 T_request、T_ready、sourceCommit、版本、Build。
+2. 运行 scripts/verify-release-ready-main-ci.sh 和 scripts/verify-release-dependency-pins.sh。
+3. 确认 stable latest 是 v1.8.3。
+4. 使用独立目录保存阶段开始/结束时间、Run URL 和验证输出。
 
-## 真实发布验收
+## 用例 1：Preview 计时
 
-1. 用户发出发布指令时立即记录 `request_started_at`；代码合入 passing main 后记录 `release_ready_at`，将两者一同传入 workflow。
-2. 预览成功时下载 `release-slo-ledger-published-<run-id>`，确认 release-ready 墙钟 `≤1740` 秒，并完整记录从 `request_started_at` 起的总用户等待。
-3. 正式晋升成功时下载 `stable-slo-ledger-complete-<run-id>`，确认指定 Pre-release 完成资格冻结后的 release-ready 墙钟 `≤1740` 秒；发布机独立 watchdog 同样必须在运行。
-4. 触发 `workflow_run` reconciliation，确认它不会在缺少发布管理任务原始授权时自动进入正式 Environment 或晋升 Release，而是要求回到发布管理任务手动发起指定 Pre-release 晋升。
-5. 分别记录候选门禁、Environment/Runner 等待、签名/公证、artifact 交接、发布与公开验证耗时。
-6. Apple、GitHub、CDN 或 Environment 审批超过预算时，预期结果是 ready 后 30 分钟内明确失败；不得延长签名门限、重建同一版本或自动重跑。
+1. 从 T_ready 开始 dispatch scripts/stage-macos-preview.sh preview。
+2. 记录 staging、真实 UI、publication 和公开字节验证的开始/结束时间。
+3. 在完成后计算 T_ready 到公开验证完成的秒数。
 
-## 验证边界
+预期：总纯发布时间不超过 1800 秒；同时报告 T_request 到完成的总时间和各阶段耗时。
 
-- 静态测试可以证明门禁、权限、计时和取消逻辑存在，不能证明 Apple 公证或 GitHub/CDN 每次都在预算内完成。
-- Preview 和正式晋升的 ready 后 30 分钟硬指标保证“预算内完成，或预算内明确失败”；`request_started_at` 总耗时必须如实报告。外部服务不可控时不通过跳过签名、公证、staple、Gatekeeper 或公开字节验证来强行成功。
+失败判定：只报告 CI 时间、重试后重置 T_ready、将等待隐藏为“没有耗时”，或为了达标跳过安全门禁。
+
+## 用例 2：Stable 计时
+
+1. 明确指定一个现有、已验证且 Tag Commit 已进入 origin/main 的 Pre-release。
+2. 从 T_ready dispatch mac-stable-promote.yml。
+3. 记录验证和 gh release edit 的开始/结束时间。
+
+预期：只执行 provenance/资产复验和分类变更，纯发布时间不超过 1800 秒；不发生任何构建、签名或上传。
+
+## 用例 3：失败分类
+
+分别模拟以下情形：
+
+- main CI 或版本输入未就绪；
+- Runner、Environment、Apple、GitHub 或网络故障；
+- 真实 UI 验收失败；
+- 公共资产摘要或 CDN 字节不一致；
+- Stable Tag 未进入 main。
+
+预期：报告中明确区分“发布未就绪”“基础设施/外部服务”“UI 验收”“公开交付验证”和“晋升资格”失败。基础设施失败复用同一 SHA、版本、Build 和 artifact，不创建新版本。
+
+## 稳定功能回归
+
+- 同 SHA 重试不改变 T_request、T_ready、版本、Build 或 artifact。
+- Preview 期间 releases/latest 始终为 v1.8.3。
+- Stable 只改变 Release 分类，不改变资产摘要。
+- 版本选择和首次 Tag 创建前的 11 个 CDN 固定路径检查只有 404 才通过；Stable 还必须复验 exact staging Run/attempt/artifact 证据。
+- 达到 30 分钟目标不是取消或降级的理由；若超时，停止突变并给出明确阻断。
+
+## 日志收集
+
+保存时间戳、Run ID/URL、阶段状态、资产摘要和失败类别；不保存 Apple 凭据、Token、密码或私钥。真实图形会话、实体硬件和第三方 App 未执行时必须明确标记。

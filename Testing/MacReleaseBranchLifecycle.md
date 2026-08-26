@@ -1,105 +1,88 @@
-# macOS 发布分支生命周期测试手册
+# macOS 发布引用与生命周期测试手册
 
 ## 适用范围
 
-- 适用分支：包含候选基线、provenance schema 2 和候选回流门禁的 `main` 及后续 `release/pre-vX.Y.Z`、编号恢复候选 `release/pre-vX.Y.Z-rerun([2-9][0-9]*)?`。
-- 适用流程：macOS Preview Candidate、macOS Signed Release Packages、Release Guard、macOS CI、macOS Stable Promotion。
-- 本手册只验证发布分支与资产生命周期，不代替 App 功能、安装、Intel Ventura、签名或公证的专项验收。
+本手册验证新的 main-based Preview、真实 UI 验收、公开 Pre-release 和 Stable promotion。它不把旧的候选分支或历史 Release 当作新流程入口。
 
 ## 测试前准备
 
-1. 使用干净工作区，执行 `git fetch origin main --tags`，确认本地 `main` 与 `origin/main` 一致。
-2. 选择尚未占用的测试版本和递增 build；首次候选命名为 `release/pre-vX.Y.Z`。如果专门验证签名前恢复，使用同版本且未占用的 `-rerun` 或更高编号后缀。
-3. 候选只修改 `Resources/Info.plist` 的版本/build、两份 `ReleaseHistory.md` 和必要的 `Testing/*.md`。
-4. 真正发布 Pre-release 前，仍需通过受保护 Environment 审批、两种架构打包、签名、公证及下载字节校验。
+1. 在隔离 worktree 执行 git fetch origin main --tags。
+2. 确认 main 工作区干净且 HEAD 与 origin/main 完全相同。
+3. 确认当前 stable latest 为 v1.8.3。
+4. 确认 config/release-dependencies.json、Package.swift、Package.resolved 和两个受保护 workflow 的依赖 SHA 一致。
+5. 准备临时 fixture；不得读取或打印 Apple、Match、Notary、Sparkle 私钥。
 
-## 用例 1：从最新 main 创建单提交候选
+## 用例 1：版本元数据 PR
 
-1. 从最新 `origin/main` 创建 `release/pre-vX.Y.Z`。
-2. 完成允许的发布元数据修改并生成一个普通提交。
-3. Push 候选分支，运行 `./scripts/verify-preview-branch.sh`。
+1. 从 origin/main 创建普通分支。
+2. 运行 scripts/prepare-preview-release.sh，传入请求版本、Build 和中英文说明。
+3. 检查 git diff --name-only。
 
-预期结果：输出 `PREVIEW BRANCH PASS`，`BASE_MAIN_COMMIT` 等于候选直接父提交和当时最新 `origin/main`，候选相对 main 只有一个提交。
+预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。版本已被 Tag、Release 或 11 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag、Release 或发布分支。
 
-失败判定：候选包含多个提交、merge commit、父提交不是最新 main，或包含产品代码时仍通过。
+失败判定：从旧 Tag/旧版本分支开始、修改产品代码、版本因 CI 失败而递增，或 Release Notes 含内部入口/凭据。
 
-## 用例 2：禁止从旧预览分支或 Tag 串联
+## 用例 2：精确 main staging
 
-1. 以旧 `release/pre-vA.B.C` 或对应 Tag 为起点创建新的 `release/pre-vX.Y.Z`。
-2. 更新版本元数据并运行候选校验。
+1. 将元数据 PR 合入 main 并 fetch。
+2. 在干净 main worktree 运行 scripts/stage-macos-preview.sh smoke。
+3. 检查 workflow 输入和 Run 标题。
 
-预期结果：校验失败，并明确提示候选直接父提交必须精确等于最新 `origin/main`，应重新从 main 创建。
+预期：只使用 main 的精确 SHA；前置检查包括 main CI、依赖 pin、稳定 latest、11 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。workflow 名称为 mac-release smoke <commit>，不创建 Tag/Release。
 
-失败判定：只因 main 是历史祖先就允许候选通过。
+失败判定：接受 detached/旧 SHA、从功能分支直接签名、找不到 main CI 仍进入 Environment，或 Run 使用隐式 GH_TOKEN。
 
-## 用例 3：禁止候选承载产品代码
+## 用例 3：受保护 staging 的职责
 
-1. 在合规候选中额外修改 `Sources/`、`Apps/`、`Package.swift` 或其他非允许文件。
-2. 运行候选校验。
+1. 运行 macOS Signed Release Staging 的 preview 模式。
+2. 检查两个架构 Job、artifact 名称和 stage record。
 
-预期结果：校验列出首个非发布改动，并要求先将产品代码通过 PR 合入 main。
+预期：Apple Silicon 与 Intel 都完成签名、公证、staple、Gatekeeper、manifest 和 ZIP/DMG/PKG 校验；上传一个 payload artifact 和一个 stage record；没有 Tag、Release、公开 appcast 或公开资产。
 
-失败判定：产品代码进入候选或只在发布后才被发现。
+失败判定：只构建一个架构、上传 ad-hoc 包、创建公开身份、重复签名同一 artifact，或把 smoke 当成 Preview 发布。
 
-## 用例 4：Pre-release 发布后回流 main
+## 用例 4：真实 Sparkle UI 门禁
 
-1. 完成签名、公证和本地验证，发布 schema 2 的 GitHub Pre-release。
-2. 等待发布脚本完成 GitHub/CDN 下载字节比较，并确认它调度 Release Guard。
-3. 检查 Release Guard 创建标题为 `Record vX.Y.Z preview candidate in main` 的 PR，并启用 auto-merge。
-4. 等待 Apple Silicon 与 Intel Ventura 必需检查通过。
+1. 使用 prepare-staged-preview-ui-test.sh 恢复指定 Run/attempt/artifact。
+2. 从 v1.8.3 下载并验证稳定基线。
+3. 通过本地固定 feed，让稳定 App 真实执行 check、download、install、首次启动、退出、二次启动。
+4. 使用 record-preview-ui-attestation.sh 和 verify-preview-ui-attestation.sh。
 
-预期结果：候选提交通过 merge commit 进入 main；GitHub Release 仍为 Pre-release；Tag 和所有签名、公证资产未变化，未运行正式晋升。
+预期：attestation 绑定 source SHA、artifact ID/digest、manifest、两份 appcast、候选 ZIP、安装后版本/Build、Team ID、公证、Gatekeeper、Sparkle helper 0755/链接和无新增崩溃。只运行 probe 或单元测试不能通过。
 
-失败判定：下载字节未验证就创建回流 PR、PR 绕过必需检查、Release 被改为正式版、Tag 或资产被重建/替换。
+## 用例 5：幂等 publication
 
-## 用例 5：从回流后的 main 创建下一候选
+1. 从精确 main worktree 运行 publish-staged-preview.sh。
+2. 注入一次 GitHub 上传或 CDN 验证失败。
+3. 用同一 attestation 重试。
 
-1. 候选 PR 合入 main 后，更新本地 `origin/main`。
-2. 产品开发分支从该 main 创建并通过 PR 合入 main。
-3. 下一 `release/pre-vX.Y.Z` 再从新的最新 main 创建。
+预期：publication workflow 不读取 Apple 凭据；首次创建或复用 exact Tag 和 Pre-release，只上传缺失且摘要匹配的 11 项 payload 与 provenance。重试不重签、不升版本、不创建新分支；已有不同字节时 fail closed。
 
-预期结果：新候选继承已回流的版本元数据和后续产品代码，且仍只有一个新的发布元数据提交。
+## 用例 6：Stable 只改分类
 
-失败判定：需要从旧候选分支继续开发，或新候选直接父提交不是最新 main。
+1. 选择已发布且已验证的 Pre-release Tag。
+2. 运行 promote-preview-release.sh。
+3. 比较晋升前后的全部资产名称、大小和 digest。
 
-## 用例 6：正式版复用已验证候选
+预期：确认 Tag Commit 已进入 origin/main，并通过 GitHub API 核对 provenance 对应的成功 protected Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变。
 
-1. 明确选择一个已经发布、验证且 Tag 提交已包含于 `origin/main` 的 Pre-release。
-2. 触发正式晋升，不修改候选分支、Tag 或 Release 资产。
-3. 比较晋升前后的资产名称、大小和 SHA-256。
+失败判定：选择 Draft/不存在的 Release、Tag 未进入 main、触发构建/签名/上传或替换资产。
 
-预期结果：同一个 Tag 从 Pre-release 变为 Stable，所有候选资产摘要完全一致，只新增正式晋升证明；未重新签名、公证或打包。
+## 用例 7：同 SHA 故障恢复
 
-失败判定：候选未进入 main 就晋升、选择了未发布候选、创建新 Tag、替换任一资产或从 main 重建。
+1. 在 staging 或 publication 中模拟 Runner、GitHub 或网络失败。
+2. 用同一个 main SHA、版本、Build 和 artifact 身份重试。
 
-## 用例 7：签名前失败的同版本恢复
-
-1. 让候选在 `Validate release identity` 或其他读取 Apple 凭据前的无秘密步骤失败，确认远端没有对应 Tag、Release、appcast 或可分发资产。
-2. 修复流水线并通过普通 PR 合入 `main`，从最新 `origin/main` 创建同版本 `release/pre-vX.Y.Z-rerun`，随后按需使用 `-rerun2` 等更高编号。
-3. 检查新候选的 provenance、请求 attestation、候选 SHA 和 Draft PR，确认旧失败候选与 Run 仍保留。
-
-预期结果：同一版本恢复进入正常候选流程，`request_started_at` 不变，新的候选 SHA 和 attestation 与旧失败身份区分；不创建新 Tag 之前不要求递增版本。
-
-失败判定：改写旧候选、force-push、清理失败证据、复用不匹配的公开 attestation，或仅因无秘密流水线失败就强制递增版本。
+预期：只新增 workflow Run；不升版本、不创建 rerun/canary 分支、不创建第二个 PR/Tag，成功的签名字节被复用。
 
 ## 稳定功能回归
 
-- `mac-preview-candidate.yml` 的普通候选 Push 仍不读取 Apple 发布证书。
-- `mac-release-package.yml` 继续只有 `contents: read`，签名密钥仅在受保护 Environment 中使用。
-- main PR 仍要求 Apple Silicon 与 Intel Ventura 两项必需检查。
-- 普通候选回流 PR 的 CI 不得触发 Stable Promotion；只有正式晋升流程显式调度的候选 CI 才可进入晋升 workflow，且没有 `stable-promotion-approved` 时必须明确跳过。
-- 历史 schema 1 候选仍可按既有正式晋升流程验证，但不会因普通 Pre-release 事件自动回流 main。
+- stable latest 在 Preview 前后仍为 v1.8.3。
+- 公开 Preview 保持 Pre-release，不触发 Stable workflow。
+- Private Draft 只写入 GetSayAll/SayAll，不污染公开源码仓库。
+- 两架构资产和固定 Tag URL 完整，11 项 payload 加 provenance 的摘要一致。
+- 所有调用 gh 的 workflow step 都显式设置 GH_TOKEN。
 
-## 日志收集
+## 日志与边界
 
-- 候选来源：保存 `verify-preview-branch.sh` 的完整输出、候选 SHA、`BASE_MAIN_COMMIT` 和 `git log -1 --format='%H %P'`。
-- 发布资产：保存 `candidate-provenance.json`、Release Guard run URL、回流 PR URL、两项必需检查结果。
-- 正式晋升：保存晋升前后 Release 状态、`stable-promotion.json` 和资产 SHA-256 对比。
-- 失败时不得粘贴 Apple 证书、私钥、API key、Match 密码或 Environment secret；只记录脱敏错误和 workflow step。
-
-## 验证边界
-
-- 自动化可验证分支父子关系、允许文件范围、provenance、PR/CI 门禁和资产摘要。
-- 本地执行 `./scripts/test-preview-branch-lifecycle.sh` 可在临时 bare remote 中验证“从最新 main 创建单候选提交通过、从旧候选串联失败”，不会修改真实远端。
-- 代理可只读检查 GitHub Release、workflow、PR 和提交关系；没有用户明确发布授权时不得创建分支、Tag、Release 或执行晋升。
-- Environment 审批、真实签名/公证、Intel Ventura 安装和可见 App 行为仍需各自真实环境验收；这些结果不能由静态脚本测试替代。
+保存 source SHA、Run/attempt、artifact ID/digest、manifest、attestation、下载比较和失败类别；不要保存秘密值。受保护签名、公证、真实 UI、实体遥控器和第三方 App 的真实验收结果必须分别标记，自动化 fixture 不能冒充真机结论。

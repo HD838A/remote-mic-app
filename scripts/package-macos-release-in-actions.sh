@@ -59,6 +59,13 @@ if [[ "$(/usr/bin/stat -f '%Lp' "$AGE_IDENTITY_FILE")" != "600" ]]; then
   exit 1
 fi
 
+match_checkout_head="$(git -C "$MATCH_REPO" rev-parse HEAD)"
+match_main_head="$(git -C "$MATCH_REPO" rev-parse refs/heads/main 2>/dev/null || true)"
+if [[ -z "$match_checkout_head" || "$match_main_head" != "$match_checkout_head" ]]; then
+  print -u2 "readonly Match checkout must expose local main at its exact pinned HEAD"
+  exit 1
+fi
+
 "$SECRETS_VALIDATOR" "$RELEASE_CREDENTIALS_REPO"
 "$MATCH_VALIDATOR" "$MATCH_REPO"
 

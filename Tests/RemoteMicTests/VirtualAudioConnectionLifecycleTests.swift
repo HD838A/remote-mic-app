@@ -5,6 +5,73 @@ import Testing
 
 @Suite("Virtual audio connection lifecycle")
 struct VirtualAudioConnectionLifecycleTests {
+    @Test func healthyExplicitOutputIgnoresDefaultSystemOutputOnlyChanges() {
+        #expect(VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
+            details: "properties=default_system_output",
+            configurationHealthy: true
+        ))
+        #expect(!VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
+            details: "properties=default_system_output",
+            configurationHealthy: false
+        ))
+        #expect(!VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
+            details: "properties=devices",
+            configurationHealthy: true
+        ))
+    }
+
+    @Test func recoveryEventsAreCountedUntilTheDebouncedExecutionConsumesThem() {
+        var state = AudioRecoveryCoalescingState()
+
+        state.recordEvent()
+        state.recordEvent()
+        state.recordEvent()
+
+        #expect(state.consumePendingEventCount() == 3)
+        #expect(state.consumePendingEventCount() == 0)
+        state.recordEvent()
+        state.reset()
+        #expect(state.consumePendingEventCount() == 0)
+    }
+
+    @Test func releaseRequiresResourcesOrPendingBuffersAndNoExistingRelease() {
+        #expect(!VirtualAudioConnectionLifecyclePolicy.shouldScheduleRelease(
+            hasPendingRelease: false,
+            hasAllocatedOutputResources: false,
+            pendingVoiceBufferCount: 0
+        ))
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldScheduleRelease(
+            hasPendingRelease: false,
+            hasAllocatedOutputResources: true,
+            pendingVoiceBufferCount: 0
+        ))
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldScheduleRelease(
+            hasPendingRelease: false,
+            hasAllocatedOutputResources: false,
+            pendingVoiceBufferCount: 1
+        ))
+        #expect(!VirtualAudioConnectionLifecyclePolicy.shouldScheduleRelease(
+            hasPendingRelease: true,
+            hasAllocatedOutputResources: true,
+            pendingVoiceBufferCount: 1
+        ))
+    }
+
+    @Test func recoveryLoggingMatchesTheExecutionDebounceBoundary() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(!source.contains("AUDIO RECOVERY scheduled"))
+        #expect(source.contains("coalesced_events=\\(coalescedEvents)"))
+        #expect(source.contains("hasAllocatedOutputResources: audioOutput.hasAllocatedOutputResources"))
+    }
+
     @Test func stoppedPlayerIsNotHealthyWhenEngineAndDeviceStillLookReady() {
         #expect(!VirtualAudioHealthPolicy.isPlaybackReady(
             hasSelectedDevice: true,

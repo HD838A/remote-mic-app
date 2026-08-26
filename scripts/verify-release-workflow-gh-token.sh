@@ -11,8 +11,8 @@ for workflow in "$WORKFLOW_DIR"/*.yml "$WORKFLOW_DIR"/*.yaml; do
   /usr/bin/awk -v workflow="$workflow" '
     function check_step() {
       if (index(step, "gh ") > 0 || index(step, "gh\t") > 0 || index(step, "gh\n") > 0) {
-        if (index(step, "GH_TOKEN: ${{ github.token }}") == 0) {
-          print workflow ":" start_line ": a step invokes gh without GH_TOKEN: ${{ github.token }}" > "/dev/stderr"
+        if (step !~ /GH_TOKEN:[[:space:]]*\$\{\{[^}]+\}\}/) {
+          print workflow ":" start_line ": a step invokes gh without an explicit step-scoped GH_TOKEN" > "/dev/stderr"
           failed = 1
         }
       }

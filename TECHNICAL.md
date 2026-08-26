@@ -21,14 +21,14 @@
 | --- | --- |
 | `RemoteMicApp.swift` | AppKit 生命周期、菜单栏图标、左键设置窗口、右键菜单、关于与版本菜单项、Sparkle 手动更新入口 |
 | `SettingsView.swift` | 设置界面、状态展示、音频选择、按键映射和权限入口；macOS 26 使用 Liquid Glass，macOS 14/15 使用兼容样式 |
-| `BridgeAppModel.swift` | 蓝牙、音频、HID、Fn 映射和 UI 状态的协调层 |
+| `BridgeAppModel.swift` | 蓝牙、音频、HID、语音键映射和 UI 状态的协调层 |
 | `XiaomiBluetoothBridge.swift` | CoreBluetooth 扫描、连接、能力协商、语音会话和自动重连 |
 | `ATVVProtocol.swift` | ATVV 命令、能力解析、IMA/DVI ADPCM 解码、帧累积与 PCM 后处理 |
 | `AudioOutput.swift` | CoreAudio 输出设备枚举和 16 kHz 单声道语音写入 |
 | `HIDRemoteMonitor.swift` | RC003 原始 HID 报告、独占/兼容模式、按键重复和活动状态 |
 | `KeyboardEventSuppressor.swift` | 兼容模式下对同一遥控器原生系统事件的短时抑制 |
 | `KeyboardInjector.swift` | 键盘、媒体键和预置应用启动动作 |
-| `RemoteVoiceFunctionMapper.swift` | 只对 RC003 把语音键的 F5 usage 映射为 Fn/Globe，并在退出时恢复 |
+| `RemoteVoiceFunctionMapper.swift` | RC003 语音键 F5 的 Fn 映射或 Command 模式中和，并在退出时恢复 |
 | `AppSettings.swift` | 音频设备、增益、HID 开关、按键映射和外设标识持久化 |
 
 ## 国际化
@@ -100,19 +100,23 @@ ATVV 通道为：
 
 方向、返回和音量键支持长按重复；打开应用动作不重复。普通实体按键活动状态会发布到 SwiftUI，用于高亮遥控器示意图和定位映射行。
 
-## 语音键 Fn 映射
+## 语音键触发方式与 Fn 映射
 
 RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`RemoteVoiceFunctionMapper` 只匹配 RC003 的 Vendor ID/Product ID；默认把该 usage 映射为 Apple vendor top-case Fn/Globe（usage page `0xFF`、usage `0x03`）。自定义按键映射启用时，同一组件还会把 RC003 的 Keyboard Power（usage `0x66`）映射为 F20（usage `0x6F`）。
 
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的 F5 映射为 usage `0`；任一目标失败或目标不完整时立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 
-该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceFnTapModeEnabled`；旧配置缺少字段时按关闭处理。应用退出时恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
+该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceKeyMode`、`voiceFnTapModeEnabled` 和 `voiceShortTapFocusEnabled`；旧配置缺少新字段时保持默认关闭。Fn 点按与短按聚焦互斥。应用退出、断连或模式切换时会释放尚未释放的 Command 按键，并恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
+
+语音键模式由统一的语音会话状态机驱动：`fn`（默认）、`left_command`、`right_command`。Command 模式在 RC003、iPhone、Apple Watch 和网页版语音开始时发送所选 Command 的 keyDown，在结束时发送配对的 keyUp。普通键盘 Command 不会触发输入源切换；只有真实语音会话才会显式开始和结束输入源会话。
+
+`VoiceShortTapFocusPolicy` 复用 `HIDRemoteTiming.longPressMilliseconds`：开关启用且会话时长小于阈值时，松开后取消转写捕获、清空该次短音频，并异步调用 `KeyboardInjector.focusFrontmostComposer`。输入框排名拒绝搜索、设置、密码、Token、终端和代码编辑器等候选；Electron / Chromium 复用已有辅助功能树唤醒和有界重试。微信主聊天窗口不暴露输入框，所以仅对精确 Bundle ID 使用最小窗口尺寸门禁和窗口相对点击。
 
 ## 菜单栏与窗口
 
 应用以 `LSUIElement` accessory 模式运行，不显示 Dock 图标。状态栏按钮同时接收左右鼠标抬起事件：
 
-- 左键：创建或置前 800×650 的可缩放设置窗口；
+- 左键：创建或置前默认及最小尺寸为 1020×772 的可缩放设置窗口；
 - 右键：显示连接、音频、HID 状态，以及重新连接、打开设置、日志、关于、版本号、检查更新、GitHub 和退出菜单。
 
 设置窗口在 macOS 26 使用原生 `glassEffect`、glass button style 和滚动边缘效果；macOS 14/15 使用标准按钮、系统 Material 面板和兼容选中状态。两套样式共用相同功能与布局，并跟随系统浅色、深色、降低透明度与增强对比度设置。
@@ -122,7 +126,7 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 - 语音 PCM 只存在于进程内存和用户选择的 CoreAudio 输出链路中，不落盘、不上传；
 - 测试音只在内存生成；
 - 持久化内容包括增益、音频设备 UID、自定义映射开关、按键绑定和 macOS 外设 UUID；
-- 日志位于 `~/Library/Logs/RemoteMic/runtime.log`，记录状态和错误，不记录语音内容、蓝牙地址或外设 UUID。
+- 日志位于 `~/Library/Logs/RemoteMic/runtime.log`，每行包含无线麦自身 PID、版本与 Build；单文件达到 10 MiB 后滚动到 `.1`～`.3`，最旧归档只移入 macOS 废纸篓。日志记录状态和错误，不记录语音内容、蓝牙地址、外设 UUID、前台 App 或外部事件来源 PID。
 
 ## 构建与测试
 
@@ -170,16 +174,17 @@ DMG 根目录严格只有 `Install Remote Mic.pkg`；App-only ZIP 与对应架�
 
 Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=true` 与 `SUScheduledCheckInterval=86400` 启用每日自动检查；`SUAutomaticallyUpdate=false` 与 `SUAllowsAutomaticUpdates=false` 禁止静默下载或自动安装。用户仍可选择菜单中的“检查更新…”立即检查。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
 
-正式发布使用 `scripts/notarize-release.sh`：它只接受已同步到发布 Mac 的既有 Developer ID 身份、Keychain 中的本地公证 profile 和受限的 Sparkle 私钥文件引用。脚本按应用、两个 PKG、DMG 的顺序公证和 staple，最后从已 staple 的应用生成 Sparkle ZIP 与签名 appcast；不会把任何证书、P12、API 密钥或私钥写入仓库或 Release。
+预览版发布采用两阶段 main-based 流程。版本和 Build 先通过普通 PR 合入 main；随后 .github/workflows/mac-release-package.yml 在受保护 mac-release Environment 中从精确 main SHA 构建 Apple Silicon 与 Intel 两条 lane，完成 Developer ID 签名、公证、staple、ZIP/DMG/PKG/appcast 校验，并上传不可变 payload artifact 和 stage record。该 workflow 不创建 Tag、Release 或公开 appcast。
 
-候选版本先以 GitHub pre-release 发布。`notarize-release.sh` 使用固定 `RELEASE_TAG` 生成 appcast 的 GitHub 发布页，并让 enclosure ZIP 和本地化更新说明使用 `download.sayall.app/mac/releases/<tag>/` 的不可变 Cloudflare CDN 地址；发布脚本在 GitHub 资产可用后从 CDN 重新下载并逐字节比较，同时验证 `HEAD` 与 `Range`。应用内的 `SUFeedURL` 仍固定为 GitHub `releases/latest/download/appcast.xml`，旧安装用户不需要迁移 feed。GitHub 的 latest release 排除 draft 和 pre-release，因此默认关闭预发布检查的用户继续取得正式版本 appcast。用户在“关于”页主动开启预发布检查后，应用通过 GitHub 公共 Release API 解析最新一个带 `appcast.xml` 的非草稿 Release，并把其不可变资产 URL 作为 Sparkle 动态 feed；手动检查前会刷新，常驻运行时也会定期刷新。
+当前授权会话从公开稳定版 v1.8.3 下载真实归档，使用只替换 URL 前缀的本地固定 feed，让稳定 App 通过真实 Sparkle UI 完成检查、下载、安装、首次启动、退出和二次启动；未完成这一步不得发布 Preview。attestation 绑定 Run、attempt、artifact、manifest、appcast、版本/Build、Team ID、公证、Gatekeeper、Sparkle helper 权限和无新增崩溃。
 
-`scripts/publish-release.sh prerelease` 只接受干净、已推送且由同一远端 Tag 指向的源提交。公开矩阵固定为 12 项：两套 DMG、两套 Sparkle ZIP、两套 appcast、两套架构卸载 PKG、共享中英文更新说明、合并的 SHA-256 清单和候选 provenance。两套安装 PKG 只存在于对应 DMG 内，不再作为独立 Release 资产重复上传。脚本确认 pre-release 未改变 latest release，并从 GitHub 与 CDN 回下载全部 12 项逐字节比较；晋升逻辑继续兼容历史 15/17 项 Release。测试机应使用与架构一致的 Sparkle CLI 单次 `--feed-url <候选版本 appcast URL>` 覆盖完成候选探测或更新，不写入持久化的 `SUFeedURL` 偏好；实际安装候选版本时需要处于已解锁的图形会话。
+.github/workflows/mac-preview-publication.yml 只在 main 上运行，不进入 Apple Environment，不读取 Apple/Match/Notary/Sparkle 私钥。它按 exact artifact ID/digest 恢复 staged bytes，创建或复用同一 source SHA 的轻量 Tag，上传 canonical manifest 的 11 项 payload 与 candidate-provenance.json，并从 GitHub fixed-tag URL 和 download.sayall.app 固定 Tag URL 逐项下载、比较字节。Preview 期间 releases/latest 必须保持 v1.8.3。
 
-仅修改本地化文案或内置文档的低风险版本，在 `release/pre-v<版本>` 候选分支完成版本号、发布历史、commit 和 push 后，可使用 `ALLOW_ISOLATED_RELEASE_KEYCHAIN=1 ./scripts/fast-release.sh`。它会运行完整 Swift 测试、使用一次性 Keychain 分别签名并公证 Apple Silicon 与 Intel 产物，再发布 pre-release 并逐字节校验公开资产。正式晋升仍是独立授权步骤，必须在同一候选提交进入 `main` 后复用原始候选字节。快速命令只允许明确的文档和资源白名单，且 `Info.plist` 只能改变显示版本与 build number；发现 Swift、蓝牙、音频、安装器或发布流水线改动时会拒绝执行，必须走完整候选验收流程。
+公开资产集合由 scripts/prepare-public-release-assets.sh 和 staged-assets.json 定义；两套安装 PKG 仍在对应 DMG 内，不作为独立公开资产重复上传。版本选择、staging 和首次 publication 创建 Tag 前都会检查 11 个 CDN 固定路径，只有 HTTP 404 才算可用，2xx/3xx 视为占用，认证、权限、5xx、超时或未知响应 fail closed。脚本和 verifier 不依赖最新 Run、候选分支或固定以外的隐式来源。Preview publication 和 Stable promotion 只允许写入 `HD838A/remote-mic-app`，并 checkout dispatch 事件的精确 SHA；基础设施失败只重试同一 SHA、版本、Build 和已成功 artifact；不升版本、不重签、不覆盖 Tag。
 
-候选版本通过干净安装、运行和 Sparkle 端到端更新测试后，运行 `scripts/publish-release.sh promote` 将相同 Tag 和相同资产晋升为正式版。晋升后必须再次确认 latest appcast 与候选版本 appcast 逐字节一致。失败的候选版本不得覆盖资产或晋升；应递增显示版本和 `CFBundleVersion`，重新构建、签名、公证并发布新的 pre-release。
+本地 scripts/stage-macos-preview.sh 只做无秘密预检和 dispatch，不在本机签名、公证、创建 Tag/Release 或上传资产。私有内部 Draft 继续走 private-draft-release skill 的 GetSayAll/SayAll 路径，不能误写入公开源码仓库。
 
+只有用户明确指定已经发布并验证的 Pre-release，才可运行 stable promotion。该流程验证 provenance、精确 protected staging Run/attempt 及 payload/stage-record artifact 身份、Tag/main 祖先关系和资产摘要，然后只修改 Release 分类与 latest；不重新构建、签名、公证或上传。
 ### 发布故障复盘与强制检查
 
 `1.4.5` 的安装 PKG 曾在 `postinstall` 中调用 `/usr/bin/lipo` 和 `/usr/bin/vtool` 检查架构与最低系统版本。这两个命令属于 Xcode Command Line Tools，不是普通 macOS 安装环境的组成部分；未安装开发工具的用户会在安装时被要求下载命令行开发者工具，并因 `set -e` 直接中止安装。该问题来自安装脚本，不是应用运行逻辑、Developer ID 签名或 Apple 公证。

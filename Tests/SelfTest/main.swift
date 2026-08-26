@@ -216,6 +216,10 @@ check(
         RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36) &&
         // Real RC003 hardware emits keyCode 10 (ISO §) for the TV key.
         RemoteButton.tv.nativeEvent == .keyboard(keyCode: 10) &&
+        RemoteButton.tv.nativeEvents == [
+            .keyboard(keyCode: 10),
+            .keyboard(keyCode: 50),
+        ] &&
         RemoteButton.power.nativeEvent == .keyboard(keyCode: 90) &&
         RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0) &&
         RemoteButton.back.nativeEvent == nil,
@@ -294,29 +298,48 @@ check(
         ) == .accessibility,
     "HID permission requests are sequential and opt-in"
 )
+check(
+    VoiceKeyMode.function.keyCode == 63 &&
+        VoiceKeyMode.leftCommand.keyCode == 55 &&
+        VoiceKeyMode.rightCommand.keyCode == 54 &&
+        HIDPermissionGate.nextPermissionRequest(
+            mappingEnabled: false,
+            voiceKeyMode: .leftCommand,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ) == .accessibility,
+    "voice key modes keep Fn default and gate Command on Accessibility"
+)
 
 var voiceFunctionKeyLatch = VoiceFunctionKeyLatch()
-let firstVoicePress = voiceFunctionKeyLatch.transition(streaming: true)
-let duplicateVoicePress = voiceFunctionKeyLatch.transition(streaming: true)
-let firstVoiceRelease = voiceFunctionKeyLatch.transition(streaming: false)
-let duplicateVoiceRelease = voiceFunctionKeyLatch.transition(streaming: false)
+let firstVoicePress = voiceFunctionKeyLatch.transition(streaming: true, owner: .bluetooth)
+let duplicateVoicePress = voiceFunctionKeyLatch.transition(streaming: true, owner: .bluetooth)
+let overlappingMobilePress = voiceFunctionKeyLatch.transition(streaming: true, owner: .mobile)
+let bluetoothReleaseWhileMobileActive = voiceFunctionKeyLatch.transition(
+    streaming: false,
+    owner: .bluetooth
+)
+let finalMobileRelease = voiceFunctionKeyLatch.transition(streaming: false, owner: .mobile)
+let duplicateVoiceRelease = voiceFunctionKeyLatch.transition(streaming: false, owner: .mobile)
 check(
     firstVoicePress == .press &&
         duplicateVoicePress == nil &&
-        firstVoiceRelease == .release &&
+        overlappingMobilePress == nil &&
+        bluetoothReleaseWhileMobileActive == nil &&
+        finalMobileRelease == .release &&
         duplicateVoiceRelease == nil &&
         !voiceFunctionKeyLatch.isHeld,
-    "voice Fn latch emits one press and one release"
+    "voice key latch releases only after the last source stops"
 )
 
-let failedVoicePress = voiceFunctionKeyLatch.transition(streaming: true)
+let failedVoicePress = voiceFunctionKeyLatch.transition(streaming: true, owner: .bluetooth)
 if let failedVoicePress {
-    voiceFunctionKeyLatch.rollback(failedVoicePress)
+    voiceFunctionKeyLatch.rollback(failedVoicePress, owner: .bluetooth)
 }
-let voicePressForFailedRelease = voiceFunctionKeyLatch.transition(streaming: true)
-let failedVoiceRelease = voiceFunctionKeyLatch.transition(streaming: false)
+let voicePressForFailedRelease = voiceFunctionKeyLatch.transition(streaming: true, owner: .mobile)
+let failedVoiceRelease = voiceFunctionKeyLatch.transition(streaming: false, owner: .mobile)
 if let failedVoiceRelease {
-    voiceFunctionKeyLatch.rollback(failedVoiceRelease)
+    voiceFunctionKeyLatch.rollback(failedVoiceRelease, owner: .mobile)
 }
 check(
     failedVoicePress == .press &&
@@ -325,7 +348,7 @@ check(
         voiceFunctionKeyLatch.isHeld,
     "voice Fn latch rolls back failed injection"
 )
-_ = voiceFunctionKeyLatch.transition(streaming: false)
+_ = voiceFunctionKeyLatch.transition(streaming: false, owner: .mobile)
 
 let unrelatedMapping = HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 0x0000_0007_0000_0005)
 let staleVoiceMapping = HIDUsageMapping(

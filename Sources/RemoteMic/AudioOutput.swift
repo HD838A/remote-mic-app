@@ -255,41 +255,6 @@ enum CoreAudioDeviceCatalog {
     }
 }
 
-enum SystemAudioSuspensionReason: String, Hashable {
-    case screenSleeping = "screen_sleeping"
-    case sessionInactive = "session_inactive"
-    case systemSleeping = "system_sleeping"
-}
-
-enum SystemAudioLifecycleEvent: String {
-    case screenDidSleep = "screen_did_sleep"
-    case screenDidWake = "screen_did_wake"
-    case sessionDidResignActive = "session_did_resign_active"
-    case sessionDidBecomeActive = "session_did_become_active"
-    case systemWillSleep = "system_will_sleep"
-    case systemDidWake = "system_did_wake"
-
-    var suspensionReason: SystemAudioSuspensionReason {
-        switch self {
-        case .screenDidSleep, .screenDidWake:
-            return .screenSleeping
-        case .sessionDidResignActive, .sessionDidBecomeActive:
-            return .sessionInactive
-        case .systemWillSleep, .systemDidWake:
-            return .systemSleeping
-        }
-    }
-
-    var isSuspending: Bool {
-        switch self {
-        case .screenDidSleep, .sessionDidResignActive, .systemWillSleep:
-            return true
-        case .screenDidWake, .sessionDidBecomeActive, .systemDidWake:
-            return false
-        }
-    }
-}
-
 struct SystemAudioSuspensionState {
     private(set) var reasons = Set<SystemAudioSuspensionReason>()
 
@@ -323,6 +288,23 @@ enum VirtualAudioConnectionLifecyclePolicy {
             return true
         }
         return readyBluetoothBridgeCount > 0 && !systemSuspended
+    }
+
+    static func shouldScheduleRelease(
+        hasPendingRelease: Bool,
+        hasAllocatedOutputResources: Bool,
+        pendingVoiceBufferCount: Int
+    ) -> Bool {
+        !hasPendingRelease && (hasAllocatedOutputResources || pendingVoiceBufferCount > 0)
+    }
+}
+
+enum VirtualAudioRecoveryPolicy {
+    static func shouldIgnoreDefaultSystemOutputChange(
+        details: String,
+        configurationHealthy: Bool
+    ) -> Bool {
+        details == "properties=default_system_output" && configurationHealthy
     }
 }
 
@@ -417,6 +399,14 @@ final class VirtualAudioOutput {
         return pendingVoiceBufferCount
     }
 
+    var hasAllocatedOutputResources: Bool {
+        engine != nil || player != nil || selectedDevice != nil
+    }
+
+    var isConfigurationHealthyForDiagnostics: Bool {
+        isConfigurationHealthy
+    }
+
     @discardableResult
     func configure(deviceUID: String) -> Bool {
         let previousState = diagnosticState()
@@ -463,7 +453,8 @@ final class VirtualAudioOutput {
             status = LocalizedMessage("audio.output.select_failed", arguments: [String(result)])
             AppLogger.shared.write(
                 "AUDIO CONFIGURE failed reason=set_current_device " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} error=\(result)"
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
+                    AppLogger.errorFields(domain: "os_status", code: Int(result))
             )
             return false
         }
@@ -494,7 +485,7 @@ final class VirtualAudioOutput {
                 arguments: [error.localizedDescription]
             )
             AppLogger.shared.write(
-                "AUDIO ERROR start_failed=\(error.localizedDescription) " +
+                "AUDIO ERROR start_failed " + AppLogger.errorFields(error) + " " +
                     "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} state={\(diagnosticState())}"
             )
             return false
@@ -550,11 +541,20 @@ final class VirtualAudioOutput {
 
     @discardableResult
     func enqueue(samples: [Int16]) -> Bool {
-        guard isPlaybackReady,
-              let player,
-              let buffer = makeBuffer(samples: samples)
-        else {
-            logRejectedWrite()
+        guard !samples.isEmpty else {
+            logRejectedWrite(reason: "empty_samples")
+            return false
+        }
+        guard let player else {
+            logRejectedWrite(reason: "player_missing")
+            return false
+        }
+        guard isPlaybackReady else {
+            logRejectedWrite(reason: "playback_not_ready")
+            return false
+        }
+        guard let buffer = makeBuffer(samples: samples) else {
+            logRejectedWrite(reason: "buffer_creation_failed")
             return false
         }
         if rejectedWriteCount > 0 {
@@ -802,11 +802,14 @@ final class VirtualAudioOutput {
         return CoreAudioDeviceCatalog.deviceInfo(for: deviceID)
     }
 
-    private func logRejectedWrite() {
+    private func logRejectedWrite(reason: String) {
         rejectedWriteCount += 1
         let now = Date()
         guard now.timeIntervalSince(lastRejectedWriteLogDate) >= 1 else { return }
         lastRejectedWriteLogDate = now
-        AppLogger.shared.write("AUDIO WRITE rejected count=\(rejectedWriteCount) state={\(basicDiagnosticState())}")
+        AppLogger.shared.write(
+            "AUDIO WRITE rejected count=\(rejectedWriteCount) reason=\(reason) " +
+                "state={\(diagnosticState())}"
+        )
     }
 }

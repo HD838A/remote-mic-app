@@ -1,0 +1,67 @@
+name: macOS Preview Publication
+run-name: mac-preview-publication ${{ inputs.source_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful protected staging Run ID
+        required: true
+        type: string
+      ui_attestation_b64:
+        description: Base64-encoded real Sparkle UI attestation
+        required: true
+        type: string
+
+concurrency:
+  group: mac-preview-publication-${{ inputs.source_run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    name: Publish verified staged Preview
+    if: ${{ github.ref_name == 'main' }}
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Validate publication dispatch
+        env:
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          TRIGGER_REF_NAME: ${{ github.ref_name }}
+          TRIGGER_REF_TYPE: ${{ github.ref_type }}
+          TRIGGER_REPOSITORY: ${{ github.repository }}
+        run: |
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          test "$TRIGGER_REF_NAME" = main
+          test "$TRIGGER_REF_TYPE" = branch
+          test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
+
+      - name: Check out exact publication workflow source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Decode UI attestation
+        env:
+          UI_ATTESTATION_B64: ${{ inputs.ui_attestation_b64 }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          [[ ${#UI_ATTESTATION_B64} -le 60000 ]]
+          printf '%s' "$UI_ATTESTATION_B64" | /usr/bin/base64 -D > "$RUNNER_TEMP/preview-ui-attestation.json"
+          jq -e --argjson run "$SOURCE_RUN_ID" '.sourceRunId == $run' \
+            "$RUNNER_TEMP/preview-ui-attestation.json" >/dev/null
+
+      - name: Publish and verify the staged Preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          REPOSITORY_ROOT: ${{ github.workspace }}
+          EXPECTED_STABLE_TAG: v1.8.3
+          GH_BIN: gh
+        run: ./scripts/publish-preview-release.sh "$RUNNER_TEMP/preview-ui-attestation.json"

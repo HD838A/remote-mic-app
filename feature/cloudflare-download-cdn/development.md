@@ -20,12 +20,12 @@ GitHub stable / pre-release appcast
   → GitHub Releases 固定标签 ZIP
 ```
 
-未来候选公开 12 项资产。安装 PKG 仍在对应 DMG 内完成签名、公证与校验，但不再作为 standalone Release 资产重复上传；两套 appcast 复用同一对中英文说明，两个 DMG 的摘要写入一个 `Remote-Mic-<version>.dmg.sha256`。该文件名沿用 Worker 现有白名单，无需新增下载路由；Worker 也必须继续接受历史固定标签 URL，不能因新矩阵上线而撤销既有 15/17 项资产路径。
+候选公开资产由 `candidate-provenance.json` 的 payload 清单唯一决定。安装 PKG 仍在对应 DMG 内完成签名、公证与校验，但不再作为 standalone Release 资产重复上传；两套 appcast 复用同一对中英文说明，两个 DMG 的摘要写入一个 `Remote-Mic-<version>.dmg.sha256`。该文件名沿用 Worker 现有白名单，无需新增下载路由；Worker 也必须继续接受历史固定标签 URL，不能因当前矩阵变化而撤销既有资产路径。
 
 ## 涉及文件
 
 - `scripts/notarize-release.sh`：生成 CDN enclosure 与更新说明 URL。
-- `scripts/publish-release.sh`：保留 GitHub 发布，并增加 CDN 全资产、HEAD 和 Range 回验。
+- `scripts/publish-preview-release.sh`：从已验证 staging artifact 发布 GitHub Pre-release，并增加 CDN 全资产字节回验。
 - `Tests/RemoteMicTests/BuildSigningTests.swift`：锁定 CDN URL、发布回验和旧 feed 边界。
 - `README.md`、`README.en.md`：提供固定正式版下载入口和 GitHub 回退。
 - `TECHNICAL.md`、`TECHNICAL.en.md`：记录 GitHub feed 与 CDN enclosure 的职责边界。
@@ -34,7 +34,7 @@ GitHub stable / pre-release appcast
 
 ## 发布顺序
 
-必须先部署并验证 Worker，再发布带 CDN enclosure 的候选版本。GitHub 固定标签资产不存在时，Worker 应返回 404；发布脚本只有在 GitHub 资产和 CDN 字节均验证后才报告成功。
+必须先部署并验证 Worker，再发布带 CDN enclosure 的 Preview。GitHub 固定标签资产不存在时，Worker 应返回 404；publication workflow 只有在 GitHub 资产和 CDN 字节均验证后才报告成功。
 
 ## 已知限制
 

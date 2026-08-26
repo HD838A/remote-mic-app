@@ -196,6 +196,60 @@ struct SettingsPageRegressionTests {
         #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
     }
 
+    @Test func mappingFooterUsesCompactLayoutAtMinimumWindowWidth() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let footer = try #require(settingsSource.range(of: "private var mappingFooter"))
+        let selector = try #require(settingsSource.range(
+            of: "private func remoteDeviceSelector",
+            range: footer.upperBound..<settingsSource.endIndex
+        ))
+        let footerSource = settingsSource[footer.lowerBound..<selector.lowerBound]
+
+        #expect(footerSource.contains("VStack(alignment: .leading, spacing: 12)"))
+        #expect(!footerSource.contains("HStack(spacing: 16)"))
+        #expect(footerSource.contains("mappingVoiceKeyModeControl"))
+        #expect(footerSource.contains("mappingVoiceFnTapControl"))
+        #expect(footerSource.contains("mappingVoiceShortTapFocusControl"))
+        #expect(footerSource.contains("mappingRestoreDefaultsButton"))
+    }
+
+    @Test func voiceShortTapFocusIsWiredOnlyAfterTheVoiceSessionStops() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let voiceStart = try #require(source.range(of: "func bluetoothBridgeDidStartVoice"))
+        let voiceStop = try #require(source.range(
+            of: "func bluetoothBridgeDidStopVoice",
+            range: voiceStart.upperBound..<source.endIndex
+        ))
+        let nextDelegate = try #require(source.range(
+            of: "func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode",
+            range: voiceStop.upperBound..<source.endIndex
+        ))
+        let startSource = source[voiceStart.lowerBound..<voiceStop.lowerBound]
+        let stopSource = source[voiceStop.lowerBound..<nextDelegate.lowerBound]
+
+        #expect(!startSource.contains("focusFrontmostComposer"))
+        #expect(stopSource.contains("VoiceShortTapFocusPolicy.shouldFocus"))
+        #expect(stopSource.contains("KeyboardInjector.focusFrontmostComposer"))
+        #expect(stopSource.contains("voice_short_tap_focus"))
+        #expect(source.contains("settings.voiceShortTapFocusEnabled = false"))
+        #expect(source.contains("if enabled, settings.voiceFnTapModeEnabled"))
+    }
+
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -491,6 +545,10 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(".toggleStyle(.switch)"))
         #expect(source.contains("button_mapping.permission_prompt.open"))
         #expect(source.contains("button_mapping.selection_lock_hint_short"))
+        #expect(source.contains("Toggle(\"button_mapping.rapid_press\""))
+        #expect(source.contains("button_mapping.rapid_press_hint_short"))
+        #expect(source.contains("button_mapping.rapid_press_help"))
+        #expect(source.contains("!configured.action.allowsRepeat"))
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.contains("karaoke.title"))
         #expect(source.contains("karaoke.action.turn_on"))

@@ -96,6 +96,11 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         case .back: return nil
         }
     }
+
+    var nativeEvents: Set<RemoteNativeEvent> {
+        guard let nativeEvent else { return [] }
+        return self == .tv ? [nativeEvent, .keyboard(keyCode: 50)] : [nativeEvent]
+    }
 }
 
 enum RemoteNativeEvent: Hashable {
@@ -645,10 +650,13 @@ enum HIDPermissionGate {
     static func nextPermissionRequest(
         mappingEnabled: Bool,
         voiceFnTapModeEnabled: Bool = false,
+        voiceKeyMode: VoiceKeyMode = .function,
         inputMonitoringGranted: Bool,
         accessibilityGranted: Bool
     ) -> HIDPermissionRequest {
-        guard mappingEnabled || voiceFnTapModeEnabled else { return .none }
+        guard mappingEnabled || voiceFnTapModeEnabled || voiceKeyMode.requiresAccessibility else {
+            return .none
+        }
         if mappingEnabled, !inputMonitoringGranted { return .inputMonitoring }
         if !accessibilityGranted { return .accessibility }
         return .none

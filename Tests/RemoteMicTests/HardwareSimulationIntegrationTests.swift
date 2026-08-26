@@ -455,6 +455,55 @@ struct HardwareSimulationIntegrationTests {
         #expect(scheduler.pendingTaskCount == 0)
     }
 
+    @Test func appSwitcherSessionUsesAnyMappedButtonAndTVAdvancesThenReleasesOnDisconnect() throws {
+        let suiteName = "HardwareSimulationIntegrationTests.appSwitcherSession.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .ok)
+        settings.setAction(.escape, for: .tv)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var performedActions: [ButtonAction] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in
+                performedActions.append(configured.action)
+                return true
+            },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "app-switcher", profileID: profileID)
+
+        let ok = XiaomiVoiceRemoteButton.ok.report
+        let tv = XiaomiVoiceRemoteButton.tv.report
+        let release = Data(repeating: 0, count: ok.data.count)
+        monitor.handleSimulatedReport(reportID: ok.reportID, data: ok.data)
+        monitor.handleSimulatedReport(reportID: ok.reportID, data: release)
+        monitor.handleSimulatedReport(reportID: tv.reportID, data: tv.data)
+        monitor.handleSimulatedReport(reportID: tv.reportID, data: release)
+        monitor.disconnectSimulatedDevice()
+
+        #expect(performedActions.isEmpty)
+        #expect(posted.map { $0.0 } == [
+            KeyboardInjector.leftCommandKeyCode, 48, 48, 48, 48,
+            KeyboardInjector.leftCommandKeyCode,
+        ])
+        #expect(posted.map { $0.1 } == [true, true, false, true, false, false])
+        #expect(posted[0].2 == .maskCommand)
+        #expect(posted[1].2 == .maskCommand)
+        #expect(posted[2].2 == .maskCommand)
+        #expect(posted[5].2.isEmpty)
+    }
+
     @Test func HIDDiagnosticsTraceReportsEdgesGesturesAndActionsWithoutRawPayloads() throws {
         let suiteName = "HardwareSimulationIntegrationTests.hidDiagnostics.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

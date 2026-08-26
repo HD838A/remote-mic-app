@@ -1,0 +1,31 @@
+version: 1
+project: remote-mic-app
+base_ref: main
+
+# This file is policy input for the trusted Workflow. It is intentionally
+# conservative; changing it requires a normal maintainer-reviewed PR.
+allowed_paths:
+  - Sources/**
+  - Tests/**
+  - Testing/**
+  - docs/**
+  - TODO.md
+  - README.md
+denied_paths:
+  - .github/**
+  - .sayall/**
+  - packaging/**
+  - scripts/**
+  - Package.swift
+  - Package.resolved
+  - Resources/Info.plist
+  - '**/*.entitlements'
+  - '**/*.p12'
+  - '**/*.pem'
+  - '**/*.mobileprovision'
+max_patch_bytes: 262144
+max_changed_files: 30
+required_checks:
+  - Swift tests and build (Apple Silicon)
+  - Swift tests and build (Intel Ventura)
+private_dependency_ci: maintainer-approved
