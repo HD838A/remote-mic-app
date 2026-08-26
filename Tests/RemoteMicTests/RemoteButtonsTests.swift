@@ -1154,7 +1154,7 @@ struct RemoteButtonsTests {
         #expect(gate.isCurrent(second))
     }
 
-    @Test func composerCandidateRankingPrefersWideLowerComposerAndRejectsSensitiveFields() {
+    @Test func composerCandidateRankingAllowsSearchAndTerminalButRejectsSensitiveFields() {
         let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
         let candidates = [
             KeyboardInjector.AccessibilityTextCandidate(
@@ -1204,7 +1204,7 @@ struct RemoteButtonsTests {
         ]
 
         #expect(KeyboardInjector.bestComposerCandidateIndex(candidates, windowFrame: windowFrame) == 2)
-        #expect(KeyboardInjector.composerCandidateScore(candidates[0], windowFrame: windowFrame) == nil)
+        #expect(KeyboardInjector.composerCandidateScore(candidates[0], windowFrame: windowFrame) != nil)
         #expect(KeyboardInjector.composerCandidateScore(candidates[1], windowFrame: windowFrame) == nil)
 
         let terminal = KeyboardInjector.AccessibilityTextCandidate(
@@ -1218,7 +1218,20 @@ struct RemoteButtonsTests {
             frame: CGRect(x: 50, y: 200, width: 900, height: 500),
             enabled: true
         )
-        #expect(KeyboardInjector.composerCandidateScore(terminal, windowFrame: windowFrame) == nil)
+        #expect(KeyboardInjector.composerCandidateScore(terminal, windowFrame: windowFrame) != nil)
+
+        let settingsField = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextField",
+            identifier: "settings-value",
+            title: "Settings",
+            description: "Preferences",
+            help: "",
+            placeholder: "Value",
+            context: "",
+            frame: CGRect(x: 100, y: 500, width: 700, height: 36),
+            enabled: true
+        )
+        #expect(KeyboardInjector.composerCandidateScore(settingsField, windowFrame: windowFrame) != nil)
     }
 
     @Test func codexComposerSemanticsAndTraversalPriorityReachTheVisibleEditor() {
