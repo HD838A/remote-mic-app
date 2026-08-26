@@ -2,10 +2,10 @@
 
 ## 适用范围
 
-- 候选版本：Remote Mic `v1.8.14 (106)`
-- 分支：`release/pre-v1.8.14`
+- 适用包：已通过受保护 staging 的指定 Preview 版本
+- 来源：合入 origin/main 的精确 source SHA（不使用版本候选分支）
 - 平台：Apple Silicon macOS 14 及以上；Intel 独立包 macOS 13 及以上
-- 本轮边界：只准备候选代码，不生成、签名、公证或发布安装包
+- 本轮边界：验证真实签名 Preview 包的首次使用、升级和安装后行为；未完成签名或公证时不得把测试包交付用户
 
 ## 测试前准备
 

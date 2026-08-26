@@ -210,6 +210,21 @@ final class XiaomiBluetoothBridge: NSObject {
         finishAttempt(reconnectAfter: 0.1)
     }
 
+    func recoverAfterSystemWake() {
+        guard shouldRun else {
+            AppLogger.shared.write("BLE WAKE recovery_skipped reason=bridge_stopped")
+            return
+        }
+        let centralState = central.map { String($0.state.rawValue) } ?? "none"
+        AppLogger.shared.write(
+            "BLE WAKE recovery_requested state=\(String(describing: state)) " +
+                "lifecycle=\(String(describing: lifecycle)) " +
+                "central_state=\(centralState) " +
+                "generation=\(generationCounter)"
+        )
+        reconnectNow()
+    }
+
     private func beginConnectionCycle() {
         guard shouldRun, central == nil else { return }
         generationCounter &+= 1
@@ -742,6 +757,11 @@ final class XiaomiBluetoothBridge: NSObject {
 extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         guard self.central === central, let generation = centralGeneration else { return }
+        AppLogger.shared.write(
+            "BLE CENTRAL state=\(central.state.rawValue) " +
+                "lifecycle=\(String(describing: lifecycle)) " +
+                "generation=\(generation)"
+        )
         switch central.state {
         case .poweredOn:
             applyCentralRecovery(

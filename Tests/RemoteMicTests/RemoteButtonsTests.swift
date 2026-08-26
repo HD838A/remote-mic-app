@@ -399,6 +399,121 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func rapidPressOptInLetsNonRepeatableActionsFireOnEveryRawPress() throws {
+        let suiteName = "RemoteButtonsTests.rapidPress.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let monitor = HIDRemoteMonitor(settings: AppSettings(defaults: defaults))
+        let otherApp = PresetApplication.codex.bundleIdentifier
+
+        #expect(monitor.shouldAcceptRawPress(
+            button: .volumeDown,
+            action: .customShortcut,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(!monitor.shouldAcceptRawPress(
+            button: .volumeDown,
+            action: .customShortcut,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+
+        for _ in 0..<5 {
+            #expect(monitor.shouldAcceptRawPress(
+                button: .volumeDown,
+                action: .customShortcut,
+                allowsRapidPress: true,
+                frontmostBundleIdentifier: otherApp
+            ))
+        }
+
+        #expect(monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(!monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(monitor.shouldAcceptRawPress(
+            button: .up,
+            action: .customShortcut,
+            allowsRapidPress: true,
+            frontmostBundleIdentifier: otherApp
+        ))
+
+        #expect(monitor.shouldAcceptRawPress(
+            button: .volumeDown,
+            action: .commandQuit,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+        #expect(!monitor.shouldAcceptRawPress(
+            button: .volumeDown,
+            action: .commandQuit,
+            allowsRapidPress: false,
+            frontmostBundleIdentifier: otherApp
+        ))
+    }
+
+    @Test func rapidPressOptInDefaultsOffAndPersistsWithMappings() throws {
+        let suiteName = "RemoteButtonsTests.rapidPressSettings.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        #expect(!settings.allowsRapidPress(for: .volumeDown))
+        #expect(settings.buttonRapidPressEnabled.isEmpty)
+
+        settings.setAllowsRapidPress(true, for: .volumeDown)
+        #expect(settings.allowsRapidPress(for: .volumeDown))
+        #expect(!settings.allowsRapidPress(for: .up))
+        #expect(AppSettings(defaults: defaults).allowsRapidPress(for: .volumeDown))
+
+        let mappings = try #require(settings.selectedRemoteProfile?.mappings)
+        #expect(mappings.buttonRapidPressEnabled?["volume_down"] == true)
+        #expect(mappings.parsedButtonRapidPressEnabled[.volumeDown] == true)
+
+        settings.setAllowsRapidPress(false, for: .volumeDown)
+        #expect(!settings.allowsRapidPress(for: .volumeDown))
+        #expect(settings.selectedRemoteProfile?.mappings.buttonRapidPressEnabled == nil)
+        #expect(!AppSettings(defaults: defaults).allowsRapidPress(for: .volumeDown))
+
+        settings.setAllowsRapidPress(true, for: .volumeDown)
+        settings.resetBindings()
+        #expect(!settings.allowsRapidPress(for: .volumeDown))
+    }
+
+    @Test func rapidPressOptInTravelsWithExportedConfigurationAndToleratesOlderFiles() throws {
+        let sourceSuiteName = "RemoteButtonsTests.rapidPressExport.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.setAllowsRapidPress(true, for: .volumeDown)
+        let exported = try source.exportedConfigurationData()
+
+        let targetSuiteName = "RemoteButtonsTests.rapidPressImport.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuiteName))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuiteName) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.allowsRapidPress(for: .volumeDown))
+        #expect(!target.allowsRapidPress(for: .up))
+
+        var legacyObject = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "buttonRapidPressEnabled")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(!target.allowsRapidPress(for: .volumeDown))
+    }
+
     @Test func navigationRepeatStopsOnlyWhileRemoteMicIsFrontmost() throws {
         let remoteMic = PresetApplication.remoteMic.bundleIdentifier
         for action in [
@@ -565,6 +680,184 @@ struct RemoteButtonsTests {
         #expect(postedStates[1].0 == 61)
         #expect(!postedStates[1].1)
         #expect(postedStates[1].2.isEmpty)
+    }
+
+    @Test func appSwitcherSessionKeepsCommandHeldAcrossTabSelections() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            }
+        )
+
+        #expect(session.trigger())
+        #expect(session.isActive)
+        #expect(session.trigger())
+        #expect(session.moveSelection(left: true))
+        #expect(session.moveSelection(left: false))
+        #expect(session.confirm())
+        #expect(!session.isActive)
+        #expect(session.cancel())
+        #expect(!session.moveSelection(left: true))
+
+        #expect(posted.count == 10)
+        #expect(posted[0].0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2 == .maskCommand)
+        #expect(posted[1].0 == 48)
+        #expect(posted[1].1)
+        #expect(posted[1].2 == .maskCommand)
+        #expect(posted[2].0 == 48)
+        #expect(!posted[2].1)
+        #expect(posted[2].2 == .maskCommand)
+        #expect(posted[3].0 == 48)
+        #expect(posted[3].1)
+        #expect(posted[3].2 == .maskCommand)
+        #expect(posted[4].0 == 48)
+        #expect(!posted[4].1)
+        #expect(posted[4].2 == .maskCommand)
+        #expect(posted[5].0 == 123)
+        #expect(posted[5].1)
+        #expect(posted[6].0 == 123)
+        #expect(!posted[6].1)
+        #expect(posted[7].0 == 124)
+        #expect(posted[7].1)
+        #expect(posted[8].0 == 124)
+        #expect(!posted[8].1)
+        #expect(posted[5].2 == .maskCommand)
+        #expect(posted[6].2 == .maskCommand)
+        #expect(posted[7].2 == .maskCommand)
+        #expect(posted[8].2 == .maskCommand)
+        #expect(posted[9].0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(!posted[9].1)
+        #expect(posted[9].2.isEmpty)
+    }
+
+    @Test func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherControls.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var frontmost = PresetApplication.codex.bundleIdentifier
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var diagnostics: [String] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { frontmost },
+            diagnosticLogger: { diagnostics.append($0) },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "app-switcher-controls", profileID: profileID)
+
+        func press(_ button: RemoteButton) {
+            let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            monitor.handleSimulatedReport(reportID: 1, data: report)
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        press(.right)
+        press(.left)
+        press(.ok)
+        frontmost = PresetApplication.safari.bundleIdentifier
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds
+        )
+
+        #expect(posted.map { $0.0 } == [
+            KeyboardInjector.leftCommandKeyCode, 48, 48,
+            124, 124, 123, 123,
+            KeyboardInjector.leftCommandKeyCode,
+        ])
+        #expect(posted.map { $0.1 } == [true, true, false, true, false, true, false, false])
+        #expect(diagnostics.contains { $0.contains("ended reason=confirmed confirmed=true") })
+        #expect(diagnostics.contains {
+            $0.contains("selection bundle_id=\(PresetApplication.safari.bundleIdentifier)")
+        })
+        #expect(scheduler.pendingTaskCount == 0)
+    }
+
+    @Test func appSwitcherBackTimeoutAndFrontmostChangeReleaseCommand() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherCancellation.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+
+        func runCancellation(
+            advanceMilliseconds: UInt64? = nil,
+            pressBack: Bool = false,
+            changeFrontmost: Bool = false
+        ) -> (posted: [(CGKeyCode, Bool, CGEventFlags)], diagnostics: [String]) {
+            let scheduler = RemoteButtonsTestScheduler()
+            var frontmost = PresetApplication.codex.bundleIdentifier
+            var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+            var diagnostics: [String] = []
+            let monitor = HIDRemoteMonitor(
+                settings: settings,
+                profileID: profileID,
+                ownsEventSuppressor: false,
+                scheduler: scheduler,
+                runtimePermissions: { true },
+                frontmostBundleIdentifier: { frontmost },
+                diagnosticLogger: { diagnostics.append($0) },
+                appSwitcherKeyStatePoster: { code, isDown, flags in
+                    posted.append((code, isDown, flags))
+                    return true
+                }
+            )
+            monitor.connectSimulatedDevice(fingerprint: UUID().uuidString, profileID: profileID)
+
+            func press(_ button: RemoteButton) {
+                let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+                monitor.handleSimulatedReport(reportID: 1, data: report)
+                monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+            }
+
+            press(.menu)
+            if pressBack { press(.back) }
+            if changeFrontmost { frontmost = PresetApplication.safari.bundleIdentifier }
+            if let advanceMilliseconds {
+                scheduler.advance(toMilliseconds: advanceMilliseconds)
+            }
+            return (posted, diagnostics)
+        }
+
+        let back = runCancellation(pressBack: true)
+        #expect(back.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(back.posted.last?.1 == false)
+        #expect(back.diagnostics.contains { $0.contains("ended reason=back") })
+
+        let timeout = runCancellation(
+            advanceMilliseconds: HIDRemoteTiming.appSwitcherTimeoutMilliseconds
+        )
+        #expect(timeout.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(timeout.posted.last?.1 == false)
+        #expect(timeout.diagnostics.contains { $0.contains("ended reason=timeout") })
+
+        let frontmostChanged = runCancellation(
+            advanceMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
+            changeFrontmost: true
+        )
+        #expect(frontmostChanged.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(frontmostChanged.posted.last?.1 == false)
+        #expect(frontmostChanged.diagnostics.contains {
+            $0.contains("ended reason=frontmost_changed")
+        })
     }
 
     @Test func customShortcutPostsRecordedKeyAndRequiresAccessibility() {
@@ -1720,6 +2013,46 @@ struct RemoteButtonsTests {
         #expect(!target.qianwenVoiceModeEnabled)
     }
 
+    @Test func importedFnTapModeWinsOverShortTapFocus() throws {
+        let suite = "RemoteMicTests.voice-focus-mutual.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.voiceFnTapModeEnabled = true
+        settings.voiceShortTapFocusEnabled = true
+
+        let data = try settings.exportedConfigurationData()
+        let targetSuite = "RemoteMicTests.voice-focus-mutual-target.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: data)
+
+        #expect(target.voiceFnTapModeEnabled)
+        #expect(!target.voiceShortTapFocusEnabled)
+    }
+
+    @Test func weChatComposerFallbackUsesTheLargestEligibleWindow() {
+        let mainWindow = CGRect(x: 250, y: 40, width: 1_000, height: 1_000)
+        let updateWindow = CGRect(x: 100, y: 100, width: 1_200, height: 900)
+        #expect(KeyboardInjector.usesWeChatComposerFallback(
+            bundleIdentifier: KeyboardInjector.weChatBundleIdentifier
+        ))
+        #expect(!KeyboardInjector.usesWeChatComposerFallback(
+            bundleIdentifier: PresetApplication.codex.bundleIdentifier
+        ))
+        #expect(KeyboardInjector.weChatComposerWindowFrame(
+            [
+                (title: "Software Update", frame: updateWindow),
+                (title: "微信", frame: mainWindow),
+            ]
+        ) == mainWindow)
+        #expect(KeyboardInjector.weChatComposerFocusPoint(windowFrame: mainWindow) == CGPoint(
+            x: 930,
+            y: 890
+        ))
+    }
+
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -2634,5 +2967,75 @@ struct RemoteButtonsTests {
         #expect(RemotePowerState.externalPower.logValue == "external_power")
         #expect(RemotePowerState.charging.logValue == "charging")
         #expect(RemotePowerState.unknown.logValue == "unknown")
+    }
+}
+
+private final class RemoteButtonsTestScheduler: HIDRemoteScheduling {
+    private final class Task: HIDRemoteScheduledTask {
+        var deadlineMilliseconds: UInt64
+        let repeatingEveryMilliseconds: UInt64?
+        let order: UInt64
+        let action: () -> Void
+        var isCancelled = false
+
+        init(
+            deadlineMilliseconds: UInt64,
+            repeatingEveryMilliseconds: UInt64?,
+            order: UInt64,
+            action: @escaping () -> Void
+        ) {
+            self.deadlineMilliseconds = deadlineMilliseconds
+            self.repeatingEveryMilliseconds = repeatingEveryMilliseconds
+            self.order = order
+            self.action = action
+        }
+
+        func cancel() {
+            isCancelled = true
+        }
+    }
+
+    private var currentTimeMilliseconds: UInt64 = 0
+    private var nextOrder: UInt64 = 0
+    private var tasks: [Task] = []
+
+    var pendingTaskCount: Int {
+        tasks.lazy.filter { !$0.isCancelled }.count
+    }
+
+    func schedule(
+        afterMilliseconds: UInt64,
+        repeatingEveryMilliseconds: UInt64?,
+        _ action: @escaping () -> Void
+    ) -> HIDRemoteScheduledTask {
+        let task = Task(
+            deadlineMilliseconds: currentTimeMilliseconds + afterMilliseconds,
+            repeatingEveryMilliseconds: repeatingEveryMilliseconds,
+            order: nextOrder,
+            action: action
+        )
+        nextOrder += 1
+        tasks.append(task)
+        return task
+    }
+
+    func advance(toMilliseconds target: UInt64) {
+        precondition(target >= currentTimeMilliseconds)
+        while let task = tasks
+            .filter({ !$0.isCancelled && $0.deadlineMilliseconds <= target })
+            .min(by: {
+                ($0.deadlineMilliseconds, $0.order) < ($1.deadlineMilliseconds, $1.order)
+            }) {
+            currentTimeMilliseconds = task.deadlineMilliseconds
+            if task.repeatingEveryMilliseconds == nil {
+                task.isCancelled = true
+            }
+            task.action()
+            if !task.isCancelled, let interval = task.repeatingEveryMilliseconds {
+                task.deadlineMilliseconds += interval
+            }
+        }
+        currentTimeMilliseconds = target
+        tasks.removeAll(where: \.isCancelled)
     }
 }

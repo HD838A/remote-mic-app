@@ -7,16 +7,13 @@ PACKAGE_RESOLVED="$ROOT/Package.resolved"
 DEPENDENCY_MANIFEST="$ROOT/config/release-dependencies.json"
 WORKFLOWS=(
   "$ROOT/.github/workflows/mac-ci.yml"
-  "$ROOT/.github/workflows/mac-preview-candidate.yml"
   "$ROOT/.github/workflows/mac-release-package.yml"
 )
 RELEASE_CRITICAL_WORKFLOWS=(
   "$ROOT/.github/workflows/mac-ci.yml"
-  "$ROOT/.github/workflows/mac-preview-candidate.yml"
   "$ROOT/.github/workflows/mac-release-package.yml"
   "$ROOT/.github/workflows/mac-preview-publication.yml"
   "$ROOT/.github/workflows/mac-stable-promote.yml"
-  "$ROOT/.github/workflows/release-guard.yml"
 )
 CREDENTIAL_REPOSITORIES=(
   "ReleaseNotarySecrets|HD838A/remotemic-notary-secrets|5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"

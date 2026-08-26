@@ -1142,6 +1142,8 @@ struct SettingsView: View {
                 mappingVoiceKeyModeControl
                 Divider()
                 mappingVoiceFnTapControl
+                Divider()
+                mappingVoiceShortTapFocusControl
                 HStack {
                     Spacer(minLength: 0)
                     mappingRestoreDefaultsButton
@@ -1212,6 +1214,22 @@ struct SettingsView: View {
         .help(localization.text("connection.voice_fn_tap.hint"))
         .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
         .disabled(settings.voiceKeyMode != .function)
+    }
+
+    private var mappingVoiceShortTapFocusControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("connection.voice_short_focus.enabled", isOn: Binding(
+                get: { settings.voiceShortTapFocusEnabled },
+                set: { model.setVoiceShortTapFocusEnabled($0) }
+            ))
+            .font(.system(size: 12, weight: .medium))
+            .toggleStyle(.switch)
+            Text("connection.voice_short_focus.hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .help(localization.text("connection.voice_short_focus.help"))
     }
 
     private var mappingRestoreDefaultsButton: some View {
@@ -1466,6 +1484,12 @@ struct SettingsView: View {
                 )
             }
 
+            if trigger == .singleClick,
+               configured.action != .disabled,
+               !configured.action.allowsRepeat {
+                mappingRapidPressControl(button: button)
+            }
+
             if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
                 Text("button_mapping.continuous_recording_experiment.power_managed")
                     .font(.system(size: 12))
@@ -1484,6 +1508,24 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func mappingRapidPressControl(button: RemoteButton) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("button_mapping.rapid_press", isOn: Binding(
+                get: { settings.allowsRapidPress(for: button) },
+                set: { settings.setAllowsRapidPress($0, for: button) }
+            ))
+            .font(.system(size: 13, weight: .medium))
+            .toggleStyle(.switch)
+            Text("button_mapping.rapid_press_hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+        .help(localization.text("button_mapping.rapid_press_help"))
     }
 
     @ViewBuilder

@@ -218,6 +218,9 @@
 "connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";
 "connection.voice_fn_tap.hint" = "适配点按式语音输入（如 Typeless）：按下语音键注入一次 Fn 开始，松开再注入一次结束，音频在按住期间照常传输。需要辅助功能权限；开启后语音键不再直接发 Fn。";
 "connection.voice_fn_tap.hint_short" = "用于需要点按 Fn 开始和结束的语音工具；遥控器仍需按住说话。";
+"connection.voice_short_focus.enabled" = "短按语音键定位输入框";
+"connection.voice_short_focus.hint_short" = "短按只定位当前 App 的聊天输入框；长按继续使用上方选定的语音触发键。";
+"connection.voice_short_focus.help" = "默认关闭。开启后，小于长按阈值的语音会话会被取消并尝试聚焦当前 App 的聊天输入框。请关闭目标语音工具自己的短按启动功能。与“语音键模拟 Fn 点按”互斥。";
 "connection.voice_key_mode.title" = "语音触发键";
 "connection.voice_key.mode.fn" = "Fn/地球键";
 "connection.voice_key.mode.left_command" = "左 Command";
@@ -337,6 +340,9 @@
 "button_mapping.single_click.help" = "按一下立即执行；设置双击后会稍等片刻再确认。";
 "button_mapping.double_click.effect" = "单击会稍等片刻以区分双击；按住重复同时停用。";
 "button_mapping.long_press.effect" = "设置长按后，该按键的按住重复会停用。";
+"button_mapping.rapid_press" = "允许连续快速按";
+"button_mapping.rapid_press_hint_short" = "每一次快速按下都会执行动作，而不是只有第一次生效。";
+"button_mapping.rapid_press_help" = "默认情况下，不支持按住连发的动作在按键松开并稳定一段时间之前只执行一次，避免按住不放时向目标应用重复发送。需要连续点按的按键可以打开本开关；打开后按住该按键可能会重复执行该动作。";
 "common.suffix.not_installed" = "（未安装）";
 "common.suffix.experimental_disabled" = "（实验功能未启用）";
 "shortcut.action.record" = "点击录入快捷键";

@@ -1,65 +1,52 @@
 # 分支与提交管理策略
 
-本文件统一规定本仓库的分支、工作区、提交和 Push 边界。具体 macOS 发布步骤仍以 [`RELEASING.md`](RELEASING.md) 为准。
+本文件规定产品开发、版本元数据、macOS 预览发布和正式晋升的最小分支边界。发布实现细节和流程设计见 RELEASING.md。
 
-## 主分支不变量
+## main 不变量
 
-- `main` 必须始终与最新已获取的 `origin/main` 精确一致；检查或交付前必须先 fetch 远端并重新核对 SHA。
-- 不得在 `main` 工作区直接开发功能、修复 Bug 或临时保存未提交改动；产品工作必须使用独立分支和 worktree。仅修改 `TODO.md` 且不改变代码、配置、测试或发布行为的 TODO-only 工作，按下方专用流程处理。
-- 每个功能或 Bug 分支都必须从最新已获取的 `origin/main` 创建；创建前必须 fetch 并确认分支基线与 `origin/main` 的 SHA 一致。
-- 每个功能或 Bug 分支提交 PR 时，目标分支必须是远端 `main`（即 GitHub 上的 `origin/main`）；不得将 PR 指向旧分支、候选分支或其他工作分支。
-- 分支、worktree、提交或发布操作不得为了方便而让 `main` 暂时承载其他工作项；完成操作后仍必须恢复 `main == origin/main`。
+- 开始任何操作前执行 git fetch origin main，并记录 origin/main 的完整 SHA。
+- main 工作区只用于同步已合入的远端主线，不直接开发、保存临时改动或准备版本元数据。
+- 功能、Bug、发布流程和文档改动都在独立分支和 worktree 中完成；分支创建点必须是当时最新的 origin/main。
+- PR 的目标分支只能是远端 main。合入后再次 fetch，确认本地 main 与 origin/main 精确一致。
+- 不使用普通 force-push、广泛 reset 或把其他 worktree 的未验收内容直接复制到发布分支。
 
-## 标准功能与 Bug 流程
+## 产品开发与发布元数据
 
-1. **同步基线**：开始工作前执行 `git fetch origin main`，确认本地 `origin/main` 是最新远端主线。
-2. **创建分支**：从该 SHA 创建独立分支和 worktree；分支创建后不得再把其他功能、Bug 或发布改动混入其中。
-3. **开发与验证**：在独立 worktree 中开发。功能必须完成必要的自动化验证和对应测试手册；Bug 必须按复现、日志、代码、修复、验证顺序处理，并记录到 `Bugs/`。
-4. **提交**：验证通过后创建只包含当前工作项的 commit；提交前检查 diff、敏感信息和单文件大小，超过 5 MB 的文件必须先获得用户批准。
-5. **创建 PR**：Push 分支后创建目标为远端 `main` 的 PR。可以提前创建 Draft PR 供审查，但未完成本地验证、必要文档或必需 CI 前，不得将其标记为 Ready，也不得合入。
-6. **更新基线**：PR 准备 Ready 前重新 fetch `origin/main`。如果主线已前进，先把当前分支同步到最新 `origin/main`，解决冲突并重新执行受影响的验证；不得用过期基线直接请求合入。
-7. **合入**：功能和 Bug 工作只有 PR 审查完成且所有必需检查通过后，才能通过 PR 合入 `main`；TODO-only 工作按下方专用流程直接合入，禁止把 TODO-only 变更混入产品分支。
-8. **合入后收尾**：合入完成后 fetch 远端，将本地 `main` 快进到 `origin/main`，确认两者 SHA 一致并记录合入 commit。已合入分支和 worktree 先标记为已完成，清理或删除必须单独确认，不能借整理之名删除未核对的工作。
+1. 功能或 Bug 先通过普通 PR 合入 main。若用户指定的 Commit 尚未进入主线，先从最新 origin/main 建立独立集成分支，只重放指定工作和必要依赖；冲突必须逐文件核对，不能以整支旧分支覆盖当前主线。
+2. 版本号、Build 和中英文 ReleaseHistory 属于发布元数据，也必须在普通 PR 中修改。使用 scripts/prepare-preview-release.sh 前，分支必须是从最新 origin/main 创建的干净分支；脚本只允许修改 Resources/Info.plist 和两份 ReleaseHistory.md。
+3. 元数据 PR 合入后，发布源就是该次合入的精确 origin/main SHA。不要再创建 release/pre-vX.Y.Z、canary、rerun 或 qualification 分支，也不要为同一版本创建第二个 PR。
+4. 请求版本已被公开 Tag、Release 或已上传的公开分发资产占用时，脚本只递增最后一位并选择更高 Build。公开资产占用检查覆盖 canonical CDN 固定路径：11 个 payload URL 只有明确 HTTP 404 才算可用；2xx/3xx 视为占用，认证、权限、5xx、超时或其他无法判断的响应 fail closed。Runner、GitHub、Apple、签名、公证或网络故障不会占用版本，不得因为这些故障升版本。
 
-## 工作区状态审计
+## 预览发布引用
 
-- worktree 数量多、分支落后或存在未合入分支，不等于当前功能代码未提交；但每次开始新任务前必须识别当前 worktree、分支、基线和未提交改动，不能把历史 worktree 当作当前任务的干净基线。
-- 规则文档不能自动修复历史分支和 worktree。发现 `ahead/behind`、未跟踪文件、未提交改动或已合入但仍保留的旧 worktree 时，先建立清单和归属，再按用户批准的方案逐项处理。
-- 未经核对不得批量删除、清空、reset、rebase 或强制 Push 分支；尤其不能为了让列表变短而破坏仍可能包含用户工作的 worktree。
+- 预览 staging 只从 main 的精确 SHA 触发。scripts/stage-macos-preview.sh 先确认工作区干净、main 与 origin/main 一致、稳定 latest 仍为 v1.8.3、主线双架构 CI 和依赖 pin 通过，然后 dispatch 受保护 workflow。
+- 受保护 workflow 的唯一职责是 Apple Silicon 与 Intel Ventura 双架构构建、Developer ID 签名、公证、staple、最终校验，并上传不可变 payload artifact 和 stage record。它不创建 Tag、Release 或公开 appcast。
+- 真实 Sparkle UI 升级必须使用该 exact artifact，在公开身份建立前完成。之后由 main 上无 Apple 凭据的 publication workflow 创建公开 Pre-release，并逐字节复用同一 artifact；首次创建 Tag 前再次确认 11 个 CDN 固定路径全部返回 404。
+- 发布身份由 source SHA、Run/attempt、artifact ID/digest、asset manifest 和 UI attestation 绑定；不能用“最新 Run”或相同名称的 artifact 猜测来源。
 
-## TODO-only 工作流程
+## 失败、重试与内容变化
 
-- 本流程只适用于新增或更新 `TODO.md`（以及同一次记录所需的简短公开文档引用），且不修改业务代码、测试、配置、依赖、发布资产或用户可观察行为。
-- 所有 TODO-only 记录统一使用长期分支 `codex/todo_list`，不为每一条 TODO 新建分支或 worktree。每次记录仍创建独立 commit，commit 只能包含当前 TODO 记录及其必要的文档改动。
-- 开始记录前先 fetch `origin/main`，确认 `codex/todo_list` 已同步到最新主线；记录完成并通过 `git diff --check`、文件范围、敏感信息和文件大小检查后，立即将该 commit 合入 `main`。该路径不触发产品构建、测试、签名、发布等 CI；仅保留必要的文档级检查。
-- 合入后 fetch 远端并确认本地 `main == origin/main`，再把 `codex/todo_list` 同步到最新主线，继续承载下一条 TODO。该长期分支不因单条 TODO 删除；任何清理仍需单独确认。
-- 如果一次 TODO 记录实际需要修改代码、测试、配置、依赖或发布行为，立即退出本流程，改按标准功能或 Bug 流程创建独立分支和 worktree，并执行相应 CI 与验收。
+- 同一 SHA 的基础设施或外部服务失败：在同一 main SHA、版本、Build 和 artifact 身份上重试对应阶段；不新建分支、PR、Tag，不重新签名已经成功的字节。
+- staging 成功后 publication 失败：先查询远端状态，复用已有 Tag 和已上传资产，只补缺失项或重做明确失败的公开验证。已有资产大小或 digest 不一致，或公开 Release Notes 与候选不一致时停止并保留现场。
+- 公开 Pre-release 建立后，Tag、资产和 appcast 视为不可变。产品内容变化必须回到产品 PR，合入 main 后使用新的可用版本和更高 Build；不能改写旧 Tag 或覆盖资产。
+- 任何失败都必须保留 Run URL、错误类别和本地验证输出，不能用多个 rerun 分支掩盖历史。
 
-## 独立工作项提交边界
+## 正式版晋升
 
-- 每个独立功能、新增需求或 Bug 修复完成必要验证后，必须先创建一个仅包含该工作项的 commit，才能继续开发下一个工作项，避免多个已完成工作堆叠在同一未提交工作区中。
-- commit 不得夹带其他工作项或用户已有的无关改动。工作失败、尚未完成或未达到必要验证要求时，不得伪装成已完成提交。
-- 交付时必须回报 commit SHA，并明确说明该提交是否尚未 Push。
-- 任何单个待提交文件超过 5 MB 时，必须在创建 commit 前暂停并等待用户明确批准；未获批准不得通过 commit、合并或 Push 方式提交该文件。
+- 不存在独立的“发布正式版”构建命令。只有用户明确指定一个已经发布且验证通过的 Pre-release，才可运行 mac-stable-promote.yml。
+- 晋升前必须确认该 Tag 的 Commit 已包含在 origin/main，Release 当前确实是公开 Pre-release，provenance、资产数量、大小和 GitHub digest 完整匹配，并通过 GitHub API 核对 provenance 绑定的 staging Run/attempt、payload artifact 以及 Preview stage-record artifact（workflow、事件、main SHA、成功结论、未过期和 digest）。
+- 晋升只执行 gh release edit，将同一 Release 标记为非预览并设为 latest；不构建、不签名、不公证、不上传、不移动 Tag。
+- v1.8.3 是当前受审的 stable latest 基线。基线变更必须通过独立普通 PR 记录，不能由预览发布脚本隐式修改。
 
-## 工作区与发布分支隔离
+## worktree、提交和清理
 
-- 当前工作区只要存在未验收、与本次发布无关或尚未计划发布的改动，即使这些改动已经 commit，也不得直接从该工作区发布。
-- 发布前必须 fetch 远端，并从明确批准且已经 Push 的目标提交创建隔离 worktree；发布提交、版本、Tag、制品和远端分支必须解析到同一个提交。
-- 不得为了整理发布工作区而合并、rebase、force-push、清空或广泛提交原工作区中的其他改动。发布完成后仍要保留未验收功能所在的原分支。
+- 发布只能从干净、已 Push、与目标远端 SHA 一致的隔离 worktree 执行；原开发 worktree 的脏状态不应被整理或覆盖。
+- 每个独立工作项创建只包含该工作项的 commit，并在交付时报告完整 SHA、Push 状态和验证命令。
+- 需要移除本地文件或 worktree 时，先精确核对目标并移动到 macOS Trash；不得永久删除或使用无法恢复的批量清理。
+- 远端旧分支的清理不是发布成功条件。只有在确认没有用户工作、Tag、Release 或审计证据依赖后，才可按单独授权清理。
 
-## macOS 预览候选分支
+## 私有 Draft 边界
 
-- 功能和修复必须先通过 PR 合入 `main`；不得直接在预览候选分支开发产品功能。
-- 发布会话收到尚未合入 `origin/main` 的产品 Commit 时，必须从最新 `origin/main` 建立独立开发集成分支，只重放用户指定工作及必要依赖，通过普通 PR 和必需检查合入；机械冲突可依据代码、测试和文档解决，涉及产品取舍或行为丢失时才请求用户决策。集成完成前不得创建候选或接触 Apple 发布凭据。
-- 每个版本只允许一个远端候选分支 `release/pre-vX.Y.Z`、一个当前冻结的候选 SHA 和一个跟随该分支当前 head 的 Draft 回流 PR。候选分支只是当前 active attempt 的唯一协调 ref；真正不可变、可审计的发布身份是候选 SHA、Run、attestation 和最终资产。禁止创建 `-rerun`、`-rerun2` 或其他指向相同内容的候选别名分支，也禁止为同一版本创建第二个回流 PR。
-- 首个候选 attempt 必须从创建时最新的 `origin/main` 建立，并冻结 `baseMainCommit`、候选 SHA、版本、Build、Release Notes 和制品闭包 digest。冻结后 `main` 可继续前进；候选签名/打包制品闭包由原始 attestation 和候选 digest 固定，只要 `baseMainCommit` 仍是当前 `origin/main` 的祖先，不得仅因恢复或发布控制面的 `main` 后续提交而废弃已冻结候选。
-- 候选分支只允许修改版本号、Build、中英文版本历史和必要的测试手册目标版本；不得包含产品代码、依赖、entitlements、签名、打包或 workflow 修改。
-- 同一候选 SHA 的 Runner、GitHub、Environment 审批、Apple 或 CDN 等基础设施失败，只能使用同一分支、SHA、Draft PR、版本、Build、`request_id` 和 `release_ready_at` 重试 workflow；不得新建候选分支、提高版本或 Build，也不得通过新 SHA 清除失败检查证据。
-- 只有候选内容、冻结基线或制品闭包确实必须变更时，才允许结束旧 attempt 并在同一 `release/pre-vX.Y.Z` 分支和同一 Draft PR 上建立 replacement attempt。该版本分支仍只保留一个直接位于冻结 base 之后的 metadata-only candidate Commit；远端 head 必须先与预期旧 SHA 完全一致，再由显式 compare-and-swap / `force-with-lease` 等受控方式原子更新。禁止普通 force-push、禁止绕过旧 head 核对，也禁止并存第二个候选分支或 PR。旧 SHA、Run、attestation 和失败原因必须保留作为证据，同一时刻只能有一个 active attempt。
-- 发布流水线资格验证与产品候选解耦：仅当变更影响 App/PKG/DMG 生成、签名、公证、Sparkle 元数据、制品清单或签名/来源信任边界时，才把普通流水线变更 PR exact SHA 临时映射到 `release/pipeline-qualification/<pr号或短SHA>` ref，以满足受保护 Environment 的分支策略，并以 `release_mode=qualification` 执行真实 Developer ID/Notary 路径。恢复控制面变更只需普通 PR、单机 macOS fixture/静态测试和主线保护检查；只读取既有 signed artifact 的版本、摘要和公开下载 verifier 也走该快速路径。`resume-preview` 只绑定原始候选的历史制品 digest，不校验当前 main 是否重新产生 qualification artifact。该 ref alias 不创建第二个 PR，也不是产品候选；资格证明按制品闭包 digest 复用，不创建版本候选、Tag、Release、appcast 或产品分发资产，也不占用版本或 Build。
-- 候选 Push 后必须立即创建唯一 exact-SHA Draft 回流 PR；`macOS Preview Candidate` 和该 PR 的无凭据检查可以并行，并且在严格 metadata-only 时复用冻结 `baseMainCommit` 已通过的双架构产品代码证明。受保护签名、公证和 Preview 发布不得与未完成的候选/PR 门禁并行；只有 exact SHA、唯一 Draft PR、双架构检查和制品闭包资格证明全部成功后才能进入 `mac-release` Environment。恢复既有签名 artifact 的控制面修复不进入该 Environment。
-- 公开 Pre-release 仍必须使用 Developer ID 签名、公证、Sparkle 签名和公开资产复核；GitHub CI 的 ad-hoc App 不能当作公开安装包。
-- 候选 Tag、远端候选分支和发布资产必须指向同一冻结 SHA。Runner、GitHub、Apple、签名、公证或其他非内容失败本身不占用版本与 Build；未产生公开不可变身份时，同一 SHA 只在同一分支原地重跑，内容确需变化时才在同一分支建立 replacement attempt。Tag、Release、appcast 或公开分发资产一旦存在，其身份与字节不可替换；后续仅恢复和验证同一批公开字节，若产品内容确需变化则选择新版本与递增 Build。候选分支在正式晋升完成前不得删除。
-- 不存在“发布正式版”命令。正式版只能由用户明确指定一个已发布并验证的 Pre-release，再将该预览版的同一 Tag、Commit 和同一批资产晋升为正式版；禁止从 `main` 重新构建正式包。
-- 完整流程与 Release Notes 规则见 [`RELEASING.md`](RELEASING.md)。
+- 私有内部 Draft 使用 private-draft-release skill 指定的 GetSayAll/SayAll 仓库，先确认 visibility 为 PRIVATE。
+- 私有 Draft 不在公开源码仓库创建 Tag 或 Release，也不调用公开 Preview publication workflow。
+- 可安装的私有 macOS 包仍必须 Developer ID 签名、公证、staple 和下载后复验；私有分发不降低信任要求。

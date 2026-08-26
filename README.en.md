@@ -124,6 +124,8 @@ Under **Button Mapping**, the voice-button area lets you choose the default Fn/G
 
 Fn remains the default because it directly matches Fn-hold voice entry in apps such as Doubao and Weixin, Fn-tap entry in Typeless, and the remote's hold-to-capture/release-to-stop lifecycle. F18, F19, F20, or other uncommon keys could be added technically, but this version does not offer an arbitrary voice-key binding: the target voice app must use the same key, and RC003, iPhone, Apple Watch, Web, permissions, and input-source switching must all share one paired press/release lifecycle. Ordinary remote buttons can still use F1–F20 shortcuts.
 
+The optional **Short Voice Tap Focuses Input** setting is off by default. A short tap focuses the most likely chat composer in the current frontmost app, while a hold keeps using the selected Fn, Left Command, or Right Command trigger. The generic path uses macOS Accessibility. WeChat does not expose its composer, so only its main window uses a size-gated, window-relative click fallback. Turn off the target voice tool's own short-press activation. This option is mutually exclusive with **Simulate Fn Tap on Voice Key**.
+
 To confirm the audio path, send a one-second test tone or inspect input level in QuickTime Player's **New Audio Recording** window.
 
 ### Qianwen Input Method compatibility

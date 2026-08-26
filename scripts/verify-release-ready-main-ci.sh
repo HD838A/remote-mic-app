@@ -10,6 +10,11 @@ GH_BIN="${GH_BIN:-gh}"
 MAIN_COMMIT="${1:-}"
 PROOF_OUTPUT="${RELEASE_READY_PROOF_OUTPUT:-}"
 
+[[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
+  echo "Main CI verification is restricted to HD838A/remote-mic-app" >&2
+  exit 1
+}
+
 if [[ "$#" -gt 1 ]]; then
     echo "usage: $0 [main-commit]" >&2
   exit 2
@@ -101,11 +106,14 @@ is_control_plane_run() {
       .headBranch == "main" and
       .headSha == $headSha and
       ([.jobs[] | select(
-        .name == "Release control-plane tests" and
+        .name == "Swift tests and build (Apple Silicon)" and
         .status == "completed" and .conclusion == "success" and
-        ([.steps[] | select(
-          .name == "Run recovery control-plane tests" and .conclusion == "success"
-        )] | length) == 1
+        ([.steps[] | select(.name == "Run release control-plane fixture" and .conclusion == "success")] | length) == 1
+      )] | length) == 1 and
+      ([.jobs[] | select(
+        .name == "Swift tests and build (Intel Ventura)" and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select(.name == "Run release control-plane fixture" and .conclusion == "success")] | length) == 1
       )] | length) == 1
     ' >/dev/null
 }

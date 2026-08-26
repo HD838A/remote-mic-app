@@ -161,7 +161,7 @@
   - 需要验证全新安装、已有 App 升级、已有驱动升级、只装过 App、只装过驱动、安装取消、管理员授权失败、安装后首次启动、Sparkle 后续更新和完整卸载；新的单入口流程必须继续通过 App、PKG、DMG、签名、公证、Gatekeeper、文件权限和最终安装结果校验。
   - 2026-08-13 已完成候选代码：DMG 根目录只保留一个安装 PKG；App-only ZIP 和卸载 PKG 继续作为高级 Release 资产。驱动在 PKG 内暂存，安装后使用系统自带 `file`、`plutil`、`codesign` 和文件权限检查判断现有 `MiRemoteV 2ch` 是否健康且同版本、同架构，健康时原样保留，缺失、损坏、架构不符、签名异常或版本不匹配时才替换；安装脚本不调用开发者工具。本轮按要求未生成产物，完成真实安装矩阵后再勾选。
   - 2026-08-15 已为 Apple Silicon 与 Intel 独立安装包增加系统 Installer Distribution 门禁：使用真实硬件能力而非 `uname -m` 判断架构，中英文界面会在安装前明确提示错误包并指向另一版本；preinstall/postinstall 继续保留二次检查。双变体 ad-hoc PKG/DMG、产品归档结构及 Apple Silicon 拒绝 Intel 包的只读命令行路径已验证；最终 Developer ID 签名、公证包仍需在真实 Intel 与 Apple Silicon 上完成 Installer.app 双语言交叉验收后再勾选。
-  - 2026-08-16 当时将公开矩阵由 17 项精简为 12 项：两套安装 PKG 继续完整保留并验证在对应 DMG 内，但不再作为 standalone 资产重复上传；两架构共享中英文更新说明并合并 DMG SHA-256 清单。现行门禁不再写死数量，而以每个 Release 的 `candidate-provenance.json` 为唯一资产集合；下一份真实签名候选仍需验证 GitHub/CDN manifest 全量字节、两架构安装与卸载。
+  - 2026-08-16 当时将公开矩阵由 17 项精简为 12 项：两套安装 PKG 继续完整保留并验证在对应 DMG 内，但不再作为 standalone 资产重复上传；两架构共享中英文更新说明并合并 DMG SHA-256 清单。当前门禁固定 canonical manifest 的 11 项 payload，另上传 1 项 `candidate-provenance.json` 作为来源证明；下一份真实签名候选仍需验证 GitHub/CDN manifest 全量字节、两架构安装与卸载。
 - [ ] 建立专用的 `SayAllMic 2ch` 虚拟麦克风并兼容旧驱动
   - 将现有 `MiRemoteV 2ch` 产品化为专用的 `SayAllMic 2ch`；新安装用户只看到并使用新名称，App、Onboarding 和排障流程不再默认提示用户安装或选择 `BlackHole 2ch`。
   - 升级必须继续识别并支持已经安装或正在使用的 `MiRemoteV 2ch`。安装器需要处理旧驱动升级、设备名称或 UID 变化、第三方 App 已保存的输入设备选择、重复设备、卸载和失败回滚，不能让升级后的用户突然无声或被迫手动重装。
@@ -249,6 +249,9 @@
   - 默认保持 Fn/地球键；可在“按键映射”页选择左 Command 或右 Command 长按。Command 模式需要辅助功能权限，并覆盖 RC003、iPhone、Apple Watch 和网页版语音入口。
   - Command 模式不得通过全局 Command flagsChanged 监听普通键盘；只在真实语音会话开始/结束时发送成对 keyDown/keyUp。Fn 点按模式仅在 Fn/地球键模式有效。
   - 组件和策略自动化已覆盖配置迁移与原子导入门禁、左右键码、跨来源 owner latch、输入源多 owner、每个 Bridge Ready 策略、F5 映射事务和设置页紧凑布局；部分 BridgeAppModel 接线仍由源码范围断言保护，未启用硬件模拟依赖，不能替代回调级事件回放。待 RC003、iPhone、Apple Watch、网页版、系统权限及目标第三方语音应用真实环境验收后再标记完成。详细测试步骤见 [`Testing/VoiceKeyModes.md`](Testing/VoiceKeyModes.md)。
+- [x] 语音键短按定位当前 App 聊天输入框
+  - 默认关闭，与 Fn 点按模式互斥；短按取消该次短音频并聚焦当前 App，长按继续使用已选语音触发键。
+  - Accessibility 通用路径已覆盖 Electron / Chromium 建树重试和安全候选排名；微信仅对精确 Bundle ID 使用有尺寸门禁的窗口相对降级。Lark/飞书、Telegram 和微信已完成 RC003 真机验收。
 - [ ] 普通遥控器语音键突破一分钟录音限制 <!-- workshop:status=阻塞;priority=P2 -->
   - 曾尝试在普通物理语音会话收到 `STREAM_START` 后每 10 秒调用 ATVV v1.0 `MIC_EXTEND`，并设置 180 秒关闭与 2 秒超时重连。
   - 2026-08-11 真机日志确认普通物理会话没有 `microphoneOpened` 状态，定时调用持续返回 `ATVV MIC_EXTEND rejected`，命令并未写入遥控器；模拟租期模型不能证明真实固件行为。
@@ -271,6 +274,7 @@
   - 2026-08-12 修复非独占 HID 监听下实体方向键被长期拦截：App 定时连发不再重复登记物理 `.down`，monitor 在断连、停止或权限撤销时会释放仍按住的 suppressor 状态。硬件模拟已覆盖全部 11 个原生按键的正常松开、按住期间断连和双遥控器共享计数，并验证返回键不进入抑制器；等待真实 RC001/RC003 与 MacBook 键盘复验。
   - 2026-08-21 跟进 Issue #137 的单次 release 丢失：遥控器原始首击改由 HID down 短窗口配对，held 状态只继续拦截系统 autorepeat；未配对的实体键盘新首击会清理陈旧状态并立即通过。新增缺失 release 的回归序列，本地 89 项聚焦测试与 42 项自检通过；等待 PR CI 与真实 RC003 monitored 模式丢包验收。
   - 2026-08-19 针对 1.9.0 内测版 OK 键偶发无响应补齐 HID 分层诊断：区分系统回调、设备过滤、解析、按下/松开边沿、手势和动作执行，并保持原按键行为不变；日志不记录原始报告或设备标识。精确根因仍需 RC003 真机再次复现后确认。
+  - 2026-08-25 修复单击绑定为不可连发动作时连续快按只有第一次生效：`shouldAcceptRawPress` 的 600ms 松开稳定闸门新增按按键的「允许连续快速按」开关，默认关闭且默认行为与上一正式版一致；`startRepeatIfNeeded` 的按住连发策略未改动，被闸门丢弃的按下不再静默、写入 `reason=awaiting_stable_release` 日志。对应社区反馈 Issue #205 第 2 条。本地 393 项测试与 43 项自检通过，测试手册见 `Testing/RapidRepeatedButtonPresses.md`；等待 RC001/RC003 真机连按与按住边沿计数验收。
 - [ ] 优化语音降噪与人声放大
   - 在遥控器和手机麦克风音频进入虚拟麦克风前增加可控的降噪、人声增益、自动增益和限幅处理，优先提升远距离、小音量说话时的可懂度。
   - 不能只提高现有固定增益，否则会同时放大底噪并造成削波；需要分别评估高通滤波、噪声抑制、AGC 和 limiter 的组合，并提供关闭或强度调节能力。
@@ -285,12 +289,11 @@
   - “关于”页提供默认关闭的预发布更新开关；仅在用户主动开启后，Sparkle 自动与手动检查才会包含最新候选版本。
   - v1.7.3 修复预发布源解析失败或缓存旧地址时阻断正式版检查的问题；预发布源不可用时必须清除旧地址并回退到稳定更新源。
   - 候选版本不存在、GitHub API 限流、网络超时或候选源暂不可用时静默忽略，不显示错误弹窗；手动检查继续使用稳定源。
-  - macOS 每个版本只使用一个从当时最新 `origin/main` 创建的 `release/pre-vX.Y.Z` 分支、一个当前冻结 SHA 和一个 Draft 回流 PR，禁止 `-rerun*`、`-canary-*` 和同版本第二 PR。用户指定的产品 Commit 尚未合入时，发布主管先从最新 `origin/main` 建立独立集成分支，只重放指定工作及必要依赖，并通过普通 PR 和必需检查合入。候选冻结后允许 main 前进，只要 frozen base 仍为当前 main 祖先且 pipeline digest 不变；metadata-only 候选复用该 base 精确 SHA 已通过的双架构测试、自检和 Release 构建，出现产品代码或依赖差异时拒绝 fast path。
-  - 同一候选 SHA 的 Runner、审批、GitHub、Apple 或 CDN 故障只重跑 workflow，复用同一分支、PR、版本、Build、`request_id` 和该 attempt 的 `release_ready_at`。只有内容、基线或 pipeline digest 真正变化且尚未进入不可变阶段时，才结束旧 attempt，并在核对远端旧 head 后以 compare-and-swap / `force-with-lease` 更新同一版本分支与 PR；旧 SHA、Run 和 attestation 必须保留。若内容变化发生在签名、公证或公开身份产生之后，则使用新版本和递增 Build。
-  - 发布流水线资格验证按 artifact-closure digest 独立复用：只把已有普通流水线变更 PR 的 exact SHA 临时映射为 `release/pipeline-qualification/<pr号或短SHA>` Environment alias，不创建第二个 PR，也不占用产品版本/Build。SayAllAI、SayAllMacroPlatform、SayAllMacRemote 的产品 Commit 统一写入 `config/release-dependencies.json`，由三个 workflow 通过同一解析器加载并进入 request attestation；只更新产品依赖值不再使未变化的签名/打包工具链 qualification 失效。Match 私有仓库继续按完整 Commit 检出，并在 Runner 临时 checkout 内把本地 `main` 明确绑定到该 Commit，避免 Fastlane 对 detached HEAD 创建空 orphan 分支。
-  - 2026-08-24：候选 Draft PR 的 metadata-only CI 通过普通变量接收 `github.head_ref`，并在调用受信脚本时显式传入 `GITHUB_REF_NAME`；禁止依赖 YAML `env` 覆盖 GitHub 保留变量，避免 PR merge ref 被误判为非法候选分支。
-  - Preview 改为两阶段：受保护 `macOS Signed Release Packages` 使用 `stage-preview` 只生成一次双架构签名、公证、staple 后的不可变 artifact 和 `preview-stage.json`，不创建 Tag/Release；当前授权会话从公开稳定版 `v1.8.3` 通过本地固定 feed 完成真实 Sparkle UI 下载、安装、首次启动、退出和二次启动，结构化 attestation 通过后，再由 `main` 上不读取 Apple 凭据的 `macOS Preview Publication` 幂等公开同一字节。publication 控制面修复合入 main 后直接重试，不重新签名、公证、升版本或新建分支。公开资产名称和数量继续以 `candidate-provenance.json` / canonical manifest 为准，不写死固定项数。
-  - `request_started_at` 和 `request_id` 记录整个用户请求且不重置；每个新 candidate SHA 是独立 attempt，新 SHA 门禁完成后产生自己的 `release_ready_at`。Preview 和正式晋升均从各自 `release_ready_at` 起按 30 分钟纯发布窗口执行 watchdog，staging、真实 UI 验收、publication 和公开验证分别记时，内部 29 分钟截止后明确失败且不盲目重试。
+  - 当前流程（2026-08-26）：产品改动和版本元数据各走一个普通 PR，合入后只从精确 `origin/main` SHA 进行一次受保护双架构 staging；随后完成真实 Sparkle UI 验收，再由无 Apple 凭据的 publication workflow 公开同一批字节。不得创建 `release/pre-*`、canary、rerun 或 qualification 分支，也不为同一版本创建第二个 PR。
+  - 同一 SHA、版本、Build、Run/attempt 和 artifact 的 Runner、审批、GitHub、Apple 或网络故障只重试对应阶段；不重新签名、不升版本。Tag/Release 查询只有明确存在或 404/无 Tag 才能决定占用，认证、权限、网络和其他 HTTP 错误必须 fail closed。
+  - staging record、canonical manifest 和 UI attestation 共同绑定发布身份；publication 会在无 Apple 凭据环境中重新恢复并验证 staging record、manifest 和真实 UI attestation，再创建或恢复公开 Pre-release。`candidate-provenance.json` 的时间戳固定取 staging record，重试不会因当前时间改变摘要。
+  - Preview 公开资产是 manifest 定义的 11 项 payload 加 provenance；当前矩阵固定名称由 verifier 检查，Install PKG 仍嵌入对应 DMG，不重复上传。Stable 只能把用户指定的已发布 Pre-release 改为正式版；已完成的晋升重试只读复验，不重新构建或上传。
+  - Preview 和 Stable 均从 T_ready 起按 30 分钟纯发布目标计时；该指标不取消或降级任何签名、公证、真实 UI 或下载字节门禁。
   - 不存在“发布正式版”命令。正式版只能选择已经发布并验证过的指定 Pre-release，将完全相同的 Tag、Commit、签名、公证资产和摘要晋升；候选回流 `main` 不构成正式晋升授权，禁止从 `main` 重建正式资产。
   - 2026-08-17：正式晋升工作流补充独立 `mac-stable-release` Environment 和按需安装 `ripgrep` 的工具门禁；晋升仍只复验并提升既有候选字节，不读取 Apple 签名 Secrets，也不重新打包。
   - 2026-08-19：GitHub Release 标题和 Tag 注释统一使用 `无线麦SayAll.app <版本>`，并由 Swift 与 shell 回归测试拒绝旧的 `Remote Mic` 用户可见标题。
@@ -321,11 +324,13 @@
 - [ ] 支持将单独的 Left/Right Option 等修饰键录入为快捷键
   - [x] 标准键盘选择器已经可以直接选择单独的 Left/Right Option、Command、Control、Shift 和 Fn，不依赖 `flagsChanged` 录入；配置保留左右侧虚拟键码，执行时显式发送按下与无修饰标志的释放事件，避免修饰键卡住。
   - [x] 自动化覆盖左右 Option 键码区分、修饰标志、按下/释放顺序和释放事件清空，并回归普通组合快捷键继续使用原单次发送路径。
-- [ ] 支持通过遥控器完整操作 macOS `Command + Tab` 应用切换器（仅记录，暂不开发）
+- [ ] 支持通过遥控器完整操作 macOS `Command + Tab` 应用切换器
   - 用户触发配置的应用切换动作后显示系统 `Command + Tab` 切换器；切换器显示期间，遥控器左右方向键只移动当前 App 选项，按“确定 / OK”确认并切换到所选 App。
   - 需要将一次普通快捷键扩展为有生命周期的临时模式：合成并保持 `Command` 按下，发送 `Tab` 打开切换器，方向键继续选择，确认时释放 `Command`；不能在初次 `Command + Tab` 后立即释放修饰键，否则系统会直接完成切换。
   - 临时模式下需要拦截方向键和确定键，避免同时执行用户原有按键映射；按返回键、超时、遥控器断连、App 失焦或执行失败时必须取消模式并可靠释放 `Command`，防止系统出现修饰键卡住。
   - 需要真机验证左右方向键、循环选择、只有一个窗口、App 尚未启动、全屏空间、多显示器及系统动画关闭等情况；不使用自制 App 列表替代系统切换器。
+  - 2026-08-25 功能分支已实现完整临时模式：任意绑定入口可启动，活动期间 TV 或同一非确定入口继续发送 Tab，左右方向键移动选项，OK 释放 Command 确认，返回键取消；15 秒无操作、前台 App 异常变化、遥控器断连、监听停止或权限失效都会释放 Command。确认后延迟读取系统最终前台 App 并写入诊断日志；macOS 不提供读取切换器“当前高亮但尚未确认 App”的公开 API。
+  - 自动化已覆盖事件顺序、确认、取消、左右导航、超时、前台变化和断连释放；TODO 在真实 RC003、WindowServer、多显示器及全屏空间验收完成前保持未完成。
 - [ ] 评估并制作老式电话与仙女魔法棒形态的特色语音硬件原型（仅记录，暂不开发）
   - 老式电话原型优先复用已完成的模拟电话 + ATA/FXS 方案：拿起听筒开始语音交互、挂断结束，并可研究用真实电话铃声提示 Codex 或其他任务完成；不得直接把电话线接入 Mac，也不自制高压振铃电路。
   - 仙女魔法棒原型先评估把已验证可用的遥控器或移动端输入能力装入定制外壳，以实体按键触发语音、灯光反馈表示录音状态；挥动手势、空间动作和自研 PCB 后置，第一版优先保证麦克风、连接、停止录音和续航可靠。

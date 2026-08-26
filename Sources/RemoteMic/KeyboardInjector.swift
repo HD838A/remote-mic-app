@@ -21,6 +21,60 @@ enum KeyboardInjector {
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
 
+    final class AppSwitcherSession {
+        private let keyStatePoster: KeyStatePoster
+        private(set) var isActive = false
+
+        init(keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState) {
+            self.keyStatePoster = keyStatePoster
+        }
+
+        @discardableResult
+        func trigger() -> Bool {
+            if isActive {
+                return postTab()
+            }
+
+            guard keyStatePoster(leftCommandKeyCode, true, .maskCommand) else {
+                return false
+            }
+            guard postTab() else {
+                _ = keyStatePoster(leftCommandKeyCode, false, [])
+                return false
+            }
+            isActive = true
+            return true
+        }
+
+        @discardableResult
+        func cancel() -> Bool {
+            guard isActive else { return true }
+            let released = keyStatePoster(leftCommandKeyCode, false, [])
+            isActive = false
+            return released
+        }
+
+        @discardableResult
+        func confirm() -> Bool {
+            cancel()
+        }
+
+        @discardableResult
+        func moveSelection(left: Bool) -> Bool {
+            guard isActive else { return false }
+            let keyCode: CGKeyCode = left ? 123 : 124
+            let pressed = keyStatePoster(keyCode, true, .maskCommand)
+            let released = keyStatePoster(keyCode, false, .maskCommand)
+            return pressed && released
+        }
+
+        private func postTab() -> Bool {
+            let pressed = keyStatePoster(48, true, .maskCommand)
+            let released = keyStatePoster(48, false, .maskCommand)
+            return pressed && released
+        }
+    }
+
     struct AccessibilityTextCandidate: Equatable {
         let role: String
         let identifier: String
@@ -88,6 +142,7 @@ enum KeyboardInjector {
     /// is set, so the composer scan keeps retrying for longer than that.
     static let composerFocusMaximumAttempts = 12
     static let composerFocusRetryMilliseconds = 250
+    static let weChatBundleIdentifier = "com.tencent.xinWeChat"
     static let weChatComposerHorizontalRatio = 0.68
     static let weChatComposerVerticalRatio = 0.85
     private static let focusRequests = ApplicationFocusRequestGate()
@@ -542,11 +597,10 @@ enum KeyboardInjector {
         guard isAccessibilityTrusted,
               let application = NSWorkspace.shared.frontmostApplication
         else { return false }
-        let processIdentifier = application.processIdentifier
         let requestID = frontmostFocusRequests.begin()
         scheduleAccessibilityComposerFocus(
             bundleIdentifier: application.bundleIdentifier ?? "unknown",
-            processIdentifier: processIdentifier,
+            processIdentifier: application.processIdentifier,
             requestID: requestID,
             requestGate: frontmostFocusRequests,
             attempt: 0,
@@ -635,8 +689,20 @@ enum KeyboardInjector {
         focusQueue.asyncAfter(deadline: .now() + delay) {
             guard requestGate.isCurrent(requestID) else { return }
 
+            if applicationIsFrontmost(processIdentifier), !isAccessibilityTrusted {
+                AppLogger.shared.write(
+                    "APP FOCUS skipped bundle=\(bundleIdentifier) method=accessibility reason=not_trusted"
+                )
+                completeComposerFocus(
+                    false,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
+                )
+                return
+            }
             if attempt == 0,
-               bundleIdentifier == QianwenVoiceFocusPolicy.weChatBundleIdentifier,
+               usesWeChatComposerFallback(bundleIdentifier: bundleIdentifier),
                applicationIsFrontmost(processIdentifier),
                focusWeChatComposer(processIdentifier: processIdentifier) {
                 AppLogger.shared.write(
@@ -830,16 +896,33 @@ enum KeyboardInjector {
         )
     }
 
+    static func usesWeChatComposerFallback(bundleIdentifier: String?) -> Bool {
+        bundleIdentifier == weChatBundleIdentifier
+    }
+
+    static func weChatComposerWindowFrame(
+        _ windows: [(title: String, frame: CGRect)]
+    ) -> CGRect? {
+        windows
+            .filter {
+                ($0.title == "微信" || $0.title == "WeChat") &&
+                    weChatComposerFocusPoint(windowFrame: $0.frame) != nil
+            }
+            .map(\.frame)
+            .max { $0.width * $0.height < $1.width * $1.height }
+    }
+
     private static func focusWeChatComposer(processIdentifier: pid_t) -> Bool {
         let applicationElement = AXUIElementCreateApplication(processIdentifier)
-        let candidate = applicationWindows(applicationElement)
-            .compactMap { window -> (frame: CGRect, area: CGFloat)? in
-                guard let frame = axFrame(window), weChatComposerFocusPoint(windowFrame: frame) != nil
-                else { return nil }
-                return (frame, frame.width * frame.height)
+        guard let frame = weChatComposerWindowFrame(
+            applicationWindows(applicationElement).compactMap { window in
+                guard let frame = axFrame(window) else { return nil }
+                return (
+                    title: axString(window, attribute: kAXTitleAttribute),
+                    frame: frame
+                )
             }
-            .max { $0.area < $1.area }
-        guard let frame = candidate?.frame,
+        ),
               let point = weChatComposerFocusPoint(windowFrame: frame),
               let source = CGEventSource(stateID: .hidSystemState),
               let down = CGEvent(
@@ -855,10 +938,21 @@ enum KeyboardInjector {
                   mouseButton: .left
               )
         else { return false }
+        let previousPointerLocation = CGEvent(source: nil)?.location
         down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+        if let previousPointerLocation,
+           let restore = CGEvent(
+               mouseEventSource: source,
+               mouseType: .mouseMoved,
+               mouseCursorPosition: previousPointerLocation,
+               mouseButton: .left
+           ) {
+            restore.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            restore.post(tap: .cghidEventTap)
+        }
         return true
     }
 
@@ -1617,7 +1711,7 @@ enum KeyboardInjector {
         up.post(tap: .cghidEventTap)
     }
 
-    private static func postKeyState(
+    static func postKeyState(
         code: CGKeyCode,
         isDown: Bool,
         flags: CGEventFlags

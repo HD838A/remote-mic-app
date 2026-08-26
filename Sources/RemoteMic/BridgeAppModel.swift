@@ -179,6 +179,12 @@ enum BluetoothVoiceStopPolicy {
     }
 }
 
+enum VoiceShortTapFocusPolicy {
+    static func shouldFocus(enabled: Bool, durationMilliseconds: Int) -> Bool {
+        enabled && durationMilliseconds < HIDRemoteTiming.longPressMilliseconds
+    }
+}
+
 enum VoiceSamplePresentationPolicy {
     static func shouldPublishReceipt(
         hasReceivedSamples: Bool,
@@ -959,6 +965,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
+    private func recoverBluetoothAfterSystemWake() {
+        let targets: [XiaomiBluetoothBridge]
+        if let selectedBluetoothBridge {
+            targets = [selectedBluetoothBridge]
+        } else {
+            targets = Array(bluetoothBridges.values)
+        }
+        AppLogger.shared.write(
+            "BLE WAKE recovery_begin target_bridges=\(targets.count) " +
+                "discovery=\(discoveryBluetoothBridge != nil) " +
+                "ready_bridges=\(readyBluetoothBridgeCount)"
+        )
+        if targets.isEmpty, discoveryBluetoothBridge == nil {
+            startBluetoothConnections()
+            AppLogger.shared.write("BLE WAKE recovery_started_missing_bridges")
+            return
+        }
+        targets.forEach { $0.recoverAfterSystemWake() }
+        discoveryBluetoothBridge?.recoverAfterSystemWake()
+    }
+
     func refreshRemoteDiscovery() {
         guard started else { return }
         if discoveryBluetoothBridge == nil {
@@ -1260,6 +1287,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         resumeVirtualAudioOutputIfNeeded(reason: "system_\(event.rawValue)")
+        if BluetoothWakeRecoveryPolicy.shouldForceReconnect(event: event, started: started) {
+            recoverBluetoothAfterSystemWake()
+        }
     }
 
     @discardableResult
@@ -1296,6 +1326,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             : LocalizedMessage("audio.output.none_or_unavailable")
         AppLogger.shared.write(
             "AUDIO REBIND finished reason=\(reason) success=\(configured) status=\(audioStatus.key) " +
+                "ready=\(isAudioOutputReady) selected_available=\(selectedAudioDeviceIsAvailable) " +
                 "state={\(audioOutput.diagnosticState())}"
         )
         if configured {
@@ -1307,7 +1338,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @discardableResult
     private func ensureVirtualAudioOutputReady(reason: String) -> Bool {
         isAudioOutputReady = audioOutput.isReadyForTestTone
-        guard !isAudioOutputReady else { return true }
+        guard !isAudioOutputReady else {
+            AppLogger.shared.write(
+                "AUDIO HEALTH ready reason=\(reason) state={\(audioOutput.diagnosticState())}"
+            )
+            return true
+        }
         AppLogger.shared.write(
             "AUDIO HEALTH stale reason=\(reason) state={\(audioOutput.diagnosticState())}"
         )
@@ -1371,6 +1407,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self.refreshAudioDevices()
                 AppLogger.shared.write(
                     "AUDIO RECOVERY ignored reason=\(reason) detail=\(details) explicit_output_unchanged"
+                )
+                return
+            }
+            let configurationHealthy = self.audioOutput.isConfigurationHealthyForDiagnostics
+            guard !VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
+                details: details,
+                configurationHealthy: configurationHealthy
+            ) else {
+                self.refreshAudioDevices()
+                AppLogger.shared.write(
+                    "AUDIO RECOVERY ignored reason=\(reason) detail=\(details) " +
+                        "explicit_output_healthy=true state={\(self.audioOutput.diagnosticState())}"
                 )
                 return
             }
@@ -1794,6 +1842,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 settings.qianwenVoiceModeEnabled = false
                 qianwenVoiceSession.setEnabled(false)
             }
+            settings.voiceShortTapFocusEnabled = false
             enableVoiceFnTapMode()
             return
         }
@@ -1831,9 +1880,28 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         settings.qianwenVoiceModeEnabled = true
         settings.voiceKeyMode = .function
         settings.voiceFnTapModeEnabled = false
+        settings.voiceShortTapFocusEnabled = false
         selectAudioDevice(device.uid, reason: "qianwen_mode_enabled")
         voiceFnTapSession.setEnabled(false) { [weak self] in
             self?.applyHIDSettings()
+        }
+    }
+
+    func setVoiceShortTapFocusEnabled(_ enabled: Bool) {
+        guard !isStreaming else {
+            AppLogger.shared.write("VOICE SHORT FOCUS change_rejected reason=voice_active")
+            return
+        }
+        guard !enabled || !settings.qianwenVoiceModeEnabled else {
+            settings.voiceShortTapFocusEnabled = false
+            return
+        }
+        settings.voiceShortTapFocusEnabled = enabled
+        if enabled, settings.voiceFnTapModeEnabled {
+            settings.voiceFnTapModeEnabled = false
+            voiceFnTapSession.setEnabled(false) { [weak self] in
+                self?.applyHIDSettings()
+            }
         }
     }
 
@@ -2246,13 +2314,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             modeEnabled: settings.qianwenVoiceModeEnabled,
             durationMilliseconds: durationMilliseconds
         )
+        let genericFocusTap = VoiceShortTapFocusPolicy.shouldFocus(
+            enabled: !settings.qianwenVoiceModeEnabled &&
+                settings.voiceShortTapFocusEnabled,
+            durationMilliseconds: durationMilliseconds
+        )
         if qianwenFocusTap {
             _ = qianwenVoiceSession.prepareDestinationIfNeeded(destinationIsReady: false)
             transcriptCaptureCoordinator.cancel(reason: "qianwen_focus_tap")
             qianwenHistoryTranscriptCapture.cancel(reason: "qianwen_focus_tap")
             beginQianwenInputFocusPreparation()
+        } else if genericFocusTap {
+            transcriptCaptureCoordinator.cancel(reason: "voice_short_tap_focus")
+            voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")
+            let started = KeyboardInjector.focusFrontmostComposer { [weak self] focused in
+                self?.voiceShortcutStatus = LocalizedMessage(
+                    focused
+                        ? "voice_button.status.input_ready"
+                        : "voice_button.status.input_unavailable"
+                )
+            }
+            if !started {
+                voiceShortcutStatus = LocalizedMessage("voice_button.status.input_unavailable")
+            }
         }
-        let shouldFlushAudio = qianwenFocusTap || BluetoothVoiceStopPolicy.shouldFlushAudio(
+        let shouldFocusInput = qianwenFocusTap || genericFocusTap
+        let shouldFlushAudio = shouldFocusInput || BluetoothVoiceStopPolicy.shouldFlushAudio(
             handledByFnTapMode: handledByFnTapMode
         )
         let pendingBuffers = audioOutput.pendingVoiceBufferCountForDiagnostics
@@ -2265,7 +2352,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "samples=\(bluetoothVoiceDecodedSampleCount) " +
                 "enqueue_failures=\(bluetoothVoiceEnqueueFailureCount) " +
                 "route=\(bluetoothVoiceTraceRoute) pending_buffers=\(pendingBuffers) " +
-                "flush=\(shouldFlushAudio)"
+                "flush=\(shouldFlushAudio) audio_ready=\(audioOutput.isReadyForTestTone) " +
+                "audio_state={\(audioOutput.diagnosticState())}"
         )
         AppLogger.shared.write(
             "ATVV STREAM tail trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue) " +
@@ -2282,7 +2370,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "final_window_peak=\(tailSnapshot.finalWindowPeak) " +
                 "final_window_rms=\(tailSnapshot.finalWindowRMS)"
         )
-        if !qianwenFocusTap {
+        if !shouldFocusInput {
             audioOutput.logWhenPendingVoiceAudioDrains(
                 context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
             )

@@ -5,6 +5,21 @@ import Testing
 
 @Suite("Virtual audio connection lifecycle")
 struct VirtualAudioConnectionLifecycleTests {
+    @Test func healthyExplicitOutputIgnoresDefaultSystemOutputOnlyChanges() {
+        #expect(VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
+            details: "properties=default_system_output",
+            configurationHealthy: true
+        ))
+        #expect(!VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
+            details: "properties=default_system_output",
+            configurationHealthy: false
+        ))
+        #expect(!VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
+            details: "properties=devices",
+            configurationHealthy: true
+        ))
+    }
+
     @Test func recoveryEventsAreCountedUntilTheDebouncedExecutionConsumesThem() {
         var state = AudioRecoveryCoalescingState()
 
