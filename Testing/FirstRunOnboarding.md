@@ -2,8 +2,8 @@
 
 ## 适用范围
 
-- 版本：无线麦SayAll.app 三种控制方式 Onboarding 未发布候选
-- 当前候选分支：`codex/onboarding-clickable-permissions`（基线 `origin/main` `4d526175`）
+- 版本：无线麦SayAll.app 三种控制方式 Onboarding 的 Preview staging artifact
+- 来源：合入 `main` 的精确 Commit；当前流程不使用候选分支
 - 平台：macOS 14 及以上
 - 功能状态：Onboarding 27 项、完整 Swift 313 项、项目自检 42 项和权限页浅色/深色生产视图已通过；等待正式签名改名权限连续性、系统设置真实跳转、实体遥控器、iPhone Nearby、手机 Safari 网页版及第三方语音工具真实环境验收
 - 目标：确认只有真正全新安装需要完整设置向导；流程优先实体遥控器，只有当前没有遥控器才继续选择 iPhone App 或网页版，三条最终路径都必须通过真实连接、按键、语音和文字上屏。

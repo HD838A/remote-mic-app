@@ -33,7 +33,7 @@
 - `Sources/RemoteMic/SettingsView.swift`：关于页布局与版本中心界面。
 - `Sources/RemoteMic/RemoteMicApp.swift`：Sparkle 检查协调、更新通道切换和 delegate 回调。
 - `Sources/RemoteMic/UpdateInformationStore.swift`：更新信息与本地化说明状态。
-- `scripts/notarize-release.sh`、`scripts/publish-release.sh`：生成并发布固定版本的中英文更新说明资产。
+- `scripts/notarize-release.sh`、`scripts/prepare-public-release-assets.sh`：从最终签名归档生成固定版本的中英文更新说明资产；公开发布由 `scripts/publish-preview-release.sh` 复用已验证字节完成。
 - `Resources/*/Localizable.strings`、`Resources/*/ReleaseHistory.md`：界面文案和用户可见版本记录。
 
 ## 隐私与兼容边界

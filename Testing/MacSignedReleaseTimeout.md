@@ -1,150 +1,66 @@
-# macOS 签名发布超时与并发隔离测试手册
+# macOS 受保护 staging 超时与并发测试手册
 
 ## 适用范围
 
-- 适用分支：包含 2026-08-16 签名发布超时修复的 `main` 或开发分支。
-- 适用工作流：`macOS Signed Release Packages`。
-- 本手册只验证发布流水线的进程、缓存和日志边界，不代替真实 Developer ID 签名、公证、安装或 App 功能验收。
+验证 .github/workflows/mac-release-package.yml 的双架构签名 staging 和 scripts/run-release-stage.sh 的进程边界。它不创建公开 Release，也不替代真实 Apple 服务验收。
 
 ## 测试前准备
 
-1. 使用干净的隔离 worktree，不使用任何候选发布分支。
-2. 不提供 Apple 证书、Notary API Key、Match 密码或 Sparkle 私钥。
-3. 确认 `zsh`、Swift 6.2、`rg` 和 YAML 解析工具可用。
+1. 使用干净隔离 worktree。
+2. 不提供 Apple 证书、P8、Match 密码、Sparkle 私钥或 Token。
+3. 确认 actionlint、zsh -n、bash -n 和 fixture 测试可用。
 
-## 用例 1：签名步骤 10 分钟硬上限
+## 用例 1：600 秒硬上限
 
-1. 检查 `.github/workflows/mac-release-package.yml` 的签名步骤。
-2. 确认该 step 的 `timeout-minutes` 为 `10`。
-3. 确认步骤从入口经过 `run-release-stage.sh`，并配置小于 GitHub 硬上限的内部清理预算。
+1. 检查签名 Job 的 GitHub step timeout-minutes 为 10。
+2. 检查内部 signed-release supervisor 为 540 秒。
+3. 用假命令让阶段超过内部期限。
 
-预期结果：签名步骤运行满 10 分钟即停止等待并失败；内部 supervisor 在 540 秒开始终止完整子进程树并返回 `124`，为 GitHub 的 600 秒硬停止和 Keychain、临时文件清理保留 60 秒。
+预期：supervisor 返回 124，完整子进程树被终止，第一份错误日志保留；不会静默重试或延长期限。
 
-失败判定：只保留 180 分钟 job timeout、仅依赖人工取消，或 timeout 后仍留下 `notarytool`、`pkgbuild`、`productbuild`、`hdiutil` 子进程。
+失败判定：只有 job 级 180 分钟限制、后台 notarytool/pkgbuild 继续运行、超时后自动重打或改版本。
 
-## 用例 2：双 lane SwiftPM 冷缓存隔离
+## 用例 2：双架构隔离
 
-1. 为 Apple Silicon 和 Intel 使用两个全新 cache/scratch 目录。
-2. 同时执行依赖解析或 Release build。
-3. 检查命令行和最终目录。
+1. 并发执行 Apple Silicon 和 Intel lane。
+2. 检查 SwiftPM scratch、cache、dist 和临时 Keychain 路径。
 
-预期结果：两个 lane 的 `--scratch-path` 与 `--cache-path` 均不同；首次并发下载 Sparkle binary artifact 不再访问同一个 `org.swift.swiftpm/artifacts` 路径，也不出现 `already exists in file system`。
+预期：两条 lane 使用不同路径；输出分别为 arm64/macOS 14 和 x86_64/macOS 13，不共享会导致冲突的构建目录。
 
-失败判定：只隔离 `.build`/scratch，下载或 binary artifact cache 仍指向用户全局目录或同一 lane 目录。
+## 用例 3：PKG/DMG 顺序
 
-## 用例 2A：首次干净 Release 构建预算
+1. 检查两个架构的 App、卸载 PKG、DMG 和 appcast 生成顺序。
+2. 确认内嵌 component PKG 先生成，外层产品 PKG 再签名、公证和 staple。
 
-1. 运行 `./scripts/verify-release-timeout-budgets.sh`。
-2. 确认输出依次为 `app-swift-build=300s`、`app-build=330s`、`signed-variant=525s`、`signed-release=540s`、`step=600s`。
-3. 将测试副本中的 Swift build 默认值改回 180 秒，确认验证失败。
-4. 将测试副本中的 `app-build` 改为不比 Swift build 多 30 秒，确认验证失败。
+预期：独立 PKG 可并行提交公证；DMG 只在内嵌内容完成后生成，最终验证器检查外层 Installer 信任边界。
 
-预期结果：首次干净双架构 Release 编译拥有现实预算，同时每个子阶段仍严格处于父 supervisor 内；完整受保护签名步骤仍在 540 秒内部 supervisor 和 600 秒 GitHub 硬停止内，不能通过抬高总上限掩盖慢构建。
+## 用例 4：错误传播
 
-失败判定：旧 180 秒仍可通过、父阶段小于或等于子阶段、`signed-release` 不等于 540 秒、GitHub step 不等于 600 秒、取消 timeout，或失败后静默自动重试。
+1. 令 Intel lane 返回非零，让 Apple Silicon lane 启动长时间子进程。
+2. 运行并行 packaging fixture。
 
-## 用例 3：单阶段 timeout 清理完整进程树
+预期：父流程失败并终止另一条 lane 的完整进程树，不留下孤儿进程，也不上传部分资产。
 
-1. 使用假命令启动父进程和长时间运行的孙进程。
-2. 将阶段 timeout 缩短为 2 秒，heartbeat 缩短为 1 秒。
-3. 等待 supervisor 返回。
+## 用例 5：凭据和 token 边界
 
-预期结果：日志包含 lane、stage、elapsed、heartbeat 和 timeout；退出码为 `124`；父进程与孙进程均不存在。
+1. 运行 scripts/verify-release-workflow-gh-token.sh。
+2. 静态检查 staging workflow 的每个 gh/API step。
 
-失败判定：只终止父 shell，后台子进程继续运行，或日志无法指出超时 lane 和 stage。
+预期：每个 step 都显式设置 GH_TOKEN；publication workflow 不声明 Apple Environment 或 secrets；日志不包含凭据值。
 
-## 用例 4：并行 lane 失败传播
+## 用例 6：主线 smoke
 
-1. 使用假 lane runner，让 Intel 快速返回非零，让 Apple Silicon 保持长时间运行并产生子进程。
-2. 运行 `PARALLEL_RELEASE_VARIANTS=1 ./scripts/package-macos-release-variants.sh`。
+1. 在合入后的精确 main SHA 运行 scripts/stage-macos-preview.sh smoke。
+2. 检查受保护 workflow 只上传 payload/stage artifact。
 
-预期结果：父脚本立即返回失败，终止 Apple Silicon 的完整进程树并等待清理，不等待其自然结束。
-
-失败判定：父脚本报告成功、等待失败 lane 之外的任务直到超时，或留下孤儿进程。
-
-## 用例 5：阶段日志与敏感信息边界
-
-1. 静态检查 App build/sign/notary、Driver build、installer/uninstaller PKG、DMG、staple/verify 的阶段调用。
-2. 执行假命令回归脚本。
-
-预期结果：每个阶段输出开始、周期 heartbeat、完成/失败和耗时；日志只含稳定的 lane/stage 标签，不开启 xtrace，不打印凭据、邀请码、设备标识、Token 或私钥路径内容。
-
-失败判定：长操作完全无输出，或日志包含 secret 值、命令环境 dump、`set -x`/`xtrace`。
-
-## 用例 6：Installer 最终产品签名与跨 lane 串行
-
-1. 静态检查 `build-doubao-driver-pkg.sh`：component `pkgbuild` 不带 `--sign`，Distribution `productbuild` 先输出 unsigned product archive。
-2. 分别向这两个命令块注入 `--sign` mutation，确认结构门禁拒绝两个变体；不能只检查旧变量名是否消失。
-3. 确认正式签名前先创建最小 nopayload probe PKG，并通过有界 `productsign` 验证 Developer ID Installer 私钥可用性。
-4. 使用两个无凭据 fake signer 同时请求同一个 `lockf -k -t` lock file。
-5. 检查最终验证器对展开后的 `RemoteMicComponent.pkg` 要求 `Status: no signature`，同时仍对外层可分发 PKG 执行 Developer ID Installer、staple 和 `spctl -t install` 检查。
-
-预期结果：两个 unsigned 命令块的原始版本通过，两个 `--sign` mutation 都被拒绝；两个 fake signer 的 `start/end` 成对出现且不重叠；只有最终安装和卸载产品执行真实 `productsign`；架构提示 Distribution 不变；锁等待和单项签名仍受 timeout 限制。
-
-失败判定：component 恢复 `pkgbuild --sign`、外层产品没有最终 Installer 签名、两个 lane 可同时进入 Installer 私钥操作、锁无限等待、探针被省略，或验证器只检查内层 component 而没有检查外层签名与 Gatekeeper。
-
-## 用例 7：按 digest 的受保护发布流水线资格验证
-
-1. 在已有的同仓普通流水线变更 PR 中提交修复，记录该 PR 的 exact head Commit 和 `./scripts/release-pipeline-digest.sh` 64 位 digest。
-2. 不创建第二个 PR，只把该 exact SHA 临时映射到 `release/pipeline-qualification/<pr号或短SHA>` ref；确认 alias 远端 head、普通 PR head 和输入 exact commit 三者一致。
-3. 从该 alias ref 手动运行 `macOS Signed Release Packages`，设置 `release_mode=qualification`，显式输入 exact commit 和 digest；Tag 文本只用于匹配该 Commit 的 `Info.plist` 打包输入，不创建或占用产品版本身份。
-4. 审核 `mac-release` Environment 前检查 workflow、脚本和 digest；确认按完整 SHA 检出的 Match checkout 在读取凭据前把本地 `refs/heads/main` 绑定到同一 SHA，且 `file://` 二次 clone 能看到该 `main`。不得改为可漂移远端分支，也不得因 detached HEAD 让 Fastlane 创建空 orphan 分支。
-5. 审批后等待双架构 Developer ID、timestamp、公证、staple 与验证完成。
-6. 检查 workflow 只上传按 digest 命名的 `release-pipeline-qualification.json` 和必要的无敏感阶段账本，没有上传可分发 App/ZIP/PKG/DMG/appcast，也没有创建或修改 GitHub Tag/Release。
-7. 原普通 PR 合入 `main` 后，运行资格证明 verifier，确认它通过记录的 PR 号读取 `refs/pull/<n>/head`、重算 source digest，并复用同 digest 证明而不重复执行资格验证。
-
-预期结果：provenance gate 同时验证本地 checkout、临时 alias ref、原普通 PR exact SHA 和脚本聚合 digest；alias 不创建第二个 PR，也不是产品候选。Qualification 仍使用受保护 Environment 并检查三个私有依赖 pin 一致；真实签名公证路径通过后只留下按 digest 可复用的证明，不发布产品字节，证明也不依赖 alias ref 永久存在。
-
-失败判定：SHA/digest 不匹配仍可执行、alias 与原 PR head 不一致、为 alias 创建第二个 PR、qualification 绕过 Environment、拥有 `contents: write`、Match 精确 SHA checkout 没有向本地 `file://` clone 暴露同 SHA `main`、创建/修改 Tag 或 Release、上传可分发产品 artifact、原 PR 未合入或 source digest 不符仍能复用，或用 qualification 结果冒充最终候选产品验收。
+预期：smoke 可以证明 workflow 路径、双架构和门禁配置，没有创建 Tag、Release、appcast 或产品候选分支。
 
 ## 稳定功能回归
 
-- 普通 ad-hoc App/DMG 构建在未启用 release timeout 时仍按原路径执行。
-- Apple Silicon 与 Intel 的输出名称、最低系统、架构、签名身份类型和 appcast 名称不变。
-- 任一 lane 或并行 PKG 公证失败时，整个签名任务必须失败。
-- 无 Apple 凭据测试不得触发真实签名、公证、Environment 审批或发布。
-- Pipeline qualification 只在流水线 digest 变化且无可复用证明时，于原普通变更 PR 合入前验证真实 Developer ID 路径；临时 alias 不能产生第二个 PR，也不能替代候选分支和最终产品发布门禁。
+- 失败只影响本次 staging，不会升版本、Build 或创建 rerun 分支。
+- 已经成功的 artifact 可由 publication 复用，不重新进入 Apple 签名。
+- scripts/test-macos-release-flow.sh、scripts/test-prepare-preview-release.sh 和 BuildSigningTests 通过。
 
-## 日志收集
+## 日志与边界
 
-- 保存 `scripts/test-release-pipeline-optimization.sh` 输出。
-- 保存双 lane 冷缓存命令及 cache/scratch 目录清单。
-- 每次真实工作流保存每个阶段的开始、heartbeat、结束和 elapsed；失败时记录 lane/stage 与退出码。
-- 不保存或粘贴 Apple 私钥、P8 内容、Match 密码、Keychain 密码或 Sparkle 私钥。
-
-## 自动化、代理实测和真实发布边界
-
-- 自动化可以证明参数隔离、确定性 timeout、进程树清理、并发失败传播和日志格式。
-- 代理可在无凭据环境运行并发冷缓存解析/构建和 shell/YAML/Swift 测试。
-- 无凭据自动化不能单独证明真实 timestamp、Developer ID、Apple Notary 或 staple；这些成功路径已由 Build 119 的受保护工作流补验。Build 118 已证明真实 Runner 的单阶段 timeout 和 fail-fast；590 秒总 supervisor 的实际超时分支没有通过故意挂起真实签名来触发。
-- 每次修改签名、打包、公证或 timeout 编排后，必须用原普通 PR 的 exact SHA 和新 pipeline digest 运行 qualification；未变化的 digest 直接复用既有成功证明，digest 变化会使旧证明失效。
-
-## 2026-08-16 验证记录
-
-- 双 lane 真实全新冷缓存并发解析通过：Apple Silicon 与 Intel 使用各自的 SwiftPM `--scratch-path` 和 `--cache-path`，均独立下载 Sparkle artifact，无共享 artifact 冲突。证据目录：`/private/tmp/remotemic-swiftpm-cold2.ZL5asT`。
-- `scripts/test-release-pipeline-optimization.sh` 通过：2 秒 timeout 返回 `124`，可见 heartbeat，父进程和孙进程均被清理，任一 lane 失败会立即取消另一 lane。
-- `BuildSigningTests` 14 项通过；项目自检 42/42 通过；Debug build 成功。
-- 修改 shell 通过 `zsh -n`，工作流 YAML 解析通过，`actionlint -ignore SC2129` 通过。
-- 本机第一次冷缓存测试遇到锁屏登录 Keychain `status -128`；该次结果不计入 cache 隔离验收。最终冷缓存验证禁用本机 Keychain/netrc 并使用本地私有依赖镜像，仅证明无凭据下载和 cache 隔离边界。
-- 该无凭据验证阶段当时尚未执行真实 Developer ID timestamp、Installer 签名、Apple 公证和 staple；后续 Build 119 已补齐成功路径。GitHub 10 分钟硬上限未被故意跑满，单阶段 timeout、进程树清理与 fail-fast 由 Build 118 和无凭据回归共同覆盖。
-
-## 2026-08-16 第二次真实工作流与修复记录
-
-- Run `31938200895` 证明 App 公证正常：Apple Silicon 与 Intel 均在约 25–26 秒返回 `Accepted`。
-- 两个 lane 随后同时进入带 Developer ID Installer 的 `installer-component-pkgbuild`，均无工具输出并在 90 秒返回 `124`；fail-fast 正确取消另一 lane，完整步骤约 326 秒失败，没有上传资产。
-- 对照 `v1.8.23` Run `31806292978`：unsigned `pkgbuild` 后对最终 PKG 执行 `productsign`，两架构均在约 1–2 秒内完成，最终公证和验证通过。
-- 无凭据 product archive 结构实验确认 Distribution `productbuild` 会把 component 纳入外层 archive；component 可保持 unsigned，最终验证边界是外层 product archive。
-- 自动化新增 component unsigned、外层最终 productsign、最小 nopayload 签名探针、`lockf` 跨 lane 串行、外层签名/公证/Gatekeeper 验证门禁。
-- 本机双架构 ad-hoc 完整链通过：Apple Silicon component `pkgbuild` 约 2 秒、Distribution `productbuild` 约 1 秒；Intel component `pkgbuild` 约 1 秒、Distribution `productbuild` 约 2 秒。两套 PKG/DMG 验证均通过，架构提示 Distribution 保持不变。
-- `BuildSigningTests` 14/14、installer architecture guard、release pipeline optimization regression 均通过。
-- 本轮未访问 Apple 凭据；随后已使用更高 Build 的新候选完成验证，没有重跑旧失败候选。
-
-## 2026-08-16 Build 119 真实成功记录
-
-- 受保护 Run [`31944719103`](https://github.com/HD838A/remote-mic-app/actions/runs/31944719103) 在候选提交 `1659b6c094b47e89016a3d6f8a6f81e972ad15f3` 上构建 `1.8.25 (119)`；该候选直接基于包含第二次修复的 `bba72af82084655ff688d38774376f4f6aaae5ff`。
-- Apple Silicon 与 Intel 的 unsigned component `pkgbuild` 和 unsigned Distribution `productbuild` 均约 1 秒完成；两个 Developer ID Installer 探针约 2 秒完成，最终安装和卸载产品的 `productsign` 均约 1 秒完成。
-- 两套 App、四个最终外层 PKG 与两套 DMG 均完成签名、可信 timestamp、公证、staple 和 Gatekeeper 验证；内层 component 保持 unsigned。
-- `signed-release` 阶段约 266 秒，GitHub 签名 step 约 4 分 26 秒，没有触发 590/600 秒门禁。
-- 防回归脚本现在直接解析 component `pkgbuild` 和 Distribution `productbuild` 命令块，并分别运行重新加入 `--sign` 的反向 mutation；任一 mutation 被接受都判定失败。
-
-可见 UI、真实安装写入、卸载结果和真实 Intel Mac 运行不属于本测试手册的流水线进程边界，仍需对应安装与产品测试手册单独验收。
+保存 lane、stage、elapsed、退出码和 artifact 摘要；不要保存秘密。无凭据 fixture 不能证明真实 Developer ID、Notary 或 staple 成功，真实结果必须由受保护 Run 提供。

@@ -2,8 +2,8 @@
 
 ## 适用版本或分支
 
-- 分支：`codex/onboarding-clickable-permissions` 或后续集成候选
-- 目标：由受保护 `macOS Signed Release Packages` 工作流生成并发布到私有 Draft 或公开 Pre-release 的 Developer ID 签名公证包
+- 来源：合入 `main` 的目标 Commit 及其受保护 staging artifact
+- 目标：由受保护 `macOS Signed Release Packages` 工作流生成、经真实 UI 验收，再由 publication workflow 公开的 Developer ID 签名公证包
 
 ## 测试前准备
 
