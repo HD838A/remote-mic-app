@@ -682,6 +682,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         assetName: String,
         includePreRelease: Bool
     ) async throws -> UpdateFeedResolver.ResolvedFeed {
+        if let testFeed = UpdateFeedResolver.testInjectedFeed(
+            environment: ProcessInfo.processInfo.environment,
+            assetName: assetName,
+            includePreRelease: includePreRelease
+        ) {
+            return testFeed
+        }
         var request = URLRequest(url: releasesURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15

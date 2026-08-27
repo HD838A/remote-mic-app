@@ -77,6 +77,7 @@ $GH_BIN api --header 'Accept: application/octet-stream' "repos/$REPOSITORY/relea
 ditto -x -k "$stable_zip" "$OUTPUT_DIR/baseline"
 stable_app="$(find "$OUTPUT_DIR/baseline" -maxdepth 1 -name '*.app' -type d -print -quit)"
 [[ -n "$stable_app" ]] || exit 1
+stable_executable="$(plutil -extract CFBundleExecutable raw -o - "$stable_app/Contents/Info.plist")"
 test "$(plutil -extract CFBundleShortVersionString raw -o - "$stable_app/Contents/Info.plist")" = "$stable_version"
 codesign --verify --deep --strict "$stable_app"
 test "$(codesign -dv --verbose=4 "$stable_app" 2>&1 | awk -F= '$1 == "TeamIdentifier" {print $2; exit}')" = L3QHLDRPAY
@@ -115,5 +116,7 @@ echo "SOURCE_COMMIT: $commit"
 echo "UI_TEST_SESSION: $OUTPUT_DIR/ui-test-session.json"
 echo "PREVIEW_STAGE_RECORD: $stage_record"
 echo "STABLE_BASELINE_APP: $stable_app"
+echo "STABLE_APP_EXECUTABLE: $stable_app/Contents/MacOS/$stable_executable"
 echo "CANDIDATE_FEED: $test_prefix""appcast.xml"
+echo "UI_TEST_ENV: REMOTE_MIC_UI_TEST_MODE=1 REMOTE_MIC_UI_TEST_FEED_URL=$test_prefix""appcast.xml REMOTE_MIC_UI_TEST_VERSION=$version"
 echo "START_FEED_SERVER: cd '$OUTPUT_DIR/feed' && python3 -m http.server $FEED_PORT --bind 127.0.0.1"
