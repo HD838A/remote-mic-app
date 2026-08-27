@@ -551,7 +551,9 @@ final class RecordingAssetCoordinator {
         applicationName: String,
         bundleIdentifier: String
     ) {
-        pendingApplicationMetadata[sessionID] = (applicationName, bundleIdentifier)
+        if activeSession?.draft.sessionID == sessionID {
+            pendingApplicationMetadata[sessionID] = (applicationName, bundleIdentifier)
+        }
         do {
             try store.updateApplication(
                 sessionID: sessionID,

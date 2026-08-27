@@ -128,4 +128,41 @@ struct RecordingAssetStoreTests {
         #expect(try store.loadAll().isEmpty)
         #expect(finalLog == "RECORDING ASSET canceled reason=feature_disabled")
     }
+
+    @Test func metadataFromARecordingDisabledSessionIsNotRetained() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemoteMicRecordingMetadata-\(UUID().uuidString)", isDirectory: true)
+        let completion = DispatchSemaphore(value: 0)
+        let sessionID = UUID()
+        var isEnabled = false
+        var committed: RecordingAssetManifest?
+        let coordinator = RecordingAssetCoordinator(
+            store: RecordingAssetStore(rootDirectoryURL: root),
+            isEnabled: { isEnabled },
+            onCommit: { manifest in
+                committed = manifest
+                completion.signal()
+            },
+            log: { _ in }
+        )
+
+        coordinator.updateApplication(
+            sessionID: sessionID,
+            applicationName: "Stale App",
+            bundleIdentifier: "com.example.stale"
+        )
+        isEnabled = true
+        coordinator.start(
+            sessionID: sessionID,
+            startedAt: Date(),
+            source: .bluetoothRemote
+        )
+        coordinator.append(samples: Array(repeating: Int16(1200), count: 1_600))
+        coordinator.finish(endedAt: Date())
+
+        #expect(completion.wait(timeout: .now() + 3) == .success)
+        #expect(committed?.applicationName == nil)
+        #expect(committed?.bundleIdentifier == nil)
+        try FileManager.default.trashItem(at: root, resultingItemURL: nil)
+    }
 }
