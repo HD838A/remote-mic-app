@@ -238,3 +238,29 @@ enum ATVVSessionGate {
         return now < cancelledAt.addingTimeInterval(cancelledOpenSuppressionInterval)
     }
 }
+
+enum KaraokeRoutingPolicy {
+    static func usesLocalPlayback(
+        modeEnabled: Bool,
+        targetDeviceIdentifier: UUID?,
+        streamDeviceIdentifier: UUID
+    ) -> Bool {
+        modeEnabled && targetDeviceIdentifier == streamDeviceIdentifier
+    }
+}
+
+enum ATVVStreamOrigin: String, Equatable {
+    case hostMicrophoneOpen = "host_mic_open"
+    case remotePressToTalk = "remote_ptt"
+    case remoteHoldToTalk = "remote_htt"
+    case unknown
+
+    static func resolve(startReason: UInt8, sessionID: UInt8) -> ATVVStreamOrigin {
+        switch (startReason, sessionID) {
+        case (0x00, 0x00): return .hostMicrophoneOpen
+        case (0x01, _): return .remotePressToTalk
+        case (0x03, _): return .remoteHoldToTalk
+        default: return .unknown
+        }
+    }
+}

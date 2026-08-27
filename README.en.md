@@ -134,6 +134,14 @@ Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝�
 
 You must still **hold the 小米蓝牙遥控器 2 Pro voice key while speaking and release it to finish**. The 小米蓝牙遥控器 2 Pro firmware stops microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete 小米蓝牙遥控器 2 Pro HID mapping automatically disables the mode and restores the default Fn-hold mapping.
 
+### Local Karaoke
+
+**Local Karaoke** under **Connection & Voice** sends audio actually captured by the Bluetooth remote to a separately selected physical playback device. Its output is independent of the normal **Voice Output** above: follow the current system sound output, or choose headphones, speakers, or an external interface without changing the normal voice binding. If that device is temporarily unavailable, Karaoke alone falls back to the current physical system output; virtual audio devices are never used for local playback.
+
+Use the in-page button to turn it on or off. No physical button is assigned by default; under **Buttons**, you can assign **Toggle Local Karaoke** to any button's click, double-click, or long-press. Before enabling, SayAll temporarily neutralizes the remote voice button's Fn or Command trigger so the system input method is not started at the same time; monitoring stays off if that cannot be done safely. While enabled, hold the remote voice button to monitor through the selected local output, then release it to end that stream. Turning Karaoke off restores the user's normal voice-button mode. It is off by default, lasts only for the current app session, and turns off automatically when the Mac locks or sleeps or the app quits. Headphones are recommended to prevent speaker feedback.
+
+RC003 hardware logs confirm that a host `MIC_OPEN` request produces only an empty stream without PCM; the remote sends real audio only while its physical voice button is held. Local Karaoke therefore no longer opens, retries, or extends the microphone from the Mac. It preserves the remote's standard PTT / HTT behavior and routes real PCM from the selected remote to physical playback while the mode is on. Karaoke audio is not sent to the virtual microphone, does not trigger Fn, and is neither saved nor transcribed. With the mode off, normal voice continues through the existing virtual-microphone path.
+
 If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install Remote Mic.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
 
 ## Customize remote buttons
@@ -145,7 +153,7 @@ If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRe
 
 Open **Button Mapping** and enable custom mapping to change direction, OK, Back, Home, Menu, TV, Power, and volume buttons.
 
-Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, launching installed apps, and custom keyboard shortcuts. A shortcut can be chosen from common combinations such as Copy, Paste, and Spotlight, assembled from an on-page standard keyboard with modifiers, F1–F20, navigation keys, a numeric keypad, or standalone left/right modifiers, or recorded from a physical keyboard as before.
+Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, toggling Local Karaoke, launching installed apps, and custom keyboard shortcuts. A shortcut can be chosen from common combinations such as Copy, Paste, and Spotlight, assembled from an on-page standard keyboard with modifiers, F1–F20, navigation keys, a numeric keypad, or standalone left/right modifiers, or recorded from a physical keyboard as before.
 
 **Open Custom App** lets you select any local `.app`, then either open it only, send its focus shortcut after activation, or record a target input field once and focus it automatically. Re-record the target if an app update changes its interface. SayAll does not use fixed screen coordinates or save text from the input field.
 
@@ -154,7 +162,7 @@ Each ordinary button supports a single-click action and optional double-click an
 - A long press triggers after about 0.55 seconds and suppresses the single-click action.
 - Buttons with a configured double-click or long-press do not hold-repeat, preventing multiple actions from firing at once.
 
-The voice button is always reserved for voice input and does not participate in ordinary button mapping; choose Fn/Globe, Left Command, or Right Command hold in its dedicated area.
+The voice button is always reserved for voice input and does not participate in ordinary button mapping; choose Fn/Globe, Left Command, or Right Command hold in its dedicated area. It does not toggle Local Karaoke by default.
 
 ## Usage statistics
 

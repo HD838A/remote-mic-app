@@ -92,6 +92,12 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
     }
 }
 
+private struct ATVVRuntimeCapabilitiesRequest {
+    let id: UInt64
+    let interactionModels: UInt8
+    let completion: (Bool) -> Void
+}
+
 final class XiaomiBluetoothBridge: NSObject {
     private static let defaultCapabilities = ATVVCapabilities(
         version: 0x0100,
@@ -119,8 +125,13 @@ final class XiaomiBluetoothBridge: NSObject {
     private var reconnectWorkItem: DispatchWorkItem?
     private var connectionTimeoutWorkItem: DispatchWorkItem?
     private var initializationTimeoutWorkItem: DispatchWorkItem?
+    private var runtimeCapabilitiesTimeoutWorkItem: DispatchWorkItem?
     private var capabilitiesRequested = false
     private var capabilitiesConfirmed = false
+    private var runtimeCapabilitiesRequestCounter: UInt64 = 0
+    private var activeRuntimeCapabilitiesRequest: ATVVRuntimeCapabilitiesRequest?
+    private var queuedRuntimeCapabilitiesRequests: [ATVVRuntimeCapabilitiesRequest] = []
+    private var activeInteractionModels = ATVVProtocol.standardInteractionModels
     private var requestedReconnectDelay: TimeInterval?
     private var reconnectPolicy = BluetoothReconnectPolicy()
     private var currentAttemptUsesCachedTarget = false
@@ -136,6 +147,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private var cancelledMicrophoneOpenAt: Date?
     private var sessionID: UInt8 = 0
     private var lastStopAt: Date?
+    private(set) var activeStreamOrigin: ATVVStreamOrigin = .unknown
 
     private let serviceUUID = CBUUID(string: ATVVProtocol.serviceUUID)
     private let transmitUUID = CBUUID(string: ATVVProtocol.transmitUUID)
@@ -271,6 +283,34 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     @discardableResult
+    func prepareContinuousMicrophoneOpen(completion: @escaping (Bool) -> Void) -> Bool {
+        guard capabilitiesConfirmed,
+              let generation = currentGeneration(),
+              lifecycle.acceptsProtocolData(generation: generation)
+        else { return false }
+        guard capabilities.version >= 0x0100 else {
+            DispatchQueue.main.async { completion(true) }
+            return true
+        }
+        return enqueueRuntimeCapabilitiesRequest(
+            interactionModels: ATVVProtocol.onRequestOnlyInteractionModels,
+            completion: completion
+        )
+    }
+
+    func restoreStandardInteractionMode() {
+        guard capabilitiesConfirmed,
+              capabilities.version >= 0x0100,
+              let generation = currentGeneration(),
+              lifecycle.acceptsProtocolData(generation: generation)
+        else { return }
+        _ = enqueueRuntimeCapabilitiesRequest(
+            interactionModels: ATVVProtocol.standardInteractionModels,
+            completion: { _ in }
+        )
+    }
+
+    @discardableResult
     func requestMicrophoneExtend() -> Bool {
         guard microphoneOpened,
               streaming,
@@ -386,9 +426,11 @@ final class XiaomiBluetoothBridge: NSObject {
         connectionTimeoutWorkItem = nil
         initializationTimeoutWorkItem?.cancel()
         initializationTimeoutWorkItem = nil
+        failRuntimeCapabilitiesRequests()
         capabilitiesRequested = false
         capabilitiesConfirmed = false
         capabilities = Self.defaultCapabilities
+        activeInteractionModels = ATVVProtocol.standardInteractionModels
         currentAttemptUsesCachedTarget = false
         resetSession()
     }
@@ -452,6 +494,93 @@ final class XiaomiBluetoothBridge: NSObject {
         accumulator.reset()
         pendingSync = nil
         decoder.reset()
+        activeStreamOrigin = .unknown
+    }
+
+    @discardableResult
+    private func enqueueRuntimeCapabilitiesRequest(
+        interactionModels: UInt8,
+        completion: @escaping (Bool) -> Void
+    ) -> Bool {
+        if activeRuntimeCapabilitiesRequest == nil,
+           queuedRuntimeCapabilitiesRequests.isEmpty,
+           activeInteractionModels == interactionModels {
+            DispatchQueue.main.async { completion(true) }
+            return true
+        }
+        runtimeCapabilitiesRequestCounter &+= 1
+        queuedRuntimeCapabilitiesRequests.append(
+            ATVVRuntimeCapabilitiesRequest(
+                id: runtimeCapabilitiesRequestCounter,
+                interactionModels: interactionModels,
+                completion: completion
+            )
+        )
+        startNextRuntimeCapabilitiesRequestIfNeeded()
+        return true
+    }
+
+    private func startNextRuntimeCapabilitiesRequestIfNeeded() {
+        guard activeRuntimeCapabilitiesRequest == nil,
+              !queuedRuntimeCapabilitiesRequests.isEmpty,
+              !streaming,
+              !microphoneOpened
+        else { return }
+        let request = queuedRuntimeCapabilitiesRequests.removeFirst()
+        guard write(ATVVProtocol.getCapabilitiesV10(
+            interactionModels: request.interactionModels
+        )) else {
+            request.completion(false)
+            startNextRuntimeCapabilitiesRequestIfNeeded()
+            return
+        }
+        activeRuntimeCapabilitiesRequest = request
+        runtimeCapabilitiesTimeoutWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.activeRuntimeCapabilitiesRequest?.id == request.id
+            else { return }
+            self.activeRuntimeCapabilitiesRequest = nil
+            self.runtimeCapabilitiesTimeoutWorkItem = nil
+            request.completion(false)
+            AppLogger.shared.write(
+                "ATVV CAPS runtime_timeout interaction_models=\(request.interactionModels)"
+            )
+            self.failRuntimeCapabilitiesRequests()
+            self.reconnectNow()
+        }
+        runtimeCapabilitiesTimeoutWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+        AppLogger.shared.write(
+            "ATVV CAPS runtime_requested interaction_models=\(request.interactionModels)"
+        )
+    }
+
+    private func finishRuntimeCapabilitiesRequest(with parsed: ATVVCapabilities) {
+        guard let request = activeRuntimeCapabilitiesRequest else { return }
+        runtimeCapabilitiesTimeoutWorkItem?.cancel()
+        runtimeCapabilitiesTimeoutWorkItem = nil
+        activeRuntimeCapabilitiesRequest = nil
+        capabilities = parsed
+        capabilitiesConfirmed = true
+        activeInteractionModels = request.interactionModels
+        AppLogger.shared.write(
+            "ATVV CAPS runtime_applied version=\(parsed.version) codec=\(parsed.selectedCodec) " +
+                "interaction=\(parsed.interaction) requested=\(request.interactionModels)"
+        )
+        request.completion(true)
+        startNextRuntimeCapabilitiesRequestIfNeeded()
+    }
+
+    private func failRuntimeCapabilitiesRequests() {
+        runtimeCapabilitiesTimeoutWorkItem?.cancel()
+        runtimeCapabilitiesTimeoutWorkItem = nil
+        let active = activeRuntimeCapabilitiesRequest
+        let queued = queuedRuntimeCapabilitiesRequests
+        activeRuntimeCapabilitiesRequest = nil
+        queuedRuntimeCapabilitiesRequests.removeAll()
+        active?.completion(false)
+        queued.forEach { $0.completion(false) }
     }
 
     private func scheduleReconnect(bypassCachedTarget: Bool = false) {
@@ -554,17 +683,29 @@ final class XiaomiBluetoothBridge: NSObject {
 
         switch opcode {
         case 0x0B:
+            guard let parsed = ATVVCapabilities.parse(data) else {
+                if lifecycle.acceptsCapabilities(generation: generation) {
+                    failInitialization(LocalizedMessage("connection.error.invalid_voice_response"))
+                } else if activeRuntimeCapabilitiesRequest != nil {
+                    failRuntimeCapabilitiesRequests()
+                    reconnectNow()
+                }
+                return
+            }
+            if lifecycle.acceptsProtocolData(generation: generation),
+               activeRuntimeCapabilitiesRequest != nil {
+                finishRuntimeCapabilitiesRequest(with: parsed)
+                return
+            }
             guard lifecycle.acceptsCapabilities(generation: generation) else {
                 AppLogger.shared.write("ATVV CAPS ignored_stale_phase")
                 return
             }
-            guard let parsed = ATVVCapabilities.parse(data) else {
-                failInitialization(LocalizedMessage("connection.error.invalid_voice_response"))
-                return
-            }
             capabilities = parsed
+            activeInteractionModels = ATVVProtocol.standardInteractionModels
             AppLogger.shared.write(
-                "ATVV CAPS version=\(parsed.version) codec=\(parsed.selectedCodec) frame=\(parsed.frameSize)"
+                "ATVV CAPS version=\(parsed.version) codec=\(parsed.selectedCodec) " +
+                    "interaction=\(parsed.interaction) frame=\(parsed.frameSize)"
             )
             if !ATVVProtocol.supportsAudio(sampleRate: parsed.sampleRate) {
                 rejectUnsupportedAudio(LocalizedMessage("connection.error.unsupported_16khz_codec"))
@@ -611,6 +752,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 rejectUnsupportedAudio(LocalizedMessage("connection.error.unsupported_8khz_codec"))
                 return
             }
+            let startReason = bytes.count >= 2 ? bytes[1] : 0
             let receivedSessionID = bytes.count >= 4 ? bytes[3] : 0
             if ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
                 cancelledAt: cancelledMicrophoneOpenAt
@@ -625,11 +767,21 @@ final class XiaomiBluetoothBridge: NSObject {
                 return
             }
             cancelledMicrophoneOpenAt = nil
+            let streamOrigin = ATVVStreamOrigin.resolve(
+                startReason: startReason,
+                sessionID: receivedSessionID
+            )
+            if streaming,
+               streamOrigin != activeStreamOrigin || receivedSessionID != sessionID {
+                stopStreaming(reason: 0x04, resumeRuntimeCapabilities: false)
+            }
             sessionID = receivedSessionID
+            activeStreamOrigin = streamOrigin
+            microphoneOpened = streamOrigin == .hostMicrophoneOpen
             startStreaming()
         case 0x00:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
-            stopStreaming()
+            stopStreaming(reason: bytes.count >= 2 ? bytes[1] : nil)
         case 0x0A:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
             guard bytes.count >= 7 else { return }
@@ -664,10 +816,15 @@ final class XiaomiBluetoothBridge: NSObject {
         guard !streaming else { return }
         streaming = true
         delegate?.bluetoothBridgeDidStartVoice(self)
-        AppLogger.shared.write("ATVV STREAM START session=\(sessionID)")
+        AppLogger.shared.write(
+            "ATVV STREAM START session=\(sessionID) origin=\(activeStreamOrigin.rawValue)"
+        )
     }
 
-    private func stopStreaming() {
+    private func stopStreaming(
+        reason: UInt8? = nil,
+        resumeRuntimeCapabilities: Bool = true
+    ) {
         guard streaming else { return }
         streaming = false
         microphoneOpened = false
@@ -679,6 +836,14 @@ final class XiaomiBluetoothBridge: NSObject {
             "ATVV STREAM STOP session=\(sessionID) partial_frame_bytes=\(partialFrameBytes)"
         )
         delegate?.bluetoothBridgeDidStopVoice(self)
+        AppLogger.shared.write(
+            "ATVV STREAM STOP session=\(sessionID) origin=\(activeStreamOrigin.rawValue) " +
+                "reason=\(reason.map(String.init) ?? "unknown")"
+        )
+        activeStreamOrigin = .unknown
+        if resumeRuntimeCapabilities {
+            startNextRuntimeCapabilitiesRequestIfNeeded()
+        }
     }
 
     private func handleAudio(_ data: Data) {
@@ -713,6 +878,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 )
                 return
             }
+            activeStreamOrigin = microphoneOpened ? .hostMicrophoneOpen : .unknown
             startStreaming()
             AppLogger.shared.write("ATVV STREAM implicit_audio_race")
         }
