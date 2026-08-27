@@ -200,7 +200,6 @@ struct SettingsView: View {
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
     @State private var configurationStatus: ConfigurationStatus?
-    @State private var isReleaseHistoryPresented = false
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
     @State private var isWebRemoteInvitePresented = false
@@ -291,9 +290,6 @@ struct SettingsView: View {
             if !isVisible, selectedSection == .macros {
                 selectedSection = .about
             }
-        }
-        .sheet(isPresented: $isReleaseHistoryPresented) {
-            ReleaseHistorySheet()
         }
         .sheet(isPresented: $isWebRemoteSessionPresented) {
             webRemoteSessionView
@@ -2535,13 +2531,6 @@ struct SettingsView: View {
                             Divider()
 
                             HStack(spacing: 20) {
-                                Button {
-                                    isReleaseHistoryPresented = true
-                                } label: {
-                                    Label("about.version.history", systemImage: "clock.arrow.circlepath")
-                                }
-                                .compatibilityButtonStyle(.standard)
-
                                 Spacer()
 
                                 VStack(alignment: .trailing, spacing: 3) {
@@ -3344,96 +3333,6 @@ enum UsageStatisticsPresentation {
         guard roundedDuration < Double(Int.max) else { return .max }
         return Int(roundedDuration)
     }
-}
-
-private struct ReleaseHistorySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var localization: LocalizationStore
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(localization.text("about.version.history"))
-                    .font(.title2.weight(.semibold))
-                Spacer()
-                Button(localization.text("common.action.close")) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
-            .padding(20)
-
-            Divider()
-
-            ScrollView(.vertical, showsIndicators: false) {
-                if let sections = releaseHistorySections {
-                    LazyVStack(alignment: .leading, spacing: 24) {
-                        ForEach(sections) { section in
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(section.title)
-                                    .font(.title3.weight(.semibold).monospacedDigit())
-
-                                ForEach(Array(section.entries.enumerated()), id: \.offset) { _, entry in
-                                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                        Text("•")
-                                        Text(entry)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .textSelection(.enabled)
-                    .padding(24)
-                } else {
-                    Text(localization.text("about.version.history_load_failed"))
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(24)
-                }
-            }
-        }
-        .frame(width: 640, height: 520)
-    }
-
-    private var releaseHistorySections: [ReleaseHistorySection]? {
-        guard let url = localization.localizedURL(
-            forResource: "ReleaseHistory",
-            withExtension: "md"
-        ),
-        let markdown = try? String(contentsOf: url, encoding: .utf8)
-        else {
-            return nil
-        }
-
-        var sections: [ReleaseHistorySection] = []
-        var title: String?
-        var entries: [String] = []
-
-        func appendSection() {
-            guard let title, !entries.isEmpty else { return }
-            sections.append(ReleaseHistorySection(title: title, entries: entries))
-        }
-
-        for rawLine in markdown.components(separatedBy: .newlines) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.hasPrefix("## ") {
-                appendSection()
-                title = String(line.dropFirst(3))
-                entries = []
-            } else if line.hasPrefix("- "), title != nil {
-                entries.append(String(line.dropFirst(2)))
-            }
-        }
-        appendSection()
-
-        return sections.isEmpty ? nil : sections
-    }
-}
-
-private struct ReleaseHistorySection: Identifiable {
-    let title: String
-    let entries: [String]
-
-    var id: String { title }
 }
 
 private final class WindowDragNSView: NSView {

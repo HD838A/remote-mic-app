@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [预览包 Build 回退导致更新误判与版本历史按钮误导](./2026-08-27-sparkle-preview-build-regression-and-history-button.md)
+
 - [回眸无可编辑输入框时录音归为未知应用且不可见](./2026-08-27-reflections-recording-metadata-fallback.md)
 - [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md)
 - [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md)

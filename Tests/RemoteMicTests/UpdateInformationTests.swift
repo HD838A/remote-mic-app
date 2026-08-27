@@ -193,6 +193,12 @@ struct UpdateInformationTests {
         #expect(UpdateVersion.isNewer("1.8.20", than: "1.8.19"))
     }
 
+    @Test func semanticVersionDetectsUpdateWhenPreviewBuildIsHigherThanReleaseBuild() {
+        #expect(Int("137")! < Int("141")!)
+        #expect(UpdateVersion.isNewer("1.9.16", than: "1.9.13"))
+        #expect(!UpdateVersion.isNewer("1.9.16", than: "1.9.16"))
+    }
+
     @Test func localizedReleaseNotesUseImmutableReleaseAssetURLs() throws {
         let archiveURL = try #require(URL(
             string: "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/Remote-Mic-1.8.6.zip"

@@ -145,7 +145,7 @@ enum RemoteMicApp {
 
 @MainActor
 private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
-    NSWindowDelegate, SPUUpdaterDelegate
+    NSWindowDelegate, SPUUpdaterDelegate, @preconcurrency SPUStandardUserDriverDelegate
 {
     private enum UpdateCheckPurpose {
         case information
@@ -177,7 +177,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: false,
         updaterDelegate: self,
-        userDriverDelegate: nil
+        userDriverDelegate: self
     )
 
     private let connectionItem = NSMenuItem()
@@ -932,6 +932,46 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
         updateInformation.setUpToDate()
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
+        let sparkleError = error as NSError
+        guard let latestItem = sparkleError.userInfo[SPULatestAppcastItemFoundKey] as? SUAppcastItem,
+              let currentVersion = Bundle.main.object(
+                  forInfoDictionaryKey: "CFBundleShortVersionString"
+              ) as? String,
+              let currentBuild = Bundle.main.object(
+                  forInfoDictionaryKey: "CFBundleVersion"
+              ) as? String,
+              let candidateBuild = Int(latestItem.versionString),
+              let installedBuild = Int(currentBuild),
+              candidateBuild < installedBuild,
+              UpdateVersion.isNewer(
+                  latestItem.displayVersionString,
+                  than: currentVersion
+              )
+        else {
+            updateInformation.setUpToDate()
+            return
+        }
+
+        updateInformation.setAvailable(
+            displayVersion: latestItem.displayVersionString,
+            buildVersion: latestItem.versionString,
+            archiveURL: latestItem.fileURL,
+            fallbackDescription: latestItem.itemDescription,
+            localeIdentifier: localization.locale.identifier
+        )
+        AppLogger.shared.write(
+            "UPDATE CHECK semantic_newer_but_sparkle_rejected " +
+                "display_version=\(latestItem.displayVersionString) " +
+                "candidate_build=\(latestItem.versionString) " +
+                "installed_build=\(currentBuild)"
+        )
+    }
+
+    func standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool {
+        false
     }
 
     func updater(

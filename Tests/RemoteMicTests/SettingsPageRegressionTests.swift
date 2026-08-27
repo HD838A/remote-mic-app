@@ -684,9 +684,9 @@ struct SettingsPageRegressionTests {
 
         let aboutPage = try #require(source.components(separatedBy: "private var aboutPage").last)
         #expect(aboutPage.contains("updateInformationContent"))
-        #expect(aboutPage.contains("about.version.history"))
         #expect(aboutPage.contains("about.version.check_prerelease"))
         #expect(aboutPage.contains("about.version.update_to"))
+        #expect(!aboutPage.contains("about.version.history"))
         #expect(aboutPage.contains("ForEach(AppLanguage.allCases)"))
         #expect(aboutPage.contains(".pickerStyle(.segmented)"))
         let languageSectionStart = try #require(
@@ -703,6 +703,15 @@ struct SettingsPageRegressionTests {
         #expect(languageSection.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
         #expect(!aboutPage.contains("help.glossary.open"))
         #expect(!aboutPage.contains("openGlossary"))
+
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        #expect(appSource.contains("SPUStandardUserDriverDelegate"))
+        #expect(appSource.contains("userDriverDelegate: self"))
+        #expect(appSource.contains("standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool"))
+        #expect(appSource.contains("semantic_newer_but_sparkle_rejected"))
     }
 
     @Test func aboutPageOffersAnOptInLoginItemWithSystemApprovalRecovery() throws {
