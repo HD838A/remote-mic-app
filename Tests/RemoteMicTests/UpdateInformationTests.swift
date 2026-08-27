@@ -20,6 +20,39 @@ struct UpdateInformationTests {
         #expect(!policy.refreshesAboutInformationOnAppear)
     }
 
+    @Test func uiTestFeedInjectionIsRestrictedToLocalPreviewFeed() throws {
+        let feed = try #require(UpdateFeedResolver.testInjectedFeed(
+            environment: [
+                "REMOTE_MIC_UI_TEST_MODE": "1",
+                "REMOTE_MIC_UI_TEST_FEED_URL": "http://127.0.0.1:8765/appcast.xml",
+                "REMOTE_MIC_UI_TEST_VERSION": "v1.9.16",
+            ],
+            assetName: "appcast.xml",
+            includePreRelease: true
+        ))
+        #expect(feed.url.absoluteString == "http://127.0.0.1:8765/appcast.xml")
+        #expect(feed.version == "1.9.16")
+        #expect(feed.isPreRelease)
+        #expect(UpdateFeedResolver.testInjectedFeed(
+            environment: [
+                "REMOTE_MIC_UI_TEST_MODE": "1",
+                "REMOTE_MIC_UI_TEST_FEED_URL": "https://example.com/appcast.xml",
+                "REMOTE_MIC_UI_TEST_VERSION": "1.9.16",
+            ],
+            assetName: "appcast.xml",
+            includePreRelease: true
+        ) == nil)
+        #expect(UpdateFeedResolver.testInjectedFeed(
+            environment: [
+                "REMOTE_MIC_UI_TEST_MODE": "1",
+                "REMOTE_MIC_UI_TEST_FEED_URL": "http://127.0.0.1:8765/appcast.xml",
+                "REMOTE_MIC_UI_TEST_VERSION": "1.9.16",
+            ],
+            assetName: "appcast.xml",
+            includePreRelease: false
+        ) == nil)
+    }
+
     @Test func releaseFeedResolverUsesNewestPublishedMacAppcast() throws {
         let data = Data(#"""
         [

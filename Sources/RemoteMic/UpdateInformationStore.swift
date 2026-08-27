@@ -62,6 +62,26 @@ enum UpdateFeedResolver {
         let isPreRelease: Bool
     }
 
+    static func testInjectedFeed(
+        environment: [String: String],
+        assetName: String,
+        includePreRelease: Bool
+    ) -> ResolvedFeed? {
+        guard environment["REMOTE_MIC_UI_TEST_MODE"] == "1",
+              includePreRelease,
+              let rawURL = environment["REMOTE_MIC_UI_TEST_FEED_URL"],
+              let url = URL(string: rawURL),
+              url.scheme == "http",
+              url.host == "127.0.0.1",
+              url.port != nil,
+              ["appcast.xml", "appcast-intel.xml"].contains(url.lastPathComponent),
+              url.lastPathComponent == assetName,
+              let rawVersion = environment["REMOTE_MIC_UI_TEST_VERSION"],
+              let version = UpdateVersion.normalized(rawVersion)
+        else { return nil }
+        return ResolvedFeed(url: url, version: version, isPreRelease: true)
+    }
+
     static func latestAppcastURL(
         from data: Data,
         assetName: String = "appcast.xml",

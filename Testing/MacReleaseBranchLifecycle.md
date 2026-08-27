@@ -45,7 +45,7 @@
 
 1. 使用 prepare-staged-preview-ui-test.sh 恢复指定 Run/attempt/artifact。
 2. 从 v1.8.3 下载并验证稳定基线。
-3. 通过本地固定 feed，让稳定 App 真实执行 check、download、install、首次启动、退出、二次启动。
+3. 启动脚本输出的本地 feed，并使用输出的 `REMOTE_MIC_UI_TEST_MODE=1`、`REMOTE_MIC_UI_TEST_FEED_URL` 和 `REMOTE_MIC_UI_TEST_VERSION` 环境变量直接运行稳定 App；稳定 App 真实执行 check、download、install、首次启动、退出、二次启动。该环境变量只接受 `127.0.0.1` 的 HTTP appcast，默认更新路径仍使用 GitHub Releases API。
 4. 使用 record-preview-ui-attestation.sh 和 verify-preview-ui-attestation.sh。
 
 预期：attestation 绑定 source SHA、artifact ID/digest、manifest、两份 appcast、候选 ZIP、安装后版本/Build、Team ID、公证、Gatekeeper、Sparkle helper 0755/链接和无新增崩溃。只运行 probe 或单元测试不能通过。
