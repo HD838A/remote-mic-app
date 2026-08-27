@@ -473,7 +473,12 @@ final class RecordingAssetCoordinator {
         self.log = log
     }
 
-    func start(sessionID: UUID, startedAt: Date, source: UsageEventSource) {
+    func start(
+        sessionID: UUID,
+        startedAt: Date,
+        source: UsageEventSource,
+        applicationMetadata: FrontmostApplicationMetadata? = nil
+    ) {
         guard isEnabled() else { return }
         finish(reason: "superseded")
         do {
@@ -486,6 +491,12 @@ final class RecordingAssetCoordinator {
                 throw error
             }
             activeSession = ActiveSession(draft: draft, writer: writer)
+            if let applicationMetadata {
+                pendingApplicationMetadata[sessionID] = (
+                    name: applicationMetadata.applicationName,
+                    bundleIdentifier: applicationMetadata.bundleIdentifier
+                )
+            }
             log("RECORDING ASSET started")
         } catch {
             log("RECORDING ASSET start_failed")

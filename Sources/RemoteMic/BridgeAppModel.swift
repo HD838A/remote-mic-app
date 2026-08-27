@@ -3256,7 +3256,23 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         voiceSessionStartedAt = startedAt
         voiceSessionID = sessionID
         voiceSessionUsageSource = source
-        recordingAssetCoordinator.start(sessionID: sessionID, startedAt: startedAt, source: source)
+        let frontmostApplication = FrontmostApplicationMetadata.current(
+            excludingBundleIdentifier: Bundle.main.bundleIdentifier
+        )
+        recordingAssetCoordinator.start(
+            sessionID: sessionID,
+            startedAt: startedAt,
+            source: source,
+            applicationMetadata: frontmostApplication
+        )
+        if let frontmostApplication {
+            AppLogger.shared.write(
+                "RECORDING ASSET application_fallback " +
+                    "bundle=\(frontmostApplication.bundleIdentifier)"
+            )
+        } else {
+            AppLogger.shared.write("RECORDING ASSET application_fallback unavailable")
+        }
         transcriptCaptureCoordinator.startSession(sessionID: sessionID, startedAt: startedAt, source: source)
         isStreaming = true
     }
