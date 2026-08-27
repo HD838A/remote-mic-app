@@ -579,6 +579,11 @@
 "onboarding.voice_tool.typeless.detail" = "The voice key taps Fn and sends audio from the remote.";
 "onboarding.voice_tool.other.title" = "Another Voice Tool";
 "onboarding.voice_tool.other.detail" = "Use your selected voice output device with your preferred voice input tool.";
+"onboarding.voice_tool.status.not_installed" = "Not installed";
+"onboarding.voice_tool.doubao.install_detail" = "Doubao Input Method is not installed. Install it, then return here and check again.";
+"onboarding.voice_tool.doubao.install" = "Install Doubao Input Method";
+"onboarding.voice_tool.typeless.fn_required" = "Typeless uses Fn/Globe taps, so this mode is fixed for compatibility.";
+"onboarding.voice_tool.voice_key_help" = "Voice trigger key: %1$@. The target voice tool must use the same key; SayAll does not intercept input-source shortcuts.";
 "onboarding.voice_tool.guide.title" = "Reserve Fn for the selected input method";
 "onboarding.voice_tool.guide.detail" = "SayAll first tries to switch input methods. Follow the screenshots to configure Fn and remove the macOS and WeChat app conflicts.";
 "onboarding.voice_tool.guide.select_doubao" = "Select Doubao Input Method";

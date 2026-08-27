@@ -18,6 +18,31 @@
 4. 打开 `~/Library/Logs/RemoteMic/runtime.log`，记录每个失败用例的大致时间。
 5. 窗口保持 `1020 × 772`，分别使用中文和英文执行布局检查。
 
+## 用例：语音工具安装状态与语音触发键
+
+适用分支：`codex/onboarding-voice-shortcuts-install-state`
+
+1. 分别准备豆包输入法已安装/未安装、微信输入法已安装/未安装、Typeless 已安装/未安装的测试环境；安装状态只能通过 macOS 公开 Input Sources、NSWorkspace 和 Bundle API 判断。
+2. 首次进入语音工具页，确认豆包始终位于第一推荐位置；未安装豆包时仍显示推荐卡和“安装豆包输入法”链接，链接目标为 `https://shurufa.doubao.com/?from=sayall.app`。
+3. 确认未安装的微信输入法和 Typeless 不显示；安装后返回页面或点击重新检测即可出现，不需要重启无线麦。
+4. 选择豆包、微信或其他工具，确认页面内可选择 Fn/地球键、左 Command、右 Command；选择结果立即保存，离开并返回语音工具页不会丢失。
+5. 选择 Typeless，确认只显示 Fn/地球键并明确说明使用 Fn 点按；若此前选择 Command，选择 Typeless 后模式恢复为 Fn 且 Fn 点按状态正确。
+6. 选择 Command 模式时，确认不再因为系统 Fn 设置阻塞当前页；选择 Fn 时，系统 Fn 冲突仍必须按现有门禁处理。
+
+失败判定：未安装的微信/Typeless 仍出现在列表、未安装豆包没有官网入口、选择 Command 后状态未保存、Typeless 进入 Command 模式、或仅点击页面/打开设置就允许继续，均视为失败。
+
+## 用例：升级用户不重复进入 Onboarding
+
+1. 在隔离偏好域中写入任一旧版本应用配置（例如旧的 `buttonBindings`、`selectedAudioDeviceUID` 或 `peripheralIdentifier`），不写入 `launch.lastLaunchedBuild`、Sparkle 启动标记和 `onboarding.*` 状态。
+2. 使用当前版本首次启动，确认直接进入主设置页，`onboardingCompletedVersion` 被迁移为当前版本，不显示欢迎页。
+3. 使用完全空的偏好域首次启动，确认仍进入完整 Onboarding；在欢迎页退出后再次启动，确认恢复原步骤而不是被误判为非首次安装。
+4. 使用已完成 Onboarding 的用户升级，确认只进入主设置页；若权限缺失，沿用权限修复页，不重跑完整向导。
+5. 额外覆盖已存在 `onboarding.migrationVersion`、但没有安装状态迁移标记的旧用户，确认仍按已有配置跳过完整 Onboarding。
+
+失败判定：已有旧配置的用户进入欢迎页、真正全新的用户第二次启动被自动标记完成、或主动“重新运行设置向导”被该判断阻止，均视为失败。
+
+自动化边界：状态机、持久化、公开 API 检测和页面源码可自动测试；第三方输入法真实注册、Command 快捷键是否被目标 App 接受、真实遥控器/手机语音文字上屏，以及 Sparkle/PKG 升级仍需用户真机验收。
+
 ## 用例 0：旧安装迁移与全新安装边界
 
 1. 在测试账号安装并正常启动 `1.8.7 (68)`，保留至少一项可辨认的连接、按键或界面设置。

@@ -402,6 +402,36 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func commandVoiceKeyDoesNotRequireSystemFnRelease() {
+        let capabilities = OnboardingCapabilities()
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .voiceTool,
+            voiceTool: .doubao,
+            voiceKeyMode: .leftCommand,
+            capabilities: capabilities
+        ))
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .voiceTool,
+            voiceTool: .doubao,
+            voiceKeyMode: .rightCommand,
+            capabilities: capabilities
+        ))
+    }
+
+    @Test func typelessOnboardingAlwaysUsesFnTapMode() throws {
+        let suiteName = "RemoteMicTests.Onboarding.TypelessFnMode.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.voiceKeyMode = .leftCommand
+        settings.setOnboardingVoiceTool(.typeless)
+
+        #expect(settings.voiceKeyMode == .function)
+        #expect(settings.voiceFnTapModeEnabled)
+        #expect(OnboardingVoiceTool.typeless.applicationBundleIdentifier == "now.typeless.desktop")
+    }
+
     @Test func inputMethodSetupUsesProductionScreenshotsAndSafeScreenshotOverrides() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1014,6 +1044,29 @@ struct OnboardingFlowTests {
             sparkleHadLaunchedBefore: true
         ))
         #expect(sparkleLegacySettings.isOnboardingComplete)
+
+        let configuredLegacySuiteName = "RemoteMicTests.Onboarding.ConfiguredLegacy.\(UUID().uuidString)"
+        let configuredLegacyDefaults = try #require(UserDefaults(suiteName: configuredLegacySuiteName))
+        defer { configuredLegacyDefaults.removePersistentDomain(forName: configuredLegacySuiteName) }
+        configuredLegacyDefaults.set(Data("legacy".utf8), forKey: "buttonBindings")
+        let configuredLegacySettings = AppSettings(defaults: configuredLegacyDefaults)
+        #expect(!configuredLegacySettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: false
+        ))
+        #expect(configuredLegacySettings.isOnboardingComplete)
+
+        let configuredAfterMigrationSuiteName = "RemoteMicTests.Onboarding.ConfiguredAfterMigration.\(UUID().uuidString)"
+        let configuredAfterMigrationDefaults = try #require(UserDefaults(suiteName: configuredAfterMigrationSuiteName))
+        defer { configuredAfterMigrationDefaults.removePersistentDomain(forName: configuredAfterMigrationSuiteName) }
+        configuredAfterMigrationDefaults.set(AppSettings.currentOnboardingVersion, forKey: "onboarding.migrationVersion")
+        configuredAfterMigrationDefaults.set(Data("legacy".utf8), forKey: "buttonBindings")
+        let configuredAfterMigrationSettings = AppSettings(defaults: configuredAfterMigrationDefaults)
+        #expect(!configuredAfterMigrationSettings.recordLaunchAndDetectCompletedUpdate(
+            currentBuild: "102",
+            sparkleHadLaunchedBefore: false
+        ))
+        #expect(configuredAfterMigrationSettings.isOnboardingComplete)
 
         let freshSuiteName = "RemoteMicTests.Onboarding.Fresh.\(UUID().uuidString)"
         let freshDefaults = try #require(UserDefaults(suiteName: freshSuiteName))
