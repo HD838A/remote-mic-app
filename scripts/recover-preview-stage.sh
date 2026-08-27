@@ -29,12 +29,30 @@ fi
   echo "recovery output already exists: $OUTPUT_DIR" >&2
   exit 1
 }
-for command_name in "$GH_BIN" jq shasum unzip zipinfo find sort; do
+for command_name in "$GH_BIN" jq shasum unzip zipinfo find sort curl; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "Missing required command: $command_name" >&2
     exit 1
   }
 done
+
+download_artifact() {
+  local artifact_id="$1"
+  local destination="$2"
+  local token="${GH_TOKEN:-}"
+  if [[ -z "$token" ]]; then
+    token="$($GH_BIN auth token)"
+  fi
+  [[ -n "$token" ]] || {
+    echo "unable to resolve GitHub token for artifact download" >&2
+    exit 1
+  }
+  curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+    -H "Authorization: Bearer $token" \
+    -H 'Accept: application/zip' \
+    "https://api.github.com/repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" \
+    --output "$destination"
+}
 
 run_json="$($GH_BIN api "repos/$REPOSITORY/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT")"
 printf '%s\n' "$run_json" | jq -e \
@@ -74,8 +92,7 @@ printf '%s\n' "$artifact_json" | jq -e \
 
 /bin/mkdir -p "$OUTPUT_DIR"
 archive="$OUTPUT_DIR/payload-artifact.zip"
-$GH_BIN api --header 'Accept: application/octet-stream' \
-  "repos/$REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$archive"
+download_artifact "$ARTIFACT_ID" "$archive"
 actual_digest="sha256:$(/usr/bin/shasum -a 256 "$archive" | /usr/bin/awk '{print $1}')"
 [[ "$actual_digest" == "$ARTIFACT_DIGEST" ]] || {
   echo "downloaded payload artifact digest mismatch" >&2
@@ -172,8 +189,7 @@ IFS=$'\t' read -r stage_artifact_id stage_artifact_digest stage_artifact_name <<
 }
 
 stage_archive="$OUTPUT_DIR/stage-record-artifact.zip"
-$GH_BIN api --header 'Accept: application/octet-stream' \
-  "repos/$REPOSITORY/actions/artifacts/$stage_artifact_id/zip" > "$stage_archive"
+download_artifact "$stage_artifact_id" "$stage_archive"
 stage_actual_digest="sha256:$(/usr/bin/shasum -a 256 "$stage_archive" | /usr/bin/awk '{print $1}')"
 [[ "$stage_actual_digest" == "$stage_artifact_digest" ]] || {
   echo "downloaded staging record artifact digest mismatch" >&2
