@@ -117,6 +117,8 @@
 "action.arrow_down" = "方向下";
 "action.arrow_left" = "方向左";
 "action.arrow_right" = "方向右";
+"action.scroll_up" = "向上滚动";
+"action.scroll_down" = "向下滚动";
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "显示桌面";
@@ -697,7 +699,16 @@
 "statistics.transcripts.enable" = "记录回眸";
 "statistics.transcripts.disabled" = "开启后，新的语音转文字结果会保存在本机。已有记录不会因关闭开关而删除。";
 "statistics.transcripts.empty" = "还没有语音记录。下一次完成语音输入后会显示在这里。";
-"statistics.transcripts.privacy" = "仅保存本次新增的转写文字、目标应用名称和时间；不保存音频、输入框全文、窗口标题、文档名或网址。删除内容会移到废纸篓，可手动恢复。";
+"statistics.transcripts.privacy" = "文字和原始录音仅在对应开关开启时保存在本机；不保存输入框全文、窗口标题、文档名或网址。删除内容会移到废纸篓，可手动恢复。";
+"statistics.transcripts.recording_enable" = "保存原始录音";
+"statistics.transcripts.recording_description" = "把每次语音会话的本地 AAC 录音保存下来，并与回眸文字关联。";
+"statistics.transcripts.recording_duration" = "%d 秒";
+"statistics.transcripts.recording_play" = "播放录音";
+"statistics.transcripts.recording_export" = "导出录音";
+"statistics.transcripts.recording_reveal" = "在 Finder 中显示";
+"statistics.transcripts.recording_delete" = "删除录音";
+"statistics.transcripts.recording_delete_confirm.title" = "删除这段录音？";
+"statistics.transcripts.recording_delete_confirm.message" = "录音将移到废纸篓，关联的文字不会受到影响。";
 "statistics.transcripts.unknown_application" = "未知应用";
 "statistics.transcripts.applications" = "应用";
 "statistics.transcripts.all_applications" = "全部应用";

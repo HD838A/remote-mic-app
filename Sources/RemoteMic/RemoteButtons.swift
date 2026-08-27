@@ -450,6 +450,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case arrowDown
     case arrowLeft
     case arrowRight
+    case scrollUp
+    case scrollDown
     case deleteBackward
     case showDesktop
     case contextMenu
@@ -501,6 +503,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .arrowDown: return localization.text("action.arrow_down")
         case .arrowLeft: return localization.text("action.arrow_left")
         case .arrowRight: return localization.text("action.arrow_right")
+        case .scrollUp: return localization.text("action.scroll_up")
+        case .scrollDown: return localization.text("action.scroll_down")
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
@@ -555,7 +559,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .disabled, .escape, .returnKey, .commandReturn, .shiftReturn, .commandCopy,
              .commandPaste, .commandClose, .commandQuit, .commandCut, .commandSelectAll,
              .commandUndo, .commandRedo, .commandFind, .commandSave, .commandDelete,
-             .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward:
+             .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .scrollUp, .scrollDown,
+             .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:

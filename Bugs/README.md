@@ -2,6 +2,7 @@
 
 - [千问遥控语音误拒绝搜索框和代码编辑器](./2026-08-26-qianwen-search-and-editor-focus-rejected.md)
 - [千问语音输出误选 Mac 扬声器产生电流声](./2026-08-25-qianwen-speaker-route-current-noise.md)
+- [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md)
 - [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md)
 - [自定义快捷键连续快速按只有第一次生效](./2026-08-25-custom-shortcut-rapid-press-dropped.md)
 - [历史蓝牙缓存持续固定频率重连](./2026-08-24-ble-cached-reconnect-storm.md)
@@ -72,6 +73,7 @@
 | --- | --- | --- |
 | 2026-08-26 | [千问遥控语音误拒绝搜索框和代码编辑器](./2026-08-26-qianwen-search-and-editor-focus-rejected.md) | 候选修复完成，自动化通过，等待 RC003 真机复验 |
 | 2026-08-25 | [千问语音输出误选 Mac 扬声器产生电流声](./2026-08-25-qianwen-speaker-route-current-noise.md) | 失败关闭自动化通过，等待设备暂时不可用的真机复验 |
+| 2026-08-26 | [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md) | 最小候选修复完成，等待 Spotlight、Launchpad、飞书/Lark、cmux 和豆包真实验收 |
 | 2026-08-25 | [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md) | 候选修复完成，等待真实 Mac、遥控器和豆包输入验收 |
 | 2026-08-25 | [自定义快捷键连续快速按只有第一次生效](./2026-08-25-custom-shortcut-rapid-press-dropped.md) | 候选修复完成；自动化与项目自检通过，等待 RC001 / RC003 真机连按验收 |
 | 2026-08-24 | [历史蓝牙缓存持续固定频率重连](./2026-08-24-ble-cached-reconnect-storm.md) | 自动化、硬件模拟与 Release App 验证通过，等待 RC001 / RC003 真机重连验收 |

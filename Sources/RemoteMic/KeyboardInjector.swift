@@ -20,6 +20,7 @@ enum KeyboardInjector {
     typealias CmuxCommandRunner = (URL, [String], TimeInterval) -> CmuxCommandResult
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
+    typealias ScrollPoster = (Int32) -> Void
 
     final class AppSwitcherSession {
         private let keyStatePoster: KeyStatePoster
@@ -145,6 +146,9 @@ enum KeyboardInjector {
     static let weChatBundleIdentifier = "com.tencent.xinWeChat"
     static let weChatComposerHorizontalRatio = 0.68
     static let weChatComposerVerticalRatio = 0.85
+    /// One scroll action moves the conversation by this many lines; the 100ms
+    /// repeat interval turns a held D-pad key into a steady scroll.
+    static let scrollLineCount: Int32 = 3
     private static let focusRequests = ApplicationFocusRequestGate()
     private static let frontmostFocusRequests = ApplicationFocusRequestGate()
     private static let manualAccessibilityLock = NSLock()
@@ -251,7 +255,8 @@ enum KeyboardInjector {
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
-        keyStatePoster: KeyStatePoster = postKeyState
+        keyStatePoster: KeyStatePoster = postKeyState,
+        scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) }
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -331,6 +336,10 @@ enum KeyboardInjector {
             keyPoster(123, [])
         case .arrowRight:
             keyPoster(124, [])
+        case .scrollUp:
+            scrollPoster(scrollLineCount)
+        case .scrollDown:
+            scrollPoster(-scrollLineCount)
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -598,6 +607,21 @@ enum KeyboardInjector {
               let application = NSWorkspace.shared.frontmostApplication
         else { return false }
         let requestID = frontmostFocusRequests.begin()
+        if application.bundleIdentifier == PresetApplication.cmux.bundleIdentifier,
+           let applicationURL = NSWorkspace.shared.urlForApplication(
+               withBundleIdentifier: PresetApplication.cmux.bundleIdentifier
+           ) {
+            scheduleCmuxFocus(
+                applicationURL: applicationURL,
+                application: .cmux,
+                processIdentifier: application.processIdentifier,
+                requestID: requestID,
+                attempt: 0,
+                requestGate: frontmostFocusRequests,
+                completion: completion
+            )
+            return true
+        }
         scheduleAccessibilityComposerFocus(
             bundleIdentifier: application.bundleIdentifier ?? "unknown",
             processIdentifier: application.processIdentifier,
@@ -614,12 +638,14 @@ enum KeyboardInjector {
         application: PresetApplication,
         processIdentifier: pid_t,
         requestID: UInt64,
-        attempt: Int
+        attempt: Int,
+        requestGate: ApplicationFocusRequestGate = focusRequests,
+        completion: ((Bool) -> Void)? = nil
     ) {
         let maximumAttempts = 4
         let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(100) : .milliseconds(200)
         focusQueue.asyncAfter(deadline: .now() + delay) {
-            guard focusRequests.isCurrent(requestID) else { return }
+            guard requestGate.isCurrent(requestID) else { return }
             let nextAttempt = attempt + 1
             if !applicationIsFrontmost(processIdentifier) {
                 if nextAttempt < maximumAttempts {
@@ -628,13 +654,22 @@ enum KeyboardInjector {
                         application: application,
                         processIdentifier: processIdentifier,
                         requestID: requestID,
-                        attempt: nextAttempt
+                        attempt: nextAttempt,
+                        requestGate: requestGate,
+                        completion: completion
+                    )
+                } else {
+                    completeComposerFocus(
+                        false,
+                        requestID: requestID,
+                        requestGate: requestGate,
+                        completion: completion
                     )
                 }
                 return
             }
             let canContinue = {
-                focusRequests.isCurrent(requestID) && applicationIsFrontmost(processIdentifier)
+                requestGate.isCurrent(requestID) && applicationIsFrontmost(processIdentifier)
             }
             let focused = focusCmux(
                 applicationURL: applicationURL,
@@ -656,6 +691,12 @@ enum KeyboardInjector {
                 AppLogger.shared.write(
                     "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=cmux_api_accessibility"
                 )
+                completeComposerFocus(
+                    true,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
+                )
                 return
             }
 
@@ -665,11 +706,19 @@ enum KeyboardInjector {
                     application: application,
                     processIdentifier: processIdentifier,
                     requestID: requestID,
-                    attempt: nextAttempt
+                    attempt: nextAttempt,
+                    requestGate: requestGate,
+                    completion: completion
                 )
-            } else if focusRequests.isCurrent(requestID) {
+            } else if requestGate.isCurrent(requestID) {
                 AppLogger.shared.write(
                     "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=terminal_not_focused"
+                )
+                completeComposerFocus(
+                    false,
+                    requestID: requestID,
+                    requestGate: requestGate,
+                    completion: completion
                 )
             }
         }
@@ -724,7 +773,10 @@ enum KeyboardInjector {
                 )
             }
             if applicationIsFrontmost(processIdentifier), isAccessibilityTrusted {
-                if focusComposer(processIdentifier: processIdentifier) {
+                if focusComposer(
+                    processIdentifier: processIdentifier,
+                    emitDiagnostics: attempt == 0 || attempt + 1 == composerFocusMaximumAttempts
+                ) {
                     AppLogger.shared.write(
                         "APP FOCUS succeeded bundle=\(bundleIdentifier) method=accessibility"
                     )
@@ -867,13 +919,34 @@ enum KeyboardInjector {
         NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier
     }
 
-    private static func focusComposer(processIdentifier: pid_t) -> Bool {
+    private static func focusComposer(
+        processIdentifier: pid_t,
+        emitDiagnostics: Bool = false
+    ) -> Bool {
         let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        var windowCount = 0
+        var candidateCount = 0
+        var eligibleCount = 0
+        var excludedSensitiveCount = 0
         for window in applicationWindows(applicationElement) {
-            let windowTitle = axString(window, attribute: kAXTitleAttribute).lowercased()
-            let excludedWindowTerms = ["settings", "preferences", "设置", "偏好设置"]
-            guard !excludedWindowTerms.contains(where: windowTitle.contains) else { continue }
+            windowCount += 1
             let candidates = accessibilityTextCandidates(in: window)
+            candidateCount += candidates.count
+            for candidate in candidates.map(\.snapshot) {
+                let semanticText = [
+                    candidate.identifier,
+                    candidate.title,
+                    candidate.description,
+                    candidate.help,
+                    candidate.placeholder,
+                    candidate.context,
+                ].joined(separator: " ").lowercased()
+                if composerCandidateScore(candidate, windowFrame: axFrame(window)) != nil {
+                    eligibleCount += 1
+                } else if containsSensitiveAccessibilityTerms(semanticText) {
+                    excludedSensitiveCount += 1
+                }
+            }
             guard let candidateIndex = bestComposerCandidateIndex(
                 candidates.map(\.snapshot),
                 windowFrame: axFrame(window)
@@ -884,6 +957,13 @@ enum KeyboardInjector {
             ) {
                 return true
             }
+        }
+        if emitDiagnostics {
+            AppLogger.shared.write(
+                "APP FOCUS scan bundle=\(NSRunningApplication(processIdentifier: processIdentifier)?.bundleIdentifier ?? "unknown") " +
+                    "windows=\(windowCount) candidates=\(candidateCount) eligible=\(eligibleCount) " +
+                    "excluded_sensitive=\(excludedSensitiveCount)"
+            )
         }
         return false
     }
@@ -1160,8 +1240,7 @@ enum KeyboardInjector {
         let value = value.lowercased()
         let terms = [
             "password", "passcode", "secret", "api key", "apikey", "token", "credit card",
-            "search", "find", "filter", "address bar", "settings", "preferences",
-            "密码", "口令", "密钥", "令牌", "银行卡", "搜索", "查找", "筛选", "设置", "偏好",
+            "密码", "口令", "密钥", "令牌", "银行卡",
         ]
         return terms.contains(where: value.contains)
     }
@@ -1371,11 +1450,9 @@ enum KeyboardInjector {
         .lowercased()
 
         let excludedTerms = [
-            "search", "find", "filter", "title", "rename", "api key", "apikey", "token",
-            "password", "secret", "settings", "preferences", "command palette", "address bar",
-            "terminal", "console", "shell", "xterm", "approval", "permission", "code editor", "monaco",
-            "搜索", "查找", "筛选", "标题", "重命名", "密钥", "令牌", "密码", "设置", "偏好",
-            "终端", "控制台", "审批", "权限", "代码编辑器",
+            "title", "rename", "api key", "apikey", "token", "password", "secret",
+            "command palette", "address bar", "approval", "permission", "code editor", "monaco",
+            "标题", "重命名", "密钥", "令牌", "密码", "审批", "权限", "代码编辑器",
         ]
         guard !excludedTerms.contains(where: semanticText.contains) else { return nil }
 
@@ -1387,9 +1464,15 @@ enum KeyboardInjector {
         let supportingTerms = [
             "message", "prompt", "reply", "ask claude", "ask anything", "chat", "提问", "回复",
         ]
+        let explicitlyAllowedTerms = [
+            "search", "find", "filter", "settings", "preferences", "terminal", "console", "shell", "xterm",
+            "搜索", "查找", "筛选", "设置", "偏好", "终端", "控制台",
+        ]
         let hasStrongSemanticMatch = strongTerms.contains(where: semanticText.contains)
         let hasSupportingSemanticMatch = supportingTerms.contains(where: semanticText.contains)
-        guard candidate.role == "AXTextArea" || hasStrongSemanticMatch || hasSupportingSemanticMatch else {
+        let hasExplicitlyAllowedMatch = explicitlyAllowedTerms.contains(where: semanticText.contains)
+        guard candidate.role == "AXTextArea" || hasStrongSemanticMatch || hasSupportingSemanticMatch ||
+                hasExplicitlyAllowedMatch else {
             return nil
         }
 
@@ -1398,6 +1481,8 @@ enum KeyboardInjector {
             score += 120
         } else if hasSupportingSemanticMatch {
             score += 70
+        } else if hasExplicitlyAllowedMatch {
+            score += 80
         }
 
         if let frame = candidate.frame {
@@ -1751,6 +1836,93 @@ enum KeyboardInjector {
             event.setIntegerValueField(.eventSourceUserData, value: userData)
         }
         return event
+    }
+
+    /// Scroll events are delivered to the window under the event location, not
+    /// to the focused application, so a remote press must aim at the frontmost
+    /// window instead of wherever the mouse happens to rest.
+    static func scrollTargetLocation(
+        windowFrame: CGRect?,
+        mouseLocation: CGPoint
+    ) -> CGPoint {
+        guard let windowFrame,
+              windowFrame.width > 0,
+              windowFrame.height > 0
+        else { return mouseLocation }
+        return CGPoint(x: windowFrame.midX, y: windowFrame.midY)
+    }
+
+    /// Picks the largest ordinary window of the given process from a
+    /// `CGWindowListCopyWindowInfo` snapshot.
+    static func frontmostWindowFrame(
+        windowInfo: [[String: Any]],
+        processIdentifier: pid_t
+    ) -> CGRect? {
+        windowInfo
+            .filter { entry in
+                guard let owner = entry[kCGWindowOwnerPID as String] as? NSNumber,
+                      owner.int32Value == processIdentifier,
+                      let layer = entry[kCGWindowLayer as String] as? NSNumber,
+                      layer.intValue == 0
+                else { return false }
+                return true
+            }
+            .compactMap { entry -> CGRect? in
+                guard let bounds = entry[kCGWindowBounds as String] as? NSDictionary else {
+                    return nil
+                }
+                return CGRect(dictionaryRepresentation: bounds as CFDictionary)
+            }
+            .filter { $0.width > 0 && $0.height > 0 }
+            .max { $0.width * $0.height < $1.width * $1.height }
+    }
+
+    private static func frontmostWindowFrame() -> CGRect? {
+        guard let processIdentifier = NSWorkspace.shared
+            .frontmostApplication?
+            .processIdentifier
+        else { return nil }
+        let application = AXUIElementCreateApplication(processIdentifier)
+        if let window = axAttribute(application, attribute: kAXFocusedWindowAttribute),
+           CFGetTypeID(window) == AXUIElementGetTypeID(),
+           let frame = axFrame(window as! AXUIElement),
+           frame.width > 0,
+           frame.height > 0 {
+            return frame
+        }
+        guard let windowInfo = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else { return nil }
+        return frontmostWindowFrame(
+            windowInfo: windowInfo,
+            processIdentifier: processIdentifier
+        )
+    }
+
+    private static func currentMouseLocation() -> CGPoint {
+        CGEvent(source: nil)?.location ?? .zero
+    }
+
+    /// Positive `lines` scrolls the content toward the beginning of the
+    /// conversation, so the up key shows earlier messages.
+    private static func postScrollWheel(lines: Int32) {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                  scrollWheelEvent2Source: source,
+                  units: .line,
+                  wheelCount: 1,
+                  wheel1: lines,
+                  wheel2: 0,
+                  wheel3: 0
+              )
+        else { return }
+        event.location = scrollTargetLocation(
+            windowFrame: frontmostWindowFrame(),
+            mouseLocation: currentMouseLocation()
+        )
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
     }
 
     private static func postSystemKey(type: Int32) {

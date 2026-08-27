@@ -121,6 +121,39 @@ struct TranscriptCaptureCoordinatorTests {
         #expect(capture.text == "快速发送")
     }
 
+    @Test func retriesTransientSnapshotFailureAfterFinish() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "",
+            selection: NSRange(location: 0, length: 0)
+        )
+        harness.coordinator.startSession(
+            startedAt: Date(timeIntervalSince1970: 100),
+            source: .bluetoothRemote
+        )
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "暂时不可用后恢复",
+            selection: NSRange(location: 8, length: 0)
+        )
+        harness.coordinator.finishSession(endedAt: Date(timeIntervalSince1970: 103))
+        harness.scheduler.advance(by: 0.125)
+        harness.snapshot = nil
+        harness.scheduler.advance(by: 0.25)
+
+        #expect(harness.captures.isEmpty)
+        #expect(harness.logs.contains {
+            $0.contains("TRANSCRIPT CAPTURE waiting reason=snapshot_unavailable_after_finish")
+        })
+
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "暂时不可用后恢复",
+            selection: NSRange(location: 8, length: 0)
+        )
+        harness.scheduler.advance(by: 1)
+
+        #expect(try #require(harness.captures.first).text == "暂时不可用后恢复")
+    }
+
     @Test func qianwenConfirmationCapturesTheCurrentCandidateBeforeTheEditorClears() throws {
         let harness = CaptureHarness()
         harness.snapshot = CaptureHarness.safeSnapshot(

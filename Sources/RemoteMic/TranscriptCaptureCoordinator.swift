@@ -161,6 +161,7 @@ final class TranscriptCaptureCoordinator {
         var stableSince: TimeInterval?
         var acceptedChange: TranscriptTextChange?
         var allowsInsertionOutsideReportedSelection = false
+        var loggedSnapshotUnavailableAfterFinish = false
     }
 
     private struct PendingSession {
@@ -215,7 +216,11 @@ final class TranscriptCaptureCoordinator {
         self.log = log
     }
 
-    func startSession(startedAt: Date, source: UsageEventSource) {
+    func startSession(
+        sessionID: UUID = UUID(),
+        startedAt: Date,
+        source: UsageEventSource
+    ) {
         settleExistingSessionBeforeNextStart()
         guard isEnabled() else {
             log("TRANSCRIPT CAPTURE skipped reason=feature_disabled")
@@ -223,7 +228,7 @@ final class TranscriptCaptureCoordinator {
         }
         generation &+= 1
         let pending = PendingSession(
-            id: UUID(),
+            id: sessionID,
             generation: generation,
             startedAt: startedAt,
             source: source,
@@ -301,7 +306,7 @@ final class TranscriptCaptureCoordinator {
         timeoutTask?.cancel()
         timeoutTask = schedule(totalTimeout) { [weak self] in
             guard self?.activeSession?.generation == generation else { return }
-            self?.cancel(reason: "timeout")
+            self?.finishTimedOutSession(generation: generation)
         }
         poll(generation: generation)
     }
@@ -409,7 +414,17 @@ final class TranscriptCaptureCoordinator {
         }
         guard session.endedAt != nil else { return }
         guard let current = snapshot() else {
-            completeAcceptedChangeOrCancel(session, reason: "snapshot_unavailable_after_finish")
+            if !session.loggedSnapshotUnavailableAfterFinish {
+                session.loggedSnapshotUnavailableAfterFinish = true
+                log(
+                    "TRANSCRIPT CAPTURE waiting reason=snapshot_unavailable_after_finish " +
+                        "retry_ms=\(Int(pollInterval * 1_000))"
+                )
+            }
+            activeSession = session
+            pollTask = schedule(pollInterval) { [weak self] in
+                self?.poll(generation: generation)
+            }
             return
         }
         guard current.isSafeEditableDestination else {
@@ -465,6 +480,11 @@ final class TranscriptCaptureCoordinator {
         pollTask = schedule(pollInterval) { [weak self] in
             self?.poll(generation: generation)
         }
+    }
+
+    private func finishTimedOutSession(generation: UInt64) {
+        guard let session = activeSession, session.generation == generation else { return }
+        completeAcceptedChangeOrCancel(session, reason: "timeout")
     }
 
     private func completeAcceptedChangeOrCancel(_ session: ActiveSession, reason: String) {

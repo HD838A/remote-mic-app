@@ -258,6 +258,7 @@ final class AppSettings: ObservableObject {
         static let voiceShortTapFocusEnabled = "voiceShortTapFocusEnabled"
         static let voiceKeyMode = "voiceKeyMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
+        static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
         static let lastLaunchedBuild = "launch.lastLaunchedBuild"
         static let totalButtonPressCount = "usage.totalButtonPressCount"
@@ -402,6 +403,15 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 localTranscriptHistoryEnabled,
                 forKey: Keys.localTranscriptHistoryEnabled
+            )
+        }
+    }
+
+    @Published var localOriginalAudioRecordingEnabled: Bool {
+        didSet {
+            defaults.set(
+                localOriginalAudioRecordingEnabled,
+                forKey: Keys.localOriginalAudioRecordingEnabled
             )
         }
     }
@@ -604,6 +614,9 @@ final class AppSettings: ObservableObject {
         voiceKeyMode = savedQianwenVoiceModeEnabled ? .function : savedVoiceKeyMode
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
+        )
+        localOriginalAudioRecordingEnabled = defaults.bool(
+            forKey: Keys.localOriginalAudioRecordingEnabled
         )
         continuousRecordingPowerBindingBackup = defaults
             .data(forKey: Keys.continuousRecordingPowerBindingBackup)

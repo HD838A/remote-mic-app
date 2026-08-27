@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import Foundation
 import Testing
 @testable import RemoteMic
@@ -328,6 +329,149 @@ struct RemoteButtonsTests {
             attempt: 4,
             alreadyLoggedSuccess: true
         ))
+    }
+
+    @Test func scrollActionsStayWithTheBasicKeysAndKeepRepeatingWhileHeld() {
+        #expect(ButtonAction.scrollUp.category == .basicKeys)
+        #expect(ButtonAction.scrollDown.category == .basicKeys)
+        #expect(ButtonAction.scrollUp.allowsRepeat)
+        #expect(ButtonAction.scrollDown.allowsRepeat)
+        #expect(HIDRemoteMonitor.shouldRepeat(
+            action: .scrollUp,
+            frontmostBundleIdentifier: PresetApplication.claude.bundleIdentifier
+        ))
+        #expect(HIDRemoteMonitor.shouldRepeat(
+            action: .scrollDown,
+            frontmostBundleIdentifier: PresetApplication.claude.bundleIdentifier
+        ))
+        #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .up) == 100)
+        #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .down) == 100)
+    }
+
+    @Test func scrollActionsKeepTheirStoredIdentifiers() throws {
+        #expect(ButtonAction.scrollUp.rawValue == "scrollUp")
+        #expect(ButtonAction.scrollDown.rawValue == "scrollDown")
+        #expect(ButtonAction(rawValue: "scrollUp") == .scrollUp)
+        #expect(ButtonAction(rawValue: "scrollDown") == .scrollDown)
+
+        for action in [ButtonAction.scrollUp, .scrollDown] {
+            let encoded = try JSONEncoder().encode([action])
+            let decoded = try JSONDecoder().decode([ButtonAction].self, from: encoded)
+            #expect(String(data: encoded, encoding: .utf8) == "[\"\(action.rawValue)\"]")
+            #expect(decoded == [action])
+        }
+
+        let suiteName = "RemoteButtonsTests.scrollActions.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        AppSettings(defaults: defaults).setAction(.scrollUp, for: .up)
+        AppSettings(defaults: defaults).setAction(.scrollDown, for: .down)
+        #expect(AppSettings(defaults: defaults).action(for: .up) == .scrollUp)
+        #expect(AppSettings(defaults: defaults).action(for: .down) == .scrollDown)
+    }
+
+    @Test func scrollActionsPostLineWheelTicksInsteadOfArrowKeys() {
+        var scrolled: [Int32] = []
+        var posted: [(CGKeyCode, CGEventFlags)] = []
+
+        #expect(KeyboardInjector.send(
+            .scrollUp,
+            accessibilityTrusted: { true },
+            keyPoster: { posted.append(($0, $1)) },
+            scrollPoster: { scrolled.append($0) }
+        ))
+        // 按上键看到更早的消息：正的行数把内容滚回对话开头。
+        #expect(scrolled == [KeyboardInjector.scrollLineCount])
+        #expect(posted.isEmpty)
+
+        scrolled.removeAll()
+        #expect(KeyboardInjector.send(
+            .scrollDown,
+            accessibilityTrusted: { true },
+            keyPoster: { posted.append(($0, $1)) },
+            scrollPoster: { scrolled.append($0) }
+        ))
+        #expect(scrolled == [-KeyboardInjector.scrollLineCount])
+        #expect(posted.isEmpty)
+
+        scrolled.removeAll()
+        #expect(!KeyboardInjector.send(
+            .scrollUp,
+            accessibilityTrusted: { false },
+            scrollPoster: { scrolled.append($0) }
+        ))
+        #expect(scrolled.isEmpty)
+    }
+
+    @Test func scrollEventsAimAtTheFrontmostWindowAndFallBackToTheCursor() {
+        let cursor = CGPoint(x: 12, y: 34)
+        #expect(KeyboardInjector.scrollTargetLocation(
+            windowFrame: CGRect(x: 100, y: 200, width: 800, height: 600),
+            mouseLocation: cursor
+        ) == CGPoint(x: 500, y: 500))
+        #expect(KeyboardInjector.scrollTargetLocation(
+            windowFrame: nil,
+            mouseLocation: cursor
+        ) == cursor)
+        #expect(KeyboardInjector.scrollTargetLocation(
+            windowFrame: CGRect(x: 10, y: 10, width: 0, height: 0),
+            mouseLocation: cursor
+        ) == cursor)
+    }
+
+    @Test func frontmostWindowLookupPicksTheLargestOrdinaryWindowOfThatProcess() {
+        func entry(
+            processIdentifier: pid_t,
+            layer: Int,
+            bounds: CGRect
+        ) -> [String: Any] {
+            [
+                kCGWindowOwnerPID as String: NSNumber(value: processIdentifier),
+                kCGWindowLayer as String: NSNumber(value: layer),
+                kCGWindowBounds as String: [
+                    "X": bounds.origin.x,
+                    "Y": bounds.origin.y,
+                    "Width": bounds.width,
+                    "Height": bounds.height,
+                ] as NSDictionary,
+            ]
+        }
+
+        let windowInfo: [[String: Any]] = [
+            entry(
+                processIdentifier: 501,
+                layer: 0,
+                bounds: CGRect(x: 0, y: 0, width: 400, height: 300)
+            ),
+            entry(
+                processIdentifier: 501,
+                layer: 0,
+                bounds: CGRect(x: 100, y: 50, width: 1_200, height: 800)
+            ),
+            entry(
+                processIdentifier: 501,
+                layer: 25,
+                bounds: CGRect(x: 0, y: 0, width: 2_000, height: 2_000)
+            ),
+            entry(
+                processIdentifier: 777,
+                layer: 0,
+                bounds: CGRect(x: 0, y: 0, width: 1_600, height: 1_200)
+            ),
+        ]
+
+        #expect(KeyboardInjector.frontmostWindowFrame(
+            windowInfo: windowInfo,
+            processIdentifier: 501
+        ) == CGRect(x: 100, y: 50, width: 1_200, height: 800))
+        #expect(KeyboardInjector.frontmostWindowFrame(
+            windowInfo: windowInfo,
+            processIdentifier: 999
+        ) == nil)
+        #expect(KeyboardInjector.frontmostWindowFrame(
+            windowInfo: [],
+            processIdentifier: 501
+        ) == nil)
     }
 
     @Test func hidReportsRouteOnlyToTheirActivePhysicalRemote() {
@@ -1252,7 +1396,7 @@ struct RemoteButtonsTests {
         #expect(gate.isCurrent(second))
     }
 
-    @Test func composerCandidateRankingPrefersWideLowerComposerAndRejectsSensitiveFields() {
+    @Test func composerCandidateRankingAllowsSearchAndTerminalButRejectsSensitiveFields() {
         let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
         let candidates = [
             KeyboardInjector.AccessibilityTextCandidate(
@@ -1302,7 +1446,7 @@ struct RemoteButtonsTests {
         ]
 
         #expect(KeyboardInjector.bestComposerCandidateIndex(candidates, windowFrame: windowFrame) == 2)
-        #expect(KeyboardInjector.composerCandidateScore(candidates[0], windowFrame: windowFrame) == nil)
+        #expect(KeyboardInjector.composerCandidateScore(candidates[0], windowFrame: windowFrame) != nil)
         #expect(KeyboardInjector.composerCandidateScore(candidates[1], windowFrame: windowFrame) == nil)
 
         let terminal = KeyboardInjector.AccessibilityTextCandidate(
@@ -1316,7 +1460,20 @@ struct RemoteButtonsTests {
             frame: CGRect(x: 50, y: 200, width: 900, height: 500),
             enabled: true
         )
-        #expect(KeyboardInjector.composerCandidateScore(terminal, windowFrame: windowFrame) == nil)
+        #expect(KeyboardInjector.composerCandidateScore(terminal, windowFrame: windowFrame) != nil)
+
+        let settingsField = KeyboardInjector.AccessibilityTextCandidate(
+            role: "AXTextField",
+            identifier: "settings-value",
+            title: "Settings",
+            description: "Preferences",
+            help: "",
+            placeholder: "Value",
+            context: "",
+            frame: CGRect(x: 100, y: 500, width: 700, height: 36),
+            enabled: true
+        )
+        #expect(KeyboardInjector.composerCandidateScore(settingsField, windowFrame: windowFrame) != nil)
     }
 
     @Test func weChatComposerFallbackUsesOnlyALargeWindowRelativePoint() {
