@@ -695,13 +695,27 @@ struct TranscriptHistorySection: View {
     private func normalizeExpandedDays() {
         let validKeys = Set(dayGroups.map(\.id) + recordingDayGroups.map { "recording-\($0.id)" })
         expandedDayKeys.formIntersection(validKeys)
-        if expandedDayKeys.isEmpty, let newestDayKey = dayGroups.first?.id {
-            expandedDayKeys.insert(newestDayKey)
+        if expandedDayKeys.isEmpty {
+            expandedDayKeys.formUnion(newestExpandableDayKeys)
         }
     }
 
     private func resetExpandedDays() {
-        expandedDayKeys = Set(dayGroups.prefix(1).map(\.id))
+        expandedDayKeys = newestExpandableDayKeys
+    }
+
+    private var newestExpandableDayKeys: Set<String> {
+        var keys = Set<String>()
+        let newestDate = [dayGroups.first?.id, recordingDayGroups.first?.id]
+            .compactMap { $0 }
+            .max()
+        if let newestTranscriptDay = dayGroups.first?.id, newestTranscriptDay == newestDate {
+            keys.insert(newestTranscriptDay)
+        }
+        if let newestRecordingDay = recordingDayGroups.first?.id, newestRecordingDay == newestDate {
+            keys.insert("recording-\(newestRecordingDay)")
+        }
+        return keys
     }
 
     private func toggleDay(_ dayKey: String) {

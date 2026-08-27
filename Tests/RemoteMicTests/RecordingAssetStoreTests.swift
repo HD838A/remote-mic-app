@@ -84,4 +84,40 @@ struct RecordingAssetStoreTests {
         #expect(audioFile.length > 0)
         try FileManager.default.trashItem(at: url, resultingItemURL: nil)
     }
+
+    @Test func recordingOnlySessionKeepsApplicationMetadata() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemoteMicRecordingOnlyTests-\(UUID().uuidString)", isDirectory: true)
+        let store = RecordingAssetStore(rootDirectoryURL: root)
+        let committed = DispatchSemaphore(value: 0)
+        var manifest: RecordingAssetManifest?
+        let coordinator = RecordingAssetCoordinator(
+            store: store,
+            isEnabled: { true },
+            onCommit: {
+                manifest = $0
+                committed.signal()
+            },
+            log: { _ in }
+        )
+        let sessionID = UUID()
+        coordinator.start(
+            sessionID: sessionID,
+            startedAt: Date(timeIntervalSince1970: 1_767_268_800),
+            source: .bluetoothRemote,
+            applicationMetadata: FrontmostApplicationMetadata(
+                applicationName: "Codex",
+                bundleIdentifier: "com.openai.codex"
+            )
+        )
+        coordinator.append(samples: Array(repeating: Int16(1200), count: 1_600))
+        coordinator.finish(endedAt: Date(timeIntervalSince1970: 1_767_268_802))
+
+        #expect(committed.wait(timeout: .now() + 3) == .success)
+        let committedManifest = try #require(manifest)
+        #expect(committedManifest.sessionID == sessionID)
+        #expect(committedManifest.applicationName == "Codex")
+        #expect(committedManifest.bundleIdentifier == "com.openai.codex")
+        try FileManager.default.trashItem(at: root, resultingItemURL: nil)
+    }
 }
