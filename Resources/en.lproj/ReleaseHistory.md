@@ -1,5 +1,19 @@
 # Version History
 
+## 1.9.16 (Pre-release)
+
+- Added Left Command and Right Command voice-trigger modes while keeping Fn/Globe as the default.
+- Voice keys now start on press and end on release without focus-gesture delays; input focus is available as a separate regular remote-button action.
+- Improved focus reliability for Electron, Web, search, and Terminal input fields.
+- Fixed RC003 TV-key characters leaking into the frontmost text field across keyboard layouts.
+- Improved Bluetooth recovery after Mac wake and audio-failure diagnostics.
+- Added remote control of the macOS Command-Tab app switcher.
+- Added an optional rapid-press setting for non-repeatable actions, disabled by default.
+- Fixed the combination-action editor from consuming ordinary remote-button events.
+- Added local original-recording storage and improved Reflections records when no editable input field is available.
+- Added Up and Down scroll actions for remote buttons.
+- Improved alignment of the language selector on the About page.
+
 ## 1.9.10 (Pre-release)
 
 - Combination Actions are now available by default, with no invitation code required to view, create, bind, or use them.
