@@ -348,6 +348,43 @@ struct RemoteButtonsTests {
         #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .down) == 100)
     }
 
+    @Test func focusInputIsANonRepeatingCustomAction() {
+        #expect(ButtonAction.focusInput.category == .custom)
+        #expect(!ButtonAction.focusInput.allowsRepeat)
+        #expect(ButtonAction(rawValue: "focusInput") == .focusInput)
+    }
+
+    @Test func focusInputUsesFrontmostComposerFocuser() {
+        var called = false
+        let handled = KeyboardInjector.send(
+            .focusInput,
+            frontmostComposerFocuser: { completion in
+                called = true
+                completion(true)
+                return true
+            },
+            accessibilityTrusted: { true }
+        )
+
+        #expect(handled)
+        #expect(called)
+    }
+
+    @Test func focusInputRequiresAccessibilityPermission() {
+        var called = false
+        let handled = KeyboardInjector.send(
+            .focusInput,
+            frontmostComposerFocuser: { _ in
+                called = true
+                return true
+            },
+            accessibilityTrusted: { false }
+        )
+
+        #expect(!handled)
+        #expect(!called)
+    }
+
     @Test func scrollActionsKeepTheirStoredIdentifiers() throws {
         #expect(ButtonAction.scrollUp.rawValue == "scrollUp")
         #expect(ButtonAction.scrollDown.rawValue == "scrollDown")
@@ -2030,25 +2067,6 @@ struct RemoteButtonsTests {
             from: try JSONSerialization.data(withJSONObject: legacyObject)
         )
         #expect(!target.voiceFnTapModeEnabled)
-    }
-
-    @Test func importedFnTapModeWinsOverShortTapFocus() throws {
-        let suite = "RemoteMicTests.voice-focus-mutual.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let settings = AppSettings(defaults: defaults)
-        settings.voiceFnTapModeEnabled = true
-        settings.voiceShortTapFocusEnabled = true
-
-        let data = try settings.exportedConfigurationData()
-        let targetSuite = "RemoteMicTests.voice-focus-mutual-target.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
-        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
-        let target = AppSettings(defaults: targetDefaults)
-        try target.importConfiguration(from: data)
-
-        #expect(target.voiceFnTapModeEnabled)
-        #expect(!target.voiceShortTapFocusEnabled)
     }
 
     @Test func weChatComposerFallbackUsesTheLargestEligibleWindow() {

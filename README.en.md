@@ -124,7 +124,7 @@ Under **Button Mapping**, the voice-button area lets you choose the default Fn/G
 
 Fn remains the default because it directly matches Fn-hold voice entry in apps such as Doubao and Weixin, Fn-tap entry in Typeless, and the remote's hold-to-capture/release-to-stop lifecycle. F18, F19, F20, or other uncommon keys could be added technically, but this version does not offer an arbitrary voice-key binding: the target voice app must use the same key, and RC003, iPhone, Apple Watch, Web, permissions, and input-source switching must all share one paired press/release lifecycle. Ordinary remote buttons can still use F1–F20 shortcuts.
 
-The optional **Short Voice Tap Focuses Input** setting is off by default. A short tap focuses the most likely chat composer in the current frontmost app, while a hold keeps using the selected Fn, Left Command, or Right Command trigger. The generic path uses macOS Accessibility. WeChat does not expose its composer, so only its main window uses a size-gated, window-relative click fallback. Turn off the target voice tool's own short-press activation. This option is mutually exclusive with **Simulate Fn Tap on Voice Key**.
+The voice button has no single-tap, double-tap, or long-press side effects. It is reserved for the low-latency press-to-start and release-to-stop voice session. To focus the frontmost app's input field, choose **Focus Input Field** under a normal button's **Custom Actions**; it uses macOS Accessibility and never reads the field contents.
 
 To confirm the audio path, send a one-second test tone or inspect input level in QuickTime Player's **New Audio Recording** window.
 
@@ -145,7 +145,7 @@ If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRe
 
 Open **Button Mapping** and enable custom mapping to change direction, OK, Back, Home, Menu, TV, Power, and volume buttons.
 
-Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, launching installed apps, and custom keyboard shortcuts. A shortcut can be chosen from common combinations such as Copy, Paste, and Spotlight, assembled from an on-page standard keyboard with modifiers, F1–F20, navigation keys, a numeric keypad, or standalone left/right modifiers, or recorded from a physical keyboard as before.
+Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, launching installed apps, focusing the frontmost input field, and custom keyboard shortcuts. A shortcut can be chosen from common combinations such as Copy, Paste, and Spotlight, assembled from an on-page standard keyboard with modifiers, F1–F20, navigation keys, a numeric keypad, or standalone left/right modifiers, or recorded from a physical keyboard as before.
 
 **Open Custom App** lets you select any local `.app`, then either open it only, send its focus shortcut after activation, or record a target input field once and focus it automatically. Re-record the target if an app update changes its interface. SayAll does not use fixed screen coordinates or save text from the input field.
 

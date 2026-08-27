@@ -217,11 +217,11 @@ struct SettingsPageRegressionTests {
         #expect(!footerSource.contains("HStack(spacing: 16)"))
         #expect(footerSource.contains("mappingVoiceKeyModeControl"))
         #expect(footerSource.contains("mappingVoiceFnTapControl"))
-        #expect(footerSource.contains("mappingVoiceShortTapFocusControl"))
+        #expect(!footerSource.contains("mappingVoiceShortTapFocusControl"))
         #expect(footerSource.contains("mappingRestoreDefaultsButton"))
     }
 
-    @Test func voiceShortTapFocusIsWiredOnlyAfterTheVoiceSessionStops() throws {
+    @Test func voiceSessionStopDoesNotTriggerInputFocus() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -243,11 +243,10 @@ struct SettingsPageRegressionTests {
         let stopSource = source[voiceStop.lowerBound..<nextDelegate.lowerBound]
 
         #expect(!startSource.contains("focusFrontmostComposer"))
-        #expect(stopSource.contains("VoiceShortTapFocusPolicy.shouldFocus"))
-        #expect(stopSource.contains("KeyboardInjector.focusFrontmostComposer"))
-        #expect(stopSource.contains("voice_short_tap_focus"))
-        #expect(source.contains("settings.voiceShortTapFocusEnabled = false"))
-        #expect(source.contains("if enabled, settings.voiceFnTapModeEnabled"))
+        #expect(!stopSource.contains("VoiceShortTapFocusPolicy"))
+        #expect(!stopSource.contains("focusFrontmostComposer"))
+        #expect(!stopSource.contains("voice_short_tap_focus"))
+        #expect(!source.contains("settings.voiceShortTapFocusEnabled"))
     }
 
     @Test func settingsWindowDragsOnlyFromDedicatedTopArea() throws {

@@ -10,7 +10,6 @@ enum AppConfigurationError: Error {
 struct VoiceKeyConfigurationState: Equatable {
     let mode: VoiceKeyMode
     let fnTapModeEnabled: Bool
-    let shortTapFocusEnabled: Bool
 }
 
 private struct PersonalizedConfiguration: Codable {
@@ -30,7 +29,6 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
-    let voiceShortTapFocusEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
@@ -252,7 +250,6 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
-        static let voiceShortTapFocusEnabled = "voiceShortTapFocusEnabled"
         static let voiceKeyMode = "voiceKeyMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
@@ -367,15 +364,6 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
-            )
-        }
-    }
-
-    @Published var voiceShortTapFocusEnabled: Bool {
-        didSet {
-            defaults.set(
-                voiceShortTapFocusEnabled,
-                forKey: Keys.voiceShortTapFocusEnabled
             )
         }
     }
@@ -588,11 +576,7 @@ final class AppSettings: ObservableObject {
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
-        let savedVoiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
-        voiceFnTapModeEnabled = savedVoiceFnTapModeEnabled
-        voiceShortTapFocusEnabled = !savedVoiceFnTapModeEnabled && defaults.bool(
-            forKey: Keys.voiceShortTapFocusEnabled
-        )
+        voiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
         voiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
@@ -741,9 +725,6 @@ final class AppSettings: ObservableObject {
         let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
         if voiceFnTapModeEnabled != shouldEnableFnTap {
             voiceFnTapModeEnabled = shouldEnableFnTap
-        }
-        if shouldEnableFnTap {
-            voiceShortTapFocusEnabled = false
         }
         guard onboardingVoiceTool != voiceTool else { return }
         onboardingVoiceTool = voiceTool
@@ -1384,7 +1365,6 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
-            voiceShortTapFocusEnabled: voiceShortTapFocusEnabled,
             voiceKeyMode: voiceKeyMode,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
@@ -1396,8 +1376,7 @@ final class AppSettings: ObservableObject {
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {
         VoiceKeyConfigurationState(
             mode: voiceKeyMode,
-            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function,
-            shortTapFocusEnabled: voiceShortTapFocusEnabled && !voiceFnTapModeEnabled
+            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function
         )
     }
 
@@ -1407,9 +1386,7 @@ final class AppSettings: ObservableObject {
         let fnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
         return VoiceKeyConfigurationState(
             mode: mode,
-            fnTapModeEnabled: fnTapModeEnabled,
-            shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
-                !fnTapModeEnabled
+            fnTapModeEnabled: fnTapModeEnabled
         )
     }
 
@@ -1420,9 +1397,7 @@ final class AppSettings: ObservableObject {
             importedMode == .function
         let importedVoiceKeyConfiguration = VoiceKeyConfigurationState(
             mode: importedMode,
-            fnTapModeEnabled: importedFnTapModeEnabled,
-            shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
-                !importedFnTapModeEnabled
+            fnTapModeEnabled: importedFnTapModeEnabled
         )
 
         let importedBindings = Dictionary(
@@ -1477,7 +1452,6 @@ final class AppSettings: ObservableObject {
         }
         voiceKeyMode = importedVoiceKeyConfiguration.mode
         voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
-        voiceShortTapFocusEnabled = importedVoiceKeyConfiguration.shortTapFocusEnabled
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup

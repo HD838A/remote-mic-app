@@ -129,6 +129,7 @@
 "action.previous_command_left" = "Previous (⌘←)";
 "action.next_command_right" = "Next (⌘→)";
 "action.custom_shortcut" = "Custom Shortcut";
+"action.focus_input" = "Focus Input Field";
 "action.open_custom_application" = "Open Custom App";
 "action.toggle_long_recording" = "Toggle Continuous Recording";
 "action.open_remote_mic" = "Open SayAll";
@@ -219,9 +220,6 @@
 "connection.voice_fn_tap.enabled" = "Simulate Fn Tap on Voice Key";
 "connection.voice_fn_tap.hint" = "For tap-to-toggle voice apps (e.g. Typeless): pressing the voice key injects one Fn tap to start, releasing injects another to stop, while audio streams as usual. Requires Accessibility permission; the voice key no longer emits Fn directly.";
 "connection.voice_fn_tap.hint_short" = "For voice tools that use Fn taps to start and stop. Keep holding the remote button while speaking.";
-"connection.voice_short_focus.enabled" = "Short Voice Tap Focuses Input";
-"connection.voice_short_focus.hint_short" = "A short tap focuses the current app's chat composer. A hold keeps using the voice trigger key selected above.";
-"connection.voice_short_focus.help" = "Off by default. When enabled, a voice session shorter than the long-press threshold is cancelled and focuses the current app's chat composer. Turn off the target voice tool's own short-press activation. This is mutually exclusive with Simulate Fn Tap on Voice Key.";
 "connection.voice_key_mode.title" = "Voice Trigger Key";
 "connection.voice_key.mode.fn" = "Fn/Globe";
 "connection.voice_key.mode.left_command" = "Left Command";

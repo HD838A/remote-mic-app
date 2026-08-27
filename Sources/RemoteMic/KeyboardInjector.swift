@@ -228,6 +228,7 @@ enum KeyboardInjector {
         customApplicationURL: (CustomApplicationProfile) -> URL? = resolveCustomApplicationURL,
         customApplicationOpener: CustomApplicationOpener = openCustomApplication,
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
+        frontmostComposerFocuser: (@escaping (Bool) -> Void) -> Bool = focusFrontmostComposer,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
@@ -263,6 +264,10 @@ enum KeyboardInjector {
                 applicationFocuser: customApplicationFocuser
             )
             return true
+        }
+        if action == .focusInput {
+            guard accessibilityTrusted() else { return false }
+            return frontmostComposerFocuser { _ in }
         }
         if action == .customShortcut, shortcut == nil {
             AppLogger.shared.write("SHORTCUT ACTION ignored reason=not_configured")
@@ -359,6 +364,8 @@ enum KeyboardInjector {
                         "modifier_flags=\(eventFlags.rawValue) standalone=false"
                 )
             }
+        case .focusInput:
+            break
         case .openCustomApplication:
             break
         case .toggleLongRecording:

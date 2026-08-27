@@ -106,11 +106,11 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的 F5 映射为 usage `0`；任一目标失败或目标不完整时立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 
-该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceKeyMode`、`voiceFnTapModeEnabled` 和 `voiceShortTapFocusEnabled`；旧配置缺少新字段时保持默认关闭。Fn 点按与短按聚焦互斥。应用退出、断连或模式切换时会释放尚未释放的 Command 按键，并恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
+该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceKeyMode` 和 `voiceFnTapModeEnabled`；旧配置缺少新字段时保持默认关闭。应用退出、断连或模式切换时会释放尚未释放的 Command 按键，并恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
 
 语音键模式由统一的语音会话状态机驱动：`fn`（默认）、`left_command`、`right_command`。Command 模式在 RC003、iPhone、Apple Watch 和网页版语音开始时发送所选 Command 的 keyDown，在结束时发送配对的 keyUp。普通键盘 Command 不会触发输入源切换；只有真实语音会话才会显式开始和结束输入源会话。
 
-`VoiceShortTapFocusPolicy` 复用 `HIDRemoteTiming.longPressMilliseconds`：开关启用且会话时长小于阈值时，松开后取消转写捕获、清空该次短音频，并异步调用 `KeyboardInjector.focusFrontmostComposer`。输入框排名拒绝搜索、设置、密码、Token、终端和代码编辑器等候选；Electron / Chromium 复用已有辅助功能树唤醒和有界重试。微信主聊天窗口不暴露输入框，所以仅对精确 Bundle ID 使用最小窗口尺寸门禁和窗口相对点击。
+普通按键的 `focusInput` 自定义动作调用 `KeyboardInjector.focusFrontmostComposer`，聚焦当前前台 App 的可编辑输入区域；该动作不重复执行，并且需要辅助功能权限。语音键路径不调用输入框聚焦逻辑，避免双击等待或长按判定影响首个语音响应。
 
 ## 菜单栏与窗口
 
