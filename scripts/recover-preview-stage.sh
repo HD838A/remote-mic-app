@@ -49,7 +49,7 @@ download_artifact() {
   }
   curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
     -H "Authorization: Bearer $token" \
-    -H 'Accept: application/zip' \
+    -H 'Accept: application/vnd.github+json' \
     "https://api.github.com/repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" \
     --output "$destination"
 }
