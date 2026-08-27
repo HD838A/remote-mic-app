@@ -2783,6 +2783,14 @@ struct SettingsView: View {
                             .padding(.vertical, 10)
                         }
                     }
+
+                    if model.isRC003VoiceExtensionTestEnabled {
+                        Text("测试长时间语音功能")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 8)
+                    }
                 }
             }
         }
