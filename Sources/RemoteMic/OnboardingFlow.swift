@@ -133,9 +133,24 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    var applicationBundleIdentifier: String? {
+        switch self {
+        case .typeless:
+            return "now.typeless.desktop"
+        case .unselected, .doubao, .weixin, .other:
+            return nil
+        }
+    }
+
     var requiresFunctionKeySetup: Bool {
         preferredInputSourceID != nil
     }
+}
+
+enum OnboardingVoiceToolAvailability: String, Equatable, Hashable {
+    case available
+    case notInstalled
+    case unknown
 }
 
 struct OnboardingCapabilities: Equatable {
@@ -219,6 +234,7 @@ enum OnboardingFlowPolicy {
         voiceTool: OnboardingVoiceTool,
         remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
+        voiceKeyMode: VoiceKeyMode = .function,
         capabilities: OnboardingCapabilities
     ) -> Bool {
         switch step {
@@ -226,7 +242,9 @@ enum OnboardingFlowPolicy {
             return true
         case .voiceTool:
             return voiceTool != .unselected &&
-                (!voiceTool.requiresFunctionKeySetup || capabilities.systemFunctionKeyAvailable)
+                (!voiceTool.requiresFunctionKeySetup ||
+                    voiceKeyMode != .function ||
+                    capabilities.systemFunctionKeyAvailable)
         case .remoteAvailability:
             return remoteAvailability != .unselected
         case .controlMethod:

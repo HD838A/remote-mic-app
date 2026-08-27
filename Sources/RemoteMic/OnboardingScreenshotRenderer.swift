@@ -110,6 +110,11 @@ enum OnboardingScreenshotRenderer {
                 completeRuntimeReadyOverride: true,
                 allowsInputSourceSwitching: false,
                 systemFunctionKeyAvailableOverride: systemFunctionKeyAvailable,
+                voiceToolAvailabilityOverride: [
+                    .doubao: .available,
+                    .weixin: .available,
+                    .typeless: .available,
+                ],
                 initialInputMethodGuideStep: requestedGuideStep
             )
                 .environmentObject(localization)

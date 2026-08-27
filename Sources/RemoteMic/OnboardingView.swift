@@ -25,6 +25,7 @@ struct OnboardingView: View {
     private let completeRuntimeReadyOverride: Bool?
     private let allowsInputSourceSwitching: Bool
     private let systemFunctionKeyAvailableOverride: Bool?
+    private let voiceToolAvailabilityOverride: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]?
 
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -39,6 +40,7 @@ struct OnboardingView: View {
     @State private var manualTranscriptInputObserved = false
     @State private var lastRecordedFailure: FirstUseFailureReason?
     @State private var inputSourceSwitchResult: OnboardingInputSourceSwitchResult = .notApplicable
+    @State private var voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability] = [:]
     @State private var systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
     @State private var selectedInputMethodGuideStep = 0
     @FocusState private var transcriptFocused: Bool
@@ -54,6 +56,7 @@ struct OnboardingView: View {
         completeRuntimeReadyOverride: Bool? = nil,
         allowsInputSourceSwitching: Bool = true,
         systemFunctionKeyAvailableOverride: Bool? = nil,
+        voiceToolAvailabilityOverride: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
         initialInputMethodGuideStep: Int = 0
     ) {
         self.model = model
@@ -61,6 +64,7 @@ struct OnboardingView: View {
         self.completeRuntimeReadyOverride = completeRuntimeReadyOverride
         self.allowsInputSourceSwitching = allowsInputSourceSwitching
         self.systemFunctionKeyAvailableOverride = systemFunctionKeyAvailableOverride
+        self.voiceToolAvailabilityOverride = voiceToolAvailabilityOverride
         _selectedInputMethodGuideStep = State(initialValue: initialInputMethodGuideStep)
     }
 
@@ -80,6 +84,7 @@ struct OnboardingView: View {
         .frame(minWidth: 980, minHeight: 732)
         .onAppear {
             refreshPermissionStates()
+            refreshVoiceToolAvailability()
             prepareForStep(settings.onboardingStep)
         }
         .onReceive(permissionRefreshTimer) { _ in
@@ -92,6 +97,7 @@ struct OnboardingView: View {
             refreshPermissionStates()
             switch settings.onboardingStep {
             case .voiceTool:
+                refreshVoiceToolAvailability()
                 switchToSelectedInputMethod()
                 refreshSystemFunctionKeyUsage()
             case .voiceTest:
@@ -319,7 +325,7 @@ struct OnboardingView: View {
                 ],
                 spacing: 10
             ) {
-                ForEach([OnboardingVoiceTool.doubao, .weixin, .typeless, .other]) { tool in
+                ForEach(visibleVoiceTools) { tool in
                     Button {
                         selectVoiceTool(tool)
                     } label: {
@@ -340,6 +346,13 @@ struct OnboardingView: View {
                                     .foregroundStyle(.secondary)
                                     .multilineTextAlignment(.leading)
                                     .lineLimit(4, reservesSpace: true)
+                                if tool == .doubao,
+                                   voiceToolAvailability[tool] == .notInstalled {
+                                    Text("onboarding.voice_tool.status.not_installed")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.orange)
+                                        .lineLimit(1)
+                                }
                             }
                             Spacer()
                             Image(systemName: settings.onboardingVoiceTool == tool ? "checkmark.circle.fill" : "circle")
@@ -368,7 +381,69 @@ struct OnboardingView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            if settings.onboardingVoiceTool == .doubao,
+               voiceToolAvailability[.doubao] == .notInstalled {
+                HStack(spacing: 8) {
+                    Text("onboarding.voice_tool.doubao.install_detail")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Link(
+                        "onboarding.voice_tool.doubao.install",
+                        destination: AppLinks.doubaoInputMethod
+                    )
+                    .font(.system(size: 12, weight: .semibold))
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if settings.onboardingVoiceTool != .unselected {
+                onboardingVoiceKeyControl
+            }
         }
+    }
+
+    private var onboardingVoiceKeyControl: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("connection.voice_key_mode.title")
+                .font(.system(size: 13, weight: .semibold))
+
+            if settings.onboardingVoiceTool == .typeless {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.green)
+                    Text("onboarding.voice_tool.typeless.fn_required")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Picker("connection.voice_key_mode.title", selection: Binding(
+                    get: { settings.voiceKeyMode },
+                    set: { selectOnboardingVoiceKeyMode($0) }
+                )) {
+                    ForEach(VoiceKeyMode.allCases) { mode in
+                        Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+            }
+
+            Text(
+                LocalizedMessage(
+                    "onboarding.voice_tool.voice_key_help",
+                    arguments: [
+                        localization.text(settings.voiceKeyMode.localizationKey),
+                    ]
+                ).text(using: localization)
+            )
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var remoteAvailabilityContent: some View {
@@ -1586,8 +1661,32 @@ struct OnboardingView: View {
             voiceTool: settings.onboardingVoiceTool,
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
+            voiceKeyMode: settings.voiceKeyMode,
             capabilities: capabilities
-        )
+        ) && (settings.onboardingStep != .voiceTool || voiceToolSelectionIsValid)
+    }
+
+    private var visibleVoiceTools: [OnboardingVoiceTool] {
+        var tools: [OnboardingVoiceTool] = [.doubao]
+        if voiceToolAvailability[.weixin] == .available {
+            tools.append(.weixin)
+        }
+        if voiceToolAvailability[.typeless] == .available {
+            tools.append(.typeless)
+        }
+        tools.append(.other)
+        return tools
+    }
+
+    private var voiceToolSelectionIsValid: Bool {
+        switch settings.onboardingVoiceTool {
+        case .unselected:
+            return false
+        case .other:
+            return true
+        case .doubao, .weixin, .typeless:
+            return voiceToolAvailability[settings.onboardingVoiceTool] == .available
+        }
     }
 
     private var diagnosticContext: FirstUseDiagnosticContext {
@@ -1846,6 +1945,30 @@ struct OnboardingView: View {
         refreshSystemFunctionKeyUsage()
     }
 
+    private func selectOnboardingVoiceKeyMode(_ mode: VoiceKeyMode) {
+        guard settings.onboardingVoiceTool != .typeless else { return }
+        model.setVoiceKeyMode(mode)
+        refreshSystemFunctionKeyUsage()
+    }
+
+    private func refreshVoiceToolAvailability() {
+        if let voiceToolAvailabilityOverride {
+            voiceToolAvailability = voiceToolAvailabilityOverride
+            return
+        }
+        var availability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability] = [:]
+        for tool in [OnboardingVoiceTool.doubao, .weixin, .typeless] {
+            availability[tool] = OnboardingInputSourceSwitcher.availability(for: tool)
+        }
+        voiceToolAvailability = availability
+
+        let selected = settings.onboardingVoiceTool
+        if [.weixin, .typeless].contains(selected),
+           availability[selected] == .notInstalled {
+            settings.setOnboardingVoiceTool(.unselected)
+        }
+    }
+
     private func selectRemoteAvailability(_ availability: OnboardingRemoteAvailability) {
         guard settings.onboardingRemoteAvailability != availability else { return }
         settings.setOnboardingRemoteAvailability(availability)
@@ -1920,6 +2043,7 @@ struct OnboardingView: View {
         refreshPermissionStates()
         switch step {
         case .voiceTool:
+            refreshVoiceToolAvailability()
             switchToSelectedInputMethod()
             refreshSystemFunctionKeyUsage()
         case .remoteAvailability:

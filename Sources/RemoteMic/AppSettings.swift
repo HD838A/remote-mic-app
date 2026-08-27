@@ -266,6 +266,7 @@ final class AppSettings: ObservableObject {
         static let onboardingControlMethod = "onboarding.controlMethod"
         static let onboardingVoiceTool = "onboarding.voiceTool"
         static let onboardingMigrationVersion = "onboarding.migrationVersion"
+        static let onboardingInstallStateMigrationVersion = "onboarding.installStateMigrationVersion"
         static let firstUseEvents = "onboarding.diagnostics.events"
         static let firstUseStepStartedAt = "onboarding.diagnostics.stepStartedAt"
         static let firstUseLastSignature = "onboarding.diagnostics.lastSignature"
@@ -722,6 +723,9 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
+        if voiceTool == .typeless, voiceKeyMode != .function {
+            voiceKeyMode = .function
+        }
         let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
         if voiceFnTapModeEnabled != shouldEnableFnTap {
             voiceFnTapModeEnabled = shouldEnableFnTap
@@ -1319,15 +1323,56 @@ final class AppSettings: ObservableObject {
                 defaults.object(forKey: Keys.onboardingRemoteAvailability) != nil ||
                 defaults.object(forKey: Keys.onboardingControlMethod) != nil ||
                 defaults.object(forKey: Keys.onboardingVoiceTool) != nil
-            let isExistingInstall = previousBuild != nil || sparkleHadLaunchedBefore
+            let isExistingInstall = previousBuild != nil ||
+                sparkleHadLaunchedBefore ||
+                hasPersistedAppConfiguration
             if !isOnboardingComplete, !hasPersistedOnboardingState, isExistingInstall {
                 completeOnboarding()
             }
             defaults.set(Self.currentOnboardingVersion, forKey: Keys.onboardingMigrationVersion)
         }
 
+        if defaults.integer(forKey: Keys.onboardingInstallStateMigrationVersion) < Self.currentOnboardingVersion {
+            let hasPersistedOnboardingState =
+                defaults.object(forKey: Keys.onboardingCompletedVersion) != nil ||
+                defaults.object(forKey: Keys.onboardingStep) != nil ||
+                defaults.object(forKey: Keys.onboardingRemoteAvailability) != nil ||
+                defaults.object(forKey: Keys.onboardingControlMethod) != nil ||
+                defaults.object(forKey: Keys.onboardingVoiceTool) != nil
+            let isExistingInstall = previousBuild != nil ||
+                sparkleHadLaunchedBefore ||
+                hasPersistedAppConfiguration
+            if !isOnboardingComplete, !hasPersistedOnboardingState, isExistingInstall {
+                completeOnboarding()
+            }
+            defaults.set(Self.currentOnboardingVersion, forKey: Keys.onboardingInstallStateMigrationVersion)
+        }
+
         defaults.set(currentBuild, forKey: Keys.lastLaunchedBuild)
         return completedUpdate
+    }
+
+    private var hasPersistedAppConfiguration: Bool {
+        [
+            Keys.gainDB,
+            Keys.selectedAudioDeviceUID,
+            Keys.customMappingEnabled,
+            Keys.legacyExclusiveHID,
+            Keys.buttonBindings,
+            Keys.buttonShortcuts,
+            Keys.buttonApplicationProfileIDs,
+            Keys.secondaryButtonBindings,
+            Keys.customApplicationProfiles,
+            Keys.peripheralIdentifier,
+            Keys.applicationLanguage,
+            Keys.voiceFnTapModeEnabled,
+            Keys.voiceKeyMode,
+            Keys.totalButtonPressCount,
+            Keys.totalVoiceDuration,
+            Keys.dailyStatistics,
+            Keys.voiceSessionRanking,
+            Keys.trustedPhoneIdentityFingerprints,
+        ].contains { defaults.object(forKey: $0) != nil }
     }
 
     func exportedConfigurationData() throws -> Data {

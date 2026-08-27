@@ -579,6 +579,11 @@
 "onboarding.voice_tool.typeless.detail" = "语音键会模拟 Fn 点按并传送遥控器声音。";
 "onboarding.voice_tool.other.title" = "其他语音工具";
 "onboarding.voice_tool.other.detail" = "使用你选择的语音输出设备，在常用语音输入工具中测试。";
+"onboarding.voice_tool.status.not_installed" = "尚未安装";
+"onboarding.voice_tool.doubao.install_detail" = "豆包输入法未安装，安装后回到此页重新检测。";
+"onboarding.voice_tool.doubao.install" = "安装豆包输入法";
+"onboarding.voice_tool.typeless.fn_required" = "Typeless 需要使用 Fn/地球键点按，已为你固定此模式。";
+"onboarding.voice_tool.voice_key_help" = "当前语音触发键：%1$@。目标语音工具也需要使用同一个按键；无线麦不会拦截输入法切换快捷键。";
 "onboarding.voice_tool.guide.title" = "把 Fn 交给选中的输入法";
 "onboarding.voice_tool.guide.detail" = "无线麦会先尝试切换输入法。请按图设置 Fn，并释放系统和微信 App 对 Fn 的占用。";
 "onboarding.voice_tool.guide.select_doubao" = "选择豆包输入法";
