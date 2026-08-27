@@ -551,6 +551,91 @@ check(
     "Typeless Fn tap session buffers pre-roll and stops after drain"
 )
 
+var darkWakeState = SystemRemoteRuntimeLifecycleState()
+let darkWakeSuspended = darkWakeState.handle(.systemWillSleep) == .suspend
+let darkWakeSchedule = darkWakeState.handle(.systemDidWake)
+let darkWakeGeneration: UInt64
+if case let .scheduleResume(generation) = darkWakeSchedule {
+    darkWakeGeneration = generation
+} else {
+    darkWakeGeneration = 0
+}
+let darkWakeCancelled = darkWakeState.handle(.systemWillSleep) == .cancelPendingResume
+check(
+    darkWakeSuspended && darkWakeGeneration > 0 && darkWakeCancelled &&
+        darkWakeState.wakeGraceElapsed(generation: darkWakeGeneration) == .none &&
+        !darkWakeState.isActive,
+    "DarkWake return to sleep keeps remote runtime suspended"
+)
+
+var stableWakeState = SystemRemoteRuntimeLifecycleState()
+_ = stableWakeState.handle(.systemWillSleep)
+let stableWakeSchedule = stableWakeState.handle(.systemDidWake)
+let stableWakeGeneration: UInt64
+if case let .scheduleResume(generation) = stableWakeSchedule {
+    stableWakeGeneration = generation
+} else {
+    stableWakeGeneration = 0
+}
+check(
+    stableWakeGeneration > 0 &&
+        stableWakeState.wakeGraceElapsed(generation: stableWakeGeneration) == .resume &&
+        stableWakeState.isActive &&
+        stableWakeState.wakeGraceElapsed(generation: stableWakeGeneration) == .none,
+    "Stable wake resumes remote runtime exactly once"
+)
+
+check(
+    SystemWakeVisibilityPolicy.isUserVisible(
+        displayActive: true,
+        displayAsleep: false,
+        clamshellClosed: false
+    ) &&
+        !SystemWakeVisibilityPolicy.isUserVisible(
+            displayActive: true,
+            displayAsleep: false,
+            clamshellClosed: true
+        ) &&
+        !SystemWakeVisibilityPolicy.isUserVisible(
+            displayActive: true,
+            displayAsleep: false,
+            clamshellClosed: nil
+        ),
+    "User-visible wake requires a confirmed open clamshell"
+)
+
+var visibleWakeState = SystemRemoteRuntimeLifecycleState()
+_ = visibleWakeState.handle(.systemWillSleep)
+_ = visibleWakeState.handle(.systemDidWake)
+check(
+    visibleWakeState.confirmUserVisibleWake() == .resume && visibleWakeState.isActive,
+    "User-visible wake resumes pending remote runtime immediately"
+)
+
+let sourceRoot = ProcessInfo.processInfo.environment["REMOTE_MIC_SOURCE_ROOT"]
+let bridgeAppModelSource = sourceRoot.flatMap { root in
+    try? String(
+        contentsOf: URL(fileURLWithPath: root)
+            .appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+        encoding: .utf8
+    )
+}
+let bluetoothBridgeSource = sourceRoot.flatMap { root in
+    try? String(
+        contentsOf: URL(fileURLWithPath: root)
+            .appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+        encoding: .utf8
+    )
+}
+check(
+    bridgeAppModelSource?.contains(
+        "bluetoothBridges.values.forEach { $0.suspendForSystemSleep() }"
+    ) == true &&
+        bridgeAppModelSource?.contains("if !remoteWakeManaged,") == true &&
+        bluetoothBridgeSource?.contains("func suspendForSystemSleep()") == true,
+    "System sleep detaches BLE and suppresses upstream wake reconnect"
+)
+
 print("RESULT passed=\(passed) failed=\(failed)")
 if failed > 0 {
     exit(1)
