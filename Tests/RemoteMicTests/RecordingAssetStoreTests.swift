@@ -84,4 +84,85 @@ struct RecordingAssetStoreTests {
         #expect(audioFile.length > 0)
         try FileManager.default.trashItem(at: url, resultingItemURL: nil)
     }
+
+    @Test func disablingRecordingDiscardsTheActiveSession() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemoteMicRecordingCancel-\(UUID().uuidString)", isDirectory: true)
+        let trashRoot = root.appendingPathComponent("Trash", isDirectory: true)
+        let completion = DispatchSemaphore(value: 0)
+        var isEnabled = true
+        var commitCount = 0
+        var trashedCount = 0
+        var finalLog = ""
+        let store = RecordingAssetStore(rootDirectoryURL: root, trashItem: { url in
+            trashedCount += 1
+            try FileManager.default.createDirectory(at: trashRoot, withIntermediateDirectories: true)
+            try FileManager.default.moveItem(
+                at: url,
+                to: trashRoot.appendingPathComponent(UUID().uuidString)
+            )
+        })
+        let coordinator = RecordingAssetCoordinator(
+            store: store,
+            isEnabled: { isEnabled },
+            onCommit: { _ in commitCount += 1 },
+            log: { message in
+                guard message.contains("saved") || message.contains("canceled") else { return }
+                finalLog = message
+                completion.signal()
+            }
+        )
+
+        coordinator.start(
+            sessionID: UUID(),
+            startedAt: Date(),
+            source: .bluetoothRemote
+        )
+        coordinator.append(samples: Array(repeating: Int16(1200), count: 1_600))
+        isEnabled = false
+        coordinator.cancel(reason: "feature_disabled")
+
+        #expect(completion.wait(timeout: .now() + 3) == .success)
+        #expect(commitCount == 0)
+        #expect(trashedCount == 1)
+        #expect(try store.loadAll().isEmpty)
+        #expect(finalLog == "RECORDING ASSET canceled reason=feature_disabled")
+    }
+
+    @Test func metadataFromARecordingDisabledSessionIsNotRetained() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemoteMicRecordingMetadata-\(UUID().uuidString)", isDirectory: true)
+        let completion = DispatchSemaphore(value: 0)
+        let sessionID = UUID()
+        var isEnabled = false
+        var committed: RecordingAssetManifest?
+        let coordinator = RecordingAssetCoordinator(
+            store: RecordingAssetStore(rootDirectoryURL: root),
+            isEnabled: { isEnabled },
+            onCommit: { manifest in
+                committed = manifest
+                completion.signal()
+            },
+            log: { _ in }
+        )
+
+        coordinator.updateApplication(
+            sessionID: sessionID,
+            applicationName: "Stale App",
+            bundleIdentifier: "com.example.stale"
+        )
+        isEnabled = true
+        coordinator.start(
+            sessionID: sessionID,
+            startedAt: Date(),
+            source: .bluetoothRemote
+        )
+        coordinator.append(samples: Array(repeating: Int16(1200), count: 1_600))
+        coordinator.finish(endedAt: Date())
+
+        #expect(completion.wait(timeout: .now() + 3) == .success)
+        #expect(committed?.applicationName == nil)
+        #expect(committed?.bundleIdentifier == nil)
+        try FileManager.default.trashItem(at: root, resultingItemURL: nil)
+    }
 }

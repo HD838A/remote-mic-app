@@ -531,8 +531,19 @@ final class RecordingAssetCoordinator {
     }
 
     func cancel(reason: String = "external") {
-        guard activeSession != nil else { return }
-        finish(reason: reason)
+        guard let activeSession else { return }
+        self.activeSession = nil
+        pendingApplicationMetadata.removeValue(forKey: activeSession.draft.sessionID)
+        let store = self.store
+        let log = self.log
+        activeSession.writer.finish { _ in
+            do {
+                try store.discard(draft: activeSession.draft)
+                log("RECORDING ASSET canceled reason=\(reason)")
+            } catch {
+                log("RECORDING ASSET cancel_failed reason=\(reason)")
+            }
+        }
     }
 
     func updateApplication(
@@ -540,7 +551,9 @@ final class RecordingAssetCoordinator {
         applicationName: String,
         bundleIdentifier: String
     ) {
-        pendingApplicationMetadata[sessionID] = (applicationName, bundleIdentifier)
+        if activeSession?.draft.sessionID == sessionID {
+            pendingApplicationMetadata[sessionID] = (applicationName, bundleIdentifier)
+        }
         do {
             try store.updateApplication(
                 sessionID: sessionID,
