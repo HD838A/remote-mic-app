@@ -14,6 +14,8 @@ mkdir -p "${OUTPUT:h}"
 xcrun swiftc \
   "$ROOT/Sources/RemoteMic/ATVVProtocol.swift" \
   "$ROOT/Sources/RemoteMic/SystemAudioLifecycle.swift" \
+  "$ROOT/Sources/RemoteMic/SystemRemoteRuntimeLifecycle.swift" \
+  "$ROOT/Sources/RemoteMic/SystemWakeEnvironment.swift" \
   "$ROOT/Sources/RemoteMic/BluetoothLifecycle.swift" \
   "$ROOT/Sources/RemoteMic/RemoteButtons.swift" \
   "$ROOT/Sources/RemoteMic/KeyboardShortcutPicker.swift" \
@@ -32,7 +34,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/TestTone.swift" \
   "$ROOT/Tests/SelfTest/main.swift" \
   -o "$OUTPUT"
-"$OUTPUT"
+REMOTE_MIC_SOURCE_ROOT="$ROOT" "$OUTPUT"
 
 if [[ "$SKIP_SWIFT_PACKAGE_BUILD" == "0" ]]; then
   xcrun swift build

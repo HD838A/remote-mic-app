@@ -195,6 +195,21 @@ final class XiaomiBluetoothBridge: NSObject {
         state = .stopped
     }
 
+    func suspendForSystemSleep() {
+        shouldRun = false
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+        reconnectPolicy.reset()
+        central?.stopScan()
+        closeMicrophoneIfNeeded()
+        if let central, let peripheral, peripheral.state != .disconnected {
+            central.cancelPeripheralConnection(peripheral)
+        }
+        finishAttempt(reconnectAfter: nil)
+        state = .stopped
+        AppLogger.shared.write("BLE SYSTEM SUSPEND completed")
+    }
+
     func reconnectNow() {
         guard shouldRun else { return }
         reconnectWorkItem?.cancel()
