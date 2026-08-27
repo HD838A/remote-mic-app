@@ -267,10 +267,12 @@ struct SettingsView: View {
         .onAppear {
             refreshPermissionStates()
             loginItemService.refresh()
-            macroFeature.setEditorActive(selectedSection == .macros)
+            macroFeature.setEditorActive(false)
         }
         .onChange(of: selectedSection) { section in
-            macroFeature.setEditorActive(section == .macros)
+            if section != .macros {
+                macroFeature.setEditorActive(false)
+            }
         }
         .onDisappear {
             macroFeature.setEditorActive(false)
@@ -2268,6 +2270,13 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .font(.system(size: 13, weight: .medium))
                 .fixedSize()
+                Toggle(
+                    "statistics.transcripts.recording_enable",
+                    isOn: $settings.localOriginalAudioRecordingEnabled
+                )
+                .toggleStyle(.switch)
+                .font(.system(size: 13, weight: .medium))
+                .fixedSize()
             }
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
@@ -2745,8 +2754,9 @@ struct SettingsView: View {
                                 }
                                 .labelsHidden()
                                 .pickerStyle(.segmented)
-                                .frame(width: 400)
+                                .frame(width: 300)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 10)
 
                             Divider()

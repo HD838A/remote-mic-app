@@ -116,6 +116,8 @@
 "action.arrow_down" = "Arrow Down";
 "action.arrow_left" = "Arrow Left";
 "action.arrow_right" = "Arrow Right";
+"action.scroll_up" = "Scroll Up";
+"action.scroll_down" = "Scroll Down";
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "Show Desktop";
@@ -694,7 +696,16 @@
 "statistics.transcripts.enable" = "Save to Reflections";
 "statistics.transcripts.disabled" = "Turn this on to save new voice transcription results locally. Existing history is kept when this switch is off.";
 "statistics.transcripts.empty" = "No voice history yet. Your next completed voice input will appear here.";
-"statistics.transcripts.privacy" = "Only the newly inserted transcript, target app name, and time are saved. Audio, full field contents, window titles, document names, and URLs are not stored. Deleted history is moved to the Trash for recovery.";
+"statistics.transcripts.privacy" = "Text and original audio are saved locally only when their switches are enabled. Full field contents, window titles, document names, and URLs are not stored. Deleted history is moved to the Trash for recovery.";
+"statistics.transcripts.recording_enable" = "Save Original Audio";
+"statistics.transcripts.recording_description" = "Keep a local AAC recording of each voice session and link it to Reflections.";
+"statistics.transcripts.recording_duration" = "%d sec";
+"statistics.transcripts.recording_play" = "Play recording";
+"statistics.transcripts.recording_export" = "Export recording";
+"statistics.transcripts.recording_reveal" = "Show in Finder";
+"statistics.transcripts.recording_delete" = "Delete recording";
+"statistics.transcripts.recording_delete_confirm.title" = "Delete this recording?";
+"statistics.transcripts.recording_delete_confirm.message" = "The recording will be moved to the Trash. Its linked text is not affected.";
 "statistics.transcripts.unknown_application" = "Unknown App";
 "statistics.transcripts.applications" = "Applications";
 "statistics.transcripts.all_applications" = "All Apps";

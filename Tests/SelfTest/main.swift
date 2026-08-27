@@ -494,6 +494,28 @@ if let defaults = UserDefaults(suiteName: suiteName) {
     check(false, "saved bindings merge with defaults")
 }
 
+let scrollSuiteName = "RemoteMicSelfTest.scroll.\(UUID().uuidString)"
+if let defaults = UserDefaults(suiteName: scrollSuiteName) {
+    let settings = AppSettings(defaults: defaults)
+    settings.setAction(.scrollUp, for: .up)
+    settings.setAction(.scrollDown, for: .down)
+    let reloaded = AppSettings(defaults: defaults)
+    check(
+        ButtonAction.scrollUp.rawValue == "scrollUp" &&
+            ButtonAction.scrollDown.rawValue == "scrollDown" &&
+            ButtonAction.scrollUp.category == .basicKeys &&
+            ButtonAction.scrollDown.category == .basicKeys &&
+            ButtonAction.scrollUp.allowsRepeat &&
+            ButtonAction.scrollDown.allowsRepeat &&
+            reloaded.action(for: .up) == .scrollUp &&
+            reloaded.action(for: .down) == .scrollDown,
+        "scroll actions repeat, stay in the basic keys and keep their stored identifiers"
+    )
+    defaults.removePersistentDomain(forName: scrollSuiteName)
+} else {
+    check(false, "scroll actions keep their stored identifiers")
+}
+
 var fnTapScheduledOperations: [() -> Void] = []
 var fnTapEvents: [Bool] = []
 var fnTapAudio: [[Int16]] = []

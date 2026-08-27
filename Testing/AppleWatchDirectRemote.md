@@ -77,7 +77,7 @@
 
 ## 日志收集
 
-保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`WATCH BLE starting/advertising`、`WATCH BLE AUDIO decoded/summary`、`MOBILE VOICE started/stopped/audio/audio_summary`、`restart_deferred/restart_completed`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志，确认 `waiting_for_mac_ready → recording → voice_first_frame` 顺序，并核对 `ble_audio_write_capability`、`ble_audio_queue_progress/summary`、`voice_signal` 和停止汇总。出现 `mac_ready_timeout` 或 `ble_write_failed` 时不应再继续发送本次语音。日志只包含计数和幅度统计，不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
+保存 Mac `~/Library/Logs/RemoteMic/runtime.log` 中问题时间段，重点检查 `PHONE REMOTE enabled_by_user`、`WATCH BLE starting/advertising`、`WATCH BLE AUDIO decoded/summary`、`MOBILE VOICE started/stopped/audio/audio_summary`、`restart_deferred/restart_completed`、授权结果和 `disabled_by_user`。Watch 端从 Watch/iPhone App 的诊断入口导出合并日志，确认 `waiting_for_mac_ready → recording → voice_first_frame` 顺序，并核对 `mic_engine_started`、`mic_pipeline_prepared`、`mic_signal`、`mic_summary`、`mic_convert_failed`、`mic_route_change`、`mic_interruption`、`ble_audio_write_capability`、`ble_audio_queue_progress/summary`、`voice_signal` 和停止汇总。对照 `nonzero_samples`、`peak`、`rms` 判断零样本发生在输入 tap、转换还是发送前；出现 `mac_ready_timeout` 或 `ble_write_failed` 时不应再继续发送本次语音。日志只包含计数和幅度统计，不得上传音频、校验码、密钥、身份指纹、地址或账号信息。
 
 ## 自动化、代理实测和用户实测边界
 

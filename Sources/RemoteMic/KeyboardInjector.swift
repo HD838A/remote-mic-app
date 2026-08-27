@@ -20,6 +20,7 @@ enum KeyboardInjector {
     typealias CmuxCommandRunner = (URL, [String], TimeInterval) -> CmuxCommandResult
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
+    typealias ScrollPoster = (Int32) -> Void
 
     final class AppSwitcherSession {
         private let keyStatePoster: KeyStatePoster
@@ -144,6 +145,9 @@ enum KeyboardInjector {
     static let weChatBundleIdentifier = "com.tencent.xinWeChat"
     static let weChatComposerHorizontalRatio = 0.68
     static let weChatComposerVerticalRatio = 0.85
+    /// One scroll action moves the conversation by this many lines; the 100ms
+    /// repeat interval turns a held D-pad key into a steady scroll.
+    static let scrollLineCount: Int32 = 3
     private static let focusRequests = ApplicationFocusRequestGate()
     private static let frontmostFocusRequests = ApplicationFocusRequestGate()
     private static let manualAccessibilityLock = NSLock()
@@ -226,7 +230,8 @@ enum KeyboardInjector {
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
-        keyStatePoster: KeyStatePoster = postKeyState
+        keyStatePoster: KeyStatePoster = postKeyState,
+        scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) }
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -306,6 +311,10 @@ enum KeyboardInjector {
             keyPoster(123, [])
         case .arrowRight:
             keyPoster(124, [])
+        case .scrollUp:
+            scrollPoster(scrollLineCount)
+        case .scrollDown:
+            scrollPoster(-scrollLineCount)
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -1774,6 +1783,93 @@ enum KeyboardInjector {
         event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         event.post(tap: .cghidEventTap)
         return true
+    }
+
+    /// Scroll events are delivered to the window under the event location, not
+    /// to the focused application, so a remote press must aim at the frontmost
+    /// window instead of wherever the mouse happens to rest.
+    static func scrollTargetLocation(
+        windowFrame: CGRect?,
+        mouseLocation: CGPoint
+    ) -> CGPoint {
+        guard let windowFrame,
+              windowFrame.width > 0,
+              windowFrame.height > 0
+        else { return mouseLocation }
+        return CGPoint(x: windowFrame.midX, y: windowFrame.midY)
+    }
+
+    /// Picks the largest ordinary window of the given process from a
+    /// `CGWindowListCopyWindowInfo` snapshot.
+    static func frontmostWindowFrame(
+        windowInfo: [[String: Any]],
+        processIdentifier: pid_t
+    ) -> CGRect? {
+        windowInfo
+            .filter { entry in
+                guard let owner = entry[kCGWindowOwnerPID as String] as? NSNumber,
+                      owner.int32Value == processIdentifier,
+                      let layer = entry[kCGWindowLayer as String] as? NSNumber,
+                      layer.intValue == 0
+                else { return false }
+                return true
+            }
+            .compactMap { entry -> CGRect? in
+                guard let bounds = entry[kCGWindowBounds as String] as? NSDictionary else {
+                    return nil
+                }
+                return CGRect(dictionaryRepresentation: bounds as CFDictionary)
+            }
+            .filter { $0.width > 0 && $0.height > 0 }
+            .max { $0.width * $0.height < $1.width * $1.height }
+    }
+
+    private static func frontmostWindowFrame() -> CGRect? {
+        guard let processIdentifier = NSWorkspace.shared
+            .frontmostApplication?
+            .processIdentifier
+        else { return nil }
+        let application = AXUIElementCreateApplication(processIdentifier)
+        if let window = axAttribute(application, attribute: kAXFocusedWindowAttribute),
+           CFGetTypeID(window) == AXUIElementGetTypeID(),
+           let frame = axFrame(window as! AXUIElement),
+           frame.width > 0,
+           frame.height > 0 {
+            return frame
+        }
+        guard let windowInfo = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else { return nil }
+        return frontmostWindowFrame(
+            windowInfo: windowInfo,
+            processIdentifier: processIdentifier
+        )
+    }
+
+    private static func currentMouseLocation() -> CGPoint {
+        CGEvent(source: nil)?.location ?? .zero
+    }
+
+    /// Positive `lines` scrolls the content toward the beginning of the
+    /// conversation, so the up key shows earlier messages.
+    private static func postScrollWheel(lines: Int32) {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                  scrollWheelEvent2Source: source,
+                  units: .line,
+                  wheelCount: 1,
+                  wheel1: lines,
+                  wheel2: 0,
+                  wheel3: 0
+              )
+        else { return }
+        event.location = scrollTargetLocation(
+            windowFrame: frontmostWindowFrame(),
+            mouseLocation: currentMouseLocation()
+        )
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
     }
 
     private static func postSystemKey(type: Int32) {

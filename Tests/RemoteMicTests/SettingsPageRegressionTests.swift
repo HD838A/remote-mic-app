@@ -690,6 +690,18 @@ struct SettingsPageRegressionTests {
         #expect(aboutPage.contains("about.version.update_to"))
         #expect(aboutPage.contains("ForEach(AppLanguage.allCases)"))
         #expect(aboutPage.contains(".pickerStyle(.segmented)"))
+        let languageSectionStart = try #require(
+            aboutPage.range(of: "Text(\"about.preferences.language\")")
+        )
+        let languageSectionEnd = try #require(
+            aboutPage.range(
+                of: "Text(\"about.preferences.restart_onboarding\")",
+                range: languageSectionStart.upperBound..<aboutPage.endIndex
+            )
+        )
+        let languageSection = aboutPage[languageSectionStart.lowerBound..<languageSectionEnd.lowerBound]
+        #expect(languageSection.contains(".frame(width: 300)"))
+        #expect(languageSection.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
         #expect(!aboutPage.contains("help.glossary.open"))
         #expect(!aboutPage.contains("openGlossary"))
     }
@@ -778,12 +790,14 @@ struct SettingsPageRegressionTests {
         #expect(integration.contains("feature.executeBoundMacro"))
         #expect(integration.contains("feature.hasActiveBinding"))
         #expect(integration.contains("feature.noteButtonInteraction"))
+        #expect(integration.contains("onBindingEditorActivityChanged"))
         #expect(integration.contains("@Published private(set) var isEditorActive"))
         #expect(settings.contains("macroFeature.settingsView"))
         #expect(settings.contains("macro.integration.focus_mcp_boundary"))
         #expect(settings.contains(".font(.system(size: 12))"))
         #expect(settings.contains("macroFeature.enrollmentView"))
-        #expect(settings.contains("macroFeature.setEditorActive(selectedSection == .macros)"))
+        #expect(settings.contains("macroFeature.setEditorActive(false)"))
+        #expect(settings.contains("if section != .macros"))
         #expect(model.contains("return (resolvedProfileID, !self.macroFeature.isEditorActive)"))
         #expect(model.contains("if macroFeature.isEditorActive"))
         #expect(chinese.contains("输入框"))
@@ -944,14 +958,14 @@ struct SettingsPageRegressionTests {
         #expect(transcriptPage.contains(".lineLimit(2)"))
         #expect(transcriptPage.contains(".fixedSize(horizontal: false, vertical: true)"))
         #expect(!transcriptPage.contains("StatusPill("))
-        #expect(historySource.contains("Dictionary(grouping: model.transcriptRecords"))
+        #expect(historySource.contains("model.transcriptRecords.map(\\.applicationKey)"))
         #expect(historySource.contains("Dictionary(grouping: records"))
         #expect(historySource.contains("allApplicationsButton"))
         #expect(historySource.contains("selectedApplicationKey = nil"))
         #expect(historySource.contains("if let activeApplicationKey"))
         #expect(historySource.contains("records = model.transcriptRecords"))
         #expect(historySource.contains("($0.records.first?.endedAt ?? .distantPast) >"))
-        #expect(historySource.contains("latestEndedAt: records.map(\\.endedAt).max()"))
+        #expect(historySource.contains("latestEndedAt: max("))
         #expect(historySource.contains("private var isApplicationSwitcherExpanded = false"))
         #expect(historySource.contains("ScrollViewReader { proxy in"))
         #expect(historySource.contains("LazyVGrid("))
@@ -988,7 +1002,7 @@ struct SettingsPageRegressionTests {
         #expect(!agentAccessSource.contains("Popover"))
 
         #expect(modelSource.contains(
-            "transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)"
+            "transcriptCaptureCoordinator.startSession(sessionID: sessionID, startedAt: startedAt, source: source)"
         ))
         #expect(modelSource.contains(
             "transcriptCaptureCoordinator.finishSession(endedAt: endedAt)"
