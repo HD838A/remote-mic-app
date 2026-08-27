@@ -196,6 +196,60 @@ struct SettingsPageRegressionTests {
         #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
     }
 
+    @Test func qianwenCompatibilityStaysInlineAndReadable() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("model.setQianwenVoiceModeEnabled($0)"))
+        let title = try #require(source.range(of: "audio.compatibility.qianwen_mode.title"))
+        let labelBlock = source[title.lowerBound...].prefix(600)
+        #expect(labelBlock.contains(".font(.system(size: 12"))
+        #expect(!labelBlock.contains(".sheet"))
+        #expect(!labelBlock.contains("Popover"))
+    }
+
+    @Test func qianwenVoiceFocusTapPreparesTheFrontmostAppBeforeAcceptingAudio() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let voiceStart = try #require(source.range(of: "func bluetoothBridgeDidStartVoice"))
+        let voiceStop = try #require(source.range(
+            of: "func bluetoothBridgeDidStopVoice",
+            range: voiceStart.upperBound..<source.endIndex
+        ))
+        let startSource = source[voiceStart.lowerBound..<voiceStop.lowerBound]
+
+        let focusGate = try #require(startSource.range(
+            of: "prepareQianwenVoiceDestinationIfNeeded(bridge)"
+        ))
+        let audioGate = try #require(startSource.range(
+            of: "ensureVirtualAudioOutputReady(reason: \"bluetooth_voice_start\")"
+        ))
+        #expect(focusGate.lowerBound < audioGate.lowerBound)
+        #expect(source.contains("KeyboardInjector.focusFrontmostComposer"))
+        #expect(!source.contains("KeyboardInjector.send(.openCodex)"))
+        #expect(source.contains("qianwenVoiceSession.armHardwareMapping()"))
+        let helper = try #require(source.range(of: "private func prepareQianwenVoiceDestinationIfNeeded"))
+        let helperEnd = try #require(source.range(
+            of: "private func scheduleQianwenRightCommandReleaseIfNeeded",
+            range: helper.upperBound..<source.endIndex
+        ))
+        let helperSource = source[helper.lowerBound..<helperEnd.lowerBound]
+        #expect(helperSource.contains("QIANWEN FOCUS requested target=frontmost"))
+        #expect(!helperSource.contains("PresetApplication.codex"))
+        #expect(!helperSource.contains("KeyboardInjector.send(.escape)"))
+    }
+
     @Test func mappingFooterUsesCompactLayoutAtMinimumWindowWidth() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -479,12 +533,13 @@ struct SettingsPageRegressionTests {
 
         for requiredAction in [
             "model.reconnect()",
-            "model.applyAudioSettings()",
+            "model.selectAudioDevice(value)",
             "model.refreshAudioDevices()",
             "model.sendTestTone()",
             "model.selectDoubaoAudioDevice()",
             "model.openDoubaoDriverInstructions(using: localization)",
             "model.setVoiceFnTapModeEnabled",
+            "model.setQianwenVoiceModeEnabled",
             "model.togglePhoneRemoteConnection()",
             "model.toggleWatchRemoteConnection()",
             "copyTestFlightPublicBetaLink()",
@@ -1005,7 +1060,10 @@ struct SettingsPageRegressionTests {
             "transcriptCaptureCoordinator.startSession(sessionID: sessionID, startedAt: startedAt, source: source)"
         ))
         #expect(modelSource.contains(
-            "transcriptCaptureCoordinator.finishSession(endedAt: endedAt)"
+            "transcriptCaptureCoordinator.finishSession("
+        ))
+        #expect(modelSource.contains(
+            "allowsInsertionOutsideReportedSelection: settings.qianwenVoiceModeEnabled"
         ))
         #expect(modelSource.contains("transcriptCaptureCoordinator.cancel()"))
         #expect(!captureSource.contains("PrivateFeatureIntegration"))

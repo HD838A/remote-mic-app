@@ -53,7 +53,7 @@ SayAll is built natively with SwiftUI. While running in the background, it uses 
 
 ### Speak to type
 
-Hold to speak and release to stop. Add text to the app you are using without interrupting a meeting or pausing your music. SayAll does not automatically change the Mac's default input or output devices.
+Hold to speak and release to stop. Add text to the app you are using without interrupting a meeting or pausing your music. SayAll does not change the Mac's default input or output devices.
 
 ### Press once to do more (new capability, real-world validation in progress)
 
@@ -128,6 +128,12 @@ The optional **Short Voice Tap Focuses Input** setting is off by default. A shor
 
 To confirm the audio path, send a one-second test tone or inspect input level in QuickTime Player's **New Audio Recording** window.
 
+### Qianwen Input Method compatibility
+
+To keep Qianwen Input Method's default Right Command voice shortcut, enable **Qianwen Compatibility Mode** under **Connection & Voice**. SayAll uses the RC003's hardware HID event to start Qianwen. Turn off Qianwen's option that also starts voice input on a short press. In the current frontmost app, tap the remote voice button once to focus the most likely chat composer, then hold it to speak. SayAll does not switch apps or dismiss dialogs. The generic path does not use coordinates, but WeChat does not expose its composer to macOS, so its main window uses a window-relative click only as the short-tap fallback. After release and queued audio drain, SayAll briefly neutralizes F5, releases Command, sends a harmless F20 event so Qianwen confirms the current voice input, then rearms the Right Command mapping. SayAll selects `MiRemoteV 2ch` as its voice output; select `MiRemoteV 2ch` explicitly as Qianwen's microphone instead of using System Default.
+
+You must still hold the remote voice button while speaking and release it to finish. Qianwen mode and **Simulate Fn Tap on Voice Key** are mutually exclusive; enabling either one disables the other.
+
 ### Typeless compatibility
 
 Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝牙遥控器 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
@@ -177,7 +183,7 @@ For AI-assisted installation, consent, client connection, and verification, give
 - Input Monitoring: identify ordinary remote buttons.
 - Accessibility: send mapped button actions to the active app.
 
-SayAll does not upload or store voice, does not change the system default input or output device, and does not log voice content, Bluetooth addresses, or peripheral identifiers.
+SayAll does not upload or store voice and does not change the system default input or output device. Voice content, Bluetooth addresses, and peripheral identifiers are never logged.
 
 ## Uninstall
 

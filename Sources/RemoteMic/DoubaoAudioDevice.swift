@@ -16,4 +16,23 @@ enum DoubaoAudioDevicePolicy {
         }
         return LocalizedMessage("audio.compatibility.device_not_detected", arguments: [deviceName])
     }
+
+    static func resolvedDeviceUID(
+        requestedUID: String,
+        qianwenModeEnabled: Bool,
+        devices: [AudioDeviceInfo]
+    ) -> String {
+        guard qianwenModeEnabled else { return requestedUID }
+        return device(in: devices)?.uid ?? ""
+    }
+
+    static func persistedDeviceUID(
+        resolvedDeviceUID: String,
+        qianwenModeEnabled: Bool
+    ) -> String {
+        guard qianwenModeEnabled, resolvedDeviceUID.isEmpty else {
+            return resolvedDeviceUID
+        }
+        return deviceUID
+    }
 }

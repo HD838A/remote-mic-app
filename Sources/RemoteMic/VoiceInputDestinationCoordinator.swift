@@ -78,19 +78,25 @@ struct VoiceInputDestinationSnapshot: Equatable {
     }
 
     var isSafeEditableDestination: Bool {
-        guard enabled, editable, !protectedContent else { return false }
-        guard role == "AXTextArea" || role == "AXTextField" || role == "AXComboBox" else {
-            return false
-        }
-        guard role != "AXSecureTextField", subrole != "AXSecureTextField" else { return false }
+        enabled && editable && !isSensitiveDestination
+    }
+
+    var allowsOpaqueVoiceShortcutPassThrough: Bool {
+        guard enabled, bundleIdentifier != nil, !isSensitiveDestination else { return false }
+        return role.isEmpty || role == "AXWindow" || role == "AXApplication"
+    }
+
+    private var isSensitiveDestination: Bool {
+        guard !protectedContent,
+              role != "AXSecureTextField",
+              subrole != "AXSecureTextField"
+        else { return true }
         let normalized = semanticText.lowercased()
         let sensitiveTerms = [
             "password", "passcode", "secret", "api key", "apikey", "token",
-            "credit card", "search", "find", "filter", "address bar", "settings",
-            "preferences", "command palette", "密码", "口令", "密钥", "令牌",
-            "信用卡", "搜索", "查找", "筛选", "设置", "偏好",
+            "credit card", "密码", "口令", "密钥", "令牌", "信用卡", "银行卡",
         ]
-        return !sensitiveTerms.contains(where: normalized.contains)
+        return sensitiveTerms.contains(where: normalized.contains)
     }
 
     static func system() -> VoiceInputDestinationSnapshot {
@@ -103,7 +109,7 @@ struct VoiceInputDestinationSnapshot: Equatable {
             systemWideElement,
             attribute: kAXFocusedUIElementAttribute as CFString
         ) else {
-            return empty(bundleIdentifier: frontmostBundleIdentifier)
+            return empty(bundleIdentifier: frontmostBundleIdentifier, enabled: true)
         }
 
         var processIdentifier: pid_t = 0
@@ -125,12 +131,18 @@ struct VoiceInputDestinationSnapshot: Equatable {
             axString(focusedElement, attribute: kAXPlaceholderValueAttribute as CFString),
         ].joined(separator: " ")
         let roleIsEditable = role == "AXTextArea" || role == "AXTextField" || role == "AXComboBox"
+        let exposesEditableText = [
+            kAXValueAttribute,
+            kAXSelectedTextAttribute,
+            kAXSelectedTextRangeAttribute,
+        ].contains { axAttributeIsSettable(focusedElement, attribute: $0 as CFString) }
         return VoiceInputDestinationSnapshot(
             bundleIdentifier: focusedBundleIdentifier ?? frontmostBundleIdentifier,
             role: role,
             subrole: subrole,
             enabled: axBool(focusedElement, attribute: kAXEnabledAttribute as CFString) ?? true,
-            editable: axBool(focusedElement, attribute: "AXEditable" as CFString) ?? roleIsEditable,
+            editable: (axBool(focusedElement, attribute: "AXEditable" as CFString) ?? false) ||
+                roleIsEditable || exposesEditableText,
             protectedContent: axBool(
                 focusedElement,
                 attribute: "AXProtectedContent" as CFString
@@ -140,12 +152,15 @@ struct VoiceInputDestinationSnapshot: Equatable {
         )
     }
 
-    private static func empty(bundleIdentifier: String?) -> VoiceInputDestinationSnapshot {
+    private static func empty(
+        bundleIdentifier: String?,
+        enabled: Bool = false
+    ) -> VoiceInputDestinationSnapshot {
         VoiceInputDestinationSnapshot(
             bundleIdentifier: bundleIdentifier,
             role: "",
             subrole: "",
-            enabled: false,
+            enabled: enabled,
             editable: false,
             protectedContent: false,
             semanticText: ""
@@ -178,6 +193,15 @@ struct VoiceInputDestinationSnapshot: Equatable {
             return nil
         }
         return value as? Bool
+    }
+
+    private static func axAttributeIsSettable(
+        _ element: AXUIElement,
+        attribute: CFString
+    ) -> Bool {
+        var settable = DarwinBoolean(false)
+        return AXUIElementIsAttributeSettable(element, attribute, &settable) == .success &&
+            settable.boolValue
     }
 }
 

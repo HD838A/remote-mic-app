@@ -109,6 +109,14 @@ final result: passed（上述人工状态与窗口边界除外）
 
 final result: passed（真实遥控器与真实系统快捷键验收除外）
 
+## 2026-08-24 千问兼容模式
+
+- “连接与语音”的既有兼容面板内增加单一开关，不新增下拉列表、Popover、Sheet 或确认弹窗；标题、说明固定不小于 12pt。
+- 开关说明同时写明右 Command、`MiRemoteV 2ch`、短按定位与自动确认，不修改系统默认输入。
+- 自动化已覆盖开关入口、字号、配置兼容和互斥状态。中文/英文、浅色/深色、`800 × 650`、真实 RC003、千问输入法和系统默认麦克风恢复仍按 `Testing/QianwenInputMethodCompatibility.md` 人工验收。
+
+final result: automated checks passed; real desktop acceptance pending.
+
 ## 2026-08-24 语音键模式布局 QA
 
 - “按键映射”页底部的 HID 状态、选择锁定、语音触发键、Fn 点按、短按聚焦和恢复默认使用稳定纵向分区；三段选择和两个开关保留在页面内，不使用下拉列表、Popover 或 Sheet。

@@ -127,6 +127,7 @@ enum KeyboardInjector {
     static let functionKeyCode: CGKeyCode = 63
     static let leftCommandKeyCode: CGKeyCode = 55
     static let rightCommandKeyCode: CGKeyCode = 54
+    static let f20KeyCode: CGKeyCode = 90
     /// Web content shells only build the accessibility tree once an assistive
     /// client announces itself, so the composer scan finds an empty shell until
     /// one of these attributes is set. `AXManualAccessibility` is the Chromium
@@ -210,6 +211,30 @@ enum KeyboardInjector {
             isPressed,
             flags
         )
+    }
+
+    @discardableResult
+    static func setRightCommandPressed(
+        _ isPressed: Bool,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postUnmarkedKeyState
+    ) -> Bool {
+        guard accessibilityTrusted() else { return false }
+        return keyStatePoster(
+            rightCommandKeyCode,
+            isPressed,
+            isPressed ? .maskCommand : []
+        )
+    }
+
+    @discardableResult
+    static func sendQianwenConfirmationInterrupt(
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        keyStatePoster: KeyStatePoster = postUnmarkedKeyState
+    ) -> Bool {
+        guard accessibilityTrusted() else { return false }
+        return keyStatePoster(f20KeyCode, true, []) &&
+            keyStatePoster(f20KeyCode, false, [])
     }
 
     @discardableResult
@@ -1776,13 +1801,41 @@ enum KeyboardInjector {
         isDown: Bool,
         flags: CGEventFlags
     ) -> Bool {
-        guard let source = CGEventSource(stateID: .hidSystemState),
-              let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
-        else { return false }
-        event.flags = flags
-        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        guard let event = keyStateEvent(
+            code: code,
+            isDown: isDown,
+            flags: flags,
+            userData: syntheticEventMarker
+        ) else { return false }
         event.post(tap: .cghidEventTap)
         return true
+    }
+
+    private static func postUnmarkedKeyState(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags
+    ) -> Bool {
+        guard let event = keyStateEvent(code: code, isDown: isDown, flags: flags, userData: nil)
+        else { return false }
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
+    static func keyStateEvent(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags,
+        userData: Int64?
+    ) -> CGEvent? {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
+        else { return nil }
+        event.flags = flags
+        if let userData {
+            event.setIntegerValueField(.eventSourceUserData, value: userData)
+        }
+        return event
     }
 
     /// Scroll events are delivered to the window under the event location, not

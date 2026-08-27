@@ -293,7 +293,8 @@ struct VoiceKeyModeTests {
         ))
         let modelImportSource = modelSource[modelImportStart.lowerBound..<modelImportEnd.lowerBound]
         #expect(modelImportSource.contains("Self.importConfiguration("))
-        #expect(modelImportSource.contains("releaseVoiceKey: { releaseVoiceKeyIfNeeded() }"))
+        #expect(modelImportSource.contains("qianwenVoiceSession.cancelVoice()"))
+        #expect(modelImportSource.contains("return releaseVoiceKeyIfNeeded()"))
     }
 
     @Test func explicitCommandVoiceSessionDoesNotReactToOrdinaryFunctionEdges() {

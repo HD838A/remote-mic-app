@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [千问遥控语音误拒绝搜索框和代码编辑器](./2026-08-26-qianwen-search-and-editor-focus-rejected.md)
+- [千问语音输出误选 Mac 扬声器产生电流声](./2026-08-25-qianwen-speaker-route-current-noise.md)
 - [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md)
 - [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md)
 - [自定义快捷键连续快速按只有第一次生效](./2026-08-25-custom-shortcut-rapid-press-dropped.md)
@@ -69,6 +71,8 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-26 | [千问遥控语音误拒绝搜索框和代码编辑器](./2026-08-26-qianwen-search-and-editor-focus-rejected.md) | 候选修复完成，自动化通过，等待 RC003 真机复验 |
+| 2026-08-25 | [千问语音输出误选 Mac 扬声器产生电流声](./2026-08-25-qianwen-speaker-route-current-noise.md) | 失败关闭自动化通过，等待设备暂时不可用的真机复验 |
 | 2026-08-26 | [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md) | 最小候选修复完成，等待 Spotlight、Launchpad、飞书/Lark、cmux 和豆包真实验收 |
 | 2026-08-25 | [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md) | 候选修复完成，等待真实 Mac、遥控器和豆包输入验收 |
 | 2026-08-25 | [自定义快捷键连续快速按只有第一次生效](./2026-08-25-custom-shortcut-rapid-press-dropped.md) | 候选修复完成；自动化与项目自检通过，等待 RC001 / RC003 真机连按验收 |
@@ -96,7 +100,7 @@
 | 2026-08-18 | [回眸页面阻断 Intel Ventura 构建](./2026-08-18-reflections-intel-ventura-onchange.md) | 已修复，等待 Intel 真机验收 |
 | 2026-08-18 | [Apple Watch BLE 语音已启动但没有有效电平](./2026-08-18-watch-ble-audio-no-signal.md) | 诊断修复完成，等待真机验收 |
 | 2026-08-18 | [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md) | 修复完成，等待真实 Codex 验收 |
-| 2026-08-17 | [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md) | 修复完成，等待真实快速发送复验 |
+| 2026-08-17 | [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md) | 已修复并通过 RC003、千问与微信真机验收 |
 | 2026-08-18 | [800 × 650 按键映射页页头被压成竖排](./2026-08-18-settings-mapping-header-compressed-800x650.md) | 已修复，等待最终打包 App 可见页面复验 |
 | 2026-07-29 | [睡眠或音频路由变化后打开页面崩溃](./2026-07-29-audio-route-change-player-crash.md) | 已修复 |
 | 2026-07-30 | [Automatic Application Focus Investigation](./2026-07-30-automatic-application-focus.md) | 已修复 |

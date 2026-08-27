@@ -48,3 +48,11 @@
 ## Conclusion
 
 The repository screenshots show the macOS 26 Liquid Glass appearance; the same page structure automatically uses compatibility styling on macOS 14/15. No review reference depends on a local temporary directory.
+
+## 2026-08-24 Qianwen compatibility mode
+
+- The existing compatibility panel under Connection & Voice gains one inline switch without a new drop-down, popover, sheet, or confirmation dialog. Its title and detail remain at least 12pt.
+- The copy explicitly names Right Command, `MiRemoteV 2ch`, temporary default-input management, and restoration instead of hiding a system-input change as a background side effect.
+- Automation covers the switch entry, typography, configuration compatibility, and mutual exclusion. Chinese/English, light/dark, `800 × 650`, real RC003, Qianwen Input Method, and default-microphone restoration remain manual checks in `Testing/QianwenInputMethodCompatibility.md`.
+
+final result: automated checks passed; real desktop acceptance pending.

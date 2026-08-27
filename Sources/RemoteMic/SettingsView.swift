@@ -853,8 +853,7 @@ struct SettingsView: View {
                     Picker("", selection: Binding(
                         get: { settings.selectedAudioDeviceUID },
                         set: { value in
-                            settings.selectedAudioDeviceUID = value
-                            model.applyAudioSettings()
+                            model.selectAudioDevice(value)
                         }
                     )) {
                         Text("audio.output.disabled").tag("")
@@ -955,6 +954,24 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                Toggle(isOn: Binding(
+                    get: { settings.qianwenVoiceModeEnabled },
+                    set: { model.setQianwenVoiceModeEnabled($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("audio.compatibility.qianwen_mode.title")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("audio.compatibility.qianwen_mode.detail")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+                .disabled(!model.hasDoubaoAudioDevice && !settings.qianwenVoiceModeEnabled)
             }
         }
     }

@@ -10,6 +10,7 @@ enum AppConfigurationError: Error {
 struct VoiceKeyConfigurationState: Equatable {
     let mode: VoiceKeyMode
     let fnTapModeEnabled: Bool
+    let qianwenModeEnabled: Bool
     let shortTapFocusEnabled: Bool
 }
 
@@ -30,6 +31,7 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
+    let qianwenVoiceModeEnabled: Bool?
     let voiceShortTapFocusEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
@@ -252,6 +254,7 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let qianwenVoiceModeEnabled = "qianwenVoiceModeEnabled"
         static let voiceShortTapFocusEnabled = "voiceShortTapFocusEnabled"
         static let voiceKeyMode = "voiceKeyMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
@@ -367,6 +370,15 @@ final class AppSettings: ObservableObject {
             defaults.set(
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
+            )
+        }
+    }
+
+    @Published var qianwenVoiceModeEnabled: Bool {
+        didSet {
+            defaults.set(
+                qianwenVoiceModeEnabled,
+                forKey: Keys.qianwenVoiceModeEnabled
             )
         }
     }
@@ -588,14 +600,18 @@ final class AppSettings: ObservableObject {
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
+        let savedQianwenVoiceModeEnabled = defaults.bool(forKey: Keys.qianwenVoiceModeEnabled)
+        qianwenVoiceModeEnabled = savedQianwenVoiceModeEnabled
         let savedVoiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
-        voiceFnTapModeEnabled = savedVoiceFnTapModeEnabled
-        voiceShortTapFocusEnabled = !savedVoiceFnTapModeEnabled && defaults.bool(
+        voiceFnTapModeEnabled = !savedQianwenVoiceModeEnabled && savedVoiceFnTapModeEnabled
+        voiceShortTapFocusEnabled = !savedQianwenVoiceModeEnabled &&
+            !savedVoiceFnTapModeEnabled && defaults.bool(
             forKey: Keys.voiceShortTapFocusEnabled
         )
-        voiceKeyMode = VoiceKeyMode(
+        let savedVoiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
+        voiceKeyMode = savedQianwenVoiceModeEnabled ? .function : savedVoiceKeyMode
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -1384,6 +1400,7 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
+            qianwenVoiceModeEnabled: qianwenVoiceModeEnabled,
             voiceShortTapFocusEnabled: voiceShortTapFocusEnabled,
             voiceKeyMode: voiceKeyMode,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
@@ -1395,34 +1412,44 @@ final class AppSettings: ObservableObject {
 
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {
         VoiceKeyConfigurationState(
-            mode: voiceKeyMode,
-            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function,
-            shortTapFocusEnabled: voiceShortTapFocusEnabled && !voiceFnTapModeEnabled
+            mode: qianwenVoiceModeEnabled ? .function : voiceKeyMode,
+            fnTapModeEnabled: !qianwenVoiceModeEnabled &&
+                voiceFnTapModeEnabled && voiceKeyMode == .function,
+            qianwenModeEnabled: qianwenVoiceModeEnabled,
+            shortTapFocusEnabled: !qianwenVoiceModeEnabled &&
+                voiceShortTapFocusEnabled && !voiceFnTapModeEnabled
         )
     }
 
     func voiceKeyConfigurationState(in data: Data) throws -> VoiceKeyConfigurationState {
         let configuration = try Self.validatedConfiguration(from: data)
-        let mode = configuration.voiceKeyMode ?? .function
-        let fnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
+        let qianwenModeEnabled = configuration.qianwenVoiceModeEnabled ?? false
+        let mode = qianwenModeEnabled ? .function : configuration.voiceKeyMode ?? .function
+        let fnTapModeEnabled = !qianwenModeEnabled &&
+            (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
         return VoiceKeyConfigurationState(
             mode: mode,
             fnTapModeEnabled: fnTapModeEnabled,
+            qianwenModeEnabled: qianwenModeEnabled,
             shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
-                !fnTapModeEnabled
+                !qianwenModeEnabled && !fnTapModeEnabled
         )
     }
 
     func importConfiguration(from data: Data) throws {
         let configuration = try Self.validatedConfiguration(from: data)
-        let importedMode = configuration.voiceKeyMode ?? .function
-        let importedFnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) &&
-            importedMode == .function
+        let qianwenModeEnabled = configuration.qianwenVoiceModeEnabled ?? false
+        let importedMode = qianwenModeEnabled
+            ? .function
+            : configuration.voiceKeyMode ?? .function
+        let importedFnTapModeEnabled = !qianwenModeEnabled &&
+            (configuration.voiceFnTapModeEnabled ?? false) && importedMode == .function
         let importedVoiceKeyConfiguration = VoiceKeyConfigurationState(
             mode: importedMode,
             fnTapModeEnabled: importedFnTapModeEnabled,
+            qianwenModeEnabled: qianwenModeEnabled,
             shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
-                !importedFnTapModeEnabled
+                !qianwenModeEnabled && !importedFnTapModeEnabled
         )
 
         let importedBindings = Dictionary(
@@ -1475,8 +1502,10 @@ final class AppSettings: ObservableObject {
         if let checksForPreReleaseUpdates = configuration.checksForPreReleaseUpdates {
             self.checksForPreReleaseUpdates = checksForPreReleaseUpdates
         }
+        qianwenVoiceModeEnabled = importedVoiceKeyConfiguration.qianwenModeEnabled
         voiceKeyMode = importedVoiceKeyConfiguration.mode
-        voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
+        voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled &&
+            voiceKeyMode == .function
         voiceShortTapFocusEnabled = importedVoiceKeyConfiguration.shortTapFocusEnabled
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,

@@ -1101,6 +1101,70 @@ struct RemoteButtonsTests {
         #expect(!didPost)
     }
 
+    @Test func qianwenVoicePostsRightCommandDownAndUp() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        #expect(KeyboardInjector.setRightCommandPressed(
+            true,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(KeyboardInjector.setRightCommandPressed(
+            false,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == KeyboardInjector.rightCommandKeyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2 == .maskCommand)
+        #expect(posted[1].0 == KeyboardInjector.rightCommandKeyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2.isEmpty)
+    }
+
+    @Test func qianwenRightCommandEventOmitsTheSyntheticMarker() throws {
+        let qianwenEvent = try #require(KeyboardInjector.keyStateEvent(
+            code: KeyboardInjector.rightCommandKeyCode,
+            isDown: true,
+            flags: .maskCommand,
+            userData: nil
+        ))
+        let ordinaryInjectedEvent = try #require(KeyboardInjector.keyStateEvent(
+            code: KeyboardInjector.functionKeyCode,
+            isDown: true,
+            flags: .maskSecondaryFn,
+            userData: KeyboardInjector.syntheticEventMarker
+        ))
+
+        #expect(qianwenEvent.getIntegerValueField(.eventSourceUserData) == 0)
+        #expect(
+            ordinaryInjectedEvent.getIntegerValueField(.eventSourceUserData) ==
+                KeyboardInjector.syntheticEventMarker
+        )
+    }
+
+    @Test func qianwenConfirmationUsesAHarmlessF20Tap() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+
+        #expect(KeyboardInjector.sendQianwenConfirmationInterrupt(
+            accessibilityTrusted: { true },
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            }
+        ))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == KeyboardInjector.f20KeyCode)
+        #expect(posted[0].1)
+        #expect(!posted[1].1)
+        #expect(posted.allSatisfy { $0.2.isEmpty })
+    }
+
     @Test func unconfiguredCustomShortcutDoesNotReportPermissionFailure() {
         #expect(KeyboardInjector.send(
             .customShortcut,
@@ -1288,6 +1352,40 @@ struct RemoteButtonsTests {
         #expect(!focusAttempted)
     }
 
+    @Test func electronComposerFocusWaitsForItsAccessibilityTree() {
+        #expect(KeyboardInjector.manualAccessibilityAttribute == "AXManualAccessibility")
+        #expect(KeyboardInjector.enhancedUserInterfaceAttribute == "AXEnhancedUserInterface")
+        let retryWindow =
+            (KeyboardInjector.composerFocusMaximumAttempts - 1) *
+            KeyboardInjector.composerFocusRetryMilliseconds
+        #expect(retryWindow >= 2_000)
+    }
+
+    @Test func manualAccessibilityFallbackAndLoggingAreDeterministic() {
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .success,
+            fallback: nil
+        ) == "success")
+        #expect(KeyboardInjector.manualAccessibilityResultToken(
+            primary: .attributeUnsupported,
+            fallback: .success
+        ) == "fallback_enhanced_success")
+        #expect(KeyboardInjector.manualAccessibilityEffectiveResult(
+            primary: .attributeUnsupported,
+            fallback: .cannotComplete
+        ) == .cannotComplete)
+        #expect(KeyboardInjector.shouldLogManualAccessibility(
+            result: .attributeUnsupported,
+            attempt: 0,
+            alreadyLoggedSuccess: false
+        ))
+        #expect(!KeyboardInjector.shouldLogManualAccessibility(
+            result: .attributeUnsupported,
+            attempt: 4,
+            alreadyLoggedSuccess: false
+        ))
+    }
+
     @Test func newerApplicationFocusRequestInvalidatesOlderRequest() {
         let gate = ApplicationFocusRequestGate()
         let first = gate.begin()
@@ -1376,6 +1474,15 @@ struct RemoteButtonsTests {
             enabled: true
         )
         #expect(KeyboardInjector.composerCandidateScore(settingsField, windowFrame: windowFrame) != nil)
+    }
+
+    @Test func weChatComposerFallbackUsesOnlyALargeWindowRelativePoint() {
+        let frame = CGRect(x: 250, y: 40, width: 1_000, height: 1_000)
+        let point = KeyboardInjector.weChatComposerFocusPoint(windowFrame: frame)
+        #expect(point == CGPoint(x: 930, y: 890))
+        #expect(KeyboardInjector.weChatComposerFocusPoint(
+            windowFrame: CGRect(x: 0, y: 0, width: 600, height: 400)
+        ) == nil)
     }
 
     @Test func codexComposerSemanticsAndTraversalPriorityReachTheVisibleEditor() {
@@ -2030,6 +2137,37 @@ struct RemoteButtonsTests {
             from: try JSONSerialization.data(withJSONObject: legacyObject)
         )
         #expect(!target.voiceFnTapModeEnabled)
+    }
+
+    @Test func qianwenVoiceModePersistsExportsAndWinsOverFnTapMode() throws {
+        let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let source = AppSettings(defaults: sourceDefaults)
+        source.qianwenVoiceModeEnabled = true
+        source.voiceFnTapModeEnabled = true
+
+        let restarted = AppSettings(defaults: sourceDefaults)
+        #expect(restarted.qianwenVoiceModeEnabled)
+        #expect(!restarted.voiceFnTapModeEnabled)
+
+        let exported = try restarted.exportedConfigurationData()
+        let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
+        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: exported)
+        #expect(target.qianwenVoiceModeEnabled)
+        #expect(!target.voiceFnTapModeEnabled)
+
+        var legacyObject = try #require(
+            JSONSerialization.jsonObject(with: exported) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "qianwenVoiceModeEnabled")
+        try target.importConfiguration(
+            from: try JSONSerialization.data(withJSONObject: legacyObject)
+        )
+        #expect(!target.qianwenVoiceModeEnabled)
     }
 
     @Test func importedFnTapModeWinsOverShortTapFocus() throws {
