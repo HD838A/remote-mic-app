@@ -735,7 +735,9 @@ struct OnboardingFlowTests {
             range: reconnectStart.upperBound..<modelSource.endIndex
         ))
         let reconnectSource = modelSource[reconnectStart.lowerBound..<reconnectEnd.lowerBound]
-        #expect(reconnectSource.contains("guard started else { return }"))
+        #expect(reconnectSource.contains(
+            "guard started, systemRemoteRuntimeState.isActive else"
+        ))
         #expect(reconnectSource.contains("bluetoothBridges.isEmpty && discoveryBluetoothBridge == nil"))
         #expect(reconnectSource.contains("startBluetoothConnections()"))
     }
