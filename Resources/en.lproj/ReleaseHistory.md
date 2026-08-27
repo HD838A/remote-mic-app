@@ -1,5 +1,13 @@
 # Version History
 
+## 1.9.17 (Pre-release)
+
+- Improved first-run voice-tool setup with installation detection and guidance for WeChat Input, Typeless, and Doubao.
+- Added Fn/Globe, Left Command, and Right Command voice-trigger choices during onboarding while keeping Typeless on Fn press.
+- Automatically switches to the selected input source and avoids sending upgraded users through the full onboarding flow again.
+- Fixed semantic-version update detection when a preview build has a higher build number than the candidate.
+- Removed the Version History button that opened downloadable text; the About page now shows localized release notes directly.
+
 ## 1.9.16 (Pre-release)
 
 - Added Left Command and Right Command voice-trigger modes while keeping Fn/Globe as the default.
