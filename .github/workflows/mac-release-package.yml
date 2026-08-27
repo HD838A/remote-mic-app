@@ -294,7 +294,6 @@ jobs:
       - name: Prepare canonical public asset bundle
         run: |
           bundle="$RUNNER_TEMP/preview-bundle"
-          /bin/mkdir -p "$bundle"
           ./scripts/prepare-public-release-assets.sh "$GITHUB_WORKSPACE/dist" "$bundle"
 
       - name: Upload immutable payload artifact
