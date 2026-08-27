@@ -58,9 +58,9 @@
 
 受保护 staging 成功后，在公开 Tag/Release 建立前执行：
 
-1. scripts/prepare-staged-preview-ui-test.sh 下载指定 Run、attempt 和 artifact ID，不使用 latest artifact；同时下载并验证稳定 v1.8.3 的公开归档。
+1. scripts/prepare-staged-preview-ui-test.sh 下载指定 Run、attempt 和 artifact ID，不使用 latest artifact；默认下载稳定 v1.8.3，验证预览升级时可设置 `PREVIEW_UI_BASELINE_TAG`（例如 v1.9.16）下载已发布但仅在本地受保护验收使用的低版本归档。
 2. 用本地固定 feed，只把生产 appcast 的不可变 URL 前缀替换为本地地址，确保 enclosure 是 staging 的同一 ZIP。
-3. 使用稳定版 App 的真实 Sparkle UI 完成 check、download、install、首次启动、退出和二次启动；验证版本/Build、Team ID L3QHLDRPAY、公证、Gatekeeper、Sparkle helper 的 0755 权限和 Versions/Current 链接。
+3. 使用低于候选版本的基线 App 的真实 Sparkle UI 完成 check、download、install、首次启动、退出和二次启动；验证版本/Build、Team ID L3QHLDRPAY、公证、Gatekeeper、Sparkle helper 的 0755 权限和 Versions/Current 链接。该基线只在本地受保护 UI 验收中使用，不改变稳定 feed 或公开分类。
 4. 检查没有新增崩溃报告、应用可以再次启动，并用 scripts/record-preview-ui-attestation.sh 生成结构化证明。仅运行 Sparkle CLI probe、单元测试或静态解压不能替代真实 UI 安装；该步骤未完成时不得公开 Preview。
 5. scripts/verify-preview-ui-attestation.sh 必须重新核对 stage record、manifest、production/test appcast 摘要和安装结果。
 

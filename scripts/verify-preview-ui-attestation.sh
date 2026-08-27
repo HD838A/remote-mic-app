@@ -26,7 +26,9 @@ jq -e --slurpfile stage "$STAGE" '
   .assetManifestSHA256 == $stage[0].assetManifestSHA256 and
   .stagedAt == $stage[0].stagedAt and (.stagedAt | fromdateiso8601 > 0) and
   .target.version == $stage[0].version and .target.build == $stage[0].build and
-  .baseline.tag == "v1.8.3" and .baseline.version == "1.8.3" and
+  (.baseline.tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+  (.baseline.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
+  ((.baseline.version | split(".") | map(tonumber)) < (.target.version | split(".") | map(tonumber))) and
   .baseline.developerTeamId == "L3QHLDRPAY" and
   .baseline.signatureVerified == true and .baseline.notarizationValidated == true and
   .baseline.gatekeeperAccepted == true and .baseline.launched == true and
