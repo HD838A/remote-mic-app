@@ -958,14 +958,14 @@ struct SettingsPageRegressionTests {
         #expect(transcriptPage.contains(".lineLimit(2)"))
         #expect(transcriptPage.contains(".fixedSize(horizontal: false, vertical: true)"))
         #expect(!transcriptPage.contains("StatusPill("))
-        #expect(historySource.contains("Dictionary(grouping: model.transcriptRecords"))
+        #expect(historySource.contains("model.transcriptRecords.map(\\.applicationKey)"))
         #expect(historySource.contains("Dictionary(grouping: records"))
         #expect(historySource.contains("allApplicationsButton"))
         #expect(historySource.contains("selectedApplicationKey = nil"))
         #expect(historySource.contains("if let activeApplicationKey"))
         #expect(historySource.contains("records = model.transcriptRecords"))
         #expect(historySource.contains("($0.records.first?.endedAt ?? .distantPast) >"))
-        #expect(historySource.contains("latestEndedAt: records.map(\\.endedAt).max()"))
+        #expect(historySource.contains("latestEndedAt: max("))
         #expect(historySource.contains("private var isApplicationSwitcherExpanded = false"))
         #expect(historySource.contains("ScrollViewReader { proxy in"))
         #expect(historySource.contains("LazyVGrid("))
@@ -1002,7 +1002,7 @@ struct SettingsPageRegressionTests {
         #expect(!agentAccessSource.contains("Popover"))
 
         #expect(modelSource.contains(
-            "transcriptCaptureCoordinator.startSession(startedAt: startedAt, source: source)"
+            "transcriptCaptureCoordinator.startSession(sessionID: sessionID, startedAt: startedAt, source: source)"
         ))
         #expect(modelSource.contains(
             "transcriptCaptureCoordinator.finishSession(endedAt: endedAt)"
