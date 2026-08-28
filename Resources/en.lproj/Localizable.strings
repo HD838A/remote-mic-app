@@ -704,6 +704,9 @@
 "statistics.transcripts.recording_description" = "Keep a local AAC recording of each voice session and link it to Reflections.";
 "statistics.transcripts.recording_duration" = "%d sec";
 "statistics.transcripts.recording_play" = "Play recording";
+"statistics.transcripts.recording_playback_error.missing" = "This recording file could not be found. It may have been moved or deleted.";
+"statistics.transcripts.recording_playback_error.invalid" = "This recording cannot be played because it may be damaged or unsupported.";
+"statistics.transcripts.recording_playback_error.unavailable" = "This recording could not be played right now. Please try again later.";
 "statistics.transcripts.recording_export" = "Export recording";
 "statistics.transcripts.recording_reveal" = "Show in Finder";
 "statistics.transcripts.recording_delete" = "Delete recording";

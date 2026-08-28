@@ -704,6 +704,9 @@
 "statistics.transcripts.recording_description" = "把每次语音会话的本地 AAC 录音保存下来，并与回眸文字关联。";
 "statistics.transcripts.recording_duration" = "%d 秒";
 "statistics.transcripts.recording_play" = "播放录音";
+"statistics.transcripts.recording_playback_error.missing" = "找不到这条录音文件，可能已被移动或删除。";
+"statistics.transcripts.recording_playback_error.invalid" = "这条录音文件无法播放，可能已损坏或格式不受支持。";
+"statistics.transcripts.recording_playback_error.unavailable" = "这条录音暂时无法播放，请稍后重试。";
 "statistics.transcripts.recording_export" = "导出录音";
 "statistics.transcripts.recording_reveal" = "在 Finder 中显示";
 "statistics.transcripts.recording_delete" = "删除录音";

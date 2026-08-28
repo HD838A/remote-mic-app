@@ -38,11 +38,51 @@ struct RecordingAssetDraft: Sendable {
     let temporaryMediaURL: URL
 }
 
+struct RecordingAssetIntegrityDiagnostics: Equatable, Sendable {
+    let actualByteCount: Int64
+    let byteCountMatches: Bool
+    let sha256Matches: Bool
+}
+
 enum RecordingAssetStoreError: Error {
     case invalidAsset
     case unsupportedFormat
     case missingAsset
     case unsafePath
+}
+
+enum RecordingPlaybackFailure: Equatable, Sendable {
+    case missingAsset
+    case invalidAsset
+    case playerUnavailable
+
+    var logReason: String {
+        switch self {
+        case .missingAsset: return "missing_asset"
+        case .invalidAsset: return "invalid_asset"
+        case .playerUnavailable: return "player_unavailable"
+        }
+    }
+
+    var messageKey: String {
+        switch self {
+        case .missingAsset: return "statistics.transcripts.recording_playback_error.missing"
+        case .invalidAsset: return "statistics.transcripts.recording_playback_error.invalid"
+        case .playerUnavailable: return "statistics.transcripts.recording_playback_error.unavailable"
+        }
+    }
+
+    static func classify(_ error: Error) -> Self {
+        guard let storeError = error as? RecordingAssetStoreError else {
+            return .invalidAsset
+        }
+        switch storeError {
+        case .missingAsset:
+            return .missingAsset
+        case .invalidAsset, .unsupportedFormat, .unsafePath:
+            return .invalidAsset
+        }
+    }
 }
 
 final class RecordingAssetStore {
@@ -190,6 +230,24 @@ final class RecordingAssetStore {
                   !isSymbolicLink(url)
             else { throw RecordingAssetStoreError.missingAsset }
             return url
+        }
+    }
+
+    func integrityDiagnostics(
+        for manifest: RecordingAssetManifest
+    ) throws -> RecordingAssetIntegrityDiagnostics {
+        try queue.sync {
+            let url = try mediaURLWithoutQueue(manifest)
+            guard url.standardizedFileURL.path.hasPrefix(rootDirectoryURL.standardizedFileURL.path + "/"),
+                  fileManager.fileExists(atPath: url.path),
+                  !isSymbolicLink(url)
+            else { throw RecordingAssetStoreError.missingAsset }
+            let actualByteCount = try fileSize(of: url)
+            return RecordingAssetIntegrityDiagnostics(
+                actualByteCount: actualByteCount,
+                byteCountMatches: actualByteCount == manifest.byteCount,
+                sha256Matches: try sha256(of: url) == manifest.sha256
+            )
         }
     }
 
