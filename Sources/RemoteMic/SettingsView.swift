@@ -2201,10 +2201,21 @@ struct SettingsView: View {
     }
 
     private var statisticsSummaryGrid: some View {
-        // Keep the approved wide layout as one row; narrow settings windows can wrap to two columns.
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
-            ForEach(statisticsMetrics) { metric in
-                ProfileMetricCard(metric: metric)
+        // Keep the approved wide layout as one row; narrow settings windows use two columns.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                ForEach(statisticsMetrics) { metric in
+                    ProfileMetricCard(metric: metric)
+                        .frame(minWidth: 280, maxWidth: .infinity)
+                }
+            }
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: 12
+            ) {
+                ForEach(statisticsMetrics) { metric in
+                    ProfileMetricCard(metric: metric)
+                }
             }
         }
     }

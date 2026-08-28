@@ -1054,8 +1054,9 @@ struct SettingsPageRegressionTests {
         ))
         let summarySource = source[summary.lowerBound..<metrics.lowerBound]
 
-        #expect(summarySource.contains("GridItem(.adaptive(minimum: 280)"))
-        #expect(!summarySource.contains("GridItem(.flexible()), GridItem(.flexible())"))
+        #expect(summarySource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(summarySource.contains(".frame(minWidth: 280, maxWidth: .infinity)"))
+        #expect(summarySource.contains("GridItem(.flexible()), GridItem(.flexible())"))
         #expect(source.contains("approved wide layout as one row"))
     }
 }
