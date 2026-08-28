@@ -72,9 +72,13 @@ jq -n -e --arg baseline "$baseline_version" --arg candidate "$version" \
   '($baseline | split(".") | map(tonumber)) < ($candidate | split(".") | map(tonumber))' >/dev/null
 baseline_asset_id="$(printf '%s\n' "$baseline_release" | jq -r --arg name "Remote-Mic-$baseline_version.zip" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
 baseline_asset_digest="$(printf '%s\n' "$baseline_release" | jq -r --arg name "Remote-Mic-$baseline_version.zip" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else empty end')"
-[[ "$baseline_asset_id" =~ ^[1-9][0-9]*$ && "$baseline_asset_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+baseline_asset_url="$(printf '%s\n' "$baseline_release" | jq -r --arg name "Remote-Mic-$baseline_version.zip" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].browser_download_url else empty end')"
+expected_baseline_asset_url="https://github.com/$REPOSITORY/releases/download/$BASELINE_TAG/Remote-Mic-$baseline_version.zip"
+[[ "$baseline_asset_id" =~ ^[1-9][0-9]*$ &&
+   "$baseline_asset_digest" =~ ^sha256:[0-9a-f]{64}$ &&
+   "$baseline_asset_url" == "$expected_baseline_asset_url" ]] || exit 1
 baseline_zip="$OUTPUT_DIR/baseline/Remote-Mic-$baseline_version.zip"
-$GH_BIN api --header 'Accept: application/octet-stream' "repos/$REPOSITORY/releases/assets/$baseline_asset_id" > "$baseline_zip"
+curl --fail --silent --show-error --location "$baseline_asset_url" --output "$baseline_zip"
 [[ "sha256:$(shasum -a 256 "$baseline_zip" | awk '{print $1}')" == "$baseline_asset_digest" ]] || exit 1
 ditto -x -k "$baseline_zip" "$OUTPUT_DIR/baseline"
 baseline_app="$(find "$OUTPUT_DIR/baseline" -maxdepth 1 -name '*.app' -type d -print -quit)"
