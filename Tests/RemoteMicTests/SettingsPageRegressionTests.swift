@@ -1037,4 +1037,25 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
     }
+
+    @Test func profileMetricsKeepApprovedWideSingleRowLayout() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let summary = try #require(source.range(of: "private var statisticsSummaryGrid"))
+        let metrics = try #require(source.range(
+            of: "private var statisticsMetrics",
+            range: summary.upperBound..<source.endIndex
+        ))
+        let summarySource = source[summary.lowerBound..<metrics.lowerBound]
+
+        #expect(summarySource.contains("GridItem(.adaptive(minimum: 280)"))
+        #expect(!summarySource.contains("GridItem(.flexible()), GridItem(.flexible())"))
+        #expect(source.contains("approved wide layout as one row"))
+    }
 }
