@@ -1,5 +1,10 @@
 # Version History
 
+## 1.9.18 (Pre-release)
+
+- Improved Reflections browsing stability for large histories, avoiding duplicate, blank, and jittery rows.
+- All Apps now shows the last 7 days by default; select an app to view its complete history.
+
 ## 1.9.17 (Pre-release)
 
 - Improved first-run voice-tool setup with installation detection and guidance for WeChat Input, Typeless, and Doubao.
