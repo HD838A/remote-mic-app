@@ -2192,7 +2192,7 @@ struct SettingsView: View {
                             .frame(minWidth: 280, maxWidth: 390, alignment: .top)
                         statisticsCalendarPanel
                             .frame(maxWidth: .infinity, alignment: .top)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxHeight: .infinity, alignment: .top)
                     }
                     sharePanel(for: .statistics)
                 }
@@ -2201,12 +2201,12 @@ struct SettingsView: View {
     }
 
     private var statisticsSummaryGrid: some View {
-        // Keep the approved wide layout as one row; narrow settings windows use two columns.
+        // Keep the approved layout as one row at the default width; only the narrowest windows wrap.
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 12) {
                 ForEach(statisticsMetrics) { metric in
                     ProfileMetricCard(metric: metric)
-                        .frame(minWidth: 280, maxWidth: .infinity)
+                        .frame(minWidth: 170, maxWidth: .infinity)
                 }
             }
             LazyVGrid(
@@ -2400,7 +2400,7 @@ struct SettingsView: View {
                         .font(.title3.weight(.semibold))
                     Spacer(minLength: 8)
                     Text("statistics.calendar.hint")
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)
                         .lineLimit(2)
@@ -2438,6 +2438,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, minHeight: 648, alignment: .top)
         }
     }
 
@@ -3902,6 +3903,9 @@ private struct StatisticsHeatmap: View {
     @Binding var selectedDate: Date?
     let localization: LocalizationStore
 
+    private let cellSpacing: CGFloat = 3
+    private let weekdayLabelWidth: CGFloat = 30
+
     private var monthLabels: [String] {
         let formatter = DateFormatter()
         formatter.locale = localization.locale
@@ -3917,52 +3921,81 @@ private struct StatisticsHeatmap: View {
         return Array(labels.prefix(12))
     }
 
+    private var weekdayLabels: [String] {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        let symbols = formatter.shortWeekdaySymbols ?? []
+        guard symbols.count == 7 else { return [] }
+        return Array(symbols.dropFirst()) + [symbols[0]]
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Color.clear.frame(width: 28)
-                ForEach(Array(monthLabels.enumerated()), id: \.offset) { _, label in
-                    Text(label)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            HStack(alignment: .top, spacing: 6) {
-                VStack(spacing: 3) {
-                    ForEach(0..<7, id: \.self) { _ in
-                        Color.clear.frame(width: 22, height: 10)
+        GeometryReader { proxy in
+            let columnCount = max(1, days.count / 7)
+            let availableWidth = max(0, proxy.size.width - weekdayLabelWidth - 8)
+            let cellSize = max(
+                4,
+                min(
+                    12,
+                    (availableWidth - CGFloat(columnCount - 1) * cellSpacing)
+                        / CGFloat(columnCount)
+                )
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: weekdayLabelWidth)
+                    ForEach(Array(monthLabels.enumerated()), id: \.offset) { _, label in
+                        Text(label)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                let columnCount = max(1, days.count / 7)
-                let cellSize: CGFloat = 6
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(0..<7, id: \.self) { row in
-                        HStack(spacing: 3) {
-                            ForEach(0..<columnCount, id: \.self) { column in
-                                let index = row * columnCount + column
-                                let day = days[index]
-                                Button {
-                                    guard let date = day.date else { return }
-                                    selectedDate = date
-                                } label: {
-                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                        .fill(fillColor(for: day))
-                                        .overlay {
-                                            if let date = day.date, Calendar.current.isDateInToday(date) {
-                                                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                                    .stroke(Color.accentColor, lineWidth: 1)
+
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: cellSpacing) {
+                        ForEach(Array(weekdayLabels.enumerated()), id: \.offset) { _, label in
+                            Text(label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .frame(width: weekdayLabelWidth, height: cellSize, alignment: .leading)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: cellSpacing) {
+                        ForEach(0..<7, id: \.self) { row in
+                            HStack(spacing: cellSpacing) {
+                                ForEach(0..<columnCount, id: \.self) { column in
+                                    let index = row * columnCount + column
+                                    let day = days[index]
+                                    Button {
+                                        guard let date = day.date else { return }
+                                        selectedDate = date
+                                    } label: {
+                                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                            .fill(fillColor(for: day))
+                                            .overlay {
+                                                if let date = day.date,
+                                                   Calendar.current.isDateInToday(date) {
+                                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                        .stroke(Color.accentColor, lineWidth: 1)
+                                                }
                                             }
-                                        }
-                                        .frame(width: cellSize, height: cellSize)
+                                            .frame(width: cellSize, height: cellSize)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(day.date.map { dateText($0) } ?? "")
                                 }
-                                .buttonStyle(.plain)
-                                .help(day.date.map { dateText($0) } ?? "")
                             }
                         }
                     }
                 }
             }
         }
+        .frame(height: 124)
     }
 
     private func fillColor(for day: StatisticsCalendarDay) -> Color {

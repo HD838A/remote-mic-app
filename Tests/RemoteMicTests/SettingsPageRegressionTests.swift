@@ -1055,8 +1055,15 @@ struct SettingsPageRegressionTests {
         let summarySource = source[summary.lowerBound..<metrics.lowerBound]
 
         #expect(summarySource.contains("ViewThatFits(in: .horizontal)"))
-        #expect(summarySource.contains(".frame(minWidth: 280, maxWidth: .infinity)"))
+        #expect(summarySource.contains(".frame(minWidth: 170, maxWidth: .infinity)"))
         #expect(summarySource.contains("GridItem(.flexible()), GridItem(.flexible())"))
-        #expect(source.contains("approved wide layout as one row"))
+        #expect(source.contains("approved layout as one row at the default width"))
+
+        let heatmap = try #require(source.range(of: "private struct StatisticsHeatmap"))
+        let heatmapSource = source[heatmap.lowerBound...]
+        #expect(heatmapSource.contains("GeometryReader"))
+        #expect(heatmapSource.contains("weekdayLabels"))
+        #expect(heatmapSource.contains(".frame(height: 124)"))
+        #expect(source.contains(".frame(maxWidth: .infinity, minHeight: 648, alignment: .top)"))
     }
 }
