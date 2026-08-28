@@ -708,8 +708,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {
-        updateFeedSelection.feedURLString(
-            checksForPreReleaseUpdates: model.settings.checksForPreReleaseUpdates
+        let includePreRelease = model.settings.checksForPreReleaseUpdates
+        if let testFeed = UpdateFeedResolver.testInjectedFeed(
+            environment: ProcessInfo.processInfo.environment,
+            assetName: updateFeedSelection.appcastAssetName,
+            includePreRelease: includePreRelease
+        ) {
+            return testFeed.url.absoluteString
+        }
+        return updateFeedSelection.feedURLString(
+            checksForPreReleaseUpdates: includePreRelease
         )
     }
 
