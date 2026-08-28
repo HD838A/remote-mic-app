@@ -1063,7 +1063,9 @@ struct SettingsPageRegressionTests {
         let heatmapSource = source[heatmap.lowerBound...]
         #expect(heatmapSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(heatmapSource.contains("weekdayLabels"))
-        #expect(heatmapSource.contains("let cellSize: CGFloat = 14"))
+        #expect(heatmapSource.contains("let cellSize = max("))
+        #expect(heatmapSource.contains("min(\n                    28"))
+        #expect(heatmapSource.contains("14,"))
         #expect(heatmapSource.contains("height: max(cellSize, 16)"))
         #expect(source.contains("dailyUsageStatistics(days: 26 * 7, calendar: calendar)"))
         #expect(source.contains("let rankingWidth = max(360, availableWidth * 0.42)"))

@@ -3939,72 +3939,82 @@ private struct StatisticsHeatmap: View {
     }
 
     var body: some View {
-        let columnCount = max(1, days.count / 7)
-        let cellSize: CGFloat = 14
-        let gridWidth = CGFloat(columnCount) * cellSize
-            + CGFloat(max(0, columnCount - 1)) * cellSpacing
+        GeometryReader { proxy in
+            let columnCount = max(1, days.count / 7)
+            let availableWidth = max(0, proxy.size.width - weekdayLabelWidth - 8)
+            let cellSize = max(
+                14,
+                min(
+                    28,
+                    (availableWidth - CGFloat(max(0, columnCount - 1)) * cellSpacing)
+                        / CGFloat(columnCount)
+                )
+            )
+            let gridWidth = CGFloat(columnCount) * cellSize
+                + CGFloat(max(0, columnCount - 1)) * cellSpacing
 
-        ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .topLeading) {
-                    ForEach(Array(monthMarkers.enumerated()), id: \.offset) { _, marker in
-                        Text(marker.label)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .frame(width: 36, alignment: .leading)
-                            .offset(x: CGFloat(marker.column) * (cellSize + cellSpacing))
-                    }
-                }
-                .frame(width: gridWidth, height: 18, alignment: .leading)
-
-                HStack(alignment: .top, spacing: 8) {
-                    VStack(alignment: .leading, spacing: cellSpacing) {
-                        ForEach(Array(weekdayLabels.enumerated()), id: \.offset) { _, label in
-                            Text(label)
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ZStack(alignment: .topLeading) {
+                        ForEach(Array(monthMarkers.enumerated()), id: \.offset) { _, marker in
+                            Text(marker.label)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
-                                .frame(
-                                    width: weekdayLabelWidth,
-                                    height: max(cellSize, 16),
-                                    alignment: .leading
-                                )
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .frame(width: 36, alignment: .leading)
+                                .offset(x: CGFloat(marker.column) * (cellSize + cellSpacing))
                         }
                     }
+                    .frame(width: gridWidth, height: 18, alignment: .leading)
 
-                    VStack(alignment: .leading, spacing: cellSpacing) {
-                        ForEach(0..<7, id: \.self) { row in
-                            HStack(spacing: cellSpacing) {
-                                ForEach(0..<columnCount, id: \.self) { column in
-                                    let index = row * columnCount + column
-                                    let day = days[index]
-                                    Button {
-                                        guard let date = day.date else { return }
-                                        selectedDate = date
-                                    } label: {
-                                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                            .fill(fillColor(for: day))
-                                            .overlay {
-                                                if let date = day.date,
-                                                   Calendar.current.isDateInToday(date) {
-                                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                                        .stroke(Color.accentColor, lineWidth: 1)
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: cellSpacing) {
+                            ForEach(Array(weekdayLabels.enumerated()), id: \.offset) { _, label in
+                                Text(label)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .frame(
+                                        width: weekdayLabelWidth,
+                                        height: max(cellSize, 16),
+                                        alignment: .leading
+                                    )
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: cellSpacing) {
+                            ForEach(0..<7, id: \.self) { row in
+                                HStack(spacing: cellSpacing) {
+                                    ForEach(0..<columnCount, id: \.self) { column in
+                                        let index = row * columnCount + column
+                                        let day = days[index]
+                                        Button {
+                                            guard let date = day.date else { return }
+                                            selectedDate = date
+                                        } label: {
+                                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                .fill(fillColor(for: day))
+                                                .overlay {
+                                                    if let date = day.date,
+                                                       Calendar.current.isDateInToday(date) {
+                                                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                            .stroke(Color.accentColor, lineWidth: 1)
+                                                    }
                                                 }
-                                            }
-                                            .frame(width: cellSize, height: cellSize)
+                                                .frame(width: cellSize, height: cellSize)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help(day.date.map { dateText($0) } ?? "")
                                     }
-                                    .buttonStyle(.plain)
-                                    .help(day.date.map { dateText($0) } ?? "")
                                 }
                             }
                         }
                     }
                 }
+                .padding(.trailing, 6)
             }
-            .padding(.trailing, 6)
         }
-        .frame(height: 150)
+        .frame(height: 230)
     }
 
     private func fillColor(for day: StatisticsCalendarDay) -> Color {
