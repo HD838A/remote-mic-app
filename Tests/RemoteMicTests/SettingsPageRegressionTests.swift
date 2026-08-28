@@ -1065,6 +1065,7 @@ struct SettingsPageRegressionTests {
         #expect(heatmapSource.contains("weekdayLabels"))
         #expect(heatmapSource.contains("let cellSize: CGFloat = 14"))
         #expect(heatmapSource.contains("height: max(cellSize, 16)"))
+        #expect(source.contains("dailyUsageStatistics(days: 26 * 7, calendar: calendar)"))
         #expect(source.contains("let rankingWidth = max(360, availableWidth * 0.42)"))
         #expect(source.contains(".frame(width: rankingWidth, alignment: .top)"))
         #expect(source.contains(".frame(maxWidth: .infinity, minHeight: 648, alignment: .top)"))

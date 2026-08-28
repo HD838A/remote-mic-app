@@ -3181,7 +3181,8 @@ struct SettingsView: View {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
         calendar.locale = localization.locale
-        let buckets = settings.dailyUsageStatistics(days: 364, calendar: calendar)
+        // Keep the heatmap to the latest 26 weeks so each day remains readable.
+        let buckets = settings.dailyUsageStatistics(days: 26 * 7, calendar: calendar)
         guard let first = buckets.first else { return [] }
         let leading = (calendar.component(.weekday, from: first.startDate) - calendar.firstWeekday + 7) % 7
         let padded = Array(repeating: StatisticsCalendarDay.empty, count: leading) + buckets.map {
@@ -3916,12 +3917,15 @@ private struct StatisticsHeatmap: View {
         formatter.setLocalizedDateFormatFromTemplate("MMM")
         var markers: [(column: Int, label: String)] = []
         var seen = Set<String>()
+        var nextAvailableColumn = 0
         for column in 0..<max(1, days.count / 7) {
             let columnDays = days.dropFirst(column * 7).prefix(7)
             guard let date = columnDays.compactMap(\.date).first else { continue }
             let key = formatter.string(from: date)
             guard seen.insert(key).inserted else { continue }
-            markers.append((column, key))
+            let displayColumn = max(column, nextAvailableColumn)
+            markers.append((displayColumn, key))
+            nextAvailableColumn = displayColumn + 2
         }
         return markers
     }
