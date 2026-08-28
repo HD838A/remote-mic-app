@@ -30,8 +30,7 @@ cd "$ROOT"
   exit 1
 }
 git fetch origin main --tags
-[[ "$(git branch --show-current)" == main &&
-    "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
+[[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
   echo "Stable promotion must run from exact origin/main" >&2
   exit 1
 }
