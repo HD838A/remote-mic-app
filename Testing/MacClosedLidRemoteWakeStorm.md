@@ -2,8 +2,8 @@
 
 ## 适用范围
 
-- 发布基线：`v1.9.16` Tag `420767d6100de20e27f4d97f1e15beb20c1aa71e`
-- 开发基线：upstream `main` `1333e2c75d5b88ffc51921cb1e1310426d5acdd4`
+- 原始回归基线：`v1.9.16` Tag `420767d6100de20e27f4d97f1e15beb20c1aa71e`
+- 当前集成基线：upstream `main` `9945224cc9d411d21b6cc06a4eb378f8c9785270`（`1.9.17 (170)`）
 - 修复分支：`fix/bug-sleep-wake-storm-v1.9.16-20260827`
 - GitHub Issue：[#240](https://github.com/HD838A/remote-mic-app/issues/240)
 - 平台：Apple Silicon macOS 14+；Intel macOS 13 需要单独执行兼容回归
