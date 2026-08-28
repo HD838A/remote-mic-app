@@ -200,8 +200,13 @@ IFS=$'\t' read -r stage_record_artifact_id stage_record_artifact_digest stage_re
   exit 1
 }
 stage_record_archive="$work_dir/stage-record-artifact.zip"
-if ! $GH_BIN api --header 'Accept: application/octet-stream' \
-  "repos/$REPOSITORY/actions/artifacts/$stage_record_artifact_id/zip" > "$stage_record_archive"; then
+api_base="https://api.github.com"
+if ! /usr/bin/curl --fail --silent --show-error --location \
+  -H "Authorization: Bearer ${GH_TOKEN:?GH_TOKEN is required to download the staging record artifact}" \
+  -H 'Accept: application/vnd.github+json' \
+  -H 'X-GitHub-Api-Version: 2022-11-28' \
+  "$api_base/repos/$REPOSITORY/actions/artifacts/$stage_record_artifact_id/zip" \
+  --output "$stage_record_archive"; then
   echo "unable to download the protected staging record artifact" >&2
   exit 1
 fi
