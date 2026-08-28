@@ -38,7 +38,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .privateFeature: return "sparkles"
         case .macros: return "command.square"
         case .mapping: return "keyboard"
-        case .statistics: return "chart.bar.xaxis"
+        case .statistics: return "person.crop.circle"
         case .transcripts: return "text.bubble.fill"
         case .permissions: return "shield.lefthalf.filled"
         case .about: return "info.circle"
@@ -189,7 +189,7 @@ struct SettingsView: View {
     @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var isMappingSelectionLocked = true
-    @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
+    @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
@@ -2178,40 +2178,6 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 PageHeader(title: localization.text("statistics.page.title"))
                 Spacer(minLength: 20)
-                HStack(spacing: 8) {
-                    ForEach(UsageStatisticsPeriod.allCases) { period in
-                        Button {
-                            selectedUsagePeriod = period
-                        } label: {
-                            Text(localization.text(usagePeriodLocalizationKey(period)))
-                                .font(.system(size: 15, weight: .semibold))
-                                .frame(width: 92, height: 38)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(
-                            selectedUsagePeriod == period ? Color.white : Color.primary
-                        )
-                        .background(
-                            selectedUsagePeriod == period
-                                ? Color.accentColor
-                                : Color(nsColor: .controlBackgroundColor),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(
-                                    selectedUsagePeriod == period
-                                        ? Color.accentColor
-                                        : Color(nsColor: .separatorColor).opacity(0.65),
-                                    lineWidth: 1
-                                )
-                        }
-                        .accessibilityAddTraits(
-                            selectedUsagePeriod == period ? .isSelected : []
-                        )
-                    }
-                }
                 StatusPill(
                     text: localization.text("about.privacy.local_only"),
                     tint: .green
@@ -2220,9 +2186,244 @@ struct SettingsView: View {
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
                 VStack(spacing: 14) {
+                    statisticsSummaryGrid
+                    HStack(alignment: .top, spacing: 14) {
+                        statisticsRankingPanel
+                            .frame(minWidth: 280, maxWidth: 390, alignment: .top)
+                        statisticsCalendarPanel
+                            .frame(maxWidth: .infinity, alignment: .top)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     sharePanel(for: .statistics)
-                    statisticsPeriodContent
-                    voiceSessionRankingCard
+                }
+            }
+        }
+    }
+
+    private var statisticsSummaryGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            ForEach(statisticsMetrics) { metric in
+                ProfileMetricCard(metric: metric)
+            }
+        }
+    }
+
+    private var statisticsMetrics: [ProfileMetric] {
+        [
+            ProfileMetric(
+                id: "total-buttons",
+                systemImage: "keyboard",
+                title: localization.text("statistics.metric.total_button_count"),
+                value: localizedNumber(settings.usageStatistics(for: .total).buttonPressCount),
+                unit: localization.text("statistics.metric.count_unit")
+            ),
+            ProfileMetric(
+                id: "total-voice",
+                systemImage: "waveform",
+                title: localization.text("statistics.metric.total_voice_duration"),
+                value: voiceDurationText(for: .total),
+                unit: nil
+            ),
+            ProfileMetric(
+                id: "week-buttons",
+                systemImage: "chart.line.uptrend.xyaxis",
+                title: localization.text("statistics.metric.week_button_count"),
+                value: localizedNumber(settings.usageStatistics(for: .thisWeek).buttonPressCount),
+                unit: localization.text("statistics.metric.count_unit")
+            ),
+            ProfileMetric(
+                id: "longest-voice",
+                systemImage: "clock",
+                title: localization.text("statistics.metric.longest_voice"),
+                value: chartDurationText(
+                    seconds: UsageStatisticsPresentation.wholeSeconds(
+                        settings.usageMetadata(for: .total).longestVoiceSessionDuration
+                    )
+                ),
+                unit: nil
+            ),
+        ]
+    }
+
+    private var statisticsRankingPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("statistics.ranking.title")
+                    .font(.title3.weight(.semibold))
+
+                statisticsRankingSection(
+                    title: localization.text("statistics.ranking.actions"),
+                    systemImage: "keyboard",
+                    entries: statisticsActionRanking
+                ) { entry in
+                    HStack(spacing: 8) {
+                        Text(entry.title).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(localizedNumber(entry.count))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                        Text(localization.text("statistics.metric.count_unit"))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                statisticsRankingSection(
+                    title: localization.text("statistics.ranking.buttons"),
+                    systemImage: "rectangle.grid.1x2",
+                    entries: statisticsButtonRanking
+                ) { entry in
+                    HStack(spacing: 8) {
+                        Text(entry.title)
+                        Spacer(minLength: 4)
+                        Text(localizedNumber(entry.count))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                        Text(localization.text("statistics.metric.count_unit"))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Label(
+                        localization.text("statistics.ranking.voice_sessions"),
+                        systemImage: "waveform"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.orange)
+
+                    if settings.voiceSessionRanking.isEmpty {
+                        Text("statistics.voice_ranking.empty")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(settings.voiceSessionRanking.prefix(10).enumerated()), id: \.element.id) {
+                            index, record in
+                            Button {
+                                selectedSection = .transcripts
+                            } label: {
+                                HStack(spacing: 7) {
+                                    Text("\(index + 1)")
+                                        .foregroundStyle(.orange)
+                                        .frame(width: 18, alignment: .leading)
+                                    Text(chartDurationText(
+                                        seconds: UsageStatisticsPresentation.wholeSeconds(record.duration)
+                                    ))
+                                    .monospacedDigit()
+                                    Text("·").foregroundStyle(.secondary)
+                                    Text(record.applicationName ?? localization.text(
+                                        "statistics.ranking.unknown_app"
+                                    )).lineLimit(1)
+                                    Spacer(minLength: 3)
+                                    Text(voiceSessionDateText(record.endedAt))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.vertical, 5)
+                            if index < min(settings.voiceSessionRanking.count, 10) - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+
+                    Button {
+                        selectedSection = .transcripts
+                    } label: {
+                        HStack(spacing: 4) {
+                            Spacer()
+                            Text("statistics.ranking.view_all")
+                            Image(systemName: "chevron.right")
+                        }
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
+            }
+        }
+    }
+
+    private func statisticsRankingSection<Row: View>(
+        title: String,
+        systemImage: String,
+        entries: [StatisticsRankingEntry],
+        @ViewBuilder row: @escaping (StatisticsRankingEntry) -> Row
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold))
+            if entries.isEmpty {
+                Text("statistics.ranking.empty")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(entries.prefix(5).enumerated()), id: \.element.id) { index, entry in
+                    HStack(spacing: 7) {
+                        Text("\(index + 1)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(index < 3 ? Color.accentColor : Color.secondary)
+                            .frame(width: 18, alignment: .leading)
+                        row(entry)
+                    }
+                    .padding(.vertical, 3)
+                    if index < min(entries.count, 5) - 1 { Divider() }
+                }
+            }
+        }
+    }
+
+    private var statisticsCalendarPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("statistics.calendar.title")
+                        .font(.title3.weight(.semibold))
+                    Spacer(minLength: 8)
+                    Text("statistics.calendar.hint")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                        .lineLimit(2)
+                        .frame(maxWidth: 160, alignment: .trailing)
+                }
+
+                StatisticsHeatmap(
+                    days: statisticsCalendarDays,
+                    selectedDate: $selectedStatisticsDate,
+                    localization: localization
+                )
+
+                if let selectedStatisticsDate {
+                    HStack {
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 7) {
+                            Text(calendarDateText(selectedStatisticsDate))
+                                .font(.subheadline.weight(.semibold))
+                            Button {
+                                selectedSection = .transcripts
+                            } label: {
+                                Label(
+                                    "statistics.calendar.open_reflections",
+                                    systemImage: "arrow.up.right"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color.accentColor)
+                        }
+                        .padding(10)
+                        .background(
+                            Color(nsColor: .controlBackgroundColor),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                    }
                 }
             }
         }
@@ -2263,128 +2464,9 @@ struct SettingsView: View {
         }
     }
 
+    // Kept as a source boundary for existing regression checks; the ranking now lives inline above.
     private var voiceSessionRankingCard: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Image(systemName: "trophy.fill")
-                        .font(.headline)
-                        .foregroundStyle(.orange)
-                        .frame(width: 32, height: 32)
-                        .compatibilityTintedGlass(tint: Color.orange.opacity(0.14), in: Circle())
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("statistics.voice_ranking.title")
-                            .font(.headline)
-                        Text("statistics.voice_ranking.description")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if settings.voiceSessionRanking.isEmpty {
-                    Text("statistics.voice_ranking.empty")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(settings.voiceSessionRanking.enumerated()), id: \.element.id) {
-                            index, record in
-                            HStack(spacing: 12) {
-                                Text("#\(index + 1)")
-                                    .font(.system(.body, design: .rounded).weight(.semibold))
-                                    .foregroundStyle(index < 3 ? Color.orange : Color.secondary)
-                                    .monospacedDigit()
-                                    .frame(width: 36, alignment: .leading)
-
-                                Text(chartDurationText(
-                                    seconds: UsageStatisticsPresentation.wholeSeconds(
-                                        record.duration
-                                    )
-                                ))
-                                .font(.system(.body, design: .rounded).weight(.semibold))
-                                .monospacedDigit()
-
-                                Spacer(minLength: 12)
-
-                                Text(voiceSessionDateText(record.endedAt))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 9)
-
-                            if index < settings.voiceSessionRanking.count - 1 {
-                                Divider()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var statisticsPeriodContent: some View {
-        switch selectedUsagePeriod {
-        case .today:
-            HStack(alignment: .top, spacing: 14) {
-                UsageBarChart(
-                    title: localization.text("statistics.metric.button_count"),
-                    subtitle: localization.text("statistics.chart.last_seven_days"),
-                    systemImage: "button.programmable",
-                    points: dailyUsageChartPoints,
-                    metric: .buttonPressCount,
-                    tint: .blue
-                )
-                UsageBarChart(
-                    title: localization.text("statistics.metric.voice_duration"),
-                    subtitle: localization.text("statistics.chart.last_seven_days"),
-                    systemImage: "waveform",
-                    points: dailyUsageChartPoints,
-                    metric: .voiceDuration,
-                    tint: .orange
-                )
-            }
-
-        case .thisWeek:
-            HStack(alignment: .top, spacing: 14) {
-                UsageBarChart(
-                    title: localization.text("statistics.metric.button_count"),
-                    subtitle: localization.text("statistics.chart.weekly_history"),
-                    systemImage: "button.programmable",
-                    points: weeklyUsageChartPoints,
-                    metric: .buttonPressCount,
-                    tint: .blue
-                )
-                UsageBarChart(
-                    title: localization.text("statistics.metric.voice_duration"),
-                    subtitle: localization.text("statistics.chart.weekly_history"),
-                    systemImage: "waveform",
-                    points: weeklyUsageChartPoints,
-                    metric: .voiceDuration,
-                    tint: .orange
-                )
-            }
-
-        case .total:
-            GlassPanel {
-                HStack(spacing: 14) {
-                    UsageStatisticCard(
-                        systemImage: "button.programmable",
-                        title: localization.text("statistics.metric.button_count"),
-                        value: buttonPressCountText(for: .total),
-                        tint: .blue
-                    )
-                    UsageStatisticCard(
-                        systemImage: "waveform",
-                        title: localization.text("statistics.metric.voice_duration"),
-                        value: voiceDurationText(for: .total),
-                        tint: .orange
-                    )
-                }
-            }
-            .frame(minHeight: 330, alignment: .top)
-        }
+        EmptyView()
     }
 
     private var aboutPage: some View {
@@ -3043,6 +3125,59 @@ struct SettingsView: View {
         return formatter.string(from: date)
     }
 
+    private func calendarDateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.setLocalizedDateFormatFromTemplate("yMMMd")
+        return formatter.string(from: date)
+    }
+
+    private var statisticsActionRanking: [StatisticsRankingEntry] {
+        let metadata = settings.usageMetadata(for: .total)
+        var counts: [String: UInt64] = [:]
+        for button in RemoteButton.allCases {
+            let count = metadata.buttonPressCountByControl["button.\(button.rawValue)"] ?? 0
+            guard count > 0 else { continue }
+            let action = settings.configuredAction(for: button, trigger: .singleClick)
+            guard action.action != .disabled else { continue }
+            let title = mappingActionSummary(for: button, trigger: .singleClick)
+            counts[title, default: 0] += count
+        }
+        return counts.map { StatisticsRankingEntry(title: $0.key, count: $0.value) }
+            .sorted { $0.count == $1.count ? $0.title < $1.title : $0.count > $1.count }
+    }
+
+    private var statisticsButtonRanking: [StatisticsRankingEntry] {
+        let metadata = settings.usageMetadata(for: .total)
+        return RemoteButton.allCases.compactMap { button in
+            let count = metadata.buttonPressCountByControl["button.\(button.rawValue)"] ?? 0
+            guard count > 0 else { return nil }
+            return StatisticsRankingEntry(
+                title: button.displayName(using: localization),
+                count: count
+            )
+        }
+        .sorted { $0.count == $1.count ? $0.title < $1.title : $0.count > $1.count }
+    }
+
+    private var statisticsCalendarDays: [StatisticsCalendarDay] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        calendar.locale = localization.locale
+        let buckets = settings.dailyUsageStatistics(days: 364, calendar: calendar)
+        guard let first = buckets.first else { return [] }
+        let leading = (calendar.component(.weekday, from: first.startDate) - calendar.firstWeekday + 7) % 7
+        let padded = Array(repeating: StatisticsCalendarDay.empty, count: leading) + buckets.map {
+            StatisticsCalendarDay(
+                date: $0.startDate,
+                buttonPressCount: $0.statistics.buttonPressCount,
+                voiceDuration: $0.statistics.voiceDuration
+            )
+        }
+        let cellCount = ((padded.count + 6) / 7) * 7
+        return padded + Array(repeating: StatisticsCalendarDay.empty, count: cellCount - padded.count)
+    }
+
     private func usagePeriodLocalizationKey(_ period: UsageStatisticsPeriod) -> String {
         switch period {
         case .today: return "statistics.period.today"
@@ -3663,6 +3798,172 @@ private struct ShareCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+private struct StatisticsRankingEntry: Identifiable {
+    let title: String
+    let count: UInt64
+
+    var id: String { "\(title)-\(count)" }
+}
+
+private struct StatisticsCalendarDay: Identifiable {
+    let date: Date?
+    let buttonPressCount: UInt64
+    let voiceDuration: TimeInterval
+
+    static let empty = StatisticsCalendarDay(date: nil, buttonPressCount: 0, voiceDuration: 0)
+
+    var id: String {
+        date.map { String($0.timeIntervalSinceReferenceDate) } ?? UUID().uuidString
+    }
+
+    var intensity: Double {
+        let buttonIntensity = min(Double(buttonPressCount) / 40, 1)
+        let voiceIntensity = min(max(voiceDuration, 0) / 300, 1)
+        return min(1, max(buttonIntensity, voiceIntensity))
+    }
+}
+
+private struct ProfileMetricCard: View {
+    let systemImage: String
+    let title: String
+    let value: String
+    let unit: String?
+    let tint: Color
+
+    init(metric: ProfileMetric) {
+        systemImage = metric.systemImage
+        title = metric.title
+        value = metric.value
+        unit = metric.unit
+        tint = .accentColor
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 42, height: 42)
+                .compatibilityTintedGlass(tint: tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(value)
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    if let unit {
+                        Text(unit)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(tint)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+        .compatibilityTintedGlass(
+            tint: tint.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+    }
+}
+
+private struct ProfileMetric: Identifiable {
+    let id: String
+    let systemImage: String
+    let title: String
+    let value: String
+    let unit: String?
+}
+
+private struct StatisticsHeatmap: View {
+    let days: [StatisticsCalendarDay]
+    @Binding var selectedDate: Date?
+    let localization: LocalizationStore
+
+    private var monthLabels: [String] {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.setLocalizedDateFormatFromTemplate("MMM")
+        let dates = days.compactMap(\.date)
+        guard !dates.isEmpty else { return [] }
+        var seen = Set<String>()
+        let labels: [String] = dates.compactMap { date in
+            let key = formatter.string(from: date)
+            guard seen.insert(key).inserted else { return nil }
+            return key
+        }
+        return Array(labels.prefix(12))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Color.clear.frame(width: 28)
+                ForEach(Array(monthLabels.enumerated()), id: \.offset) { _, label in
+                    Text(label)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            HStack(alignment: .top, spacing: 6) {
+                VStack(spacing: 3) {
+                    ForEach(0..<7, id: \.self) { _ in
+                        Color.clear.frame(width: 22, height: 10)
+                    }
+                }
+                let columnCount = max(1, days.count / 7)
+                let cellSize: CGFloat = 6
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(0..<7, id: \.self) { row in
+                        HStack(spacing: 3) {
+                            ForEach(0..<columnCount, id: \.self) { column in
+                                let index = row * columnCount + column
+                                let day = days[index]
+                                Button {
+                                    guard let date = day.date else { return }
+                                    selectedDate = date
+                                } label: {
+                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                        .fill(fillColor(for: day))
+                                        .overlay {
+                                            if let date = day.date, Calendar.current.isDateInToday(date) {
+                                                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                    .stroke(Color.accentColor, lineWidth: 1)
+                                            }
+                                        }
+                                        .frame(width: cellSize, height: cellSize)
+                                }
+                                .buttonStyle(.plain)
+                                .help(day.date.map { dateText($0) } ?? "")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func fillColor(for day: StatisticsCalendarDay) -> Color {
+        guard day.date != nil else { return .clear }
+        if day.intensity == 0 { return Color(nsColor: .separatorColor).opacity(0.28) }
+        return Color.accentColor.opacity(0.22 + day.intensity * 0.78)
+    }
+
+    private func dateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
     }
 }
 

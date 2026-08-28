@@ -74,6 +74,7 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
+        seedStatisticsForScreenshot(settings)
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
         let localization = LocalizationStore(settings: settings)
@@ -90,9 +91,7 @@ enum SettingsScreenshotRenderer {
                 model: model,
                 updateInformation: updateInformation,
                 initialSection: section,
-                initialShareSection: section == .statistics || section == .about
-                    ? section
-                    : nil,
+                initialShareSection: section == .about ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensShortcutEditor
                     ? .ok
                     : nil,
@@ -136,6 +135,50 @@ enum SettingsScreenshotRenderer {
             try png.write(to: outputDirectory.appendingPathComponent(filename))
             window.orderOut(nil)
             window.contentViewController = nil
+        }
+    }
+
+    private static func seedStatisticsForScreenshot(_ settings: AppSettings) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let today = calendar.startOfDay(for: Date())
+        for offset in 0..<364 {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            let buttonCount = (offset % 17 == 0) ? 9 : (offset % 5 == 0 ? 4 : (offset % 3 == 0 ? 1 : 0))
+            for index in 0..<buttonCount {
+                let button = RemoteButton.allCases[(offset + index) % RemoteButton.allCases.count]
+                settings.recordButtonPress(
+                    control: .remoteButton(button),
+                    source: .bluetoothRemote,
+                    at: date.addingTimeInterval(Double(index) * 11),
+                    calendar: calendar
+                )
+            }
+            if offset % 11 == 0 {
+                settings.recordVoiceDuration(
+                    TimeInterval(18 + (offset * 13) % 95),
+                    startedAt: date.addingTimeInterval(3600),
+                    source: .bluetoothRemote,
+                    applicationName: ["Codex", "Claude", "Notion", "Zoom", "Slack"][(offset / 11) % 5],
+                    at: date.addingTimeInterval(3660),
+                    calendar: calendar
+                )
+            }
+        }
+        let topSessions: [(TimeInterval, String)] = [
+            (85, "Codex"), (38, "Claude"), (38, "Notion"), (37, "Zoom"),
+            (37, "Slack"), (29, "Figma"), (28, "VS Code"),
+        ]
+        for (index, session) in topSessions.enumerated() {
+            let date = today.addingTimeInterval(-Double(index * 86_400 + 2_000))
+            settings.recordVoiceDuration(
+                session.0,
+                startedAt: date.addingTimeInterval(-session.0),
+                source: .bluetoothRemote,
+                applicationName: session.1,
+                at: date,
+                calendar: calendar
+            )
         }
     }
 
