@@ -196,6 +196,10 @@ struct VoiceKeyModeTests {
 
         #expect(callbackSource.contains("let previousState"))
         #expect(callbackSource.contains("Self.shouldReapplyHIDSettings("))
+        #expect(callbackSource.contains("scheduleHIDMappingRecoveryIfNeeded()"))
+        #expect(callbackSource.contains(
+            "cancelHIDMappingRecovery(reason: \"bluetooth_not_ready\")"
+        ))
         #expect(!callbackSource.contains("let hadReadyBridge"))
     }
 

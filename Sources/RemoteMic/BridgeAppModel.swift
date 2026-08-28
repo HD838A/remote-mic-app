@@ -79,6 +79,24 @@ enum HIDPermissionRecoveryPolicy {
     }
 }
 
+enum HIDMappingRecoveryPolicy {
+    static let retryDelays: [TimeInterval] = [0.5, 1, 2, 4, 8]
+
+    static func retryDelay(
+        forAttempt attempt: Int,
+        started: Bool,
+        readyBridgeCount: Int,
+        hasMatchingServices: Bool
+    ) -> TimeInterval? {
+        guard started,
+              readyBridgeCount > 0,
+              !hasMatchingServices,
+              retryDelays.indices.contains(attempt)
+        else { return nil }
+        return retryDelays[attempt]
+    }
+}
+
 enum MobileVoiceStopDisposition: Equatable {
     case ignoredInactive
     case ignoredAlreadyStopping(cancelledPendingRestart: Bool)
@@ -439,6 +457,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var appliedHIDPermissionSnapshot: HIDPermissionSnapshot?
     private var terminationObserver: NSObjectProtocol?
     private var completedUpdateHIDRecoveryWorkItem: DispatchWorkItem?
+    private var hidMappingRecoveryWorkItem: DispatchWorkItem?
+    private var hidMappingRecoveryAttempt = 0
+    private var hidMappingRecoveryGeneration: UInt64 = 0
     private let audioPreparationQueue = DispatchQueue(label: "RemoteMic.audioPreparation", qos: .userInitiated)
     private var audioStartupGeneration: UInt64 = 0
     private var audioDeviceRefreshGeneration: UInt64 = 0
@@ -757,6 +778,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         stopRecordingPlayback()
         guard started else { return }
         started = false
+        cancelHIDMappingRecovery(reason: "app_stop")
         completedUpdateHIDRecoveryWorkItem?.cancel()
         completedUpdateHIDRecoveryWorkItem = nil
         audioStartupGeneration &+= 1
@@ -1716,6 +1738,85 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+        completeHIDMappingRecoveryIfNeeded()
+    }
+
+    private func scheduleHIDMappingRecoveryIfNeeded() {
+        guard hidMappingRecoveryWorkItem == nil else { return }
+        guard let delay = HIDMappingRecoveryPolicy.retryDelay(
+            forAttempt: hidMappingRecoveryAttempt,
+            started: started,
+            readyBridgeCount: readyBluetoothBridgeCount,
+            hasMatchingServices: voiceFunctionMapper.hasMatchingServices
+        ) else {
+            if started,
+               readyBluetoothBridgeCount > 0,
+               !voiceFunctionMapper.hasMatchingServices,
+               hidMappingRecoveryAttempt == HIDMappingRecoveryPolicy.retryDelays.count {
+                AppLogger.shared.write(
+                    "HID MAPPING RECOVERY exhausted attempts=\(hidMappingRecoveryAttempt) " +
+                        "ready_bridges=\(readyBluetoothBridgeCount)"
+                )
+            }
+            return
+        }
+
+        let attempt = hidMappingRecoveryAttempt + 1
+        hidMappingRecoveryAttempt = attempt
+        hidMappingRecoveryGeneration &+= 1
+        let generation = hidMappingRecoveryGeneration
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.hidMappingRecoveryGeneration == generation else { return }
+            self.hidMappingRecoveryWorkItem = nil
+            guard self.started,
+                  self.readyBluetoothBridgeCount > 0,
+                  !self.voiceFunctionMapper.hasMatchingServices
+            else {
+                self.cancelHIDMappingRecovery(reason: "conditions_changed")
+                return
+            }
+            AppLogger.shared.write(
+                "HID MAPPING RECOVERY applying attempt=\(attempt) " +
+                    "ready_bridges=\(self.readyBluetoothBridgeCount)"
+            )
+            self.applyHIDSettings()
+            if !self.voiceFunctionMapper.hasMatchingServices {
+                self.scheduleHIDMappingRecoveryIfNeeded()
+            }
+        }
+        hidMappingRecoveryWorkItem = workItem
+        AppLogger.shared.write(
+            "HID MAPPING RECOVERY scheduled attempt=\(attempt) " +
+                "delay_ms=\(Int(delay * 1_000)) ready_bridges=\(readyBluetoothBridgeCount)"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func completeHIDMappingRecoveryIfNeeded() {
+        guard voiceFunctionMapper.hasMatchingServices,
+              hidMappingRecoveryWorkItem != nil || hidMappingRecoveryAttempt > 0
+        else { return }
+        let attempts = hidMappingRecoveryAttempt
+        hidMappingRecoveryGeneration &+= 1
+        hidMappingRecoveryWorkItem?.cancel()
+        hidMappingRecoveryWorkItem = nil
+        hidMappingRecoveryAttempt = 0
+        AppLogger.shared.write(
+            "HID MAPPING RECOVERY completed attempts=\(attempts) " +
+                "matched=\(voiceFunctionMapper.matchedServiceCount)"
+        )
+    }
+
+    private func cancelHIDMappingRecovery(reason: String) {
+        guard hidMappingRecoveryWorkItem != nil || hidMappingRecoveryAttempt > 0 else { return }
+        let attempts = hidMappingRecoveryAttempt
+        hidMappingRecoveryGeneration &+= 1
+        hidMappingRecoveryWorkItem?.cancel()
+        hidMappingRecoveryWorkItem = nil
+        hidMappingRecoveryAttempt = 0
+        AppLogger.shared.write(
+            "HID MAPPING RECOVERY cancelled reason=\(reason) attempts=\(attempts)"
+        )
     }
 
     private func startHIDMonitors(powerKeySuppressed: Bool) {
@@ -2120,8 +2221,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             voiceFnTapSession.resume()
             if shouldReapplyHIDSettings {
                 applyHIDSettings()
+                scheduleHIDMappingRecoveryIfNeeded()
             }
         } else {
+            if readyBluetoothBridgeCount == 0 {
+                cancelHIDMappingRecovery(reason: "bluetooth_not_ready")
+            }
             let identifier = bluetoothIdentifier(for: bridge)
             if let identifier,
                let profileID = settings.profileID(forBluetoothIdentifier: identifier) {
