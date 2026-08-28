@@ -591,6 +591,7 @@ struct BuildSigningTests {
         #expect(!promotionWorkflow.contains("package-macos-release"))
         #expect(promotionSource.contains("case \"$is_prerelease\" in"))
         #expect(promotionSource.contains("--prerelease=false"))
+        #expect(!promotionSource.contains("git branch --show-current"))
         #expect(promotionSource.contains("Candidate provenance is invalid"))
         #expect(promotionSource.contains("asset set"))
         #expect(!promotionSource.contains("run-release-stage"))
