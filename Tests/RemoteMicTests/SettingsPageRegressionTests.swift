@@ -533,7 +533,7 @@ struct SettingsPageRegressionTests {
         #expect(mobileEntrySource.contains("PhoneRemoteInvitationCard"))
         #expect(source.contains("ButtonTrigger.allCases"))
         #expect(source.contains("isMappingSelectionLocked"))
-        #expect(!source.contains("ScrollView(.horizontal, showsIndicators: false)"))
+        #expect(!mobileEntrySource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(!source.contains("remoteDeviceBindingPanel"))
         #expect(!source.contains("SidebarGlassModifier"))
         #expect(source.contains(".focusEffectDisabled()"))
@@ -1061,9 +1061,12 @@ struct SettingsPageRegressionTests {
 
         let heatmap = try #require(source.range(of: "private struct StatisticsHeatmap"))
         let heatmapSource = source[heatmap.lowerBound...]
-        #expect(heatmapSource.contains("GeometryReader"))
+        #expect(heatmapSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(heatmapSource.contains("weekdayLabels"))
-        #expect(heatmapSource.contains(".frame(height: 124)"))
+        #expect(heatmapSource.contains("let cellSize: CGFloat = 14"))
+        #expect(heatmapSource.contains("height: max(cellSize, 16)"))
+        #expect(source.contains("let rankingWidth = max(360, availableWidth * 0.42)"))
+        #expect(source.contains(".frame(width: rankingWidth, alignment: .top)"))
         #expect(source.contains(".frame(maxWidth: .infinity, minHeight: 648, alignment: .top)"))
     }
 }

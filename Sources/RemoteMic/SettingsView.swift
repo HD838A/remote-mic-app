@@ -2187,13 +2187,17 @@ struct SettingsView: View {
             CompatibilityGlassContainer(spacing: 14) {
                 VStack(spacing: 14) {
                     statisticsSummaryGrid
-                    HStack(alignment: .top, spacing: 14) {
-                        statisticsRankingPanel
-                            .frame(minWidth: 280, maxWidth: 390, alignment: .top)
-                        statisticsCalendarPanel
-                            .frame(maxWidth: .infinity, alignment: .top)
-                            .frame(maxHeight: .infinity, alignment: .top)
+                    GeometryReader { proxy in
+                        let availableWidth = max(0, proxy.size.width - 14)
+                        let rankingWidth = max(360, availableWidth * 0.42)
+                        HStack(alignment: .top, spacing: 14) {
+                            statisticsRankingPanel
+                                .frame(width: rankingWidth, alignment: .top)
+                            statisticsCalendarPanel
+                                .frame(width: max(0, availableWidth - rankingWidth), alignment: .top)
+                        }
                     }
+                    .frame(minHeight: 648)
                     sharePanel(for: .statistics)
                 }
             }
@@ -3906,19 +3910,20 @@ private struct StatisticsHeatmap: View {
     private let cellSpacing: CGFloat = 3
     private let weekdayLabelWidth: CGFloat = 30
 
-    private var monthLabels: [String] {
+    private var monthMarkers: [(column: Int, label: String)] {
         let formatter = DateFormatter()
         formatter.locale = localization.locale
         formatter.setLocalizedDateFormatFromTemplate("MMM")
-        let dates = days.compactMap(\.date)
-        guard !dates.isEmpty else { return [] }
+        var markers: [(column: Int, label: String)] = []
         var seen = Set<String>()
-        let labels: [String] = dates.compactMap { date in
+        for column in 0..<max(1, days.count / 7) {
+            let columnDays = days.dropFirst(column * 7).prefix(7)
+            guard let date = columnDays.compactMap(\.date).first else { continue }
             let key = formatter.string(from: date)
-            guard seen.insert(key).inserted else { return nil }
-            return key
+            guard seen.insert(key).inserted else { continue }
+            markers.append((column, key))
         }
-        return Array(labels.prefix(12))
+        return markers
     }
 
     private var weekdayLabels: [String] {
@@ -3930,30 +3935,25 @@ private struct StatisticsHeatmap: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let columnCount = max(1, days.count / 7)
-            let availableWidth = max(0, proxy.size.width - weekdayLabelWidth - 8)
-            let cellSize = max(
-                4,
-                min(
-                    12,
-                    (availableWidth - CGFloat(columnCount - 1) * cellSpacing)
-                        / CGFloat(columnCount)
-                )
-            )
+        let columnCount = max(1, days.count / 7)
+        let cellSize: CGFloat = 14
+        let gridWidth = CGFloat(columnCount) * cellSize
+            + CGFloat(max(0, columnCount - 1)) * cellSpacing
 
+        ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 0) {
-                    Color.clear.frame(width: weekdayLabelWidth)
-                    ForEach(Array(monthLabels.enumerated()), id: \.offset) { _, label in
-                        Text(label)
+                ZStack(alignment: .topLeading) {
+                    ForEach(Array(monthMarkers.enumerated()), id: \.offset) { _, marker in
+                        Text(marker.label)
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(width: 36, alignment: .leading)
+                            .offset(x: CGFloat(marker.column) * (cellSize + cellSpacing))
                     }
                 }
+                .frame(width: gridWidth, height: 18, alignment: .leading)
 
                 HStack(alignment: .top, spacing: 8) {
                     VStack(alignment: .leading, spacing: cellSpacing) {
@@ -3961,7 +3961,11 @@ private struct StatisticsHeatmap: View {
                             Text(label)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
-                                .frame(width: weekdayLabelWidth, height: cellSize, alignment: .leading)
+                                .frame(
+                                    width: weekdayLabelWidth,
+                                    height: max(cellSize, 16),
+                                    alignment: .leading
+                                )
                         }
                     }
 
@@ -3994,8 +3998,9 @@ private struct StatisticsHeatmap: View {
                     }
                 }
             }
+            .padding(.trailing, 6)
         }
-        .frame(height: 124)
+        .frame(height: 150)
     }
 
     private func fillColor(for day: StatisticsCalendarDay) -> Color {
