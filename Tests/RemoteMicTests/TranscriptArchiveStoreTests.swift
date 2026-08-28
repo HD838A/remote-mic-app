@@ -4,6 +4,43 @@ import Testing
 
 @Suite("Local transcript archive")
 struct TranscriptArchiveStoreTests {
+    @Test func allApplicationsWindowKeepsRecentWeekWhileAppViewKeepsOlderEntries() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recent = TranscriptRecord(
+            sessionID: UUID(),
+            startedAt: now.addingTimeInterval(-60),
+            endedAt: now.addingTimeInterval(-60),
+            applicationName: "Notes",
+            bundleIdentifier: "com.apple.Notes",
+            source: .bluetoothRemote,
+            originalTranscript: "recent"
+        )
+        let old = TranscriptRecord(
+            sessionID: UUID(),
+            startedAt: now.addingTimeInterval(-(8 * 24 * 60 * 60)),
+            endedAt: now.addingTimeInterval(-(8 * 24 * 60 * 60)),
+            applicationName: "Notes",
+            bundleIdentifier: "com.apple.Notes",
+            source: .bluetoothRemote,
+            originalTranscript: "old"
+        )
+
+        #expect(
+            TranscriptHistoryPresentationPolicy.visibleRecords(
+                [old, recent],
+                applicationKey: nil,
+                now: now
+            ).map(\.id) == [recent.id]
+        )
+        #expect(
+            TranscriptHistoryPresentationPolicy.visibleRecords(
+                [old, recent],
+                applicationKey: old.applicationKey,
+                now: now
+            ).map(\.id) == [recent.id, old.id]
+        )
+    }
+
     @Test func recordsAreStoredByApplicationAndLocalDate() throws {
         let harness = try ArchiveHarness()
         let first = harness.record(

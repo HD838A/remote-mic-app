@@ -715,6 +715,8 @@
 "statistics.transcripts.all_records" = "All Entries";
 "statistics.transcripts.expand_applications" = "Expand";
 "statistics.transcripts.collapse_applications" = "Collapse";
+"statistics.transcripts.view_more_by_application" = "View older entries by app";
+"statistics.transcripts.no_recent_records" = "No entries from the last 7 days. Select an app above to view older history.";
 "statistics.transcripts.entry_count" = "%@ entries";
 "statistics.transcripts.copy" = "Copy this entry";
 "statistics.transcripts.delete_record" = "Delete this entry";
