@@ -321,7 +321,7 @@ final class AppLogger {
         })
     }
 
-    private static func stableToken(_ value: String) -> String {
+    static func stableToken(_ value: String) -> String {
         let token = String(value.unicodeScalars.map { scalar -> Character in
             switch scalar.value {
             case 48 ... 57, 65 ... 90, 97 ... 122, 45, 46, 95:

@@ -72,6 +72,7 @@ struct TranscriptHistorySection: View {
     @State private var expandedDayKeys: Set<String> = []
     @State private var copiedRecordID: UUID?
     @State private var deletionRequest: TranscriptDeletionRequest?
+    @State private var lastDisplayDiagnosticSignature: String?
 
     private var recordingAssetsBySessionID: [UUID: RecordingAssetManifest] {
         Dictionary(
@@ -210,18 +211,30 @@ struct TranscriptHistorySection: View {
             model.refreshRecordingAssets()
             normalizeSelection()
             normalizeExpandedDays()
+            logDisplayDiagnostics()
         }
         .onChange(of: applications.map(\.id)) { _ in
             normalizeSelection()
+            logDisplayDiagnostics()
         }
         .onChange(of: activeApplicationKey) { _ in
             resetExpandedDays()
+            logDisplayDiagnostics()
+        }
+        .onChange(of: model.transcriptRecords.count) { _ in
+            normalizeExpandedDays()
+            logDisplayDiagnostics()
         }
         .onChange(of: dayGroups.map(\.id)) { _ in
             normalizeExpandedDays()
+            logDisplayDiagnostics()
         }
         .onChange(of: recordingDayGroups.map(\.id)) { _ in
             normalizeExpandedDays()
+            logDisplayDiagnostics()
+        }
+        .onChange(of: expandedDayKeys) { _ in
+            logDisplayDiagnostics()
         }
         .alert(item: $deletionRequest, content: deletionAlert)
     }
@@ -293,6 +306,28 @@ struct TranscriptHistorySection: View {
             }
 
             applicationSwitcher
+
+            if let playbackFailure = model.recordingPlaybackError {
+                GlassPanel {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(localization.text(playbackFailure.messageKey))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button {
+                            model.clearRecordingPlaybackError()
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(.borderless)
+                        .help(localization.text("common.action.close"))
+                    }
+                    .padding(10)
+                }
+            }
 
             if activeApplicationKey == nil && hasEarlierEntries {
                 Button {
@@ -772,6 +807,52 @@ struct TranscriptHistorySection: View {
             selectedApplicationKey = nil
             return
         }
+    }
+
+    private func logDisplayDiagnostics() {
+        let loadedCount = model.transcriptRecords.count
+        guard loadedCount > 0 else {
+            lastDisplayDiagnosticSignature = nil
+            return
+        }
+
+        let eligibleCount = dayGroups.reduce(0) { $0 + $1.records.count }
+        let displayedCount = dayGroups.reduce(0) { count, group in
+            count + (expandedDayKeys.contains(group.id) ? group.records.count : 0)
+        }
+        guard displayedCount == 0 else {
+            lastDisplayDiagnosticSignature = nil
+            return
+        }
+
+        let reason: String
+        if eligibleCount > 0 {
+            reason = "date_groups_collapsed"
+        } else if let activeApplicationKey {
+            reason = model.transcriptRecords.contains {
+                $0.applicationKey == activeApplicationKey
+            } ? "grouping_empty" : "application_filter_no_match"
+        } else if model.transcriptRecords.allSatisfy({
+            $0.endedAt < presentationNow.addingTimeInterval(
+                -TranscriptHistoryPresentationPolicy.recentWindow
+            )
+        }) {
+            reason = "outside_recent_window"
+        } else {
+            reason = "no_visible_records"
+        }
+
+        let applicationKey = activeApplicationKey ?? "all"
+        let signature = "\(reason)|\(applicationKey)|\(loadedCount)|" +
+            "\(eligibleCount)|\(displayedCount)"
+        guard lastDisplayDiagnosticSignature != signature else { return }
+        lastDisplayDiagnosticSignature = signature
+        AppLogger.shared.write(
+            "TRANSCRIPT HISTORY display_failed " +
+                "reason=\(reason) application_key=\(applicationKey) " +
+                "loaded_count=\(loadedCount) eligible_count=\(eligibleCount) " +
+                "displayed_count=\(displayedCount)"
+        )
     }
 
     private func normalizeExpandedDays() {

@@ -5,6 +5,25 @@ import Testing
 
 @Suite("Local recording assets")
 struct RecordingAssetStoreTests {
+    @Test func playbackFailuresUseSafeUserMessagesAndStableReasons() {
+        #expect(
+            RecordingPlaybackFailure.classify(RecordingAssetStoreError.missingAsset) == .missingAsset
+        )
+        #expect(
+            RecordingPlaybackFailure.classify(RecordingAssetStoreError.unsupportedFormat) == .invalidAsset
+        )
+        #expect(
+            RecordingPlaybackFailure.classify(
+                NSError(domain: "AVFoundation", code: -1)
+            ) == .invalidAsset
+        )
+        #expect(RecordingPlaybackFailure.missingAsset.logReason == "missing_asset")
+        #expect(
+            RecordingPlaybackFailure.missingAsset.messageKey ==
+                "statistics.transcripts.recording_playback_error.missing"
+        )
+    }
+
     @Test func commitsM4AAssetAndKeepsManifestMetadata() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("RemoteMicRecordingTests-\(UUID().uuidString)", isDirectory: true)
@@ -41,6 +60,15 @@ struct RecordingAssetStoreTests {
         #expect(try store.loadAll() == [manifest])
         #expect(try store.mediaURL(for: manifest).lastPathComponent == "original.m4a")
         #expect(!FileManager.default.fileExists(atPath: draft.temporaryMediaURL.path))
+        let originalDiagnostics = try store.integrityDiagnostics(for: manifest)
+        #expect(originalDiagnostics.actualByteCount == manifest.byteCount)
+        #expect(originalDiagnostics.byteCountMatches)
+        #expect(originalDiagnostics.sha256Matches)
+
+        try Data("fixture-Audio".utf8).write(to: store.mediaURL(for: manifest))
+        let changedDiagnostics = try store.integrityDiagnostics(for: manifest)
+        #expect(changedDiagnostics.byteCountMatches)
+        #expect(!changedDiagnostics.sha256Matches)
 
         try store.updateApplication(
             sessionID: sessionID,

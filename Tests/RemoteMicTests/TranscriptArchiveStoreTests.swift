@@ -4,6 +4,30 @@ import Testing
 
 @Suite("Local transcript archive")
 struct TranscriptArchiveStoreTests {
+    @Test func malformedDayFileIsSkippedAndLoggedWithoutTranscriptBody() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "RemoteMicTranscriptReadFailure-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let applicationDirectory = root.appendingPathComponent("com.example.editor", isDirectory: true)
+        try FileManager.default.createDirectory(at: applicationDirectory, withIntermediateDirectories: true)
+        try Data("private transcript body".utf8)
+            .write(to: applicationDirectory.appendingPathComponent("2026-08-29.json"))
+        var logs: [String] = []
+        let store = TranscriptArchiveStore(rootDirectoryURL: root, log: { logs.append($0) })
+
+        #expect(try store.loadAll().isEmpty)
+        #expect(logs.contains {
+            $0.contains("TRANSCRIPT ARCHIVE read_failed") &&
+                $0.contains("reason=decode") &&
+                $0.contains("application_key=com.example.editor") &&
+                $0.contains("date=2026-08-29")
+        })
+        #expect(logs.allSatisfy { !$0.contains("private transcript body") })
+        try FileManager.default.trashItem(at: root, resultingItemURL: nil)
+    }
+
     @Test func allApplicationsWindowKeepsRecentWeekWhileAppViewKeepsOlderEntries() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let recent = TranscriptRecord(

@@ -272,6 +272,17 @@ struct BluetoothVoiceTailDiagnostics {
     }
 }
 
+private enum RecordingPlaybackOperationError: Error {
+    case playerRejected
+}
+
+private enum RecordingPlaybackStage: String {
+    case resolveAsset = "resolve_asset"
+    case initializePlayer = "initialize_player"
+    case preparePlayer = "prepare_player"
+    case startPlayback = "start_playback"
+}
+
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
@@ -311,11 +322,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
     @Published private(set) var transcriptRecords: [TranscriptRecord] = []
     @Published private(set) var recordingAssets: [RecordingAssetManifest] = []
+    @Published private(set) var recordingPlaybackError: RecordingPlaybackFailure?
 
     private let transcriptArchiveStore: TranscriptArchiveStore
     private let recordingAssetStore: RecordingAssetStore
     private let transcriptArchiveOperationQueue = DispatchQueue(
         label: "RemoteMic.transcriptArchive.operations",
+        qos: .utility
+    )
+    private let recordingPlaybackDiagnosticQueue = DispatchQueue(
+        label: "RemoteMic.recordingPlayback.diagnostics",
         qos: .utility
     )
     private let audioOutput = VirtualAudioOutput()
@@ -827,7 +843,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     self?.transcriptRecords = records
                 }
             } catch {
-                AppLogger.shared.write("TRANSCRIPT ARCHIVE load_failed")
+                AppLogger.shared.write(
+                    "TRANSCRIPT ARCHIVE load_failed reason=load_all " +
+                        AppLogger.errorFields(error)
+                )
             }
         }
         refreshRecordingAssets()
@@ -851,21 +870,93 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     self?.recordingAssets = assets
                 }
             } catch {
-                AppLogger.shared.write("RECORDING ASSET load_failed")
+                AppLogger.shared.write(
+                    "RECORDING ASSET load_failed reason=load_all " +
+                        AppLogger.errorFields(error)
+                )
             }
         }
     }
 
     func playRecording(_ asset: RecordingAssetManifest) {
+        recordingPlaybackError = nil
+        var stage = RecordingPlaybackStage.resolveAsset
+        var prepareResult: Bool?
         do {
             let url = try recordingAssetStore.mediaURL(for: asset)
             recordingPlayback?.stop()
+            recordingPlayback = nil
+            stage = .initializePlayer
             recordingPlayback = try AVAudioPlayer(contentsOf: url)
-            recordingPlayback?.prepareToPlay()
-            recordingPlayback?.play()
+            stage = .preparePlayer
+            prepareResult = recordingPlayback?.prepareToPlay()
+            stage = .startPlayback
+            guard recordingPlayback?.play() == true else {
+                throw RecordingPlaybackOperationError.playerRejected
+            }
         } catch {
-            AppLogger.shared.write("RECORDING ASSET playback_failed")
+            let playerDurationMilliseconds = recordingPlayback.map {
+                Int(($0.duration * 1_000).rounded())
+            } ?? -1
+            let playerChannelCount = recordingPlayback?.numberOfChannels ?? -1
+            let playerSampleRate = recordingPlayback.map {
+                Int($0.format.sampleRate.rounded())
+            } ?? -1
+            recordingPlayback?.stop()
+            recordingPlayback = nil
+            let failure: RecordingPlaybackFailure = error is RecordingPlaybackOperationError
+                ? .playerUnavailable
+                : .classify(error)
+            recordingPlaybackError = failure
+            let failureFields = [
+                "RECORDING ASSET playback_failed",
+                "record_id=\(asset.id.uuidString)",
+                "session_id=\(asset.sessionID.uuidString)",
+                "application_key=\(AppLogger.stableToken(asset.applicationKey ?? "__unknown__"))",
+                "date=\(asset.localDateKey)",
+                "reason=\(failure.logReason)",
+                "stage=\(stage.rawValue)",
+                "source=\(asset.source.rawValue)",
+                "manifest_format_supported=\(asset.format == "m4a-aac")",
+                "manifest_bytes=\(asset.byteCount)",
+                "manifest_duration_ms=\(asset.durationMilliseconds)",
+                "prepare_result=\(prepareResult.map { String($0) } ?? "not_attempted")",
+                "player_duration_ms=\(playerDurationMilliseconds)",
+                "player_channels=\(playerChannelCount)",
+                "player_sample_rate_hz=\(playerSampleRate)",
+                AppLogger.errorFields(error)
+            ]
+            AppLogger.shared.write(failureFields.joined(separator: " "))
+            logRecordingPlaybackIntegrity(asset)
         }
+    }
+
+    private func logRecordingPlaybackIntegrity(_ asset: RecordingAssetManifest) {
+        recordingPlaybackDiagnosticQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                let diagnostics = try self.recordingAssetStore.integrityDiagnostics(for: asset)
+                AppLogger.shared.write(
+                    "RECORDING ASSET playback_integrity " +
+                        "record_id=\(asset.id.uuidString) " +
+                        "session_id=\(asset.sessionID.uuidString) " +
+                        "actual_bytes=\(diagnostics.actualByteCount) " +
+                        "byte_count_match=\(diagnostics.byteCountMatches) " +
+                        "sha256_match=\(diagnostics.sha256Matches)"
+                )
+            } catch {
+                AppLogger.shared.write(
+                    "RECORDING ASSET playback_integrity_failed " +
+                        "record_id=\(asset.id.uuidString) " +
+                        "session_id=\(asset.sessionID.uuidString) " +
+                        AppLogger.errorFields(error)
+                )
+            }
+        }
+    }
+
+    func clearRecordingPlaybackError() {
+        recordingPlaybackError = nil
     }
 
     func stopRecordingPlayback() {
