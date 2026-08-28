@@ -80,6 +80,7 @@ REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-workflow-gh-token.sh" >/de
 publication_source="$ROOT/scripts/publish-preview-release.sh"
 recovery_source="$ROOT/scripts/recover-preview-stage.sh"
 attestation_source="$ROOT/scripts/verify-preview-ui-attestation.sh"
+ui_prep_source="$ROOT/scripts/prepare-staged-preview-ui-test.sh"
 /usr/bin/grep -Fq 'verify-preview-ui-attestation.sh' "$publication_source"
 /usr/bin/grep -Fq 'stage-record/preview-stage-record.json' "$publication_source"
 /usr/bin/grep -Fq 'staging record artifact' "$recovery_source"
@@ -95,6 +96,11 @@ attestation_source="$ROOT/scripts/verify-preview-ui-attestation.sh"
 /usr/bin/grep -Fq '.id == $artifact' "$recovery_source"
 /usr/bin/grep -Fq 'zipinfo -l' "$recovery_source"
 /usr/bin/grep -Fq 'zipinfo -l' "$ROOT/scripts/promote-preview-release.sh"
+/usr/bin/grep -Fq 'browser_download_url' "$ui_prep_source"
+if /usr/bin/grep -Fq 'application/octet-stream' "$ui_prep_source"; then
+  print -u2 "Preview UI preparation still relies on an unsupported gh API media type"
+  exit 1
+fi
 if /usr/bin/grep -Eq '\$\(\)/bin/date|date -u' "$publication_source"; then
   print -u2 "publication provenance must not use the current clock"
   exit 1
