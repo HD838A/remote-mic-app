@@ -2,8 +2,8 @@
 
 - 时间：2026-08-27
 - GitHub：[#240](https://github.com/HD838A/remote-mic-app/issues/240)
-- 状态：已在 `v1.9.16` 后续主线完成候选修复；自动化状态回放、项目自检、Debug/Release 构建与 App 自检通过，等待签名公证测试包、真实合盖电源日志及 RC001 / RC003 首按验收
-- 基线：`v1.9.16` Tag `420767d6100de20e27f4d97f1e15beb20c1aa71e` 后的 upstream `main` `1333e2c75d5b88ffc51921cb1e1310426d5acdd4`
+- 状态：已在 `v1.9.16` 后续主线完成候选修复，并重放至 `1.9.17 (170)` 主线；自动化状态回放、项目自检、Debug/Release 构建与 App 自检通过，等待签名公证测试包、真实合盖电源日志及 RC001 / RC003 首按验收
+- 基线：原实现基于 `v1.9.16` Tag `420767d6100de20e27f4d97f1e15beb20c1aa71e` 后的 upstream `main` `1333e2c75d5b88ffc51921cb1e1310426d5acdd4`；当前集成基于 `9945224cc9d411d21b6cc06a4eb378f8c9785270`
 - 影响范围：macOS `1.9.8 (131)` 已确认；`v1.9.16` 增加真实唤醒后的主动 BLE 恢复，但仍未在系统睡眠时暂停 BLE / HID
 - 功能点：系统休眠、CoreBluetooth、IOHID、合盖 DarkWake、遥控器重连
 
