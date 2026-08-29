@@ -1,7 +1,7 @@
 # 休眠唤醒后蓝牙失效，以及豆包有电平但没有文字
 
 - 时间：2026-08-25
-- 状态：补充 HID 晚到候选修复；测试包真实休眠唤醒基础路径通过，等待现场命中 `matched=0` 重试分支
+- 状态：补充 HID 晚到候选修复；Fn 模式已在真机命中 `matched=0 → recovery completed`，左/右 Command 模式仍待真机验收
 - 影响范围：用户反馈版本 1.9.10；回溯检查 v1.9.3 至 v1.9.10，并确认 2026-08-28 `origin/main` `10900ee2` 仍存在 HID 一次性映射窗口
 - 功能点：CoreBluetooth 睡眠唤醒恢复、MiRemoteV 2ch 虚拟音频、豆包输入法文字捕获
 - 简单描述：Mac 休眠后无线麦或遥控器无法继续工作，重启 App 才恢复；豆包显示电平但最终没有文字。
@@ -81,22 +81,24 @@
 
 ### 根因
 
-蓝牙 bridge 的 Ready 与 macOS `IOHIDEventSystemClient` 枚举出 RC003 service 不是同一时刻。现有代码只在 bridge 从非 Ready 进入 Ready 时调用一次 `applyHIDSettings()`；如果那一刻 `matched=0`，既没有 HID service 到达通知，也没有延迟重试。HID monitor 又要求电源键映射已经安全生效才能启动，无法反向触发恢复。
+蓝牙 bridge 的 Ready 与 macOS `IOHIDEventSystemClient` 枚举出 RC003 service 不是同一时刻。现有代码只在 bridge 从非 Ready 进入 Ready 时调用一次 `applyHIDSettings()`；如果那一刻 `matched=0`，既没有 HID service 到达通知，也没有延迟重试，因此用户当前选择的语音键模式无法恢复。HID monitor 又要求电源键映射已经安全生效才能启动，无法反向触发恢复。
+
+该时序问题不只影响 Fn：Fn/地球键模式需要把 RC003 F5 映射为 Fn；Fn 点按、左 Command 和右 Command 模式都需要先把实体 F5 中和，再由软件发送所选按键。四条路径共享同一次 HID service 枚举，因此 `matched=0` 会阻断当前所选模式，而不是只丢失固定的 Fn 映射。
 
 ### 补充修复
 
-- 仅当 App 已启动、至少一个蓝牙 bridge 为 Ready 且映射仍为 `matched=0` 时，按 0.5、1、2、4、8 秒最多重试五次现有 `applyHIDSettings()`。
+- 仅当 App 已启动、至少一个蓝牙 bridge 为 Ready 且映射仍为 `matched=0` 时，按 0.5、1、2、4、8 秒最多重试五次现有 `applyHIDSettings()`；该方法读取当前 `voiceKeyMode`，不会强制切回 Fn。
 - 任一重试枚举到目标 HID service 后立即结束；所有 bridge 不再 Ready 或 App 停止时取消；五次耗尽后停止，不持续轮询。
 - 增加 `scheduled`、`applying`、`completed`、`cancelled` 和 `exhausted` 日志，下一次现场可直接确认恢复结果。
 - 不修改 ATVV、虚拟音频、输入法协议、语音键按下/释放时序或手势定义。
 
 ### 补充验证边界
 
-- `swift test --filter 'BluetoothLifecycleTests|VoiceKeyModeTests'`：2 个测试套件、31 个测试通过；覆盖有限退避序列、Ready 回调接线，以及断连取消接线。
-- `swift test`：37 个测试套件、418 个测试全部通过。
+- `swift test --filter 'BluetoothLifecycleTests|VoiceKeyModeTests|RemoteVoiceFunctionMapperTests'`：3 个测试套件、44 个测试通过；覆盖有限退避序列、Ready 回调接线、断连取消接线、当前模式读取，以及 Fn/左右 Command 的映射与中和边界。
+- `swift test`：37 个测试套件、421 个测试全部通过。
 - `SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh`：Self Test 44 项全部通过。
 - `./scripts/check-repository-boundaries.sh`：公开仓库边界检查通过。
-- 自动化验证 App 未启动、无 Ready bridge、已经枚举到 HID service 时不再安排恢复。
+- 自动化验证 App 未启动、无 Ready bridge、已经枚举到 HID service 时不再安排恢复；同时验证恢复重试重新进入读取当前 `voiceKeyMode` 的完整映射流程，没有把模式写死为 `.function`。
 - 仍必须用本轮代码构建同一 App，在真实 RC003 上重放“久置或休眠 → 电源键唤醒 → 方向键可用 → 不点击立即重新连接 → 第一次语音”。只有首次语音成功并看到 `HID MAPPING RECOVERY completed`，才能确认现场问题修复。
 
 ### 测试包真实休眠唤醒结果
@@ -108,6 +110,12 @@
 - 唤醒后第一次语音于 15:50:41 开始，Fn down/up 完整，23,280 个样本全部通过虚拟音频路由，`enqueue_failures=0`；随后两次语音分别通过 30,000 和 128,640 个样本。
 - 用户确认唤醒后遥控器正常，证明本候选包的真实休眠唤醒基础路径、Fn 触发和虚拟音频路径通过。
 - 本次 HID service 已及时出现，没有复现原故障的 `matched=0`，日志中也不会出现 `HID MAPPING RECOVERY completed`。因此有限重试分支仍只有自动化覆盖，尚不能表述为已完成该分支的真机验收。
+
+### 测试包命中有限重试分支
+
+随后同一台 Mac、同一只 RC003 再次复现原问题时序：首次映射记录 `matched=0`，新逻辑在 500ms 后执行第一次重试，得到 `matched=1 applied=1`，并记录 `HID MAPPING RECOVERY completed attempts=1`。整个过程没有点击“立即重新连接”；恢复后的下一次语音成功触发豆包，传输 31,920 个音频样本且 `enqueue_failures=0`，后续四次语音也均正常。
+
+现场同时确认：BLE Ready 后约 0.2 秒立即按下的第一次语音发生在 500ms 重试前，因此仍可能漏掉；恢复完成后不会持续失效。该结果验证了 Fn/地球键与豆包路径，但没有验证左 Command、右 Command 或 Fn 点按模式的真实 RC003 按键侧别、权限和第三方 App 行为，这三项仍需按 `Testing/VoiceKeyModes.md` 完成真机验收。
 
 ## 检查过的代码位置
 

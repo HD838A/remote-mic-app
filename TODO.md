@@ -251,6 +251,7 @@
   - 默认保持 Fn/地球键；可在“按键映射”页选择左 Command 或右 Command 长按。Command 模式需要辅助功能权限，并覆盖 RC003、iPhone、Apple Watch 和网页版语音入口。
   - Command 模式不得通过全局 Command flagsChanged 监听普通键盘；只在真实语音会话开始/结束时发送成对 keyDown/keyUp。Fn 点按模式仅在 Fn/地球键模式有效。
   - 组件和策略自动化已覆盖配置迁移与原子导入门禁、左右键码、跨来源 owner latch、输入源多 owner、每个 Bridge Ready 策略、F5 映射事务和设置页紧凑布局；部分 BridgeAppModel 接线仍由源码范围断言保护，未启用硬件模拟依赖，不能替代回调级事件回放。待 RC003、iPhone、Apple Watch、网页版、系统权限及目标第三方语音应用真实环境验收后再标记完成。详细测试步骤见 [`Testing/VoiceKeyModes.md`](Testing/VoiceKeyModes.md)。
+  - 2026-08-29 补充 RC003 HID service 晚于 BLE Ready 时的有限恢复：重试完整读取当前 `voiceKeyMode` 的映射流程，不把模式写死为 Fn；Fn 真机已命中 `matched=0 → recovery completed`，Fn 点按与左/右 Command 的恢复自动化已覆盖，真实硬件和第三方 App 仍按测试手册验收。
 - [x] 语音键短按定位当前 App 聊天输入框
   - 默认关闭，与 Fn 点按模式互斥；短按取消该次短音频并聚焦当前 App，长按继续使用已选语音触发键。
   - Accessibility 通用路径已覆盖 Electron / Chromium 建树重试和安全候选排名；微信仅对精确 Bundle ID 使用有尺寸门禁的窗口相对降级。Lark/飞书、Telegram 和微信已完成 RC003 真机验收。

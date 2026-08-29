@@ -93,6 +93,21 @@
 
 失败判定：keyDown/keyUp 不配对、左右侧发送错误、一次会话重复发送、松开后 Command 仍影响键盘、音频链路被阻断。
 
+## 专项用例：RC003 HID 晚到恢复（全模式）
+
+分别选择以下配置执行完整矩阵：Fn/地球键、Fn/地球键并开启 Fn 点按、左 Command、右 Command。
+
+1. 每种配置下都让遥控器久置断开，或让 Mac 完成一次真实休眠与唤醒；按遥控器电源键恢复，直到方向键已经能控制 Mac。
+   - 预期：RC003 重新进入 BLE Ready；即使 HID service 晚于 Ready 出现，SayAll 也会在有限恢复窗口内重新应用当前所选模式和电源键映射，不会强制切回 Fn。
+2. 不点击“立即重新连接”，直接执行恢复后的第一次语音。
+   - 预期：Fn/地球键产生一组 Fn 按下/释放；Fn 点按先中和 F5 并产生配对 tap；左/右 Command 先中和 F5，再分别产生正确侧的 Command 按下/释放。每种模式的第一次语音都必须收到完整音频，不能以第二次或第三次成功作为通过。
+3. 检查本次 `runtime.log`。
+   - 预期：如果首次 Ready 出现 `VOICE FN MAPPING ... matched=0`，随后出现有限次数的 `HID MAPPING RECOVERY scheduled`，并在首次语音前以 `completed` 结束；不得持续轮询或出现无条件切换 `voiceKeyMode=fn`。
+4. 记录输入监控、辅助功能和目标第三方 App 的实际结果。
+   - 预期：Fn 硬件映射不依赖辅助功能；Fn 点按和左右 Command 按既有权限门禁工作。权限不足应明确提示，不得把模式静默改成 Fn。
+
+失败判定：必须点击“立即重新连接”、出现 `HID MAPPING RECOVERY exhausted`、当前选择被改成 Fn、第一次语音失败、左右 Command 侧别错误、F5 未中和、按键未释放、首段或尾音丢失。
+
 ## 用例 5：iPhone、Apple Watch 与网页版
 
 对三个入口分别执行以下矩阵：
