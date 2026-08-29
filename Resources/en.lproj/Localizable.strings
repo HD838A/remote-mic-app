@@ -145,6 +145,7 @@
 "action.open_chrome" = "Open Chrome";
 "action.open_safari" = "Open Safari";
 "action.open_zed" = "Open Zed";
+"button_mapping.action_filter.all" = "All";
 "button_mapping.action_group.basic_keys" = "Basic Keys";
 "button_mapping.action_group.system_and_media" = "System & Media";
 "button_mapping.action_group.custom" = "Custom Actions";

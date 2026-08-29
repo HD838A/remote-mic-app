@@ -21,6 +21,7 @@
 - Panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
+- The action editor provides an in-page All / Basic Keys / System & Media / Custom Actions capsule filter. Filtering is temporary, does not execute or rewrite the current mapping, and Custom Actions also exposes the existing app actions.
 - The UI does not show a separate mute key that is absent from the physical remote.
 - Regular UI uses product language instead of remote model codes, Bluetooth voice protocol names, button protocol names, hexadecimal button numbers, or device-identifier terminology.
 - Statistics uses a prominent large Day / Week / All selector aligned to the left, shows daily bars for the latest seven days, weekly bars for the latest eight weeks, and only all-time button and voice totals in the All view while preserving expansion space.
@@ -36,6 +37,7 @@
 - Every design must maintain a coherent visual order and overall polish: align the edges or text baselines of peer elements, keep equivalent controls consistently sized, and apply a consistent rhythm to page margins, section spacing, control spacing, and internal padding. Do not introduce unexplained differences in size, alignment, or spacing.
 - Chinese UI text must render at 12pt or larger. Do not use 8–11pt Chinese text or allow `minimumScaleFactor` to reduce Chinese below 12pt. When space is constrained, increase control height, adjust the layout, wrap text, or truncate secondary content instead.
 - Avoid drop-down lists whenever practical, especially a single long list that mixes basic keys, system actions, custom actions, and individual apps. Group larger option sets semantically and prefer in-page button grids, segmented choices, or clearly separated lists.
+- At `800 × 650`, the four action-filter capsules must remain on one line in Chinese and English, use 12pt-or-larger text, and avoid horizontal scrolling or clipping in light and dark appearances.
 - Flatten flows into the main page instead of relying on popovers, sheets, or consecutive confirmation dialogs. Related configuration should share one large surface where the current target, available actions, secondary settings, learning state, and test action remain visible together.
 - Keep system dialogs only for file selection, required permission authorization, and irreversible destructive actions. Ordinary instructions, learning progress, success, and failure feedback should appear inline.
 

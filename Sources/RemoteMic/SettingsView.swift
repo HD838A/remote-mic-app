@@ -124,6 +124,37 @@ private struct ConfigurationStatus {
     let systemImage: String
 }
 
+private enum MappingActionFilter: String, CaseIterable, Identifiable {
+    case all
+    case basicKeys
+    case systemAndMedia
+    case custom
+
+    var id: String { rawValue }
+
+    var localizationKey: String {
+        switch self {
+        case .all: return "button_mapping.action_filter.all"
+        case .basicKeys: return ButtonActionCategory.basicKeys.localizationKey
+        case .systemAndMedia: return ButtonActionCategory.systemAndMedia.localizationKey
+        case .custom: return ButtonActionCategory.custom.localizationKey
+        }
+    }
+
+    func includes(_ category: ButtonActionCategory) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .basicKeys:
+            return category == .basicKeys
+        case .systemAndMedia:
+            return category == .systemAndMedia
+        case .custom:
+            return category == .custom || category == .applications
+        }
+    }
+}
+
 enum MappingSelectionPolicy {
     static func selection(
         current: RemoteButton,
@@ -191,6 +222,7 @@ struct SettingsView: View {
     @State private var isMappingSelectionLocked = true
     @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
     @State private var mappingEditingTarget: ShortcutEditingTarget?
+    @State private var mappingActionFilter: MappingActionFilter = .all
     @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
@@ -995,6 +1027,7 @@ struct SettingsView: View {
                             actionSummary: mappingActionSummary,
                             onEdit: { button, trigger in
                                 selectedRemoteButton = button
+                                mappingActionFilter = .all
                                 isPresetApplicationActionsExpanded = false
                                 mappingEditingTarget = ShortcutEditingTarget(
                                     button: button,
@@ -1413,7 +1446,9 @@ struct SettingsView: View {
             trigger == .singleClick &&
             settings.experimentalContinuousRecordingEnabled
         return VStack(alignment: .leading, spacing: 16) {
-            ForEach(ButtonActionCategory.allCases) { category in
+            mappingActionFilterControl
+
+            ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
                 let groupedActions = actions.filter { $0.category == category }
                 if !groupedActions.isEmpty {
                     mappingActionGroup(
@@ -1471,6 +1506,44 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var mappingActionFilterControl: some View {
+        HStack(spacing: 8) {
+            ForEach(MappingActionFilter.allCases) { filter in
+                let isSelected = mappingActionFilter == filter
+                Button {
+                    guard mappingActionFilter != filter else { return }
+                    mappingActionFilter = filter
+                    isPresetApplicationActionsExpanded = filter == .custom
+                } label: {
+                    Text(localization.text(filter.localizationKey))
+                        .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
+                        .lineLimit(1)
+                        .foregroundStyle(
+                            isSelected
+                                ? Color(nsColor: .alternateSelectedControlTextColor)
+                                : Color.secondary
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(
+                            isSelected ? Color.accentColor : Color.clear,
+                            in: Capsule()
+                        )
+                        .overlay {
+                            Capsule()
+                                .stroke(
+                                    isSelected ? Color.clear : Color.secondary.opacity(0.22),
+                                    lineWidth: 1
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(8)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func mappingRapidPressControl(button: RemoteButton) -> some View {

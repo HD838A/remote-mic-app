@@ -549,6 +549,13 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("!configured.action.allowsRepeat"))
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.contains("ButtonActionCategory.allCases"))
+        #expect(source.contains("MappingActionFilter.allCases"))
+        #expect(source.contains("mappingActionFilterControl"))
+        #expect(source.contains("ButtonActionCategory.allCases.filter(mappingActionFilter.includes)"))
+        #expect(source.contains("category == .custom || category == .applications"))
+        #expect(source.contains("button_mapping.action_filter.all"))
+        #expect(source.contains("in: Capsule()"))
+        #expect(source.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"))
         #expect(source.contains("LazyVGrid("))
         #expect(source.contains("button_mapping.action.disable_switch"))
         #expect(source.contains(").filter { $0 != .disabled }"))
@@ -896,6 +903,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(
             "model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))
+        #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_ACTION_EDITOR"))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"))
     }

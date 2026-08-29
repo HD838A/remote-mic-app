@@ -48,6 +48,10 @@ enum SettingsScreenshotRenderer {
         let opensShortcutEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"
         ] == "1"
+        let opensActionEditor = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_ACTION_EDITOR"
+        ] == "1"
+        let opensMappingEditor = opensShortcutEditor || opensActionEditor
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
@@ -93,7 +97,7 @@ enum SettingsScreenshotRenderer {
                 initialShareSection: section == .statistics || section == .about
                     ? section
                     : nil,
-                initialMappingEditingButton: section == .mapping && opensShortcutEditor
+                initialMappingEditingButton: section == .mapping && opensMappingEditor
                     ? .ok
                     : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
