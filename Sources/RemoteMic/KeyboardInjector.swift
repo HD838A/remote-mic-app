@@ -320,6 +320,10 @@ enum KeyboardInjector {
             scrollPoster(scrollLineCount)
         case .scrollDown:
             scrollPoster(-scrollLineCount)
+        case .codexProjectPicker:
+            Task { @MainActor in
+                CodexProjectPickerController.shared.show()
+            }
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -1776,6 +1780,19 @@ enum KeyboardInjector {
         up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+    }
+
+    @discardableResult
+    static func postCodexProjectShortcut(number: Int) -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier ==
+                PresetApplication.codex.bundleIdentifier,
+              let keyCode = CodexProjectPickerModel.keyCode(for: number)
+        else {
+            return false
+        }
+        postKey(code: keyCode, flags: .maskCommand)
+        AppLogger.shared.write("CODEX PROJECT PICKER selected number=\(number)")
+        return true
     }
 
     static func postKeyState(

@@ -78,7 +78,8 @@ let package = Package(
         .executableTarget(
             name: "RemoteMic",
             dependencies: remoteMicDependencies,
-            path: "Sources/RemoteMic"
+            path: "Sources/RemoteMic",
+            linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         .target(
             name: "AudioExceptionGuard",

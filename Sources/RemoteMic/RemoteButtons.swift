@@ -468,6 +468,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case toggleLongRecording
     case openRemoteMic
     case openCodex
+    case codexProjectPicker
     case openClaude
     case openCmux
     case openWeChat
@@ -522,6 +523,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
         case .openCodex: return localization.text("action.open_codex")
+        case .codexProjectPicker: return localization.text("action.project_switch")
         case .openClaude: return localization.text("action.open_claude")
         case .openCmux: return localization.text("action.open_cmux")
         case .openWeChat: return localization.text("action.open_wechat")
@@ -571,7 +573,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             return .custom
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
              .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
-             .openZed:
+             .openZed, .codexProjectPicker:
             return .applications
         }
     }
@@ -594,6 +596,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .commandFind,
             .commandSave,
             .commandDelete,
+            .codexProjectPicker,
             .previousCommandLeft,
             .nextCommandRight,
         ].contains(self) && presetApplication == nil && !isAppInternal

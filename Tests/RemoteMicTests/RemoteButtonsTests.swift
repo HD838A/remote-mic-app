@@ -3005,6 +3005,61 @@ struct RemoteButtonsTests {
         #expect(RemotePowerState.charging.logValue == "charging")
         #expect(RemotePowerState.unknown.logValue == "unknown")
     }
+
+    @Test func projectPickerUsesAllNineCommandNumberKeyCodes() {
+        #expect((1...9).allSatisfy {
+            CodexProjectPickerModel.keyCode(for: $0) != nil
+        })
+        #expect(CodexProjectPickerModel.keyCode(for: 0) == nil)
+        #expect(CodexProjectPickerModel.keyCode(for: 10) == nil)
+        let items = CodexProjectPickerModel.items(
+            labels: (1...9).map { "对话 \($0)" }
+        )
+        #expect(items.count == 9)
+        #expect(items.map(\.number) == Array(1...9))
+        #expect(items.last?.title == "对话 9")
+    }
+
+    @Test func projectPickerOrdersExpandedProjectsThenRecents() throws {
+        let data = try #require(
+            """
+            {
+              "project-order": ["project-a", "project-b"],
+              "thread-project-assignments": {
+                "a-old": {"projectId": "project-a"},
+                "a-new": {"projectId": "project-a"},
+                "b-only": {"projectId": "project-b"}
+              },
+              "projectless-thread-ids": ["recent"],
+              "electron-persisted-atom-state": {
+                "sidebar-project-expanded-v1-codex:project-a": true,
+                "sidebar-project-expanded-v1-codex:project-b": true
+              }
+            }
+            """.data(using: .utf8)
+        )
+        let threads = [
+            CodexSidebarThreadRecord(
+                id: "a-old", title: "生成标题 A", name: "命名 A",
+                archived: false, hasPreview: true, recencyAtMilliseconds: 10
+            ),
+            CodexSidebarThreadRecord(
+                id: "a-new", title: "最新标题 A", name: nil,
+                archived: false, hasPreview: true, recencyAtMilliseconds: 20
+            ),
+            CodexSidebarThreadRecord(
+                id: "b-only", title: "标题 B", name: nil,
+                archived: false, hasPreview: true, recencyAtMilliseconds: 30
+            ),
+            CodexSidebarThreadRecord(
+                id: "recent", title: "最近对话", name: nil,
+                archived: false, hasPreview: true, recencyAtMilliseconds: 40
+            )
+        ]
+        #expect(CodexProjectStateReader.projectLabels(from: data, threads: threads) == [
+            "最新标题 A", "命名 A", "标题 B", "最近对话"
+        ])
+    }
 }
 
 private final class RemoteButtonsTestScheduler: HIDRemoteScheduling {

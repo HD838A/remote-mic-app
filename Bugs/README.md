@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Codex 切换框第 6～9 项显示占位名称](./2026-08-29-codex-project-picker-only-five-names.md)
 - [预览包 Build 回退导致更新误判与版本历史按钮误导](./2026-08-27-sparkle-preview-build-regression-and-history-button.md)
 
 - [回眸无可编辑输入框时录音归为未知应用且不可见](./2026-08-27-reflections-recording-metadata-fallback.md)
@@ -72,6 +73,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-29 | [Codex 切换框第 6～9 项显示占位名称](./2026-08-29-codex-project-picker-only-five-names.md) | 已修复；真实 9 条标题读取与单页完整显示均经用户验收通过 |
 | 2026-08-27 | [回眸无可编辑输入框时录音归为未知应用且不可见](./2026-08-27-reflections-recording-metadata-fallback.md) | 候选修复完成，等待真实 RC003 与第三方 App 验收 |
 | 2026-08-26 | [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md) | 最小候选修复完成，等待 Spotlight、Launchpad、飞书/Lark、cmux 和豆包真实验收 |
 | 2026-08-25 | [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md) | 补充 HID 晚到候选修复；真实休眠唤醒基础路径通过，等待现场命中重试分支 |
