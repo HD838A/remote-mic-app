@@ -45,7 +45,7 @@
 "button_mapping.error.device_read_failed" = "无法读取遥控器按键（错误 %1$@）";
 "button_mapping.error.exclusive_access" = "遥控器被其他输入工具占用。请退出或暂停键盘、鼠标或设备映射工具后重新检测。常见软件包括 Karabiner-Elements、BetterTouchTool、USB Overdrive 和 SteerMouse。";
 "button_mapping.error.exclusive_access.karabiner" = "遥控器被其他输入工具占用。若使用 Karabiner-Elements，请打开“设备”，找到“小米蓝牙语音遥控器”，关闭“Modify events”或将设备设为“Ignore”，然后重新检测。";
-"button_mapping.error.power_suppression_failed" = "无法安全接管遥控器开关机键";
+"button_mapping.error.native_suppression_failed" = "无法安全接管遥控器原始按键";
 "button_mapping.status.connected_fallback" = "按键功能已连接";
 "button_mapping.status.connected_system_actions_may_remain" = "按键功能已连接；部分系统原操作可能仍会触发";
 "button_mapping.status.disconnected" = "遥控器按键已断开";
@@ -227,6 +227,11 @@
 "connection.voice_key_mode.help" = "默认使用 Fn/地球键。Command 模式需要辅助功能权限，并要求目标语音应用支持对应的单独左或右 Command 长按；许多应用会把左右 Command 合并为通用 Command。长按期间按其他键可能触发 Command 快捷键。";
 "connection.voice_key_mode.command_permission" = "Command 模式需要辅助功能权限";
 "connection.action.reconnect" = "立即重新连接";
+"connection.action.resume_remote" = "恢复本机 SayAll 连接";
+"connection.status.paused_for_handoff" = "本机 SayAll 连接已暂停";
+"connection.remote.multi_mac_help" = "切换到另一台 Mac 前，先暂停本机 SayAll 连接，避免 App 自动重连；暂停状态会在唤醒和重启后保留。然后在系统蓝牙中断开遥控器，再到目标 Mac 连接。SayAll 无法迁移或解除 macOS 管理的系统配对；目标 Mac 找不到时，同时长按 Home + Menu 进入配对模式。";
+"connection.remote.pause_for_handoff" = "暂停本机 SayAll 并打开蓝牙设置";
+"connection.remote.open_bluetooth_settings" = "打开蓝牙设置";
 "connection.phone.section_title" = "iPhone、Apple Watch 与网页版";
 "connection.phone.ios_title" = "iOS App（推荐）";
 "connection.phone.no_invite_badge" = "无需邀请码";

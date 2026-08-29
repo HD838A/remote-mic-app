@@ -146,6 +146,7 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
     var model: XiaomiRemoteModel
     var customName: String
     var bluetoothIdentifier: UUID?
+    var bluetoothConnectionPaused: Bool?
     var hidFingerprint: String?
     var mappings: RemoteDeviceMappings
 
@@ -156,6 +157,7 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
         model: XiaomiRemoteModel = .unknown,
         customName: String = "",
         bluetoothIdentifier: UUID? = nil,
+        bluetoothConnectionPaused: Bool? = nil,
         hidFingerprint: String? = nil,
         mappings: RemoteDeviceMappings
     ) {
@@ -163,6 +165,7 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
         self.model = model
         self.customName = customName
         self.bluetoothIdentifier = bluetoothIdentifier
+        self.bluetoothConnectionPaused = bluetoothConnectionPaused
         self.hidFingerprint = hidFingerprint
         self.mappings = mappings
     }

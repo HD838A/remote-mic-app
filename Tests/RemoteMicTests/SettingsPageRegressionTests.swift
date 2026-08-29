@@ -478,6 +478,7 @@ struct SettingsPageRegressionTests {
 
         for requiredAction in [
             "model.reconnect()",
+            "model.pauseSelectedRemoteForHandoff()",
             "model.applyAudioSettings()",
             "model.refreshAudioDevices()",
             "model.sendTestTone()",
@@ -642,6 +643,12 @@ struct SettingsPageRegressionTests {
         let panelSource = settingsSource[panelStart.lowerBound..<panelEnd.lowerBound]
         #expect(!panelSource.contains("Text(selectedRemoteDisplayName)"))
         #expect(!panelSource.contains("StatusPill(text: connectionBadge"))
+        #expect(panelSource.contains("connection.remote.multi_mac_help"))
+        #expect(panelSource.contains("connection.remote.pause_for_handoff"))
+        #expect(panelSource.contains("model.pauseSelectedRemoteForHandoff()"))
+        #expect(panelSource.contains("connection.action.resume_remote"))
+        #expect(panelSource.contains("connection.remote.open_bluetooth_settings"))
+        #expect(panelSource.contains("com.apple.BluetoothSettings"))
 
         #expect(appSource.contains(
             "fileMenu.addItem(menuItem(\"menu.open_log_folder\", action: #selector(showLog)))"

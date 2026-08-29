@@ -877,6 +877,25 @@ final class AppSettings: ObservableObject {
         return remoteDeviceProfiles.first(where: { $0.id == selectedRemoteProfileID })
     }
 
+    var pausedBluetoothRemoteIdentifiers: Set<UUID> {
+        Set(remoteDeviceProfiles.compactMap { profile in
+            guard profile.bluetoothConnectionPaused == true else { return nil }
+            return profile.bluetoothIdentifier
+        })
+    }
+
+    func isBluetoothConnectionPaused(profileID: UUID) -> Bool {
+        remoteDeviceProfiles.first(where: { $0.id == profileID })?
+            .bluetoothConnectionPaused == true
+    }
+
+    func setBluetoothConnectionPaused(_ paused: Bool, profileID: UUID) {
+        guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }),
+              remoteDeviceProfiles[index].bluetoothIdentifier != nil
+        else { return }
+        remoteDeviceProfiles[index].bluetoothConnectionPaused = paused ? true : nil
+    }
+
     func selectRemoteProfile(_ profileID: UUID) {
         guard profileID != selectedRemoteProfileID,
               let profile = remoteDeviceProfiles.first(where: { $0.id == profileID })

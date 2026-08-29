@@ -62,7 +62,7 @@
 4. 确认安装器先停止旧 `RemoteMic` 进程，再更新 MiRemoteV 2ch 或重启 `coreaudiod`；新 App 验证后旧 App 被移入废纸篓并启动 `SayAll.app`。
 5. 进入 Onboarding 音频页，确认 `MiRemoteV 2ch` 可枚举、可选择，实体遥控器按键和语音测试可继续。
 
-预期结果：无需手动删除 1.8.x App；旧路径中的产品 App 可恢复地移入废纸篓；新版本首次启动不出现 `audio.no_output_device` 或 `button_mapping.error.power_suppression_failed`。
+预期结果：无需手动删除 1.8.x App；旧路径中的产品 App 可恢复地移入废纸篓；新版本首次启动不出现 `audio.no_output_device` 或 `button_mapping.error.native_suppression_failed`。
 
 失败判定：旧进程在驱动更新或 `coreaudiod` 重启期间仍运行、旧 App 未迁移且继续占用资源、音频设备不可用、HID 电源键保护失败，或必须手动删除旧 App 后重新安装才能恢复。
 

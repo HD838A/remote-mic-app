@@ -60,6 +60,21 @@ struct ShortcutCaptureMonitorTests {
         #expect(captureCount == 0)
     }
 
+    @Test func capturesControlArrowShortcuts() throws {
+        for keyCode in [CGKeyCode(123), 124, 125, 126] {
+            var captured: CustomKeyboardShortcut?
+            let monitor = ShortcutCaptureMonitor(
+                onCapture: { captured = $0 },
+                dispatchCallback: { $0() }
+            )
+            let event = try #require(keyEvent(keyCode: keyCode, flags: .maskControl))
+
+            #expect(monitor.handle(type: .keyDown, event: event))
+            #expect(captured?.keyCode == keyCode)
+            #expect(captured?.modifierFlags == .control)
+        }
+    }
+
     @Test func missingAccessibilityPermissionFailsBeforeCreatingAnEventTap() {
         let monitor = ShortcutCaptureMonitor(
             onCapture: { _ in },

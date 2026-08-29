@@ -403,4 +403,62 @@ struct BluetoothLifecycleTests {
         #expect(!XiaomiVoiceRemoteNameMatcher.matches("MI RC2"))
         #expect(!XiaomiVoiceRemoteNameMatcher.matches("小米"))
     }
+
+    @Test func handoffPauseStopsAppReconnectAndExcludesTheRemoteUntilResume() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let pauseStart = try #require(source.range(of: "func pauseSelectedRemoteForHandoff"))
+        let pauseEnd = try #require(source.range(
+            of: "private func recoverBluetoothAfterSystemWake",
+            range: pauseStart.upperBound..<source.endIndex
+        ))
+        let pauseSource = source[pauseStart.lowerBound..<pauseEnd.lowerBound]
+        let persistPause = try #require(pauseSource.range(
+            of: "settings.setBluetoothConnectionPaused(true, profileID: profile.id)"
+        ))
+        let stopBridge = try #require(pauseSource.range(of: "bridge?.stop()"))
+        #expect(persistPause.lowerBound < stopBridge.lowerBound)
+        #expect(pauseSource.contains("app_reconnect=false"))
+        #expect(pauseSource.contains("system_pairing_unchanged=true"))
+
+        let bridgeSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+            encoding: .utf8
+        )
+        let wakeRecovery = try #require(bridgeSource.range(of: "func recoverAfterSystemWake()"))
+        let connectionCycle = try #require(bridgeSource.range(
+            of: "private func beginConnectionCycle",
+            range: wakeRecovery.upperBound..<bridgeSource.endIndex
+        ))
+        let wakeRecoverySource = bridgeSource[wakeRecovery.lowerBound..<connectionCycle.lowerBound]
+        #expect(wakeRecoverySource.contains("guard shouldRun else"))
+        #expect(wakeRecoverySource.contains("reason=bridge_stopped"))
+
+        let startConnections = try #require(source.range(of: "private func startBluetoothConnections"))
+        let discovery = try #require(source.range(
+            of: "private func startBluetoothDiscoveryIfNeeded",
+            range: startConnections.upperBound..<source.endIndex
+        ))
+        let startupSource = source[startConnections.lowerBound..<discovery.lowerBound]
+        #expect(startupSource.contains("subtracting(pausedIdentifiers)"))
+        #expect(source.contains(".union(self.settings.pausedBluetoothRemoteIdentifiers)"))
+
+        let reconnectStart = try #require(source.range(of: "func reconnect()"))
+        let reconnectEnd = try #require(source.range(
+            of: "func pauseSelectedRemoteForHandoff",
+            range: reconnectStart.upperBound..<source.endIndex
+        ))
+        let reconnectSource = source[reconnectStart.lowerBound..<reconnectEnd.lowerBound]
+        let clearPause = try #require(reconnectSource.range(
+            of: "settings.setBluetoothConnectionPaused(false, profileID: profile.id)"
+        ))
+        let startBridge = try #require(reconnectSource.range(of: "bridge.start()"))
+        #expect(clearPause.lowerBound < startBridge.lowerBound)
+    }
 }
