@@ -506,7 +506,9 @@
 "about.support.website" = "官网";
 "about.support.feedback" = "问题反馈";
 "about.support.feedback_action" = "提交反馈";
-"about.support.feedback_description" = "反馈无线麦SayAll.app的问题，或提出改进建议。";
+"about.support.feedback_description" = "反馈问题或建议；自动附带脱敏的版本、权限和运行状态，不上传日志或个人信息。";
+"about.support.feedback_logs" = "查看日志";
+"about.support.feedback_logs_help" = "日志不会自动上传；如需提供，请先检查内容并由您主动附加。";
 "share.action" = "分享";
 "share.sidebar.accessibility_label" = "分享无线麦SayAll.app";
 "share.title" = "分享无线麦SayAll.app";

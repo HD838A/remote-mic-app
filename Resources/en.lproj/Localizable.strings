@@ -506,7 +506,9 @@
 "about.support.website" = "Website";
 "about.support.feedback" = "Feedback";
 "about.support.feedback_action" = "Send Feedback";
-"about.support.feedback_description" = "Report a problem or suggest an improvement for 无线麦SayAll.app.";
+"about.support.feedback_description" = "Report an issue or suggestion with redacted version, permission, and runtime status; logs and personal data are not uploaded.";
+"about.support.feedback_logs" = "View Logs";
+"about.support.feedback_logs_help" = "Logs are never uploaded automatically. Review them before choosing to attach them.";
 "share.action" = "Share";
 "share.sidebar.accessibility_label" = "Share 无线麦SayAll.app";
 "share.title" = "Share 无线麦SayAll.app";
