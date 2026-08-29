@@ -494,6 +494,10 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("GridItem(.flexible(), spacing: 10, alignment: .top)"))
         #expect(viewSource.contains(".frame(height: 112, alignment: .top)"))
         #expect(viewSource.contains("inputMethodGuide(for: settings.onboardingVoiceTool)"))
+        #expect(viewSource.contains("allRecognizedVoiceToolsUnavailable"))
+        #expect(viewSource.contains("onboarding.voice_tool.none_detected"))
+        #expect(viewSource.contains("onboarding.voice_tool.other.setup_detail"))
+        #expect(viewSource.contains("onboarding.voice_test.other_detail"))
         #expect(rendererSource.contains("allowsInputSourceSwitching: false"))
         #expect(rendererSource.contains(
             "systemFunctionKeyAvailableOverride: systemFunctionKeyAvailable"

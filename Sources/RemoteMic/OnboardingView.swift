@@ -330,6 +330,25 @@ struct OnboardingView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 
+            if allRecognizedVoiceToolsUnavailable {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.orange)
+                    Text("onboarding.voice_tool.none_detected")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.22), lineWidth: 1)
+                }
+            }
+
             LazyVGrid(
                 columns: [
                     GridItem(.flexible(), spacing: 10, alignment: .top),
@@ -407,6 +426,25 @@ struct OnboardingView: View {
                     .font(.system(size: 12, weight: .semibold))
                 }
                 .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if settings.onboardingVoiceTool == .other {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "mic.badge.xmark")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                    Text("onboarding.voice_tool.other.setup_detail")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
+                }
             }
 
             if settings.onboardingVoiceTool != .unselected {
@@ -1099,6 +1137,21 @@ struct OnboardingView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
 
+            if settings.onboardingVoiceTool == .other {
+                Label {
+                    Text(LocalizedMessage(
+                        "onboarding.voice_test.other_detail",
+                        arguments: [selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required")]
+                    ).text(using: localization))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+
             ZStack(alignment: .topLeading) {
                 OnboardingTranscriptEditor(
                     text: $transcript,
@@ -1700,6 +1753,12 @@ struct OnboardingView: View {
         }
         tools.append(.other)
         return tools
+    }
+
+    private var allRecognizedVoiceToolsUnavailable: Bool {
+        [OnboardingVoiceTool.doubao, .weixin, .typeless].allSatisfy {
+            voiceToolAvailability[$0] == .notInstalled
+        }
     }
 
     private var voiceToolSelectionIsValid: Bool {

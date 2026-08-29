@@ -569,6 +569,7 @@
 "onboarding.welcome.feature.verify" = "Verify each setting live and see exactly what needs attention";
 "onboarding.voice_tool.title" = "Where do you want to dictate?";
 "onboarding.voice_tool.detail" = "Choose your usual tool and we’ll prepare the right voice-key behavior. You can change it later in Settings.";
+"onboarding.voice_tool.none_detected" = "Doubao Input Method, WeChat Input Method, and Typeless were not detected. You can still choose “Another Voice Tool”, but first install and open a tool that supports voice input.";
 "onboarding.voice_tool.unselected.title" = "Not Selected";
 "onboarding.voice_tool.unselected.detail" = "No voice tool selected yet.";
 "onboarding.voice_tool.doubao.title" = "Doubao Input Method";
@@ -579,6 +580,7 @@
 "onboarding.voice_tool.typeless.detail" = "The voice key taps Fn and sends audio from the remote.";
 "onboarding.voice_tool.other.title" = "Another Voice Tool";
 "onboarding.voice_tool.other.detail" = "Use your selected voice output device with your preferred voice input tool.";
+"onboarding.voice_tool.other.setup_detail" = "Another Voice Tool must support voice input. In that tool’s own settings, choose the correct microphone and confirm it can write text into a regular input field.";
 "onboarding.voice_tool.status.not_installed" = "Not installed";
 "onboarding.voice_tool.doubao.install_detail" = "Doubao Input Method is not installed. Install it, then return here and check again.";
 "onboarding.voice_tool.doubao.install" = "Install Doubao Input Method";
@@ -673,6 +675,7 @@
 "onboarding.audio.on_demand_detail" = "The selected device will connect automatically when phone voice input starts. The next step verifies real audio and text.";
 "onboarding.voice_test.title" = "Say something and confirm it really works";
 "onboarding.voice_test.detail" = "Click the field below, hold the voice key on your selected control method while speaking, then release it.";
+"onboarding.voice_test.other_detail" = "In the other voice tool using %@, enable voice input and choose %@ as its microphone in that tool’s settings.";
 "onboarding.voice_test.placeholder" = "Try saying: SayAll is connected";
 "onboarding.voice_test.waiting_voice" = "Waiting for you to hold the voice key…";
 "onboarding.voice_test.receiving" = "Receiving voice audio…";
@@ -839,7 +842,7 @@
 "onboarding.recovery.voice.input_target_focus_lost.detail" = "Keep SayAll in front, retry, and complete one press, speak, and release cycle.";
 "onboarding.recovery.voice.input_target_focus_lost.action" = "Retry Voice Input";
 "onboarding.recovery.voice.external_tool_no_commit.title" = "Audio worked, but the voice tool did not enter text";
-"onboarding.recovery.voice.external_tool_no_commit.detail" = "SayAll received and output audio, and the field was ready. Check that the selected voice tool is listening to the current device and can enter text in a normal field.";
+"onboarding.recovery.voice.external_tool_no_commit.detail" = "SayAll received and output audio, and the field was ready. Confirm that the selected tool supports voice input and that its own settings use the current voice output device as the microphone, then try again.";
 "onboarding.recovery.voice.external_tool_no_commit.action" = "Check and Try Again";
 "onboarding.recovery.controls.not_confirmed.title" = "Try three different normal buttons";
 "onboarding.recovery.controls.not_confirmed.detail" = "Reconnect if needed, then press three different normal buttons.";
