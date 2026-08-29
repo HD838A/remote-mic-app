@@ -832,6 +832,15 @@
 "onboarding.recovery.voice.no_transcript.title" = "Audio arrived, but no text appeared";
 "onboarding.recovery.voice.no_transcript.detail" = "Make sure your voice tool is listening to the selected device, then try again.";
 "onboarding.recovery.voice.no_transcript.action" = "Try Text Input Again";
+"onboarding.recovery.voice.input_target_not_ready.title" = "The text field was not ready";
+"onboarding.recovery.voice.input_target_not_ready.detail" = "SayAll could not confirm that the field was the system text input target. Retry, then hold the voice key and speak again.";
+"onboarding.recovery.voice.input_target_not_ready.action" = "Prepare the Field Again";
+"onboarding.recovery.voice.input_target_focus_lost.title" = "The input target changed while you were speaking";
+"onboarding.recovery.voice.input_target_focus_lost.detail" = "Keep SayAll in front, retry, and complete one press, speak, and release cycle.";
+"onboarding.recovery.voice.input_target_focus_lost.action" = "Retry Voice Input";
+"onboarding.recovery.voice.external_tool_no_commit.title" = "Audio worked, but the voice tool did not enter text";
+"onboarding.recovery.voice.external_tool_no_commit.detail" = "SayAll received and output audio, and the field was ready. Check that the selected voice tool is listening to the current device and can enter text in a normal field.";
+"onboarding.recovery.voice.external_tool_no_commit.action" = "Check and Try Again";
 "onboarding.recovery.controls.not_confirmed.title" = "Try three different normal buttons";
 "onboarding.recovery.controls.not_confirmed.detail" = "Reconnect if needed, then press three different normal buttons.";
 "onboarding.recovery.controls.not_confirmed.action" = "Retry Button Detection";

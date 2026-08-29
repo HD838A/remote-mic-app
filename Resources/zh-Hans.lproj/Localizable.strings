@@ -832,6 +832,15 @@
 "onboarding.recovery.voice.no_transcript.title" = "声音已收到，但没有出现文字";
 "onboarding.recovery.voice.no_transcript.detail" = "确认语音工具正在使用所选设备，然后重新测试。";
 "onboarding.recovery.voice.no_transcript.action" = "重新测试文字输入";
+"onboarding.recovery.voice.input_target_not_ready.title" = "文字输入框没有准备好";
+"onboarding.recovery.voice.input_target_not_ready.detail" = "无线麦没有确认输入框已成为系统文字输入目标。点击重试后再按住语音键说一句。";
+"onboarding.recovery.voice.input_target_not_ready.action" = "重新准备输入框";
+"onboarding.recovery.voice.input_target_focus_lost.title" = "说话过程中输入目标发生变化";
+"onboarding.recovery.voice.input_target_focus_lost.detail" = "保持无线麦窗口在前台，点击重试后完成一次按下、说话和松开。";
+"onboarding.recovery.voice.input_target_focus_lost.action" = "重新测试语音输入";
+"onboarding.recovery.voice.external_tool_no_commit.title" = "声音链路正常，但语音工具没有写入文字";
+"onboarding.recovery.voice.external_tool_no_commit.detail" = "无线麦已收到并输出声音，输入框也已准备好。请确认所选语音工具正在监听当前设备并能在普通输入框中写入文字。";
+"onboarding.recovery.voice.external_tool_no_commit.action" = "检查后重新测试";
 "onboarding.recovery.controls.not_confirmed.title" = "请试三个不同的普通按键";
 "onboarding.recovery.controls.not_confirmed.detail" = "如有需要先重新连接，然后按三个不同的普通按键。";
 "onboarding.recovery.controls.not_confirmed.action" = "重新检测按键";

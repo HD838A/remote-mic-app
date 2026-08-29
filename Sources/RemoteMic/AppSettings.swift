@@ -688,6 +688,8 @@ final class AppSettings: ObservableObject {
         _ kind: FirstUseEventKind,
         step: OnboardingStep,
         failureReason: FirstUseFailureReason? = nil,
+        voiceAttemptID: Int? = nil,
+        voiceResult: FirstUseVoiceAttemptResult? = nil,
         at date: Date = Date()
     ) {
         let stepStartedAt = defaults.object(forKey: Keys.firstUseStepStartedAt) as? Date ?? date
@@ -696,7 +698,9 @@ final class AppSettings: ObservableObject {
             kind: kind,
             step: step,
             elapsedMilliseconds: max(0, Int(date.timeIntervalSince(stepStartedAt) * 1_000)),
-            failureReason: failureReason
+            failureReason: failureReason,
+            voiceAttemptID: voiceAttemptID,
+            voiceResult: voiceResult
         )
         if kind == .blocked,
            defaults.string(forKey: Keys.firstUseLastSignature) == event.deduplicationSignature {
