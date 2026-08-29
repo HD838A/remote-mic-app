@@ -3,8 +3,8 @@
 ## 适用范围
 
 - 原始回归基线：`v1.9.16` Tag `420767d6100de20e27f4d97f1e15beb20c1aa71e`
-- 当前集成基线：upstream `main` `9945224cc9d411d21b6cc06a4eb378f8c9785270`（`1.9.17 (170)`）
-- 修复分支：`fix/bug-sleep-wake-storm-v1.9.16-20260827`
+- 当前集成基线：upstream `main` `b65ae40308da35d026217f1e824e07b59af84e79`（`1.9.18 (171)`，包含 PR #296）
+- 修复分支：`codex/integrate-closed-lid-runtime-suspension-20260829`
 - GitHub Issue：[#240](https://github.com/HD838A/remote-mic-app/issues/240)
 - 平台：Apple Silicon macOS 14+；Intel macOS 13 需要单独执行兼容回归
 - 遥控器：RC001 为原始复现设备；RC003 为共享 BLE / HID / Power 安全门回归设备
@@ -46,6 +46,7 @@
 1. `SYSTEM REMOTE event=system_will_sleep action=suspend`
 2. `SYSTEM REMOTE suspended ...`
 3. DarkWake 如果产生，只允许 `system_did_wake → resume_scheduled`；在约 10 秒后再次休眠时出现 `resume_cancelled`，中间不得出现 `BLE SCANNING`、`BLE CONNECTING`、`BLE READY` 或 `HID START`。
+   - 若睡眠前存在 `HID MAPPING RECOVERY scheduled`，还必须先出现 `HID MAPPING RECOVERY cancelled reason=system_sleep`；`sleeping` / `wake_pending` 期间不得再次安排或执行恢复。
 4. 真实开盖后出现 `SYSTEM REMOTE resumed reason=user_visible_...` 或稳定窗口恢复。
 
 预期系统结果：相较 v1.9.8 原始记录，不再由 SayAll 每约 48 秒放大出一整组 BLE/HID 重建。若 App 停止对照没有 FullWake，本用例也不得出现固定频率 FullWake。
@@ -79,7 +80,7 @@
 3. 执行“普通 App/快捷键动作 → 目标输入框就绪 → 第一次 `STREAM_START → AUDIO → STREAM_STOP`”。
 4. 再执行第二次短语音和一次 30 秒语音。
 
-预期：第一次即成功，只产生一组正确 Fn 事件和完整音频，不丢首字、不截尾、不要求重新选择设备；日志无旧 sleep generation 的迟到回调冲掉新会话。
+预期：第一次即成功，并按当前选择产生一组正确 Fn、Fn 点按、左 Command 或右 Command 事件和完整音频，不丢首字、不截尾、不要求重新选择设备；日志无旧 sleep generation 或 HID recovery generation 的迟到回调冲掉新会话。
 
 失败判定：第二次才成功、首句无声、重复 Fn、音频不完整、旧 resume timer 在新会话中触发，或默认输入覆盖用户睡眠期间的新选择。
 
@@ -101,6 +102,7 @@
 
 1. 系统将睡眠时 BLE 正在连接。
 2. 系统将睡眠时 RC001/RC003 正在传输语音。
+   - 预期：先记录 `ATVV STREAM interrupted reason=system_sleep`，释放当前语音键并结束实体遥控器会话，再 detach BLE；开盖后第一次语音创建全新会话，不继承睡眠前的设备 ID、按键 latch 或 trace。
 3. `systemDidWake` 后 10 秒内再次 `systemWillSleep`。
 4. 锁屏但不睡眠、只关闭显示器、切换用户会话。
 5. 外接显示器且 MacBook 合盖。

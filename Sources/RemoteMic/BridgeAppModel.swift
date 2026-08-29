@@ -1551,8 +1551,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         stopLongRecording(reason: "system_sleep")
         finishRC003VoiceExtensionTest(reason: "system_sleep")
         preferredInputSourceMonitor.stop()
+        let bluetoothVoiceWasActive = bluetoothVoiceActive
         _ = releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
-        voiceFnTapSession.suspend()
+        bluetoothVoiceActive = false
+        activeBluetoothVoiceDeviceIdentifier = nil
+        loggedBluetoothVoiceAudioDeviceIdentifier = nil
+        voiceFnTapSession.shutdown()
+        if bluetoothVoiceWasActive {
+            endVoiceSessionIfNeeded(flushAudio: false)
+            AppLogger.shared.write("ATVV STREAM interrupted reason=system_sleep")
+        }
         stopHIDMonitors()
         bluetoothBridges.values.forEach { $0.suspendForSystemSleep() }
         discoveryBluetoothBridge?.suspendForSystemSleep()

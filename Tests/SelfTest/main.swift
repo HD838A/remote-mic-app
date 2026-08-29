@@ -631,9 +631,19 @@ check(
     bridgeAppModelSource?.contains(
         "bluetoothBridges.values.forEach { $0.suspendForSystemSleep() }"
     ) == true &&
+        bridgeAppModelSource?.contains(
+            "cancelHIDMappingRecovery(reason: \"system_sleep\")"
+        ) == true &&
+        bridgeAppModelSource?.contains(
+            "guard systemRemoteRuntimeState.isActive else { return }"
+        ) == true &&
+        bridgeAppModelSource?.contains("voiceFnTapSession.shutdown()") == true &&
+        bridgeAppModelSource?.contains(
+            "endVoiceSessionIfNeeded(flushAudio: false)"
+        ) == true &&
         bridgeAppModelSource?.contains("if !remoteWakeManaged,") == true &&
         bluetoothBridgeSource?.contains("func suspendForSystemSleep()") == true,
-    "System sleep detaches BLE and suppresses upstream wake reconnect"
+    "System sleep closes voice state, detaches BLE and suppresses recovery"
 )
 
 print("RESULT passed=\(passed) failed=\(failed)")

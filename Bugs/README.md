@@ -73,7 +73,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
-| 2026-08-27 | [合盖后 RC001 每约 48 秒触发 HID FullWake](./2026-08-27-closed-lid-hid-wake-storm.md) | 已重放至 1.9.17 (170) 主线；自动化、自检、Debug/Release 构建与 App 自检通过，等待签名公证包和 RC001 / RC003 真实合盖验收 |
+| 2026-08-27 | [合盖后 RC001 每约 48 秒触发 HID FullWake](./2026-08-27-closed-lid-hid-wake-storm.md) | 已重放至包含 PR #296 的 1.9.18 (171) 主线；自动化、自检和仓库边界检查通过，等待签名公证包和 RC001 / RC003 真实合盖验收 |
 | 2026-08-27 | [回眸无可编辑输入框时录音归为未知应用且不可见](./2026-08-27-reflections-recording-metadata-fallback.md) | 候选修复完成，等待真实 RC003 与第三方 App 验收 |
 | 2026-08-26 | [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md) | 最小候选修复完成，等待 Spotlight、Launchpad、飞书/Lark、cmux 和豆包真实验收 |
 | 2026-08-25 | [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md) | 补充 HID 晚到候选修复；真实休眠唤醒基础路径通过，等待现场命中重试分支 |

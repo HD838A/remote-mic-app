@@ -127,6 +127,35 @@ struct SystemRemoteRuntimeLifecycleTests {
         #expect(scheduleSource.contains("guard systemRemoteRuntimeState.isActive else"))
         #expect(scheduleSource.contains("self.systemRemoteRuntimeState.isActive"))
     }
+
+    @Test func systemSleepEndsBluetoothVoiceBeforeDetachingTheBridge() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let suspendStart = try #require(source.range(of: "private func suspendRemoteRuntime("))
+        let suspendEnd = try #require(source.range(
+            of: "private func scheduleRemoteRuntimeResume(",
+            range: suspendStart.upperBound..<source.endIndex
+        ))
+        let suspendSource = source[suspendStart.lowerBound..<suspendEnd.lowerBound]
+        let clearActive = try #require(suspendSource.range(of: "bluetoothVoiceActive = false"))
+        let clearIdentifier = try #require(
+            suspendSource.range(of: "activeBluetoothVoiceDeviceIdentifier = nil")
+        )
+        let detachBridge = try #require(
+            suspendSource.range(of: "bluetoothBridges.values.forEach { $0.suspendForSystemSleep() }")
+        )
+
+        #expect(clearActive.lowerBound < detachBridge.lowerBound)
+        #expect(clearIdentifier.lowerBound < detachBridge.lowerBound)
+        #expect(suspendSource.contains("voiceFnTapSession.shutdown()"))
+        #expect(suspendSource.contains("endVoiceSessionIfNeeded(flushAudio: false)"))
+    }
 }
 
 private extension SystemRemoteRuntimeAction {
