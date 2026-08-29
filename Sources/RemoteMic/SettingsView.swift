@@ -2437,7 +2437,18 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 20)
-                            Link(destination: AppLinks.feedback) {
+                            Button {
+                                model.openLogFolder()
+                            } label: {
+                                Label(
+                                    "about.support.feedback_logs",
+                                    systemImage: "doc.text.magnifyingglass"
+                                )
+                            }
+                            .compatibilityButtonStyle(.standard)
+                            .help(Text("about.support.feedback_logs_help"))
+
+                            Link(destination: feedbackURL) {
                                 Label("about.support.feedback_action", systemImage: "arrow.up.right")
                             }
                             .compatibilityButtonStyle(.standard)
@@ -2888,6 +2899,53 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var feedbackURL: URL {
+        AppLinks.feedback(diagnostics: AppLinks.FeedbackDiagnostics(
+            appVersion: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleShortVersionString"
+            ) as? String ?? "unknown",
+            appBuild: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleVersion"
+            ) as? String ?? "unknown",
+            macOSVersion: ProcessInfo.processInfo.operatingSystemVersion,
+            architecture: AppLinks.FeedbackDiagnostics.currentArchitecture,
+            bluetoothPermission: feedbackBluetoothPermission,
+            inputMonitoringPermission: inputMonitoringGranted,
+            accessibilityPermission: accessibilityGranted,
+            physicalRemoteConnected: model.isConnected,
+            phoneRemoteConnected: model.isPhoneRemoteConnected,
+            watchRemoteConnected: model.isWatchRemoteConnected,
+            webRemoteConnected: feedbackWebRemoteConnected,
+            audioDeviceSelected: !settings.selectedAudioDeviceUID.isEmpty,
+            audioDeviceAvailable: model.audioDevices.contains {
+                $0.uid == settings.selectedAudioDeviceUID
+            },
+            audioOutputReady: model.isAudioOutputReady,
+            audioStreaming: model.isStreaming,
+            buttonMappingEnabled: settings.customMappingEnabled,
+            buttonPermissionReady: inputMonitoringGranted && accessibilityGranted,
+            buttonObserved: model.lastRemoteButtonPress != nil,
+            logAvailable: FileManager.default.fileExists(
+                atPath: AppLogger.shared.logURL.path
+            )
+        ))
+    }
+
+    private var feedbackBluetoothPermission: AppLinks.FeedbackDiagnostics.BluetoothPermission {
+        switch bluetoothAuthorization {
+        case .allowedAlways: return .allowed
+        case .denied: return .denied
+        case .restricted: return .restricted
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown
+        }
+    }
+
+    private var feedbackWebRemoteConnected: Bool {
+        if case .connected = model.webRemoteState { return true }
+        return false
     }
 
     private var currentVersion: String {
