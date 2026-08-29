@@ -45,7 +45,7 @@
 "button_mapping.error.device_read_failed" = "Unable to read remote buttons (error %1$@)";
 "button_mapping.error.exclusive_access" = "Another input tool is using the remote. Quit or pause keyboard, mouse, or device remapping tools, then try again. Common examples include Karabiner-Elements, BetterTouchTool, USB Overdrive, and SteerMouse.";
 "button_mapping.error.exclusive_access.karabiner" = "Another input tool is using the remote. If you use Karabiner-Elements, open Devices, find the Xiaomi Bluetooth Voice Remote, turn off “Modify events” or set the device to “Ignore”, then try again.";
-"button_mapping.error.power_suppression_failed" = "Unable to safely override the remote power button";
+"button_mapping.error.native_suppression_failed" = "Unable to safely override the remote's original buttons";
 "button_mapping.status.connected_fallback" = "Button controls connected";
 "button_mapping.status.connected_system_actions_may_remain" = "Button controls connected; some original system actions may still occur";
 "button_mapping.status.disconnected" = "Remote buttons disconnected";
@@ -227,6 +227,11 @@
 "connection.voice_key_mode.help" = "Fn/Globe is the default. Command modes require Accessibility permission and a target voice app that supports the corresponding standalone Left or Right Command hold; many apps merge both sides into a generic Command. Pressing another key while held may trigger a Command shortcut.";
 "connection.voice_key_mode.command_permission" = "Command mode requires Accessibility permission";
 "connection.action.reconnect" = "Reconnect Now";
+"connection.action.resume_remote" = "Resume SayAll on This Mac";
+"connection.status.paused_for_handoff" = "SayAll connection is paused on this Mac";
+"connection.remote.multi_mac_help" = "Before moving to another Mac, pause SayAll on this Mac so the app cannot reconnect automatically; the pause survives wake and relaunch. Then disconnect the remote in Bluetooth settings and connect it on the other Mac. SayAll cannot transfer or remove macOS-managed system pairing. If the other Mac cannot find it, hold Home + Menu to enter pairing mode.";
+"connection.remote.pause_for_handoff" = "Pause This Mac and Open Bluetooth Settings";
+"connection.remote.open_bluetooth_settings" = "Open Bluetooth Settings";
 "connection.phone.section_title" = "iPhone, Apple Watch, and Web";
 "connection.phone.ios_title" = "iOS App (Recommended)";
 "connection.phone.no_invite_badge" = "No invite code";

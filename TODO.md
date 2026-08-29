@@ -279,6 +279,7 @@
   - 2026-08-21 跟进 Issue #137 的单次 release 丢失：遥控器原始首击改由 HID down 短窗口配对，held 状态只继续拦截系统 autorepeat；未配对的实体键盘新首击会清理陈旧状态并立即通过。新增缺失 release 的回归序列，本地 89 项聚焦测试与 42 项自检通过；等待 PR CI 与真实 RC003 monitored 模式丢包验收。
   - 2026-08-19 针对 1.9.0 内测版 OK 键偶发无响应补齐 HID 分层诊断：区分系统回调、设备过滤、解析、按下/松开边沿、手势和动作执行，并保持原按键行为不变；日志不记录原始报告或设备标识。精确根因仍需 RC003 真机再次复现后确认。
   - 2026-08-25 修复单击绑定为不可连发动作时连续快按只有第一次生效：`shouldAcceptRawPress` 的 600ms 松开稳定闸门新增按按键的「允许连续快速按」开关，默认关闭且默认行为与上一正式版一致；`startRepeatIfNeeded` 的按住连发策略未改动，被闸门丢弃的按下不再静默、写入 `reason=awaiting_stable_release` 日志。对应社区反馈 Issue #205 第 2 条。本地 393 项测试与 43 项自检通过，测试手册见 `Testing/RapidRepeatedButtonPresses.md`；等待 RC001/RC003 真机连按与按住边沿计数验收。
+  - 2026-08-29 针对 Issue #241 的映射泄漏，启用自定义映射时会在设备级中和 RC003 全部 12 个普通按键，并在写入后逐服务读回；失败时恢复并按设备位置失败关闭，避免复制/粘贴等配置动作与系统音量、方向或符号键同时触发。Issue #257 的页面内标准键盘原本已支持 Control + 四方向；本次进一步修复实体键盘录入方向键时 macOS 隐式 Fn 被误存的问题，并补齐选择、录入和注入回归。真实 RC003、Mission Control、不同输入框及全局快捷键工具仍按 [`Testing/CustomKeyControlNativeLeakAndMacSwitching.md`](Testing/CustomKeyControlNativeLeakAndMacSwitching.md) 验收。
 - [ ] 优化语音降噪与人声放大
   - 在遥控器和手机麦克风音频进入虚拟麦克风前增加可控的降噪、人声增益、自动增益和限幅处理，优先提升远距离、小音量说话时的可懂度。
   - 不能只提高现有固定增益，否则会同时放大底噪并造成削波；需要分别评估高通滤波、噪声抑制、AGC 和 limiter 的组合，并提供关闭或强度调节能力。
@@ -360,4 +361,5 @@
 - [ ] 同一个遥控器在多台已配对 Mac 之间切换蓝牙连接（不使用网络转发） <!-- workshop:status=阻塞;priority=P2 -->
   - 当前结论：小米产品页与 Bluetooth SIG 官方产品记录均未声明 RC003 支持多个配对主机或主机切换；Apple 也明确说明 App 取消本地 CoreBluetooth 连接不保证底层物理链路断开。因此“在任意一台 Mac 的 App 中单击后直接抢占遥控器”目前不能判定为可实现。
   - 必须先用同一只 RC003 和两台 Mac 验证：分别配对后无需重新配对即可来回重连、当前 Mac 释放后遥控器会重新广播、macOS HID 不会立即抢回连接。通过后可实现“当前 Mac 释放 → 目标 Mac 连接”；任一关键条件失败则纯 App 方案不支持，并在此条目标明硬件限制。
+  - 2026-08-29 已补充按遥控器持久化的 handoff 暂停：先停止当前 Mac 的 SayAll BLE/ATVV bridge，并让自动重连、discovery、唤醒和 App 重启继续排除该 peripheral；只有用户显式恢复才重新连接。连接页随后打开系统蓝牙设置完成系统级断开。CoreBluetooth 公共 API 没有 unpair/forget 或迁移 macOS HID 配对能力，`IOBluetoothDevice.closeConnection()` 也无法由当前 peripheral UUID 安全定位选中 RC003、不能保证 HID 不重连，因此本项仍保持未完成，等待两台 Mac + 同一只 RC003 验证暂停后能否免“忽略设备”往返切换。
   - 研究结论和真机验收步骤保存在独立的产品资料工作区。

@@ -230,25 +230,25 @@ check(
         mappingEnabled: true,
         inputMonitoringGranted: false,
         accessibilityGranted: true,
-        powerKeySuppressed: true
+        nativeButtonEventsSuppressed: true
     ) &&
         !HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: false,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ) &&
         !HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: false
+            nativeButtonEventsSuppressed: false
         ) &&
         HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ),
     "HID permission gate fails closed"
 )
@@ -260,13 +260,10 @@ let unrelatedKeyMapping = HIDUsageMapping(
 check(
     RemoteVoiceFunctionMappingPolicy.applying(
         to: [unrelatedKeyMapping],
-        powerMapping: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
-    ) == [
-        unrelatedKeyMapping,
-        RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
-        RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
-    ],
-    "RC003 power is remapped to harmless F20"
+        nativeButtonMappings: RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings
+    ) == [unrelatedKeyMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey] +
+        RemoteVoiceFunctionMappingPolicy.neutralRemoteButtonMappings,
+    "RC003 native button events are neutralized before custom mapping"
 )
 
 check(
@@ -413,12 +410,12 @@ let changedUnrelatedMapping = HIDUsageMapping(
 check(
     RemoteVoiceFunctionMappingPolicy.restoring(
         originalVoiceMapping: staleVoiceMapping,
-        originalPowerMapping: nil,
+        originalNativeButtonMappings: [],
         in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
     ) == [changedUnrelatedMapping, staleVoiceMapping] &&
         RemoteVoiceFunctionMappingPolicy.restoring(
             originalVoiceMapping: nil,
-            originalPowerMapping: nil,
+            originalNativeButtonMappings: [],
             in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
         ) == [changedUnrelatedMapping],
     "RC003 hardware voice mapping restore preserves unrelated runtime changes"

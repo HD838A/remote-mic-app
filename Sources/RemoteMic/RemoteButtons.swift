@@ -131,9 +131,32 @@ struct CustomKeyboardShortcut: Codable, Equatable {
     init(event: NSEvent) {
         self.init(
             keyCode: event.keyCode,
-            modifierFlags: event.modifierFlags,
+            modifierFlags: Self.normalizedModifierFlags(
+                event.modifierFlags,
+                keyCode: event.keyCode
+            ),
             keyLabel: Self.keyLabel(for: event)
         )
+    }
+
+    static func normalizedModifierFlags(
+        _ modifierFlags: NSEvent.ModifierFlags,
+        keyCode: UInt16
+    ) -> NSEvent.ModifierFlags {
+        var normalized = modifierFlags.intersection(supportedModifiers)
+        if functionFlagIsImplicit(for: keyCode) {
+            normalized.remove(.function)
+        }
+        return normalized
+    }
+
+    private static func functionFlagIsImplicit(for keyCode: UInt16) -> Bool {
+        switch keyCode {
+        case 64, 79, 80, 90, 96...101, 103, 105...107, 109, 111, 113...126:
+            return true
+        default:
+            return false
+        }
     }
 
     var modifierFlags: NSEvent.ModifierFlags {
@@ -647,9 +670,10 @@ enum HIDPermissionGate {
         mappingEnabled: Bool,
         inputMonitoringGranted: Bool,
         accessibilityGranted: Bool,
-        powerKeySuppressed: Bool
+        nativeButtonEventsSuppressed: Bool
     ) -> Bool {
-        mappingEnabled && inputMonitoringGranted && accessibilityGranted && powerKeySuppressed
+        mappingEnabled && inputMonitoringGranted && accessibilityGranted &&
+            nativeButtonEventsSuppressed
     }
 
     static func nextPermissionRequest(

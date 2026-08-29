@@ -802,6 +802,17 @@ struct RemoteButtonsTests {
         ) == shortcut)
     }
 
+    @Test func navigationKeysDropTheImplicitFunctionFlagButLettersKeepExplicitFn() {
+        #expect(CustomKeyboardShortcut.normalizedModifierFlags(
+            [.control, .function],
+            keyCode: 126
+        ) == .control)
+        #expect(CustomKeyboardShortcut.normalizedModifierFlags(
+            [.control, .function],
+            keyCode: 40
+        ) == [.control, .function])
+    }
+
     @Test func shortcutPresetsAndStandardKeyboardExposeReservedAndUnpressableChoices() throws {
         let spotlight = KeyboardShortcutPreset.spotlight.shortcut
         #expect(spotlight.keyCode == 49)
@@ -1066,6 +1077,30 @@ struct RemoteButtonsTests {
             keyPoster: { posted = ($0, $1) }
         ))
         #expect(posted == nil)
+    }
+
+    @Test func controlArrowShortcutsAreSelectableAndPostControlForEveryDirection() throws {
+        let arrows = Dictionary(
+            uniqueKeysWithValues: StandardKeyboardKey.navigationRows
+                .flatMap { $0 }
+                .filter { [123, 124, 125, 126].contains($0.keyCode) }
+                .map { ($0.keyCode, $0) }
+        )
+
+        for keyCode in [UInt16(123), 124, 125, 126] {
+            let key = try #require(arrows[keyCode])
+            let shortcut = key.shortcut(modifierFlags: .control)
+            var posted: (CGKeyCode, CGEventFlags)?
+
+            #expect(KeyboardInjector.send(
+                .customShortcut,
+                shortcut: shortcut,
+                accessibilityTrusted: { true },
+                keyPoster: { posted = ($0, $1) }
+            ))
+            #expect(posted?.0 == keyCode)
+            #expect(posted?.1 == .maskControl)
+        }
     }
 
     @Test func fixedCompoundShortcutsPostExpectedKeyCodesAndModifiers() {
@@ -1660,7 +1695,7 @@ struct RemoteButtonsTests {
         #expect(!source.contains("DispatchQueue.main.async"))
     }
 
-    @Test func powerSuppressionIsArmedBeforeButtonCallbacksAndMonitoring() throws {
+    @Test func nativeButtonSuppressionIsArmedBeforeButtonCallbacksAndMonitoring() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let monitor = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
         let model = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"), encoding: .utf8)
@@ -1675,10 +1710,14 @@ struct RemoteButtonsTests {
         )
         let applySettings = model[applySettingsStart.lowerBound..<applySettingsEnd.lowerBound]
         let map = try #require(
-            applySettings.range(of: "powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)")
+            applySettings.range(
+                of: "nativeButtonEventsSuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)"
+            )
         )
         let start = try #require(
-            applySettings.range(of: "startHIDMonitors(powerKeySuppressed: powerKeySuppressed)")
+            applySettings.range(
+                of: "startHIDMonitors(nativeButtonEventsSuppressed: nativeButtonEventsSuppressed)"
+            )
         )
         #expect(arm.lowerBound < callback.lowerBound)
         #expect(map.lowerBound < start.lowerBound)
@@ -1728,25 +1767,25 @@ struct RemoteButtonsTests {
             mappingEnabled: true,
             inputMonitoringGranted: false,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
         #expect(!HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: false,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
         #expect(!HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: false
+            nativeButtonEventsSuppressed: false
         ))
         #expect(HIDPermissionGate.canMonitor(
             mappingEnabled: true,
             inputMonitoringGranted: true,
             accessibilityGranted: true,
-            powerKeySuppressed: true
+            nativeButtonEventsSuppressed: true
         ))
     }
 
@@ -1860,6 +1899,31 @@ struct RemoteButtonsTests {
             trigger: .singleClick,
             profileID: secondProfileID
         ).action == .showDesktop)
+    }
+
+    @Test func bluetoothHandoffPausePersistsPerRemoteAndCanBeCleared() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let firstIdentifier = UUID()
+        let secondIdentifier = UUID()
+        let firstProfileID = settings.registerBluetoothRemote(identifier: firstIdentifier)
+        let secondProfileID = settings.registerBluetoothRemote(identifier: secondIdentifier)
+
+        settings.setBluetoothConnectionPaused(true, profileID: firstProfileID)
+
+        #expect(settings.isBluetoothConnectionPaused(profileID: firstProfileID))
+        #expect(!settings.isBluetoothConnectionPaused(profileID: secondProfileID))
+        #expect(settings.pausedBluetoothRemoteIdentifiers == Set([firstIdentifier]))
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.isBluetoothConnectionPaused(profileID: firstProfileID))
+        #expect(restored.pausedBluetoothRemoteIdentifiers == Set([firstIdentifier]))
+
+        restored.setBluetoothConnectionPaused(false, profileID: firstProfileID)
+        #expect(!restored.isBluetoothConnectionPaused(profileID: firstProfileID))
+        #expect(restored.pausedBluetoothRemoteIdentifiers.isEmpty)
     }
 
     @Test func additionalBluetoothRemoteCopiesCurrentMappingsBeforeIndependentEditing() throws {

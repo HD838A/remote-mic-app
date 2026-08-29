@@ -813,12 +813,35 @@ struct SettingsView: View {
                 Button {
                     model.reconnect()
                 } label: {
-                    Text("connection.action.reconnect")
+                    Text(
+                        model.isSelectedRemoteConnectionPaused
+                            ? "connection.action.resume_remote"
+                            : "connection.action.reconnect"
+                    )
                         .foregroundStyle(.white)
                 }
                     .compatibilityButtonStyle(.prominent)
                     .compatibilityRoundedButtonBorderShape(radius: 10)
                     .frame(maxWidth: .infinity)
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("connection.remote.multi_mac_help")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !model.isSelectedRemoteConnectionPaused {
+                        Button("connection.remote.pause_for_handoff") {
+                            guard model.pauseSelectedRemoteForHandoff() else { return }
+                            openBluetoothSettings()
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                    Button("connection.remote.open_bluetooth_settings") {
+                        openBluetoothSettings()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             }
         }
@@ -835,6 +858,13 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func openBluetoothSettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.BluetoothSettings"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private var audioSettingsPanel: some View {
