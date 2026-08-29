@@ -74,7 +74,7 @@
 | --- | --- | --- |
 | 2026-08-27 | [回眸无可编辑输入框时录音归为未知应用且不可见](./2026-08-27-reflections-recording-metadata-fallback.md) | 候选修复完成，等待真实 RC003 与第三方 App 验收 |
 | 2026-08-26 | [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md) | 最小候选修复完成，等待 Spotlight、Launchpad、飞书/Lark、cmux 和豆包真实验收 |
-| 2026-08-25 | [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md) | 候选修复完成，等待真实 Mac、遥控器和豆包输入验收 |
+| 2026-08-25 | [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md) | 补充 HID 晚到候选修复；真实休眠唤醒基础路径通过，等待现场命中重试分支 |
 | 2026-08-25 | [自定义快捷键连续快速按只有第一次生效](./2026-08-25-custom-shortcut-rapid-press-dropped.md) | 候选修复完成；自动化与项目自检通过，等待 RC001 / RC003 真机连按验收 |
 | 2026-08-24 | [历史蓝牙缓存持续固定频率重连](./2026-08-24-ble-cached-reconnect-storm.md) | 自动化、硬件模拟与 Release App 验证通过，等待 RC001 / RC003 真机重连验收 |
 | 2026-08-24 | [运行日志缺少实例归属、轮转与有效降噪](./2026-08-24-runtime-log-operational-quality.md) | 候选修复完成；自动化、事务故障夹具与 Release App 验证通过，等待真实 BLE / CoreAudio、废纸篓权限与长时间运行验收 |

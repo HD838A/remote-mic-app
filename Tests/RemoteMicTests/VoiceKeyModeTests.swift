@@ -196,7 +196,45 @@ struct VoiceKeyModeTests {
 
         #expect(callbackSource.contains("let previousState"))
         #expect(callbackSource.contains("Self.shouldReapplyHIDSettings("))
+        #expect(callbackSource.contains("scheduleHIDMappingRecoveryIfNeeded()"))
+        #expect(callbackSource.contains(
+            "cancelHIDMappingRecovery(reason: \"bluetooth_not_ready\")"
+        ))
         #expect(!callbackSource.contains("let hadReadyBridge"))
+    }
+
+    @Test func hidRecoveryReappliesTheCurrentVoiceKeyModeWithoutForcingFn() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let recoveryStart = try #require(
+            source.range(of: "private func scheduleHIDMappingRecoveryIfNeeded()")
+        )
+        let recoveryEnd = try #require(source.range(
+            of: "private func completeHIDMappingRecoveryIfNeeded()",
+            range: recoveryStart.upperBound..<source.endIndex
+        ))
+        let recoverySource = source[recoveryStart.lowerBound..<recoveryEnd.lowerBound]
+
+        #expect(recoverySource.contains("self.applyHIDSettings()"))
+        #expect(!recoverySource.contains("settings.voiceKeyMode = .function"))
+
+        let applyStart = try #require(source.range(of: "func applyHIDSettings("))
+        let applyEnd = try #require(source.range(
+            of: "private func scheduleHIDMappingRecoveryIfNeeded()",
+            range: applyStart.upperBound..<source.endIndex
+        ))
+        let applySource = source[applyStart.lowerBound..<applyEnd.lowerBound]
+
+        #expect(applySource.contains("let requestedVoiceKeyMode = settings.voiceKeyMode"))
+        #expect(applySource.contains("requestedVoiceKeyMode != .function"))
+        #expect(applySource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: true)"))
+        #expect(applySource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: false)"))
     }
 
     @Test func bluetoothCommandVoiceRequiresNeutralizedHardwareKeyBeforeAcceptance() throws {
