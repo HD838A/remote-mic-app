@@ -413,8 +413,7 @@ struct OnboardingView: View {
                 }
             }
 
-            if settings.onboardingVoiceTool == .doubao,
-               voiceToolAvailability[.doubao] == .notInstalled {
+            if voiceToolAvailability[.doubao] == .notInstalled {
                 HStack(spacing: 8) {
                     Text("onboarding.voice_tool.doubao.install_detail")
                         .font(.system(size: 12))

@@ -498,6 +498,8 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("onboarding.voice_tool.none_detected"))
         #expect(viewSource.contains("onboarding.voice_tool.other.setup_detail"))
         #expect(viewSource.contains("onboarding.voice_test.other_detail"))
+        #expect(viewSource.contains("if voiceToolAvailability[.doubao] == .notInstalled"))
+        #expect(!viewSource.contains("settings.onboardingVoiceTool == .doubao,\n"))
         #expect(viewSource.contains("localization.text(settings.onboardingVoiceTool.titleKey)"))
         #expect(rendererSource.contains("allowsInputSourceSwitching: false"))
         #expect(rendererSource.contains(

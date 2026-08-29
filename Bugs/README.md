@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Onboarding 选择其他语音工具时隐藏豆包官方安装入口](./2026-08-29-onboarding-doubao-install-link-hidden.md)
 - [Onboarding 已收到语音但没有文字，诊断事件反复跳变](./2026-08-29-onboarding-voice-test-focus-and-diagnostics.md)
 - [Onboarding 权限页返回按钮点击后停留原页](./2026-08-29-onboarding-permissions-back-auto-route.md)
 - [预览包 Build 回退导致更新误判与版本历史按钮误导](./2026-08-27-sparkle-preview-build-regression-and-history-button.md)
@@ -74,6 +75,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-29 | [Onboarding 选择其他语音工具时隐藏豆包官方安装入口](./2026-08-29-onboarding-doubao-install-link-hidden.md) | 候选修复完成，58 张生产截图复验通过 |
 | 2026-08-29 | [Onboarding 已收到语音但没有文字，诊断事件反复跳变](./2026-08-29-onboarding-voice-test-focus-and-diagnostics.md) | 候选修复完成，等待真实第三方语音工具验收 |
 | 2026-08-29 | [Onboarding 权限页返回按钮点击后停留原页](./2026-08-29-onboarding-permissions-back-auto-route.md) | 候选修复完成，等待真实点击复验 |
 | 2026-08-27 | [回眸无可编辑输入框时录音归为未知应用且不可见](./2026-08-27-reflections-recording-metadata-fallback.md) | 候选修复完成，等待真实 RC003 与第三方 App 验收 |
