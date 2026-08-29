@@ -20,13 +20,42 @@ ATTACHED=0
 mkdir -p "$MOUNT_POINT"
 
 cleanup() {
+  local console_user user_home trash_root trash_destination counter=0
   if [[ "$ATTACHED" -eq 1 ]]; then
     hdiutil detach "$MOUNT_POINT" -quiet || true
   fi
   case "$VERIFY_ROOT" in
-    /private/tmp/remote-mic-dmg-verify.*) rm -rf -- "$VERIFY_ROOT" ;;
-    *) print -u2 "refusing to clean unexpected verification path: $VERIFY_ROOT" ;;
+    /private/tmp/remote-mic-dmg-verify.*) ;;
+    *) print -u2 "refusing to clean unexpected verification path: $VERIFY_ROOT"; return ;;
   esac
+  [[ -d "$VERIFY_ROOT" ]] || return
+  console_user="$(/usr/bin/stat -f '%Su' /dev/console 2>/dev/null || true)"
+  if [[ -z "$console_user" || "$console_user" == "root" || "$console_user" == "loginwindow" ]]; then
+    print -u2 "DMG verification workspace retained because no desktop Trash is available: $VERIFY_ROOT"
+    return
+  fi
+  user_home="$(/usr/bin/dscl . -read "/Users/$console_user" NFSHomeDirectory \
+    2>/dev/null | /usr/bin/sed -n 's/^NFSHomeDirectory: //p')"
+  if [[ "$user_home" != /* || "$user_home" == "/" || "$user_home" == *'/../'* || \
+        "$user_home" == *'/..' ]]; then
+    print -u2 "DMG verification workspace retained because the desktop Trash path is invalid: $VERIFY_ROOT"
+    return
+  fi
+  trash_root="$user_home/.Trash"
+  [[ -d "$trash_root" ]] || {
+    print -u2 "DMG verification workspace retained because Trash is unavailable: $VERIFY_ROOT"
+    return
+  }
+  trash_destination="$trash_root/${VERIFY_ROOT:t}"
+  while [[ -e "$trash_destination" || -L "$trash_destination" ]]; do
+    counter=$((counter + 1))
+    trash_destination="$trash_root/${VERIFY_ROOT:t}-$counter"
+  done
+  if /bin/mv -n -- "$VERIFY_ROOT" "$trash_destination"; then
+    print "DMG verification workspace moved to Trash: $trash_destination"
+  else
+    print -u2 "DMG verification workspace retained after Trash move failed: $VERIFY_ROOT"
+  fi
 }
 trap cleanup EXIT
 

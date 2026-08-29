@@ -2,8 +2,23 @@
 set -euo pipefail
 
 TARGET_VOLUME="${3:-/}"
-DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
-PLIST="$DESTINATION/Contents/Info.plist"
+DRIVER_DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+DRIVER_PLIST="$DRIVER_DESTINATION/Contents/Info.plist"
+APP_DESTINATIONS=(
+  "${TARGET_VOLUME%/}/Applications/SayAll.app"
+  "${TARGET_VOLUME%/}/Applications/Remote Mic.app"
+  "${TARGET_VOLUME%/}/Applications/无线麦.app"
+)
+APP_LABELS=("SayAll.app" "Remote Mic.app" "无线麦.app")
+BUNDLE_IDENTIFIER="com.hd838a.RemoteMic"
+DRIVER_BUNDLE_IDENTIFIER="com.hd838a.MiRemoteV2ch"
+UNINSTALL_TOKEN="$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
+ITEM_SOURCES=()
+ITEM_LABELS=()
+ITEM_KINDS=()
+ITEM_DESTINATIONS=()
+MOVED_COUNT=0
+DRIVER_MOVED=0
 
 uses_chinese_locale() {
   local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
@@ -18,18 +33,151 @@ installer_message() {
   fi
 }
 
-if [[ ! -e "$DESTINATION" ]]; then
+item_bundle_identifier() {
+  /usr/bin/plutil -extract CFBundleIdentifier raw -o - "$1" 2>/dev/null || true
+}
+
+queue_owned_app() {
+  local app_path="$1"
+  local app_label="$2"
+  local app_plist="$app_path/Contents/Info.plist"
+
+  if [[ ! -e "$app_path" && ! -L "$app_path" ]]; then
+    return
+  fi
+  if [[ ! -f "$app_plist" ]] || \
+     [[ "$(item_bundle_identifier "$app_plist")" != "$BUNDLE_IDENTIFIER" ]]; then
+    installer_message \
+      "$app_label 不属于无线麦SayAll.app，卸载器已保留它不作处理。" \
+      "$app_label does not belong to SayAll and was left untouched."
+    return
+  fi
+  ITEM_SOURCES+=("$app_path")
+  ITEM_LABELS+=("$app_label")
+  ITEM_KINDS+=("app")
+}
+
+queue_owned_driver() {
+  if [[ ! -e "$DRIVER_DESTINATION" && ! -L "$DRIVER_DESTINATION" ]]; then
+    return
+  fi
+  if [[ ! -f "$DRIVER_PLIST" ]] || \
+     [[ "$(item_bundle_identifier "$DRIVER_PLIST")" != "$DRIVER_BUNDLE_IDENTIFIER" ]]; then
+    installer_message \
+      "MiRemoteV2ch.driver 无法确认为无线麦兼容麦克风，卸载器已保留它不作处理。" \
+      "MiRemoteV2ch.driver could not be verified as the SayAll compatibility microphone and was left untouched."
+    return
+  fi
+  ITEM_SOURCES+=("$DRIVER_DESTINATION")
+  ITEM_LABELS+=("MiRemoteV2ch.driver")
+  ITEM_KINDS+=("driver")
+}
+
+prepare_trash_root() {
+  local console_user console_uid user_home trash_created=0
+
+  console_user="$(/usr/bin/stat -f '%Su' /dev/console)"
+  if [[ "$console_user" != "root" && "$console_user" != "loginwindow" ]] && \
+     console_uid="$(/usr/bin/id -u "$console_user" 2>/dev/null)"; then
+    user_home="$(/usr/bin/dscl . -read "/Users/$console_user" NFSHomeDirectory \
+      2>/dev/null | /usr/bin/sed -n 's/^NFSHomeDirectory: //p')"
+  else
+    console_uid=0
+    user_home=""
+  fi
+
+  if [[ "$TARGET_VOLUME" == "/" && "$user_home" == /* && "$user_home" != "/" && \
+        "$user_home" != *'/../'* && "$user_home" != *'/..' ]]; then
+    TRASH_ROOT="${TARGET_VOLUME%/}$user_home/.Trash"
+  else
+    TRASH_ROOT="${TARGET_VOLUME%/}/.Trashes/$console_uid"
+  fi
+  if [[ "$TRASH_ROOT" != /* || "$TRASH_ROOT" == "/" || "$console_uid" != <-> ]]; then
+    return 1
+  fi
+  if [[ ! -d "$TRASH_ROOT" ]]; then
+    /bin/mkdir -p -- "$TRASH_ROOT" || return 1
+    trash_created=1
+  fi
+  if [[ "$trash_created" -eq 1 ]]; then
+    /usr/sbin/chown "$console_uid" "$TRASH_ROOT" || return 1
+    /bin/chmod 700 "$TRASH_ROOT" || return 1
+  fi
+}
+
+trash_destination_for_item() {
+  local label="$1"
+  local stem extension candidate counter=0
+
+  case "$label" in
+    *.app) stem="${label%.app}"; extension=".app" ;;
+    *.driver) stem="${label%.driver}"; extension=".driver" ;;
+    *) return 1 ;;
+  esac
+  candidate="$TRASH_ROOT/$stem (uninstalled $UNINSTALL_TOKEN)$extension"
+  while [[ -e "$candidate" || -L "$candidate" ]]; do
+    counter=$((counter + 1))
+    candidate="$TRASH_ROOT/$stem (uninstalled $UNINSTALL_TOKEN-$counter)$extension"
+  done
+  print -r -- "$candidate"
+}
+
+rollback_moved_items() {
+  local index
+  for (( index=MOVED_COUNT; index>=1; index-- )); do
+    if ! /bin/mv -n -- "${ITEM_DESTINATIONS[$index]}" "${ITEM_SOURCES[$index]}"; then
+      installer_message \
+        "无法自动恢复 ${ITEM_LABELS[$index]}；它仍保留在废纸篓 ${ITEM_DESTINATIONS[$index]} 中。" \
+        "${ITEM_LABELS[$index]} could not be restored automatically and remains in Trash at ${ITEM_DESTINATIONS[$index]}." >&2
+    fi
+  done
+}
+
+for (( index=1; index<=${#APP_DESTINATIONS[@]}; index++ )); do
+  queue_owned_app "${APP_DESTINATIONS[$index]}" "${APP_LABELS[$index]}"
+done
+queue_owned_driver
+
+if [[ "${#ITEM_SOURCES[@]}" -eq 0 ]]; then
   installer_message \
-    "未发现 MiRemoteV 2ch，无需卸载。" \
-    "MiRemoteV 2ch was not found; nothing needs to be uninstalled."
+    "未发现可安全卸载的无线麦SayAll.app 或 MiRemoteV 2ch。" \
+    "No SayAll app or MiRemoteV 2ch installation that could be safely uninstalled was found."
   exit 0
 fi
 
-test -f "$PLIST"
-test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "com.hd838a.MiRemoteV2ch"
+if ! prepare_trash_root; then
+  installer_message \
+    "卸载已停止：无法安全使用废纸篓，现有 App 和兼容麦克风均已保留。" \
+    "Uninstallation stopped because Trash could not be used safely. The existing app and compatibility microphone were left intact." >&2
+  exit 2
+fi
 
-/bin/rm -rf -- "$DESTINATION"
-/usr/bin/killall coreaudiod
+for label in "${ITEM_LABELS[@]}"; do
+  if [[ "$label" == *.app && "$TARGET_VOLUME" == "/" ]]; then
+    /usr/bin/pkill -x RemoteMic 2>/dev/null || true
+    break
+  fi
+done
+
+for (( index=1; index<=${#ITEM_SOURCES[@]}; index++ )); do
+  ITEM_DESTINATIONS+=("$(trash_destination_for_item "${ITEM_LABELS[$index]}")")
+  if /bin/mv -n -- "${ITEM_SOURCES[$index]}" "${ITEM_DESTINATIONS[$index]}" && \
+     [[ ! -e "${ITEM_SOURCES[$index]}" && ! -L "${ITEM_SOURCES[$index]}" ]] && \
+     [[ -e "${ITEM_DESTINATIONS[$index]}" || -L "${ITEM_DESTINATIONS[$index]}" ]]; then
+    MOVED_COUNT="$index"
+    [[ "${ITEM_KINDS[$index]}" == "driver" ]] && DRIVER_MOVED=1
+  else
+    installer_message \
+      "卸载 ${ITEM_LABELS[$index]} 失败；正在恢复本次已移动的项目。" \
+      "Failed to uninstall ${ITEM_LABELS[$index]}; restoring items moved during this run." >&2
+    rollback_moved_items
+    exit 2
+  fi
+done
+
+if [[ "$DRIVER_MOVED" -eq 1 && "$TARGET_VOLUME" == "/" ]]; then
+  /usr/bin/killall coreaudiod 2>/dev/null || true
+fi
 installer_message \
-  "已卸载 MiRemoteV 2ch。BlackHole 未被修改。" \
-  "MiRemoteV 2ch has been uninstalled. BlackHole was not changed."
+  "已将无线麦SayAll.app 的已识别安装项移到废纸篓，需要时可恢复；BlackHole 和本地设置未被修改。" \
+  "Recognized SayAll installation items were moved to Trash and can be restored. BlackHole and local settings were not changed."

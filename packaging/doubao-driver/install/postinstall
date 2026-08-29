@@ -107,6 +107,16 @@ fi
 SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
 test "$SYSTEM_MAJOR" -ge "$MINIMUM_SYSTEM_MAJOR"
 DRIVER_CHANGED=0
+DRIVER_BACKUP=""
+
+restore_previous_driver() {
+  if [[ -n "$DRIVER_BACKUP" && -e "$DRIVER_BACKUP" ]]; then
+    /bin/mv -n -- "$DRIVER_BACKUP" "$DESTINATION" || \
+      installer_message \
+        "MiRemoteV 2ch 更新失败，且无法自动恢复旧驱动；旧驱动仍保留在 $DRIVER_BACKUP。" \
+        "MiRemoteV 2ch update failed and the previous driver could not be restored automatically. It remains at $DRIVER_BACKUP." >&2
+  fi
+}
 
 if driver_is_healthy_and_current; then
   installer_message \
@@ -114,19 +124,55 @@ if driver_is_healthy_and_current; then
     "The existing MiRemoteV 2ch is healthy and was kept in place."
 else
   DRIVER_CHANGED=1
-  /bin/rm -rf -- "$DESTINATION"
+  if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
+    DRIVER_BACKUP="${DESTINATION:h}/.MiRemoteV2ch.driver.install-backup-$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
+    /bin/mv -n -- "$DESTINATION" "$DRIVER_BACKUP"
+  fi
   /bin/mkdir -p "${DESTINATION:h}"
-  /usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$STAGED_DRIVER" "$DESTINATION"
-  /usr/sbin/chown -R root:wheel "$DESTINATION"
-  /usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \;
-  /usr/bin/find "$DESTINATION" -type f -exec /bin/chmod 644 {} \;
-  /bin/chmod 755 "$BINARY"
-  /usr/bin/codesign --verify --deep --strict "$DESTINATION"
+  if ! /usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$STAGED_DRIVER" "$DESTINATION" || \
+     ! /usr/sbin/chown -R root:wheel "$DESTINATION" || \
+     ! /usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \; || \
+     ! /usr/bin/find "$DESTINATION" -type f -exec /bin/chmod 644 {} \; || \
+     ! /bin/chmod 755 "$BINARY" || \
+     ! /usr/bin/codesign --verify --deep --strict "$DESTINATION"; then
+    if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
+      FAILED_DRIVER="${DESTINATION:h}/.MiRemoteV2ch.driver.failed-$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
+      /bin/mv -n -- "$DESTINATION" "$FAILED_DRIVER" 2>/dev/null || true
+    fi
+    restore_previous_driver
+    installer_message \
+      "MiRemoteV 2ch 更新失败，安装已停止。" \
+      "MiRemoteV 2ch update failed and installation has stopped." >&2
+    exit 2
+  fi
+  if [[ -n "$DRIVER_BACKUP" ]]; then
+    DRIVER_BACKUP_TRASH_ROOT="${TARGET_VOLUME%/}/.Trashes/0"
+    DRIVER_BACKUP_TRASH_DESTINATION="$DRIVER_BACKUP_TRASH_ROOT/MiRemoteV2ch (replaced $(/bin/date -u +%Y%m%dT%H%M%SZ)-$$).driver"
+    if /bin/mkdir -p -- "$DRIVER_BACKUP_TRASH_ROOT" && \
+       /usr/sbin/chown root:wheel "$DRIVER_BACKUP_TRASH_ROOT" && \
+       /bin/chmod 700 "$DRIVER_BACKUP_TRASH_ROOT" && \
+       /bin/mv -n -- "$DRIVER_BACKUP" "$DRIVER_BACKUP_TRASH_DESTINATION"; then
+      DRIVER_BACKUP=""
+    else
+      installer_message \
+        "MiRemoteV 2ch 已更新，但旧驱动无法移入废纸篓，已保留在 $DRIVER_BACKUP。" \
+        "MiRemoteV 2ch was updated, but the previous driver could not be moved to Trash and remains at $DRIVER_BACKUP." >&2
+    fi
+  fi
   installer_message \
     "已安装或更新 MiRemoteV 2ch。" \
     "MiRemoteV 2ch was installed or updated."
 fi
-/bin/rm -rf -- "${STAGED_DRIVER:h}"
+STAGED_DRIVER_TRASH_ROOT="${TARGET_VOLUME%/}/.Trashes/0"
+STAGED_DRIVER_TRASH_DESTINATION="$STAGED_DRIVER_TRASH_ROOT/RemoteMic Installer Staging $(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
+if ! /bin/mkdir -p -- "$STAGED_DRIVER_TRASH_ROOT" || \
+   ! /usr/sbin/chown root:wheel "$STAGED_DRIVER_TRASH_ROOT" || \
+   ! /bin/chmod 700 "$STAGED_DRIVER_TRASH_ROOT" || \
+   ! /bin/mv -n -- "${STAGED_DRIVER:h}" "$STAGED_DRIVER_TRASH_DESTINATION"; then
+  installer_message \
+    "安装已完成，但临时驱动目录无法移入废纸篓，已保留在 ${STAGED_DRIVER:h}。" \
+    "Installation completed, but the staged driver directory could not be moved to Trash and remains at ${STAGED_DRIVER:h}." >&2
+fi
 /usr/sbin/chown -R root:wheel "$APP_DESTINATION"
 /usr/bin/find "$APP_DESTINATION" -type d -exec /bin/chmod 755 {} \;
 /usr/bin/find "$APP_DESTINATION" -type f -exec /bin/chmod 644 {} \;
