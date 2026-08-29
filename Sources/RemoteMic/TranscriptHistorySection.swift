@@ -638,11 +638,6 @@ struct TranscriptHistorySection: View {
                     }
                     .buttonStyle(.borderless)
                     .help(localization.text("statistics.transcripts.recording_export"))
-                    Button { model.revealRecording(asset) } label: {
-                        Image(systemName: "folder")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(localization.text("statistics.transcripts.recording_reveal"))
                     Button(role: .destructive) {
                         deletionRequest = .recording(asset)
                     } label: {

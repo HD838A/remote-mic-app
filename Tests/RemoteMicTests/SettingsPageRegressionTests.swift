@@ -998,6 +998,7 @@ struct SettingsPageRegressionTests {
         #expect(historySource.contains("NSWorkspace.shared.urlForApplication"))
         #expect(historySource.contains("NSWorkspace.shared.icon(forFile:"))
         #expect(historySource.contains("model.copyTranscript(record)"))
+        #expect(!historySource.contains("model.revealRecording"))
         #expect(historySource.contains("model.deleteTranscriptRecord(record)"))
         #expect(historySource.contains("model.deleteTranscriptApplication(applicationKey: key)"))
         #expect(historySource.contains("model.deleteAllTranscripts()"))

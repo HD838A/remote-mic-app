@@ -708,7 +708,6 @@
 "statistics.transcripts.recording_playback_error.invalid" = "这条录音文件无法播放，可能已损坏或格式不受支持。";
 "statistics.transcripts.recording_playback_error.unavailable" = "这条录音暂时无法播放，请稍后重试。";
 "statistics.transcripts.recording_export" = "导出录音";
-"statistics.transcripts.recording_reveal" = "在 Finder 中显示";
 "statistics.transcripts.recording_delete" = "删除录音";
 "statistics.transcripts.recording_delete_confirm.title" = "删除这段录音？";
 "statistics.transcripts.recording_delete_confirm.message" = "录音将移到废纸篓，关联的文字不会受到影响。";
