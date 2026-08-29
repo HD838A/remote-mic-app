@@ -118,6 +118,7 @@
 "action.arrow_right" = "方向右";
 "action.scroll_up" = "向上滚动";
 "action.scroll_down" = "向下滚动";
+"action.project_switch" = "项目切换";
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "显示桌面";
@@ -134,6 +135,9 @@
 "action.toggle_long_recording" = "切换持续录音";
 "action.open_remote_mic" = "打开无线麦";
 "action.open_codex" = "打开 Codex";
+"project_picker.title" = "项目切换";
+"project_picker.hint" = "方向键选择 · OK 确定 · ⌘数字直达";
+"project_picker.empty" = "暂未读取到项目名称，仍可尝试 ⌘1～⌘9";
 "action.open_claude" = "打开 Claude";
 "action.open_cmux" = "打开 cmux";
 "action.open_wechat" = "打开微信";

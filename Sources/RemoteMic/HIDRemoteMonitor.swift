@@ -673,6 +673,9 @@ final class HIDRemoteMonitor {
                 profileID: profileID
             ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
             let action = settings.action(for: button, profileID: profileID)
+            if CodexProjectPickerRemoteBridge.shared.handle(button) {
+                continue
+            }
             if appSwitcherSession.isActive,
                handleAppSwitcherControlPress(button) {
                 continue

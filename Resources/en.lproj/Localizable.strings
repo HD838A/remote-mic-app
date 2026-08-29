@@ -118,6 +118,7 @@
 "action.arrow_right" = "Arrow Right";
 "action.scroll_up" = "Scroll Up";
 "action.scroll_down" = "Scroll Down";
+"action.project_switch" = "Project Switcher";
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "Show Desktop";
@@ -134,6 +135,9 @@
 "action.toggle_long_recording" = "Toggle Continuous Recording";
 "action.open_remote_mic" = "Open SayAll";
 "action.open_codex" = "Open Codex";
+"project_picker.title" = "Project Switcher";
+"project_picker.hint" = "Arrow keys select · OK confirms · ⌘number jumps";
+"project_picker.empty" = "Project names unavailable; try ⌘1–⌘9";
 "action.open_claude" = "Open Claude";
 "action.open_cmux" = "Open cmux";
 "action.open_wechat" = "Open WeChat";
