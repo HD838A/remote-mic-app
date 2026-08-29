@@ -1141,7 +1141,10 @@ struct OnboardingView: View {
                 Label {
                     Text(LocalizedMessage(
                         "onboarding.voice_test.other_detail",
-                        arguments: [selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required")]
+                        arguments: [
+                            localization.text(settings.onboardingVoiceTool.titleKey),
+                            selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required")
+                        ]
                     ).text(using: localization))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)

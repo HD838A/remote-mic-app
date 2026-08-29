@@ -75,6 +75,9 @@ enum OnboardingScreenshotRenderer {
         let systemFunctionKeyAvailable = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"
         ].map { $0 != "0" } ?? true
+        let allVoiceToolsUnavailable = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_ALL_VOICE_TOOLS_UNAVAILABLE"
+        ] == "1"
         let controlMethod = requestedControlMethod ?? .physicalRemote
         settings.setOnboardingVoiceTool(requestedVoiceTool ?? .doubao)
         settings.setOnboardingRemoteAvailability(
@@ -111,9 +114,9 @@ enum OnboardingScreenshotRenderer {
                 allowsInputSourceSwitching: false,
                 systemFunctionKeyAvailableOverride: systemFunctionKeyAvailable,
                 voiceToolAvailabilityOverride: [
-                    .doubao: .available,
-                    .weixin: .available,
-                    .typeless: .available,
+                    .doubao: allVoiceToolsUnavailable ? .notInstalled : .available,
+                    .weixin: allVoiceToolsUnavailable ? .notInstalled : .available,
+                    .typeless: allVoiceToolsUnavailable ? .notInstalled : .available,
                 ],
                 initialInputMethodGuideStep: requestedGuideStep
             )
