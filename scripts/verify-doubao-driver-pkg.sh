@@ -18,10 +18,39 @@ INSTALLER_CHOICES="$WORK_DIR/installer-choices.xml"
 INSTALLER_ERROR="$WORK_DIR/installer-error.txt"
 
 cleanup() {
+  local console_user user_home trash_root trash_destination counter=0
   case "$WORK_DIR" in
-    /private/tmp/remote-mic-driver-package-verify.*) /bin/rm -rf -- "$WORK_DIR" ;;
-    *) print -u2 "refusing to clean unexpected verification path: $WORK_DIR" ;;
+    /private/tmp/remote-mic-driver-package-verify.*) ;;
+    *) print -u2 "refusing to clean unexpected verification path: $WORK_DIR"; return ;;
   esac
+  [[ -d "$WORK_DIR" ]] || return
+  console_user="$(/usr/bin/stat -f '%Su' /dev/console 2>/dev/null || true)"
+  if [[ -z "$console_user" || "$console_user" == "root" || "$console_user" == "loginwindow" ]]; then
+    print -u2 "verification workspace retained because no desktop Trash is available: $WORK_DIR"
+    return
+  fi
+  user_home="$(/usr/bin/dscl . -read "/Users/$console_user" NFSHomeDirectory \
+    2>/dev/null | /usr/bin/sed -n 's/^NFSHomeDirectory: //p')"
+  if [[ "$user_home" != /* || "$user_home" == "/" || "$user_home" == *'/../'* || \
+        "$user_home" == *'/..' ]]; then
+    print -u2 "verification workspace retained because the desktop Trash path is invalid: $WORK_DIR"
+    return
+  fi
+  trash_root="$user_home/.Trash"
+  [[ -d "$trash_root" ]] || {
+    print -u2 "verification workspace retained because Trash is unavailable: $WORK_DIR"
+    return
+  }
+  trash_destination="$trash_root/${WORK_DIR:t}"
+  while [[ -e "$trash_destination" || -L "$trash_destination" ]]; do
+    counter=$((counter + 1))
+    trash_destination="$trash_root/${WORK_DIR:t}-$counter"
+  done
+  if /bin/mv -n -- "$WORK_DIR" "$trash_destination"; then
+    print "Verification workspace moved to Trash: $trash_destination"
+  else
+    print -u2 "verification workspace retained after Trash move failed: $WORK_DIR"
+  fi
 }
 trap cleanup EXIT
 
@@ -162,6 +191,20 @@ case "$MODE" in
     /usr/bin/grep -Fq '/usr/bin/file -b "$1"' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq 'The existing MiRemoteV 2ch is healthy and was kept in place.' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq '/usr/bin/codesign --verify --deep --strict "$DESTINATION"' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'DRIVER_BACKUP=' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'restore_previous_driver' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq '/bin/mv -n -- "$DESTINATION" "$DRIVER_BACKUP"' \
+      "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'DRIVER_BACKUP_TRASH_ROOT="${TARGET_VOLUME%/}/.Trashes/0"' \
+      "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'STAGED_DRIVER_TRASH_ROOT="${TARGET_VOLUME%/}/.Trashes/0"' \
+      "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq '/bin/mv -n -- "${STAGED_DRIVER:h}" "$STAGED_DRIVER_TRASH_DESTINATION"' \
+      "$SCRIPTS_DIR/postinstall"
+    if /usr/bin/grep -Fq '/bin/rm -rf -- "$DESTINATION"' "$SCRIPTS_DIR/postinstall"; then
+      print -u2 "installer must preserve the previous driver for rollback"
+      exit 1
+    fi
     /usr/bin/grep -Fqx 'APP_DESTINATION="${TARGET_VOLUME%/}/Applications/SayAll.app"' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fqx 'LEGACY_REMOTE_MIC_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/Remote Mic.app"' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fqx 'LEGACY_CHINESE_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"' "$SCRIPTS_DIR/postinstall"
@@ -231,8 +274,27 @@ case "$MODE" in
       exit 1
     fi
     test -x "$EXPANDED/Scripts/postinstall"
-    /usr/bin/grep -Fqx '/bin/rm -rf -- "$DESTINATION"' "$EXPANDED/Scripts/postinstall"
-    /usr/bin/grep -Fqx '/usr/bin/killall coreaudiod' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fqx 'DRIVER_DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"' \
+      "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq '"${TARGET_VOLUME%/}/Applications/SayAll.app"' \
+      "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq '"${TARGET_VOLUME%/}/Applications/Remote Mic.app"' \
+      "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq '"${TARGET_VOLUME%/}/Applications/无线麦.app"' \
+      "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'queue_owned_app' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'queue_owned_driver' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'prepare_trash_root' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'rollback_moved_items' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq '/bin/mv -n -- "${ITEM_SOURCES[$index]}" "${ITEM_DESTINATIONS[$index]}"' \
+      "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'BlackHole and local settings were not changed.' \
+      "$EXPANDED/Scripts/postinstall"
+    if /usr/bin/grep -Eq '(/bin/)?rm([[:space:]]|$)|unlink|find[[:space:]].*-delete' \
+        "$EXPANDED/Scripts/postinstall"; then
+      print -u2 "uninstaller must move recognized items to Trash instead of permanently deleting them"
+      exit 1
+    fi
     ;;
   *)
     print -u2 "unknown package mode: $MODE"

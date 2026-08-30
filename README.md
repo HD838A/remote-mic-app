@@ -186,10 +186,9 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 ## 卸载
 
 1. 退出无线麦。
-2. 从同一 GitHub Release 下载并运行 `Uninstall Remote Mic.pkg`，移除 `MiRemoteV 2ch` 兼容麦克风。
-3. 删除“应用程序”中的 SayAll.app。
+2. 从同一 GitHub Release 下载并运行 `Uninstall Remote Mic.pkg`。
 
-卸载兼容麦克风不会修改或删除已有的 BlackHole。
+卸载器会核对 Bundle ID，然后把已识别的 `SayAll.app`、历史 `Remote Mic.app` / `无线麦.app` 和 `MiRemoteV 2ch` 移到 macOS 废纸篓，需要时可恢复。它不会修改 BlackHole 或无线麦的本地设置；同名但无法确认归属的内容会保留在原位。
 
 ## 遇到问题
 
