@@ -1,5 +1,14 @@
 # Version History
 
+## 1.9.19 (Pre-release)
+
+- Improve Onboarding permission back navigation, voice test input focus, and diagnostics.
+- Keep the “Other voice tool” option when known tools are not installed, with an official Doubao installation link.
+- Improve actionable Reflections playback errors for missing, modified, unreadable, and player-start failures.
+- Restore the selected voice-key mapping after remote wake.
+- Move SayAll, legacy app paths, and the driver to the Trash during uninstall, with rollback on replacement failure.
+- Remove the Finder entry from recording-only Reflections records while keeping playback, export, and Trash actions.
+
 ## 1.9.18 (Pre-release)
 
 - Improved Reflections browsing stability for large histories, avoiding duplicate, blank, and jittery rows.
