@@ -117,7 +117,10 @@ enum CoreAudioDeviceCatalog {
         }
     }
 
-    static func preferredFallbackInput(excludingUID excludedUID: String) -> AudioDeviceInfo? {
+    static func preferredFallbackInput(
+        excludingUID excludedUID: String,
+        preferredUID: String? = nil
+    ) -> AudioDeviceInfo? {
         let devices = inputDevices()
         let builtInDeviceIDs = Set(devices.compactMap { device in
             transportType(for: device.id) == kAudioDeviceTransportTypeBuiltIn ? device.id : nil
@@ -125,7 +128,8 @@ enum CoreAudioDeviceCatalog {
         return DefaultInputFallbackPolicy.preferredFallback(
             in: devices,
             excludingUID: excludedUID,
-            builtInDeviceIDs: builtInDeviceIDs
+            builtInDeviceIDs: builtInDeviceIDs,
+            preferredUID: preferredUID
         )
     }
 
@@ -313,9 +317,14 @@ enum DefaultInputFallbackPolicy {
     static func preferredFallback(
         in devices: [AudioDeviceInfo],
         excludingUID excludedUID: String,
-        builtInDeviceIDs: Set<AudioDeviceID>
+        builtInDeviceIDs: Set<AudioDeviceID>,
+        preferredUID: String? = nil
     ) -> AudioDeviceInfo? {
         let candidates = devices.filter { $0.uid != excludedUID }
+        if let preferredUID,
+           let preferred = candidates.first(where: { $0.uid == preferredUID }) {
+            return preferred
+        }
         return candidates.first { builtInDeviceIDs.contains($0.id) } ?? candidates.first
     }
 
