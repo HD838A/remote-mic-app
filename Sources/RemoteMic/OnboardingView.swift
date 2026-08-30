@@ -42,6 +42,7 @@ struct OnboardingView: View {
     @State private var inputSourceSwitchResult: OnboardingInputSourceSwitchResult = .notApplicable
     @State private var voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability] = [:]
     @State private var systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
+    @State private var voiceKeyMigrationSource: VoiceKeyMode?
     @State private var selectedInputMethodGuideStep = 0
     @State private var transcriptFocusRequest = 0
     @State private var transcriptEditorMounted = false
@@ -74,6 +75,9 @@ struct OnboardingView: View {
         self.systemFunctionKeyAvailableOverride = systemFunctionKeyAvailableOverride
         self.voiceToolAvailabilityOverride = voiceToolAvailabilityOverride
         _selectedInputMethodGuideStep = State(initialValue: initialInputMethodGuideStep)
+        _voiceKeyMigrationSource = State(
+            initialValue: model.settings.pendingOnboardingVoiceKeyMigration
+        )
     }
 
     var body: some View {
@@ -316,6 +320,8 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            onboardingVoiceKeyMigrationNotice
+
             VStack(alignment: .leading, spacing: 12) {
                 featureLine("waveform", "onboarding.welcome.feature.voice")
                 featureLine("rectangle.and.hand.point.up.left", "onboarding.welcome.feature.controls")
@@ -331,6 +337,8 @@ struct OnboardingView: View {
             Text("onboarding.voice_tool.detail")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
+
+            onboardingVoiceKeyMigrationNotice
 
             if allRecognizedVoiceToolsUnavailable {
                 HStack(alignment: .top, spacing: 10) {
@@ -485,6 +493,38 @@ struct OnboardingView: View {
         }
         .padding(12)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private var onboardingVoiceKeyMigrationNotice: some View {
+        if let voiceKeyMigrationSource {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Color.orange)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(
+                        LocalizedMessage(
+                            "onboarding.voice_key.migration.title",
+                            arguments: [localization.text(voiceKeyMigrationSource.localizationKey)]
+                        ).text(using: localization)
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    Text("onboarding.voice_key.migration.detail")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+            }
+        }
     }
 
     private var remoteAvailabilityContent: some View {
@@ -2027,8 +2067,12 @@ struct OnboardingView: View {
     }
 
     private func enforceOnboardingVoiceKeyPolicy() {
+        if let pending = settings.consumePendingOnboardingVoiceKeyMigration() {
+            voiceKeyMigrationSource = pending
+        }
         guard settings.voiceKeyMode != .function else { return }
         let previousMode = settings.voiceKeyMode.rawValue
+        voiceKeyMigrationSource = settings.voiceKeyMode
         AppLogger.shared.write(
             "ONBOARDING VOICE_KEY_POLICY requested from=\(previousMode) to=fn policy=fn_only"
         )

@@ -28,7 +28,7 @@
 2. 首次进入语音工具页，确认豆包始终位于第一推荐位置；未安装豆包时仍显示推荐卡和“安装豆包输入法”链接，链接目标为 `https://shurufa.doubao.com/?from=sayall.app`。
 3. 确认未安装的微信输入法和 Typeless 不显示；安装后返回页面或点击重新检测即可出现，不需要重启无线麦。
 4. 在三者均未安装的环境，确认页面明确提示未检测到这三种工具，但仍保留“其他语音工具”选项；选择“其他语音工具”后，页面必须明确说明该工具需要支持语音输入，并由用户在工具自己的设置中选择正确的麦克风、确认能向普通输入框写入文字。
-5. 选择豆包、微信、Typeless 或其他工具，确认 Onboarding 页面明确显示“首次设置统一使用 Fn/地球键”，且不再显示左 Command/右 Command 选择器；如果进入前保存的是 Command，进入 Onboarding 后应自动切换为 Fn。
+5. 选择豆包、微信、Typeless 或其他工具，确认 Onboarding 页面明确显示“首次设置统一使用 Fn/地球键”，且不再显示左 Command/右 Command 选择器；如果进入前保存的是 Command，进入 Onboarding 后应自动切换为 Fn，并在欢迎页和语音工具页显示醒目的迁移提示，明确写出原按键、Fn/地球键以及完成后可在主设置页改回 Command。
 6. 选择 Typeless，确认明确说明使用 Fn 点按；选择其他工具时仍明确要求工具支持语音输入、由用户自行开启语音和选择麦克风。
 7. 系统 Fn 设置不是“不执行任何操作”时，豆包和微信不能继续；修复系统设置后实时状态更新。Command 只在完成 Onboarding 后的主设置页提供。
 
@@ -36,7 +36,7 @@
 
 选择“其他语音工具”后进入语音测试页：确认页面再次显示所选虚拟音频设备，并提醒用户在第三方工具中开启语音输入、把该设备设为麦克风。未安装或未打开任何支持语音输入的工具时，语音测试不得通过；应显示针对第三方工具未提交文字的恢复说明。
 
-失败判定：三者均未安装时没有明确提示、未安装的微信/Typeless 仍出现在列表、未安装豆包没有官网入口、“其他语音工具”没有说明语音输入和麦克风配置要求、Onboarding 仍允许选择 Command、旧 Command 进入 Onboarding 后没有切回 Fn、Typeless 进入 Command 模式、主设置页切换 Command 没有未验证提醒、或仅点击页面/打开设置就允许继续，均视为失败。
+失败判定：三者均未安装时没有明确提示、未安装的微信/Typeless 仍出现在列表、未安装豆包没有官网入口、“其他语音工具”没有说明语音输入和麦克风配置要求、Onboarding 仍允许选择 Command、旧 Command 进入 Onboarding 后没有切回 Fn、没有明确显示“从哪个按键切换到 Fn”的迁移提示、Fn 用户被错误显示迁移提示、Typeless 进入 Command 模式、主设置页切换 Command 没有未验证提醒、或仅点击页面/打开设置就允许继续，均视为失败。
 
 ## 用例：升级用户不重复进入 Onboarding
 
@@ -339,8 +339,9 @@
 2. 执行 `~/.codex/skills/remote-mic-onboarding-screenshots/scripts/capture.sh <仓库绝对路径> <输出目录> both`。
 3. 分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD=physical_remote|iphone_app|web_remote`；实体路径的 `light/` 和 `dark/` 各包含 9 张，iPhone/网页路径各包含 10 张。
 4. 对本次“其他语音工具”优化，为三种控制方式均设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_TOOL=other` 和 `REMOTE_MIC_ONBOARDING_SCREENSHOT_ALL_VOICE_TOOLS_UNAVAILABLE=1`，生成对应浅色/深色截图，确认语音工具页显示三种工具未检测提示，语音测试页显示第三方工具与麦克风配置提醒。
-5. 逐张查看三种方式共 58 张截图，并在执行前后核对用户正式 Onboarding 进度未变化。
-6. 不设置截图环境变量正常启动 App，确认不会显示截图入口、额外窗口或调试菜单。
+5. 对本次 Command→Fn 迁移提示，额外设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_KEY_MODE=left_command` 和 `right_command`，分别生成欢迎页与语音工具页截图；确认提示准确显示来源按键、Fn/地球键和完成后可改回主设置页。使用默认 Fn 模式生成的截图不得显示迁移提示。
+6. 逐张查看三种方式共 58 张截图，并在执行前后核对用户正式 Onboarding 进度未变化。
+7. 不设置截图环境变量正常启动 App，确认不会显示截图入口、额外窗口或调试菜单。
 
 预期结果：锁屏状态仍能从生产 `OnboardingView` 生成全部页面；每张为有效 PNG 且像素尺寸有效；浅色和深色分别保持一致视觉体系；隐藏入口不修改正式偏好，也不影响正常启动。
 
