@@ -20,6 +20,8 @@ final class PreferredInputSourceMonitor {
     private var monitor: Any?
     private var functionKeyIsPressed = false
     private var managedInputSourceSession: ManagedInputSourceSession?
+    private static let activationTimeout: TimeInterval = 0.5
+    private static let activationPollInterval: TimeInterval = 0.02
 
     var functionKeyIsPressedForDiagnostics: Bool {
         functionKeyIsPressed
@@ -107,7 +109,8 @@ final class PreferredInputSourceMonitor {
     /// Command keys do not produce the Fn `flagsChanged` event that the legacy
     /// monitor observes, so their lifecycle is driven explicitly by the voice
     /// session instead of by every ordinary Command press on the Mac keyboard.
-    func beginVoiceSession() {
+    @discardableResult
+    func beginVoiceSession() -> Bool {
         beginVoiceSession(reason: "voice_session_start", owner: .explicitVoice)
     }
 
@@ -119,10 +122,11 @@ final class PreferredInputSourceMonitor {
         )
     }
 
+    @discardableResult
     private func beginVoiceSession(
         reason: String,
         owner: ManagedInputSourceSession.Owner
-    ) {
+    ) -> Bool {
         let selectedVoiceTool = voiceTool()
         if selectedVoiceTool.preferredInputSourceID != nil || managedInputSourceSession != nil {
             logger(
@@ -133,16 +137,16 @@ final class PreferredInputSourceMonitor {
         if var session = managedInputSourceSession {
             session.owners.insert(owner)
             managedInputSourceSession = session
-            return
+            return true
         }
 
-        guard let targetInputSourceID = selectedVoiceTool.preferredInputSourceID else { return }
+        guard let targetInputSourceID = selectedVoiceTool.preferredInputSourceID else { return true }
         let previousInputSourceID = currentInputSourceID()
         if previousInputSourceID == targetInputSourceID {
             logger(
                 "VOICE INPUT source_prepare tool=\(selectedVoiceTool.rawValue) result=selected managed=false"
             )
-            return
+            return true
         }
 
         let result = prepareInputSource(selectedVoiceTool)
@@ -150,13 +154,33 @@ final class PreferredInputSourceMonitor {
             "VOICE INPUT source_prepare tool=\(selectedVoiceTool.rawValue) result=\(result.rawValue) " +
                 "managed=\(result == .selected && previousInputSourceID != nil)"
         )
-        if result == .selected, let previousInputSourceID {
+        guard result == .selected else { return false }
+        guard waitForActivation(of: targetInputSourceID) else {
+            logger(
+                "VOICE INPUT source_prepare tool=\(selectedVoiceTool.rawValue) " +
+                    "result=activation_timeout"
+            )
+            if let previousInputSourceID {
+                _ = restoreInputSource(previousInputSourceID)
+            }
+            return false
+        }
+        if let previousInputSourceID {
             managedInputSourceSession = ManagedInputSourceSession(
                 previousInputSourceID: previousInputSourceID,
                 targetInputSourceID: targetInputSourceID,
                 owners: [owner]
             )
         }
+        return true
+    }
+
+    private func waitForActivation(of targetInputSourceID: String) -> Bool {
+        let deadline = Date().addingTimeInterval(Self.activationTimeout)
+        while currentInputSourceID() != targetInputSourceID, Date() < deadline {
+            _ = RunLoop.main.run(mode: .common, before: Date().addingTimeInterval(Self.activationPollInterval))
+        }
+        return currentInputSourceID() == targetInputSourceID
     }
 
     private func finishManagedInputSourceSession(

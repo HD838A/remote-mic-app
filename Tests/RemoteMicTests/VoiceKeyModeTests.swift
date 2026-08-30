@@ -368,6 +368,25 @@ struct VoiceKeyModeTests {
         #expect(!monitor.functionKeyIsPressedForDiagnostics)
     }
 
+    @Test func commandVoiceConfirmsInputSourceBeforeInjectingTrigger() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let prepare = try #require(source.range(of: "preferredInputSourceMonitor.beginVoiceSession()"))
+        let inject = try #require(source.range(of: "KeyboardInjector.setVoiceKeyPressed", range: prepare.upperBound..<source.endIndex))
+        #expect(prepare.lowerBound < inject.lowerBound)
+        let monitor = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/PreferredInputSourceMonitor.swift"),
+            encoding: .utf8
+        )
+        #expect(monitor.contains("waitForActivation(of: targetInputSourceID)"))
+    }
+
     @Test func configurationDefaultsLegacyAndRoundTripsCommandMode() throws {
         let sourceSuite = "RemoteMicTests.voice-key-source.\(UUID().uuidString)"
         let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))

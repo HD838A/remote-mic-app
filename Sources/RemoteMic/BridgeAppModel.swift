@@ -3687,6 +3687,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return true
         }
         let shouldHold = transition == .press
+        if shouldHold, mode != .function,
+           !preferredInputSourceMonitor.beginVoiceSession() {
+            voiceKeyLatch.rollback(transition, owner: owner)
+            AppLogger.shared.write(
+                "VOICE INPUT source_prepare_failed mode=\(mode.rawValue)"
+            )
+            return false
+        }
         guard KeyboardInjector.setVoiceKeyPressed(mode, isPressed: shouldHold) else {
             voiceKeyLatch.rollback(transition, owner: owner)
             AppLogger.shared.write(
@@ -3694,12 +3702,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return false
         }
-        if mode != .function {
-            if shouldHold {
-                preferredInputSourceMonitor.beginVoiceSession()
-            } else {
-                preferredInputSourceMonitor.endVoiceSession()
-            }
+        if mode != .function, !shouldHold {
+            preferredInputSourceMonitor.endVoiceSession()
         }
         if shouldHold {
             heldVoiceKeyMode = mode

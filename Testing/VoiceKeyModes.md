@@ -195,3 +195,7 @@
 2. 重点检查：`ATVV STREAM`、`MOBILE VOICE`、`VOICE KEY`、`VOICE FN MAPPING`、`VOICE INPUT`、`HID PERMISSIONS`、`CONFIGURATION IMPORT`、音频设备准备和 cleanup。
 3. 关联来源、事件先后与最终结果；“收到事件”“解码成功”或“入队成功”不等于用户语音已经可用。
 4. 分享日志前移除语音内容、转写文字、设备地址、UUID、账号、令牌和密钥。
+
+## Issue #307 回归：输入源确认后再触发 Command
+
+在微信输入法与豆包输入法之间切换，连续执行右 Command 语音会话。预期每次日志先出现 `VOICE INPUT source_prepare` 且当前输入源确认成功，再出现 `VOICE KEY ... DOWN`；超时时不发送孤立 Command，松开后只恢复未被用户改动的原输入源。
