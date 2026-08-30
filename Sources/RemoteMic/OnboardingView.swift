@@ -43,7 +43,15 @@ struct OnboardingView: View {
     @State private var voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability] = [:]
     @State private var systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
     @State private var selectedInputMethodGuideStep = 0
-    @FocusState private var transcriptFocused: Bool
+    @State private var transcriptFocusRequest = 0
+    @State private var transcriptEditorMounted = false
+    @State private var transcriptWindowKey = false
+    @State private var transcriptFirstResponder = false
+    @State private var voiceAttempt = FirstUseVoiceAttemptDiagnostic()
+    @State private var voiceAttemptStartedAt: Date?
+    @State private var voiceTranscriptWaitStartedAt: Date?
+    @State private var voiceTranscriptDeadlineToken = UUID()
+    @State private var suppressConnectedPhysicalRemoteAutoRouteOnce = false
 
     private let permissionRefreshTimer = Timer.publish(
         every: 1,
@@ -150,13 +158,9 @@ struct OnboardingView: View {
             guard settings.onboardingStep == .voiceTest,
                   selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
             if isStreaming {
-                voiceSamplesReceived = false
-                voiceSessionEnded = false
-                manualTranscriptInputObserved = false
-                transcript = ""
-                voiceSessionStarted = true
+                beginVoiceAttempt(triggerPath: model.activeVoiceSource?.rawValue ?? "unknown")
             } else if voiceSessionStarted {
-                voiceSessionEnded = true
+                endVoiceAttempt()
             }
         }
         .onReceive(model.$hasReceivedCurrentVoiceSamples.removeDuplicates()) { hasReceivedSamples in
@@ -164,17 +168,18 @@ struct OnboardingView: View {
                   hasReceivedSamples,
                   selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
             voiceSamplesReceived = true
+            if voiceAttempt.firstSampleLatencyMilliseconds == nil,
+               let voiceAttemptStartedAt {
+                voiceAttempt.firstSampleLatencyMilliseconds = elapsedMilliseconds(
+                    since: voiceAttemptStartedAt
+                )
+            }
         }
         .onChange(of: settings.onboardingStep) { step in
             prepareForStep(step)
         }
-        .onChange(of: transcriptFocused) { isFocused in
-            AppLogger.shared.write("ONBOARDING TRANSCRIPT focus=\(isFocused)")
-            guard isFocused, settings.onboardingStep == .voiceTest else { return }
-        }
         .onChange(of: transcript) { updatedText in
             guard settings.onboardingStep == .voiceTest,
-                  transcriptFocused,
                   !updatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return
             }
@@ -189,6 +194,13 @@ struct OnboardingView: View {
             ) else { return }
             manualTranscriptInputObserved = true
             AppLogger.shared.write("ONBOARDING TRANSCRIPT manual_keyboard_input=true")
+            finishVoiceAttempt(result: .manualInput)
+        }
+        .onChange(of: transcriptionAppeared) { appeared in
+            guard appeared,
+                  voiceSessionEnded,
+                  !manualTranscriptInputObserved else { return }
+            finishVoiceAttempt(result: .passed)
         }
         .onChange(of: failureReason) { failure in
             recordFailureTransition(failure)
@@ -230,7 +242,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 0) {
             if let previous = previousStep {
                 Button {
-                    settings.setOnboardingStep(previous)
+                    goBack(to: previous)
                 } label: {
                     Label("onboarding.action.back", systemImage: "arrow.left")
                         .font(.system(size: 13, weight: .medium))
@@ -318,6 +330,25 @@ struct OnboardingView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 
+            if allRecognizedVoiceToolsUnavailable {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.orange)
+                    Text("onboarding.voice_tool.none_detected")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.22), lineWidth: 1)
+                }
+            }
+
             LazyVGrid(
                 columns: [
                     GridItem(.flexible(), spacing: 10, alignment: .top),
@@ -382,8 +413,7 @@ struct OnboardingView: View {
                 }
             }
 
-            if settings.onboardingVoiceTool == .doubao,
-               voiceToolAvailability[.doubao] == .notInstalled {
+            if voiceToolAvailability[.doubao] == .notInstalled {
                 HStack(spacing: 8) {
                     Text("onboarding.voice_tool.doubao.install_detail")
                         .font(.system(size: 12))
@@ -395,6 +425,25 @@ struct OnboardingView: View {
                     .font(.system(size: 12, weight: .semibold))
                 }
                 .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if settings.onboardingVoiceTool == .other {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "mic.badge.xmark")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                    Text("onboarding.voice_tool.other.setup_detail")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
+                }
             }
 
             if settings.onboardingVoiceTool != .unselected {
@@ -1087,23 +1136,48 @@ struct OnboardingView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
 
+            if settings.onboardingVoiceTool == .other {
+                Label {
+                    Text(LocalizedMessage(
+                        "onboarding.voice_test.other_detail",
+                        arguments: [
+                            localization.text(settings.onboardingVoiceTool.titleKey),
+                            selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required")
+                        ]
+                    ).text(using: localization))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+
             ZStack(alignment: .topLeading) {
-                TextEditor(text: $transcript)
-                    .font(.system(size: 15))
-                    .focused($transcriptFocused)
-                    .scrollContentBackground(.hidden)
-                    .padding(10)
-                    .onAppear {
-                        requestTranscriptFocus()
-                    }
-                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(
-                                transcriptFocused ? Color.accentColor : Color.primary.opacity(0.12),
-                                lineWidth: transcriptFocused ? 1.5 : 1
-                            )
-                    }
+                OnboardingTranscriptEditor(
+                    text: $transcript,
+                    focusRequest: transcriptFocusRequest,
+                    isActive: settings.onboardingStep == .voiceTest
+                ) { snapshot in
+                    updateTranscriptFocus(snapshot)
+                }
+                .onAppear {
+                    requestTranscriptFocus()
+                }
+                .background(
+                    Color(nsColor: .textBackgroundColor),
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            transcriptFirstResponder
+                                ? Color.accentColor
+                                : Color.primary.opacity(0.12),
+                            lineWidth: transcriptFirstResponder ? 1.5 : 1
+                        )
+                }
 
                 if transcript.isEmpty {
                     Text("onboarding.voice_test.placeholder")
@@ -1656,14 +1730,19 @@ struct OnboardingView: View {
            let completeRuntimeReadyOverride {
             return completeRuntimeReadyOverride
         }
-        return OnboardingFlowPolicy.canContinue(
+        let policyAllowsContinue = OnboardingFlowPolicy.canContinue(
             from: settings.onboardingStep,
             voiceTool: settings.onboardingVoiceTool,
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
             voiceKeyMode: settings.voiceKeyMode,
             capabilities: capabilities
-        ) && (settings.onboardingStep != .voiceTool || voiceToolSelectionIsValid)
+        )
+        if settings.onboardingStep == .voiceTest {
+            return policyAllowsContinue && voiceAttempt.phase == .passed
+        }
+        return policyAllowsContinue &&
+            (settings.onboardingStep != .voiceTool || voiceToolSelectionIsValid)
     }
 
     private var visibleVoiceTools: [OnboardingVoiceTool] {
@@ -1676,6 +1755,12 @@ struct OnboardingView: View {
         }
         tools.append(.other)
         return tools
+    }
+
+    private var allRecognizedVoiceToolsUnavailable: Bool {
+        [OnboardingVoiceTool.doubao, .weixin, .typeless].allSatisfy {
+            voiceToolAvailability[$0] == .notInstalled
+        }
     }
 
     private var voiceToolSelectionIsValid: Bool {
@@ -1695,7 +1780,8 @@ struct OnboardingView: View {
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
             capabilities: capabilities,
-            hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty
+            hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty,
+            voiceAttempt: settings.onboardingStep == .voiceTest ? voiceAttempt : nil
         )
     }
 
@@ -2055,12 +2141,7 @@ struct OnboardingView: View {
         case .audio:
             model.refreshAudioDevices()
         case .voiceTest:
-            voiceSessionStarted = false
-            voiceSamplesReceived = false
-            voiceSessionEnded = false
-            manualTranscriptInputObserved = false
-            transcript = ""
-            requestTranscriptFocus()
+            resetVoiceTestForRetry()
         case .controls:
             testedControlButtons.removeAll()
         case .complete:
@@ -2078,6 +2159,7 @@ struct OnboardingView: View {
     }
 
     private func recordFailureTransition(_ failure: FirstUseFailureReason?) {
+        guard settings.onboardingStep != .voiceTest else { return }
         if let failure {
             guard failure != lastRecordedFailure else { return }
             if let previousFailure = lastRecordedFailure {
@@ -2127,7 +2209,10 @@ struct OnboardingView: View {
         case .voiceSessionNotStarted,
              .voiceSessionNotEnded,
              .voiceManualInput,
-             .voiceNoTranscript:
+             .voiceNoTranscript,
+             .voiceInputTargetNotReady,
+             .voiceInputTargetFocusLost,
+             .voiceExternalToolNoCommit:
             resetVoiceTestForRetry()
         case .voiceNoSamples:
             model.applyAudioSettings(reason: "onboarding_voice_retry")
@@ -2146,21 +2231,174 @@ struct OnboardingView: View {
     }
 
     private func resetVoiceTestForRetry() {
+        voiceTranscriptDeadlineToken = UUID()
+        voiceAttemptStartedAt = nil
+        voiceTranscriptWaitStartedAt = nil
         voiceSessionStarted = false
         voiceSamplesReceived = false
         voiceSessionEnded = false
         manualTranscriptInputObserved = false
         transcript = ""
+        voiceAttempt = FirstUseVoiceAttemptDiagnostic(
+            attemptID: voiceAttempt.attemptID,
+            phase: .idle,
+            triggerPath: "none",
+            triggerReady: false,
+            editorMounted: transcriptEditorMounted,
+            windowKeyAtStart: false,
+            firstResponderAtStart: false,
+            firstResponderAtEnd: false,
+            focusLost: false,
+            firstSampleLatencyMilliseconds: nil,
+            sessionDurationMilliseconds: nil,
+            transcriptWaitMilliseconds: nil,
+            result: .none
+        )
+        lastRecordedFailure = nil
         requestTranscriptFocus()
     }
 
     private func requestTranscriptFocus() {
         guard settings.onboardingStep == .voiceTest else { return }
-        transcriptFocused = false
-        DispatchQueue.main.async {
-            guard settings.onboardingStep == .voiceTest else { return }
-            transcriptFocused = true
+        transcriptFocusRequest &+= 1
+    }
+
+    private func updateTranscriptFocus(_ snapshot: OnboardingTranscriptFocusSnapshot) {
+        let changed = transcriptEditorMounted != snapshot.editorMounted ||
+            transcriptWindowKey != snapshot.windowKey ||
+            transcriptFirstResponder != snapshot.firstResponder
+        transcriptEditorMounted = snapshot.editorMounted
+        transcriptWindowKey = snapshot.windowKey
+        transcriptFirstResponder = snapshot.firstResponder
+        if voiceAttempt.phase == .recording || voiceAttempt.phase == .awaitingTranscript {
+            if voiceAttempt.triggerReady &&
+                (!snapshot.editorMounted || !snapshot.windowKey || !snapshot.firstResponder) {
+                voiceAttempt.focusLost = true
+            }
+            voiceAttempt.editorMounted = snapshot.editorMounted
         }
+        if changed {
+            AppLogger.shared.write(
+                "ONBOARDING TRANSCRIPT_TARGET mounted=\(snapshot.editorMounted) " +
+                    "window_key=\(snapshot.windowKey) first_responder=\(snapshot.firstResponder)"
+            )
+        }
+    }
+
+    private func beginVoiceAttempt(triggerPath: String) {
+        voiceTranscriptDeadlineToken = UUID()
+        voiceAttemptStartedAt = Date()
+        voiceTranscriptWaitStartedAt = nil
+        voiceSessionStarted = true
+        voiceSamplesReceived = false
+        voiceSessionEnded = false
+        manualTranscriptInputObserved = false
+        transcript = ""
+
+        let targetReady = transcriptEditorMounted && transcriptWindowKey && transcriptFirstResponder
+        voiceAttempt = FirstUseVoiceAttemptDiagnostic(
+            attemptID: voiceAttempt.attemptID + 1,
+            phase: .recording,
+            triggerPath: triggerPath,
+            triggerReady: targetReady,
+            editorMounted: transcriptEditorMounted,
+            windowKeyAtStart: transcriptWindowKey,
+            firstResponderAtStart: transcriptFirstResponder,
+            firstResponderAtEnd: false,
+            focusLost: false,
+            firstSampleLatencyMilliseconds: nil,
+            sessionDurationMilliseconds: nil,
+            transcriptWaitMilliseconds: nil,
+            result: .none
+        )
+        lastRecordedFailure = nil
+        if !targetReady {
+            requestTranscriptFocus()
+        }
+        AppLogger.shared.write(
+            "ONBOARDING VOICE_ATTEMPT started attempt=\(voiceAttempt.attemptID) " +
+                "trigger_path=\(triggerPath) trigger_ready=\(targetReady) " +
+                "editor_mounted=\(transcriptEditorMounted) window_key=\(transcriptWindowKey) " +
+                "first_responder=\(transcriptFirstResponder)"
+        )
+    }
+
+    private func endVoiceAttempt() {
+        guard voiceAttempt.phase == .recording else { return }
+        voiceSessionEnded = true
+        voiceAttempt.phase = .awaitingTranscript
+        voiceAttempt.firstResponderAtEnd = transcriptWindowKey && transcriptFirstResponder
+        if let voiceAttemptStartedAt {
+            voiceAttempt.sessionDurationMilliseconds = elapsedMilliseconds(since: voiceAttemptStartedAt)
+        }
+        voiceTranscriptWaitStartedAt = Date()
+
+        let result = FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: manualTranscriptInputObserved,
+            samplesReceived: voiceSamplesReceived,
+            transcriptionAppeared: transcriptionAppeared,
+            triggerReady: voiceAttempt.triggerReady,
+            focusLost: voiceAttempt.focusLost
+        )
+        if result != .externalToolNoCommit &&
+            result != .inputTargetNotReady &&
+            result != .inputTargetFocusLost {
+            finishVoiceAttempt(result: result)
+        } else {
+            scheduleVoiceTranscriptDeadline(attemptID: voiceAttempt.attemptID)
+        }
+    }
+
+    private func scheduleVoiceTranscriptDeadline(attemptID: Int) {
+        let token = UUID()
+        voiceTranscriptDeadlineToken = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            guard settings.onboardingStep == .voiceTest,
+                  voiceTranscriptDeadlineToken == token,
+                  voiceAttempt.attemptID == attemptID,
+                  voiceAttempt.phase == .awaitingTranscript else { return }
+            let result = FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+                manualInputObserved: manualTranscriptInputObserved,
+                samplesReceived: voiceSamplesReceived,
+                transcriptionAppeared: transcriptionAppeared,
+                triggerReady: voiceAttempt.triggerReady,
+                focusLost: voiceAttempt.focusLost
+            )
+            finishVoiceAttempt(result: result)
+        }
+    }
+
+    private func finishVoiceAttempt(result: FirstUseVoiceAttemptResult) {
+        guard voiceAttempt.phase == .awaitingTranscript else { return }
+        voiceTranscriptDeadlineToken = UUID()
+        if let voiceTranscriptWaitStartedAt {
+            voiceAttempt.transcriptWaitMilliseconds = elapsedMilliseconds(
+                since: voiceTranscriptWaitStartedAt
+            )
+        }
+        voiceAttempt.result = result
+        voiceAttempt.phase = result == .passed ? .passed : .failed
+        let failure = result.failureReason
+        settings.recordFirstUseEvent(
+            result == .passed ? .passed : .blocked,
+            step: .voiceTest,
+            failureReason: failure,
+            voiceAttemptID: voiceAttempt.attemptID,
+            voiceResult: result
+        )
+        lastRecordedFailure = failure
+        AppLogger.shared.write(
+            "ONBOARDING VOICE_ATTEMPT terminal attempt=\(voiceAttempt.attemptID) " +
+                "result=\(result.rawValue) probable_cause=\(result.rawValue) " +
+                "boundary=\(result.diagnosticBoundary) " +
+                "first_sample_latency_ms=\(voiceAttempt.firstSampleLatencyMilliseconds.map(String.init) ?? "unavailable") " +
+                "session_duration_ms=\(voiceAttempt.sessionDurationMilliseconds.map(String.init) ?? "unavailable") " +
+                "transcript_wait_ms=\(voiceAttempt.transcriptWaitMilliseconds.map(String.init) ?? "unavailable")"
+        )
+    }
+
+    private func elapsedMilliseconds(since date: Date) -> Int {
+        max(0, Int(Date().timeIntervalSince(date) * 1_000))
     }
 
     private func copyDiagnosticSummary() {
@@ -2170,7 +2408,9 @@ struct OnboardingView: View {
             systemMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
             architecture: FirstUseDiagnosticSnapshot.architecture,
             voiceTool: settings.onboardingVoiceTool,
+            voiceKeyMode: settings.voiceKeyMode,
             context: diagnosticContext,
+            voiceAttempt: voiceAttempt,
             bluetoothStatus: model.connectionStatus.key,
             buttonStatus: model.hidStatus.key,
             audioStatus: model.audioStatus.key,
@@ -2212,12 +2452,26 @@ struct OnboardingView: View {
     }
 
     private func routeConnectedPhysicalRemoteIfNeeded() {
+        let suppressForUserBack = suppressConnectedPhysicalRemoteAutoRouteOnce
+        suppressConnectedPhysicalRemoteAutoRouteOnce = false
         guard OnboardingFlowPolicy.shouldAutoSelectPhysicalRemote(
             at: settings.onboardingStep,
-            remoteConnected: model.isConnected
-        ) else { return }
+            remoteConnected: model.isConnected,
+            suppressForUserBack: suppressForUserBack
+        ) else {
+            if suppressForUserBack {
+                AppLogger.shared.write(
+                    "ONBOARDING NAVIGATION step=remoteAvailability " +
+                        "auto_route_suppressed=true reason=user_back"
+                )
+            }
+            return
+        }
         settings.setOnboardingRemoteAvailability(.hasRemote)
         selectControlMethod(.physicalRemote)
+        AppLogger.shared.write(
+            "ONBOARDING NAVIGATION from=remoteAvailability to=permissions reason=connected_physical_remote"
+        )
         settings.setOnboardingStep(.permissions)
     }
 
@@ -2261,7 +2515,9 @@ struct OnboardingView: View {
 
     private func continueFlow() {
         guard canContinue else { return }
-        settings.recordFirstUseEvent(.passed, step: settings.onboardingStep)
+        if settings.onboardingStep != .voiceTest {
+            settings.recordFirstUseEvent(.passed, step: settings.onboardingStep)
+        }
         if settings.onboardingStep == .remoteAvailability {
             switch settings.onboardingRemoteAvailability {
             case .hasRemote:
@@ -2298,6 +2554,19 @@ struct OnboardingView: View {
         return settings.onboardingStep.previous
     }
 
+    private func goBack(to previous: OnboardingStep) {
+        if settings.onboardingStep == .permissions,
+           previous == .remoteAvailability,
+           settings.onboardingRemoteAvailability == .hasRemote {
+            suppressConnectedPhysicalRemoteAutoRouteOnce = true
+        }
+        AppLogger.shared.write(
+            "ONBOARDING NAVIGATION from=\(settings.onboardingStep.rawValue) " +
+                "to=\(previous.rawValue) reason=user_back"
+        )
+        settings.setOnboardingStep(previous)
+    }
+
     private func requestBluetoothPermission() {
         if bluetoothAuthorization == .allowedAlways {
             openBluetoothPrivacySettings()
@@ -2329,5 +2598,179 @@ struct OnboardingView: View {
             string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension"
         ) else { return }
         NSWorkspace.shared.open(url)
+    }
+}
+
+struct OnboardingTranscriptFocusSnapshot: Equatable {
+    let editorMounted: Bool
+    let windowKey: Bool
+    let firstResponder: Bool
+}
+
+struct OnboardingTranscriptEditor: NSViewRepresentable {
+    @Binding var text: String
+    let focusRequest: Int
+    let isActive: Bool
+    let onFocusStateChanged: (OnboardingTranscriptFocusSnapshot) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = OnboardingTranscriptScrollView()
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+
+        let textView = NSTextView(frame: .zero)
+        textView.delegate = context.coordinator
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.allowsUndo = true
+        textView.font = .systemFont(ofSize: 15)
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+        textView.minSize = .zero
+        textView.maxSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.string = text
+        scrollView.documentView = textView
+
+        context.coordinator.attach(scrollView: scrollView, textView: textView)
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.update(parent: self)
+    }
+
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        private var parent: OnboardingTranscriptEditor
+        private weak var scrollView: OnboardingTranscriptScrollView?
+        private weak var textView: NSTextView?
+        private var appliedFocusRequest: Int?
+        private var lastPublishedSnapshot: OnboardingTranscriptFocusSnapshot?
+
+        init(parent: OnboardingTranscriptEditor) {
+            self.parent = parent
+            super.init()
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowFocusChanged),
+                name: NSWindow.didBecomeKeyNotification,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowFocusChanged),
+                name: NSWindow.didResignKeyNotification,
+                object: nil
+            )
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        fileprivate func attach(scrollView: OnboardingTranscriptScrollView, textView: NSTextView) {
+            self.scrollView = scrollView
+            self.textView = textView
+            scrollView.didMoveToWindowHandler = { [weak self] in
+                self?.applyFocusRequestIfPossible()
+                self?.publishFocusSnapshot()
+            }
+            applyFocusRequestIfPossible()
+            publishFocusSnapshot()
+        }
+
+        func update(parent: OnboardingTranscriptEditor) {
+            self.parent = parent
+            if textView?.string != parent.text {
+                textView?.string = parent.text
+            }
+            applyFocusRequestIfPossible()
+            publishFocusSnapshot()
+        }
+
+        func detach() {
+            textView?.delegate = nil
+            scrollView?.didMoveToWindowHandler = nil
+            scrollView = nil
+            textView = nil
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView, parent.text != textView.string else { return }
+            parent.text = textView.string
+        }
+
+        func textDidBeginEditing(_ notification: Notification) {
+            publishFocusSnapshot()
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            publishFocusSnapshot()
+        }
+
+        @objc private func windowFocusChanged(_ notification: Notification) {
+            guard let window = notification.object as? NSWindow,
+                  window === scrollView?.window else { return }
+            applyFocusRequestIfPossible()
+            publishFocusSnapshot()
+        }
+
+        private func applyFocusRequestIfPossible() {
+            guard parent.isActive,
+                  appliedFocusRequest != parent.focusRequest,
+                  let textView,
+                  let window = textView.window else { return }
+            if window.makeFirstResponder(textView) {
+                appliedFocusRequest = parent.focusRequest
+            }
+        }
+
+        private func publishFocusSnapshot() {
+            let snapshot = OnboardingTranscriptFocusSnapshot(
+                editorMounted: textView?.window != nil,
+                windowKey: textView?.window?.isKeyWindow == true,
+                firstResponder: textView?.window?.firstResponder === textView
+            )
+            guard snapshot != lastPublishedSnapshot else { return }
+            lastPublishedSnapshot = snapshot
+            DispatchQueue.main.async { [weak self] in
+                self?.parent.onFocusStateChanged(snapshot)
+            }
+        }
+    }
+}
+
+private final class OnboardingTranscriptScrollView: NSScrollView {
+    var didMoveToWindowHandler: (() -> Void)?
+
+    override func layout() {
+        super.layout()
+        guard let textView = documentView as? NSTextView else { return }
+        var frame = textView.frame
+        let targetWidth = contentSize.width
+        let targetHeight = max(frame.height, contentSize.height)
+        guard frame.width != targetWidth || frame.height != targetHeight else { return }
+        frame.size = NSSize(width: targetWidth, height: targetHeight)
+        textView.frame = frame
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        didMoveToWindowHandler?()
     }
 }
