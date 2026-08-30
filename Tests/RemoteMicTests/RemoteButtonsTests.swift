@@ -2904,6 +2904,25 @@ struct RemoteButtonsTests {
         #expect(RemoteButton.back.nativeEvent == nil)
     }
 
+    @Test func disabledMappingKeepsBackRecoveryPathForPhysicalRemotes() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        #expect(modelSource.contains("let backOnlyMode = !settings.customMappingEnabled"))
+        #expect(modelSource.contains("allowBackOnly: backOnlyMode"))
+        let monitorSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"),
+            encoding: .utf8
+        )
+        #expect(monitorSource.contains("backOnlyMode = allowBackOnly && !settings.customMappingEnabled"))
+        #expect(monitorSource.contains("usages.intersection([RemoteButton.back.hidUsage])"))
+    }
+
     @Test(arguments: [UInt16(10), UInt16(50)])
     func tvNativeEventIsSuppressedForISOAndANSIKeyboardLayouts(_ keyCode: UInt16) throws {
         let suppressor = KeyboardEventSuppressor()
