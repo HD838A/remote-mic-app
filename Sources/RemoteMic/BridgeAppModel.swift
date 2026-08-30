@@ -2550,9 +2550,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         activeBluetoothVoiceTraceID = nil
         bluetoothVoiceTraceStartedAt = nil
         bluetoothVoiceTailDiagnostics.reset()
-        endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
-        if systemAudioSuspensionState.isSuspended {
-            releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
+        let finishStop: () -> Void = { [weak self] in
+            guard let self else { return }
+            self.releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+            self.endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
+            if self.systemAudioSuspensionState.isSuspended {
+                self.releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
+            }
+        }
+        if handledByFnTapMode {
+            finishStop()
+        } else {
+            audioOutput.endSessionAfterDraining(completion: finishStop)
         }
     }
 

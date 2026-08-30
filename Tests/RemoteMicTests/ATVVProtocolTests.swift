@@ -79,6 +79,26 @@ struct ATVVProtocolTests {
 
 @Suite("Bluetooth voice tail diagnostics")
 struct BluetoothVoiceTailDiagnosticsTests {
+    @Test func bluetoothVoiceStopDrainsPlaybackBeforeReleasingSoftwareVoiceKey() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let stopStart = try #require(source.range(of: "func bluetoothBridgeDidStopVoice"))
+        let stopEnd = try #require(source.range(
+            of: "func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples:",
+            range: stopStart.upperBound..<source.endIndex
+        ))
+        let stopSource = source[stopStart.lowerBound..<stopEnd.lowerBound]
+        let drain = try #require(stopSource.range(of: "audioOutput.endSessionAfterDraining"))
+        let release = try #require(stopSource.range(of: "releaseVoiceKeyIfNeeded(owner: .bluetooth"))
+        #expect(drain.lowerBound < release.lowerBound)
+    }
+
     @Test func keepsOnlyTheLatestThreeHundredMillisecondsWithoutAudioContentLogging() {
         var diagnostics = BluetoothVoiceTailDiagnostics()
         diagnostics.append(Array(repeating: 1, count: 4_000), at: 10)
