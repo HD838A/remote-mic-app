@@ -986,11 +986,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         recordingPlayback = nil
     }
 
-    func revealRecording(_ asset: RecordingAssetManifest) {
-        guard let url = try? recordingAssetStore.mediaURL(for: asset) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
     func exportRecording(_ asset: RecordingAssetManifest) {
         guard let sourceURL = try? recordingAssetStore.mediaURL(for: asset) else { return }
         let panel = NSSavePanel()
