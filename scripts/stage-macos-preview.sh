@@ -102,12 +102,15 @@ if [[ "$MODE" == preview ]]; then
       ;;
   esac
 
-  stable_latest="$($GH_BIN api "repos/$REPOSITORY/releases/latest" --jq '.tag_name')" || {
+  stable_release="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
     print -u2 "unable to verify the current stable latest Release"
     exit 1
   }
-  [[ "$stable_latest" == "v1.8.3" ]] || {
-    print -u2 "Preview staging requires stable latest v1.8.3; found $stable_latest"
+  stable_latest="$(print -r -- "$stable_release" | jq -r '.tag_name')"
+  print -r -- "$stable_release" | jq -e \
+    --arg tag "$stable_latest" \
+    '.tag_name == $tag and ($tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and .draft == false and .prerelease == false' >/dev/null || {
+    print -u2 "Preview staging requires releases/latest to be a formal stable Release; found $stable_latest"
     exit 1
   }
 fi

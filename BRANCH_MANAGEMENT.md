@@ -19,7 +19,7 @@
 
 ## 预览发布引用
 
-- 预览 staging 只从 main 的精确 SHA 触发。scripts/stage-macos-preview.sh 先确认工作区干净、main 与 origin/main 一致、稳定 latest 仍为 v1.8.3、主线双架构 CI 和依赖 pin 通过，然后 dispatch 受保护 workflow。
+- 预览 staging 只从 main 的精确 SHA 触发。scripts/stage-macos-preview.sh 先读取并确认 GitHub `releases/latest` 是正式稳定版、工作区干净、main 与 origin/main 一致、主线双架构 CI 和依赖 pin 通过，然后 dispatch 受保护 workflow。
 - 受保护 workflow 的唯一职责是 Apple Silicon 与 Intel Ventura 双架构构建、Developer ID 签名、公证、staple、最终校验，并上传不可变 payload artifact 和 stage record。它不创建 Tag、Release 或公开 appcast。
 - 真实 Sparkle UI 升级必须使用该 exact artifact，在公开身份建立前完成。之后由 main 上无 Apple 凭据的 publication workflow 创建公开 Pre-release，并逐字节复用同一 artifact；首次创建 Tag 前再次确认 11 个 CDN 固定路径全部返回 404。
 - 发布身份由 source SHA、Run/attempt、artifact ID/digest、asset manifest 和 UI attestation 绑定；不能用“最新 Run”或相同名称的 artifact 猜测来源。
@@ -36,7 +36,7 @@
 - 不存在独立的“发布正式版”构建命令。只有用户明确指定一个已经发布且验证通过的 Pre-release，才可运行 mac-stable-promote.yml。
 - 晋升前必须确认该 Tag 的 Commit 已包含在 origin/main，Release 当前确实是公开 Pre-release，provenance、资产数量、大小和 GitHub digest 完整匹配，并通过 GitHub API 核对 provenance 绑定的 staging Run/attempt、payload artifact 以及 Preview stage-record artifact（workflow、事件、main SHA、成功结论、未过期和 digest）。
 - 晋升只执行 gh release edit，将同一 Release 标记为非预览并设为 latest；不构建、不签名、不公证、不上传、不移动 Tag。
-- v1.8.3 是当前受审的 stable latest 基线。基线变更必须通过独立普通 PR 记录，不能由预览发布脚本隐式修改。
+- stable latest 由 GitHub `releases/latest` 在每次流程开始和结束时动态读取并校验。基线变更必须通过独立普通 PR 记录，不能由预览发布脚本隐式修改。
 
 ## worktree、提交和清理
 

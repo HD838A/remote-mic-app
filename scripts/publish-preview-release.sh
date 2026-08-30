@@ -5,7 +5,6 @@ umask 077
 ROOT="${REPOSITORY_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 GH_BIN="${GH_BIN:-gh}"
-EXPECTED_STABLE_TAG="${EXPECTED_STABLE_TAG:-v1.8.3}"
 ATTESTATION="${1:-}"
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
@@ -76,9 +75,15 @@ git -C "$ROOT" merge-base --is-ancestor "$source_commit" "origin/main" || {
   exit 1
 }
 
-stable_latest="$($GH_BIN api "repos/$REPOSITORY/releases/latest" --jq '.tag_name')"
-[[ "$stable_latest" == "$EXPECTED_STABLE_TAG" ]] || {
-  echo "Preview requires stable latest $EXPECTED_STABLE_TAG; found $stable_latest" >&2
+stable_release_before="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
+  echo "unable to resolve the current stable latest Release" >&2
+  exit 1
+}
+stable_latest_before="$(printf '%s\n' "$stable_release_before" | jq -r '.tag_name')"
+printf '%s\n' "$stable_release_before" | jq -e \
+  --arg tag "$stable_latest_before" \
+  '.tag_name == $tag and ($tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and .draft == false and .prerelease == false' >/dev/null || {
+  echo "releases/latest is not a formal stable Release: $stable_latest_before" >&2
   exit 1
 }
 
@@ -324,8 +329,19 @@ while IFS=$'\t' read -r name _ expected_sha; do
   fi
 done < "$expected_assets"
 
-[[ "$($GH_BIN api "repos/$REPOSITORY/releases/latest" --jq '.tag_name')" == "$EXPECTED_STABLE_TAG" ]] || {
-  echo "Preview publication changed releases/latest" >&2
+stable_release_after="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
+  echo "unable to verify releases/latest after publication" >&2
+  exit 1
+}
+stable_latest_after="$(printf '%s\n' "$stable_release_after" | jq -r '.tag_name')"
+printf '%s\n' "$stable_release_after" | jq -e \
+  --arg tag "$stable_latest_after" \
+  '.tag_name == $tag and ($tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and .draft == false and .prerelease == false' >/dev/null || {
+  echo "releases/latest is no longer a formal stable Release" >&2
+  exit 1
+}
+[[ "$stable_latest_after" == "$stable_latest_before" ]] || {
+  echo "Preview publication changed releases/latest from $stable_latest_before to $stable_latest_after" >&2
   exit 1
 }
 

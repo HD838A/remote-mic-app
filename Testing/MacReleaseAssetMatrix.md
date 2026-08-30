@@ -51,7 +51,7 @@
 1. 从 GitHub fixed-tag URL 下载 11 项 payload。
 2. 从 download.sayall.app/mac/releases/TAG/ 下载同名 payload。
 3. 对每项执行 SHA-256 和 cmp；对 appcast 再检查 enclosure URL。
-4. 检查 releases/latest 仍为 v1.8.3。
+4. 检查 releases/latest 仍为发布前动态记录的同一正式稳定版本。
 
 预期：本地 staging、GitHub 和 CDN 三方字节完全一致；Preview 不改变稳定 latest。
 

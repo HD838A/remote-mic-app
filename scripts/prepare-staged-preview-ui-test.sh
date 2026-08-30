@@ -9,7 +9,7 @@ GH_BIN="${GH_BIN:-gh}"
 RUN_ID="${1:-}"
 OUTPUT_DIR="${2:-}"
 FEED_PORT="${PREVIEW_UI_FEED_PORT:-8765}"
-BASELINE_TAG="${PREVIEW_UI_BASELINE_TAG:-v1.8.3}"
+BASELINE_TAG="${PREVIEW_UI_BASELINE_TAG:-}"
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
   echo "Preview UI preparation is restricted to HD838A/remote-mic-app" >&2
@@ -26,6 +26,25 @@ for command_name in "$GH_BIN" jq shasum unzip curl plutil codesign spctl xcrun d
   command -v "$command_name" >/dev/null 2>&1 || { echo "Missing required command: $command_name" >&2; exit 1; }
 done
 mkdir -p "$OUTPUT_DIR/feed" "$OUTPUT_DIR/baseline"
+
+if [[ -z "$BASELINE_TAG" ]]; then
+  baseline_release="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
+    echo "unable to resolve the current stable latest Release" >&2
+    exit 1
+  }
+  BASELINE_TAG="$(printf '%s\n' "$baseline_release" | jq -r '.tag_name')"
+else
+  baseline_release="$($GH_BIN api "repos/$REPOSITORY/releases/tags/$BASELINE_TAG")" || {
+    echo "unable to resolve the requested Preview UI baseline Release: $BASELINE_TAG" >&2
+    exit 1
+  }
+fi
+printf '%s\n' "$baseline_release" | jq -e \
+  --arg tag "$BASELINE_TAG" \
+  '.tag_name == $tag and ($tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and .draft == false and .prerelease == false' >/dev/null || {
+  echo "Preview UI baseline is not a formal stable Release: $BASELINE_TAG" >&2
+  exit 1
+}
 
 run_json="$($GH_BIN api "repos/$REPOSITORY/actions/runs/$RUN_ID")"
 printf '%s\n' "$run_json" | jq -e '
@@ -65,8 +84,7 @@ done
 sed "s#$production_prefix#$test_prefix#g" "$public_dir/appcast.xml" > "$OUTPUT_DIR/feed/appcast.xml"
 grep -Fq "url=\"$test_prefix$archive\"" "$OUTPUT_DIR/feed/appcast.xml"
 
-baseline_release="$($GH_BIN api "repos/$REPOSITORY/releases/tags/$BASELINE_TAG")"
-printf '%s\n' "$baseline_release" | jq -e --arg tag "$BASELINE_TAG" '.tag_name == $tag and .draft == false' >/dev/null
+printf '%s\n' "$baseline_release" | jq -e --arg tag "$BASELINE_TAG" '.tag_name == $tag and .draft == false and .prerelease == false' >/dev/null
 baseline_version="$(printf '%s' "$BASELINE_TAG" | sed 's/^v//')"
 jq -n -e --arg baseline "$baseline_version" --arg candidate "$version" \
   '($baseline | split(".") | map(tonumber)) < ($candidate | split(".") | map(tonumber))' >/dev/null
