@@ -422,20 +422,48 @@ struct OnboardingFlowTests {
         ))
     }
 
-    @Test func commandVoiceKeyDoesNotRequireSystemFnRelease() {
-        let capabilities = OnboardingCapabilities()
-        #expect(OnboardingFlowPolicy.canContinue(
+    @Test func onboardingCommandVoiceKeyIsAlwaysBlocked() {
+        var capabilities = OnboardingCapabilities(systemFunctionKeyAvailable: true)
+        #expect(!OnboardingFlowPolicy.canContinue(
             from: .voiceTool,
             voiceTool: .doubao,
             voiceKeyMode: .leftCommand,
             capabilities: capabilities
         ))
-        #expect(OnboardingFlowPolicy.canContinue(
+        #expect(!OnboardingFlowPolicy.canContinue(
             from: .voiceTool,
             voiceTool: .doubao,
             voiceKeyMode: .rightCommand,
             capabilities: capabilities
         ))
+        capabilities.systemFunctionKeyAvailable = true
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .voiceTool,
+            voiceTool: .doubao,
+            voiceKeyMode: .function,
+            capabilities: capabilities
+        ))
+    }
+
+    @Test func selectingAnyOnboardingVoiceToolResetsCommandToFn() throws {
+        let suiteName = "RemoteMicTests.Onboarding.FnOnlyPolicy.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        for tool in [OnboardingVoiceTool.doubao, .weixin, .other] {
+            settings.voiceKeyMode = .rightCommand
+            settings.voiceFnTapModeEnabled = true
+            settings.setOnboardingVoiceTool(tool)
+            #expect(settings.voiceKeyMode == .function)
+            #expect(!settings.voiceFnTapModeEnabled)
+        }
+
+        settings.voiceKeyMode = .rightCommand
+        settings.voiceFnTapModeEnabled = true
+        settings.restartOnboarding()
+        #expect(settings.voiceKeyMode == .function)
+        #expect(!settings.voiceFnTapModeEnabled)
     }
 
     @Test func typelessOnboardingAlwaysUsesFnTapMode() throws {
@@ -469,6 +497,9 @@ struct OnboardingFlowTests {
             contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
             encoding: .utf8
         )
+        #expect(viewSource.contains("onboarding.voice_tool.fn_only"))
+        #expect(!viewSource.contains("selectOnboardingVoiceKeyMode"))
+        #expect(viewSource.contains("policy=fn_only"))
         let verifySource = try String(
             contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
             encoding: .utf8
@@ -1503,12 +1534,21 @@ struct OnboardingFlowTests {
             bluetoothStatus: "connection.status.searching",
             buttonStatus: "button_mapping.status.disabled",
             audioStatus: "audio.output.none_selected",
-            events: []
+            events: [],
+            appLanguage: "zh-Hans"
         )
 
         let text = snapshot.redactedText
         #expect(text.contains("failure=permission.input_monitoring_denied"))
         #expect(text.contains("voice_attempt=2"))
+        #expect(text.contains("diagnostic_schema=2"))
+        #expect(text.contains("app_version=1.8.14"))
+        #expect(text.contains("app_build=106"))
+        #expect(text.contains("onboarding_voice_key_policy=fn_only"))
+        #expect(text.contains("voice_key_policy_compliant=true"))
+        #expect(text.contains("macos_version="))
+        #expect(text.contains("macos_build="))
+        #expect(text.contains("app_language=zh-Hans"))
         #expect(text.contains("voice_terminal_result=external_tool_no_commit"))
         #expect(text.contains("voice_first_sample_latency_ms=24"))
         #expect(text.contains("voice_diagnostic_boundary=external_tool_internal_state_unavailable"))
