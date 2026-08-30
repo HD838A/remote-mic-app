@@ -457,6 +457,8 @@ struct OnboardingFlowTests {
             settings.setOnboardingVoiceTool(tool)
             #expect(settings.voiceKeyMode == .function)
             #expect(!settings.voiceFnTapModeEnabled)
+            #expect(settings.pendingOnboardingVoiceKeyMigration == .rightCommand)
+            #expect(settings.consumePendingOnboardingVoiceKeyMigration() == .rightCommand)
         }
 
         settings.voiceKeyMode = .rightCommand
@@ -464,6 +466,21 @@ struct OnboardingFlowTests {
         settings.restartOnboarding()
         #expect(settings.voiceKeyMode == .function)
         #expect(!settings.voiceFnTapModeEnabled)
+        #expect(settings.pendingOnboardingVoiceKeyMigration == .rightCommand)
+        #expect(settings.consumePendingOnboardingVoiceKeyMigration() == .rightCommand)
+    }
+
+    @Test func onboardingFnModeDoesNotCreateVoiceKeyMigrationNotice() throws {
+        let suiteName = "RemoteMicTests.Onboarding.FnOnlyPolicyNotice.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.voiceKeyMode = .function
+        settings.setOnboardingVoiceTool(.doubao)
+        settings.restartOnboarding()
+
+        #expect(settings.pendingOnboardingVoiceKeyMigration == nil)
     }
 
     @Test func typelessOnboardingAlwaysUsesFnTapMode() throws {
@@ -498,6 +515,9 @@ struct OnboardingFlowTests {
             encoding: .utf8
         )
         #expect(viewSource.contains("onboarding.voice_tool.fn_only"))
+        #expect(viewSource.contains("onboarding.voice_key.migration.title"))
+        #expect(viewSource.contains("onboardingVoiceKeyMigrationNotice"))
+        #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_KEY_MODE"))
         #expect(!viewSource.contains("selectOnboardingVoiceKeyMode"))
         #expect(viewSource.contains("policy=fn_only"))
         let verifySource = try String(
