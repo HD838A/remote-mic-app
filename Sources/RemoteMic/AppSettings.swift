@@ -727,7 +727,7 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
-        if voiceTool == .typeless, voiceKeyMode != .function {
+        if voiceKeyMode != .function {
             voiceKeyMode = .function
         }
         let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
@@ -758,6 +758,8 @@ final class AppSettings: ObservableObject {
         onboardingVoiceTool = .unselected
         onboardingRemoteAvailability = .unselected
         onboardingControlMethod = .unselected
+        voiceKeyMode = .function
+        voiceFnTapModeEnabled = false
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
         defaults.removeObject(forKey: Keys.firstUseStepStartedAt)

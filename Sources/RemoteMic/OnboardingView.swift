@@ -91,6 +91,7 @@ struct OnboardingView: View {
         .environment(\.locale, localization.locale)
         .frame(minWidth: 980, minHeight: 732)
         .onAppear {
+            enforceOnboardingVoiceKeyPolicy()
             refreshPermissionStates()
             refreshVoiceToolAvailability()
             prepareForStep(settings.onboardingStep)
@@ -176,6 +177,7 @@ struct OnboardingView: View {
             }
         }
         .onChange(of: settings.onboardingStep) { step in
+            enforceOnboardingVoiceKeyPolicy()
             prepareForStep(step)
         }
         .onChange(of: transcript) { updatedText in
@@ -457,33 +459,23 @@ struct OnboardingView: View {
             Text("connection.voice_key_mode.title")
                 .font(.system(size: 13, weight: .semibold))
 
-            if settings.onboardingVoiceTool == .typeless {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.green)
-                    Text("onboarding.voice_tool.typeless.fn_required")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Picker("connection.voice_key_mode.title", selection: Binding(
-                    get: { settings.voiceKeyMode },
-                    set: { selectOnboardingVoiceKeyMode($0) }
-                )) {
-                    ForEach(VoiceKeyMode.allCases) { mode in
-                        Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.green)
+                Text(
+                    settings.onboardingVoiceTool == .typeless
+                        ? "onboarding.voice_tool.typeless.fn_required"
+                        : "onboarding.voice_tool.fn_only"
+                )
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
             }
 
             Text(
                 LocalizedMessage(
                     "onboarding.voice_tool.voice_key_help",
                     arguments: [
-                        localization.text(settings.voiceKeyMode.localizationKey),
+                        localization.text("connection.voice_key.mode.fn"),
                     ]
                 ).text(using: localization)
             )
@@ -2026,15 +2018,25 @@ struct OnboardingView: View {
 
     private func selectVoiceTool(_ tool: OnboardingVoiceTool) {
         settings.setOnboardingVoiceTool(tool)
+        AppLogger.shared.write(
+            "ONBOARDING VOICE_TOOL selected=\(tool.rawValue) voice_key_policy=fn_only"
+        )
         selectedInputMethodGuideStep = 0
         switchToSelectedInputMethod()
         refreshSystemFunctionKeyUsage()
     }
 
-    private func selectOnboardingVoiceKeyMode(_ mode: VoiceKeyMode) {
-        guard settings.onboardingVoiceTool != .typeless else { return }
-        model.setVoiceKeyMode(mode)
-        refreshSystemFunctionKeyUsage()
+    private func enforceOnboardingVoiceKeyPolicy() {
+        guard settings.voiceKeyMode != .function else { return }
+        let previousMode = settings.voiceKeyMode.rawValue
+        AppLogger.shared.write(
+            "ONBOARDING VOICE_KEY_POLICY requested from=\(previousMode) to=fn policy=fn_only"
+        )
+        model.setVoiceKeyMode(.function)
+        AppLogger.shared.write(
+            "ONBOARDING VOICE_KEY_POLICY result=\(settings.voiceKeyMode == .function ? "applied" : "blocked") " +
+                "voice_key_mode=\(settings.voiceKeyMode.rawValue) policy=fn_only"
+        )
     }
 
     private func refreshVoiceToolAvailability() {
@@ -2414,7 +2416,8 @@ struct OnboardingView: View {
             bluetoothStatus: model.connectionStatus.key,
             buttonStatus: model.hidStatus.key,
             audioStatus: model.audioStatus.key,
-            events: settings.firstUseEvents
+            events: settings.firstUseEvents,
+            appLanguage: localization.locale.identifier
         )
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(snapshot.redactedText, forType: .string)

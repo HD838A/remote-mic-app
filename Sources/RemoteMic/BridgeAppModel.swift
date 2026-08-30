@@ -2086,6 +2086,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func setVoiceKeyMode(_ mode: VoiceKeyMode) {
         guard mode != settings.voiceKeyMode else { return }
+        let previousMode = settings.voiceKeyMode.rawValue
+        AppLogger.shared.write(
+            "VOICE KEY mode_change requested from=\(previousMode) to=\(mode.rawValue)"
+        )
         guard !isStreaming else {
             AppLogger.shared.write(
                 "VOICE KEY mode_change_rejected reason=voice_active requested=\(mode.rawValue)"
@@ -2106,12 +2110,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 guard let self else { return }
                 self.settings.voiceKeyMode = mode
                 self.applyHIDSettings()
+                AppLogger.shared.write(
+                    "VOICE KEY mode_change completed from=\(previousMode) to=\(mode.rawValue) result=applied"
+                )
             }
             return
         }
 
         settings.voiceKeyMode = .function
         applyHIDSettings()
+        AppLogger.shared.write(
+            "VOICE KEY mode_change completed from=\(previousMode) to=fn result=applied"
+        )
     }
 
     private func enableVoiceFnTapMode() {

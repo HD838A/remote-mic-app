@@ -75,6 +75,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-08-31 | [Onboarding 允许 Command 导致第三方语音工具不提交文字](./2026-08-31-onboarding-voice-key-policy-mismatch.md) | 修复完成，等待 PR CI 与真实第三方工具验收 |
 | 2026-08-29 | [Issue #101：卸载 PKG 运行后 App 仍保留](./2026-08-29-issue-101-uninstaller-keeps-app.md) | 候选修复完成，等待正式签名 PKG 与双架构真实卸载验收 |
 | 2026-08-29 | [Onboarding 选择其他语音工具时隐藏豆包官方安装入口](./2026-08-29-onboarding-doubao-install-link-hidden.md) | 候选修复完成，58 张生产截图复验通过 |
 | 2026-08-29 | [Onboarding 已收到语音但没有文字，诊断事件反复跳变](./2026-08-29-onboarding-voice-test-focus-and-diagnostics.md) | 候选修复完成，等待真实第三方语音工具验收 |
