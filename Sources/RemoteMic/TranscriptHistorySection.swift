@@ -334,25 +334,24 @@ struct TranscriptHistorySection: View {
             applicationSwitcher
 
             if let playbackFailure = model.recordingPlaybackError {
-                GlassPanel {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Text(localization.text(playbackFailure.messageKey))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 8)
-                        Button {
-                            model.clearRecordingPlaybackError()
-                        } label: {
-                            Image(systemName: "xmark")
-                        }
-                        .buttonStyle(.borderless)
-                        .help(localization.text("common.action.close"))
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(localization.text(playbackFailure.messageKey))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button {
+                        model.clearRecordingPlaybackError()
+                    } label: {
+                        Image(systemName: "xmark")
                     }
-                    .padding(10)
+                    .buttonStyle(.borderless)
+                    .help(localization.text("common.action.close"))
                 }
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if activeApplicationKey == nil && hasEarlierEntries {
@@ -373,13 +372,11 @@ struct TranscriptHistorySection: View {
             }
 
             if dayGroups.isEmpty && recordingDayGroups.isEmpty {
-                GlassPanel {
-                    Text("statistics.transcripts.no_recent_records")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                }
+                Text("statistics.transcripts.no_recent_records")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 12)
             } else {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(dayGroups) { group in

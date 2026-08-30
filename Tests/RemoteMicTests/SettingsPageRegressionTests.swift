@@ -757,7 +757,7 @@ struct SettingsPageRegressionTests {
         #expect(!mappingCanvasSource.contains("minimumScaleFactor"))
         #expect(source.range(of: "MappingRemotePhoto()")!.lowerBound < source.range(of: "connectionLines(metrics: metrics)")!.lowerBound)
 
-        let voiceFnToggle = "\"connection.voice_fn_tap.enabled\",\n                        isOn: Binding("
+        let voiceFnToggle = "\"connection.voice_fn_tap.enabled\",\n                    isOn: Binding("
         #expect(source.components(separatedBy: voiceFnToggle).count == 2)
         #expect(
             source.range(of: voiceFnToggle)!.lowerBound >
@@ -1017,7 +1017,7 @@ struct SettingsPageRegressionTests {
         #expect(currentVersionSource.contains("checkForUpdates()"))
         #expect(currentVersionSource.contains("refreshUpdateInformation()"))
         #expect(!currentVersionSource.contains("Button(\"about.version.recheck\""))
-        #expect(aboutSource.contains("Image(systemName: \"chevron.forward\")"))
+        #expect(!aboutSource.contains("about.version.history"))
     }
 
     @Test func remoteCardsShowCompleteNamesWithoutDuplicateConnectionSummary() throws {
