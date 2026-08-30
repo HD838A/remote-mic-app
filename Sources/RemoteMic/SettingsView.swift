@@ -11,6 +11,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case connection
     case privateFeature
     case macros
+    case buttonProfiles
+    case membership
     case mapping
     case statistics
     case transcripts
@@ -24,6 +26,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: return "settings.section.connection"
         case .privateFeature: return ""
         case .macros: return ""
+        case .buttonProfiles: return ""
+        case .membership: return ""
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
         case .transcripts: return "settings.section.transcripts"
@@ -37,6 +41,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: return "link"
         case .privateFeature: return "sparkles"
         case .macros: return "command.square"
+        case .buttonProfiles: return "rectangle.3.group"
+        case .membership: return "crown.fill"
         case .mapping: return "keyboard"
         case .statistics: return "chart.bar.xaxis"
         case .transcripts: return "text.bubble.fill"
@@ -166,6 +172,7 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
     @ObservedObject private var macroFeature: MacroFeatureIntegration
+    @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @ObservedObject private var loginItemService: LoginItemService
     @ObservedObject private var updateInformation: UpdateInformationStore
     @EnvironmentObject private var localization: LocalizationStore
@@ -178,6 +185,8 @@ struct SettingsView: View {
     private static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
         .macros,
+        .buttonProfiles,
+        .membership,
         .statistics,
         .transcripts,
         .connection,
@@ -230,6 +239,7 @@ struct SettingsView: View {
         settings = model.settings
         privateFeature = model.privateFeature
         macroFeature = model.macroFeature
+        membershipFeature = model.membershipFeature
         loginItemService = model.loginItemService
         self.updateInformation = updateInformation
         self.checkForUpdates = checkForUpdates
@@ -267,9 +277,10 @@ struct SettingsView: View {
             refreshPermissionStates()
             loginItemService.refresh()
             macroFeature.setEditorActive(false)
+            membershipFeature.refreshIfNeeded()
         }
         .onChange(of: selectedSection) { section in
-            if section != .macros {
+            if section != .macros, section != .buttonProfiles {
                 macroFeature.setEditorActive(false)
             }
         }
@@ -280,6 +291,7 @@ struct SettingsView: View {
             refreshPermissionStates()
             loginItemService.refresh()
             resumeCustomMappingIfPermissionsGranted()
+            membershipFeature.refreshIfNeeded()
         }
         .onReceive(privateFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
             if !isVisible, selectedSection == .privateFeature {
@@ -287,7 +299,13 @@ struct SettingsView: View {
             }
         }
         .onReceive(macroFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
-            if !isVisible, selectedSection == .macros {
+            if !isVisible,
+               (selectedSection == .macros || selectedSection == .buttonProfiles) {
+                selectedSection = .about
+            }
+        }
+        .onReceive(membershipFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
+            if !isVisible, selectedSection == .membership {
                 selectedSection = .about
             }
         }
@@ -475,7 +493,8 @@ struct SettingsView: View {
         Self.sidebarSectionOrder.filter {
             switch $0 {
             case .privateFeature: privateFeature.isFeatureVisible
-            case .macros: macroFeature.isFeatureVisible
+            case .macros, .buttonProfiles: macroFeature.isFeatureVisible
+            case .membership: membershipFeature.isFeatureVisible
             default: true
             }
         }
@@ -488,7 +507,10 @@ struct SettingsView: View {
             VStack(spacing: 7) {
                 Image(systemName: sectionSystemImage(section))
                     .font(.system(size: 21, weight: .semibold))
-                if section == .privateFeature || section == .macros {
+                if section == .privateFeature
+                    || section == .macros
+                    || section == .buttonProfiles
+                    || section == .membership {
                     Text(sectionTitle(section))
                         .font(.system(size: 13, weight: .semibold))
                 } else {
@@ -542,6 +564,21 @@ struct SettingsView: View {
                     .padding(.horizontal, 22)
                     .padding(.vertical, 10)
                 }
+            } else {
+                aboutPage
+            }
+        case .buttonProfiles:
+            if macroFeature.isFeatureVisible {
+                macroFeature.buttonProfilesView(
+                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                    hostActionSections: buttonProfileHostActionSections
+                )
+            } else {
+                aboutPage
+            }
+        case .membership:
+            if membershipFeature.isFeatureVisible {
+                membershipFeature.settingsView()
             } else {
                 aboutPage
             }
@@ -2097,6 +2134,53 @@ struct SettingsView: View {
         return configured.action.displayName(using: localization)
     }
 
+    private var buttonProfileHostActionSections: [ButtonProfileHostActionSection] {
+        let availableActions = ButtonAction.pickerActions(
+            installedBundleIdentifiers: PresetApplication.installedBundleIdentifiers,
+            current: .disabled,
+            experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
+        ).filter {
+            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication
+        }
+        return ButtonActionCategory.allCases.compactMap { category in
+            let actions: [ButtonProfileHostAction] = availableActions
+                .filter { $0.category == category }
+                .compactMap { action in
+                guard let payload = try? JSONEncoder().encode(ConfiguredButtonAction(
+                    action: action,
+                    shortcut: nil
+                )) else { return nil }
+                return ButtonProfileHostAction(
+                    id: "host.action.\(action.rawValue)",
+                    title: action.displayName(using: localization),
+                    detail: nil,
+                    systemImage: buttonProfileSystemImage(for: action),
+                    payload: payload,
+                    isAvailable: true
+                )
+                }
+            guard !actions.isEmpty else { return nil }
+            return ButtonProfileHostActionSection(
+                id: "host.section.\(category.rawValue)",
+                title: localization.text(category.localizationKey),
+                actions: actions
+            )
+        }
+    }
+
+    private func buttonProfileSystemImage(for action: ButtonAction) -> String {
+        if action.presetApplication != nil { return "app" }
+        switch action {
+        case .focusInput: return "scope"
+        case .showDesktop: return "macwindow"
+        case .appSwitcher: return "command"
+        case .volumeUp, .volumeDown, .volumeMute: return "speaker.wave.2"
+        case .playPause, .previousCommandLeft, .nextCommandRight: return "play.circle"
+        case .toggleLongRecording: return "record.circle"
+        default: return "keyboard"
+        }
+    }
+
     private var permissionsPage: some View {
         settingsPage {
             PageHeader(title: localization.text("permissions.page.title"))
@@ -2831,6 +2915,8 @@ struct SettingsView: View {
         switch section {
         case .privateFeature: privateFeature.sectionTitle
         case .macros: macroFeature.sectionTitle
+        case .buttonProfiles: macroFeature.buttonProfilesSectionTitle
+        case .membership: membershipFeature.sectionTitle
         default: ""
         }
     }
@@ -2839,6 +2925,8 @@ struct SettingsView: View {
         switch section {
         case .privateFeature: privateFeature.sectionSystemImage
         case .macros: macroFeature.sectionSystemImage
+        case .buttonProfiles: macroFeature.buttonProfilesSectionSystemImage
+        case .membership: membershipFeature.sectionSystemImage
         default: section.systemImage
         }
     }

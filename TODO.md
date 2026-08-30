@@ -38,6 +38,11 @@
   - 2026-08-14：修复快捷指令组件在最终 macOS App 中错误使用 SwiftPM 根目录资源路径的问题；宿主继续把私有组件 Bundle 放在 `Contents/Resources`，最终 ZIP 验证必须移除同版本构建缓存后真实打开受影响页面，避免绝对构建路径回退掩盖打包缺陷。
   - 公开宿主不提供私有功能资格入口，也不会主动创建相关身份或发起资格请求；未提供私有组件时继续完全隐藏，已授权用户的本地功能开关仍默认关闭。
 
+- [ ] 完成会员页面与首个 Plus 收费按键方案
+  - 公开 Mac 宿主已加入可选会员与按键方案薄桥接：私有 Package 或会员服务配置缺失时入口完全隐藏，公开构建继续独立编译运行；宿主只传递现有公开动作的稳定 ID 与 JSON，不包含会员、订单、验签或收费方案实现。
+  - 实体 HID、Nearby iPhone / Apple Watch 和 Web Remote 已统一接入完整方案动作执行；方案未绑定、会员不可用或动作执行失败时继续执行原公开映射，不删除已保存方案。
+  - 自动化与本地 Debug 集成已完成；仍需完成生产会员 API 配置、真实支付闭环、Developer ID 签名公证包、`800 × 650` 页面截图、真实遥控器/手机/Watch/Web、双设备、第三方 App、7 天离线跨度及升级回滚验收后再勾选。详见 [`Testing/MembershipAndButtonProfiles.md`](Testing/MembershipAndButtonProfiles.md)。
+
 - [ ] Windows 版本
   - 当前范围只包含小米 RC003；已完成相关 forks、Windows 实现、权限/安装和虚拟麦克风路线研究。首选源码基线为 `miaomiaozii/windows-remote-mic-app`，但产品化仍需独立真机验收、免费自签流程和第三方组件审查。
   - 已在主仓库发布独立的 [Windows RC003 Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，镜像贡献者提交 `271ed794` 的未签名安装器、便携版、对应源码快照和 SHA-256 清单。该版本仅作为社区预览，不代表 PR #3 当前 HEAD 或正式产品化完成，Windows 源码仍未合入 `main`。

@@ -5,6 +5,21 @@ import SwiftUI
 import SayAllMacroRemoteMic
 #endif
 
+struct ButtonProfileHostAction: Equatable {
+    let id: String
+    let title: String
+    let detail: String?
+    let systemImage: String
+    let payload: Data
+    let isAvailable: Bool
+}
+
+struct ButtonProfileHostActionSection: Equatable {
+    let id: String
+    let title: String
+    let actions: [ButtonProfileHostAction]
+}
+
 final class MacroFeatureIntegration: ObservableObject {
     @Published private(set) var isFeatureVisible = false
     @Published private(set) var shouldShowEnrollment = false
@@ -48,6 +63,22 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    var buttonProfilesSectionTitle: String {
+        #if canImport(SayAllMacroRemoteMic)
+        feature.buttonProfilesSectionTitle
+        #else
+        ""
+        #endif
+    }
+
+    var buttonProfilesSectionSystemImage: String {
+        #if canImport(SayAllMacroRemoteMic)
+        feature.buttonProfilesSectionSystemImage
+        #else
+        "rectangle.3.group"
+        #endif
+    }
+
     func updateLocaleIdentifier(_ identifier: String) {
         #if canImport(SayAllMacroRemoteMic)
         feature.updateLocaleIdentifier(identifier)
@@ -59,6 +90,23 @@ final class MacroFeatureIntegration: ObservableObject {
 #if canImport(SayAllMacroRemoteMic)
         feature.refreshAccessIfNeeded(force: force)
 #endif
+    }
+
+    func updateButtonProfilesAccess(_ decision: HostButtonProfilesAccessDecision) {
+        #if canImport(SayAllMacroRemoteMic)
+        let packageDecision: ButtonProfilesAccessDecision
+        switch decision {
+        case let .allowed(validUntil):
+            packageDecision = .allowed(validUntil: validUntil)
+        case let .temporarilyOffline(validUntil):
+            packageDecision = .temporarilyOffline(validUntil: validUntil)
+        case .requiresPlus:
+            packageDecision = .requiresPlus
+        case .unavailable:
+            packageDecision = .unavailable
+        }
+        feature.updateButtonProfilesAccess(packageDecision)
+        #endif
     }
 
     func setEditorActive(_ active: Bool) {
@@ -94,6 +142,37 @@ final class MacroFeatureIntegration: ObservableObject {
         feature.enrollmentView()
         #else
         AnyView(EmptyView())
+        #endif
+    }
+
+    func buttonProfilesView(
+        selectedRemoteProfileID: UUID?,
+        hostActionSections: [ButtonProfileHostActionSection]
+    ) -> AnyView {
+        #if canImport(SayAllMacroRemoteMic)
+        return feature.buttonProfilesView(
+            selectedRemoteProfileID: selectedRemoteProfileID,
+            hostActionSections: hostActionSections.map { section in
+                RemoteMicHostActionSection(
+                    id: section.id,
+                    title: section.title,
+                    actions: section.actions.map { action in
+                        RemoteMicHostActionDescriptor(
+                            reference: RemoteMicHostActionReference(
+                                id: action.id,
+                                displayName: action.title,
+                                payload: action.payload
+                            ),
+                            detail: action.detail,
+                            systemImage: action.systemImage,
+                            isAvailable: action.isAvailable
+                        )
+                    }
+                )
+            }
+        )
+        #else
+        return AnyView(EmptyView())
         #endif
     }
 
@@ -133,6 +212,27 @@ final class MacroFeatureIntegration: ObservableObject {
         )
         #else
         false
+        #endif
+    }
+
+    @discardableResult
+    func executeBoundAction(
+        profileID: UUID?,
+        button: RemoteButton,
+        trigger: ButtonTrigger,
+        hostActionPerformer: (Data) -> Bool,
+        shortcutPerformer: (UInt16, [String]) -> Bool
+    ) -> Bool {
+        #if canImport(SayAllMacroRemoteMic)
+        return feature.executeBoundAction(
+            remoteProfileID: profileID,
+            button: button.rawValue,
+            trigger: trigger.rawValue,
+            hostActionPerformer: hostActionPerformer,
+            shortcutPerformer: shortcutPerformer
+        )
+        #else
+        return false
         #endif
     }
 

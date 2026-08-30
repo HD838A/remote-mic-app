@@ -209,6 +209,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         installWorkspaceAudioLifecycleObservers()
         model.privateFeature.refreshAccessIfNeeded()
         model.macroFeature.refreshAccessIfNeeded()
+        model.membershipFeature.refreshIfNeeded()
         if OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: model.settings.isOnboardingComplete,
             step: model.settings.onboardingStep
@@ -278,6 +279,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     func applicationDidBecomeActive(_ notification: Notification) {
         model.privateFeature.refreshAccessIfNeeded()
         model.macroFeature.refreshAccessIfNeeded()
+        model.membershipFeature.refreshIfNeeded()
         model.refreshHIDAfterPermissionChange()
     }
 
@@ -322,6 +324,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                     if event == .systemDidWake {
                         self.model.privateFeature.refreshAccessIfNeeded()
                         self.model.macroFeature.refreshAccessIfNeeded()
+                        self.model.membershipFeature.refreshIfNeeded()
                     }
                 }
             }
@@ -552,6 +555,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                     self.localization.locale.identifier
                 )
                 self.model.macroFeature.updateLocaleIdentifier(
+                    self.localization.locale.identifier
+                )
+                self.model.membershipFeature.updateLocaleIdentifier(
                     self.localization.locale.identifier
                 )
                 self.configureApplicationMenu()

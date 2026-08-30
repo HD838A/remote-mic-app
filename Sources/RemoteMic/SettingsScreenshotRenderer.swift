@@ -29,6 +29,8 @@ enum SettingsScreenshotRenderer {
     private static let sections: [SettingsSection] = [
         .mapping,
         .macros,
+        .buttonProfiles,
+        .membership,
         .statistics,
         .transcripts,
         .connection,
@@ -79,6 +81,7 @@ enum SettingsScreenshotRenderer {
         let localization = LocalizationStore(settings: settings)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
+        model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
 
         _ = NSApplication.shared
         let previousAppearance = NSApp.appearance

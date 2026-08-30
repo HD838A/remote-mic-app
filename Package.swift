@@ -48,6 +48,21 @@ if let macroPlatformPath = ProcessInfo.processInfo.environment[
     )
 }
 
+if let membershipPackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_MEMBERSHIP_PACKAGE_PATH"
+], !membershipPackagePath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: membershipPackagePath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: membershipPackagePath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllMembershipCore", package: packageIdentity)
+    )
+    remoteMicDependencies.append(
+        .product(name: "SayAllMembershipUI", package: packageIdentity)
+    )
+}
+
 if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
     "REMOTE_MIC_HARDWARE_SIMULATION_PATH"
 ], !hardwareSimulationPath.isEmpty {
