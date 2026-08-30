@@ -226,6 +226,26 @@ struct OnboardingFlowTests {
             at: .controlMethod,
             remoteConnected: true
         ))
+        #expect(!OnboardingFlowPolicy.shouldAutoSelectPhysicalRemote(
+            at: .remoteAvailability,
+            remoteConnected: true,
+            suppressForUserBack: true
+        ))
+    }
+
+    @Test func permissionsBackNavigationSuppressesOnlyOneConnectedRemoteAutoRoute() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewSource.contains("suppressConnectedPhysicalRemoteAutoRouteOnce = true"))
+        #expect(viewSource.contains("suppressConnectedPhysicalRemoteAutoRouteOnce = false"))
+        #expect(viewSource.contains("auto_route_suppressed=true reason=user_back"))
     }
 
     @Test func validatedRemoteButtonAlsoProvesThePhysicalRemoteIsRecognized() {
@@ -470,10 +490,17 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("switchToSelectedInputMethod()"))
         #expect(viewSource.contains("OnboardingInputSourceSwitcher.selectIfNeeded(tool)"))
         #expect(viewSource.contains("openKeyboardSettings()"))
-        #expect(!viewSource.contains("ScrollView"))
+        #expect(!viewSource.contains("\n            ScrollView {"))
         #expect(viewSource.contains("GridItem(.flexible(), spacing: 10, alignment: .top)"))
         #expect(viewSource.contains(".frame(height: 112, alignment: .top)"))
         #expect(viewSource.contains("inputMethodGuide(for: settings.onboardingVoiceTool)"))
+        #expect(viewSource.contains("allRecognizedVoiceToolsUnavailable"))
+        #expect(viewSource.contains("onboarding.voice_tool.none_detected"))
+        #expect(viewSource.contains("onboarding.voice_tool.other.setup_detail"))
+        #expect(viewSource.contains("onboarding.voice_test.other_detail"))
+        #expect(viewSource.contains("if voiceToolAvailability[.doubao] == .notInstalled"))
+        #expect(!viewSource.contains("settings.onboardingVoiceTool == .doubao,\n"))
+        #expect(viewSource.contains("localization.text(settings.onboardingVoiceTool.titleKey)"))
         #expect(rendererSource.contains("allowsInputSourceSwitching: false"))
         #expect(rendererSource.contains(
             "systemFunctionKeyAvailableOverride: systemFunctionKeyAvailable"
@@ -481,6 +508,7 @@ struct OnboardingFlowTests {
         #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"))
         #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"))
         #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD"))
+        #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_ALL_VOICE_TOOLS_UNAVAILABLE"))
         #expect(rendererSource.contains(".remoteAvailability"))
         #expect(rendererSource.contains("controlMethod != .physicalRemote"))
         #expect(rendererSource.contains("return \"remote-availability\""))
@@ -501,22 +529,24 @@ struct OnboardingFlowTests {
             encoding: .utf8
         )
 
-        #expect(viewSource.contains(".onAppear {\n                        requestTranscriptFocus()\n                    }"))
+        #expect(viewSource.contains(".onAppear {\n                    requestTranscriptFocus()"))
         #expect(viewSource.contains("case .voiceTest:\n                requestTranscriptFocus()"))
         #expect(!viewSource.contains("case .voiceTest:\n                switchToSelectedInputMethod()"))
         #expect(viewSource.contains("guard settings.onboardingStep == .voiceTool else { return }"))
         #expect(viewSource.contains("private func requestTranscriptFocus()"))
-        #expect(viewSource.contains("transcriptFocused = false\n        DispatchQueue.main.async"))
-        #expect(viewSource.contains("transcriptFocused = true"))
+        #expect(viewSource.contains("transcriptFocusRequest &+= 1"))
+        #expect(viewSource.contains("window.makeFirstResponder(textView)"))
         #expect(viewSource.contains(".font(.system(size: 15))\n                        .foregroundStyle(.tertiary)\n                        .padding(.horizontal, 15)\n                        .padding(.vertical, 10)"))
         #expect(viewSource.contains(".onChange(of: transcript)"))
         #expect(!viewSource.contains(".onChange(of: transcript) { _, updatedText in"))
         #expect(viewSource.contains("OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput"))
+        #expect(viewSource.contains("policyAllowsContinue && voiceAttempt.phase == .passed"))
         #expect(viewSource.contains(".eventSourceStateID"))
         #expect(viewSource.contains(".eventSourceUnixProcessID"))
         #expect(viewSource.contains("manualTranscriptInputObserved = true"))
         #expect(viewSource.contains("ONBOARDING TRANSCRIPT manual_keyboard_input=true"))
-        #expect(viewSource.contains("transcript = \"\"\n                voiceSessionStarted = true"))
+        #expect(viewSource.contains("voiceSessionStarted = true"))
+        #expect(viewSource.contains("transcript = \"\""))
     }
 
     @Test func transcriptInputPolicyRejectsSyntheticAndUnknownEventSources() {
@@ -1272,6 +1302,102 @@ struct OnboardingFlowTests {
         ) == .remote)
     }
 
+    @Test func voiceAttemptUsesOneTerminalCauseAfterTheSessionEnds() {
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: true,
+            triggerReady: true,
+            focusLost: false
+        ) == .passed)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: false,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusLost: false
+        ) == .noSamples)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: false,
+            focusLost: false
+        ) == .inputTargetNotReady)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusLost: true
+        ) == .inputTargetFocusLost)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusLost: false
+        ) == .externalToolNoCommit)
+    }
+
+    @Test func voiceAttemptIntermediatePhasesAreNotFailures() {
+        let capabilities = OnboardingCapabilities(
+            voiceSessionStarted: true,
+            voiceSamplesReceived: true
+        )
+        var attempt = FirstUseVoiceAttemptDiagnostic(
+            attemptID: 1,
+            phase: .recording,
+            triggerPath: UsageEventSource.bluetoothRemote.rawValue,
+            triggerReady: true,
+            editorMounted: true,
+            windowKeyAtStart: true,
+            firstResponderAtStart: true
+        )
+        var context = FirstUseDiagnosticContext(
+            step: .voiceTest,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true,
+            voiceAttempt: attempt
+        )
+        #expect(context.failureReason == nil)
+
+        attempt.phase = .awaitingTranscript
+        context = FirstUseDiagnosticContext(
+            step: .voiceTest,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true,
+            voiceAttempt: attempt
+        )
+        #expect(context.failureReason == nil)
+
+        attempt.phase = .failed
+        attempt.result = .externalToolNoCommit
+        context = FirstUseDiagnosticContext(
+            step: .voiceTest,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true,
+            voiceAttempt: attempt
+        )
+        #expect(context.failureReason == .voiceExternalToolNoCommit)
+    }
+
+    @Test func voiceTestUsesNativeFirstResponderAsTheFocusFact() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewSource.contains("struct OnboardingTranscriptEditor: NSViewRepresentable"))
+        #expect(viewSource.contains("window.makeFirstResponder(textView)"))
+        #expect(viewSource.contains("window?.firstResponder === textView"))
+        #expect(!viewSource.contains("@FocusState private var transcriptFocused"))
+    }
+
     @Test func firstUseEventsDeduplicatePollingAndKeepExplicitRetries() throws {
         let suiteName = "RemoteMicTests.Onboarding.Diagnostics.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -1309,6 +1435,30 @@ struct OnboardingFlowTests {
         #expect(settings.firstUseEvents.last?.elapsedMilliseconds == 4_000)
     }
 
+    @Test func firstUseEventsPersistVoiceAttemptIdentityAndDecodeLegacyEvents() throws {
+        let suiteName = "RemoteMicTests.Onboarding.VoiceDiagnostics.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+
+        settings.recordFirstUseEvent(
+            .blocked,
+            step: .voiceTest,
+            failureReason: .voiceExternalToolNoCommit,
+            voiceAttemptID: 3,
+            voiceResult: .externalToolNoCommit
+        )
+        #expect(settings.firstUseEvents.last?.voiceAttemptID == 3)
+        #expect(settings.firstUseEvents.last?.voiceResult == .externalToolNoCommit)
+
+        let legacyData = Data("""
+        [{"timestamp":0,"kind":"entered","step":"voiceTest","elapsedMilliseconds":0,"failureReason":null}]
+        """.utf8)
+        let legacyEvents = try JSONDecoder().decode([FirstUseEvent].self, from: legacyData)
+        #expect(legacyEvents.first?.voiceAttemptID == nil)
+        #expect(legacyEvents.first?.voiceResult == nil)
+    }
+
     @Test func diagnosticSummaryContainsOnlyNormalizedState() {
         let capabilities = OnboardingCapabilities(
             bluetoothGranted: true,
@@ -1330,10 +1480,25 @@ struct OnboardingFlowTests {
             systemMajorVersion: 14,
             architecture: "arm64",
             voiceTool: .typeless,
+            voiceKeyMode: .function,
             context: FirstUseDiagnosticContext(
                 step: .permissions,
                 capabilities: capabilities,
                 hasSelectedAudioUID: false
+            ),
+            voiceAttempt: FirstUseVoiceAttemptDiagnostic(
+                attemptID: 2,
+                phase: .failed,
+                triggerPath: UsageEventSource.bluetoothRemote.rawValue,
+                triggerReady: true,
+                editorMounted: true,
+                windowKeyAtStart: true,
+                firstResponderAtStart: true,
+                firstResponderAtEnd: true,
+                firstSampleLatencyMilliseconds: 24,
+                sessionDurationMilliseconds: 1_500,
+                transcriptWaitMilliseconds: 3_000,
+                result: .externalToolNoCommit
             ),
             bluetoothStatus: "connection.status.searching",
             buttonStatus: "button_mapping.status.disabled",
@@ -1343,6 +1508,10 @@ struct OnboardingFlowTests {
 
         let text = snapshot.redactedText
         #expect(text.contains("failure=permission.input_monitoring_denied"))
+        #expect(text.contains("voice_attempt=2"))
+        #expect(text.contains("voice_terminal_result=external_tool_no_commit"))
+        #expect(text.contains("voice_first_sample_latency_ms=24"))
+        #expect(text.contains("voice_diagnostic_boundary=external_tool_internal_state_unavailable"))
         #expect(!text.contains("/Users/"))
         #expect(!text.contains("UUID"))
         #expect(!text.contains("无线麦已经连接成功"))

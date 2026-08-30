@@ -216,9 +216,10 @@ enum OnboardingFlowPolicy {
 
     static func shouldAutoSelectPhysicalRemote(
         at step: OnboardingStep,
-        remoteConnected: Bool
+        remoteConnected: Bool,
+        suppressForUserBack: Bool = false
     ) -> Bool {
-        step == .remoteAvailability && remoteConnected
+        step == .remoteAvailability && remoteConnected && !suppressForUserBack
     }
 
     static func shouldRequestRemoteReconnect(

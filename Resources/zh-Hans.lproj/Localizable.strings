@@ -569,6 +569,7 @@
 "onboarding.welcome.feature.verify" = "每项设置都现场检查，出问题时直接告诉你原因";
 "onboarding.voice_tool.title" = "你准备在哪个工具里说话？";
 "onboarding.voice_tool.detail" = "选择常用工具，我们会为它准备合适的语音键方式。以后仍可在设置中修改。";
+"onboarding.voice_tool.none_detected" = "未检测到豆包输入法、微信输入法或 Typeless。你仍可选择“其他语音工具”，但请先安装并打开一个支持语音输入的工具。";
 "onboarding.voice_tool.unselected.title" = "尚未选择";
 "onboarding.voice_tool.unselected.detail" = "尚未选择常用语音工具。";
 "onboarding.voice_tool.doubao.title" = "豆包输入法";
@@ -579,6 +580,7 @@
 "onboarding.voice_tool.typeless.detail" = "语音键会模拟 Fn 点按并传送遥控器声音。";
 "onboarding.voice_tool.other.title" = "其他语音工具";
 "onboarding.voice_tool.other.detail" = "使用你选择的语音输出设备，在常用语音输入工具中测试。";
+"onboarding.voice_tool.other.setup_detail" = "其他语音工具必须支持语音输入。请在该工具自己的设置中选择正确的麦克风，并确认它能在普通输入框中写入文字。";
 "onboarding.voice_tool.status.not_installed" = "尚未安装";
 "onboarding.voice_tool.doubao.install_detail" = "豆包输入法未安装，安装后回到此页重新检测。";
 "onboarding.voice_tool.doubao.install" = "安装豆包输入法";
@@ -673,6 +675,7 @@
 "onboarding.audio.on_demand_detail" = "手机开始语音时会自动连接所选设备；下一步将通过真实声音和文字进行验证。";
 "onboarding.voice_test.title" = "亲自说一句，确认真的能用";
 "onboarding.voice_test.detail" = "点一下下面的输入框，按住所选控制方式的语音键说话，说完后松开。";
+"onboarding.voice_test.other_detail" = "请在“%@”所用的其他语音工具中开启语音输入，并在工具设置里把“%@”选为麦克风。";
 "onboarding.voice_test.placeholder" = "试着说：无线麦已经连接成功";
 "onboarding.voice_test.waiting_voice" = "等待你按住语音键开始说话…";
 "onboarding.voice_test.receiving" = "正在接收声音…";
@@ -831,6 +834,15 @@
 "onboarding.recovery.voice.no_transcript.title" = "声音已收到，但没有出现文字";
 "onboarding.recovery.voice.no_transcript.detail" = "确认语音工具正在使用所选设备，然后重新测试。";
 "onboarding.recovery.voice.no_transcript.action" = "重新测试文字输入";
+"onboarding.recovery.voice.input_target_not_ready.title" = "文字输入框没有准备好";
+"onboarding.recovery.voice.input_target_not_ready.detail" = "无线麦没有确认输入框已成为系统文字输入目标。点击重试后再按住语音键说一句。";
+"onboarding.recovery.voice.input_target_not_ready.action" = "重新准备输入框";
+"onboarding.recovery.voice.input_target_focus_lost.title" = "说话过程中输入目标发生变化";
+"onboarding.recovery.voice.input_target_focus_lost.detail" = "保持无线麦窗口在前台，点击重试后完成一次按下、说话和松开。";
+"onboarding.recovery.voice.input_target_focus_lost.action" = "重新测试语音输入";
+"onboarding.recovery.voice.external_tool_no_commit.title" = "声音链路正常，但语音工具没有写入文字";
+"onboarding.recovery.voice.external_tool_no_commit.detail" = "无线麦已收到并输出声音，输入框也已准备好。请确认所选工具支持语音输入，并在工具自己的设置中选择当前语音输出设备作为麦克风，然后重试。";
+"onboarding.recovery.voice.external_tool_no_commit.action" = "检查后重新测试";
 "onboarding.recovery.controls.not_confirmed.title" = "请试三个不同的普通按键";
 "onboarding.recovery.controls.not_confirmed.detail" = "如有需要先重新连接，然后按三个不同的普通按键。";
 "onboarding.recovery.controls.not_confirmed.action" = "重新检测按键";
