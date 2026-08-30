@@ -216,6 +216,8 @@ struct SettingsPageRegressionTests {
         #expect(footerSource.contains("VStack(alignment: .leading, spacing: 12)"))
         #expect(!footerSource.contains("HStack(spacing: 16)"))
         #expect(footerSource.contains("mappingVoiceKeyModeControl"))
+        #expect(footerSource.contains("connection.voice_key_mode.unverified"))
+        #expect(footerSource.contains("connection.voice_key_mode.unverified_detail"))
         #expect(footerSource.contains("mappingVoiceFnTapControl"))
         #expect(!footerSource.contains("mappingVoiceShortTapFocusControl"))
         #expect(footerSource.contains("mappingRestoreDefaultsButton"))

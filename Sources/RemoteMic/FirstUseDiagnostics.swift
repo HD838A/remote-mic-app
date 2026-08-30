@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 enum FirstUseFailureReason: String, Codable, Equatable {
@@ -234,18 +235,36 @@ struct FirstUseDiagnosticSnapshot {
     let buttonStatus: String
     let audioStatus: String
     let events: [FirstUseEvent]
+    let appLanguage: String
+    let generatedAt = Date()
+    let onboardingVoiceKeyPolicy = "fn_only"
 
     var redactedText: String {
         let capabilities = context.capabilities
         var lines = [
             "SayAll first-use diagnostics",
+            "diagnostic_schema=2",
+            "generated_at=\(Self.timestamp(generatedAt))",
             "app_version=\(appVersion)",
             "app_build=\(appBuild)",
+            "source_revision=unknown",
+            "build_channel=unknown",
+            "release_tag=unknown",
+            "bundle_id=\(Bundle.main.bundleIdentifier ?? "unknown")",
+            "process_id=\(ProcessInfo.processInfo.processIdentifier)",
+            "process_architecture=\(Self.architecture)",
+            "hardware_architecture=\(Self.hardwareArchitecture)",
+            "running_under_rosetta=\(Self.runningUnderRosetta)",
+            "macos_version=\(Self.systemVersion)",
+            "macos_build=\(Self.systemBuild)",
             "macos_major=\(systemMajorVersion)",
+            "app_language=\(Self.stableToken(appLanguage))",
             "architecture=\(architecture)",
             "step=\(context.step.rawValue)",
             "voice_tool=\(voiceTool.rawValue)",
             "voice_key_mode=\(voiceKeyMode.rawValue)",
+            "onboarding_voice_key_policy=\(onboardingVoiceKeyPolicy)",
+            "voice_key_policy_compliant=\(voiceKeyMode == .function)",
             "remote_availability=\(context.remoteAvailability.rawValue)",
             "control_method=\(context.controlMethod.rawValue)",
             "failure=\(context.failureReason?.rawValue ?? "none")",
@@ -301,6 +320,66 @@ struct FirstUseDiagnosticSnapshot {
 
     private static func metric(_ value: Int?) -> String {
         value.map(String.init) ?? "unavailable"
+    }
+
+    private static func timestamp(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter.string(from: date)
+    }
+
+    private static func stableToken(_ value: String) -> String {
+        let allowed = value.unicodeScalars.filter {
+            CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "." || $0 == "_"
+        }
+        let token = String(String.UnicodeScalarView(allowed))
+        return token.isEmpty ? "unknown" : token
+    }
+
+    private static var systemBuild: String {
+        var size = 0
+        guard sysctlbyname("kern.osversion", nil, &size, nil, 0) == 0, size > 0 else {
+            return "unknown"
+        }
+        var buffer = [CChar](repeating: 0, count: size)
+        let result = buffer.withUnsafeMutableBytes { bytes in
+            sysctlbyname("kern.osversion", bytes.baseAddress, &size, nil, 0)
+        }
+        guard result == 0 else { return "unknown" }
+        return String(cString: buffer)
+    }
+
+    private static var runningUnderRosetta: String {
+        if let translated = sysctlInt32("sysctl.proc_translated") {
+            return translated == 1 ? "true" : "false"
+        }
+        return hardwareArchitecture == "arm64" || hardwareArchitecture == "x86_64"
+            ? "false"
+            : "unknown"
+    }
+
+    private static var hardwareArchitecture: String {
+        #if arch(arm64)
+        return "arm64"
+        #else
+        if sysctlInt32("hw.optional.arm64") == 1 {
+            return "arm64"
+        }
+        return "x86_64"
+        #endif
+    }
+
+    private static var systemVersion: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+    }
+
+    private static func sysctlInt32(_ name: String) -> Int32? {
+        var value: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        guard sysctlbyname(name, &value, &size, nil, 0) == 0 else { return nil }
+        return value
     }
 
     static var architecture: String {

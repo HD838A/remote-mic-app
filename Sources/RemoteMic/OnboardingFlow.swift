@@ -238,14 +238,13 @@ enum OnboardingFlowPolicy {
         voiceKeyMode: VoiceKeyMode = .function,
         capabilities: OnboardingCapabilities
     ) -> Bool {
+        guard voiceKeyMode == .function else { return false }
         switch step {
         case .welcome:
             return true
         case .voiceTool:
             return voiceTool != .unselected &&
-                (!voiceTool.requiresFunctionKeySetup ||
-                    voiceKeyMode != .function ||
-                    capabilities.systemFunctionKeyAvailable)
+                (!voiceTool.requiresFunctionKeySetup || capabilities.systemFunctionKeyAvailable)
         case .remoteAvailability:
             return remoteAvailability != .unselected
         case .controlMethod:

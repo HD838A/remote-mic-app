@@ -1173,6 +1173,21 @@ struct SettingsView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
+            if settings.voiceKeyMode != .function {
+                Label {
+                    Text("connection.voice_key_mode.unverified")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                Text("connection.voice_key_mode.unverified_detail")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .help(localization.text("connection.voice_key_mode.help"))
     }

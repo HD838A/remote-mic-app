@@ -225,6 +225,8 @@
 "connection.voice_key.mode.left_command" = "Left Command";
 "connection.voice_key.mode.right_command" = "Right Command";
 "connection.voice_key_mode.help" = "Fn/Globe is the default. Command modes require Accessibility permission and a target voice app that supports the corresponding standalone Left or Right Command hold; many apps merge both sides into a generic Command. Pressing another key while held may trigger a Command shortcut.";
+"connection.voice_key_mode.unverified" = "Command mode is not verified";
+"connection.voice_key_mode.unverified_detail" = "Configure the same Left or Right Command in the target voice tool and confirm a real dictated phrase. SayAll cannot read the tool's internal settings; switch back to Fn/Globe if no text appears.";
 "connection.voice_key_mode.command_permission" = "Command mode requires Accessibility permission";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "iPhone, Apple Watch, and Web";
@@ -586,6 +588,7 @@
 "onboarding.voice_tool.doubao.install" = "Install Doubao Input Method";
 "onboarding.voice_tool.typeless.fn_required" = "Typeless uses Fn/Globe taps, so this mode is fixed for compatibility.";
 "onboarding.voice_tool.voice_key_help" = "Voice trigger key: %1$@. The target voice tool must use the same key; SayAll does not intercept input-source shortcuts.";
+"onboarding.voice_tool.fn_only" = "Use Fn/Globe for the first-time setup";
 "onboarding.voice_tool.guide.title" = "Reserve Fn for the selected input method";
 "onboarding.voice_tool.guide.detail" = "SayAll first tries to switch input methods. Follow the screenshots to configure Fn and remove the macOS and WeChat app conflicts.";
 "onboarding.voice_tool.guide.select_doubao" = "Select Doubao Input Method";
