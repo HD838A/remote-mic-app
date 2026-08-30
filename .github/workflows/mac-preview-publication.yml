@@ -62,6 +62,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           REPOSITORY_ROOT: ${{ github.workspace }}
-          EXPECTED_STABLE_TAG: v1.8.3
           GH_BIN: gh
         run: ./scripts/publish-preview-release.sh "$RUNNER_TEMP/preview-ui-attestation.json"

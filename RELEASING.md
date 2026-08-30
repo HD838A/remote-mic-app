@@ -8,7 +8,7 @@
 - Stable：用户明确指定一个已经发布并验证通过的 Pre-release，将它改为正式版；不重新构建。
 - 私有内部 Draft：使用 private-draft-release skill 的独立路径，目标仓库固定为 GetSayAll/SayAll，不在公开源码仓库创建内部 Draft。
 - “发布正式版”不是独立构建命令。没有指定现有 Pre-release 时，只能准备 Preview 或报告缺少授权。
-- 当前受审 stable latest 是 v1.8.3。Preview 开始前、公开后和失败恢复前后都必须核对该值；流程不得修改 stable feed。
+- stable latest 不写死版本号。Preview 开始前、公开后和失败恢复前后都必须动态读取 `releases/latest`，确认其为正式稳定版且前后一致；流程不得修改 stable feed。
 
 发布流程只保留一个版本元数据 PR、一次受保护 staging、一次真实 Sparkle UI 验收和一个无 Apple 凭据 publication workflow。没有 release/pre-* 候选分支、qualification、Release Guard、编号 rerun、watchdog 或 SLO ledger 状态机。
 
@@ -58,7 +58,7 @@
 
 受保护 staging 成功后，在公开 Tag/Release 建立前执行：
 
-1. scripts/prepare-staged-preview-ui-test.sh 下载指定 Run、attempt 和 artifact ID，不使用 latest artifact；默认下载稳定 v1.8.3，验证预览升级时可设置 `PREVIEW_UI_BASELINE_TAG`（例如 v1.9.16）下载已发布但仅在本地受保护验收使用的低版本归档。
+1. scripts/prepare-staged-preview-ui-test.sh 下载指定 Run、attempt 和 artifact ID，不使用 latest artifact；默认动态读取当前 `releases/latest` 作为稳定基线，也可设置 `PREVIEW_UI_BASELINE_TAG` 指定已发布的正式版本进行本地验收。
 2. 用本地固定 feed，只把生产 appcast 的不可变 URL 前缀替换为本地地址，确保 enclosure 是 staging 的同一 ZIP。
 3. 使用低于候选版本的基线 App 的真实 Sparkle UI 完成 check、download、install、首次启动、退出和二次启动；验证版本/Build、Team ID L3QHLDRPAY、公证、Gatekeeper、Sparkle helper 的 0755 权限和 Versions/Current 链接。该基线只在本地受保护 UI 验收中使用，不改变稳定 feed 或公开分类。
 4. 检查没有新增崩溃报告、应用可以再次启动，并用 scripts/record-preview-ui-attestation.sh 生成结构化证明。仅运行 Sparkle CLI probe、单元测试或静态解压不能替代真实 UI 安装；该步骤未完成时不得公开 Preview。
@@ -81,7 +81,7 @@
 - 若远端 Tag 尚不存在，创建 Tag 前最后一次确认该版本的 11 个 CDN 固定路径全部返回 HTTP 404；任一已占用或未知响应都不创建 Tag。已有 Tag 的幂等恢复跳过占用检查，继续执行固定 Tag/CDN 字节复验；
 - candidate-provenance.json 的 `stagedAt`/`publishedAt` 固定取受保护 staging 的时间戳；重试同一 staging 身份不会因当前时间变化而生成不同字节；
 - 从 GitHub 固定 Tag URL 和 download.sayall.app 固定 Tag URL 下载每项公开资产并逐字节比较；
-- 确认 releases/latest 仍为 v1.8.3，且 Release 为非 Draft、Pre-release。
+- 确认 releases/latest 仍指向发布前记录的正式稳定版，且 Release 为非 Draft、非 Pre-release。
 
 publication 失败时先查询远端状态。若 Tag、Release、资产和摘要已经正确，只重做缺失的公开验证；不要删除 Release、移动 Tag、重签名或重复上传不同字节。公开 Pre-release 的标题和正文与本次候选不一致时也必须 fail closed，不能在重试中覆盖 Release Notes。任何 Tag/Release 查询的认证、网络或非 404 错误都必须 fail closed，不能被当作“版本可用”。
 

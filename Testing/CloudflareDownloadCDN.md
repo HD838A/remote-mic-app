@@ -76,8 +76,8 @@
 
 - [x] App 内置 `SUFeedURL` 仍为 GitHub latest appcast。
 - [x] 预发布开关缺失/默认关闭、明确关闭、开启、使用后再关闭的相关自动化回归通过；候选 UI 更新尚未执行。
-- [x] 当前 Stable latest 仍为 `v1.8.3`，Worker 与官网部署没有改变正式版。
-- [x] GitHub Release 页面和 `v1.8.3` 固定标签 DMG 可直接下载，并与 CDN 字节一致。
+- [x] 当前 Stable latest 由 GitHub `releases/latest` 动态确认，Worker 与官网部署没有改变正式版。
+- [x] GitHub Release 页面和当前稳定 Tag 的 DMG 可直接下载，并与 CDN 字节一致。
 - [ ] 官网 GitHub、TestFlight、社群、版本历史和其他作品链接保持正常。
 - [x] Mac App 蓝牙、HID、音频、权限和 Onboarding 代码未被本功能修改；完整自动化与硬件事件模拟回归通过。
 

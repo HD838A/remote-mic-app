@@ -8,7 +8,7 @@
 
 1. 在隔离 worktree 执行 git fetch origin main --tags。
 2. 确认 main 工作区干净且 HEAD 与 origin/main 完全相同。
-3. 确认当前 stable latest 为 v1.8.3。
+3. 动态读取 `releases/latest`，确认其为正式稳定版（非 Draft、非 Pre-release）。
 4. 确认 config/release-dependencies.json、Package.swift、Package.resolved 和两个受保护 workflow 的依赖 SHA 一致。
 5. 准备临时 fixture；不得读取或打印 Apple、Match、Notary、Sparkle 私钥。
 
@@ -44,7 +44,7 @@
 ## 用例 4：真实 Sparkle UI 门禁
 
 1. 使用 prepare-staged-preview-ui-test.sh 恢复指定 Run/attempt/artifact。
-2. 从 v1.8.3 下载并验证稳定基线。
+2. 从当前 `releases/latest` 下载并验证稳定基线。
 3. 启动脚本输出的本地 feed，并使用输出的 `REMOTE_MIC_UI_TEST_MODE=1`、`REMOTE_MIC_UI_TEST_FEED_URL` 和 `REMOTE_MIC_UI_TEST_VERSION` 环境变量直接运行稳定 App；稳定 App 真实执行 check、download、install、首次启动、退出、二次启动。该环境变量只接受 `127.0.0.1` 的 HTTP appcast，默认更新路径仍使用 GitHub Releases API。
 4. 使用 record-preview-ui-attestation.sh 和 verify-preview-ui-attestation.sh。
 
@@ -77,7 +77,7 @@
 
 ## 稳定功能回归
 
-- stable latest 在 Preview 前后仍为 v1.8.3。
+- stable latest 在 Preview 前后仍为发布前动态记录的同一正式版本。
 - 公开 Preview 保持 Pre-release，不触发 Stable workflow。
 - Private Draft 只写入 GetSayAll/SayAll，不污染公开源码仓库。
 - 两架构资产和固定 Tag URL 完整，11 项 payload 加 provenance 的摘要一致。

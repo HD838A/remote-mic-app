@@ -5,7 +5,6 @@ umask 077
 ROOT="${REPOSITORY_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 GH_BIN="${GH_BIN:-gh}"
-EXPECTED_STABLE_TAG="${EXPECTED_STABLE_TAG:-v1.8.3}"
 TAG="${1:-}"
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
@@ -55,13 +54,19 @@ printf '%s\n' "$release_json" | jq -e --arg tag "$TAG" '.tagName == $tag and .is
 }
 
 is_prerelease="$(printf '%s\n' "$release_json" | jq -r '.isPrerelease')"
-latest_tag="$($GH_BIN api "repos/$REPOSITORY/releases/latest" --jq '.tag_name')"
+stable_release_before="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
+  echo "unable to resolve the current stable latest Release" >&2
+  exit 1
+}
+latest_tag="$(printf '%s\n' "$stable_release_before" | jq -r '.tag_name')"
+printf '%s\n' "$stable_release_before" | jq -e \
+  --arg tag "$latest_tag" \
+  '.tag_name == $tag and ($tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and .draft == false and .prerelease == false' >/dev/null || {
+  echo "releases/latest is not a formal stable Release: $latest_tag" >&2
+  exit 1
+}
 case "$is_prerelease" in
   true)
-    [[ "$latest_tag" == "$EXPECTED_STABLE_TAG" ]] || {
-      echo "Stable latest changed before promotion: expected $EXPECTED_STABLE_TAG, found $latest_tag" >&2
-      exit 1
-    }
     needs_promotion=1
     ;;
   false)
@@ -326,9 +331,13 @@ local_sha="$(/usr/bin/shasum -a 256 "$provenance" | /usr/bin/awk '{print $1}')"
 # re-run as a read-only verification when the Release is already Stable and
 # releases/latest already points at the selected Tag.
 if (( needs_promotion )); then
-  current_latest="$($GH_BIN api "repos/$REPOSITORY/releases/latest" --jq '.tag_name')"
-  [[ "$current_latest" == "$EXPECTED_STABLE_TAG" ]] || {
-    echo "Stable latest changed before promotion: expected $EXPECTED_STABLE_TAG, found $current_latest" >&2
+  current_stable_release="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
+    echo "unable to verify stable latest before promotion" >&2
+    exit 1
+  }
+  current_latest="$(printf '%s\n' "$current_stable_release" | jq -r '.tag_name')"
+  [[ "$current_latest" == "$latest_tag" ]] || {
+    echo "Stable latest changed before promotion: expected $latest_tag, found $current_latest" >&2
     exit 1
   }
   $GH_BIN release edit "$TAG" --repo "$REPOSITORY" --draft=false --prerelease=false --latest
