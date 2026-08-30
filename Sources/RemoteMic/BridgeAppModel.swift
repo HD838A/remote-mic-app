@@ -2500,7 +2500,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = false
-        releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
         if longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
         } else if longRecordingCloseTimer != nil {

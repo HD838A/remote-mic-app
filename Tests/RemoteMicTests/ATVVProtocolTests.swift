@@ -94,9 +94,13 @@ struct BluetoothVoiceTailDiagnosticsTests {
             range: stopStart.upperBound..<source.endIndex
         ))
         let stopSource = source[stopStart.lowerBound..<stopEnd.lowerBound]
-        let drain = try #require(stopSource.range(of: "audioOutput.endSessionAfterDraining"))
-        let release = try #require(stopSource.range(of: "releaseVoiceKeyIfNeeded(owner: .bluetooth"))
-        #expect(drain.lowerBound < release.lowerBound)
+        let finish = try #require(stopSource.range(of: "let finishStop: () -> Void"))
+        let drain = try #require(stopSource.range(
+            of: "audioOutput.endSessionAfterDraining(completion: finishStop)",
+            range: finish.upperBound..<stopSource.endIndex
+        ))
+        #expect(finish.lowerBound < drain.lowerBound)
+        #expect(stopSource.contains("self.releaseVoiceKeyIfNeeded(owner: .bluetooth"))
     }
 
     @Test func keepsOnlyTheLatestThreeHundredMillisecondsWithoutAudioContentLogging() {
