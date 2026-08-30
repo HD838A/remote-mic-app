@@ -6,6 +6,20 @@ import Testing
 
 @Suite("Remote buttons")
 struct RemoteButtonsTests {
+
+    @Test func hidDiscoveryRebuildsWhenManagerWaitsWithoutAReport() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("scheduleDiscoveryWatchdog()"))
+        #expect(source.contains("watchdog_rebuild"))
+        #expect(source.contains("discoveryRecoveryAttempt < 2"))
+    }
     @Test func exclusiveHIDAccessUsesASeparateUserFacingFailure() {
         #expect(HIDRemoteMonitor.deviceOpenFailureMessageKey(
             result: kIOReturnExclusiveAccess,
