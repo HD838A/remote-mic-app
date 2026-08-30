@@ -375,6 +375,9 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// One-session notice for an existing Command mode normalized to Fn by Onboarding.
+    @Published private(set) var pendingOnboardingVoiceKeyMigration: VoiceKeyMode? = nil
+
     @Published var localTranscriptHistoryEnabled: Bool {
         didSet {
             defaults.set(
@@ -728,6 +731,7 @@ final class AppSettings: ObservableObject {
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
         if voiceKeyMode != .function {
+            pendingOnboardingVoiceKeyMigration = voiceKeyMode
             voiceKeyMode = .function
         }
         let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
@@ -752,18 +756,28 @@ final class AppSettings: ObservableObject {
         recordFirstUseEvent(.completed, step: .complete)
         onboardingStep = .complete
         onboardingCompletedVersion = Self.currentOnboardingVersion
+        pendingOnboardingVoiceKeyMigration = nil
     }
 
     func restartOnboarding() {
         onboardingVoiceTool = .unselected
         onboardingRemoteAvailability = .unselected
         onboardingControlMethod = .unselected
+        if voiceKeyMode != .function {
+            pendingOnboardingVoiceKeyMigration = voiceKeyMode
+        }
         voiceKeyMode = .function
         voiceFnTapModeEnabled = false
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
         defaults.removeObject(forKey: Keys.firstUseStepStartedAt)
         defaults.removeObject(forKey: Keys.firstUseLastSignature)
+    }
+
+    func consumePendingOnboardingVoiceKeyMigration() -> VoiceKeyMode? {
+        let pending = pendingOnboardingVoiceKeyMigration
+        pendingOnboardingVoiceKeyMigration = nil
+        return pending
     }
 
     func action(for button: RemoteButton) -> ButtonAction {

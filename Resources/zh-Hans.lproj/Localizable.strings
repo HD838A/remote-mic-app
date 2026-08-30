@@ -589,6 +589,8 @@
 "onboarding.voice_tool.typeless.fn_required" = "Typeless 需要使用 Fn/地球键点按，已为你固定此模式。";
 "onboarding.voice_tool.voice_key_help" = "当前语音触发键：%1$@。目标语音工具也需要使用同一个按键；无线麦不会拦截输入法切换快捷键。";
 "onboarding.voice_tool.fn_only" = "首次设置统一使用 Fn/地球键";
+"onboarding.voice_key.migration.title" = "已将语音键从 %1$@ 切换为 Fn/地球键";
+"onboarding.voice_key.migration.detail" = "首次设置统一使用 Fn/地球键，以确保输入法配置一致。完成设置后，你仍可在主设置页改回左或右 Command。";
 "onboarding.voice_tool.guide.title" = "把 Fn 交给选中的输入法";
 "onboarding.voice_tool.guide.detail" = "无线麦会先尝试切换输入法。请按图设置 Fn，并释放系统和微信 App 对 Fn 的占用。";
 "onboarding.voice_tool.guide.select_doubao" = "选择豆包输入法";
