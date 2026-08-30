@@ -38,6 +38,7 @@
 - Chinese UI text must render at 12pt or larger. Do not use 8–11pt Chinese text or allow `minimumScaleFactor` to reduce Chinese below 12pt. When space is constrained, increase control height, adjust the layout, wrap text, or truncate secondary content instead.
 - Avoid drop-down lists whenever practical, especially a single long list that mixes basic keys, system actions, custom actions, and individual apps. Group larger option sets semantically and prefer in-page button grids, segmented choices, or clearly separated lists.
 - At `800 × 650`, the four action-filter capsules must remain on one line in Chinese and English, use 12pt-or-larger text, and avoid horizontal scrolling or clipping in light and dark appearances.
+- Physical-keyboard shortcut recording accepts an unmodified single key, a key combination, or one standalone left/right Command, Option, Control, Shift, or Fn key. A modifier press remains pending until either a main key completes the combination or the modifier is released alone.
 - Flatten flows into the main page instead of relying on popovers, sheets, or consecutive confirmation dialogs. Related configuration should share one large surface where the current target, available actions, secondary settings, learning state, and test action remain visible together.
 - Keep system dialogs only for file selection, required permission authorization, and irreversible destructive actions. Ordinary instructions, learning progress, success, and failure feedback should appear inline.
 

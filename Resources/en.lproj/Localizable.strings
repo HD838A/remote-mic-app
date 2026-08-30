@@ -160,7 +160,7 @@
 "custom_application.focus.recorded" = "Focus a recorded input field";
 "custom_application.shortcut.record" = "Record focus shortcut";
 "custom_application.shortcut.editor_title" = "Set the focus shortcut for %@";
-"custom_application.shortcut.editor_instructions" = "Click Record Shortcut first, then press the shortcut this app uses to focus its input field. SayAll activates the app before sending it.";
+"custom_application.shortcut.editor_instructions" = "Click Record Shortcut first, then press the single key or key combination this app uses to focus its input field. SayAll activates the app before sending it.";
 "custom_application.accessibility.record" = "Record Target Input Field";
 "custom_application.accessibility.not_recorded" = "No target input field has been recorded";
 "custom_application.accessibility.recorded" = "Target input field recorded";
@@ -345,7 +345,7 @@
 "common.suffix.experimental_disabled" = " (Experiment disabled)";
 "shortcut.action.record" = "Click to Record a Shortcut";
 "shortcut.action.record_again" = "Record Again";
-"shortcut.record.help" = "Record the keyboard shortcut to send to the current app";
+"shortcut.record.help" = "Record a single key or key combination to send to the current app";
 "trigger.other_actions" = "Other %1$@ Actions";
 "trigger.hold_repeat_disabled" = "Hold-to-repeat is disabled";
 "trigger.timing.help" = "Double-click waits about 0.3 seconds to confirm a single click; long-press triggers after about 0.55 seconds. Unconfigured buttons keep their immediate response.";
@@ -370,11 +370,11 @@
 "common.status.connecting" = "Connecting";
 "common.status.preparing" = "Preparing";
 "shortcut.editor.title" = "Record a %1$@ %2$@ Shortcut";
-"shortcut.editor.instructions" = "Press the desired key combination directly. Command, Option, Control, Shift, and Fn are supported.";
+"shortcut.editor.instructions" = "Press a single key or key combination. Left/right Command, Option, Control, Shift, and Fn can also be recorded alone.";
 "shortcut.editor.waiting" = "Waiting for Keys…";
-"shortcut.editor.click_first_help" = "Choose a common combination or assemble one from the standard keyboard and modifiers. Keyboard recording remains available.";
+"shortcut.editor.click_first_help" = "Choose a common combination or select a main key from the standard keyboard with modifiers left empty when desired. Keyboard recording remains available.";
 "shortcut.editor.not_recorded" = "Not Recorded";
-"shortcut.editor.recording_prompt" = "Press the shortcut now. This key press will not trigger its existing system or app action.";
+"shortcut.editor.recording_prompt" = "Press a single key, key combination, or standalone modifier now. This key press will not trigger its existing action.";
 "shortcut.editor.success" = "Shortcut recorded successfully";
 "shortcut.editor.permission_required" = "Recording system shortcuts requires Accessibility permission. Grant access, then click Record Shortcut again.";
 "shortcut.editor.capture_unavailable" = "Shortcut recording could not start. Check Accessibility and Input Monitoring permissions, or reopen SayAll and try again.";

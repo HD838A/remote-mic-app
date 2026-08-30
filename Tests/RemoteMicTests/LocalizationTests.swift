@@ -117,6 +117,8 @@ struct LocalizationTests {
 
         #expect(english["action.command_delete"] == "Command-Delete")
         #expect(english["button_mapping.action_filter.all"] == "All")
+        #expect(english["shortcut.editor.instructions"]?.contains("single key") == true)
+        #expect(english["shortcut.editor.instructions"]?.contains("recorded alone") == true)
         #expect(english["action.scroll_up"] == "Scroll Up")
         #expect(english["action.scroll_down"] == "Scroll Down")
         #expect(english["about.support.feedback"] == "Feedback")
@@ -138,6 +140,8 @@ struct LocalizationTests {
             if directory.lastPathComponent == "zh-Hans.lproj" {
                 #expect(localized["action.command_delete"] == "Command-Delete")
                 #expect(localized["button_mapping.action_filter.all"] == "全部")
+                #expect(localized["shortcut.editor.instructions"]?.contains("单个按键") == true)
+                #expect(localized["shortcut.editor.instructions"]?.contains("单独录入") == true)
                 #expect(localized["action.scroll_up"] == "向上滚动")
                 #expect(localized["action.scroll_down"] == "向下滚动")
                 #expect(localized["about.support.feedback"] == "问题反馈")
