@@ -101,6 +101,134 @@ struct VirtualAudioConnectionLifecycleTests {
         ))
     }
 
+    @Test func voiceDeliveryRequiresTheSelectedRouteAndPlayedSampleCounts() {
+        let startCounters = VirtualAudioPlaybackCounters(
+            scheduledBuffers: 10,
+            scheduledSamples: 1_600,
+            playedBuffers: 10,
+            playedSamples: 1_600
+        )
+        let start = VirtualAudioOutputDiagnosticSnapshot(
+            selectedDeviceKind: .miRemoteV2ch,
+            actualDeviceKind: .miRemoteV2ch,
+            engineRunning: true,
+            playerPlaying: true,
+            boundToSelectedDevice: true,
+            counters: startCounters
+        )
+        var observation = start
+        observation.counters.scheduledBuffers += 2
+        observation.counters.scheduledSamples += 320
+        observation.counters.playedBuffers += 2
+        observation.counters.playedSamples += 320
+        var diagnostic = VoiceAudioDeliveryDiagnostic(
+            generation: 4,
+            source: UsageEventSource.bluetoothRemote.rawValue,
+            route: .virtualAudioDirect,
+            sessionEnded: true,
+            receivedBatches: 2,
+            receivedSamples: 320,
+            outputAtStart: start,
+            outputAtObservation: observation,
+            countersAtStart: startCounters
+        )
+
+        #expect(diagnostic.result == .deliveredToSelectedDevice)
+
+        diagnostic.enqueueFailures = 1
+        #expect(diagnostic.result == .enqueueFailed)
+        diagnostic.enqueueFailures = 0
+        diagnostic.outputAtObservation.counters.interruptedSamples = 80
+        #expect(diagnostic.result == .playbackInterrupted)
+        diagnostic.outputAtObservation.counters.interruptedSamples = 0
+        diagnostic.outputAtObservation.pendingSamples = 80
+        #expect(diagnostic.result == .playbackPending)
+
+        diagnostic.outputAtObservation.pendingSamples = 0
+        diagnostic.outputAtStart.boundToSelectedDevice = false
+        #expect(diagnostic.result == .routeMismatch)
+    }
+
+    @Test func virtualAudioDeviceDiagnosticsUseOnlyApprovedStableKinds() {
+        #expect(VirtualAudioDeviceDiagnosticKind.classify(AudioDeviceInfo(
+            id: 1,
+            uid: "MiRemoteV2ch_UID",
+            name: "Renamed by user"
+        )) == .miRemoteV2ch)
+        #expect(VirtualAudioDeviceDiagnosticKind.classify(AudioDeviceInfo(
+            id: 2,
+            uid: "private-device-uid",
+            name: "Private custom name"
+        )) == .other)
+        #expect(VirtualAudioDeviceDiagnosticKind.classify(nil) == .unavailable)
+    }
+
+    @Test func fnTapAndDirectVoicePathsRecordTheActualVirtualAudioEnqueue() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("enqueueAudio: { [weak self] samples in\n            self?.enqueueVoiceFnTapAudio(samples)"))
+        #expect(source.contains("deliveryGeneration: deliveryGeneration"))
+        #expect(source.contains("route: handledByFnTapMode ? .virtualAudioViaFnTap : .virtualAudioDirect"))
+        #expect(source.contains("route: .virtualAudioDirect"))
+        #expect(!source.contains("accepted: handledByFnTapMode ||"))
+    }
+
+    @Test func consecutiveVoiceGenerationsUseIndependentPlaybackCounters() {
+        let healthy = VirtualAudioOutputDiagnosticSnapshot(
+            selectedDeviceKind: .miRemoteV2ch,
+            actualDeviceKind: .miRemoteV2ch,
+            engineRunning: true,
+            playerPlaying: true,
+            boundToSelectedDevice: true
+        )
+        var firstObservation = healthy
+        firstObservation.counters = VirtualAudioPlaybackCounters(
+            scheduledBuffers: 1,
+            scheduledSamples: 160,
+            playedBuffers: 1,
+            playedSamples: 160
+        )
+        let first = VoiceAudioDeliveryDiagnostic(
+            generation: 1,
+            source: UsageEventSource.bluetoothRemote.rawValue,
+            route: .virtualAudioViaFnTap,
+            sessionEnded: true,
+            receivedBatches: 1,
+            receivedSamples: 160,
+            outputAtStart: healthy,
+            outputAtObservation: firstObservation
+        )
+
+        var secondObservation = healthy
+        secondObservation.pendingBuffers = 1
+        secondObservation.pendingSamples = 320
+        secondObservation.counters = VirtualAudioPlaybackCounters(
+            scheduledBuffers: 1,
+            scheduledSamples: 320
+        )
+        let second = VoiceAudioDeliveryDiagnostic(
+            generation: 2,
+            source: UsageEventSource.bluetoothRemote.rawValue,
+            route: .virtualAudioViaFnTap,
+            sessionEnded: true,
+            receivedBatches: 1,
+            receivedSamples: 320,
+            outputAtStart: healthy,
+            outputAtObservation: secondObservation
+        )
+
+        #expect(first.result == .deliveredToSelectedDevice)
+        #expect(second.result == .playbackPending)
+        #expect(second.playedSamples == 0)
+    }
+
     @Test func everyVoiceEntryChecksLiveAudioHealthInsteadOfCachedReadyState() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

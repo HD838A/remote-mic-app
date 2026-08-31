@@ -49,8 +49,10 @@ struct OnboardingView: View {
     @State private var transcriptWindowKey = false
     @State private var transcriptFirstResponder = false
     @State private var voiceAttempt = FirstUseVoiceAttemptDiagnostic()
-    @State private var voiceAttemptStartedAt: Date?
-    @State private var voiceTranscriptWaitStartedAt: Date?
+    @State private var voiceAttemptStartedAtUptime: TimeInterval?
+    @State private var voiceTranscriptWaitStartedAtUptime: TimeInterval?
+    @State private var activeFocusLossStartedAtUptime: TimeInterval?
+    @State private var externalToolMicrophoneConfirmed = false
     @State private var voiceTranscriptDeadlineToken = UUID()
     @State private var suppressConnectedPhysicalRemoteAutoRouteOnce = false
 
@@ -173,16 +175,30 @@ struct OnboardingView: View {
                   hasReceivedSamples,
                   selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
             voiceSamplesReceived = true
+            voiceAttempt.audioDelivery = model.voiceAudioDeliveryDiagnosticSnapshot()
             if voiceAttempt.firstSampleLatencyMilliseconds == nil,
-               let voiceAttemptStartedAt {
+               let voiceAttemptStartedAtUptime {
                 voiceAttempt.firstSampleLatencyMilliseconds = elapsedMilliseconds(
-                    since: voiceAttemptStartedAt
+                    sinceUptime: voiceAttemptStartedAtUptime
                 )
             }
         }
         .onChange(of: settings.onboardingStep) { step in
             enforceOnboardingVoiceKeyPolicy()
             prepareForStep(step)
+        }
+        .onChange(of: settings.onboardingVoiceTool) { _ in
+            resetExternalToolMicrophoneConfirmation(reason: "voice_tool_changed")
+        }
+        .onChange(of: settings.selectedAudioDeviceUID) { _ in
+            resetExternalToolMicrophoneConfirmation(reason: "audio_device_changed")
+        }
+        .onChange(of: externalToolMicrophoneConfirmed) { confirmed in
+            AppLogger.shared.write(
+                "ONBOARDING EXTERNAL_MICROPHONE_CONFIRMATION source=user " +
+                    "confirmed=\(confirmed) tool=\(settings.onboardingVoiceTool.rawValue) " +
+                    "expected_device=\(selectedAudioDeviceDiagnosticKind.rawValue)"
+            )
         }
         .onChange(of: transcript) { updatedText in
             guard settings.onboardingStep == .voiceTest,
@@ -206,7 +222,10 @@ struct OnboardingView: View {
             guard appeared,
                   voiceSessionEnded,
                   !manualTranscriptInputObserved else { return }
-            finishVoiceAttempt(result: .passed)
+            refreshVoiceAttemptObservableState(atDeadline: false)
+            if voiceAttempt.audioDelivery.result == .deliveredToSelectedDevice {
+                finishVoiceAttempt(result: .passed)
+            }
         }
         .onChange(of: failureReason) { failure in
             recordFailureTransition(failure)
@@ -1168,23 +1187,7 @@ struct OnboardingView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            if settings.onboardingVoiceTool == .other {
-                Label {
-                    Text(LocalizedMessage(
-                        "onboarding.voice_test.other_detail",
-                        arguments: [
-                            localization.text(settings.onboardingVoiceTool.titleKey),
-                            selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required")
-                        ]
-                    ).text(using: localization))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "mic.fill")
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
+            externalToolMicrophoneConfirmationCard
 
             ZStack(alignment: .topLeading) {
                 OnboardingTranscriptEditor(
@@ -1230,6 +1233,54 @@ struct OnboardingView: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var externalToolMicrophoneConfirmationCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text("onboarding.voice_test.microphone_confirmation.title")
+                    .font(.system(size: 13, weight: .semibold))
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Color.orange)
+            }
+
+            Text(
+                LocalizedMessage(
+                    "onboarding.voice_test.microphone_confirmation.detail",
+                    arguments: [
+                        selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
+                        localization.text(settings.onboardingVoiceTool.titleKey),
+                        selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
+                    ]
+                ).text(using: localization)
+            )
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Toggle(isOn: $externalToolMicrophoneConfirmed) {
+                Text(
+                    LocalizedMessage(
+                        "onboarding.voice_test.microphone_confirmation.checkbox",
+                        arguments: [
+                            localization.text(settings.onboardingVoiceTool.titleKey),
+                            selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
+                        ]
+                    ).text(using: localization)
+                )
+                .font(.system(size: 12, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .toggleStyle(.checkbox)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
         }
     }
 
@@ -1771,7 +1822,9 @@ struct OnboardingView: View {
             capabilities: capabilities
         )
         if settings.onboardingStep == .voiceTest {
-            return policyAllowsContinue && voiceAttempt.phase == .passed
+            return policyAllowsContinue &&
+                voiceAttempt.phase == .passed &&
+                externalToolMicrophoneConfirmed
         }
         return policyAllowsContinue &&
             (settings.onboardingStep != .voiceTool || voiceToolSelectionIsValid)
@@ -1834,6 +1887,10 @@ struct OnboardingView: View {
 
     private var selectedAudioDevice: AudioDeviceInfo? {
         supportedAudioDevices.first { $0.uid == settings.selectedAudioDeviceUID }
+    }
+
+    private var selectedAudioDeviceDiagnosticKind: VirtualAudioDeviceDiagnosticKind {
+        .classify(selectedAudioDevice)
     }
 
     private var audioOutputSelected: Bool {
@@ -2260,7 +2317,7 @@ struct OnboardingView: View {
              .voiceInputTargetFocusLost,
              .voiceExternalToolNoCommit:
             resetVoiceTestForRetry()
-        case .voiceNoSamples:
+        case .voiceNoSamples, .voiceAudioDeliveryFailed:
             model.applyAudioSettings(reason: "onboarding_voice_retry")
             resetVoiceTestForRetry()
         case .completeRuntimeRegressed:
@@ -2278,8 +2335,9 @@ struct OnboardingView: View {
 
     private func resetVoiceTestForRetry() {
         voiceTranscriptDeadlineToken = UUID()
-        voiceAttemptStartedAt = nil
-        voiceTranscriptWaitStartedAt = nil
+        voiceAttemptStartedAtUptime = nil
+        voiceTranscriptWaitStartedAtUptime = nil
+        activeFocusLossStartedAtUptime = nil
         voiceSessionStarted = false
         voiceSamplesReceived = false
         voiceSessionEnded = false
@@ -2317,24 +2375,51 @@ struct OnboardingView: View {
         transcriptWindowKey = snapshot.windowKey
         transcriptFirstResponder = snapshot.firstResponder
         if voiceAttempt.phase == .recording || voiceAttempt.phase == .awaitingTranscript {
-            if voiceAttempt.triggerReady &&
-                (!snapshot.editorMounted || !snapshot.windowKey || !snapshot.firstResponder) {
+            let now = ProcessInfo.processInfo.systemUptime
+            let targetReady = snapshot.editorMounted && snapshot.windowKey && snapshot.firstResponder
+            if !targetReady {
                 voiceAttempt.focusLost = true
+                voiceAttempt.focusEditorUnmounted = voiceAttempt.focusEditorUnmounted || !snapshot.editorMounted
+                voiceAttempt.focusWindowNotKey = voiceAttempt.focusWindowNotKey || !snapshot.windowKey
+                voiceAttempt.focusFirstResponderChanged =
+                    voiceAttempt.focusFirstResponderChanged || !snapshot.firstResponder
+                if activeFocusLossStartedAtUptime == nil {
+                    activeFocusLossStartedAtUptime = now
+                    voiceAttempt.focusLossCount += 1
+                    if voiceAttempt.firstFocusLossLatencyMilliseconds == nil,
+                       let voiceAttemptStartedAtUptime {
+                        voiceAttempt.firstFocusLossLatencyMilliseconds = max(
+                            0,
+                            Int((now - voiceAttemptStartedAtUptime) * 1_000)
+                        )
+                    }
+                }
+            } else if let lossStartedAt = activeFocusLossStartedAtUptime {
+                voiceAttempt.totalFocusLossMilliseconds += max(
+                    0,
+                    Int((now - lossStartedAt) * 1_000)
+                )
+                activeFocusLossStartedAtUptime = nil
+                voiceAttempt.focusRecovered = true
             }
             voiceAttempt.editorMounted = snapshot.editorMounted
         }
         if changed {
             AppLogger.shared.write(
-                "ONBOARDING TRANSCRIPT_TARGET mounted=\(snapshot.editorMounted) " +
-                    "window_key=\(snapshot.windowKey) first_responder=\(snapshot.firstResponder)"
+                "ONBOARDING TRANSCRIPT_TARGET attempt=\(voiceAttempt.attemptID) " +
+                    "phase=\(voiceAttempt.phase.rawValue) mounted=\(snapshot.editorMounted) " +
+                    "window_key=\(snapshot.windowKey) first_responder=\(snapshot.firstResponder) " +
+                    "ready=\(snapshot.editorMounted && snapshot.windowKey && snapshot.firstResponder) " +
+                    "loss_count=\(voiceAttempt.focusLossCount)"
             )
         }
     }
 
     private func beginVoiceAttempt(triggerPath: String) {
         voiceTranscriptDeadlineToken = UUID()
-        voiceAttemptStartedAt = Date()
-        voiceTranscriptWaitStartedAt = nil
+        voiceAttemptStartedAtUptime = ProcessInfo.processInfo.systemUptime
+        voiceTranscriptWaitStartedAtUptime = nil
+        activeFocusLossStartedAtUptime = nil
         voiceSessionStarted = true
         voiceSamplesReceived = false
         voiceSessionEnded = false
@@ -2355,6 +2440,8 @@ struct OnboardingView: View {
             firstSampleLatencyMilliseconds: nil,
             sessionDurationMilliseconds: nil,
             transcriptWaitMilliseconds: nil,
+            externalToolMicrophoneUserConfirmed: externalToolMicrophoneConfirmed,
+            audioDelivery: model.voiceAudioDeliveryDiagnosticSnapshot(),
             result: .none
         )
         lastRecordedFailure = nil
@@ -2365,7 +2452,13 @@ struct OnboardingView: View {
             "ONBOARDING VOICE_ATTEMPT started attempt=\(voiceAttempt.attemptID) " +
                 "trigger_path=\(triggerPath) trigger_ready=\(targetReady) " +
                 "editor_mounted=\(transcriptEditorMounted) window_key=\(transcriptWindowKey) " +
-                "first_responder=\(transcriptFirstResponder)"
+                "first_responder=\(transcriptFirstResponder) " +
+                "external_microphone_observable=false " +
+                "external_microphone_user_confirmed=\(externalToolMicrophoneConfirmed) " +
+                "audio_generation=\(voiceAttempt.audioDelivery.generation) " +
+                "audio_selected=\(voiceAttempt.audioDelivery.outputAtStart.selectedDeviceKind.rawValue) " +
+                "audio_actual=\(voiceAttempt.audioDelivery.outputAtStart.actualDeviceKind.rawValue) " +
+                "audio_bound=\(voiceAttempt.audioDelivery.outputAtStart.boundToSelectedDevice.map(String.init) ?? "unknown")"
         )
     }
 
@@ -2373,22 +2466,27 @@ struct OnboardingView: View {
         guard voiceAttempt.phase == .recording else { return }
         voiceSessionEnded = true
         voiceAttempt.phase = .awaitingTranscript
-        voiceAttempt.firstResponderAtEnd = transcriptWindowKey && transcriptFirstResponder
-        if let voiceAttemptStartedAt {
-            voiceAttempt.sessionDurationMilliseconds = elapsedMilliseconds(since: voiceAttemptStartedAt)
+        let targetReadyAtEnd = transcriptEditorMounted && transcriptWindowKey && transcriptFirstResponder
+        voiceAttempt.firstResponderAtEnd = targetReadyAtEnd
+        voiceAttempt.focusReadyAtEnd = targetReadyAtEnd
+        voiceAttempt.audioDelivery = model.voiceAudioDeliveryDiagnosticSnapshot()
+        if let voiceAttemptStartedAtUptime {
+            voiceAttempt.sessionDurationMilliseconds = elapsedMilliseconds(
+                sinceUptime: voiceAttemptStartedAtUptime
+            )
         }
-        voiceTranscriptWaitStartedAt = Date()
+        voiceTranscriptWaitStartedAtUptime = ProcessInfo.processInfo.systemUptime
 
         let result = FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: manualTranscriptInputObserved,
             samplesReceived: voiceSamplesReceived,
             transcriptionAppeared: transcriptionAppeared,
             triggerReady: voiceAttempt.triggerReady,
-            focusLost: voiceAttempt.focusLost
+            focusReadyAtDeadline: targetReadyAtEnd,
+            audioDeliveryResult: voiceAttempt.audioDelivery.result,
+            finalObservation: false
         )
-        if result != .externalToolNoCommit &&
-            result != .inputTargetNotReady &&
-            result != .inputTargetFocusLost {
+        if result == .manualInput || result == .noSamples || result == .audioDeliveryFailed {
             finishVoiceAttempt(result: result)
         } else {
             scheduleVoiceTranscriptDeadline(attemptID: voiceAttempt.attemptID)
@@ -2403,12 +2501,15 @@ struct OnboardingView: View {
                   voiceTranscriptDeadlineToken == token,
                   voiceAttempt.attemptID == attemptID,
                   voiceAttempt.phase == .awaitingTranscript else { return }
+            refreshVoiceAttemptObservableState(atDeadline: true)
             let result = FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
                 manualInputObserved: manualTranscriptInputObserved,
                 samplesReceived: voiceSamplesReceived,
                 transcriptionAppeared: transcriptionAppeared,
                 triggerReady: voiceAttempt.triggerReady,
-                focusLost: voiceAttempt.focusLost
+                focusReadyAtDeadline: voiceAttempt.focusReadyAtDeadline == true,
+                audioDeliveryResult: voiceAttempt.audioDelivery.result,
+                finalObservation: true
             )
             finishVoiceAttempt(result: result)
         }
@@ -2417,9 +2518,10 @@ struct OnboardingView: View {
     private func finishVoiceAttempt(result: FirstUseVoiceAttemptResult) {
         guard voiceAttempt.phase == .awaitingTranscript else { return }
         voiceTranscriptDeadlineToken = UUID()
-        if let voiceTranscriptWaitStartedAt {
+        refreshVoiceAttemptObservableState(atDeadline: false)
+        if let voiceTranscriptWaitStartedAtUptime {
             voiceAttempt.transcriptWaitMilliseconds = elapsedMilliseconds(
-                since: voiceTranscriptWaitStartedAt
+                sinceUptime: voiceTranscriptWaitStartedAtUptime
             )
         }
         voiceAttempt.result = result
@@ -2435,19 +2537,74 @@ struct OnboardingView: View {
         lastRecordedFailure = failure
         AppLogger.shared.write(
             "ONBOARDING VOICE_ATTEMPT terminal attempt=\(voiceAttempt.attemptID) " +
-                "result=\(result.rawValue) probable_cause=\(result.rawValue) " +
+                "result=\(result.rawValue) observed_failure=\(result.observedFailure) " +
+                "probable_cause=\(voiceAttempt.probableCause) " +
+                "probable_cause_confirmed=\(voiceAttempt.probableCauseConfirmed) " +
                 "boundary=\(result.diagnosticBoundary) " +
+                "audio_generation=\(voiceAttempt.audioDelivery.generation) " +
+                "audio_route=\(voiceAttempt.audioDelivery.route.rawValue) " +
+                "audio_result=\(voiceAttempt.audioDelivery.result.rawValue) " +
+                "audio_selected=\(voiceAttempt.audioDelivery.outputAtStart.selectedDeviceKind.rawValue) " +
+                "audio_actual_start=\(voiceAttempt.audioDelivery.outputAtStart.actualDeviceKind.rawValue) " +
+                "audio_bound_start=\(voiceAttempt.audioDelivery.outputAtStart.boundToSelectedDevice.map(String.init) ?? "unknown") " +
+                "audio_actual_observation=\(voiceAttempt.audioDelivery.outputAtObservation.actualDeviceKind.rawValue) " +
+                "audio_bound_observation=\(voiceAttempt.audioDelivery.outputAtObservation.boundToSelectedDevice.map(String.init) ?? "unknown") " +
+                "audio_received_samples=\(voiceAttempt.audioDelivery.receivedSamples) " +
+                "audio_scheduled_samples=\(voiceAttempt.audioDelivery.scheduledSamples) " +
+                "audio_played_samples=\(voiceAttempt.audioDelivery.playedSamples) " +
+                "audio_interrupted_samples=\(voiceAttempt.audioDelivery.interruptedSamples) " +
+                "audio_pending_samples=\(voiceAttempt.audioDelivery.outputAtObservation.pendingSamples) " +
+                "audio_enqueue_failures=\(voiceAttempt.audioDelivery.enqueueFailures) " +
+                "focus_loss_count=\(voiceAttempt.focusLossCount) " +
+                "focus_editor_unmounted=\(voiceAttempt.focusEditorUnmounted) " +
+                "focus_window_not_key=\(voiceAttempt.focusWindowNotKey) " +
+                "focus_first_responder_changed=\(voiceAttempt.focusFirstResponderChanged) " +
+                "focus_recovered=\(voiceAttempt.focusRecovered) " +
+                "focus_ready_at_end=\(voiceAttempt.focusReadyAtEnd) " +
+                "focus_ready_at_deadline=\(voiceAttempt.focusReadyAtDeadline.map(String.init) ?? "unknown") " +
+                "focus_total_loss_ms=\(voiceAttempt.totalFocusLossMilliseconds) " +
+                "external_microphone_observable=false " +
+                "external_microphone_user_confirmed=\(voiceAttempt.externalToolMicrophoneUserConfirmed) " +
+                "external_next_check=microphone_matches_selected_device " +
                 "first_sample_latency_ms=\(voiceAttempt.firstSampleLatencyMilliseconds.map(String.init) ?? "unavailable") " +
                 "session_duration_ms=\(voiceAttempt.sessionDurationMilliseconds.map(String.init) ?? "unavailable") " +
+                "session_under_1s=\((voiceAttempt.sessionDurationMilliseconds ?? 1_000) < 1_000) " +
                 "transcript_wait_ms=\(voiceAttempt.transcriptWaitMilliseconds.map(String.init) ?? "unavailable")"
         )
     }
 
-    private func elapsedMilliseconds(since date: Date) -> Int {
-        max(0, Int(Date().timeIntervalSince(date) * 1_000))
+    private func refreshVoiceAttemptObservableState(atDeadline: Bool) {
+        voiceAttempt.audioDelivery = model.voiceAudioDeliveryDiagnosticSnapshot()
+        let targetReady = transcriptEditorMounted && transcriptWindowKey && transcriptFirstResponder
+        if atDeadline {
+            voiceAttempt.focusReadyAtDeadline = targetReady
+        }
+        if let lossStartedAt = activeFocusLossStartedAtUptime {
+            let now = ProcessInfo.processInfo.systemUptime
+            voiceAttempt.totalFocusLossMilliseconds += max(
+                0,
+                Int((now - lossStartedAt) * 1_000)
+            )
+            activeFocusLossStartedAtUptime = targetReady ? nil : now
+            voiceAttempt.focusRecovered = voiceAttempt.focusRecovered || targetReady
+        }
+    }
+
+    private func resetExternalToolMicrophoneConfirmation(reason: String) {
+        guard externalToolMicrophoneConfirmed else { return }
+        externalToolMicrophoneConfirmed = false
+        AppLogger.shared.write(
+            "ONBOARDING EXTERNAL_MICROPHONE_CONFIRMATION reset reason=\(reason)"
+        )
+    }
+
+    private func elapsedMilliseconds(sinceUptime uptime: TimeInterval) -> Int {
+        max(0, Int((ProcessInfo.processInfo.systemUptime - uptime) * 1_000))
     }
 
     private func copyDiagnosticSummary() {
+        var diagnosticVoiceAttempt = voiceAttempt
+        diagnosticVoiceAttempt.audioDelivery = model.voiceAudioDeliveryDiagnosticSnapshot()
         let snapshot = FirstUseDiagnosticSnapshot(
             appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
             appBuild: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
@@ -2456,7 +2613,7 @@ struct OnboardingView: View {
             voiceTool: settings.onboardingVoiceTool,
             voiceKeyMode: settings.voiceKeyMode,
             context: diagnosticContext,
-            voiceAttempt: voiceAttempt,
+            voiceAttempt: diagnosticVoiceAttempt,
             bluetoothStatus: model.connectionStatus.key,
             buttonStatus: model.hidStatus.key,
             audioStatus: model.audioStatus.key,

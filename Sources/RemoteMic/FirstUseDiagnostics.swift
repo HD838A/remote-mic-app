@@ -1,6 +1,129 @@
 import Darwin
 import Foundation
 
+enum VirtualAudioDeviceDiagnosticKind: String, Equatable {
+    case miRemoteV2ch = "miremotev_2ch"
+    case blackHole2ch = "blackhole_2ch"
+    case other
+    case unavailable
+}
+
+struct VirtualAudioPlaybackCounters: Equatable {
+    var scheduledBuffers = 0
+    var scheduledSamples = 0
+    var playedBuffers = 0
+    var playedSamples = 0
+    var interruptedBuffers = 0
+    var interruptedSamples = 0
+}
+
+struct VirtualAudioOutputDiagnosticSnapshot: Equatable {
+    var selectedDeviceKind: VirtualAudioDeviceDiagnosticKind = .unavailable
+    var actualDeviceKind: VirtualAudioDeviceDiagnosticKind = .unavailable
+    var engineRunning = false
+    var playerPlaying = false
+    var boundToSelectedDevice: Bool?
+    var pendingBuffers = 0
+    var pendingSamples = 0
+    var counters = VirtualAudioPlaybackCounters()
+}
+
+enum VoiceAudioDeliveryRoute: String, Equatable {
+    case none
+    case virtualAudioDirect = "virtual_audio_direct"
+    case virtualAudioViaFnTap = "virtual_audio_via_fn_tap"
+}
+
+enum VoiceAudioDeliveryResult: String, Equatable {
+    case unavailable
+    case receiving
+    case noSamples = "no_samples"
+    case outputNotReady = "output_not_ready"
+    case routeMismatch = "route_mismatch"
+    case enqueueFailed = "enqueue_failed"
+    case playbackInterrupted = "playback_interrupted"
+    case playbackPending = "playback_pending"
+    case playbackIncomplete = "playback_incomplete"
+    case deliveredToSelectedDevice = "delivered_to_selected_device"
+
+    var isConfirmedFailure: Bool {
+        switch self {
+        case .outputNotReady, .routeMismatch, .enqueueFailed,
+             .playbackInterrupted:
+            return true
+        case .unavailable, .receiving, .noSamples, .playbackPending,
+             .playbackIncomplete, .deliveredToSelectedDevice:
+            return false
+        }
+    }
+}
+
+struct VoiceAudioDeliveryDiagnostic: Equatable {
+    var generation = 0
+    var source = "none"
+    var route: VoiceAudioDeliveryRoute = .none
+    var sessionEnded = false
+    var receivedBatches = 0
+    var receivedSamples = 0
+    var enqueueFailures = 0
+    var outputAtStart = VirtualAudioOutputDiagnosticSnapshot()
+    var outputAtObservation = VirtualAudioOutputDiagnosticSnapshot()
+    var countersAtStart = VirtualAudioPlaybackCounters()
+
+    var scheduledBuffers: Int {
+        max(0, outputAtObservation.counters.scheduledBuffers - countersAtStart.scheduledBuffers)
+    }
+
+    var scheduledSamples: Int {
+        max(0, outputAtObservation.counters.scheduledSamples - countersAtStart.scheduledSamples)
+    }
+
+    var playedBuffers: Int {
+        max(0, outputAtObservation.counters.playedBuffers - countersAtStart.playedBuffers)
+    }
+
+    var playedSamples: Int {
+        max(0, outputAtObservation.counters.playedSamples - countersAtStart.playedSamples)
+    }
+
+    var interruptedBuffers: Int {
+        max(0, outputAtObservation.counters.interruptedBuffers - countersAtStart.interruptedBuffers)
+    }
+
+    var interruptedSamples: Int {
+        max(0, outputAtObservation.counters.interruptedSamples - countersAtStart.interruptedSamples)
+    }
+
+    var result: VoiceAudioDeliveryResult {
+        VoiceAudioDeliveryPolicy.result(for: self)
+    }
+}
+
+enum VoiceAudioDeliveryPolicy {
+    static func result(for diagnostic: VoiceAudioDeliveryDiagnostic) -> VoiceAudioDeliveryResult {
+        guard diagnostic.generation > 0 else { return .unavailable }
+        guard diagnostic.receivedSamples > 0 else {
+            return diagnostic.sessionEnded ? .noSamples : .receiving
+        }
+        guard diagnostic.outputAtStart.selectedDeviceKind != .unavailable,
+              diagnostic.outputAtStart.engineRunning,
+              diagnostic.outputAtStart.playerPlaying
+        else { return .outputNotReady }
+        guard diagnostic.outputAtStart.boundToSelectedDevice == true else { return .routeMismatch }
+        guard diagnostic.enqueueFailures == 0 else { return .enqueueFailed }
+        guard diagnostic.interruptedSamples == 0 else { return .playbackInterrupted }
+        guard diagnostic.sessionEnded else { return .receiving }
+        guard diagnostic.scheduledSamples >= diagnostic.receivedSamples else {
+            return .playbackIncomplete
+        }
+        guard diagnostic.outputAtObservation.pendingSamples == 0 else { return .playbackPending }
+        guard diagnostic.playedSamples >= diagnostic.receivedSamples else {
+            return .playbackIncomplete
+        }
+        return .deliveredToSelectedDevice
+    }
+}
+
 enum FirstUseFailureReason: String, Codable, Equatable {
     case bluetoothPermissionDenied = "permission.bluetooth_denied"
     case inputMonitoringPermissionDenied = "permission.input_monitoring_denied"
@@ -17,6 +140,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
     case voiceNoTranscript = "voice.no_transcript"
     case voiceInputTargetNotReady = "voice.input_target_not_ready"
     case voiceInputTargetFocusLost = "voice.input_target_focus_lost"
+    case voiceAudioDeliveryFailed = "voice.audio_delivery_failed"
     case voiceExternalToolNoCommit = "voice.external_tool_no_commit"
     case controlsNotConfirmed = "controls.not_confirmed"
     case completeRuntimeRegressed = "complete.runtime_regressed"
@@ -38,6 +162,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
              .voiceNoTranscript,
              .voiceInputTargetNotReady,
              .voiceInputTargetFocusLost,
+             .voiceAudioDeliveryFailed,
              .voiceExternalToolNoCommit:
             return .voiceTest
         case .controlsNotConfirmed:
@@ -61,6 +186,7 @@ enum FirstUseVoiceAttemptResult: String, Codable, Equatable {
     case passed
     case inputTargetNotReady = "input_target_not_ready"
     case inputTargetFocusLost = "input_target_focus_lost"
+    case audioDeliveryFailed = "audio_delivery_failed"
     case noSamples = "no_samples"
     case manualInput = "manual_input"
     case externalToolNoCommit = "external_tool_no_commit"
@@ -73,12 +199,26 @@ enum FirstUseVoiceAttemptResult: String, Codable, Equatable {
             return .voiceInputTargetNotReady
         case .inputTargetFocusLost:
             return .voiceInputTargetFocusLost
+        case .audioDeliveryFailed:
+            return .voiceAudioDeliveryFailed
         case .noSamples:
             return .voiceNoSamples
         case .manualInput:
             return .voiceManualInput
         case .externalToolNoCommit:
             return .voiceExternalToolNoCommit
+        }
+    }
+
+    var observedFailure: String {
+        switch self {
+        case .none, .passed: return "none"
+        case .inputTargetNotReady: return "input_target_not_ready"
+        case .inputTargetFocusLost: return "input_target_not_ready_at_deadline"
+        case .audioDeliveryFailed: return "audio_not_delivered_to_selected_device"
+        case .noSamples: return "audio_samples_not_received"
+        case .manualInput: return "manual_input_observed"
+        case .externalToolNoCommit: return "transcript_commit_not_observed"
         }
     }
 
@@ -99,13 +239,41 @@ struct FirstUseVoiceAttemptDiagnostic: Equatable {
     var firstResponderAtStart = false
     var firstResponderAtEnd = false
     var focusLost = false
+    var focusLossCount = 0
+    var focusEditorUnmounted = false
+    var focusWindowNotKey = false
+    var focusFirstResponderChanged = false
+    var focusRecovered = false
+    var focusReadyAtEnd = false
+    var focusReadyAtDeadline: Bool?
+    var firstFocusLossLatencyMilliseconds: Int?
+    var totalFocusLossMilliseconds = 0
     var firstSampleLatencyMilliseconds: Int?
     var sessionDurationMilliseconds: Int?
     var transcriptWaitMilliseconds: Int?
+    var externalToolMicrophoneUserConfirmed = false
+    var audioDelivery = VoiceAudioDeliveryDiagnostic()
     var result: FirstUseVoiceAttemptResult = .none
 
     var failureReason: FirstUseFailureReason? {
         phase == .failed ? result.failureReason : nil
+    }
+
+    var probableCause: String {
+        switch result {
+        case .audioDeliveryFailed:
+            return "audio_\(audioDelivery.result.rawValue)"
+        case .externalToolNoCommit:
+            return externalToolMicrophoneUserConfirmed
+                ? "external_tool_no_commit"
+                : "external_tool_microphone_not_confirmed"
+        default:
+            return result.rawValue
+        }
+    }
+
+    var probableCauseConfirmed: Bool {
+        result != .externalToolNoCommit
     }
 }
 
@@ -115,13 +283,23 @@ enum FirstUseVoiceAttemptPolicy {
         samplesReceived: Bool,
         transcriptionAppeared: Bool,
         triggerReady: Bool,
-        focusLost: Bool
+        focusReadyAtDeadline: Bool,
+        audioDeliveryResult: VoiceAudioDeliveryResult,
+        finalObservation: Bool
     ) -> FirstUseVoiceAttemptResult {
         if manualInputObserved { return .manualInput }
         if !samplesReceived { return .noSamples }
-        if transcriptionAppeared { return .passed }
         if !triggerReady { return .inputTargetNotReady }
-        if focusLost { return .inputTargetFocusLost }
+        if audioDeliveryResult.isConfirmedFailure { return .audioDeliveryFailed }
+        if finalObservation,
+           audioDeliveryResult != .deliveredToSelectedDevice {
+            return .audioDeliveryFailed
+        }
+        if transcriptionAppeared,
+           audioDeliveryResult == .deliveredToSelectedDevice {
+            return .passed
+        }
+        if !focusReadyAtDeadline { return .inputTargetFocusLost }
         return .externalToolNoCommit
     }
 }
@@ -243,7 +421,7 @@ struct FirstUseDiagnosticSnapshot {
         let capabilities = context.capabilities
         var lines = [
             "SayAll first-use diagnostics",
-            "diagnostic_schema=2",
+            "diagnostic_schema=3",
             "generated_at=\(Self.timestamp(generatedAt))",
             "app_version=\(appVersion)",
             "app_build=\(appBuild)",
@@ -290,11 +468,49 @@ struct FirstUseDiagnosticSnapshot {
             "voice_first_responder_at_start=\(voiceAttempt.firstResponderAtStart)",
             "voice_first_responder_at_end=\(voiceAttempt.firstResponderAtEnd)",
             "voice_focus_lost=\(voiceAttempt.focusLost)",
+            "voice_focus_loss_count=\(voiceAttempt.focusLossCount)",
+            "voice_focus_editor_unmounted=\(voiceAttempt.focusEditorUnmounted)",
+            "voice_focus_window_not_key=\(voiceAttempt.focusWindowNotKey)",
+            "voice_focus_first_responder_changed=\(voiceAttempt.focusFirstResponderChanged)",
+            "voice_focus_recovered=\(voiceAttempt.focusRecovered)",
+            "voice_focus_ready_at_end=\(voiceAttempt.focusReadyAtEnd)",
+            "voice_focus_ready_at_deadline=\(Self.optionalBoolean(voiceAttempt.focusReadyAtDeadline))",
+            "voice_focus_first_loss_latency_ms=\(Self.metric(voiceAttempt.firstFocusLossLatencyMilliseconds))",
+            "voice_focus_total_loss_ms=\(voiceAttempt.totalFocusLossMilliseconds)",
             "voice_first_sample_latency_ms=\(Self.metric(voiceAttempt.firstSampleLatencyMilliseconds))",
             "voice_session_duration_ms=\(Self.metric(voiceAttempt.sessionDurationMilliseconds))",
+            "voice_session_under_1s=\((voiceAttempt.sessionDurationMilliseconds ?? 1_000) < 1_000)",
             "voice_transcript_wait_ms=\(Self.metric(voiceAttempt.transcriptWaitMilliseconds))",
+            "voice_external_tool_microphone_observable=false",
+            "voice_external_tool_microphone_user_confirmed=\(voiceAttempt.externalToolMicrophoneUserConfirmed)",
+            "voice_external_tool_expected_microphone=\(voiceAttempt.audioDelivery.outputAtStart.selectedDeviceKind.rawValue)",
+            "voice_external_tool_next_checks=microphone_matches_selected_device,voice_input_enabled,trigger_mode_matches_fn,session_duration_sufficient",
+            "voice_audio_generation=\(voiceAttempt.audioDelivery.generation)",
+            "voice_audio_source=\(voiceAttempt.audioDelivery.source)",
+            "voice_audio_route=\(voiceAttempt.audioDelivery.route.rawValue)",
+            "voice_audio_delivery_result=\(voiceAttempt.audioDelivery.result.rawValue)",
+            "voice_audio_received_batches=\(voiceAttempt.audioDelivery.receivedBatches)",
+            "voice_audio_received_samples=\(voiceAttempt.audioDelivery.receivedSamples)",
+            "voice_audio_enqueue_failures=\(voiceAttempt.audioDelivery.enqueueFailures)",
+            "voice_audio_selected_device=\(voiceAttempt.audioDelivery.outputAtStart.selectedDeviceKind.rawValue)",
+            "voice_audio_actual_device_at_start=\(voiceAttempt.audioDelivery.outputAtStart.actualDeviceKind.rawValue)",
+            "voice_audio_bound_at_start=\(Self.optionalBoolean(voiceAttempt.audioDelivery.outputAtStart.boundToSelectedDevice))",
+            "voice_audio_engine_running_at_start=\(voiceAttempt.audioDelivery.outputAtStart.engineRunning)",
+            "voice_audio_player_playing_at_start=\(voiceAttempt.audioDelivery.outputAtStart.playerPlaying)",
+            "voice_audio_actual_device_at_observation=\(voiceAttempt.audioDelivery.outputAtObservation.actualDeviceKind.rawValue)",
+            "voice_audio_bound_at_observation=\(Self.optionalBoolean(voiceAttempt.audioDelivery.outputAtObservation.boundToSelectedDevice))",
+            "voice_audio_scheduled_buffers=\(voiceAttempt.audioDelivery.scheduledBuffers)",
+            "voice_audio_scheduled_samples=\(voiceAttempt.audioDelivery.scheduledSamples)",
+            "voice_audio_played_buffers=\(voiceAttempt.audioDelivery.playedBuffers)",
+            "voice_audio_played_samples=\(voiceAttempt.audioDelivery.playedSamples)",
+            "voice_audio_interrupted_buffers=\(voiceAttempt.audioDelivery.interruptedBuffers)",
+            "voice_audio_interrupted_samples=\(voiceAttempt.audioDelivery.interruptedSamples)",
+            "voice_audio_pending_buffers=\(voiceAttempt.audioDelivery.outputAtObservation.pendingBuffers)",
+            "voice_audio_pending_samples=\(voiceAttempt.audioDelivery.outputAtObservation.pendingSamples)",
             "voice_terminal_result=\(voiceAttempt.result.rawValue)",
-            "voice_probable_cause=\(voiceAttempt.result.rawValue)",
+            "voice_observed_failure=\(voiceAttempt.result.observedFailure)",
+            "voice_probable_cause=\(voiceAttempt.probableCause)",
+            "voice_probable_cause_confirmed=\(voiceAttempt.probableCauseConfirmed)",
             "voice_diagnostic_boundary=\(voiceAttempt.result.diagnosticBoundary)",
             "tested_button_count=\(capabilities.testedRemoteButtonCount)",
             "bluetooth_status=\(bluetoothStatus)",
@@ -320,6 +536,10 @@ struct FirstUseDiagnosticSnapshot {
 
     private static func metric(_ value: Int?) -> String {
         value.map(String.init) ?? "unavailable"
+    }
+
+    private static func optionalBoolean(_ value: Bool?) -> String {
+        value.map(String.init) ?? "unknown"
     }
 
     private static func timestamp(_ date: Date) -> String {

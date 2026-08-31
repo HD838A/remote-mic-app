@@ -681,6 +681,9 @@
 "onboarding.voice_test.title" = "亲自说一句，确认真的能用";
 "onboarding.voice_test.detail" = "点一下下面的输入框，按住所选控制方式的语音键说话，说完后松开。";
 "onboarding.voice_test.other_detail" = "请在“%@”所用的其他语音工具中开启语音输入，并在工具设置里把“%@”选为麦克风。";
+"onboarding.voice_test.microphone_confirmation.title" = "输入工具还必须选择同一个麦克风";
+"onboarding.voice_test.microphone_confirmation.detail" = "无线麦选择“%@”只负责输出遥控器声音，不会修改%@自己的麦克风设置。请先在该工具设置中把麦克风也改为“%@”。";
+"onboarding.voice_test.microphone_confirmation.checkbox" = "我已确认%@的麦克风是“%@”";
 "onboarding.voice_test.placeholder" = "试着说：无线麦已经连接成功";
 "onboarding.voice_test.waiting_voice" = "等待你按住语音键开始说话…";
 "onboarding.voice_test.receiving" = "正在接收声音…";
@@ -845,6 +848,9 @@
 "onboarding.recovery.voice.input_target_focus_lost.title" = "说话过程中输入目标发生变化";
 "onboarding.recovery.voice.input_target_focus_lost.detail" = "保持无线麦窗口在前台，点击重试后完成一次按下、说话和松开。";
 "onboarding.recovery.voice.input_target_focus_lost.action" = "重新测试语音输入";
+"onboarding.recovery.voice.audio_delivery_failed.title" = "声音没有完整送到所选虚拟设备";
+"onboarding.recovery.voice.audio_delivery_failed.detail" = "无线麦已收到遥控器声音，但实际设备绑定、音频入队或播放排空未通过。请重试音频设置后再说一次。";
+"onboarding.recovery.voice.audio_delivery_failed.action" = "重试音频输出";
 "onboarding.recovery.voice.external_tool_no_commit.title" = "声音链路正常，但语音工具没有写入文字";
 "onboarding.recovery.voice.external_tool_no_commit.detail" = "无线麦已收到并输出声音，输入框也已准备好。请确认所选工具支持语音输入，并在工具自己的设置中选择当前语音输出设备作为麦克风，然后重试。";
 "onboarding.recovery.voice.external_tool_no_commit.action" = "检查后重新测试";
