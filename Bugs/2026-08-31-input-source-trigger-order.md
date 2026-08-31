@@ -8,11 +8,11 @@
 
 旧实现先调用 `KeyboardInjector.setVoiceKeyPressed`，再调用 `TISSelectInputSource`；而输入源激活是异步的。
 
-首次候选修复把激活轮询放进了 Fn 与显式 Command 共用的输入源会话入口，导致 Fn 路径在无法读取当前输入源时每次额外等待 500ms。定向测试稳定复现为两次实际准备、四条含 `source_prepare` 的日志，其中两条是 `activation_timeout`。代码检查还确认，激活等待期间的提前松手可重入共享 RunLoop，使 UP 先于尚未发出的 DOWN；DOWN 注入失败时也没有结束已准备的输入源会话。蓝牙 `didDecode` 同样可在等待期间重入并直接 enqueue，使目标 PTT 丢失 DOWN 前的首段 PCM。
+首次候选修复把激活轮询放进了 Fn 与显式 Command 共用的输入源会话入口，导致 Fn 路径在无法读取当前输入源时每次额外等待 500ms。定向测试稳定复现为两次实际准备、四条含 `source_prepare` 的日志，其中两条是 `activation_timeout`。代码检查还确认，激活等待期间的提前松手可重入共享 RunLoop，使 UP 先于尚未发出的 DOWN；DOWN 注入失败时也没有结束已准备的输入源会话。蓝牙 `didDecode` 同样可在等待期间重入并直接 enqueue，使目标 PTT 丢失 DOWN 前的首段 PCM；移动端 START 若在此时重入，还会注册一个没有真实 DOWN 的幽灵 owner。
 
 ## 修复
 
-Command 按下前先准备目标输入源，并在 500ms 内轮询确认当前输入源 ID 已切换；超时则恢复原输入源、回滚 latch，不发送 Command。等待期间记录 pending Command，并缓存最多 500ms 的蓝牙 PCM，DOWN 成功后按原顺序补送；提前松手、监听停止、注入失败或强制释放会清空缓存、恢复原输入源且不发送孤立 UP。激活轮询只用于显式 Command 会话，Fn 路径维持原有的即时准备和响应。
+Command 按下前先准备目标输入源，并在 500ms 内轮询确认当前输入源 ID 已切换；超时则恢复原输入源、回滚 latch，不发送 Command。等待期间记录 pending Command，并缓存最多 500ms 的蓝牙 PCM，DOWN 成功后按原顺序补送；新 owner 在 DOWN 完成前会被拒绝，同一 owner 的重复事件仍保持幂等，完成后多 owner 共享行为不变。提前松手、监听停止、注入失败或强制释放会清空缓存、恢复原输入源且不发送孤立 UP。激活轮询只用于显式 Command 会话，Fn 路径维持原有的即时准备和响应。
 
 ## 验证
 

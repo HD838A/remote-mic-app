@@ -198,6 +198,16 @@ enum BluetoothVoiceStopPolicy {
     }
 }
 
+enum VoiceKeyPendingDownPolicy {
+    static func shouldRejectStart(
+        streaming: Bool,
+        pendingDown: Bool,
+        ownerAlreadyRegistered: Bool
+    ) -> Bool {
+        streaming && pendingDown && !ownerAlreadyRegistered
+    }
+}
+
 struct CommandVoiceActivationAudioBuffer {
     private let maximumSampleCount: Int
     private var samples: [Int16] = []
@@ -3750,6 +3760,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             ? settings.voiceKeyMode
             : (heldVoiceKeyMode ?? pendingVoiceKeyMode ?? settings.voiceKeyMode)
         guard forceSoftware || !mode.usesHardwareMapping else { return true }
+        if VoiceKeyPendingDownPolicy.shouldRejectStart(
+            streaming: streaming,
+            pendingDown: pendingVoiceKeyMode != nil,
+            ownerAlreadyRegistered: voiceKeyLatch.contains(owner)
+        ) {
+            AppLogger.shared.write(
+                "VOICE KEY start_rejected reason=pending_down owner=\(owner)"
+            )
+            return false
+        }
         guard let transition = voiceKeyLatch.transition(
             streaming: streaming,
             owner: owner

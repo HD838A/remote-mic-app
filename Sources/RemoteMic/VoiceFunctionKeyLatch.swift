@@ -17,6 +17,10 @@ struct VoiceFunctionKeyLatch {
         !owners.isEmpty
     }
 
+    func contains(_ owner: Owner) -> Bool {
+        owners.contains(owner)
+    }
+
     mutating func transition(
         streaming: Bool,
         owner: Owner
