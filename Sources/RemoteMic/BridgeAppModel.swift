@@ -415,6 +415,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
     private var heldVoiceKeyMode: VoiceKeyMode?
+    private var pendingVoiceKeyMode: VoiceKeyMode?
     private var voiceSessionStartedAt: Date?
     private var voiceSessionID: UUID?
     private var voiceSessionUsageSource: UsageEventSource?
@@ -3678,7 +3679,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         forceSoftware: Bool,
         owner: VoiceFunctionKeyLatch.Owner
     ) -> Bool {
-        let mode = streaming ? settings.voiceKeyMode : (heldVoiceKeyMode ?? settings.voiceKeyMode)
+        let mode = streaming
+            ? settings.voiceKeyMode
+            : (heldVoiceKeyMode ?? pendingVoiceKeyMode ?? settings.voiceKeyMode)
         guard forceSoftware || !mode.usesHardwareMapping else { return true }
         guard let transition = voiceKeyLatch.transition(
             streaming: streaming,
@@ -3687,15 +3690,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return true
         }
         let shouldHold = transition == .press
-        if shouldHold, mode != .function,
-           !preferredInputSourceMonitor.beginVoiceSession() {
-            voiceKeyLatch.rollback(transition, owner: owner)
+        if shouldHold, mode != .function {
+            pendingVoiceKeyMode = mode
+            if !preferredInputSourceMonitor.beginVoiceSession() {
+                pendingVoiceKeyMode = nil
+                voiceKeyLatch.rollback(transition, owner: owner)
+                AppLogger.shared.write(
+                    "VOICE INPUT source_prepare_failed mode=\(mode.rawValue)"
+                )
+                return false
+            }
+        }
+        if !shouldHold, mode != .function,
+           heldVoiceKeyMode == nil, pendingVoiceKeyMode != nil {
+            pendingVoiceKeyMode = nil
+            preferredInputSourceMonitor.endVoiceSession()
+            isVoiceTriggerEnabled = true
             AppLogger.shared.write(
-                "VOICE INPUT source_prepare_failed mode=\(mode.rawValue)"
+                "VOICE KEY mode=\(mode.rawValue) pending_down_cancelled"
             )
-            return false
+            return true
         }
         guard KeyboardInjector.setVoiceKeyPressed(mode, isPressed: shouldHold) else {
+            if shouldHold, mode != .function {
+                pendingVoiceKeyMode = nil
+                preferredInputSourceMonitor.endVoiceSession()
+            }
             voiceKeyLatch.rollback(transition, owner: owner)
             AppLogger.shared.write(
                 "VOICE KEY \(mode.rawValue) \(shouldHold ? "DOWN" : "UP") failed"
@@ -3706,6 +3726,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             preferredInputSourceMonitor.endVoiceSession()
         }
         if shouldHold {
+            pendingVoiceKeyMode = nil
             heldVoiceKeyMode = mode
         } else {
             heldVoiceKeyMode = nil
@@ -3739,9 +3760,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func releaseVoiceKeyIfNeeded() -> Bool {
         guard voiceKeyLatch.isHeld else {
             heldVoiceKeyMode = nil
+            pendingVoiceKeyMode = nil
             return true
         }
-        guard let heldVoiceKeyMode else { return false }
+        guard let heldVoiceKeyMode else {
+            guard pendingVoiceKeyMode != nil else { return false }
+            voiceKeyLatch.reset()
+            pendingVoiceKeyMode = nil
+            preferredInputSourceMonitor.endVoiceSession()
+            isVoiceTriggerEnabled = true
+            AppLogger.shared.write("VOICE KEY pending_down_cancelled reason=forced_release")
+            return true
+        }
 
         var forcedAfterPermissionChange = false
         var released = KeyboardInjector.setVoiceKeyPressed(

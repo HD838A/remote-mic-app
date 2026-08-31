@@ -31,6 +31,7 @@ struct PreferredInputSourceMonitorTests {
     @Test func functionKeyDownPreparesTheRememberedInputMethodOncePerPress() {
         var handler: ((Bool) -> Void)?
         var preparedTools: [OnboardingVoiceTool] = []
+        var inputSourceLookupCount = 0
         var logs: [String] = []
         let monitor = PreferredInputSourceMonitor(
             voiceTool: { .doubao },
@@ -38,7 +39,10 @@ struct PreferredInputSourceMonitorTests {
                 preparedTools.append(tool)
                 return .selected
             },
-            currentInputSourceID: { nil },
+            currentInputSourceID: {
+                inputSourceLookupCount += 1
+                return nil
+            },
             restoreInputSource: { _ in .selected },
             installMonitor: { callback in
                 handler = callback
@@ -55,6 +59,7 @@ struct PreferredInputSourceMonitorTests {
         handler?(true)
 
         #expect(preparedTools == [.doubao, .doubao])
+        #expect(inputSourceLookupCount == 2)
         #expect(logs.filter { $0.contains("source_prepare") }.count == 2)
         #expect(logs.filter { $0.contains("function_key edge=down") }.count == 2)
         #expect(logs.filter { $0.contains("function_key edge=up") }.count == 1)
@@ -83,6 +88,62 @@ struct PreferredInputSourceMonitorTests {
         monitor.handleFunctionKeyPressed(true)
 
         #expect(preparationCount == 0)
+    }
+
+    @Test func cancellingExplicitVoiceDuringActivationStopsWaitingAndRestores() {
+        var monitor: PreferredInputSourceMonitor!
+        var logs: [String] = []
+        var restoredInputSourceIDs: [String] = []
+        monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                DispatchQueue.main.async {
+                    monitor.endVoiceSession()
+                }
+                return .selected
+            },
+            currentInputSourceID: { "com.apple.keylayout.ABC" },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { logs.append($0) }
+        )
+
+        #expect(!monitor.beginVoiceSession())
+        #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
+        #expect(logs.contains { $0.contains("result=activation_cancelled") })
+        #expect(!logs.contains { $0.contains("result=activation_timeout") })
+    }
+
+    @Test func stoppingDuringExplicitVoiceActivationCancelsThePendingSession() {
+        var monitor: PreferredInputSourceMonitor!
+        var logs: [String] = []
+        var restoredInputSourceIDs: [String] = []
+        monitor = PreferredInputSourceMonitor(
+            voiceTool: { .weixin },
+            prepareInputSource: { _ in
+                DispatchQueue.main.async {
+                    monitor.stop()
+                }
+                return .selected
+            },
+            currentInputSourceID: { "com.apple.keylayout.ABC" },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { logs.append($0) }
+        )
+
+        monitor.start()
+        #expect(!monitor.beginVoiceSession())
+        #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
+        #expect(logs.contains { $0.contains("result=activation_cancelled") })
     }
 
     @Test func stopRemovesTheMonitorAndClearsThePressedLatch() {

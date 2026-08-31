@@ -198,4 +198,4 @@
 
 ## Issue #307 回归：输入源确认后再触发 Command
 
-在微信输入法与豆包输入法之间切换，连续执行右 Command 语音会话。预期每次日志先出现 `VOICE INPUT source_prepare` 且当前输入源确认成功，再出现 `VOICE KEY ... DOWN`；超时时不发送孤立 Command，松开后只恢复未被用户改动的原输入源。
+在微信输入法与豆包输入法之间切换，连续执行右 Command 语音会话。预期每次日志先出现 `VOICE INPUT source_prepare` 且当前输入源确认成功，再出现 `VOICE KEY ... DOWN`；超时时不发送孤立 Command，松开后只恢复未被用户改动的原输入源。输入源仍在激活时立即松开语音键，预期记录 `pending_down_cancelled`，不出现 UP 先于 DOWN，也不残留目标输入源。
