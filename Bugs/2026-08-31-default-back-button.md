@@ -15,5 +15,5 @@
 ## 验证
 
 - `swift test --filter RemoteButtonsTests`
-- 自动化覆盖映射关闭时的 back-only 接线。
+- 自动化覆盖映射关闭时 Back 固定即时执行一次退格，不读取旧 profile、override、双击/长按映射，也不处理其它键。
 - 真实遥控器、输入监控/辅助功能权限和目标文本应用仍需真机验收。

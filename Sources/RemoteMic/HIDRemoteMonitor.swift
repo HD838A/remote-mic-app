@@ -579,6 +579,13 @@ final class HIDRemoteMonitor {
         parseAndProcess(reportID: reportID, data: data, source: "simulated")
     }
 
+    func handleSimulatedBackOnlyReport(reportID: UInt32, data: Data) {
+        let previousBackOnlyMode = backOnlyMode
+        backOnlyMode = true
+        defer { backOnlyMode = previousBackOnlyMode }
+        handleSimulatedReport(reportID: reportID, data: data)
+    }
+
     private func parseAndProcess(reportID: UInt32, data: Data, source: String) {
         guard let usages = parsedUsages(reportID: reportID, data: data, source: source) else {
             return
@@ -607,7 +614,11 @@ final class HIDRemoteMonitor {
             "HID REPORT accepted source=\(source) id=\(reportID) bytes=\(data.count) " +
                 "usage_count=\(usages.count) buttons=\(Self.buttonList(for: usages))"
         )
-        process(usages: backOnlyMode ? usages.intersection([RemoteButton.back.hidUsage]) : usages)
+        if backOnlyMode {
+            processBackOnly(usages: usages.intersection([RemoteButton.back.hidUsage]))
+        } else {
+            process(usages: usages)
+        }
     }
 
     func disconnectSimulatedDevice() {
@@ -770,6 +781,21 @@ final class HIDRemoteMonitor {
                 guard processGestureCommands(gestureRecognizer.release(button)) else { return }
             }
         }
+    }
+
+    private func processBackOnly(usages: Set<UInt16>) {
+        let pressed = usages.subtracting(activeUsages)
+        activeUsages = usages
+        onActiveButtons?(profileID, RemoteButton.buttons(for: usages))
+        guard pressed.contains(RemoteButton.back.hidUsage) else { return }
+        let configured = ConfiguredButtonAction(action: .deleteBackward, shortcut: nil)
+        guard actionPerformer(.back, .singleClick, configured) else {
+            releaseForRevokedPermissions()
+            return
+        }
+        AppLogger.shared.write(
+            "HID BUTTON button=back trigger=singleClick action=deleteBackward path=back_only"
+        )
     }
 
     static func acceptsReport(reportingFingerprint: String?, activeFingerprint: String?) -> Bool {

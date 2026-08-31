@@ -2904,23 +2904,56 @@ struct RemoteButtonsTests {
         #expect(RemoteButton.back.nativeEvent == nil)
     }
 
-    @Test func disabledMappingKeepsBackRecoveryPathForPhysicalRemotes() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let modelSource = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
-            encoding: .utf8
+    @Test func disabledMappingBackIgnoresStoredMappingsOverridesAndOtherButtons() throws {
+        let suiteName = "RemoteButtonsTests.backOnly.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = false
+        settings.setAction(.escape, for: .back)
+        settings.setAction(.openCodex, for: .back, trigger: .doubleClick)
+        settings.setAction(.openClaude, for: .back, trigger: .longPress)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var performed: [(RemoteButton, ButtonTrigger, ButtonAction)] = []
+        var overrideTriggers: [ButtonTrigger] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { button, trigger, configured in
+                performed.append((button, trigger, configured.action))
+                return true
+            },
+            overrideActionPerformer: { _, button, trigger in
+                guard button == .back else { return false }
+                overrideTriggers.append(trigger)
+                return true
+            },
+            hasOverrideBinding: { _, button, trigger in
+                button == .back && trigger != .singleClick
+            }
         )
-        #expect(modelSource.contains("let backOnlyMode = !settings.customMappingEnabled"))
-        #expect(modelSource.contains("allowBackOnly: backOnlyMode"))
-        let monitorSource = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"),
-            encoding: .utf8
-        )
-        #expect(monitorSource.contains("backOnlyMode = allowBackOnly && !settings.customMappingEnabled"))
-        #expect(monitorSource.contains("usages.intersection([RemoteButton.back.hidUsage])"))
+        monitor.connectSimulatedDevice(fingerprint: "back-only", profileID: profileID, isSeized: false)
+
+        let backDown = Data([UInt8(RemoteButton.back.hidUsage), 0, 0, 0, 0, 0])
+        let upDown = Data([UInt8(RemoteButton.up.hidUsage), 0, 0, 0, 0, 0])
+        let release = Data(repeating: 0, count: 6)
+        monitor.handleSimulatedBackOnlyReport(reportID: 1, data: backDown)
+        monitor.handleSimulatedBackOnlyReport(reportID: 1, data: backDown)
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.longPressMilliseconds)
+        monitor.handleSimulatedBackOnlyReport(reportID: 1, data: release)
+        monitor.handleSimulatedBackOnlyReport(reportID: 1, data: upDown)
+        monitor.handleSimulatedBackOnlyReport(reportID: 1, data: release)
+
+        #expect(performed.count == 1)
+        #expect(performed.first?.0 == .back)
+        #expect(performed.first?.1 == .singleClick)
+        #expect(performed.first?.2 == .deleteBackward)
+        #expect(overrideTriggers.isEmpty)
+        #expect(scheduler.pendingTaskCount == 0)
     }
 
     @Test(arguments: [UInt16(10), UInt16(50)])
