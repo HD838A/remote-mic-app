@@ -17,4 +17,3 @@
 - `swift test --filter VirtualAudioConnectionLifecycleTests`
 - 自动化覆盖记忆设备优先、设备缺失回退和受管切换不覆盖用户选择。
 - 真实 Elgato/Wave Link 与热插拔验收仍需在目标 Mac 执行。
-
