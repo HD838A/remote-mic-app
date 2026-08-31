@@ -548,7 +548,8 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("allRecognizedVoiceToolsUnavailable"))
         #expect(viewSource.contains("onboarding.voice_tool.none_detected"))
         #expect(viewSource.contains("onboarding.voice_tool.other.setup_detail"))
-        #expect(viewSource.contains("onboarding.voice_test.other_detail"))
+        #expect(viewSource.contains("onboarding.voice_test.microphone_confirmation.detail"))
+        #expect(viewSource.contains("externalToolMicrophoneConfirmationCard"))
         #expect(viewSource.contains("if voiceToolAvailability[.doubao] == .notInstalled"))
         #expect(!viewSource.contains("settings.onboardingVoiceTool == .doubao,\n"))
         #expect(viewSource.contains("localization.text(settings.onboardingVoiceTool.titleKey)"))
@@ -591,7 +592,8 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains(".onChange(of: transcript)"))
         #expect(!viewSource.contains(".onChange(of: transcript) { _, updatedText in"))
         #expect(viewSource.contains("OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput"))
-        #expect(viewSource.contains("policyAllowsContinue && voiceAttempt.phase == .passed"))
+        #expect(viewSource.contains("voiceAttempt.phase == .passed &&"))
+        #expect(viewSource.contains("externalToolMicrophoneConfirmed"))
         #expect(viewSource.contains(".eventSourceStateID"))
         #expect(viewSource.contains(".eventSourceUnixProcessID"))
         #expect(viewSource.contains("manualTranscriptInputObserved = true"))
@@ -1359,36 +1361,73 @@ struct OnboardingFlowTests {
             samplesReceived: true,
             transcriptionAppeared: true,
             triggerReady: true,
-            focusLost: false
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
         ) == .passed)
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: false,
             transcriptionAppeared: false,
             triggerReady: true,
-            focusLost: false
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .noSamples,
+            finalObservation: true
         ) == .noSamples)
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: true,
             transcriptionAppeared: false,
             triggerReady: false,
-            focusLost: false
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
         ) == .inputTargetNotReady)
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: true,
             transcriptionAppeared: false,
             triggerReady: true,
-            focusLost: true
+            focusReadyAtDeadline: false,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
         ) == .inputTargetFocusLost)
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: true,
             transcriptionAppeared: false,
             triggerReady: true,
-            focusLost: false
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .enqueueFailed,
+            finalObservation: true
+        ) == .audioDeliveryFailed)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
         ) == .externalToolNoCommit)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .playbackPending,
+            finalObservation: false
+        ) == .externalToolNoCommit)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .playbackPending,
+            finalObservation: true
+        ) == .audioDeliveryFailed)
     }
 
     @Test func voiceAttemptIntermediatePhasesAreNotFailures() {
@@ -1431,6 +1470,65 @@ struct OnboardingFlowTests {
             voiceAttempt: attempt
         )
         #expect(context.failureReason == .voiceExternalToolNoCommit)
+    }
+
+    @Test func recoveredTransientFocusLossDoesNotOverrideTheExternalToolBoundary() {
+        let result = FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
+        )
+        var attempt = FirstUseVoiceAttemptDiagnostic(
+            phase: .failed,
+            focusLost: true,
+            focusLossCount: 1,
+            focusRecovered: true,
+            focusReadyAtDeadline: true,
+            externalToolMicrophoneUserConfirmed: true,
+            result: result
+        )
+        attempt.audioDelivery = deliveredAudioDiagnostic()
+
+        #expect(result == .externalToolNoCommit)
+        #expect(attempt.probableCause == "external_tool_no_commit")
+        #expect(!attempt.probableCauseConfirmed)
+    }
+
+    @Test func focusStillMissingAtTheDeadlineIsAConfirmedSayAllFailure() {
+        let result = FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: false,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
+        )
+
+        #expect(result == .inputTargetFocusLost)
+        #expect(FirstUseVoiceAttemptDiagnostic(
+            phase: .failed,
+            focusReadyAtDeadline: false,
+            result: result
+        ).probableCauseConfirmed)
+    }
+
+    @Test func unconfirmedExternalMicrophoneIsReportedAsAnUnverifiedNextCheck() {
+        var attempt = FirstUseVoiceAttemptDiagnostic(
+            phase: .failed,
+            focusReadyAtDeadline: true,
+            externalToolMicrophoneUserConfirmed: false,
+            result: .externalToolNoCommit
+        )
+        attempt.audioDelivery = deliveredAudioDiagnostic()
+
+        #expect(attempt.probableCause == "external_tool_microphone_not_confirmed")
+        #expect(!attempt.probableCauseConfirmed)
+        #expect(attempt.result.diagnosticBoundary == "external_tool_internal_state_unavailable")
     }
 
     @Test func voiceTestUsesNativeFirstResponderAsTheFocusFact() throws {
@@ -1561,7 +1659,7 @@ struct OnboardingFlowTests {
         let text = snapshot.redactedText
         #expect(text.contains("failure=permission.input_monitoring_denied"))
         #expect(text.contains("voice_attempt=2"))
-        #expect(text.contains("diagnostic_schema=2"))
+        #expect(text.contains("diagnostic_schema=3"))
         #expect(text.contains("app_version=1.8.14"))
         #expect(text.contains("app_build=106"))
         #expect(text.contains("onboarding_voice_key_policy=fn_only"))
@@ -1570,10 +1668,43 @@ struct OnboardingFlowTests {
         #expect(text.contains("macos_build="))
         #expect(text.contains("app_language=zh-Hans"))
         #expect(text.contains("voice_terminal_result=external_tool_no_commit"))
+        #expect(text.contains("voice_probable_cause_confirmed=false"))
+        #expect(text.contains("voice_external_tool_microphone_observable=false"))
+        #expect(text.contains("voice_external_tool_expected_microphone=unavailable"))
+        #expect(text.contains("voice_external_tool_next_checks=microphone_matches_selected_device"))
+        #expect(text.contains("voice_audio_delivery_result=unavailable"))
+        #expect(text.contains("voice_focus_ready_at_deadline=unknown"))
         #expect(text.contains("voice_first_sample_latency_ms=24"))
         #expect(text.contains("voice_diagnostic_boundary=external_tool_internal_state_unavailable"))
         #expect(!text.contains("/Users/"))
         #expect(!text.contains("UUID"))
         #expect(!text.contains("无线麦已经连接成功"))
+    }
+
+    private func deliveredAudioDiagnostic() -> VoiceAudioDeliveryDiagnostic {
+        let start = VirtualAudioOutputDiagnosticSnapshot(
+            selectedDeviceKind: .miRemoteV2ch,
+            actualDeviceKind: .miRemoteV2ch,
+            engineRunning: true,
+            playerPlaying: true,
+            boundToSelectedDevice: true
+        )
+        var observation = start
+        observation.counters = VirtualAudioPlaybackCounters(
+            scheduledBuffers: 1,
+            scheduledSamples: 320,
+            playedBuffers: 1,
+            playedSamples: 320
+        )
+        return VoiceAudioDeliveryDiagnostic(
+            generation: 1,
+            source: UsageEventSource.bluetoothRemote.rawValue,
+            route: .virtualAudioDirect,
+            sessionEnded: true,
+            receivedBatches: 1,
+            receivedSamples: 320,
+            outputAtStart: start,
+            outputAtObservation: observation
+        )
     }
 }

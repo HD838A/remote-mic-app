@@ -41,7 +41,7 @@
 用户复制的诊断、验收 session 和每次 App 启动的环境头必须包含以下 App 信息：
 
 ```text
-diagnostic_schema=2
+diagnostic_schema=3
 app_version=1.9.18
 app_build=172
 source_revision=<完整 Git Commit SHA 或 unknown>
@@ -159,12 +159,30 @@ COMPONENT ACTION operation_id=12 phase=completed result=passed source=physical_r
 ```text
 ONBOARDING VOICE_ATTEMPT attempt_id=12 phase=completed result=failed voice_tool=weixin
 trigger_down_observed=true trigger_up_observed=true audio_samples_received=true
-input_target_ready=true focus_lost=false manual_input_observed=false
+audio_route=virtual_audio_direct audio_received_samples=64000
+audio_scheduled_samples=64000 audio_played_samples=64000 audio_pending_samples=0
+audio_selected=miremotev_2ch audio_actual_observation=miremotev_2ch audio_bound_observation=true
+input_target_ready=true focus_lost=false focus_recovered=false manual_input_observed=false
 transcript_commit_observed=false terminal_result=external_tool_no_commit
-diagnostic_boundary=external_tool_internal_state_unavailable elapsed_ms=3128
+external_microphone_observable=false external_microphone_user_confirmed=true
+external_next_check=microphone_matches_selected_device
+probable_cause_confirmed=false diagnostic_boundary=external_tool_internal_state_unavailable
+elapsed_ms=3128
 ```
 
-这条日志只能证明 SayAll 可观察链路已经完成而第三方工具没有提交文字，不能进一步断言微信输入法没有开启“按住说话”或选择了错误麦克风。
+这条日志能证明 SayAll 已收到声音、实际绑定并播放到所选虚拟设备、输入目标正常，但第三方工具没有提交文字。`external_microphone_user_confirmed` 只能表示用户勾选确认，不能替代自动检测；SayAll 不得读取第三方 App 私有配置。因而日志应优先提示检查“第三方工具麦克风是否与 SayAll 所选设备一致”，但不能进一步断言微信输入法没有开启“按住说话”或已经确定选择了错误麦克风。
+
+虚拟音频链路必须分别记录以下事实，不能只输出 `audio_received=true` 或 `enqueued=true`：
+
+| 阶段 | 推荐字段 |
+| --- | --- |
+| SayAll 收到音频 | `audio_received_batches`、`audio_received_samples` |
+| 路由与入队 | `audio_route`、`audio_enqueue_failures`、`audio_scheduled_samples` |
+| Core Audio 设备绑定 | `audio_selected`、`audio_actual_observation`、`audio_bound_observation` |
+| 实际播放与排空 | `audio_played_samples`、`audio_interrupted_samples`、`audio_pending_samples` |
+| 连续会话隔离 | `audio_generation`；上一 generation 的迟到 callback 不得计入下一次 attempt |
+
+当录音结束时仍有正常 pending 音频，不应立即输出终态失败；应等待该功能定义的排空/文字截止窗口，只有截止时仍 pending、播放不完整或已经中断才判定为音频投递失败。
 
 ## 隐私与敏感信息红线
 

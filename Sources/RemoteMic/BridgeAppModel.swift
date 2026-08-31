@@ -378,7 +378,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         },
         setFunctionKeyPressed: { KeyboardInjector.setFunctionKeyPressed($0) },
         enqueueAudio: { [weak self] samples in
-            _ = self?.audioOutput.enqueue(samples: samples)
+            self?.enqueueVoiceFnTapAudio(samples)
         },
         drainAudio: { [weak self] completion in
             guard let self else {
@@ -417,6 +417,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var heldVoiceKeyMode: VoiceKeyMode?
     private var voiceSessionStartedAt: Date?
     private var voiceSessionID: UUID?
+    private var voiceAudioDeliveryGeneration = 0
+    private var voiceAudioDeliveryDiagnostic = VoiceAudioDeliveryDiagnostic()
     private var voiceSessionUsageSource: UsageEventSource?
     private var bluetoothVoiceActive = false
     private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
@@ -2561,8 +2563,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
               identifier == activeBluetoothVoiceDeviceIdentifier
         else { return }
         recordingAssetCoordinator.append(samples: samples)
+        let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
         let handledByFnTapMode = voiceFnTapSession.receive(samples)
-        let enqueued = handledByFnTapMode || audioOutput.enqueue(samples: samples)
+        let enqueued: Bool
+        if handledByFnTapMode {
+            enqueued = true
+        } else {
+            enqueued = audioOutput.enqueue(
+                samples: samples,
+                deliveryGeneration: deliveryGeneration
+            )
+            recordVoiceAudioEnqueueOutcome(
+                accepted: enqueued,
+                deliveryGeneration: deliveryGeneration
+            )
+        }
+        recordVoiceAudioReceipt(
+            samples: samples,
+            route: handledByFnTapMode ? .virtualAudioViaFnTap : .virtualAudioDirect
+        )
         bluetoothVoiceDecodedBatchCount += 1
         bluetoothVoiceDecodedSampleCount += samples.count
         bluetoothVoiceTailDiagnostics.append(samples, at: ProcessInfo.processInfo.systemUptime)
@@ -3506,7 +3525,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
         mobileVoiceAudioBatchCount += 1
         mobileVoiceAudioSignalMetrics.append(samples)
-        let accepted = audioOutput.enqueue(samples: samples)
+        let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
+        let accepted = audioOutput.enqueue(
+            samples: samples,
+            deliveryGeneration: deliveryGeneration
+        )
+        recordVoiceAudioReceipt(
+            samples: samples,
+            route: .virtualAudioDirect
+        )
+        recordVoiceAudioEnqueueOutcome(
+            accepted: accepted,
+            deliveryGeneration: deliveryGeneration
+        )
         if !accepted { mobileVoiceAudioEnqueueFailureCount += 1 }
         if mobileVoiceAudioBatchCount == 1 || mobileVoiceAudioBatchCount.isMultiple(of: 20) {
             AppLogger.shared.write(
@@ -3544,6 +3575,56 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             sampleCount: sampleCount
         ) else { return }
         hasReceivedCurrentVoiceSamples = true
+    }
+
+    func voiceAudioDeliveryDiagnosticSnapshot() -> VoiceAudioDeliveryDiagnostic {
+        var diagnostic = voiceAudioDeliveryDiagnostic
+        diagnostic.outputAtObservation = audioOutput.diagnosticSnapshot(
+            deliveryGeneration: diagnostic.generation
+        )
+        return diagnostic
+    }
+
+    private func recordVoiceAudioReceipt(
+        samples: [Int16],
+        route: VoiceAudioDeliveryRoute
+    ) {
+        guard !samples.isEmpty, voiceAudioDeliveryDiagnostic.generation > 0 else { return }
+        voiceAudioDeliveryDiagnostic.route = route
+        voiceAudioDeliveryDiagnostic.receivedBatches += 1
+        voiceAudioDeliveryDiagnostic.receivedSamples += samples.count
+        voiceAudioDeliveryDiagnostic.outputAtObservation = audioOutput.diagnosticSnapshot(
+            deliveryGeneration: voiceAudioDeliveryDiagnostic.generation
+        )
+    }
+
+    private func recordVoiceAudioEnqueueOutcome(
+        accepted: Bool,
+        deliveryGeneration: Int
+    ) {
+        guard !accepted,
+              deliveryGeneration > 0,
+              voiceAudioDeliveryDiagnostic.generation == deliveryGeneration
+        else { return }
+        voiceAudioDeliveryDiagnostic.enqueueFailures += 1
+        voiceAudioDeliveryDiagnostic.outputAtObservation = audioOutput.diagnosticSnapshot(
+            deliveryGeneration: deliveryGeneration
+        )
+    }
+
+    private func enqueueVoiceFnTapAudio(_ samples: [Int16]) {
+        let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
+        let accepted = audioOutput.enqueue(
+            samples: samples,
+            deliveryGeneration: deliveryGeneration
+        )
+        recordVoiceAudioEnqueueOutcome(
+            accepted: accepted,
+            deliveryGeneration: deliveryGeneration
+        )
+        if !accepted {
+            bluetoothVoiceEnqueueFailureCount += 1
+        }
     }
 
     private func archiveCapturedTranscript(_ capture: CapturedTranscript) {
@@ -3593,6 +3674,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let startedAt = Date()
         let source = currentVoiceUsageSource
         let sessionID = UUID()
+        voiceAudioDeliveryGeneration &+= 1
+        let audioSnapshot = audioOutput.diagnosticSnapshot(
+            deliveryGeneration: voiceAudioDeliveryGeneration
+        )
+        voiceAudioDeliveryDiagnostic = VoiceAudioDeliveryDiagnostic(
+            generation: voiceAudioDeliveryGeneration,
+            source: source.rawValue,
+            outputAtStart: audioSnapshot,
+            outputAtObservation: audioSnapshot,
+            countersAtStart: audioSnapshot.counters
+        )
         activeVoiceSource = source
         settings.recordButtonPress(control: .voice, source: source, at: startedAt)
         voiceSessionStartedAt = startedAt
@@ -3634,6 +3726,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         voiceSessionUsageSource = nil
         let sessionID = voiceSessionID
         voiceSessionID = nil
+        voiceAudioDeliveryDiagnostic.sessionEnded = true
+        voiceAudioDeliveryDiagnostic.outputAtObservation = audioOutput.diagnosticSnapshot(
+            deliveryGeneration: voiceAudioDeliveryDiagnostic.generation
+        )
         isStreaming = false
         activeVoiceSource = nil
         if flushAudio {
