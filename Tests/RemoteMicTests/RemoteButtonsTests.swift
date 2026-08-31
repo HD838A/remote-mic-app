@@ -7,18 +7,43 @@ import Testing
 @Suite("Remote buttons")
 struct RemoteButtonsTests {
 
-    @Test func hidDiscoveryRebuildsWhenManagerWaitsWithoutAReport() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let source = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"),
-            encoding: .utf8
-        )
-        #expect(source.contains("scheduleDiscoveryWatchdog()"))
-        #expect(source.contains("watchdog_rebuild"))
-        #expect(source.contains("discoveryRecoveryAttempt < 2"))
+    @Test func hidDiscoveryWatchdogRebuildsAtMostTwiceAcrossRestartScheduling() {
+        let scheduler = RemoteButtonsTestScheduler()
+        let watchdog = HIDDiscoveryRecoveryWatchdog(scheduler: scheduler)
+        var rebuildAttempts: [Int] = []
+        var scheduleNext: (() -> Void)!
+        scheduleNext = {
+            watchdog.schedule(
+                isWaiting: { true },
+                rebuild: { attempt in
+                    rebuildAttempts.append(attempt)
+                    scheduleNext()
+                }
+            )
+        }
+
+        scheduleNext()
+        #expect(scheduler.pendingTaskCount == 1)
+        scheduler.advance(toMilliseconds: 2_000)
+        #expect(rebuildAttempts == [1])
+        #expect(scheduler.pendingTaskCount == 1)
+        scheduler.advance(toMilliseconds: 4_000)
+        #expect(rebuildAttempts == [1, 2])
+        #expect(scheduler.pendingTaskCount == 0)
+        scheduler.advance(toMilliseconds: 6_000)
+        #expect(rebuildAttempts == [1, 2])
+    }
+
+    @Test func hidDiscoveryWatchdogSurvivesRejectedReportsAndStopsForAcceptedReport() {
+        let scheduler = RemoteButtonsTestScheduler()
+        let watchdog = HIDDiscoveryRecoveryWatchdog(scheduler: scheduler)
+        watchdog.schedule(isWaiting: { true }, rebuild: { _ in })
+
+        watchdog.handleReport(accepted: false)
+        #expect(scheduler.pendingTaskCount == 1)
+        watchdog.handleReport(accepted: true)
+        #expect(scheduler.pendingTaskCount == 0)
+        #expect(watchdog.attempt == 0)
     }
     @Test func exclusiveHIDAccessUsesASeparateUserFacingFailure() {
         #expect(HIDRemoteMonitor.deviceOpenFailureMessageKey(

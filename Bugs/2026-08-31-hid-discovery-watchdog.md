@@ -15,5 +15,5 @@ HID manager 启动后增加 2 秒 watchdog：无 active device 时执行一次�
 ## 验证
 
 - `swift test --filter RemoteButtonsTests`
-- 自动化覆盖 watchdog 接线与有限重试。
+- 自动化覆盖跨 manager rebuild 最多两次重试，以及拒绝报告不取消、有效报告才取消 watchdog。
 - RC001/RC003、睡眠唤醒、第三方 HID 工具占用仍需真机验收。
