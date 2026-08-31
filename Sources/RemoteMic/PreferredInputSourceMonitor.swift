@@ -5,6 +5,11 @@ final class PreferredInputSourceMonitor {
     typealias InputSourcePreparer = (OnboardingVoiceTool) -> OnboardingInputSourceSwitchResult
     typealias CurrentInputSourceIDProvider = () -> String?
     typealias InputSourceRestorer = (String) -> OnboardingInputSourceSwitchResult
+    typealias InputSourceActivationWaiter = (
+        String,
+        CurrentInputSourceIDProvider,
+        () -> Bool
+    ) -> Bool
     typealias MonitorInstaller = (@escaping (Bool) -> Void) -> Any?
     typealias MonitorRemover = (Any) -> Void
     typealias Logger = (String) -> Void
@@ -13,6 +18,7 @@ final class PreferredInputSourceMonitor {
     private let prepareInputSource: InputSourcePreparer
     private let currentInputSourceID: CurrentInputSourceIDProvider
     private let restoreInputSource: InputSourceRestorer
+    private let waitForInputSourceActivation: InputSourceActivationWaiter
     private let installMonitor: MonitorInstaller
     private let removeMonitor: MonitorRemover
     private let logger: Logger
@@ -34,9 +40,10 @@ final class PreferredInputSourceMonitor {
             case explicitVoice
         }
 
-        let previousInputSourceID: String
+        let previousInputSourceID: String?
         let targetInputSourceID: String
         var owners: Set<Owner>
+        var activationPending: Bool
     }
 
     init(
@@ -44,6 +51,16 @@ final class PreferredInputSourceMonitor {
         prepareInputSource: @escaping InputSourcePreparer = OnboardingInputSourceSwitcher.prepareForVoiceSession,
         currentInputSourceID: @escaping CurrentInputSourceIDProvider = OnboardingInputSourceSwitcher.currentInputSourceID,
         restoreInputSource: @escaping InputSourceRestorer = OnboardingInputSourceSwitcher.selectEnabledInputSource,
+        waitForInputSourceActivation: @escaping InputSourceActivationWaiter = { target, current, shouldContinue in
+            let deadline = Date().addingTimeInterval(PreferredInputSourceMonitor.activationTimeout)
+            while shouldContinue(), current() != target, Date() < deadline {
+                _ = RunLoop.main.run(
+                    mode: .common,
+                    before: Date().addingTimeInterval(PreferredInputSourceMonitor.activationPollInterval)
+                )
+            }
+            return shouldContinue() && current() == target
+        },
         installMonitor: @escaping MonitorInstaller = { handler in
             NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { event in
                 handler(event.modifierFlags.contains(.function))
@@ -56,6 +73,7 @@ final class PreferredInputSourceMonitor {
         self.prepareInputSource = prepareInputSource
         self.currentInputSourceID = currentInputSourceID
         self.restoreInputSource = restoreInputSource
+        self.waitForInputSourceActivation = waitForInputSourceActivation
         self.installMonitor = installMonitor
         self.removeMonitor = removeMonitor
         self.logger = logger
@@ -148,13 +166,43 @@ final class PreferredInputSourceMonitor {
                     "tool=\(selectedVoiceTool.rawValue)"
             )
         }
+        guard let targetInputSourceID = selectedVoiceTool.preferredInputSourceID else { return true }
         if var session = managedInputSourceSession {
+            guard session.targetInputSourceID == targetInputSourceID else {
+                logger("VOICE INPUT session_rejected reason=target_changed")
+                return false
+            }
+            if session.activationPending {
+                let currentSourceID = currentInputSourceID()
+                guard currentSourceID == session.targetInputSourceID ||
+                      currentSourceID == session.previousInputSourceID
+                else {
+                    logger("VOICE INPUT session_rejected reason=source_changed")
+                    return false
+                }
+                session.owners.insert(owner)
+                managedInputSourceSession = session
+                return true
+            }
+            if currentInputSourceID() == targetInputSourceID {
+                session.owners.insert(owner)
+                managedInputSourceSession = session
+                return true
+            }
+            guard owner == .explicitVoice else {
+                logger("VOICE INPUT session_rejected reason=source_changed")
+                return false
+            }
             session.owners.insert(owner)
+            session.activationPending = true
             managedInputSourceSession = session
-            return true
+            return completeExplicitActivation(
+                targetInputSourceID: targetInputSourceID,
+                activationShouldContinue: activationShouldContinue,
+                selectedVoiceTool: selectedVoiceTool
+            )
         }
 
-        guard let targetInputSourceID = selectedVoiceTool.preferredInputSourceID else { return true }
         let previousInputSourceID = currentInputSourceID()
         if previousInputSourceID == targetInputSourceID {
             logger(
@@ -169,11 +217,32 @@ final class PreferredInputSourceMonitor {
                 "managed=\(result == .selected && previousInputSourceID != nil)"
         )
         guard result == .selected else { return false }
-        if owner == .explicitVoice,
-           !waitForActivation(
-               of: targetInputSourceID,
-               shouldContinue: activationShouldContinue
-           ) {
+        managedInputSourceSession = ManagedInputSourceSession(
+            previousInputSourceID: previousInputSourceID,
+            targetInputSourceID: targetInputSourceID,
+            owners: [owner],
+            activationPending: owner == .explicitVoice
+        )
+        if owner == .explicitVoice {
+            return completeExplicitActivation(
+                targetInputSourceID: targetInputSourceID,
+                activationShouldContinue: activationShouldContinue,
+                selectedVoiceTool: selectedVoiceTool
+            )
+        }
+        return true
+    }
+
+    private func completeExplicitActivation(
+        targetInputSourceID: String,
+        activationShouldContinue: () -> Bool,
+        selectedVoiceTool: OnboardingVoiceTool
+    ) -> Bool {
+        guard waitForInputSourceActivation(
+            targetInputSourceID,
+            currentInputSourceID,
+            activationShouldContinue
+        ) else {
             let activationResult = activationShouldContinue()
                 ? "activation_timeout"
                 : "activation_cancelled"
@@ -181,32 +250,23 @@ final class PreferredInputSourceMonitor {
                 "VOICE INPUT source_prepare tool=\(selectedVoiceTool.rawValue) " +
                     "result=\(activationResult)"
             )
-            if let previousInputSourceID {
-                _ = restoreInputSource(previousInputSourceID)
+            if var session = managedInputSourceSession {
+                session.activationPending = false
+                managedInputSourceSession = session
             }
+            finishManagedInputSourceSession(
+                reason: activationResult,
+                owner: .explicitVoice
+            )
             return false
         }
-        if let previousInputSourceID {
-            managedInputSourceSession = ManagedInputSourceSession(
-                previousInputSourceID: previousInputSourceID,
-                targetInputSourceID: targetInputSourceID,
-                owners: [owner]
-            )
-        }
+        guard var session = managedInputSourceSession,
+              session.owners.contains(.explicitVoice),
+              session.targetInputSourceID == targetInputSourceID
+        else { return false }
+        session.activationPending = false
+        managedInputSourceSession = session
         return true
-    }
-
-    private func waitForActivation(
-        of targetInputSourceID: String,
-        shouldContinue: () -> Bool
-    ) -> Bool {
-        let deadline = Date().addingTimeInterval(Self.activationTimeout)
-        while shouldContinue(),
-              currentInputSourceID() != targetInputSourceID,
-              Date() < deadline {
-            _ = RunLoop.main.run(mode: .common, before: Date().addingTimeInterval(Self.activationPollInterval))
-        }
-        return shouldContinue() && currentInputSourceID() == targetInputSourceID
     }
 
     private func finishManagedInputSourceSession(
@@ -223,14 +283,18 @@ final class PreferredInputSourceMonitor {
         }
         managedInputSourceSession = nil
 
-        guard currentInputSourceID() == session.targetInputSourceID else {
+        guard let previousInputSourceID = session.previousInputSourceID else { return }
+        let currentSourceID = currentInputSourceID()
+        guard currentSourceID == session.targetInputSourceID ||
+              currentSourceID == previousInputSourceID
+        else {
             logger(
                 "VOICE INPUT source_restore skipped reason=user_changed session_reason=\(reason)"
             )
             return
         }
 
-        let result = restoreInputSource(session.previousInputSourceID)
+        let result = restoreInputSource(previousInputSourceID)
         logger(
             "VOICE INPUT source_restore result=\(result.rawValue) reason=\(reason)"
         )

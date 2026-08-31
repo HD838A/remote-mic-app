@@ -157,6 +157,16 @@ struct VoiceKeyModeTests {
     }
 
     @Test func inputMonitoringLossPreservesAnActiveExplicitCommandSession() throws {
+        #expect(VoiceKeySessionPreservationPolicy.shouldPreserveInputSourceSession(
+            latchHeld: false,
+            heldMode: nil,
+            pendingMode: .rightCommand
+        ))
+        #expect(!VoiceKeySessionPreservationPolicy.shouldPreserveInputSourceSession(
+            latchHeld: false,
+            heldMode: nil,
+            pendingMode: .function
+        ))
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -174,7 +184,7 @@ struct VoiceKeyModeTests {
 
         #expect(applySource.contains("preservingExplicitVoiceSession:"))
         #expect(applySource.contains(
-            "voiceKeyLatch.isHeld && heldVoiceKeyMode?.requiresAccessibility == true"
+            "VoiceKeySessionPreservationPolicy"
         ))
     }
 
@@ -384,7 +394,7 @@ struct VoiceKeyModeTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/PreferredInputSourceMonitor.swift"),
             encoding: .utf8
         )
-        #expect(monitor.contains("of: targetInputSourceID,"))
+        #expect(monitor.contains("waitForInputSourceActivation("))
     }
 
     @Test func commandVoicePreparationIsReleasedWhenKeyDownInjectionFails() throws {

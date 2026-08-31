@@ -201,10 +201,20 @@ enum BluetoothVoiceStopPolicy {
 enum VoiceKeyPendingDownPolicy {
     static func shouldRejectStart(
         streaming: Bool,
-        pendingDown: Bool,
-        ownerAlreadyRegistered: Bool
+        pendingDown: Bool
     ) -> Bool {
-        streaming && pendingDown && !ownerAlreadyRegistered
+        streaming && pendingDown
+    }
+}
+
+enum VoiceKeySessionPreservationPolicy {
+    static func shouldPreserveInputSourceSession(
+        latchHeld: Bool,
+        heldMode: VoiceKeyMode?,
+        pendingMode: VoiceKeyMode?
+    ) -> Bool {
+        (latchHeld && heldMode?.requiresAccessibility == true) ||
+            pendingMode?.requiresAccessibility == true
     }
 }
 
@@ -1770,8 +1780,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             preferredInputSourceMonitor.start()
         } else {
             preferredInputSourceMonitor.stop(
-                preservingExplicitVoiceSession:
-                    voiceKeyLatch.isHeld && heldVoiceKeyMode?.requiresAccessibility == true
+                preservingExplicitVoiceSession: VoiceKeySessionPreservationPolicy
+                    .shouldPreserveInputSourceSession(
+                        latchHeld: voiceKeyLatch.isHeld,
+                        heldMode: heldVoiceKeyMode,
+                        pendingMode: pendingVoiceKeyMode
+                    )
             )
         }
         if !settings.customMappingEnabled {
@@ -2419,6 +2433,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func bluetoothBridgeDidStartVoice(_ bridge: XiaomiBluetoothBridge) {
         guard let identifier = bridge.deviceIdentifier else { return }
+        if identifier == activeBluetoothVoiceDeviceIdentifier, bluetoothVoiceActive {
+            AppLogger.shared.write("ATVV STREAM ignored_duplicate_start")
+            return
+        }
         let isRC003Continuation = rc003VoiceExtensionTestEnabled &&
             rc003VoiceExtensionActive &&
             rc003VoiceExtensionAwaitingReopen &&
@@ -3762,8 +3780,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard forceSoftware || !mode.usesHardwareMapping else { return true }
         if VoiceKeyPendingDownPolicy.shouldRejectStart(
             streaming: streaming,
-            pendingDown: pendingVoiceKeyMode != nil,
-            ownerAlreadyRegistered: voiceKeyLatch.contains(owner)
+            pendingDown: pendingVoiceKeyMode != nil
         ) {
             AppLogger.shared.write(
                 "VOICE KEY start_rejected reason=pending_down owner=\(owner)"

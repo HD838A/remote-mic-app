@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import RemoteMic
 
-@Suite("Preferred input source monitor")
+@Suite("Preferred input source monitor", .serialized)
 struct PreferredInputSourceMonitorTests {
     @Test func productionRuntimeStartsOnlyWithInputMonitoringAndStopsCleanly() throws {
         let root = URL(fileURLWithPath: #filePath)
@@ -96,16 +96,15 @@ struct PreferredInputSourceMonitorTests {
         var restoredInputSourceIDs: [String] = []
         monitor = PreferredInputSourceMonitor(
             voiceTool: { .doubao },
-            prepareInputSource: { _ in
-                DispatchQueue.main.async {
-                    monitor.endVoiceSession()
-                }
-                return .selected
-            },
+            prepareInputSource: { _ in .selected },
             currentInputSourceID: { "com.apple.keylayout.ABC" },
             restoreInputSource: { sourceID in
                 restoredInputSourceIDs.append(sourceID)
                 return .selected
+            },
+            waitForInputSourceActivation: { _, _, _ in
+                monitor.endVoiceSession()
+                return false
             },
             installMonitor: { _ in "monitor" },
             removeMonitor: { _ in },
@@ -124,16 +123,15 @@ struct PreferredInputSourceMonitorTests {
         var restoredInputSourceIDs: [String] = []
         monitor = PreferredInputSourceMonitor(
             voiceTool: { .weixin },
-            prepareInputSource: { _ in
-                DispatchQueue.main.async {
-                    monitor.stop()
-                }
-                return .selected
-            },
+            prepareInputSource: { _ in .selected },
             currentInputSourceID: { "com.apple.keylayout.ABC" },
             restoreInputSource: { sourceID in
                 restoredInputSourceIDs.append(sourceID)
                 return .selected
+            },
+            waitForInputSourceActivation: { _, _, _ in
+                monitor.stop()
+                return false
             },
             installMonitor: { _ in "monitor" },
             removeMonitor: { _ in },
@@ -144,6 +142,130 @@ struct PreferredInputSourceMonitorTests {
         #expect(!monitor.beginVoiceSession())
         #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
         #expect(logs.contains { $0.contains("result=activation_cancelled") })
+    }
+
+    @Test func pendingCommandActivationKeepsAReentrantFunctionOwnerUntilFunctionUp() {
+        var monitor: PreferredInputSourceMonitor!
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoredInputSourceIDs: [String] = []
+        monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in .selected },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            waitForInputSourceActivation: { target, _, shouldContinue in
+                monitor.handleFunctionKeyPressed(true)
+                currentInputSourceID = target
+                return shouldContinue()
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        #expect(monitor.beginVoiceSession())
+        monitor.endVoiceSession()
+        #expect(restoredInputSourceIDs.isEmpty)
+
+        monitor.handleFunctionKeyPressed(false)
+        #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
+    }
+
+    @Test func managedSessionRejectsADifferentVoiceToolOwner() {
+        var selectedTool = OnboardingVoiceTool.doubao
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoredInputSourceIDs: [String] = []
+        var logs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { selectedTool },
+            prepareInputSource: { _ in
+                currentInputSourceID = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { logs.append($0) }
+        )
+
+        #expect(monitor.beginVoiceSession())
+        selectedTool = .weixin
+        monitor.handleFunctionKeyPressed(true)
+        monitor.endVoiceSession()
+
+        #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
+        #expect(logs.contains { $0.contains("reason=target_changed") })
+    }
+
+    @Test func managedSessionRejectsAFunctionOwnerAfterTheUserChangesSource() {
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoredInputSourceIDs: [String] = []
+        var logs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                currentInputSourceID = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { logs.append($0) }
+        )
+
+        #expect(monitor.beginVoiceSession())
+        currentInputSourceID = "com.apple.keylayout.US"
+        monitor.handleFunctionKeyPressed(true)
+        monitor.endVoiceSession()
+
+        #expect(restoredInputSourceIDs.isEmpty)
+        #expect(currentInputSourceID == "com.apple.keylayout.US")
+        #expect(logs.contains { $0.contains("reason=source_changed") })
+    }
+
+    @Test func activationCancellationDoesNotOverrideAThirdInputSource() {
+        var monitor: PreferredInputSourceMonitor!
+        var currentInputSourceID: String? = "com.apple.keylayout.ABC"
+        var restoredInputSourceIDs: [String] = []
+        var logs: [String] = []
+        monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in .selected },
+            currentInputSourceID: { currentInputSourceID },
+            restoreInputSource: { sourceID in
+                restoredInputSourceIDs.append(sourceID)
+                currentInputSourceID = sourceID
+                return .selected
+            },
+            waitForInputSourceActivation: { _, _, _ in
+                currentInputSourceID = "com.apple.keylayout.US"
+                monitor.handleFunctionKeyPressed(true)
+                monitor.endVoiceSession()
+                return false
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { logs.append($0) }
+        )
+
+        #expect(!monitor.beginVoiceSession())
+        #expect(restoredInputSourceIDs.isEmpty)
+        #expect(currentInputSourceID == "com.apple.keylayout.US")
+        #expect(logs.contains { $0.contains("reason=source_changed") })
     }
 
     @Test func stopRemovesTheMonitorAndClearsThePressedLatch() {
