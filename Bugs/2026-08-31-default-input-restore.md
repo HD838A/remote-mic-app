@@ -15,5 +15,5 @@
 ## 验证
 
 - `swift test --filter VirtualAudioConnectionLifecycleTests`
-- 自动化覆盖记忆设备优先、设备缺失回退和受管切换不覆盖用户选择。
+- 自动化覆盖记忆设备优先、设备缺失回退，以及受管 fallback 期间改选第三个物理输入会更新记忆并解除过期 transition。
 - 真实 Elgato/Wave Link 与热插拔验收仍需在目标 Mac 执行。

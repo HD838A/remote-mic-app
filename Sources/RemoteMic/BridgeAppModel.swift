@@ -3464,12 +3464,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func rememberCurrentUserInputDeviceIfNeeded(reason: String) {
-        guard managedDefaultInputTransition == nil,
-              let current = CoreAudioDeviceCatalog.defaultInputDevice(),
-              current.uid != settings.selectedAudioDeviceUID,
-              current.uid != settings.lastUserSelectedInputDeviceUID
-        else { return }
-        settings.lastUserSelectedInputDeviceUID = current.uid
+        let current = CoreAudioDeviceCatalog.defaultInputDevice()
+        let decision = DefaultInputFallbackPolicy.observationDecision(
+            currentUID: current?.uid,
+            selectedVirtualUID: settings.selectedAudioDeviceUID,
+            managedFallbackUID: managedDefaultInputTransition?.fallbackUID,
+            lastRememberedUID: settings.lastUserSelectedInputDeviceUID
+        )
+        switch decision {
+        case .ignore:
+            return
+        case .clearManagedTransition:
+            managedDefaultInputTransition = nil
+            return
+        case let .remember(uid, clearManagedTransition):
+            if clearManagedTransition {
+                managedDefaultInputTransition = nil
+            }
+            settings.lastUserSelectedInputDeviceUID = uid
+        }
         AppLogger.shared.write(
             "AUDIO DEFAULT_INPUT remembered reason=\(reason) target={\(CoreAudioDeviceCatalog.deviceDiagnostic(current))}"
         )

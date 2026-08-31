@@ -281,4 +281,25 @@ struct VirtualAudioConnectionLifecycleTests {
             currentDefaultUID: "built-in"
         ))
     }
+
+    @Test func userChoiceDuringManagedFallbackIsRememberedAndClearsTheTransition() {
+        #expect(DefaultInputFallbackPolicy.observationDecision(
+            currentUID: "built-in-fallback",
+            selectedVirtualUID: "virtual",
+            managedFallbackUID: "built-in-fallback",
+            lastRememberedUID: "old-usb"
+        ) == .ignore)
+        #expect(DefaultInputFallbackPolicy.observationDecision(
+            currentUID: "new-wave-xlr",
+            selectedVirtualUID: "virtual",
+            managedFallbackUID: "built-in-fallback",
+            lastRememberedUID: "old-usb"
+        ) == .remember(uid: "new-wave-xlr", clearManagedTransition: true))
+        #expect(DefaultInputFallbackPolicy.observationDecision(
+            currentUID: "old-usb",
+            selectedVirtualUID: "virtual",
+            managedFallbackUID: "built-in-fallback",
+            lastRememberedUID: "old-usb"
+        ) == .clearManagedTransition)
+    }
 }

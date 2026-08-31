@@ -314,6 +314,12 @@ enum VirtualAudioHealthPolicy {
 }
 
 enum DefaultInputFallbackPolicy {
+    enum ObservationDecision: Equatable {
+        case ignore
+        case clearManagedTransition
+        case remember(uid: String, clearManagedTransition: Bool)
+    }
+
     static func preferredFallback(
         in devices: [AudioDeviceInfo],
         excludingUID excludedUID: String,
@@ -335,6 +341,25 @@ enum DefaultInputFallbackPolicy {
         currentDefaultUID: String?
     ) -> Bool {
         managedVirtualUID == selectedVirtualUID && currentDefaultUID == managedFallbackUID
+    }
+
+    static func observationDecision(
+        currentUID: String?,
+        selectedVirtualUID: String,
+        managedFallbackUID: String?,
+        lastRememberedUID: String?
+    ) -> ObservationDecision {
+        guard let currentUID,
+              currentUID != selectedVirtualUID,
+              currentUID != managedFallbackUID
+        else { return .ignore }
+        if currentUID == lastRememberedUID {
+            return managedFallbackUID == nil ? .ignore : .clearManagedTransition
+        }
+        return .remember(
+            uid: currentUID,
+            clearManagedTransition: managedFallbackUID != nil
+        )
     }
 }
 
