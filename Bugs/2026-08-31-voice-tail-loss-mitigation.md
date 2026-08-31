@@ -17,4 +17,3 @@
 - `swift test --filter ATVVProtocolTests`
 - 自动化覆盖停止路径顺序。
 - 仍需固件支持或连接参数调整后，在 RC001/RC003 真机复测完整尾音；当前 PR 不能宣称解决硬件侧主缺口。
-
