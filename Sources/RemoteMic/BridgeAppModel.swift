@@ -198,6 +198,40 @@ enum BluetoothVoiceStopPolicy {
     }
 }
 
+final class BluetoothVoiceStopCoordinator {
+    private var generation: UInt64 = 0
+    private var hasPendingDrain = false
+
+    @discardableResult
+    func didStart(cancelPendingDrain: () -> Void) -> Bool {
+        generation &+= 1
+        guard hasPendingDrain else { return false }
+        hasPendingDrain = false
+        cancelPendingDrain()
+        return true
+    }
+
+    func stop(
+        requiresDrain: Bool,
+        drainAudio: (@escaping () -> Void) -> Void,
+        finish: @escaping () -> Void
+    ) {
+        generation &+= 1
+        let stopGeneration = generation
+        hasPendingDrain = requiresDrain
+        let completion = { [weak self] in
+            guard let self, self.generation == stopGeneration else { return }
+            self.hasPendingDrain = false
+            finish()
+        }
+        if requiresDrain {
+            drainAudio(completion)
+        } else {
+            completion()
+        }
+    }
+}
+
 enum VoiceSamplePresentationPolicy {
     static func shouldPublishReceipt(
         hasReceivedSamples: Bool,
@@ -419,6 +453,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var voiceSessionID: UUID?
     private var voiceSessionUsageSource: UsageEventSource?
     private var bluetoothVoiceActive = false
+    private let bluetoothVoiceStopCoordinator = BluetoothVoiceStopCoordinator()
     private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
     private var mobileVoiceLifecycle = MobileVoiceLifecycleState()
     private var pendingMobileVoiceRestartCompletion: ((RemoteVoiceStartResult) -> Void)?
@@ -2414,6 +2449,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
+        if bluetoothVoiceStopCoordinator.didStart(
+            cancelPendingDrain: audioOutput.cancelPendingDrain
+        ) {
+            AppLogger.shared.write("ATVV STREAM stale_stop_cancelled reason=restart")
+        }
         let model = profileID
             .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
             ?? .unknown
@@ -2549,18 +2589,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         activeBluetoothVoiceTraceID = nil
         bluetoothVoiceTraceStartedAt = nil
         bluetoothVoiceTailDiagnostics.reset()
-        let finishStop: () -> Void = { [weak self] in
+        bluetoothVoiceStopCoordinator.stop(
+            requiresDrain: !handledByFnTapMode,
+            drainAudio: { [weak self] completion in
+                guard let self else {
+                    completion()
+                    return
+                }
+                self.audioOutput.endSessionAfterDraining(completion: completion)
+            }
+        ) { [weak self] in
             guard let self else { return }
             self.releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
             self.endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
             if self.systemAudioSuspensionState.isSuspended {
                 self.releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
             }
-        }
-        if handledByFnTapMode {
-            finishStop()
-        } else {
-            audioOutput.endSessionAfterDraining(completion: finishStop)
         }
     }
 

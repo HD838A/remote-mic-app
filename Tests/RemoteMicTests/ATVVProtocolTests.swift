@@ -79,28 +79,50 @@ struct ATVVProtocolTests {
 
 @Suite("Bluetooth voice tail diagnostics")
 struct BluetoothVoiceTailDiagnosticsTests {
-    @Test func bluetoothVoiceStopDrainsPlaybackBeforeReleasingSoftwareVoiceKey() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let source = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
-            encoding: .utf8
-        )
-        let stopStart = try #require(source.range(of: "func bluetoothBridgeDidStopVoice"))
-        let stopEnd = try #require(source.range(
-            of: "func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples:",
-            range: stopStart.upperBound..<source.endIndex
-        ))
-        let stopSource = source[stopStart.lowerBound..<stopEnd.lowerBound]
-        let finish = try #require(stopSource.range(of: "let finishStop: () -> Void"))
-        let drain = try #require(stopSource.range(
-            of: "audioOutput.endSessionAfterDraining(completion: finishStop)",
-            range: finish.upperBound..<stopSource.endIndex
-        ))
-        #expect(finish.lowerBound < drain.lowerBound)
-        #expect(stopSource.contains("self.releaseVoiceKeyIfNeeded(owner: .bluetooth"))
+    @Test func staleBluetoothStopCompletionCannotReleaseARestartedVoiceLatch() {
+        let coordinator = BluetoothVoiceStopCoordinator()
+        var latch = VoiceFunctionKeyLatch()
+        var drainCompletion: (() -> Void)?
+        var cancelledDrainCount = 0
+        var finishedStopCount = 0
+
+        #expect(!coordinator.didStart(cancelPendingDrain: { cancelledDrainCount += 1 }))
+        #expect(latch.transition(streaming: true, owner: .bluetooth) == .press)
+        coordinator.stop(
+            requiresDrain: true,
+            drainAudio: { drainCompletion = $0 }
+        ) {
+            _ = latch.transition(streaming: false, owner: .bluetooth)
+            finishedStopCount += 1
+        }
+
+        #expect(coordinator.didStart(cancelPendingDrain: { cancelledDrainCount += 1 }))
+        #expect(latch.transition(streaming: true, owner: .bluetooth) == nil)
+        drainCompletion?()
+
+        #expect(cancelledDrainCount == 1)
+        #expect(latch.isHeld)
+        #expect(finishedStopCount == 0)
+    }
+
+    @Test func bluetoothVoiceStopDrainsPlaybackBeforeReleasingSoftwareVoiceKey() {
+        let coordinator = BluetoothVoiceStopCoordinator()
+        var drainCompletion: (() -> Void)?
+        var events: [String] = []
+
+        coordinator.stop(
+            requiresDrain: true,
+            drainAudio: {
+                events.append("drain_started")
+                drainCompletion = $0
+            }
+        ) {
+            events.append("voice_key_released")
+        }
+
+        #expect(events == ["drain_started"])
+        drainCompletion?()
+        #expect(events == ["drain_started", "voice_key_released"])
     }
 
     @Test func keepsOnlyTheLatestThreeHundredMillisecondsWithoutAudioContentLogging() {
