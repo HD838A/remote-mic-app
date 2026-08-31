@@ -202,6 +202,10 @@ final class BluetoothVoiceStopCoordinator {
     private var generation: UInt64 = 0
     private var hasPendingDrain = false
 
+    var isDraining: Bool {
+        hasPendingDrain
+    }
+
     @discardableResult
     func didStart(cancelPendingDrain: () -> Void) -> Bool {
         generation &+= 1
@@ -2602,9 +2606,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             guard let self else { return }
             self.releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
             self.endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
-            if self.systemAudioSuspensionState.isSuspended {
-                self.releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
-            }
+            self.releaseVirtualAudioOutputIfUnused(reason: "bluetooth_voice_stopped")
         }
     }
 
@@ -3353,6 +3355,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: readyBluetoothBridgeCount,
             bluetoothVoiceActive: bluetoothVoiceActive,
+            bluetoothVoiceDraining: bluetoothVoiceStopCoordinator.isDraining,
             mobileVoiceActive: activeMobileVoiceSource != nil,
             testToneActive: isPlayingTestTone,
             systemSuspended: systemAudioSuspensionState.isSuspended
@@ -3360,7 +3363,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private var hasActiveVirtualAudioSource: Bool {
-        bluetoothVoiceActive || activeMobileVoiceSource != nil || isPlayingTestTone
+        bluetoothVoiceActive || bluetoothVoiceStopCoordinator.isDraining ||
+            activeMobileVoiceSource != nil || isPlayingTestTone
     }
 
     private func resumeVirtualAudioOutputIfNeeded(reason: String) {

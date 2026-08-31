@@ -133,6 +133,17 @@ struct VirtualAudioConnectionLifecycleTests {
         ))
     }
 
+    @Test func pendingBluetoothVoiceDrainKeepsAudioActiveAfterDisconnectOrSuspension() {
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
+            bluetoothVoiceDraining: true,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: true
+        ))
+    }
+
     @Test func anotherReadyBluetoothBridgeKeepsAudioActive() {
         #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 1,

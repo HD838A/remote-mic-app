@@ -121,8 +121,10 @@ struct BluetoothVoiceTailDiagnosticsTests {
         }
 
         #expect(events == ["drain_started"])
+        #expect(coordinator.isDraining)
         drainCompletion?()
         #expect(events == ["drain_started", "voice_key_released"])
+        #expect(!coordinator.isDraining)
     }
 
     @Test func keepsOnlyTheLatestThreeHundredMillisecondsWithoutAudioContentLogging() {
