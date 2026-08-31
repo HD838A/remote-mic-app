@@ -198,6 +198,46 @@ enum BluetoothVoiceStopPolicy {
     }
 }
 
+struct CommandVoiceActivationAudioBuffer {
+    private let maximumSampleCount: Int
+    private var samples: [Int16] = []
+    private(set) var isWaiting = false
+
+    init(maximumSampleCount: Int = 8_000) {
+        self.maximumSampleCount = maximumSampleCount
+    }
+
+    var bufferedSampleCount: Int {
+        samples.count
+    }
+
+    mutating func begin() {
+        samples.removeAll(keepingCapacity: true)
+        isWaiting = true
+    }
+
+    mutating func appendIfWaiting(_ newSamples: [Int16]) -> Bool {
+        guard isWaiting else { return false }
+        samples.append(contentsOf: newSamples)
+        if samples.count > maximumSampleCount {
+            samples.removeFirst(samples.count - maximumSampleCount)
+        }
+        return true
+    }
+
+    mutating func drain() -> [Int16] {
+        guard isWaiting else { return [] }
+        isWaiting = false
+        defer { samples.removeAll(keepingCapacity: true) }
+        return samples
+    }
+
+    mutating func cancel() {
+        isWaiting = false
+        samples.removeAll(keepingCapacity: true)
+    }
+}
+
 enum VoiceSamplePresentationPolicy {
     static func shouldPublishReceipt(
         hasReceivedSamples: Bool,
@@ -416,6 +456,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
     private var heldVoiceKeyMode: VoiceKeyMode?
     private var pendingVoiceKeyMode: VoiceKeyMode?
+    private var pendingCommandVoiceAudio = CommandVoiceActivationAudioBuffer()
     private var voiceSessionStartedAt: Date?
     private var voiceSessionID: UUID?
     private var voiceSessionUsageSource: UsageEventSource?
@@ -2399,6 +2440,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("ATVV STREAM rejected_audio_output")
             return
         }
+        pendingCommandVoiceAudio.cancel()
         activeBluetoothVoiceDeviceIdentifier = identifier
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = true
@@ -2470,6 +2512,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 )
             }
         }
+        flushPendingCommandVoiceAudio(for: bridge)
     }
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
@@ -2502,6 +2545,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = false
         releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+        pendingCommandVoiceAudio.cancel()
         if longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
         } else if longRecordingCloseTimer != nil {
@@ -2561,6 +2605,29 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard let identifier = bridge.deviceIdentifier,
               identifier == activeBluetoothVoiceDeviceIdentifier
         else { return }
+        if pendingCommandVoiceAudio.appendIfWaiting(samples) {
+            AppLogger.shared.write(
+                "ATVV AUDIO buffered_before_command samples=\(samples.count) " +
+                    "total=\(pendingCommandVoiceAudio.bufferedSampleCount)"
+            )
+            return
+        }
+        routeBluetoothVoiceSamples(samples, from: bridge, identifier: identifier)
+    }
+
+    private func flushPendingCommandVoiceAudio(for bridge: XiaomiBluetoothBridge) {
+        let samples = pendingCommandVoiceAudio.drain()
+        guard !samples.isEmpty, let identifier = bridge.deviceIdentifier else { return }
+        AppLogger.shared.write("ATVV AUDIO flush_before_command samples=\(samples.count)")
+        routeBluetoothVoiceSamples(samples, from: bridge, identifier: identifier)
+    }
+
+    private func routeBluetoothVoiceSamples(
+        _ samples: [Int16],
+        from bridge: XiaomiBluetoothBridge,
+        identifier: UUID
+    ) {
+        guard identifier == activeBluetoothVoiceDeviceIdentifier else { return }
         recordingAssetCoordinator.append(samples: samples)
         let handledByFnTapMode = voiceFnTapSession.receive(samples)
         let enqueued = handledByFnTapMode || audioOutput.enqueue(samples: samples)
@@ -3692,8 +3759,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let shouldHold = transition == .press
         if shouldHold, mode != .function {
             pendingVoiceKeyMode = mode
+            if owner == .bluetooth {
+                pendingCommandVoiceAudio.begin()
+            }
             if !preferredInputSourceMonitor.beginVoiceSession() {
                 pendingVoiceKeyMode = nil
+                if owner == .bluetooth {
+                    pendingCommandVoiceAudio.cancel()
+                }
                 voiceKeyLatch.rollback(transition, owner: owner)
                 AppLogger.shared.write(
                     "VOICE INPUT source_prepare_failed mode=\(mode.rawValue)"
@@ -3704,6 +3777,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if !shouldHold, mode != .function,
            heldVoiceKeyMode == nil, pendingVoiceKeyMode != nil {
             pendingVoiceKeyMode = nil
+            if owner == .bluetooth {
+                pendingCommandVoiceAudio.cancel()
+            }
             preferredInputSourceMonitor.endVoiceSession()
             isVoiceTriggerEnabled = true
             AppLogger.shared.write(
@@ -3714,6 +3790,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard KeyboardInjector.setVoiceKeyPressed(mode, isPressed: shouldHold) else {
             if shouldHold, mode != .function {
                 pendingVoiceKeyMode = nil
+                if owner == .bluetooth {
+                    pendingCommandVoiceAudio.cancel()
+                }
                 preferredInputSourceMonitor.endVoiceSession()
             }
             voiceKeyLatch.rollback(transition, owner: owner)
@@ -3761,12 +3840,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard voiceKeyLatch.isHeld else {
             heldVoiceKeyMode = nil
             pendingVoiceKeyMode = nil
+            pendingCommandVoiceAudio.cancel()
             return true
         }
         guard let heldVoiceKeyMode else {
             guard pendingVoiceKeyMode != nil else { return false }
             voiceKeyLatch.reset()
             pendingVoiceKeyMode = nil
+            pendingCommandVoiceAudio.cancel()
             preferredInputSourceMonitor.endVoiceSession()
             isVoiceTriggerEnabled = true
             AppLogger.shared.write("VOICE KEY pending_down_cancelled reason=forced_release")
