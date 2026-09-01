@@ -145,6 +145,7 @@
 "action.open_chrome" = "打开 Chrome";
 "action.open_safari" = "打开 Safari";
 "action.open_zed" = "打开 Zed";
+"button_mapping.action_filter.all" = "全部";
 "button_mapping.action_group.basic_keys" = "基础按键";
 "button_mapping.action_group.system_and_media" = "系统与媒体";
 "button_mapping.action_group.custom" = "自定义动作";
@@ -159,7 +160,7 @@
 "custom_application.focus.recorded" = "聚焦已记录的输入框";
 "custom_application.shortcut.record" = "录入聚焦快捷键";
 "custom_application.shortcut.editor_title" = "设置 %@ 的聚焦快捷键";
-"custom_application.shortcut.editor_instructions" = "先点击“录入快捷键”，再按下该 APP 用于聚焦输入框的组合键。执行时会先激活 APP，再发送此快捷键。";
+"custom_application.shortcut.editor_instructions" = "先点击“录入快捷键”，再按下该 APP 用于聚焦输入框的单个按键或组合键。执行时会先激活 APP，再发送此按键。";
 "custom_application.accessibility.record" = "记录目标输入框";
 "custom_application.accessibility.not_recorded" = "尚未记录目标输入框";
 "custom_application.accessibility.recorded" = "已记录目标输入框";
@@ -346,7 +347,7 @@
 "common.suffix.experimental_disabled" = "（实验功能未启用）";
 "shortcut.action.record" = "点击录入快捷键";
 "shortcut.action.record_again" = "重新录入";
-"shortcut.record.help" = "录入要发送给当前应用的键盘快捷键";
+"shortcut.record.help" = "录入要发送给当前应用的单个按键或组合键";
 "trigger.other_actions" = "%1$@其他触发";
 "trigger.hold_repeat_disabled" = "按住重复已停用";
 "trigger.timing.help" = "双击会等待约 0.3 秒确认单击；长按约 0.55 秒触发。未配置时保持原有即时响应。";
@@ -371,11 +372,11 @@
 "common.status.connecting" = "连接中";
 "common.status.preparing" = "准备中";
 "shortcut.editor.title" = "录入%1$@%2$@快捷键";
-"shortcut.editor.instructions" = "直接按下想要的按键组合，支持 Command、Option、Control、Shift 和 Fn。";
+"shortcut.editor.instructions" = "直接按下单个按键或组合键；左/右 Command、Option、Control、Shift 和 Fn 也可以单独录入。";
 "shortcut.editor.waiting" = "等待按键…";
-"shortcut.editor.click_first_help" = "可直接选择常用组合，或在标准键盘中选择组合键和主按键；也可以继续使用键盘录入。";
+"shortcut.editor.click_first_help" = "可直接选择常用组合，或在标准键盘中选择主按键，组合键可以留空；也可以继续使用键盘录入。";
 "shortcut.editor.not_recorded" = "尚未录入";
-"shortcut.editor.recording_prompt" = "现在请按下快捷键；本次按键不会触发系统或其他 APP 中原本绑定的动作。";
+"shortcut.editor.recording_prompt" = "现在请按下单个按键、组合键或单独修饰键；本次按键不会触发原本绑定的动作。";
 "shortcut.editor.success" = "快捷键录入成功";
 "shortcut.editor.permission_required" = "录入系统快捷键需要辅助功能权限。请完成系统授权后再次点击录入。";
 "shortcut.editor.capture_unavailable" = "无法启动快捷键录入，请检查辅助功能和输入监控权限，或重新打开无线麦后再试。";
