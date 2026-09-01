@@ -439,6 +439,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var longRecordingOpenTimer: DispatchSourceTimer?
     private var longRecordingCloseTimer: DispatchSourceTimer?
     private let rc003VoiceExtensionTestEnabled: Bool
+    private let virtualAudioKeepAliveEnabled: Bool
+    private var onDemandVirtualAudioReleaseWorkItem: DispatchWorkItem?
+    private var onDemandVirtualAudioReleaseGeneration: UInt64 = 0
+    static let onDemandVirtualAudioReleaseDelay: TimeInterval = 2.0
     private weak var rc003VoiceExtensionBridge: XiaomiBluetoothBridge?
     private var rc003VoiceExtensionActive = false
     private var rc003VoiceExtensionAwaitingReopen = false
@@ -500,6 +504,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         rc003VoiceExtensionTestEnabled
     }
 
+    var isVirtualAudioKeepAliveEnabled: Bool {
+        virtualAudioKeepAliveEnabled
+    }
+
     init(
         settings: AppSettings = AppSettings(),
         initialAudioDevices: [AudioDeviceInfo] = [],
@@ -510,6 +518,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         rc003VoiceExtensionTestEnabled: Bool =
             ProcessInfo.processInfo.arguments.contains("--rc003-voice-extension-test") ||
             (Bundle.main.object(forInfoDictionaryKey: "RC003VoiceExtensionTestEnabled") as? Bool == true),
+        virtualAudioKeepAliveEnabled: Bool =
+            ProcessInfo.processInfo.arguments.contains("--virtual-audio-keep-alive") ||
+            UserDefaults.standard.bool(forKey: "VirtualAudioKeepAliveEnabled"),
         recordingAssetStore: RecordingAssetStore = RecordingAssetStore()
     ) {
         self.settings = settings
@@ -518,6 +529,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.loginItemService = loginItemService
         self.transcriptArchiveStore = transcriptArchiveStore
         self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
+        self.virtualAudioKeepAliveEnabled = virtualAudioKeepAliveEnabled
         self.recordingAssetStore = recordingAssetStore
         audioDevices = initialAudioDevices
         audioOutput.onConfigurationChange = { [weak self] in
@@ -783,7 +795,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? "development"
         AppLogger.shared.write(
-            "APP START version=\(version) rc003_test=\(rc003VoiceExtensionTestEnabled)"
+            "APP START version=\(version) rc003_test=\(rc003VoiceExtensionTestEnabled) " +
+                "virtual_audio_keep_alive=\(virtualAudioKeepAliveEnabled)"
         )
     }
 
@@ -840,6 +853,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         releaseVoiceKeyIfNeeded()
         stopHIDMonitors()
         isAudioOutputReady = false
+        onDemandVirtualAudioReleaseGeneration &+= 1
+        onDemandVirtualAudioReleaseWorkItem?.cancel()
+        onDemandVirtualAudioReleaseWorkItem = nil
         virtualAudioReleaseGeneration &+= 1
         pendingVirtualAudioRelease = nil
         managedDefaultInputTransition = nil
@@ -1357,6 +1373,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                             "state={\(outputState)}"
                     )
                     self.releaseVirtualAudioOutputIfUnused(reason: "startup_system_suspended")
+                } else if !self.virtualAudioKeepAliveEnabled {
+                    AppLogger.shared.write(
+                        "AUDIO ON_DEMAND startup_release state={\(outputState)}"
+                    )
+                    self.releaseVirtualAudioOutputIfUnused(reason: "startup_on_demand_idle")
                 }
                 self.startBluetoothConnections()
                 AppLogger.shared.write(
@@ -1465,6 +1486,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     @discardableResult
     private func configureVirtualAudioOutput(reason: String) -> Bool {
+        cancelScheduledOnDemandVirtualAudioRelease(trigger: "rebind_\(reason)")
         cancelVirtualAudioReleaseIfPending(trigger: "rebind_\(reason)")
         virtualAudioReleaseGeneration &+= 1
         AppLogger.shared.write("AUDIO REBIND begin reason=\(reason) state={\(audioOutput.diagnosticState())}")
@@ -1491,6 +1513,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     @discardableResult
     private func ensureVirtualAudioOutputReady(reason: String) -> Bool {
+        cancelScheduledOnDemandVirtualAudioRelease(trigger: "ensure_\(reason)")
         isAudioOutputReady = audioOutput.isReadyForTestTone
         guard !isAudioOutputReady else {
             AppLogger.shared.write(
@@ -2555,6 +2578,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
         if systemAudioSuspensionState.isSuspended {
             releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
+        } else if !shouldKeepVirtualAudioActive {
+            scheduleOnDemandVirtualAudioRelease(reason: "bluetooth_voice_stopped")
         }
     }
 
@@ -3322,7 +3347,46 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             bluetoothVoiceActive: bluetoothVoiceActive,
             mobileVoiceActive: activeMobileVoiceSource != nil,
             testToneActive: isPlayingTestTone,
-            systemSuspended: systemAudioSuspensionState.isSuspended
+            systemSuspended: systemAudioSuspensionState.isSuspended,
+            keepAliveWhileConnected: virtualAudioKeepAliveEnabled
+        )
+    }
+
+    private func scheduleOnDemandVirtualAudioRelease(reason: String) {
+        cancelScheduledOnDemandVirtualAudioRelease(trigger: "reschedule_\(reason)")
+        onDemandVirtualAudioReleaseGeneration &+= 1
+        let generation = onDemandVirtualAudioReleaseGeneration
+        let work = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.started,
+                  self.onDemandVirtualAudioReleaseGeneration == generation
+            else { return }
+            self.onDemandVirtualAudioReleaseWorkItem = nil
+            AppLogger.shared.write(
+                "AUDIO ON_DEMAND release_due reason=\(reason) generation=\(generation) " +
+                    "state={\(self.audioOutput.diagnosticState())}"
+            )
+            self.releaseVirtualAudioOutputIfUnused(reason: reason)
+        }
+        onDemandVirtualAudioReleaseWorkItem = work
+        AppLogger.shared.write(
+            "AUDIO ON_DEMAND release_scheduled reason=\(reason) generation=\(generation) " +
+                "delay_s=\(Self.onDemandVirtualAudioReleaseDelay)"
+        )
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.onDemandVirtualAudioReleaseDelay,
+            execute: work
+        )
+    }
+
+    private func cancelScheduledOnDemandVirtualAudioRelease(trigger: String) {
+        guard onDemandVirtualAudioReleaseWorkItem != nil else { return }
+        onDemandVirtualAudioReleaseGeneration &+= 1
+        onDemandVirtualAudioReleaseWorkItem?.cancel()
+        onDemandVirtualAudioReleaseWorkItem = nil
+        AppLogger.shared.write(
+            "AUDIO ON_DEMAND release_cancelled trigger=\(trigger) " +
+                "generation=\(onDemandVirtualAudioReleaseGeneration)"
         )
     }
 
