@@ -204,6 +204,13 @@ struct VoiceKeyModeTests {
     }
 
     @Test func hidRecoveryReappliesTheCurrentVoiceKeyModeWithoutForcingFn() throws {
+        #expect(HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+            hasMatchingServices: false
+        ))
+        #expect(!HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+            hasMatchingServices: true
+        ))
+
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -235,6 +242,24 @@ struct VoiceKeyModeTests {
         #expect(applySource.contains("requestedVoiceKeyMode != .function"))
         #expect(applySource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: true)"))
         #expect(applySource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: false)"))
+        #expect(applySource.contains(
+            "HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure"
+        ))
+        #expect(applySource.contains(
+            "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
+        ))
+
+        let enableStart = try #require(source.range(of: "private func enableVoiceFnTapMode()"))
+        let enableEnd = try #require(source.range(
+            of: "private func handleVoiceFnTapFailure",
+            range: enableStart.upperBound..<source.endIndex
+        ))
+        let enableSource = source[enableStart.lowerBound..<enableEnd.lowerBound]
+        #expect(enableSource.contains(
+            "HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure"
+        ))
+        #expect(enableSource.contains("settings.voiceFnTapModeEnabled = true"))
+        #expect(enableSource.contains("scheduleHIDMappingRecoveryIfNeeded()"))
     }
 
     @Test func bluetoothCommandVoiceRequiresNeutralizedHardwareKeyBeforeAcceptance() throws {
