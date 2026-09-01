@@ -23,6 +23,8 @@
 "voice_button.status.fn_enabled" = "The remote voice button is mapped to Fn in hardware";
 "voice_button.status.left_command_enabled" = "The remote voice button will hold Left Command";
 "voice_button.status.right_command_enabled" = "The remote voice button will hold Right Command";
+"voice_button.status.macos_dictation_enabled" = "Remote configured to send Control double-taps for macOS Dictation";
+"voice_button.status.tap_permission" = "Accessibility permission is needed for voice-button tap modes";
 "voice_button.status.waiting" = "Waiting for the remote voice-key mapping";
 "voice_button.status.fn_pressed" = "Hardware Fn is held; release the voice button to release it";
 "voice_button.status.fn_released" = "Hardware Fn released";
@@ -220,6 +222,9 @@
 "connection.voice_fn_tap.enabled" = "Simulate Fn Tap on Voice Key";
 "connection.voice_fn_tap.hint" = "For tap-to-toggle voice apps (e.g. Typeless): pressing the voice key injects one Fn tap to start, releasing injects another to stop, while audio streams as usual. Requires Accessibility permission; the voice key no longer emits Fn directly.";
 "connection.voice_fn_tap.hint_short" = "For voice tools that use Fn taps to start and stop. Keep holding the remote button while speaking.";
+"connection.voice_macos_dictation.enabled" = "Use macOS Dictation";
+"connection.voice_macos_dictation.hint" = "Pressing the remote voice button sends the Control double-tap shortcut for macOS Dictation. Keep holding it while you speak. After you release it and the remaining audio finishes, SayAll sends the shortcut again to stop. In System Settings, set the Dictation shortcut to “Press Control Key Twice”. Accessibility permission is required. This setting applies only to a physical Xiaomi Bluetooth Remote 2 Pro.";
+"connection.voice_macos_dictation.hint_short" = "No Mac keyboard needed. Set the system Dictation shortcut to “Press Control Key Twice” first.";
 "connection.voice_key_mode.title" = "Voice Trigger Key";
 "connection.voice_key.mode.fn" = "Fn/Globe";
 "connection.voice_key.mode.left_command" = "Left Command";

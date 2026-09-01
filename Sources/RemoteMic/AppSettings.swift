@@ -10,6 +10,7 @@ enum AppConfigurationError: Error {
 struct VoiceKeyConfigurationState: Equatable {
     let mode: VoiceKeyMode
     let fnTapModeEnabled: Bool
+    let macOSDictationModeEnabled: Bool
 }
 
 private struct PersonalizedConfiguration: Codable {
@@ -29,6 +30,7 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
+    let voiceMacOSDictationModeEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
@@ -250,6 +252,7 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let voiceMacOSDictationModeEnabled = "voiceMacOSDictationModeEnabled"
         static let voiceKeyMode = "voiceKeyMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
@@ -362,9 +365,24 @@ final class AppSettings: ObservableObject {
 
     @Published var voiceFnTapModeEnabled: Bool {
         didSet {
+            if voiceFnTapModeEnabled, voiceMacOSDictationModeEnabled {
+                voiceMacOSDictationModeEnabled = false
+            }
             defaults.set(
                 voiceFnTapModeEnabled,
                 forKey: Keys.voiceFnTapModeEnabled
+            )
+        }
+    }
+
+    @Published var voiceMacOSDictationModeEnabled: Bool {
+        didSet {
+            if voiceMacOSDictationModeEnabled, voiceFnTapModeEnabled {
+                voiceFnTapModeEnabled = false
+            }
+            defaults.set(
+                voiceMacOSDictationModeEnabled,
+                forKey: Keys.voiceMacOSDictationModeEnabled
             )
         }
     }
@@ -580,10 +598,17 @@ final class AppSettings: ObservableObject {
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
-        voiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
-        voiceKeyMode = VoiceKeyMode(
+        let persistedVoiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
+        let persistedMacOSDictationModeEnabled =
+            defaults.bool(forKey: Keys.voiceMacOSDictationModeEnabled) &&
+            persistedVoiceKeyMode == .function
+        voiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled) &&
+            !persistedMacOSDictationModeEnabled &&
+            persistedVoiceKeyMode == .function
+        voiceMacOSDictationModeEnabled = persistedMacOSDictationModeEnabled
+        voiceKeyMode = persistedVoiceKeyMode
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -730,6 +755,9 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
+        if voiceMacOSDictationModeEnabled {
+            voiceMacOSDictationModeEnabled = false
+        }
         if voiceKeyMode != .function {
             pendingOnboardingVoiceKeyMigration = voiceKeyMode
             voiceKeyMode = .function
@@ -768,6 +796,7 @@ final class AppSettings: ObservableObject {
         }
         voiceKeyMode = .function
         voiceFnTapModeEnabled = false
+        voiceMacOSDictationModeEnabled = false
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
         defaults.removeObject(forKey: Keys.firstUseStepStartedAt)
@@ -1386,6 +1415,7 @@ final class AppSettings: ObservableObject {
             Keys.peripheralIdentifier,
             Keys.applicationLanguage,
             Keys.voiceFnTapModeEnabled,
+            Keys.voiceMacOSDictationModeEnabled,
             Keys.voiceKeyMode,
             Keys.totalButtonPressCount,
             Keys.totalVoiceDuration,
@@ -1430,6 +1460,7 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
+            voiceMacOSDictationModeEnabled: voiceMacOSDictationModeEnabled,
             voiceKeyMode: voiceKeyMode,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
@@ -1441,28 +1472,42 @@ final class AppSettings: ObservableObject {
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {
         VoiceKeyConfigurationState(
             mode: voiceKeyMode,
-            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function
+            fnTapModeEnabled: voiceFnTapModeEnabled &&
+                !voiceMacOSDictationModeEnabled &&
+                voiceKeyMode == .function,
+            macOSDictationModeEnabled: voiceMacOSDictationModeEnabled &&
+                voiceKeyMode == .function
         )
     }
 
     func voiceKeyConfigurationState(in data: Data) throws -> VoiceKeyConfigurationState {
         let configuration = try Self.validatedConfiguration(from: data)
         let mode = configuration.voiceKeyMode ?? .function
-        let fnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
+        let macOSDictationModeEnabled =
+            (configuration.voiceMacOSDictationModeEnabled ?? false) && mode == .function
+        let fnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) &&
+            !macOSDictationModeEnabled &&
+            mode == .function
         return VoiceKeyConfigurationState(
             mode: mode,
-            fnTapModeEnabled: fnTapModeEnabled
+            fnTapModeEnabled: fnTapModeEnabled,
+            macOSDictationModeEnabled: macOSDictationModeEnabled
         )
     }
 
     func importConfiguration(from data: Data) throws {
         let configuration = try Self.validatedConfiguration(from: data)
         let importedMode = configuration.voiceKeyMode ?? .function
+        let importedMacOSDictationModeEnabled =
+            (configuration.voiceMacOSDictationModeEnabled ?? false) &&
+            importedMode == .function
         let importedFnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) &&
+            !importedMacOSDictationModeEnabled &&
             importedMode == .function
         let importedVoiceKeyConfiguration = VoiceKeyConfigurationState(
             mode: importedMode,
-            fnTapModeEnabled: importedFnTapModeEnabled
+            fnTapModeEnabled: importedFnTapModeEnabled,
+            macOSDictationModeEnabled: importedMacOSDictationModeEnabled
         )
 
         let importedBindings = Dictionary(
@@ -1517,6 +1562,9 @@ final class AppSettings: ObservableObject {
         }
         voiceKeyMode = importedVoiceKeyConfiguration.mode
         voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
+        voiceMacOSDictationModeEnabled =
+            importedVoiceKeyConfiguration.macOSDictationModeEnabled &&
+            voiceKeyMode == .function
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup

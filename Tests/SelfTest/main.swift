@@ -531,7 +531,7 @@ let fnTapController = VoiceFnTapSessionController(
     },
     enqueueAudio: { fnTapAudio.append($0) },
     drainAudio: { fnTapDrainCompletion = $0 },
-    onFailure: { _ in }
+    onFailure: { _, _ in }
 )
 fnTapController.setEnabled(true)
 let fnTapStarted = fnTapController.startVoice()

@@ -184,6 +184,24 @@ elapsed_ms=3128
 
 当录音结束时仍有正常 pending 音频，不应立即输出终态失败；应等待该功能定义的排空/文字截止窗口，只有截止时仍 pending、播放不完整或已经中断才判定为音频投递失败。
 
+### macOS 听写触发边界
+
+实体遥控器触发 macOS 听写时，使用现有 ATVV `trace` 关联开始、音频、停止和失败。正常链路至少包含：
+
+```text
+VOICE TAP trace=12 phase=start_requested trigger=macos_dictation result=submitted diagnostic_boundary=macos_dictation_text_unobservable
+VOICE TAP trace=12 phase=start_accepted trigger=macos_dictation result=accepted diagnostic_boundary=macos_dictation_text_unobservable
+ATVV AUDIO routed trace=12 model=rc003 route=macos_dictation accepted=true first_batch_samples=...
+VOICE TAP trace=12 phase=stop_requested trigger=macos_dictation result=accepted diagnostic_boundary=macos_dictation_text_unobservable
+VOICE TAP trace=12 phase=external_boundary trigger=macos_dictation result=unobservable expected_effect=dictation_text_in_focused_field diagnostic_boundary=macos_dictation_text_unobservable
+```
+
+`result=submitted` 只证明无线麦准备提交开始请求，`result=accepted` 只证明状态机接受了 Control 双击请求。`route=macos_dictation` 只证明音频进入对应的虚拟音频路径。只有关闭 Control 双击完整结束后才记录 `phase=external_boundary`。macOS 没有提供可靠的公开接口，让无线麦确认听写界面已经出现或文字已经写入目标输入框，因此最终边界必须保留 `result=unobservable`，不能写成文字成功。
+
+开始或停止点按失败时记录同一 `trace`、`phase=failed`、`reason=start_tap_failed|stop_tap_failed`，清理完成后再记录 `phase=recovery result=completed|failed target=hardware_fn`。目标等待取消使用 `phase=start_cancelled` 和目标原因；模式关闭、模式切换、权限撤回、蓝牙不可用、App 退出或前一段失败导致排队会话取消时，使用 `phase=cancelled result=completed`，并分别记录 `mode_disabled`、`mode_changed`、`permission_revoked`、`bluetooth_not_ready`、`app_shutdown` 或 `prior_session_failed`。同一 `trace` 只能有一个正常、取消或失败终态。
+
+型号尚未确认且 macOS 听写已开启时，蓝牙初始化会等型号读取终结后再进入 Ready；日志使用 `BLE MODEL identified=...` 或 `BLE MODEL model_unavailable reason=...`。关闭听写会立即解除这项等待，但仍保留在途的可选型号读取。权限撤回、遥控器断连和快速连续会话必须保持原 `trace`，不得归到下一次语音。日志不记录说话内容、转写正文、输入框内容或焦点元素描述。
+
 ## 隐私与敏感信息红线
 
 任何运行日志、统一日志、用户可复制诊断、崩溃附加信息和测试证据都不得包含：

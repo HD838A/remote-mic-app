@@ -27,7 +27,7 @@ struct CoreVoiceInputJourneyTests {
             },
             enqueueAudio: { enqueuedAudio.append($0) },
             drainAudio: { $0() },
-            onFailure: { failures.append($0) }
+            onFailure: { failure, _ in failures.append(failure) }
         )
         controller.setEnabled(true)
         coordinator.beginTargetSwitch(
@@ -74,7 +74,7 @@ struct CoreVoiceInputJourneyTests {
             },
             enqueueAudio: { enqueuedAudio.append($0) },
             drainAudio: { drains.append($0) },
-            onFailure: { _ in }
+            onFailure: { _, _ in }
         )
         controller.setEnabled(true)
         coordinator.beginTargetSwitch(
@@ -124,7 +124,7 @@ struct CoreVoiceInputJourneyTests {
             },
             enqueueAudio: { enqueuedAudio.append($0) },
             drainAudio: { $0() },
-            onFailure: { _ in }
+            onFailure: { _, _ in }
         )
         controller.setEnabled(true)
         coordinator.beginTargetSwitch(
@@ -160,7 +160,7 @@ struct CoreVoiceInputJourneyTests {
             setFunctionKeyPressed: { _ in true },
             enqueueAudio: { enqueuedAudio.append($0) },
             drainAudio: { $0() },
-            onFailure: { _ in }
+            onFailure: { _, _ in }
         )
         controller.setEnabled(true)
         coordinator.beginTargetSwitch(

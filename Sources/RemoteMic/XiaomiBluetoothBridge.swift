@@ -35,6 +35,29 @@ protocol XiaomiBluetoothBridgeDelegate: AnyObject {
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdatePowerState state: RemotePowerState?)
 }
 
+enum BluetoothRemoteModelReadinessPolicy {
+    static func shouldWaitBeforeReady(
+        voiceMacOSDictationModeEnabled: Bool,
+        persistedModel: XiaomiRemoteModel,
+        bluetoothName: String?,
+        modelReadPending: Bool
+    ) -> Bool {
+        voiceMacOSDictationModeEnabled &&
+            persistedModel == .unknown &&
+            XiaomiRemoteModel.identified(byBluetoothName: bluetoothName) == nil &&
+            modelReadPending
+    }
+
+    static func canCompleteInitialization(
+        capabilitiesConfirmed: Bool,
+        waitsForModelIdentification: Bool,
+        modelReadPending: Bool
+    ) -> Bool {
+        capabilitiesConfirmed &&
+            (!waitsForModelIdentification || !modelReadPending)
+    }
+}
+
 private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegate {
     let generation: UInt64
     weak var owner: XiaomiBluetoothBridge?
@@ -121,6 +144,8 @@ final class XiaomiBluetoothBridge: NSObject {
     private var initializationTimeoutWorkItem: DispatchWorkItem?
     private var capabilitiesRequested = false
     private var capabilitiesConfirmed = false
+    private var modelIdentificationPending = false
+    private var waitsForModelIdentificationBeforeReady = false
     private var requestedReconnectDelay: TimeInterval?
     private var reconnectPolicy = BluetoothReconnectPolicy()
     private var currentAttemptUsesCachedTarget = false
@@ -149,6 +174,10 @@ final class XiaomiBluetoothBridge: NSObject {
 
     var deviceIdentifier: UUID? {
         peripheral?.identifier ?? targetIdentifier
+    }
+
+    var deviceName: String? {
+        peripheral?.name
     }
 
     private(set) var state: BluetoothBridgeState = .stopped {
@@ -208,6 +237,16 @@ final class XiaomiBluetoothBridge: NSObject {
             return
         }
         finishAttempt(reconnectAfter: 0.1)
+    }
+
+    func releaseModelIdentificationWaitForDisabledDictation() {
+        guard waitsForModelIdentificationBeforeReady else { return }
+        waitsForModelIdentificationBeforeReady = false
+        AppLogger.shared.write(
+            "BLE MODEL wait_released reason=macos_dictation_disabled"
+        )
+        guard let generation = currentGeneration() else { return }
+        completeInitializationIfPossible(generation: generation)
     }
 
     func recoverAfterSystemWake() {
@@ -388,6 +427,8 @@ final class XiaomiBluetoothBridge: NSObject {
         initializationTimeoutWorkItem = nil
         capabilitiesRequested = false
         capabilitiesConfirmed = false
+        modelIdentificationPending = false
+        waitsForModelIdentificationBeforeReady = false
         capabilities = Self.defaultCapabilities
         currentAttemptUsesCachedTarget = false
         resetSession()
@@ -527,6 +568,46 @@ final class XiaomiBluetoothBridge: NSObject {
         _ = requestMicrophoneClose()
     }
 
+    private func persistedRemoteModel(for peripheral: CBPeripheral) -> XiaomiRemoteModel {
+        guard let profileID = settings.profileID(forBluetoothIdentifier: peripheral.identifier)
+        else { return .unknown }
+        return settings.remoteDeviceProfiles.first(where: { $0.id == profileID })?.model
+            ?? .unknown
+    }
+
+    private func finishModelIdentification(
+        generation: UInt64,
+        unavailableReason: String? = nil
+    ) {
+        if let unavailableReason {
+            AppLogger.shared.write(
+                "BLE MODEL model_unavailable reason=\(unavailableReason) " +
+                    "generation=\(generation)"
+            )
+        }
+        modelIdentificationPending = false
+        completeInitializationIfPossible(generation: generation)
+    }
+
+    private func completeInitializationIfPossible(generation: UInt64) {
+        guard lifecycle == .awaitingCapabilities(generation),
+              BluetoothRemoteModelReadinessPolicy.canCompleteInitialization(
+                  capabilitiesConfirmed: capabilitiesConfirmed,
+                  waitsForModelIdentification: waitsForModelIdentificationBeforeReady,
+                  modelReadPending: modelIdentificationPending
+              )
+        else { return }
+        initializationTimeoutWorkItem?.cancel()
+        initializationTimeoutWorkItem = nil
+        reconnectPolicy.reset()
+        currentAttemptUsesCachedTarget = false
+        lifecycle = .ready(generation)
+        if let peripheral {
+            state = .ready(peripheral.name ?? "MI RC")
+            AppLogger.shared.write("BLE READY name=\(peripheral.name ?? "MI RC")")
+        }
+    }
+
     private func requestCapabilitiesIfPossible() {
         guard let generation = currentGeneration(),
               lifecycle.acceptsInitializationCallback(generation: generation)
@@ -571,15 +652,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 return
             }
             capabilitiesConfirmed = true
-            initializationTimeoutWorkItem?.cancel()
-            initializationTimeoutWorkItem = nil
-            reconnectPolicy.reset()
-            currentAttemptUsesCachedTarget = false
-            lifecycle = .ready(generation)
-            if let peripheral {
-                state = .ready(peripheral.name ?? "MI RC")
-                AppLogger.shared.write("BLE READY name=\(peripheral.name ?? "MI RC")")
-            }
+            completeInitializationIfPossible(generation: generation)
         case 0x08:
             guard requestMicrophoneOpen() else {
                 AppLogger.shared.write("ATVV MIC_OPEN remote_request_ignored")
@@ -990,6 +1063,17 @@ extension XiaomiBluetoothBridge {
             scheduleReconnect(bypassCachedTarget: true)
             return
         }
+        let deviceInformationService = peripheral.services?.first(where: {
+            $0.uuid == deviceInformationServiceUUID
+        })
+        modelIdentificationPending = deviceInformationService != nil
+        waitsForModelIdentificationBeforeReady =
+            BluetoothRemoteModelReadinessPolicy.shouldWaitBeforeReady(
+                voiceMacOSDictationModeEnabled: settings.voiceMacOSDictationModeEnabled,
+                persistedModel: persistedRemoteModel(for: peripheral),
+                bluetoothName: peripheral.name,
+                modelReadPending: modelIdentificationPending
+            )
         peripheral.discoverCharacteristics(
             [transmitUUID, audioUUID, controlUUID],
             for: service
@@ -1000,10 +1084,12 @@ extension XiaomiBluetoothBridge {
                 for: batteryService
             )
         }
-        if let deviceInformationService = peripheral.services?.first(where: {
-            $0.uuid == deviceInformationServiceUUID
-        }) {
+        if let deviceInformationService {
             peripheral.discoverCharacteristics([modelNumberUUID], for: deviceInformationService)
+        } else {
+            AppLogger.shared.write(
+                "BLE MODEL model_unavailable reason=service_missing generation=\(generation)"
+            )
         }
     }
 
@@ -1063,9 +1149,17 @@ extension XiaomiBluetoothBridge {
                     "BLE MODEL characteristic_discovery_failed " +
                         AppLogger.errorFields(error)
                 )
+                finishModelIdentification(
+                    generation: generation,
+                    unavailableReason: "characteristic_discovery_failed"
+                )
                 return
             }
             guard let characteristic = service.characteristics?.first(where: { $0.uuid == modelNumberUUID }) else {
+                finishModelIdentification(
+                    generation: generation,
+                    unavailableReason: "characteristic_missing"
+                )
                 return
             }
             peripheral.readValue(for: characteristic)
@@ -1175,10 +1269,22 @@ extension XiaomiBluetoothBridge {
                 AppLogger.shared.write(
                     "BLE MODEL read_failed " + AppLogger.errorFields(error)
                 )
+                finishModelIdentification(
+                    generation: generation,
+                    unavailableReason: "read_failed"
+                )
             }
             return
         }
-        guard let data = characteristic.value else { return }
+        guard let data = characteristic.value else {
+            if characteristic.uuid == modelNumberUUID {
+                finishModelIdentification(
+                    generation: generation,
+                    unavailableReason: "value_missing"
+                )
+            }
+            return
+        }
         if characteristic.uuid == batteryLevelUUID {
             let level = data.first.map(Int.init)
             AppLogger.shared.write("BLE BATTERY level=\(level.map(String.init) ?? "unknown")")
@@ -1194,11 +1300,28 @@ extension XiaomiBluetoothBridge {
             return
         }
         if characteristic.uuid == modelNumberUUID {
+            guard !data.isEmpty else {
+                finishModelIdentification(
+                    generation: generation,
+                    unavailableReason: "value_empty"
+                )
+                return
+            }
             guard let modelNumber = String(data: data, encoding: .utf8) else {
-                AppLogger.shared.write("BLE MODEL unreadable")
+                finishModelIdentification(
+                    generation: generation,
+                    unavailableReason: "unreadable"
+                )
                 return
             }
             let normalizedModelNumber = modelNumber.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalizedModelNumber.isEmpty else {
+                finishModelIdentification(
+                    generation: generation,
+                    unavailableReason: "value_empty"
+                )
+                return
+            }
             if normalizedModelNumber.contains("ARN9") {
                 // ARN9 firmware encodes ADPCM low-nibble-first; flipping the
                 // default high-first order is required for intelligible audio.
@@ -1207,10 +1330,15 @@ extension XiaomiBluetoothBridge {
             }
             guard let model = XiaomiRemoteModel.identified(by: modelNumber) else {
                 AppLogger.shared.write("BLE MODEL unrecognized modelNumber=\(normalizedModelNumber)")
+                finishModelIdentification(
+                    generation: generation,
+                    unavailableReason: "unrecognized_model"
+                )
                 return
             }
             AppLogger.shared.write("BLE MODEL identified=\(model.rawValue)")
             delegate?.bluetoothBridge(self, didIdentifyRemoteModel: model)
+            finishModelIdentification(generation: generation)
             return
         }
         if characteristic.uuid == controlUUID {

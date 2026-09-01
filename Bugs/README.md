@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [macOS 听写仍需手动触发](./2026-09-01-macos-dictation-needs-manual-shortcut.md)
 - [Onboarding 语音诊断无法区分焦点、音频输出与第三方未提交](./2026-08-31-onboarding-voice-attempt-diagnostics/DEBUG.md)
 - [Onboarding 选择其他语音工具时隐藏豆包官方安装入口](./2026-08-29-onboarding-doubao-install-link-hidden.md)
 - [Onboarding 已收到语音但没有文字，诊断事件反复跳变](./2026-08-29-onboarding-voice-test-focus-and-diagnostics.md)
@@ -76,6 +77,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-09-01 | [macOS 听写仍需手动触发](./2026-09-01-macos-dictation-needs-manual-shortcut.md) | 根因确认并完成候选修复；已补关键状态机用例，等待 PR CI、签名包与 RC003 真实文字验收 |
 | 2026-09-01 | [1.9.18「语音键模拟 Fn 点按」自动关闭](./2026-09-01-fn-tap-auto-disable/DEBUG.md) | 根因确认并完成候选修复；自动化通过，等待 RC003 与 Typeless 真机验收 |
 | 2026-08-31 | [Onboarding 语音诊断无法区分焦点、音频输出与第三方未提交](./2026-08-31-onboarding-voice-attempt-diagnostics/DEBUG.md) | 用户确认豆包麦克风配置根因；候选诊断、双端确认卡和本地完整验证完成，等待 PR CI 与独立真机验收 |
 | 2026-08-31 | [Onboarding 允许 Command 导致第三方语音工具不提交文字](./2026-08-31-onboarding-voice-key-policy-mismatch.md) | 修复完成，等待 PR CI 与真实第三方工具验收 |

@@ -23,6 +23,8 @@
 "voice_button.status.fn_enabled" = "遥控器语音键已硬件映射为 Fn";
 "voice_button.status.left_command_enabled" = "遥控器语音键将按住左 Command";
 "voice_button.status.right_command_enabled" = "遥控器语音键将按住右 Command";
+"voice_button.status.macos_dictation_enabled" = "已配置遥控器为 macOS 听写发送 Control 双击";
+"voice_button.status.tap_permission" = "需要辅助功能权限，才能使用语音键点按模式";
 "voice_button.status.waiting" = "等待遥控器语音键映射";
 "voice_button.status.fn_pressed" = "硬件 Fn 已按下；松开语音键即释放";
 "voice_button.status.fn_released" = "硬件 Fn 已释放";
@@ -220,6 +222,9 @@
 "connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";
 "connection.voice_fn_tap.hint" = "适配点按式语音输入（如 Typeless）：按下语音键注入一次 Fn 开始，松开再注入一次结束，音频在按住期间照常传输。需要辅助功能权限；开启后语音键不再直接发 Fn。";
 "connection.voice_fn_tap.hint_short" = "用于需要点按 Fn 开始和结束的语音工具；遥控器仍需按住说话。";
+"connection.voice_macos_dictation.enabled" = "使用 macOS 自带听写";
+"connection.voice_macos_dictation.hint" = "按下遥控器语音键时，无线麦会为 macOS 听写发送 Control 双击快捷键。按住说话，松开并传完尾音后，再发送一次快捷键来结束。请先在系统设置中把听写快捷键设为“连按两下 Control 键”。此功能需要辅助功能权限，只作用于实体小米蓝牙遥控器 2 Pro。";
+"connection.voice_macos_dictation.hint_short" = "无需再按 Mac 键盘。请先把系统听写快捷键设为“连按两下 Control 键”。";
 "connection.voice_key_mode.title" = "语音触发键";
 "connection.voice_key.mode.fn" = "Fn/地球键";
 "connection.voice_key.mode.left_command" = "左 Command";

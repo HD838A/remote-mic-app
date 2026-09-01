@@ -483,6 +483,35 @@ struct OnboardingFlowTests {
         #expect(settings.pendingOnboardingVoiceKeyMigration == nil)
     }
 
+    @Test func selectingOnboardingVoiceToolDisablesMacOSDictationMode() throws {
+        let suiteName = "RemoteMicTests.Onboarding.DictationVoiceTool.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.voiceMacOSDictationModeEnabled = true
+        settings.setOnboardingVoiceTool(.doubao)
+        #expect(!settings.voiceMacOSDictationModeEnabled)
+
+        settings.voiceMacOSDictationModeEnabled = true
+        settings.setOnboardingVoiceTool(.doubao)
+        #expect(!settings.voiceMacOSDictationModeEnabled)
+        #expect(!AppSettings(defaults: defaults).voiceMacOSDictationModeEnabled)
+    }
+
+    @Test func restartingOnboardingDisablesMacOSDictationMode() throws {
+        let suiteName = "RemoteMicTests.Onboarding.DictationRestart.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.voiceMacOSDictationModeEnabled = true
+        settings.restartOnboarding()
+
+        #expect(!settings.voiceMacOSDictationModeEnabled)
+        #expect(!AppSettings(defaults: defaults).voiceMacOSDictationModeEnabled)
+    }
+
     @Test func typelessOnboardingAlwaysUsesFnTapMode() throws {
         let suiteName = "RemoteMicTests.Onboarding.TypelessFnMode.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

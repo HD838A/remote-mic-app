@@ -25,6 +25,16 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
         default: return nil
         }
     }
+
+    static func identified(byBluetoothName name: String?) -> XiaomiRemoteModel? {
+        guard let name else { return nil }
+        switch name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "xiaomi bluetooth remote 2": return .rc001
+        case "xiaomi bluetooth remote 2 pro", "小米蓝牙遥控器2 pro":
+            return .rc003
+        default: return nil
+        }
+    }
 }
 
 enum RemotePowerState: Equatable {
