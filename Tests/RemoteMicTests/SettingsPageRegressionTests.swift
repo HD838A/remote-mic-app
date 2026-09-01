@@ -64,6 +64,90 @@ struct SettingsPageRegressionTests {
         #endif
     }
 
+    @Test func membershipFeatureRequiresExplicitServiceConfiguration() {
+        let membershipFeature = MembershipFeatureIntegration(configuration: nil)
+
+        #expect(!membershipFeature.isFeatureVisible)
+        #expect(membershipFeature.buttonProfilesAccessDecision == .unavailable)
+    }
+
+    @Test func membershipServiceConfigurationRequiresHTTPSExceptForLocalDevelopment() throws {
+        let secure = try #require(MembershipFeatureConfiguration.current(environment: [
+            "SAYALL_MEMBERSHIP_API_BASE_URL": "https://membership.example.com/api",
+        ]))
+        #expect(secure.baseURL.absoluteString == "https://membership.example.com/api")
+
+        let local = try #require(MembershipFeatureConfiguration.current(environment: [
+            "SAYALL_MEMBERSHIP_API_BASE_URL": "http://127.0.0.1:8787",
+        ]))
+        #expect(local.baseURL.absoluteString == "http://127.0.0.1:8787")
+
+        #expect(MembershipFeatureConfiguration.current(environment: [
+            "SAYALL_MEMBERSHIP_API_BASE_URL": "http://membership.example.com",
+        ]) == nil)
+        #expect(MembershipFeatureConfiguration.current(environment: [
+            "SAYALL_MEMBERSHIP_API_BASE_URL": "http://localhost:8787",
+        ]) == nil)
+    }
+
+    @Test func commerceBridgeKeepsPrivateCodeOptionalAndRoutesEveryRemoteSource() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let package = try String(
+            contentsOf: root.appendingPathComponent("Package.swift"),
+            encoding: .utf8
+        )
+        let membership = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MembershipFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+        let macro = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MacroFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+        let model = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let settings = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(package.contains("SAYALL_MEMBERSHIP_PACKAGE_PATH"))
+        #expect(package.contains("SayAllMembershipCore"))
+        #expect(package.contains("SayAllMembershipUI"))
+        #expect(membership.contains("#if canImport(SayAllMembershipCore)"))
+        #expect(membership.contains("return AnyView(EmptyView())"))
+        #expect(macro.contains("func executeBoundAction("))
+        #expect(macro.contains("return false"))
+        #expect(model.contains("overrideActionPerformer:"))
+        #expect(model.contains("performButtonProfileBoundAction("))
+        #expect(model.contains("private func performMobileConfiguredAction("))
+        #expect(model.contains("webRemoteClient.onCommand"))
+        #expect(model.contains("webRemoteClient.onButtonEvent"))
+        #expect(model.contains("JSONDecoder().decode(ConfiguredButtonAction.self, from: payload)"))
+        #expect(settings.contains("case .macros, .buttonProfiles: macroFeature.isFeatureVisible"))
+        #expect(settings.contains("case .membership: membershipFeature.isFeatureVisible"))
+
+        #if !canImport(SayAllMacroRemoteMic)
+        let macroFeature = MacroFeatureIntegration(localeIdentifier: "zh-Hans")
+        #expect(!macroFeature.executeBoundAction(
+            profileID: nil,
+            button: .menu,
+            trigger: .singleClick,
+            hostActionPerformer: { _ in true },
+            shortcutPerformer: { _, _ in true }
+        ))
+        #endif
+    }
+
     @Test func nearbyMobileListenerOnlyStartsFromAUserConnectionEntry() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -842,6 +926,8 @@ struct SettingsPageRegressionTests {
         for section in [
             ".mapping",
             ".macros",
+            ".buttonProfiles",
+            ".membership",
             ".statistics",
             ".transcripts",
             ".connection",
@@ -883,6 +969,8 @@ struct SettingsPageRegressionTests {
         for section in [
             ".mapping",
             ".macros",
+            ".buttonProfiles",
+            ".membership",
             ".statistics",
             ".transcripts",
             ".connection",
@@ -897,6 +985,9 @@ struct SettingsPageRegressionTests {
         ))
         #expect(source.contains(
             "model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)"
+        ))
+        #expect(source.contains(
+            "model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"))

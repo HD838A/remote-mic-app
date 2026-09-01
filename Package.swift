@@ -6,7 +6,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
     .package(
         url: "https://github.com/GetSayAll/sayall-mac-remote.git",
-        revision: "3f3c782180eef4024b53941c1f65d80e7cff4c66"
+        revision: "7d1b3c2e1d88913bafaa3a401c939eb218a1f363"
     ),
 ]
 var remoteMicDependencies: [Target.Dependency] = [
@@ -45,6 +45,21 @@ if let macroPlatformPath = ProcessInfo.processInfo.environment[
     packageDependencies.append(.package(path: macroPlatformPath))
     remoteMicDependencies.append(
         .product(name: "SayAllMacroRemoteMic", package: packageIdentity)
+    )
+}
+
+if let membershipPackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_MEMBERSHIP_PACKAGE_PATH"
+], !membershipPackagePath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: membershipPackagePath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: membershipPackagePath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllMembershipCore", package: packageIdentity)
+    )
+    remoteMicDependencies.append(
+        .product(name: "SayAllMembershipUI", package: packageIdentity)
     )
 }
 

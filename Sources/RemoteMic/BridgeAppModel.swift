@@ -317,6 +317,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     let settings: AppSettings
     let privateFeature: PrivateFeatureIntegration
     let macroFeature: MacroFeatureIntegration
+    let membershipFeature: MembershipFeatureIntegration
     let loginItemService: LoginItemService
 
     @Published private(set) var connectionStatus = LocalizedMessage("bluetooth.status.initializing")
@@ -418,6 +419,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     )
     private var transcriptHistoryToggleCancellable: AnyCancellable?
     private var recordingToggleCancellable: AnyCancellable?
+    private var membershipAccessCancellable: AnyCancellable?
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
     private var heldVoiceKeyMode: VoiceKeyMode?
@@ -511,6 +513,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         initialAudioDevices: [AudioDeviceInfo] = [],
         privateFeature: PrivateFeatureIntegration = PrivateFeatureIntegration(),
         macroFeature: MacroFeatureIntegration = MacroFeatureIntegration(),
+        membershipFeature: MembershipFeatureIntegration = MembershipFeatureIntegration(),
         loginItemService: LoginItemService = LoginItemService(),
         transcriptArchiveStore: TranscriptArchiveStore = TranscriptArchiveStore(),
         rc003VoiceExtensionTestEnabled: Bool =
@@ -521,11 +524,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.settings = settings
         self.privateFeature = privateFeature
         self.macroFeature = macroFeature
+        self.membershipFeature = membershipFeature
         self.loginItemService = loginItemService
         self.transcriptArchiveStore = transcriptArchiveStore
         self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
         self.recordingAssetStore = recordingAssetStore
         audioDevices = initialAudioDevices
+        membershipAccessCancellable = membershipFeature.$buttonProfilesAccessDecision
+            .removeDuplicates()
+            .sink { [weak macroFeature] decision in
+                macroFeature?.updateButtonProfilesAccess(decision)
+            }
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
         }
@@ -1989,7 +1998,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self?.performExternalConfiguredAction(configured) ?? false
             },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
-                self?.macroFeature.executeBoundMacro(
+                self?.performButtonProfileBoundAction(
                     profileID: profileID,
                     button: button,
                     trigger: trigger
@@ -2952,7 +2961,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         trigger: ButtonTrigger,
         source: UsageEventSource
     ) -> Bool {
-        if macroFeature.executeBoundMacro(
+        if performButtonProfileBoundAction(
             profileID: settings.selectedRemoteProfileID,
             button: button,
             trigger: trigger
@@ -2988,6 +2997,66 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "action=\(configured.action.rawValue)"
         )
         return true
+    }
+
+    private func performButtonProfileBoundAction(
+        profileID: UUID?,
+        button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> Bool {
+        macroFeature.executeBoundAction(
+            profileID: profileID,
+            button: button,
+            trigger: trigger,
+            hostActionPerformer: { [weak self] payload in
+                self?.performButtonProfileHostAction(payload) ?? false
+            },
+            shortcutPerformer: { [weak self] keyCode, modifiers in
+                self?.performButtonProfileShortcut(keyCode: keyCode, modifiers: modifiers) ?? false
+            }
+        )
+    }
+
+    private func performButtonProfileHostAction(_ payload: Data) -> Bool {
+        guard let configured = try? JSONDecoder().decode(ConfiguredButtonAction.self, from: payload)
+        else { return false }
+        if configured.action.isAppInternal {
+            return performInternalAction(configured.action)
+        }
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            _ = KeyboardInjector.requestAccessibilityAccess()
+            return false
+        }
+        return performExternalConfiguredAction(configured)
+    }
+
+    private func performButtonProfileShortcut(
+        keyCode: UInt16,
+        modifiers: [String]
+    ) -> Bool {
+        var modifierFlags: NSEvent.ModifierFlags = []
+        for modifier in modifiers {
+            switch modifier {
+            case "command": modifierFlags.insert(.command)
+            case "shift": modifierFlags.insert(.shift)
+            case "option": modifierFlags.insert(.option)
+            case "control": modifierFlags.insert(.control)
+            case "function": modifierFlags.insert(.function)
+            default: return false
+            }
+        }
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            _ = KeyboardInjector.requestAccessibilityAccess()
+            return false
+        }
+        return performExternalConfiguredAction(ConfiguredButtonAction(
+            action: .customShortcut,
+            shortcut: CustomKeyboardShortcut(
+                keyCode: keyCode,
+                modifierFlags: modifierFlags,
+                keyLabel: "Key Code \(keyCode)"
+            )
+        ))
     }
 
     private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
