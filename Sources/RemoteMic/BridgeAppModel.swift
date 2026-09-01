@@ -82,6 +82,12 @@ enum HIDPermissionRecoveryPolicy {
 enum HIDMappingRecoveryPolicy {
     static let retryDelays: [TimeInterval] = [0.5, 1, 2, 4, 8]
 
+    static func shouldPreserveFnTapPreferenceAfterMappingFailure(
+        hasMatchingServices: Bool
+    ) -> Bool {
+        !hasMatchingServices
+    }
+
     static func retryDelay(
         forAttempt attempt: Int,
         started: Bool,
@@ -1766,6 +1772,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 AppLogger.shared.write(
                     "VOICE FN TAP mode_preserved reason=voice_start_mapping_failed"
                 )
+            } else if HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+                hasMatchingServices: voiceFunctionMapper.hasMatchingServices
+            ) {
+                voiceFnTapSession.setEnabled(false)
+                AppLogger.shared.write(
+                    "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
+                )
+                scheduleHIDMappingRecoveryIfNeeded()
             } else {
                 settings.voiceFnTapModeEnabled = false
                 voiceFnTapSession.setEnabled(false)
@@ -2136,8 +2150,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
         var powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
         guard voiceFunctionMapper.isVoiceKeyNeutralized else {
-            settings.voiceFnTapModeEnabled = false
             voiceFnTapSession.setEnabled(false)
+            if HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+                hasMatchingServices: voiceFunctionMapper.hasMatchingServices
+            ) {
+                settings.voiceFnTapModeEnabled = true
+                AppLogger.shared.write(
+                    "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
+                )
+                startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+                scheduleHIDMappingRecoveryIfNeeded()
+                return
+            }
+            settings.voiceFnTapModeEnabled = false
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
             startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
             return
