@@ -645,6 +645,7 @@ final class VoiceFnTapSessionController {
                     discardPendingTermination(
                         sessionIdentity: interruptedSessionIdentity
                     )
+                    suppressAudioUntilRemoteStop = false
                     onFailure(
                         .stopTapFailed,
                         interruptedOperationID ?? pendingCleanupOperationID

@@ -343,7 +343,8 @@ struct MacOSDictationBridgeTests {
         ))
         #expect(controllerShutdown.lowerBound < destinationShutdown.lowerBound)
         #expect(applySettings.contains("cleanupTerminationReason = .modeChanged"))
-        #expect(applySettings.contains("reason: .permissionRevoked"))
+        #expect(applySettings.contains("cleanupTerminationReason = .permissionRevoked"))
+        #expect(applySettings.contains("reason: cleanupTerminationReason"))
         #expect(source.contains("setEnabled(false, reason: .modeChanged)"))
         #expect(source.contains("setEnabled(false, reason: .modeDisabled)"))
         #expect(cancellation.contains(
