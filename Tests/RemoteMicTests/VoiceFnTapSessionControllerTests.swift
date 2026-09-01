@@ -1469,8 +1469,8 @@ private final class Harness {
     var terminationOperationIDs: [UInt64?] = []
     var lifecycleEvents: [String] = []
     lazy var controller = VoiceFnTapSessionController(
-        schedule: scheduler.schedule,
         dictationLeadInSampleCount: 4,
+        schedule: scheduler.schedule,
         setFunctionKeyPressed: { [unowned self] pressed in
             functionKeyEvents.append(pressed)
             return functionKeyResults.isEmpty ? true : functionKeyResults.removeFirst()
