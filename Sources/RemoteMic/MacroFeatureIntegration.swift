@@ -93,7 +93,7 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     func updateButtonProfilesAccess(_ decision: HostButtonProfilesAccessDecision) {
-        #if canImport(SayAllMacroRemoteMic)
+        #if canImport(SayAllMacroRemoteMic) && canImport(SayAllMembershipCore)
         let packageDecision: ButtonProfilesAccessDecision
         switch decision {
         case let .allowed(validUntil):
