@@ -127,7 +127,9 @@ struct HardwareSimulationIntegrationTests {
             },
             enqueueAudio: { queuedSamples.append(contentsOf: $0) },
             drainAudio: { drainCompletions.append($0) },
-            onFailure: { Issue.record("Fn tap unexpectedly failed: \($0.rawValue)") }
+            onFailure: { failure, _ in
+                Issue.record("Fn tap unexpectedly failed: \(failure.rawValue)")
+            }
         )
         controller.setEnabled(true)
         coordinator.beginTargetSwitch(
@@ -183,6 +185,183 @@ struct HardwareSimulationIntegrationTests {
         drainCompletions.removeFirst()()
         scheduler.advance(by: 0.12)
         #expect(functionKeyEvents == [true, false, true, false])
+        #expect(controller.phase == .idle)
+    }
+
+    @Test func rc003MacOSDictationCompletesTheFirstDelayedTargetJourney() throws {
+        let runner = try HardwareScenarioRunner(
+            scenario: try XiaomiVoiceRemoteFixture.directStreamScenario(),
+            catalog: HardwareCatalog(profiles: [try XiaomiVoiceRemoteFixture.profile()])
+        )
+        let scheduler = VoiceInputManualScheduler()
+        var destination = voiceInputTestSnapshot(
+            bundleIdentifier: "com.example.previous",
+            role: "AXWindow",
+            editable: false
+        )
+        let coordinator = VoiceInputDestinationCoordinator(
+            schedule: scheduler.schedule,
+            snapshot: { destination }
+        )
+        var functionKeyEvents: [Bool] = []
+        var controlKeyEvents: [Bool] = []
+        var queuedSamples: [Int16] = []
+        var drainCompletions: [() -> Void] = []
+        var completions: [(VoiceFnTapSessionController.TapPattern, UInt64?)] = []
+        let controller = VoiceFnTapSessionController(
+            schedule: scheduler.schedule,
+            destinationReadiness: coordinator.waitUntilReady,
+            setFunctionKeyPressed: {
+                functionKeyEvents.append($0)
+                return true
+            },
+            setControlKeyPressed: {
+                controlKeyEvents.append($0)
+                return true
+            },
+            enqueueAudio: { queuedSamples.append(contentsOf: $0) },
+            drainAudio: { drainCompletions.append($0) },
+            onFailure: { failure, _ in
+                Issue.record("Control tap unexpectedly failed: \(failure.rawValue)")
+            },
+            onCompletion: { completions.append(($0, $1)) }
+        )
+        controller.setEnabled(true)
+        coordinator.beginTargetSwitch(
+            intent: .application(bundleIdentifier: "com.example.target")
+        )
+
+        var capabilities: ATVVCapabilities?
+        var capabilitiesConfirmed = false
+        var modelReadPending = true
+        let waitsForModelIdentification =
+            BluetoothRemoteModelReadinessPolicy.shouldWaitBeforeReady(
+                voiceMacOSDictationModeEnabled: true,
+                persistedModel: .unknown,
+                bluetoothName: "MI RC",
+                modelReadPending: modelReadPending
+            )
+        #expect(waitsForModelIdentification)
+        var identifiedModel: XiaomiRemoteModel?
+        var bridgeReady = false
+        var accumulator = FrameAccumulator()
+        let decoder = IMAADPCMDecoder()
+        var streaming = false
+        var streamStartCount = 0
+        var streamStopCount = 0
+        var decodedSamples: [Int16] = []
+
+        while let signal = runner.nextSignal() {
+            if signal.kind == XiaomiVoiceRemoteSignalKind.notificationState,
+               signal.payload["characteristicUUID"]?.stringValue == XiaomiVoiceRemoteFixture.controlUUID,
+               signal.payload["enabled"] == .bool(true) {
+                _ = try runner.receive(XiaomiVoiceRemoteFixture.getCapabilitiesCommand())
+                continue
+            }
+
+            guard let value = BLEGATTValue(signal: signal) else { continue }
+            if value.characteristicUUID == XiaomiVoiceRemoteFixture.controlUUID {
+                switch value.value.first {
+                case 0x0B:
+                    capabilities = ATVVCapabilities.parse(value.value)
+                    capabilitiesConfirmed = capabilities != nil
+                    #expect(!BluetoothRemoteModelReadinessPolicy.canCompleteInitialization(
+                        capabilitiesConfirmed: capabilitiesConfirmed,
+                        waitsForModelIdentification: waitsForModelIdentification,
+                        modelReadPending: modelReadPending
+                    ))
+                    identifiedModel = XiaomiRemoteModel.identified(by: "RC003")
+                    #expect(identifiedModel == .rc003)
+                    modelReadPending = false
+                    bridgeReady = BluetoothRemoteModelReadinessPolicy.canCompleteInitialization(
+                        capabilitiesConfirmed: capabilitiesConfirmed,
+                        waitsForModelIdentification: waitsForModelIdentification,
+                        modelReadPending: modelReadPending
+                    )
+                    #expect(bridgeReady)
+                case 0x04:
+                    streamStartCount += 1
+                    #expect(streamStartCount == 1)
+                    #expect(bridgeReady)
+                    #expect(identifiedModel == .rc003)
+                    streaming = true
+                    accumulator.reset()
+                    decoder.reset()
+                    #expect(controller.startVoice(
+                        pattern: .macOSDictation,
+                        operationID: 1
+                    ))
+                case 0x00:
+                    streamStopCount += 1
+                    #expect(streaming)
+                    streaming = false
+                    #expect(controller.stopVoice())
+                default:
+                    break
+                }
+            } else if value.characteristicUUID == XiaomiVoiceRemoteFixture.audioUUID {
+                let activeCapabilities = try #require(capabilities)
+                #expect(streaming)
+                for frame in accumulator.append(
+                    value.value,
+                    frameSize: activeCapabilities.frameSize
+                ) {
+                    let samples = PCMPostprocessor.process(decoder.decode(frame), gainDB: 0)
+                    decodedSamples.append(contentsOf: samples)
+                    #expect(controller.receive(samples))
+                }
+            }
+        }
+
+        #expect(streamStartCount == 1)
+        #expect(streamStopCount == 1)
+        #expect(!streaming)
+        #expect(accumulator.pending.isEmpty)
+        #expect(decodedSamples.count == 240)
+        #expect(decodedSamples.prefix(3) == [1, 2, 3])
+        #expect(functionKeyEvents.isEmpty)
+        #expect(controlKeyEvents.isEmpty)
+        #expect(queuedSamples.isEmpty)
+        #expect(drainCompletions.isEmpty)
+
+        destination = voiceInputTestSnapshot(bundleIdentifier: "com.example.target")
+        scheduler.advance(by: 0.05)
+        #expect(controlKeyEvents == [true])
+        scheduler.advance(by: 0.059)
+        #expect(controlKeyEvents == [true])
+        scheduler.advance(by: 0.002)
+        #expect(controlKeyEvents == [true, false])
+        scheduler.advance(by: 0.078)
+        #expect(controlKeyEvents == [true, false])
+        scheduler.advance(by: 0.002)
+        #expect(controlKeyEvents == [true, false, true])
+        scheduler.advance(by: 0.058)
+        #expect(controlKeyEvents == [true, false, true])
+        scheduler.advance(by: 0.002)
+        #expect(controlKeyEvents == [true, false, true, false])
+        #expect(queuedSamples.count == 4_000 + decodedSamples.count)
+        #expect(queuedSamples.prefix(4_000).allSatisfy { $0 == 0 })
+        #expect(Array(queuedSamples.dropFirst(4_000)) == decodedSamples)
+        #expect(drainCompletions.count == 1)
+        #expect(completions.isEmpty)
+
+        drainCompletions.removeFirst()()
+        #expect(controlKeyEvents == [true, false, true, false, true])
+        scheduler.advance(by: 0.059)
+        #expect(controlKeyEvents == [true, false, true, false, true])
+        scheduler.advance(by: 0.002)
+        #expect(controlKeyEvents == [true, false, true, false, true, false])
+        scheduler.advance(by: 0.078)
+        #expect(controlKeyEvents == [true, false, true, false, true, false])
+        scheduler.advance(by: 0.002)
+        #expect(controlKeyEvents == [true, false, true, false, true, false, true])
+        scheduler.advance(by: 0.058)
+        #expect(controlKeyEvents == [true, false, true, false, true, false, true])
+        scheduler.advance(by: 0.002)
+        #expect(controlKeyEvents == [true, false, true, false, true, false, true, false])
+        #expect(completions.count == 1)
+        #expect(completions[0].0 == .macOSDictation)
+        #expect(completions[0].1 == 1)
         #expect(controller.phase == .idle)
     }
 

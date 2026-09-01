@@ -252,6 +252,9 @@
   - 已完成辅助功能权限门、全目标 HID neutralize 与失败回滚、generation 会话状态、开头 pre-roll、结尾排空、配置兼容及自动化测试；新增跨组件首次语音门禁，覆盖目标延迟 0～3 秒、5 秒缓存、提前松开、超时、目标切换、敏感字段以及 RC001/RC003 模拟 `STREAM_START → AUDIO → STREAM_STOP`，不再把第三次成功视为通过。待实体遥控器复验默认豆包路径、Typeless 路径、录音中关闭开关、断连恢复和唤起目标后的第一次文字上屏，再标记完成。
   - `1.7.6` 预览版已因 macOS 26 启动阶段的 HID 服务生命周期崩溃撤回；修复后服务对象会在映射读取和写入期间持续持有所属 HID 客户端，并由生命周期回归测试覆盖。`1.7.7` 已在 RC003 连接和代表性持久化设置下通过最终 ZIP App 的首次启动、正常退出、二次启动、四种功能状态及无新增崩溃报告门禁；PKG 内嵌 App 与已启动验证的 App 完全一致，已发布为 Pre-release。Typeless 等实验路径仍按本条后续真机范围继续验证。
   - 2026-09-01 修复 1.9.18 中启动、唤醒或手动开启时 HID service 暂未枚举导致 Fn 点按偏好被持久化关闭：`matched=0` 现在保持用户开关并进入有限恢复，已枚举目标后的真实写入失败仍按安全策略关闭并回退硬件 Fn；自动化通过，仍待 RC003 休眠后先启 App、再唤醒遥控器并完成 Typeless 第一次语音真机验收。
+- [ ] 实体遥控器语音键直接触发 macOS 自带听写
+  - 默认关闭，只在 Fn/地球键模式下使用。按下语音键时自动发送 Control 双击，松开并排空尾音后再次发送 Control 双击；不增加语音键手势等待，也不改变 iPhone、Apple Watch 和网页版路径。
+  - 系统听写快捷键必须设为“连按两下 Control 键”。源码、自动化和真机边界见 [`Bugs/2026-09-01-macos-dictation-needs-manual-shortcut.md`](Bugs/2026-09-01-macos-dictation-needs-manual-shortcut.md) 与 [`Testing/MacOSSystemDictation.md`](Testing/MacOSSystemDictation.md)。在项目正式签名版本完成 RC003 连续会话和首尾文字验收前保持未完成。
 - [ ] 语音键支持 Fn/左 Command/右 Command 长按模式
   - 默认保持 Fn/地球键；可在“按键映射”页选择左 Command 或右 Command 长按。Command 模式需要辅助功能权限，并覆盖 RC003、iPhone、Apple Watch 和网页版语音入口。
   - Command 模式不得通过全局 Command flagsChanged 监听普通键盘；只在真实语音会话开始/结束时发送成对 keyDown/keyUp。Fn 点按模式仅在 Fn/地球键模式有效。

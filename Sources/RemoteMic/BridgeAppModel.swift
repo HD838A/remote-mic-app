@@ -19,6 +19,36 @@ enum MobileVoiceSource: Equatable {
     }
 }
 
+private enum VoiceTapTrigger: Equatable {
+    case function
+    case macOSDictation
+
+    var tapPattern: VoiceFnTapSessionController.TapPattern {
+        switch self {
+        case .function: return .function
+        case .macOSDictation: return .macOSDictation
+        }
+    }
+
+    var logName: String {
+        switch self {
+        case .function: return "fn_tap"
+        case .macOSDictation: return "macos_dictation"
+        }
+    }
+
+    var diagnosticBoundary: String {
+        switch self {
+        case .function: return "target_text_unobservable"
+        case .macOSDictation: return "macos_dictation_text_unobservable"
+        }
+    }
+
+    init(pattern: VoiceFnTapSessionController.TapPattern) {
+        self = pattern == .macOSDictation ? .macOSDictation : .function
+    }
+}
+
 enum MobileVoiceStartDisposition: Equatable {
     case startNow
     case deferUntilStopped
@@ -62,6 +92,7 @@ enum HIDPermissionRecoveryPolicy {
         customMappingEnabled: Bool,
         voiceKeyMode: VoiceKeyMode = .function,
         voiceFnTapModeEnabled: Bool = false,
+        voiceMacOSDictationModeEnabled: Bool = false,
         softwareVoiceKeyHeld: Bool = false,
         previous: HIDPermissionSnapshot?,
         current: HIDPermissionSnapshot
@@ -71,6 +102,7 @@ enum HIDPermissionRecoveryPolicy {
                   customMappingEnabled ||
                       voiceKeyMode.requiresAccessibility ||
                       voiceFnTapModeEnabled ||
+                      voiceMacOSDictationModeEnabled ||
                       softwareVoiceKeyHeld
               ),
               let previous
@@ -383,6 +415,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.voiceInputDestinationCoordinator.waitUntilReady(completion: completion) ?? .immediate
         },
         setFunctionKeyPressed: { KeyboardInjector.setFunctionKeyPressed($0) },
+        setControlKeyPressed: { KeyboardInjector.setControlKeyPressed($0) },
         enqueueAudio: { [weak self] samples in
             self?.enqueueVoiceFnTapAudio(samples)
         },
@@ -393,8 +426,21 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             self.audioOutput.endSessionAfterDraining(completion: completion)
         },
-        onFailure: { [weak self] failure in
-            self?.handleVoiceFnTapFailure(failure)
+        onFailure: { [weak self] failure, operationID in
+            self?.handleVoiceFnTapFailure(failure, operationID: operationID)
+        },
+        onCancellation: { [weak self] reason, operationID in
+            self?.handleVoiceTapCancellation(reason, operationID: operationID)
+        },
+        onCompletion: { [weak self] pattern, operationID in
+            self?.handleVoiceTapCompletion(pattern, operationID: operationID)
+        },
+        onTermination: { [weak self] reason, pattern, operationID in
+            self?.handleVoiceTapTermination(
+                reason,
+                pattern: pattern,
+                operationID: operationID
+            )
         }
     )
     private lazy var transcriptCaptureCoordinator = TranscriptCaptureCoordinator(
@@ -418,9 +464,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     )
     private var transcriptHistoryToggleCancellable: AnyCancellable?
     private var recordingToggleCancellable: AnyCancellable?
+    private var macOSDictationToggleCancellable: AnyCancellable?
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
     private var heldVoiceKeyMode: VoiceKeyMode?
+    private var activeVoiceTapTrigger: VoiceTapTrigger = .function
+    private var isVoiceTapModeEnabled: Bool {
+        settings.voiceFnTapModeEnabled || settings.voiceMacOSDictationModeEnabled
+    }
     private var voiceSessionStartedAt: Date?
     private var voiceSessionID: UUID?
     private var voiceAudioDeliveryGeneration = 0
@@ -771,6 +822,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     transcriptCaptureCoordinator.cancel()
                 }
             }
+        macOSDictationToggleCancellable = settings.$voiceMacOSDictationModeEnabled
+            .removeDuplicates()
+            .scan((
+                previous: settings.voiceMacOSDictationModeEnabled,
+                current: settings.voiceMacOSDictationModeEnabled
+            )) { state, current in
+                (previous: state.current, current: current)
+            }
+            .dropFirst()
+            .sink { [weak self] transition in
+                guard transition.previous, !transition.current else { return }
+                DispatchQueue.main.async { [weak self] in
+                    guard self?.settings.voiceMacOSDictationModeEnabled == false else { return }
+                    self?.releaseBluetoothModelWaitsForDisabledDictation()
+                }
+            }
     }
 
     func startIfNeeded() {
@@ -820,8 +887,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         stopLongRecording(reason: "app_stop")
         finishRC003VoiceExtensionTest(reason: "app_stop")
+        voiceFnTapSession.shutdown(reason: .appShutdown)
         voiceInputDestinationCoordinator.shutdown()
-        voiceFnTapSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
         bluetoothBridges.removeAll()
@@ -1096,9 +1163,31 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     static func canStartBluetoothVoice(
         mode: VoiceKeyMode,
         voiceFnTapModeEnabled: Bool = false,
+        voiceMacOSDictationModeEnabled: Bool = false,
+        voiceTapSessionEnabled: Bool = true,
+        voiceTapCleanupPending: Bool = false,
+        remoteModel: XiaomiRemoteModel = .unknown,
         isVoiceKeyNeutralized: Bool
     ) -> Bool {
-        (mode == .function && !voiceFnTapModeEnabled) || isVoiceKeyNeutralized
+        guard !voiceMacOSDictationModeEnabled || remoteModel == .rc003 else { return false }
+        let voiceTapModeEnabled = voiceFnTapModeEnabled || voiceMacOSDictationModeEnabled
+        guard !voiceTapCleanupPending else { return false }
+        guard !voiceTapModeEnabled || voiceTapSessionEnabled else { return false }
+        return (
+            mode == .function &&
+                !voiceFnTapModeEnabled &&
+                !voiceMacOSDictationModeEnabled
+        ) || isVoiceKeyNeutralized
+    }
+
+    static func shouldReconnectForMacOSDictationModelIdentification(
+        enabling: Bool,
+        remoteModel: XiaomiRemoteModel,
+        bluetoothName: String?
+    ) -> Bool {
+        enabling &&
+            remoteModel == .unknown &&
+            XiaomiRemoteModel.identified(byBluetoothName: bluetoothName) == nil
     }
 
     static func canFallbackVoiceKeyMode(
@@ -1149,7 +1238,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             customMappingEnabled: settings.customMappingEnabled,
             voiceKeyMode: settings.voiceKeyMode,
             voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled,
-            softwareVoiceKeyHeld: voiceKeyLatch.isHeld,
+            voiceMacOSDictationModeEnabled: settings.voiceMacOSDictationModeEnabled,
+            softwareVoiceKeyHeld: voiceKeyLatch.isHeld ||
+                voiceFnTapSession.requiresCleanupBeforeMapping,
             previous: appliedHIDPermissionSnapshot,
             current: current
         ) else { return }
@@ -1739,20 +1830,53 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
         let requestedVoiceKeyMode = settings.voiceKeyMode
         let accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
-        let requestedFnTapMode = settings.voiceFnTapModeEnabled && requestedVoiceKeyMode == .function
+        let requestedMacOSDictationMode =
+            settings.voiceMacOSDictationModeEnabled && requestedVoiceKeyMode == .function
+        let requestedFnTapMode = settings.voiceFnTapModeEnabled &&
+            !requestedMacOSDictationMode &&
+            requestedVoiceKeyMode == .function
         if settings.voiceFnTapModeEnabled != requestedFnTapMode {
             settings.voiceFnTapModeEnabled = requestedFnTapMode
         }
-        if !requestedFnTapMode, voiceFnTapSession.requiresCleanupBeforeMapping {
-            voiceFnTapSession.setEnabled(false) { [weak self] in
-                self?.applyHIDSettings(
+        if settings.voiceMacOSDictationModeEnabled != requestedMacOSDictationMode {
+            settings.voiceMacOSDictationModeEnabled = requestedMacOSDictationMode
+        }
+        let requestedVoiceTapTrigger: VoiceTapTrigger? = requestedMacOSDictationMode
+            ? .macOSDictation
+            : (requestedFnTapMode ? .function : nil)
+        let voiceTapTriggerChanged = requestedVoiceTapTrigger.map {
+            $0 != activeVoiceTapTrigger
+        } ?? true
+        let cleanupTerminationReason: VoiceFnTapTerminationReason
+        if requestedVoiceTapTrigger != nil, !accessibilityGranted {
+            cleanupTerminationReason = .permissionRevoked
+        } else if voiceTapTriggerChanged {
+            cleanupTerminationReason = .modeChanged
+        } else {
+            cleanupTerminationReason = .modeDisabled
+        }
+        if voiceFnTapSession.requiresCleanupBeforeMapping,
+           (
+               voiceTapTriggerChanged ||
+                   voiceFnTapSession.phase == .idle ||
+                   (requestedVoiceTapTrigger != nil && !accessibilityGranted)
+           ) {
+            voiceFnTapSession.setEnabled(
+                false,
+                reason: cleanupTerminationReason
+            ) { [weak self] in
+                guard let self else { return }
+                self.activeVoiceTapTrigger = requestedVoiceTapTrigger ?? .function
+                self.applyHIDSettings(
                     allowVoiceKeyModeFallback: allowVoiceKeyModeFallback
                 )
             }
             return
         }
+        activeVoiceTapTrigger = requestedVoiceTapTrigger ?? .function
+        let requestedVoiceTapMode = requestedVoiceTapTrigger != nil
         requestNextHIDPermissionIfNeeded(
-            voiceFnTapModeRequested: requestedFnTapMode,
+            voiceFnTapModeRequested: requestedVoiceTapMode,
             voiceKeyModeRequested: requestedVoiceKeyMode
         )
         let canFallbackVoiceKeyMode = Self.canFallbackVoiceKeyMode(
@@ -1760,29 +1884,48 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             allowVoiceKeyModeFallback: allowVoiceKeyModeFallback
         )
         var powerKeySuppressed: Bool
-        if requestedFnTapMode, accessibilityGranted {
+        if requestedVoiceTapMode, accessibilityGranted {
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
+                let voiceTapWasEnabled = voiceFnTapSession.isEnabled
                 voiceFnTapSession.setEnabled(true)
+                if requestedMacOSDictationMode {
+                    voiceShortcutStatus = LocalizedMessage(
+                        "voice_button.status.macos_dictation_enabled"
+                    )
+                }
+                if !voiceTapWasEnabled {
+                    AppLogger.shared.write(
+                        "VOICE TAP mode_ready trigger=\(activeVoiceTapTrigger.logName) " +
+                            "phase=completed result=enabled"
+                    )
+                }
             } else if !canFallbackVoiceKeyMode, isStreaming {
                 AppLogger.shared.write(
-                    "VOICE FN TAP mode_preserved reason=voice_active_mapping_failed"
+                    "VOICE TAP mode_preserved trigger=\(activeVoiceTapTrigger.logName) " +
+                        "reason=voice_active_mapping_failed"
                 )
             } else if !canFallbackVoiceKeyMode {
                 AppLogger.shared.write(
-                    "VOICE FN TAP mode_preserved reason=voice_start_mapping_failed"
+                    "VOICE TAP mode_preserved trigger=\(activeVoiceTapTrigger.logName) " +
+                        "reason=voice_start_mapping_failed"
                 )
             } else if HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
                 hasMatchingServices: voiceFunctionMapper.hasMatchingServices
             ) {
-                voiceFnTapSession.setEnabled(false)
+                voiceFnTapSession.setEnabled(false, reason: .modeDisabled)
                 AppLogger.shared.write(
-                    "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
+                    "VOICE TAP mode_pending_mapping trigger=\(activeVoiceTapTrigger.logName) " +
+                        "reason=no_matching_service"
                 )
                 scheduleHIDMappingRecoveryIfNeeded()
             } else {
-                settings.voiceFnTapModeEnabled = false
-                voiceFnTapSession.setEnabled(false)
+                if requestedMacOSDictationMode {
+                    settings.voiceMacOSDictationModeEnabled = false
+                } else {
+                    settings.voiceFnTapModeEnabled = false
+                }
+                voiceFnTapSession.setEnabled(false, reason: .modeDisabled)
                 powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
             }
         } else if requestedVoiceKeyMode != .function {
@@ -1833,11 +1976,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 )
             }
         } else {
-            if requestedFnTapMode {
-                settings.voiceFnTapModeEnabled = false
-            }
-            voiceFnTapSession.setEnabled(false)
+            voiceFnTapSession.setEnabled(false, reason: .modeDisabled)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+            if requestedVoiceTapMode, !accessibilityGranted {
+                voiceShortcutStatus = LocalizedMessage(
+                    "voice_button.status.tap_permission"
+                )
+                AppLogger.shared.write(
+                    "VOICE TAP mode_waiting trigger=\(activeVoiceTapTrigger.logName) " +
+                        "reason=accessibility_permission"
+                )
+            }
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
         completeHIDMappingRecoveryIfNeeded()
@@ -2068,17 +2217,59 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             settings.voiceFnTapModeEnabled = false
             return
         }
+        AppLogger.shared.write(
+            "VOICE TAP mode_change requested trigger=fn_tap enabled=\(enabled)"
+        )
         if enabled {
-            enableVoiceFnTapMode()
+            voiceFnTapSession.setEnabled(false, reason: .modeChanged) { [weak self] in
+                guard let self else { return }
+                self.settings.voiceMacOSDictationModeEnabled = false
+                self.activeVoiceTapTrigger = .function
+                self.enableVoiceFnTapMode()
+            }
             return
         }
-        settings.voiceFnTapModeEnabled = false
-        voiceFnTapSession.setEnabled(false) { [weak self] in
-            self?.applyHIDSettings()
+        voiceFnTapSession.setEnabled(false, reason: .modeDisabled) { [weak self] in
+            guard let self else { return }
+            self.settings.voiceFnTapModeEnabled = false
+            self.activeVoiceTapTrigger = .function
+            self.applyHIDSettings()
+            AppLogger.shared.write(
+                "VOICE TAP mode_change completed trigger=fn_tap result=disabled"
+            )
+        }
+    }
+
+    func setVoiceMacOSDictationModeEnabled(_ enabled: Bool) {
+        guard settings.voiceKeyMode == .function else {
+            settings.voiceMacOSDictationModeEnabled = false
+            return
+        }
+        AppLogger.shared.write(
+            "VOICE TAP mode_change requested trigger=macos_dictation enabled=\(enabled)"
+        )
+        if enabled {
+            voiceFnTapSession.setEnabled(false, reason: .modeChanged) { [weak self] in
+                guard let self else { return }
+                self.settings.voiceFnTapModeEnabled = false
+                self.activeVoiceTapTrigger = .macOSDictation
+                self.enableVoiceMacOSDictationMode()
+            }
+            return
+        }
+        voiceFnTapSession.setEnabled(false, reason: .modeDisabled) { [weak self] in
+            guard let self else { return }
+            self.settings.voiceMacOSDictationModeEnabled = false
+            self.activeVoiceTapTrigger = .function
+            self.applyHIDSettings()
+            AppLogger.shared.write(
+                "VOICE TAP mode_change completed trigger=macos_dictation result=disabled"
+            )
         }
     }
 
     func importConfiguration(from data: Data) throws {
+        let macOSDictationWasEnabled = settings.voiceMacOSDictationModeEnabled
         let changedVoiceKeyConfiguration: Bool
         do {
             changedVoiceKeyConfiguration = try Self.importConfiguration(
@@ -2095,6 +2286,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         if changedVoiceKeyConfiguration {
             preferredInputSourceMonitor.endVoiceSession()
+        }
+        if !macOSDictationWasEnabled, settings.voiceMacOSDictationModeEnabled {
+            reconnectUnknownBluetoothBridgesForMacOSDictation()
         }
         applyAudioSettings(reason: "configuration_import")
         applyHIDSettings()
@@ -2121,9 +2315,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         preferredInputSourceMonitor.endVoiceSession()
         if mode != .function {
-            settings.voiceFnTapModeEnabled = false
-            voiceFnTapSession.setEnabled(false) { [weak self] in
+            voiceFnTapSession.setEnabled(false, reason: .modeChanged) { [weak self] in
                 guard let self else { return }
+                self.settings.voiceFnTapModeEnabled = false
+                self.settings.voiceMacOSDictationModeEnabled = false
+                self.activeVoiceTapTrigger = .function
                 self.settings.voiceKeyMode = mode
                 self.applyHIDSettings()
                 AppLogger.shared.write(
@@ -2150,7 +2346,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
         var powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
         guard voiceFunctionMapper.isVoiceKeyNeutralized else {
-            voiceFnTapSession.setEnabled(false)
+            voiceFnTapSession.setEnabled(false, reason: .modeDisabled)
             if HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
                 hasMatchingServices: voiceFunctionMapper.hasMatchingServices
             ) {
@@ -2168,15 +2364,189 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         settings.voiceFnTapModeEnabled = true
+        settings.voiceMacOSDictationModeEnabled = false
+        activeVoiceTapTrigger = .function
         voiceFnTapSession.setEnabled(true)
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
     }
 
-    private func handleVoiceFnTapFailure(_ failure: VoiceFnTapFailure) {
-        AppLogger.shared.write("VOICE FN TAP failed reason=\(failure.rawValue) fallback=hardware_fn")
+    private func enableVoiceMacOSDictationMode() {
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            settings.voiceMacOSDictationModeEnabled = true
+            reconnectUnknownBluetoothBridgesForMacOSDictation()
+            requestNextHIDPermissionIfNeeded(voiceFnTapModeRequested: true)
+            AppLogger.shared.write(
+                "VOICE TAP mode_waiting trigger=macos_dictation " +
+                    "reason=accessibility_permission"
+            )
+            applyHIDSettings()
+            return
+        }
+
+        var powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
+        guard voiceFunctionMapper.isVoiceKeyNeutralized else {
+            voiceFnTapSession.setEnabled(false, reason: .modeDisabled)
+            if HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+                hasMatchingServices: voiceFunctionMapper.hasMatchingServices
+            ) {
+                settings.voiceMacOSDictationModeEnabled = true
+                reconnectUnknownBluetoothBridgesForMacOSDictation()
+                AppLogger.shared.write(
+                    "VOICE TAP mode_pending_mapping trigger=macos_dictation " +
+                        "reason=no_matching_service"
+                )
+                startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+                scheduleHIDMappingRecoveryIfNeeded()
+                return
+            }
+            settings.voiceMacOSDictationModeEnabled = false
+            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+            startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+            AppLogger.shared.write(
+                "VOICE TAP mode_change completed trigger=macos_dictation " +
+                    "result=failed reason=voice_mapping_failed"
+            )
+            return
+        }
         settings.voiceFnTapModeEnabled = false
-        voiceFnTapSession.setEnabled(false)
-        applyHIDSettings()
+        settings.voiceMacOSDictationModeEnabled = true
+        reconnectUnknownBluetoothBridgesForMacOSDictation()
+        activeVoiceTapTrigger = .macOSDictation
+        voiceFnTapSession.setEnabled(true)
+        voiceShortcutStatus = LocalizedMessage("voice_button.status.macos_dictation_enabled")
+        startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+        AppLogger.shared.write(
+            "VOICE TAP mode_change completed trigger=macos_dictation result=enabled"
+        )
+    }
+
+    private func handleVoiceFnTapFailure(
+        _ failure: VoiceFnTapFailure,
+        operationID: UInt64?
+    ) {
+        let failedTrigger = activeVoiceTapTrigger
+        let failedTraceID = operationID ?? activeBluetoothVoiceTraceID ?? 0
+        AppLogger.shared.write(
+            "VOICE TAP trace=\(failedTraceID) " +
+                "phase=failed trigger=\(failedTrigger.logName) " +
+                "reason=\(failure.rawValue) recovery=hardware_fn_pending " +
+                "diagnostic_boundary=\(failedTrigger.diagnosticBoundary)"
+        )
+        if let identifier = activeBluetoothVoiceDeviceIdentifier {
+            let activeStreamTraceID = activeBluetoothVoiceTraceID ?? 0
+            let activeBridge = bluetoothBridges[identifier]
+            bluetoothVoiceActive = false
+            activeBluetoothVoiceDeviceIdentifier = nil
+            loggedBluetoothVoiceAudioDeviceIdentifier = nil
+            let closeRequested = activeBridge?.requestMicrophoneClose() ?? false
+            releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+            endVoiceSessionIfNeeded(flushAudio: failure == .startTapFailed)
+            bluetoothVoiceTraceStartedAt = nil
+            bluetoothVoiceTailDiagnostics.reset()
+            activeBluetoothVoiceTraceID = nil
+            AppLogger.shared.write(
+                "ATVV STREAM aborted trace=\(activeStreamTraceID) " +
+                    "reason=\(failure.rawValue) origin_trace=\(failedTraceID) " +
+                    "close_requested=\(closeRequested)"
+            )
+        }
+        if failedTrigger == .macOSDictation {
+            settings.voiceMacOSDictationModeEnabled = false
+        } else {
+            settings.voiceFnTapModeEnabled = false
+        }
+        activeVoiceTapTrigger = .function
+        voiceFnTapSession.setEnabled(false, reason: .modeDisabled) { [weak self] in
+            guard let self else { return }
+            self.applyHIDSettings()
+            let recovered = self.voiceFunctionMapper.isApplied &&
+                !self.voiceFunctionMapper.isVoiceKeyNeutralized
+            AppLogger.shared.write(
+                "VOICE TAP trace=\(failedTraceID) phase=recovery " +
+                    "trigger=\(failedTrigger.logName) " +
+                    "result=\(recovered ? "completed" : "failed") " +
+                    "target=hardware_fn " +
+                    "diagnostic_boundary=\(failedTrigger.diagnosticBoundary)"
+            )
+        }
+    }
+
+    private func handleVoiceTapCompletion(
+        _ pattern: VoiceFnTapSessionController.TapPattern,
+        operationID: UInt64?
+    ) {
+        let trigger = VoiceTapTrigger(pattern: pattern)
+        guard trigger == .macOSDictation else { return }
+        AppLogger.shared.write(
+            "VOICE TAP trace=\(operationID ?? 0) phase=external_boundary " +
+                "trigger=macos_dictation result=unobservable " +
+                "expected_effect=dictation_text_in_focused_field " +
+                "diagnostic_boundary=macos_dictation_text_unobservable"
+        )
+    }
+
+    private func handleVoiceTapCancellation(
+        _ reason: VoiceInputDestinationCancellation,
+        operationID: UInt64?
+    ) {
+        let trigger = activeVoiceTapTrigger
+        let cancelledTraceID = operationID ?? activeBluetoothVoiceTraceID ?? 0
+        AppLogger.shared.write(
+            "VOICE TAP trace=\(cancelledTraceID) phase=start_cancelled " +
+                "trigger=\(trigger.logName) result=cancelled reason=\(reason.rawValue) " +
+                "diagnostic_boundary=\(trigger.diagnosticBoundary)"
+        )
+        _ = voiceFnTapSession.stopVoice()
+        guard activeBluetoothVoiceTraceID == cancelledTraceID,
+              let identifier = activeBluetoothVoiceDeviceIdentifier
+        else { return }
+        let activeBridge = bluetoothBridges[identifier]
+        let closeRequested = activeBridge?.requestMicrophoneClose() ?? false
+        bluetoothVoiceActive = false
+        activeBluetoothVoiceDeviceIdentifier = nil
+        loggedBluetoothVoiceAudioDeviceIdentifier = nil
+        releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+        endVoiceSessionIfNeeded(flushAudio: true)
+        activeBluetoothVoiceTraceID = nil
+        bluetoothVoiceTraceStartedAt = nil
+        bluetoothVoiceTailDiagnostics.reset()
+        AppLogger.shared.write(
+            "ATVV STREAM aborted trace=\(cancelledTraceID) " +
+                "reason=voice_tap_destination_\(reason.rawValue) " +
+                "close_requested=\(closeRequested)"
+        )
+    }
+
+    private func handleVoiceTapTermination(
+        _ reason: VoiceFnTapTerminationReason,
+        pattern: VoiceFnTapSessionController.TapPattern,
+        operationID: UInt64?
+    ) {
+        let trigger = VoiceTapTrigger(pattern: pattern)
+        let terminatedTraceID = operationID ?? 0
+        AppLogger.shared.write(
+            "VOICE TAP trace=\(terminatedTraceID) phase=cancelled " +
+                "trigger=\(trigger.logName) result=completed reason=\(reason.rawValue) " +
+                "diagnostic_boundary=\(trigger.diagnosticBoundary)"
+        )
+        guard activeBluetoothVoiceTraceID == terminatedTraceID,
+              let identifier = activeBluetoothVoiceDeviceIdentifier
+        else { return }
+        let activeBridge = bluetoothBridges[identifier]
+        let closeRequested = activeBridge?.requestMicrophoneClose() ?? false
+        bluetoothVoiceActive = false
+        activeBluetoothVoiceDeviceIdentifier = nil
+        loggedBluetoothVoiceAudioDeviceIdentifier = nil
+        releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+        endVoiceSessionIfNeeded(flushAudio: false)
+        activeBluetoothVoiceTraceID = nil
+        bluetoothVoiceTraceStartedAt = nil
+        bluetoothVoiceTailDiagnostics.reset()
+        AppLogger.shared.write(
+            "ATVV STREAM aborted trace=\(terminatedTraceID) " +
+                "reason=voice_tap_\(reason.rawValue) " +
+                "close_requested=\(closeRequested)"
+        )
     }
 
     private func requestNextHIDPermissionIfNeeded(
@@ -2185,7 +2555,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     ) {
         let request = HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: settings.customMappingEnabled,
-            voiceFnTapModeEnabled: voiceFnTapModeRequested ?? settings.voiceFnTapModeEnabled,
+            voiceFnTapModeEnabled: voiceFnTapModeRequested ?? isVoiceTapModeEnabled,
             voiceKeyMode: voiceKeyModeRequested ?? settings.voiceKeyMode,
             inputMonitoringGranted: HIDRemoteMonitor.isInputMonitoringGranted,
             accessibilityGranted: KeyboardInjector.isAccessibilityTrusted
@@ -2235,6 +2605,43 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var selectedBluetoothBridge: XiaomiBluetoothBridge? {
         guard let identifier = settings.selectedRemoteProfile?.bluetoothIdentifier else { return nil }
         return bluetoothBridges[identifier]
+    }
+
+    private func reconnectUnknownBluetoothBridgesForMacOSDictation() {
+        for (identifier, bridge) in bluetoothBridges {
+            let model = settings.profileID(forBluetoothIdentifier: identifier)
+                .flatMap { profileID in
+                    settings.remoteDeviceProfiles.first(where: { $0.id == profileID })?.model
+                } ?? .unknown
+            guard Self.shouldReconnectForMacOSDictationModelIdentification(
+                enabling: settings.voiceMacOSDictationModeEnabled,
+                remoteModel: model,
+                bluetoothName: bridge.deviceName
+            ) else { continue }
+            AppLogger.shared.write(
+                "BLE MODEL reconnect_requested reason=macos_dictation_model_unknown"
+            )
+            bridge.reconnectNow()
+        }
+        if let discoveryBluetoothBridge,
+           discoveryBluetoothBridge.deviceIdentifier != nil,
+           Self.shouldReconnectForMacOSDictationModelIdentification(
+               enabling: settings.voiceMacOSDictationModeEnabled,
+               remoteModel: .unknown,
+               bluetoothName: discoveryBluetoothBridge.deviceName
+           ) {
+            AppLogger.shared.write(
+                "BLE MODEL reconnect_requested reason=macos_dictation_discovery_model_unknown"
+            )
+            discoveryBluetoothBridge.reconnectNow()
+        }
+    }
+
+    private func releaseBluetoothModelWaitsForDisabledDictation() {
+        bluetoothBridges.values.forEach {
+            $0.releaseModelIdentificationWaitForDisabledDictation()
+        }
+        discoveryBluetoothBridge?.releaseModelIdentificationWaitForDisabledDictation()
     }
 
     private func startBluetoothConnections() {
@@ -2358,6 +2765,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
+                let traceID = activeBluetoothVoiceTraceID ?? 0
                 if rc003VoiceExtensionTestEnabled,
                    rc003VoiceExtensionActive,
                    rc003VoiceExtensionBridge === bridge {
@@ -2366,7 +2774,28 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
                 releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+                let tapTrigger = activeVoiceTapTrigger
+                let handledByVoiceTapMode = voiceFnTapSession.stopVoice()
+                if handledByVoiceTapMode {
+                    voiceFnTapSession.suspend(reason: .bluetoothNotReady)
+                    AppLogger.shared.write(
+                        "VOICE TAP trace=\(traceID) phase=stop_requested " +
+                            "trigger=\(tapTrigger.logName) result=accepted " +
+                            "reason=bluetooth_not_ready " +
+                            "diagnostic_boundary=\(tapTrigger.diagnosticBoundary)"
+                    )
+                }
                 endVoiceSessionIfNeeded(flushAudio: false)
+                AppLogger.shared.write(
+                    "ATVV STREAM aborted trace=\(traceID) reason=bluetooth_not_ready " +
+                        "model=\(bluetoothVoiceTraceModel.rawValue) " +
+                        "batches=\(bluetoothVoiceDecodedBatchCount) " +
+                        "samples=\(bluetoothVoiceDecodedSampleCount) " +
+                        "route=\(bluetoothVoiceTraceRoute)"
+                )
+                activeBluetoothVoiceTraceID = nil
+                bluetoothVoiceTraceStartedAt = nil
+                bluetoothVoiceTailDiagnostics.reset()
             }
             if longRecordingRequested {
                 finishLongRecording(reason: "bluetooth_not_ready")
@@ -2386,7 +2815,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 )
             }
         } else {
-            voiceFnTapSession.suspend { [weak self] in
+            voiceFnTapSession.suspend(reason: .bluetoothNotReady) { [weak self] in
                 self?.releaseVirtualAudioOutputIfUnused(reason: "bluetooth_not_ready")
             }
         }
@@ -2399,24 +2828,55 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             rc003VoiceExtensionAwaitingReopen &&
             rc003VoiceExtensionBridge === bridge
         let profileID = activateRemoteProfile(for: bridge)
+        let persistedModel = profileID
+            .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
+            ?? .unknown
+        let model = persistedModel == .unknown
+            ? XiaomiRemoteModel.identified(byBluetoothName: bridge.deviceName) ?? .unknown
+            : persistedModel
+        if persistedModel == .unknown, model != .unknown, let profileID {
+            settings.updateRemoteProfileModel(profileID, model: model)
+        }
         if let activeBluetoothVoiceDeviceIdentifier,
            activeBluetoothVoiceDeviceIdentifier != identifier {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write("ATVV STREAM rejected_busy")
             return
         }
-        if settings.voiceKeyMode != .function || settings.voiceFnTapModeEnabled {
+        if bluetoothVoiceActive {
+            AppLogger.shared.write(
+                "ATVV STREAM ignored_duplicate trace=\(activeBluetoothVoiceTraceID ?? 0) " +
+                    "model=\(model.rawValue)"
+            )
+            return
+        }
+        if settings.voiceKeyMode != .function || isVoiceTapModeEnabled {
             applyHIDSettings(allowVoiceKeyModeFallback: false)
         }
+        let voiceTapCleanupPending = voiceFnTapSession.hasCleanupBlockingNewVoice
         guard Self.canStartBluetoothVoice(
             mode: settings.voiceKeyMode,
             voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled,
+            voiceMacOSDictationModeEnabled: settings.voiceMacOSDictationModeEnabled,
+            voiceTapSessionEnabled: voiceFnTapSession.isEnabled,
+            voiceTapCleanupPending: voiceTapCleanupPending,
+            remoteModel: model,
             isVoiceKeyNeutralized: voiceFunctionMapper.isVoiceKeyNeutralized
         ) else {
             _ = bridge.requestMicrophoneClose()
+            let reason: String
+            if settings.voiceMacOSDictationModeEnabled, model != .rc003 {
+                reason = "unsupported_remote_model"
+            } else if voiceTapCleanupPending {
+                reason = "voice_tap_cleanup_pending"
+            } else if isVoiceTapModeEnabled, !voiceFnTapSession.isEnabled {
+                reason = "voice_tap_session_disabled"
+            } else {
+                reason = "voice_key_not_neutralized"
+            }
             AppLogger.shared.write(
-                "ATVV STREAM rejected reason=voice_key_not_neutralized " +
-                    "mode=\(settings.voiceKeyMode.rawValue)"
+                "ATVV STREAM rejected reason=\(reason) " +
+                    "mode=\(settings.voiceKeyMode.rawValue) model=\(model.rawValue)"
             )
             return
         }
@@ -2441,9 +2901,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
-        let model = profileID
-            .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
-            ?? .unknown
         bluetoothVoiceTraceCounter &+= 1
         activeBluetoothVoiceTraceID = bluetoothVoiceTraceCounter
         bluetoothVoiceTraceStartedAt = Date()
@@ -2480,7 +2937,58 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "RC003 EXTENSION physical_segment_reopened trace=\(activeBluetoothVoiceTraceID ?? 0)"
             )
         } else {
-            _ = voiceFnTapSession.startVoice()
+            if isVoiceTapModeEnabled {
+                let trigger = activeVoiceTapTrigger
+                let traceID = activeBluetoothVoiceTraceID ?? 0
+                AppLogger.shared.write(
+                    "VOICE TAP trace=\(traceID) phase=start_requested " +
+                        "trigger=\(trigger.logName) result=submitted " +
+                        "diagnostic_boundary=\(trigger.diagnosticBoundary)"
+                )
+                let accepted = voiceFnTapSession.startVoice(
+                    pattern: trigger.tapPattern,
+                    operationID: traceID
+                )
+                let remainsActive =
+                    activeBluetoothVoiceDeviceIdentifier == identifier &&
+                    bluetoothVoiceActive &&
+                    voiceFnTapSession.isEnabled
+                guard accepted, remainsActive else {
+                    if !accepted,
+                       voiceFnTapSession.isEnabled,
+                       activeBluetoothVoiceDeviceIdentifier == identifier {
+                        let closeRequested = bridge.requestMicrophoneClose()
+                        bluetoothVoiceActive = false
+                        activeBluetoothVoiceDeviceIdentifier = nil
+                        loggedBluetoothVoiceAudioDeviceIdentifier = nil
+                        releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+                        activeBluetoothVoiceTraceID = nil
+                        bluetoothVoiceTraceStartedAt = nil
+                        bluetoothVoiceTailDiagnostics.reset()
+                        AppLogger.shared.write(
+                            "VOICE TAP trace=\(traceID) phase=start_rejected " +
+                                "trigger=\(trigger.logName) result=busy_or_cancelled " +
+                                "diagnostic_boundary=\(trigger.diagnosticBoundary)"
+                        )
+                        AppLogger.shared.write(
+                            "ATVV STREAM aborted trace=\(traceID) " +
+                                "reason=voice_tap_start_rejected " +
+                                "close_requested=\(closeRequested)"
+                        )
+                    } else if activeBluetoothVoiceDeviceIdentifier == identifier {
+                        handleVoiceFnTapFailure(
+                            .startTapFailed,
+                            operationID: traceID
+                        )
+                    }
+                    return
+                }
+                AppLogger.shared.write(
+                    "VOICE TAP trace=\(traceID) phase=start_accepted " +
+                        "trigger=\(trigger.logName) result=accepted " +
+                        "diagnostic_boundary=\(trigger.diagnosticBoundary)"
+                )
+            }
             beginVoiceSessionIfNeeded()
             if rc003VoiceExtensionTestEnabled {
                 rc003VoiceExtensionActive = true
@@ -2535,8 +3043,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             longRecordingCloseTimer = nil
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
+        let tapTrigger = activeVoiceTapTrigger
         let handledByFnTapMode = voiceFnTapSession.stopVoice()
         let traceID = activeBluetoothVoiceTraceID ?? 0
+        if handledByFnTapMode {
+            AppLogger.shared.write(
+                "VOICE TAP trace=\(traceID) phase=stop_requested " +
+                    "trigger=\(tapTrigger.logName) result=accepted " +
+                    "diagnostic_boundary=\(tapTrigger.diagnosticBoundary)"
+            )
+        }
         let durationMilliseconds = bluetoothVoiceTraceStartedAt.map {
             max(0, Int(Date().timeIntervalSince($0) * 1_000))
         } ?? 0
@@ -2614,7 +3130,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if !enqueued {
             bluetoothVoiceEnqueueFailureCount += 1
         }
-        bluetoothVoiceTraceRoute = handledByFnTapMode ? "fn_tap" : "virtual_audio"
+        bluetoothVoiceTraceRoute = handledByFnTapMode
+            ? (activeVoiceTapTrigger == .macOSDictation ? "macos_dictation" : "fn_tap")
+            : "virtual_audio"
         if loggedBluetoothVoiceAudioDeviceIdentifier != identifier {
             loggedBluetoothVoiceAudioDeviceIdentifier = identifier
             let model = settings.profileID(forBluetoothIdentifier: identifier)
@@ -2994,7 +3512,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let applicationProfile = settings.customApplicationProfile(
             id: configured.applicationProfileID
         )
-        let requestID = settings.voiceFnTapModeEnabled
+        let requestID = isVoiceTapModeEnabled
             ? VoiceInputDestinationIntent.resolve(
                 configured: configured,
                 applicationProfile: applicationProfile
@@ -3012,7 +3530,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {
-        guard settings.voiceFnTapModeEnabled else { return }
+        guard isVoiceTapModeEnabled else { return }
         switch state {
         case .waiting:
             voiceShortcutStatus = LocalizedMessage("voice_button.status.waiting_for_input")

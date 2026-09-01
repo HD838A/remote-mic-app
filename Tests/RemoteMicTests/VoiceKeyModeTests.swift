@@ -246,8 +246,9 @@ struct VoiceKeyModeTests {
             "HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure"
         ))
         #expect(applySource.contains(
-            "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
+            "VOICE TAP mode_pending_mapping trigger="
         ))
+        #expect(applySource.contains("reason=no_matching_service"))
 
         let enableStart = try #require(source.range(of: "private func enableVoiceFnTapMode()"))
         let enableEnd = try #require(source.range(
@@ -321,7 +322,8 @@ struct VoiceKeyModeTests {
 
         #expect(activeGate.lowerBound < fallback.lowerBound)
         #expect(applySource.contains("mode_preserved reason=voice_active_mapping_failed"))
-        #expect(applySource.contains("VOICE FN TAP mode_preserved reason=voice_active_mapping_failed"))
+        #expect(applySource.contains("VOICE TAP mode_preserved trigger="))
+        #expect(applySource.contains("reason=voice_active_mapping_failed"))
     }
 
     @Test func configurationImportUsesModelSafetyGate() throws {

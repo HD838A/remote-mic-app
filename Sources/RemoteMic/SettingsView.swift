@@ -1123,6 +1123,8 @@ struct SettingsView: View {
                 mappingVoiceKeyModeControl
                 Divider()
                 mappingVoiceFnTapControl
+                Divider()
+                mappingVoiceMacOSDictationControl
                 HStack {
                     Spacer(minLength: 0)
                     mappingRestoreDefaultsButton
@@ -1206,6 +1208,24 @@ struct SettingsView: View {
                 .lineLimit(2)
         }
         .help(localization.text("connection.voice_fn_tap.hint"))
+        .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
+        .disabled(settings.voiceKeyMode != .function)
+    }
+
+    private var mappingVoiceMacOSDictationControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("connection.voice_macos_dictation.enabled", isOn: Binding(
+                get: { settings.voiceMacOSDictationModeEnabled },
+                set: { model.setVoiceMacOSDictationModeEnabled($0) }
+            ))
+            .font(.system(size: 12, weight: .medium))
+            .toggleStyle(.switch)
+            Text("connection.voice_macos_dictation.hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .help(localization.text("connection.voice_macos_dictation.hint"))
         .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
         .disabled(settings.voiceKeyMode != .function)
     }

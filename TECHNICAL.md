@@ -106,7 +106,9 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的 F5 映射为 usage `0`；尚未枚举到任何匹配服务时保留用户开关、暂停 Fn 点按运行时并进入有限 HID 恢复，已枚举目标但任一写入失败或目标不完整时才立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 
-该兼容模式只转换目标应用看到的触发语义，RC003 仍然必须按住语音键才会采集音频，不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceKeyMode` 和 `voiceFnTapModeEnabled`；旧配置缺少新字段时保持默认关闭。应用退出、断连或模式切换时会释放尚未释放的 Command 按键，并恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。
+macOS 听写模式也默认关闭，并与 Typeless 模式互斥。它沿用 F5 中和、pre-roll 和音频排空流程，但只在实体小米 RC003 的语音流开始时发送两次左 Control 点按，在尾音排空后再发送两次。每下按住 60 毫秒，两次之间等待 80 毫秒。开场双击后先向 16 kHz 音频队列写入 4,000 个静音样本，再播放 pre-roll，给系统听写留出约 250 毫秒的启动时间。系统听写快捷键必须设为“连按两下 Control 键”。首次连接且 profile 仍为 unknown 时，只有该模式会在 Ready 前等待并行的 2A24 型号读取终结；关闭模式会立即解除等待但不取消在途读取。RC001、未识别型号、iPhone、Apple Watch 和网页版不会发送 Control 双击。
+
+这两个点按模式只转换目标应用看到的触发方式，RC003 仍然必须按住语音键才会采集音频，也不提供持续录音或独立语音输入。设置导入导出包含可选的 `voiceKeyMode`、`voiceFnTapModeEnabled` 和 `voiceMacOSDictationModeEnabled`；旧配置缺少新字段时保持默认关闭。应用退出、断连或模式切换时会释放尚未释放的合成按键，并恢复启动前对应 source usage 的映射，同时保留运行期间其他来源的映射变化。运行期 Dictation 清理沿用正常 Control 时序；进程退出只同步尽力释放和补偿，不能把该边界当成系统听写响应证明。
 
 语音键模式由统一的语音会话状态机驱动：`fn`（默认）、`left_command`、`right_command`。Command 模式在 RC003、iPhone、Apple Watch 和网页版语音开始时发送所选 Command 的 keyDown，在结束时发送配对的 keyUp。普通键盘 Command 不会触发输入源切换；只有真实语音会话才会显式开始和结束输入源会话。
 
@@ -139,7 +141,7 @@ xcrun swift test
 ./scripts/verify-app.sh
 ```
 
-`scripts/test.sh` 运行协议/策略自检并编译完整应用；Swift Testing 继续覆盖 ATVV、蓝牙生命周期、音频设备策略、按键、权限、配置兼容、Fn 映射、Typeless 会话生命周期、pre-roll、音频排空和测试音。
+`scripts/test.sh` 运行协议/策略自检并编译完整应用；Swift Testing 继续覆盖 ATVV、蓝牙生命周期、音频设备策略、按键、权限、配置兼容、Fn 映射、Typeless 与 macOS 听写会话生命周期、pre-roll、音频排空和测试音。
 
 构建并启动应用：
 

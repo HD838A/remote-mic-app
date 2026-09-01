@@ -4,7 +4,7 @@
 
 - 适用分支：`codex/voice-key-command-modes` 及包含该功能的 macOS 版本。
 - 适用系统：Apple Silicon 使用 macOS 14 或更高版本；Intel 使用 macOS 13 或更高版本。
-- 功能范围：Fn/地球键（默认）、左 Command 长按、右 Command 长按，以及既有 Fn 点按兼容模式。
+- 功能范围：Fn/地球键（默认）、左 Command 长按、右 Command 长按、Fn 点按兼容模式，以及仅限实体小米 RC003 的 macOS 听写模式。
 - 本手册不把模拟 HID、单元测试、构建、签名或截图视为 RC003、iPhone、Apple Watch、网页版、系统权限或第三方语音应用的真实环境验收。
 
 ## 测试前准备
@@ -15,7 +15,7 @@
    - 预期：每个设备都能单独连接并完成一次稳定 Fn 语音。
 3. 准备 `MiRemoteV 2ch` 或另一个已经验证的回环音频设备，并准备“设备缺失”测试条件。
    - 预期：设备可用时能看到输入电平；缺失时 SayAll 明确报告不可用，不静默吞掉语音。
-4. 分别准备并记录版本与快捷键设置：豆包输入法、微信输入法、Typeless，以及一个明确声明支持独立左/右 Command 长按的测试 App。
+4. 分别准备并记录版本与快捷键设置：豆包输入法、微信输入法、Typeless、macOS 自带听写，以及一个明确声明支持独立左/右 Command 长按的测试 App。
    - 预期：每个 App 的语音快捷键与本轮选择的 SayAll 模式一致；不把“普通 Command”支持误写为“能区分左右 Command”。
 5. 准备已授权的 iPhone、Apple Watch 和网页版会话；每个入口均需能够单独开始、传输和停止语音。
 6. 先记录输入监控、辅助功能和音频设备的初始状态；测试权限变化前保存一份 `runtime.log` 基线。
@@ -23,19 +23,19 @@
 ## 用例 1：设置界面与配置
 
 1. 在真实生产设置窗口 `1020 × 772` 中打开“按键映射”，逐一点击所有受影响的侧边栏入口，再返回映射页。
-   - 预期：侧边栏、页头、遥控器卡片、语音键三段选择、Fn 点按区、恢复默认按钮和纵向滚动均完整可达；窗口几何不被页面改变。
+   - 预期：侧边栏、页头、遥控器卡片、语音键三段选择、Fn 点按区、macOS 听写区、恢复默认按钮和纵向滚动均完整可达；窗口几何不被页面改变。
 2. 分别使用中文和英文检查映射页。
    - 预期：无横向裁切，中文最终显示字号不小于 12pt。
 3. 使用项目截图 harness 在 `800 × 650` 压力尺寸渲染映射页。
    - 预期：仅用于发现布局溢出，不表述为生产 App 支持 `800 × 650` 真实窗口。
 4. 依次选择 Fn/地球键、左 Command、右 Command。
-   - 预期：Fn 模式可设置“语音键模拟 Fn 点按”；Command 模式停用该开关，并显示权限与目标 App 兼容性说明。
+   - 预期：Fn 模式可选择“语音键模拟 Fn 点按”或“使用 macOS 自带听写”，两者不能同时开启；Command 模式停用这两个开关，并显示权限与目标 App 兼容性说明。
 5. 关闭并重新打开 App。
    - 预期：所选模式持久化；默认和旧版本仍为 Fn/地球键。
 6. 导出配置并检查 JSON；再导入不含 `voiceKeyMode` 的旧配置。
    - 预期：新配置包含当前模式；旧配置回退 Fn/地球键且不丢失其他设置。
 7. 确认语音键区域没有“短按语音键定位输入框”开关。
-   - 预期：语音键设置只包含语音触发模式及 Fn 点按兼容设置。
+   - 预期：语音键设置只包含语音触发模式、Fn 点按兼容设置及 macOS 听写设置。
 
 ## 用例 2：语音键极速响应边界
 
@@ -79,6 +79,14 @@
 
 失败判定：只发送一次 tap、排空前提前结束、切到 Command 后仍发送 Fn tap、映射不完整时仍允许 Fn 点按会话开始。
 
+## 用例 3A：macOS 自带听写
+
+选择 Fn/地球键，关闭 Fn 点按并开启“使用 macOS 自带听写”。系统听写快捷键必须设为“连按两下 Control 键”。只用实体 RC003 完成一次短句、一次长句、一次快速按下释放和两次连续会话。
+
+预期是按下时自动发送 Control 双击，松开并排空尾音后再次发送 Control 双击。整个过程不碰 Mac 键盘，文字首尾完整，Control 不残留。随后用 iPhone、Apple Watch 和网页版各完成一次语音，确认这些入口不会发送 Control 双击。完整步骤与日志判定见 [macOS 自带听写真机测试](MacOSSystemDictation.md)。
+
+失败判定：仍需手动触发、只发送一次 Control、松开后听写未结束、快速短会话破坏下一次双击、移动或网页入口也触发系统听写。
+
 ## 用例 4：RC003 左右 Command 长按
 
 分别对左 Command 和右 Command 执行：
@@ -95,20 +103,20 @@
 
 ## 专项用例：RC003 HID 晚到恢复（全模式）
 
-分别选择以下配置执行完整矩阵：Fn/地球键、Fn/地球键并开启 Fn 点按、左 Command、右 Command。
+分别选择以下配置执行完整矩阵：Fn/地球键、Fn/地球键并开启 Fn 点按、Fn/地球键并开启 macOS 听写、左 Command、右 Command。
 
 1. 在 Fn 点按已开启时退出 SayAll，让遥控器久置进入休眠，再先启动 SayAll、后唤醒遥控器。
-   - 预期：HID service 尚未出现期间设置开关仍保持开启，日志出现 `VOICE FN TAP mode_pending_mapping reason=no_matching_service`；此时不得发送软件 Fn，HID 恢复完成后自动启用，不要求用户重新打开开关。
+   - 预期：HID service 尚未出现期间设置开关仍保持开启，日志出现 `VOICE TAP mode_pending_mapping trigger=fn_tap reason=no_matching_service`；此时不得发送软件 Fn，HID 恢复完成后自动启用，不要求用户重新打开开关。macOS 听写模式使用同一恢复边界，并记录 `trigger=macos_dictation`。
 2. 每种配置下都让遥控器久置断开，或让 Mac 完成一次真实休眠与唤醒；按遥控器电源键恢复，直到方向键已经能控制 Mac。
    - 预期：RC003 重新进入 BLE Ready；即使 HID service 晚于 Ready 出现，SayAll 也会在有限恢复窗口内重新应用当前所选模式和电源键映射，不会强制切回 Fn。
 3. 不点击“立即重新连接”，直接执行恢复后的第一次语音。
-   - 预期：Fn/地球键产生一组 Fn 按下/释放；Fn 点按先中和 F5 并产生配对 tap；左/右 Command 先中和 F5，再分别产生正确侧的 Command 按下/释放。每种模式的第一次语音都必须收到完整音频，不能以第二次或第三次成功作为通过。
+   - 预期：Fn/地球键产生一组 Fn 按下/释放；Fn 点按先中和 F5 并产生配对 tap；macOS 听写先中和 F5，并在开始和结束各产生一组 Control 双击；左/右 Command 先中和 F5，再分别产生正确侧的 Command 按下/释放。每种模式的第一次语音都必须收到完整音频，不能以第二次或第三次成功作为通过。
 4. 检查本次 `runtime.log`。
    - 预期：如果首次 Ready 出现 `VOICE FN MAPPING ... matched=0`，随后出现有限次数的 `HID MAPPING RECOVERY scheduled`，并在首次语音前以 `completed` 结束；不得持续轮询或出现无条件切换 `voiceKeyMode=fn`。
 5. 记录输入监控、辅助功能和目标第三方 App 的实际结果。
-   - 预期：Fn 硬件映射不依赖辅助功能；Fn 点按和左右 Command 按既有权限门禁工作。权限不足应明确提示，不得把模式静默改成 Fn。
+   - 预期：Fn 硬件映射不依赖辅助功能；Fn 点按、macOS 听写和左右 Command 按既有权限门禁工作。权限不足应明确提示，不得把模式静默改成 Fn。
 
-失败判定：`matched=0` 时 Fn 点按开关自行关闭、必须手动重新开启、必须点击“立即重新连接”、出现 `HID MAPPING RECOVERY exhausted`、当前选择被改成 Fn、第一次语音失败、左右 Command 侧别错误、F5 未中和、按键未释放、首段或尾音丢失。
+失败判定：`matched=0` 时 Fn 点按或 macOS 听写开关自行关闭、必须手动重新开启、必须点击“立即重新连接”、出现 `HID MAPPING RECOVERY exhausted`、当前选择被改成 Fn、第一次语音失败、左右 Command 侧别错误、F5 未中和、按键未释放、首段或尾音丢失。
 
 ## 用例 5：iPhone、Apple Watch 与网页版
 
@@ -180,7 +188,7 @@
 ## 稳定功能回归
 
 - 普通按键映射、双击、长按、应用打开和自定义快捷键保持原行为。
-- 默认 Fn、Fn 点按、RC003 普通 `STREAM_START → AUDIO → STREAM_STOP`、iPhone、Watch、Web 的既有语音路径均需回归。
+- 默认 Fn、Fn 点按、macOS 听写、RC003 普通 `STREAM_START → AUDIO → STREAM_STOP`、iPhone、Watch、Web 的既有语音路径均需回归。
 - 切换模式、断连、退出 App、关闭映射和权限变化后，不得留下 Command、Fn、输入源或音频会话。
 - 配置导入导出、旧配置默认值、中英文资源和设置窗口全部侧边栏入口保持可用。
 
@@ -189,7 +197,7 @@
 - 自动化已覆盖：枚举与迁移、左右键码与 flags、owner-aware keyDown/keyUp、失败回滚、每个 Bridge Ready 策略、F5 映射事务、配置导入原子门禁、输入源多 owner 和设置页布局门禁；部分 BridgeAppModel 权限/回调接线仍是源码范围断言，运行环境未加载 `REMOTE_MIC_HARDWARE_SIMULATION_PATH`，不等于硬件事件回放。
 - 代理截图可以证明生产 SwiftUI 视图在指定渲染尺寸没有明显裁切，但不能替代真实窗口点击、系统权限、音频设备、前后台和第三方 App 行为。
 - 模拟 HID 只能证明映射事务和状态机；不能证明 RC003 固件、第二台真实设备或真实 F5 事件顺序。
-- 未执行的 RC003、iPhone、Apple Watch、网页版、豆包、微信、Typeless、左右 Command 测试 App、真实权限与前后台用例必须标记为“未验收”。
+- 未执行的 RC003、iPhone、Apple Watch、网页版、豆包、微信、Typeless、macOS 听写、左右 Command 测试 App、真实权限与前后台用例必须标记为“未验收”。
 
 ## 日志收集
 
