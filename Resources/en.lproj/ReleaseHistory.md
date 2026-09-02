@@ -1,5 +1,11 @@
 # Version History
 
+## 1.9.20 (Pre-release)
+
+- Improve first-run voice-test diagnostics to distinguish button, audio-input, and text-output results more accurately.
+- Fix an issue that could disable the Fn-tap preference while HID is still becoming ready.
+- Add Mac-side membership status and button-profile support while remaining compatible with the legacy Combination Actions component.
+
 ## 1.9.19 (Pre-release)
 
 - Improve Onboarding permission back navigation, voice test input focus, and diagnostics.
