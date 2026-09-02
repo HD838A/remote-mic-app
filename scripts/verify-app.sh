@@ -18,6 +18,7 @@ REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
 REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
 REQUIRE_SAYALL_MACRO_PLATFORM="${REQUIRE_SAYALL_MACRO_PLATFORM:-0}"
+REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE:-0}"
 
 case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
@@ -34,6 +35,10 @@ esac
 case "$REQUIRE_SAYALL_MACRO_PLATFORM" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_MACRO_PLATFORM must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE must be 0 or 1"; exit 1 ;;
 esac
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && -z "$EXPECTED_DEVELOPER_TEAM_ID" ]]; then
   print -u2 "EXPECTED_DEVELOPER_TEAM_ID is required for Developer ID verification"
@@ -239,11 +244,18 @@ SAYALL_MACRO_PLATFORM_INCLUDED="$(plutil -extract SayAllMacroPlatformIncluded ra
 SAYALL_MACRO_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
 if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
   test -d "$SAYALL_MACRO_RESOURCE_BUNDLE"
-  test -f "$SAYALL_MACRO_RESOURCE_BUNDLE/en.lproj/Localizable.strings"
+  if [[ -d "$SAYALL_MACRO_RESOURCE_BUNDLE/Contents/Resources" ]]; then
+    SAYALL_MACRO_RESOURCE_ROOT="$SAYALL_MACRO_RESOURCE_BUNDLE/Contents/Resources"
+    SAYALL_MACRO_RESOURCE_PLIST="$SAYALL_MACRO_RESOURCE_BUNDLE/Contents/Info.plist"
+  else
+    SAYALL_MACRO_RESOURCE_ROOT="$SAYALL_MACRO_RESOURCE_BUNDLE"
+    SAYALL_MACRO_RESOURCE_PLIST="$SAYALL_MACRO_RESOURCE_BUNDLE/Info.plist"
+  fi
+  test -f "$SAYALL_MACRO_RESOURCE_ROOT/en.lproj/Localizable.strings"
   test -n "$(plutil -extract CFBundleDevelopmentRegion raw -o - \
-    "$SAYALL_MACRO_RESOURCE_BUNDLE/Info.plist")"
-  if [[ ! -f "$SAYALL_MACRO_RESOURCE_BUNDLE/zh-Hans.lproj/Localizable.strings" && \
-        ! -f "$SAYALL_MACRO_RESOURCE_BUNDLE/zh-hans.lproj/Localizable.strings" ]]; then
+    "$SAYALL_MACRO_RESOURCE_PLIST")"
+  if [[ ! -f "$SAYALL_MACRO_RESOURCE_ROOT/zh-Hans.lproj/Localizable.strings" && \
+        ! -f "$SAYALL_MACRO_RESOURCE_ROOT/zh-hans.lproj/Localizable.strings" ]]; then
     print -u2 "SayAll macro platform Chinese localization is missing"
     exit 1
   fi
@@ -253,6 +265,17 @@ elif [[ -e "$SAYALL_MACRO_RESOURCE_BUNDLE" ]]; then
 fi
 if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
   print -u2 "App is missing the required SayAll macro platform marker"
+  exit 1
+fi
+SAYALL_PRIVATE_ARTIFACT_INCLUDED="$(plutil -extract SayAllPrivateArtifactsIncluded raw -o - "$PLIST" 2>/dev/null || true)"
+if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" && \
+      "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
+  print -u2 "private artifact marker exists without the macro platform marker"
+  exit 1
+fi
+if [[ "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" == "1" && \
+      "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" != "true" ]]; then
+  print -u2 "App is missing the required private artifact package marker"
   exit 1
 fi
 
