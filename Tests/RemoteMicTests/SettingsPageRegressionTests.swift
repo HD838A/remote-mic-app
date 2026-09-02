@@ -927,6 +927,7 @@ struct SettingsPageRegressionTests {
 
         for section in [
             ".mapping",
+            ".quickPhrases",
             ".macros",
             ".buttonProfiles",
             ".membership",
@@ -970,6 +971,7 @@ struct SettingsPageRegressionTests {
 
         for section in [
             ".mapping",
+            ".quickPhrases",
             ".macros",
             ".buttonProfiles",
             ".membership",

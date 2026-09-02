@@ -28,6 +28,7 @@ enum SettingsScreenshotRenderer {
 
     private static let sections: [SettingsSection] = [
         .mapping,
+        .quickPhrases,
         .macros,
         .buttonProfiles,
         .membership,
@@ -67,6 +68,14 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        for index in 1...5 {
+            let id = settings.addQuickPhrase()
+            settings.updateQuickPhrase(
+                id: id,
+                title: "Test Phrase \(index)",
+                text: "Non-sensitive screenshot content \(index)"
+            )
+        }
         if opensShortcutEditor {
             settings.customMappingEnabled = true
             settings.setAction(.customShortcut, for: .ok, trigger: .singleClick)

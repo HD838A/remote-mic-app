@@ -14,6 +14,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case buttonProfiles
     case membership
     case mapping
+    case quickPhrases
     case statistics
     case transcripts
     case permissions
@@ -29,6 +30,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .buttonProfiles: return ""
         case .membership: return ""
         case .mapping: return "settings.section.buttons"
+        case .quickPhrases: return "settings.section.quick_phrases"
         case .statistics: return "settings.section.statistics"
         case .transcripts: return "settings.section.transcripts"
         case .permissions: return "settings.section.permissions"
@@ -44,6 +46,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .buttonProfiles: return "rectangle.3.group"
         case .membership: return "crown.fill"
         case .mapping: return "keyboard"
+        case .quickPhrases: return "text.bubble"
         case .statistics: return "chart.bar.xaxis"
         case .transcripts: return "text.bubble.fill"
         case .permissions: return "shield.lefthalf.filled"
@@ -184,6 +187,7 @@ struct SettingsView: View {
     private let initialShortcutPickerShowsKeyboard: Bool
     private static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
+        .quickPhrases,
         .macros,
         .buttonProfiles,
         .membership,
@@ -197,6 +201,11 @@ struct SettingsView: View {
 
     @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
+    @State private var selectedQuickPhraseID: UUID?
+    @State private var quickPhraseDraftTitle = ""
+    @State private var quickPhraseDraftText = ""
+    @State private var quickPhraseSaveTask: Task<Void, Never>?
+    @State private var quickPhraseEditOperationID: UInt64 = 0
     @State private var isMappingSelectionLocked = true
     @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
     @State private var mappingEditingTarget: ShortcutEditingTarget?
@@ -278,13 +287,22 @@ struct SettingsView: View {
             loginItemService.refresh()
             macroFeature.setEditorActive(false)
             membershipFeature.refreshIfNeeded()
+            if selectedQuickPhraseID == nil {
+                selectedQuickPhraseID = settings.quickPhrases.first?.id
+            }
+            beginQuickPhraseEditOperation()
+            loadQuickPhraseDraft()
         }
         .onChange(of: selectedSection) { section in
+            if section != .quickPhrases {
+                persistQuickPhraseDraft(trigger: "page_change")
+            }
             if section != .macros, section != .buttonProfiles {
                 macroFeature.setEditorActive(false)
             }
         }
         .onDisappear {
+            persistQuickPhraseDraft(trigger: "window_close")
             macroFeature.setEditorActive(false)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -584,6 +602,8 @@ struct SettingsView: View {
             }
         case .mapping:
             mappingPage
+        case .quickPhrases:
+            quickPhrasesPage
         case .statistics:
             statisticsPage
         case .transcripts:
@@ -634,6 +654,274 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var quickPhrasesPage: some View {
+        settingsPage {
+            VStack(alignment: .leading, spacing: 4) {
+                PageHeader(title: localization.text("quick_phrases.page.title"))
+                Text("quick_phrases.page.description")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        } content: {
+            CompatibilityGlassContainer(spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    GlassPanel {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("quick_phrases.list.title")
+                                    .font(.headline)
+                                Spacer()
+                                Button {
+                                    addQuickPhrase()
+                                } label: {
+                                    Label("common.action.add", systemImage: "plus")
+                                }
+                                .compatibilityButtonStyle(.standard)
+                            }
+
+                            if settings.quickPhrases.isEmpty {
+                                Text("quick_phrases.list.empty")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, minHeight: 180)
+                            } else {
+                                VStack(spacing: 7) {
+                                    ForEach(settings.quickPhrases) { phrase in
+                                        Button {
+                                            selectQuickPhraseForEditing(phrase.id)
+                                        } label: {
+                                            HStack(spacing: 10) {
+                                                Image(systemName: "text.bubble")
+                                                    .foregroundStyle(Color.accentColor)
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(phrase.title.isEmpty
+                                                        ? localization.text("quick_phrases.untitled")
+                                                        : phrase.title)
+                                                        .font(.system(size: 13, weight: .semibold))
+                                                        .lineLimit(1)
+                                                    Text(phrase.text.replacingOccurrences(of: "\n", with: " "))
+                                                        .font(.system(size: 12))
+                                                        .foregroundStyle(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                                Spacer(minLength: 0)
+                                            }
+                                            .padding(.horizontal, 11)
+                                            .padding(.vertical, 9)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(
+                                                selectedQuickPhraseID == phrase.id
+                                                    ? Color.accentColor.opacity(0.13)
+                                                    : Color.clear,
+                                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .compatibilityFocusEffectDisabled()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .frame(width: 285)
+
+                    GlassPanel {
+                        if let phrase = selectedQuickPhrase {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    Text("quick_phrases.editor.title")
+                                        .font(.headline)
+                                    Spacer()
+                                    Button {
+                                        moveSelectedQuickPhrase(id: phrase.id, offset: -1)
+                                    } label: {
+                                        Image(systemName: "arrow.up")
+                                    }
+                                    .help("quick_phrases.editor.move_up")
+                                    .disabled(settings.quickPhrases.first?.id == phrase.id)
+                                    Button {
+                                        moveSelectedQuickPhrase(id: phrase.id, offset: 1)
+                                    } label: {
+                                        Image(systemName: "arrow.down")
+                                    }
+                                    .help("quick_phrases.editor.move_down")
+                                    .disabled(settings.quickPhrases.last?.id == phrase.id)
+                                    Button(role: .destructive) {
+                                        removeSelectedQuickPhrase(phrase.id)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .help("common.action.delete")
+                                }
+
+                                VStack(alignment: .leading, spacing: 7) {
+                                    Text("quick_phrases.editor.name")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    TextField(
+                                        localization.text("quick_phrases.editor.name_placeholder"),
+                                        text: quickPhraseTitleBinding
+                                    )
+                                    .textFieldStyle(.roundedBorder)
+                                }
+
+                                VStack(alignment: .leading, spacing: 7) {
+                                    Text("quick_phrases.editor.content")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    TextEditor(text: quickPhraseTextBinding)
+                                        .font(.system(size: 13))
+                                        .padding(8)
+                                        .scrollContentBackground(.hidden)
+                                        .background(
+                                            Color(nsColor: .textBackgroundColor).opacity(0.78),
+                                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                                        )
+                                        .frame(minHeight: 330)
+                                }
+
+                                Label("quick_phrases.editor.autosave", systemImage: "checkmark.circle")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            VStack(spacing: 10) {
+                                Image(systemName: "text.badge.plus")
+                                    .font(.system(size: 30))
+                                    .foregroundStyle(.secondary)
+                                Text("quick_phrases.editor.empty")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 460)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+
+    private var selectedQuickPhrase: QuickPhrase? {
+        if let selectedQuickPhraseID,
+           let phrase = settings.quickPhrases.first(where: { $0.id == selectedQuickPhraseID }) {
+            return phrase
+        }
+        return settings.quickPhrases.first
+    }
+
+    private var quickPhraseTitleBinding: Binding<String> {
+        Binding(
+            get: { quickPhraseDraftTitle },
+            set: { value in
+                quickPhraseDraftTitle = value
+                scheduleQuickPhraseDraftSave(title: value, text: quickPhraseDraftText)
+            }
+        )
+    }
+
+    private var quickPhraseTextBinding: Binding<String> {
+        Binding(
+            get: { quickPhraseDraftText },
+            set: { value in
+                quickPhraseDraftText = value
+                scheduleQuickPhraseDraftSave(title: quickPhraseDraftTitle, text: value)
+            }
+        )
+    }
+
+    private func addQuickPhrase() {
+        persistQuickPhraseDraft(trigger: "add")
+        selectedQuickPhraseID = settings.addQuickPhrase()
+        beginQuickPhraseEditOperation()
+        loadQuickPhraseDraft()
+    }
+
+    private func selectQuickPhraseForEditing(_ id: UUID) {
+        guard selectedQuickPhraseID != id else { return }
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        persistQuickPhraseDraft(trigger: "selection_change")
+        selectedQuickPhraseID = id
+        beginQuickPhraseEditOperation()
+        loadQuickPhraseDraft()
+        let elapsedMilliseconds = (DispatchTime.now().uptimeNanoseconds - startedAt) / 1_000_000
+        let index = settings.quickPhrases.firstIndex(where: { $0.id == id }) ?? -1
+        AppLogger.shared.write(
+            "QUICK PHRASE EDIT operation_id=\(quickPhraseEditOperationID) " +
+                "phase=completed result=selected index=\(index) " +
+                "elapsed_ms=\(elapsedMilliseconds)"
+        )
+    }
+
+    private func moveSelectedQuickPhrase(id: UUID, offset: Int) {
+        persistQuickPhraseDraft(trigger: "reorder")
+        settings.moveQuickPhrase(id: id, offset: offset)
+    }
+
+    private func beginQuickPhraseEditOperation() {
+        quickPhraseEditOperationID &+= 1
+    }
+
+    private func loadQuickPhraseDraft() {
+        quickPhraseSaveTask?.cancel()
+        quickPhraseSaveTask = nil
+        guard let phrase = selectedQuickPhrase else {
+            quickPhraseDraftTitle = ""
+            quickPhraseDraftText = ""
+            return
+        }
+        quickPhraseDraftTitle = phrase.title
+        quickPhraseDraftText = phrase.text
+    }
+
+    private func scheduleQuickPhraseDraftSave(title: String, text: String) {
+        guard let id = selectedQuickPhraseID else { return }
+        quickPhraseSaveTask?.cancel()
+        let operationID = quickPhraseEditOperationID
+        quickPhraseSaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            guard settings.updateQuickPhrase(id: id, title: title, text: text) else { return }
+            AppLogger.shared.write(
+                "QUICK PHRASE EDIT operation_id=\(operationID) " +
+                    "phase=completed result=saved trigger=idle"
+            )
+        }
+    }
+
+    private func persistQuickPhraseDraft(trigger: String) {
+        quickPhraseSaveTask?.cancel()
+        quickPhraseSaveTask = nil
+        guard let id = selectedQuickPhraseID,
+              settings.updateQuickPhrase(
+                  id: id,
+                  title: quickPhraseDraftTitle,
+                  text: quickPhraseDraftText
+              )
+        else { return }
+        AppLogger.shared.write(
+            "QUICK PHRASE EDIT operation_id=\(quickPhraseEditOperationID) " +
+                "phase=completed result=saved trigger=\(trigger)"
+        )
+    }
+
+    private func removeSelectedQuickPhrase(_ id: UUID) {
+        guard let index = settings.quickPhrases.firstIndex(where: { $0.id == id }) else { return }
+        quickPhraseSaveTask?.cancel()
+        quickPhraseSaveTask = nil
+        settings.removeQuickPhrase(id: id)
+        guard !settings.quickPhrases.isEmpty else {
+            selectedQuickPhraseID = nil
+            loadQuickPhraseDraft()
+            return
+        }
+        selectedQuickPhraseID = settings.quickPhrases[min(index, settings.quickPhrases.count - 1)].id
+        beginQuickPhraseEditOperation()
+        loadQuickPhraseDraft()
     }
 
     private var phoneConnectionsPanel: some View {
