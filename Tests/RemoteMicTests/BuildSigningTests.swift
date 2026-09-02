@@ -157,6 +157,43 @@ struct BuildSigningTests {
         #expect(verifySource.contains("CFBundleDevelopmentRegion"))
     }
 
+    @Test func preparedPrivateArtifactsAreOptionalAndFailClosed() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let packageSource = try String(
+            contentsOf: root.appendingPathComponent("Package.swift"),
+            encoding: .utf8
+        )
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+        let prepareSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/prepare-private-artifact-package.sh"),
+            encoding: .utf8
+        )
+
+        #expect(packageSource.contains("SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"))
+        #expect(packageSource.contains("private artifacts cannot be combined with private source packages"))
+        #expect(buildSource.contains("repositoryDirty == false"))
+        #expect(buildSource.contains("SayAllPrivateArtifactsIncluded"))
+        #expect(buildSource.contains("PREVIOUS APP MOVED TO TRASH"))
+        #expect(buildSource.contains("private artifact package contents do not match the prepared manifest"))
+        #expect(verifySource.contains("App is missing the required private artifact package marker"))
+        #expect(prepareSource.contains("checksum manifest digest does not match the trusted value"))
+        #expect(prepareSource.contains("repository_state.dirty == false"))
+        #expect(prepareSource.contains("PREPARED_SHA256SUMS"))
+        #expect(prepareSource.contains("lipo \"$binary\" -verify_arch arm64 x86_64"))
+        #expect(prepareSource.contains("MinimumOSVersion"))
+        #expect(!prepareSource.contains("rm -rf"))
+    }
+
     @Test func unavailablePreReleaseFeedDoesNotPresentACustomErrorAlert() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

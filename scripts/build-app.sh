@@ -15,8 +15,10 @@ REQUIRE_WEB_REMOTE_CONFIGURATION="${REQUIRE_WEB_REMOTE_CONFIGURATION:-0}"
 REQUIRE_EARLY_ACCESS_CONFIGURATION="${REQUIRE_EARLY_ACCESS_CONFIGURATION:-0}"
 REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
 REQUIRE_SAYALL_MACRO_PLATFORM="${REQUIRE_SAYALL_MACRO_PLATFORM:-0}"
+REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE:-0}"
 SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
 SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:-}"
+SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
@@ -48,6 +50,10 @@ esac
 case "$REQUIRE_SAYALL_MACRO_PLATFORM" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_MACRO_PLATFORM must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE must be 0 or 1"; exit 1 ;;
 esac
 case "$RELEASE_STAGE_TIMEOUTS" in
   0|1) ;;
@@ -114,9 +120,60 @@ if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDE
   exit 1
 fi
 
+if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
+  if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" || -n "${SAYALL_MEMBERSHIP_PACKAGE_PATH:-}" ]]; then
+    print -u2 "private artifacts cannot be combined with private source packages"
+    exit 1
+  fi
+  if [[ ! -f "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Package.swift" || \
+        ! -f "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json" || \
+        ! -f "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/PREPARED_SHA256SUMS" ]]; then
+    print -u2 "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH must be a prepared private artifact package"
+    exit 1
+  fi
+  for command_name in jq shasum; do
+    command -v "$command_name" >/dev/null || {
+      print -u2 "required command is unavailable: $command_name"
+      exit 1
+    }
+  done
+  if ! jq -e '
+    .schemaVersion == 1 and
+    (.sourceCommit | type == "string" and test("^[0-9a-f]{40}$")) and
+    (.checksumsSHA256 | type == "string" and test("^[0-9a-f]{64}$")) and
+    (.preparedManifestSHA256 | type == "string" and test("^[0-9a-f]{64}$")) and
+    .repositoryDirty == false
+  ' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json" >/dev/null; then
+    print -u2 "private artifact package metadata is invalid or dirty"
+    exit 1
+  fi
+  EXPECTED_PREPARED_MANIFEST_SHA256="$(jq -r '.preparedManifestSHA256' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json")"
+  ACTUAL_PREPARED_MANIFEST_SHA256="$(shasum -a 256 "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/PREPARED_SHA256SUMS" | awk '{print $1}')"
+  if [[ "$ACTUAL_PREPARED_MANIFEST_SHA256" != "$EXPECTED_PREPARED_MANIFEST_SHA256" ]] || \
+      ! (cd "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" && shasum -a 256 -c PREPARED_SHA256SUMS); then
+    print -u2 "private artifact package contents do not match the prepared manifest"
+    exit 1
+  fi
+  SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:A}"
+  export SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH
+  SAYALL_PRIVATE_ARTIFACT_INCLUDED=true
+  SAYALL_MACRO_PLATFORM_INCLUDED=true
+else
+  SAYALL_PRIVATE_ARTIFACT_INCLUDED=false
+fi
+if [[ "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" == "1" && \
+      "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" != "true" ]]; then
+  print -u2 "A prepared private artifact package is required for this build"
+  exit 1
+fi
+
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
-if [[ "$SAYALL_AI_INCLUDED" == "true" && "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
+if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" && "$SAYALL_AI_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="sayall-ai-private-artifacts"
+elif [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="private-artifacts"
+elif [[ "$SAYALL_AI_INCLUDED" == "true" && "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="sayall-ai-macro-platform"
 elif [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="sayall-ai"
@@ -151,7 +208,15 @@ case "$APP_DIR" in
   "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;
   *) print -u2 "refusing to clean unexpected app path: $APP_DIR"; exit 1 ;;
 esac
-rm -rf -- "$APP_DIR"
+if [[ -e "$APP_DIR" ]]; then
+  USER_HOME_DIRECTORY="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+  TRASH_DIRECTORY="$USER_HOME_DIRECTORY/.Trash"
+  TRASH_DESTINATION="$TRASH_DIRECTORY/${APP_DIR:t}.build-app.$(date -u +%Y%m%dT%H%M%SZ).$$"
+  test -d "$TRASH_DIRECTORY"
+  test ! -e "$TRASH_DESTINATION"
+  mv "$APP_DIR" "$TRASH_DESTINATION"
+  print "PREVIOUS APP MOVED TO TRASH: $TRASH_DESTINATION"
+fi
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$MCP_HELPER_PATH"
@@ -170,6 +235,9 @@ plutil -insert SayAllAIIncluded -bool "$SAYALL_AI_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllMacroPlatformIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllMacroPlatformIncluded -bool "$SAYALL_MACRO_PLATFORM_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   plutil -replace LSMinimumSystemVersion -string "$RELEASE_MIN_SYSTEM_VERSION" \
@@ -272,7 +340,11 @@ if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
     "$APP_DIR/Contents/Resources/SayAllAI_SayAllAI.bundle"
 fi
 if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
-  SAYALL_MACRO_RESOURCE_BUNDLE="$BIN_DIR/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+  if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+    SAYALL_MACRO_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+  else
+    SAYALL_MACRO_RESOURCE_BUNDLE="$BIN_DIR/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+  fi
   if [[ ! -d "$SAYALL_MACRO_RESOURCE_BUNDLE" ]]; then
     print -u2 "SayAll macro platform resource bundle is missing from the Swift build"
     exit 1

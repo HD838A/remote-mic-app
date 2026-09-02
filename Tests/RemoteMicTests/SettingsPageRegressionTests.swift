@@ -121,6 +121,8 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(package.contains("SAYALL_MEMBERSHIP_PACKAGE_PATH"))
+        #expect(package.contains("SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"))
+        #expect(package.contains("private artifacts cannot be combined with private source packages"))
         #expect(package.contains("SayAllMembershipCore"))
         #expect(package.contains("SayAllMembershipUI"))
         #expect(membership.contains("#if canImport(SayAllMembershipCore)"))

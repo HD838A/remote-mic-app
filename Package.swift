@@ -20,6 +20,9 @@ var remoteMicTestDependencies: [Target.Dependency] = [
     "RemoteMic",
     .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
 ]
+let privateArtifactPackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"
+]
 let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
     ? .macOS(.v13)
     : .macOS(.v14)
@@ -60,6 +63,31 @@ if let membershipPackagePath = ProcessInfo.processInfo.environment[
     )
     remoteMicDependencies.append(
         .product(name: "SayAllMembershipUI", package: packageIdentity)
+    )
+}
+
+if let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty {
+    let sourcePackageVariables = [
+        "SAYALL_MACRO_PLATFORM_PATH",
+        "SAYALL_MEMBERSHIP_PACKAGE_PATH",
+    ]
+    if sourcePackageVariables.contains(where: {
+        !(ProcessInfo.processInfo.environment[$0] ?? "").isEmpty
+    }) {
+        fatalError("private artifacts cannot be combined with private source packages")
+    }
+    let packageIdentity = URL(fileURLWithPath: privateArtifactPackagePath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: privateArtifactPackagePath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllMembershipCore", package: packageIdentity)
+    )
+    remoteMicDependencies.append(
+        .product(name: "SayAllMembershipUI", package: packageIdentity)
+    )
+    remoteMicDependencies.append(
+        .product(name: "SayAllMacroRemoteMic", package: packageIdentity)
     )
 }
 
