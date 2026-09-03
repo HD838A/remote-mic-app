@@ -1,5 +1,13 @@
 # Version History
 
+## 1.9.20 (Pre-release)
+
+- Standardize first-run onboarding on the Fn voice key to reduce setup ambiguity.
+- Add a migration notice for existing voice-key settings.
+- Improve first-run microphone, audio-output, and voice-result diagnostics with clearer failure reasons.
+- Fix an issue where Fn tap mode could be disabled while a remote was still preparing its connection.
+- Refresh the images used in the project documentation.
+
 ## 1.9.19 (Pre-release)
 
 - Improve Onboarding permission back navigation, voice test input focus, and diagnostics.
