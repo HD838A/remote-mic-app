@@ -18,6 +18,7 @@ Mac 安装包和 Sparkle 更新资产当前直接从 GitHub Releases 下载。Gi
 本次范围：
 
 - Cloudflare Worker 白名单代理公开仓库的固定标签资产；
+- Cloudflare Worker 提供 stable/preview、Apple Silicon/Intel 四个 appcast 固定通道；
 - 官网中英文下载链接与匿名点击事件；
 - appcast enclosure 和本地化说明 URL；
 - 发布后的 GitHub/CDN 双路径字节回验；
@@ -27,8 +28,7 @@ Mac 安装包和 Sparkle 更新资产当前直接从 GitHub Releases 下载。Gi
 本次不做：
 
 - 不迁移到 Cloudflare R2；
-- 不修改 App 内置稳定 feed；
-- 不修改预发布版本的 GitHub API 发现机制；
+- 不迁移或复制 GitHub Release 源资产；
 - 不代理任意仓库或用户传入 URL；
 - 不改变签名、公证、版本治理或 Stable 晋升规则。
 
@@ -36,10 +36,10 @@ Mac 安装包和 Sparkle 更新资产当前直接从 GitHub Releases 下载。Gi
 
 Worker 只接收普通 HTTP 下载请求并访问公开 GitHub Release 资产，不需要账号、Token、Cookie 或设备身份。Cloudflare 和 GitHub 会按各自基础设施处理常规网络元数据；无线麦不在该链路新增用户账号、语音数据或本地设置上传。
 
-已安装版本继续通过原有 GitHub `SUFeedURL` 获取 appcast，因此无需专门迁移。appcast 内的 ZIP 地址改变后仍使用同一 Sparkle Ed25519 签名验证。
+新版本通过 Cloudflare 固定通道获取 appcast，Cloudflare 在边缘读取公开 GitHub Releases 并重定向到同域版本化 appcast；客户端不再直接请求未认证 GitHub Releases API。appcast 内的 ZIP 地址继续使用同一 Sparkle Ed25519 签名验证。
 
 ## 状态
 
-等待预览版集成。公开 Worker 和官网已经上线并使用当前正式版完成回源验证；候选产物、签名公证资产与生产到候选更新路径由统一 Mac 预览版流程继续验证。
+四个 appcast 通道实现与自动化已完成，等待生产部署和 `1.9.21` 预览发布闭环；候选产物、签名公证资产与生产到候选更新路径由统一 Mac 预览版流程验证。
 
 详细实现见 [development.md](development.md)，测试边界见 [testing.md](testing.md)、[Testing/CloudflareDownloadCDN.md](../../Testing/CloudflareDownloadCDN.md) 和 [Testing/MacReleaseAssetMatrix.md](../../Testing/MacReleaseAssetMatrix.md)。

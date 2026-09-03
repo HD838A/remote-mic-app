@@ -39,7 +39,7 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 	<key>SUFeedURL</key>
-	<string>https://github.com/HD838A/remote-mic-app/releases/latest/download/appcast.xml</string>
+	<string>https://download.sayall.app/mac/channels/stable/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUScheduledCheckInterval</key>

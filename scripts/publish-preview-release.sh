@@ -329,6 +329,25 @@ while IFS=$'\t' read -r name _ expected_sha; do
   fi
 done < "$expected_assets"
 
+verify_channel_appcast() {
+  local channel="$1"
+  local appcast="$2"
+  local expected_file="$3"
+  local downloaded_file="$4"
+  local attempt
+  for attempt in {1..20}; do
+    if /usr/bin/curl --fail --silent --show-error --location \
+        "https://download.sayall.app/mac/channels/$channel/$appcast" \
+        --output "$downloaded_file" && \
+       /usr/bin/cmp -s "$expected_file" "$downloaded_file"; then
+      return 0
+    fi
+    (( attempt < 20 )) && /bin/sleep 6
+  done
+  echo "Cloudflare $channel channel did not resolve to the expected appcast: $appcast" >&2
+  return 1
+}
+
 stable_release_after="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
   echo "unable to verify releases/latest after publication" >&2
   exit 1
@@ -344,6 +363,16 @@ printf '%s\n' "$stable_release_after" | jq -e \
   echo "Preview publication changed releases/latest from $stable_latest_before to $stable_latest_after" >&2
   exit 1
 }
+
+for appcast in appcast.xml appcast-intel.xml; do
+  verify_channel_appcast \
+    preview "$appcast" "$github_dir/$appcast" "$work_dir/preview-channel-$appcast"
+  /usr/bin/curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+    "https://github.com/$REPOSITORY/releases/download/$stable_latest_after/$appcast" \
+    --output "$work_dir/stable-fixed-$appcast"
+  verify_channel_appcast \
+    stable "$appcast" "$work_dir/stable-fixed-$appcast" "$work_dir/stable-channel-$appcast"
+done
 
 echo "PREVIEW RELEASE PUBLISHED AND VERIFIED"
 echo "TAG: $tag"
