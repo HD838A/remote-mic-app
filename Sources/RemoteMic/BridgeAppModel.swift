@@ -398,6 +398,40 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.handleVoiceFnTapFailure(failure)
         }
     )
+    private lazy var mobileVoiceInputSession = MobileVoiceInputSession(
+        destinationReadiness: { [weak self] completion in
+            self?.voiceInputDestinationCoordinator.waitUntilReady(completion: completion) ?? .immediate
+        },
+        setFunctionKeyPressed: { [weak self] pressed in
+            let success = KeyboardInjector.setFunctionKeyPressed(pressed)
+            self?.logMobileFunctionKeyTap(pressed: pressed, success: success)
+            return success
+        },
+        setHeldVoiceKeyPressed: { [weak self] pressed in
+            guard let self else { return false }
+            if pressed {
+                return self.updateVoiceKeyState(
+                    streaming: true,
+                    forceSoftware: true,
+                    owner: .mobile
+                )
+            }
+            return self.releaseVoiceKeyIfNeeded(owner: .mobile, forceSoftware: true)
+        },
+        enqueueAudio: { [weak self] samples in
+            self?.enqueueMobileVoiceAudio(samples) ?? false
+        },
+        drainAudio: { [weak self] completion in
+            guard let self else {
+                completion()
+                return
+            }
+            self.audioOutput.endSessionAfterDraining(completion: completion)
+        },
+        onTapFailure: { [weak self] failure in
+            self?.handleVoiceFnTapFailure(failure)
+        }
+    )
     private lazy var transcriptCaptureCoordinator = TranscriptCaptureCoordinator(
         isEnabled: { [weak self] in
             guard let self else { return false }
@@ -831,6 +865,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         finishRC003VoiceExtensionTest(reason: "app_stop")
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
+        mobileVoiceInputSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
         bluetoothBridges.removeAll()
@@ -3310,11 +3345,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_configure_failed")
             return .unavailable
         }
-        guard updateVoiceKeyState(
-            streaming: true,
-            forceSoftware: true,
-            owner: .mobile
-        ) else {
+        let useFnTap = settings.voiceFnTapModeEnabled && settings.voiceKeyMode == .function
+        guard mobileVoiceInputSession.start(useFnTap: useFnTap) else {
             AppLogger.shared.write(
                 "MOBILE VOICE start_rejected reason=function_key requested=\(source.logName)"
             )
@@ -3372,33 +3404,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("MOBILE VOICE stop_ignored reason=already_stopping source=\(source.logName)")
             return
         case let .begin(stopGeneration):
-            logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
-            audioOutput.endSessionAfterDraining { [weak self] in
-                guard let self else { return }
-                switch self.mobileVoiceLifecycle.completeStop(
-                    source,
-                    generation: stopGeneration
-                ) {
-                case .ignored:
-                    return
-                case .stopped:
-                    self.releaseVoiceKeyIfNeeded(owner: .mobile, forceSoftware: true)
-                    self.endVoiceSessionIfNeeded()
-                    AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
-                    self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
-                case let .restart(restartSource):
-                    self.releaseVoiceKeyIfNeeded(owner: .mobile, forceSoftware: true)
-                    self.endVoiceSessionIfNeeded()
-                    AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
-                    let completion = self.pendingMobileVoiceRestartCompletion
-                    self.pendingMobileVoiceRestartCompletion = nil
-                    let result = self.startPhoneVoice(source: restartSource)
-                    AppLogger.shared.write(
-                        "MOBILE VOICE restart_completed source=\(restartSource.logName) result=\(result)"
-                    )
-                    completion?(result)
-                }
+            _ = mobileVoiceInputSession.stop { [weak self] in
+                self?.finishPhoneVoiceStop(source: source, generation: stopGeneration)
             }
+        }
+    }
+
+    private func finishPhoneVoiceStop(source: MobileVoiceSource, generation: UInt64) {
+        switch mobileVoiceLifecycle.completeStop(source, generation: generation) {
+        case .ignored:
+            return
+        case .stopped:
+            logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
+            endVoiceSessionIfNeeded()
+            AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
+            releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
+        case let .restart(restartSource):
+            logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
+            endVoiceSessionIfNeeded()
+            AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
+            let completion = pendingMobileVoiceRestartCompletion
+            pendingMobileVoiceRestartCompletion = nil
+            let result = startPhoneVoice(source: restartSource)
+            AppLogger.shared.write(
+                "MOBILE VOICE restart_completed source=\(restartSource.logName) result=\(result)"
+            )
+            completion?(result)
         }
     }
 
@@ -3619,20 +3650,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
         mobileVoiceAudioBatchCount += 1
         mobileVoiceAudioSignalMetrics.append(samples)
-        let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
-        let accepted = audioOutput.enqueue(
-            samples: samples,
-            deliveryGeneration: deliveryGeneration
-        )
-        recordVoiceAudioReceipt(
-            samples: samples,
-            route: .virtualAudioDirect
-        )
-        recordVoiceAudioEnqueueOutcome(
-            accepted: accepted,
-            deliveryGeneration: deliveryGeneration
-        )
-        if !accepted { mobileVoiceAudioEnqueueFailureCount += 1 }
+        let accepted = mobileVoiceInputSession.receive(samples)
         if mobileVoiceAudioBatchCount == 1 || mobileVoiceAudioBatchCount.isMultiple(of: 20) {
             AppLogger.shared.write(
                 "MOBILE VOICE audio source=\(source.logName) batches=\(mobileVoiceAudioBatchCount) " +
@@ -3643,6 +3661,38 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
             )
         }
+    }
+
+    private func enqueueMobileVoiceAudio(_ samples: [Int16]) -> Bool {
+        let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
+        let accepted = audioOutput.enqueue(
+            samples: samples,
+            deliveryGeneration: deliveryGeneration
+        )
+        recordVoiceAudioReceipt(
+            samples: samples,
+            route: mobileVoiceInputSession.usesFnTapForActiveSession
+                ? .virtualAudioViaFnTap
+                : .virtualAudioDirect
+        )
+        recordVoiceAudioEnqueueOutcome(
+            accepted: accepted,
+            deliveryGeneration: deliveryGeneration
+        )
+        if !accepted { mobileVoiceAudioEnqueueFailureCount += 1 }
+        return accepted
+    }
+
+    private func logMobileFunctionKeyTap(pressed: Bool, success: Bool) {
+        if success {
+            isVoiceTriggerEnabled = !pressed
+            voiceShortcutStatus = LocalizedMessage(
+                pressed ? "voice_button.status.fn_pressed" : "voice_button.status.fn_released"
+            )
+        }
+        AppLogger.shared.write(
+            "MOBILE VOICE FN TAP \(pressed ? "DOWN" : "UP") \(success ? "posted" : "failed")"
+        )
     }
 
     private func logMobileVoiceAudioSummary(source: MobileVoiceSource, reason: String) {

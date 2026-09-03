@@ -176,7 +176,11 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(source.contains("enqueueAudio: { [weak self] samples in\n            self?.enqueueVoiceFnTapAudio(samples)"))
         #expect(source.contains("deliveryGeneration: deliveryGeneration"))
         #expect(source.contains("route: handledByFnTapMode ? .virtualAudioViaFnTap : .virtualAudioDirect"))
-        #expect(source.contains("route: .virtualAudioDirect"))
+        #expect(source.contains(
+            "route: mobileVoiceInputSession.usesFnTapForActiveSession\n" +
+                "                ? .virtualAudioViaFnTap\n" +
+                "                : .virtualAudioDirect"
+        ))
         #expect(!source.contains("accepted: handledByFnTapMode ||"))
     }
 
