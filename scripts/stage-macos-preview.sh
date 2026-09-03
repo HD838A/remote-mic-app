@@ -34,14 +34,14 @@ cd "$ROOT"
   print -u2 "staging requires a clean committed worktree"
   exit 1
 }
-[[ "$(git branch --show-current)" == main ]] || {
-  print -u2 "staging must run from main"
+[[ "$(git branch --show-current)" == release-main ]] || {
+  print -u2 "staging must run from release-main"
   exit 1
 }
-git fetch --no-tags origin main
+git fetch --no-tags origin release-main
 commit="$(git rev-parse HEAD)"
-[[ "$commit" == "$(git rev-parse origin/main)" ]] || {
-  print -u2 "local main must exactly match origin/main"
+[[ "$commit" == "$(git rev-parse origin/release-main)" ]] || {
+  print -u2 "local release-main must exactly match origin/release-main"
   exit 1
 }
 version="$(plutil -extract CFBundleShortVersionString raw -o - Resources/Info.plist)"
@@ -123,7 +123,7 @@ GITHUB_REPOSITORY="$REPOSITORY" \
 
 run_title="mac-release $MODE $commit"
 dispatched_at="$(/bin/date -u +'%Y-%m-%dT%H:%M:%SZ')"
-"$GH_BIN" workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref main \
+"$GH_BIN" workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref release-main \
   --raw-field "mode=$MODE" \
   --raw-field "expected_commit=$commit"
 
@@ -131,12 +131,12 @@ run_id=""
 run_url=""
 for lookup_attempt in {1..6}; do
   runs_json="$("$GH_BIN" run list --repo "$REPOSITORY" \
-    --workflow "$WORKFLOW_FILE" --branch main --commit "$commit" \
+    --workflow "$WORKFLOW_FILE" --branch release-main --commit "$commit" \
     --event workflow_dispatch --limit 20 \
     --json databaseId,createdAt,displayTitle,event,headBranch,headSha,url)"
   matches="$(print -r -- "$runs_json" | jq -c \
     --arg title "$run_title" --arg sha "$commit" --arg created "$dispatched_at" \
-    '[.[] | select(.event == "workflow_dispatch" and .headBranch == "main" and .headSha == $sha and .displayTitle == $title and .createdAt >= $created)]')"
+    '[.[] | select(.event == "workflow_dispatch" and .headBranch == "release-main" and .headSha == $sha and .displayTitle == $title and .createdAt >= $created)]')"
   count="$(print -r -- "$matches" | jq -r length)"
   if (( count > 1 )); then
     print -u2 "dispatch succeeded, but multiple exact Runs were found; do not redispatch"

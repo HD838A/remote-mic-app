@@ -64,11 +64,11 @@ printf '%s\n' "$run_json" | jq -e \
     .repository.full_name == $repository and
     .event == "workflow_dispatch" and
     .path == ".github/workflows/mac-release-package.yml" and
-    .head_branch == "main" and .head_sha == $commit and
+    .head_branch == "release-main" and .head_sha == $commit and
     .run_attempt == $attempt and
     .status == "completed" and .conclusion == "success"
   ' >/dev/null || {
-    echo "source Run is not the exact successful main-based staging Run" >&2
+    echo "source Run is not the exact successful release-main staging Run" >&2
     exit 1
   }
 
@@ -83,7 +83,7 @@ printf '%s\n' "$artifact_json" | jq -e \
     .digest == $digest and
     (.name | test("^mac-preview-payload-v[0-9]+[.][0-9]+[.][0-9]+-[0-9a-f]{40}$")) and
     .workflow_run.id == $run and
-    .workflow_run.head_branch == "main" and
+    .workflow_run.head_branch == "release-main" and
     .workflow_run.head_sha == $commit
   ' >/dev/null || {
     echo "payload artifact identity does not match the source Run" >&2
@@ -173,7 +173,7 @@ stage_record_info="$(printf '%s\n' "$stage_artifacts" | jq -r \
   --argjson run "$RUN_ID" --arg commit "$EXPECTED_COMMIT" '
     [.artifacts[] | select(.name == $name) | select(.expired == false) |
       select(.workflow_run.id == ($run // 0) and
-             .workflow_run.head_branch == "main" and
+             .workflow_run.head_branch == "release-main" and
              .workflow_run.head_sha == $commit)] |
     if length == 1 then .[0] | [.id,.digest,.name] | @tsv else empty end
   ')"

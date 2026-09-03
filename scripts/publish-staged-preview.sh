@@ -42,10 +42,10 @@ cd "$ROOT"
   echo "publication dispatch requires a clean worktree" >&2
   exit 1
 }
-git fetch --no-tags origin main
-[[ "$(git branch --show-current)" == main &&
-    "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
-  echo "publication dispatch must run from exact origin/main" >&2
+git fetch --no-tags origin release-main
+[[ "$(git branch --show-current)" == release-main &&
+    "$(git rev-parse HEAD)" == "$(git rev-parse origin/release-main)" ]] || {
+  echo "publication dispatch must run from exact origin/release-main" >&2
   exit 1
 }
 
@@ -55,7 +55,7 @@ ui_attestation_b64="$(/usr/bin/base64 < "$ATTESTATION" | /usr/bin/tr -d '\n')"
   exit 1
 }
 
-$GH_BIN workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref main \
+$GH_BIN workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref release-main \
   --raw-field "source_run_id=$(jq -r '.sourceRunId' "$ATTESTATION")" \
   --raw-field "ui_attestation_b64=$ui_attestation_b64"
 

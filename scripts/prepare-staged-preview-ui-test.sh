@@ -51,8 +51,8 @@ printf '%s\n' "$run_json" | jq -e '
   .event == "workflow_dispatch" and
   .path == ".github/workflows/mac-release-package.yml" and
   .status == "completed" and .conclusion == "success" and
-  .head_branch == "main" and (.head_sha | test("^[0-9a-f]{40}$"))
-' >/dev/null || { echo "source Run is not a successful main-based staging workflow" >&2; exit 1; }
+  .head_branch == "release-main" and (.head_sha | test("^[0-9a-f]{40}$"))
+' >/dev/null || { echo "source Run is not a successful release-main staging workflow" >&2; exit 1; }
 run_attempt="$(printf '%s\n' "$run_json" | jq -r '.run_attempt')"
 commit="$(printf '%s\n' "$run_json" | jq -r '.head_sha')"
 artifacts="$($GH_BIN api "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100")"
