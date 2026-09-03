@@ -1,5 +1,9 @@
 # Version History
 
+## 1.9.21 (Pre-release)
+
+- Improves update check reliability and reduces intermittent failures to retrieve update information.
+
 ## 1.9.20 (Pre-release)
 
 - Standardize first-run onboarding on the Fn voice key to reduce setup ambiguity.
