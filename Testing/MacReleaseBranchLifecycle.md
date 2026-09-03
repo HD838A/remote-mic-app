@@ -2,12 +2,12 @@
 
 ## 适用范围
 
-本手册验证新的 main-based Preview、真实 UI 验收、公开 Pre-release 和 Stable promotion。它不把旧的候选分支或历史 Release 当作新流程入口。
+本手册验证新的 `release-main` Preview、真实 UI 验收、公开 Pre-release 和 Stable promotion。它不把 `main`、旧的候选分支或历史 Release 当作新流程入口。
 
 ## 测试前准备
 
-1. 在隔离 worktree 执行 git fetch origin main --tags。
-2. 确认 main 工作区干净且 HEAD 与 origin/main 完全相同。
+1. 在隔离 worktree 执行 `git fetch origin release-main --tags`。
+2. 确认当前分支为 `release-main`、工作区干净、HEAD 与 `origin/release-main` 完全相同，并确认分支历史以 `v1.9.19` Commit 为起点。
 3. 动态读取 `releases/latest`，确认其为正式稳定版（非 Draft、非 Pre-release）。
 4. 确认 config/release-dependencies.json、Package.swift、Package.resolved 和两个受保护 workflow 的依赖 SHA 一致。
 5. 准备临时 fixture；不得读取或打印 Apple、Match、Notary、Sparkle 私钥。
@@ -18,19 +18,19 @@
 2. 运行 scripts/prepare-preview-release.sh，传入请求版本、Build 和中英文说明。
 3. 检查 git diff --name-only。
 
-预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。版本已被 Tag、Release 或 11 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag、Release 或发布分支。
+预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。版本已被 Tag、Release 或 11 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag 或 Release；元数据 PR 审查后只把该版本需要的 Commit 选入既有 `release-main`。
 
 失败判定：从旧 Tag/旧版本分支开始、修改产品代码、版本因 CI 失败而递增，或 Release Notes 含内部入口/凭据。
 
-## 用例 2：精确 main staging
+## 用例 2：精确 release-main staging
 
-1. 将元数据 PR 合入 main 并 fetch。
-2. 在干净 main worktree 运行 scripts/stage-macos-preview.sh smoke。
+1. 完成元数据 PR 审查，并把该版本需要的已审查 Commit 选入、推送到 `release-main`。
+2. 在干净 `release-main` worktree 运行 scripts/stage-macos-preview.sh smoke。
 3. 检查 workflow 输入和 Run 标题。
 
-预期：只使用 main 的精确 SHA；前置检查包括 main CI、依赖 pin、稳定 latest、11 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。workflow 名称为 mac-release smoke <commit>，不创建 Tag/Release。
+预期：只使用 `release-main` 的精确 SHA；前置检查包括发布分支 CI、依赖 pin、稳定 latest、11 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。workflow 名称为 mac-release smoke <commit>，不创建 Tag/Release。
 
-失败判定：接受 detached/旧 SHA、从功能分支直接签名、找不到 main CI 仍进入 Environment，或 Run 使用隐式 GH_TOKEN。
+失败判定：接受 `main`、detached/旧 SHA、未推送的发布分支提交、从功能分支直接签名、找不到 `release-main` CI 仍进入 Environment，或 Run 使用隐式 GH_TOKEN。
 
 ## 用例 3：受保护 staging 的职责
 
@@ -52,7 +52,7 @@
 
 ## 用例 5：幂等 publication
 
-1. 从精确 main worktree 运行 publish-staged-preview.sh。
+1. 从精确 `release-main` worktree 运行 publish-staged-preview.sh。
 2. 注入一次 GitHub 上传或 CDN 验证失败。
 3. 用同一 attestation 重试。
 
@@ -64,14 +64,14 @@
 2. 运行 promote-preview-release.sh。
 3. 比较晋升前后的全部资产名称、大小和 digest。
 
-预期：确认 Tag Commit 已进入 origin/main，并通过 GitHub API 核对 provenance 对应的成功 protected Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变。
+预期：确认 Tag Commit 已进入 `origin/release-main`，并通过 GitHub API 核对 provenance 对应的成功 protected Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变。
 
-失败判定：选择 Draft/不存在的 Release、Tag 未进入 main、触发构建/签名/上传或替换资产。
+失败判定：选择 Draft/不存在的 Release、Tag 未进入 `release-main`、触发构建/签名/上传或替换资产。
 
 ## 用例 7：同 SHA 故障恢复
 
 1. 在 staging 或 publication 中模拟 Runner、GitHub 或网络失败。
-2. 用同一个 main SHA、版本、Build 和 artifact 身份重试。
+2. 用同一个 `release-main` SHA、版本、Build 和 artifact 身份重试。
 
 预期：只新增 workflow Run；不升版本、不创建 rerun/canary 分支、不创建第二个 PR/Tag，成功的签名字节被复用。
 

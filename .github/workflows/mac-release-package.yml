@@ -13,7 +13,7 @@ on:
           - preview
           - smoke
       expected_commit:
-        description: Exact 40-character commit on main to package
+        description: Exact 40-character commit on release-main to package
         required: true
         type: string
 
@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate exact main release source
+    name: Validate exact release-main source
     runs-on: macos-15
     timeout-minutes: 15
     steps:
@@ -48,10 +48,10 @@ jobs:
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$TRIGGER_COMMIT" = "$EXPECTED_COMMIT"
           test "$TRIGGER_REF_TYPE" = branch
-          test "$TRIGGER_REF_NAME" = main
+          test "$TRIGGER_REF_NAME" = release-main
           test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
 
-      - name: Check out exact main commit
+      - name: Check out exact release-main commit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
@@ -67,14 +67,14 @@ jobs:
             brew install "${missing[@]}"
           fi
 
-      - name: Verify exact main checkout
+      - name: Verify exact release-main checkout
         run: |
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
           test -z "$(git status --porcelain)"
-          git fetch --no-tags origin main
-          test "$(git rev-parse origin/main)" = "${{ inputs.expected_commit }}"
+          git fetch --no-tags origin release-main
+          test "$(git rev-parse origin/release-main)" = "${{ inputs.expected_commit }}"
 
-      - name: Verify successful main CI
+      - name: Verify successful release-main CI
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -136,12 +136,12 @@ jobs:
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$TRIGGER_COMMIT" = "$EXPECTED_COMMIT"
           test "$TRIGGER_REF_TYPE" = branch
-          test "$TRIGGER_REF_NAME" = main
+          test "$TRIGGER_REF_NAME" = release-main
           test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
-          remote_head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          remote_head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/release-main" --jq '.object.sha')"
           test "$remote_head" = "$EXPECTED_COMMIT"
 
-      - name: Check out exact main commit
+      - name: Check out exact release-main commit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
@@ -277,8 +277,8 @@ jobs:
           GH_BIN: gh
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
-          git fetch --no-tags origin main
-          test "$(git rev-parse origin/main)" = "$EXPECTED_COMMIT"
+          git fetch --no-tags origin release-main
+          test "$(git rev-parse origin/release-main)" = "$EXPECTED_COMMIT"
           ./scripts/verify-release-dependency-pins.sh
 
       - name: Sign, notarize, staple, and verify both variants

@@ -22,7 +22,7 @@ permissions:
 jobs:
   promote:
     name: Promote an existing Preview without rebuilding
-    if: ${{ github.ref_name == 'main' }}
+    if: ${{ github.ref_name == 'release-main' }}
     runs-on: macos-15
     timeout-minutes: 20
     environment: mac-stable-release
@@ -35,11 +35,11 @@ jobs:
           TRIGGER_REPOSITORY: ${{ github.repository }}
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$TRIGGER_REF_NAME" = main
+          test "$TRIGGER_REF_NAME" = release-main
           test "$TRIGGER_REF_TYPE" = branch
           test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
 
-      - name: Check out exact main
+      - name: Check out exact release-main
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0

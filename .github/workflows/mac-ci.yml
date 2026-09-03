@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [main, release-main]
 
 concurrency:
   group: mac-ci-${{ github.workflow }}-${{ github.ref }}

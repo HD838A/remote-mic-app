@@ -172,7 +172,7 @@ struct BuildSigningTests {
         #expect(!source.contains("showPreReleaseFeedUnavailableAlert"))
     }
 
-    @Test func mainBasedPreviewFlowUsesSingleImmutableStagingArtifact() throws {
+    @Test func releaseMainPreviewFlowUsesSingleImmutableStagingArtifact() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -208,6 +208,7 @@ struct BuildSigningTests {
         #expect(packageWorkflow.contains("prepare-public-release-assets.sh"))
         #expect(packageWorkflow.contains("mac-preview-payload-v"))
         #expect(packageWorkflow.contains("mac-preview-stage-v"))
+        #expect(packageWorkflow.contains("test \"$TRIGGER_REF_NAME\" = release-main"))
         #expect(!packageWorkflow.contains("qualification"))
         #expect(!packageWorkflow.contains("release_mode"))
         #expect(!packageWorkflow.contains("gh release"))
@@ -217,10 +218,12 @@ struct BuildSigningTests {
         #expect(publicationWorkflow.contains("GH_TOKEN:"))
         #expect(publicationWorkflow.contains("ref: ${{ github.sha }}"))
         #expect(publicationWorkflow.contains("TRIGGER_REPOSITORY"))
+        #expect(publicationWorkflow.contains("github.ref_name == 'release-main'"))
         #expect(!publicationWorkflow.contains("secrets."))
         #expect(!publicationWorkflow.contains("environment: mac-release"))
         #expect(stableWorkflow.contains("promote-preview-release.sh"))
         #expect(stableWorkflow.contains("environment: mac-stable-release"))
+        #expect(stableWorkflow.contains("github.ref_name == 'release-main'"))
         #expect(!stableWorkflow.contains("workflow_run:"))
         #expect(!stableWorkflow.contains("package-macos-release"))
         #expect(!stableWorkflow.contains("upload-artifact"))
@@ -229,6 +232,7 @@ struct BuildSigningTests {
         #expect(stagingSource.contains("--include"))
         #expect(stagingSource.contains("releases/latest"))
         #expect(stagingSource.contains("verify-release-workflow-gh-token.sh"))
+        #expect(stagingSource.contains("--ref release-main"))
         #expect(publicationSource.contains("recover-preview-stage.sh"))
         #expect(publicationSource.contains("candidate-provenance.json"))
         #expect(publicationSource.contains("releases/latest"))
@@ -591,7 +595,8 @@ struct BuildSigningTests {
         #expect(!promotionWorkflow.contains("package-macos-release"))
         #expect(promotionSource.contains("case \"$is_prerelease\" in"))
         #expect(promotionSource.contains("--prerelease=false"))
-        #expect(!promotionSource.contains("git branch --show-current"))
+        #expect(promotionSource.contains("git branch --show-current"))
+        #expect(promotionSource.contains("origin/release-main"))
         #expect(promotionSource.contains("Candidate provenance is invalid"))
         #expect(promotionSource.contains("asset set"))
         #expect(!promotionSource.contains("run-release-stage"))

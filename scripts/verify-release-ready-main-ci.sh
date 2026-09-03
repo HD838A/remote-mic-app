@@ -11,12 +11,12 @@ MAIN_COMMIT="${1:-}"
 PROOF_OUTPUT="${RELEASE_READY_PROOF_OUTPUT:-}"
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
-  echo "Main CI verification is restricted to HD838A/remote-mic-app" >&2
+  echo "Release-main CI verification is restricted to HD838A/remote-mic-app" >&2
   exit 1
 }
 
 if [[ "$#" -gt 1 ]]; then
-    echo "usage: $0 [main-commit]" >&2
+    echo "usage: $0 [release-main-commit]" >&2
   exit 2
 fi
 for command_name in git jq "$GH_BIN"; do
@@ -28,17 +28,17 @@ done
 
 cd "$ROOT"
 if [[ -z "$MAIN_COMMIT" ]]; then
-  MAIN_COMMIT="$(git rev-parse HEAD^)"
+  MAIN_COMMIT="$(git rev-parse HEAD)"
 fi
 if [[ ! "$MAIN_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
-  echo "release-ready main commit must be a full 40-character SHA" >&2
+  echo "release-ready release-main commit must be a full 40-character SHA" >&2
   exit 1
 fi
-CURRENT_MAIN_COMMIT="$(git rev-parse origin/main)"
+CURRENT_MAIN_COMMIT="$(git rev-parse origin/release-main)"
 if [[ "$MAIN_COMMIT" != "$CURRENT_MAIN_COMMIT" ]]; then
   if [[ "${ALLOW_FROZEN_BASE_MAIN:-0}" != "1" ]] || \
      ! git merge-base --is-ancestor "$MAIN_COMMIT" "$CURRENT_MAIN_COMMIT"; then
-    echo "release candidate base must be the current origin/main or an approved frozen ancestor" >&2
+    echo "release candidate base must be the current origin/release-main or an approved frozen ancestor" >&2
     exit 1
   fi
 fi
@@ -48,7 +48,7 @@ find_successful_main_run_id() {
   "$GH_BIN" run list \
     --repo "$REPOSITORY" \
     --workflow "$WORKFLOW_FILE" \
-    --branch main \
+    --branch release-main \
     --commit "$commit" \
     --event push \
     --status success \
@@ -74,7 +74,7 @@ is_full_product_run() {
     .event == "push" and
     .status == "completed" and
     .conclusion == "success" and
-    .headBranch == "main" and
+    .headBranch == "release-main" and
     .headSha == $headSha and
     ([.jobs[] | select(
       .name == "Swift tests and build (Apple Silicon)" and
@@ -103,7 +103,7 @@ is_control_plane_run() {
       .event == "push" and
       .status == "completed" and
       .conclusion == "success" and
-      .headBranch == "main" and
+      .headBranch == "release-main" and
       .headSha == $headSha and
       ([.jobs[] | select(
         .name == "Swift tests and build (Apple Silicon)" and
@@ -120,7 +120,7 @@ is_control_plane_run() {
 
 RUN_ID="$(find_successful_main_run_id "$MAIN_COMMIT")"
 if [[ -z "$RUN_ID" || ! "$RUN_ID" =~ ^[0-9]+$ ]]; then
-  echo "candidate base main has no successful macOS CI push run: $MAIN_COMMIT" >&2
+  echo "candidate base release-main has no successful macOS CI push run: $MAIN_COMMIT" >&2
   exit 1
 fi
 RUN_JSON="$(load_main_run_json "$RUN_ID")"
@@ -130,7 +130,7 @@ PRODUCT_CI_RUN_ID="$RUN_ID"
 PRODUCT_RUN_JSON="$RUN_JSON"
 if ! is_full_product_run "$RUN_JSON" "$MAIN_COMMIT"; then
   if ! is_control_plane_run "$RUN_JSON" "$MAIN_COMMIT"; then
-    echo "main CI run $RUN_ID is neither a full product run nor a control-plane-only run" >&2
+    echo "release-main CI run $RUN_ID is neither a full product run nor a control-plane-only run" >&2
     exit 1
   fi
 
@@ -150,12 +150,12 @@ if ! is_full_product_run "$RUN_JSON" "$MAIN_COMMIT"; then
   done < <(git rev-list --first-parent --skip=1 --max-count=50 "$MAIN_COMMIT")
 
   if [[ -z "$PRODUCT_PROOF_COMMIT" ]]; then
-    echo "control-plane main has no recent first-parent full two-architecture product proof" >&2
+    echo "control-plane release-main has no recent first-parent full two-architecture product proof" >&2
     exit 1
   fi
   if ! "$ROOT/scripts/verify-release-control-plane-diff.sh" \
       "$PRODUCT_PROOF_COMMIT" "$MAIN_COMMIT"; then
-    echo "main changes after the inherited product proof are not control-plane-only" >&2
+    echo "release-main changes after the inherited product proof are not control-plane-only" >&2
     exit 1
   fi
 fi
@@ -192,10 +192,10 @@ if [[ -n "$PROOF_OUTPUT" ]]; then
     }' > "$PROOF_OUTPUT"
 fi
 
-echo "RELEASE-READY MAIN CI PASS"
-echo "MAIN_COMMIT: $MAIN_COMMIT"
-echo "MAIN_CI_RUN_ID: $RUN_ID"
-echo "MAIN_CI_RUN_URL: $(printf '%s\n' "$RUN_JSON" | jq -r '.url')"
+echo "RELEASE-READY RELEASE-MAIN CI PASS"
+echo "RELEASE_MAIN_COMMIT: $MAIN_COMMIT"
+echo "RELEASE_MAIN_CI_RUN_ID: $RUN_ID"
+echo "RELEASE_MAIN_CI_RUN_URL: $(printf '%s\n' "$RUN_JSON" | jq -r '.url')"
 echo "PRODUCT_PROOF_COMMIT: $PRODUCT_PROOF_COMMIT"
 echo "PRODUCT_CI_RUN_ID: $PRODUCT_CI_RUN_ID"
 echo "PRODUCT_CI_RUN_URL: $(printf '%s\n' "$PRODUCT_RUN_JSON" | jq -r '.url')"

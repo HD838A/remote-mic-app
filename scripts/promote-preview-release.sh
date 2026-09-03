@@ -28,9 +28,10 @@ cd "$ROOT"
   echo "Stable promotion requires a clean worktree" >&2
   exit 1
 }
-git fetch origin main --tags
-[[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || {
-  echo "Stable promotion must run from exact origin/main" >&2
+git fetch origin release-main --tags
+[[ "$(git branch --show-current)" == release-main &&
+    "$(git rev-parse HEAD)" == "$(git rev-parse origin/release-main)" ]] || {
+  echo "Stable promotion must run from exact origin/release-main" >&2
   exit 1
 }
 
@@ -39,10 +40,10 @@ if [[ "${RELEASE_ALLOW_LOCAL_FIXTURE:-0}" != 1 ]]; then
   [[ "${GITHUB_ACTIONS:-}" == true &&
       "${GITHUB_REPOSITORY:-}" == "$REPOSITORY" &&
       "${GITHUB_EVENT_NAME:-}" == workflow_dispatch &&
-      "${GITHUB_REF_NAME:-}" == main &&
+      "${GITHUB_REF_NAME:-}" == release-main &&
       "${GITHUB_SHA:-}" == "$current_commit" &&
       "${GITHUB_WORKFLOW_REF:-}" == "$REPOSITORY/.github/workflows/mac-stable-promote.yml@"* ]] || {
-    echo "Stable promotion is restricted to the reviewed main workflow" >&2
+    echo "Stable promotion is restricted to the reviewed release-main workflow" >&2
     exit 1
   }
 fi
@@ -145,10 +146,10 @@ printf '%s\n' "$run_json" | jq -e \
   '.id == $run and .repository.full_name == $repository and
    .event == "workflow_dispatch" and
    .path == ".github/workflows/mac-release-package.yml" and
-   .head_branch == "main" and .head_sha == $commit and
+   .head_branch == "release-main" and .head_sha == $commit and
    .run_attempt == $attempt and .status == "completed" and
    .conclusion == "success"' >/dev/null || {
-  echo "candidate provenance is not bound to a successful protected main staging Run" >&2
+  echo "candidate provenance is not bound to a successful protected release-main staging Run" >&2
   exit 1
 }
 
@@ -168,7 +169,7 @@ printf '%s\n' "$artifact_json" | jq -e \
   '.id == $artifact and .expired == false and .digest == $digest and
    (.name == ("mac-preview-payload-v" + $version + "-" + $commit)) and
    .workflow_run.id == $run and
-   .workflow_run.head_branch == "main" and
+   .workflow_run.head_branch == "release-main" and
    .workflow_run.head_sha == $commit' >/dev/null || {
   echo "candidate provenance is not bound to the exact protected staging artifact" >&2
   exit 1
@@ -190,7 +191,7 @@ stage_record_info="$(printf '%s\n' "$stage_artifacts" | jq -r \
   --argjson run "$source_run_id" --arg commit "$source_commit" '
     [.artifacts[] | select(.name == $name and .expired == false) |
       select(.workflow_run.id == $run and
-             .workflow_run.head_branch == "main" and
+             .workflow_run.head_branch == "release-main" and
              .workflow_run.head_sha == $commit)] |
     if length == 1 then .[0] | [.id, (.digest // ""), .name] | @tsv else empty end
   ')"
@@ -290,8 +291,8 @@ tag_commit="$(printf '%s\n' "$remote_tag_refs" | /usr/bin/awk '$2 ~ /\^\{\}$/ {p
   echo "Tag Commit does not match candidate provenance" >&2
   exit 1
 }
-git merge-base --is-ancestor "$source_commit" origin/main || {
-  echo "The selected Pre-release Commit is not contained in origin/main" >&2
+git merge-base --is-ancestor "$source_commit" origin/release-main || {
+  echo "The selected Pre-release Commit is not contained in origin/release-main" >&2
   exit 1
 }
 
