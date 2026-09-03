@@ -40,6 +40,6 @@ Worker 只接收普通 HTTP 下载请求并访问公开 GitHub Release 资产，
 
 ## 状态
 
-四个 appcast 通道实现与自动化已完成，等待生产部署和 `1.9.21` 预览发布闭环；候选产物、签名公证资产与生产到候选更新路径由统一 Mac 预览版流程验证。
+四个 appcast 通道已部署，stable 两架构指向当前正式版 `v1.9.18`，preview 两架构指向当前预览版 `v1.9.20`，最终字节均与 GitHub 固定 Tag 一致。等待 `1.9.21` 候选产物、签名公证和真实 Sparkle UI 发布闭环。
 
 详细实现见 [development.md](development.md)，测试边界见 [testing.md](testing.md)、[Testing/CloudflareDownloadCDN.md](../../Testing/CloudflareDownloadCDN.md) 和 [Testing/MacReleaseAssetMatrix.md](../../Testing/MacReleaseAssetMatrix.md)。
