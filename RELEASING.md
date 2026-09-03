@@ -4,21 +4,21 @@
 
 ## 合法目标与不变量
 
-- Preview：从已经合入 origin/main 的精确 SHA 构建一次，完成真实 UI 升级后发布一个公开 Pre-release。
+- Preview：从以 `v1.9.19` 为起点的精确 `origin/release-main` SHA 构建一次，完成真实 UI 升级后发布一个公开 Pre-release。
 - Stable：用户明确指定一个已经发布并验证通过的 Pre-release，将它改为正式版；不重新构建。
 - 私有内部 Draft：使用 private-draft-release skill 的独立路径，目标仓库固定为 GetSayAll/SayAll，不在公开源码仓库创建内部 Draft。
 - “发布正式版”不是独立构建命令。没有指定现有 Pre-release 时，只能准备 Preview 或报告缺少授权。
 - stable latest 不写死版本号。Preview 开始前、公开后和失败恢复前后都必须动态读取 `releases/latest`，确认其为正式稳定版且前后一致；流程不得修改 stable feed。
 
-发布流程只保留一个版本元数据 PR、一次受保护 staging、一次真实 Sparkle UI 验收和一个无 Apple 凭据 publication workflow。没有 release/pre-* 候选分支、qualification、Release Guard、编号 rerun、watchdog 或 SLO ledger 状态机。
+发布流程只保留一个版本元数据 PR、一次主线到 `release-main` 的同步、一次受保护 staging、一次真实 Sparkle UI 验收和一个无 Apple 凭据 publication workflow。没有新的 release/pre-* 候选分支、qualification、Release Guard、编号 rerun、watchdog 或 SLO ledger 状态机。
 
 ## 发布前准备
 
-1. 记录用户请求时间 request_started_at 和 request_id。T_ready 表示所有代码已合入主线、主线 CI 和依赖 pin 已通过、版本/Build/Release Notes 已冻结的时刻；Preview 和 Stable 从 T_ready 起均以 30 分钟为纯发布目标。重试不重置时间，也不以时间目标替代签名、公证、staple 或 UI 验收。
-2. fetch origin main，确认发布 worktree 干净，main 与 origin/main 精确一致。发布不得从其他脏 worktree、旧 Tag 或旧预览包开始。
+1. 记录用户请求时间 request_started_at 和 request_id。T_ready 表示本次明确选定的代码已进入 `release-main`、发布分支 CI 和依赖 pin 已通过、版本/Build/Release Notes 已冻结的时刻；Preview 和 Stable 从 T_ready 起均以 30 分钟为纯发布目标。重试不重置时间，也不以时间目标替代签名、公证、staple 或 UI 验收。
+2. fetch `origin release-main`，确认发布 worktree 干净，当前分支是 `release-main`，HEAD 与 `origin/release-main` 精确一致。发布不得从其他脏 worktree、旧 Tag 或旧预览包开始。
 3. 检查产品 Commit 已经通过普通 PR 合入 main。若用户指定 Commit 尚未合入，先在独立集成分支重放指定改动，逐个解决机械冲突，完成普通 PR、双架构 CI 后再继续；冲突涉及产品取舍时报告并暂停该取舍，不接触 Apple 凭据。
 4. 检查 config/release-dependencies.json、Package.swift、Package.resolved 和受保护 workflow 使用相同的完整依赖 SHA；运行 scripts/verify-release-dependency-pins.sh。
-5. 运行 scripts/verify-release-ready-main-ci.sh，确认 Apple Silicon 与 Intel Ventura 的 main push CI 都完成 Swift tests、项目 self-test 和 Release build。发布控制面 fixture 不得冒充产品 CI。
+5. 运行 scripts/verify-release-ready-main-ci.sh，确认 Apple Silicon 与 Intel Ventura 的 `release-main` push CI 都完成 Swift tests、项目 self-test 和 Release build。脚本名为历史兼容名称；发布控制面 fixture 不得冒充产品 CI。
 
 ## Preview 版本元数据
 
@@ -30,17 +30,17 @@
    scripts/prepare-preview-release.sh <requested-version> <build> <zh-notes> <en-notes>
 
 3. 脚本只修改这三个文件，并检查 Release Notes 不含内部入口、邀请码、凭据或实现细节。若 Tag、Release 或公开分发资产已经占用请求版本，只递增最后一位并选更高 Build；公开资产占用检查覆盖 11 个 CDN 固定路径，只有 HTTP 404 才算可用，2xx/3xx 视为占用，认证、权限、5xx、超时或其他未知响应 fail closed。单纯的 CI、Runner、GitHub、Apple 或网络故障不占用版本，不得升版本。
-4. 运行 git diff --check、Swift/脚本测试和必要的 UI/功能测试，创建普通 PR 合入 main。合入后重新 fetch，记录用于 staging 的精确 main SHA。
+4. 运行 git diff --check、Swift/脚本测试和必要的 UI/功能测试，完成普通 PR 审查；随后只把该版本明确需要的已审查 Commit 选入并推送到 `release-main`，记录用于 staging 的精确发布分支 SHA。
 
-元数据 PR 合入后不再创建版本候选分支，也不在发布分支上回流或重写版本文件。产品内容变化必须回到普通产品 PR；公开身份产生后不能覆盖旧 Tag 或资产。
+元数据 PR 合入后不再创建版本候选分支，也不在发布分支上单独修改或重写版本文件。产品内容变化必须回到普通产品 PR，再同步到 `release-main`；公开身份产生后不能覆盖旧 Tag 或资产。
 
 ## Preview staging：受保护的唯一签名入口
 
-从与 origin/main 相同的 main worktree 执行：
+从与 `origin/release-main` 相同的 `release-main` worktree 执行：
 
     scripts/stage-macos-preview.sh preview
 
-脚本先做无秘密检查：main 精确 SHA、版本/build、stable latest、main CI、依赖 pin、目标仓库、显式 GH_TOKEN 静态门禁和 11 个 CDN 固定路径全部为 HTTP 404，然后 dispatch .github/workflows/mac-release-package.yml，输入只有 mode 和 expected_commit。smoke 只用于受保护流程检查，不创建公开身份。
+脚本先做无秘密检查：`release-main` 精确 SHA、版本/build、stable latest、发布分支 CI、依赖 pin、目标仓库、显式 GH_TOKEN 静态门禁和 11 个 CDN 固定路径全部为 HTTP 404，然后 dispatch .github/workflows/mac-release-package.yml，输入只有 mode 和 expected_commit。smoke 只用于受保护流程检查，不创建公开身份。
 
 受保护 workflow 的 package job 才能读取 Apple/Match/Notary/Sparkle 凭据，并且必须：
 
@@ -66,14 +66,14 @@
 
 ## Preview publication：无 Apple 凭据
 
-在真实 UI attestation 通过后，从精确 origin/main 的干净 worktree 执行：
+在真实 UI attestation 通过后，从精确 `origin/release-main` 的干净 worktree 执行：
 
     scripts/publish-staged-preview.sh <preview-ui-attestation.json>
 
 它只 dispatch .github/workflows/mac-preview-publication.yml。该 workflow：
 
-- 只在 main 上运行，显式配置 GH_TOKEN，不声明 mac-release Environment，不读取 secrets；
-- 目标仓库固定为 `HD838A/remote-mic-app`，并 checkout 触发事件的精确 `github.sha`，不在运行中跟随会变化的 `main`；
+- 只在 `release-main` 上运行，显式配置 GH_TOKEN，不声明 mac-release Environment，不读取 secrets；
+- 目标仓库固定为 `HD838A/remote-mic-app`，并 checkout 触发事件的精确 `github.sha`，不在运行中跟随会变化的 `release-main`；
 - 按 Run/attempt/artifact ID 下载并验证同一 staged payload；
 - 创建或复用与 source SHA 完全一致的轻量 Tag；
 - 创建或恢复公开 Pre-release，上传 manifest 中的完整 11 项 payload 加 candidate-provenance.json；
@@ -95,10 +95,10 @@ publication 失败时先查询远端状态。若 Tag、Release、资产和摘要
 
 - Release 存在且当前是公开 Pre-release；
 - candidate-provenance.json、Tag Commit 和 source Commit 一致；
-- Tag Commit 已包含在当前 origin/main；
+- Tag Commit 已包含在当前 `origin/release-main`；
 - 11 项 payload 与 provenance 的大小、SHA-256、GitHub digest 完全一致。
-- provenance 中的 sourceRunId/sourceRunAttempt 指向成功的 `.github/workflows/mac-release-package.yml` `workflow_dispatch` Run，且 `head_branch=main`、`head_sha=sourceCommit`、attempt 完全一致；signedArtifactId/digest 指向同一 Run 的未过期 payload artifact，另有唯一未过期的 Preview stage-record artifact，记录 `mode=preview` 并与 provenance 的 Run、artifact、manifest、Tag 和时间戳一致。
-- 目标仓库固定为 `HD838A/remote-mic-app`，并使用 dispatch 事件的精确 `github.sha`；若 main 在 dispatch 后前进则 fail closed，重新从最新 main 发起晋升。
+- provenance 中的 sourceRunId/sourceRunAttempt 指向成功的 `.github/workflows/mac-release-package.yml` `workflow_dispatch` Run，且 `head_branch=release-main`、`head_sha=sourceCommit`、attempt 完全一致；signedArtifactId/digest 指向同一 Run 的未过期 payload artifact，另有唯一未过期的 Preview stage-record artifact，记录 `mode=preview` 并与 provenance 的 Run、artifact、manifest、Tag 和时间戳一致。
+- 目标仓库固定为 `HD838A/remote-mic-app`，并使用 dispatch 事件的精确 `github.sha`；若 `release-main` 在 dispatch 后前进则 fail closed，重新从最新发布分支发起晋升。
 
 随后唯一的远端突变是 gh release edit --prerelease=false --latest。Tag、Release Notes、appcast、ZIP、DMG、PKG 和 provenance 均保持原字节；晋升不重新构建、签名、公证、staple 或上传。若上一次突变已成功且该 Tag 已是 `releases/latest`，重试只做完整只读复验，不再次突变；所有候选晋升共享一个并发锁，并在突变前再次核对 stable latest。
 
@@ -106,11 +106,11 @@ publication 失败时先查询远端状态。若 Tag、Release、资产和摘要
 
 | 故障 | 处理 |
 | --- | --- |
-| 产品代码或版本输入未就绪 | 回到普通 PR 和 main CI，不能先进入 mac-release Environment |
-| Runner、GitHub、Apple、网络或审批失败，尚无公开身份 | 在同一 main SHA、版本、Build 上重试同一 stage；复用成功 artifact |
+| 产品代码或版本输入未就绪 | 回到普通 PR 审查，并把明确需要的 Commit 选入 `release-main`，不能先进入 mac-release Environment |
+| Runner、GitHub、Apple、网络或审批失败，尚无公开身份 | 在同一 `release-main` SHA、版本、Build 上重试同一 stage；复用成功 artifact |
 | staging 已成功，UI 或 publication 失败 | 保留 artifact，修复对应控制面后重新验证；不重签、不升版本 |
 | Tag/Release/公开资产已存在且内容需要改变 | 新建普通产品/元数据 PR，选择新的可用版本和更高 Build；旧身份不可修改 |
-| stable promotion 条件不满足 | 保持 Pre-release，报告精确缺口；绝不从 main 重建正式包 |
+| stable promotion 条件不满足 | 保持 Pre-release，报告精确缺口；绝不从其他分支重建正式包 |
 
 ## 发布后报告
 

@@ -33,10 +33,10 @@ if [[ "${RELEASE_ALLOW_LOCAL_FIXTURE:-0}" != 1 ]]; then
   [[ "${GITHUB_ACTIONS:-}" == true &&
       "${GITHUB_REPOSITORY:-}" == "$REPOSITORY" &&
       "${GITHUB_EVENT_NAME:-}" == workflow_dispatch &&
-      "${GITHUB_REF_NAME:-}" == main &&
+      "${GITHUB_REF_NAME:-}" == release-main &&
       "${GITHUB_SHA:-}" == "$current_commit" &&
       "${GITHUB_WORKFLOW_REF:-}" == "$REPOSITORY/.github/workflows/mac-preview-publication.yml@"* ]] || {
-    echo "Preview publication is restricted to the reviewed main workflow" >&2
+    echo "Preview publication is restricted to the reviewed release-main workflow" >&2
     exit 1
   }
 fi
@@ -69,9 +69,9 @@ expected_manifest_sha="$(jq -r '.assetManifestSHA256' "$ATTESTATION")"
 staged_at="$(jq -r '.stagedAt' "$ATTESTATION")"
 version="${tag#v}"
 
-git -C "$ROOT" fetch --no-tags origin main
-git -C "$ROOT" merge-base --is-ancestor "$source_commit" "origin/main" || {
-  echo "staged source commit is not contained in current origin/main" >&2
+git -C "$ROOT" fetch --no-tags origin release-main
+git -C "$ROOT" merge-base --is-ancestor "$source_commit" "origin/release-main" || {
+  echo "staged source commit is not contained in current origin/release-main" >&2
   exit 1
 }
 

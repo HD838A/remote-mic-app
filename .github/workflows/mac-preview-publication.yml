@@ -24,7 +24,7 @@ permissions:
 jobs:
   publish:
     name: Publish verified staged Preview
-    if: ${{ github.ref_name == 'main' }}
+    if: ${{ github.ref_name == 'release-main' }}
     runs-on: macos-15
     timeout-minutes: 20
     steps:
@@ -36,7 +36,7 @@ jobs:
           TRIGGER_REPOSITORY: ${{ github.repository }}
         run: |
           [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
-          test "$TRIGGER_REF_NAME" = main
+          test "$TRIGGER_REF_NAME" = release-main
           test "$TRIGGER_REF_TYPE" = branch
           test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
 

@@ -42,6 +42,7 @@ done
 package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
 stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
+ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
 
 /usr/bin/grep -Fq 'mode:' "$package_workflow"
 /usr/bin/grep -Fq 'expected_commit:' "$package_workflow"
@@ -49,7 +50,10 @@ stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
 /usr/bin/grep -Fq 'prepare-public-release-assets.sh' "$package_workflow"
 /usr/bin/grep -Fq 'mac-preview-payload-v' "$package_workflow"
 /usr/bin/grep -Fq 'mac-preview-stage-v' "$package_workflow"
-/usr/bin/grep -Fq 'swift test --filter BuildSigningTests' "$ROOT/.github/workflows/mac-ci.yml"
+/usr/bin/grep -Fq 'test "$TRIGGER_REF_NAME" = release-main' "$package_workflow"
+/usr/bin/grep -Fq 'origin/release-main' "$package_workflow"
+/usr/bin/grep -Fq 'branches: [main, release-main]' "$ci_workflow"
+/usr/bin/grep -Fq 'swift test --filter BuildSigningTests' "$ci_workflow"
 if /usr/bin/grep -Eq 'release_mode|expected_pipeline_digest|qualification|candidateBranch|requestId|gh release|git tag|contents:[[:space:]]*write' "$package_workflow"; then
   print -u2 "protected staging workflow still contains publication or legacy qualification state"
   exit 1
@@ -60,6 +64,7 @@ fi
 /usr/bin/grep -Fq 'publish-preview-release.sh' "$publication_workflow"
 /usr/bin/grep -Fq 'ref: ${{ github.sha }}' "$publication_workflow"
 /usr/bin/grep -Fq 'TRIGGER_REPOSITORY' "$publication_workflow"
+/usr/bin/grep -Fq "github.ref_name == 'release-main'" "$publication_workflow"
 if /usr/bin/grep -Eq 'environment:[[:space:]]*mac-release|secrets[.]|RELEASE_AGE_IDENTITY|MATCH|NOTARY|draft:' "$publication_workflow"; then
   print -u2 "Preview publication workflow contains protected Apple inputs"
   exit 1
@@ -70,6 +75,7 @@ fi
 /usr/bin/grep -Fq 'group: mac-stable-promotion' "$stable_workflow"
 /usr/bin/grep -Fq 'ref: ${{ github.sha }}' "$stable_workflow"
 /usr/bin/grep -Fq 'TRIGGER_REPOSITORY' "$stable_workflow"
+/usr/bin/grep -Fq "github.ref_name == 'release-main'" "$stable_workflow"
 if /usr/bin/grep -Eq 'package-macos|codesign|notary|xcrun stapler|upload-artifact|workflow_run' "$stable_workflow"; then
   print -u2 "Stable promotion workflow still rebuilds or uploads assets"
   exit 1
@@ -81,6 +87,12 @@ publication_source="$ROOT/scripts/publish-preview-release.sh"
 recovery_source="$ROOT/scripts/recover-preview-stage.sh"
 attestation_source="$ROOT/scripts/verify-preview-ui-attestation.sh"
 ui_prep_source="$ROOT/scripts/prepare-staged-preview-ui-test.sh"
+/usr/bin/grep -Fq -- '--ref release-main' "$ROOT/scripts/stage-macos-preview.sh"
+/usr/bin/grep -Fq -- '--branch release-main' "$ROOT/scripts/stage-macos-preview.sh"
+/usr/bin/grep -Fq -- '--ref release-main' "$ROOT/scripts/publish-staged-preview.sh"
+/usr/bin/grep -Fq 'origin/release-main' "$ROOT/scripts/promote-preview-release.sh"
+/usr/bin/grep -Fq '.head_branch == "release-main"' "$recovery_source"
+/usr/bin/grep -Fq '.head_branch == "release-main"' "$ui_prep_source"
 /usr/bin/grep -Fq 'verify-preview-ui-attestation.sh' "$publication_source"
 /usr/bin/grep -Fq 'stage-record/preview-stage-record.json' "$publication_source"
 /usr/bin/grep -Fq 'staging record artifact' "$recovery_source"
