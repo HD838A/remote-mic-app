@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Remote Mic Windows 设置改版预览</title>
+  <link rel="stylesheet" href="../../design-systems/remote-mic-product/tokens/colors_and_type.css" />
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #dde0e5;
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+    }
+    button, select, input { font: inherit; }
+    button { cursor: pointer; }
+    .window {
+      width: min(1180px, 100vw);
+      height: min(820px, 100vh);
+      display: grid;
+      grid-template-rows: 42px 1fr;
+      overflow: hidden;
+      background: var(--surface-secondary);
+      border: 1px solid rgba(0,0,0,.18);
+      border-radius: 12px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.24);
+    }
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-left: 14px;
+      background: var(--surface-primary);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 16px;
+    }
+    .window-actions { display: flex; height: 100%; }
+    .window-actions span { width: 46px; display: grid; place-items: center; }
+    .workspace { display: grid; grid-template-columns: 124px minmax(0, 1fr); min-height: 0; }
+    .sidebar {
+      padding: 12px;
+      background: var(--bg-nav);
+      border-right: 1px solid var(--border-subtle);
+      overflow-y: auto;
+    }
+    .brand { height: 48px; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+    .nav-button {
+      width: 100%;
+      min-height: 82px;
+      margin: 4px 0;
+      display: grid;
+      place-items: center;
+      gap: 4px;
+      border: 0;
+      border-radius: 14px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .nav-button:hover { background: rgba(10,132,255,.07); }
+    .nav-button.active { color: var(--accent-1); background: var(--selection-fill); }
+    .nav-icon { font-family: "Segoe Fluent Icons", "Segoe UI Symbol"; font-size: 24px; line-height: 1; }
+    .main { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto 1fr; }
+    .page-title { margin: 0; padding: 24px 28px 10px; font: var(--h1); }
+    .page { display: none; min-height: 0; overflow: auto; padding: 10px 28px 28px; }
+    .page.active { display: block; }
+    .grid-two { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; }
+    .card {
+      background: var(--surface-primary);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-card);
+      padding: 20px;
+      box-shadow: var(--shadow-card);
+    }
+    .card + .card { margin-top: 16px; }
+    h2 { margin: 0 0 4px; font: var(--h2); }
+    h3 { margin: 0; font-size: 16px; }
+    p { margin: 0; line-height: 1.5; }
+    .muted { color: var(--text-secondary); font: var(--caption); }
+    .device-card { text-align: center; }
+    .device-card img { width: 150px; height: 300px; object-fit: contain; margin: 12px auto; }
+    .status-list { margin-top: 6px; text-align: left; }
+    .status-row {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 0;
+      border-top: 1px solid var(--border-subtle);
+    }
+    .status-dot {
+      width: 28px; height: 28px; display: grid; place-items: center;
+      border-radius: 50%; background: var(--success-soft); color: var(--success-1); font-weight: 700;
+    }
+    .pill { padding: 4px 10px; border-radius: 999px; font-size: 16px; font-weight: 700; white-space: nowrap; }
+    .pill.success { color: var(--success-1); background: var(--success-soft); }
+    .pill.info { color: var(--accent-1); background: var(--selection-fill); }
+    .pill.neutral { background: #eeeeef; color: var(--text-primary); }
+    .settings-stack { display: grid; gap: 16px; }
+    .setting-row {
+      display: grid; grid-template-columns: 145px minmax(0, 1fr); align-items: center; gap: 14px;
+      padding: 11px 0; border-top: 1px solid var(--border-subtle);
+    }
+    .setting-row:first-of-type { border-top: 0; }
+    .field { min-height: 42px; padding: 9px 12px; border-radius: var(--radius-control); background: #f0f0f1; border: 1px solid transparent; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .btn { min-height: 38px; border: 0; border-radius: var(--radius-control); padding: 8px 14px; font-weight: 600; }
+    .btn.primary { color: #fff; background: var(--accent-1); }
+    .btn.secondary { color: var(--text-primary); background: #ededee; }
+    .bridge-banner {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px;
+      padding: 14px; margin-top: 12px; border-radius: 12px; background: var(--selection-fill);
+    }
+    .mapping-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+    .mapping-toolbar .summary { flex: 1; }
+    .mapping-grid { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; }
+    .remote-panel { min-height: 565px; text-align: center; }
+    .remote-wrap { position: relative; width: 165px; height: 405px; margin: 12px auto; }
+    .remote-wrap img { width: 100%; height: 100%; object-fit: contain; }
+    .hotspot { position: absolute; width: 54px; height: 36px; border: 2px solid var(--accent-1); border-radius: 50%; background: rgba(10,132,255,.18); left: 55px; top: 115px; }
+    .mapping-panel { min-height: 565px; }
+    .mapping-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; margin-top: 10px; }
+    .map-row {
+      display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+      min-height: 55px; border-bottom: 1px solid var(--border-subtle); padding: 6px 0;
+    }
+    .map-row.selected { margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 10px; background: var(--selection-fill); }
+    .map-row .field { min-height: 36px; padding: 6px 10px; white-space: normal; line-height: 1.35; }
+    .limited { color: var(--warning-1); font-size: 16px; font-weight: 700; }
+    .gesture-box { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+    .gesture-grid { display: grid; grid-template-columns: 80px 1fr 80px 1fr; align-items: center; gap: 10px; margin-top: 10px; }
+    .metric-switch { display: flex; gap: 10px; }
+    .metric-switch button { min-width: 96px; }
+    .metric-switch .active { background: var(--accent-1); color: #fff; }
+    .heatmap-card { margin-top: 16px; }
+    .heatmap-layout { display: grid; grid-template-columns: 58px minmax(0,1fr); gap: 10px; margin-top: 18px; }
+    .weekday-axis { display: grid; grid-template-rows: 23px repeat(7, 20px); row-gap: 5px; font-size: 16px; }
+    .weekday-axis span:first-child { visibility: hidden; }
+    .heatmap-scroll { min-width: 0; overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x proximity; scrollbar-gutter: stable; }
+    .year-track { display: flex; align-items: flex-start; gap: 30px; width: max-content; }
+    .month-block { flex: none; scroll-snap-align: start; }
+    .month-label { height: 28px; display: flex; align-items: flex-start; font-size: 16px; font-weight: 700; }
+    .month-grid { display: grid; grid-template-rows: repeat(7, 20px); grid-auto-flow: column; grid-auto-columns: 16px; gap: 5px; width: max-content; }
+    .cell { width: 16px; height: 20px; border-radius: 3px; background: var(--heatmapEmpty); border: 1px solid rgba(0,0,0,.04); }
+    .cell.outside { visibility: hidden; }
+    .cell.l1 { background: rgba(10,132,255,.25); }
+    .cell.l2 { background: rgba(10,132,255,.45); }
+    .cell.l3 { background: rgba(10,132,255,.68); }
+    .cell.l4 { background: rgba(10,132,255,.95); }
+    .legend { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 12px; font-size: 16px; }
+    .legend i { width: 14px; height: 14px; border-radius: 3px; display: block; }
+    .summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .summary-card strong { display: block; margin-top: 6px; color: var(--accent-1); font-size: 26px; }
+    .permission-card { padding: 0 20px; }
+    .permission-row {
+      display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 14px;
+      min-height: 92px; padding: 14px 0; border-top: 1px solid var(--border-subtle);
+    }
+    .permission-row:first-child { border-top: 0; }
+    .step { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-1); color: #fff; font-weight: 700; }
+    .permission-action { display: flex; align-items: center; gap: 10px; }
+    .note { margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: #f0f0f1; }
+    .unchanged { display: grid; place-items: center; min-height: 420px; text-align: center; }
+    @media (max-width: 880px) {
+      .window { height: 100vh; border-radius: 0; }
+      .grid-two, .mapping-grid { grid-template-columns: 1fr; }
+      .sidebar { padding: 8px; }
+      .workspace { grid-template-columns: 108px minmax(0,1fr); }
+      .mapping-list { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <span>Remote Mic 设置 · OpenDesign 预览</span>
+      <div class="window-actions" aria-label="Windows 窗口控件示意"><span>—</span><span>□</span><span>×</span></div>
+    </div>
+    <div class="workspace">
+      <aside class="sidebar">
+        <div class="brand">Remote Mic</div>
+        <button class="nav-button active" data-page="connection" data-title="连接与语音"><span class="nav-icon">&#xE71B;</span><span>连接</span></button>
+        <button class="nav-button" data-page="mapping" data-title="按键映射"><span class="nav-icon">&#xE765;</span><span>按键映射</span></button>
+        <button class="nav-button" data-page="statistics" data-title="使用统计"><span class="nav-icon">&#xE9D2;</span><span>统计</span></button>
+        <button class="nav-button" data-page="permissions" data-title="权限与系统"><span class="nav-icon">&#xE83D;</span><span>权限</span></button>
+        <button class="nav-button" data-page="diagnostics" data-title="检查与修复"><span class="nav-icon">&#xE90F;</span><span>检查</span></button>
+      </aside>
+      <main class="main">
+        <h1 class="page-title" id="page-title">连接与语音</h1>
+
+        <section class="page active" id="connection">
+          <div class="grid-two">
+            <article class="card device-card">
+              <h2>小米蓝牙遥控器 2 Pro</h2>
+              <p class="muted">当前设备</p>
+              <img src="../../../Resources/RC003-remote-photo.png" alt="RC003 遥控器" />
+              <div class="status-list">
+                <div class="status-row"><span class="status-dot">✓</span><div><h3>系统识别</h3><p class="muted">Raw Input 与蓝牙已就绪</p></div><span class="pill success">已就绪</span></div>
+                <div class="status-row"><span class="status-dot">▰</span><div><h3>遥控器电量</h3><p class="muted">来自 Windows 设备状态</p></div><span class="pill success">100%</span></div>
+                <div class="status-row"><span class="status-dot">●</span><div><h3>语音桥接</h3><p class="muted">千问（右 Alt）</p></div><span class="pill info">运行中</span></div>
+              </div>
+              <div class="buttons"><button class="btn primary">立即重新连接</button><button class="btn secondary">保存设备</button></div>
+            </article>
+
+            <div class="settings-stack">
+              <article class="card">
+                <h2>音频设置</h2>
+                <p class="muted">遥控器语音只写入所选虚拟音频设备，不改变 Windows 默认输入与输出。</p>
+                <div class="setting-row"><strong>语音输出</strong><div class="field">CABLE Input (VB-Audio Virtual Cable)</div></div>
+                <div class="setting-row"><strong>输出状态</strong><div><span class="pill success">设备可用</span> <span class="muted">CABLE Input 已解析</span></div></div>
+              </article>
+              <article class="card">
+                <h2>语音软件</h2>
+                <p class="muted">两个预设使用相同的按下点按开始、松开点按结束逻辑，只切换目标快捷键与必要适配。</p>
+                <div class="setting-row"><strong>语音软件预设</strong><div class="field">千问（点按：右 Alt）</div></div>
+                <div class="setting-row"><strong>语音组合键</strong><div class="field">ralt</div></div>
+                <div class="bridge-banner"><div><h3>当前生效预设</h3><p class="muted">千问（右 Alt） · 桥接进程正在运行</p></div><span class="pill success">已生效</span></div>
+                <div class="buttons"><button class="btn primary">保存并切换桥接</button><button class="btn secondary">打开日志目录</button></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="mapping">
+          <div class="mapping-toolbar">
+            <div class="summary"><h2>按键动作</h2><p class="muted">点击遥控器实物位置或右侧映射行进行定位，修改后手动保存。</p></div>
+            <button class="btn secondary">检测真实按键</button><button class="btn secondary">恢复默认</button><button class="btn primary">保存映射</button>
+          </div>
+          <div class="mapping-grid">
+            <article class="card remote-panel">
+              <h2>遥控器定位</h2><p class="muted">当前选中：确定键</p>
+              <div class="remote-wrap"><img src="../../../Resources/RC003-remote-photo.png" alt="RC003 遥控器" /><span class="hotspot" aria-hidden="true"></span></div>
+              <p class="muted">返回键与音量键是否可映射，以“检测真实按键”的实际结果为准。</p>
+            </article>
+            <article class="card mapping-panel">
+              <h2>实际按键映射</h2>
+              <div class="mapping-list">
+                <div class="map-row"><strong>电源键</strong><div class="field">系统休眠</div><span></span></div>
+                <div class="map-row"><strong>语音键</strong><div class="field">专用语音组合键</div><span></span></div>
+                <div class="map-row"><strong>上键</strong><div class="field">方向上</div><span></span></div>
+                <div class="map-row"><strong>返回键</strong><div class="field">Delete（退格）</div><span class="limited">待检测</span></div>
+                <div class="map-row"><strong>左键</strong><div class="field">方向左</div><span></span></div>
+                <div class="map-row"><strong>音量 +</strong><div class="field">系统音量 +</div><span class="limited">待检测</span></div>
+                <div class="map-row selected"><strong>确定键</strong><div class="field">Return</div><span></span></div>
+                <div class="map-row"><strong>主页键</strong><div class="field">显示桌面</div><span></span></div>
+                <div class="map-row"><strong>右键</strong><div class="field">方向右</div><span></span></div>
+                <div class="map-row"><strong>音量 −</strong><div class="field">系统音量 −</div><span class="limited">待检测</span></div>
+                <div class="map-row"><strong>下键</strong><div class="field">方向下</div><span></span></div>
+                <div class="map-row"><strong>菜单键</strong><div class="field">上下文菜单</div><span></span></div>
+                <div class="map-row"><strong>TV 键</strong><div class="field">打开应用</div><span></span></div>
+              </div>
+              <div class="gesture-box"><h3>确定键其他触发</h3><div class="gesture-grid"><span>双击</span><div class="field">未设置</div><span>长按</span><div class="field">未设置</div></div></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="statistics">
+          <div class="summary-cards">
+            <article class="card summary-card"><span class="muted">今日语音时长</span><strong>8 分 26 秒</strong></article>
+            <article class="card summary-card"><span class="muted">今日触发次数</span><strong>37 次</strong></article>
+            <article class="card summary-card"><span class="muted">过去一年活跃</span><strong>126 天</strong></article>
+          </div>
+          <article class="card heatmap-card">
+            <div style="display:flex;align-items:center;gap:16px"><div style="flex:1"><h2><span id="statistics-year">2026</span> 年使用</h2><p class="muted">横轴从 1 月到 12 月，可左右滑动；打开时当前月份自动位于最左侧。纵轴严格对应周一至周日，每个格子代表一天。</p></div><div class="metric-switch"><button class="btn active">语音时长</button><button class="btn secondary">触发次数</button></div></div>
+            <div class="heatmap-layout">
+              <div class="weekday-axis"><span>轴</span><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span></div>
+              <div class="heatmap-scroll" id="heatmap-scroll"><div class="year-track" id="year-track"></div></div>
+            </div>
+            <div class="legend"><span>少</span><i style="background:var(--heatmapEmpty)"></i><i style="background:rgba(10,132,255,.25)"></i><i style="background:rgba(10,132,255,.45)"></i><i style="background:rgba(10,132,255,.68)"></i><i style="background:rgba(10,132,255,.95)"></i><span>多</span></div>
+          </article>
+          <div class="note"><strong>隐私说明</strong><p class="muted">只保存每天累计的按键次数、语音会话次数和语音时长；不保存音频、转写文字、应用名称或设备标识。</p></div>
+        </section>
+
+        <section class="page" id="permissions">
+          <article class="card">
+            <h2>Windows 所需能力</h2><p class="muted">Windows 没有与 macOS“输入监控/辅助功能”完全对应的统一授权页，因此按真实使用边界分别说明。</p>
+          </article>
+          <article class="card permission-card">
+            <div class="permission-row"><span class="step">1</span><div><h3>蓝牙与设备连接</h3><p class="muted">RC003 必须先在 Windows 蓝牙设置中完成配对；软件据此读取蓝牙语音服务和设备状态。</p></div><div class="permission-action"><span class="pill success">已检测</span><button class="btn secondary">打开蓝牙设置</button></div></div>
+            <div class="permission-row"><span class="step">2</span><div><h3>语音软件的麦克风访问</h3><p class="muted">Typeless 或千问需要被 Windows 允许使用麦克风，并在软件内选择 CABLE Output。Remote Mic 本身不采集电脑麦克风。</p></div><div class="permission-action"><span class="pill neutral">由目标软件决定</span><button class="btn secondary">麦克风隐私设置</button></div></div>
+            <div class="permission-row"><span class="step">3</span><div><h3>管理员权限</h3><p class="muted">日常桥接不依赖管理员权限；仅安装 VB-CABLE、首次启用特定兼容适配或排障时可能需要。</p></div><div class="permission-action"><span class="pill success">日常无需</span></div></div>
+          </article>
+          <article class="card">
+            <h2>诊断与隐私</h2><div class="setting-row"><div><strong>应用日志</strong><p class="muted">日志不记录语音内容、蓝牙地址或设备路径。</p></div><div class="buttons"><button class="btn secondary">打开日志目录</button><button class="btn secondary">前往检查与修复</button></div></div>
+          </article>
+        </section>
+
+        <section class="page" id="diagnostics">
+          <article class="card">
+            <div style="display:flex;align-items:center;gap:16px"><div style="flex:1"><h2>系统检查</h2><p class="muted">检查设备、按键、蓝牙与语音链路。结果只代表对应项目，不用“进程运行”冒充“设备已连接”。</p></div><button class="btn primary">重新检测</button></div>
+          </article>
+          <article class="card permission-card">
+            <div class="permission-row"><span class="step">1</span><div><h3>Windows 与设备输入</h3><p class="muted">64 位系统、RC003 Raw Input、已配对蓝牙候选与电量属性。</p></div><div class="permission-action"><span class="pill success">4 项通过</span><button class="btn secondary">查看详情</button></div></div>
+            <div class="permission-row"><span class="step">2</span><div><h3>虚拟音频链路</h3><p class="muted">VB-CABLE 播放/录音端点与当前语音输出设备是否可以精确解析。</p></div><div class="permission-action"><span class="pill success">已就绪</span><button class="btn secondary">选择 CABLE Input</button></div></div>
+            <div class="permission-row"><span class="step">3</span><div><h3>目标语音软件</h3><p class="muted">Typeless 或千问的窗口、麦克风选择和文字提交需要人工验证，自动检查不会伪造结论。</p></div><div class="permission-action"><span class="pill neutral">手动确认</span></div></div>
+          </article>
+          <article class="card">
+            <h2>修复工具</h2>
+            <div class="setting-row"><div><strong>VB-CABLE</strong><p class="muted">仅在系统未安装虚拟音频端点时使用；安装会触发 Windows 管理员确认。</p></div><div class="buttons"><button class="btn secondary">打开安装说明</button><button class="btn secondary">安装 VB-CABLE</button></div></div>
+            <div class="setting-row"><div><strong>诊断日志</strong><p class="muted">用于确认实际连接、按键与语音状态，不记录语音内容或设备标识。</p></div><div class="buttons"><button class="btn secondary">打开日志目录</button></div></div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script>
+    const navButtons = [...document.querySelectorAll('.nav-button')];
+    const pages = [...document.querySelectorAll('.page')];
+    navButtons.forEach((button) => button.addEventListener('click', () => {
+      navButtons.forEach((item) => item.classList.toggle('active', item === button));
+      pages.forEach((page) => page.classList.toggle('active', page.id === button.dataset.page));
+      document.getElementById('page-title').textContent = button.dataset.title;
+    }));
+
+    const yearTrack = document.getElementById('year-track');
+    const heatmapScroll = document.getElementById('heatmap-scroll');
+    const previewDate = new Date();
+    const previewYear = previewDate.getFullYear();
+    const currentMonthIndex = previewDate.getMonth();
+    document.getElementById('statistics-year').textContent = String(previewYear);
+    for (let month = 0; month < 12; month += 1) {
+      const firstDay = new Date(previewYear, month, 1);
+      const daysInMonth = new Date(previewYear, month + 1, 0).getDate();
+      const mondayOffset = (firstDay.getDay() + 6) % 7;
+      const weekCount = Math.ceil((mondayOffset + daysInMonth) / 7);
+      const block = document.createElement('section');
+      block.className = 'month-block';
+      block.dataset.month = String(month);
+      const title = document.createElement('div');
+      title.className = 'month-label';
+      title.textContent = `${month + 1} 月`;
+      const grid = document.createElement('div');
+      grid.className = 'month-grid';
+      for (let slot = 0; slot < weekCount * 7; slot += 1) {
+        const dayNumber = slot - mondayOffset + 1;
+        const cell = document.createElement('span');
+        if (dayNumber < 1 || dayNumber > daysInMonth) {
+          cell.className = 'cell outside';
+        } else {
+          const seed = (month * 23 + dayNumber * 11) % 13;
+          const level = month > currentMonthIndex ? 0 : seed < 5 ? 0 : seed < 8 ? 1 : seed < 10 ? 2 : seed < 12 ? 3 : 4;
+          cell.className = `cell ${level ? `l${level}` : ''}`;
+          cell.title = `${previewYear}-${String(month + 1).padStart(2,'0')}-${String(dayNumber).padStart(2,'0')}`;
+        }
+        grid.appendChild(cell);
+      }
+      block.append(title, grid);
+      yearTrack.appendChild(block);
+    }
+    function alignCurrentMonthToLeft() {
+      const current = yearTrack.querySelector(`[data-month="${currentMonthIndex}"]`);
+      yearTrack.style.paddingRight = `${Math.max(0, heatmapScroll.clientWidth - current.offsetWidth)}px`;
+      heatmapScroll.scrollLeft = current.offsetLeft - yearTrack.offsetLeft;
+    }
+    requestAnimationFrame(alignCurrentMonthToLeft);
+    navButtons.find((button) => button.dataset.page === 'statistics').addEventListener('click', () => requestAnimationFrame(alignCurrentMonthToLeft));
+    window.addEventListener('resize', () => requestAnimationFrame(alignCurrentMonthToLeft));
+  </script>
+</body>
+</html>

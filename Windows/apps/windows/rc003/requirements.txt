@@ -1,0 +1,71 @@
+# Runtime dependencies for the Remote Mic · RC003 Windows client.
+#
+# All of these are optional at import time within ovb_rc003 (every module
+# that needs one guards the import and raises a clear "*Unavailable* error
+# instead of failing to import) - this lets the package's cross-platform
+# pure-logic modules and their tests can run on non-Windows hosts without any of
+# these installed. They are required to actually run the app on Windows.
+
+sounddevice==0.5.5
+numpy==2.4.3
+
+# Qt Quick/QML settings window (XRBM-030), replacing the earlier Tk view.
+# PySide6-Essentials is the official Qt-for-Python distribution split that
+# excludes the (separately packaged, heavier) PySide6-Addons modules this
+# project does not use. Per Qt's own documentation, the Qt for Python
+# community edition (what both packages are) is available under open-source
+# terms (LGPLv3, with some modules under GPLv3) or a separate commercial Qt
+# license; this project installs only the open-source community edition
+# from PyPI, under no commercial license - see THIRD_PARTY_NOTICES.md for
+# the full notice. Only settings_ui.py's ``main()``/qt_settings_app.py
+# import PySide6 at all, and only lazily inside a function body (see
+# qt_settings_app.py's module docstring) - importing any other module in
+# this package, or running ``--dry-run``, never requires it. The frozen
+# PyInstaller build always bundles its own Qt runtime (see
+# build/RemoteMicRC003.spec), so end users of a packaged release never
+# need to separately install this themselves.
+PySide6-Essentials==6.11.1
+
+# WinRT projections for BLE GATT (Bluetooth Low Energy Generic Attribute
+# Profile) access to the RC003's ATVV voice service.
+#
+# Foundation and Foundation.Collections (XRBM-024): the official 3.2.1
+# wheels for Devices.Bluetooth/Bluetooth.GenericAttributeProfile/
+# Devices.Enumeration/Storage.Streams above declare winrt-runtime as their
+# only BASE dependency - winrt-Windows.Foundation[all] and
+# winrt-Windows.Foundation.Collections[all] are declared only as an "all"
+# EXTRA, which this project deliberately does not pull (see below). But the
+# call surface those base packages actually return at runtime does need
+# both: DeviceInformation.find_all_async_aqs_filter() returns a
+# Windows.Foundation.IAsyncOperation, and iterating the resulting
+# DeviceInformationCollection uses a Windows.Foundation.Collections
+# IIterator (see ble_transport_winrt.py's discover_candidates()). Without
+# these two exact pins, that call raises
+# "ModuleNotFoundError: No module named 'winrt.windows.foundation'" the
+# first time discover_candidates() actually awaits it - passing every
+# source-level test but crashing at first real BLE use (XRBM-024 red
+# evidence, real Windows Actions run 29643131337).
+#
+# Pinned as plain base packages, NOT the "[all]" extra: "[all]" would pull
+# in every other namespace those packages' own "all" extras reference
+# (ApplicationModel.Background, Security.Credentials, UI, UI.Popups, Storage,
+# System, Networking, Radios, Rfcomm, ...) - none of which
+# ble_transport_winrt.py uses. Only the two exact projections this module's
+# real call surface needs are added.
+winrt-runtime==3.2.1
+winrt-Windows.Devices.Bluetooth==3.2.1
+winrt-Windows.Devices.Bluetooth.GenericAttributeProfile==3.2.1
+winrt-Windows.Devices.Enumeration==3.2.1
+winrt-Windows.Storage.Streams==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1
+
+# Doubao voice acceptance (XRBM-037): attaches to the verified ImeService
+# low-level callback and removes only this bridge's injected marker. The app
+# remains import-safe without it, but a Windows voice build must install it.
+frida==17.15.3
+
+# Button input (raw_input_windows.py) and key injection (win32_input.py) use
+# only the standard library's ctypes against user32.dll/kernel32.dll - no
+# extra package needed. (The earlier hidapi-based adapter was removed after
+# XRBM-014 review RETRY P1 #5; see ATTRIBUTION.md.)

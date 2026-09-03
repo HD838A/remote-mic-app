@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "dji-mic-2",
+  "displayName": "DJI Mic 2",
+  "vendor": "DJI",
+  "model": "DMT02 / DMR02",
+  "support": {
+    "status": "research",
+    "notes": "Windows settings can select DJI Mic 2 and report a real recording endpoint; continuous recording and transmitter-control mapping are not accepted on real hardware."
+  },
+  "identity": {
+    "bluetoothNamePrefixes": [
+      "DJI-MIC2",
+      "DJI Mic 2"
+    ],
+    "audioInputNamePrefixes": [
+      "DJI-MIC2",
+      "DJI Mic 2"
+    ]
+  },
+  "transports": [
+    {
+      "kind": "usb-digital-audio",
+      "role": "voice-input",
+      "status": "research",
+      "notes": "DJI officially documents connecting the receiver to a computer by USB-C; endpoint behavior is verified from Windows audio enumeration."
+    },
+    {
+      "kind": "bluetooth-br-edr-audio",
+      "role": "voice-input",
+      "status": "planned",
+      "notes": "Windows HFP recording availability depends on device state and is verified by the audio-input endpoint."
+    }
+  ],
+  "capabilities": [
+    "voice-capture",
+    "gain-control",
+    "channel-selection",
+    "device-status"
+  ],
+  "protocols": [
+    {
+      "id": "dji-device-specific-audio-and-control",
+      "status": "research",
+      "notes": "No undocumented Bluetooth or control protocol is claimed or implemented."
+    }
+  ],
+  "platforms": [
+    {
+      "platform": "windows",
+      "status": "planned",
+      "notes": "Windows Bluetooth HFP identity and recording endpoints are confirmed on real hardware; continuous recording and physical-control acceptance remain pending."
+    }
+  ],
+  "sources": [
+    "https://www.dji.com/mic-2/specs",
+    "https://www.dji.com/mic-2/faq",
+    "https://dl.djicdn.com/downloads/DJI_Mic_2/UM/DJI_Mic_2_User_Manual__V1.0_EN.pdf",
+    "https://www.dji.com/osmo-pocket-3/specs"
+  ]
+}

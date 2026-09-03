@@ -1,0 +1,83 @@
+{
+  "generated": "2026-08-23T17:29:46+08:00",
+  "sections": [
+    {
+      "id": "mockups",
+      "label": "Mockups",
+      "groups": [
+        {
+          "slug": "remote-mic-windows",
+          "files": [
+            {
+              "label": "mac-inspired-settings.html",
+              "path": "mockups/remote-mic-windows/mac-inspired-settings.html"
+            },
+            {
+              "label": "settings-four-pages-preview.html",
+              "path": "mockups/remote-mic-windows/settings-four-pages-preview.html"
+            },
+            {
+              "label": "usage-heatmap.html",
+              "path": "mockups/remote-mic-windows/usage-heatmap.html"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "design-systems",
+      "label": "Design Systems",
+      "groups": [
+        {
+          "slug": "remote-mic-product",
+          "files": [
+            {
+              "label": "RemoteMic-AppIcon.png",
+              "path": "design-systems/remote-mic-product/assets/icons/RemoteMic-AppIcon.png"
+            },
+            {
+              "label": "RemoteMic-AppIcon.svg",
+              "path": "design-systems/remote-mic-product/assets/icons/RemoteMic-AppIcon.svg"
+            },
+            {
+              "label": "RC003-remote-photo.png",
+              "path": "design-systems/remote-mic-product/assets/imagery/RC003-remote-photo.png"
+            },
+            {
+              "label": "style-notes.md",
+              "path": "design-systems/remote-mic-product/brand/style-notes.md"
+            },
+            {
+              "label": "voice-and-tone.md",
+              "path": "design-systems/remote-mic-product/brand/voice-and-tone.md"
+            },
+            {
+              "label": "README.md",
+              "path": "design-systems/remote-mic-product/README.md"
+            },
+            {
+              "label": "SKILL.md",
+              "path": "design-systems/remote-mic-product/SKILL.md"
+            },
+            {
+              "label": "colors_and_type.css",
+              "path": "design-systems/remote-mic-product/tokens/colors_and_type.css"
+            },
+            {
+              "label": "SidebarItem.jsx",
+              "path": "design-systems/remote-mic-product/ui-kit-windows/components/SidebarItem.jsx"
+            },
+            {
+              "label": "StatusCard.jsx",
+              "path": "design-systems/remote-mic-product/ui-kit-windows/components/StatusCard.jsx"
+            },
+            {
+              "label": "UI kit",
+              "path": "design-systems/remote-mic-product/ui-kit-windows/index.html"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -88,7 +88,7 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 `Remote-Mic-<版本>-Intel.dmg`，两者不能混用。
 
-Windows 与 Mac 单独构建和发布。当前仅提供面向小米蓝牙遥控器 2 Pro 的 [Windows 小米蓝牙遥控器 2 Pro Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，它是未签名、尚未由主项目维护者独立真机复验的社区预览版，不进入 Mac 的 Sparkle 更新序列。下载前请阅读 Release 中的权限、杀毒软件和虚拟音频设备提示，并使用 `SHA256SUMS.txt` 校验文件。
+Windows 与 Mac 单独构建和发布。仓库中的 [`Windows/`](Windows/) 是一套独立维护的 Windows RC003 实现，包含自己的源码、测试、构建与安装流程，不依赖 Mac 源码，也不是旧 Community Preview 或 PR #3 的代码延续。历史的 [Windows 小米蓝牙遥控器 2 Pro Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview) 仍仅作为旧的未签名社区预览保留；它与当前 `Windows/` 源码和后续制品必须分别验证、分别发布。
 
 打开 DMG 后只需双击唯一的 `Install Remote Mic.pkg`；Intel Mac 使用 `Install Remote Mic Intel.pkg`。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
