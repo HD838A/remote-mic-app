@@ -30,6 +30,9 @@
 "voice_button.status.left_command_released" = "左 Command 已释放";
 "voice_button.status.right_command_pressed" = "右 Command 已按下；松开语音键即释放";
 "voice_button.status.right_command_released" = "右 Command 已释放";
+"voice_button.status.right_option_enabled" = "遥控器语音键将按住右 Option";
+"voice_button.status.right_option_pressed" = "右 Option 已按下；松开语音键即释放";
+"voice_button.status.right_option_released" = "右 Option 已释放";
 "voice_button.status.waiting_for_input" = "正在等待目标输入位置准备完成";
 "voice_button.status.input_ready" = "目标输入位置已准备完成";
 "voice_button.status.input_unavailable" = "目标输入位置未准备完成，已取消本次语音输入";
@@ -224,10 +227,11 @@
 "connection.voice_key.mode.fn" = "Fn/地球键";
 "connection.voice_key.mode.left_command" = "左 Command";
 "connection.voice_key.mode.right_command" = "右 Command";
-"connection.voice_key_mode.help" = "默认使用 Fn/地球键。Command 模式需要辅助功能权限，并要求目标语音应用支持对应的单独左或右 Command 长按；许多应用会把左右 Command 合并为通用 Command。长按期间按其他键可能触发 Command 快捷键。";
-"connection.voice_key_mode.unverified" = "Command 模式尚未验证";
-"connection.voice_key_mode.unverified_detail" = "请在目标语音工具中同步配置相同的左/右 Command 并实际说一句确认文字上屏。无线麦无法读取第三方工具的内部设置；如果没有文字，请改回 Fn/地球键。";
-"connection.voice_key_mode.command_permission" = "Command 模式需要辅助功能权限";
+"connection.voice_key.mode.right_option" = "右 Option（⌥）";
+"connection.voice_key_mode.help" = "默认使用 Fn/地球键。Command 与右 Option 模式需要辅助功能权限，并要求目标语音应用支持对应的单独按键长按；许多应用会把左右同侧按键合并为通用修饰键。长按期间按其他键可能触发修饰键快捷键。";
+"connection.voice_key_mode.unverified" = "修饰键模式尚未验证";
+"connection.voice_key_mode.unverified_detail" = "请在目标语音工具中同步配置相同的触发键（左/右 Command 或右 Option）并实际说一句确认文字上屏。无线麦无法读取第三方工具的内部设置；如果没有文字，请改回 Fn/地球键。";
+"connection.voice_key_mode.command_permission" = "修饰键模式需要辅助功能权限";
 "connection.action.reconnect" = "立即重新连接";
 "connection.phone.section_title" = "iPhone、Apple Watch 与网页版";
 "connection.phone.ios_title" = "iOS App（推荐）";
