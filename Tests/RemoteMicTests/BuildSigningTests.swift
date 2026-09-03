@@ -167,8 +167,10 @@ struct BuildSigningTests {
             encoding: .utf8
         )
 
-        #expect(source.contains("resolved=false fallback=none"))
+        #expect(source.contains("source=cloudflare_channel"))
+        #expect(source.contains(#"source=\(testFeed == nil ? "cloudflare_channel" : "ui_test")"#))
         #expect(source.contains("user_alert=false"))
+        #expect(!source.contains("api.github.com/repos/HD838A/remote-mic-app/releases"))
         #expect(!source.contains("showPreReleaseFeedUnavailableAlert"))
     }
 
@@ -241,7 +243,9 @@ struct BuildSigningTests {
         #expect(!publicationSource.contains("--arg publishedAt \"$(/bin/date"))
         #expect(publicationSource.contains("verify-preview-ui-attestation.sh"))
         #expect(publicationSource.contains("HD838A/remote-mic-app"))
+        #expect(publicationSource.contains("/mac/channels/$channel/$appcast"))
         #expect(promotionSource.contains("--prerelease=false"))
+        #expect(promotionSource.contains("/mac/channels/stable/$appcast"))
         #expect(promotionSource.contains("candidate-provenance.json"))
         #expect(promotionSource.contains("needs_promotion=0"))
         #expect(promotionSource.contains("already Stable"))
@@ -394,6 +398,12 @@ struct BuildSigningTests {
         #expect(variantSource.contains("RELEASE_OUTPUT_DIR=\"$ROOT/dist/intel\""))
         #expect(variantSource.contains("RELEASE_APPCAST_NAME=\"appcast-intel.xml\""))
         #expect(variantSource.contains("RELEASE_ASSET_SUFFIX=\"-Intel\""))
+        #expect(variantSource.contains(
+            "https://download.sayall.app/mac/channels/stable/appcast.xml"
+        ))
+        #expect(variantSource.contains(
+            "https://download.sayall.app/mac/channels/stable/appcast-intel.xml"
+        ))
 
         #expect(workflowSource.contains("RELEASE_VARIANT: ${{ matrix.variant }}"))
         #expect(workflowSource.contains("x86_64-apple-macosx13.0"))

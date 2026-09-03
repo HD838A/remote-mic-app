@@ -2815,31 +2815,25 @@ struct RemoteButtonsTests {
         #expect(restored.customApplicationProfile(id: profile.id) == profile)
     }
 
-    @Test func preReleaseUpdateFeedAlwaysFallsBackToStableFeed() throws {
-        let stableFeed = "https://example.com/releases/latest/download/appcast.xml"
-        let preReleaseFeed = try #require(
-            URL(string: "https://example.com/releases/download/v1.7.3/appcast.xml")
+    @Test func preReleaseUpdateFeedUsesTheCloudflarePreviewChannel() {
+        let selection = UpdateFeedSelection(
+            stableFeedURLString: "https://download.sayall.app/mac/channels/stable/appcast.xml"
         )
-        var selection = UpdateFeedSelection(stableFeedURLString: stableFeed)
 
-        selection.usePreReleaseFeed(preReleaseFeed)
-        #expect(
-            selection.feedURLString(checksForPreReleaseUpdates: true)
-                == preReleaseFeed.absoluteString
-        )
-        #expect(selection.feedURLString(checksForPreReleaseUpdates: false) == stableFeed)
-
-        selection.useStableFeed()
-        #expect(selection.feedURLString(checksForPreReleaseUpdates: true) == stableFeed)
-        #expect(selection.feedURLString(checksForPreReleaseUpdates: false) == stableFeed)
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: true)
+            == "https://download.sayall.app/mac/channels/preview/appcast.xml")
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: false)
+            == "https://download.sayall.app/mac/channels/stable/appcast.xml")
     }
 
     @Test func intelUpdateSelectionUsesTheIntelAppcastNameForPreReleaseResolution() {
         let selection = UpdateFeedSelection(
-            stableFeedURLString: "https://example.com/releases/latest/download/appcast-intel.xml"
+            stableFeedURLString: "https://download.sayall.app/mac/channels/stable/appcast-intel.xml"
         )
 
         #expect(selection.appcastAssetName == "appcast-intel.xml")
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: true)
+            == "https://download.sayall.app/mac/channels/preview/appcast-intel.xml")
     }
 
     @Test func secondaryTriggerActionsPersistAndResetWithoutChangingSingleClick() throws {

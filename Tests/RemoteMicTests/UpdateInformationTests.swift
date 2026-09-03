@@ -53,138 +53,43 @@ struct UpdateInformationTests {
         ) == nil)
     }
 
-    @Test func releaseFeedResolverUsesNewestPublishedMacAppcast() throws {
-        let data = Data(#"""
-        [
-          {
-            "draft": false,
-            "published_at": "2026-08-10T04:26:12Z",
-            "assets": [
-              {
-                "name": "appcast.xml",
-                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.3/appcast.xml"
-              }
-            ]
-          },
-          {
-            "draft": true,
-            "published_at": "2026-08-10T12:00:00Z",
-            "assets": [
-              {
-                "name": "appcast.xml",
-                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/appcast.xml"
-              }
-            ]
-          },
-          {
-            "draft": false,
-            "published_at": "2026-08-10T10:00:20Z",
-            "assets": [
-              {
-                "name": "Remote-Mic-1.8.5.zip",
-                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.5/Remote-Mic-1.8.5.zip"
-              },
-              {
-                "name": "appcast.xml",
-                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.5/appcast.xml"
-              }
-            ]
-          }
-        ]
-        """#.utf8)
-
-        #expect(
-            try UpdateFeedResolver.latestAppcastURL(from: data).absoluteString
-                == "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.5/appcast.xml"
+    @Test func cloudflareChannelSelectionSeparatesStableAndPreviewFeeds() {
+        let selection = UpdateFeedSelection(
+            stableFeedURLString: "https://download.sayall.app/mac/channels/stable/appcast.xml"
         )
+
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: false)
+            == "https://download.sayall.app/mac/channels/stable/appcast.xml")
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: true)
+            == "https://download.sayall.app/mac/channels/preview/appcast.xml")
     }
 
-    @Test func releaseFeedResolverFailsClosedWhenNoAppcastExists() {
-        let data = Data(#"""
-        [
-          {
-            "draft": false,
-            "published_at": "2026-08-10T10:00:20Z",
-            "assets": []
-          }
-        ]
-        """#.utf8)
+    @Test func cloudflareChannelSelectionKeepsIntelOnIntelFeed() {
+        let selection = UpdateFeedSelection(
+            stableFeedURLString: "https://download.sayall.app/mac/channels/stable/appcast-intel.xml"
+        )
 
-        #expect(throws: UpdateFeedResolutionError.self) {
-            try UpdateFeedResolver.latestAppcastURL(from: data)
+        #expect(selection.appcastAssetName == "appcast-intel.xml")
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: false)
+            == "https://download.sayall.app/mac/channels/stable/appcast-intel.xml")
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: true)
+            == "https://download.sayall.app/mac/channels/preview/appcast-intel.xml")
+    }
+
+    @Test func cloudflareChannelSelectionRejectsUnexpectedStableFeedURLs() {
+        let invalidFeeds = [
+            "http://download.sayall.app/mac/channels/stable/appcast.xml",
+            "https://github.com/HD838A/remote-mic-app/releases/latest/download/appcast.xml",
+            "https://download.sayall.app/mac/channels/stable/other.xml",
+            "https://download.sayall.app/mac/channels/stable/nested/appcast.xml",
+            "https://download.sayall.app/mac/channels/stable/appcast.xml?source=test",
+        ]
+
+        for invalidFeed in invalidFeeds {
+            let selection = UpdateFeedSelection(stableFeedURLString: invalidFeed)
+            #expect(selection.feedURLString(checksForPreReleaseUpdates: false) == nil)
+            #expect(selection.feedURLString(checksForPreReleaseUpdates: true) == nil)
         }
-    }
-
-    @Test func releaseFeedResolverKeepsIntelPreReleaseChecksOnTheIntelFeed() throws {
-        let data = Data(#"""
-        [
-          {
-            "draft": false,
-            "published_at": "2026-08-12T01:00:00Z",
-            "assets": [
-              {
-                "name": "appcast.xml",
-                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.11/appcast.xml"
-              },
-              {
-                "name": "appcast-intel.xml",
-                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.11/appcast-intel.xml"
-              }
-            ]
-          }
-        ]
-        """#.utf8)
-
-        #expect(
-            try UpdateFeedResolver.latestAppcastURL(
-                from: data,
-                assetName: "appcast-intel.xml"
-            ).lastPathComponent == "appcast-intel.xml"
-        )
-    }
-
-    @Test func releaseFeedResolverSeparatesStableAndPreReleaseVersions() throws {
-        let data = Data(#"""
-        [
-          {
-            "draft": false,
-            "prerelease": true,
-            "tag_name": "v1.8.20",
-            "published_at": "2026-08-14T03:40:24Z",
-            "assets": [
-              {
-                "name": "appcast.xml",
-                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.20/appcast.xml"
-              }
-            ]
-          },
-          {
-            "draft": false,
-            "prerelease": false,
-            "tag_name": "v1.8.3",
-            "published_at": "2026-08-10T04:26:12Z",
-            "assets": [
-              {
-                "name": "appcast.xml",
-                "browser_download_url": "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.3/appcast.xml"
-              }
-            ]
-          }
-        ]
-        """#.utf8)
-
-        let stable = try UpdateFeedResolver.latestFeed(
-            from: data,
-            includePreRelease: false
-        )
-        let preview = try UpdateFeedResolver.latestFeed(
-            from: data,
-            includePreRelease: true
-        )
-        #expect(stable.version == "1.8.3")
-        #expect(preview.version == "1.8.20")
-        #expect(!UpdateVersion.isNewer(stable.version, than: "1.8.19"))
-        #expect(UpdateVersion.isNewer(preview.version, than: "1.8.19"))
     }
 
     @Test func updateVersionComparisonTreatsEqualAndOlderVersionsAsNotNewer() {
