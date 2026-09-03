@@ -14,7 +14,9 @@
 Sparkle 路径不经过动态 `/mac`：
 
 ```text
-GitHub stable / pre-release appcast
+https://download.sayall.app/mac/channels/<stable|preview>/<appcast>
+  → Cloudflare 边缘解析并短时缓存 GitHub Releases 列表
+  → /mac/releases/<tag>/<appcast>
   → https://download.sayall.app/mac/releases/<tag>/Remote-Mic-<version>.zip
   → Cloudflare Worker
   → GitHub Releases 固定标签 ZIP
@@ -25,7 +27,7 @@ GitHub stable / pre-release appcast
 ## 涉及文件
 
 - `scripts/notarize-release.sh`：生成 CDN enclosure 与更新说明 URL。
-- `scripts/publish-preview-release.sh`：从已验证 staging artifact 发布 GitHub Pre-release，并增加 CDN 全资产字节回验。
+- `scripts/publish-preview-release.sh`：从已验证 staging artifact 发布 GitHub Pre-release，并增加 CDN 全资产及 stable/preview appcast 通道字节回验。
 - `Tests/RemoteMicTests/BuildSigningTests.swift`：锁定 CDN URL、发布回验和旧 feed 边界。
 - `README.md`、`README.en.md`：提供固定正式版下载入口和 GitHub 回退。
 - `TECHNICAL.md`、`TECHNICAL.en.md`：记录 GitHub feed 与 CDN enclosure 的职责边界。
@@ -34,10 +36,11 @@ GitHub stable / pre-release appcast
 
 ## 发布顺序
 
-必须先部署并验证 Worker，再发布带 CDN enclosure 的 Preview。GitHub 固定标签资产不存在时，Worker 应返回 404；publication workflow 只有在 GitHub 资产和 CDN 字节均验证后才报告成功。
+必须先部署并验证 Worker，再发布带 CDN enclosure 的 Preview。GitHub 固定标签资产不存在时，Worker 应返回 404；publication workflow 只有在 GitHub、CDN 固定资产、preview 通道候选字节和 stable 通道正式版字节均验证后才报告成功。
 
 ## 已知限制
 
 - 第一次访问尚未缓存的版本文件仍需要 GitHub 源站可用。
+- appcast 通道解析仍依赖 Cloudflare 边缘访问公开 GitHub Releases API，但 60 秒缓存由所有客户端共享，不再消耗每台设备的未认证额度。
 - Cloudflare 缓存提升下载稳定性，但不能替代 GitHub Release 的不可变资产和版本治理。
 - 固定 `/mac` 依赖 GitHub `releases/latest` 的重定向语义；测试必须确认它只解析正式版。

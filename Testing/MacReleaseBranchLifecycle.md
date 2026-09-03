@@ -45,7 +45,7 @@
 
 1. 使用 prepare-staged-preview-ui-test.sh 恢复指定 Run/attempt/artifact。
 2. 从当前 `releases/latest` 下载并验证稳定基线。
-3. 启动脚本输出的本地 feed，并使用输出的 `REMOTE_MIC_UI_TEST_MODE=1`、`REMOTE_MIC_UI_TEST_FEED_URL` 和 `REMOTE_MIC_UI_TEST_VERSION` 环境变量直接运行稳定 App；稳定 App 真实执行 check、download、install、首次启动、退出、二次启动。该环境变量只接受 `127.0.0.1` 的 HTTP appcast，默认更新路径仍使用 GitHub Releases API。
+3. 启动脚本输出的本地 feed，并使用输出的 `REMOTE_MIC_UI_TEST_MODE=1`、`REMOTE_MIC_UI_TEST_FEED_URL` 和 `REMOTE_MIC_UI_TEST_VERSION` 环境变量直接运行稳定 App；稳定 App 真实执行 check、download、install、首次启动、退出、二次启动。该环境变量只接受 `127.0.0.1` 的 HTTP appcast，生产默认路径使用 Cloudflare stable/preview 通道。
 4. 使用 record-preview-ui-attestation.sh 和 verify-preview-ui-attestation.sh。
 
 预期：attestation 绑定 source SHA、artifact ID/digest、manifest、两份 appcast、候选 ZIP、安装后版本/Build、Team ID、公证、Gatekeeper、Sparkle helper 0755/链接和无新增崩溃。只运行 probe 或单元测试不能通过。
@@ -56,7 +56,7 @@
 2. 注入一次 GitHub 上传或 CDN 验证失败。
 3. 用同一 attestation 重试。
 
-预期：publication workflow 不读取 Apple 凭据；首次创建或复用 exact Tag 和 Pre-release，只上传缺失且摘要匹配的 11 项 payload 与 provenance。重试不重签、不升版本、不创建新分支；已有不同字节时 fail closed。
+预期：publication workflow 不读取 Apple 凭据；首次创建或复用 exact Tag 和 Pre-release，只上传缺失且摘要匹配的 11 项 payload 与 provenance。发布后等待 Cloudflare 缓存传播，preview 两架构通道必须与新候选 appcast 一致，stable 两架构通道必须仍与发布前后同一个正式 Tag 一致。重试不重签、不升版本、不创建新分支；已有不同字节时 fail closed。
 
 ## 用例 6：Stable 只改分类
 
@@ -64,7 +64,7 @@
 2. 运行 promote-preview-release.sh。
 3. 比较晋升前后的全部资产名称、大小和 digest。
 
-预期：确认 Tag Commit 已进入 `origin/release-main`，并通过 GitHub API 核对 provenance 对应的成功 protected Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变。
+预期：确认 Tag Commit 已进入 `origin/release-main`，并通过 GitHub API 核对 provenance 对应的成功 protected Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变，并等待 Cloudflare stable 两架构通道逐字节切换到该 Tag。
 
 失败判定：选择 Draft/不存在的 Release、Tag 未进入 `release-main`、触发构建/签名/上传或替换资产。
 

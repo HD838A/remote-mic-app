@@ -371,6 +371,21 @@ for appcast in appcast.xml appcast-intel.xml; do
     echo "Latest stable appcast differs from the promoted candidate: $appcast" >&2
     exit 1
   }
+  channel_matches=0
+  for attempt in {1..20}; do
+    if /usr/bin/curl --fail --silent --show-error --location \
+        "https://download.sayall.app/mac/channels/stable/$appcast" \
+        --output "$work_dir/stable-channel-$appcast" && \
+       /usr/bin/cmp -s "$work_dir/fixed-$appcast" "$work_dir/stable-channel-$appcast"; then
+      channel_matches=1
+      break
+    fi
+    (( attempt < 20 )) && /bin/sleep 6
+  done
+  [[ "$channel_matches" -eq 1 ]] || {
+    echo "Cloudflare stable channel differs from the promoted candidate: $appcast" >&2
+    exit 1
+  }
 done
 
 echo "STABLE PROMOTION PASS"

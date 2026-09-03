@@ -17,42 +17,6 @@ enum UpdateInformationState: Equatable {
 
 enum UpdateFeedResolutionError: Error {
     case invalidResponse
-    case feedNotFound
-}
-
-struct GitHubReleaseFeedRecord: Decodable, Equatable {
-    struct Asset: Decodable, Equatable {
-        let name: String
-        let browserDownloadURL: URL
-
-        private enum CodingKeys: String, CodingKey {
-            case name
-            case browserDownloadURL = "browser_download_url"
-        }
-    }
-
-    let draft: Bool
-    let prerelease: Bool
-    let tagName: String
-    let publishedAt: String?
-    let assets: [Asset]
-
-    private enum CodingKeys: String, CodingKey {
-        case draft
-        case prerelease
-        case tagName = "tag_name"
-        case publishedAt = "published_at"
-        case assets
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        draft = try container.decode(Bool.self, forKey: .draft)
-        prerelease = try container.decodeIfPresent(Bool.self, forKey: .prerelease) ?? false
-        tagName = try container.decodeIfPresent(String.self, forKey: .tagName) ?? ""
-        publishedAt = try container.decodeIfPresent(String.self, forKey: .publishedAt)
-        assets = try container.decode([Asset].self, forKey: .assets)
-    }
 }
 
 enum UpdateFeedResolver {
@@ -82,50 +46,6 @@ enum UpdateFeedResolver {
         return ResolvedFeed(url: url, version: version, isPreRelease: true)
     }
 
-    static func latestAppcastURL(
-        from data: Data,
-        assetName: String = "appcast.xml",
-        includePreRelease: Bool? = nil
-    ) throws -> URL {
-        try latestFeed(
-            from: data,
-            assetName: assetName,
-            includePreRelease: includePreRelease
-        ).url
-    }
-
-    static func latestFeed(
-        from data: Data,
-        assetName: String = "appcast.xml",
-        includePreRelease: Bool? = nil
-    ) throws -> ResolvedFeed {
-        let releases = try JSONDecoder().decode([GitHubReleaseFeedRecord].self, from: data)
-        let orderedReleases = releases.enumerated().sorted { lhs, rhs in
-            switch (lhs.element.publishedAt, rhs.element.publishedAt) {
-            case let (lhsDate?, rhsDate?) where lhsDate != rhsDate:
-                return lhsDate > rhsDate
-            default:
-                return lhs.offset < rhs.offset
-            }
-        }
-        guard let release = orderedReleases.lazy
-            .map(\.element)
-            .filter({ !$0.draft })
-            .filter({ release in
-                guard let includePreRelease else { return true }
-                return release.prerelease == includePreRelease
-            })
-            .first(where: { release in
-                release.assets.contains { $0.name == assetName }
-            }),
-            let feedURL = release.assets.first(where: { $0.name == assetName })?.browserDownloadURL,
-            let version = UpdateVersion.normalized(release.tagName)
-                ?? feedURL.pathComponents.dropLast().last.flatMap(UpdateVersion.normalized)
-        else {
-            throw UpdateFeedResolutionError.feedNotFound
-        }
-        return ResolvedFeed(url: feedURL, version: version, isPreRelease: release.prerelease)
-    }
 }
 
 enum UpdateVersion {

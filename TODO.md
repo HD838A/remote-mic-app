@@ -8,9 +8,9 @@
 
 - [x] 使用 Cloudflare CDN 加速 Mac 下载
   - 官网固定入口为 `https://download.sayall.app/mac`，只解析 GitHub 最新正式版并跳转到同域名的版本化 DMG，不把 Pre-release 作为默认下载。
-  - Sparkle 的稳定 feed 和预发布发现继续使用 GitHub，版本化 ZIP 与本地化更新说明改走 `download.sayall.app/mac/releases/<tag>/`；旧安装用户无需迁移 feed。
+  - Sparkle 的稳定和预发布 feed 使用 `download.sayall.app/mac/channels/<channel>/` 固定通道；Cloudflare 边缘解析公开 GitHub Releases 并重定向到同域版本化 appcast，客户端不再直接请求未认证 GitHub Releases API。版本化 ZIP 与本地化更新说明继续使用 `download.sayall.app/mac/releases/<tag>/`。
   - GitHub Releases 继续保存全部签名、公证资产；发布后必须从 GitHub 与 CDN 分别下载并逐字节比较，同时验证 `HEAD`、`Range`、签名、公证和候选更新发现。完成公开 Worker、官网和 `1.8.12` Pre-release 验证后再勾选。
-  - 2026-08-12：Worker 与中英文官网已部署，当前正式版 `v1.8.3` 的 GitHub/CDN DMG 字节一致；候选 appcast、签名公证资产和正式版到候选更新仍由统一 Mac 预览版流程完成。
+  - 2026-09-03：补充 Apple Silicon / Intel 的 stable、preview 四个 appcast 通道；发布后必须验证 preview 通道与新候选 appcast 一致，stable 通道仍与动态读取的正式版一致。`1.9.21` 的签名、公证、真实 Sparkle UI 和公开字节验收仍由统一 Mac 预览版流程完成。
 
 - [ ] 在 Mac App 提供低门槛问题反馈入口
   - “关于”页面已增加“问题反馈”，点击后由默认浏览器打开 SayAll 工作台的最低权限入口；状态栏不再重复显示，不传递账号、设备标识、Token 或动态口令。
@@ -301,8 +301,7 @@
   - 不拦截或假设 `Control + Space` 及其他用户自定义输入法快捷键。定向测试覆盖会话恢复、用户手动改选不覆盖、监听停止恢复、已选目标旁路和现有 Fn 去重；完整 Swift 测试、项目自检和真实豆包/微信输入法及遥控器映射出的 Fn 仍需验收。
 - [x] 新增 pre-release 发布，避免未实测的功能被检测到更新
   - “关于”页提供默认关闭的预发布更新开关；仅在用户主动开启后，Sparkle 自动与手动检查才会包含最新候选版本。
-  - v1.7.3 修复预发布源解析失败或缓存旧地址时阻断正式版检查的问题；预发布源不可用时必须清除旧地址并回退到稳定更新源。
-  - 候选版本不存在、GitHub API 限流、网络超时或候选源暂不可用时静默忽略，不显示错误弹窗；手动检查继续使用稳定源。
+  - 2026-09-03 起，客户端按偏好直接选择 Cloudflare stable 或 preview appcast 通道，不再调用未认证 GitHub Releases API，也不在预览通道失败时回退到较旧稳定版本。通道或网络暂不可用时显示更新信息暂不可用，不弹额外错误提示；关闭预发布检查后立即恢复 stable 通道。
   - 当前流程（2026-08-26）：产品改动和版本元数据各走一个普通 PR，合入后只从精确 `origin/main` SHA 进行一次受保护双架构 staging；随后完成真实 Sparkle UI 验收，再由无 Apple 凭据的 publication workflow 公开同一批字节。不得创建 `release/pre-*`、canary、rerun 或 qualification 分支，也不为同一版本创建第二个 PR。
   - 同一 SHA、版本、Build、Run/attempt 和 artifact 的 Runner、审批、GitHub、Apple 或网络故障只重试对应阶段；不重新签名、不升版本。Tag/Release 查询只有明确存在或 404/无 Tag 才能决定占用，认证、权限、网络和其他 HTTP 错误必须 fail closed。
   - staging record、canonical manifest 和 UI attestation 共同绑定发布身份；publication 会在无 Apple 凭据环境中重新恢复并验证 staging record、manifest 和真实 UI attestation，再创建或恢复公开 Pre-release。`candidate-provenance.json` 的时间戳固定取 staging record，重试不会因当前时间改变摘要。
