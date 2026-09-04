@@ -621,7 +621,7 @@ struct SettingsPageRegressionTests {
         #expect(mobileEntrySource.contains("PhoneRemoteInvitationCard"))
         #expect(source.contains("ButtonTrigger.allCases"))
         #expect(source.contains("isMappingSelectionLocked"))
-        #expect(!source.contains("ScrollView(.horizontal, showsIndicators: false)"))
+        #expect(!mobileEntrySource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(!source.contains("remoteDeviceBindingPanel"))
         #expect(!source.contains("SidebarGlassModifier"))
         #expect(source.contains(".focusEffectDisabled()"))
@@ -1149,5 +1149,40 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("expandedShareSection = .about"))
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
+    }
+
+    @Test func profileMetricsKeepApprovedWideSingleRowLayout() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let summary = try #require(source.range(of: "private var statisticsSummaryGrid"))
+        let metrics = try #require(source.range(
+            of: "private var statisticsMetrics",
+            range: summary.upperBound..<source.endIndex
+        ))
+        let summarySource = source[summary.lowerBound..<metrics.lowerBound]
+
+        #expect(summarySource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(summarySource.contains(".frame(minWidth: 170, maxWidth: .infinity)"))
+        #expect(summarySource.contains("GridItem(.flexible()), GridItem(.flexible())"))
+        #expect(source.contains("approved layout as one row at the default width"))
+
+        let heatmap = try #require(source.range(of: "private struct StatisticsHeatmap"))
+        let heatmapSource = source[heatmap.lowerBound...]
+        #expect(heatmapSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
+        #expect(heatmapSource.contains("weekdayLabels"))
+        #expect(heatmapSource.contains("let cellSize = max("))
+        #expect(heatmapSource.contains("min(\n                    28"))
+        #expect(heatmapSource.contains("14,"))
+        #expect(heatmapSource.contains("height: max(cellSize, 16)"))
+        #expect(source.contains("dailyUsageStatistics(days: 26 * 7, calendar: calendar)"))
+        #expect(source.contains("let rankingWidth = max(360, availableWidth * 0.42)"))
+        #expect(source.contains(".frame(width: rankingWidth, alignment: .top)"))
+        #expect(source.contains(".frame(maxWidth: .infinity, minHeight: 648, alignment: .top)"))
     }
 }

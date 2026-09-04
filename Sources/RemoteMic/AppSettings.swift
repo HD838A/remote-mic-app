@@ -101,6 +101,42 @@ struct VoiceSessionUsageRecord: Codable, Equatable, Identifiable {
     let endedAt: Date
     let duration: TimeInterval
     let source: UsageEventSource?
+    let applicationName: String?
+
+    init(
+        id: UUID,
+        startedAt: Date?,
+        endedAt: Date,
+        duration: TimeInterval,
+        source: UsageEventSource?,
+        applicationName: String? = nil
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.duration = duration
+        self.source = source
+        self.applicationName = applicationName
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case startedAt
+        case endedAt
+        case duration
+        case source
+        case applicationName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        endedAt = try container.decode(Date.self, forKey: .endedAt)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        source = try container.decodeIfPresent(UsageEventSource.self, forKey: .source)
+        applicationName = try container.decodeIfPresent(String.self, forKey: .applicationName)
+    }
 }
 
 private struct DailyUsageMetadata: Codable {
@@ -1133,6 +1169,7 @@ final class AppSettings: ObservableObject {
         _ duration: TimeInterval,
         startedAt: Date? = nil,
         source: UsageEventSource = .unknown,
+        applicationName: String? = nil,
         at date: Date = Date(),
         calendar: Calendar = .current
     ) {
@@ -1189,7 +1226,8 @@ final class AppSettings: ObservableObject {
                 startedAt: startedAt,
                 endedAt: date,
                 duration: duration,
-                source: source
+                source: source,
+                applicationName: applicationName
             )]
         )
     }

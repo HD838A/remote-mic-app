@@ -428,6 +428,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var voiceAudioDeliveryGeneration = 0
     private var voiceAudioDeliveryDiagnostic = VoiceAudioDeliveryDiagnostic()
     private var voiceSessionUsageSource: UsageEventSource?
+    private var voiceSessionApplicationName: String?
     private var bluetoothVoiceActive = false
     private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
     private var mobileVoiceLifecycle = MobileVoiceLifecycleState()
@@ -852,6 +853,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             completion?(.unavailable)
         }
         voiceSessionUsageSource = nil
+        voiceSessionApplicationName = nil
         releaseVoiceKeyIfNeeded()
         stopHIDMonitors()
         isAudioOutputReady = false
@@ -3787,6 +3789,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let frontmostApplication = FrontmostApplicationMetadata.current(
             excludingBundleIdentifier: Bundle.main.bundleIdentifier
         )
+        voiceSessionApplicationName = frontmostApplication?.applicationName
         recordingAssetCoordinator.start(
             sessionID: sessionID,
             startedAt: startedAt,
@@ -3813,11 +3816,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 endedAt.timeIntervalSince(voiceSessionStartedAt),
                 startedAt: voiceSessionStartedAt,
                 source: voiceSessionUsageSource ?? .unknown,
+                applicationName: voiceSessionApplicationName,
                 at: endedAt
             )
             self.voiceSessionStartedAt = nil
         }
         voiceSessionUsageSource = nil
+        voiceSessionApplicationName = nil
         let sessionID = voiceSessionID
         voiceSessionID = nil
         voiceAudioDeliveryDiagnostic.sessionEnded = true
