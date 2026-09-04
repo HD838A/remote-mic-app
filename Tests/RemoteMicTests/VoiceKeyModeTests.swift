@@ -157,6 +157,16 @@ struct VoiceKeyModeTests {
     }
 
     @Test func inputMonitoringLossPreservesAnActiveExplicitCommandSession() throws {
+        #expect(VoiceKeySessionPreservationPolicy.shouldPreserveInputSourceSession(
+            latchHeld: false,
+            heldMode: nil,
+            pendingMode: .rightCommand
+        ))
+        #expect(!VoiceKeySessionPreservationPolicy.shouldPreserveInputSourceSession(
+            latchHeld: false,
+            heldMode: nil,
+            pendingMode: .function
+        ))
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -174,7 +184,7 @@ struct VoiceKeyModeTests {
 
         #expect(applySource.contains("preservingExplicitVoiceSession:"))
         #expect(applySource.contains(
-            "voiceKeyLatch.isHeld && heldVoiceKeyMode?.requiresAccessibility == true"
+            "VoiceKeySessionPreservationPolicy"
         ))
     }
 
@@ -391,6 +401,60 @@ struct VoiceKeyModeTests {
         #expect(prepared == 1)
         #expect(restored == 1)
         #expect(!monitor.functionKeyIsPressedForDiagnostics)
+    }
+
+    @Test func commandVoiceConfirmsInputSourceBeforeInjectingTrigger() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let prepare = try #require(source.range(of: "preferredInputSourceMonitor.beginVoiceSession()"))
+        let inject = try #require(source.range(of: "KeyboardInjector.setVoiceKeyPressed", range: prepare.upperBound..<source.endIndex))
+        #expect(prepare.lowerBound < inject.lowerBound)
+        let monitor = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/PreferredInputSourceMonitor.swift"),
+            encoding: .utf8
+        )
+        #expect(monitor.contains("waitForInputSourceActivation("))
+    }
+
+    @Test func commandVoicePreparationIsReleasedWhenKeyDownInjectionFails() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let updateStart = try #require(source.range(of: "private func updateVoiceKeyState("))
+        let updateEnd = try #require(source.range(
+            of: "private func releaseVoiceKeyIfNeeded(",
+            range: updateStart.upperBound..<source.endIndex
+        ))
+        let updateSource = source[updateStart.lowerBound..<updateEnd.lowerBound]
+        let injectionStart = try #require(updateSource.range(
+            of: "guard KeyboardInjector.setVoiceKeyPressed"
+        ))
+        let injectionEnd = try #require(updateSource.range(
+            of: "if mode != .function, !shouldHold",
+            range: injectionStart.upperBound..<updateSource.endIndex
+        ))
+        let injectionFailureSource = updateSource[
+            injectionStart.lowerBound..<injectionEnd.lowerBound
+        ]
+
+        #expect(injectionFailureSource.contains(
+            "preferredInputSourceMonitor.endVoiceSession()"
+        ))
+        let pendingCancellation = try #require(updateSource.range(
+            of: "heldVoiceKeyMode == nil, pendingVoiceKeyMode != nil"
+        ))
+        #expect(pendingCancellation.lowerBound < injectionStart.lowerBound)
     }
 
     @Test func configurationDefaultsLegacyAndRoundTripsCommandMode() throws {
