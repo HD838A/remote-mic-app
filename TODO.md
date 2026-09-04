@@ -45,7 +45,7 @@
 
 - [ ] Windows 版本
   - 当前范围只包含小米 RC003；已完成相关 forks、Windows 实现、权限/安装和虚拟麦克风路线研究。首选源码基线为 `miaomiaozii/windows-remote-mic-app`，但产品化仍需独立真机验收、免费自签流程和第三方组件审查。
-  - 已在主仓库发布独立的 [Windows RC003 Community Preview v0.1.0](https://github.com/HD838A/remote-mic-app/releases/tag/windows-v0.1.0-community-preview)，镜像贡献者提交 `271ed794` 的未签名安装器、便携版、对应源码快照和 SHA-256 清单。该版本仅作为社区预览，不代表 PR #3 当前 HEAD 或正式产品化完成，Windows 源码仍未合入 `main`。
+  - Windows 版本正在开发，尚未发布内测版本；源码与后续发布计划维护在独立的 [Windows 仓库](https://github.com/GetSayAll/remote-mic-app-windows)，Windows 源码仍未合入本仓库 `main`。
   - Windows 与 macOS 必须独立构建、签名、打包、验证和发布：Windows 当前决定只使用免费自签 Authenticode 证书与 EXE/MSI/ZIP 产物，不购买微软/公共 CA 签名，也不复用 Apple Developer ID、APP/PKG/DMG、公证或 Sparkle 流水线。自签版本仍会出现未知发布者或 SmartScreen 提示。
   - Windows 可行性、候选源码、Release、CI、许可与最终排名研究材料已迁移至独立的产品资料工作区，不随公开源码仓库发布。
 - [x] 开发手机伴侣 App，让手机可以替代或补充蓝牙遥控器控制 Mac
