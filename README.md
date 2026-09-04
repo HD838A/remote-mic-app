@@ -30,6 +30,11 @@
   </tr>
 </table>
 
+## Windows 版本
+
+Windows 版本正在开发，敬请期待！
+无线麦 SayAll.app Windows 版本地址：[https://github.com/GetSayAll/remote-mic-app-windows](https://github.com/GetSayAll/remote-mic-app-windows)，目前还没有内测版本放出，敬请期待。
+
 iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8k8fb7v)
 
 Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停；当前 App Store 上架重点只包含 iOS App 与其内嵌的 Apple Watch App。
@@ -87,9 +92,6 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 - 最新预览版（Apple Silicon / Intel）：前往 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases)，在发布列表中寻找最新标记为 **Pre-release** 的 macOS 候选版本，并按 Mac 芯片下载对应 DMG。在包含 Intel 安装包的版本晋升为正式版前，Intel 用户请下载名称带 `Intel` 的最新预览版 DMG。
 
 Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 `Remote-Mic-<版本>-Intel.dmg`，两者不能混用。
-
-Windows 版本正在开发，敬请期待！
-无线麦 SayAll.app Windows 版本地址：[https://github.com/GetSayAll/remote-mic-app-windows](https://github.com/GetSayAll/remote-mic-app-windows)，目前还没有内测版本放出，敬请期待。
 
 打开 DMG 后只需双击唯一的 `Install Remote Mic.pkg`；Intel Mac 使用 `Install Remote Mic Intel.pkg`。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
