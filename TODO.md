@@ -302,12 +302,12 @@
 - [x] 新增 pre-release 发布，避免未实测的功能被检测到更新
   - “关于”页提供默认关闭的预发布更新开关；仅在用户主动开启后，Sparkle 自动与手动检查才会包含最新候选版本。
   - 2026-09-03 起，客户端按偏好直接选择 Cloudflare stable 或 preview appcast 通道，不再调用未认证 GitHub Releases API，也不在预览通道失败时回退到较旧稳定版本。通道或网络暂不可用时显示更新信息暂不可用，不弹额外错误提示；关闭预发布检查后立即恢复 stable 通道。
-  - 当前流程（2026-08-26）：产品改动和版本元数据各走一个普通 PR，合入后只从精确 `origin/main` SHA 进行一次受保护双架构 staging；随后完成真实 Sparkle UI 验收，再由无 Apple 凭据的 publication workflow 公开同一批字节。不得创建 `release/pre-*`、canary、rerun 或 qualification 分支，也不为同一版本创建第二个 PR。
+  - 当前流程（2026-09-05）：产品改动和版本元数据通过普通 PR 合入后，只从精确 `origin/main` SHA 进行一次受保护双架构 staging；随后完成真实 Sparkle UI 验收，再由无 Apple 凭据的 publication workflow 公开同一批字节。发布 Workflow 控制面始终使用精确 `main` HEAD；只有紧急 Hotfix 源码可来自当前稳定 Tag 派生的 `hotfix/vX.Y.Z`。不得创建 `release/pre-*`、canary、rerun 或 qualification 分支。
   - 同一 SHA、版本、Build、Run/attempt 和 artifact 的 Runner、审批、GitHub、Apple 或网络故障只重试对应阶段；不重新签名、不升版本。Tag/Release 查询只有明确存在或 404/无 Tag 才能决定占用，认证、权限、网络和其他 HTTP 错误必须 fail closed。
   - staging record、canonical manifest 和 UI attestation 共同绑定发布身份；publication 会在无 Apple 凭据环境中重新恢复并验证 staging record、manifest 和真实 UI attestation，再创建或恢复公开 Pre-release。`candidate-provenance.json` 的时间戳固定取 staging record，重试不会因当前时间改变摘要。
   - Preview 公开资产是 manifest 定义的 11 项 payload 加 provenance；当前矩阵固定名称由 verifier 检查，Install PKG 仍嵌入对应 DMG，不重复上传。Stable 只能把用户指定的已发布 Pre-release 改为正式版；已完成的晋升重试只读复验，不重新构建或上传。
   - Preview 和 Stable 均从 T_ready 起按 30 分钟纯发布目标计时；该指标不取消或降级任何签名、公证、真实 UI 或下载字节门禁。
-  - 不存在“发布正式版”命令。正式版只能选择已经发布并验证过的指定 Pre-release，将完全相同的 Tag、Commit、签名、公证资产和摘要晋升；候选回流 `main` 不构成正式晋升授权，禁止从 `main` 重建正式资产。
+  - 不存在独立的正式版构建命令。正式版只能选择已经发布并验证过的指定 Pre-release，将完全相同的 Tag、Commit、签名、公证资产和摘要晋升；晋升 Workflow 仍只从精确 `main` HEAD 运行，禁止为正式版重新构建资产。
   - 2026-08-17：正式晋升工作流补充独立 `mac-stable-release` Environment 和按需安装 `ripgrep` 的工具门禁；晋升仍只复验并提升既有候选字节，不读取 Apple 签名 Secrets，也不重新打包。
   - 2026-08-19：GitHub Release 标题和 Tag 注释统一使用 `无线麦SayAll.app <版本>`，并由 Swift 与 shell 回归测试拒绝旧的 `Remote Mic` 用户可见标题。
 - [x] 在“关于”页集中展示版本与更新信息
