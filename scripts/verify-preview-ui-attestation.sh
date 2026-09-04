@@ -18,8 +18,11 @@ done
 [[ -d "$DIST" ]] || exit 1
 
 jq -e --slurpfile stage "$STAGE" '
-  .schemaVersion == 3 and .result == "passed" and .mode == "preview" and
+  .schemaVersion == 4 and .result == "passed" and .mode == "preview" and
   .tag == $stage[0].tag and .sourceCommit == $stage[0].sourceCommit and
+  .sourceBranch == $stage[0].sourceBranch and .sourceKind == $stage[0].sourceKind and
+  .sourceBaseTag == $stage[0].sourceBaseTag and .sourceBaseCommit == $stage[0].sourceBaseCommit and
+  .sourceWorkflowCommit == $stage[0].sourceWorkflowCommit and
   .sourceRunId == $stage[0].sourceRunId and .sourceRunAttempt == $stage[0].sourceRunAttempt and
   .signedArtifactId == $stage[0].signedArtifactId and
   .signedArtifactDigest == $stage[0].signedArtifactDigest and

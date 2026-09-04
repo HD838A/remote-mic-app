@@ -24,8 +24,13 @@ for command_name in git jq plutil "$GH_BIN"; do
   }
 done
 CDN_PROBE_BIN="$ROOT/scripts/verify-preview-cdn-availability.sh"
+SOURCE_GUARD_BIN="$ROOT/scripts/verify-public-release-source.sh"
 [[ -x "$CDN_PROBE_BIN" ]] || {
   print -u2 "Missing executable CDN occupancy checker: $CDN_PROBE_BIN"
+  exit 1
+}
+[[ -x "$SOURCE_GUARD_BIN" ]] || {
+  print -u2 "Missing executable release source verifier: $SOURCE_GUARD_BIN"
   exit 1
 }
 
@@ -34,16 +39,8 @@ cd "$ROOT"
   print -u2 "staging requires a clean committed worktree"
   exit 1
 }
-[[ "$(git branch --show-current)" == release-main ]] || {
-  print -u2 "staging must run from release-main"
-  exit 1
-}
-git fetch --no-tags origin release-main
+source_branch="$(git branch --show-current)"
 commit="$(git rev-parse HEAD)"
-[[ "$commit" == "$(git rev-parse origin/release-main)" ]] || {
-  print -u2 "local release-main must exactly match origin/release-main"
-  exit 1
-}
 version="$(plutil -extract CFBundleShortVersionString raw -o - Resources/Info.plist)"
 build="$(plutil -extract CFBundleVersion raw -o - Resources/Info.plist)"
 tag="v$version"
@@ -51,6 +48,10 @@ tag="v$version"
   print -u2 "Info.plist version/build is invalid"
   exit 1
 }
+GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
+  "$SOURCE_GUARD_BIN" "$source_branch" "$commit" "$version" >/dev/null
+git fetch --no-tags origin main
+control_commit="$(git rev-parse origin/main)"
 
 if [[ "$MODE" == preview ]]; then
   tag_is_occupied=0
@@ -116,27 +117,28 @@ if [[ "$MODE" == preview ]]; then
 fi
 
 GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
-  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$commit"
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$commit" "$source_branch"
 REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-workflow-gh-token.sh" >/dev/null
 GITHUB_REPOSITORY="$REPOSITORY" \
   "$ROOT/scripts/verify-release-dependency-pins.sh" >/dev/null
 
-run_title="mac-release $MODE $commit"
+run_title="mac-release $MODE $source_branch $commit"
 dispatched_at="$(/bin/date -u +'%Y-%m-%dT%H:%M:%SZ')"
-"$GH_BIN" workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref release-main \
+"$GH_BIN" workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref main \
   --raw-field "mode=$MODE" \
+  --raw-field "source_branch=$source_branch" \
   --raw-field "expected_commit=$commit"
 
 run_id=""
 run_url=""
 for lookup_attempt in {1..6}; do
   runs_json="$("$GH_BIN" run list --repo "$REPOSITORY" \
-    --workflow "$WORKFLOW_FILE" --branch release-main --commit "$commit" \
+    --workflow "$WORKFLOW_FILE" --branch main --commit "$control_commit" \
     --event workflow_dispatch --limit 20 \
     --json databaseId,createdAt,displayTitle,event,headBranch,headSha,url)"
   matches="$(print -r -- "$runs_json" | jq -c \
-    --arg title "$run_title" --arg sha "$commit" --arg created "$dispatched_at" \
-    '[.[] | select(.event == "workflow_dispatch" and .headBranch == "release-main" and .headSha == $sha and .displayTitle == $title and .createdAt >= $created)]')"
+    --arg title "$run_title" --arg sha "$control_commit" --arg created "$dispatched_at" \
+    '[.[] | select(.event == "workflow_dispatch" and .headBranch == "main" and .headSha == $sha and .displayTitle == $title and .createdAt >= $created)]')"
   count="$(print -r -- "$matches" | jq -r length)"
   if (( count > 1 )); then
     print -u2 "dispatch succeeded, but multiple exact Runs were found; do not redispatch"
@@ -157,6 +159,8 @@ done
 print "MAC RELEASE STAGING DISPATCHED"
 print "MODE: $MODE"
 print "TAG: $tag"
+print "SOURCE_BRANCH: $source_branch"
 print "SOURCE_COMMIT: $commit"
+print "WORKFLOW_COMMIT: $control_commit"
 print "RUN_ID: $run_id"
 print "RUN_URL: $run_url"

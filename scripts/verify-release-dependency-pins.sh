@@ -2,18 +2,19 @@
 set -euo pipefail
 
 ROOT="${REPOSITORY_ROOT:-${0:A:h:h}}"
+CONTROL_ROOT="${RELEASE_CONTROL_ROOT:-$ROOT}"
 PACKAGE_MANIFEST="$ROOT/Package.swift"
 PACKAGE_RESOLVED="$ROOT/Package.resolved"
 DEPENDENCY_MANIFEST="$ROOT/config/release-dependencies.json"
 WORKFLOWS=(
-  "$ROOT/.github/workflows/mac-ci.yml"
-  "$ROOT/.github/workflows/mac-release-package.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 )
 RELEASE_CRITICAL_WORKFLOWS=(
-  "$ROOT/.github/workflows/mac-ci.yml"
-  "$ROOT/.github/workflows/mac-release-package.yml"
-  "$ROOT/.github/workflows/mac-preview-publication.yml"
-  "$ROOT/.github/workflows/mac-stable-promote.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-preview-publication.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-stable-promote.yml"
 )
 CREDENTIAL_REPOSITORIES=(
   "ReleaseNotarySecrets|HD838A/remotemic-notary-secrets|5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d"
@@ -123,12 +124,12 @@ for workflow in "${WORKFLOWS[@]}"; do
   done
 done
 
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$ROOT/.github/workflows/mac-ci.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}' "$ROOT/.github/workflows/mac-ci.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$ROOT/.github/workflows/mac-ci.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$ROOT/.github/workflows/mac-release-package.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}' "$ROOT/.github/workflows/mac-release-package.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$ROOT/.github/workflows/mac-release-package.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 
 manifest_ref="$(extract_manifest_ref)"
 resolved_ref="$(extract_resolved_ref)"
@@ -146,7 +147,7 @@ for credential_repository in "${CREDENTIAL_REPOSITORIES[@]}"; do
   remainder="${credential_repository#*|}"
   repository="${remainder%%|*}"
   expected_ref="${remainder#*|}"
-  pinned_ref="$(extract_ref "$ROOT/.github/workflows/mac-release-package.yml" "$repository" "")"
+  pinned_ref="$(extract_ref "$CONTROL_ROOT/.github/workflows/mac-release-package.yml" "$repository" "")"
   if [[ "$pinned_ref" != "$expected_ref" ]]; then
     print -u2 "$label must use reviewed immutable commit $expected_ref in mac-release-package.yml"
     exit 1
