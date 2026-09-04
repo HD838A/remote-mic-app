@@ -81,6 +81,7 @@ final class HIDRemoteMonitor {
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
     private var allowedLocationIDs: Set<UInt32>?
+    private var backOnlyMode = false
     private var manager: IOHIDManager?
     private var activeDevice: IOHIDDevice?
     private var probedDevices: [IOHIDDevice] = []
@@ -181,10 +182,15 @@ final class HIDRemoteMonitor {
         IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
     }
 
-    func start(powerKeySuppressed: Bool, allowedLocationIDs: Set<UInt32>? = nil) {
+    func start(
+        powerKeySuppressed: Bool,
+        allowedLocationIDs: Set<UInt32>? = nil,
+        allowBackOnly: Bool = false
+    ) {
         stop()
         self.allowedLocationIDs = allowedLocationIDs
-        guard settings.customMappingEnabled else {
+        backOnlyMode = allowBackOnly && !settings.customMappingEnabled
+        guard settings.customMappingEnabled || backOnlyMode else {
             updateStatus(LocalizedMessage("button_mapping.status.system_managed"))
             return
         }
@@ -194,10 +200,10 @@ final class HIDRemoteMonitor {
             "HID PERMISSIONS input=\(inputGranted) accessibility=\(accessibilityGranted)"
         )
         guard HIDPermissionGate.canMonitor(
-            mappingEnabled: settings.customMappingEnabled,
+            mappingEnabled: settings.customMappingEnabled || backOnlyMode,
             inputMonitoringGranted: inputGranted,
             accessibilityGranted: accessibilityGranted,
-            powerKeySuppressed: powerKeySuppressed
+            powerKeySuppressed: powerKeySuppressed || backOnlyMode
         ) else {
             if !inputGranted {
                 updateStatus(LocalizedMessage("button_mapping.permission.input_monitoring_required"))
@@ -210,8 +216,10 @@ final class HIDRemoteMonitor {
             return
         }
 
-        let suppressionReady = eventSuppressor.start()
-        AppLogger.shared.write("HID FILTER ready=\(suppressionReady)")
+        if settings.customMappingEnabled {
+            let suppressionReady = eventSuppressor.start()
+            AppLogger.shared.write("HID FILTER ready=\(suppressionReady)")
+        }
 
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         let matching = [
@@ -307,7 +315,11 @@ final class HIDRemoteMonitor {
             excludedFingerprints: excludedFingerprints()
         ) {
         case let .activate(fingerprint):
-            _ = activateDevice(device, fingerprint: fingerprint, allowManagerFallback: false)
+            if backOnlyMode {
+                probeDevice(device)
+            } else {
+                _ = activateDevice(device, fingerprint: fingerprint, allowManagerFallback: false)
+            }
         case .probe:
             probeDevice(device)
         case let .rejected(reason):
@@ -463,7 +475,7 @@ final class HIDRemoteMonitor {
             diagnosticLogger("HID REPORT rejected reason=monitor_inactive")
             return
         }
-        guard settings.customMappingEnabled else {
+        guard settings.customMappingEnabled || backOnlyMode else {
             diagnosticLogger("HID REPORT rejected reason=mapping_disabled")
             return
         }
@@ -556,7 +568,7 @@ final class HIDRemoteMonitor {
     }
 
     func handleSimulatedReport(reportID: UInt32, data: Data) {
-        guard settings.customMappingEnabled else {
+        guard settings.customMappingEnabled || backOnlyMode else {
             diagnosticLogger("HID REPORT rejected reason=mapping_disabled source=simulated")
             return
         }
@@ -565,6 +577,13 @@ final class HIDRemoteMonitor {
             return
         }
         parseAndProcess(reportID: reportID, data: data, source: "simulated")
+    }
+
+    func handleSimulatedBackOnlyReport(reportID: UInt32, data: Data) {
+        let previousBackOnlyMode = backOnlyMode
+        backOnlyMode = true
+        defer { backOnlyMode = previousBackOnlyMode }
+        handleSimulatedReport(reportID: reportID, data: data)
     }
 
     private func parseAndProcess(reportID: UInt32, data: Data, source: String) {
@@ -595,7 +614,11 @@ final class HIDRemoteMonitor {
             "HID REPORT accepted source=\(source) id=\(reportID) bytes=\(data.count) " +
                 "usage_count=\(usages.count) buttons=\(Self.buttonList(for: usages))"
         )
-        process(usages: usages)
+        if backOnlyMode {
+            processBackOnly(usages: usages.intersection([RemoteButton.back.hidUsage]))
+        } else {
+            process(usages: usages)
+        }
     }
 
     func disconnectSimulatedDevice() {
@@ -758,6 +781,21 @@ final class HIDRemoteMonitor {
                 guard processGestureCommands(gestureRecognizer.release(button)) else { return }
             }
         }
+    }
+
+    private func processBackOnly(usages: Set<UInt16>) {
+        let pressed = usages.subtracting(activeUsages)
+        activeUsages = usages
+        onActiveButtons?(profileID, RemoteButton.buttons(for: usages))
+        guard pressed.contains(RemoteButton.back.hidUsage) else { return }
+        let configured = ConfiguredButtonAction(action: .deleteBackward, shortcut: nil)
+        guard actionPerformer(.back, .singleClick, configured) else {
+            releaseForRevokedPermissions()
+            return
+        }
+        AppLogger.shared.write(
+            "HID BUTTON button=back trigger=singleClick action=deleteBackward path=back_only"
+        )
     }
 
     static func acceptsReport(reportingFingerprint: String?, activeFingerprint: String?) -> Bool {
