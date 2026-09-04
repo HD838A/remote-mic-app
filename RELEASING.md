@@ -6,6 +6,7 @@
 
 - Preview：从以 `v1.9.19` 为起点的精确 `origin/release-main` SHA 构建一次，完成真实 UI 升级后发布一个公开 Pre-release。
 - Stable：用户明确指定一个已经发布并验证通过的 Pre-release，将它改为正式版；不重新构建。
+- 除 `release-main` 外的任何分支都不是发布入口；`main` 和其他 PR 分支只用于开发、审查和准备待选 Commit。
 - 私有内部 Draft：使用 private-draft-release skill 的独立路径，目标仓库固定为 GetSayAll/SayAll，不在公开源码仓库创建内部 Draft。
 - “发布正式版”不是独立构建命令。没有指定现有 Pre-release 时，只能准备 Preview 或报告缺少授权。
 - stable latest 不写死版本号。Preview 开始前、公开后和失败恢复前后都必须动态读取 `releases/latest`，确认其为正式稳定版且前后一致；流程不得修改 stable feed。
