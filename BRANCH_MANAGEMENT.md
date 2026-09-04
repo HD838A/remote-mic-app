@@ -13,7 +13,9 @@
 ## release-main 不变量
 
 - `release-main` 从公开 `v1.9.19` Tag 的精确 Commit `b02b7fde2d21000d070ac252f8cdd66ef396a691` 起步，是唯一公开发布分支；Preview staging、Preview publication 和 Stable promotion 都只能从它的精确远端 HEAD 触发。
-- `release-main` 不承载未经审查的功能开发或 Bug 修复；发布内容仍先通过普通 PR 审查，再按发布范围明确选入 `release-main`，不要求发布分支自动追平整个 `origin/main`。
+- `release-main` 是发布专用分支，主要承载已审查的 hotfix 或需要快速上线的新功能；不承载未经审查的功能开发或 Bug 修复，也不要求自动追平整个 `origin/main`，以避免其他 PR 混入发布内容。
+- 发布内容仍先通过普通 PR 审查，再按发布范围明确选入 `release-main`；选入时必须记录对应 Commit/PR 来源和必要依赖。
+- 发布脚本或 workflow 即使已在 `main` 修改，也不具备发布权限；必须先按发布范围选入 `release-main`，并由 `release-main` 的精确 SHA 触发发布。
 - 发布前必须 fetch `origin/release-main`，确认发布 worktree 干净、HEAD 与 `origin/release-main` 完全一致。
 - 不再创建新的 `release/pre-vX.Y.Z`、canary、rerun 或 qualification 分支；历史分支只保留审计用途，不得作为新发布入口。
 
