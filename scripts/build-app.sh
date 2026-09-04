@@ -115,11 +115,6 @@ if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" ]]; then
 else
   SAYALL_MACRO_PLATFORM_INCLUDED=false
 fi
-if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
-  print -u2 "A SayAll macro platform package is required for this build"
-  exit 1
-fi
-
 if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
   if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" || -n "${SAYALL_MEMBERSHIP_PACKAGE_PATH:-}" ]]; then
     print -u2 "private artifacts cannot be combined with private source packages"
@@ -164,6 +159,10 @@ fi
 if [[ "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" == "1" && \
       "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" != "true" ]]; then
   print -u2 "A prepared private artifact package is required for this build"
+  exit 1
+fi
+if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
+  print -u2 "A SayAll macro platform package is required for this build"
   exit 1
 fi
 

@@ -35,8 +35,19 @@ DISTRIBUTION="$ROOT/packaging/doubao-driver/distribution/$RELEASE_VARIANT.xml"
 DISTRIBUTION_RESOURCES="$ROOT/packaging/doubao-driver/distribution/Resources"
 
 cleanup() {
+  local user_home trash_directory trash_destination
   case "$WORK_DIR" in
-    "$OUTPUT_DIR/.doubao-driver-package."*) /bin/rm -rf -- "$WORK_DIR" ;;
+    "$OUTPUT_DIR/.doubao-driver-package."*)
+      user_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+      trash_directory="$user_home/.Trash"
+      trash_destination="$trash_directory/${WORK_DIR:t}.package-build.$(date -u +%Y%m%dT%H%M%SZ).$$"
+      if [[ -d "$trash_directory" && ! -e "$trash_destination" ]] && \
+          /bin/mv -n -- "$WORK_DIR" "$trash_destination"; then
+        print "PACKAGE WORKSPACE MOVED TO TRASH: $trash_destination"
+      else
+        print -u2 "PACKAGE WORKSPACE PRESERVED: $WORK_DIR"
+      fi
+      ;;
     *) print -u2 "refusing to clean unexpected work path: $WORK_DIR" ;;
   esac
 }
@@ -101,11 +112,29 @@ fi
 "$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
 "$ROOT/scripts/verify-app.sh" "$APP"
 
-/bin/rm -f -- \
+move_existing_package_to_trash() {
+  local package="$1"
+  local user_home trash_directory trash_destination counter=0
+  [[ -e "$package" || -L "$package" ]] || return 0
+  user_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+  trash_directory="$user_home/.Trash"
+  test -d "$trash_directory"
+  trash_destination="$trash_directory/${package:t}.package-build.$(date -u +%Y%m%dT%H%M%SZ).$$"
+  while [[ -e "$trash_destination" || -L "$trash_destination" ]]; do
+    counter=$((counter + 1))
+    trash_destination="$trash_directory/${package:t}.package-build.$(date -u +%Y%m%dT%H%M%SZ).$$.$counter"
+  done
+  /bin/mv -n -- "$package" "$trash_destination"
+  print "PREVIOUS PACKAGE MOVED TO TRASH: $trash_destination"
+}
+
+for existing_package in \
   "$INSTALL_PACKAGE" \
   "$LEGACY_INSTALL_PACKAGE" \
   "$UNINSTALL_PACKAGE" \
-  "$LEGACY_UNINSTALL_PACKAGE"
+  "$LEGACY_UNINSTALL_PACKAGE"; do
+  move_existing_package_to_trash "$existing_package"
+done
 /bin/mkdir -p \
   "$PAYLOAD_ROOT/Applications" \
   "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer"

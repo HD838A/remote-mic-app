@@ -185,6 +185,13 @@ struct BuildSigningTests {
         #expect(buildSource.contains("SayAllPrivateArtifactsIncluded"))
         #expect(buildSource.contains("PREVIOUS APP MOVED TO TRASH"))
         #expect(buildSource.contains("private artifact package contents do not match the prepared manifest"))
+        let privateArtifactResolution = try #require(
+            buildSource.range(of: "SAYALL_PRIVATE_ARTIFACT_INCLUDED=true")
+        )
+        let macroRequirement = try #require(
+            buildSource.range(of: "A SayAll macro platform package is required for this build")
+        )
+        #expect(privateArtifactResolution.lowerBound < macroRequirement.lowerBound)
         #expect(verifySource.contains("App is missing the required private artifact package marker"))
         #expect(prepareSource.contains("checksum manifest digest does not match the trusted value"))
         #expect(prepareSource.contains("repository_state.dirty == false"))
