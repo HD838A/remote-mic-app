@@ -64,7 +64,24 @@ case "$OUTPUT" in
   *) print -u2 "refusing to replace unexpected output path: $OUTPUT"; exit 1 ;;
 esac
 
-rm -rf -- "$WORK_ROOT" "$OUTPUT"
+move_existing_path_to_trash() {
+  local target="$1"
+  local user_home trash_directory trash_destination counter=0
+  [[ -e "$target" || -L "$target" ]] || return 0
+  user_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+  trash_directory="$user_home/.Trash"
+  test -d "$trash_directory"
+  trash_destination="$trash_directory/${target:t}.driver-build.$(date -u +%Y%m%dT%H%M%SZ).$$"
+  while [[ -e "$trash_destination" || -L "$trash_destination" ]]; do
+    counter=$((counter + 1))
+    trash_destination="$trash_directory/${target:t}.driver-build.$(date -u +%Y%m%dT%H%M%SZ).$$.$counter"
+  done
+  /bin/mv -n -- "$target" "$trash_destination"
+  print "PREVIOUS DRIVER BUILD PATH MOVED TO TRASH: $trash_destination"
+}
+
+move_existing_path_to_trash "$WORK_ROOT"
+move_existing_path_to_trash "$OUTPUT"
 mkdir -p "${WORK_ROOT:h}" "${OUTPUT:h}"
 run_release_stage driver-source-clone 60 git clone --depth 1 --branch "$BLACKHOLE_TAG" \
   https://github.com/ExistentialAudio/BlackHole.git "$SOURCE_ROOT"

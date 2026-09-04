@@ -58,8 +58,19 @@ WORK_DIR="$(mktemp -d "$OUTPUT_DIR/.package-work.XXXXXX")"
 STAGING="$WORK_DIR/dmg"
 
 cleanup() {
+  local user_home trash_directory trash_destination
   case "$WORK_DIR" in
-    "$OUTPUT_DIR/.package-work."*) rm -rf -- "$WORK_DIR" ;;
+    "$OUTPUT_DIR/.package-work."*)
+      user_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+      trash_directory="$user_home/.Trash"
+      trash_destination="$trash_directory/${WORK_DIR:t}.dmg-build.$(date -u +%Y%m%dT%H%M%SZ).$$"
+      if [[ -d "$trash_directory" && ! -e "$trash_destination" ]] && \
+          /bin/mv -n -- "$WORK_DIR" "$trash_destination"; then
+        print "DMG WORKSPACE MOVED TO TRASH: $trash_destination"
+      else
+        print -u2 "DMG WORKSPACE PRESERVED: $WORK_DIR"
+      fi
+      ;;
     *) print -u2 "refusing to clean unexpected work path: $WORK_DIR" ;;
   esac
 }
@@ -81,12 +92,21 @@ fi
 ditto --norsrc --noqtn --noacl \
   "$OUTPUT_DIR/$INSTALL_PACKAGE" "$STAGING/$INSTALL_PACKAGE"
 
+if [[ -e "$DMG" || -L "$DMG" ]]; then
+  USER_HOME_DIRECTORY="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+  TRASH_DIRECTORY="$USER_HOME_DIRECTORY/.Trash"
+  TRASH_DESTINATION="$TRASH_DIRECTORY/${DMG:t}.dmg-build.$(date -u +%Y%m%dT%H%M%SZ).$$"
+  test -d "$TRASH_DIRECTORY"
+  test ! -e "$TRASH_DESTINATION"
+  /bin/mv -n -- "$DMG" "$TRASH_DESTINATION"
+  print "PREVIOUS DMG MOVED TO TRASH: $TRASH_DESTINATION"
+fi
+
 run_release_stage dmg-hdiutil-create "$RELEASE_DMG_BUILD_TIMEOUT_SECONDS" hdiutil create \
   -volname "$DISPLAY_NAME $VERSION $RELEASE_LABEL" \
   -srcfolder "$STAGING" \
   -fs "HFS+" \
   -format UDZO \
-  -ov \
   "$DMG"
 
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
