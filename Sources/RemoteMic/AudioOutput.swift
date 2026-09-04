@@ -141,7 +141,10 @@ enum CoreAudioDeviceCatalog {
         }
     }
 
-    static func preferredFallbackInput(excludingUID excludedUID: String) -> AudioDeviceInfo? {
+    static func preferredFallbackInput(
+        excludingUID excludedUID: String,
+        preferredUID: String? = nil
+    ) -> AudioDeviceInfo? {
         let devices = inputDevices()
         let builtInDeviceIDs = Set(devices.compactMap { device in
             transportType(for: device.id) == kAudioDeviceTransportTypeBuiltIn ? device.id : nil
@@ -149,7 +152,8 @@ enum CoreAudioDeviceCatalog {
         return DefaultInputFallbackPolicy.preferredFallback(
             in: devices,
             excludingUID: excludedUID,
-            builtInDeviceIDs: builtInDeviceIDs
+            builtInDeviceIDs: builtInDeviceIDs,
+            preferredUID: preferredUID
         )
     }
 
@@ -334,12 +338,23 @@ enum VirtualAudioHealthPolicy {
 }
 
 enum DefaultInputFallbackPolicy {
+    enum ObservationDecision: Equatable {
+        case ignore
+        case clearManagedTransition
+        case remember(uid: String, clearManagedTransition: Bool)
+    }
+
     static func preferredFallback(
         in devices: [AudioDeviceInfo],
         excludingUID excludedUID: String,
-        builtInDeviceIDs: Set<AudioDeviceID>
+        builtInDeviceIDs: Set<AudioDeviceID>,
+        preferredUID: String? = nil
     ) -> AudioDeviceInfo? {
         let candidates = devices.filter { $0.uid != excludedUID }
+        if let preferredUID,
+           let preferred = candidates.first(where: { $0.uid == preferredUID }) {
+            return preferred
+        }
         return candidates.first { builtInDeviceIDs.contains($0.id) } ?? candidates.first
     }
 
@@ -350,6 +365,25 @@ enum DefaultInputFallbackPolicy {
         currentDefaultUID: String?
     ) -> Bool {
         managedVirtualUID == selectedVirtualUID && currentDefaultUID == managedFallbackUID
+    }
+
+    static func observationDecision(
+        currentUID: String?,
+        selectedVirtualUID: String,
+        managedFallbackUID: String?,
+        lastRememberedUID: String?
+    ) -> ObservationDecision {
+        guard let currentUID,
+              currentUID != selectedVirtualUID,
+              currentUID != managedFallbackUID
+        else { return .ignore }
+        if currentUID == lastRememberedUID {
+            return managedFallbackUID == nil ? .ignore : .clearManagedTransition
+        }
+        return .remember(
+            uid: currentUID,
+            clearManagedTransition: managedFallbackUID != nil
+        )
     }
 }
 
