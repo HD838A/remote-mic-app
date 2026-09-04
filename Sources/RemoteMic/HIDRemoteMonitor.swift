@@ -65,11 +65,53 @@ enum HIDDeviceMatchDecision: Equatable {
     case rejected(String)
 }
 
+final class HIDDiscoveryRecoveryWatchdog {
+    private let scheduler: HIDRemoteScheduling
+    private var task: HIDRemoteScheduledTask?
+    private(set) var attempt = 0
+
+    init(scheduler: HIDRemoteScheduling) {
+        self.scheduler = scheduler
+    }
+
+    func schedule(
+        isWaiting: @escaping () -> Bool,
+        rebuild: @escaping (Int) -> Void
+    ) {
+        task?.cancel()
+        task = nil
+        guard isWaiting(), attempt < 2 else { return }
+        task = scheduler.schedule(
+            afterMilliseconds: 2_000,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self, isWaiting(), self.attempt < 2 else { return }
+            self.task = nil
+            self.attempt += 1
+            rebuild(self.attempt)
+        }
+    }
+
+    func cancel(resetAttempts: Bool) {
+        task?.cancel()
+        task = nil
+        if resetAttempts {
+            attempt = 0
+        }
+    }
+
+    func handleReport(accepted: Bool) {
+        guard accepted else { return }
+        cancel(resetAttempts: true)
+    }
+}
+
 final class HIDRemoteMonitor {
     private let settings: AppSettings
     private let eventSuppressor: KeyboardEventSuppressor
     private let ownsEventSuppressor: Bool
     private let scheduler: HIDRemoteScheduling
+    private let discoveryRecoveryWatchdog: HIDDiscoveryRecoveryWatchdog
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
     private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
@@ -96,6 +138,7 @@ final class HIDRemoteMonitor {
     private var doubleClickTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     private var longPressTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     private var permissionMonitor: HIDRemoteScheduledTask?
+    private var powerKeySuppressed = false
     private var appSwitcherTimeout: HIDRemoteScheduledTask?
     private var appSwitcherFrontmostMonitor: HIDRemoteScheduledTask?
     private var appSwitcherConfirmationProbe: HIDRemoteScheduledTask?
@@ -144,6 +187,7 @@ final class HIDRemoteMonitor {
         self.eventSuppressor = eventSuppressor
         self.ownsEventSuppressor = ownsEventSuppressor
         self.scheduler = scheduler
+        self.discoveryRecoveryWatchdog = HIDDiscoveryRecoveryWatchdog(scheduler: scheduler)
         self.runtimePermissions = runtimePermissions
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
             keyStatePoster: appSwitcherKeyStatePoster
@@ -182,7 +226,20 @@ final class HIDRemoteMonitor {
     }
 
     func start(powerKeySuppressed: Bool, allowedLocationIDs: Set<UInt32>? = nil) {
-        stop()
+        start(
+            powerKeySuppressed: powerKeySuppressed,
+            allowedLocationIDs: allowedLocationIDs,
+            preservingDiscoveryRecovery: false
+        )
+    }
+
+    private func start(
+        powerKeySuppressed: Bool,
+        allowedLocationIDs: Set<UInt32>?,
+        preservingDiscoveryRecovery: Bool
+    ) {
+        stop(resetDiscoveryRecovery: !preservingDiscoveryRecovery)
+        self.powerKeySuppressed = powerKeySuppressed
         self.allowedLocationIDs = allowedLocationIDs
         guard settings.customMappingEnabled else {
             updateStatus(LocalizedMessage("button_mapping.status.system_managed"))
@@ -258,13 +315,19 @@ final class HIDRemoteMonitor {
         }
         self.manager = manager
         startPermissionMonitor()
+        scheduleDiscoveryWatchdog()
         updateStatus(LocalizedMessage("button_mapping.status.waiting_for_device"))
         AppLogger.shared.write("HID START mode=adaptive")
     }
 
     func stop() {
+        stop(resetDiscoveryRecovery: true)
+    }
+
+    private func stop(resetDiscoveryRecovery: Bool) {
         permissionMonitor?.cancel()
         permissionMonitor = nil
+        discoveryRecoveryWatchdog.cancel(resetAttempts: resetDiscoveryRecovery)
         resetInputState()
         if ownsEventSuppressor { eventSuppressor.stop() }
         probedDevices.forEach {
@@ -467,6 +530,8 @@ final class HIDRemoteMonitor {
             diagnosticLogger("HID REPORT rejected reason=mapping_disabled")
             return
         }
+        var accepted = false
+        defer { discoveryRecoveryWatchdog.handleReport(accepted: accepted) }
         guard Self.isLocationAllowed(
             locationID: Self.locationID(for: device),
             allowedLocationIDs: allowedLocationIDs
@@ -528,8 +593,9 @@ final class HIDRemoteMonitor {
                 source: "device",
                 usages: discoveryUsages
             )
+            accepted = true
         } else {
-            parseAndProcess(reportID: reportID, data: data, source: "device")
+            accepted = parseAndProcess(reportID: reportID, data: data, source: "device")
         }
     }
 
@@ -567,11 +633,13 @@ final class HIDRemoteMonitor {
         parseAndProcess(reportID: reportID, data: data, source: "simulated")
     }
 
-    private func parseAndProcess(reportID: UInt32, data: Data, source: String) {
+    @discardableResult
+    private func parseAndProcess(reportID: UInt32, data: Data, source: String) -> Bool {
         guard let usages = parsedUsages(reportID: reportID, data: data, source: source) else {
-            return
+            return false
         }
         processParsedReport(reportID: reportID, data: data, source: source, usages: usages)
+        return true
     }
 
     private func parsedUsages(reportID: UInt32, data: Data, source: String) -> Set<UInt16>? {
@@ -596,6 +664,24 @@ final class HIDRemoteMonitor {
                 "usage_count=\(usages.count) buttons=\(Self.buttonList(for: usages))"
         )
         process(usages: usages)
+    }
+
+    private func scheduleDiscoveryWatchdog() {
+        discoveryRecoveryWatchdog.schedule(
+            isWaiting: { [weak self] in
+                guard let self else { return false }
+                return self.manager != nil && self.activeDevice == nil
+            },
+            rebuild: { [weak self] attempt in
+                guard let self else { return }
+                self.diagnosticLogger("HID DISCOVERY watchdog_rebuild attempt=\(attempt)")
+                self.start(
+                    powerKeySuppressed: self.powerKeySuppressed,
+                    allowedLocationIDs: self.allowedLocationIDs,
+                    preservingDiscoveryRecovery: true
+                )
+            }
+        )
     }
 
     func disconnectSimulatedDevice() {
