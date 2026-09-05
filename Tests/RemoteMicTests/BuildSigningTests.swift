@@ -118,6 +118,7 @@ struct BuildSigningTests {
         )
 
         #expect(buildSource.contains("SAYALL_AI_PACKAGE_PATH"))
+        #expect(!buildSource.contains("$ROOT/../sayall-ai/Package.swift"))
         #expect(buildSource.contains("A SayAllAI package is required for this build"))
         #expect(buildSource.contains("SayAllAI_SayAllAI.bundle"))
         #expect(buildSource.contains("SayAllAIIncluded"))
