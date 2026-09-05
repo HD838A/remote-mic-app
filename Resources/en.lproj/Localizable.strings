@@ -875,3 +875,14 @@
 "about.preferences.restart_onboarding_help" = "Recheck permissions, the remote, voice output device, and voice input without clearing existing connections, button mappings, or other settings.";
 "about.preferences.restart_onboarding_action" = "Run Again";
 "common.action.copy" = "Copy";
+
+"settings.import_notice.title" = "Some imported entries were not adopted";
+"settings.import_notice.rejected" = "Skipped as untrusted: %1$@.";
+"settings.import_notice.missing_app" = "These applications are not installed on this Mac, so buttons pointing to them will not work yet: %1$@.";
+"settings.import_notice.next_step" = "Set the skipped items again to use them; this notice clears on relaunch.";
+"settings.import_notice.separator" = ", ";
+"settings.import_notice.item.button_mapping" = "remote button mappings";
+"settings.import_notice.item.custom_application" = "custom application actions";
+"settings.import_notice.item.audio_device" = "audio device selection";
+"settings.import_notice.item.other" = "other settings";
+"configuration.import.partial" = "Imported; some entries were not adopted (see the Button Mapping page)";
