@@ -30,6 +30,9 @@
 "voice_button.status.left_command_released" = "Left Command released";
 "voice_button.status.right_command_pressed" = "Right Command is held; release the voice button to release it";
 "voice_button.status.right_command_released" = "Right Command released";
+"voice_button.status.right_option_enabled" = "The remote voice button will hold Right Option";
+"voice_button.status.right_option_pressed" = "Right Option is held; release the voice button to release it";
+"voice_button.status.right_option_released" = "Right Option released";
 "voice_button.status.waiting_for_input" = "Waiting for the target input to be ready";
 "voice_button.status.input_ready" = "Target input is ready";
 "voice_button.status.input_unavailable" = "Target input was not ready; voice input was cancelled";
@@ -224,10 +227,11 @@
 "connection.voice_key.mode.fn" = "Fn/Globe";
 "connection.voice_key.mode.left_command" = "Left Command";
 "connection.voice_key.mode.right_command" = "Right Command";
-"connection.voice_key_mode.help" = "Fn/Globe is the default. Command modes require Accessibility permission and a target voice app that supports the corresponding standalone Left or Right Command hold; many apps merge both sides into a generic Command. Pressing another key while held may trigger a Command shortcut.";
-"connection.voice_key_mode.unverified" = "Command mode is not verified";
-"connection.voice_key_mode.unverified_detail" = "Configure the same Left or Right Command in the target voice tool and confirm a real dictated phrase. SayAll cannot read the tool's internal settings; switch back to Fn/Globe if no text appears.";
-"connection.voice_key_mode.command_permission" = "Command mode requires Accessibility permission";
+"connection.voice_key.mode.right_option" = "Right Option";
+"connection.voice_key_mode.help" = "Fn/Globe is the default. Command and Right Option modes require Accessibility permission and a target voice app that supports the corresponding standalone key hold; many apps merge both sides into a generic modifier. Pressing another key while held may trigger a modifier shortcut.";
+"connection.voice_key_mode.unverified" = "Modifier-key mode is not verified";
+"connection.voice_key_mode.unverified_detail" = "Configure the same trigger key (Left/Right Command or Right Option) in the target voice tool and confirm a real dictated phrase. SayAll cannot read the tool's internal settings; switch back to Fn/Globe if no text appears.";
+"connection.voice_key_mode.command_permission" = "Modifier-key mode requires Accessibility permission";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "iPhone, Apple Watch, and Web";
 "connection.phone.ios_title" = "iOS App (Recommended)";

@@ -11,16 +11,24 @@ struct VoiceKeyModeTests {
         #expect(VoiceKeyMode.function.keyCode == 63)
         #expect(VoiceKeyMode.leftCommand.keyCode == 55)
         #expect(VoiceKeyMode.rightCommand.keyCode == 54)
+        #expect(VoiceKeyMode.rightOption.rawValue == "right_option")
+        #expect(VoiceKeyMode.rightOption.keyCode == 61)
         #expect(!VoiceKeyMode.function.requiresAccessibility)
         #expect(VoiceKeyMode.leftCommand.requiresAccessibility)
         #expect(VoiceKeyMode.rightCommand.requiresAccessibility)
+        #expect(VoiceKeyMode.rightOption.requiresAccessibility)
         #expect(VoiceKeyMode.function.usesHardwareMapping)
         #expect(!VoiceKeyMode.leftCommand.usesHardwareMapping)
         #expect(VoiceKeyMode.function.localizationKey == "connection.voice_key.mode.fn")
     }
 
     @Test func voiceKeyInjectionPreservesSideAndReleasesWithEmptyFlags() {
-        for mode in [VoiceKeyMode.leftCommand, .rightCommand] {
+        let expectedFlags: [VoiceKeyMode: CGEventFlags] = [
+            .leftCommand: .maskCommand,
+            .rightCommand: .maskCommand,
+            .rightOption: .maskAlternate,
+        ]
+        for (mode, heldFlags) in expectedFlags {
             var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
             let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
                 posted.append((code, isDown, flags))
@@ -43,7 +51,7 @@ struct VoiceKeyModeTests {
             #expect(posted.count == 2)
             #expect(posted[0].0 == mode.keyCode)
             #expect(posted[0].1)
-            #expect(posted[0].2 == .maskCommand)
+            #expect(posted[0].2 == heldFlags)
             #expect(posted[1].0 == mode.keyCode)
             #expect(!posted[1].1)
             #expect(posted[1].2.isEmpty)
