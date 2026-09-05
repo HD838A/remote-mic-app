@@ -681,6 +681,17 @@
 "onboarding.voice_test.title" = "Say something and confirm it really works";
 "onboarding.voice_test.detail" = "Click the field below, hold the voice key on your selected control method while speaking, then release it.";
 "onboarding.voice_test.other_detail" = "In the other voice tool using %@, enable voice input and choose %@ as its microphone in that tool’s settings.";
+"onboarding.voice_test.configuration.title" = "Before testing, make SayAll and %@ match";
+"onboarding.voice_test.configuration.detail" = "SayAll configured the first two items automatically, but it cannot read %@’s internal settings. Confirm each item before treating the setup as correct.";
+"onboarding.voice_test.configuration.sayall_voice_key" = "SayAll voice trigger";
+"onboarding.voice_test.configuration.sayall_audio_output" = "SayAll audio output";
+"onboarding.voice_test.configuration.audio_output_not_ready" = "%@ (not ready)";
+"onboarding.voice_test.configuration.voice_key_fn_hold" = "Hold Fn/Globe";
+"onboarding.voice_test.configuration.voice_key_fn_tap" = "Tap Fn to start/stop";
+"onboarding.voice_test.configuration.sayall_voice_key_mismatch" = "Current: %1$@; required: %2$@";
+"onboarding.voice_test.configuration.voice_key_checkbox" = "I confirmed %@ uses “%@” for voice input";
+"onboarding.voice_test.configuration.global_voice_checkbox" = "I confirmed Doubao has global voice activation enabled";
+"onboarding.voice_test.configuration.no_commit" = "No text appeared. Recheck the voice trigger, global activation, and microphone settings above.";
 "onboarding.voice_test.microphone_confirmation.title" = "The voice tool must use the same microphone";
 "onboarding.voice_test.microphone_confirmation.detail" = "Selecting “%@” in SayAll only routes remote audio; it does not change %@’s own microphone setting. In that tool, set the microphone to “%@” too.";
 "onboarding.voice_test.microphone_confirmation.checkbox" = "I confirmed %@ uses “%@” as its microphone";

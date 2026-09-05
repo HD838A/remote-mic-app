@@ -251,6 +251,10 @@ struct FirstUseVoiceAttemptDiagnostic: Equatable {
     var firstSampleLatencyMilliseconds: Int?
     var sessionDurationMilliseconds: Int?
     var transcriptWaitMilliseconds: Int?
+    var externalToolVoiceKeyUserConfirmed = false
+    var externalToolExpectedVoiceKey = "fn_hold"
+    var externalToolGlobalVoiceApplicable = false
+    var externalToolGlobalVoiceUserConfirmed = true
     var externalToolMicrophoneUserConfirmed = false
     var audioDelivery = VoiceAudioDeliveryDiagnostic()
     var result: FirstUseVoiceAttemptResult = .none
@@ -264,6 +268,13 @@ struct FirstUseVoiceAttemptDiagnostic: Equatable {
         case .audioDeliveryFailed:
             return "audio_\(audioDelivery.result.rawValue)"
         case .externalToolNoCommit:
+            if !externalToolVoiceKeyUserConfirmed {
+                return "external_tool_voice_key_not_confirmed"
+            }
+            if externalToolGlobalVoiceApplicable,
+               !externalToolGlobalVoiceUserConfirmed {
+                return "external_tool_global_voice_not_confirmed"
+            }
             return externalToolMicrophoneUserConfirmed
                 ? "external_tool_no_commit"
                 : "external_tool_microphone_not_confirmed"
@@ -481,10 +492,16 @@ struct FirstUseDiagnosticSnapshot {
             "voice_session_duration_ms=\(Self.metric(voiceAttempt.sessionDurationMilliseconds))",
             "voice_session_under_1s=\((voiceAttempt.sessionDurationMilliseconds ?? 1_000) < 1_000)",
             "voice_transcript_wait_ms=\(Self.metric(voiceAttempt.transcriptWaitMilliseconds))",
+            "voice_external_tool_voice_key_observable=false",
+            "voice_external_tool_voice_key_user_confirmed=\(voiceAttempt.externalToolVoiceKeyUserConfirmed)",
+            "voice_external_tool_expected_voice_key=\(voiceAttempt.externalToolExpectedVoiceKey)",
+            "voice_external_tool_global_voice_observable=false",
+            "voice_external_tool_global_voice_applicable=\(voiceAttempt.externalToolGlobalVoiceApplicable)",
+            "voice_external_tool_global_voice_user_confirmed=\(voiceAttempt.externalToolGlobalVoiceUserConfirmed)",
             "voice_external_tool_microphone_observable=false",
             "voice_external_tool_microphone_user_confirmed=\(voiceAttempt.externalToolMicrophoneUserConfirmed)",
             "voice_external_tool_expected_microphone=\(voiceAttempt.audioDelivery.outputAtStart.selectedDeviceKind.rawValue)",
-            "voice_external_tool_next_checks=microphone_matches_selected_device,voice_input_enabled,trigger_mode_matches_fn,session_duration_sufficient",
+            "voice_external_tool_next_checks=trigger_mode_matches_fn,global_voice_enabled_if_required,microphone_matches_selected_device,voice_input_enabled,session_duration_sufficient",
             "voice_audio_generation=\(voiceAttempt.audioDelivery.generation)",
             "voice_audio_source=\(voiceAttempt.audioDelivery.source)",
             "voice_audio_route=\(voiceAttempt.audioDelivery.route.rawValue)",
