@@ -681,6 +681,17 @@
 "onboarding.voice_test.title" = "亲自说一句，确认真的能用";
 "onboarding.voice_test.detail" = "点一下下面的输入框，按住所选控制方式的语音键说话，说完后松开。";
 "onboarding.voice_test.other_detail" = "请在“%@”所用的其他语音工具中开启语音输入，并在工具设置里把“%@”选为麦克风。";
+"onboarding.voice_test.configuration.title" = "测试前核对：无线麦与%@必须一致";
+"onboarding.voice_test.configuration.detail" = "无线麦已自动设置上面两项，但无法读取%@内部配置。未逐项确认前，不能把测试结果视为配置正确。";
+"onboarding.voice_test.configuration.sayall_voice_key" = "无线麦发送语音键";
+"onboarding.voice_test.configuration.sayall_audio_output" = "无线麦音频输出";
+"onboarding.voice_test.configuration.audio_output_not_ready" = "%@（未就绪）";
+"onboarding.voice_test.configuration.voice_key_fn_hold" = "长按 Fn/地球键";
+"onboarding.voice_test.configuration.voice_key_fn_tap" = "点按 Fn 开始/结束";
+"onboarding.voice_test.configuration.sayall_voice_key_mismatch" = "当前：%1$@；应为：%2$@";
+"onboarding.voice_test.configuration.voice_key_checkbox" = "我已确认%@的语音识别键是“%@”";
+"onboarding.voice_test.configuration.global_voice_checkbox" = "我已确认豆包已开启“全局唤起语音”";
+"onboarding.voice_test.configuration.no_commit" = "没有收到文字。请重新核对上面的语音识别键、全局唤起和麦克风设置。";
 "onboarding.voice_test.microphone_confirmation.title" = "输入工具还必须选择同一个麦克风";
 "onboarding.voice_test.microphone_confirmation.detail" = "无线麦选择“%@”只负责输出遥控器声音，不会修改%@自己的麦克风设置。请先在该工具设置中把麦克风也改为“%@”。";
 "onboarding.voice_test.microphone_confirmation.checkbox" = "我已确认%@的麦克风是“%@”";

@@ -52,6 +52,8 @@ struct OnboardingView: View {
     @State private var voiceAttemptStartedAtUptime: TimeInterval?
     @State private var voiceTranscriptWaitStartedAtUptime: TimeInterval?
     @State private var activeFocusLossStartedAtUptime: TimeInterval?
+    @State private var externalToolVoiceKeyConfirmed = false
+    @State private var externalToolGlobalVoiceConfirmed = false
     @State private var externalToolMicrophoneConfirmed = false
     @State private var voiceTranscriptDeadlineToken = UUID()
     @State private var suppressConnectedPhysicalRemoteAutoRouteOnce = false
@@ -188,6 +190,8 @@ struct OnboardingView: View {
             prepareForStep(step)
         }
         .onChange(of: settings.onboardingVoiceTool) { _ in
+            resetExternalToolVoiceKeyConfirmation(reason: "voice_tool_changed")
+            resetExternalToolGlobalVoiceConfirmation(reason: "voice_tool_changed")
             resetExternalToolMicrophoneConfirmation(reason: "voice_tool_changed")
         }
         .onChange(of: settings.selectedAudioDeviceUID) { _ in
@@ -198,6 +202,20 @@ struct OnboardingView: View {
                 "ONBOARDING EXTERNAL_MICROPHONE_CONFIRMATION source=user " +
                     "confirmed=\(confirmed) tool=\(settings.onboardingVoiceTool.rawValue) " +
                     "expected_device=\(selectedAudioDeviceDiagnosticKind.rawValue)"
+            )
+        }
+        .onChange(of: externalToolVoiceKeyConfirmed) { confirmed in
+            AppLogger.shared.write(
+                "ONBOARDING EXTERNAL_VOICE_KEY_CONFIRMATION source=user " +
+                    "confirmed=\(confirmed) tool=\(settings.onboardingVoiceTool.rawValue) " +
+                    "expected=\(externalToolExpectedVoiceKeyDiagnosticValue)"
+            )
+        }
+        .onChange(of: externalToolGlobalVoiceConfirmed) { confirmed in
+            AppLogger.shared.write(
+                "ONBOARDING EXTERNAL_GLOBAL_VOICE_CONFIRMATION source=user " +
+                    "confirmed=\(confirmed) tool=\(settings.onboardingVoiceTool.rawValue) " +
+                    "applicable=\(externalToolGlobalVoiceConfirmationRequired)"
             )
         }
         .onChange(of: transcript) { updatedText in
@@ -1183,11 +1201,7 @@ struct OnboardingView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 
-            Text(voiceTestEnvironmentText)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            externalToolMicrophoneConfirmationCard
+            externalToolConfigurationConfirmationCard
 
             ZStack(alignment: .topLeading) {
                 OnboardingTranscriptEditor(
@@ -1236,10 +1250,15 @@ struct OnboardingView: View {
         }
     }
 
-    private var externalToolMicrophoneConfirmationCard: some View {
+    private var externalToolConfigurationConfirmationCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label {
-                Text("onboarding.voice_test.microphone_confirmation.title")
+                Text(
+                    LocalizedMessage(
+                        "onboarding.voice_test.configuration.title",
+                        arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
+                    ).text(using: localization)
+                )
                     .font(.system(size: 13, weight: .semibold))
             } icon: {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -1248,17 +1267,67 @@ struct OnboardingView: View {
 
             Text(
                 LocalizedMessage(
-                    "onboarding.voice_test.microphone_confirmation.detail",
-                    arguments: [
-                        selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
-                        localization.text(settings.onboardingVoiceTool.titleKey),
-                        selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
-                    ]
+                    "onboarding.voice_test.configuration.detail",
+                    arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
                 ).text(using: localization)
             )
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("onboarding.voice_test.configuration.sayall_voice_key")
+                    .font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 8)
+                Label(
+                    sayAllVoiceKeyConfigurationText,
+                    systemImage: sayAllVoiceKeyConfigurationReady
+                        ? "checkmark.circle.fill"
+                        : "xmark.circle.fill"
+                )
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(sayAllVoiceKeyConfigurationReady ? Color.green : Color.red)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("onboarding.voice_test.configuration.sayall_audio_output")
+                    .font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 8)
+                Label(
+                    sayAllAudioOutputConfigurationText,
+                    systemImage: onboardingAudioReady
+                        ? "checkmark.circle.fill"
+                        : "xmark.circle.fill"
+                )
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(onboardingAudioReady ? Color.green : Color.red)
+            }
+
+            Divider()
+
+            Toggle(isOn: $externalToolVoiceKeyConfirmed) {
+                Text(
+                    LocalizedMessage(
+                        "onboarding.voice_test.configuration.voice_key_checkbox",
+                        arguments: [
+                            localization.text(settings.onboardingVoiceTool.titleKey),
+                            externalToolExpectedVoiceKeyText,
+                        ]
+                    ).text(using: localization)
+                )
+                .font(.system(size: 12, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .toggleStyle(.checkbox)
+
+            if externalToolGlobalVoiceConfirmationRequired {
+                Toggle(isOn: $externalToolGlobalVoiceConfirmed) {
+                    Text("onboarding.voice_test.configuration.global_voice_checkbox")
+                        .font(.system(size: 12, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .toggleStyle(.checkbox)
+            }
 
             Toggle(isOn: $externalToolMicrophoneConfirmed) {
                 Text(
@@ -1274,6 +1343,13 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
             .toggleStyle(.checkbox)
+
+            if voiceAttempt.result == .externalToolNoCommit {
+                Label("onboarding.voice_test.configuration.no_commit", systemImage: "xmark.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1824,7 +1900,7 @@ struct OnboardingView: View {
         if settings.onboardingStep == .voiceTest {
             return policyAllowsContinue &&
                 voiceAttempt.phase == .passed &&
-                externalToolMicrophoneConfirmed
+                externalToolConfigurationConfirmed
         }
         return policyAllowsContinue &&
             (settings.onboardingStep != .voiceTool || voiceToolSelectionIsValid)
@@ -1992,10 +2068,79 @@ struct OnboardingView: View {
         }
     }
 
-    private var voiceTestEnvironmentText: String {
-        let tool = localization.text(settings.onboardingVoiceTool.titleKey)
-        let device = selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required")
-        return "\(tool)  ·  \(device)"
+    private var externalToolExpectedVoiceKeyText: String {
+        localization.text(
+            OnboardingVoiceTestConfigurationPolicy.expectsFnTap(
+                for: settings.onboardingVoiceTool
+            )
+                ? "onboarding.voice_test.configuration.voice_key_fn_tap"
+                : "onboarding.voice_test.configuration.voice_key_fn_hold"
+        )
+    }
+
+    private var externalToolExpectedVoiceKeyDiagnosticValue: String {
+        OnboardingVoiceTestConfigurationPolicy.expectsFnTap(
+            for: settings.onboardingVoiceTool
+        ) ? "fn_tap" : "fn_hold"
+    }
+
+    private var sayAllVoiceKeyConfigurationReady: Bool {
+        OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: settings.onboardingVoiceTool,
+            voiceKeyMode: settings.voiceKeyMode,
+            voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled
+        )
+    }
+
+    private var sayAllVoiceKeyConfigurationText: String {
+        guard !sayAllVoiceKeyConfigurationReady else {
+            return externalToolExpectedVoiceKeyText
+        }
+        let current: String
+        if settings.voiceKeyMode == .function {
+            current = localization.text(
+                settings.voiceFnTapModeEnabled
+                    ? "onboarding.voice_test.configuration.voice_key_fn_tap"
+                    : "onboarding.voice_test.configuration.voice_key_fn_hold"
+            )
+        } else {
+            current = localization.text(settings.voiceKeyMode.localizationKey)
+        }
+        return LocalizedMessage(
+            "onboarding.voice_test.configuration.sayall_voice_key_mismatch",
+            arguments: [current, externalToolExpectedVoiceKeyText]
+        ).text(using: localization)
+    }
+
+    private var sayAllAudioOutputConfigurationText: String {
+        guard let selectedAudioDevice else {
+            return localization.text("onboarding.audio.select_required")
+        }
+        guard onboardingAudioReady else {
+            return LocalizedMessage(
+                "onboarding.voice_test.configuration.audio_output_not_ready",
+                arguments: [selectedAudioDevice.name]
+            ).text(using: localization)
+        }
+        return selectedAudioDevice.name
+    }
+
+    private var externalToolGlobalVoiceConfirmationRequired: Bool {
+        OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(
+            for: settings.onboardingVoiceTool
+        )
+    }
+
+    private var externalToolConfigurationConfirmed: Bool {
+        OnboardingVoiceTestConfigurationPolicy.isComplete(
+            voiceTool: settings.onboardingVoiceTool,
+            voiceKeyMode: settings.voiceKeyMode,
+            voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled,
+            audioOutputReady: onboardingAudioReady,
+            externalVoiceKeyConfirmed: externalToolVoiceKeyConfirmed,
+            externalGlobalVoiceConfirmed: externalToolGlobalVoiceConfirmed,
+            externalMicrophoneConfirmed: externalToolMicrophoneConfirmed
+        )
     }
 
     private var voiceTestStatusText: String {
@@ -2440,6 +2585,11 @@ struct OnboardingView: View {
             firstSampleLatencyMilliseconds: nil,
             sessionDurationMilliseconds: nil,
             transcriptWaitMilliseconds: nil,
+            externalToolVoiceKeyUserConfirmed: externalToolVoiceKeyConfirmed,
+            externalToolExpectedVoiceKey: externalToolExpectedVoiceKeyDiagnosticValue,
+            externalToolGlobalVoiceApplicable: externalToolGlobalVoiceConfirmationRequired,
+            externalToolGlobalVoiceUserConfirmed: !externalToolGlobalVoiceConfirmationRequired ||
+                externalToolGlobalVoiceConfirmed,
             externalToolMicrophoneUserConfirmed: externalToolMicrophoneConfirmed,
             audioDelivery: model.voiceAudioDeliveryDiagnosticSnapshot(),
             result: .none
@@ -2563,9 +2713,16 @@ struct OnboardingView: View {
                 "focus_ready_at_end=\(voiceAttempt.focusReadyAtEnd) " +
                 "focus_ready_at_deadline=\(voiceAttempt.focusReadyAtDeadline.map(String.init) ?? "unknown") " +
                 "focus_total_loss_ms=\(voiceAttempt.totalFocusLossMilliseconds) " +
+                "external_voice_key_observable=false " +
+                "external_voice_key_user_confirmed=\(voiceAttempt.externalToolVoiceKeyUserConfirmed) " +
+                "external_expected_voice_key=\(voiceAttempt.externalToolExpectedVoiceKey) " +
+                "external_global_voice_observable=false " +
+                "external_global_voice_applicable=\(voiceAttempt.externalToolGlobalVoiceApplicable) " +
+                "external_global_voice_user_confirmed=\(voiceAttempt.externalToolGlobalVoiceUserConfirmed) " +
                 "external_microphone_observable=false " +
                 "external_microphone_user_confirmed=\(voiceAttempt.externalToolMicrophoneUserConfirmed) " +
-                "external_next_check=microphone_matches_selected_device " +
+                "external_next_checks=trigger_mode_matches_fn,global_voice_enabled_if_required," +
+                "microphone_matches_selected_device " +
                 "first_sample_latency_ms=\(voiceAttempt.firstSampleLatencyMilliseconds.map(String.init) ?? "unavailable") " +
                 "session_duration_ms=\(voiceAttempt.sessionDurationMilliseconds.map(String.init) ?? "unavailable") " +
                 "session_under_1s=\((voiceAttempt.sessionDurationMilliseconds ?? 1_000) < 1_000) " +
@@ -2595,6 +2752,22 @@ struct OnboardingView: View {
         externalToolMicrophoneConfirmed = false
         AppLogger.shared.write(
             "ONBOARDING EXTERNAL_MICROPHONE_CONFIRMATION reset reason=\(reason)"
+        )
+    }
+
+    private func resetExternalToolVoiceKeyConfirmation(reason: String) {
+        guard externalToolVoiceKeyConfirmed else { return }
+        externalToolVoiceKeyConfirmed = false
+        AppLogger.shared.write(
+            "ONBOARDING EXTERNAL_VOICE_KEY_CONFIRMATION reset reason=\(reason)"
+        )
+    }
+
+    private func resetExternalToolGlobalVoiceConfirmation(reason: String) {
+        guard externalToolGlobalVoiceConfirmed else { return }
+        externalToolGlobalVoiceConfirmed = false
+        AppLogger.shared.write(
+            "ONBOARDING EXTERNAL_GLOBAL_VOICE_CONFIRMATION reset reason=\(reason)"
         )
     }
 
