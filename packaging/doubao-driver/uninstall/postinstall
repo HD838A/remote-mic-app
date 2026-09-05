@@ -175,8 +175,27 @@ for (( index=1; index<=${#ITEM_SOURCES[@]}; index++ )); do
   fi
 done
 
+# The recognized items are already in Trash, so a failed audio-service restart
+# must not turn a successful uninstall into an installer error, and a real
+# failure must be reported honestly instead of swallowed by `|| true`.
+restart_audio_service() {
+  if ! /usr/bin/pgrep -qx coreaudiod; then
+    installer_message \
+      "系统音频服务当前未运行，无需重启；驱动移除即刻生效。" \
+      "The system audio service is not running; no restart was needed and the driver removal takes effect immediately."
+  elif /usr/bin/killall coreaudiod; then
+    installer_message \
+      "已重启系统音频服务。" \
+      "Restarted the system audio service."
+  else
+    installer_message \
+      "驱动已移除，但重启系统音频服务失败；请重启 Mac 完成卸载。" \
+      "The driver was removed, but the system audio service could not be restarted; restart your Mac to finish."
+  fi
+}
+
 if [[ "$DRIVER_MOVED" -eq 1 && "$TARGET_VOLUME" == "/" ]]; then
-  /usr/bin/killall coreaudiod 2>/dev/null || true
+  restart_audio_service
 fi
 installer_message \
   "已将无线麦SayAll.app 的已识别安装项移到废纸篓，需要时可恢复；BlackHole 和本地设置未被修改。" \
