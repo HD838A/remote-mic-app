@@ -79,9 +79,6 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; t
   exit 1
 fi
 
-if [[ -z "$SAYALL_AI_PACKAGE_PATH" && -f "$ROOT/../sayall-ai/Package.swift" ]]; then
-  SAYALL_AI_PACKAGE_PATH="$ROOT/../sayall-ai"
-fi
 if [[ -n "$SAYALL_AI_PACKAGE_PATH" ]]; then
   if [[ ! -f "$SAYALL_AI_PACKAGE_PATH/Package.swift" ]]; then
     print -u2 "SAYALL_AI_PACKAGE_PATH must contain Package.swift"
