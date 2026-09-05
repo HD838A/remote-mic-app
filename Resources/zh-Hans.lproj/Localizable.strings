@@ -875,3 +875,14 @@
 "about.preferences.restart_onboarding_help" = "重新检查权限、遥控器、语音输出设备和语音输入；不会清除现有连接、按键映射或其他设置。";
 "about.preferences.restart_onboarding_action" = "重新运行";
 "common.action.copy" = "复制";
+
+"settings.import_notice.title" = "导入的配置里有内容没有通过检查";
+"settings.import_notice.rejected" = "未通过检查已跳过：%1$@。";
+"settings.import_notice.missing_app" = "以下应用在这台 Mac 上未安装，相关按键暂时不会生效：%1$@。";
+"settings.import_notice.next_step" = "重新设置一次被跳过的内容即可；这条提示只保留到本次退出。";
+"settings.import_notice.separator" = "、";
+"settings.import_notice.item.button_mapping" = "遥控器按键映射";
+"settings.import_notice.item.custom_application" = "自定义应用动作";
+"settings.import_notice.item.audio_device" = "音频设备选择";
+"settings.import_notice.item.other" = "其他设置";
+"configuration.import.partial" = "已导入，部分内容未通过检查（详见「按键映射」页提示）";
