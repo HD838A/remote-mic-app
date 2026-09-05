@@ -62,6 +62,7 @@
 - [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md)
 - [导入配置几乎不校验，可为遥控器按键装上任意应用与快捷键触发器](./2026-09-05-configuration-import-accepts-arbitrary-app-and-shortcut.md)
 - [安装/卸载脚本在音频服务缺失时于成功之后报错中止](./2026-09-05-installer-audio-service-restart-aborts-script.md)
+- [遥控器连接且空闲时音频引擎自我维持的重绑循环](./2026-09-05-idle-audio-rebind-loop.md)
 - [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md)
 
 本目录统一保存已经发现、调查或修复的问题。每个 Bug 使用独立 Markdown 文件，至少记录时间、状态、影响范围、功能点、简单描述和详细过程；无法从历史提交恢复的细节会明确标注，不补写推测。
