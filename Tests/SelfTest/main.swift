@@ -543,7 +543,11 @@ let preRollFlushedAfterStart = fnTapAudio == [[1, 2, 3]]
 let fnTapStopped = fnTapController.stopVoice()
 let stopWaitedForDrain = fnTapEvents == [true, false]
 fnTapDrainCompletion?()
-fnTapScheduledOperations.removeFirst()()
+// This fake scheduler's cancellation is a no-op, so cancelled work such as the drain
+// deadline stays queued. Run everything queued to reach the closing key release.
+while !fnTapScheduledOperations.isEmpty {
+    fnTapScheduledOperations.removeFirst()()
+}
 check(
     fnTapStarted && fnTapBuffered && preRollStayedBuffered && preRollFlushedAfterStart &&
         fnTapStopped && stopWaitedForDrain && fnTapEvents == [true, false, true, false] &&
