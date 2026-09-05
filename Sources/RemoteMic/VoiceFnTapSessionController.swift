@@ -53,6 +53,10 @@ final class VoiceFnTapSessionController {
         var ended = false
     }
 
+    /// Upper bound on `.draining`. Comfortably above the audio side's own drain fallback,
+    /// so a healthy session always leaves `.draining` through `drainAudio` and this only
+    /// fires when no drain answer arrives at all.
+    private let drainTimeout: TimeInterval = 2
     private let startDelay: TimeInterval
     private let tapDuration: TimeInterval
     private let maximumPreRollSampleCount: Int
@@ -297,6 +301,15 @@ final class VoiceFnTapSessionController {
         default:
             return
         }
+        // Safety net for a drain answer that never arrives at all: the audio side's own
+        // fallback holds its output weakly, so a released output reports nothing and this
+        // session would sit in `.draining` refusing every later voice press. Armed before
+        // `drainAudio` so a synchronous answer cancels it through `resetSessionState`, and
+        // funnelled through the generation-guarded `beginStopTap` so a late fire cannot
+        // touch a healthy later session.
+        scheduledTasks.append(schedule(drainTimeout) { [weak self] in
+            self?.beginStopTap(generation: sessionGeneration)
+        })
         drainAudio { [weak self] in
             self?.beginStopTap(generation: sessionGeneration)
         }

@@ -386,6 +386,16 @@ final class VirtualAudioOutput {
     private(set) var status = LocalizedMessage("audio.output.none_selected")
     var onConfigurationChange: (() -> Void)?
 
+    /// Counts one buffer as queued for playback. Together with
+    /// `scheduledVoiceBufferDidFinish` this drives the pending-buffer count that
+    /// draining waits on, so it is the single seam a test can use to arm drain
+    /// bookkeeping without a live output device.
+    func registerPendingVoiceBuffer() {
+        playbackLock.lock()
+        pendingVoiceBufferCount += 1
+        playbackLock.unlock()
+    }
+
     var pendingVoiceBufferCountForDiagnostics: Int {
         playbackLock.lock()
         defer { playbackLock.unlock() }
@@ -593,10 +603,12 @@ final class VirtualAudioOutput {
         drainGeneration &+= 1
         let generation = drainGeneration
         let shouldCompleteImmediately = pendingVoiceBufferCount == 0
-        if !shouldCompleteImmediately {
-            drainCompletion = completion
-        }
+        // One slot only, so a new request must hand the previous waiter back rather than
+        // overwrite (and silently lose) it. Invoked after the new drain is armed.
+        let displacedCompletion = drainCompletion
+        drainCompletion = shouldCompleteImmediately ? nil : completion
         playbackLock.unlock()
+        defer { displacedCompletion?() }
 
         if shouldCompleteImmediately {
             flushPlayer()
@@ -637,12 +649,20 @@ final class VirtualAudioOutput {
         pendingVoiceSampleCount = 0
         playbackGeneration &+= 1
         pendingDrainLogContexts.removeAll()
+        // Taken before the teardown below so a nested `stop()` cannot pick it up a second
+        // time, and invoked afterwards so it never runs against a half-restarted player.
+        // An interruption is an outcome and must answer the waiter exactly once: dropping
+        // it here strands the caller on a drain that can never report back, because the
+        // fallback timer armed by `endSessionAfterDraining` is invalidated by the
+        // generation bump below.
+        let interruptedDrain = drainCompletion
         drainCompletion = nil
         drainGeneration &+= 1
         playbackLock.unlock()
         for context in interruptedContexts {
             AppLogger.shared.write("AUDIO PLAYBACK interrupted \(context)")
         }
+        defer { interruptedDrain?() }
         guard let player, engine?.isRunning == true else { return }
         player.stop()
         player.reset()
@@ -664,12 +684,17 @@ final class VirtualAudioOutput {
         pendingVoiceSampleCount = 0
         playbackGeneration &+= 1
         pendingDrainLogContexts.removeAll()
+        // Same contract as flushPlayer: stopping answers the drain waiter exactly
+        // once, after the teardown below, instead of dropping it with the
+        // generation bump.
+        let interruptedDrain = drainCompletion
         drainCompletion = nil
         drainGeneration &+= 1
         playbackLock.unlock()
         for context in interruptedContexts {
             AppLogger.shared.write("AUDIO PLAYBACK interrupted \(context)")
         }
+        defer { interruptedDrain?() }
         removeEngineConfigurationObserver()
         player?.stop()
         engine?.stop()
