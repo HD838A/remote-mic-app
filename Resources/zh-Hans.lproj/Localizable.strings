@@ -875,3 +875,14 @@
 "about.preferences.restart_onboarding_help" = "重新检查权限、遥控器、语音输出设备和语音输入；不会清除现有连接、按键映射或其他设置。";
 "about.preferences.restart_onboarding_action" = "重新运行";
 "common.action.copy" = "复制";
+
+"settings.corrupted.title" = "部分设置读不出来，已经暂时换回默认设置";
+"settings.corrupted.summary" = "受影响的是：%1$@。";
+"settings.corrupted.recovery" = "你原来保存的内容没有被删掉，还留在设置文件里，需要时可以联系我们帮你找回。";
+"settings.corrupted.next_step" = "现在把上面这些内容重新设置一次就能继续正常使用，设置好之后这条提示会自动消失。";
+"settings.corrupted.separator" = "、";
+"settings.corrupted.item.button_mapping" = "遥控器按键映射";
+"settings.corrupted.item.custom_application" = "自定义应用动作";
+"settings.corrupted.item.remote_device" = "遥控器设备配置";
+"settings.corrupted.item.statistics" = "使用统计记录";
+"settings.corrupted.item.other" = "其他设置";

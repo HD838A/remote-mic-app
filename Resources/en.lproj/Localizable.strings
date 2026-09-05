@@ -875,3 +875,14 @@
 "about.preferences.restart_onboarding_help" = "Recheck permissions, the remote, voice output device, and voice input without clearing existing connections, button mappings, or other settings.";
 "about.preferences.restart_onboarding_action" = "Run Again";
 "common.action.copy" = "Copy";
+
+"settings.corrupted.title" = "Some settings could not be read and were reset to defaults";
+"settings.corrupted.summary" = "Affected: %1$@.";
+"settings.corrupted.recovery" = "Your saved content was not deleted; it is still in the settings file. Contact us if you need help recovering it.";
+"settings.corrupted.next_step" = "Set the items above again to keep using them; this notice disappears once they decode cleanly.";
+"settings.corrupted.separator" = ", ";
+"settings.corrupted.item.button_mapping" = "remote button mappings";
+"settings.corrupted.item.custom_application" = "custom application actions";
+"settings.corrupted.item.remote_device" = "remote device profiles";
+"settings.corrupted.item.statistics" = "usage statistics";
+"settings.corrupted.item.other" = "other settings";
