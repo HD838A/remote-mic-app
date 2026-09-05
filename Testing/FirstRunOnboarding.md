@@ -1,5 +1,7 @@
 # 首次使用设置向导测试手册
 
+> 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
+
 ## 适用范围
 
 - 版本：无线麦SayAll.app 三种控制方式 Onboarding 的 Preview staging artifact
