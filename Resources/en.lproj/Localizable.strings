@@ -94,6 +94,8 @@
 "remote.button.full.tv" = "TV button";
 "keyboard.key_code" = "Key %1$@";
 "keyboard.key.return" = "Return";
+"keyboard.modifier.left" = "L";
+"keyboard.modifier.right" = "R";
 "keyboard.key.tab" = "Tab";
 "keyboard.key.space" = "Space";
 "keyboard.key.clear" = "Clear";

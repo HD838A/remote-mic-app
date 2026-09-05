@@ -94,6 +94,8 @@
 "remote.button.full.tv" = "TV 键";
 "keyboard.key_code" = "按键 %1$@";
 "keyboard.key.return" = "Return（回车）";
+"keyboard.modifier.left" = "左";
+"keyboard.modifier.right" = "右";
 "keyboard.key.tab" = "Tab（制表）";
 "keyboard.key.space" = "Space（空格）";
 "keyboard.key.clear" = "Clear（清除）";
