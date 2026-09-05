@@ -6,6 +6,7 @@ dist/
 .DS_Store
 .codex-screenshots/
 .private-dependencies/
+/.worktrees/
 
 # Local credentials, signing identities, and notarization material.
 .env
