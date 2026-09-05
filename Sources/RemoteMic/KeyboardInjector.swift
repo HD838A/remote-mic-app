@@ -190,6 +190,84 @@ enum KeyboardInjector {
         )
     }
 
+    // Side-specific modifier keys and the flags each one contributes (generic mask
+    // plus its device-dependent side bit). Real hardware reports modifier changes as
+    // flagsChanged, so these codes are posted that way. Fn (63) is intentionally
+    // absent: its existing injection path is already verified and stays unchanged.
+    private static let modifierFlagsByKeyCode: [CGKeyCode: CGEventFlags] = [
+        54: CGEventFlags(rawValue: CGEventFlags.maskCommand.rawValue | 0x10),
+        55: CGEventFlags(rawValue: CGEventFlags.maskCommand.rawValue | 0x08),
+        56: CGEventFlags(rawValue: CGEventFlags.maskShift.rawValue | 0x02),
+        60: CGEventFlags(rawValue: CGEventFlags.maskShift.rawValue | 0x04),
+        58: CGEventFlags(rawValue: CGEventFlags.maskAlternate.rawValue | 0x20),
+        61: CGEventFlags(rawValue: CGEventFlags.maskAlternate.rawValue | 0x40),
+        59: CGEventFlags(rawValue: CGEventFlags.maskControl.rawValue | 0x01),
+        62: CGEventFlags(rawValue: CGEventFlags.maskControl.rawValue | 0x2000),
+    ]
+
+    static func isModifierKeyCode(_ code: CGKeyCode) -> Bool {
+        modifierFlagsByKeyCode[code] != nil
+    }
+
+    private static func modifierFlags(for code: CGKeyCode) -> CGEventFlags {
+        modifierFlagsByKeyCode[code] ?? []
+    }
+
+    /// Sends a recorded shortcut the way a real keyboard would: when a side was
+    /// recorded, the matching physical modifiers go down (with cumulative flags)
+    /// around the main key and are released in reverse order. Side-specific tools
+    /// require e.g. the right Command actually see it; a plain flags-only event
+    /// cannot express the side. Modifiers are always released in reverse order.
+    static func postShortcut(
+        _ shortcut: CustomKeyboardShortcut,
+        keyPoster: KeyPoster,
+        keyStatePoster: KeyStatePoster
+    ) {
+        let flags = shortcut.cgEventFlags
+        let modifierCodes = shortcut.sideSpecificModifierKeyCodes
+        guard !modifierCodes.isEmpty else {
+            keyPoster(CGKeyCode(shortcut.keyCode), flags)
+            return
+        }
+        var pressed: [CGKeyCode] = []
+        defer {
+            while let code = pressed.popLast() {
+                let remaining = pressed.reduce(into: CGEventFlags()) { result, held in
+                    result.formUnion(modifierFlags(for: held))
+                }
+                _ = keyStatePoster(code, false, remaining)
+            }
+        }
+        var accumulated = CGEventFlags()
+        for code in modifierCodes {
+            accumulated.formUnion(modifierFlags(for: code))
+            guard keyStatePoster(code, true, accumulated) else { return }
+            pressed.append(code)
+        }
+        keyPoster(CGKeyCode(shortcut.keyCode), flags)
+    }
+
+    /// Posts a modifier state change the way real hardware does, as a flagsChanged
+    /// event. Posting modifiers as keyDown/keyUp leaves the system modifier state
+    /// untouched, so hotkey handlers that check the real state do not consume the
+    /// keystroke and it leaks through to the frontmost app.
+    private static func postModifierState(
+        code: CGKeyCode,
+        isDown: Bool,
+        flags: CGEventFlags
+    ) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
+        else { return false }
+        if isModifierKeyCode(code) {
+            event.type = .flagsChanged
+        }
+        event.flags = flags
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
     @discardableResult
     static func setVoiceKeyPressed(
         _ mode: VoiceKeyMode,
@@ -232,6 +310,7 @@ enum KeyboardInjector {
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
+        modifierStatePoster: KeyStatePoster = postModifierState,
         scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) }
     ) -> Bool {
         guard action != .disabled else { return true }
@@ -358,10 +437,15 @@ enum KeyboardInjector {
                     )
                     return submitted
                 }
-                keyPoster(CGKeyCode(shortcut.keyCode), eventFlags)
+                postShortcut(
+                    shortcut,
+                    keyPoster: keyPoster,
+                    keyStatePoster: modifierStatePoster
+                )
                 AppLogger.shared.write(
                     "SHORTCUT ACTION submitted key_code=\(shortcut.keyCode) " +
-                        "modifier_flags=\(eventFlags.rawValue) standalone=false"
+                        "modifier_flags=\(eventFlags.rawValue) standalone=false " +
+                        "side_modifiers=\(shortcut.sideSpecificModifierKeyCodes.count)"
                 )
             }
         case .focusInput:

@@ -118,13 +118,30 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         .control, .option, .shift, .command, .function,
     ]
 
+    // Device-dependent bits (IOKit IOLLEvent.h) record which physical side was
+    // pressed. Without them a recorded right Command collapses into a plain
+    // Command, so tools that require the right-side key never trigger.
+    private static let leftControlMask: UInt = 0x0000_0001
+    private static let rightControlMask: UInt = 0x0000_2000
+    private static let leftShiftMask: UInt = 0x0000_0002
+    private static let rightShiftMask: UInt = 0x0000_0004
+    private static let leftCommandMask: UInt = 0x0000_0008
+    private static let rightCommandMask: UInt = 0x0000_0010
+    private static let leftOptionMask: UInt = 0x0000_0020
+    private static let rightOptionMask: UInt = 0x0000_0040
+    static let deviceDependentModifiers = NSEvent.ModifierFlags(rawValue: 0x0000_207F)
+
+    private static var retainedModifiers: NSEvent.ModifierFlags {
+        supportedModifiers.union(deviceDependentModifiers)
+    }
+
     let keyCode: UInt16
     let modifierFlagsRawValue: UInt
     let keyLabel: String
 
     init(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags, keyLabel: String) {
         self.keyCode = keyCode
-        modifierFlagsRawValue = modifierFlags.intersection(Self.supportedModifiers).rawValue
+        modifierFlagsRawValue = modifierFlags.intersection(Self.retainedModifiers).rawValue
         self.keyLabel = keyLabel
     }
 
@@ -138,7 +155,7 @@ struct CustomKeyboardShortcut: Codable, Equatable {
 
     var modifierFlags: NSEvent.ModifierFlags {
         NSEvent.ModifierFlags(rawValue: modifierFlagsRawValue)
-            .intersection(Self.supportedModifiers)
+            .intersection(Self.retainedModifiers)
     }
 
     var cgEventFlags: CGEventFlags {
@@ -148,7 +165,38 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         if modifierFlags.contains(.shift) { flags.insert(.maskShift) }
         if modifierFlags.contains(.command) { flags.insert(.maskCommand) }
         if modifierFlags.contains(.function) { flags.insert(.maskSecondaryFn) }
-        return flags
+        // Carry the recorded side so apps reading device-dependent bits see it.
+        let side = modifierFlagsRawValue & Self.deviceDependentModifiers.rawValue
+        return CGEventFlags(rawValue: flags.rawValue | UInt64(side))
+    }
+
+    /// Real modifier keys to hold while sending the shortcut, in a stable order.
+    /// Empty when no side was recorded (older configurations), which keeps the
+    /// previous flags-only injection behavior.
+    var sideSpecificModifierKeyCodes: [CGKeyCode] {
+        let raw = modifierFlagsRawValue
+        var codes: [CGKeyCode] = []
+        if raw & Self.rightControlMask != 0 {
+            codes.append(62)
+        } else if raw & Self.leftControlMask != 0 {
+            codes.append(59)
+        }
+        if raw & Self.rightOptionMask != 0 {
+            codes.append(61)
+        } else if raw & Self.leftOptionMask != 0 {
+            codes.append(58)
+        }
+        if raw & Self.rightShiftMask != 0 {
+            codes.append(60)
+        } else if raw & Self.leftShiftMask != 0 {
+            codes.append(56)
+        }
+        if raw & Self.rightCommandMask != 0 {
+            codes.append(54)
+        } else if raw & Self.leftCommandMask != 0 {
+            codes.append(55)
+        }
+        return codes
     }
 
     var standaloneModifier: StandaloneKeyboardModifier? {
@@ -160,12 +208,50 @@ struct CustomKeyboardShortcut: Codable, Equatable {
             return standaloneModifier.displayName(using: localization)
         }
         var result = ""
-        if modifierFlags.contains(.control) { result += "⌃" }
-        if modifierFlags.contains(.option) { result += "⌥" }
-        if modifierFlags.contains(.shift) { result += "⇧" }
-        if modifierFlags.contains(.command) { result += "⌘" }
+        if modifierFlags.contains(.control) {
+            result += sidePrefix(
+                leftMask: Self.leftControlMask,
+                rightMask: Self.rightControlMask,
+                using: localization
+            ) + "⌃"
+        }
+        if modifierFlags.contains(.option) {
+            result += sidePrefix(
+                leftMask: Self.leftOptionMask,
+                rightMask: Self.rightOptionMask,
+                using: localization
+            ) + "⌥"
+        }
+        if modifierFlags.contains(.shift) {
+            result += sidePrefix(
+                leftMask: Self.leftShiftMask,
+                rightMask: Self.rightShiftMask,
+                using: localization
+            ) + "⇧"
+        }
+        if modifierFlags.contains(.command) {
+            result += sidePrefix(
+                leftMask: Self.leftCommandMask,
+                rightMask: Self.rightCommandMask,
+                using: localization
+            ) + "⌘"
+        }
         if modifierFlags.contains(.function) { result += "fn " }
         return result + localizedKeyLabel(using: localization)
+    }
+
+    private func sidePrefix(
+        leftMask: UInt,
+        rightMask: UInt,
+        using localization: LocalizationStore
+    ) -> String {
+        if modifierFlagsRawValue & rightMask != 0 {
+            return localization.text("keyboard.modifier.right")
+        }
+        if modifierFlagsRawValue & leftMask != 0 {
+            return localization.text("keyboard.modifier.left")
+        }
+        return ""
     }
 
     private func localizedKeyLabel(using localization: LocalizationStore) -> String {
