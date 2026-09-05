@@ -332,6 +332,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var connectedRemoteProfileIDs = Set<UUID>()
     @Published private(set) var remoteBatteryLevels: [UUID: Int] = [:]
     @Published private(set) var remotePowerStates: [UUID: RemotePowerState] = [:]
+    // Battery, power and model all arrive before the ATVV handshake completes, and until it
+    // does there is no profile to attach them to. Keyed by peripheral identifier, replayed
+    // once the remote proves itself real, never persisted if it does not.
+    private var pendingRemoteBatteryLevels: [UUID: Int] = [:]
+    private var pendingRemotePowerStates: [UUID: RemotePowerState] = [:]
+    private var pendingRemoteModels: [UUID: XiaomiRemoteModel] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
@@ -2285,17 +2291,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         } else if bluetoothBridges[identifier] == nil {
             bluetoothBridges[identifier] = bridge
         }
+        applyPendingRemoteTelemetry(identifier: identifier, profileID: profileID)
         return profileID
+    }
+
+    private func applyPendingRemoteTelemetry(identifier: UUID, profileID: UUID) {
+        if let level = pendingRemoteBatteryLevels.removeValue(forKey: identifier) {
+            remoteBatteryLevels[profileID] = min(100, max(0, level))
+        }
+        if let powerState = pendingRemotePowerStates.removeValue(forKey: identifier) {
+            remotePowerStates[profileID] = powerState
+        }
+        if let model = pendingRemoteModels.removeValue(forKey: identifier) {
+            settings.updateRemoteProfileModel(profileID, model: model)
+        }
     }
 
     private func bluetoothIdentifier(for bridge: XiaomiBluetoothBridge) -> UUID? {
         bridge.deviceIdentifier ?? bluetoothBridges.first(where: { $0.value === bridge })?.key
     }
 
+    /// Lookup only. Persisting a profile here would leave one behind for every peripheral that
+    /// answers a battery or model read and then never completes the voice handshake — a nearby
+    /// `MI RC` advertiser is enough, and the stale card can never be removed from the UI.
     private func remoteProfileID(for bridge: XiaomiBluetoothBridge) -> UUID? {
         guard let identifier = bluetoothIdentifier(for: bridge) else { return nil }
         return settings.profileID(forBluetoothIdentifier: identifier)
-            ?? settings.registerBluetoothRemote(identifier: identifier)
     }
 
     func selectRemoteProfile(_ profileID: UUID) {
@@ -2360,10 +2381,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 cancelHIDMappingRecovery(reason: "bluetooth_not_ready")
             }
             let identifier = bluetoothIdentifier(for: bridge)
-            if let identifier,
-               let profileID = settings.profileID(forBluetoothIdentifier: identifier) {
-                remoteBatteryLevels.removeValue(forKey: profileID)
-                remotePowerStates.removeValue(forKey: profileID)
+            if let identifier {
+                // A fresh attempt publishes `.discovering` before any characteristic is read,
+                // and identical states do not re-notify — so this cannot discard a reading
+                // from the connection currently being set up. What it does discard is a
+                // reading left over from an attempt that never reached the handshake.
+                pendingRemoteBatteryLevels.removeValue(forKey: identifier)
+                pendingRemotePowerStates.removeValue(forKey: identifier)
+                pendingRemoteModels.removeValue(forKey: identifier)
+                if let profileID = settings.profileID(forBluetoothIdentifier: identifier) {
+                    remoteBatteryLevels.removeValue(forKey: profileID)
+                    remotePowerStates.removeValue(forKey: profileID)
+                }
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
@@ -2651,7 +2680,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdateBatteryLevel level: Int?) {
-        guard let profileID = remoteProfileID(for: bridge) else { return }
+        guard let profileID = remoteProfileID(for: bridge) else {
+            if let identifier = bluetoothIdentifier(for: bridge) {
+                // A nil level means the read failed, so it has to clear any buffered value
+                // rather than let it survive as the one that gets replayed.
+                pendingRemoteBatteryLevels[identifier] = level
+            }
+            return
+        }
         if let level {
             remoteBatteryLevels[profileID] = min(100, max(0, level))
         } else {
@@ -2663,7 +2699,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ bridge: XiaomiBluetoothBridge,
         didIdentifyRemoteModel model: XiaomiRemoteModel
     ) {
-        guard let profileID = remoteProfileID(for: bridge) else { return }
+        guard let profileID = remoteProfileID(for: bridge) else {
+            if let identifier = bluetoothIdentifier(for: bridge) {
+                pendingRemoteModels[identifier] = model
+            }
+            return
+        }
         settings.updateRemoteProfileModel(profileID, model: model)
     }
 
@@ -2671,7 +2712,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ bridge: XiaomiBluetoothBridge,
         didUpdatePowerState state: RemotePowerState?
     ) {
-        guard let profileID = remoteProfileID(for: bridge) else { return }
+        guard let profileID = remoteProfileID(for: bridge) else {
+            if let identifier = bluetoothIdentifier(for: bridge) {
+                pendingRemotePowerStates[identifier] = state
+            }
+            return
+        }
         if let state {
             remotePowerStates[profileID] = state
         } else {
