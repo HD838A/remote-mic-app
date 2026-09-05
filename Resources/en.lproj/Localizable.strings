@@ -875,3 +875,8 @@
 "about.preferences.restart_onboarding_help" = "Recheck permissions, the remote, voice output device, and voice input without clearing existing connections, button mappings, or other settings.";
 "about.preferences.restart_onboarding_action" = "Run Again";
 "common.action.copy" = "Copy";
+
+"connection.voice_key_capture.enabled" = "Capture audio from the remote microphone";
+"connection.voice_key_capture.hint_short" = "Off makes the voice key a pure trigger: no remote audio is captured, so an external microphone can be the voice source. Fn tap is paused meanwhile.";
+"connection.voice_key_capture.hint" = "On by default: holding the voice key streams the remote microphone into the selected audio device. Off makes the voice key a pure trigger — only the trigger key (Fn/Globe or the chosen modifier) is emitted, nothing is captured or routed, and the dictation tool listens on a microphone the Mac already has (such as an external one). Fn tap (Typeless) is timed by the remote audio draining, so it pauses while capture is off and resumes when capture is back on.";
+"connection.voice_fn_tap.paused_without_capture" = "Fn tap is paused because remote microphone capture is off; it resumes when capture is back on.";

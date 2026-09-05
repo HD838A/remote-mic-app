@@ -875,3 +875,8 @@
 "about.preferences.restart_onboarding_help" = "重新检查权限、遥控器、语音输出设备和语音输入；不会清除现有连接、按键映射或其他设置。";
 "about.preferences.restart_onboarding_action" = "重新运行";
 "common.action.copy" = "复制";
+
+"connection.voice_key_capture.enabled" = "用遥控器自带麦克风收音";
+"connection.voice_key_capture.hint_short" = "关闭后语音键只发送触发键，不再采集遥控器音频，可改用外接麦克风收音；Fn 点按在此期间暂停。";
+"connection.voice_key_capture.hint" = "默认开启：按住语音键时把遥控器麦克风的音频送进所选音频设备。关闭后语音键变成纯触发器——只发送触发键（Fn/地球键或所选修饰键），不采集、不路由遥控器音频，语音输入改用 Mac 上已有的麦克风（如外接麦克风）。适合嘈杂环境或已有专业麦克风的场景。Fn 点按（Typeless）依赖遥控器音频排空计时，关闭期间自动暂停，重新开启后恢复。";
+"connection.voice_fn_tap.paused_without_capture" = "未开启遥控器收音，Fn 点按已暂停；重新开启「用遥控器自带麦克风收音」后恢复。";

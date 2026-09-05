@@ -1159,6 +1159,8 @@ struct SettingsView: View {
                 Divider()
                 mappingVoiceKeyModeControl
                 Divider()
+                mappingVoiceCaptureControl
+                Divider()
                 mappingVoiceFnTapControl
                 HStack {
                     Spacer(minLength: 0)
@@ -1229,6 +1231,22 @@ struct SettingsView: View {
         .help(localization.text("connection.voice_key_mode.help"))
     }
 
+    private var mappingVoiceCaptureControl: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle("connection.voice_key_capture.enabled", isOn: Binding(
+                get: { settings.voiceKeyUsesRemoteMicrophone },
+                set: { model.setVoiceKeyCapturesRemoteMicrophone($0) }
+            ))
+            .font(.system(size: 12, weight: .medium))
+            .toggleStyle(.switch)
+            Text("connection.voice_key_capture.hint_short")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .help(localization.text("connection.voice_key_capture.hint"))
+    }
+
     private var mappingVoiceFnTapControl: some View {
         VStack(alignment: .leading, spacing: 2) {
             Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
@@ -1241,10 +1259,20 @@ struct SettingsView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+            if !settings.voiceKeyUsesRemoteMicrophone {
+                Text("connection.voice_fn_tap.paused_without_capture")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+            }
         }
         .help(localization.text("connection.voice_fn_tap.hint"))
-        .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
-        .disabled(settings.voiceKeyMode != .function)
+        .opacity(
+            settings.voiceKeyMode == .function && settings.voiceKeyUsesRemoteMicrophone ? 1 : 0.55
+        )
+        .disabled(
+            settings.voiceKeyMode != .function || !settings.voiceKeyUsesRemoteMicrophone
+        )
     }
 
     private var mappingRestoreDefaultsButton: some View {
