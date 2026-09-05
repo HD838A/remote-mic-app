@@ -199,7 +199,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 请先查看[排障指南](TROUBLESHOOTING.md)。首次安装的完整步骤见[首次安装说明](Resources/首次安装说明.md)。
 
-开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)。
+开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)；新增或重命名仓库文件前请阅读[文件命名规范](FILE_NAMING.md)。
 
 后续开发计划见 [TODO](TODO.md)。
 
