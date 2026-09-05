@@ -1,5 +1,5 @@
 name: macOS Signed Release Staging
-run-name: mac-release ${{ inputs.mode }} ${{ inputs.expected_commit }}
+run-name: mac-release ${{ inputs.mode }} ${{ inputs.source_branch }} ${{ inputs.expected_commit }}
 
 on:
   workflow_dispatch:
@@ -13,8 +13,13 @@ on:
           - preview
           - smoke
       expected_commit:
-        description: Exact 40-character commit on release-main to package
+        description: Exact 40-character source commit to package
         required: true
+        type: string
+      source_branch:
+        description: Exact source branch; main or hotfix/vX.Y.Z
+        required: true
+        default: main
         type: string
 
 concurrency:
@@ -28,13 +33,15 @@ permissions:
 
 jobs:
   validate:
-    name: Validate exact release-main source
+    name: Validate main-controlled release source
     runs-on: macos-15
     timeout-minutes: 15
     steps:
       - name: Validate dispatch identity
         env:
+          GH_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
           TRIGGER_COMMIT: ${{ github.sha }}
           TRIGGER_REF_NAME: ${{ github.ref_name }}
           TRIGGER_REF_TYPE: ${{ github.ref_type }}
@@ -46,16 +53,18 @@ jobs:
             *) echo "mode must be preview or smoke" >&2; exit 2 ;;
           esac
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          test "$TRIGGER_COMMIT" = "$EXPECTED_COMMIT"
           test "$TRIGGER_REF_TYPE" = branch
-          test "$TRIGGER_REF_NAME" = release-main
+          test "$TRIGGER_REF_NAME" = main
           test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
+          [[ "$SOURCE_BRANCH" == main || "$SOURCE_BRANCH" =~ ^hotfix/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          remote_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$TRIGGER_COMMIT" = "$remote_main"
 
-      - name: Check out exact release-main commit
+      - name: Check out exact main release control plane
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
-          ref: ${{ inputs.expected_commit }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Install validation tools
@@ -67,25 +76,36 @@ jobs:
             brew install "${missing[@]}"
           fi
 
-      - name: Verify exact release-main checkout
-        run: |
-          test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
-          test -z "$(git status --porcelain)"
-          git fetch --no-tags origin release-main
-          test "$(git rev-parse origin/release-main)" = "${{ inputs.expected_commit }}"
+      - name: Check out exact release source commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.expected_commit }}
+          path: release-source
+          persist-credentials: false
 
-      - name: Verify successful release-main CI
+      - name: Verify exact release source checkout
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          REPOSITORY_ROOT: ${{ github.workspace }}
+          REPOSITORY_ROOT: ${{ github.workspace }}/release-source
+          RELEASE_SOURCE_CHECKOUT_MODE: detached
+        run: ./scripts/verify-public-release-source.sh "${{ inputs.source_branch }}" "${{ inputs.expected_commit }}"
+
+      - name: Verify successful source-branch CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          REPOSITORY_ROOT: ${{ github.workspace }}/release-source
+          RELEASE_CONTROL_PLANE_DIFF_BIN: ${{ github.workspace }}/scripts/verify-release-control-plane-diff.sh
           GH_BIN: gh
-        run: ./scripts/verify-release-ready-main-ci.sh "${{ inputs.expected_commit }}"
+        run: ./scripts/verify-release-ready-main-ci.sh "${{ inputs.expected_commit }}" "${{ inputs.source_branch }}"
 
       - name: Verify release dependency pins
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-          REPOSITORY_ROOT: ${{ github.workspace }}
+          REPOSITORY_ROOT: ${{ github.workspace }}/release-source
+          RELEASE_CONTROL_ROOT: ${{ github.workspace }}
         run: ./scripts/verify-release-dependency-pins.sh
 
       - name: Verify explicit GitHub token bindings
@@ -94,6 +114,7 @@ jobs:
         run: ./scripts/verify-release-workflow-gh-token.sh
 
       - name: Verify release metadata
+        working-directory: release-source
         run: |
           version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - Resources/Info.plist)"
           build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - Resources/Info.plist)"
@@ -123,6 +144,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
           TRIGGER_COMMIT: ${{ github.sha }}
           TRIGGER_REF_NAME: ${{ github.ref_name }}
           TRIGGER_REF_TYPE: ${{ github.ref_type }}
@@ -134,14 +156,24 @@ jobs:
             *) echo "mode must be preview or smoke" >&2; exit 2 ;;
           esac
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          test "$TRIGGER_COMMIT" = "$EXPECTED_COMMIT"
           test "$TRIGGER_REF_TYPE" = branch
-          test "$TRIGGER_REF_NAME" = release-main
+          test "$TRIGGER_REF_NAME" = main
           test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
-          remote_head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/release-main" --jq '.object.sha')"
-          test "$remote_head" = "$EXPECTED_COMMIT"
+          [[ "$SOURCE_BRANCH" == main || "$SOURCE_BRANCH" =~ ^hotfix/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          remote_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$TRIGGER_COMMIT" = "$remote_main"
 
-      - name: Check out exact release-main commit
+      - name: Check out exact main release control plane
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Preserve trusted release source verifier
+        run: /bin/cp scripts/verify-public-release-source.sh "$RUNNER_TEMP/verify-public-release-source.sh"
+
+      - name: Check out exact release source commit
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
@@ -149,10 +181,14 @@ jobs:
           persist-credentials: false
 
       - name: Verify checked-out source identity
+        id: release-source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_SOURCE_CHECKOUT_MODE: detached
         run: |
-          test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
-          git diff --quiet
-          git diff --cached --quiet
+          "$RUNNER_TEMP/verify-public-release-source.sh" \
+            "${{ inputs.source_branch }}" "${{ inputs.expected_commit }}"
 
       - name: Read release metadata
         id: release-meta
@@ -271,14 +307,16 @@ jobs:
       - name: Validate active source before signing
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
           GH_TOKEN: ${{ github.token }}
           REPOSITORY_ROOT: ${{ github.workspace }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_BIN: gh
+          RELEASE_SOURCE_CHECKOUT_MODE: detached
+          RELEASE_SOURCE_EXPECTED_BASE_TAG: ${{ steps.release-source.outputs.source_base_tag }}
+          RELEASE_SOURCE_EXPECTED_BASE_COMMIT: ${{ steps.release-source.outputs.source_base_commit }}
         run: |
-          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
-          git fetch --no-tags origin release-main
-          test "$(git rev-parse origin/release-main)" = "$EXPECTED_COMMIT"
+          "$RUNNER_TEMP/verify-public-release-source.sh" "$SOURCE_BRANCH" "$EXPECTED_COMMIT"
           ./scripts/verify-release-dependency-pins.sh
 
       - name: Sign, notarize, staple, and verify both variants
@@ -310,7 +348,12 @@ jobs:
           PAYLOAD_ARTIFACT_ID: ${{ steps.payload-upload.outputs.artifact-id }}
           PAYLOAD_ARTIFACT_DIGEST: ${{ steps.payload-upload.outputs.artifact-digest }}
           RELEASE_MODE_INPUT: ${{ inputs.mode }}
+          SOURCE_BRANCH: ${{ steps.release-source.outputs.source_branch }}
+          SOURCE_KIND: ${{ steps.release-source.outputs.source_kind }}
+          SOURCE_BASE_TAG: ${{ steps.release-source.outputs.source_base_tag }}
+          SOURCE_BASE_COMMIT: ${{ steps.release-source.outputs.source_base_commit }}
           SOURCE_COMMIT: ${{ inputs.expected_commit }}
+          SOURCE_WORKFLOW_COMMIT: ${{ github.sha }}
           SOURCE_RUN_ID: ${{ github.run_id }}
           SOURCE_RUN_ATTEMPT: ${{ github.run_attempt }}
           TAG: ${{ steps.release-meta.outputs.tag }}
@@ -325,7 +368,10 @@ jobs:
           jq -n -S \
             --arg mode "$RELEASE_MODE_INPUT" \
             --arg tag "$TAG" --arg version "$VERSION" --arg build "$BUILD" \
+            --arg sourceBranch "$SOURCE_BRANCH" --arg sourceKind "$SOURCE_KIND" \
+            --arg sourceBaseTag "$SOURCE_BASE_TAG" --arg sourceBaseCommit "$SOURCE_BASE_COMMIT" \
             --arg sourceCommit "$SOURCE_COMMIT" \
+            --arg sourceWorkflowCommit "$SOURCE_WORKFLOW_COMMIT" \
             --argjson sourceRunId "$SOURCE_RUN_ID" \
             --argjson sourceRunAttempt "$SOURCE_RUN_ATTEMPT" \
             --argjson signedArtifactId "$PAYLOAD_ARTIFACT_ID" \
@@ -333,8 +379,11 @@ jobs:
             --arg assetManifestSHA256 "$manifest_sha" \
             --arg stagedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             '{
-              schemaVersion:1, mode:$mode, tag:$tag, version:$version, build:$build,
-              sourceCommit:$sourceCommit, sourceRunId:$sourceRunId,
+              schemaVersion:2, mode:$mode, tag:$tag, version:$version, build:$build,
+              sourceBranch:$sourceBranch, sourceKind:$sourceKind,
+              sourceBaseTag:$sourceBaseTag, sourceBaseCommit:$sourceBaseCommit,
+              sourceCommit:$sourceCommit, sourceWorkflowCommit:$sourceWorkflowCommit,
+              sourceRunId:$sourceRunId,
               sourceRunAttempt:$sourceRunAttempt, signedArtifactId:$signedArtifactId,
               signedArtifactDigest:$signedArtifactDigest,
               assetManifestSHA256:$assetManifestSHA256, stagedAt:$stagedAt

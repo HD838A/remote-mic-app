@@ -3,7 +3,7 @@
 ## 目标与边界
 
 - Preview 和 Stable promotion 都从 T_ready 起使用 30 分钟纯发布目标。
-- T_request 是用户首次发出本次发布指令的时间，统计完整用户等待；T_ready 是本次选定代码已进入 `release-main`、发布分支 CI、依赖 pin、版本、Build 和必要发布输入全部就绪并冻结的时间。
+- T_request 是用户首次发出本次发布指令的时间，统计完整用户等待；T_ready 是本次选定代码已进入精确 `main` 或已批准 Hotfix 分支、源码分支 CI、依赖 pin、版本、Build 和必要发布输入全部就绪并冻结的时间。
 - 30 分钟是发布目标和报告指标，不允许跳过签名、公证、staple、真实 Sparkle UI 或下载字节验证。
 - 不再使用候选分支、编号 rerun、qualification、watchdog 或 ledger 状态机。失败要立即分类并继续可安全的同 SHA 恢复。
 
@@ -26,7 +26,7 @@
 
 ## 用例 2：Stable 计时
 
-1. 明确指定一个现有、已验证且 Tag Commit 已进入 `origin/release-main` 的 Pre-release。
+1. 明确指定一个现有、已验证，且来源满足 main/Hotfix 门禁的 Pre-release。
 2. 从 T_ready dispatch mac-stable-promote.yml。
 3. 记录验证和 gh release edit 的开始/结束时间。
 
@@ -36,11 +36,11 @@
 
 分别模拟以下情形：
 
-- `release-main` CI、发布内容选入或版本输入未就绪；
+- main/Hotfix 源码 CI 或版本输入未就绪；
 - Runner、Environment、Apple、GitHub 或网络故障；
 - 真实 UI 验收失败；
 - 公共资产摘要或 CDN 字节不一致；
-- Stable Tag 未进入 `release-main`。
+- 普通 Stable Tag 未进入 main，或 Hotfix 来源/稳定基线不再匹配。
 
 预期：报告中明确区分“发布未就绪”“基础设施/外部服务”“UI 验收”“公开交付验证”和“晋升资格”失败。基础设施失败复用同一 SHA、版本、Build 和 artifact，不创建新版本。
 

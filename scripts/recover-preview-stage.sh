@@ -57,34 +57,34 @@ download_artifact() {
 run_json="$($GH_BIN api "repos/$REPOSITORY/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT")"
 printf '%s\n' "$run_json" | jq -e \
   --arg repository "$REPOSITORY" \
-  --arg commit "$EXPECTED_COMMIT" \
   --argjson run "$RUN_ID" \
   --argjson attempt "$RUN_ATTEMPT" '
     .id == $run and
     .repository.full_name == $repository and
     .event == "workflow_dispatch" and
     .path == ".github/workflows/mac-release-package.yml" and
-    .head_branch == "release-main" and .head_sha == $commit and
+    .head_branch == "main" and (.head_sha | test("^[0-9a-f]{40}$")) and
     .run_attempt == $attempt and
     .status == "completed" and .conclusion == "success"
   ' >/dev/null || {
-    echo "source Run is not the exact successful release-main staging Run" >&2
+    echo "source Run is not a successful main-controlled staging Run" >&2
     exit 1
   }
+workflow_commit="$(printf '%s\n' "$run_json" | jq -r '.head_sha')"
 
 artifact_json="$($GH_BIN api "repos/$REPOSITORY/actions/artifacts/$ARTIFACT_ID")"
 artifact_name="$(printf '%s\n' "$artifact_json" | jq -r '.name')"
 printf '%s\n' "$artifact_json" | jq -e \
   --arg digest "$ARTIFACT_DIGEST" \
-  --arg commit "$EXPECTED_COMMIT" \
+  --arg workflowCommit "$workflow_commit" \
   --argjson artifact "$ARTIFACT_ID" \
   --argjson run "$RUN_ID" '
     .id == $artifact and .expired == false and
     .digest == $digest and
     (.name | test("^mac-preview-payload-v[0-9]+[.][0-9]+[.][0-9]+-[0-9a-f]{40}$")) and
     .workflow_run.id == $run and
-    .workflow_run.head_branch == "release-main" and
-    .workflow_run.head_sha == $commit
+    .workflow_run.head_branch == "main" and
+    .workflow_run.head_sha == $workflowCommit
   ' >/dev/null || {
     echo "payload artifact identity does not match the source Run" >&2
     exit 1
@@ -170,11 +170,11 @@ tag="$(jq -r '.tag' "$manifest")"
 stage_artifacts="$($GH_BIN api "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100")"
 stage_record_info="$(printf '%s\n' "$stage_artifacts" | jq -r \
   --arg name "mac-preview-stage-$tag-$EXPECTED_COMMIT" \
-  --argjson run "$RUN_ID" --arg commit "$EXPECTED_COMMIT" '
+  --argjson run "$RUN_ID" --arg workflowCommit "$workflow_commit" '
     [.artifacts[] | select(.name == $name) | select(.expired == false) |
       select(.workflow_run.id == ($run // 0) and
-             .workflow_run.head_branch == "release-main" and
-             .workflow_run.head_sha == $commit)] |
+             .workflow_run.head_branch == "main" and
+             .workflow_run.head_sha == $workflowCommit)] |
     if length == 1 then .[0] | [.id,.digest,.name] | @tsv else empty end
   ')"
 [[ -n "$stage_record_info" ]] || {
@@ -235,11 +235,19 @@ done < <(/usr/bin/find "$stage_bundle" -name preview-stage-record.json -type f)
 stage_record="${stage_candidates[0]}"
 jq -e \
   --arg tag "$tag" --arg version "$version" --arg commit "$EXPECTED_COMMIT" \
+  --arg workflowCommit "$workflow_commit" \
   --argjson run "$RUN_ID" --argjson attempt "$RUN_ATTEMPT" \
   --argjson artifact "$ARTIFACT_ID" --arg digest "$ARTIFACT_DIGEST" \
   --arg manifest "$manifest_sha" \
-  '.schemaVersion == 1 and .mode == "preview" and
+  '.schemaVersion == 2 and .mode == "preview" and
+   (.sourceBranch == "main" or (.sourceBranch | test("^hotfix/v[0-9]+[.][0-9]+[.][0-9]+$"))) and
+   (.sourceKind == "main" or .sourceKind == "hotfix") and
+   ((.sourceKind == "main" and .sourceBranch == "main" and .sourceBaseTag == "" and .sourceBaseCommit == "") or
+    (.sourceKind == "hotfix" and .sourceBranch == ("hotfix/" + .tag) and
+     (.sourceBaseTag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+     (.sourceBaseCommit | test("^[0-9a-f]{40}$")))) and
    .tag == $tag and .version == $version and .sourceCommit == $commit and
+   .sourceWorkflowCommit == $workflowCommit and
    .sourceRunId == $run and .sourceRunAttempt == $attempt and
    .signedArtifactId == $artifact and .signedArtifactDigest == $digest and
    .assetManifestSHA256 == $manifest and (.stagedAt | fromdateiso8601 > 0)' \
