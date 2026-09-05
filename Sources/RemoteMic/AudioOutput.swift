@@ -282,11 +282,12 @@ enum VirtualAudioConnectionLifecyclePolicy {
     static func shouldBeActive(
         readyBluetoothBridgeCount: Int,
         bluetoothVoiceActive: Bool,
+        bluetoothVoiceDraining: Bool = false,
         mobileVoiceActive: Bool,
         testToneActive: Bool,
         systemSuspended: Bool
     ) -> Bool {
-        if bluetoothVoiceActive || mobileVoiceActive || testToneActive {
+        if bluetoothVoiceActive || bluetoothVoiceDraining || mobileVoiceActive || testToneActive {
             return true
         }
         return readyBluetoothBridgeCount > 0 && !systemSuspended
