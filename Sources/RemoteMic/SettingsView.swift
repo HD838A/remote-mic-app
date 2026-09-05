@@ -1025,6 +1025,8 @@ struct SettingsView: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 16) {
+                        corruptedSettingsBanner
+
                         RemoteMappingCanvas(
                             selectedButton: $selectedRemoteButton,
                             activeButtons: model.activeRemoteButtons,
@@ -1077,6 +1079,40 @@ struct SettingsView: View {
                             proxy.scrollTo("mapping-action-editor", anchor: .top)
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// Inline on purpose: a sheet or alert here would be dismissed once and never seen again,
+    /// and the repository's interface rules keep page-level notices flat inside the page.
+    /// Renders nothing at all when no key failed to decode, so a healthy launch keeps its layout.
+    @ViewBuilder
+    private var corruptedSettingsBanner: some View {
+        if let summary = CorruptedSettingsNotice.summary(
+            for: settings.corruptedSettingKeys,
+            localize: localization.text
+        ) {
+            GlassPanel {
+                HStack(alignment: .top, spacing: 11) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(localization.text(CorruptedSettingsNotice.titleKey))
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(summary)
+                            .font(.system(size: 12))
+                        Text(localization.text(CorruptedSettingsNotice.recoveryKey))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                        Text(localization.text(CorruptedSettingsNotice.nextStepKey))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -3982,5 +4018,64 @@ private struct RC003Photo: View {
                     }
             }
         }
+    }
+}
+
+/// Turns the storage keys published by `AppSettings.corruptedSettingKeys` into the warning the
+/// button mapping page shows. Storage keys are an implementation detail, so they are collapsed
+/// onto the settings a user recognizes. An unrecognized key still surfaces under a generic item
+/// so that adding a decoded key later cannot silently drop the warning again — the original
+/// defect was exactly this kind of silent reset.
+enum CorruptedSettingsNotice {
+    static let titleKey = "settings.corrupted.title"
+    static let summaryKey = "settings.corrupted.summary"
+    static let recoveryKey = "settings.corrupted.recovery"
+    static let nextStepKey = "settings.corrupted.next_step"
+    static let separatorKey = "settings.corrupted.separator"
+    static let buttonMappingItemKey = "settings.corrupted.item.button_mapping"
+    static let customApplicationItemKey = "settings.corrupted.item.custom_application"
+    static let remoteDeviceItemKey = "settings.corrupted.item.remote_device"
+    static let statisticsItemKey = "settings.corrupted.item.statistics"
+    static let otherItemKey = "settings.corrupted.item.other"
+
+    /// Fixed display order, so the sentence reads the same no matter which order the load
+    /// happened to discover the unreadable keys in.
+    private static let itemKeyOrder = [
+        buttonMappingItemKey,
+        customApplicationItemKey,
+        remoteDeviceItemKey,
+        statisticsItemKey,
+        otherItemKey,
+    ]
+
+    private static let itemKeysByStorageKey: [String: String] = [
+        "buttonBindings": buttonMappingItemKey,
+        "buttonShortcuts": buttonMappingItemKey,
+        "buttonApplicationProfileIDs": buttonMappingItemKey,
+        "secondaryButtonBindings": buttonMappingItemKey,
+        "buttonRapidPressEnabled": buttonMappingItemKey,
+        "continuousRecordingPowerBindingBackup": buttonMappingItemKey,
+        "customApplicationProfiles": customApplicationItemKey,
+        "remoteDeviceProfiles": remoteDeviceItemKey,
+        "usage.dailyStatistics": statisticsItemKey,
+        "usage.voiceSessionRanking": statisticsItemKey,
+    ]
+
+    /// Deduplicated, order-stable localization keys naming what the user actually lost.
+    static func affectedItemKeys(for storageKeys: [String]) -> [String] {
+        let matched = Set(storageKeys.map { itemKeysByStorageKey[$0] ?? otherItemKey })
+        return itemKeyOrder.filter(matched.contains)
+    }
+
+    /// `nil` means there is nothing to report, which is what keeps the banner from taking up
+    /// space on a healthy launch.
+    static func summary(
+        for storageKeys: [String],
+        localize: (String) -> String
+    ) -> String? {
+        let itemKeys = affectedItemKeys(for: storageKeys)
+        guard !itemKeys.isEmpty else { return nil }
+        let list = itemKeys.map(localize).joined(separator: localize(separatorKey))
+        return String(format: localize(summaryKey), list)
     }
 }

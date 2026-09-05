@@ -1150,4 +1150,69 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
     }
+
+    @Test func corruptedSettingsBannerIsInlineAndNeverShrinksChineseBelowTwelvePoints() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        // The two interface rules this banner has to satisfy are a rendered-pixel property and
+        // a presentation-style property. Neither is observable from the notice's return value,
+        // and asserting them by snapshot would need a running window, so this is the one part
+        // of the feature that has to be checked against the declaration itself. The wording and
+        // the show/hide decision are covered behaviourally in CorruptedSettingsNoticeTests.
+        let bannerStart = try #require(
+            settingsSource.range(of: "private var corruptedSettingsBanner: some View {")
+        )
+        let bannerEnd = try #require(settingsSource.range(
+            of: "private var mappingHeaderToggle",
+            range: bannerStart.upperBound..<settingsSource.endIndex
+        ))
+        let banner = settingsSource[bannerStart.upperBound..<bannerEnd.lowerBound]
+
+        // Semantic styles are banned here: .caption and .caption2 render at 10pt and
+        // .subheadline at 11pt, all of which break the 12pt floor for Chinese text.
+        for bannedStyle in [
+            ".font(.caption)",
+            ".font(.caption2)",
+            ".font(.subheadline)",
+            ".font(.footnote)",
+            "minimumScaleFactor",
+        ] {
+            #expect(!banner.contains(bannedStyle), Comment(rawValue: bannedStyle))
+        }
+
+        // Every font must be an explicit size, and no explicit size may be below 12.
+        let sizes = try NSRegularExpression(pattern: #"\.system\(size: (\d+)"#)
+        let bannerText = String(banner)
+        let range = NSRange(bannerText.startIndex..., in: bannerText)
+        let matches = sizes.matches(in: bannerText, range: range)
+        #expect(matches.count == banner.components(separatedBy: ".font(").count - 1)
+        #expect(!matches.isEmpty)
+        for match in matches {
+            let digits = try #require(Range(match.range(at: 1), in: bannerText))
+            let size = try #require(Int(bannerText[digits]))
+            #expect(size >= 12, Comment(rawValue: "font size \(size)"))
+        }
+
+        // Inline on the page: a dismissible container would hide the warning after one look.
+        for bannedContainer in [".popover(", ".sheet(", ".alert(", ".confirmationDialog("] {
+            #expect(!banner.contains(bannedContainer), Comment(rawValue: bannedContainer))
+        }
+        // ... and it has to be mounted on the mapping page, where the lost mappings live.
+        let mappingPage = try #require(settingsSource.range(of: "private var mappingPage"))
+        let mappingPageEnd = try #require(settingsSource.range(
+            of: "private var corruptedSettingsBanner",
+            range: mappingPage.upperBound..<settingsSource.endIndex
+        ))
+        #expect(
+            settingsSource[mappingPage.upperBound..<mappingPageEnd.lowerBound]
+                .contains("corruptedSettingsBanner")
+        )
+    }
 }
