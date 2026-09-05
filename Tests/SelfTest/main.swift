@@ -302,13 +302,15 @@ check(
     VoiceKeyMode.function.keyCode == 63 &&
         VoiceKeyMode.leftCommand.keyCode == 55 &&
         VoiceKeyMode.rightCommand.keyCode == 54 &&
+        VoiceKeyMode.rightOption.keyCode == 61 &&
+        VoiceKeyMode.rightShift.keyCode == 60 &&
         HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: false,
             voiceKeyMode: .leftCommand,
             inputMonitoringGranted: false,
             accessibilityGranted: false
         ) == .accessibility,
-    "voice key modes keep Fn default and gate Command on Accessibility"
+    "voice key modes keep Fn default and gate modifiers on Accessibility"
 )
 
 var voiceFunctionKeyLatch = VoiceFunctionKeyLatch()

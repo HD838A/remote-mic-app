@@ -120,7 +120,7 @@ The app checks for updates once per day and asks before installing a newer versi
 4. Choose the same device as the microphone in the app that receives dictation or voice input.
 5. Click the target text field, hold the remote voice button to speak, then release it to finish.
 
-Under **Button Mapping**, the voice-button area lets you choose the default Fn/Globe behavior, a Left Command hold, or a Right Command hold. Command modes require SayAll Accessibility permission and press the selected Command side when voice starts, then release it when voice ends. The target voice app must support that standalone side; many apps merge both sides into a generic Command, so verify the target app directly. Pressing another key while Command is held may trigger a Command shortcut.
+Under **Button Mapping**, the voice-button area lets you choose the default Fn/Globe behavior, or a Left Command, Right Command, Right Option, or Right Shift hold. Modifier modes require SayAll Accessibility permission and press the selected modifier when voice starts, then release it when voice ends. The target voice app must support holding that key on the matching physical side; many apps merge both sides into a generic modifier, so verify the target app directly. Pressing another key while the modifier is held may trigger the corresponding system shortcut.
 
 Fn remains the default because it directly matches Fn-hold voice entry in apps such as Doubao and Weixin, Fn-tap entry in Typeless, and the remote's hold-to-capture/release-to-stop lifecycle. F18, F19, F20, or other uncommon keys could be added technically, but this version does not offer an arbitrary voice-key binding: the target voice app must use the same key, and RC003, iPhone, Apple Watch, Web, permissions, and input-source switching must all share one paired press/release lifecycle. Ordinary remote buttons can still use F1–F20 shortcuts.
 
@@ -154,7 +154,7 @@ Each ordinary button supports a single-click action and optional double-click an
 - A long press triggers after about 0.55 seconds and suppresses the single-click action.
 - Buttons with a configured double-click or long-press do not hold-repeat, preventing multiple actions from firing at once.
 
-The voice button is always reserved for voice input and does not participate in ordinary button mapping; choose Fn/Globe, Left Command, or Right Command hold in its dedicated area.
+The voice button is always reserved for voice input and does not participate in ordinary button mapping; choose Fn/Globe, Left/Right Command, Right Option, or Right Shift hold in its dedicated area.
 
 ## Usage statistics
 
