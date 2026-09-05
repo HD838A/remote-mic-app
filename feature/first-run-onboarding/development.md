@@ -1,5 +1,7 @@
 # 开发记录
 
+> 开发前必须先阅读跨平台 [`PRODUCT_SPEC.md`](PRODUCT_SPEC.md) 和当前平台附件。本文只记录现有代码接入点与实现历史，不得用实现细节反向覆盖产品规范。
+
 ## 精确接入点
 
 - `Sources/RemoteMic/OnboardingFlow.swift`：步骤、阶段、语音工具与控制方式选择、分支权限和下一页门禁。

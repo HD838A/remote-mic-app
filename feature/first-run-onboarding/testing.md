@@ -1,5 +1,7 @@
 # 功能测试说明
 
+测试或修改 Onboarding 前，必须先阅读跨平台 [`PRODUCT_SPEC.md`](PRODUCT_SPEC.md) 和当前平台附件。本文件只记录测试入口与历史结果，不替代产品行为规范。
+
 本功能的完整人工测试步骤统一维护在 [`Testing/FirstRunOnboarding.md`](../../Testing/FirstRunOnboarding.md)。
 
 `v1.8.8 (100)` 公开 Pre-release 已通过原流程验证；2026-08-17 两层控制方式候选已通过 233 项 Swift 测试，并逐张检查实体遥控器浅/深色各 9 张、iPhone 和网页版浅/深色各 10 张 Onboarding 生产视图截图。真实 TV 键激活、Home + Menu 配对、RC001 / RC003、新 iPhone Nearby 会话和手机 Safari 网页版仍需真机验收。

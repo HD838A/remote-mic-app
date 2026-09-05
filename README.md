@@ -99,6 +99,8 @@ Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 
 
 ## 首次使用
 
+开发、检查或移植首次设置流程时，请先阅读 [SayAll Onboarding 跨平台产品规范](feature/first-run-onboarding/PRODUCT_SPEC.md)；具体系统差异见 [macOS](feature/first-run-onboarding/platform-macos.md) 与 [Windows](feature/first-run-onboarding/platform-windows.md) 平台附件。
+
 1. 在“系统设置 → 蓝牙”中打开蓝牙。
 2. 同时长按遥控器的“主页”和“菜单”键，使遥控器进入配对状态。
 3. 在 Mac 上连接名称为 `MI RC`、`Xiaomi Bluetooth Remote 2`、`Xiaomi Bluetooth Remote 2 Pro` 或“小米蓝牙语音遥控器”的设备。
