@@ -16,25 +16,30 @@ struct SiriRemoteCursorFeedbackTests {
     }
 
     @Test func scrollFeedbackUsesDirectionOnly() {
-        #expect(SiriRemoteCursorFeedbackState.scrollSymbol(forPixels: 4) == "↑")
-        #expect(SiriRemoteCursorFeedbackState.scrollSymbol(forPixels: -4) == "↓")
-        #expect(SiriRemoteCursorFeedbackState.scrollSymbol(forPixels: 0) == "↑")
+        #expect(SiriRemoteCursorFeedbackState.scrollDirection(forPixels: 4) == .up)
+        #expect(SiriRemoteCursorFeedbackState.scrollDirection(forPixels: -4) == .down)
+        #expect(SiriRemoteCursorFeedbackState.scrollDirection(forPixels: 0) == .up)
+        #expect(SiriRemoteCursorFeedbackState.scrollSymbolName(for: .up) == "arrow.up.circle.fill")
+        #expect(SiriRemoteCursorFeedbackState.scrollSymbolName(for: .down) == "arrow.down.circle.fill")
     }
 
-    @Test func feedbackFrameIsPlacedToTheRightAndFlipsAtTheScreenEdge() {
+    @Test func feedbackFrameStaysOnTheCursorBodyAndClampsAtScreenEdges() {
         let screen = CGRect(x: 0, y: 0, width: 1_000, height: 800)
-        let right = SiriRemoteCursorFeedbackLayout.frame(
+        let centered = SiriRemoteCursorFeedbackLayout.frame(
             for: CGPoint(x: 400, y: 300),
             visibleFrame: screen
         )
-        #expect(right.minX > 400)
-        #expect(right.midY == 300)
+        #expect(centered.width == 48)
+        #expect(centered.height == 48)
+        #expect(centered.midX == 408)
+        #expect(centered.midY == 292)
+        #expect(centered.contains(CGPoint(x: 400, y: 300)))
 
         let edge = SiriRemoteCursorFeedbackLayout.frame(
-            for: CGPoint(x: 980, y: 300),
+            for: CGPoint(x: 998, y: 2),
             visibleFrame: screen
         )
         #expect(edge.maxX <= screen.maxX)
-        #expect(edge.maxX < 980)
+        #expect(edge.minY >= screen.minY)
     }
 }

@@ -20,6 +20,7 @@ SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
 SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:-}"
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
 SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
+SAYALL_OPUS_LIBRARY="${SAYALL_OPUS_LIBRARY:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
@@ -280,6 +281,9 @@ plutil -insert SayAllMacroPlatformIncluded -bool "$SAYALL_MACRO_PLATFORM_INCLUDE
 plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllSiriRemoteIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllSiriRemoteIncluded -bool "$SAYALL_SIRI_REMOTE_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   plutil -replace LSMinimumSystemVersion -string "$RELEASE_MIN_SYSTEM_VERSION" \
     "$APP_DIR/Contents/Info.plist"
@@ -317,6 +321,31 @@ if [[ "$REQUIRE_EARLY_ACCESS_CONFIGURATION" == "1" ]]; then
   fi
 fi
 mkdir -p "$APP_DIR/Contents/Frameworks"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  OPUS_DYLIB=""
+  for candidate in \
+    "$SAYALL_OPUS_LIBRARY" \
+    "$ROOT/.build/apple-remote-opus/$RELEASE_VARIANT/install/lib/libopus.0.dylib" \
+    "/opt/homebrew/opt/opus/lib/libopus.0.dylib" \
+    "/usr/local/opt/opus/lib/libopus.0.dylib"; do
+    [[ -n "$candidate" && -f "$candidate" ]] || continue
+    OPUS_ARCHS="$(lipo -archs "$candidate")"
+    OPUS_MINOS="$(xcrun vtool -show-build "$candidate" | awk '/minos / { print $2; exit }')"
+    [[ "$OPUS_ARCHS" == "$RELEASE_ARCH" ]] || continue
+    [[ -n "$OPUS_MINOS" && "${OPUS_MINOS%%.*}" -le "$RELEASE_MIN_SYSTEM_MAJOR" ]] || continue
+    OPUS_DYLIB="$candidate"
+    break
+  done
+  if [[ -z "$OPUS_DYLIB" ]]; then
+    print -u2 "Siri Remote requires a compatible libopus; set SAYALL_OPUS_LIBRARY"
+    exit 1
+  fi
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$OPUS_DYLIB" "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  install_name_tool -id @rpath/libopus.0.dylib \
+    "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  chmod 0644 "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
@@ -396,6 +425,15 @@ if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
 fi
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    run_release_stage app-codesign-siri-remote-opus "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+      codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  fi
   run_release_stage app-codesign-installer-xpc "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
     codesign \
     --force \
@@ -457,6 +495,13 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
 fi
 if [[ "$SIGNING_IDENTITY" == "-" ]]; then
   BUNDLE_IDENTIFIER="$(plutil -extract CFBundleIdentifier raw -o - "$APP_DIR/Contents/Info.plist")"
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    codesign \
+      --force \
+      --timestamp=none \
+      --sign - \
+      "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  fi
   codesign \
     --force \
     --timestamp=none \

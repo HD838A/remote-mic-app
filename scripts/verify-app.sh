@@ -11,6 +11,8 @@ APP="${1:-$RELEASE_OUTPUT_DIR/SayAll.app}"
 PLIST="$APP/Contents/Info.plist"
 BINARY="$APP/Contents/MacOS/RemoteMic"
 MCP_HELPER="$APP/Contents/Helpers/SayAllMCP"
+APPLE_REMOTE_AUDIO_HELPER="$APP/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+OPUS_DYLIB="$APP/Contents/Frameworks/libopus.0.dylib"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 APP_ICON="$APP/Contents/Resources/AppIcon.icns"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
@@ -53,6 +55,14 @@ test -d "$APP"
 test -f "$PLIST"
 test -x "$BINARY"
 test -x "$MCP_HELPER"
+SAYALL_SIRI_REMOTE_INCLUDED="$(plutil -extract SayAllSiriRemoteIncluded raw -o - "$PLIST" 2>/dev/null || true)"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  test -x "$APPLE_REMOTE_AUDIO_HELPER"
+  test -f "$OPUS_DYLIB"
+else
+  test ! -e "$APPLE_REMOTE_AUDIO_HELPER"
+  test ! -e "$OPUS_DYLIB"
+fi
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$SPARKLE_FRAMEWORK/Versions/B/Sparkle"
 test -x "$SPARKLE_FRAMEWORK/Versions/B/Autoupdate"
@@ -281,6 +291,10 @@ fi
 
 codesign --verify --deep --strict "$APP"
 codesign --verify --strict "$MCP_HELPER"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  codesign --verify --strict "$APPLE_REMOTE_AUDIO_HELPER"
+  codesign --verify --strict "$OPUS_DYLIB"
+fi
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
   RELAY_URL="$(plutil -extract RemoteWebRelayURL raw -o - "$PLIST" 2>/dev/null || true)"
   if [[ "$RELAY_URL" != wss://?*/ws ]]; then
@@ -310,6 +324,16 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
     print -r -- "$COMPONENT_SIGNATURE_DETAILS" | \
       rg -q '^CodeDirectory .*flags=.*runtime'
   done
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    for signed_component in "$APPLE_REMOTE_AUDIO_HELPER" "$OPUS_DYLIB"; do
+      COMPONENT_SIGNATURE_DETAILS="$(codesign -dvvv "$signed_component" 2>&1)"
+      print -r -- "$COMPONENT_SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:'
+      print -r -- "$COMPONENT_SIGNATURE_DETAILS" | \
+        rg -q "^TeamIdentifier=$EXPECTED_DEVELOPER_TEAM_ID$"
+      print -r -- "$COMPONENT_SIGNATURE_DETAILS" | \
+        rg -q '^CodeDirectory .*flags=.*runtime'
+    done
+  fi
 fi
 file "$BINARY" | rg -q 'Mach-O 64-bit executable'
 file "$MCP_HELPER" | rg -q 'Mach-O 64-bit executable'
@@ -318,6 +342,15 @@ test "$ARCHS" = "$RELEASE_ARCH"
 test "$(lipo -archs "$MCP_HELPER")" = "$RELEASE_ARCH"
 xcrun vtool -show-build "$BINARY" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
 xcrun vtool -show-build "$MCP_HELPER" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  file "$APPLE_REMOTE_AUDIO_HELPER" | rg -q 'Mach-O 64-bit executable'
+  file "$OPUS_DYLIB" | rg -q 'Mach-O 64-bit dynamically linked shared library'
+  test "$(lipo -archs "$APPLE_REMOTE_AUDIO_HELPER")" = "$RELEASE_ARCH"
+  test "$(lipo -archs "$OPUS_DYLIB")" = "$RELEASE_ARCH"
+  xcrun vtool -show-build "$APPLE_REMOTE_AUDIO_HELPER" | \
+    rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
+  xcrun vtool -show-build "$OPUS_DYLIB" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
+fi
 otool -l "$BINARY" | rg -A2 'LC_RPATH' | rg -q '@executable_path/\.\./Frameworks'
 
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
@@ -335,6 +368,10 @@ EXPECTED_APP_FILES=$'Contents/Helpers/SayAllMCP\nContents/Info.plist\nContents/M
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  test -f "$APPLE_REMOTE_AUDIO_HELPER"
+  test -f "$OPUS_DYLIB"
+fi
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
 done

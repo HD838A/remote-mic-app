@@ -354,7 +354,8 @@
   - 已完成 SiriRemoteForge、Wand、siri-remote-steamos、SiriRemoteVibe 及其他相关开源项目的可行性研究；当前总体首选 SiriRemoteForge，建议按“按键 → 触摸/滚动 → 麦克风高级组件”分阶段验证。
   - SiriRemoteForge 集成评估、候选项目源码与 Release 对比，以及暂停的 Apple Remote Windows 路线研究均已迁移至独立的产品资料工作区。
   - 2026-09-05 已增加 Siri Remote 专属触摸视觉反馈：移动速度越快，临时光标 HUD 平滑放大；圆周滚动显示短暂方向箭头。反馈不修改系统全局鼠标、不抢焦点，语音活动和尾音排空期间抑制。自动化与 Release 构建已通过，A2854 真机视觉验收仍待完成。
-  - 2026-09-05 修复本地 Siri Remote 测试包遗漏 `SayAllAppleRemoteAudioCapture` helper 导致语音无法开始的问题；同时让 HUD 默认避开鼠标右侧显示，并按 macOS 自然滚动偏好选择圆周滚动方向。真实语音和滚动方向仍需 A2854 现场复验。
+  - 2026-09-05 修复本地 Siri Remote 测试包遗漏 `SayAllAppleRemoteAudioCapture` helper 导致语音无法开始的问题；2026-09-06 进一步确认 ad-hoc 签名会被特权 HCI 服务拒绝，本地 Siri Remote 候选必须使用 Team ID `L3QHLDRPAY` 的 Developer ID 签名并嵌入 helper。当前自动验证只能证明 `packet_stream phase=ready result=authorized`，未重新完成真实 Siri 按键、PCM、MiRemoteV 2ch 和最终文字链路前不得标记为真机通过。
+  - 2026-09-06 将触摸反馈改为紧贴系统鼠标热点的 macOS accent 色光环，不再绘制第二个白色鼠标；滚动提示改为与光环同中心的原生 SF Symbol，并跟随系统强调色。圆周滚动改为固定 iPod Click Wheel 语义：顺时针进入后续内容/向下滚动，逆时针返回前面内容/向上滚动，不再随 macOS 自然滚动开关变化。自动化通过后仍需 A2854 现场验证视觉和实际页面方向。
 - [x] 支持 Xiaomi Bluetooth Remote Control 2（RC001-MS）
   - 真机确认 RC001-MS 与 RC003-MS 使用相同的固件 `2671`、VID/PID `0x2717 / 0x32B8`、GATT Service、ATVV v1.0、16kHz IMA-ADPCM 和 120-byte frame；两款设备均已完成真实普通按键和 `STREAM_START → AUDIO → STREAM_STOP` 语音链路。
   - App 已通过正式设备信息识别 RC001/RC003，并复用既有协议、解码器、多遥控器独立配置、电量状态和按键映射；RC001 基础连接、普通按键与语音兼容范围已完成。后续条目中仍标注待 Preview 或人工验收的共享按键行为、充电状态和增强项不在此处改写为已验收。
