@@ -19,6 +19,7 @@ REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKA
 SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
 SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:-}"
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
+SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
@@ -158,6 +159,17 @@ if [[ "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" == "1" && \
   print -u2 "A prepared private artifact package is required for this build"
   exit 1
 fi
+if [[ -n "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" ]]; then
+  if [[ ! -f "$SAYALL_SIRI_REMOTE_PACKAGE_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_SIRI_REMOTE_PACKAGE_PATH must contain Package.swift"
+    exit 1
+  fi
+  SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:A}"
+  export SAYALL_SIRI_REMOTE_PACKAGE_PATH
+  SAYALL_SIRI_REMOTE_INCLUDED=true
+else
+  SAYALL_SIRI_REMOTE_INCLUDED=false
+fi
 if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
   print -u2 "A SayAll macro platform package is required for this build"
   exit 1
@@ -199,6 +211,29 @@ BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
   --show-bin-path)"
 BIN_PATH="$BIN_DIR/$APP_NAME"
 MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
+SIRI_REMOTE_AUDIO_CAPTURE_PATH=""
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  SIRI_REMOTE_BUILD_SCRATCH_PATH="$BUILD_SCRATCH_PATH/siri-remote"
+  SIRI_REMOTE_BUILD_CACHE_PATH="$BUILD_CACHE_PATH/siri-remote"
+  run_release_stage siri-remote-audio-helper-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
+    xcrun swift build \
+    --package-path "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" \
+    --scratch-path "$SIRI_REMOTE_BUILD_SCRATCH_PATH" \
+    --cache-path "$SIRI_REMOTE_BUILD_CACHE_PATH" \
+    -c "$CONFIGURATION" \
+    --triple "$RELEASE_TRIPLE" \
+    --product AppleRemoteAudioCapture
+  SIRI_REMOTE_AUDIO_BIN_DIR="$(run_release_stage siri-remote-audio-helper-bin-path 30 \
+    xcrun swift build \
+    --package-path "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" \
+    --scratch-path "$SIRI_REMOTE_BUILD_SCRATCH_PATH" \
+    --cache-path "$SIRI_REMOTE_BUILD_CACHE_PATH" \
+    -c "$CONFIGURATION" \
+    --triple "$RELEASE_TRIPLE" \
+    --product AppleRemoteAudioCapture \
+    --show-bin-path)"
+  SIRI_REMOTE_AUDIO_CAPTURE_PATH="$SIRI_REMOTE_AUDIO_BIN_DIR/AppleRemoteAudioCapture"
+fi
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;
@@ -216,6 +251,9 @@ fi
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$MCP_HELPER_PATH"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  test -x "$SIRI_REMOTE_AUDIO_CAPTURE_PATH"
+fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$BIN_PATH" "$APP_DIR/Contents/MacOS/$APP_NAME"
 strip -S -x "$APP_DIR/Contents/MacOS/$APP_NAME"
@@ -224,6 +262,13 @@ install_name_tool -add_rpath @executable_path/../Frameworks \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$MCP_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllMCP"
 strip -S -x "$APP_DIR/Contents/Helpers/SayAllMCP"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$SIRI_REMOTE_AUDIO_CAPTURE_PATH" \
+    "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  chmod 755 "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllAIIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
@@ -358,6 +403,15 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
     "$APP_DIR/Contents/Helpers/SayAllMCP"
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    run_release_stage app-codesign-siri-remote-audio-helper "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+      codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  fi
   codesign \
     --force \
     --options runtime \
@@ -408,6 +462,13 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
     --timestamp=none \
     --sign - \
     "$APP_DIR/Contents/Helpers/SayAllMCP"
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    codesign \
+      --force \
+      --timestamp=none \
+      --sign - \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  fi
   codesign \
     --force \
     --timestamp=none \

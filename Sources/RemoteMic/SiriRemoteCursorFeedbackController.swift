@@ -18,6 +18,27 @@ struct SiriRemoteCursorFeedbackState: Equatable {
     }
 }
 
+struct SiriRemoteCursorFeedbackLayout {
+    static func frame(
+        for point: NSPoint,
+        visibleFrame: NSRect,
+        size: CGFloat = 72,
+        gap: CGFloat = 14
+    ) -> NSRect {
+        var originX = point.x + gap
+        if originX + size > visibleFrame.maxX {
+            originX = point.x - size - gap
+        }
+        originX = min(max(originX, visibleFrame.minX), visibleFrame.maxX - size)
+
+        let originY = min(
+            max(point.y - size / 2, visibleFrame.minY),
+            visibleFrame.maxY - size
+        )
+        return NSRect(x: originX, y: originY, width: size, height: size)
+    }
+}
+
 final class SiriRemoteCursorFeedbackController {
     private let view = SiriRemoteCursorFeedbackView(frame: NSRect(x: 0, y: 0, width: 72, height: 72))
     private var window: NSPanel?
@@ -78,12 +99,10 @@ final class SiriRemoteCursorFeedbackController {
             panel.contentView = view
             window = panel
         }
-        let frame = NSRect(
-            x: point.x - 36,
-            y: point.y - 36,
-            width: 72,
-            height: 72
-        )
+        let frame = NSScreen.screens
+            .first(where: { $0.visibleFrame.contains(point) })
+            .map { SiriRemoteCursorFeedbackLayout.frame(for: point, visibleFrame: $0.visibleFrame) }
+            ?? NSRect(x: point.x + 14, y: point.y - 36, width: 72, height: 72)
         window?.setFrame(frame, display: true)
         window?.orderFrontRegardless()
         view.needsDisplay = true

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Testing
 @testable import RemoteMic
 
@@ -18,5 +19,22 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(SiriRemoteCursorFeedbackState.scrollSymbol(forPixels: 4) == "↑")
         #expect(SiriRemoteCursorFeedbackState.scrollSymbol(forPixels: -4) == "↓")
         #expect(SiriRemoteCursorFeedbackState.scrollSymbol(forPixels: 0) == "↑")
+    }
+
+    @Test func feedbackFrameIsPlacedToTheRightAndFlipsAtTheScreenEdge() {
+        let screen = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let right = SiriRemoteCursorFeedbackLayout.frame(
+            for: CGPoint(x: 400, y: 300),
+            visibleFrame: screen
+        )
+        #expect(right.minX > 400)
+        #expect(right.midY == 300)
+
+        let edge = SiriRemoteCursorFeedbackLayout.frame(
+            for: CGPoint(x: 980, y: 300),
+            visibleFrame: screen
+        )
+        #expect(edge.maxX <= screen.maxX)
+        #expect(edge.maxX < 980)
     }
 }
