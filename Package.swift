@@ -16,6 +16,7 @@ var remoteMicDependencies: [Target.Dependency] = [
     .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
     .product(name: "SayAllMacRemoteUI", package: "sayall-mac-remote"),
 ]
+var remoteMicSwiftSettings: [SwiftSetting] = []
 var remoteMicTestDependencies: [Target.Dependency] = [
     "RemoteMic",
     .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
@@ -49,6 +50,7 @@ if let siriRemotePackagePath = ProcessInfo.processInfo.environment[
     remoteMicDependencies.append(
         .product(name: "SayAllSiriRemote", package: packageIdentity)
     )
+    remoteMicSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
 }
 
 if let macroPlatformPath = ProcessInfo.processInfo.environment[
@@ -133,7 +135,8 @@ let package = Package(
         .executableTarget(
             name: "RemoteMic",
             dependencies: remoteMicDependencies,
-            path: "Sources/RemoteMic"
+            path: "Sources/RemoteMic",
+            swiftSettings: remoteMicSwiftSettings
         ),
         .target(
             name: "AudioExceptionGuard",

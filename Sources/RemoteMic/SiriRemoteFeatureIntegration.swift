@@ -1,6 +1,6 @@
 import Foundation
 
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
 import SayAllSiriRemote
 #endif
 
@@ -15,18 +15,25 @@ struct SiriRemoteControlObservation: Equatable {
     let fingerprintToken: String
 }
 
+enum SiriRemoteTouchFeedbackKind: Equatable {
+    case pointerMoved(deltaX: Double, deltaY: Double, speed: Double)
+    case scrolled(pixels: Double, speed: Double)
+    case clicked
+}
+
 final class SiriRemoteFeatureIntegration {
     var onConnection: ((SiriRemoteConnectionObservation) -> Void)?
     var onControl: ((SiriRemoteControlObservation) -> Void)?
     var onVoiceSamples: (([Int16]) -> Void)?
     var onStatus: ((String) -> Void)?
+    var onTouchFeedback: ((SiriRemoteTouchFeedbackKind) -> Void)?
 
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
     private let feature: SayAllSiriRemoteFeature
 #endif
 
     init(logger: @escaping (String) -> Void = AppLogger.shared.write) {
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
         feature = SayAllSiriRemoteFeature(logger: logger)
         feature.onConnection = { [weak self] connection in
             self?.onConnection?(SiriRemoteConnectionObservation(
@@ -51,6 +58,20 @@ final class SiriRemoteFeatureIntegration {
         feature.onSamples = { [weak self] samples in
             self?.onVoiceSamples?(samples)
         }
+        feature.onTouchFeedback = { [weak self] feedback in
+            switch feedback {
+            case let .pointerMoved(deltaX, deltaY, speed):
+                self?.onTouchFeedback?(.pointerMoved(
+                    deltaX: deltaX,
+                    deltaY: deltaY,
+                    speed: speed
+                ))
+            case let .scrolled(pixels, speed):
+                self?.onTouchFeedback?(.scrolled(pixels: pixels, speed: speed))
+            case .clicked:
+                self?.onTouchFeedback?(.clicked)
+            }
+        }
         feature.onStatus = { [weak self] status in
             self?.onStatus?(status)
         }
@@ -58,7 +79,7 @@ final class SiriRemoteFeatureIntegration {
     }
 
     func start(customMappingEnabled: Bool) {
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
         feature.start()
         feature.restart(customMappingEnabled: customMappingEnabled)
 #else
@@ -67,14 +88,14 @@ final class SiriRemoteFeatureIntegration {
     }
 
     func stop() {
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
         feature.stop()
 #endif
     }
 
     @discardableResult
     func beginCapture() -> Bool {
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
         return feature.beginCapture()
 #else
         return false
@@ -83,7 +104,7 @@ final class SiriRemoteFeatureIntegration {
 
     @discardableResult
     func resumeCaptureIfStopping() -> Bool {
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
         return feature.resumeCaptureIfStopping()
 #else
         return false
@@ -91,7 +112,7 @@ final class SiriRemoteFeatureIntegration {
     }
 
     func stopCapture(completion: @escaping () -> Void) {
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
         feature.stopCapture(completion: completion)
 #else
         completion()
@@ -99,7 +120,7 @@ final class SiriRemoteFeatureIntegration {
     }
 
     func setVoiceTouchSuppressed(_ suppressed: Bool) {
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED
         feature.setVoiceTouchSuppressed(suppressed)
 #else
         _ = suppressed

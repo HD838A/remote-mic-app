@@ -320,6 +320,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     let membershipFeature: MembershipFeatureIntegration
     let loginItemService: LoginItemService
     let siriRemoteFeature: SiriRemoteFeatureIntegration
+    private let siriRemoteCursorFeedback = SiriRemoteCursorFeedbackController()
 
     @Published private(set) var connectionStatus = LocalizedMessage("bluetooth.status.initializing")
     @Published private(set) var hidStatus = LocalizedMessage("button_mapping.status.disabled")
@@ -553,6 +554,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             DispatchQueue.main.async {
                 self?.receiveSiriRemoteAudio(samples)
             }
+        }
+        siriRemoteFeature.onTouchFeedback = { [weak self] feedback in
+            self?.siriRemoteCursorFeedback.handle(feedback)
         }
         siriRemoteFeature.onStatus = { status in
             AppLogger.shared.write("APPLE REMOTE status=\(status)")
@@ -834,6 +838,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         privateFeature.stop()
         macroFeature.stop()
         siriRemoteFeature.stop()
+        siriRemoteCursorFeedback.stop()
         preferredInputSourceMonitor.stop()
         transcriptCaptureCoordinator.cancel()
         recordingAssetCoordinator.cancel(reason: "app_stop")
