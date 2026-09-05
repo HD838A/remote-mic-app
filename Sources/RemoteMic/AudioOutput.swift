@@ -284,9 +284,10 @@ enum VirtualAudioConnectionLifecyclePolicy {
         bluetoothVoiceActive: Bool,
         mobileVoiceActive: Bool,
         testToneActive: Bool,
-        systemSuspended: Bool
+        systemSuspended: Bool,
+        siriRemoteVoiceActive: Bool = false
     ) -> Bool {
-        if bluetoothVoiceActive || mobileVoiceActive || testToneActive {
+        if bluetoothVoiceActive || mobileVoiceActive || siriRemoteVoiceActive || testToneActive {
             return true
         }
         return readyBluetoothBridgeCount > 0 && !systemSuspended

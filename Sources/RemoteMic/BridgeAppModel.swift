@@ -319,6 +319,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     let macroFeature: MacroFeatureIntegration
     let membershipFeature: MembershipFeatureIntegration
     let loginItemService: LoginItemService
+    let siriRemoteFeature: SiriRemoteFeatureIntegration
 
     @Published private(set) var connectionStatus = LocalizedMessage("bluetooth.status.initializing")
     @Published private(set) var hidStatus = LocalizedMessage("button_mapping.status.disabled")
@@ -429,6 +430,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var voiceAudioDeliveryDiagnostic = VoiceAudioDeliveryDiagnostic()
     private var voiceSessionUsageSource: UsageEventSource?
     private var bluetoothVoiceActive = false
+    private var siriRemoteVoiceActive = false
+    private var siriRemoteVoiceStopping = false
+    private var siriRemoteVoiceFingerprint: String?
+    private var siriRemoteConnectedProfileIDs = Set<UUID>()
+    private var siriRemoteVoiceAudioBatchCount = 0
+    private var siriRemoteVoiceAudioEnqueueFailureCount = 0
     private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
     private var mobileVoiceLifecycle = MobileVoiceLifecycleState()
     private var pendingMobileVoiceRestartCompletion: ((RemoteVoiceStartResult) -> Void)?
@@ -515,6 +522,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         macroFeature: MacroFeatureIntegration = MacroFeatureIntegration(),
         membershipFeature: MembershipFeatureIntegration = MembershipFeatureIntegration(),
         loginItemService: LoginItemService = LoginItemService(),
+        siriRemoteFeature: SiriRemoteFeatureIntegration = SiriRemoteFeatureIntegration(),
         transcriptArchiveStore: TranscriptArchiveStore = TranscriptArchiveStore(),
         rc003VoiceExtensionTestEnabled: Bool =
             ProcessInfo.processInfo.arguments.contains("--rc003-voice-extension-test") ||
@@ -526,10 +534,29 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.macroFeature = macroFeature
         self.membershipFeature = membershipFeature
         self.loginItemService = loginItemService
+        self.siriRemoteFeature = siriRemoteFeature
         self.transcriptArchiveStore = transcriptArchiveStore
         self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
         self.recordingAssetStore = recordingAssetStore
         audioDevices = initialAudioDevices
+        siriRemoteFeature.onConnection = { [weak self] observation in
+            DispatchQueue.main.async {
+                self?.handleSiriRemoteConnection(observation)
+            }
+        }
+        siriRemoteFeature.onControl = { [weak self] observation in
+            DispatchQueue.main.async {
+                self?.handleSiriRemoteControl(observation)
+            }
+        }
+        siriRemoteFeature.onVoiceSamples = { [weak self] samples in
+            DispatchQueue.main.async {
+                self?.receiveSiriRemoteAudio(samples)
+            }
+        }
+        siriRemoteFeature.onStatus = { status in
+            AppLogger.shared.write("APPLE REMOTE status=\(status)")
+        }
         membershipAccessCancellable = membershipFeature.$buttonProfilesAccessDecision
             .removeDuplicates()
             .sink { [weak macroFeature] decision in
@@ -787,6 +814,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         started = true
         startAudioSubsystem()
         applyHIDSettings()
+        siriRemoteFeature.start(customMappingEnabled: settings.customMappingEnabled)
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -805,6 +833,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func stop() {
         privateFeature.stop()
         macroFeature.stop()
+        siriRemoteFeature.stop()
         preferredInputSourceMonitor.stop()
         transcriptCaptureCoordinator.cancel()
         recordingAssetCoordinator.cancel(reason: "app_stop")
@@ -845,6 +874,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isWatchRemoteConnected = false
         webRemoteState = .disabled
         bluetoothVoiceActive = false
+        siriRemoteVoiceActive = false
+        siriRemoteVoiceStopping = false
+        siriRemoteVoiceFingerprint = nil
+        siriRemoteConnectedProfileIDs.removeAll()
         let cancelledPendingRestart = mobileVoiceLifecycle.reset()
         let completion = pendingMobileVoiceRestartCompletion
         pendingMobileVoiceRestartCompletion = nil
@@ -2311,20 +2344,24 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func refreshBluetoothPresentation() {
         let allStates = bluetoothBridgeStates.values
-        connectedRemoteProfileIDs = Set(bluetoothBridges.compactMap { identifier, bridge in
+        let bluetoothProfileIDs = Set<UUID>(bluetoothBridges.compactMap { identifier, bridge in
             guard let profileID = settings.profileID(forBluetoothIdentifier: identifier),
                   let state = bluetoothBridgeStates[ObjectIdentifier(bridge)],
                   case .ready = state
             else { return nil }
             return profileID
         })
-        isConnected = allStates.contains { state in
+        connectedRemoteProfileIDs = bluetoothProfileIDs.union(siriRemoteConnectedProfileIDs)
+        let bluetoothIsConnected = allStates.contains { state in
             if case .ready = state { return true }
             return false
         }
+        isConnected = bluetoothIsConnected || !siriRemoteConnectedProfileIDs.isEmpty
         if let selectedBluetoothBridge,
            let state = bluetoothBridgeStates[ObjectIdentifier(selectedBluetoothBridge)] {
             connectionStatus = state.message
+        } else if !siriRemoteConnectedProfileIDs.isEmpty {
+            connectionStatus = LocalizedMessage("connection.status.connected_to_device")
         } else if let ready = allStates.first(where: { state in
             if case .ready = state { return true }
             return false
@@ -2334,6 +2371,157 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             connectionStatus = state.message
         } else {
             connectionStatus = LocalizedMessage("connection.status.searching")
+        }
+    }
+
+    private func handleSiriRemoteConnection(_ observation: SiriRemoteConnectionObservation) {
+        let profileID = settings.registerAppleSiriRemote(fingerprint: observation.fingerprint)
+        if observation.isConnected {
+            siriRemoteConnectedProfileIDs.insert(profileID)
+            settings.selectRemoteProfile(profileID)
+            AppLogger.shared.write("APPLE REMOTE connected profile_bound=true")
+        } else {
+            siriRemoteConnectedProfileIDs.remove(profileID)
+            if siriRemoteVoiceFingerprint == observation.fingerprint {
+                stopSiriRemoteVoice(reason: "remote_disconnected")
+            }
+            AppLogger.shared.write("APPLE REMOTE disconnected profile_bound=true")
+        }
+        refreshBluetoothPresentation()
+    }
+
+    private static func remoteButton(forSiriRemoteControl control: String) -> RemoteButton? {
+        switch control {
+        case "up": return .up
+        case "down": return .down
+        case "left": return .left
+        case "right": return .right
+        case "select": return .ok
+        case "back": return .back
+        case "tv": return .tv
+        case "volume_up": return .volumeUp
+        case "volume_down": return .volumeDown
+        case "power": return .power
+        default: return nil
+        }
+    }
+
+    private func handleSiriRemoteControl(_ observation: SiriRemoteControlObservation) {
+        if observation.control == "siri" {
+            switch observation.phase {
+            case "began": beginSiriRemoteVoice(fingerprint: observation.fingerprintToken)
+            case "ended": stopSiriRemoteVoice(reason: "button_released")
+            case "cancelled": stopSiriRemoteVoice(reason: "button_cancelled")
+            default: break
+            }
+            return
+        }
+        guard let button = Self.remoteButton(forSiriRemoteControl: observation.control) else {
+            AppLogger.shared.write(
+                "APPLE REMOTE control_ignored control=\(observation.control) " +
+                    "phase=\(observation.phase) reason=unsupported_host_mapping"
+            )
+            return
+        }
+        let phase: RemoteButtonPhase = observation.phase == "began" ? .press : .release
+        observeMobileButton(button, source: .appleSiriRemote)
+        _ = handleMobileButtonEvent(button, phase: phase, source: .appleSiriRemote)
+    }
+
+    private func beginSiriRemoteVoice(fingerprint: String) {
+        if siriRemoteVoiceActive {
+            if siriRemoteVoiceStopping,
+               siriRemoteFeature.resumeCaptureIfStopping() {
+                siriRemoteVoiceStopping = false
+                siriRemoteFeature.setVoiceTouchSuppressed(true)
+                AppLogger.shared.write("APPLE REMOTE voice_resumed")
+            }
+            return
+        }
+        guard !bluetoothVoiceActive, activeMobileVoiceSource == nil else {
+            AppLogger.shared.write("APPLE REMOTE voice_rejected reason=voice_busy")
+            return
+        }
+        guard ensureVirtualAudioOutputReady(reason: "apple_remote_voice_start") else {
+            AppLogger.shared.write("APPLE REMOTE voice_rejected reason=audio_output")
+            return
+        }
+        guard updateVoiceKeyState(
+            streaming: true,
+            forceSoftware: true,
+            owner: .appleRemote
+        ) else {
+            AppLogger.shared.write("APPLE REMOTE voice_rejected reason=function_key")
+            return
+        }
+        siriRemoteVoiceActive = true
+        siriRemoteVoiceStopping = false
+        siriRemoteVoiceFingerprint = fingerprint
+        siriRemoteVoiceAudioBatchCount = 0
+        siriRemoteVoiceAudioEnqueueFailureCount = 0
+        resetCurrentVoiceSampleReceipt()
+        beginVoiceSessionIfNeeded()
+        siriRemoteFeature.setVoiceTouchSuppressed(true)
+        guard siriRemoteFeature.beginCapture() else {
+            siriRemoteFeature.setVoiceTouchSuppressed(false)
+            siriRemoteVoiceActive = false
+            siriRemoteVoiceFingerprint = nil
+            releaseVoiceKeyIfNeeded(owner: .appleRemote, forceSoftware: true)
+            endVoiceSessionIfNeeded(flushAudio: false)
+            AppLogger.shared.write("APPLE REMOTE voice_rejected reason=capture_begin")
+            return
+        }
+        AppLogger.shared.write("APPLE REMOTE voice_started")
+    }
+
+    private func stopSiriRemoteVoice(reason: String) {
+        guard siriRemoteVoiceActive, !siriRemoteVoiceStopping else { return }
+        siriRemoteVoiceStopping = true
+        AppLogger.shared.write("APPLE REMOTE voice_stopping reason=\(reason)")
+        siriRemoteFeature.stopCapture { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.audioOutput.endSessionAfterDraining { [weak self] in
+                    guard let self else { return }
+                    self.siriRemoteVoiceActive = false
+                    self.siriRemoteVoiceStopping = false
+                    self.siriRemoteVoiceFingerprint = nil
+                    self.siriRemoteFeature.setVoiceTouchSuppressed(false)
+                    _ = self.releaseVoiceKeyIfNeeded(owner: .appleRemote, forceSoftware: true)
+                    self.endVoiceSessionIfNeeded(flushAudio: false)
+                    AppLogger.shared.write(
+                        "APPLE REMOTE voice_stopped reason=\(reason) " +
+                            "batches=\(self.siriRemoteVoiceAudioBatchCount) " +
+                            "enqueue_failures=\(self.siriRemoteVoiceAudioEnqueueFailureCount)"
+                    )
+                    self.releaseVirtualAudioOutputIfUnused(reason: "apple_remote_voice_stopped")
+                }
+            }
+        }
+    }
+
+    private func receiveSiriRemoteAudio(_ samples: [Int16]) {
+        guard siriRemoteVoiceActive || siriRemoteVoiceStopping else {
+            AppLogger.shared.write("APPLE REMOTE audio_ignored reason=no_voice_session")
+            return
+        }
+        recordingAssetCoordinator.append(samples: samples)
+        let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
+        let accepted = audioOutput.enqueue(samples: samples, deliveryGeneration: deliveryGeneration)
+        siriRemoteVoiceAudioBatchCount += 1
+        if !accepted {
+            siriRemoteVoiceAudioEnqueueFailureCount += 1
+        }
+        recordVoiceAudioReceipt(samples: samples, route: .virtualAudioDirect)
+        recordVoiceAudioEnqueueOutcome(accepted: accepted, deliveryGeneration: deliveryGeneration)
+        publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
+        if siriRemoteVoiceAudioBatchCount == 1 || siriRemoteVoiceAudioBatchCount.isMultiple(of: 20) || !accepted {
+            AppLogger.shared.write(
+                "APPLE REMOTE audio batches=\(siriRemoteVoiceAudioBatchCount) " +
+                    "samples=\(samples.count) accepted=\(accepted) " +
+                    "enqueue_failures=\(siriRemoteVoiceAudioEnqueueFailureCount) " +
+                    "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
+            )
         }
     }
 
@@ -3416,12 +3604,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             bluetoothVoiceActive: bluetoothVoiceActive,
             mobileVoiceActive: activeMobileVoiceSource != nil,
             testToneActive: isPlayingTestTone,
-            systemSuspended: systemAudioSuspensionState.isSuspended
+            systemSuspended: systemAudioSuspensionState.isSuspended,
+            siriRemoteVoiceActive: siriRemoteVoiceActive
         )
     }
 
     private var hasActiveVirtualAudioSource: Bool {
-        bluetoothVoiceActive || activeMobileVoiceSource != nil || isPlayingTestTone
+        bluetoothVoiceActive || siriRemoteVoiceActive || activeMobileVoiceSource != nil || isPlayingTestTone
     }
 
     private func resumeVirtualAudioOutputIfNeeded(reason: String) {
@@ -3806,7 +3995,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func endVoiceSessionIfNeeded(flushAudio: Bool = true) {
-        guard !bluetoothVoiceActive, activeMobileVoiceSource == nil, isStreaming else { return }
+        guard !bluetoothVoiceActive,
+              !siriRemoteVoiceActive,
+              activeMobileVoiceSource == nil,
+              isStreaming
+        else { return }
         let endedAt = Date()
         if let voiceSessionStartedAt {
             settings.recordVoiceDuration(
@@ -3838,6 +4031,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private var currentVoiceUsageSource: UsageEventSource {
         if bluetoothVoiceActive { return .bluetoothRemote }
+        if siriRemoteVoiceActive { return .appleSiriRemote }
         switch activeMobileVoiceSource {
         case .nearbyPhone, .nearbyWatch: return .nearbyPhone
         case .web: return .webRemote

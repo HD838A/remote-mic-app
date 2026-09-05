@@ -60,6 +60,7 @@ struct WeeklyUsageStatisticsSeries: Equatable {
 
 enum UsageEventSource: String, Codable, CaseIterable, Hashable {
     case bluetoothRemote = "bluetooth_remote"
+    case appleSiriRemote = "apple_siri_remote"
     case nearbyPhone = "nearby_phone"
     case webRemote = "web_remote"
     case unknown
@@ -977,6 +978,32 @@ final class AppSettings: ObservableObject {
             remoteDeviceProfiles[candidate].hidFingerprint = nil
         }
         remoteDeviceProfiles[index].hidFingerprint = fingerprint
+    }
+
+    @discardableResult
+    func registerAppleSiriRemote(fingerprint: String) -> UUID {
+        if let existing = remoteDeviceProfiles.first(where: {
+            $0.hidFingerprint == fingerprint && $0.model == .appleSiriRemote
+        }) {
+            return existing.id
+        }
+        if let existingIndex = remoteDeviceProfiles.firstIndex(where: {
+            $0.hidFingerprint == fingerprint
+        }) {
+            remoteDeviceProfiles[existingIndex].model = .appleSiriRemote
+            return remoteDeviceProfiles[existingIndex].id
+        }
+        let profileID = registerHIDRemote(fingerprint: fingerprint)
+        if let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }) {
+            remoteDeviceProfiles[index].model = .appleSiriRemote
+        }
+        return profileID
+    }
+
+    func profileID(forAppleSiriRemoteFingerprint fingerprint: String) -> UUID? {
+        remoteDeviceProfiles.first(where: {
+            $0.model == .appleSiriRemote && $0.hidFingerprint == fingerprint
+        })?.id
     }
 
     private func mappingsForNewRemote() -> RemoteDeviceMappings {

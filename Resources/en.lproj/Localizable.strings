@@ -191,6 +191,7 @@
 "remote.device.model" = "Model";
 "remote.device.model.rc001" = "Xiaomi Bluetooth Remote 2";
 "remote.device.model.rc003" = "Xiaomi Bluetooth Remote 2 Pro";
+"remote.device.model.apple_siri_remote" = "Apple Siri Remote";
 "remote.device.model.unknown" = "Xiaomi Remote";
 "remote.device.custom_name" = "Custom name";
 "remote.device.bind_button" = "Bind physical buttons";

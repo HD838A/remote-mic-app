@@ -9,6 +9,7 @@ struct VoiceFunctionKeyLatch {
     enum Owner: Hashable {
         case bluetooth
         case mobile
+        case appleRemote
     }
 
     private var owners: Set<Owner> = []

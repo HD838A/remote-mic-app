@@ -191,6 +191,7 @@
 "remote.device.model" = "型号";
 "remote.device.model.rc001" = "小米蓝牙遥控器 2";
 "remote.device.model.rc003" = "小米蓝牙遥控器 2 Pro";
+"remote.device.model.apple_siri_remote" = "Apple Siri Remote";
 "remote.device.model.unknown" = "小米遥控器";
 "remote.device.custom_name" = "自定义名称";
 "remote.device.bind_button" = "绑定普通按键";

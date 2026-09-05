@@ -39,6 +39,18 @@ if let privateFeaturePath = ProcessInfo.processInfo.environment[
     )
 }
 
+if let siriRemotePackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_SIRI_REMOTE_PACKAGE_PATH"
+], !siriRemotePackagePath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: siriRemotePackagePath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: siriRemotePackagePath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllSiriRemote", package: packageIdentity)
+    )
+}
+
 if let macroPlatformPath = ProcessInfo.processInfo.environment[
     "SAYALL_MACRO_PLATFORM_PATH"
 ], !macroPlatformPath.isEmpty {

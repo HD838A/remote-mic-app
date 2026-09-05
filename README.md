@@ -131,6 +131,10 @@ Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 
 
 默认使用 Fn，是为了直接兼容豆包、微信等 Fn 长按语音入口和 Typeless 的 Fn 点按入口，同时让遥控器“按住采音、松开停止”的生命周期与快捷键一致。技术上可以继续扩展 F18、F19、F20 等低频键，但当前版本不支持任意自定义语音键：目标语音应用也必须配置同一个键，而且 RC003、iPhone、Apple Watch、网页版、权限与输入源切换都要共享同一套成对按下/释放逻辑。普通遥控器按键仍可单独配置 F1–F20。
 
+## 私有 Siri Remote 接线
+
+公开宿主默认不包含 Apple Siri Remote 专用协议、HCI、PacketLogger 或音频实现，因此不设置额外环境变量时仍可独立构建和运行。私有产品构建可通过 `SAYALL_SIRI_REMOTE_PACKAGE_PATH` 注入 `sayall-private-platform/packages/audio-input-kit/siri-remote`；宿主只负责连接状态、按键映射、语音会话生命周期和 `MiRemoteV 2ch` 音频投递，专用适配器与实机测试手册保留在私有仓库。
+
 语音键不承担短按、双击或长按附加动作，只负责按下即开始、释放即结束的实时语音会话。需要聚焦前台 App 输入框时，请在普通按键的“自定义动作”中选择“聚焦输入框”；该动作使用 macOS Accessibility，不读取输入内容。
 
 如果想先确认音频链路是否正常，可以点击“发送 1 秒测试音”，或在 QuickTime Player 的“新建音频录制”中观察输入电平。
