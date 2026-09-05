@@ -9,6 +9,8 @@ enum VoiceKeyMode: String, Codable, CaseIterable, Identifiable {
     case function = "fn"
     case leftCommand = "left_command"
     case rightCommand = "right_command"
+    case rightOption = "right_option"
+    case rightShift = "right_shift"
 
     var id: String { rawValue }
 
@@ -17,6 +19,8 @@ enum VoiceKeyMode: String, Codable, CaseIterable, Identifiable {
         case .function: return 63
         case .leftCommand: return 55
         case .rightCommand: return 54
+        case .rightOption: return 61
+        case .rightShift: return 60
         }
     }
 

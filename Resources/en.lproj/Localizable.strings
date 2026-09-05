@@ -224,10 +224,12 @@
 "connection.voice_key.mode.fn" = "Fn/Globe";
 "connection.voice_key.mode.left_command" = "Left Command";
 "connection.voice_key.mode.right_command" = "Right Command";
-"connection.voice_key_mode.help" = "Fn/Globe is the default. Command modes require Accessibility permission and a target voice app that supports the corresponding standalone Left or Right Command hold; many apps merge both sides into a generic Command. Pressing another key while held may trigger a Command shortcut.";
-"connection.voice_key_mode.unverified" = "Command mode is not verified";
-"connection.voice_key_mode.unverified_detail" = "Configure the same Left or Right Command in the target voice tool and confirm a real dictated phrase. SayAll cannot read the tool's internal settings; switch back to Fn/Globe if no text appears.";
-"connection.voice_key_mode.command_permission" = "Command mode requires Accessibility permission";
+"connection.voice_key.mode.right_option" = "Right Option";
+"connection.voice_key.mode.right_shift" = "Right Shift";
+"connection.voice_key_mode.help" = "Fn/Globe is the default. Modifier modes require Accessibility permission and a target voice app that supports holding that key on the matching physical side; many apps merge both sides into a generic modifier. Pressing another key while held may trigger the corresponding system shortcut.";
+"connection.voice_key_mode.unverified" = "Modifier mode is not verified";
+"connection.voice_key_mode.unverified_detail" = "Configure the same side-specific modifier in the target voice tool and confirm a real dictated phrase. SayAll cannot read the tool's internal settings; switch back to Fn/Globe if no text appears.";
+"connection.voice_key_mode.command_permission" = "Modifier mode requires Accessibility permission";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "iPhone, Apple Watch, and Web";
 "connection.phone.ios_title" = "iOS App (Recommended)";
