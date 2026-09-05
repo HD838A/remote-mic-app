@@ -7,6 +7,20 @@ enum AppConfigurationError: Error {
     case unsafeVoiceKeyChange
 }
 
+struct QuickPhrase: Codable, Equatable, Identifiable {
+    let id: UUID
+    var title: String
+    var text: String
+
+    init(id: UUID = UUID(), title: String, text: String) {
+        self.id = id
+        self.title = title
+        self.text = text
+    }
+
+    static let defaults: [QuickPhrase] = []
+}
+
 struct VoiceKeyConfigurationState: Equatable {
     let mode: VoiceKeyMode
     let fnTapModeEnabled: Bool
@@ -23,6 +37,7 @@ private struct PersonalizedConfiguration: Codable {
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     let buttonRapidPressEnabled: [String: Bool]?
     let customApplicationProfiles: [CustomApplicationProfile]?
+    let quickPhrases: [QuickPhrase]?
     let applicationLanguage: AppLanguage
     let showDockIcon: Bool
     let openMainWindowAtLaunch: Bool?
@@ -241,6 +256,7 @@ final class AppSettings: ObservableObject {
         static let secondaryButtonBindings = "secondaryButtonBindings"
         static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let customApplicationProfiles = "customApplicationProfiles"
+        static let quickPhrases = "quickPhrases"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
         static let selectedRemoteProfileID = "selectedRemoteProfileID"
@@ -323,6 +339,14 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var customApplicationProfiles: [CustomApplicationProfile] {
         didSet { saveCustomApplicationProfiles() }
+    }
+
+    @Published private(set) var quickPhrases: [QuickPhrase] {
+        didSet {
+            if let data = try? JSONEncoder().encode(quickPhrases) {
+                defaults.set(data, forKey: Keys.quickPhrases)
+            }
+        }
     }
 
     @Published private(set) var remoteDeviceProfiles: [RemoteDeviceProfile] {
@@ -566,6 +590,10 @@ final class AppSettings: ObservableObject {
             .data(forKey: Keys.customApplicationProfiles)
             .flatMap { try? JSONDecoder().decode([CustomApplicationProfile].self, from: $0) }
             ?? []
+        quickPhrases = defaults
+            .data(forKey: Keys.quickPhrases)
+            .flatMap { try? JSONDecoder().decode([QuickPhrase].self, from: $0) }
+            ?? QuickPhrase.defaults
 
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
@@ -856,6 +884,36 @@ final class AppSettings: ObservableObject {
             return
         }
         customApplicationProfiles[index] = profile
+    }
+
+    @discardableResult
+    func addQuickPhrase() -> UUID {
+        let phrase = QuickPhrase(title: "", text: "")
+        quickPhrases.append(phrase)
+        return phrase.id
+    }
+
+    @discardableResult
+    func updateQuickPhrase(id: UUID, title: String? = nil, text: String? = nil) -> Bool {
+        guard let index = quickPhrases.firstIndex(where: { $0.id == id }) else { return false }
+        var updated = quickPhrases[index]
+        if let title { updated.title = title }
+        if let text { updated.text = text }
+        guard updated != quickPhrases[index] else { return false }
+        quickPhrases[index] = updated
+        return true
+    }
+
+    func removeQuickPhrase(id: UUID) {
+        quickPhrases.removeAll { $0.id == id }
+    }
+
+    func moveQuickPhrase(id: UUID, offset: Int) {
+        guard let source = quickPhrases.firstIndex(where: { $0.id == id }) else { return }
+        let destination = min(max(0, source + offset), quickPhrases.count - 1)
+        guard source != destination else { return }
+        let phrase = quickPhrases.remove(at: source)
+        quickPhrases.insert(phrase, at: destination)
     }
 
     func configuredAction(
@@ -1383,6 +1441,7 @@ final class AppSettings: ObservableObject {
             Keys.buttonApplicationProfileIDs,
             Keys.secondaryButtonBindings,
             Keys.customApplicationProfiles,
+            Keys.quickPhrases,
             Keys.peripheralIdentifier,
             Keys.applicationLanguage,
             Keys.voiceFnTapModeEnabled,
@@ -1424,6 +1483,7 @@ final class AppSettings: ObservableObject {
                     uniqueKeysWithValues: buttonRapidPressEnabled.map { ($0.key.rawValue, $0.value) }
                 ),
             customApplicationProfiles: customApplicationProfiles,
+            quickPhrases: quickPhrases,
             applicationLanguage: applicationLanguage,
             showDockIcon: showDockIcon,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
@@ -1507,6 +1567,9 @@ final class AppSettings: ObservableObject {
         secondaryButtonBindings = importedSecondaryBindings
         buttonRapidPressEnabled = importedRapidPressEnabled
         customApplicationProfiles = configuration.customApplicationProfiles ?? []
+        if let quickPhrases = configuration.quickPhrases {
+            self.quickPhrases = quickPhrases
+        }
         applicationLanguage = configuration.applicationLanguage
         showDockIcon = configuration.showDockIcon
         if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {

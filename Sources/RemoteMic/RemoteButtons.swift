@@ -464,6 +464,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case nextCommandRight
     case customShortcut
     case focusInput
+    case showQuickPhrases
     case openCustomApplication
     case toggleLongRecording
     case openRemoteMic
@@ -518,6 +519,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .nextCommandRight: return localization.text("action.next_command_right")
         case .customShortcut: return localization.text("action.custom_shortcut")
         case .focusInput: return localization.text("action.focus_input")
+        case .showQuickPhrases: return localization.text("action.show_quick_phrases")
         case .openCustomApplication: return localization.text("action.open_custom_application")
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
@@ -567,7 +569,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
-        case .customShortcut, .focusInput, .openCustomApplication:
+        case .customShortcut, .focusInput, .showQuickPhrases, .openCustomApplication:
             return .custom
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
              .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
@@ -600,7 +602,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     }
 
     var isAppInternal: Bool {
-        self == .toggleLongRecording
+        self == .toggleLongRecording || self == .showQuickPhrases
     }
 
     func isEnabled(experimentalContinuousRecordingEnabled: Bool) -> Bool {

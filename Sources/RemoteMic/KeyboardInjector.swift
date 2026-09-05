@@ -366,6 +366,8 @@ enum KeyboardInjector {
             }
         case .focusInput:
             break
+        case .showQuickPhrases:
+            break
         case .openCustomApplication:
             break
         case .toggleLongRecording:

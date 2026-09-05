@@ -348,6 +348,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var transcriptRecords: [TranscriptRecord] = []
     @Published private(set) var recordingAssets: [RecordingAssetManifest] = []
     @Published private(set) var recordingPlaybackError: RecordingPlaybackFailure?
+    @Published private(set) var isQuickPhrasePalettePresented = false
+    @Published private(set) var quickPhrasePaletteSelectionIndex = 0
 
     private let transcriptArchiveStore: TranscriptArchiveStore
     private let recordingAssetStore: RecordingAssetStore
@@ -461,6 +463,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var mobileButtonGestureRecognizers: [UsageEventSource: RemoteButtonGestureRecognizer] = [:]
     private var mobileDoubleClickTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
     private var mobileLongPressTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
+    private var quickPhrasePaletteOperationID: UInt64 = 0
     private var bluetoothBridges: [UUID: XiaomiBluetoothBridge] = [:]
     private var bluetoothBridgeStates: [ObjectIdentifier: BluetoothBridgeState] = [:]
     private var discoveryBluetoothBridge: XiaomiBluetoothBridge?
@@ -803,6 +806,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func stop() {
+        dismissQuickPhrasePalette(reason: "app_stop")
         privateFeature.stop()
         macroFeature.stop()
         preferredInputSourceMonitor.stop()
@@ -2049,6 +2053,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 control: .remoteButton(button),
                 source: .bluetoothRemote
             )
+            if self.isQuickPhrasePalettePresented {
+                self.handleQuickPhrasePaletteButton(button)
+                return (resolvedProfileID, false)
+            }
             if self.macroFeature.isEditorActive {
                 AppLogger.shared.write(
                     "HID BUTTON button=\(button.rawValue) path=binding_editor_capture"
@@ -3094,14 +3102,96 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     @discardableResult
     private func performInternalAction(_ action: ButtonAction) -> Bool {
-        guard action == .toggleLongRecording else { return false }
-        guard action.isEnabled(
-            experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
-        ) else {
-            AppLogger.shared.write("LONG RECORDING ignored feature_enabled=false")
+        switch action {
+        case .showQuickPhrases:
+            quickPhrasePaletteOperationID &+= 1
+            quickPhrasePaletteSelectionIndex = 0
+            isQuickPhrasePalettePresented = true
+            AppLogger.shared.write(
+                "QUICK PHRASES operation_id=\(quickPhrasePaletteOperationID) " +
+                    "phase=started result=presented count=\(settings.quickPhrases.count)"
+            )
+            return true
+        case .toggleLongRecording:
+            guard action.isEnabled(
+                experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
+            ) else {
+                AppLogger.shared.write("LONG RECORDING ignored feature_enabled=false")
+                return false
+            }
+            return toggleLongRecording()
+        default:
             return false
         }
-        return toggleLongRecording()
+    }
+
+    func dismissQuickPhrasePalette(reason: String = "back") {
+        guard isQuickPhrasePalettePresented else { return }
+        isQuickPhrasePalettePresented = false
+        AppLogger.shared.write(
+            "QUICK PHRASES operation_id=\(quickPhrasePaletteOperationID) " +
+                "phase=completed result=cancelled reason=\(reason)"
+        )
+    }
+
+    @discardableResult
+    func confirmQuickPhraseSelection() -> Bool {
+        guard settings.quickPhrases.indices.contains(quickPhrasePaletteSelectionIndex) else {
+            AppLogger.shared.write(
+                "QUICK PHRASES operation_id=\(quickPhrasePaletteOperationID) " +
+                    "phase=insert_rejected result=retryable reason=selection_unavailable"
+            )
+            return false
+        }
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            _ = KeyboardInjector.requestAccessibilityAccess()
+            AppLogger.shared.write(
+                "QUICK PHRASES operation_id=\(quickPhrasePaletteOperationID) " +
+                    "phase=insert_failed result=retryable reason=accessibility"
+            )
+            return false
+        }
+        let phrase = settings.quickPhrases[quickPhrasePaletteSelectionIndex]
+        guard QuickPhrasePaster.paste(phrase.text) else {
+            AppLogger.shared.write(
+                "QUICK PHRASES operation_id=\(quickPhrasePaletteOperationID) " +
+                    "phase=insert_failed result=retryable reason=paste"
+            )
+            return false
+        }
+        isQuickPhrasePalettePresented = false
+        AppLogger.shared.write(
+            "QUICK PHRASES operation_id=\(quickPhrasePaletteOperationID) " +
+                "phase=completed result=insert_submitted " +
+                "index=\(quickPhrasePaletteSelectionIndex)"
+        )
+        return true
+    }
+
+    private func handleQuickPhrasePaletteButton(_ button: RemoteButton) {
+        switch button {
+        case .up, .down, .left, .right:
+            let startedAt = DispatchTime.now().uptimeNanoseconds
+            let previousIndex = quickPhrasePaletteSelectionIndex
+            quickPhrasePaletteSelectionIndex = QuickPhraseGridNavigation.destination(
+                from: previousIndex,
+                button: button,
+                itemCount: settings.quickPhrases.count
+            )
+            let elapsedMilliseconds = (DispatchTime.now().uptimeNanoseconds - startedAt) / 1_000_000
+            AppLogger.shared.write(
+                "QUICK PHRASES operation_id=\(quickPhrasePaletteOperationID) " +
+                    "phase=navigated result=\(previousIndex == quickPhrasePaletteSelectionIndex ? "boundary" : "moved") " +
+                    "button=\(button.rawValue) from_index=\(previousIndex) " +
+                    "to_index=\(quickPhrasePaletteSelectionIndex) elapsed_ms=\(elapsedMilliseconds)"
+            )
+        case .ok:
+            _ = confirmQuickPhraseSelection()
+        case .back:
+            dismissQuickPhrasePalette()
+        default:
+            break
+        }
     }
 
     private func toggleLongRecording() -> Bool {

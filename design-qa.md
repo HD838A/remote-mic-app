@@ -127,6 +127,16 @@ final result: passed（真实遥控器与真实系统快捷键验收除外）
 
 final result: passed（横向布局与静态字号；真实窗口交互和真实设备除外）
 
+## 2026-09-02 常用语悬浮面板
+
+- 参考 Command Palette 的轻量层级，悬浮面板使用两列卡片、明确选择态和固定的方向键 / OK / 返回提示；不放搜索、分类或二级设置。
+- 编辑入口独立放在设置页，列表、名称、正文、排序与删除同页完成，不使用下拉框、Popover、Sheet 或连续确认弹窗。
+- 所有中文正文和提示固定为 12pt 或更大；悬浮面板不激活 SayAll、不读取当前输入内容，避免破坏原应用的输入焦点。
+- 使用非敏感测试数据在 `1020 × 772` 渲染中文浅色和英文深色；侧边栏、五条测试常用语、编辑器、排序和删除入口均无裁切。真实 RC003、不同显示器和目标 App 焦点仍按 `Testing/QuickPhrasePalette.md` 人工验收。
+- 设置页编辑器使用页面内草稿，停止输入后合并保存；左侧条目切换不再与编辑器失焦造成的整组数据发布竞争。选择和保存日志不包含常用语名称或正文。
+
+final result: automated checks and rendered settings UI passed; floating panel and real remote acceptance pending.
+
 ### 快速连接补充约束
 
 - Codex、Claude Code、Cursor、OpenCode 使用页面内两列卡片，不使用下拉列表、Popover 或 Sheet；每张卡显示客户端图标或回退图标、名称、检测/连接状态和单一主操作。

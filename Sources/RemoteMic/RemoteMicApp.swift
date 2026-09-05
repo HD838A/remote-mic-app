@@ -172,6 +172,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
+    private var quickPhrasePaletteWindowController: QuickPhrasePaletteWindowController?
     private var isSettingsWindowOpen = false
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
@@ -267,6 +268,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        quickPhrasePaletteWindowController?.hide()
         model.privateFeature.hideHUDImmediately()
         model.stop()
         updateCheckTask?.cancel()
@@ -545,6 +547,29 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             self?.setPrivateFeatureHUDVisible(isVisible)
         }
         .store(in: &subscriptions)
+
+        model.$isQuickPhrasePalettePresented
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isPresented in
+                self?.setQuickPhrasePalettePresented(isPresented)
+            }
+            .store(in: &subscriptions)
+    }
+
+    private func setQuickPhrasePalettePresented(_ isPresented: Bool) {
+        if isPresented {
+            if quickPhrasePaletteWindowController == nil {
+                quickPhrasePaletteWindowController = QuickPhrasePaletteWindowController(
+                    model: model,
+                    settings: model.settings,
+                    localization: localization
+                )
+            }
+            quickPhrasePaletteWindowController?.show()
+        } else {
+            quickPhrasePaletteWindowController?.hide()
+        }
     }
 
     private func setPrivateFeatureHUDVisible(_ isVisible: Bool) {
