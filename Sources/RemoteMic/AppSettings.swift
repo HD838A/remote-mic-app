@@ -30,6 +30,7 @@ private struct PersonalizedConfiguration: Codable {
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
+    let voiceKeyUsesRemoteMicrophone: Bool?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
 
@@ -251,6 +252,7 @@ final class AppSettings: ObservableObject {
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
         static let voiceKeyMode = "voiceKeyMode"
+        static let voiceKeyUsesRemoteMicrophone = "voiceKeyUsesRemoteMicrophone"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
@@ -367,6 +369,26 @@ final class AppSettings: ObservableObject {
                 forKey: Keys.voiceFnTapModeEnabled
             )
         }
+    }
+
+    /// Whether the remote's own microphone is captured while the voice key is held
+    /// (default true, the historical behavior). Off means the voice key is a pure
+    /// trigger: only the trigger key is emitted, and the dictation tool listens on
+    /// the Mac's own (e.g. external) microphone instead.
+    @Published var voiceKeyUsesRemoteMicrophone: Bool {
+        didSet {
+            defaults.set(
+                voiceKeyUsesRemoteMicrophone,
+                forKey: Keys.voiceKeyUsesRemoteMicrophone
+            )
+        }
+    }
+
+    /// Fn-tap (Typeless) injection is driven by the remote's audio draining, so it can
+    /// only run while the remote microphone is captured. The stored preference survives;
+    /// it simply has no effect in pure-trigger mode.
+    var effectiveVoiceFnTapModeEnabled: Bool {
+        voiceFnTapModeEnabled && voiceKeyUsesRemoteMicrophone
     }
 
     @Published var voiceKeyMode: VoiceKeyMode {
@@ -581,6 +603,9 @@ final class AppSettings: ObservableObject {
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
         voiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
+        voiceKeyUsesRemoteMicrophone = defaults.object(forKey: Keys.voiceKeyUsesRemoteMicrophone) == nil
+            ? true
+            : defaults.bool(forKey: Keys.voiceKeyUsesRemoteMicrophone)
         voiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
@@ -1431,6 +1456,7 @@ final class AppSettings: ObservableObject {
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
             voiceKeyMode: voiceKeyMode,
+            voiceKeyUsesRemoteMicrophone: voiceKeyUsesRemoteMicrophone,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
         let encoder = JSONEncoder()
@@ -1517,6 +1543,7 @@ final class AppSettings: ObservableObject {
         }
         voiceKeyMode = importedVoiceKeyConfiguration.mode
         voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
+        voiceKeyUsesRemoteMicrophone = configuration.voiceKeyUsesRemoteMicrophone ?? true
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup
