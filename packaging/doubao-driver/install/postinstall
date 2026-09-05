@@ -183,8 +183,29 @@ for app_executable in "${APP_EXECUTABLES[@]}"; do
 done
 /usr/bin/codesign --verify --deep --strict "$APP_DESTINATION"
 
+# Never abort here: the driver is already in place, so a failed audio-service
+# restart must not turn a successful install into an installer error. pgrep
+# decides the wording so a real failure is never reported as "was not running",
+# and killall's stderr reaches the installer log instead of being suppressed.
+# Deliberately not `|| true`, which would also swallow permission failures.
+restart_audio_service() {
+  if ! /usr/bin/pgrep -qx coreaudiod; then
+    installer_message \
+      "系统音频服务当前未运行，无需重启；驱动会在它启动时加载。" \
+      "The system audio service is not running; no restart was needed and the driver loads when it starts."
+  elif /usr/bin/killall coreaudiod; then
+    installer_message \
+      "已重启系统音频服务。" \
+      "Restarted the system audio service."
+  else
+    installer_message \
+      "驱动已安装，但重启系统音频服务失败；请重启 Mac 以加载驱动。" \
+      "The driver is installed, but the system audio service could not be restarted; restart your Mac to load it."
+  fi
+}
+
 if [[ "$DRIVER_CHANGED" -eq 1 ]]; then
-  /usr/bin/killall coreaudiod
+  restart_audio_service
 fi
 
 CONSOLE_USER="$(/usr/bin/stat -f '%Su' /dev/console)"

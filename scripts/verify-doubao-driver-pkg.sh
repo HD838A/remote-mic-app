@@ -241,7 +241,16 @@ case "$MODE" in
     /usr/bin/grep -Fq 'if [[ "$CURRENT_ARCHITECTURE" != "$EXPECTED_ARCHITECTURE" ]]; then' \
       "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fqx 'if [[ "$DRIVER_CHANGED" -eq 1 ]]; then' "$SCRIPTS_DIR/postinstall"
-    /usr/bin/grep -Fqx '  /usr/bin/killall coreaudiod' "$SCRIPTS_DIR/postinstall"
+    # The audio-service restart must exist, and must be guarded so a missing or
+    # unresponsive coreaudiod cannot abort the installer after the driver was
+    # already written to disk.
+    /usr/bin/grep -Fq '/usr/bin/pgrep -qx coreaudiod' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'elif /usr/bin/killall coreaudiod; then' "$SCRIPTS_DIR/postinstall"
+    if /usr/bin/grep -Eq '^[[:space:]]*/usr/bin/killall coreaudiod[[:space:]]*$' \
+      "$SCRIPTS_DIR/postinstall"; then
+      print -u2 "postinstall must not call killall unguarded"
+      exit 1
+    fi
     /usr/bin/grep -Fq '/bin/launchctl asuser "$CONSOLE_UID"' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq '/usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"' "$SCRIPTS_DIR/postinstall"
     /usr/sbin/pkgutil --expand-full "$PACKAGE" "$FULL_EXPANDED"
@@ -290,6 +299,15 @@ case "$MODE" in
       "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fq 'BlackHole and local settings were not changed.' \
       "$EXPANDED/Scripts/postinstall"
+    # Same guard as the installer: the audio-service restart after the driver
+    # was moved to Trash must never abort the uninstaller.
+    /usr/bin/grep -Fq '/usr/bin/pgrep -qx coreaudiod' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'elif /usr/bin/killall coreaudiod; then' "$EXPANDED/Scripts/postinstall"
+    if /usr/bin/grep -Eq '^[[:space:]]*/usr/bin/killall coreaudiod[[:space:]]*$' \
+      "$EXPANDED/Scripts/postinstall"; then
+      print -u2 "uninstall postinstall must not call killall unguarded"
+      exit 1
+    fi
     if /usr/bin/grep -Eq '(/bin/)?rm([[:space:]]|$)|unlink|find[[:space:]].*-delete' \
         "$EXPANDED/Scripts/postinstall"; then
       print -u2 "uninstaller must move recognized items to Trash instead of permanently deleting them"

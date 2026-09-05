@@ -726,4 +726,154 @@ struct BuildSigningTests {
         #expect(!workflowSource.contains("pull_request:"))
         #expect(!workflowSource.contains("push:"))
     }
+
+    @Test func audioServiceRestartNeverAbortsInstallerScripts() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let scriptPaths = [
+            "scripts/install-doubao-driver.sh",
+            "scripts/uninstall-doubao-driver.sh",
+            "packaging/doubao-driver/install/postinstall",
+            "packaging/doubao-driver/uninstall/postinstall",
+        ]
+
+        // Static gate: no script may invoke a process killer as a bare statement.
+        // Under `set -euo pipefail` a non-matching killall exits non-zero and
+        // aborts the script *after* the driver payload was already installed or
+        // removed, so the installer reports failure for work that succeeded.
+        // Allowed forms: the pgrep-guarded restart branch, or an explicit
+        // best-effort `|| true` (e.g. stopping the app before trashing it).
+        let bareKiller = try NSRegularExpression(
+            pattern: #"(?m)^[[:space:]]*(?:/usr/bin/)?(?:killall|pkill)[^|\n]*$"#
+        )
+        for path in scriptPaths {
+            let source = try String(
+                contentsOf: root.appendingPathComponent(path),
+                encoding: .utf8
+            )
+            #expect(source.contains("set -euo pipefail"))
+            #expect(
+                source.contains("restart_audio_service() {"),
+                "\(path) must route the audio-service restart through the guarded function"
+            )
+            #expect(
+                source.contains("pgrep -qx coreaudiod"),
+                "\(path) must check whether the audio service runs before restarting it"
+            )
+            let range = NSRange(source.startIndex..., in: source)
+            #expect(
+                bareKiller.firstMatch(in: source, range: range) == nil,
+                "\(path) calls a process killer as an unguarded bare statement"
+            )
+        }
+
+        // Behavioral proof: run the shipped restart_audio_service function from
+        // every script with pgrep/killall stubs that fail. The absolute paths in
+        // the pkg scripts are rewritten to bare names in the extracted copy so
+        // PATH stubs can intercept them; the shipped text itself is asserted
+        // above. All three scenarios must exit 0 and report honestly.
+        let scenarios: [(pgrep: Int32, killall: Int32, expectedMessage: String)] = [
+            (1, 1, "not running"),
+            (0, 1, "could not be restarted"),
+            (0, 0, "Restarted"),
+        ]
+        for path in scriptPaths {
+            for scenario in scenarios {
+                let result = try runRestartAudioServiceScenario(
+                    scriptAt: root.appendingPathComponent(path),
+                    pgrepExitCode: scenario.pgrep,
+                    killallExitCode: scenario.killall
+                )
+                #expect(
+                    result.status == 0,
+                    "\(path) aborted with status \(result.status) (pgrep=\(scenario.pgrep) killall=\(scenario.killall)): \(result.output)"
+                )
+                #expect(
+                    result.output.contains(scenario.expectedMessage),
+                    "\(path) reported \(result.output) instead of \(scenario.expectedMessage)"
+                )
+            }
+        }
+    }
+
+    /// Extracts the shipped `restart_audio_service` function from a script and
+    /// runs it under `set -euo pipefail` with PATH stubs for pgrep and killall
+    /// whose exit codes are injected. Returns the exit status and combined output.
+    private func runRestartAudioServiceScenario(
+        scriptAt scriptURL: URL,
+        pgrepExitCode: Int32,
+        killallExitCode: Int32
+    ) throws -> (status: Int32, output: String) {
+        let work = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("remote-mic-audio-restart-\(UUID().uuidString)")
+        let fakeBin = work.appendingPathComponent("bin")
+        defer { try? FileManager.default.removeItem(at: work) }
+        try FileManager.default.createDirectory(at: fakeBin, withIntermediateDirectories: true)
+        for (tool, code) in [("pgrep", pgrepExitCode), ("killall", killallExitCode)] {
+            let stub = fakeBin.appendingPathComponent(tool)
+            try "#!/bin/sh\nexit \(code)\n".write(to: stub, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: stub.path
+            )
+        }
+
+        let extracted = try extractRestartAudioServiceFunction(from: scriptURL)
+        // Absolute paths bypass PATH stubs, so the harness copy rewrites them
+        // to bare names; the shipped text itself is asserted by the static gate.
+        let testableBody = extracted
+            .replacingOccurrences(of: "/usr/bin/pgrep", with: "pgrep")
+            .replacingOccurrences(of: "/usr/bin/killall", with: "killall")
+        let harness = """
+            set -euo pipefail
+            installer_message() { print -- "$2"; }
+            \(testableBody)
+            restart_audio_service
+            """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-c", harness]
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = "\(fakeBin.path):\(environment["PATH"] ?? "/usr/bin:/bin")"
+        process.environment = environment
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        process.waitUntilExit()
+        let output = String(
+            decoding: pipe.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+        )
+        return (process.terminationStatus, output)
+    }
+
+    /// Returns the text of the shipped `restart_audio_service` zsh function.
+    /// Failing the extraction must fail the test, so a renamed or removed
+    /// function cannot silently disable the behavioral coverage.
+    private func extractRestartAudioServiceFunction(from scriptURL: URL) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/awk")
+        process.arguments = [
+            "/^restart_audio_service\\(\\) \\{/,/^\\}/",
+            scriptURL.path,
+        ]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        process.waitUntilExit()
+        let output = String(
+            decoding: pipe.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+        )
+        try #require(
+            process.terminationStatus == 0 && output.contains("restart_audio_service() {"),
+            "could not extract restart_audio_service from \(scriptURL.path)"
+        )
+        return output
+    }
 }
