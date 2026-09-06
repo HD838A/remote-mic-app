@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+#if SAYALL_SIRI_REMOTE_ENABLED
 import Foundation
 import Testing
 @testable import RemoteMic
@@ -352,3 +353,4 @@ struct AppleSiriRemoteAdapterTests {
         }
     }
 }
+#endif

@@ -56,9 +56,26 @@ test -d "$APP"
 test -f "$PLIST"
 test -x "$BINARY"
 test -x "$MCP_HELPER"
-test -x "$APPLE_REMOTE_AUDIO_HELPER"
-test -x "$APPLE_REMOTE_HCI_SERVICE"
-test -f "$OPUS_DYLIB"
+SAYALL_SIRI_REMOTE_INCLUDED="$(plutil -extract SayAllSiriRemoteIncluded raw -o - "$PLIST" 2>/dev/null || true)"
+SAYALL_SIRI_REMOTE_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllSiriRemote_SayAllSiriRemote.bundle"
+case "$SAYALL_SIRI_REMOTE_INCLUDED" in
+  true)
+    test -x "$APPLE_REMOTE_AUDIO_HELPER"
+    test -x "$APPLE_REMOTE_HCI_SERVICE"
+    test -f "$OPUS_DYLIB"
+    test -d "$SAYALL_SIRI_REMOTE_RESOURCE_BUNDLE"
+    ;;
+  false|"")
+    test ! -e "$APPLE_REMOTE_AUDIO_HELPER"
+    test ! -e "$APPLE_REMOTE_HCI_SERVICE"
+    test ! -e "$OPUS_DYLIB"
+    test ! -e "$SAYALL_SIRI_REMOTE_RESOURCE_BUNDLE"
+    ;;
+  *)
+    print -u2 "invalid SayAllSiriRemoteIncluded marker"
+    exit 1
+    ;;
+esac
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$SPARKLE_FRAMEWORK/Versions/B/Sparkle"
 test -x "$SPARKLE_FRAMEWORK/Versions/B/Autoupdate"
@@ -287,13 +304,15 @@ fi
 
 codesign --verify --deep --strict "$APP"
 codesign --verify --strict "$MCP_HELPER"
-codesign --verify --strict "$APPLE_REMOTE_AUDIO_HELPER"
-codesign --verify --strict "$APPLE_REMOTE_HCI_SERVICE"
-test "$(codesign -dvv "$APPLE_REMOTE_AUDIO_HELPER" 2>&1 | \
-  sed -n 's/^Identifier=//p')" = "com.hd838a.RemoteMic.apple-remote-audio"
-test "$(codesign -dvv "$APPLE_REMOTE_HCI_SERVICE" 2>&1 | \
-  sed -n 's/^Identifier=//p')" = "com.hd838a.SayAll.AppleRemoteHCIService"
-codesign --verify --strict "$OPUS_DYLIB"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  codesign --verify --strict "$APPLE_REMOTE_AUDIO_HELPER"
+  codesign --verify --strict "$APPLE_REMOTE_HCI_SERVICE"
+  test "$(codesign -dvv "$APPLE_REMOTE_AUDIO_HELPER" 2>&1 | \
+    sed -n 's/^Identifier=//p')" = "com.hd838a.RemoteMic.apple-remote-audio"
+  test "$(codesign -dvv "$APPLE_REMOTE_HCI_SERVICE" 2>&1 | \
+    sed -n 's/^Identifier=//p')" = "com.hd838a.SayAll.AppleRemoteHCIService"
+  codesign --verify --strict "$OPUS_DYLIB"
+fi
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
   RELAY_URL="$(plutil -extract RemoteWebRelayURL raw -o - "$PLIST" 2>/dev/null || true)"
   if [[ "$RELAY_URL" != wss://?*/ws ]]; then
@@ -309,11 +328,16 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
   print -r -- "$SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:'
   print -r -- "$SIGNATURE_DETAILS" | rg -q "^TeamIdentifier=$EXPECTED_DEVELOPER_TEAM_ID$"
   print -r -- "$SIGNATURE_DETAILS" | rg -q '^CodeDirectory .*flags=.*runtime'
+  signed_components=("$MCP_HELPER")
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    signed_components+=(
+      "$APPLE_REMOTE_AUDIO_HELPER"
+      "$APPLE_REMOTE_HCI_SERVICE"
+      "$OPUS_DYLIB"
+    )
+  fi
   for signed_component in \
-    "$MCP_HELPER" \
-    "$APPLE_REMOTE_AUDIO_HELPER" \
-    "$APPLE_REMOTE_HCI_SERVICE" \
-    "$OPUS_DYLIB" \
+    "${signed_components[@]}" \
     "$SPARKLE_FRAMEWORK/Versions/B/XPCServices/Installer.xpc" \
     "$SPARKLE_FRAMEWORK/Versions/B/XPCServices/Downloader.xpc" \
     "$SPARKLE_FRAMEWORK/Versions/B/Autoupdate" \
@@ -329,20 +353,26 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" ]]; then
 fi
 file "$BINARY" | rg -q 'Mach-O 64-bit executable'
 file "$MCP_HELPER" | rg -q 'Mach-O 64-bit executable'
-file "$APPLE_REMOTE_AUDIO_HELPER" | rg -q 'Mach-O 64-bit executable'
-file "$APPLE_REMOTE_HCI_SERVICE" | rg -q 'Mach-O 64-bit executable'
-file "$OPUS_DYLIB" | rg -q 'Mach-O 64-bit dynamically linked shared library'
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  file "$APPLE_REMOTE_AUDIO_HELPER" | rg -q 'Mach-O 64-bit executable'
+  file "$APPLE_REMOTE_HCI_SERVICE" | rg -q 'Mach-O 64-bit executable'
+  file "$OPUS_DYLIB" | rg -q 'Mach-O 64-bit dynamically linked shared library'
+fi
 ARCHS="$(lipo -archs "$BINARY")"
 test "$ARCHS" = "$RELEASE_ARCH"
 test "$(lipo -archs "$MCP_HELPER")" = "$RELEASE_ARCH"
-test "$(lipo -archs "$APPLE_REMOTE_AUDIO_HELPER")" = "$RELEASE_ARCH"
-test "$(lipo -archs "$APPLE_REMOTE_HCI_SERVICE")" = "$RELEASE_ARCH"
-test "$(lipo -archs "$OPUS_DYLIB")" = "$RELEASE_ARCH"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  test "$(lipo -archs "$APPLE_REMOTE_AUDIO_HELPER")" = "$RELEASE_ARCH"
+  test "$(lipo -archs "$APPLE_REMOTE_HCI_SERVICE")" = "$RELEASE_ARCH"
+  test "$(lipo -archs "$OPUS_DYLIB")" = "$RELEASE_ARCH"
+fi
 xcrun vtool -show-build "$BINARY" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
 xcrun vtool -show-build "$MCP_HELPER" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
-xcrun vtool -show-build "$APPLE_REMOTE_AUDIO_HELPER" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
-xcrun vtool -show-build "$APPLE_REMOTE_HCI_SERVICE" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
-xcrun vtool -show-build "$OPUS_DYLIB" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  xcrun vtool -show-build "$APPLE_REMOTE_AUDIO_HELPER" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
+  xcrun vtool -show-build "$APPLE_REMOTE_HCI_SERVICE" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
+  xcrun vtool -show-build "$OPUS_DYLIB" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
+fi
 otool -l "$BINARY" | rg -A2 'LC_RPATH' | rg -q '@executable_path/\.\./Frameworks'
 
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
@@ -356,7 +386,10 @@ if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   done
 fi
 
-EXPECTED_APP_FILES=$'Contents/Frameworks/libopus.0.dylib\nContents/Helpers/SayAllAppleRemoteAudioCapture\nContents/Helpers/SayAllAppleRemoteHCIService\nContents/Helpers/SayAllMCP\nContents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
+EXPECTED_APP_FILES=$'Contents/Helpers/SayAllMCP\nContents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  EXPECTED_APP_FILES=$'Contents/Frameworks/libopus.0.dylib\nContents/Helpers/SayAllAppleRemoteAudioCapture\nContents/Helpers/SayAllAppleRemoteHCIService\n'"$EXPECTED_APP_FILES"
+fi
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"

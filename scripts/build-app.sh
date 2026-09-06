@@ -19,6 +19,7 @@ REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKA
 SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
 SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:-}"
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
+SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
@@ -93,6 +94,25 @@ fi
 if [[ "$REQUIRE_SAYALL_AI_PACKAGE" == "1" && "$SAYALL_AI_INCLUDED" != "true" ]]; then
   print -u2 "A SayAllAI package is required for this build"
   exit 1
+fi
+
+if [[ -n "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" ]]; then
+  if [[ ! -f "$SAYALL_SIRI_REMOTE_PACKAGE_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_SIRI_REMOTE_PACKAGE_PATH must contain Package.swift"
+    exit 1
+  fi
+  SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:A}"
+  export SAYALL_SIRI_REMOTE_PACKAGE_PATH
+  # The host already owns the runtime Apple Remote targets.  The private
+  # package contributes the gated UI/resources here; forcing UI-only avoids
+  # SwiftPM target-name collisions when the private package also contains its
+  # standalone runtime helpers.
+  export SAYALL_SIRI_REMOTE_UI_ONLY=1
+  export SAYALL_ENABLE_SIRI_REMOTE=1
+  SAYALL_SIRI_REMOTE_INCLUDED=true
+else
+  unset SAYALL_ENABLE_SIRI_REMOTE
+  SAYALL_SIRI_REMOTE_INCLUDED=false
 fi
 
 if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" ]]; then
@@ -178,6 +198,9 @@ elif [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
 else
   SCRATCH_FLAVOR="public"
 fi
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="${SCRATCH_FLAVOR}-siri-remote"
+fi
 DEFAULT_SCRATCH_PATH="/private/tmp/remote-mic-swiftpm/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
 DEFAULT_CACHE_PATH="/private/tmp/remote-mic-swiftpm-cache/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
 BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_SCRATCH_PATH}"
@@ -203,7 +226,9 @@ BIN_PATH="$BIN_DIR/$APP_NAME"
 MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
 APPLE_REMOTE_AUDIO_HELPER_PATH="$BIN_DIR/AppleRemoteAudioCapture"
 APPLE_REMOTE_HCI_SERVICE_PATH="$BIN_DIR/AppleRemoteHCIService"
-SIRI_REMOTE_RESOURCE_BUNDLE="$BIN_DIR/SayAllSiriRemote_SayAllSiriRemote.bundle"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  SIRI_REMOTE_RESOURCE_BUNDLE="$BIN_DIR/SayAllSiriRemote_SayAllSiriRemote.bundle"
+fi
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;
@@ -221,8 +246,10 @@ fi
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$MCP_HELPER_PATH"
-test -x "$APPLE_REMOTE_AUDIO_HELPER_PATH"
-test -x "$APPLE_REMOTE_HCI_SERVICE_PATH"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  test -x "$APPLE_REMOTE_AUDIO_HELPER_PATH"
+  test -x "$APPLE_REMOTE_HCI_SERVICE_PATH"
+fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$BIN_PATH" "$APP_DIR/Contents/MacOS/$APP_NAME"
 strip -S -x "$APP_DIR/Contents/MacOS/$APP_NAME"
@@ -231,13 +258,17 @@ install_name_tool -add_rpath @executable_path/../Frameworks \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$MCP_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllMCP"
 strip -S -x "$APP_DIR/Contents/Helpers/SayAllMCP"
-ditto --norsrc --noextattr --noqtn --noacl \
-  "$APPLE_REMOTE_AUDIO_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
-strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
-ditto --norsrc --noextattr --noqtn --noacl \
-  "$APPLE_REMOTE_HCI_SERVICE_PATH" "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
-strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
-if [[ -d "$SIRI_REMOTE_RESOURCE_BUNDLE" ]]; then
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$APPLE_REMOTE_AUDIO_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$APPLE_REMOTE_HCI_SERVICE_PATH" "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+  strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+  if [[ ! -d "$SIRI_REMOTE_RESOURCE_BUNDLE" ]]; then
+    print -u2 "SayAllSiriRemote resource bundle is missing from the Swift build"
+    exit 1
+  fi
   ditto --norsrc --noextattr --noqtn --noacl \
     "$SIRI_REMOTE_RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/SayAllSiriRemote_SayAllSiriRemote.bundle"
 fi
@@ -251,6 +282,9 @@ plutil -insert SayAllMacroPlatformIncluded -bool "$SAYALL_MACRO_PLATFORM_INCLUDE
   "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllSiriRemoteIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllSiriRemoteIncluded -bool "$SAYALL_SIRI_REMOTE_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   plutil -replace LSMinimumSystemVersion -string "$RELEASE_MIN_SYSTEM_VERSION" \
@@ -289,29 +323,31 @@ if [[ "$REQUIRE_EARLY_ACCESS_CONFIGURATION" == "1" ]]; then
   fi
 fi
 mkdir -p "$APP_DIR/Contents/Frameworks"
-OPUS_DYLIB=""
-for candidate in \
-  "${SAYALL_OPUS_LIBRARY:-}" \
-  "$ROOT/.build/apple-remote-opus/$RELEASE_VARIANT/install/lib/libopus.0.dylib" \
-  "/opt/homebrew/opt/opus/lib/libopus.0.dylib" \
-  "/usr/local/opt/opus/lib/libopus.0.dylib"; do
-  [[ -n "$candidate" && -f "$candidate" ]] || continue
-  OPUS_ARCHS="$(lipo -archs "$candidate")"
-  OPUS_MINOS="$(xcrun vtool -show-build "$candidate" | awk '/minos / { print $2; exit }')"
-  [[ "$OPUS_ARCHS" == "$RELEASE_ARCH" ]] || continue
-  [[ -n "$OPUS_MINOS" && "${OPUS_MINOS%%.*}" -le "$RELEASE_MIN_SYSTEM_MAJOR" ]] || continue
-  OPUS_DYLIB="$candidate"
-  break
-done
-if [[ -n "$OPUS_DYLIB" ]]; then
-  ditto --norsrc --noextattr --noqtn --noacl \
-    "$OPUS_DYLIB" "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
-  install_name_tool -id @rpath/libopus.0.dylib \
-    "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
-  chmod 0644 "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
-else
-  print -u2 "Apple Remote audio helper requires a compatible libopus; run scripts/build-apple-remote-opus.sh or set SAYALL_OPUS_LIBRARY"
-  exit 1
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  OPUS_DYLIB=""
+  for candidate in \
+    "${SAYALL_OPUS_LIBRARY:-}" \
+    "$ROOT/.build/apple-remote-opus/$RELEASE_VARIANT/install/lib/libopus.0.dylib" \
+    "/opt/homebrew/opt/opus/lib/libopus.0.dylib" \
+    "/usr/local/opt/opus/lib/libopus.0.dylib"; do
+    [[ -n "$candidate" && -f "$candidate" ]] || continue
+    OPUS_ARCHS="$(lipo -archs "$candidate")"
+    OPUS_MINOS="$(xcrun vtool -show-build "$candidate" | awk '/minos / { print $2; exit }')"
+    [[ "$OPUS_ARCHS" == "$RELEASE_ARCH" ]] || continue
+    [[ -n "$OPUS_MINOS" && "${OPUS_MINOS%%.*}" -le "$RELEASE_MIN_SYSTEM_MAJOR" ]] || continue
+    OPUS_DYLIB="$candidate"
+    break
+  done
+  if [[ -n "$OPUS_DYLIB" ]]; then
+    ditto --norsrc --noextattr --noqtn --noacl \
+      "$OPUS_DYLIB" "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+    install_name_tool -id @rpath/libopus.0.dylib \
+      "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+    chmod 0644 "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  else
+    print -u2 "Apple Remote audio helper requires a compatible libopus; run scripts/build-apple-remote-opus.sh or set SAYALL_OPUS_LIBRARY"
+    exit 1
+  fi
 fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
@@ -399,26 +435,28 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
       --timestamp \
       --sign "$SIGNING_IDENTITY" \
       "$APP_DIR/Contents/Helpers/SayAllMCP"
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
-    --identifier "com.hd838a.RemoteMic.apple-remote-audio" \
-    --sign "$SIGNING_IDENTITY" \
-    "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
-    --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
-    --sign "$SIGNING_IDENTITY" \
-    "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
-    --sign "$SIGNING_IDENTITY" \
-    "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --identifier "com.hd838a.RemoteMic.apple-remote-audio" \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+    codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+    codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  fi
   codesign \
     --force \
     --options runtime \
@@ -469,23 +507,25 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
     --timestamp=none \
     --sign - \
     "$APP_DIR/Contents/Helpers/SayAllMCP"
-  codesign \
-    --force \
-    --timestamp=none \
-    --identifier "com.hd838a.RemoteMic.apple-remote-audio" \
-    --sign - \
-    "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
-  codesign \
-    --force \
-    --timestamp=none \
-    --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
-    --sign - \
-    "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
-  codesign \
-    --force \
-    --timestamp=none \
-    --sign - \
-    "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    codesign \
+      --force \
+      --timestamp=none \
+      --identifier "com.hd838a.RemoteMic.apple-remote-audio" \
+      --sign - \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+    codesign \
+      --force \
+      --timestamp=none \
+      --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
+      --sign - \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+    codesign \
+      --force \
+      --timestamp=none \
+      --sign - \
+      "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  fi
   codesign \
     --force \
     --timestamp=none \

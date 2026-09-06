@@ -1,5 +1,6 @@
 import AppleRemoteHCIProtocol
 import Foundation
+#if SAYALL_SIRI_REMOTE_ENABLED
 import Testing
 
 struct AppleRemoteHCITraceConfigurationTests {
@@ -88,3 +89,4 @@ struct AppleRemoteHCITraceConfigurationTests {
         )
     }
 }
+#endif

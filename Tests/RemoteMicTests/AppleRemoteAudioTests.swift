@@ -1,3 +1,4 @@
+#if SAYALL_SIRI_REMOTE_ENABLED
 import Foundation
 import Testing
 @testable import AppleRemoteAudioCore
@@ -175,3 +176,4 @@ struct AppleRemoteAudioTests {
         return body
     }
 }
+#endif

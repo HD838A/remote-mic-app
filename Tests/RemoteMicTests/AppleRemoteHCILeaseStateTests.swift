@@ -1,4 +1,5 @@
 import AppleRemoteHCIProtocol
+#if SAYALL_SIRI_REMOTE_ENABLED
 import Testing
 
 struct AppleRemoteHCILeaseStateTests {
@@ -57,3 +58,4 @@ struct AppleRemoteHCILeaseStateTests {
         #expect(restoreCount == 0)
     }
 }
+#endif

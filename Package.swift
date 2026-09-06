@@ -25,6 +25,17 @@ var remoteMicTestDependencies: [Target.Dependency] = [
     "AppleRemoteAudioCore",
     .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
 ]
+let siriRemotePackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_SIRI_REMOTE_PACKAGE_PATH"
+]
+let siriRemoteExplicitlyEnabled = ProcessInfo.processInfo.environment[
+    "SAYALL_ENABLE_SIRI_REMOTE"
+] == "1"
+let siriRemoteEnabled = siriRemoteExplicitlyEnabled ||
+    !(siriRemotePackagePath ?? "").isEmpty
+if siriRemoteExplicitlyEnabled && (siriRemotePackagePath ?? "").isEmpty {
+    fatalError("SAYALL_ENABLE_SIRI_REMOTE=1 requires SAYALL_SIRI_REMOTE_PACKAGE_PATH")
+}
 let privateArtifactPackagePath = ProcessInfo.processInfo.environment[
     "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"
 ]
@@ -44,9 +55,7 @@ if let privateFeaturePath = ProcessInfo.processInfo.environment[
     )
 }
 
-if let siriRemotePath = ProcessInfo.processInfo.environment[
-    "SAYALL_SIRI_REMOTE_PACKAGE_PATH"
-], !siriRemotePath.isEmpty {
+if let siriRemotePath = siriRemotePackagePath, !siriRemotePath.isEmpty {
     let packageIdentity = URL(fileURLWithPath: siriRemotePath)
         .lastPathComponent
         .lowercased()
@@ -143,6 +152,9 @@ let package = Package(
             name: "RemoteMic",
             dependencies: remoteMicDependencies,
             path: "Sources/RemoteMic",
+            swiftSettings: siriRemoteEnabled
+                ? [.define("SAYALL_SIRI_REMOTE_ENABLED")]
+                : [],
             linkerSettings: [
                 .linkedFramework("Network"),
             ]
@@ -209,7 +221,10 @@ let package = Package(
         .testTarget(
             name: "RemoteMicTests",
             dependencies: remoteMicTestDependencies + ["SayAllMCPKit", "AppleRemoteHCIProtocol"],
-            path: "Tests/RemoteMicTests"
+            path: "Tests/RemoteMicTests",
+            swiftSettings: siriRemoteEnabled
+                ? [.define("SAYALL_SIRI_REMOTE_ENABLED")]
+                : []
         ),
     ],
     swiftLanguageModes: [.v5]

@@ -73,6 +73,35 @@ struct BuildSigningTests {
         #expect(!adHocSigningSource.contains("--options runtime"))
     }
 
+    @Test func siriRemoteIsOptInForCommunityBuilds() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let packageSource = try String(
+            contentsOf: root.appendingPathComponent("Package.swift"),
+            encoding: .utf8
+        )
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(packageSource.contains("SAYALL_SIRI_REMOTE_PACKAGE_PATH"))
+        #expect(packageSource.contains("SAYALL_SIRI_REMOTE_ENABLED"))
+        #expect(packageSource.contains("requires SAYALL_SIRI_REMOTE_PACKAGE_PATH"))
+        #expect(buildSource.contains("SAYALL_SIRI_REMOTE_INCLUDED=false"))
+        #expect(buildSource.contains("SayAllSiriRemoteIncluded"))
+        #expect(buildSource.contains("export SAYALL_SIRI_REMOTE_UI_ONLY=1"))
+        #expect(buildSource.contains("$SAYALL_SIRI_REMOTE_INCLUDED\" == \"true\""))
+        #expect(modelSource.contains("#if SAYALL_SIRI_REMOTE_ENABLED"))
+        #expect(modelSource.contains("appleRemoteAudioClient.start()"))
+    }
+
     @Test func productionReleaseRequiresAndVerifiesWebRemoteConfiguration() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

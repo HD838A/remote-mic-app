@@ -4,7 +4,7 @@ import Combine
 import CoreBluetooth
 import SayAllMacRemoteCore
 import SayAllMacRemoteUI
-#if canImport(SayAllSiriRemote)
+#if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
 import SayAllSiriRemote
 #endif
 import SwiftUI
@@ -591,7 +591,7 @@ struct SettingsView: View {
             }
         case .mapping:
             if settings.selectedRemoteProfile?.model == .appleSiriRemoteA2854 {
-                #if canImport(SayAllSiriRemote)
+                #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
                 siriRemoteMappingPage
                 #else
                 mappingPage
@@ -1007,7 +1007,7 @@ struct SettingsView: View {
         }
     }
 
-    #if canImport(SayAllSiriRemote)
+    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private var siriRemoteMappingPage: some View {
         VStack(spacing: 0) {
             ViewThatFits(in: .horizontal) {

@@ -18,7 +18,7 @@ struct SettingsPageRegressionTests {
             contentsOf: root.appendingPathComponent("Package.swift"),
             encoding: .utf8
         )
-        #expect(settingsSource.contains("#if canImport(SayAllSiriRemote)"))
+        #expect(settingsSource.contains("#if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)"))
         #expect(settingsSource.contains("siriRemoteMappingPage"))
         #expect(settingsSource.contains("model == .appleSiriRemoteA2854"))
         #expect(settingsSource.contains("SiriRemoteMappingPage("))

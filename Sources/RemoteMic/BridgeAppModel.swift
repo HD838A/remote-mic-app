@@ -612,6 +612,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
         }
+#if SAYALL_SIRI_REMOTE_ENABLED
         appleRemoteAdapter.onConnection = { [weak self] connection in
             self?.handleAppleRemoteConnection(connection)
         }
@@ -625,6 +626,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.receiveAppleRemoteAudio(samples)
         }
         appleRemoteAudioClient.onStatus = { _ in }
+#endif
         phoneRemoteServer.isIdentityTrusted = { [weak self] fingerprint in
             self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
         }
@@ -873,7 +875,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard !started else { return }
         started = true
         startAudioSubsystem()
+#if SAYALL_SIRI_REMOTE_ENABLED
         appleRemoteAudioClient.start()
+#endif
         applyHIDSettings()
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
@@ -921,9 +925,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         voiceFnTapSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
+#if SAYALL_SIRI_REMOTE_ENABLED
         appleRemoteAdapter.stop(reason: .adapterStopped, suppressNextRelease: false)
         appleRemoteAudioClient.stop()
         resetAllAppleRemoteState(reason: "app_stop")
+#endif
         bluetoothBridges.removeAll()
         bluetoothBridgeStates.removeAll()
         discoveryBluetoothBridge = nil
@@ -936,9 +942,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         isWatchRemoteConnected = false
         webRemoteState = .disabled
         bluetoothVoiceActive = false
+#if SAYALL_SIRI_REMOTE_ENABLED
         appleRemoteVoiceDevices.removeAll()
         appleRemoteVoiceStopping = false
         appleRemoteVoiceStopOperation &+= 1
+#endif
         let cancelledPendingRestart = mobileVoiceLifecycle.reset()
         let completion = pendingMobileVoiceRestartCompletion
         pendingMobileVoiceRestartCompletion = nil
@@ -1943,10 +1951,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
+#if SAYALL_SIRI_REMOTE_ENABLED
         if started {
             appleRemoteAdapter.restart(customMappingEnabled: settings.customMappingEnabled)
         }
         refreshAppleRemoteHIDStatus()
+#endif
         completeHIDMappingRecoveryIfNeeded()
     }
 
