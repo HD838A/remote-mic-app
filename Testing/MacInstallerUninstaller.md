@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 分支：`codex/fix-installer-uninstaller-behavior`
+- 基线：`origin/main` `18b42243710ac80f27ec2d16c41741e8ba0d99e5`
 - 目标：macOS Apple Silicon 14+ 和 Intel Ventura 13
 - 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 DMG、Install PKG 和 standalone Uninstall PKG
 - Siri Remote 系统服务是 Install PKG 中的可选组件，默认不选择；MiRemoteV 2ch 与无线麦SayAll.app仍是默认组件。
@@ -86,3 +86,5 @@
 ## 自动化、代理实测与用户实测边界
 
 自动化可验证脚本语法、伪目标卷移动/碰撞/未知内容保护、PKG/DMG 结构、架构门禁和不含永久删除命令。代理可构建无签名包并在伪卷执行脚本，但不能替代真实管理员授权、用户废纸篓、Developer ID 签名/公证/Gatekeeper、Intel Ventura 和 CoreAudio 设备刷新。这些项必须由最终候选包完成用户实测。
+
+2026-09-06 已使用最终 Developer ID、公证并 staple 的 Apple Silicon 1.9.21 (174) 资产执行 Siri Remote 可选组件 E2E。默认不安装、主动选择安装、已有 Helper 覆盖升级不选择、卸载原路径、无管理员权限拒绝、GUI 默认值/勾选交互、App 启动和 CoreAudio 枚举均通过；Finder 废纸篓恢复、Installer.app secure UI 授权、无历史 receipt 新机和 Intel Ventura 仍待人工实机。计划见 `Testing/SiriRemoteOptionalPKGE2EPlan.md`，结果见 `Testing/SiriRemoteOptionalPKGE2EReport-2026-09-06.md`。
