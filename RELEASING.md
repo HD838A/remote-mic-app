@@ -34,7 +34,7 @@
 
    scripts/prepare-preview-release.sh <requested-version> <build> <zh-notes> <en-notes>
 
-3. 脚本只修改这三个文件，并检查 Release Notes 不含内部入口、邀请码、凭据或实现细节。若 Tag、Release 或公开分发资产已经占用请求版本，只递增最后一位并选更高 Build；公开资产占用检查覆盖 11 个 CDN 固定路径，只有 HTTP 404 才算可用，2xx/3xx 视为占用，认证、权限、5xx、超时或其他未知响应 fail closed。单纯的 CI、Runner、GitHub、Apple 或网络故障不占用版本，不得升版本。
+3. 脚本只修改这三个文件，并检查 Release Notes 不含内部入口、邀请码、凭据或实现细节。若 Tag、Release 或公开分发资产已经占用请求版本，只递增最后一位并选更高 Build；公开资产占用检查覆盖 13 个 CDN 固定路径，只有 HTTP 404 才算可用，2xx/3xx 视为占用，认证、权限、5xx、超时或其他未知响应 fail closed。单纯的 CI、Runner、GitHub、Apple 或网络故障不占用版本，不得升版本。
 4. 运行 git diff --check、Swift/脚本测试和必要的 UI/功能测试，创建普通 PR 合入 main。合入后重新 fetch，记录用于 staging 的精确 `origin/main` SHA；不再同步到其他发布分支。
 
 ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 GitHub Release 状态统一标记：正式版使用“正式版 / Stable”，公开候选使用“预发布 / Pre-release”。同步工作流会在 Release 状态变化时运行，并每三天兜底检查一次，也可以手动触发；官网只同步这两份已标记的主仓库文件，不在官网单独判断版本渠道。
@@ -47,7 +47,7 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 
     scripts/stage-macos-preview.sh preview
 
-脚本先做无秘密检查：合法源码分支与精确 SHA、Hotfix 稳定基线、版本/build、stable latest、源码分支 CI、依赖 pin、目标仓库、显式 GH_TOKEN 静态门禁和 11 个 CDN 固定路径全部为 HTTP 404。随后始终以 `--ref main` dispatch .github/workflows/mac-release-package.yml，输入 mode、source_branch 和 expected_commit；Workflow 再次独立验证。smoke 只用于受保护流程检查，不创建公开身份。
+脚本先做无秘密检查：合法源码分支与精确 SHA、Hotfix 稳定基线、版本/build、stable latest、源码分支 CI、依赖 pin、目标仓库、显式 GH_TOKEN 静态门禁和 13 个 CDN 固定路径全部为 HTTP 404。随后始终以 `--ref main` dispatch .github/workflows/mac-release-package.yml，输入 mode、source_branch 和 expected_commit；Workflow 再次独立验证。smoke 只用于受保护流程检查，不创建公开身份。
 
 受保护 workflow 的 package job 才能读取 Apple/Match/Notary/Sparkle 凭据，并且必须：
 
@@ -83,9 +83,9 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 - 目标仓库固定为 `HD838A/remote-mic-app`，并验证触发事件的 `github.sha` 仍是精确 `origin/main`；
 - 按 Run/attempt/artifact ID 下载并验证同一 staged payload；
 - 创建或复用与 source SHA 完全一致的轻量 Tag；
-- 创建或恢复公开 Pre-release，上传 manifest 中的完整 11 项 payload 加 candidate-provenance.json；
+- 创建或恢复公开 Pre-release，上传 manifest 中的完整 13 项 payload 加 candidate-provenance.json；
 - 对已有资产做大小和 GitHub digest 比较，只补缺失项，发现字节不同即 fail closed；
-- 若远端 Tag 尚不存在，创建 Tag 前最后一次确认该版本的 11 个 CDN 固定路径全部返回 HTTP 404；任一已占用或未知响应都不创建 Tag。已有 Tag 的幂等恢复跳过占用检查，继续执行固定 Tag/CDN 字节复验；
+- 若远端 Tag 尚不存在，创建 Tag 前最后一次确认该版本的 13 个 CDN 固定路径全部返回 HTTP 404；任一已占用或未知响应都不创建 Tag。已有 Tag 的幂等恢复跳过占用检查，继续执行固定 Tag/CDN 字节复验；
 - candidate-provenance.json 的 `stagedAt`/`publishedAt` 固定取受保护 staging 的时间戳；重试同一 staging 身份不会因当前时间变化而生成不同字节；
 - 从 GitHub 固定 Tag URL 和 download.sayall.app 固定 Tag URL 下载每项公开资产并逐字节比较；
 - 确认 releases/latest 仍为发布前记录的正式稳定版，且 Release 为非 Draft、Pre-release。
@@ -103,7 +103,7 @@ publication 失败时先查询远端状态。若 Tag、Release、资产和摘要
 - Release 存在且当前是公开 Pre-release；
 - candidate-provenance.json、Tag Commit 和 source Commit 一致；
 - 普通候选 Tag Commit 已包含在当前 `origin/main`；Hotfix 候选仍是对应远端 Hotfix 分支的精确 HEAD，并绑定当前稳定基线。
-- 11 项 payload 与 provenance 的大小、SHA-256、GitHub digest 完全一致。
+- 13 项 payload 与 provenance 的大小、SHA-256、GitHub digest 完全一致。
 - provenance 中的 sourceRunId/sourceRunAttempt 指向成功的 `.github/workflows/mac-release-package.yml` `workflow_dispatch` Run，且 Run 的 `head_branch=main`、`head_sha=sourceWorkflowCommit`、attempt 完全一致；sourceBranch/sourceCommit 则绑定实际源码。signedArtifactId/digest 指向同一 Run 的未过期 payload artifact，另有唯一未过期的 Preview stage-record artifact，记录 `mode=preview` 并与 provenance 的源码、控制面、artifact、manifest、Tag 和时间戳一致。
 - 目标仓库固定为 `HD838A/remote-mic-app`，Stable promotion 也只从精确 `origin/main` 控制面执行。
 

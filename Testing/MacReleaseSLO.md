@@ -49,7 +49,7 @@
 - 同 SHA 重试不改变 T_request、T_ready、版本、Build 或 artifact。
 - Preview 期间 releases/latest 始终保持为发布前动态记录的同一稳定版本。
 - Stable 只改变 Release 分类，不改变资产摘要。
-- 版本选择和首次 Tag 创建前的 11 个 CDN 固定路径检查只有 404 才通过；Stable 还必须复验 exact staging Run/attempt/artifact 证据。
+- 版本选择和首次 Tag 创建前的 13 个 CDN 固定路径检查只有 404 才通过；Stable 还必须复验 exact staging Run/attempt/artifact 证据。
 - 达到 30 分钟目标不是取消或降级的理由；若超时，停止突变并给出明确阻断。
 
 ## 日志收集

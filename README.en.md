@@ -88,7 +88,7 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 
 The Apple Silicon installer is named `Remote-Mic-<version>.dmg`; the Intel installer is named `Remote-Mic-<version>-Intel.dmg`. They are not interchangeable.
 
-The DMG has one ordinary installation entry: double-click **Install Remote Mic.pkg** on Apple Silicon, or **Install Remote Mic Intel.pkg** on Intel Macs. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
+The DMG has one ordinary installation entry: double-click **Install SayAll.pkg** on Apple Silicon, or **Install SayAll Intel.pkg** on Intel Macs. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
 Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only through the official Cloudflare CDN entry or this project's GitHub Releases. To verify a DMG, use `Remote-Mic-<version>.dmg.sha256` from the same GitHub Release; it lists both architecture-specific DMGs by filename.
 
@@ -134,7 +134,7 @@ Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝�
 
 You must still **hold the 小米蓝牙遥控器 2 Pro voice key while speaking and release it to finish**. The 小米蓝牙遥控器 2 Pro firmware stops microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete 小米蓝牙遥控器 2 Pro HID mapping automatically disables the mode and restores the default Fn-hold mapping.
 
-If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install Remote Mic.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
+If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install SayAll.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
 
 ## Customize remote buttons
 
@@ -182,8 +182,7 @@ SayAll does not upload or store voice, does not change the system default input 
 ## Uninstall
 
 1. Quit SayAll.
-2. Download and run **Uninstall Remote Mic.pkg** from the same GitHub Release to remove MiRemoteV 2ch.
-3. Delete **SayAll.app** from Applications.
+2. Download and run `SayAll-<version>-Uninstaller.pkg` from the same GitHub Release to remove SayAll and MiRemoteV 2ch.
 
 Uninstalling the compatible microphone does not change or remove BlackHole.
 

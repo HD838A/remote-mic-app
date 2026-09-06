@@ -561,6 +561,13 @@ struct BuildSigningTests {
         let dmgVerifierSource = try source("scripts/verify-dmg.sh")
         let packageSource = try source("scripts/build-doubao-driver-pkg.sh")
         let packageVerifierSource = try source("scripts/verify-doubao-driver-pkg.sh")
+        let releaseVariantSource = try source("scripts/release-variant.sh")
+        let appleSiliconDistribution = try source(
+            "packaging/doubao-driver/distribution/apple-silicon.xml"
+        )
+        let intelDistribution = try source(
+            "packaging/doubao-driver/distribution/intel.xml"
+        )
         let appVerifierSource = try source("scripts/verify-app.sh")
         let publishSource = try source("scripts/publish-preview-release.sh")
         let preinstallSource = try source("packaging/doubao-driver/install/preinstall")
@@ -585,6 +592,22 @@ struct BuildSigningTests {
         #expect(dmgVerifierSource.contains("DISPLAY_NAME=\"SayAll\""))
         #expect(packageSource.contains("APP=\"$OUTPUT_DIR/SayAll.app\""))
         #expect(packageSource.contains("$PAYLOAD_ROOT/Applications/SayAll.app"))
+        #expect(packageSource.contains("Install SayAll-unsigned.pkg"))
+        #expect(packageSource.contains("Uninstall SayAll-unsigned.pkg"))
+        #expect(releaseVariantSource.contains(
+            "RELEASE_INSTALL_PACKAGE_NAME=\"Install SayAll.pkg\""
+        ))
+        #expect(releaseVariantSource.contains(
+            "RELEASE_UNINSTALL_PACKAGE_NAME=\"Uninstall SayAll.pkg\""
+        ))
+        #expect(releaseVariantSource.contains(
+            "RELEASE_INSTALL_PACKAGE_NAME=\"Install SayAll Intel.pkg\""
+        ))
+        #expect(releaseVariantSource.contains(
+            "RELEASE_UNINSTALL_PACKAGE_NAME=\"Uninstall SayAll Intel.pkg\""
+        ))
+        #expect(appleSiliconDistribution.contains("<title>SayAll</title>"))
+        #expect(intelDistribution.contains("<title>SayAll</title>"))
         #expect(packageVerifierSource.contains("./Applications/SayAll.app/Contents/Info.plist"))
         #expect(packageVerifierSource.contains("*/Applications/SayAll.app"))
         #expect(appVerifierSource.contains("test \"${APP:t}\" = \"SayAll.app\""))
@@ -688,8 +711,8 @@ struct BuildSigningTests {
         #expect(assetSource.contains("staged-assets.json"))
         #expect(assetSource.contains("verify-staged-release-assets.sh"))
         #expect(assetSource.contains("ASSET_COUNT: 13"))
-        #expect(assetSource.contains("Remote-Mic-$version-Installer.pkg"))
-        #expect(assetSource.contains("Remote-Mic-$version-Intel-Installer.pkg"))
+        #expect(assetSource.contains("SayAll-$version-Installer.pkg"))
+        #expect(assetSource.contains("SayAll-$version-Intel-Installer.pkg"))
         #expect(!assetSource.contains("candidate-provenance.json"))
     }
 

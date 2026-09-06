@@ -93,7 +93,7 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 `Remote-Mic-<版本>-Intel.dmg`，两者不能混用。
 
-打开 DMG 后只需双击唯一的 `Install Remote Mic.pkg`；Intel Mac 使用 `Install Remote Mic Intel.pkg`。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
+打开 DMG 后只需双击唯一的 `Install SayAll.pkg`；Intel Mac 使用 `Install SayAll Intel.pkg`。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
 自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从官网 Cloudflare CDN 固定入口或本项目 GitHub Releases 下载；如需核验，请使用同一 GitHub Release 中的 `Remote-Mic-<版本>.dmg.sha256`，它会按文件名列出两种架构的 DMG。
 
@@ -141,7 +141,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 该模式仍然要求**按住小米蓝牙遥控器 2 Pro 语音键说话、松开结束**；小米蓝牙遥控器 2 Pro 固件在松开语音键后不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或小米蓝牙遥控器 2 Pro HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
 
-豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 `Install Remote Mic.pkg`，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
+豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 `Install SayAll.pkg`，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
 
 ![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
 
@@ -191,7 +191,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 ## 卸载
 
 1. 退出无线麦。
-2. 从同一 GitHub Release 下载并运行 `Uninstall Remote Mic.pkg`。
+2. 从同一 GitHub Release 下载并运行 `SayAll-<版本>-Uninstaller.pkg`。
 
 卸载器会核对 Bundle ID，然后把已识别的 `SayAll.app`、历史 `Remote Mic.app` / `无线麦.app` 和 `MiRemoteV 2ch` 移到 macOS 废纸篓，需要时可恢复。它不会修改 BlackHole 或无线麦的本地设置；同名但无法确认归属的内容会保留在原位。
 

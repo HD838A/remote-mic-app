@@ -163,12 +163,12 @@ xcrun swift test
 
 - `dist/SayAll.app`；
 - `dist/MiRemoteV2ch.driver`；
-- `dist/Install Remote Mic.pkg`；
-- `dist/Uninstall Remote Mic.pkg`；
+- `dist/Install SayAll.pkg`；
+- `dist/Uninstall SayAll.pkg`；
 - `dist/Remote-Mic-<版本>.dmg`；
 - `dist/Remote-Mic-<版本>.dmg.sha256`。
 
-DMG 根目录严格只有 `Install Remote Mic.pkg`；App-only ZIP 与对应架构的卸载 PKG 继续作为同一 Release 的高级资产。安装 PKG 不再作为独立 Release 资产重复上传，但仍完整保留在 DMG 内，并继续接受签名、公证、Gatekeeper 和 payload 校验。安装 PKG 在内部暂存驱动，安装后仅在现有驱动缺失、损坏、架构不符、签名异常或版本不匹配时替换，健康同版本驱动保持原样。
+DMG 根目录严格只有 `Install SayAll.pkg`；App-only ZIP 与对应架构的 `SayAll-<版本>-Installer.pkg`、`SayAll-<版本>-Uninstaller.pkg` 继续作为同一 Release 的独立资产。安装 PKG 同时保留在 DMG 内，并继续接受签名、公证、Gatekeeper 和 payload 校验。安装 PKG 在内部暂存驱动，安装后仅在现有驱动缺失、损坏、架构不符、签名异常或版本不匹配时替换，健康同版本驱动保持原样。
 
 `verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、唯一根入口和安装 PKG payload。应用 bundle、卸载 PKG、版本号、架构、最低系统、签名与本地路径泄漏继续由各自产物校验器覆盖；正式模式还校验 Developer ID Team、Hardened Runtime、PKG/DMG 签名、stapled 公证票据与 Gatekeeper 评估。
 
@@ -178,9 +178,9 @@ Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应
 
 当前授权会话从公开稳定版 v1.8.3 下载真实归档，使用只替换 URL 前缀的本地固定 feed，让稳定 App 通过真实 Sparkle UI 完成检查、下载、安装、首次启动、退出和二次启动；未完成这一步不得发布 Preview。attestation 绑定 Run、attempt、artifact、manifest、appcast、版本/Build、Team ID、公证、Gatekeeper、Sparkle helper 权限和无新增崩溃。
 
-.github/workflows/mac-preview-publication.yml 只在 main 上运行，不进入 Apple Environment，不读取 Apple/Match/Notary/Sparkle 私钥。它按 exact artifact ID/digest 恢复 staged bytes，创建或复用同一 source SHA 的轻量 Tag，上传 canonical manifest 的 11 项 payload 与 candidate-provenance.json，并从 GitHub fixed-tag URL 和 download.sayall.app 固定 Tag URL 逐项下载、比较字节。Preview 期间 releases/latest 必须保持 v1.8.3。
+.github/workflows/mac-preview-publication.yml 只在 main 上运行，不进入 Apple Environment，不读取 Apple/Match/Notary/Sparkle 私钥。它按 exact artifact ID/digest 恢复 staged bytes，创建或复用同一 source SHA 的轻量 Tag，上传 canonical manifest 的 13 项 payload 与 candidate-provenance.json，并从 GitHub fixed-tag URL 和 download.sayall.app 固定 Tag URL 逐项下载、比较字节。Preview 期间 releases/latest 必须保持发布前记录的正式稳定版。
 
-公开资产集合由 scripts/prepare-public-release-assets.sh 和 staged-assets.json 定义；两套安装 PKG 仍在对应 DMG 内，不作为独立公开资产重复上传。版本选择、staging 和首次 publication 创建 Tag 前都会检查 11 个 CDN 固定路径，只有 HTTP 404 才算可用，2xx/3xx 视为占用，认证、权限、5xx、超时或未知响应 fail closed。脚本和 verifier 不依赖最新 Run、候选分支或固定以外的隐式来源。Preview publication 和 Stable promotion 只允许写入 `HD838A/remote-mic-app`，并 checkout dispatch 事件的精确 SHA；基础设施失败只重试同一 SHA、版本、Build 和已成功 artifact；不升版本、不重签、不覆盖 Tag。
+公开资产集合由 scripts/prepare-public-release-assets.sh 和 staged-assets.json 定义；两套安装 PKG 保留在对应 DMG 内，同时以 SayAll 品牌名作为独立公开资产发布，用于硬件支持公告直接下载。版本选择、staging 和首次 publication 创建 Tag 前都会检查 13 个 CDN 固定路径，只有 HTTP 404 才算可用，2xx/3xx 视为占用，认证、权限、5xx、超时或未知响应 fail closed。脚本和 verifier 不依赖最新 Run、候选分支或固定以外的隐式来源。Preview publication 和 Stable promotion 只允许写入 `HD838A/remote-mic-app`，并 checkout dispatch 事件的精确 SHA；基础设施失败只重试同一 SHA、版本、Build 和已成功 artifact；不升版本、不重签、不覆盖 Tag。
 
 本地 scripts/stage-macos-preview.sh 只做无秘密预检和 dispatch，不在本机签名、公证、创建 Tag/Release 或上传资产。私有内部 Draft 继续走 private-draft-release skill 的 GetSayAll/SayAll 路径，不能误写入公开源码仓库。
 

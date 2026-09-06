@@ -44,12 +44,12 @@ jq -e '
 
 version="$(jq -r '.version' "$MANIFEST")"
 expected_names="$(printf '%s\n' \
-  "Remote-Mic-$version-Intel-Uninstaller.pkg" \
-  "Remote-Mic-$version-Intel-Installer.pkg" \
+  "SayAll-$version-Intel-Uninstaller.pkg" \
+  "SayAll-$version-Intel-Installer.pkg" \
   "Remote-Mic-$version-Intel.dmg" \
   "Remote-Mic-$version-Intel.zip" \
-  "Remote-Mic-$version-Uninstaller.pkg" \
-  "Remote-Mic-$version-Installer.pkg" \
+  "SayAll-$version-Uninstaller.pkg" \
+  "SayAll-$version-Installer.pkg" \
   "Remote-Mic-$version.dmg" \
   "Remote-Mic-$version.dmg.sha256" \
   "Remote-Mic-$version.en.txt" \

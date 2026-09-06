@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <installer-gui-script minSpecVersion="1">
-    <title>Remote Mic</title>
+    <title>SayAll</title>
     <options customize="always" hostArchitectures="arm64,x86_64"/>
     <script><![CDATA[
 function hardwareIsAppleSilicon() {

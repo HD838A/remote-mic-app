@@ -18,7 +18,7 @@
 2. 运行 scripts/prepare-preview-release.sh，传入请求版本、Build 和中英文说明。
 3. 检查 git diff --name-only。
 
-预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。版本已被 Tag、Release 或 11 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag 或 Release；元数据 PR 合入 main 后不再同步第二条发布主线。
+预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。版本已被 Tag、Release 或 13 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag 或 Release；元数据 PR 合入 main 后不再同步第二条发布主线。
 
 失败判定：从旧 Tag/旧版本分支开始、修改产品代码、版本因 CI 失败而递增，或 Release Notes 含内部入口/凭据。
 
@@ -28,7 +28,7 @@
 2. 在干净、与 `origin/main` 一致的 main worktree 运行 scripts/stage-macos-preview.sh smoke。
 3. 检查 workflow 输入和 Run 标题。
 
-预期：源码只使用 `main` 的精确 SHA，Workflow 也以精确 main HEAD 触发；前置检查包括源码分支 CI、依赖 pin、稳定 latest、11 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。Run 标题包含 mode、source branch 和 source commit，不创建 Tag/Release。
+预期：源码只使用 `main` 的精确 SHA，Workflow 也以精确 main HEAD 触发；前置检查包括源码分支 CI、依赖 pin、稳定 latest、13 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。Run 标题包含 mode、source branch 和 source commit，不创建 Tag/Release。
 
 失败判定：接受 detached/旧 SHA、未推送提交、`release-main`、功能分支、找不到 main CI 仍进入 Environment，或 Run 使用隐式 GH_TOKEN。
 
@@ -65,7 +65,7 @@
 2. 注入一次 GitHub 上传或 CDN 验证失败。
 3. 用同一 attestation 重试。
 
-预期：publication workflow 不读取 Apple 凭据；首次创建或复用 exact Tag 和 Pre-release，只上传缺失且摘要匹配的 11 项 payload 与 provenance。发布后等待 Cloudflare 缓存传播，preview 两架构通道必须与新候选 appcast 一致，stable 两架构通道必须仍与发布前后同一个正式 Tag 一致。重试不重签、不升版本、不创建新分支；已有不同字节时 fail closed。
+预期：publication workflow 不读取 Apple 凭据；首次创建或复用 exact Tag 和 Pre-release，只上传缺失且摘要匹配的 13 项 payload 与 provenance。发布后等待 Cloudflare 缓存传播，preview 两架构通道必须与新候选 appcast 一致，stable 两架构通道必须仍与发布前后同一个正式 Tag 一致。重试不重签、不升版本、不创建新分支；已有不同字节时 fail closed。
 
 ## 用例 7：Stable 只改分类
 
@@ -89,7 +89,7 @@
 - stable latest 在 Preview 前后仍为发布前动态记录的同一正式版本。
 - 公开 Preview 保持 Pre-release，不触发 Stable workflow。
 - Private Draft 只写入 GetSayAll/SayAll，不污染公开源码仓库。
-- 两架构资产和固定 Tag URL 完整，11 项 payload 加 provenance 的摘要一致。
+- 两架构资产和固定 Tag URL 完整，13 项 payload 加 provenance 的摘要一致。
 - 所有调用 gh 的 workflow step 都显式设置 GH_TOKEN。
 - `release-main` push 不触发 macOS CI，所有发布 Workflow 都拒绝从该分支 dispatch。
 

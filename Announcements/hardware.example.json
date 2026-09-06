@@ -11,7 +11,7 @@
         "zh-Hans": "请手动下载并安装包含系统组件的 PKG，安装后重新打开无线麦SayAll.app。",
         "en": "Manually download and install the PKG with the required system component, then reopen SayAll."
       },
-      "downloadURL": "https://download.sayall.app/mac/releases/vX.Y.Z/Remote-Mic-X.Y.Z-Installer.pkg",
+      "downloadURL": "https://download.sayall.app/mac/releases/vX.Y.Z/SayAll-X.Y.Z-Installer.pkg",
       "expiresAt": null
     }
   ]

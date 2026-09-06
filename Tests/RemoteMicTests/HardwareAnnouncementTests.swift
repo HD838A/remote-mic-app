@@ -27,7 +27,7 @@ struct HardwareAnnouncementTests {
           "hardware": "Apple Siri Remote",
           "title": {"zh-Hans": "新增支持", "en": "Support added"},
           "message": {"zh-Hans": "请安装 PKG", "en": "Install the PKG"},
-          "downloadURL": "https://download.sayall.app/mac/releases/vX.Y.Z/Remote-Mic-X.Y.Z-Installer.pkg",
+          "downloadURL": "https://download.sayall.app/mac/releases/vX.Y.Z/SayAll-X.Y.Z-Installer.pkg",
           "expiresAt": null
         }
         """#.utf8)

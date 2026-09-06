@@ -176,6 +176,7 @@
   - 2026-08-13 已完成候选代码：DMG 根目录只保留一个安装 PKG；App-only ZIP 和卸载 PKG 继续作为高级 Release 资产。驱动在 PKG 内暂存，安装后使用系统自带 `file`、`plutil`、`codesign` 和文件权限检查判断现有 `MiRemoteV 2ch` 是否健康且同版本、同架构，健康时原样保留，缺失、损坏、架构不符、签名异常或版本不匹配时才替换；安装脚本不调用开发者工具。本轮按要求未生成产物，完成真实安装矩阵后再勾选。
   - 2026-08-15 已为 Apple Silicon 与 Intel 独立安装包增加系统 Installer Distribution 门禁：使用真实硬件能力而非 `uname -m` 判断架构，中英文界面会在安装前明确提示错误包并指向另一版本；preinstall/postinstall 继续保留二次检查。双变体 ad-hoc PKG/DMG、产品归档结构及 Apple Silicon 拒绝 Intel 包的只读命令行路径已验证；最终 Developer ID 签名、公证包仍需在真实 Intel 与 Apple Silicon 上完成 Installer.app 双语言交叉验收后再勾选。
   - 2026-09-06 公开资产矩阵扩展为 13 项 canonical payload：两架构安装 PKG 既保留在对应 DMG 内，也作为独立可下载资产发布；另上传 1 项 `candidate-provenance.json` 作为来源证明。下一份真实签名候选仍需验证 GitHub/CDN manifest 全量字节、两架构安装与卸载。
+  - 2026-09-06 安装器发行品牌统一为 SayAll：Apple Silicon 使用 `Install SayAll.pkg` / `Uninstall SayAll.pkg`，Intel 使用带 `Intel` 后缀的对应名称，Installer.app 标题同步为 SayAll；未来公开独立 PKG 使用 `SayAll-VERSION-Installer.pkg` / `SayAll-VERSION-Uninstaller.pkg`。历史 Bundle ID、Package ID、receipt、DMG/ZIP 名称和旧 App 路径保持不变，避免破坏升级兼容。
   - 2026-08-29 修复 Issue #101：`Uninstall Remote Mic.pkg` 不再只删除兼容麦克风，而是在 Bundle ID 校验后把 canonical/历史 App 与 `MiRemoteV 2ch` 一起移入可恢复的 macOS 废纸篓；废纸篓或移动失败时停止并回滚本轮已移动项。安装器替换旧驱动时也保留备份，失败即恢复，成功后才移入 root 废纸篓。本地设置和 BlackHole 明确保留。代码与伪目标卷验证完成；由于仍需最终 Developer ID 候选在 Apple Silicon/Intel 上完成管理员授权、真实废纸篓和取消/失败矩阵，本总任务暂不勾选。
   - 2026-09-06 安装、升级与卸载流程已纳入 Apple Remote HCI 系统服务；安装前会核验既有 Helper 签名标识与 LaunchDaemon 的 Label、可执行路径，无法确认归属时停止覆盖。静态门禁覆盖服务恢复、加载、卸载移入废纸篓和状态目录回滚；真实管理员授权与覆盖升级仍随最终测试包验收。
 - [ ] 建立专用的 `SayAllMic 2ch` 虚拟麦克风并兼容旧驱动

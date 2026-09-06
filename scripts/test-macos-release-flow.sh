@@ -316,12 +316,12 @@ public_dir="$WORK_DIR/public"
 /bin/mkdir -p "$public_dir"
 version=9.9.9
 for name in \
-  "Remote-Mic-$version-Intel-Uninstaller.pkg" \
-  "Remote-Mic-$version-Intel-Installer.pkg" \
+  "SayAll-$version-Intel-Uninstaller.pkg" \
+  "SayAll-$version-Intel-Installer.pkg" \
   "Remote-Mic-$version-Intel.dmg" \
   "Remote-Mic-$version-Intel.zip" \
-  "Remote-Mic-$version-Uninstaller.pkg" \
-  "Remote-Mic-$version-Installer.pkg" \
+  "SayAll-$version-Uninstaller.pkg" \
+  "SayAll-$version-Installer.pkg" \
   "Remote-Mic-$version.dmg" \
   "Remote-Mic-$version.en.txt" \
   "Remote-Mic-$version.zh.txt" \

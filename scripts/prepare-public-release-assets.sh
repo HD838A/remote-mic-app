@@ -47,15 +47,15 @@ copy_asset() {
   /usr/bin/cmp -s "$source_file" "$public_dir/$published_name"
 }
 
-copy_asset "$DIST/Uninstall Remote Mic.pkg" "Remote-Mic-$version-Uninstaller.pkg"
-copy_asset "$DIST/Install Remote Mic.pkg" "Remote-Mic-$version-Installer.pkg"
+copy_asset "$DIST/Uninstall SayAll.pkg" "SayAll-$version-Uninstaller.pkg"
+copy_asset "$DIST/Install SayAll.pkg" "SayAll-$version-Installer.pkg"
 copy_asset "$DIST/Remote-Mic-$version.dmg" "Remote-Mic-$version.dmg"
 copy_asset "$DIST/Remote-Mic-$version.zip" "Remote-Mic-$version.zip"
 copy_asset "$DIST/appcast.xml" appcast.xml
 copy_asset "$DIST/Remote-Mic-$version.zh.txt" "Remote-Mic-$version.zh.txt"
 copy_asset "$DIST/Remote-Mic-$version.en.txt" "Remote-Mic-$version.en.txt"
-copy_asset "$DIST/intel/Uninstall Remote Mic Intel.pkg" "Remote-Mic-$version-Intel-Uninstaller.pkg"
-copy_asset "$DIST/intel/Install Remote Mic Intel.pkg" "Remote-Mic-$version-Intel-Installer.pkg"
+copy_asset "$DIST/intel/Uninstall SayAll Intel.pkg" "SayAll-$version-Intel-Uninstaller.pkg"
+copy_asset "$DIST/intel/Install SayAll Intel.pkg" "SayAll-$version-Intel-Installer.pkg"
 copy_asset "$DIST/intel/Remote-Mic-$version-Intel.dmg" "Remote-Mic-$version-Intel.dmg"
 copy_asset "$DIST/intel/Remote-Mic-$version-Intel.zip" "Remote-Mic-$version-Intel.zip"
 copy_asset "$DIST/intel/appcast-intel.xml" appcast-intel.xml

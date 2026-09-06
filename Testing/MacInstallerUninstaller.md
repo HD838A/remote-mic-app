@@ -4,7 +4,7 @@
 
 - 基线：`origin/main` `18b42243710ac80f27ec2d16c41741e8ba0d99e5`
 - 目标：macOS Apple Silicon 14+ 和 Intel Ventura 13
-- 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 DMG、Install PKG 和 standalone Uninstall PKG
+- 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 DMG、`Install SayAll*.pkg` 和 standalone `Uninstall SayAll*.pkg`
 - Siri Remote 系统服务是 Install PKG 中的可选组件，默认不选择；MiRemoteV 2ch 与无线麦SayAll.app仍是默认组件。
 
 ## 测试前准备
@@ -19,7 +19,7 @@
 ### 1. DMG 单入口与全新安装
 
 1. 挂载对应架构 DMG。
-2. 确认根目录只有 Install PKG，没有并列 App、Applications 快捷方式或 Uninstall PKG。
+2. 确认 Apple Silicon DMG 根目录只有 `Install SayAll.pkg`，Intel DMG 根目录只有 `Install SayAll Intel.pkg`；没有并列 App、Applications 快捷方式或 Uninstall PKG。
 3. 运行 Install PKG；进入“安装类型/自定安装”页面后，确认 `Siri Remote 支持` 默认未勾选。
 4. 不勾选 Siri Remote，继续安装并完成管理员授权。
 
@@ -51,7 +51,7 @@
 
 ### 4. 完整卸载与可恢复性
 
-1. 退出 App，运行 standalone Uninstall PKG。
+1. 退出 App，运行对应架构的 standalone `Uninstall SayAll*.pkg`。
 2. 分别验证 canonical App+驱动、历史 App+驱动、仅 App 和仅驱动。
 3. 在废纸篓中找到名称带 `uninstalled` 时间标记的项目，执行“放回原处”或手动恢复。
 
@@ -76,6 +76,7 @@
 - 安装包不要求 Xcode 或 Command Line Tools。
 - Apple Silicon/Intel 错包会在 Installer.app 中显示可操作的错误提示。
 - 安装或卸载不读取其他 App 内部数据。
+- Finder 文件名、Installer.app 标题和公开版本化 PKG 资产均使用 `SayAll` 品牌；历史 Bundle ID、Package ID、receipt 和旧 App 路径保持兼容。
 
 ## 日志收集
 

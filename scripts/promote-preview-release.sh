@@ -118,12 +118,12 @@ jq -e \
       (.size | type == "number" and . >= 0 and floor == .) and
       (.sha256 | test("^[0-9a-f]{64}$"))) and
     ([
-      "Remote-Mic-" + .version + "-Intel-Uninstaller.pkg",
-      "Remote-Mic-" + .version + "-Intel-Installer.pkg",
+      "SayAll-" + .version + "-Intel-Uninstaller.pkg",
+      "SayAll-" + .version + "-Intel-Installer.pkg",
       "Remote-Mic-" + .version + "-Intel.dmg",
       "Remote-Mic-" + .version + "-Intel.zip",
-      "Remote-Mic-" + .version + "-Uninstaller.pkg",
-      "Remote-Mic-" + .version + "-Installer.pkg",
+      "SayAll-" + .version + "-Uninstaller.pkg",
+      "SayAll-" + .version + "-Installer.pkg",
       "Remote-Mic-" + .version + ".dmg",
       "Remote-Mic-" + .version + ".dmg.sha256",
       "Remote-Mic-" + .version + ".en.txt",

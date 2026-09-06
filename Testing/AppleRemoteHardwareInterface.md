@@ -44,7 +44,7 @@
 5. 连接 A2854，进入 Apple Remote 音频测试；App 会显示 `preparing_hci → authorizing → ready`，不要求用户操作 PacketLogger。
 <!-- HCI 配置、授权项和 bluetoothd 恢复均由安装包 helper 管理，用户不需要手工执行命令。 -->
 
-卸载使用 `dist/Uninstall Remote Mic.pkg`。卸载前后应确认 HCI plist 与 `com.apple.PacketLogger.HCI` right 恢复到安装前状态；如果安装前不存在配置，恢复动作应把 helper 创建的空 plist 移入 macOS Trash，而不是永久删除。
+卸载使用 `dist/Uninstall SayAll.pkg`。卸载前后应确认 HCI plist 与 `com.apple.PacketLogger.HCI` right 恢复到安装前状态；如果安装前不存在配置，恢复动作应把 helper 创建的空 plist 移入 macOS Trash，而不是永久删除。
 
 失败判定：缺少 PacketLogger 时日志应为 `unavailable:packetlogger_missing`；跟踪项未完整开启时应为 `unavailable:hci_voice_tracing_disabled`。两种情况都不得自动改用 Mac 麦克风。
 
@@ -234,12 +234,12 @@ APPLE_REMOTE_HCI_SERVICE connection_rejected reason=<reason>
 
 | 场景 | 操作 | 通过标准 |
 |---|---|---|
-| 首次安装 | 安装 `Install Remote Mic.pkg`，启动 App，首次进入 Apple Remote 音频 | 仅出现一次标准管理员认证；不要求 PacketLogger 或 Apple 账号；HCI helper 与 App 均能启动 |
+| 首次安装 | 安装 `Install SayAll.pkg`，启动 App，首次进入 Apple Remote 音频 | 仅出现一次标准管理员认证；不要求 PacketLogger 或 Apple 账号；HCI helper 与 App 均能启动 |
 | 已授权重启 | 退出并再次启动 App，重新开始一次音频会话 | 不重复弹管理员认证；PacketLogger 状态按 `preparing_hci → connecting → ready` 恢复 |
 | App 崩溃/强杀 | 在授权后强制结束 App，再重新启动 | helper 清理租约；全局 right 恢复；重启后第一次会话即可成功 |
 | helper 重启 | 重启 `AppleRemoteHCIService`，保持 App 不退出 | App 报告不可用并可重新准备；不遗留旧 HCI 配置或授权项 |
 | 安装升级 | 用新 PKG 覆盖旧版本 | 旧配置保留；授权项不会扩大到其他 Bundle ID；新版本可重新建立租约 |
-| 卸载 | 运行 `Uninstall Remote Mic.pkg` | App、helper、driver 移除；HCI plist/right 恢复安装前状态；创建的空 plist 只移入 Trash |
+| 卸载 | 运行 `Uninstall SayAll.pkg` | App、helper、driver 移除；HCI plist/right 恢复安装前状态；创建的空 plist 只移入 Trash |
 
 ## 用例一：识别与配对
 
