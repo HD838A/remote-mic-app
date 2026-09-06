@@ -186,12 +186,14 @@ SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframe
 
 run_release_stage app-swift-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
   xcrun swift build \
+  --disable-keychain \
   --scratch-path "$BUILD_SCRATCH_PATH" \
   --cache-path "$BUILD_CACHE_PATH" \
   -c "$CONFIGURATION" \
   --triple "$RELEASE_TRIPLE"
 BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
   xcrun swift build \
+  --disable-keychain \
   --scratch-path "$BUILD_SCRATCH_PATH" \
   --cache-path "$BUILD_CACHE_PATH" \
   -c "$CONFIGURATION" \

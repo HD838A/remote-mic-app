@@ -1,5 +1,10 @@
 # 仓库开发规则
 
+## SwiftPM 本地凭据边界
+
+- 在 macOS 本地运行本仓库的 `swift build`、`swift test` 或 `swift package resolve` 时，必须传入 `--disable-keychain`；GitHub 源码依赖继续使用现有 Git 凭据助手，公开二进制依赖不得扫描登录钥匙串。
+- 新增或修改调用 SwiftPM 的本地脚本时必须保留该参数。GitHub Actions 等没有交互式登录钥匙串的隔离 CI 环境可按其现有凭据配置执行。
+
 ## 产品命名规范
 
 - 正式产品全称为「无线麦SayAll.app」；中文简称为「无线麦」，英文简称为「SayAll」。

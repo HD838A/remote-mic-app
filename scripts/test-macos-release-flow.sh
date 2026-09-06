@@ -46,6 +46,14 @@ publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
 stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
 
+/usr/bin/grep -Fq -- '--disable-keychain' "$ROOT/scripts/build-app.sh"
+/usr/bin/grep -Fq 'xcrun swift build --disable-keychain' "$ROOT/scripts/test.sh"
+if [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/scripts/build-app.sh")" -lt 2 ]] || \
+   [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/Testing/build_rc003_preview.sh")" -lt 2 ]]; then
+  print -u2 "local SwiftPM entry points must disable macOS Keychain credential lookup"
+  exit 1
+fi
+
 /usr/bin/grep -Fq 'mode:' "$package_workflow"
 /usr/bin/grep -Fq 'expected_commit:' "$package_workflow"
 /usr/bin/grep -Fq 'source_branch:' "$package_workflow"
