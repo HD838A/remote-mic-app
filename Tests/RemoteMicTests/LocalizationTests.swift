@@ -121,6 +121,9 @@ struct LocalizationTests {
         #expect(english["about.support.feedback"] == "Feedback")
         #expect(english["onboarding.remote.first_pairing.wake"] == "Hold TV for about 2 seconds until the white light at the bottom starts flashing.")
         #expect(english["onboarding.remote.first_pairing.pair"] == "Then hold Home + Menu together to enter Bluetooth pairing mode.")
+        #expect(english["onboarding.remote.button_waiting_detail"] == "Press the center OK button or an arrow button. Do not press the microphone/voice button.")
+        #expect(english["onboarding.remote.voice_button_mistake.title"] == "That was the voice button")
+        #expect(english["onboarding.remote.voice_button_mistake.detail"] == "This step checks a normal control button. Press the center OK button or an arrow button instead.")
         #expect(english["onboarding.voice_tool.weixin.title"] == "WeChat Input Method")
         #expect(english["onboarding.voice_tool.system_fn.conflict"] == "macOS is still using Fn")
 
@@ -141,6 +144,9 @@ struct LocalizationTests {
                 #expect(localized["about.support.feedback"] == "问题反馈")
                 #expect(localized["onboarding.remote.first_pairing.wake"] == "长按 TV 键约 2 秒，直到遥控器底部白灯开始闪烁。")
                 #expect(localized["onboarding.remote.first_pairing.pair"] == "同时长按 Home（主页）+ Menu（菜单）键，进入蓝牙配对模式。")
+                #expect(localized["onboarding.remote.button_waiting_detail"] == "请短按圆盘中间的确定键或任意方向键，不要按麦克风/语音键。")
+                #expect(localized["onboarding.remote.voice_button_mistake.title"] == "刚才按的是语音键")
+                #expect(localized["onboarding.remote.voice_button_mistake.detail"] == "这一步检查普通控制键。请改为短按圆盘中间的确定键或任意方向键。")
                 #expect(localized["onboarding.voice_tool.weixin.title"] == "微信输入法")
                 #expect(localized["onboarding.voice_tool.system_fn.conflict"] == "系统仍在使用 Fn")
             }

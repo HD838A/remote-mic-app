@@ -26,11 +26,13 @@ struct OnboardingView: View {
     private let allowsInputSourceSwitching: Bool
     private let systemFunctionKeyAvailableOverride: Bool?
     private let voiceToolAvailabilityOverride: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]?
+    private let remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic?
 
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
     @State private var observedRemoteButtons = Set<RemoteButton>()
+    @State private var remoteInputDiagnostic = FirstUseRemoteInputDiagnostic()
     @State private var requestedRemoteConnectionRecovery = false
     @State private var testedControlButtons = Set<RemoteButton>()
     @State private var voiceSessionStarted = false
@@ -70,7 +72,8 @@ struct OnboardingView: View {
         allowsInputSourceSwitching: Bool = true,
         systemFunctionKeyAvailableOverride: Bool? = nil,
         voiceToolAvailabilityOverride: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
-        initialInputMethodGuideStep: Int = 0
+        initialInputMethodGuideStep: Int = 0,
+        remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic? = nil
     ) {
         self.model = model
         settings = model.settings
@@ -78,6 +81,7 @@ struct OnboardingView: View {
         self.allowsInputSourceSwitching = allowsInputSourceSwitching
         self.systemFunctionKeyAvailableOverride = systemFunctionKeyAvailableOverride
         self.voiceToolAvailabilityOverride = voiceToolAvailabilityOverride
+        self.remoteInputDiagnosticOverride = remoteInputDiagnosticOverride
         _selectedInputMethodGuideStep = State(initialValue: initialInputMethodGuideStep)
         _voiceKeyMigrationSource = State(
             initialValue: model.settings.pendingOnboardingVoiceKeyMigration
@@ -140,7 +144,7 @@ struct OnboardingView: View {
             guard settings.onboardingControlMethod == .physicalRemote,
                   !buttons.isEmpty else { return }
             if settings.onboardingStep == .remote {
-                observedRemoteButtons.formUnion(buttons)
+                recordRemoteControlButtons(buttons, source: "physical_remote")
                 recoverRemoteConnectionIfNeeded()
             } else if settings.onboardingStep == .controls {
                 testedControlButtons.formUnion(buttons)
@@ -149,7 +153,7 @@ struct OnboardingView: View {
         .onReceive(model.$lastRemoteButtonPress.compactMap { $0 }) { button in
             guard settings.onboardingControlMethod == .physicalRemote else { return }
             if settings.onboardingStep == .remote {
-                observedRemoteButtons.insert(button)
+                recordRemoteControlButtons(Set([button]), source: "physical_remote")
                 recoverRemoteConnectionIfNeeded()
             } else if settings.onboardingStep == .controls {
                 testedControlButtons.insert(button)
@@ -158,18 +162,24 @@ struct OnboardingView: View {
         .onReceive(model.$lastMobileRemoteButtonObservation.compactMap { $0 }) { observation in
             guard selectedControlAccepts(observation.source) else { return }
             if settings.onboardingStep == .remote {
-                observedRemoteButtons.insert(observation.button)
+                recordRemoteControlButtons(Set([observation.button]), source: observation.source.rawValue)
             } else if settings.onboardingStep == .controls {
                 testedControlButtons.insert(observation.button)
             }
         }
-        .onReceive(model.$isStreaming) { isStreaming in
-            guard settings.onboardingStep == .voiceTest,
-                  selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
-            if isStreaming {
-                beginVoiceAttempt(triggerPath: model.activeVoiceSource?.rawValue ?? "unknown")
-            } else if voiceSessionStarted {
-                endVoiceAttempt()
+        .onReceive(model.$isStreaming.removeDuplicates()) { isStreaming in
+            guard selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
+            switch settings.onboardingStep {
+            case .remote where isStreaming:
+                recordRemoteVoiceButtonPress()
+            case .voiceTest:
+                if isStreaming {
+                    beginVoiceAttempt(triggerPath: model.activeVoiceSource?.rawValue ?? "unknown")
+                } else if voiceSessionStarted {
+                    endVoiceAttempt()
+                }
+            default:
+                break
             }
         }
         .onReceive(model.$hasReceivedCurrentVoiceSamples.removeDuplicates()) { hasReceivedSamples in
@@ -1015,22 +1025,40 @@ struct OnboardingView: View {
             )
 
             statusCard(
-                icon: observedRemoteButtons.isEmpty ? "button.programmable" : "checkmark.circle.fill",
+                icon: remoteInputDiagnostic.shouldShowVoiceButtonCorrection
+                    ? "exclamationmark.triangle.fill"
+                    : observedRemoteButtons.isEmpty
+                        ? "button.programmable"
+                        : "checkmark.circle.fill",
                 title: localization.text(
-                    observedRemoteButtons.isEmpty
-                        ? "onboarding.remote.button_waiting"
-                        : "onboarding.remote.button_received"
+                    remoteInputDiagnostic.shouldShowVoiceButtonCorrection
+                        ? "onboarding.remote.voice_button_mistake.title"
+                        : observedRemoteButtons.isEmpty
+                            ? "onboarding.remote.button_waiting"
+                            : "onboarding.remote.button_received"
                 ),
-                detail: observedRemoteButtons.isEmpty
-                    ? model.hidStatus.text(using: localization)
-                    : localization.text("onboarding.remote.button_detail"),
-                isComplete: !observedRemoteButtons.isEmpty
+                detail: physicalRemoteButtonStatusDetail,
+                isComplete: !observedRemoteButtons.isEmpty,
+                pendingColor: remoteInputDiagnostic.shouldShowVoiceButtonCorrection ? .orange : nil
             )
 
             if !selectedControlConnected {
                 openBluetoothSettingsButton
             }
         }
+    }
+
+    private var physicalRemoteButtonStatusDetail: String {
+        let instructionKey = remoteInputDiagnostic.shouldShowVoiceButtonCorrection
+            ? "onboarding.remote.voice_button_mistake.detail"
+            : observedRemoteButtons.isEmpty
+                ? "onboarding.remote.button_waiting_detail"
+                : "onboarding.remote.button_detail"
+        let listenerStatus = LocalizedMessage(
+            "onboarding.remote.listener_status",
+            arguments: [model.hidStatus.text(using: localization)]
+        ).text(using: localization)
+        return "\(localization.text(instructionKey))\n\(listenerStatus)"
     }
 
     private var iPhoneRemoteContent: some View {
@@ -1839,14 +1867,16 @@ struct OnboardingView: View {
         icon: String,
         title: String,
         detail: String,
-        isComplete: Bool
+        isComplete: Bool,
+        pendingColor: Color? = nil
     ) -> some View {
-        HStack(spacing: 13) {
+        let statusColor = isComplete ? Color.green : (pendingColor ?? Color.accentColor)
+        return HStack(spacing: 13) {
             Image(systemName: icon)
                 .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(isComplete ? Color.green : Color.accentColor)
+                .foregroundStyle(statusColor)
                 .frame(width: 36, height: 36)
-                .background((isComplete ? Color.green : Color.accentColor).opacity(0.10), in: Circle())
+                .background(statusColor.opacity(0.10), in: Circle())
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
@@ -1858,7 +1888,10 @@ struct OnboardingView: View {
             Spacer()
         }
         .padding(14)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+        .background(
+            (pendingColor?.opacity(0.08) ?? Color.primary.opacity(0.035)),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
     }
 
     private var currentPhase: OnboardingPhase {
@@ -1942,7 +1975,8 @@ struct OnboardingView: View {
             controlMethod: settings.onboardingControlMethod,
             capabilities: capabilities,
             hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty,
-            voiceAttempt: settings.onboardingStep == .voiceTest ? voiceAttempt : nil
+            voiceAttempt: settings.onboardingStep == .voiceTest ? voiceAttempt : nil,
+            remoteInput: remoteInputDiagnostic
         )
     }
 
@@ -2325,6 +2359,7 @@ struct OnboardingView: View {
         }
         settings.setOnboardingControlMethod(method)
         observedRemoteButtons.removeAll()
+        remoteInputDiagnostic = FirstUseRemoteInputDiagnostic()
         testedControlButtons.removeAll()
     }
 
@@ -2384,6 +2419,7 @@ struct OnboardingView: View {
             routeConnectedPhysicalRemoteIfNeeded()
         case .remote:
             observedRemoteButtons.removeAll()
+            remoteInputDiagnostic = remoteInputDiagnosticOverride ?? FirstUseRemoteInputDiagnostic()
             requestedRemoteConnectionRecovery = false
             prepareSelectedControlConnection()
         case .audio:
@@ -2810,6 +2846,33 @@ struct OnboardingView: View {
         ) else { return }
         requestedRemoteConnectionRecovery = true
         model.reconnect()
+    }
+
+    private func recordRemoteVoiceButtonPress() {
+        remoteInputDiagnostic.recordVoiceButtonPress()
+        AppLogger.shared.write(
+            "ONBOARDING REMOTE_INPUT observed=voice " +
+                "source=\(model.activeVoiceSource?.rawValue ?? "unknown") " +
+                "voice_count=\(remoteInputDiagnostic.voiceButtonPressCount) " +
+                "control_count=\(remoteInputDiagnostic.controlButtonObservationCount) " +
+                "last_input=\(remoteInputDiagnostic.lastInputKind.rawValue)"
+        )
+    }
+
+    private func recordRemoteControlButtons(_ buttons: Set<RemoteButton>, source: String) {
+        let newlyObserved = buttons.subtracting(observedRemoteButtons)
+        guard !newlyObserved.isEmpty else { return }
+        observedRemoteButtons.formUnion(newlyObserved)
+        for _ in newlyObserved {
+            remoteInputDiagnostic.recordControlButtonObservation()
+        }
+        AppLogger.shared.write(
+            "ONBOARDING REMOTE_INPUT observed=control source=\(source) " +
+                "new_count=\(newlyObserved.count) " +
+                "voice_count=\(remoteInputDiagnostic.voiceButtonPressCount) " +
+                "control_count=\(remoteInputDiagnostic.controlButtonObservationCount) " +
+                "last_input=\(remoteInputDiagnostic.lastInputKind.rawValue)"
+        )
     }
 
     private func prepareSelectedControlConnection() {

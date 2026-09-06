@@ -271,6 +271,25 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func remoteInputDiagnosticDistinguishesVoiceFromControlButtons() {
+        var diagnostic = FirstUseRemoteInputDiagnostic()
+
+        diagnostic.recordVoiceButtonPress()
+        diagnostic.recordVoiceButtonPress()
+
+        #expect(diagnostic.voiceButtonPressCount == 2)
+        #expect(diagnostic.controlButtonObservationCount == 0)
+        #expect(diagnostic.lastInputKind == .voice)
+        #expect(diagnostic.shouldShowVoiceButtonCorrection)
+
+        diagnostic.recordControlButtonObservation()
+
+        #expect(diagnostic.voiceButtonPressCount == 2)
+        #expect(diagnostic.controlButtonObservationCount == 1)
+        #expect(diagnostic.lastInputKind == .control)
+        #expect(!diagnostic.shouldShowVoiceButtonCorrection)
+    }
+
     @Test func everyRequiredCapabilityBlocksItsStepUntilVerified() {
         var capabilities = OnboardingCapabilities()
 
@@ -942,7 +961,7 @@ struct OnboardingFlowTests {
             of: ".onReceive(model.$lastRemoteButtonPress.compactMap { $0 })"
         ))
         let buttonReceiveEnd = try #require(viewSource.range(
-            of: ".onReceive(model.$isStreaming)",
+            of: ".onReceive(model.$isStreaming",
             range: buttonReceiveStart.upperBound..<viewSource.endIndex
         ))
         let buttonReceiveSource = viewSource[buttonReceiveStart.lowerBound..<buttonReceiveEnd.lowerBound]
@@ -1057,6 +1076,30 @@ struct OnboardingFlowTests {
         let recoverySource = viewSource[recoveryStart.lowerBound..<recoveryEnd.lowerBound]
         #expect(recoverySource.contains("case .remoteButtonNotReady, .controlsNotConfirmed:"))
         #expect(recoverySource.contains("model.applyHIDSettings()"))
+    }
+
+    @Test func remoteStepCorrectsVoiceButtonMistakesWithoutWeakeningTheControlGate() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingScreenshotRenderer.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewSource.contains("recordRemoteVoiceButtonPress()"))
+        #expect(viewSource.contains("onboarding.remote.voice_button_mistake.title"))
+        #expect(viewSource.contains("onboarding.remote.voice_button_mistake.detail"))
+        #expect(viewSource.contains("onboarding.remote.button_waiting_detail"))
+        #expect(viewSource.contains("ONBOARDING REMOTE_INPUT observed=voice"))
+        #expect(viewSource.contains("ONBOARDING REMOTE_INPUT observed=control"))
+        #expect(viewSource.contains("isComplete: !observedRemoteButtons.isEmpty"))
+        #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_REMOTE_INPUT"))
     }
 
     @Test func completionPageExplainsARegressedRuntimeCondition() throws {
@@ -1807,7 +1850,12 @@ struct OnboardingFlowTests {
             context: FirstUseDiagnosticContext(
                 step: .permissions,
                 capabilities: capabilities,
-                hasSelectedAudioUID: false
+                hasSelectedAudioUID: false,
+                remoteInput: FirstUseRemoteInputDiagnostic(
+                    voiceButtonPressCount: 2,
+                    controlButtonObservationCount: 0,
+                    lastInputKind: .voice
+                )
             ),
             voiceAttempt: FirstUseVoiceAttemptDiagnostic(
                 attemptID: 2,
@@ -1840,6 +1888,10 @@ struct OnboardingFlowTests {
         #expect(text.contains("app_build=106"))
         #expect(text.contains("onboarding_voice_key_policy=fn_only"))
         #expect(text.contains("voice_key_policy_compliant=true"))
+        #expect(text.contains("remote_voice_button_press_count=2"))
+        #expect(text.contains("remote_control_button_observation_count=0"))
+        #expect(text.contains("remote_last_input_kind=voice"))
+        #expect(text.contains("remote_voice_button_mistake_detected=true"))
         #expect(text.contains("macos_version="))
         #expect(text.contains("macos_build="))
         #expect(text.contains("app_language=zh-Hans"))

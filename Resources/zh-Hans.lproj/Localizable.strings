@@ -656,8 +656,12 @@
 "onboarding.remote.hid_connected_detail" = "已收到遥控器按键，语音连接会在后台继续准备。";
 "onboarding.remote.searching_detail" = "保持遥控器靠近 Mac；首次连接按上方步骤操作，已配对时按任意键唤醒。";
 "onboarding.remote.button_waiting" = "等待控制按键";
+"onboarding.remote.button_waiting_detail" = "请短按圆盘中间的确定键或任意方向键，不要按麦克风/语音键。";
 "onboarding.remote.button_received" = "已收到控制按键";
 "onboarding.remote.button_detail" = "语音键以外的任意普通按键都可以。";
+"onboarding.remote.voice_button_mistake.title" = "刚才按的是语音键";
+"onboarding.remote.voice_button_mistake.detail" = "这一步检查普通控制键。请改为短按圆盘中间的确定键或任意方向键。";
+"onboarding.remote.listener_status" = "监听状态：%@";
 "onboarding.remote.reconnect" = "重新查找";
 "onboarding.remote.retry_input" = "重新检测按键";
 "onboarding.remote.open_bluetooth" = "打开蓝牙设置";
