@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RemoteMicRootView: View {
-    @ObservedObject var model: BridgeAppModel
+    let model: BridgeAppModel
     @ObservedObject private var settings: AppSettings
     @ObservedObject private var updateInformation: UpdateInformationStore
     let checkForUpdates: () -> Void

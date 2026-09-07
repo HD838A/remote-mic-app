@@ -42,7 +42,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
     @Published private(set) var isAudioOutputReady = false
-    @Published private(set) var currentVoiceSampleCount: UInt64 = 0
+    @Published private(set) var hasReceivedCurrentVoiceSamples = false
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
@@ -1122,7 +1122,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothVoiceTraceModel = model
         bluetoothVoiceDecodedBatchCount = 0
         bluetoothVoiceDecodedSampleCount = 0
-        currentVoiceSampleCount = 0
+        if hasReceivedCurrentVoiceSamples {
+            hasReceivedCurrentVoiceSamples = false
+        }
         bluetoothVoiceEnqueueFailureCount = 0
         bluetoothVoiceTraceRoute = "none"
         AppLogger.shared.write(
@@ -1236,7 +1238,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let enqueued = handledByFnTapMode || audioOutput.enqueue(samples: samples)
         bluetoothVoiceDecodedBatchCount += 1
         bluetoothVoiceDecodedSampleCount += samples.count
-        currentVoiceSampleCount &+= UInt64(samples.count)
+        if !samples.isEmpty, !hasReceivedCurrentVoiceSamples {
+            hasReceivedCurrentVoiceSamples = true
+        }
         if !enqueued {
             bluetoothVoiceEnqueueFailureCount += 1
         }
