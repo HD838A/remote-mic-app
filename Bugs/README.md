@@ -49,6 +49,7 @@
 - [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md)
 - [真实候选版本号导致预发布生命周期测试夹具失败](./2026-08-13-preview-lifecycle-fixture-current-version.md)
 - [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md)
+- [自定义快捷键丢失修饰键左右侧（右⌘+逗号不生效）](./2026-09-05-custom-shortcut-loses-modifier-side.md)
 - [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md)
 
 本目录统一保存已经发现、调查或修复的问题。每个 Bug 使用独立 Markdown 文件，至少记录时间、状态、影响范围、功能点、简单描述和详细过程；无法从历史提交恢复的细节会明确标注，不补写推测。

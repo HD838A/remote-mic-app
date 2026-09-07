@@ -2999,6 +2999,124 @@ struct RemoteButtonsTests {
         #expect(RemotePowerState.charging.logValue == "charging")
         #expect(RemotePowerState.unknown.logValue == "unknown")
     }
+
+    @Test func rightSideModifierIsPreservedAndDisplayed() throws {
+        let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
+        // 0x10 is the device-dependent right Command bit reported by real hardware.
+        let rightCommand = NSEvent.ModifierFlags(rawValue: 0x0000_0010)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 43,
+            modifierFlags: [.command, rightCommand],
+            keyLabel: ","
+        )
+
+        #expect(shortcut.modifierFlagsRawValue & 0x0000_0010 != 0)
+        #expect(shortcut.sideSpecificModifierKeyCodes == [54])
+        #expect(shortcut.cgEventFlags.rawValue & 0x0000_0010 != 0)
+        #expect(shortcut.cgEventFlags.contains(.maskCommand))
+        #expect(shortcut.displayName(using: localization).contains("⌘"))
+    }
+
+    @Test func sideSpecificShortcutHoldsRealModifierAndReleasesInReverse() {
+        let rightCommand = NSEvent.ModifierFlags(rawValue: 0x0000_0010)
+        let rightShift = NSEvent.ModifierFlags(rawValue: 0x0000_0004)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 43,
+            modifierFlags: [.command, .shift, rightCommand, rightShift],
+            keyLabel: ","
+        )
+        var events: [String] = []
+
+        KeyboardInjector.postShortcut(
+            shortcut,
+            keyPoster: { code, _ in events.append("key:\(code)") },
+            keyStatePoster: { code, isDown, _ in
+                events.append("\(isDown ? "down" : "up"):\(code)")
+                return true
+            }
+        )
+
+        // Shift (60) then Command (54) held, main key, then released in reverse.
+        #expect(events == ["down:60", "down:54", "key:43", "up:54", "up:60"])
+    }
+
+    @Test func failedModifierPressStillReleasesWhatWasHeld() {
+        let rightCommand = NSEvent.ModifierFlags(rawValue: 0x0000_0010)
+        let rightShift = NSEvent.ModifierFlags(rawValue: 0x0000_0004)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 43,
+            modifierFlags: [.command, .shift, rightCommand, rightShift],
+            keyLabel: ","
+        )
+        var events: [String] = []
+
+        KeyboardInjector.postShortcut(
+            shortcut,
+            keyPoster: { code, _ in events.append("key:\(code)") },
+            keyStatePoster: { code, isDown, _ in
+                events.append("\(isDown ? "down" : "up"):\(code)")
+                return code == 60 // the second modifier fails
+            }
+        )
+
+        // The main key is skipped, and the already-held modifier is still released.
+        #expect(events == ["down:60", "down:54", "up:60"])
+    }
+
+    @Test func legacyShortcutWithoutSideKeepsFlagsOnlyInjection() {
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 43,
+            modifierFlags: [.command],
+            keyLabel: ","
+        )
+        var events: [String] = []
+
+        #expect(shortcut.sideSpecificModifierKeyCodes.isEmpty)
+        KeyboardInjector.postShortcut(
+            shortcut,
+            keyPoster: { code, flags in
+                events.append("key:\(code):\(flags.rawValue)")
+            },
+            keyStatePoster: { _, _, _ in
+                events.append("unexpected")
+                return true
+            }
+        )
+
+        #expect(events == ["key:43:\(CGEventFlags.maskCommand.rawValue)"])
+    }
+
+    @Test func sideSpecificShortcutInjectsCumulativeSideFlags() {
+        let rightCommand = NSEvent.ModifierFlags(rawValue: 0x0000_0010)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 43,
+            modifierFlags: [.command, rightCommand],
+            keyLabel: ","
+        )
+        var downFlags: [(CGKeyCode, CGEventFlags)] = []
+
+        KeyboardInjector.postShortcut(
+            shortcut,
+            keyPoster: { _, _ in },
+            keyStatePoster: { code, isDown, flags in
+                if isDown { downFlags.append((code, flags)) }
+                return true
+            }
+        )
+
+        #expect(downFlags.count == 1)
+        #expect(downFlags[0].0 == 54)
+        #expect(downFlags[0].1.contains(.maskCommand))
+        #expect(downFlags[0].1.rawValue & 0x0000_0010 != 0)
+    }
+
+    @Test func modifierKeyCodesAreClassifiedForFlagsChanged() {
+        for code: CGKeyCode in [54, 55, 56, 60, 58, 61, 59, 62] {
+            #expect(KeyboardInjector.isModifierKeyCode(code))
+        }
+        #expect(!KeyboardInjector.isModifierKeyCode(43)) // comma stays a key press
+        #expect(!KeyboardInjector.isModifierKeyCode(63)) // Fn keeps its own path
+    }
 }
 
 private final class RemoteButtonsTestScheduler: HIDRemoteScheduling {
