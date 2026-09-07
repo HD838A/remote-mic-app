@@ -27,11 +27,57 @@ enum CoreAudioDeviceCatalog {
 
     static func outputDevices() -> [AudioDeviceInfo] {
         withPropertyLock {
-            outputDevicesLocked()
+            devicesLocked(scope: kAudioDevicePropertyScopeOutput)
         }
     }
 
-    private static func outputDevicesLocked() -> [AudioDeviceInfo] {
+    static func inputDevices() -> [AudioDeviceInfo] {
+        withPropertyLock { devicesLocked(scope: kAudioDevicePropertyScopeInput) }
+    }
+
+    static func defaultInputDevice() -> AudioDeviceInfo? {
+        withPropertyLock { defaultDevice(selector: kAudioHardwarePropertyDefaultInputDevice) }
+    }
+
+    static func setDefaultInputDevice(_ device: AudioDeviceInfo) -> OSStatus {
+        withPropertyLock {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var id = device.id
+            return AudioObjectSetPropertyData(
+                AudioObjectID(kAudioObjectSystemObject), &address, 0, nil,
+                UInt32(MemoryLayout<AudioDeviceID>.size), &id
+            )
+        }
+    }
+
+    static func preferredPhysicalInput(excludingUID: String) -> AudioDeviceInfo? {
+        withPropertyLock {
+            let candidates = inputDevices().filter { device in
+                guard device.uid != excludingUID, let transport = transportType(for: device.id) else { return false }
+                return transport != kAudioDeviceTransportTypeVirtual && transport != kAudioDeviceTransportTypeAggregate
+            }
+            return candidates.first { transportType(for: $0.id) == kAudioDeviceTransportTypeBuiltIn }
+                ?? candidates.first
+        }
+    }
+
+    private static func transportType(for id: AudioDeviceID) -> UInt32? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var transport: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &transport) == noErr else { return nil }
+        return transport
+    }
+
+    private static func devicesLocked(scope: AudioObjectPropertyScope) -> [AudioDeviceInfo] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -64,7 +110,7 @@ enum CoreAudioDeviceCatalog {
 
         var seenUIDs = Set<String>()
         return deviceIDs.compactMap { deviceID in
-            guard outputChannelCount(for: deviceID) > 0 else { return nil }
+            guard channelCount(for: deviceID, scope: scope) > 0 else { return nil }
             return deviceInfo(for: deviceID)
         }
         .filter { seenUIDs.insert($0.uid).inserted }
@@ -142,10 +188,10 @@ enum CoreAudioDeviceCatalog {
         return value?.takeUnretainedValue() as String?
     }
 
-    private static func outputChannelCount(for deviceID: AudioDeviceID) -> Int {
+    private static func channelCount(for deviceID: AudioDeviceID, scope: AudioObjectPropertyScope) -> Int {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreamConfiguration,
-            mScope: kAudioDevicePropertyScopeOutput,
+            mScope: scope,
             mElement: kAudioObjectPropertyElementMain
         )
         var size: UInt32 = 0
@@ -186,6 +232,7 @@ final class VirtualAudioOutput {
     private var pendingDrainLogContexts: [String] = []
     private var drainCompletion: (() -> Void)?
     private var drainGeneration: UInt64 = 0
+    private var playbackGeneration: UInt64 = 0
     private let sourceFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
@@ -202,6 +249,8 @@ final class VirtualAudioOutput {
         defer { playbackLock.unlock() }
         return pendingVoiceBufferCount
     }
+
+    var hasAllocatedResources: Bool { engine != nil || player != nil || selectedDevice != nil }
 
     @discardableResult
     func configure(deviceUID: String) -> Bool {
@@ -354,6 +403,7 @@ final class VirtualAudioOutput {
         }
         playbackLock.lock()
         pendingVoiceBufferCount += 1
+        let generation = playbackGeneration
         playbackLock.unlock()
         player.scheduleBuffer(
             buffer,
@@ -361,7 +411,7 @@ final class VirtualAudioOutput {
             options: [],
             completionCallbackType: .dataPlayedBack
         ) { [weak self] _ in
-            self?.scheduledVoiceBufferDidFinish()
+            self?.scheduledVoiceBufferDidFinish(generation: generation)
         }
         return true
     }
@@ -393,6 +443,13 @@ final class VirtualAudioOutput {
         }
     }
 
+    func cancelPendingDrain() {
+        playbackLock.lock()
+        drainCompletion = nil
+        drainGeneration &+= 1
+        playbackLock.unlock()
+    }
+
     func logWhenPendingVoiceAudioDrains(context: String) {
         playbackLock.lock()
         let alreadyDrained = pendingVoiceBufferCount == 0
@@ -407,6 +464,7 @@ final class VirtualAudioOutput {
 
     private func flushPlayer() {
         playbackLock.lock()
+        playbackGeneration &+= 1
         let interruptedContexts = pendingVoiceBufferCount > 0 ? pendingDrainLogContexts : []
         pendingVoiceBufferCount = 0
         pendingDrainLogContexts.removeAll()
@@ -429,6 +487,7 @@ final class VirtualAudioOutput {
 
     func stop() {
         playbackLock.lock()
+        playbackGeneration &+= 1
         let interruptedContexts = pendingVoiceBufferCount > 0 ? pendingDrainLogContexts : []
         pendingVoiceBufferCount = 0
         pendingDrainLogContexts.removeAll()
@@ -446,25 +505,35 @@ final class VirtualAudioOutput {
         selectedDevice = nil
     }
 
-    private func scheduledVoiceBufferDidFinish() {
+    private func scheduledVoiceBufferDidFinish(generation: UInt64) {
         var completion: (() -> Void)?
+        var completionGeneration: UInt64?
         var drainedContexts: [String] = []
         playbackLock.lock()
+        guard generation == playbackGeneration else {
+            playbackLock.unlock()
+            return
+        }
         pendingVoiceBufferCount = max(0, pendingVoiceBufferCount - 1)
         if pendingVoiceBufferCount == 0 {
             drainedContexts = pendingDrainLogContexts
             pendingDrainLogContexts.removeAll()
             completion = drainCompletion
             drainCompletion = nil
-            drainGeneration &+= 1
+            if completion != nil { completionGeneration = drainGeneration }
         }
         playbackLock.unlock()
         for context in drainedContexts {
             AppLogger.shared.write("AUDIO PLAYBACK drained \(context) pending_buffers=0")
         }
-        guard let completion else { return }
+        guard let completion, let completionGeneration else { return }
         DispatchQueue.main.async { [weak self] in
-            self?.flushPlayer()
+            guard let self else { return }
+            self.playbackLock.lock()
+            let isCurrent = self.drainGeneration == completionGeneration
+            self.playbackLock.unlock()
+            guard isCurrent else { return }
+            self.flushPlayer()
             completion()
         }
     }

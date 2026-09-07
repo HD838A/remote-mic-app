@@ -430,8 +430,14 @@ final class VoiceFnTapSessionController {
         }
     }
 
+    /// Observe completion without changing the existing Fn/PCM stopping sequence.
+    func whenIdle(_ completion: @escaping () -> Void) {
+        idleCompletions.append(completion)
+        runIdleCompletions()
+    }
+
     private func runIdleCompletions() {
-        guard phase == .idle, !suppressAudioUntilRemoteStop else { return }
+        guard phase == .idle, pendingVoice == nil, !suppressAudioUntilRemoteStop else { return }
         let completions = idleCompletions
         idleCompletions.removeAll()
         completions.forEach { $0() }

@@ -4,6 +4,24 @@ import Testing
 
 @Suite("Typeless Fn tap session lifecycle")
 struct VoiceFnTapSessionControllerTests {
+    @Test func idleObserverWaitsForOriginalDrainAndFinalFnRelease() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.receive([11, 22, 33]))
+        #expect(harness.controller.stopVoice())
+        var released = false
+        harness.controller.whenIdle { released = true }
+        #expect(!released)
+        #expect(harness.drainCompletions.count == 1)
+        harness.completeNextDrain()
+        #expect(!released)
+        harness.scheduler.advance(by: 0.12)
+        #expect(released)
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        #expect(harness.enqueuedAudio == [[11, 22, 33]])
+    }
+
     @Test func defaultDisabledPreservesExistingVoicePath() {
         let harness = Harness()
         harness.controller.setEnabled(false)

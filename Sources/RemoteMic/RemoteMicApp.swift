@@ -74,6 +74,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     private let model = BridgeAppModel()
     private let voiceContinuationWarningPanel = VoiceContinuationWarningPanelController()
+    private var systemAudioObservers: [NSObjectProtocol] = []
     private let updateInformation = UpdateInformationStore()
     private lazy var localization = LocalizationStore(settings: model.settings)
     private var statusItem: NSStatusItem?
@@ -117,6 +118,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         observeModel()
         observeLocalization()
         observePhoneRemoteButtonTitles()
+        for event in SystemAudioLifecycleEvent.allCases {
+            systemAudioObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
+                forName: event.notification, object: nil, queue: .main
+            ) { [weak self] _ in
+                self?.model.handleSystemAudioLifecycle(event)
+            })
+        }
         if OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: model.settings.isOnboardingComplete,
             step: model.settings.onboardingStep
@@ -148,6 +156,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        systemAudioObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        systemAudioObservers.removeAll()
         voiceContinuationWarningPanel.hide()
         model.stop()
         updateFeedRefreshTask?.cancel()
