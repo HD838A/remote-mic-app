@@ -16,6 +16,12 @@ enum AudioPlayerNodeSafety {
     }
 }
 
+enum VirtualAudioHealthPolicy {
+    static func isPlaybackReady(hasSelectedDevice: Bool, engineRunning: Bool, playerPlaying: Bool) -> Bool {
+        hasSelectedDevice && engineRunning && playerPlaying
+    }
+}
+
 enum CoreAudioDeviceCatalog {
     private static let propertyLock = NSRecursiveLock()
 
@@ -282,7 +288,15 @@ final class VirtualAudioOutput {
     }
 
     var isReadyForTestTone: Bool {
-        selectedDevice != nil && engine?.isRunning == true
+        isPlaybackReady && selectedDevice?.id == currentOutputDevice()?.id
+    }
+
+    private var isPlaybackReady: Bool {
+        VirtualAudioHealthPolicy.isPlaybackReady(
+            hasSelectedDevice: selectedDevice != nil,
+            engineRunning: engine?.isRunning == true,
+            playerPlaying: player?.isPlaying == true
+        )
     }
 
     /// Schedules the test tone and reports actual playback completion via `scheduleBuffer`'s
@@ -330,7 +344,7 @@ final class VirtualAudioOutput {
 
     @discardableResult
     func enqueue(samples: [Int16]) -> Bool {
-        guard let player, engine?.isRunning == true, let buffer = makeBuffer(samples: samples) else {
+        guard isPlaybackReady, let player, let buffer = makeBuffer(samples: samples) else {
             logRejectedWrite()
             return false
         }
@@ -482,11 +496,9 @@ final class VirtualAudioOutput {
                   self.engine === engine,
                   self.engineConfigurationGeneration == generation
             else { return }
-            if self.isReadyForTestTone,
-               let selectedDevice = self.selectedDevice,
-               self.currentOutputDevice()?.id == selectedDevice.id {
+            if self.isReadyForTestTone {
                 AppLogger.shared.write(
-                    "AUDIO ENGINE configuration_ignored generation=\(generation) reason=still_bound"
+                    "AUDIO ENGINE configuration_ignored generation=\(generation) reason=healthy"
                 )
                 return
             }
@@ -517,7 +529,8 @@ final class VirtualAudioOutput {
     }
 
     private func basicDiagnosticState() -> String {
-        "engine_running=\(engine?.isRunning == true) selected={\(CoreAudioDeviceCatalog.deviceDiagnostic(selectedDevice))}"
+        "engine_running=\(engine?.isRunning == true) player_playing=\(player?.isPlaying == true) " +
+            "selected={\(CoreAudioDeviceCatalog.deviceDiagnostic(selectedDevice))}"
     }
 
     private func currentOutputDevice() -> AudioDeviceInfo? {

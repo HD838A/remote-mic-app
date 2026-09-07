@@ -535,6 +535,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
     }
 
+    @discardableResult
+    private func ensureVirtualAudioOutputReady(reason: String) -> Bool {
+        guard !audioStartupPending else { return false }
+        let healthy = audioOutput.isReadyForTestTone
+        if isAudioOutputReady != healthy { isAudioOutputReady = healthy }
+        guard !healthy else { return true }
+        AppLogger.shared.write("AUDIO HEALTH stale reason=\(reason) state={\(audioOutput.diagnosticState())}")
+        applyAudioSettings(reason: reason)
+        return isAudioOutputReady
+    }
+
     private func startObservingAudioHardware() {
         guard observedAudioHardwareAddresses.isEmpty else { return }
         for selector in [
@@ -599,7 +610,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.refreshAudioDevices()
-                self.applyAudioSettings(reason: "recovery_\(reason)")
+                _ = self.ensureVirtualAudioOutputReady(reason: "recovery_\(reason)")
                 AppLogger.shared.write(
                     "AUDIO RECOVERY completed id=\(generation) reason=\(reason) " +
                         "state={\(self.audioOutput.diagnosticState())}"
@@ -675,6 +686,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
         testToneGeneration &+= 1
         let generation = testToneGeneration
+        guard ensureVirtualAudioOutputReady(reason: "test_tone") else {
+            testToneStatus = LocalizedMessage("audio.test_tone.device_not_ready")
+            return
+        }
         let started = audioOutput.playTestTone { [weak self] finished in
             DispatchQueue.main.async {
                 self?.handleTestToneCompletion(generation: generation, finished: finished)
@@ -1091,6 +1106,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         refreshBluetoothPresentation()
         if isConnected {
             voiceFnTapSession.resume()
+            _ = ensureVirtualAudioOutputReady(reason: "bluetooth_ready")
         } else {
             voiceFnTapSession.suspend()
         }
@@ -1107,6 +1123,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
            activeBluetoothVoiceDeviceIdentifier != identifier {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write("ATVV STREAM rejected_busy")
+            return
+        }
+        guard ensureVirtualAudioOutputReady(reason: "bluetooth_voice_start") else {
+            _ = bridge.requestMicrophoneClose()
+            AppLogger.shared.write("ATVV STREAM rejected_audio_output")
             return
         }
         activeBluetoothVoiceDeviceIdentifier = identifier
@@ -1682,7 +1703,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func startPhoneVoice(source: MobileVoiceSource) -> Bool {
         guard activeMobileVoiceSource == nil,
-              isAudioOutputReady,
+              ensureVirtualAudioOutputReady(reason: "mobile_voice_start"),
               updatePhoneVoiceFunctionKeyState(streaming: true)
         else { return false }
         activeMobileVoiceSource = source

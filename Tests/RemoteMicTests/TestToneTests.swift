@@ -4,6 +4,26 @@ import Testing
 
 @Suite("Test tone")
 struct TestToneTests {
+    @Test func stoppedPlayerIsNotHealthyEvenWhenEngineIsRunning() throws {
+        let engine = AVAudioEngine()
+        let player = AVAudioPlayerNode()
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1))
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 320)
+        try engine.start()
+        defer { engine.stop() }
+        player.play()
+        #expect(VirtualAudioHealthPolicy.isPlaybackReady(
+            hasSelectedDevice: true, engineRunning: engine.isRunning, playerPlaying: player.isPlaying
+        ))
+        player.stop()
+        #expect(engine.isRunning)
+        #expect(!VirtualAudioHealthPolicy.isPlaybackReady(
+            hasSelectedDevice: true, engineRunning: engine.isRunning, playerPlaying: player.isPlaying
+        ))
+    }
+
     @Test func sampleCountFollowsDurationAndSampleRate() {
         #expect(TestToneGenerator.samples(sampleRate: 16_000).count == 16_000)
         #expect(TestToneGenerator.samples(sampleRate: 8_000).count == 8_000)
