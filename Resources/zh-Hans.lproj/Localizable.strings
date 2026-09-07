@@ -27,6 +27,9 @@
 "voice_button.status.waiting_for_input" = "正在等待目标输入位置准备完成";
 "voice_button.status.input_ready" = "目标输入位置已准备完成";
 "voice_button.status.input_unavailable" = "目标输入位置未准备完成，已取消本次语音输入";
+"voice_warning.title" = "语音即将达到 1 分钟上限";
+"voice_warning.action" = "请松开后在 2 秒内重新按下语音键";
+"voice_warning.accessibility" = "语音即将达到 1 分钟上限，请松开后在 2 秒内重新按下语音键";
 "audio.compatibility.device_detected" = "已检测到 %1$@（豆包兼容）";
 "audio.compatibility.device_not_detected" = "未检测到 %1$@";
 "button_mapping.status.system_managed" = "按键由 macOS 原生处理";

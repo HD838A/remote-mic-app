@@ -27,6 +27,9 @@
 "voice_button.status.waiting_for_input" = "Waiting for the target input to be ready";
 "voice_button.status.input_ready" = "Target input is ready";
 "voice_button.status.input_unavailable" = "Target input was not ready; voice input was cancelled";
+"voice_warning.title" = "Voice input is nearing the 1-minute limit";
+"voice_warning.action" = "Release, then press the voice button again within 2 seconds";
+"voice_warning.accessibility" = "Voice input is nearing the 1-minute limit. Release, then press the voice button again within 2 seconds.";
 "audio.compatibility.device_detected" = "%1$@ detected (Doubao compatible)";
 "audio.compatibility.device_not_detected" = "%1$@ was not found";
 "button_mapping.status.system_managed" = "Buttons are handled natively by macOS";

@@ -73,6 +73,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private static let preReleaseFeedRefreshInterval: TimeInterval = 6 * 60 * 60
 
     private let model = BridgeAppModel()
+    private let voiceContinuationWarningPanel = VoiceContinuationWarningPanelController()
     private let updateInformation = UpdateInformationStore()
     private lazy var localization = LocalizationStore(settings: model.settings)
     private var statusItem: NSStatusItem?
@@ -147,6 +148,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        voiceContinuationWarningPanel.hide()
         model.stop()
         updateFeedRefreshTask?.cancel()
         updateFeedRefreshTimer?.invalidate()
@@ -192,6 +194,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.imagePosition = .imageLeading
+            button.title = ""
             if let image = statusImage(isStreaming: false) {
                 button.image = image
             } else {
@@ -343,9 +347,27 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         )
         .receive(on: RunLoop.main)
         .sink { [weak self] _ in
-            self?.refreshMenuStatus()
+            guard let self else { return }
+            self.refreshMenuStatus()
+            self.refreshVoiceContinuationWarning()
         }
         .store(in: &subscriptions)
+
+        model.$voiceRecordingRemainingSeconds
+            .receive(on: RunLoop.main)
+            .sink { [weak self] remainingSeconds in
+                guard let self else { return }
+                self.refreshMenuStatus()
+                self.refreshVoiceContinuationWarning(remainingSeconds: remainingSeconds)
+            }
+            .store(in: &subscriptions)
+    }
+
+    private func refreshVoiceContinuationWarning(remainingSeconds: Int? = nil) {
+        voiceContinuationWarningPanel.update(
+            isStreaming: model.isStreaming,
+            remainingSeconds: remainingSeconds ?? model.voiceRecordingRemainingSeconds
+        )
     }
 
     private func observeLocalization() {
@@ -499,7 +521,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             ? localization.text("connection.status.voice_active")
             : model.audioStatus.text(using: localization)
         hidItem.title = model.hidStatus.text(using: localization)
-        statusItem?.button?.image = statusImage(isStreaming: model.isStreaming)
+        if let button = statusItem?.button {
+            button.image = statusImage(isStreaming: model.isStreaming)
+            if model.isStreaming, let remainingSeconds = model.voiceRecordingRemainingSeconds {
+                button.title = "\(remainingSeconds)s"
+            } else {
+                button.title = ""
+            }
+        }
     }
 
     private func statusImage(isStreaming: Bool) -> NSImage? {

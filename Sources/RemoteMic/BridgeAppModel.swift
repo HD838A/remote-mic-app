@@ -46,6 +46,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isPhoneRemoteConnectionEnabled = false
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
+    @Published private(set) var voiceRecordingRemainingSeconds: Int?
 
     private let audioOutput = VirtualAudioOutput()
     private let phoneRemoteServer = PhoneRemoteServer()
@@ -76,6 +77,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     )
     private let bluetoothVoiceLeaseController = BluetoothVoiceSessionLeaseController()
+    private lazy var bluetoothVoiceContinuationCoordinator = BluetoothVoiceContinuationCoordinator(
+        enqueueSilence: { [weak self] samples in
+            self?.enqueueBluetoothVoiceContinuationSilence(samples)
+        },
+        updateRemainingSeconds: { [weak self] remainingSeconds in
+            self?.voiceRecordingRemainingSeconds = remainingSeconds
+        },
+        finishAfterTimeout: { [weak self] duration in
+            self?.finishBluetoothVoiceSessionAfterContinuationTimeout(duration: duration)
+        },
+        log: { AppLogger.shared.write($0) }
+    )
+    private let bluetoothVoiceFunctionKeyGuard = BluetoothVoiceFunctionKeyGuard()
     private var testToneGeneration = 0
     private var phoneVoiceFunctionKeyLatch = VoiceFunctionKeyLatch()
     private var voiceSessionStartedAt: Date?
@@ -271,9 +285,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             logReason: "app_stop"
         )
         stopLongRecording(reason: "app_stop")
+        bluetoothVoiceContinuationCoordinator.cancel(reason: "app_stop")
         bluetoothVoiceLeaseController.stop()
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
+        bluetoothVoiceFunctionKeyGuard.release()
         bluetoothBridges.values.forEach { $0.stop() }
         discoveryBluetoothBridge?.stop()
         bluetoothBridges.removeAll()
@@ -707,6 +723,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         requestNextHIDPermissionIfNeeded(voiceFnTapModeRequested: requestedFnTapMode)
         var powerKeySuppressed: Bool
         if requestedFnTapMode, KeyboardInjector.isAccessibilityTrusted {
+            bluetoothVoiceFunctionKeyGuard.setAvailable(false)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
                 voiceFnTapSession.setEnabled(true)
@@ -715,7 +732,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 voiceFnTapSession.setEnabled(false)
                 powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
             }
+        } else if !requestedFnTapMode, KeyboardInjector.isAccessibilityTrusted {
+            // The default hardware mapping lets the remote's physical key-up become
+            // an Fn key-up immediately.  That closes hold-to-talk clients before the
+            // continuation window can decide whether this was a real final stop.
+            // Use a software-held Fn for the normal mode when Accessibility is
+            // available, while keeping the existing Fn-tap mode above unchanged.
+            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
+            if voiceFunctionMapper.isVoiceKeyNeutralized {
+                bluetoothVoiceFunctionKeyGuard.setAvailable(true)
+                voiceFnTapSession.setEnabled(false)
+            } else {
+                bluetoothVoiceFunctionKeyGuard.setAvailable(false)
+                powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+            }
         } else {
+            bluetoothVoiceFunctionKeyGuard.setAvailable(false)
             if requestedFnTapMode {
                 settings.voiceFnTapModeEnabled = false
             }
@@ -1045,7 +1077,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
+                bluetoothVoiceContinuationCoordinator.cancel(reason: "bluetooth_not_ready")
                 bluetoothVoiceLeaseController.stop()
+                bluetoothVoiceFunctionKeyGuard.release()
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
                 endVoiceSessionIfNeeded(flushAudio: false)
@@ -1064,6 +1098,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func bluetoothBridgeDidStartVoice(_ bridge: XiaomiBluetoothBridge) {
         guard let identifier = bridge.deviceIdentifier else { return }
+        if bluetoothVoiceContinuationCoordinator.isWaiting(for: identifier) {
+            bluetoothVoiceContinuationCoordinator.resume(deviceIdentifier: identifier)
+            return
+        }
         let profileID = activateRemoteProfile(for: bridge)
         if let activeBluetoothVoiceDeviceIdentifier,
            activeBluetoothVoiceDeviceIdentifier != identifier {
@@ -1074,6 +1112,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         activeBluetoothVoiceDeviceIdentifier = identifier
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = true
+        bluetoothVoiceContinuationCoordinator.start(deviceIdentifier: identifier)
         let model = profileID
             .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
             ?? .unknown
@@ -1114,18 +1153,50 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             longRecordingOpenTimer = nil
             AppLogger.shared.write("LONG RECORDING started")
         }
+        bluetoothVoiceFunctionKeyGuard.beginIfNeeded {
+            _ = self.applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+        }
         _ = voiceFnTapSession.startVoice()
         beginVoiceSessionIfNeeded()
     }
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
+        guard let identifier = bridge.deviceIdentifier,
+              identifier == activeBluetoothVoiceDeviceIdentifier
+        else { return }
+        switch bluetoothVoiceContinuationCoordinator.stop(
+            deviceIdentifier: identifier,
+            allowContinuation: !longRecordingRequested
+        ) {
+        case .wait:
+            // The legacy lease would close a later physical segment while the
+            // logical voice session is waiting for continuation.
+            bluetoothVoiceLeaseController.stop()
+            return
+        case .finish(let duration):
+            finishBluetoothVoiceSession(
+                bridge: bridge,
+                reason: "remote_stop",
+                duration: duration
+            )
+        }
+    }
+
+    private func finishBluetoothVoiceSession(
+        bridge: XiaomiBluetoothBridge,
+        reason: String,
+        duration: TimeInterval? = nil
+    ) {
         guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
+        let finalDuration = duration ?? bluetoothVoiceContinuationCoordinator.currentSegmentDuration()
+        bluetoothVoiceContinuationCoordinator.finish(reason: reason)
         bluetoothVoiceLeaseController.stop()
+        bluetoothVoiceFunctionKeyGuard.release()
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         bluetoothVoiceActive = false
         if longRecordingRequested {
-            finishLongRecording(reason: "remote_stop")
+            finishLongRecording(reason: reason)
         } else if longRecordingCloseTimer != nil {
             longRecordingCloseTimer?.cancel()
             longRecordingCloseTimer = nil
@@ -1136,9 +1207,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             handledByFnTapMode: handledByFnTapMode
         )
         let traceID = activeBluetoothVoiceTraceID ?? 0
-        let durationMilliseconds = bluetoothVoiceTraceStartedAt.map {
-            max(0, Int(Date().timeIntervalSince($0) * 1_000))
-        } ?? 0
+        let durationMilliseconds = max(
+            0,
+            Int(finalDuration * 1_000)
+        )
         let pendingBuffers = audioOutput.pendingVoiceBufferCountForDiagnostics
         AppLogger.shared.write(
             "ATVV STREAM summary trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue) " +
@@ -1641,6 +1713,24 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         voiceSessionStartedAt = startedAt
         voiceSessionUsageSource = source
         isStreaming = true
+    }
+
+    private func enqueueBluetoothVoiceContinuationSilence(_ samples: [Int16]) {
+        let handledByFnTapMode = voiceFnTapSession.receive(samples)
+        if !handledByFnTapMode {
+            _ = audioOutput.enqueue(samples: samples)
+        }
+    }
+
+    private func finishBluetoothVoiceSessionAfterContinuationTimeout(duration: TimeInterval) {
+        guard let identifier = activeBluetoothVoiceDeviceIdentifier,
+              let bridge = bluetoothBridges[identifier]
+        else { return }
+        finishBluetoothVoiceSession(
+            bridge: bridge,
+            reason: "continuation_timeout",
+            duration: duration
+        )
     }
 
     private func endVoiceSessionIfNeeded(flushAudio: Bool = true) {
