@@ -540,6 +540,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var appleRemoteRepeatCounts: [AppleRemoteButtonGestureKey: Int] = [:]
     private var appleRemoteRepeatOperationIDs: [AppleRemoteButtonGestureKey: UInt64] = [:]
     private var appleRemoteRepeatOperationCounter: UInt64 = 0
+    private let appleRemoteAppSwitcherSession = KeyboardInjector.AppSwitcherSession()
+    private var appleRemoteAppSwitcherTimeout: DispatchSourceTimer?
     private var appleRemoteVoiceDevices = Set<RemoteHardwareDeviceIdentity>()
     private var appleRemoteVoiceStopping = false
     private var appleRemoteVoiceStopOperation: UInt64 = 0
@@ -2596,6 +2598,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         appleRemoteActiveButtons[device] = buttons
         refreshAppleRemoteActiveButtons()
 
+        if appleRemoteAppSwitcherSession.isActive {
+            if phase == .release {
+                AppLogger.shared.write(
+                    "APPLE REMOTE APP SWITCHER phase=release_ignored button=\(button.rawValue)"
+                )
+                return
+            }
+            if handleAppleRemoteAppSwitcherControlPress(button) {
+                return
+            }
+            finishAppleRemoteAppSwitcher(
+                reason: "unrelated_button_\(button.rawValue)",
+                confirmed: false
+            )
+        }
+
         if macroFeature.isEditorActive {
             if phase == .press {
                 macroFeature.noteButtonInteraction(button: button)
@@ -2906,6 +2924,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             trigger: trigger,
             profileID: profileID
         )
+        if configured.action == .appSwitcher {
+            return performAppleRemoteAppSwitcher(for: button, trigger: trigger)
+        }
         let handled: Bool
         if configured.action.isAppInternal {
             handled = performInternalAction(configured.action)
@@ -2932,6 +2953,88 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "action=\(configured.action.rawValue)"
         )
         return handled
+    }
+
+    private func performAppleRemoteAppSwitcher(
+        for button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> Bool {
+        let wasActive = appleRemoteAppSwitcherSession.isActive
+        let phase = wasActive ? "tab" : "start"
+        let submitted = appleRemoteAppSwitcherSession.trigger()
+        AppLogger.shared.write(
+            "APPLE REMOTE APP SWITCHER phase=\(phase) button=\(button.rawValue) " +
+                "trigger=\(trigger.rawValue) success=\(submitted)"
+        )
+        if submitted {
+            scheduleAppleRemoteAppSwitcherTimeout()
+        } else if wasActive {
+            finishAppleRemoteAppSwitcher(reason: "tab_failed", confirmed: false)
+        }
+        return submitted
+    }
+
+    private func handleAppleRemoteAppSwitcherControlPress(
+        _ button: RemoteButton
+    ) -> Bool {
+        switch button {
+        case .ok:
+            let confirmed = appleRemoteAppSwitcherSession.confirm()
+            finishAppleRemoteAppSwitcher(
+                reason: confirmed ? "confirmed" : "confirm_failed",
+                confirmed: confirmed
+            )
+            return true
+        case .back:
+            finishAppleRemoteAppSwitcher(reason: "back", confirmed: false)
+            return true
+        case .left, .right:
+            let moved = appleRemoteAppSwitcherSession.moveSelection(left: button == .left)
+            AppLogger.shared.write(
+                "APPLE REMOTE APP SWITCHER phase=navigate button=\(button.rawValue) " +
+                    "direction=\(button == .left ? "left" : "right") success=\(moved)"
+            )
+            if moved {
+                scheduleAppleRemoteAppSwitcherTimeout()
+            } else {
+                finishAppleRemoteAppSwitcher(reason: "navigate_failed", confirmed: false)
+            }
+            return true
+        case .up, .down:
+            AppLogger.shared.write(
+                "APPLE REMOTE APP SWITCHER phase=navigate button=\(button.rawValue) " +
+                    "direction=unsupported success=true"
+            )
+            return true
+        case .tv:
+            return performAppleRemoteAppSwitcher(for: button, trigger: .singleClick)
+        default:
+            return false
+        }
+    }
+
+    private func scheduleAppleRemoteAppSwitcherTimeout() {
+        appleRemoteAppSwitcherTimeout?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(
+            deadline: .now() + .milliseconds(Int(HIDRemoteTiming.appSwitcherTimeoutMilliseconds))
+        )
+        timer.setEventHandler { [weak self] in
+            self?.finishAppleRemoteAppSwitcher(reason: "timeout", confirmed: false)
+        }
+        appleRemoteAppSwitcherTimeout = timer
+        timer.resume()
+    }
+
+    private func finishAppleRemoteAppSwitcher(reason: String, confirmed: Bool) {
+        appleRemoteAppSwitcherTimeout?.cancel()
+        appleRemoteAppSwitcherTimeout = nil
+        if appleRemoteAppSwitcherSession.isActive {
+            _ = appleRemoteAppSwitcherSession.cancel()
+        }
+        AppLogger.shared.write(
+            "APPLE REMOTE APP SWITCHER phase=ended reason=\(reason) confirmed=\(confirmed)"
+        )
     }
 
     private func beginAppleRemoteVoice(for device: RemoteHardwareDeviceIdentity) {
@@ -3234,6 +3337,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         for device: RemoteHardwareDeviceIdentity,
         reason: String
     ) {
+        if appleRemoteAppSwitcherSession.isActive {
+            finishAppleRemoteAppSwitcher(reason: "input_reset_\(reason)", confirmed: false)
+        }
         let doubleClickKeys = appleRemoteDoubleClickTimers.keys.filter { $0.device == device }
         doubleClickKeys.forEach {
             appleRemoteDoubleClickTimers.removeValue(forKey: $0)?.cancel()

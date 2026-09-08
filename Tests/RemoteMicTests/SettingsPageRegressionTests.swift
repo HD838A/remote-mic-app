@@ -310,6 +310,36 @@ struct SettingsPageRegressionTests {
         #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
     }
 
+    @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let connectionPanel = try #require(source.range(of: "private var connectionDevicePanel"))
+        let mappingPage = try #require(source.range(
+            of: "private var mappingPage",
+            range: connectionPanel.upperBound..<source.endIndex
+        ))
+        let connectionSource = source[connectionPanel.lowerBound..<mappingPage.lowerBound]
+        #expect(connectionSource.contains("private var connectionRemotePhoto"))
+        #expect(connectionSource.contains("SiriRemoteConnectionPhoto()"))
+
+        let siriPage = try #require(source.range(of: "private var siriRemoteMappingPage"))
+        let siriSource = source[siriPage.lowerBound..<mappingPage.lowerBound]
+        #expect(siriSource.contains(".id(settings.selectedRemoteProfileID)"))
+
+        let mappingEnd = try #require(source.range(
+            of: "private func mappingEditorPanel",
+            range: mappingPage.upperBound..<source.endIndex
+        ))
+        let mappingSource = source[mappingPage.lowerBound..<mappingEnd.lowerBound]
+        #expect(mappingSource.contains(".id(settings.selectedRemoteProfileID)"))
+    }
+
     @Test func mappingFooterUsesCompactLayoutAtMinimumWindowWidth() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

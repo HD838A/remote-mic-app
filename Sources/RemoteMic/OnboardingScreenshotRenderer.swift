@@ -81,6 +81,18 @@ enum OnboardingScreenshotRenderer {
         let allVoiceToolsUnavailable = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_ALL_VOICE_TOOLS_UNAVAILABLE"
         ] == "1"
+        let remoteInputDiagnostic = switch ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_REMOTE_INPUT"
+        ] {
+        case "voice":
+            FirstUseRemoteInputDiagnostic(
+                voiceButtonPressCount: 1,
+                controlButtonObservationCount: 0,
+                lastInputKind: .voice
+            )
+        default:
+            FirstUseRemoteInputDiagnostic()
+        }
         let controlMethod = requestedControlMethod ?? .physicalRemote
         if let requestedVoiceKeyMode {
             settings.voiceKeyMode = requestedVoiceKeyMode
@@ -124,7 +136,8 @@ enum OnboardingScreenshotRenderer {
                     .weixin: allVoiceToolsUnavailable ? .notInstalled : .available,
                     .typeless: allVoiceToolsUnavailable ? .notInstalled : .available,
                 ],
-                initialInputMethodGuideStep: requestedGuideStep
+                initialInputMethodGuideStep: requestedGuideStep,
+                remoteInputDiagnosticOverride: remoteInputDiagnostic
             )
                 .environmentObject(localization)
                 .frame(width: 1020, height: 772)

@@ -12,6 +12,13 @@
 - 普通 Preview 和 Stable 的发布控制面与源码都只能使用精确 `origin/main`；GitHub Actions 必须从 `main` 触发并验证它仍是远端 HEAD。
 - 不使用普通 force-push、广泛 reset 或把其他 worktree 的未验收内容直接复制到发布分支。
 
+## PR 合并策略
+
+- PR 默认使用 GitHub 的普通 Merge（保留合并提交），保留 PR 分支中的独立提交、作者、时间顺序和完整 Git history；即使 PR 只有一个提交，也不自动改用 squash。
+- 只有用户明确要求，或仓库维护者在该 PR/项目规范中明确记录了具体例外时，才允许使用 squash merge 或 rebase merge。执行前必须在交付说明中写明合并方式及其影响。
+- 自动化工具不得因为“提交较少”“历史更整洁”或界面默认按钮而擅自选择 squash/rebase；未指定时按本节的普通 Merge 执行。
+- 合并后必须重新 `git fetch origin main`，记录远端 `main` 的合并提交 SHA，并确认目标分支已包含该 PR；已经合入的提交不得为了更换合并方式而改写 `main` 历史。
+
 ## release-main 历史冻结
 
 - `release-main` 只保留历史审计，不再接收 Commit、PR、合并、Preview staging、Preview publication 或 Stable promotion。

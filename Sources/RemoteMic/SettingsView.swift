@@ -843,8 +843,7 @@ struct SettingsView: View {
             VStack(spacing: 16) {
                 remoteDeviceSelector(vertical: true)
 
-                RC003Photo()
-                    .frame(width: 82, height: 166)
+                connectionRemotePhoto
 
                 VStack(alignment: .leading, spacing: 9) {
                     connectionStatusLine(
@@ -879,6 +878,21 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
 
             }
+        }
+    }
+
+    @ViewBuilder
+    private var connectionRemotePhoto: some View {
+        if settings.selectedRemoteProfile?.model == .appleSiriRemoteA2854 {
+            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+            SiriRemoteConnectionPhoto()
+            #else
+            RC003Photo()
+                .frame(width: 82, height: 166)
+            #endif
+        } else {
+            RC003Photo()
+                .frame(width: 82, height: 166)
         }
     }
 
@@ -1094,6 +1108,7 @@ struct SettingsView: View {
                 .padding(22)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .id(settings.selectedRemoteProfileID)
             .compatibilityScrollEdgeEffect()
         }
     }
@@ -1182,6 +1197,7 @@ struct SettingsView: View {
                     .padding(22)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+                .id(settings.selectedRemoteProfileID)
                 .compatibilityScrollEdgeEffect()
                 .onAppear {
                     guard let target = mappingEditingTarget else { return }

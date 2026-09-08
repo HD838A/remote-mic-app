@@ -315,6 +315,32 @@ enum FirstUseVoiceAttemptPolicy {
     }
 }
 
+enum FirstUseRemoteInputKind: String, Equatable {
+    case none
+    case voice
+    case control
+}
+
+struct FirstUseRemoteInputDiagnostic: Equatable {
+    var voiceButtonPressCount = 0
+    var controlButtonObservationCount = 0
+    var lastInputKind: FirstUseRemoteInputKind = .none
+
+    var shouldShowVoiceButtonCorrection: Bool {
+        lastInputKind == .voice && controlButtonObservationCount == 0
+    }
+
+    mutating func recordVoiceButtonPress() {
+        voiceButtonPressCount += 1
+        lastInputKind = .voice
+    }
+
+    mutating func recordControlButtonObservation() {
+        controlButtonObservationCount += 1
+        lastInputKind = .control
+    }
+}
+
 struct FirstUseDiagnosticContext: Equatable {
     let step: OnboardingStep
     let remoteAvailability: OnboardingRemoteAvailability
@@ -322,6 +348,7 @@ struct FirstUseDiagnosticContext: Equatable {
     let capabilities: OnboardingCapabilities
     let hasSelectedAudioUID: Bool
     let voiceAttempt: FirstUseVoiceAttemptDiagnostic?
+    let remoteInput: FirstUseRemoteInputDiagnostic
 
     init(
         step: OnboardingStep,
@@ -329,7 +356,8 @@ struct FirstUseDiagnosticContext: Equatable {
         controlMethod: OnboardingControlMethod = .physicalRemote,
         capabilities: OnboardingCapabilities,
         hasSelectedAudioUID: Bool,
-        voiceAttempt: FirstUseVoiceAttemptDiagnostic? = nil
+        voiceAttempt: FirstUseVoiceAttemptDiagnostic? = nil,
+        remoteInput: FirstUseRemoteInputDiagnostic = FirstUseRemoteInputDiagnostic()
     ) {
         self.step = step
         self.remoteAvailability = remoteAvailability
@@ -337,6 +365,7 @@ struct FirstUseDiagnosticContext: Equatable {
         self.capabilities = capabilities
         self.hasSelectedAudioUID = hasSelectedAudioUID
         self.voiceAttempt = voiceAttempt
+        self.remoteInput = remoteInput
     }
 
     var failureReason: FirstUseFailureReason? {
@@ -462,6 +491,10 @@ struct FirstUseDiagnosticSnapshot {
             "permission_accessibility=\(capabilities.accessibilityGranted)",
             "control_connected=\(capabilities.remoteConnected)",
             "control_button_observed=\(capabilities.remoteButtonObserved)",
+            "remote_voice_button_press_count=\(context.remoteInput.voiceButtonPressCount)",
+            "remote_control_button_observation_count=\(context.remoteInput.controlButtonObservationCount)",
+            "remote_last_input_kind=\(context.remoteInput.lastInputKind.rawValue)",
+            "remote_voice_button_mistake_detected=\(context.remoteInput.voiceButtonPressCount > 0)",
             "audio_device_selected=\(context.hasSelectedAudioUID)",
             "audio_device_available=\(capabilities.audioOutputSelected)",
             "audio_output_ready=\(capabilities.audioReady)",

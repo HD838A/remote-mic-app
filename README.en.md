@@ -76,7 +76,7 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 ## Requirements
 
 - Apple Silicon Mac with macOS 14 or later, or Intel Mac with macOS 13 or later
-- Xiaomi Bluetooth Remote 2 Pro
+- Xiaomi Bluetooth Remote 2 or 2 Pro
 - For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
 
 ## Download and install
@@ -130,9 +130,9 @@ To confirm the audio path, send a one-second test tone or inspect input level in
 
 ### Typeless compatibility
 
-Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝牙遥控器 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
+Tap-to-toggle voice tools such as Typeless are incompatible with the Xiaomi Bluetooth Remote 2 and 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
 
-You must still **hold the 小米蓝牙遥控器 2 Pro voice key while speaking and release it to finish**. The 小米蓝牙遥控器 2 Pro firmware stops microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete 小米蓝牙遥控器 2 Pro HID mapping automatically disables the mode and restores the default Fn-hold mapping.
+You must still **hold the Xiaomi Bluetooth Remote 2 or 2 Pro voice key while speaking and release it to finish**. Both remote firmwares stop microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete remote HID mapping automatically disables the mode and restores the default Fn-hold mapping.
 
 If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install SayAll.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
 

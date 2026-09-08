@@ -119,6 +119,23 @@ struct AppleSiriRemoteAdapterTests {
         ))
     }
 
+    @Test func appSwitcherUsesHeldCommandLifecycleForSiriRemote() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("appleRemoteAppSwitcherSession = KeyboardInjector.AppSwitcherSession()"))
+        #expect(source.contains("handleAppleRemoteAppSwitcherControlPress(button)"))
+        #expect(source.contains("appleRemoteAppSwitcherSession.moveSelection(left: button == .left)"))
+        #expect(source.contains("finishAppleRemoteAppSwitcher(reason: \"timeout\", confirmed: false)"))
+        #expect(source.contains("return performAppleRemoteAppSwitcher(for: button, trigger: trigger)"))
+        #expect(source.contains("phase=release_ignored"))
+    }
+
     @Test func treatsEveryNonzeroHIDValueAsPressed() {
         #expect(!AppleSiriRemoteAdapter.isPressed(integerValue: 0))
         #expect(AppleSiriRemoteAdapter.isPressed(integerValue: 1))
