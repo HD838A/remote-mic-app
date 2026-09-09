@@ -551,6 +551,49 @@ check(
     "Typeless Fn tap session buffers pre-roll and stops after drain"
 )
 
+check(
+    OnboardingLaunchPolicy.shouldShowMainWindow(
+        isComplete: true,
+        completedUpdate: false,
+        openMainWindowAtLaunch: false,
+        showDockIcon: false,
+        showStatusBarIcon: false
+    ) &&
+        !OnboardingLaunchPolicy.shouldShowMainWindow(
+            isComplete: true,
+            completedUpdate: false,
+            openMainWindowAtLaunch: false,
+            showDockIcon: true,
+            showStatusBarIcon: false
+        ) &&
+        !OnboardingLaunchPolicy.shouldShowMainWindow(
+            isComplete: true,
+            completedUpdate: false,
+            openMainWindowAtLaunch: false,
+            showDockIcon: false,
+            showStatusBarIcon: true
+        ),
+    "both-hidden entry points still open Settings on launch"
+)
+
+let statusBarPreferenceSuite = "RemoteMicSelfTest.StatusBarIcon.\(UUID().uuidString)"
+if let statusBarDefaults = UserDefaults(suiteName: statusBarPreferenceSuite) {
+    defer { statusBarDefaults.removePersistentDomain(forName: statusBarPreferenceSuite) }
+    let defaultSettings = AppSettings(defaults: statusBarDefaults)
+    let defaultShowsStatusBar = defaultSettings.showStatusBarIcon
+    defaultSettings.showStatusBarIcon = false
+    defaultSettings.showDockIcon = false
+    let restoredSettings = AppSettings(defaults: statusBarDefaults)
+    check(
+        defaultShowsStatusBar &&
+            !restoredSettings.showStatusBarIcon &&
+            !restoredSettings.showDockIcon,
+        "dock and status bar icons can both persist off"
+    )
+} else {
+    check(false, "dock and status bar icons can both persist off")
+}
+
 print("RESULT passed=\(passed) failed=\(failed)")
 if failed > 0 {
     exit(1)

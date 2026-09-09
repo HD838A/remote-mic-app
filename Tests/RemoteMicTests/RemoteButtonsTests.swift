@@ -2137,10 +2137,13 @@ struct RemoteButtonsTests {
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
         let sourceSettings = AppSettings(defaults: sourceDefaults)
         #expect(sourceSettings.openMainWindowAtLaunch)
+        #expect(sourceSettings.showStatusBarIcon)
         #expect(!sourceSettings.checksForPreReleaseUpdates)
         sourceSettings.openMainWindowAtLaunch = false
+        sourceSettings.showStatusBarIcon = false
         sourceSettings.checksForPreReleaseUpdates = true
         #expect(!AppSettings(defaults: sourceDefaults).openMainWindowAtLaunch)
+        #expect(!AppSettings(defaults: sourceDefaults).showStatusBarIcon)
         #expect(AppSettings(defaults: sourceDefaults).checksForPreReleaseUpdates)
 
         let exportedData = try sourceSettings.exportedConfigurationData()
@@ -2150,20 +2153,49 @@ struct RemoteButtonsTests {
         let targetSettings = AppSettings(defaults: targetDefaults)
         try targetSettings.importConfiguration(from: exportedData)
         #expect(!targetSettings.openMainWindowAtLaunch)
+        #expect(!targetSettings.showStatusBarIcon)
+        #expect(targetSettings.showDockIcon)
         #expect(targetSettings.checksForPreReleaseUpdates)
 
         var legacyObject = try #require(
             JSONSerialization.jsonObject(with: exportedData) as? [String: Any]
         )
         legacyObject.removeValue(forKey: "openMainWindowAtLaunch")
+        legacyObject.removeValue(forKey: "showStatusBarIcon")
         legacyObject.removeValue(forKey: "checksForPreReleaseUpdates")
         targetSettings.openMainWindowAtLaunch = true
+        targetSettings.showStatusBarIcon = false
         targetSettings.checksForPreReleaseUpdates = false
         try targetSettings.importConfiguration(
             from: try JSONSerialization.data(withJSONObject: legacyObject)
         )
         #expect(targetSettings.openMainWindowAtLaunch)
+        #expect(!targetSettings.showStatusBarIcon)
         #expect(!targetSettings.checksForPreReleaseUpdates)
+    }
+
+    @Test func bothHiddenEntryPointsStillOpenSettingsOnLaunch() {
+        #expect(OnboardingLaunchPolicy.shouldShowMainWindow(
+            isComplete: true,
+            completedUpdate: false,
+            openMainWindowAtLaunch: false,
+            showDockIcon: false,
+            showStatusBarIcon: false
+        ))
+        #expect(!OnboardingLaunchPolicy.shouldShowMainWindow(
+            isComplete: true,
+            completedUpdate: false,
+            openMainWindowAtLaunch: false,
+            showDockIcon: true,
+            showStatusBarIcon: false
+        ))
+        #expect(!OnboardingLaunchPolicy.shouldShowMainWindow(
+            isComplete: true,
+            completedUpdate: false,
+            openMainWindowAtLaunch: false,
+            showDockIcon: false,
+            showStatusBarIcon: true
+        ))
     }
 
     @Test func localUsageStatisticsSeparatesTodayWeekAndTotalAndPersists() throws {

@@ -184,6 +184,8 @@ struct SettingsView: View {
     private let checkForUpdates: () -> Void
     private let refreshUpdateInformation: () -> Void
     private let setDockIconVisible: (Bool) -> Void
+    private let setStatusBarIconVisible: (Bool) -> Void
+    private let syncEntryPointVisibility: () -> Void
     private let minimumContentSize: CGSize
     private let initialShortcutPickerShowsKeyboard: Bool
     private static let sidebarSectionOrder: [SettingsSection] = [
@@ -234,6 +236,8 @@ struct SettingsView: View {
         checkForUpdates: @escaping () -> Void = {},
         refreshUpdateInformation: @escaping () -> Void = {},
         setDockIconVisible: @escaping (Bool) -> Void = { _ in },
+        setStatusBarIconVisible: @escaping (Bool) -> Void = { _ in },
+        syncEntryPointVisibility: @escaping () -> Void = {},
         initialSection: SettingsSection = .connection,
         initialShareSection: SettingsSection? = nil,
         initialMappingEditingButton: RemoteButton? = nil,
@@ -252,6 +256,8 @@ struct SettingsView: View {
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
+        self.setStatusBarIconVisible = setStatusBarIconVisible
+        self.syncEntryPointVisibility = syncEntryPointVisibility
         self.minimumContentSize = minimumContentSize
         self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
         _selectedSection = State(initialValue: initialSection)
@@ -2957,8 +2963,9 @@ struct SettingsView: View {
                                     Text("about.preferences.show_dock_icon")
                                         .font(.subheadline.weight(.semibold))
                                     Text("about.preferences.show_dock_icon_help")
-                                        .font(.caption)
+                                        .font(.system(size: 12))
                                         .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer()
                                 Toggle("", isOn: Binding(
@@ -2969,6 +2976,46 @@ struct SettingsView: View {
                                 .toggleStyle(.switch)
                             }
                             .padding(.vertical, 10)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "dot.radiowaves.left.and.right")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.show_status_bar_icon")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.show_status_bar_icon_help")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { settings.showStatusBarIcon },
+                                    set: { setStatusBarIconVisible($0) }
+                                ))
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                            }
+                            .padding(.vertical, 10)
+
+                            if !settings.showDockIcon && !settings.showStatusBarIcon {
+                                Divider()
+                                Label {
+                                    Text("about.preferences.entry_points_both_hidden_help")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                } icon: {
+                                    Image(systemName: "info.circle")
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                            }
 
                             Divider()
 
@@ -3513,7 +3560,7 @@ struct SettingsView: View {
         do {
             try model.importConfiguration(from: Data(contentsOf: url))
             localization.select(settings.applicationLanguage)
-            setDockIconVisible(settings.showDockIcon)
+            syncEntryPointVisibility()
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.success"),
                 tint: .green,

@@ -211,7 +211,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         installTerminationSignalHandlers()
         configureApplicationMenu()
         installApplicationKeyboardShortcuts()
-        configureStatusItem()
+        applyStatusBarIconVisibility(model.settings.showStatusBarIcon)
         observeModel()
         observeLocalization()
         observePhoneRemoteButtonTitles()
@@ -251,7 +251,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         if OnboardingLaunchPolicy.shouldShowMainWindow(
             isComplete: model.settings.isOnboardingComplete,
             completedUpdate: completedUpdate,
-            openMainWindowAtLaunch: model.settings.openMainWindowAtLaunch
+            openMainWindowAtLaunch: model.settings.openMainWindowAtLaunch,
+            showDockIcon: model.settings.showDockIcon,
+            showStatusBarIcon: model.settings.showStatusBarIcon
         ) {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -347,6 +349,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func configureStatusItem() {
+        guard statusItem == nil else {
+            rebuildStatusMenu()
+            refreshMenuStatus()
+            return
+        }
+
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             button.toolTip = localization.text("app.name")
@@ -366,6 +374,24 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         statusItem = item
         rebuildStatusMenu()
+    }
+
+    private func removeStatusItem() {
+        guard let statusItem else { return }
+        statusMenu?.removeItem(connectionItem)
+        statusMenu?.removeItem(audioItem)
+        statusMenu?.removeItem(hidItem)
+        NSStatusBar.system.removeStatusItem(statusItem)
+        self.statusItem = nil
+        statusMenu = nil
+    }
+
+    private func applyStatusBarIconVisibility(_ isVisible: Bool) {
+        if isVisible {
+            configureStatusItem()
+        } else {
+            removeStatusItem()
+        }
     }
 
     private func rebuildStatusMenu() {
@@ -737,6 +763,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 setDockIconVisible: { [weak self] isVisible in
                     self?.setDockIconVisible(isVisible)
                 },
+                setStatusBarIconVisible: { [weak self] isVisible in
+                    self?.setStatusBarIconVisible(isVisible)
+                },
+                syncEntryPointVisibility: { [weak self] in
+                    self?.applyImportedEntryPointVisibility()
+                },
                 initialSettingsSection: initialSettingsSection
             )
             .environmentObject(localization)
@@ -937,6 +969,32 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private func setDockIconVisible(_ isVisible: Bool) {
         model.settings.showDockIcon = isVisible
         updateDockActivationPolicy()
+        AppLogger.shared.write(
+            "UI ENTRY_POINT phase=completed result=passed source=dock_toggle " +
+                "show_dock=\(isVisible) show_status_bar=\(model.settings.showStatusBarIcon) " +
+                "both_hidden=\(!isVisible && !model.settings.showStatusBarIcon)"
+        )
+    }
+
+    private func setStatusBarIconVisible(_ isVisible: Bool) {
+        model.settings.showStatusBarIcon = isVisible
+        applyStatusBarIconVisibility(isVisible)
+        AppLogger.shared.write(
+            "UI ENTRY_POINT phase=completed result=passed source=status_bar_toggle " +
+                "show_dock=\(model.settings.showDockIcon) show_status_bar=\(isVisible) " +
+                "both_hidden=\(!model.settings.showDockIcon && !isVisible)"
+        )
+    }
+
+    private func applyImportedEntryPointVisibility() {
+        applyStatusBarIconVisibility(model.settings.showStatusBarIcon)
+        updateDockActivationPolicy()
+        AppLogger.shared.write(
+            "UI ENTRY_POINT phase=completed result=passed source=configuration_import " +
+                "show_dock=\(model.settings.showDockIcon) " +
+                "show_status_bar=\(model.settings.showStatusBarIcon) " +
+                "both_hidden=\(!model.settings.showDockIcon && !model.settings.showStatusBarIcon)"
+        )
     }
 
     private func updateDockActivationPolicy() {
