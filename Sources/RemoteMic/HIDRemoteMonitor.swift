@@ -105,6 +105,8 @@ final class HIDRemoteMonitor {
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
     var onButtonPressed: ((UUID?, String, RemoteButton) -> (profileID: UUID, shouldPerformAction: Bool)?)?
     var onInternalAction: ((UUID?, ButtonAction) -> Void)?
+    var onModalButtonEvent: ((UUID?, RemoteButton, RemoteButtonPhase) -> Bool)?
+    var onInputReset: ((UUID?) -> Void)?
 
     init(
         settings: AppSettings,
@@ -562,6 +564,7 @@ final class HIDRemoteMonitor {
         }
         guard runtimePermissionsAreValid() else {
             diagnosticLogger("HID REPORT rejected reason=runtime_permission_revoked source=simulated")
+            releaseForRevokedPermissions()
             return
         }
         parseAndProcess(reportID: reportID, data: data, source: "simulated")
@@ -662,6 +665,13 @@ final class HIDRemoteMonitor {
                 continue
             }
 
+            if onModalButtonEvent?(profileID, button, .press) == true {
+                if !activeDeviceIsSeized, usesNativePassthrough {
+                    eventSuppressor.arm(button: button, edge: .down)
+                }
+                continue
+            }
+
             let recognizesDoubleClick = settings.configuredAction(
                 for: button,
                 trigger: .doubleClick,
@@ -754,6 +764,7 @@ final class HIDRemoteMonitor {
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
             if let button = RemoteButton.usageMap[usage] {
+                if onModalButtonEvent?(profileID, button, .release) == true { continue }
                 scheduleNonRepeatableRelease(for: button)
                 guard processGestureCommands(gestureRecognizer.release(button)) else { return }
             }
@@ -1208,7 +1219,22 @@ final class HIDRemoteMonitor {
         gestureRecognizer.reset()
     }
 
+    /// A screen picker takes over ordinary buttons without changing the raw
+    /// held usages or the voice path. Cancel work queued before it appeared.
+    func prepareForAgentSwitcher() {
+        if appSwitcherSession.isActive {
+            finishAppSwitcherLifecycle(reason: "agent_switcher", confirmed: false)
+        }
+        repeatTimers.values.forEach { $0.cancel() }
+        repeatTimers.removeAll()
+        nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
+        nonRepeatableReleaseTimers.removeAll()
+        nonRepeatablePressedButtons.removeAll()
+        resetGestureRecognition()
+    }
+
     private func resetInputState() {
+        onInputReset?(profileID)
         if appSwitcherSession.isActive {
             _ = appSwitcherSession.cancel()
             diagnosticLogger("HID APP SWITCHER cancelled reason=input_reset")

@@ -23,6 +23,7 @@ private struct PersonalizedConfiguration: Codable {
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     let buttonRapidPressEnabled: [String: Bool]?
     let customApplicationProfiles: [CustomApplicationProfile]?
+    let agentSwitcherBundleIdentifiers: [String]?
     let applicationLanguage: AppLanguage
     let showDockIcon: Bool
     let openMainWindowAtLaunch: Bool?
@@ -265,6 +266,11 @@ private struct DailyUsageStatistics: Codable {
 final class AppSettings: ObservableObject {
     static let continuousRecordingExperimentAvailable = false
     static let currentOnboardingVersion = 1
+    static let defaultAgentSwitcherBundleIdentifiers = [
+        PresetApplication.cursor.bundleIdentifier,
+        PresetApplication.codex.bundleIdentifier,
+    ]
+    private static let maximumAgentSwitcherBundleIdentifierCount = 32
 
     private enum Keys {
         static let gainDB = "gainDB"
@@ -277,6 +283,7 @@ final class AppSettings: ObservableObject {
         static let secondaryButtonBindings = "secondaryButtonBindings"
         static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let customApplicationProfiles = "customApplicationProfiles"
+        static let agentSwitcherBundleIdentifiers = "agentSwitcherBundleIdentifiers"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
         static let selectedRemoteProfileID = "selectedRemoteProfileID"
@@ -359,6 +366,10 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var customApplicationProfiles: [CustomApplicationProfile] {
         didSet { saveCustomApplicationProfiles() }
+    }
+
+    @Published private(set) var agentSwitcherBundleIdentifiers: [String] {
+        didSet { defaults.set(agentSwitcherBundleIdentifiers, forKey: Keys.agentSwitcherBundleIdentifiers) }
     }
 
     @Published private(set) var remoteDeviceProfiles: [RemoteDeviceProfile] {
@@ -602,6 +613,11 @@ final class AppSettings: ObservableObject {
             .data(forKey: Keys.customApplicationProfiles)
             .flatMap { try? JSONDecoder().decode([CustomApplicationProfile].self, from: $0) }
             ?? []
+        agentSwitcherBundleIdentifiers = defaults.object(forKey: Keys.agentSwitcherBundleIdentifiers) == nil
+            ? Self.defaultAgentSwitcherBundleIdentifiers
+            : Self.normalizedAgentSwitcherBundleIdentifiers(
+                defaults.stringArray(forKey: Keys.agentSwitcherBundleIdentifiers) ?? []
+            )
 
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
@@ -921,6 +937,23 @@ final class AppSettings: ObservableObject {
         profile.focusShortcut = shortcut
         updateCustomApplicationProfile(profile)
         AppLogger.shared.write("SHORTCUT CONFIGURATION phase=completed result=saved target=application_focus configured=\(shortcut != nil)")
+    }
+
+    func setAgentSwitcherBundleIdentifiers(_ bundleIdentifiers: [String]) {
+        agentSwitcherBundleIdentifiers = Self.normalizedAgentSwitcherBundleIdentifiers(bundleIdentifiers)
+        AppLogger.shared.write("AGENT SWITCHER CONFIGURATION phase=completed count=\(agentSwitcherBundleIdentifiers.count)")
+    }
+
+    func setAgentSwitcherBundleIdentifier(_ bundleIdentifier: String, enabled: Bool) {
+        let normalizedIdentifier = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedIdentifier.isEmpty else { return }
+        var identifiers = agentSwitcherBundleIdentifiers
+        if enabled {
+            identifiers.append(normalizedIdentifier)
+        } else {
+            identifiers.removeAll { $0 == normalizedIdentifier }
+        }
+        setAgentSwitcherBundleIdentifiers(identifiers)
     }
 
     func configuredAction(
@@ -1480,6 +1513,7 @@ final class AppSettings: ObservableObject {
             Keys.buttonApplicationProfileIDs,
             Keys.secondaryButtonBindings,
             Keys.customApplicationProfiles,
+            Keys.agentSwitcherBundleIdentifiers,
             Keys.peripheralIdentifier,
             Keys.applicationLanguage,
             Keys.voiceFnTapModeEnabled,
@@ -1521,6 +1555,7 @@ final class AppSettings: ObservableObject {
                     uniqueKeysWithValues: buttonRapidPressEnabled.map { ($0.key.rawValue, $0.value) }
                 ),
             customApplicationProfiles: customApplicationProfiles,
+            agentSwitcherBundleIdentifiers: agentSwitcherBundleIdentifiers,
             applicationLanguage: applicationLanguage,
             showDockIcon: showDockIcon,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
@@ -1604,6 +1639,9 @@ final class AppSettings: ObservableObject {
         secondaryButtonBindings = importedSecondaryBindings
         buttonRapidPressEnabled = importedRapidPressEnabled
         customApplicationProfiles = configuration.customApplicationProfiles ?? []
+        agentSwitcherBundleIdentifiers = configuration.agentSwitcherBundleIdentifiers.map {
+            Self.normalizedAgentSwitcherBundleIdentifiers($0)
+        } ?? Self.defaultAgentSwitcherBundleIdentifiers
         applicationLanguage = configuration.applicationLanguage
         showDockIcon = configuration.showDockIcon
         if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {
@@ -1629,6 +1667,21 @@ final class AppSettings: ObservableObject {
             throw AppConfigurationError.invalidValues
         }
         return configuration
+    }
+
+    private static func normalizedAgentSwitcherBundleIdentifiers(_ identifiers: [String]) -> [String] {
+        var seen = Set<String>()
+        var normalized: [String] = []
+        for identifier in identifiers {
+            let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !seen.contains(trimmed) else { continue }
+            seen.insert(trimmed)
+            normalized.append(trimmed)
+            if normalized.count == maximumAgentSwitcherBundleIdentifierCount {
+                break
+            }
+        }
+        return normalized
     }
 
     private func saveBindings() {

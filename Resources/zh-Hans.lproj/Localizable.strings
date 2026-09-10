@@ -141,6 +141,7 @@
 "action.custom_shortcut" = "自定义快捷键";
 "action.focus_input" = "聚焦输入框";
 "action.open_custom_application" = "打开自定义 APP";
+"action.agent_switcher" = "切换 Agent";
 "action.toggle_long_recording" = "切换持续录音";
 "action.open_remote_mic" = "打开无线麦";
 "action.open_codex" = "打开 Codex";
@@ -165,6 +166,15 @@
 "custom_application.add" = "添加 APP";
 "custom_application.agent_targets" = "Agent";
 "custom_application.saved_apps" = "已添加 APP";
+"agent_switcher.targets" = "切换器 Agent";
+"agent_switcher.help" = "按键弹出列表，左右选择，OK 打开，返回取消。";
+"agent_switcher.preview" = "预览切换器";
+"agent_switcher.empty" = "至少选择一个 Agent 才会显示切换器。";
+"agent_switcher.controls" = "左右选择，OK 打开，返回取消。";
+"agent_switcher.opening" = "正在打开 %@…";
+"agent_switcher.open_failed" = "无法打开 %@。可以重新选择，或按返回取消。";
+"agent_switcher.empty_title" = "暂无可用 Agent";
+"agent_switcher.empty_detail" = "在按键设置中选择已安装的 Cursor、Codex 等 App。按返回或 Escape 关闭。";
 "custom_application.focus_strategy" = "聚焦方式";
 "custom_application.focus.none" = "只打开 APP";
 "custom_application.focus.shortcut" = "使用 APP 快捷键聚焦";

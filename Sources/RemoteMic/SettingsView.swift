@@ -238,6 +238,14 @@ private struct ConfigurationStatus {
     let systemImage: String
 }
 
+private struct AgentSwitcherCandidate: Identifiable, Equatable {
+    let bundleIdentifier: String
+    let displayName: String
+    let installed: Bool
+
+    var id: String { bundleIdentifier }
+}
+
 enum MappingSelectionPolicy {
     static func selection(
         current: RemoteButton,
@@ -1329,6 +1337,8 @@ struct SettingsView: View {
                         scrollTarget = "mapping-shortcut-editor-\(target.id)"
                     case .openCustomApplication:
                         scrollTarget = "mapping-application-editor"
+                    case .agentSwitcher:
+                        scrollTarget = "mapping-agent-switcher-editor"
                     default:
                         scrollTarget = "mapping-action-editor"
                     }
@@ -1764,6 +1774,11 @@ struct SettingsView: View {
                     configured: configured
                 )
                 .id("mapping-application-editor")
+            }
+
+            if configured.action == .agentSwitcher {
+                agentSwitcherEditor()
+                    .id("mapping-agent-switcher-editor")
             }
 
             if trigger == .singleClick,
@@ -2250,6 +2265,135 @@ struct SettingsView: View {
         )
     }
 
+    private func agentSwitcherEditor() -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("agent_switcher.targets")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Button("agent_switcher.preview") {
+                    model.previewAgentSwitcher()
+                }
+                .compatibilityButtonStyle(.standard)
+                .disabled(settings.agentSwitcherBundleIdentifiers.isEmpty)
+            }
+
+            Text("agent_switcher.help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(agentSwitcherCandidates()) { candidate in
+                    agentSwitcherCandidateButton(candidate)
+                }
+
+                Button {
+                    chooseAgentSwitcherApplication()
+                } label: {
+                    Label("custom_application.add", systemImage: "plus")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                }
+                .compatibilityButtonStyle(.standard)
+            }
+
+            if settings.agentSwitcherBundleIdentifiers.isEmpty {
+                Label("agent_switcher.empty", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func agentSwitcherCandidateButton(_ candidate: AgentSwitcherCandidate) -> some View {
+        let selected = settings.agentSwitcherBundleIdentifiers.contains(candidate.bundleIdentifier)
+        return Button {
+            settings.setAgentSwitcherBundleIdentifier(
+                candidate.bundleIdentifier,
+                enabled: !selected
+            )
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                Text(candidate.displayName + (candidate.installed ? "" : localization.text("common.suffix.not_installed")))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+            .background(
+                selected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(selected ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.16))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func agentSwitcherCandidates() -> [AgentSwitcherCandidate] {
+        var seen = Set<String>()
+        var candidates: [AgentSwitcherCandidate] = []
+        for application in PresetApplication.customApplicationAgentTargets {
+            let bundleIdentifier = application.bundleIdentifier
+            guard seen.insert(bundleIdentifier).inserted else { continue }
+            candidates.append(AgentSwitcherCandidate(
+                bundleIdentifier: bundleIdentifier,
+                displayName: application.displayName(using: localization),
+                installed: NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) != nil
+            ))
+        }
+        for profile in settings.customApplicationProfiles {
+            guard seen.insert(profile.bundleIdentifier).inserted else { continue }
+            candidates.append(AgentSwitcherCandidate(
+                bundleIdentifier: profile.bundleIdentifier,
+                displayName: profile.displayName,
+                installed: customApplicationIsInstalled(profile)
+            ))
+        }
+        for identifier in settings.agentSwitcherBundleIdentifiers {
+            guard seen.insert(identifier).inserted else { continue }
+            let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier)
+            candidates.append(AgentSwitcherCandidate(
+                bundleIdentifier: identifier,
+                displayName: url?.deletingPathExtension().lastPathComponent ?? identifier,
+                installed: url != nil
+            ))
+        }
+        return candidates
+    }
+
+    private func customApplicationIsInstalled(_ profile: CustomApplicationProfile) -> Bool {
+        let savedURL = URL(fileURLWithPath: profile.applicationPath)
+        if Bundle(url: savedURL)?.bundleIdentifier == profile.bundleIdentifier {
+            return true
+        }
+        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier) != nil
+    }
+
+    private func chooseAgentSwitcherApplication() {
+        applicationShortcutCaptureProfileID = nil
+        shortcutCaptureFeedback = nil
+        guard let profile = chooseCustomApplicationProfile(source: "agent_switcher_file_picker") else {
+            return
+        }
+        settings.setAgentSwitcherBundleIdentifier(profile.bundleIdentifier, enabled: true)
+    }
+
     @ViewBuilder
     private func inlineApplicationShortcutEditor(_ profile: CustomApplicationProfile) -> some View {
         let contextID = "application-\(profile.id.uuidString)"
@@ -2415,6 +2559,13 @@ struct SettingsView: View {
     ) {
         applicationShortcutCaptureProfileID = nil
         shortcutCaptureFeedback = nil
+        guard let profile = chooseCustomApplicationProfile(source: "file_picker") else {
+            return
+        }
+        settings.setApplicationProfileID(profile.id, for: button, trigger: trigger)
+    }
+
+    private func chooseCustomApplicationProfile(source: String) -> CustomApplicationProfile? {
         let panel = NSOpenPanel()
         panel.title = localization.text("custom_application.picker.title")
         panel.prompt = localization.text("common.action.choose")
@@ -2426,31 +2577,37 @@ struct SettingsView: View {
               let bundle = Bundle(url: url),
               let bundleIdentifier = bundle.bundleIdentifier,
               !bundleIdentifier.isEmpty
-        else { return }
+        else { return nil }
 
         let existing = settings.customApplicationProfiles.first {
             $0.bundleIdentifier == bundleIdentifier
         }
-        let profileID: UUID
+        let profile: CustomApplicationProfile
         if let existing {
             var updated = existing
             updated.applicationPath = url.path
             settings.updateCustomApplicationProfile(updated)
-            profileID = existing.id
+            profile = updated
         } else {
             let displayName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
                 ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
                 ?? url.deletingPathExtension().lastPathComponent
-            profileID = settings.upsertCustomApplicationProfile(
+            let profileID = settings.upsertCustomApplicationProfile(
+                displayName: displayName,
+                bundleIdentifier: bundleIdentifier,
+                applicationPath: url.path
+            )
+            profile = settings.customApplicationProfile(id: profileID) ?? CustomApplicationProfile(
+                id: profileID,
                 displayName: displayName,
                 bundleIdentifier: bundleIdentifier,
                 applicationPath: url.path
             )
         }
-        settings.setApplicationProfileID(profileID, for: button, trigger: trigger)
         AppLogger.shared.write(
-            "CUSTOM_APPLICATION TARGET phase=completed result=selected source=file_picker"
+            "CUSTOM_APPLICATION TARGET phase=completed result=selected source=\(source)"
         )
+        return profile
     }
 
     private func recordCustomApplicationInput(profileID: UUID) {

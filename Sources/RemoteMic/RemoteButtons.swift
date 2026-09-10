@@ -508,6 +508,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case customShortcut
     case focusInput
     case openCustomApplication
+    case agentSwitcher
     case toggleLongRecording
     case openRemoteMic
     case openCodex
@@ -562,6 +563,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .customShortcut: return localization.text("action.custom_shortcut")
         case .focusInput: return localization.text("action.focus_input")
         case .openCustomApplication: return localization.text("action.open_custom_application")
+        case .agentSwitcher: return localization.text("action.agent_switcher")
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
         case .openCodex: return localization.text("action.open_codex")
@@ -610,7 +612,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
-        case .customShortcut, .focusInput, .openCustomApplication:
+        case .customShortcut, .focusInput, .openCustomApplication, .agentSwitcher:
             return .custom
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
              .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
@@ -624,6 +626,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .customShortcut,
             .focusInput,
             .openCustomApplication,
+            .agentSwitcher,
             .commandReturn,
             .shiftReturn,
             .commandCopy,
@@ -643,7 +646,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     }
 
     var isAppInternal: Bool {
-        self == .toggleLongRecording
+        [.agentSwitcher, .toggleLongRecording].contains(self)
     }
 
     func isEnabled(experimentalContinuousRecordingEnabled: Bool) -> Bool {

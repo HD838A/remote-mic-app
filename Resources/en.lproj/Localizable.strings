@@ -141,6 +141,7 @@
 "action.custom_shortcut" = "Custom Shortcut";
 "action.focus_input" = "Focus Input Field";
 "action.open_custom_application" = "Open Custom App";
+"action.agent_switcher" = "Switch Agent";
 "action.toggle_long_recording" = "Toggle Continuous Recording";
 "action.open_remote_mic" = "Open SayAll";
 "action.open_codex" = "Open Codex";
@@ -165,6 +166,15 @@
 "custom_application.add" = "Add App";
 "custom_application.agent_targets" = "Agents";
 "custom_application.saved_apps" = "Added apps";
+"agent_switcher.targets" = "Switcher agents";
+"agent_switcher.help" = "Press the mapped button to show the list, use left and right to choose, OK to open, and Back to cancel.";
+"agent_switcher.preview" = "Preview Switcher";
+"agent_switcher.empty" = "Choose at least one agent to show in the switcher.";
+"agent_switcher.controls" = "Use Left and Right to choose, OK to open, Back to cancel.";
+"agent_switcher.opening" = "Opening %@…";
+"agent_switcher.open_failed" = "%@ could not be opened. Choose it again or cancel.";
+"agent_switcher.empty_title" = "No Available Agents";
+"agent_switcher.empty_detail" = "Choose an installed app such as Cursor or Codex in button mapping settings. Press Back or Escape to close.";
 "custom_application.focus_strategy" = "Focus method";
 "custom_application.focus.none" = "Open app only";
 "custom_application.focus.shortcut" = "Use an app shortcut";

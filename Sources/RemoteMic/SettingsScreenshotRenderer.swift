@@ -52,6 +52,9 @@ enum SettingsScreenshotRenderer {
         let opensApplicationEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_APPLICATION_EDITOR"
         ] == "1"
+        let opensAgentSwitcherEditor = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_AGENT_SWITCHER_EDITOR"
+        ] == "1"
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
@@ -84,6 +87,10 @@ enum SettingsScreenshotRenderer {
         if opensApplicationEditor {
             seedApplicationEditorForScreenshot(settings)
         }
+        if opensAgentSwitcherEditor {
+            settings.customMappingEnabled = true
+            settings.setAction(.agentSwitcher, for: .ok, trigger: .singleClick)
+        }
         seedStatisticsForScreenshot(settings)
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
@@ -104,7 +111,7 @@ enum SettingsScreenshotRenderer {
                 updateInformation: updateInformation,
                 initialSection: section,
                 initialShareSection: section == .about && expandsShare ? section : nil,
-                initialMappingEditingButton: section == .mapping && (opensShortcutEditor || opensApplicationEditor)
+                initialMappingEditingButton: section == .mapping && (opensShortcutEditor || opensApplicationEditor || opensAgentSwitcherEditor)
                     ? .ok
                     : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
