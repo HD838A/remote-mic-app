@@ -303,4 +303,3 @@ private final class AgentSwitcherTestScheduler: HIDRemoteScheduling {
         tasks.removeAll { $0.cancelled }
     }
 }
-
