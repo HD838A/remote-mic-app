@@ -912,6 +912,7 @@ final class HIDRemoteMonitor {
         recognizesLongPress: Bool
     ) -> Bool {
         guard !activeDeviceIsSeized,
+              !appSwitcherSession.isActive,
               !recognizesDoubleClick,
               !recognizesLongPress,
               frontmostBundleIdentifier() != PresetApplication.remoteMic.bundleIdentifier
@@ -981,6 +982,36 @@ final class HIDRemoteMonitor {
         repeatTimers[usage] = timer
     }
 
+    private func startHeldDeleteRepeat(for button: RemoteButton) {
+        let configured = settings.configuredAction(for: button, trigger: .longPress, profileID: profileID)
+        guard configured.action == .deleteBackward,
+              !hasOverrideBinding(profileID, button, .longPress) else { return }
+        let usage = button.hidUsage
+        let origin = frontmostBundleIdentifier()
+        repeatTimers.removeValue(forKey: usage)?.cancel()
+        repeatTimers[usage] = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.heldDeleteIntervalMilliseconds,
+            repeatingEveryMilliseconds: HIDRemoteTiming.heldDeleteIntervalMilliseconds
+        ) { [weak self] in
+            guard let self else { return }
+            guard self.activeUsages.contains(usage),
+                  self.settings.customMappingEnabled,
+                  self.frontmostBundleIdentifier() == origin,
+                  self.settings.configuredAction(for: button, trigger: .longPress, profileID: self.profileID) == configured,
+                  !self.hasOverrideBinding(self.profileID, button, .longPress) else {
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+                return
+            }
+            guard self.runtimePermissionsAreValid() else {
+                self.releaseForRevokedPermissions()
+                return
+            }
+            if !self.performConfiguredAction(for: button, trigger: .longPress) {
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+            }
+        }
+    }
+
     private func processGestureCommands(
         _ commands: [RemoteButtonGestureRecognizer.Command]
     ) -> Bool {
@@ -999,6 +1030,7 @@ final class HIDRemoteMonitor {
                     "HID GESTURE button=\(button.rawValue) trigger=\(trigger.rawValue) path=recognizer"
                 )
                 guard performConfiguredAction(for: button, trigger: trigger) else { return false }
+                if trigger == .longPress { startHeldDeleteRepeat(for: button) }
             }
         }
         return true

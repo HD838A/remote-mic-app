@@ -937,13 +937,20 @@ struct RemoteButtonsTests {
         #expect(posted[9].2.isEmpty)
     }
 
-    @Test func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp() throws {
+    @Test(arguments: [true, false])
+    func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp(isSeized: Bool) throws {
         let suiteName = "RemoteButtonsTests.appSwitcherControls.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
         settings.setAction(.appSwitcher, for: .menu)
+        for button in [RemoteButton.left, .right] {
+            settings.setAction(button == .left ? .arrowLeft : .arrowRight, for: button)
+            settings.setAction(.disabled, for: button, trigger: .doubleClick)
+            settings.setAction(.disabled, for: button, trigger: .longPress)
+        }
+        let suppressor = KeyboardEventSuppressor()
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = RemoteButtonsTestScheduler()
         var frontmost = PresetApplication.codex.bundleIdentifier
@@ -952,6 +959,7 @@ struct RemoteButtonsTests {
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
+            eventSuppressor: suppressor,
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
@@ -962,18 +970,37 @@ struct RemoteButtonsTests {
                 return true
             }
         )
-        monitor.connectSimulatedDevice(fingerprint: "app-switcher-controls", profileID: profileID)
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-controls", profileID: profileID, isSeized: isSeized
+        )
 
-        func press(_ button: RemoteButton) {
+        func press(_ button: RemoteButton, inSwitcher: Bool = true) throws {
             let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
             monitor.handleSimulatedReport(reportID: 1, data: report)
+            let keyCode: CGKeyCode? = button == .left ? 123 : button == .right ? 124 : nil
+            if let keyCode {
+                let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true))
+                #expect(suppressor.handle(type: .keyDown, event: event) == (!isSeized && inSwitcher))
+            }
             monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+            if let keyCode {
+                let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false))
+                #expect(suppressor.handle(type: .keyUp, event: event) == (!isSeized && inSwitcher))
+            }
         }
 
-        press(.menu)
-        press(.right)
-        press(.left)
-        press(.ok)
+        if !isSeized {
+            try press(.left, inSwitcher: false)
+            try press(.right, inSwitcher: false)
+        }
+        try press(.menu)
+        try press(.right)
+        try press(.left)
+        try press(.ok)
+        if !isSeized {
+            try press(.left, inSwitcher: false)
+            try press(.right, inSwitcher: false)
+        }
         frontmost = PresetApplication.safari.bundleIdentifier
         scheduler.advance(
             toMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds
@@ -989,6 +1016,58 @@ struct RemoteButtonsTests {
         #expect(diagnostics.contains {
             $0.contains("selection bundle_id=\(PresetApplication.safari.bundleIdentifier)")
         })
+        #expect(scheduler.pendingTaskCount == 0)
+    }
+
+    @Test(arguments: ["release", "disconnect", "frontmost", "permission", "mapping", "failure"])
+    func heldDeleteRepeatsAtFixedRateAndStops(reason: String) throws {
+        let suiteName = "RemoteButtonsTests.heldDelete.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.escape, for: .menu)
+        settings.setAction(.deleteBackward, for: .menu, trigger: .longPress)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var permissions = true
+        var succeeds = true
+        var frontmost = PresetApplication.safari.bundleIdentifier
+        var deletions = 0
+        let monitor = HIDRemoteMonitor(
+            settings: settings, profileID: profileID, ownsEventSuppressor: false,
+            scheduler: scheduler, runtimePermissions: { permissions },
+            actionPerformer: { _, trigger, configured in
+                #expect(trigger == .longPress)
+                #expect(configured.action == .deleteBackward)
+                if succeeds { deletions += 1 }
+                return succeeds
+            },
+            frontmostBundleIdentifier: { frontmost }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "held-delete", profileID: profileID)
+        monitor.handleSimulatedReport(
+            reportID: 1, data: Data([UInt8(RemoteButton.menu.hidUsage), 0, 0, 0, 0, 0])
+        )
+        scheduler.advance(toMilliseconds: 549)
+        #expect(deletions == 0)
+        scheduler.advance(toMilliseconds: 550)
+        #expect(deletions == 1)
+        scheduler.advance(toMilliseconds: 699)
+        #expect(deletions == 1)
+        scheduler.advance(toMilliseconds: 850)
+        #expect(deletions == 3)
+        switch reason {
+        case "release": monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        case "disconnect": monitor.disconnectSimulatedDevice()
+        case "frontmost": frontmost = PresetApplication.codex.bundleIdentifier
+        case "permission": permissions = false
+        case "mapping": settings.setAction(.escape, for: .menu, trigger: .longPress)
+        case "failure": succeeds = false
+        default: Issue.record("Unknown stop reason")
+        }
+        scheduler.advance(toMilliseconds: 2_000)
+        #expect(deletions == 3)
         #expect(scheduler.pendingTaskCount == 0)
     }
 

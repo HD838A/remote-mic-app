@@ -16,6 +16,7 @@ protocol HIDRemoteScheduling {
 enum HIDRemoteTiming {
     static let doubleClickMilliseconds: UInt64 = 300
     static let longPressMilliseconds: UInt64 = 550
+    static let heldDeleteIntervalMilliseconds: UInt64 = 150
     static let repeatStartMilliseconds: UInt64 = 350
     static let stableReleaseMilliseconds: UInt64 = 600
     static let permissionPollMilliseconds: UInt64 = 1_000
