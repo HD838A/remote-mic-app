@@ -569,6 +569,18 @@ enum KeyboardInjector {
         )
     }
 
+    static func performCustomFocusShortcut(
+        usesCursorComposer: Bool,
+        focusComposer: () -> Bool,
+        postShortcut: () -> Void
+    ) -> Bool {
+        // Cmd+L is a toggle. An incomplete AX tree must never be treated as
+        // permission to toggle an already-open chat closed.
+        if usesCursorComposer { return focusComposer() }
+        postShortcut()
+        return true
+    }
+
     private static func scheduleCustomApplicationFocus(
         application: CustomApplicationProfile,
         processIdentifier: pid_t,
@@ -579,7 +591,11 @@ enum KeyboardInjector {
         let delay: DispatchTimeInterval = attempt == 0 ? .milliseconds(0) : .milliseconds(200)
         focusQueue.asyncAfter(deadline: .now() + delay) {
             guard focusRequests.isCurrent(requestID) else { return }
-            if isAccessibilityTrusted, application.focusStrategy == .recordedAccessibility {
+            let usesCursorComposer = application.bundleIdentifier == PresetApplication.cursor.bundleIdentifier &&
+                application.focusShortcut?.keyCode == 37 &&
+                application.focusShortcut?.cgEventFlags == .maskCommand
+            if isAccessibilityTrusted,
+               application.focusStrategy == .recordedAccessibility || usesCursorComposer {
                 announceManualAccessibility(
                     processIdentifier: processIdentifier,
                     bundleIdentifier: "custom",
@@ -599,12 +615,22 @@ enum KeyboardInjector {
                     return
                 case .keyboardShortcut:
                     if let shortcut = application.focusShortcut {
-                        postKey(code: CGKeyCode(shortcut.keyCode), flags: shortcut.cgEventFlags)
-                        AppLogger.shared.write(
-                            "APP FOCUS submitted operation_id=\(requestID) " +
-                                "method=custom_shortcut result=unknown diagnostic_boundary=external_focus_unverified"
+                        let completed = performCustomFocusShortcut(
+                            usesCursorComposer: usesCursorComposer,
+                            focusComposer: {
+                                focusCursorComposer(processIdentifier: processIdentifier, requestID: requestID)
+                            },
+                            postShortcut: {
+                                postKey(code: CGKeyCode(shortcut.keyCode), flags: shortcut.cgEventFlags)
+                            }
                         )
-                        return
+                        if completed {
+                            AppLogger.shared.write(usesCursorComposer
+                                ? "APP FOCUS succeeded operation_id=\(requestID) method=cursor_composer"
+                                : "APP FOCUS submitted operation_id=\(requestID) method=custom_shortcut " +
+                                    "result=unknown diagnostic_boundary=external_focus_unverified")
+                            return
+                        }
                     }
                 case .recordedAccessibility:
                     if let target = application.accessibilityTarget,
@@ -637,6 +663,105 @@ enum KeyboardInjector {
                 )
             }
         }
+    }
+
+    private static func focusCursorComposer(processIdentifier: pid_t, requestID: UInt64) -> Bool {
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        guard let window = applicationWindows(applicationElement).first else { return false }
+        let candidates = accessibilityTextCandidates(in: window).filter {
+            isCursorComposerCandidate(
+                $0.snapshot,
+                windowFrame: axFrame(window),
+                hasChatControls: hasCursorComposerControls(near: $0.element)
+            )
+        }
+        guard !candidates.isEmpty else { return false }
+        let focused = candidates.filter { $0.snapshot.focused }
+        guard let candidate = focused.count == 1 ? focused.first : (candidates.count == 1 ? candidates.first : nil),
+              focusRequests.isCurrent(requestID), applicationIsFrontmost(processIdentifier) else { return false }
+        if focusAccessibilityElement(
+            candidate.element,
+            applicationElement: applicationElement,
+            requiresApplicationFocusedElement: true
+        ) { return true }
+        // Electron may ignore AX focus writes. Click only the identified composer,
+        // after hit-testing its current bounds; the next retry verifies actual focus.
+        guard let frame = axFrame(candidate.element) else { return false }
+        let point = CGPoint(x: frame.midX, y: frame.midY)
+        var hit: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(
+            AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &hit
+        ) == .success else { return false }
+        var matches = false
+        for _ in 0..<5 {
+            guard let element = hit else { break }
+            if CFEqual(element, candidate.element) { matches = true; break }
+            hit = axElement(element, attribute: kAXParentAttribute)
+        }
+        guard matches, focusRequests.isCurrent(requestID), applicationIsFrontmost(processIdentifier),
+              let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown,
+                                 mouseCursorPosition: point, mouseButton: .left),
+              let up = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp,
+                               mouseCursorPosition: point, mouseButton: .left) else { return false }
+        let previousPointerLocation = CGEvent(source: nil)?.location
+        for event in [down, up] {
+            event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            event.post(tap: .cghidEventTap)
+        }
+        if let previousPointerLocation,
+           let restore = CGEvent(mouseEventSource: source, mouseType: .mouseMoved,
+                                 mouseCursorPosition: previousPointerLocation, mouseButton: .left) {
+            restore.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            restore.post(tap: .cghidEventTap)
+        }
+        return false
+    }
+
+    static func isCursorComposerCandidate(
+        _ candidate: AccessibilityTextCandidate,
+        windowFrame: CGRect?,
+        hasChatControls: Bool
+    ) -> Bool {
+        guard candidate.enabled, candidate.role == "AXTextArea",
+              let frame = candidate.frame, frame.width > 0, frame.height > 0,
+              let windowFrame, frame.intersects(windowFrame) else { return false }
+        let text = [candidate.identifier, candidate.title, candidate.description,
+                    candidate.help, candidate.placeholder].joined(separator: " ").lowercased()
+        let excluded = ["code editor", "editor content", "monaco", "terminal", "xterm", "search",
+                        "password", "command palette", "代码编辑器", "搜索", "终端"]
+        guard !excluded.contains(where: text.contains) else { return false }
+        return hasChatControls || ["composer", "prompt-editor", "chat-input", "message-input"]
+            .contains(where: text.contains)
+    }
+
+    private static func hasCursorComposerControls(near element: AXUIElement) -> Bool {
+        guard let parent = axElement(element, attribute: kAXParentAttribute) else { return false }
+        let container = axElement(parent, attribute: kAXParentAttribute) ?? parent
+        var pending = [(container, 0)]
+        var visited = 0
+        var hasMode = false
+        var hasModelPicker = false
+        while let (current, depth) = pending.popLast(), visited < 60 {
+            visited += 1
+            let role = axString(current, attribute: kAXRoleAttribute)
+            if role == "AXPopUpButton" { hasModelPicker = true }
+            // Read visible static control labels only, never the user's draft text.
+            if role == "AXStaticText" {
+                let label = axString(current, attribute: kAXValueAttribute).lowercased()
+                if label == "add a follow-up" || label == "plan, build, / for skills, @ for context" {
+                    return true
+                }
+                let words = label.split { !$0.isLetter }
+                if words.count == 1, ["agent", "ask", "plan", "debug"].contains(String(words[0])) {
+                    hasMode = true
+                }
+            }
+            if depth < 3, role != "AXTextArea", role != "AXTextField" {
+                pending.append(contentsOf: axElements(current, attribute: kAXChildrenAttribute).map { ($0, depth + 1) })
+            }
+        }
+        return hasMode && hasModelPicker
     }
 
     private static func focusApplication(
