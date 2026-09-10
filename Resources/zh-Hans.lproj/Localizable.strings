@@ -163,13 +163,15 @@
 "custom_application.target" = "目标 APP";
 "custom_application.not_configured" = "尚未选择 APP";
 "custom_application.add" = "添加 APP";
+"custom_application.agent_targets" = "Agent";
+"custom_application.saved_apps" = "已添加 APP";
 "custom_application.focus_strategy" = "聚焦方式";
 "custom_application.focus.none" = "只打开 APP";
 "custom_application.focus.shortcut" = "使用 APP 快捷键聚焦";
 "custom_application.focus.recorded" = "聚焦已记录的输入框";
 "custom_application.shortcut.record" = "录入聚焦快捷键";
 "custom_application.shortcut.editor_title" = "设置 %@ 的聚焦快捷键";
-"custom_application.shortcut.editor_instructions" = "先点击“录入快捷键”，再按下该 APP 用于聚焦输入框的组合键。执行时会先激活 APP，再发送此快捷键。";
+"custom_application.shortcut.editor_instructions" = "选择下方 Command 和 L 等按键，或点击“录入快捷键”后按下组合键。执行时会先激活 APP，再发送此快捷键。";
 "custom_application.accessibility.record" = "记录目标输入框";
 "custom_application.accessibility.not_recorded" = "尚未记录目标输入框";
 "custom_application.accessibility.recorded" = "已记录目标输入框";
@@ -390,7 +392,7 @@
 "shortcut.editor.waiting" = "等待按键…";
 "shortcut.editor.click_first_help" = "可直接选择常用组合，或在标准键盘中选择组合键和主按键；也可以继续使用键盘录入。";
 "shortcut.editor.not_recorded" = "尚未录入";
-"shortcut.editor.recording_prompt" = "现在请按下快捷键；本次按键不会触发系统或其他 APP 中原本绑定的动作。";
+"shortcut.editor.recording_prompt" = "现在请按下快捷键。";
 "shortcut.editor.success" = "快捷键录入成功";
 "shortcut.editor.permission_required" = "录入系统快捷键需要辅助功能权限。请完成系统授权后再次点击录入。";
 "shortcut.editor.capture_unavailable" = "无法启动快捷键录入，请检查辅助功能和输入监控权限，或重新打开无线麦后再试。";
@@ -919,3 +921,5 @@
 "about.preferences.restart_onboarding_action" = "重新运行";
 "about.hardware.download" = "下载安装包";
 "common.action.copy" = "复制";
+
+"shortcut.editor.foreground_help" = "请保持无线麦在前台。未能拦截的系统组合键可能执行原动作，可取消并使用标准键盘选择。";

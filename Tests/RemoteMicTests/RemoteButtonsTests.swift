@@ -155,6 +155,8 @@ struct RemoteButtonsTests {
             "Zed": "dev.zed.Zed",
         ])
         #expect(Set(ButtonAction.allCases.compactMap(\.presetApplication)) == Set(PresetApplication.allCases))
+        #expect(PresetApplication.customApplicationAgentTargets.contains(.codex))
+        #expect(PresetApplication.customApplicationAgentTargets.contains(.cursor))
     }
 
     @Test func onlySupportedApplicationsHaveAutomaticFocusStrategies() {
@@ -2835,6 +2837,56 @@ struct RemoteButtonsTests {
             trigger: .singleClick
         ).applicationProfileID == nil)
         #expect(restored.customApplicationProfile(id: profile.id) == profile)
+    }
+
+    @Test func presetApplicationTargetsUpsertProfilesWithoutLosingFocusConfiguration() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 37,
+            modifierFlags: [.command],
+            keyLabel: "L"
+        )
+        let settings = AppSettings(defaults: defaults)
+
+        let codexID = settings.upsertCustomApplicationProfile(
+            displayName: "Codex",
+            bundleIdentifier: PresetApplication.codex.bundleIdentifier,
+            applicationPath: "/Applications/Codex.app"
+        )
+        var codexProfile = try #require(settings.customApplicationProfile(id: codexID))
+        codexProfile.focusStrategy = .keyboardShortcut
+        codexProfile.focusShortcut = shortcut
+        settings.updateCustomApplicationProfile(codexProfile)
+
+        let updatedCodexID = settings.upsertCustomApplicationProfile(
+            displayName: "Codex",
+            bundleIdentifier: PresetApplication.codex.bundleIdentifier,
+            applicationPath: "/Users/test/Applications/Codex.app"
+        )
+        let cursorID = settings.upsertCustomApplicationProfile(
+            displayName: "Cursor",
+            bundleIdentifier: PresetApplication.cursor.bundleIdentifier,
+            applicationPath: "/Applications/Cursor.app"
+        )
+        settings.setAction(.openCustomApplication, for: .menu, trigger: .singleClick)
+        settings.setApplicationProfileID(cursorID, for: .menu, trigger: .singleClick)
+
+        #expect(updatedCodexID == codexID)
+        #expect(settings.customApplicationProfiles.count == 2)
+        let updatedCodex = try #require(settings.customApplicationProfile(id: codexID))
+        #expect(updatedCodex.applicationPath == "/Users/test/Applications/Codex.app")
+        #expect(updatedCodex.focusStrategy == .keyboardShortcut)
+        #expect(updatedCodex.focusShortcut == shortcut)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.customApplicationProfiles.count == 2)
+        #expect(restored.customApplicationProfile(id: codexID)?.focusShortcut == shortcut)
+        #expect(restored.configuredAction(
+            for: .menu,
+            trigger: .singleClick
+        ).applicationProfileID == cursorID)
     }
 
     @Test func preReleaseUpdateFeedUsesTheCloudflarePreviewChannel() {

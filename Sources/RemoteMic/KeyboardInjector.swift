@@ -426,7 +426,7 @@ enum KeyboardInjector {
     ) {
         guard let url = applicationURL(application) else {
             AppLogger.shared.write(
-                "APP ACTION unavailable bundle=\(application.bundleIdentifier) custom=true"
+                "APP ACTION unavailable operation_id=\(focusRequestID) custom=true"
             )
             return
         }
@@ -434,13 +434,13 @@ enum KeyboardInjector {
         applicationOpener(url, application) { processIdentifier, error in
             if let error {
                 AppLogger.shared.write(
-                    "APP ACTION failed bundle=\(application.bundleIdentifier) custom=true " +
+                    "APP ACTION failed operation_id=\(focusRequestID) custom=true " +
                         AppLogger.errorFields(error)
                 )
                 return
             }
             AppLogger.shared.write(
-                "APP ACTION opened bundle=\(application.bundleIdentifier) custom=true"
+                "APP ACTION opened operation_id=\(focusRequestID) custom=true"
             )
             guard application.focusStrategy != .none, let processIdentifier else { return }
             applicationFocuser(application, processIdentifier, focusRequestID)
@@ -498,14 +498,14 @@ enum KeyboardInjector {
             if isAccessibilityTrusted, application.focusStrategy == .recordedAccessibility {
                 announceManualAccessibility(
                     processIdentifier: processIdentifier,
-                    bundleIdentifier: application.bundleIdentifier,
+                    bundleIdentifier: "custom",
                     attempt: attempt
                 )
             }
             if applicationIsFrontmost(processIdentifier) {
                 guard isAccessibilityTrusted else {
                     AppLogger.shared.write(
-                        "APP FOCUS skipped bundle=\(application.bundleIdentifier) " +
+                        "APP FOCUS skipped operation_id=\(requestID) " +
                             "method=custom reason=not_trusted"
                     )
                     return
@@ -517,8 +517,8 @@ enum KeyboardInjector {
                     if let shortcut = application.focusShortcut {
                         postKey(code: CGKeyCode(shortcut.keyCode), flags: shortcut.cgEventFlags)
                         AppLogger.shared.write(
-                            "APP FOCUS succeeded bundle=\(application.bundleIdentifier) " +
-                                "method=custom_shortcut"
+                            "APP FOCUS submitted operation_id=\(requestID) " +
+                                "method=custom_shortcut result=unknown diagnostic_boundary=external_focus_unverified"
                         )
                         return
                     }
@@ -530,7 +530,7 @@ enum KeyboardInjector {
                        )
                     {
                         AppLogger.shared.write(
-                            "APP FOCUS succeeded bundle=\(application.bundleIdentifier) " +
+                            "APP FOCUS succeeded operation_id=\(requestID) " +
                                 "method=custom_accessibility"
                         )
                         return
@@ -548,7 +548,7 @@ enum KeyboardInjector {
                 )
             } else if focusRequests.isCurrent(requestID) {
                 AppLogger.shared.write(
-                    "APP FOCUS failed bundle=\(application.bundleIdentifier) " +
+                    "APP FOCUS failed operation_id=\(requestID) " +
                         "method=custom reason=target_not_focused"
                 )
             }

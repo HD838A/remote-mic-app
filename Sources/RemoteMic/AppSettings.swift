@@ -887,11 +887,40 @@ final class AppSettings: ObservableObject {
         return profile.id
     }
 
+    @discardableResult
+    func upsertCustomApplicationProfile(
+        displayName: String,
+        bundleIdentifier: String,
+        applicationPath: String
+    ) -> UUID {
+        if let index = customApplicationProfiles.firstIndex(where: {
+            $0.bundleIdentifier == bundleIdentifier
+        }) {
+            customApplicationProfiles[index].displayName = displayName
+            customApplicationProfiles[index].applicationPath = applicationPath
+            return customApplicationProfiles[index].id
+        }
+        let profile = CustomApplicationProfile(
+            displayName: displayName,
+            bundleIdentifier: bundleIdentifier,
+            applicationPath: applicationPath
+        )
+        customApplicationProfiles.append(profile)
+        return profile.id
+    }
+
     func updateCustomApplicationProfile(_ profile: CustomApplicationProfile) {
         guard let index = customApplicationProfiles.firstIndex(where: { $0.id == profile.id }) else {
             return
         }
         customApplicationProfiles[index] = profile
+    }
+
+    func setApplicationFocusShortcut(_ shortcut: CustomKeyboardShortcut?, profileID: UUID) {
+        guard var profile = customApplicationProfile(id: profileID) else { return }
+        profile.focusShortcut = shortcut
+        updateCustomApplicationProfile(profile)
+        AppLogger.shared.write("SHORTCUT CONFIGURATION phase=completed result=saved target=application_focus configured=\(shortcut != nil)")
     }
 
     func configuredAction(

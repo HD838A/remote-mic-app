@@ -49,6 +49,9 @@ enum SettingsScreenshotRenderer {
         let opensShortcutEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"
         ] == "1"
+        let opensApplicationEditor = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_APPLICATION_EDITOR"
+        ] == "1"
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
@@ -78,6 +81,9 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
+        if opensApplicationEditor {
+            seedApplicationEditorForScreenshot(settings)
+        }
         seedStatisticsForScreenshot(settings)
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
@@ -98,7 +104,7 @@ enum SettingsScreenshotRenderer {
                 updateInformation: updateInformation,
                 initialSection: section,
                 initialShareSection: section == .about && expandsShare ? section : nil,
-                initialMappingEditingButton: section == .mapping && opensShortcutEditor
+                initialMappingEditingButton: section == .mapping && (opensShortcutEditor || opensApplicationEditor)
                     ? .ok
                     : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
@@ -142,6 +148,33 @@ enum SettingsScreenshotRenderer {
             window.orderOut(nil)
             window.contentViewController = nil
         }
+    }
+
+    private static func seedApplicationEditorForScreenshot(_ settings: AppSettings) {
+        settings.customMappingEnabled = true
+        let focusShortcut = CustomKeyboardShortcut(
+            keyCode: 37,
+            modifierFlags: [.command],
+            keyLabel: "L"
+        )
+        let cursorProfileID = settings.upsertCustomApplicationProfile(
+            displayName: "Cursor",
+            bundleIdentifier: PresetApplication.cursor.bundleIdentifier,
+            applicationPath: "/Applications/Cursor.app"
+        )
+        let codexProfileID = settings.upsertCustomApplicationProfile(
+            displayName: "Codex",
+            bundleIdentifier: PresetApplication.codex.bundleIdentifier,
+            applicationPath: "/Applications/Codex.app"
+        )
+        for profileID in [cursorProfileID, codexProfileID] {
+            guard var profile = settings.customApplicationProfile(id: profileID) else { continue }
+            profile.focusStrategy = .keyboardShortcut
+            profile.focusShortcut = focusShortcut
+            settings.updateCustomApplicationProfile(profile)
+        }
+        settings.setAction(.openCustomApplication, for: .ok, trigger: .singleClick)
+        settings.setApplicationProfileID(cursorProfileID, for: .ok, trigger: .singleClick)
     }
 
     private static func seedAvailableUpdate(

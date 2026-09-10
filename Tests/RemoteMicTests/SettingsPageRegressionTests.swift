@@ -735,6 +735,9 @@ struct SettingsPageRegressionTests {
             "settings.setShortcut(",
             "chooseCustomApplication(for:",
             "recordCustomApplicationInput(profileID:",
+            "PresetApplication.customApplicationAgentTargets",
+            "selectPresetApplicationTarget(",
+            "settings.upsertCustomApplicationProfile(",
             "settings.setApplicationProfileID(",
             ".openCustomApplication",
             "settings.resetBindings()",
@@ -796,6 +799,9 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(").filter { $0 != .disabled }"))
         #expect(source.contains("DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded)"))
         #expect(source.contains("isPresetApplicationActionsExpanded = false"))
+        #expect(source.contains("custom_application.agent_targets"))
+        #expect(source.contains("custom_application.saved_apps"))
+        #expect(source.contains("NSWorkspace.shared.urlForApplication"))
         #expect(source.contains("custom_application.accessibility.learn_help"))
         #expect(!source.contains(".popover(item: $mappingEditingTarget)"))
         #expect(!source.contains(".sheet(item: $shortcutEditingTarget)"))

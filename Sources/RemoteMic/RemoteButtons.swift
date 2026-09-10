@@ -444,6 +444,14 @@ enum PresetApplication: String, CaseIterable, Identifiable {
         })
         return identifiers
     }
+
+    static let customApplicationAgentTargets: [PresetApplication] = [
+        .codex,
+        .cursor,
+        .claude,
+        .cmux,
+        .zed,
+    ]
 }
 
 enum ButtonActionCategory: String, CaseIterable, Identifiable {

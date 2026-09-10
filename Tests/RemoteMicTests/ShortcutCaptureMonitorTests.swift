@@ -4,6 +4,7 @@ import Testing
 @testable import RemoteMic
 
 @Suite("Shortcut capture monitor")
+@MainActor
 struct ShortcutCaptureMonitorTests {
     @Test func capturesAndSuppressesAReservedCommandShortcutOnce() throws {
         var captured: [CustomKeyboardShortcut] = []
@@ -60,19 +61,86 @@ struct ShortcutCaptureMonitorTests {
         #expect(captureCount == 0)
     }
 
-    @Test func missingAccessibilityPermissionFailsBeforeCreatingAnEventTap() {
+    @Test func missingAccessibilityPermissionStillAllowsForegroundCommandL() throws {
+        var handler: ((NSEvent) -> NSEvent?)?
+        var captured: [CustomKeyboardShortcut] = []
+        var removed = false
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { captured.append($0) },
+            accessibilityTrusted: { false },
+            dispatchCallback: { $0() },
+            installLocalMonitor: { handler = $0; return NSObject() },
+            removeLocalMonitor: { _ in removed = true }
+        )
+        switch monitor.start() {
+        case .success: break
+        case .failure: Issue.record("Foreground recording must not require global capture permission")
+        }
+        let commandL = try #require(keyEvent(keyCode: 37, flags: .maskCommand))
+        let event = try #require(NSEvent(cgEvent: commandL))
+        let receive = try #require(handler)
+        #expect(receive(event) == nil)
+        #expect(captured.first?.keyCode == 37)
+        #expect(captured.first?.modifierFlags == .command)
+        monitor.stop()
+        #expect(removed)
+    }
+
+    @Test func unavailableGlobalTapFallsBackAndCancellationRemovesLocalMonitor() throws {
+        var installed = false
+        var removed = false
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { _ in Issue.record("Cancelled recording must not capture") },
+            accessibilityTrusted: { true },
+            createEventTap: { _, _ in nil },
+            installLocalMonitor: { _ in installed = true; return NSObject() },
+            removeLocalMonitor: { _ in removed = true }
+        )
+        if case .failure = monitor.start() { Issue.record("Expected foreground fallback") }
+        #expect(installed)
+        monitor.stop()
+        #expect(removed)
+    }
+
+    @Test func failureIsReportedWhenNeitherCaptureBackendCanStart() {
         let monitor = ShortcutCaptureMonitor(
             onCapture: { _ in },
             accessibilityTrusted: { false },
-            dispatchCallback: { $0() }
+            installLocalMonitor: { _ in nil }
         )
-
-        switch monitor.start() {
-        case .success:
-            Issue.record("Expected Accessibility permission failure")
-        case let .failure(failure):
+        if case let .failure(failure) = monitor.start() {
             #expect(failure == .accessibilityPermissionRequired)
+        } else {
+            Issue.record("Expected unavailable capture to fail")
         }
+    }
+
+    @Test func foregroundCapturePassesSyntheticEventsAndDiscardsQueuedCaptureAfterCancel() throws {
+        var handler: ((NSEvent) -> NSEvent?)?
+        var pending: (() -> Void)?
+        var captures = 0
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { _ in captures += 1 },
+            accessibilityTrusted: { false },
+            dispatchCallback: { pending = $0 },
+            installLocalMonitor: { handler = $0; return NSObject() },
+            removeLocalMonitor: { _ in }
+        )
+        if case .failure = monitor.start() { Issue.record("Expected foreground fallback") }
+        let receive = try #require(handler)
+        let synthetic = try #require(keyEvent(keyCode: 37, flags: .maskCommand))
+        synthetic.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        let syntheticEvent = try #require(NSEvent(cgEvent: synthetic))
+        #expect(receive(syntheticEvent) === syntheticEvent)
+        #expect(pending == nil)
+        let key = try #require(keyEvent(keyCode: 37, flags: .maskCommand))
+        let event = try #require(NSEvent(cgEvent: key))
+        #expect(receive(event) == nil)
+        let deliver = try #require(pending)
+        monitor.stop()
+        deliver()
+        #expect(captures == 0)
+        #expect(receive(event) === event)
     }
 
     private func keyEvent(

@@ -163,13 +163,15 @@
 "custom_application.target" = "Target app";
 "custom_application.not_configured" = "No app selected";
 "custom_application.add" = "Add App";
+"custom_application.agent_targets" = "Agents";
+"custom_application.saved_apps" = "Added apps";
 "custom_application.focus_strategy" = "Focus method";
 "custom_application.focus.none" = "Open app only";
 "custom_application.focus.shortcut" = "Use an app shortcut";
 "custom_application.focus.recorded" = "Focus a recorded input field";
 "custom_application.shortcut.record" = "Record focus shortcut";
 "custom_application.shortcut.editor_title" = "Set the focus shortcut for %@";
-"custom_application.shortcut.editor_instructions" = "Click Record Shortcut first, then press the shortcut this app uses to focus its input field. SayAll activates the app before sending it.";
+"custom_application.shortcut.editor_instructions" = "Choose keys such as Command and L below, or click Record Shortcut and press the combination. SayAll activates the app before sending it.";
 "custom_application.accessibility.record" = "Record Target Input Field";
 "custom_application.accessibility.not_recorded" = "No target input field has been recorded";
 "custom_application.accessibility.recorded" = "Target input field recorded";
@@ -390,7 +392,7 @@
 "shortcut.editor.waiting" = "Waiting for Keys…";
 "shortcut.editor.click_first_help" = "Choose a common combination or assemble one from the standard keyboard and modifiers. Keyboard recording remains available.";
 "shortcut.editor.not_recorded" = "Not Recorded";
-"shortcut.editor.recording_prompt" = "Press the shortcut now. This key press will not trigger its existing system or app action.";
+"shortcut.editor.recording_prompt" = "Press the shortcut now.";
 "shortcut.editor.success" = "Shortcut recorded successfully";
 "shortcut.editor.permission_required" = "Recording system shortcuts requires Accessibility permission. Grant access, then click Record Shortcut again.";
 "shortcut.editor.capture_unavailable" = "Shortcut recording could not start. Check Accessibility and Input Monitoring permissions, or reopen SayAll and try again.";
@@ -919,3 +921,5 @@
 "about.preferences.restart_onboarding_action" = "Run Again";
 "about.hardware.download" = "Download Installer";
 "common.action.copy" = "Copy";
+
+"shortcut.editor.foreground_help" = "Keep SayAll in front. System shortcuts that cannot be intercepted may run their original action; cancel and use the standard keyboard instead.";
