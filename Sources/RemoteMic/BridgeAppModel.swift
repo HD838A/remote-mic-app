@@ -530,9 +530,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private let agentSwitcherInput = AgentSwitcherInputRouter()
     private var agentSwitcherActionOwner: String?
     private lazy var agentSwitcherLocalization = LocalizationStore(settings: settings)
-    private lazy var agentSwitcher = AgentSwitcherController(localize: { [weak self] key in
-        self?.agentSwitcherLocalization.text(key) ?? key
-    })
+    private lazy var agentSwitcher = AgentSwitcherController(
+        localize: { [weak self] key in
+            self?.agentSwitcherLocalization.text(key) ?? key
+        },
+        onApplicationActivated: { [weak self] application, operationID in
+            guard let self else { return }
+            KeyboardInjector.focusActivatedAgent(
+                application,
+                profiles: self.settings.customApplicationProfiles,
+                switcherOperationID: operationID
+            )
+        }
+    )
     private let appleRemoteAppSwitcherSession = KeyboardInjector.AppSwitcherSession()
     private var appleRemoteAppSwitcherTimeout: DispatchSourceTimer?
     private var appleRemoteVoiceDevices = Set<SiriRemoteDeviceIdentity>()
@@ -4168,6 +4178,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func toggleAgentSwitcher(owner: String) {
+        KeyboardInjector.cancelPendingApplicationFocus()
         agentSwitcherLocalization.select(settings.applicationLanguage)
         if !agentSwitcher.isActive || agentSwitcher.owner != owner {
             for monitor in hidMonitors.values {

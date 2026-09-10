@@ -6,6 +6,57 @@ import Testing
 @MainActor
 @Suite("Agent switcher controller")
 struct AgentSwitcherControllerTests {
+    @Test func selectedApplicationFocusRunsOnceAfterFrontmostAndPanelDismissal() {
+        let scheduler = AgentSwitcherTestScheduler()
+        let renderer = AgentSwitcherTestRenderer()
+        var frontmost = "other.bundle"
+        var completion: ((Error?) -> Void)?
+        var focused: [String] = []
+        let controller = AgentSwitcherController(
+            opener: { _, callback in completion = callback },
+            onApplicationActivated: { application, operationID in
+                #expect(renderer.dismissCount == 1)
+                #expect(operationID == 1)
+                focused.append(application.id)
+            },
+            frontmostBundleIdentifier: { frontmost },
+            scheduler: scheduler,
+            renderer: renderer
+        )
+        controller.toggle(applications: testApplications, owner: "hid:one")
+        _ = controller.handle(button: .right, owner: "hid:one")
+        _ = controller.handle(button: .ok, owner: "hid:one")
+        #expect(focused.isEmpty)
+        completion?(nil)
+        scheduler.advance(byMilliseconds: 500)
+        #expect(focused.isEmpty)
+        frontmost = "codex.bundle"
+        scheduler.advance(byMilliseconds: 250)
+        #expect(focused == ["codex.bundle"])
+        completion?(nil)
+        scheduler.advance(byMilliseconds: 500)
+        #expect(focused == ["codex.bundle"])
+    }
+
+    @Test func cancelledOpeningNeverFocusesFromLateCallback() {
+        let scheduler = AgentSwitcherTestScheduler()
+        var completion: ((Error?) -> Void)?
+        var focusCount = 0
+        let controller = AgentSwitcherController(
+            opener: { _, callback in completion = callback },
+            onApplicationActivated: { _, _ in focusCount += 1 },
+            frontmostBundleIdentifier: { "cursor.bundle" },
+            scheduler: scheduler,
+            renderer: AgentSwitcherTestRenderer()
+        )
+        controller.toggle(applications: testApplications, owner: "hid:one")
+        _ = controller.handle(button: .ok, owner: "hid:one")
+        _ = controller.handle(button: .back, owner: "hid:one")
+        completion?(nil)
+        scheduler.advance(byMilliseconds: 500)
+        #expect(focusCount == 0)
+    }
+
     @Test func leftRightSelectionWrapsAndOKOpensTheSelectedApplication() {
         let scheduler = AgentSwitcherTestScheduler()
         let renderer = AgentSwitcherTestRenderer()

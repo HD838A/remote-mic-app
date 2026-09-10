@@ -62,6 +62,7 @@ final class AgentSwitcherController {
     static let frontmostPollMilliseconds: UInt64 = 250
 
     private let opener: Opener
+    private let onApplicationActivated: (AgentSwitcherApplication, UInt64) -> Void
     private let frontmostBundleIdentifier: () -> String?
     private let scheduler: HIDRemoteScheduling
     private let logger: (String) -> Void
@@ -78,6 +79,7 @@ final class AgentSwitcherController {
     init(
         localize: @escaping Localize = { $0 },
         opener: @escaping Opener = AgentSwitcherController.openApplication,
+        onApplicationActivated: @escaping (AgentSwitcherApplication, UInt64) -> Void = { _, _ in },
         frontmostBundleIdentifier: @escaping () -> String? = {
             NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         },
@@ -86,6 +88,7 @@ final class AgentSwitcherController {
         renderer: AgentSwitcherRendering? = nil
     ) {
         self.opener = opener
+        self.onApplicationActivated = onApplicationActivated
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
         self.scheduler = scheduler
         self.logger = logger
@@ -299,6 +302,8 @@ final class AgentSwitcherController {
         session = nil
         renderer.dismiss()
         logger("AGENT SWITCHER phase=completed result=frontmost selection=\(active.state.selectedIndex) operation_id=\(token) elapsed_ms=\(elapsedMilliseconds(active))")
+        // Dismiss first so the panel cannot consume the application's focus shortcut.
+        onApplicationActivated(application, token)
     }
 
     private func elapsedMilliseconds(_ session: Session) -> Int {

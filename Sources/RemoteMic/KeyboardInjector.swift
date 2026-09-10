@@ -21,6 +21,10 @@ enum KeyboardInjector {
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
     typealias ScrollPoster = (Int32) -> Void
+    typealias FrontmostApplicationProvider = () -> (
+        bundleIdentifier: String?,
+        processIdentifier: pid_t
+    )?
 
     final class AppSwitcherSession {
         private let keyStatePoster: KeyStatePoster
@@ -174,6 +178,86 @@ enum KeyboardInjector {
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
         ] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
+    }
+
+    static func cancelPendingApplicationFocus() {
+        _ = focusRequests.begin()
+        _ = frontmostFocusRequests.begin()
+    }
+
+    static func focusActivatedAgent(
+        _ application: AgentSwitcherApplication,
+        profiles: [CustomApplicationProfile],
+        switcherOperationID: UInt64,
+        frontmostApplication: FrontmostApplicationProvider = {
+            guard let application = NSWorkspace.shared.frontmostApplication else { return nil }
+            return (application.bundleIdentifier, application.processIdentifier)
+        },
+        applicationFocuser: @escaping ApplicationFocuser = focusApplication,
+        customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
+        logger: (String) -> Void = AppLogger.shared.write
+    ) {
+        let requestID = focusRequests.begin()
+        guard let frontmost = frontmostApplication(),
+              frontmost.bundleIdentifier == application.id
+        else {
+            logger(
+                "APP FOCUS skipped switcher_operation_id=\(switcherOperationID) " +
+                    "operation_id=\(requestID) method=agent_switcher reason=frontmost_changed"
+            )
+            return
+        }
+
+        logger(
+            "APP FOCUS handoff switcher_operation_id=\(switcherOperationID) " +
+                "operation_id=\(requestID) method=agent_switcher"
+        )
+
+        if let profile = profiles.first(where: { $0.bundleIdentifier == application.id }) {
+            switch profile.focusStrategy {
+            case .none:
+                logger(
+                    "APP FOCUS skipped switcher_operation_id=\(switcherOperationID) " +
+                        "operation_id=\(requestID) method=custom reason=focus_disabled"
+                )
+            case .keyboardShortcut:
+                guard profile.focusShortcut != nil else {
+                    logger(
+                        "APP FOCUS skipped switcher_operation_id=\(switcherOperationID) " +
+                            "operation_id=\(requestID) method=custom_shortcut reason=shortcut_missing"
+                    )
+                    return
+                }
+                customApplicationFocuser(profile, frontmost.processIdentifier, requestID)
+            case .recordedAccessibility:
+                guard profile.accessibilityTarget != nil else {
+                    logger(
+                        "APP FOCUS skipped switcher_operation_id=\(switcherOperationID) " +
+                            "operation_id=\(requestID) method=custom_accessibility reason=target_missing"
+                    )
+                    return
+                }
+                customApplicationFocuser(profile, frontmost.processIdentifier, requestID)
+            }
+            return
+        }
+
+        guard let preset = PresetApplication.allCases.first(where: { $0.bundleIdentifier == application.id }),
+              preset.focusStrategy != nil
+        else {
+            logger(
+                "APP FOCUS skipped switcher_operation_id=\(switcherOperationID) " +
+                    "operation_id=\(requestID) method=preset reason=strategy_missing"
+            )
+            return
+        }
+
+        applicationFocuser(
+            application.url,
+            preset,
+            frontmost.processIdentifier,
+            requestID
+        )
     }
 
     @discardableResult
@@ -659,7 +743,8 @@ enum KeyboardInjector {
                 terminalFocuser: { _ in
                     guard isAccessibilityTrusted else {
                         AppLogger.shared.write(
-                            "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=not_trusted"
+                            "APP FOCUS failed operation_id=\(requestID) " +
+                                "bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=not_trusted"
                         )
                         return false
                     }
@@ -671,7 +756,8 @@ enum KeyboardInjector {
             )
             if focused {
                 AppLogger.shared.write(
-                    "APP FOCUS succeeded bundle=\(application.bundleIdentifier) method=cmux_api_accessibility"
+                    "APP FOCUS succeeded operation_id=\(requestID) " +
+                        "bundle=\(application.bundleIdentifier) method=cmux_api_accessibility"
                 )
                 completeComposerFocus(
                     true,
@@ -694,7 +780,8 @@ enum KeyboardInjector {
                 )
             } else if requestGate.isCurrent(requestID) {
                 AppLogger.shared.write(
-                    "APP FOCUS failed bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=terminal_not_focused"
+                    "APP FOCUS failed operation_id=\(requestID) " +
+                        "bundle=\(application.bundleIdentifier) method=cmux_accessibility reason=terminal_not_focused"
                 )
                 completeComposerFocus(
                     false,
@@ -722,7 +809,8 @@ enum KeyboardInjector {
 
             if applicationIsFrontmost(processIdentifier), !isAccessibilityTrusted {
                 AppLogger.shared.write(
-                    "APP FOCUS skipped bundle=\(bundleIdentifier) method=accessibility reason=not_trusted"
+                    "APP FOCUS skipped operation_id=\(requestID) " +
+                        "bundle=\(bundleIdentifier) method=accessibility reason=not_trusted"
                 )
                 completeComposerFocus(
                     false,
@@ -737,7 +825,8 @@ enum KeyboardInjector {
                applicationIsFrontmost(processIdentifier),
                focusWeChatComposer(processIdentifier: processIdentifier) {
                 AppLogger.shared.write(
-                    "APP FOCUS succeeded bundle=\(bundleIdentifier) method=wechat_window_click"
+                    "APP FOCUS succeeded operation_id=\(requestID) " +
+                        "bundle=\(bundleIdentifier) method=wechat_window_click"
                 )
                 completeComposerFocus(
                     true,
@@ -760,7 +849,8 @@ enum KeyboardInjector {
                     emitDiagnostics: attempt == 0 || attempt + 1 == composerFocusMaximumAttempts
                 ) {
                     AppLogger.shared.write(
-                        "APP FOCUS succeeded bundle=\(bundleIdentifier) method=accessibility"
+                        "APP FOCUS succeeded operation_id=\(requestID) " +
+                            "bundle=\(bundleIdentifier) method=accessibility"
                     )
                     completeComposerFocus(
                         true,
@@ -784,7 +874,8 @@ enum KeyboardInjector {
                 )
             } else if requestGate.isCurrent(requestID) {
                 AppLogger.shared.write(
-                    "APP FOCUS failed bundle=\(bundleIdentifier) method=accessibility reason=composer_not_found"
+                    "APP FOCUS failed operation_id=\(requestID) " +
+                        "bundle=\(bundleIdentifier) method=accessibility reason=composer_not_found"
                 )
                 completeComposerFocus(
                     false,
