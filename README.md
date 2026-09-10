@@ -13,11 +13,6 @@
 <table>
   <tr>
     <td align="center">
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb"><img src="Screenshots/community-entry-qrcode.png" alt="无线麦 APP 飞书固定入口" width="220"></a><br>
-      <strong>飞书固定入口</strong><br>
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb">点击打开最新加群页面</a>
-    </td>
-    <td align="center">
       <img src="Screenshots/wechat-group-qrcode.jpg" alt="无线麦 APP 微信群二维码" width="220"><br>
       <strong>微信群二维码</strong><br>
       微信扫码加入交流群
@@ -206,7 +201,9 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 请先查看[排障指南](TROUBLESHOOTING.md)。首次安装的完整步骤见[首次安装说明](Resources/首次安装说明.md)。
 
-开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)；新增或重命名仓库文件前请阅读[文件命名规范](FILE_NAMING.md)。
+所有人开发新功能前，包括仓库作者、维护者、外部贡献者和自动化 Agent，都必须阅读并遵守[新功能开发规范](FEATURE_DEVELOPMENT.md)。
+
+开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)；分支与 PR 管理见[分支与提交管理策略](BRANCH_MANAGEMENT.md)；新增或重命名仓库文件前请阅读[文件命名规范](FILE_NAMING.md)。
 
 后续开发计划见 [TODO](TODO.md)。
 

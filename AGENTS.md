@@ -1,5 +1,11 @@
 # 仓库开发规则
 
+## 新功能开发规范
+
+- 开发任何新功能前，必须完整阅读并遵守 [`FEATURE_DEVELOPMENT.md`](FEATURE_DEVELOPMENT.md)。该规范适用于仓库作者、维护者、外部贡献者、自动化 Agent 和受委托开发者，不因身份而豁免。
+- 新功能必须从最新 `origin/main` 开始，开发前遍历全部 Open PR 完成查重；UI 变更 PR 必须附实际运行截图；任何方案都不得读取或依赖第三方 App 的私有文件、数据或协议。
+- 新功能 PR 必须完成 [PR 提交模板](.github/PULL_REQUEST_TEMPLATE.md) 中的检查项，并同时遵守 [`BRANCH_MANAGEMENT.md`](BRANCH_MANAGEMENT.md) 与本文件的专项门禁。
+
 ## SwiftPM 本地凭据边界
 
 - 在 macOS 本地运行本仓库的 `swift build`、`swift test` 或 `swift package resolve` 时，必须传入 `--disable-keychain`；GitHub 源码依赖继续使用现有 Git 凭据助手，公开二进制依赖不得扫描登录钥匙串。
