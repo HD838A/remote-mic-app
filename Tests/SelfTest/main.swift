@@ -302,6 +302,7 @@ check(
     VoiceKeyMode.function.keyCode == 63 &&
         VoiceKeyMode.leftCommand.keyCode == 55 &&
         VoiceKeyMode.rightCommand.keyCode == 54 &&
+        VoiceKeyMode.rightOption.keyCode == 61 &&
         HIDPermissionGate.nextPermissionRequest(
             mappingEnabled: false,
             voiceKeyMode: .leftCommand,

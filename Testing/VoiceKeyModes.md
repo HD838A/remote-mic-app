@@ -4,7 +4,7 @@
 
 - 适用分支：`codex/voice-key-command-modes` 及包含该功能的 macOS 版本。
 - 适用系统：Apple Silicon 使用 macOS 14 或更高版本；Intel 使用 macOS 13 或更高版本。
-- 功能范围：Fn/地球键（默认）、左 Command 长按、右 Command 长按，以及既有 Fn 点按兼容模式。
+- 功能范围：Fn/地球键（默认）、左 Command 长按、右 Command 长按、右 Option 长按，以及既有 Fn 点按兼容模式。
 - 本手册不把模拟 HID、单元测试、构建、签名或截图视为 RC003、iPhone、Apple Watch、网页版、系统权限或第三方语音应用的真实环境验收。
 
 ## 测试前准备
@@ -28,7 +28,7 @@
    - 预期：无横向裁切，中文最终显示字号不小于 12pt。
 3. 使用项目截图 harness 在 `800 × 650` 压力尺寸渲染映射页。
    - 预期：仅用于发现布局溢出，不表述为生产 App 支持 `800 × 650` 真实窗口。
-4. 依次选择 Fn/地球键、左 Command、右 Command。
+4. 依次选择 Fn/地球键、左 Command、右 Command、右 Option。
    - 预期：Fn 模式可设置“语音键模拟 Fn 点按”；Command 模式停用该开关，并显示权限与目标 App 兼容性说明。
 5. 关闭并重新打开 App。
    - 预期：所选模式持久化；默认和旧版本仍为 Fn/地球键。
