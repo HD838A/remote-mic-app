@@ -1063,7 +1063,7 @@ struct RemoteButtonsTests {
         })
     }
 
-    @Test func customShortcutPostsRecordedKeyAndRequiresAccessibility() {
+    @Test func customShortcutPostsRecordedCombinationAndSingleKeyAndRequiresAccessibility() {
         let shortcut = CustomKeyboardShortcut(
             keyCode: 40,
             modifierFlags: [.control, .option],
@@ -1079,6 +1079,21 @@ struct RemoteButtonsTests {
         ))
         #expect(posted?.0 == 40)
         #expect(posted?.1 == [.maskControl, .maskAlternate])
+
+        let singleKey = CustomKeyboardShortcut(
+            keyCode: 49,
+            modifierFlags: [],
+            keyLabel: "Space"
+        )
+        posted = nil
+        #expect(KeyboardInjector.send(
+            .customShortcut,
+            shortcut: singleKey,
+            accessibilityTrusted: { true },
+            keyPoster: { posted = ($0, $1) }
+        ))
+        #expect(posted?.0 == 49)
+        #expect(posted?.1.isEmpty == true)
 
         posted = nil
         #expect(!KeyboardInjector.send(
