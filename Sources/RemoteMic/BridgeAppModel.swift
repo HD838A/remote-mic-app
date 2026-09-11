@@ -530,6 +530,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var appleRemoteRepeatCounts: [AppleRemoteButtonGestureKey: Int] = [:]
     private var appleRemoteRepeatOperationIDs: [AppleRemoteButtonGestureKey: UInt64] = [:]
     private var appleRemoteRepeatOperationCounter: UInt64 = 0
+    private let agentSwitcherInput = AgentSwitcherInputRouter()
+    private var agentSwitcherActionOwner: String?
+    private lazy var agentSwitcherLocalization = LocalizationStore(settings: settings)
+    private lazy var agentSwitcher = AgentSwitcherController(
+        localize: { [weak self] key in
+            self?.agentSwitcherLocalization.text(key) ?? key
+        },
+        onApplicationActivated: { [weak self] application, operationID in
+            guard let self else { return }
+            KeyboardInjector.focusActivatedAgent(
+                application,
+                profiles: self.settings.customApplicationProfiles,
+                switcherOperationID: operationID
+            )
+        }
+    )
     private let appleRemoteAppSwitcherSession = KeyboardInjector.AppSwitcherSession()
     private var appleRemoteAppSwitcherTimeout: DispatchSourceTimer?
     private var appleRemoteVoiceDevices = Set<SiriRemoteDeviceIdentity>()
@@ -892,6 +908,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func stop() {
+        agentSwitcher.cancel(reason: "app_stop")
         privateFeature.stop()
         macroFeature.stop()
         preferredInputSourceMonitor.stop()
@@ -2108,11 +2125,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 self?.performExternalConfiguredAction(configured) ?? false
             },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
-                self?.performButtonProfileBoundAction(
+                guard let self else { return false }
+                let previousOwner = self.agentSwitcherActionOwner
+                self.agentSwitcherActionOwner = profileID.map(Self.hidSwitcherOwner)
+                defer { self.agentSwitcherActionOwner = previousOwner }
+                return self.performButtonProfileBoundAction(
                     profileID: profileID,
                     button: button,
                     trigger: trigger
-                ) == true
+                )
             },
             hasOverrideBinding: { [weak self] profileID, button, trigger in
                 self?.macroFeature.hasActiveBinding(
@@ -2163,6 +2184,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 source: .bluetoothRemote
             )
             if self.macroFeature.isEditorActive {
+                self.resetAgentSwitcher(owner: Self.hidSwitcherOwner(resolvedProfileID), reason: "binding_editor")
                 AppLogger.shared.write(
                     "HID BUTTON button=\(button.rawValue) path=binding_editor_capture"
                 )
@@ -2172,7 +2194,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         monitor.onInternalAction = { [weak self] profileID, action in
             guard let self else { return }
             if let profileID { self.selectRemoteProfile(profileID) }
-            self.performInternalAction(action)
+            self.performInternalAction(action, owner: profileID.map(Self.hidSwitcherOwner))
+        }
+        monitor.onModalButtonEvent = { [weak self] profileID, button, phase in
+            guard let self, let profileID else { return false }
+            return self.handleAgentSwitcherButton(button, phase: phase, owner: Self.hidSwitcherOwner(profileID))
+        }
+        monitor.onInputReset = { [weak self] profileID in
+            guard let self, let profileID else { return }
+            self.resetAgentSwitcher(owner: Self.hidSwitcherOwner(profileID), reason: "input_reset")
         }
         return monitor
     }
@@ -2483,6 +2513,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
         } else {
             if let profileID = appleRemoteProfileIDs.removeValue(forKey: connection.device) {
+                resetAgentSwitcher(owner: Self.appleSwitcherOwner(profileID), reason: "disconnect")
                 connectedAppleRemoteProfileIDs.remove(profileID)
                 remoteBatteryLevels.removeValue(forKey: profileID)
                 remotePowerStates.removeValue(forKey: profileID)
@@ -2655,6 +2686,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
 
         if macroFeature.isEditorActive {
+            resetAgentSwitcher(owner: Self.appleSwitcherOwner(profileID), reason: "binding_editor")
             if phase == .press {
                 macroFeature.noteButtonInteraction(button: button)
             }
@@ -2662,6 +2694,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "APPLE REMOTE BUTTON phase=\(phase.rawValue) button=\(button.rawValue) " +
                     "path=binding_editor_capture"
             )
+            return
+        }
+
+        if handleAgentSwitcherButton(button, phase: phase, owner: Self.appleSwitcherOwner(profileID)) {
             return
         }
 
@@ -2944,6 +2980,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         trigger: ButtonTrigger,
         profileID: UUID
     ) -> Bool {
+        let previousOwner = agentSwitcherActionOwner
+        agentSwitcherActionOwner = Self.appleSwitcherOwner(profileID)
+        defer { agentSwitcherActionOwner = previousOwner }
+
         if performButtonProfileBoundAction(
             profileID: profileID,
             button: button,
@@ -3322,6 +3362,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         for device: SiriRemoteDeviceIdentity,
         reason: String
     ) {
+        if let profileID = appleRemoteProfileIDs[device] {
+            resetAgentSwitcher(owner: Self.appleSwitcherOwner(profileID), reason: reason)
+        }
         if appleRemoteAppSwitcherSession.isActive {
             finishAppleRemoteAppSwitcher(reason: "input_reset_\(reason)", confirmed: false)
         }
@@ -3871,7 +3914,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ button: RemoteButton,
         source: UsageEventSource
     ) -> Bool {
-        performMobileConfiguredAction(for: button, trigger: .singleClick, source: source)
+        let owner = Self.mobileSwitcherOwner(source)
+        if macroFeature.isEditorActive {
+            resetAgentSwitcher(owner: owner, reason: "binding_editor")
+            macroFeature.noteButtonInteraction(button: button)
+            AppLogger.shared.write("PHONE REMOTE path=binding_editor_capture phase=click")
+            return true
+        }
+        if handleAgentSwitcherButton(button, phase: .press, owner: owner) {
+            _ = handleAgentSwitcherButton(button, phase: .release, owner: owner)
+            return true
+        }
+        let performed = performMobileConfiguredAction(for: button, trigger: .singleClick, source: source)
+        _ = handleAgentSwitcherButton(button, phase: .release, owner: owner)
+        return performed
     }
 
     private func observeMobileButton(_ button: RemoteButton, source: UsageEventSource) {
@@ -3887,6 +3943,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         source: UsageEventSource
     ) -> Bool {
         if macroFeature.isEditorActive {
+            resetAgentSwitcher(owner: Self.mobileSwitcherOwner(source), reason: "binding_editor")
             if phase == .press {
                 macroFeature.noteButtonInteraction(button: button)
             }
@@ -3894,6 +3951,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "PHONE REMOTE button=\(button.rawValue) phase=\(phase.rawValue) " +
                     "path=binding_editor_capture"
             )
+            return true
+        }
+        if handleAgentSwitcherButton(button, phase: phase, owner: Self.mobileSwitcherOwner(source)) {
             return true
         }
         let profileID = settings.selectedRemoteProfileID
@@ -4007,7 +4067,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         timer.resume()
     }
 
-    private func resetMobileButtonGestures(source: UsageEventSource) {
+    private func resetMobileButtonGestures(source: UsageEventSource, resetSwitcher: Bool = true) {
+        if resetSwitcher {
+            resetAgentSwitcher(owner: Self.mobileSwitcherOwner(source), reason: "input_reset")
+        }
         let doubleClickKeys = mobileDoubleClickTimers.keys.filter { $0.source == source }
         doubleClickKeys.forEach {
             mobileDoubleClickTimers.removeValue(forKey: $0)?.cancel()
@@ -4024,6 +4087,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         trigger: ButtonTrigger,
         source: UsageEventSource
     ) -> Bool {
+        let previousOwner = agentSwitcherActionOwner
+        agentSwitcherActionOwner = Self.mobileSwitcherOwner(source)
+        defer { agentSwitcherActionOwner = previousOwner }
+
         if performButtonProfileBoundAction(
             profileID: settings.selectedRemoteProfileID,
             button: button,
@@ -4155,8 +4222,86 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
+    func previewAgentSwitcher() {
+        toggleAgentSwitcher(owner: "preview")
+    }
+
+    private static func hidSwitcherOwner(_ profileID: UUID) -> String { "hid:\(profileID)" }
+    private static func appleSwitcherOwner(_ profileID: UUID) -> String { "apple:\(profileID)" }
+    private static func mobileSwitcherOwner(_ source: UsageEventSource) -> String { "mobile:\(source.rawValue)" }
+
+    private func handleAgentSwitcherButton(
+        _ button: RemoteButton,
+        phase: RemoteButtonPhase,
+        owner: String
+    ) -> Bool {
+        agentSwitcherInput.consume(
+            button: button,
+            phase: phase,
+            owner: owner,
+            isActive: agentSwitcher.isActive && agentSwitcher.owner == owner
+        ) {
+            agentSwitcher.handle(button: button, owner: owner)
+        }
+    }
+
+    private func resetAgentSwitcher(owner: String, reason: String) {
+        agentSwitcherInput.reset(owner: owner)
+        agentSwitcher.cancel(owner: owner, reason: reason)
+    }
+
+    private func toggleAgentSwitcher(owner: String) {
+        KeyboardInjector.cancelPendingApplicationFocus()
+        agentSwitcherLocalization.select(settings.applicationLanguage)
+        if !agentSwitcher.isActive || agentSwitcher.owner != owner {
+            for monitor in hidMonitors.values {
+                if monitor.profileID.map(Self.hidSwitcherOwner) == owner {
+                    monitor.prepareForAgentSwitcher()
+                }
+            }
+            if discoveryHIDMonitor?.profileID.map(Self.hidSwitcherOwner) == owner {
+                discoveryHIDMonitor?.prepareForAgentSwitcher()
+            }
+            for (device, profileID) in appleRemoteProfileIDs where Self.appleSwitcherOwner(profileID) == owner {
+                if appleRemoteAppSwitcherSession.isActive {
+                    finishAppleRemoteAppSwitcher(reason: "agent_switcher", confirmed: false)
+                }
+                for key in Array(appleRemoteDoubleClickTimers.keys) where key.device == device {
+                    appleRemoteDoubleClickTimers.removeValue(forKey: key)?.cancel()
+                }
+                for key in Array(appleRemoteLongPressTimers.keys) where key.device == device {
+                    appleRemoteLongPressTimers.removeValue(forKey: key)?.cancel()
+                }
+                for key in Array(appleRemoteRepeatTimers.keys) where key.device == device {
+                    cancelAppleRemoteRepeat(for: key.button, device: device, reason: "agent_switcher")
+                }
+                appleRemoteGestureRecognizers.removeValue(forKey: device)
+            }
+            for source in UsageEventSource.allCases where Self.mobileSwitcherOwner(source) == owner {
+                resetMobileButtonGestures(source: source, resetSwitcher: false)
+            }
+        }
+
+        let localization = agentSwitcherLocalization
+        let applications = settings.agentSwitcherBundleIdentifiers.compactMap { identifier -> AgentSwitcherApplication? in
+            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier) else { return nil }
+            let preset = PresetApplication.allCases.first { $0.bundleIdentifier == identifier }
+            let profile = settings.customApplicationProfiles.first { $0.bundleIdentifier == identifier }
+            return AgentSwitcherApplication(
+                id: identifier,
+                name: preset?.displayName(using: localization) ?? profile?.displayName ?? url.deletingPathExtension().lastPathComponent,
+                url: url
+            )
+        }
+        agentSwitcher.toggle(applications: applications, owner: owner)
+    }
+
     @discardableResult
-    private func performInternalAction(_ action: ButtonAction) -> Bool {
+    private func performInternalAction(_ action: ButtonAction, owner: String? = nil) -> Bool {
+        if action == .agentSwitcher {
+            toggleAgentSwitcher(owner: owner ?? agentSwitcherActionOwner ?? "preview")
+            return true
+        }
         guard action == .toggleLongRecording else { return false }
         guard action.isEnabled(
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
