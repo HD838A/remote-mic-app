@@ -5,7 +5,6 @@ umask 077
 ROOT="${REPOSITORY_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 GH_BIN="${GH_BIN:-gh}"
-EXPECTED_STABLE_TAG="${EXPECTED_STABLE_TAG:-v1.8.3}"
 ATTESTATION="${1:-}"
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
@@ -29,6 +28,19 @@ for command_name in git jq shasum curl "$GH_BIN"; do
   }
 done
 
+cd "$ROOT"
+[[ -z "$(git status --porcelain)" ]] || {
+  echo "Preview publication requires a clean worktree" >&2
+  exit 1
+}
+git fetch --no-tags origin main
+current_branch="$(git branch --show-current)"
+[[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" &&
+   ( "$current_branch" == main || ( "${GITHUB_ACTIONS:-}" == true && -z "$current_branch" ) ) ]] || {
+  echo "Preview publication must run from exact origin/main" >&2
+  exit 1
+}
+
 if [[ "${RELEASE_ALLOW_LOCAL_FIXTURE:-0}" != 1 ]]; then
   current_commit="$(git -C "$ROOT" rev-parse HEAD)"
   [[ "${GITHUB_ACTIONS:-}" == true &&
@@ -43,9 +55,16 @@ if [[ "${RELEASE_ALLOW_LOCAL_FIXTURE:-0}" != 1 ]]; then
 fi
 
 jq -e '
-  .schemaVersion == 3 and .result == "passed" and .mode == "preview" and
+  .schemaVersion == 4 and .result == "passed" and .mode == "preview" and
   (.tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+  (.sourceBranch == "main" or (.sourceBranch | test("^hotfix/v[0-9]+[.][0-9]+[.][0-9]+$"))) and
+  (.sourceKind == "main" or .sourceKind == "hotfix") and
   (.sourceCommit | test("^[0-9a-f]{40}$")) and
+  (.sourceWorkflowCommit | test("^[0-9a-f]{40}$")) and
+  ((.sourceKind == "main" and .sourceBranch == "main" and .sourceBaseTag == "" and .sourceBaseCommit == "") or
+   (.sourceKind == "hotfix" and .sourceBranch == ("hotfix/" + .tag) and
+    (.sourceBaseTag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+    (.sourceBaseCommit | test("^[0-9a-f]{40}$")))) and
   (.sourceRunId | type == "number" and . > 0) and
   (.sourceRunAttempt | type == "number" and . > 0) and
   (.signedArtifactId | type == "number" and . > 0) and
@@ -61,7 +80,12 @@ jq -e '
 }
 
 tag="$(jq -r '.tag' "$ATTESTATION")"
+source_branch="$(jq -r '.sourceBranch' "$ATTESTATION")"
+source_kind="$(jq -r '.sourceKind' "$ATTESTATION")"
+source_base_tag="$(jq -r '.sourceBaseTag' "$ATTESTATION")"
+source_base_commit="$(jq -r '.sourceBaseCommit' "$ATTESTATION")"
 source_commit="$(jq -r '.sourceCommit' "$ATTESTATION")"
+source_workflow_commit="$(jq -r '.sourceWorkflowCommit' "$ATTESTATION")"
 run_id="$(jq -r '.sourceRunId' "$ATTESTATION")"
 run_attempt="$(jq -r '.sourceRunAttempt' "$ATTESTATION")"
 artifact_id="$(jq -r '.signedArtifactId' "$ATTESTATION")"
@@ -70,15 +94,15 @@ expected_manifest_sha="$(jq -r '.assetManifestSHA256' "$ATTESTATION")"
 staged_at="$(jq -r '.stagedAt' "$ATTESTATION")"
 version="${tag#v}"
 
-git -C "$ROOT" fetch --no-tags origin main
-git -C "$ROOT" merge-base --is-ancestor "$source_commit" "origin/main" || {
-  echo "staged source commit is not contained in current origin/main" >&2
+stable_release_before="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
+  echo "unable to resolve the current stable latest Release" >&2
   exit 1
 }
-
-stable_latest="$($GH_BIN api "repos/$REPOSITORY/releases/latest" --jq '.tag_name')"
-[[ "$stable_latest" == "$EXPECTED_STABLE_TAG" ]] || {
-  echo "Preview requires stable latest $EXPECTED_STABLE_TAG; found $stable_latest" >&2
+stable_latest_before="$(printf '%s\n' "$stable_release_before" | jq -r '.tag_name')"
+printf '%s\n' "$stable_release_before" | jq -e \
+  --arg tag "$stable_latest_before" \
+  '.tag_name == $tag and ($tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and .draft == false and .prerelease == false' >/dev/null || {
+  echo "releases/latest is not a formal stable Release: $stable_latest_before" >&2
   exit 1
 }
 
@@ -108,6 +132,13 @@ stage_record="$recovered/stage-record/preview-stage-record.json"
   echo "Preview UI attestation failed final publication verification" >&2
   exit 1
 }
+RELEASE_SOURCE_CHECKOUT_MODE=none \
+RELEASE_SOURCE_REMOTE_MODE=published \
+RELEASE_SOURCE_EXPECTED_BASE_TAG="$source_base_tag" \
+RELEASE_SOURCE_EXPECTED_BASE_COMMIT="$source_base_commit" \
+GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
+  "$ROOT/scripts/verify-public-release-source.sh" \
+  "$source_branch" "$source_commit" "$version" >/dev/null
 jq -e \
   --arg tag "$tag" --arg commit "$source_commit" --arg version "$version" \
   --arg build "$(jq -r '.target.build' "$ATTESTATION")" '
@@ -122,7 +153,12 @@ provenance="$work_dir/candidate-provenance.json"
 jq -S \
   --arg repository "$REPOSITORY" \
   --arg tag "$tag" \
+  --arg sourceBranch "$source_branch" \
+  --arg sourceKind "$source_kind" \
+  --arg sourceBaseTag "$source_base_tag" \
+  --arg sourceBaseCommit "$source_base_commit" \
   --arg sourceCommit "$source_commit" \
+  --arg sourceWorkflowCommit "$source_workflow_commit" \
   --argjson sourceRunId "$run_id" \
   --argjson sourceRunAttempt "$run_attempt" \
   --argjson signedArtifactId "$artifact_id" \
@@ -132,11 +168,16 @@ jq -S \
   --arg stagedAt "$staged_at" \
   --slurpfile manifest "$manifest" '
     {
-      schemaVersion:4,
+      schemaVersion:5,
       repository:$repository,
       tag:$tag,
       tagCommit:$sourceCommit,
+      sourceBranch:$sourceBranch,
+      sourceKind:$sourceKind,
+      sourceBaseTag:$sourceBaseTag,
+      sourceBaseCommit:$sourceBaseCommit,
       sourceCommit:$sourceCommit,
+      sourceWorkflowCommit:$sourceWorkflowCommit,
       version:$manifest[0].version,
       build:$manifest[0].build,
       sourceRunId:$sourceRunId,
@@ -324,10 +365,50 @@ while IFS=$'\t' read -r name _ expected_sha; do
   fi
 done < "$expected_assets"
 
-[[ "$($GH_BIN api "repos/$REPOSITORY/releases/latest" --jq '.tag_name')" == "$EXPECTED_STABLE_TAG" ]] || {
-  echo "Preview publication changed releases/latest" >&2
+verify_channel_appcast() {
+  local channel="$1"
+  local appcast="$2"
+  local expected_file="$3"
+  local downloaded_file="$4"
+  local attempt
+  for attempt in {1..20}; do
+    if /usr/bin/curl --fail --silent --show-error --location \
+        "https://download.sayall.app/mac/channels/$channel/$appcast" \
+        --output "$downloaded_file" && \
+       /usr/bin/cmp -s "$expected_file" "$downloaded_file"; then
+      return 0
+    fi
+    (( attempt < 20 )) && /bin/sleep 6
+  done
+  echo "Cloudflare $channel channel did not resolve to the expected appcast: $appcast" >&2
+  return 1
+}
+
+stable_release_after="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
+  echo "unable to verify releases/latest after publication" >&2
   exit 1
 }
+stable_latest_after="$(printf '%s\n' "$stable_release_after" | jq -r '.tag_name')"
+printf '%s\n' "$stable_release_after" | jq -e \
+  --arg tag "$stable_latest_after" \
+  '.tag_name == $tag and ($tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and .draft == false and .prerelease == false' >/dev/null || {
+  echo "releases/latest is no longer a formal stable Release" >&2
+  exit 1
+}
+[[ "$stable_latest_after" == "$stable_latest_before" ]] || {
+  echo "Preview publication changed releases/latest from $stable_latest_before to $stable_latest_after" >&2
+  exit 1
+}
+
+for appcast in appcast.xml appcast-intel.xml; do
+  verify_channel_appcast \
+    preview "$appcast" "$github_dir/$appcast" "$work_dir/preview-channel-$appcast"
+  /usr/bin/curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+    "https://github.com/$REPOSITORY/releases/download/$stable_latest_after/$appcast" \
+    --output "$work_dir/stable-fixed-$appcast"
+  verify_channel_appcast \
+    stable "$appcast" "$work_dir/stable-fixed-$appcast" "$work_dir/stable-channel-$appcast"
+done
 
 echo "PREVIEW RELEASE PUBLISHED AND VERIFIED"
 echo "TAG: $tag"

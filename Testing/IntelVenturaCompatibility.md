@@ -43,11 +43,11 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 
 必须使用最终 Developer ID 签名、公证并 staple 的候选产物完成以下交叉检查，不能用 ad-hoc 包替代：
 
-1. 在 Apple Silicon Mac 上打开 `Install Remote Mic Intel.pkg`。预期 Installer 在进入安装步骤前显示“此安装包仅适用于 Intel Mac”，并提示下载文件名不带 `Intel` 的 Apple Silicon 版本。
+1. 在 Apple Silicon Mac 上打开 `Install SayAll Intel.pkg`。预期 Installer 在进入安装步骤前显示“此安装包仅适用于 Intel Mac”，并提示下载文件名不带 `Intel` 的 Apple Silicon 版本。
 2. 关闭错误提示，确认没有请求管理员密码，没有改动 `/Applications/SayAll.app` 或旧版 `/Applications/Remote Mic.app`、`/Applications/无线麦.app`，也没有新增或替换 `/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver`。
-3. 在同一台 Mac 打开 `Install Remote Mic.pkg`。预期能够进入正常安装流程。
-4. 在真实 Intel Ventura Mac 上打开 `Install Remote Mic.pkg`。预期 Installer 在进入安装步骤前显示“此安装包仅适用于 Apple 芯片 Mac”，并提示下载文件名带 `Intel` 的版本。
-5. 关闭错误提示并确认 App、驱动均未变化；随后打开 `Install Remote Mic Intel.pkg`，确认能够进入正常安装流程。
+3. 在同一台 Mac 打开 `Install SayAll.pkg`。预期能够进入正常安装流程。
+4. 在真实 Intel Ventura Mac 上打开 `Install SayAll.pkg`。预期 Installer 在进入安装步骤前显示“此安装包仅适用于 Apple 芯片 Mac”，并提示下载文件名带 `Intel` 的版本。
+5. 关闭错误提示并确认 App、驱动均未变化；随后打开 `Install SayAll Intel.pkg`，确认能够进入正常安装流程。
 6. 分别在中文和英文系统语言下重复错误包检查，确认错误内容跟随 Installer 界面语言，而不是安装脚本的 `LANG` 环境变量。
 
 任一错误包能够继续进入授权或复制文件、提示只显示内部架构值 `arm64` / `x86_64`、没有指出另一安装包、语言错误，或关闭后 App/驱动发生变化，都判定为失败。使用命令行只读执行 `installer -showChoicesXML -pkg <PKG> -target /` 可以验证 Distribution 拒绝原因，但不能替代 Installer.app 的真实界面验收。
@@ -57,7 +57,7 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 使用一台未安装 Xcode 或 Command Line Tools 的 Intel Mac，并从 GitHub Release 下载最终签名、公证后的 Intel 测试包。
 
 1. 下载后核对 SHA-256，打开 DMG，确认 Gatekeeper 不提示来源或完整性异常。
-2. 运行 `Install Remote Mic Intel.pkg`，确认普通管理员授权即可完成安装，不要求下载开发者工具。
+2. 运行 `Install SayAll Intel.pkg`，确认普通管理员授权即可完成安装，不要求下载开发者工具。
 3. 分别在 Finder、Launchpad、Dock 和 App 自身关于页查看 SayAll 图标，确认使用透明圆角品牌图，不出现铺满画布的正方形背景；覆盖安装后也不能继续显示旧缓存图标。
 4. 首次启动完成蓝牙、输入监控和辅助功能权限流程；已安装过旧版本的用户不应重新进入完整 Onboarding。
 5. 配对小米蓝牙遥控器 2 Pro，验证连接、断开、重连和实体按键事件。
@@ -67,7 +67,7 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 9. 验证 iOS 附近连接与网页版连接入口，不改变现有邀请码和服务配置行为。
 10. 让 Mac 睡眠后唤醒，验证 App 不崩溃，遥控器、HID、音频设备和菜单栏状态能够恢复。
 11. 使用 Intel 测试 Feed 验证同架构跨版本更新；不得下载或安装 Apple Silicon 资产。
-12. 运行 `Uninstall Remote Mic Intel.pkg`，确认驱动移除、Core Audio 刷新且 App 的既有卸载行为不变。
+12. 运行 `Uninstall SayAll Intel.pkg`，确认驱动移除、Core Audio 刷新且 App 的既有卸载行为不变。
 
 ## 失败时收集信息
 

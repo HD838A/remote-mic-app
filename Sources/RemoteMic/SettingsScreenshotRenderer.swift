@@ -29,10 +29,11 @@ enum SettingsScreenshotRenderer {
     private static let sections: [SettingsSection] = [
         .mapping,
         .macros,
+        .buttonProfiles,
+        .membership,
         .statistics,
         .transcripts,
         .connection,
-        .permissions,
         .about,
     ]
 
@@ -55,6 +56,9 @@ enum SettingsScreenshotRenderer {
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
+        let expandsShare = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_EXPAND_SHARE"
+        ] == "1"
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -78,11 +82,14 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
+        seedStatisticsForScreenshot(settings)
         let model = BridgeAppModel(settings: settings)
         let updateInformation = UpdateInformationStore()
+        seedAvailableUpdate(updateInformation, language: language)
         let localization = LocalizationStore(settings: settings)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
+        model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
 
         _ = NSApplication.shared
         let previousAppearance = NSApp.appearance
@@ -94,9 +101,7 @@ enum SettingsScreenshotRenderer {
                 model: model,
                 updateInformation: updateInformation,
                 initialSection: section,
-                initialShareSection: section == .statistics || section == .about
-                    ? section
-                    : nil,
+                initialShareSection: section == .about && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor
                     ? .ok
                     : nil,
@@ -140,6 +145,70 @@ enum SettingsScreenshotRenderer {
             try png.write(to: outputDirectory.appendingPathComponent(filename))
             window.orderOut(nil)
             window.contentViewController = nil
+        }
+    }
+
+    private static func seedAvailableUpdate(
+        _ updateInformation: UpdateInformationStore,
+        language: AppLanguage
+    ) {
+        let notes: String
+        switch language {
+        case .simplifiedChinese:
+            notes = "优化设置页面结构\n权限与日志集中管理\n修复已知问题"
+        case .system, .english:
+            notes = "Refined the Settings layout\nCentralized permissions and logs\nFixed known issues"
+        }
+        updateInformation.setAvailable(
+            displayVersion: "1.9.22",
+            buildVersion: "183",
+            archiveURL: nil,
+            fallbackDescription: notes,
+            localeIdentifier: language.rawValue
+        )
+    }
+
+    private static func seedStatisticsForScreenshot(_ settings: AppSettings) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let today = calendar.startOfDay(for: Date())
+        for offset in 0..<364 {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            let buttonCount = (offset % 17 == 0) ? 9 : (offset % 5 == 0 ? 4 : (offset % 3 == 0 ? 1 : 0))
+            for index in 0..<buttonCount {
+                let button = RemoteButton.allCases[(offset + index) % RemoteButton.allCases.count]
+                settings.recordButtonPress(
+                    control: .remoteButton(button),
+                    source: .bluetoothRemote,
+                    at: date.addingTimeInterval(Double(index) * 11),
+                    calendar: calendar
+                )
+            }
+            if offset % 11 == 0 {
+                settings.recordVoiceDuration(
+                    TimeInterval(18 + (offset * 13) % 95),
+                    startedAt: date.addingTimeInterval(3600),
+                    source: .bluetoothRemote,
+                    applicationName: ["Codex", "Claude", "Notion", "Zoom", "Slack"][(offset / 11) % 5],
+                    at: date.addingTimeInterval(3660),
+                    calendar: calendar
+                )
+            }
+        }
+        let topSessions: [(TimeInterval, String)] = [
+            (85, "Codex"), (38, "Claude"), (38, "Notion"), (37, "Zoom"),
+            (37, "Slack"), (29, "Figma"), (28, "VS Code"),
+        ]
+        for (index, session) in topSessions.enumerated() {
+            let date = today.addingTimeInterval(-Double(index * 86_400 + 2_000))
+            settings.recordVoiceDuration(
+                session.0,
+                startedAt: date.addingTimeInterval(-session.0),
+                source: .bluetoothRemote,
+                applicationName: session.1,
+                at: date,
+                calendar: calendar
+            )
         }
     }
 

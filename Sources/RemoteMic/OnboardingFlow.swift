@@ -205,6 +205,45 @@ enum OnboardingTranscriptInputPolicy {
     }
 }
 
+enum OnboardingVoiceTestConfigurationPolicy {
+    static func expectsFnTap(for voiceTool: OnboardingVoiceTool) -> Bool {
+        voiceTool == .typeless
+    }
+
+    static func requiresGlobalVoiceConfirmation(for voiceTool: OnboardingVoiceTool) -> Bool {
+        voiceTool == .doubao
+    }
+
+    static func isSayAllVoiceKeyReady(
+        voiceTool: OnboardingVoiceTool,
+        voiceKeyMode: VoiceKeyMode,
+        voiceFnTapModeEnabled: Bool
+    ) -> Bool {
+        voiceKeyMode == .function &&
+            voiceFnTapModeEnabled == expectsFnTap(for: voiceTool)
+    }
+
+    static func isComplete(
+        voiceTool: OnboardingVoiceTool,
+        voiceKeyMode: VoiceKeyMode,
+        voiceFnTapModeEnabled: Bool,
+        audioOutputReady: Bool,
+        externalVoiceKeyConfirmed: Bool,
+        externalGlobalVoiceConfirmed: Bool,
+        externalMicrophoneConfirmed: Bool
+    ) -> Bool {
+        isSayAllVoiceKeyReady(
+            voiceTool: voiceTool,
+            voiceKeyMode: voiceKeyMode,
+            voiceFnTapModeEnabled: voiceFnTapModeEnabled
+        ) &&
+            audioOutputReady &&
+            externalVoiceKeyConfirmed &&
+            (!requiresGlobalVoiceConfirmation(for: voiceTool) || externalGlobalVoiceConfirmed) &&
+            externalMicrophoneConfirmed
+    }
+}
+
 enum OnboardingFlowPolicy {
     static func isPhysicalRemoteRecognized(
         at step: OnboardingStep,
@@ -216,9 +255,10 @@ enum OnboardingFlowPolicy {
 
     static func shouldAutoSelectPhysicalRemote(
         at step: OnboardingStep,
-        remoteConnected: Bool
+        remoteConnected: Bool,
+        suppressForUserBack: Bool = false
     ) -> Bool {
-        step == .remoteAvailability && remoteConnected
+        step == .remoteAvailability && remoteConnected && !suppressForUserBack
     }
 
     static func shouldRequestRemoteReconnect(
@@ -237,14 +277,13 @@ enum OnboardingFlowPolicy {
         voiceKeyMode: VoiceKeyMode = .function,
         capabilities: OnboardingCapabilities
     ) -> Bool {
+        guard voiceKeyMode == .function else { return false }
         switch step {
         case .welcome:
             return true
         case .voiceTool:
             return voiceTool != .unselected &&
-                (!voiceTool.requiresFunctionKeySetup ||
-                    voiceKeyMode != .function ||
-                    capabilities.systemFunctionKeyAvailable)
+                (!voiceTool.requiresFunctionKeySetup || capabilities.systemFunctionKeyAvailable)
         case .remoteAvailability:
             return remoteAvailability != .unselected
         case .controlMethod:

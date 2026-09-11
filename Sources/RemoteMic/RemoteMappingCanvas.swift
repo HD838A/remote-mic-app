@@ -314,6 +314,8 @@ struct RemoteMappingCanvas: View {
         case .volumeDown: return "speaker.minus"
         case .menu: return "line.3.horizontal"
         case .tv: return "tv"
+        case .playPause: return "playpause.fill"
+        case .mute: return "speaker.slash"
         }
     }
 

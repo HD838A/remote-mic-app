@@ -198,13 +198,7 @@ enum KeyboardInjector {
         keyStatePoster: KeyStatePoster = postKeyState
     ) -> Bool {
         guard accessibilityTrusted() else { return false }
-        let flags: CGEventFlags
-        switch mode {
-        case .function:
-            flags = isPressed ? .maskSecondaryFn : []
-        case .leftCommand, .rightCommand:
-            flags = isPressed ? .maskCommand : []
-        }
+        let flags = isPressed ? mode.eventFlags : []
         return keyStatePoster(
             mode.keyCode,
             isPressed,

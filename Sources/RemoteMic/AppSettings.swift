@@ -101,6 +101,42 @@ struct VoiceSessionUsageRecord: Codable, Equatable, Identifiable {
     let endedAt: Date
     let duration: TimeInterval
     let source: UsageEventSource?
+    let applicationName: String?
+
+    init(
+        id: UUID,
+        startedAt: Date?,
+        endedAt: Date,
+        duration: TimeInterval,
+        source: UsageEventSource?,
+        applicationName: String? = nil
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.duration = duration
+        self.source = source
+        self.applicationName = applicationName
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case startedAt
+        case endedAt
+        case duration
+        case source
+        case applicationName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        endedAt = try container.decode(Date.self, forKey: .endedAt)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        source = try container.decodeIfPresent(UsageEventSource.self, forKey: .source)
+        applicationName = try container.decodeIfPresent(String.self, forKey: .applicationName)
+    }
 }
 
 private struct DailyUsageMetadata: Codable {
@@ -374,6 +410,9 @@ final class AppSettings: ObservableObject {
             defaults.set(voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
         }
     }
+
+    /// One-session notice for an existing Command mode normalized to Fn by Onboarding.
+    @Published private(set) var pendingOnboardingVoiceKeyMigration: VoiceKeyMode? = nil
 
     @Published var localTranscriptHistoryEnabled: Bool {
         didSet {
@@ -688,6 +727,8 @@ final class AppSettings: ObservableObject {
         _ kind: FirstUseEventKind,
         step: OnboardingStep,
         failureReason: FirstUseFailureReason? = nil,
+        voiceAttemptID: Int? = nil,
+        voiceResult: FirstUseVoiceAttemptResult? = nil,
         at date: Date = Date()
     ) {
         let stepStartedAt = defaults.object(forKey: Keys.firstUseStepStartedAt) as? Date ?? date
@@ -696,7 +737,9 @@ final class AppSettings: ObservableObject {
             kind: kind,
             step: step,
             elapsedMilliseconds: max(0, Int(date.timeIntervalSince(stepStartedAt) * 1_000)),
-            failureReason: failureReason
+            failureReason: failureReason,
+            voiceAttemptID: voiceAttemptID,
+            voiceResult: voiceResult
         )
         if kind == .blocked,
            defaults.string(forKey: Keys.firstUseLastSignature) == event.deduplicationSignature {
@@ -723,7 +766,8 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
-        if voiceTool == .typeless, voiceKeyMode != .function {
+        if voiceKeyMode != .function {
+            pendingOnboardingVoiceKeyMigration = voiceKeyMode
             voiceKeyMode = .function
         }
         let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
@@ -748,16 +792,28 @@ final class AppSettings: ObservableObject {
         recordFirstUseEvent(.completed, step: .complete)
         onboardingStep = .complete
         onboardingCompletedVersion = Self.currentOnboardingVersion
+        pendingOnboardingVoiceKeyMigration = nil
     }
 
     func restartOnboarding() {
         onboardingVoiceTool = .unselected
         onboardingRemoteAvailability = .unselected
         onboardingControlMethod = .unselected
+        if voiceKeyMode != .function {
+            pendingOnboardingVoiceKeyMigration = voiceKeyMode
+        }
+        voiceKeyMode = .function
+        voiceFnTapModeEnabled = false
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
         defaults.removeObject(forKey: Keys.firstUseStepStartedAt)
         defaults.removeObject(forKey: Keys.firstUseLastSignature)
+    }
+
+    func consumePendingOnboardingVoiceKeyMigration() -> VoiceKeyMode? {
+        let pending = pendingOnboardingVoiceKeyMigration
+        pendingOnboardingVoiceKeyMigration = nil
+        return pending
     }
 
     func action(for button: RemoteButton) -> ButtonAction {
@@ -943,6 +999,36 @@ final class AppSettings: ObservableObject {
         return profile.id
     }
 
+    @discardableResult
+    func registerAppleSiriRemote(
+        fingerprint: String,
+        model: XiaomiRemoteModel = .appleSiriRemoteA2854
+    ) -> UUID {
+#if !SAYALL_SIRI_REMOTE_ENABLED
+        // Community builds keep this compatibility entry point so old persisted
+        // state can be decoded, but never create or expose a Siri Remote profile.
+        return registerHIDRemote(fingerprint: fingerprint)
+#else
+        if let existing = remoteDeviceProfiles.first(where: { $0.hidFingerprint == fingerprint }) {
+            return existing.id
+        }
+        if let index = remoteDeviceProfiles.firstIndex(where: {
+            $0.bluetoothIdentifier == nil && $0.hidFingerprint == nil && $0.model == .unknown
+        }) {
+            remoteDeviceProfiles[index].hidFingerprint = fingerprint
+            remoteDeviceProfiles[index].model = model
+            return remoteDeviceProfiles[index].id
+        }
+        let profile = RemoteDeviceProfile(
+            model: model,
+            hidFingerprint: fingerprint,
+            mappings: mappingsForNewRemote()
+        )
+        remoteDeviceProfiles.append(profile)
+        return profile.id
+#endif
+    }
+
     func profileID(forBluetoothIdentifier identifier: UUID) -> UUID? {
         remoteDeviceProfiles.first(where: { $0.bluetoothIdentifier == identifier })?.id
     }
@@ -1113,6 +1199,7 @@ final class AppSettings: ObservableObject {
         _ duration: TimeInterval,
         startedAt: Date? = nil,
         source: UsageEventSource = .unknown,
+        applicationName: String? = nil,
         at date: Date = Date(),
         calendar: Calendar = .current
     ) {
@@ -1169,7 +1256,8 @@ final class AppSettings: ObservableObject {
                 startedAt: startedAt,
                 endedAt: date,
                 duration: duration,
-                source: source
+                source: source,
+                applicationName: applicationName
             )]
         )
     }
@@ -1908,5 +1996,7 @@ final class AppSettings: ObservableObject {
         .volumeDown: .volumeDown,
         .menu: .contextMenu,
         .tv: .appSwitcher,
+        .playPause: .playPause,
+        .mute: .volumeMute,
     ]
 }

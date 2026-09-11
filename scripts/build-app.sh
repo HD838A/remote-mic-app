@@ -15,8 +15,13 @@ REQUIRE_WEB_REMOTE_CONFIGURATION="${REQUIRE_WEB_REMOTE_CONFIGURATION:-0}"
 REQUIRE_EARLY_ACCESS_CONFIGURATION="${REQUIRE_EARLY_ACCESS_CONFIGURATION:-0}"
 REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
 REQUIRE_SAYALL_MACRO_PLATFORM="${REQUIRE_SAYALL_MACRO_PLATFORM:-0}"
+REQUIRE_SAYALL_MAC_REMOTE_PACKAGE="${REQUIRE_SAYALL_MAC_REMOTE_PACKAGE:-0}"
+REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE:-0}"
 SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
 SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:-}"
+SAYALL_MAC_REMOTE_PACKAGE_PATH="${SAYALL_MAC_REMOTE_PACKAGE_PATH:-}"
+SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
+SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
@@ -49,6 +54,14 @@ case "$REQUIRE_SAYALL_MACRO_PLATFORM" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_MACRO_PLATFORM must be 0 or 1"; exit 1 ;;
 esac
+case "$REQUIRE_SAYALL_MAC_REMOTE_PACKAGE" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE must be 0 or 1"; exit 1 ;;
+esac
 case "$RELEASE_STAGE_TIMEOUTS" in
   0|1) ;;
   *) print -u2 "RELEASE_STAGE_TIMEOUTS must be 0 or 1"; exit 1 ;;
@@ -73,9 +86,6 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; t
   exit 1
 fi
 
-if [[ -z "$SAYALL_AI_PACKAGE_PATH" && -f "$ROOT/../sayall-ai/Package.swift" ]]; then
-  SAYALL_AI_PACKAGE_PATH="$ROOT/../sayall-ai"
-fi
 if [[ -n "$SAYALL_AI_PACKAGE_PATH" ]]; then
   if [[ ! -f "$SAYALL_AI_PACKAGE_PATH/Package.swift" ]]; then
     print -u2 "SAYALL_AI_PACKAGE_PATH must contain Package.swift"
@@ -90,6 +100,39 @@ fi
 if [[ "$REQUIRE_SAYALL_AI_PACKAGE" == "1" && "$SAYALL_AI_INCLUDED" != "true" ]]; then
   print -u2 "A SayAllAI package is required for this build"
   exit 1
+fi
+
+if [[ -n "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" ]]; then
+  if [[ ! -f "$SAYALL_SIRI_REMOTE_PACKAGE_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_SIRI_REMOTE_PACKAGE_PATH must contain Package.swift"
+    exit 1
+  fi
+  SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:A}"
+  export SAYALL_SIRI_REMOTE_PACKAGE_PATH
+  # The private package owns the Siri Remote runtime and UI. Its internal
+  # targets use unique names so the full feature can be linked into the host.
+  unset SAYALL_SIRI_REMOTE_UI_ONLY
+  export SAYALL_ENABLE_SIRI_REMOTE=1
+  SAYALL_SIRI_REMOTE_INCLUDED=true
+  SIRI_REMOTE_SOURCE_ROOT="$SAYALL_SIRI_REMOTE_PACKAGE_PATH/Sources/SayAllSiriRemote"
+  SIRI_REMOTE_RESOURCE_RESOLVER="$SIRI_REMOTE_SOURCE_ROOT/SiriRemoteResources.swift"
+  if [[ ! -f "$SIRI_REMOTE_RESOURCE_RESOLVER" ]] || \
+      ! /usr/bin/grep -Eq 'Bundle\.main\.resourceURL' "$SIRI_REMOTE_RESOURCE_RESOLVER"; then
+    print -u2 "Siri Remote resource resolver is missing or does not prefer the packaged App resource bundle"
+    exit 1
+  fi
+  for siri_remote_source in \
+    SiriRemoteDeviceCapabilities.swift \
+    SiriRemoteConnectionPhoto.swift \
+    SiriRemoteMappingPage.swift; do
+    if /usr/bin/grep -Eq 'Bundle\.module' "$SIRI_REMOTE_SOURCE_ROOT/$siri_remote_source"; then
+      print -u2 "Siri Remote source bypasses the packaged resource resolver: $siri_remote_source"
+      exit 1
+    fi
+  done
+else
+  unset SAYALL_ENABLE_SIRI_REMOTE
+  SAYALL_SIRI_REMOTE_INCLUDED=false
 fi
 
 if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" ]]; then
@@ -109,14 +152,79 @@ if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" ]]; then
 else
   SAYALL_MACRO_PLATFORM_INCLUDED=false
 fi
+if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
+  if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" || -n "${SAYALL_MEMBERSHIP_PACKAGE_PATH:-}" ]]; then
+    print -u2 "private artifacts cannot be combined with private source packages"
+    exit 1
+  fi
+  if [[ ! -f "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Package.swift" || \
+        ! -f "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json" || \
+        ! -f "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/PREPARED_SHA256SUMS" ]]; then
+    print -u2 "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH must be a prepared private artifact package"
+    exit 1
+  fi
+  for command_name in jq shasum; do
+    command -v "$command_name" >/dev/null || {
+      print -u2 "required command is unavailable: $command_name"
+      exit 1
+    }
+  done
+  if ! jq -e '
+    .schemaVersion == 1 and
+    (.sourceCommit | type == "string" and test("^[0-9a-f]{40}$")) and
+    (.checksumsSHA256 | type == "string" and test("^[0-9a-f]{64}$")) and
+    (.preparedManifestSHA256 | type == "string" and test("^[0-9a-f]{64}$")) and
+    .repositoryDirty == false
+  ' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json" >/dev/null; then
+    print -u2 "private artifact package metadata is invalid or dirty"
+    exit 1
+  fi
+  EXPECTED_PREPARED_MANIFEST_SHA256="$(jq -r '.preparedManifestSHA256' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json")"
+  ACTUAL_PREPARED_MANIFEST_SHA256="$(shasum -a 256 "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/PREPARED_SHA256SUMS" | awk '{print $1}')"
+  if [[ "$ACTUAL_PREPARED_MANIFEST_SHA256" != "$EXPECTED_PREPARED_MANIFEST_SHA256" ]] || \
+      ! (cd "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" && shasum -a 256 -c PREPARED_SHA256SUMS); then
+    print -u2 "private artifact package contents do not match the prepared manifest"
+    exit 1
+  fi
+  SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:A}"
+  export SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH
+  SAYALL_PRIVATE_ARTIFACT_INCLUDED=true
+  SAYALL_MACRO_PLATFORM_INCLUDED=true
+else
+  SAYALL_PRIVATE_ARTIFACT_INCLUDED=false
+fi
+if [[ "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" == "1" && \
+      "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" != "true" ]]; then
+  print -u2 "A prepared private artifact package is required for this build"
+  exit 1
+fi
 if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
   print -u2 "A SayAll macro platform package is required for this build"
+  exit 1
+fi
+if [[ -n "$SAYALL_MAC_REMOTE_PACKAGE_PATH" ]]; then
+  if [[ ! -f "$SAYALL_MAC_REMOTE_PACKAGE_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_MAC_REMOTE_PACKAGE_PATH must contain Package.swift"
+    exit 1
+  fi
+  SAYALL_MAC_REMOTE_PACKAGE_PATH="${SAYALL_MAC_REMOTE_PACKAGE_PATH:A}"
+  export SAYALL_MAC_REMOTE_PACKAGE_PATH
+  SAYALL_MAC_REMOTE_INCLUDED=true
+else
+  SAYALL_MAC_REMOTE_INCLUDED=false
+fi
+if [[ "$REQUIRE_SAYALL_MAC_REMOTE_PACKAGE" == "1" && "$SAYALL_MAC_REMOTE_INCLUDED" != "true" ]]; then
+  print -u2 "A SayAll Mac remote package is required for this build"
   exit 1
 fi
 
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
-if [[ "$SAYALL_AI_INCLUDED" == "true" && "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
+if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" && "$SAYALL_AI_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="sayall-ai-private-artifacts"
+elif [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="private-artifacts"
+elif [[ "$SAYALL_AI_INCLUDED" == "true" && "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="sayall-ai-macro-platform"
 elif [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="sayall-ai"
@@ -124,6 +232,9 @@ elif [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="macro-platform"
 else
   SCRATCH_FLAVOR="public"
+fi
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="${SCRATCH_FLAVOR}-siri-remote"
 fi
 DEFAULT_SCRATCH_PATH="/private/tmp/remote-mic-swiftpm/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
 DEFAULT_CACHE_PATH="/private/tmp/remote-mic-swiftpm-cache/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
@@ -133,12 +244,14 @@ SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframe
 
 run_release_stage app-swift-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
   xcrun swift build \
+  --disable-keychain \
   --scratch-path "$BUILD_SCRATCH_PATH" \
   --cache-path "$BUILD_CACHE_PATH" \
   -c "$CONFIGURATION" \
   --triple "$RELEASE_TRIPLE"
 BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
   xcrun swift build \
+  --disable-keychain \
   --scratch-path "$BUILD_SCRATCH_PATH" \
   --cache-path "$BUILD_CACHE_PATH" \
   -c "$CONFIGURATION" \
@@ -146,15 +259,32 @@ BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
   --show-bin-path)"
 BIN_PATH="$BIN_DIR/$APP_NAME"
 MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
+APPLE_REMOTE_AUDIO_HELPER_PATH="$BIN_DIR/AppleRemoteAudioCapture"
+APPLE_REMOTE_HCI_SERVICE_PATH="$BIN_DIR/AppleRemoteHCIService"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  SIRI_REMOTE_RESOURCE_BUNDLE="$BIN_DIR/SayAllSiriRemote_SayAllSiriRemote.bundle"
+fi
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;
   *) print -u2 "refusing to clean unexpected app path: $APP_DIR"; exit 1 ;;
 esac
-rm -rf -- "$APP_DIR"
+if [[ -e "$APP_DIR" ]]; then
+  USER_HOME_DIRECTORY="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+  TRASH_DIRECTORY="$USER_HOME_DIRECTORY/.Trash"
+  TRASH_DESTINATION="$TRASH_DIRECTORY/${APP_DIR:t}.build-app.$(date -u +%Y%m%dT%H%M%SZ).$$"
+  test -d "$TRASH_DIRECTORY"
+  test ! -e "$TRASH_DESTINATION"
+  mv "$APP_DIR" "$TRASH_DESTINATION"
+  print "PREVIOUS APP MOVED TO TRASH: $TRASH_DESTINATION"
+fi
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$MCP_HELPER_PATH"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  test -x "$APPLE_REMOTE_AUDIO_HELPER_PATH"
+  test -x "$APPLE_REMOTE_HCI_SERVICE_PATH"
+fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$BIN_PATH" "$APP_DIR/Contents/MacOS/$APP_NAME"
 strip -S -x "$APP_DIR/Contents/MacOS/$APP_NAME"
@@ -163,6 +293,20 @@ install_name_tool -add_rpath @executable_path/../Frameworks \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$MCP_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllMCP"
 strip -S -x "$APP_DIR/Contents/Helpers/SayAllMCP"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$APPLE_REMOTE_AUDIO_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$APPLE_REMOTE_HCI_SERVICE_PATH" "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+  strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+  if [[ ! -d "$SIRI_REMOTE_RESOURCE_BUNDLE" ]]; then
+    print -u2 "SayAllSiriRemote resource bundle is missing from the Swift build"
+    exit 1
+  fi
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$SIRI_REMOTE_RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/SayAllSiriRemote_SayAllSiriRemote.bundle"
+fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllAIIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
@@ -170,6 +314,12 @@ plutil -insert SayAllAIIncluded -bool "$SAYALL_AI_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllMacroPlatformIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllMacroPlatformIncluded -bool "$SAYALL_MACRO_PLATFORM_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllSiriRemoteIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllSiriRemoteIncluded -bool "$SAYALL_SIRI_REMOTE_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   plutil -replace LSMinimumSystemVersion -string "$RELEASE_MIN_SYSTEM_VERSION" \
@@ -208,6 +358,32 @@ if [[ "$REQUIRE_EARLY_ACCESS_CONFIGURATION" == "1" ]]; then
   fi
 fi
 mkdir -p "$APP_DIR/Contents/Frameworks"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  OPUS_DYLIB=""
+  for candidate in \
+    "${SAYALL_OPUS_LIBRARY:-}" \
+    "$ROOT/.build/apple-remote-opus/$RELEASE_VARIANT/install/lib/libopus.0.dylib" \
+    "/opt/homebrew/opt/opus/lib/libopus.0.dylib" \
+    "/usr/local/opt/opus/lib/libopus.0.dylib"; do
+    [[ -n "$candidate" && -f "$candidate" ]] || continue
+    OPUS_ARCHS="$(lipo -archs "$candidate")"
+    OPUS_MINOS="$(xcrun vtool -show-build "$candidate" | awk '/minos / { print $2; exit }')"
+    [[ "$OPUS_ARCHS" == "$RELEASE_ARCH" ]] || continue
+    [[ -n "$OPUS_MINOS" && "${OPUS_MINOS%%.*}" -le "$RELEASE_MIN_SYSTEM_MAJOR" ]] || continue
+    OPUS_DYLIB="$candidate"
+    break
+  done
+  if [[ -n "$OPUS_DYLIB" ]]; then
+    ditto --norsrc --noextattr --noqtn --noacl \
+      "$OPUS_DYLIB" "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+    install_name_tool -id @rpath/libopus.0.dylib \
+      "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+    chmod 0644 "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  else
+    print -u2 "Apple Remote audio helper requires a compatible libopus; run scripts/build-apple-remote-opus.sh or set SAYALL_OPUS_LIBRARY"
+    exit 1
+  fi
+fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
@@ -272,7 +448,11 @@ if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
     "$APP_DIR/Contents/Resources/SayAllAI_SayAllAI.bundle"
 fi
 if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
-  SAYALL_MACRO_RESOURCE_BUNDLE="$BIN_DIR/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+  if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+    SAYALL_MACRO_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+  else
+    SAYALL_MACRO_RESOURCE_BUNDLE="$BIN_DIR/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+  fi
   if [[ ! -d "$SAYALL_MACRO_RESOURCE_BUNDLE" ]]; then
     print -u2 "SayAll macro platform resource bundle is missing from the Swift build"
     exit 1
@@ -285,11 +465,33 @@ SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
   run_release_stage app-codesign-installer-xpc "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
     codesign \
-    --force \
-    --options runtime \
-    --timestamp \
-    --sign "$SIGNING_IDENTITY" \
-    "$APP_DIR/Contents/Helpers/SayAllMCP"
+      --force \
+      --options runtime \
+      --timestamp \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Helpers/SayAllMCP"
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --identifier "com.hd838a.RemoteMic.apple-remote-audio" \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+    codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+    codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --sign "$SIGNING_IDENTITY" \
+      "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  fi
   codesign \
     --force \
     --options runtime \
@@ -340,6 +542,25 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
     --timestamp=none \
     --sign - \
     "$APP_DIR/Contents/Helpers/SayAllMCP"
+  if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+    codesign \
+      --force \
+      --timestamp=none \
+      --identifier "com.hd838a.RemoteMic.apple-remote-audio" \
+      --sign - \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+    codesign \
+      --force \
+      --timestamp=none \
+      --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
+      --sign - \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+    codesign \
+      --force \
+      --timestamp=none \
+      --sign - \
+      "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+  fi
   codesign \
     --force \
     --timestamp=none \
