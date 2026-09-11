@@ -482,7 +482,7 @@ final class SiriRemoteCursorFeedbackView: NSView {
 
         let sign: CGFloat = direction == .clockwise ? -1 : 1
         let startAngle: CGFloat = direction == .clockwise ? 130 : 50
-        let sweep: CGFloat = 280
+        let sweep: CGFloat = 250
         let segmentCount = 40
         let arc = NSBezierPath()
         var endPoint = center
@@ -504,15 +504,15 @@ final class SiriRemoteCursorFeedbackView: NSView {
             endAngle = radians
         }
         NSColor.controlAccentColor.withAlphaComponent(0.96).setStroke()
-        arc.lineWidth = 2.6
+        arc.lineWidth = 3.2
         arc.lineCapStyle = .round
         arc.stroke()
 
         let tangentAngle = endAngle + sign * CGFloat.pi / 2
         let tangent = NSPoint(x: cos(tangentAngle), y: sin(tangentAngle))
         let normal = NSPoint(x: -tangent.y, y: tangent.x)
-        let arrowLength = max(6, min(10, radius * 0.28))
-        let arrowWidth = arrowLength * 0.7
+        let arrowLength = max(10, min(16, radius * 0.62))
+        let arrowWidth = arrowLength * 0.9
         let tip = NSPoint(
             x: endPoint.x + tangent.x * 2,
             y: endPoint.y + tangent.y * 2
@@ -532,6 +532,9 @@ final class SiriRemoteCursorFeedbackView: NSView {
             y: baseCenter.y - normal.y * arrowWidth / 2
         ))
         arrow.close()
+        NSColor.controlAccentColor.withAlphaComponent(0.3).setStroke()
+        arrow.lineWidth = 4.5
+        arrow.stroke()
         NSColor.controlAccentColor.withAlphaComponent(0.96).setFill()
         arrow.fill()
     }
