@@ -43,7 +43,7 @@ struct VoiceKeyModeTests {
             #expect(posted.count == 2)
             #expect(posted[0].0 == mode.keyCode)
             #expect(posted[0].1)
-            #expect(posted[0].2 == .maskCommand)
+            #expect(posted[0].2 == mode.eventFlags)
             #expect(posted[1].0 == mode.keyCode)
             #expect(!posted[1].1)
             #expect(posted[1].2.isEmpty)
