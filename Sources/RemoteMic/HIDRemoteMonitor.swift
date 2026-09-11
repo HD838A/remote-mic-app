@@ -717,6 +717,16 @@ final class HIDRemoteMonitor {
                     recognizesLongPress: recognizesLongPress
                 )
                 guard processGestureCommands(commands) else { return }
+                if !recognizesLongPress {
+                    startHeldSingleActionRepeat(
+                        usage: usage,
+                        button: button,
+                        configured: ConfiguredButtonAction(
+                            action: action,
+                            shortcut: settings.shortcut(for: button, profileID: profileID)
+                        )
+                    )
+                }
             } else {
                 guard shouldAcceptRawPress(
                     button: button,
@@ -912,6 +922,7 @@ final class HIDRemoteMonitor {
         recognizesLongPress: Bool
     ) -> Bool {
         guard !activeDeviceIsSeized,
+              !appSwitcherSession.isActive,
               !recognizesDoubleClick,
               !recognizesLongPress,
               frontmostBundleIdentifier() != PresetApplication.remoteMic.bundleIdentifier
@@ -942,7 +953,7 @@ final class HIDRemoteMonitor {
         button: RemoteButton,
         action: ButtonAction
     ) {
-        guard let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: button) else { return }
+        guard let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: action) else { return }
         guard
             !settings.hasSecondaryAction(for: button, profileID: profileID),
             action != .disabled,
@@ -981,6 +992,114 @@ final class HIDRemoteMonitor {
         repeatTimers[usage] = timer
     }
 
+    /// Single unified repeat executor for the gesture paths. Repeat cadence comes
+    /// from the action-level policy table (`HIDRemoteTiming.repeatIntervalMilliseconds`),
+    /// so no call site special-cases individual actions. `isStillValid` re-checks
+    /// path-specific preconditions on every tick; any failure cancels the repeat.
+    private func scheduleActionRepeat(
+        usage: UInt16,
+        button: RemoteButton,
+        trigger: ButtonTrigger,
+        configured: ConfiguredButtonAction,
+        firstTickMilliseconds: UInt64,
+        confirmHoldOnFirstTick: Bool,
+        isStillValid: @escaping (HIDRemoteMonitor) -> Bool
+    ) {
+        guard let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: configured.action) else {
+            return
+        }
+        repeatTimers.removeValue(forKey: usage)?.cancel()
+        var holdConfirmed = false
+        repeatTimers[usage] = scheduler.schedule(
+            afterMilliseconds: firstTickMilliseconds,
+            repeatingEveryMilliseconds: interval
+        ) { [weak self] in
+            guard let self, self.activeUsages.contains(usage) else {
+                self?.repeatTimers.removeValue(forKey: usage)?.cancel()
+                return
+            }
+            guard isStillValid(self) else {
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+                return
+            }
+            if confirmHoldOnFirstTick, !holdConfirmed {
+                holdConfirmed = true
+                self.gestureRecognizer.holdConfirmed(button)
+            }
+            guard self.runtimePermissionsAreValid() else {
+                self.releaseForRevokedPermissions()
+                return
+            }
+            if !self.actionPerformer(button, trigger, configured) {
+                self.releaseForRevokedPermissions()
+            }
+        }
+    }
+
+    /// While a button with no long-press binding stays held past the double-click
+    /// window, its single-click action repeats (e.g. held up/down keeps scrolling).
+    private func startHeldSingleActionRepeat(
+        usage: UInt16,
+        button: RemoteButton,
+        configured: ConfiguredButtonAction
+    ) {
+        let originProfileID = profileID
+        let originApp = frontmostBundleIdentifier()
+        scheduleActionRepeat(
+            usage: usage,
+            button: button,
+            trigger: .singleClick,
+            configured: configured,
+            firstTickMilliseconds: HIDRemoteTiming.holdRepeatStartMilliseconds,
+            confirmHoldOnFirstTick: true
+        ) { [weak self] monitor in
+            guard let self else { return false }
+            return self.profileID == originProfileID
+                && self.frontmostBundleIdentifier() == originApp
+                && self.settings.customMappingEnabled
+                && Self.shouldRepeat(
+                    action: configured.action,
+                    frontmostBundleIdentifier: self.frontmostBundleIdentifier()
+                )
+                && self.settings.configuredAction(
+                    for: button,
+                    trigger: .longPress,
+                    profileID: self.profileID
+                ).action == .disabled
+                && !self.hasOverrideBinding(self.profileID, button, .longPress)
+        }
+    }
+
+    /// A confirmed long press repeats when its configured action says so
+    /// (e.g. held menu keeps deleting); non-repeatable long-press actions
+    /// (shortcuts, app launches, ...) fire exactly once as before.
+    private func startLongPressActionRepeat(for button: RemoteButton) {
+        guard let originProfileID = profileID else { return }
+        let configured = settings.configuredAction(
+            for: button,
+            trigger: .longPress,
+            profileID: originProfileID
+        )
+        let originApp = frontmostBundleIdentifier()
+        scheduleActionRepeat(
+            usage: button.hidUsage,
+            button: button,
+            trigger: .longPress,
+            configured: configured,
+            firstTickMilliseconds: HIDRemoteTiming.repeatIntervalMilliseconds(for: configured.action) ?? 0,
+            confirmHoldOnFirstTick: false
+        ) { [weak self] monitor in
+            guard let self else { return false }
+            return self.profileID == originProfileID
+                && self.frontmostBundleIdentifier() == originApp
+                && self.settings.configuredAction(
+                    for: button,
+                    trigger: .longPress,
+                    profileID: self.profileID
+                ) == configured
+        }
+    }
+
     private func processGestureCommands(
         _ commands: [RemoteButtonGestureRecognizer.Command]
     ) -> Bool {
@@ -999,6 +1118,9 @@ final class HIDRemoteMonitor {
                     "HID GESTURE button=\(button.rawValue) trigger=\(trigger.rawValue) path=recognizer"
                 )
                 guard performConfiguredAction(for: button, trigger: trigger) else { return false }
+                if trigger == .longPress {
+                    startLongPressActionRepeat(for: button)
+                }
             }
         }
         return true

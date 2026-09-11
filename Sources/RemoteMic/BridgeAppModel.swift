@@ -209,7 +209,7 @@ enum AppleRemoteInteractionPolicy {
                   frontmostBundleIdentifier: frontmostBundleIdentifier
               )
         else { return nil }
-        return HIDRemoteTiming.repeatIntervalMilliseconds(for: button)
+        return HIDRemoteTiming.repeatIntervalMilliseconds(for: action)
     }
 
     static func blocksTouch(activeVoiceDeviceCount: Int, voiceStopping: Bool) -> Bool {

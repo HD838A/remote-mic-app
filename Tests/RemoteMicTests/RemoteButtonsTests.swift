@@ -344,8 +344,10 @@ struct RemoteButtonsTests {
             action: .scrollDown,
             frontmostBundleIdentifier: PresetApplication.claude.bundleIdentifier
         ))
-        #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .up) == 100)
-        #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .down) == 100)
+        #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .scrollUp) == 100)
+        #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .scrollDown) == 100)
+        #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .customShortcut) == nil)
+        #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .deleteBackward) == 120)
     }
 
     @Test func focusInputIsANonRepeatingCustomAction() {
@@ -730,6 +732,202 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func heldSingleActionRepeatScrollsWhilePressedAndReleaseConsumesGesture() throws {
+        let suiteName = "RemoteButtonsTests.holdRepeatScroll.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.scrollUp, for: .up)
+        settings.setAction(.customShortcut, for: .up, trigger: .doubleClick)
+        settings.setShortcut(
+            StandardKeyboardKey("page_up", keyCode: 116, label: "Page Up").shortcut(modifierFlags: []),
+            for: .up,
+            trigger: .doubleClick
+        )
+        settings.setAction(.disabled, for: .up, trigger: .longPress)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var frontmost = PresetApplication.codex.bundleIdentifier
+        var performed: [(RemoteButton, ButtonTrigger, ButtonAction)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { button, trigger, configured in
+                performed.append((button, trigger, configured.action))
+                return true
+            },
+            frontmostBundleIdentifier: { frontmost }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "hold-scroll", profileID: profileID, isSeized: false)
+
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: Data([UInt8(RemoteButton.up.hidUsage), 0, 0, 0, 0, 0])
+        )
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.holdRepeatStartMilliseconds - 1)
+        #expect(performed.isEmpty)
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.holdRepeatStartMilliseconds
+                + HIDRemoteTiming.repeatIntervalMilliseconds(for: .scrollUp)! * 2
+        )
+        #expect(performed.count == 3)
+        #expect(performed.allSatisfy { $0.0 == .up && $0.1 == .singleClick && $0.2 == .scrollUp })
+
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        scheduler.advance(toMilliseconds: 2_000)
+        #expect(performed.count == 3)
+        #expect(scheduler.pendingTaskCount == 0)
+    }
+
+    @Test func holdDefersToLongPressBindingAndShortcutLongPressFiresOnce() throws {
+        let suiteName = "RemoteButtonsTests.holdDefersLongPress.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.scrollUp, for: .up)
+        settings.setAction(.customShortcut, for: .up, trigger: .doubleClick)
+        settings.setAction(.customShortcut, for: .up, trigger: .longPress)
+        settings.setShortcut(
+            StandardKeyboardKey("home", keyCode: 115, label: "Home").shortcut(
+                modifierFlags: [.function]
+            ),
+            for: .up,
+            trigger: .longPress
+        )
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var performed: [(RemoteButton, ButtonTrigger, ButtonAction)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { button, trigger, configured in
+                performed.append((button, trigger, configured.action))
+                return true
+            }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "hold-defers", profileID: profileID)
+
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: Data([UInt8(RemoteButton.up.hidUsage), 0, 0, 0, 0, 0])
+        )
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.longPressMilliseconds - 1)
+        #expect(performed.isEmpty)
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.longPressMilliseconds)
+        #expect(performed.map { $0.1 } == [.longPress])
+        scheduler.advance(toMilliseconds: 3_000)
+        #expect(performed.count == 1)
+
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        scheduler.advance(toMilliseconds: 5_000)
+        #expect(performed.count == 1)
+    }
+
+    @Test func longPressDeleteBackwardRepeatsWhileHeldAndStopsOnRelease() throws {
+        let suiteName = "RemoteButtonsTests.heldDelete.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.escape, for: .menu)
+        settings.setAction(.customShortcut, for: .menu, trigger: .doubleClick)
+        settings.setAction(.deleteBackward, for: .menu, trigger: .longPress)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var performed: [(RemoteButton, ButtonTrigger, ButtonAction)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { button, trigger, configured in
+                performed.append((button, trigger, configured.action))
+                return true
+            }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "held-delete", profileID: profileID)
+
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: Data([UInt8(RemoteButton.menu.hidUsage), 0, 0, 0, 0, 0])
+        )
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.longPressMilliseconds)
+        let deleteInterval = HIDRemoteTiming.repeatIntervalMilliseconds(for: .deleteBackward)!
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.longPressMilliseconds + deleteInterval * 2
+        )
+        #expect(performed.count == 3)
+        #expect(performed.allSatisfy { $0.1 == .longPress && $0.2 == .deleteBackward })
+
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        scheduler.advance(toMilliseconds: 5_000)
+        #expect(performed.count == 3)
+    }
+
+    @Test func heldSingleActionRepeatStopsOnFrontmostOrProfileChange() throws {
+        let suiteName = "RemoteButtonsTests.holdRepeatGuards.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.scrollUp, for: .up)
+        settings.setAction(.customShortcut, for: .up, trigger: .doubleClick)
+        settings.setAction(.disabled, for: .up, trigger: .longPress)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var frontmost = PresetApplication.codex.bundleIdentifier
+        var performed: [(RemoteButton, ButtonTrigger, ButtonAction)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { button, trigger, configured in
+                performed.append((button, trigger, configured.action))
+                return true
+            },
+            frontmostBundleIdentifier: { frontmost }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "hold-guards", profileID: profileID, isSeized: false)
+
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: Data([UInt8(RemoteButton.up.hidUsage), 0, 0, 0, 0, 0])
+        )
+        var clock: UInt64 = HIDRemoteTiming.holdRepeatStartMilliseconds
+        scheduler.advance(toMilliseconds: clock)
+        #expect(performed.count == 1)
+
+        frontmost = PresetApplication.safari.bundleIdentifier
+        clock += 1_700
+        scheduler.advance(toMilliseconds: clock)
+        #expect(performed.count == 1)
+
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        frontmost = PresetApplication.codex.bundleIdentifier
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: Data([UInt8(RemoteButton.up.hidUsage), 0, 0, 0, 0, 0])
+        )
+        clock += HIDRemoteTiming.holdRepeatStartMilliseconds
+        scheduler.advance(toMilliseconds: clock)
+        #expect(performed.count == 2)
+        monitor.assignProfileID(UUID())
+        clock += 1_700
+        scheduler.advance(toMilliseconds: clock)
+        #expect(performed.count == 2)
+    }
+
     @Test func continuousRecordingIsInternalAndNeverRepeats() {
         #expect(ButtonAction.toggleLongRecording.isAppInternal)
         #expect(!ButtonAction.toggleLongRecording.allowsRepeat)
@@ -937,13 +1135,20 @@ struct RemoteButtonsTests {
         #expect(posted[9].2.isEmpty)
     }
 
-    @Test func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp() throws {
+    @Test(arguments: [true, false])
+    func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp(isSeized: Bool) throws {
         let suiteName = "RemoteButtonsTests.appSwitcherControls.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
         settings.setAction(.appSwitcher, for: .menu)
+        for button in [RemoteButton.left, .right] {
+            settings.setAction(button == .left ? .arrowLeft : .arrowRight, for: button)
+            settings.setAction(.disabled, for: button, trigger: .doubleClick)
+            settings.setAction(.disabled, for: button, trigger: .longPress)
+        }
+        let suppressor = KeyboardEventSuppressor()
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = RemoteButtonsTestScheduler()
         var frontmost = PresetApplication.codex.bundleIdentifier
@@ -952,6 +1157,7 @@ struct RemoteButtonsTests {
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
+            eventSuppressor: suppressor,
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
@@ -962,18 +1168,33 @@ struct RemoteButtonsTests {
                 return true
             }
         )
-        monitor.connectSimulatedDevice(fingerprint: "app-switcher-controls", profileID: profileID)
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-controls", profileID: profileID, isSeized: isSeized
+        )
 
-        func press(_ button: RemoteButton) {
+        func press(_ button: RemoteButton, inSwitcher: Bool = true) throws {
             let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
             monitor.handleSimulatedReport(reportID: 1, data: report)
+            let keyCode: CGKeyCode? = button == .left ? 123 : button == .right ? 124 : nil
+            if let keyCode {
+                let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true))
+                #expect(suppressor.handle(type: .keyDown, event: event) == (!isSeized && inSwitcher))
+            }
             monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+            if let keyCode {
+                let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false))
+                #expect(suppressor.handle(type: .keyUp, event: event) == (!isSeized && inSwitcher))
+            }
         }
 
-        press(.menu)
-        press(.right)
-        press(.left)
-        press(.ok)
+        if !isSeized {
+            try press(.left, inSwitcher: false)
+            try press(.right, inSwitcher: false)
+        }
+        try press(.menu)
+        try press(.right)
+        try press(.left)
+        try press(.ok)
         frontmost = PresetApplication.safari.bundleIdentifier
         scheduler.advance(
             toMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds
