@@ -4,7 +4,7 @@
 
 - 适用分支：`codex/voice-key-command-modes` 及包含该功能的 macOS 版本。
 - 适用系统：Apple Silicon 使用 macOS 14 或更高版本；Intel 使用 macOS 13 或更高版本。
-- 功能范围：Fn/地球键（默认）、左 Command 长按、右 Command 长按，以及既有 Fn 点按兼容模式。
+- 功能范围：Fn/地球键（默认）、左 Command、右 Command、右 Option、右 Shift 长按，以及既有 Fn 点按兼容模式。
 - 本手册不把模拟 HID、单元测试、构建、签名或截图视为 RC003、iPhone、Apple Watch、网页版、系统权限或第三方语音应用的真实环境验收。
 
 ## 测试前准备
@@ -79,30 +79,30 @@
 
 失败判定：只发送一次 tap、排空前提前结束、切到 Command 后仍发送 Fn tap、映射不完整时仍允许 Fn 点按会话开始。
 
-## 用例 4：RC003 左右 Command 长按
+## 用例 4：RC003 左右 Command、右 Option、右 Shift 长按
 
-分别对左 Command 和右 Command 执行：
+分别对左 Command、右 Command、右 Option 和右 Shift 执行：
 
-1. 在明确支持对应侧 Command 的测试 App 中设置语音快捷键，选择相同 SayAll 模式并重新连接 RC003。
+1. 在明确支持对应单侧修饰键的测试 App 中设置语音快捷键，选择相同 SayAll 模式并重新连接 RC003。
 2. 执行短于 1 秒、约 10 秒、连续三次和重连后的第一次语音。
    - 预期：只产生一次正确侧的 keyDown 和一次无修饰 flags 的 keyUp，音频和文字完整。
 3. 按住期间短暂按普通字母键或遥控器普通键。
-   - 预期：记录目标 App 是否触发 Command 组合；SayAll 不应额外重复 Command，但此模式本身存在组合键冲突风险。
+   - 预期：记录目标 App 是否触发修饰键组合；SayAll 不应额外重复修饰键，但此模式本身存在组合键冲突风险。
 4. 分别在豆包、微信、Typeless 中按其真实快捷键能力测试。
-   - 预期：只有明确支持对应 Command 长按的 App 才应通过；不支持是兼容性结论，不得伪装为 SayAll 已兼容。
+   - 预期：只有明确支持对应修饰键长按的 App 才应通过；不支持是兼容性结论，不得伪装为 SayAll 已兼容。
 
-失败判定：keyDown/keyUp 不配对、左右侧发送错误、一次会话重复发送、松开后 Command 仍影响键盘、音频链路被阻断。
+失败判定：keyDown/keyUp 不配对、左右侧发送错误、一次会话重复发送、松开后修饰键仍影响键盘、音频链路被阻断。右 Option/右 Shift 是本轮新增模式，任意一项失败都必须单独记录，不得并入 Command 结论。
 
 ## 专项用例：RC003 HID 晚到恢复（全模式）
 
-分别选择以下配置执行完整矩阵：Fn/地球键、Fn/地球键并开启 Fn 点按、左 Command、右 Command。
+分别选择以下配置执行完整矩阵：Fn/地球键、Fn/地球键并开启 Fn 点按、左 Command、右 Command、右 Option、右 Shift。
 
 1. 在 Fn 点按已开启时退出 SayAll，让遥控器久置进入休眠，再先启动 SayAll、后唤醒遥控器。
    - 预期：HID service 尚未出现期间设置开关仍保持开启，日志出现 `VOICE FN TAP mode_pending_mapping reason=no_matching_service`；此时不得发送软件 Fn，HID 恢复完成后自动启用，不要求用户重新打开开关。
 2. 每种配置下都让遥控器久置断开，或让 Mac 完成一次真实休眠与唤醒；按遥控器电源键恢复，直到方向键已经能控制 Mac。
    - 预期：RC003 重新进入 BLE Ready；即使 HID service 晚于 Ready 出现，SayAll 也会在有限恢复窗口内重新应用当前所选模式和电源键映射，不会强制切回 Fn。
 3. 不点击“立即重新连接”，直接执行恢复后的第一次语音。
-   - 预期：Fn/地球键产生一组 Fn 按下/释放；Fn 点按先中和 F5 并产生配对 tap；左/右 Command 先中和 F5，再分别产生正确侧的 Command 按下/释放。每种模式的第一次语音都必须收到完整音频，不能以第二次或第三次成功作为通过。
+   - 预期：Fn/地球键产生一组 Fn 按下/释放；Fn 点按先中和 F5 并产生配对 tap；左/右 Command、右 Option、右 Shift 先中和 F5，再分别产生正确侧修饰键的按下/释放。每种模式的第一次语音都必须收到完整音频，不能以第二次或第三次成功作为通过。
 4. 检查本次 `runtime.log`。
    - 预期：如果首次 Ready 出现 `VOICE FN MAPPING ... matched=0`，随后出现有限次数的 `HID MAPPING RECOVERY scheduled`，并在首次语音前以 `completed` 结束；不得持续轮询或出现无条件切换 `voiceKeyMode=fn`。
 5. 记录输入监控、辅助功能和目标第三方 App 的实际结果。

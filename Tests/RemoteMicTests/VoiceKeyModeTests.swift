@@ -11,16 +11,30 @@ struct VoiceKeyModeTests {
         #expect(VoiceKeyMode.function.keyCode == 63)
         #expect(VoiceKeyMode.leftCommand.keyCode == 55)
         #expect(VoiceKeyMode.rightCommand.keyCode == 54)
+        #expect(VoiceKeyMode.rightOption.keyCode == 61)
+        #expect(VoiceKeyMode.rightShift.keyCode == 60)
         #expect(!VoiceKeyMode.function.requiresAccessibility)
         #expect(VoiceKeyMode.leftCommand.requiresAccessibility)
         #expect(VoiceKeyMode.rightCommand.requiresAccessibility)
+        #expect(VoiceKeyMode.rightOption.requiresAccessibility)
+        #expect(VoiceKeyMode.rightShift.requiresAccessibility)
         #expect(VoiceKeyMode.function.usesHardwareMapping)
         #expect(!VoiceKeyMode.leftCommand.usesHardwareMapping)
+        #expect(!VoiceKeyMode.rightOption.usesHardwareMapping)
+        #expect(!VoiceKeyMode.rightShift.usesHardwareMapping)
         #expect(VoiceKeyMode.function.localizationKey == "connection.voice_key.mode.fn")
+        #expect(VoiceKeyMode.rightOption.localizationKey == "connection.voice_key.mode.right_option")
+        #expect(VoiceKeyMode.rightShift.localizationKey == "connection.voice_key.mode.right_shift")
     }
 
     @Test func voiceKeyInjectionPreservesSideAndReleasesWithEmptyFlags() {
-        for mode in [VoiceKeyMode.leftCommand, .rightCommand] {
+        let expectedFlags: [VoiceKeyMode: CGEventFlags] = [
+            .leftCommand: .maskCommand,
+            .rightCommand: .maskCommand,
+            .rightOption: .maskAlternate,
+            .rightShift: .maskShift,
+        ]
+        for (mode, expectedFlag) in expectedFlags {
             var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
             let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
                 posted.append((code, isDown, flags))
@@ -43,7 +57,7 @@ struct VoiceKeyModeTests {
             #expect(posted.count == 2)
             #expect(posted[0].0 == mode.keyCode)
             #expect(posted[0].1)
-            #expect(posted[0].2 == .maskCommand)
+            #expect(posted[0].2 == expectedFlag)
             #expect(posted[1].0 == mode.keyCode)
             #expect(!posted[1].1)
             #expect(posted[1].2.isEmpty)
