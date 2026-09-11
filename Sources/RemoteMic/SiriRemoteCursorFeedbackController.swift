@@ -5,15 +5,15 @@ import Foundation
 struct SiriRemoteCursorFeedbackState: Equatable {
     enum Presentation: Equatable {
         case pointer(scale: CGFloat)
-        case scroll(direction: VerticalDirection, scale: CGFloat)
+        case scroll(direction: RotationDirection, scale: CGFloat)
     }
 
-    enum VerticalDirection: Equatable {
-        case up
-        case down
+    enum RotationDirection: Equatable {
+        case clockwise
+        case counterClockwise
     }
 
-    static let baseIndicatorDiameter: CGFloat = 14
+    static let baseIndicatorDiameter: CGFloat = 36
 
     static func indicatorScale(forSpeed speed: Double) -> CGFloat {
         let normalized = min(1, max(0, (speed - 2.0) / 70.0))
@@ -25,24 +25,13 @@ struct SiriRemoteCursorFeedbackState: Equatable {
         switch feedback {
         case let .pointerMoved(_, _, speed):
             return .pointer(scale: indicatorScale(forSpeed: speed))
-        case let .scrolled(pixels, speed):
+        case let .scrolled(_, speed, physicalDirection):
             return .scroll(
-                direction: scrollDirection(forPixels: pixels),
+                direction: physicalDirection == .clockwise ? .clockwise : .counterClockwise,
                 scale: indicatorScale(forSpeed: speed)
             )
         case .clicked:
             return nil
-        }
-    }
-
-    static func scrollDirection(forPixels pixels: Double) -> VerticalDirection {
-        pixels >= 0 ? .up : .down
-    }
-
-    static func scrollSymbolName(for direction: VerticalDirection) -> String {
-        switch direction {
-        case .up: "arrow.up.circle.fill"
-        case .down: "arrow.down.circle.fill"
         }
     }
 
@@ -61,7 +50,7 @@ struct SiriRemoteCursorFeedbackInteractionState {
         case holdForClick(TimeInterval)
     }
 
-    static let clickableTargetHoldDelay: TimeInterval = 1.2
+    static let clickableTargetHoldDelay: TimeInterval = 2.5
 
     private var canConsumeOK = false
 
@@ -114,11 +103,7 @@ struct SiriRemotePressableTargetResolver {
 
 struct SiriRemoteCursorFeedbackLayout: Equatable {
     enum Placement: String, Equatable {
-        case rightBelow = "right_below"
-        case leftBelow = "left_below"
-        case rightAbove = "right_above"
-        case leftAbove = "left_above"
-        case clamped
+        case centeredOnCursor = "centered_on_cursor"
     }
 
     let frame: NSRect
@@ -127,71 +112,36 @@ struct SiriRemoteCursorFeedbackLayout: Equatable {
     static func layout(
         for point: NSPoint,
         visibleFrame: NSRect,
-        size: CGFloat = 40,
-        cursorBodySize: NSSize = NSSize(width: 18, height: 24),
-        gap: CGFloat = 4
+        size: CGFloat = 104,
+        cursorBodySize: NSSize = NSSize(width: 18, height: 24)
     ) -> SiriRemoteCursorFeedbackLayout {
-        let belowY = point.y - size - 4
-        let candidates: [(Placement, NSRect)] = [
-            (.rightBelow, NSRect(
-                x: point.x + cursorBodySize.width + gap,
-                y: belowY,
-                width: size,
-                height: size
-            )),
-            (.leftBelow, NSRect(
-                x: point.x - gap - size,
-                y: belowY,
-                width: size,
-                height: size
-            )),
-            (.rightAbove, NSRect(
-                x: point.x + cursorBodySize.width + gap,
-                y: point.y + gap,
-                width: size,
-                height: size
-            )),
-            (.leftAbove, NSRect(
-                x: point.x - gap - size,
-                y: point.y + gap,
-                width: size,
-                height: size
-            )),
-        ]
-        if let candidate = candidates.first(where: { visibleFrame.contains($0.1) }) {
-            return SiriRemoteCursorFeedbackLayout(
-                frame: candidate.1,
-                placement: candidate.0
-            )
-        }
-        let preferred = candidates[0].1
+        _ = visibleFrame
+        let center = cursorBodyCenter(for: point, cursorBodySize: cursorBodySize)
         return SiriRemoteCursorFeedbackLayout(
             frame: NSRect(
-                x: min(max(preferred.minX, visibleFrame.minX), visibleFrame.maxX - size),
-                y: min(max(preferred.minY, visibleFrame.minY), visibleFrame.maxY - size),
+                x: center.x - size / 2,
+                y: center.y - size / 2,
                 width: size,
                 height: size
             ),
-            placement: .clamped
+            placement: .centeredOnCursor
         )
     }
 
-    static func cursorProtectionFrame(
+    static func cursorBodyCenter(
         for point: NSPoint,
         cursorBodySize: NSSize = NSSize(width: 18, height: 24)
-    ) -> NSRect {
-        NSRect(
-            x: point.x,
-            y: point.y - cursorBodySize.height,
-            width: cursorBodySize.width,
-            height: cursorBodySize.height
+    ) -> NSPoint {
+        NSPoint(
+            x: point.x + cursorBodySize.width / 2,
+            y: point.y - cursorBodySize.height / 2
         )
     }
 }
 
 final class SiriRemoteCursorFeedbackController {
     private let view = SiriRemoteCursorFeedbackView(
-        frame: NSRect(x: 0, y: 0, width: 40, height: 40)
+        frame: NSRect(x: 0, y: 0, width: 104, height: 104)
     )
     private let logger: (String) -> Void
     private var window: NSPanel?
@@ -225,12 +175,12 @@ final class SiriRemoteCursorFeedbackController {
             ))
             show(at: NSEvent.mouseLocation, mode: "pointer")
             schedulePointerIdleEvaluation(after: 0.24)
-        case let .scrolled(pixels, speed):
+        case let .scrolled(_, speed, physicalDirection):
             interactionState.scrolled()
             hoveredElement = nil
             hoveredCursorLocation = nil
             view.presentation = .scroll(
-                direction: SiriRemoteCursorFeedbackState.scrollDirection(forPixels: pixels),
+                direction: physicalDirection == .clockwise ? .clockwise : .counterClockwise,
                 scale: SiriRemoteCursorFeedbackState.indicatorScale(forSpeed: speed)
             )
             show(at: NSEvent.mouseLocation, mode: "scroll")
@@ -325,7 +275,7 @@ final class SiriRemoteCursorFeedbackController {
     private func show(at point: NSPoint, mode: String) {
         if window == nil {
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 40, height: 40),
+                contentRect: NSRect(x: 0, y: 0, width: 104, height: 104),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: true
@@ -482,7 +432,7 @@ final class SiriRemoteCursorFeedbackController {
     }
 }
 
-private final class SiriRemoteCursorFeedbackView: NSView {
+final class SiriRemoteCursorFeedbackView: NSView {
     var presentation: SiriRemoteCursorFeedbackState.Presentation = .pointer(scale: 1.0)
 
     override var isFlipped: Bool { false }
@@ -506,47 +456,83 @@ private final class SiriRemoteCursorFeedbackView: NSView {
             width: radius * 2,
             height: radius * 2
         ))
-        NSColor.controlAccentColor.withAlphaComponent(0.14).setFill()
-        halo.fill()
+        NSColor.controlAccentColor.withAlphaComponent(0.22).setStroke()
+        halo.lineWidth = 7
+        halo.stroke()
         NSColor.controlAccentColor.withAlphaComponent(0.9).setStroke()
         halo.lineWidth = 2
         halo.stroke()
-
-        NSColor.controlAccentColor.setFill()
-        NSBezierPath(ovalIn: NSRect(
-            x: center.x - 2.5,
-            y: center.y - 2.5,
-            width: 5,
-            height: 5
-        )).fill()
     }
 
     private func drawScroll(
-        direction: SiriRemoteCursorFeedbackState.VerticalDirection,
+        direction: SiriRemoteCursorFeedbackState.RotationDirection,
         scale: CGFloat
     ) {
-        let symbolName = SiriRemoteCursorFeedbackState.scrollSymbolName(for: direction)
-        guard let baseImage = NSImage(
-            systemSymbolName: symbolName,
-            accessibilityDescription: nil
-        ) else { return }
-        let diameter = SiriRemoteCursorFeedbackState.baseIndicatorDiameter * scale
-        let pointSize = NSImage.SymbolConfiguration(pointSize: diameter, weight: .semibold)
-        let palette = NSImage.SymbolConfiguration(paletteColors: [
-            NSColor.controlAccentColor.withAlphaComponent(0.96),
-            NSColor.white.withAlphaComponent(0.98),
-        ])
-        let image = baseImage.withSymbolConfiguration(pointSize.applying(palette)) ?? baseImage
-        image.draw(
-            in: NSRect(
-                x: bounds.midX - diameter / 2,
-                y: bounds.midY - diameter / 2,
-                width: diameter,
-                height: diameter
-            ),
-            from: .zero,
-            operation: .sourceOver,
-            fraction: 1
+        let center = NSPoint(x: bounds.midX, y: bounds.midY)
+        let radius = SiriRemoteCursorFeedbackState.baseIndicatorDiameter * scale / 2
+        let background = NSBezierPath(ovalIn: NSRect(
+            x: center.x - radius,
+            y: center.y - radius,
+            width: radius * 2,
+            height: radius * 2
+        ))
+        NSColor.controlAccentColor.withAlphaComponent(0.12).setStroke()
+        background.lineWidth = 5
+        background.stroke()
+
+        let sign: CGFloat = direction == .clockwise ? -1 : 1
+        let startAngle: CGFloat = direction == .clockwise ? 130 : 50
+        let sweep: CGFloat = 280
+        let segmentCount = 40
+        let arc = NSBezierPath()
+        var endPoint = center
+        var endAngle: CGFloat = startAngle
+        for index in 0...segmentCount {
+            let progress = CGFloat(index) / CGFloat(segmentCount)
+            let angle = startAngle + sign * sweep * progress
+            let radians = angle * CGFloat.pi / 180
+            let point = NSPoint(
+                x: center.x + cos(radians) * radius,
+                y: center.y + sin(radians) * radius
+            )
+            if index == 0 {
+                arc.move(to: point)
+            } else {
+                arc.line(to: point)
+            }
+            endPoint = point
+            endAngle = radians
+        }
+        NSColor.controlAccentColor.withAlphaComponent(0.96).setStroke()
+        arc.lineWidth = 2.6
+        arc.lineCapStyle = .round
+        arc.stroke()
+
+        let tangentAngle = endAngle + sign * CGFloat.pi / 2
+        let tangent = NSPoint(x: cos(tangentAngle), y: sin(tangentAngle))
+        let normal = NSPoint(x: -tangent.y, y: tangent.x)
+        let arrowLength = max(6, min(10, radius * 0.28))
+        let arrowWidth = arrowLength * 0.7
+        let tip = NSPoint(
+            x: endPoint.x + tangent.x * 2,
+            y: endPoint.y + tangent.y * 2
         )
+        let baseCenter = NSPoint(
+            x: endPoint.x - tangent.x * arrowLength,
+            y: endPoint.y - tangent.y * arrowLength
+        )
+        let arrow = NSBezierPath()
+        arrow.move(to: tip)
+        arrow.line(to: NSPoint(
+            x: baseCenter.x + normal.x * arrowWidth / 2,
+            y: baseCenter.y + normal.y * arrowWidth / 2
+        ))
+        arrow.line(to: NSPoint(
+            x: baseCenter.x - normal.x * arrowWidth / 2,
+            y: baseCenter.y - normal.y * arrowWidth / 2
+        ))
+        arrow.close()
+        NSColor.controlAccentColor.withAlphaComponent(0.96).setFill()
+        arrow.fill()
     }
 }

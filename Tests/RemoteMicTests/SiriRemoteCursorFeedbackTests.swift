@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import Testing
@@ -24,9 +25,13 @@ struct SiriRemoteCursorFeedbackTests {
             for: .pointerMoved(deltaX: speed, deltaY: 0, speed: speed)
         ) == .pointer(scale: scale))
         #expect(SiriRemoteCursorFeedbackState.presentation(
-            for: .scrolled(pixels: 4, speed: speed)
-        ) == .scroll(direction: .up, scale: scale))
-        #expect(SiriRemoteCursorFeedbackState.baseIndicatorDiameter == 14)
+            for: .scrolled(
+                pixels: 4,
+                speed: speed,
+                physicalDirection: .counterClockwise
+            )
+        ) == .scroll(direction: .counterClockwise, scale: scale))
+        #expect(SiriRemoteCursorFeedbackState.baseIndicatorDiameter == 36)
     }
 
     @Test func hoverClickRejectsAnElementAfterTheCursorMovesAway() {
@@ -40,26 +45,33 @@ struct SiriRemoteCursorFeedbackTests {
         ))
     }
 
-    @Test func scrollFeedbackUsesDirectionOnly() {
-        #expect(SiriRemoteCursorFeedbackState.scrollDirection(forPixels: 4) == .up)
-        #expect(SiriRemoteCursorFeedbackState.scrollDirection(forPixels: -4) == .down)
-        #expect(SiriRemoteCursorFeedbackState.scrollSymbolName(for: .up) == "arrow.up.circle.fill")
-        #expect(SiriRemoteCursorFeedbackState.scrollSymbolName(for: .down) == "arrow.down.circle.fill")
+    @Test func scrollFeedbackUsesPhysicalRotationInsteadOfPageDirection() {
+        let speed = 12.0
+        let scale = SiriRemoteCursorFeedbackState.indicatorScale(forSpeed: speed)
+        #expect(SiriRemoteCursorFeedbackState.presentation(for: .scrolled(
+            pixels: -4,
+            speed: speed,
+            physicalDirection: .counterClockwise
+        )) == .scroll(direction: .counterClockwise, scale: scale))
+        #expect(SiriRemoteCursorFeedbackState.presentation(for: .scrolled(
+            pixels: 4,
+            speed: speed,
+            physicalDirection: .clockwise
+        )) == .scroll(direction: .clockwise, scale: scale))
     }
 
-    @Test func preferredFeedbackFrameIsRightBelowAndNeverOverlapsTheCursorBody() {
+    @Test func feedbackFrameCentersOnTheVisibleCursorBody() {
         let point = CGPoint(x: 400, y: 300)
         let layout = SiriRemoteCursorFeedbackLayout.layout(
             for: point,
             visibleFrame: CGRect(x: 0, y: 0, width: 1_000, height: 800)
         )
-        let cursorBody = SiriRemoteCursorFeedbackLayout.cursorProtectionFrame(for: point)
+        let cursorCenter = SiriRemoteCursorFeedbackLayout.cursorBodyCenter(for: point)
 
-        #expect(layout.placement == .rightBelow)
-        #expect(layout.frame.minX - cursorBody.maxX == 4)
-        #expect(layout.frame.minX > cursorBody.maxX)
-        #expect(!layout.frame.intersects(cursorBody))
-        #expect(!layout.frame.contains(point))
+        #expect(layout.placement == .centeredOnCursor)
+        #expect(layout.frame.midX == cursorCenter.x)
+        #expect(layout.frame.midY == cursorCenter.y)
+        #expect(layout.frame.contains(point))
     }
 
     @Test func clickablePointerTargetExtendsVisibilityAndConsumesOnlyOneOKPress() {
@@ -71,6 +83,7 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(interaction.pointerBecameIdle(hasClickableTarget: true) == .holdForClick(
             SiriRemoteCursorFeedbackInteractionState.clickableTargetHoldDelay
         ))
+        #expect(SiriRemoteCursorFeedbackInteractionState.clickableTargetHoldDelay == 2.5)
         let firstConsumed = interaction.consumeOK()
         let duplicateConsumed = interaction.consumeOK()
         #expect(firstConsumed)
@@ -109,7 +122,7 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(beyondLimit == nil)
     }
 
-    @Test func feedbackFlipsAwayFromScreenEdgesWithoutCoveringTheCursor() {
+    @Test func feedbackStaysCenteredAtScreenEdgesInsteadOfDriftingAway() {
         let screen = CGRect(x: 0, y: 0, width: 1_000, height: 800)
         for point in [
             CGPoint(x: 998, y: 2),
@@ -120,9 +133,9 @@ struct SiriRemoteCursorFeedbackTests {
                 for: point,
                 visibleFrame: screen
             )
-            let cursorBody = SiriRemoteCursorFeedbackLayout.cursorProtectionFrame(for: point)
-            #expect(screen.contains(layout.frame))
-            #expect(!layout.frame.intersects(cursorBody))
+            let cursorCenter = SiriRemoteCursorFeedbackLayout.cursorBodyCenter(for: point)
+            #expect(layout.frame.midX == cursorCenter.x)
+            #expect(layout.frame.midY == cursorCenter.y)
         }
     }
 
@@ -143,13 +156,52 @@ struct SiriRemoteCursorFeedbackTests {
         )
 
         #expect(integration.contains("feature.onTouchFeedback ="))
+        #expect(integration.contains("feature.onCenterTapConfirmation ="))
         #expect(model.contains("siriRemoteFeature.onTouchFeedback ="))
+        #expect(model.contains("siriRemoteFeature.onCenterTapConfirmation ="))
         #expect(model.contains("siriRemoteCursorFeedback.handle(feedback)"))
         #expect(model.contains("siriRemoteCursorFeedback.stop()"))
         #expect(model.contains("siriRemoteCursorFeedback.activateHoveredElementIfAvailable()"))
         #expect(model.contains("appleRemoteHoverClickDevices.insert(event.device)"))
         #expect(model.contains("appleRemoteHoverClickDevices.remove(event.device)"))
+        #expect(model.contains("siriRemoteCursorFeedback.cancelInteraction(reason: \"voice_started\")"))
         #expect(model.contains("siriRemoteCursorFeedback.cancelInteraction(reason: \"device_reset\")"))
         #expect(model.contains("APPLE REMOTE HOVER_CLICK phase=ended result=consumed"))
+    }
+
+    @MainActor
+    @Test func productionViewRendersReviewArtifactsWhenRequested() throws {
+        guard let outputDirectory = ProcessInfo.processInfo.environment[
+            "SAYALL_CURSOR_FEEDBACK_SCREENSHOT_DIR"
+        ], !outputDirectory.isEmpty else { return }
+        let presentations: [(String, SiriRemoteCursorFeedbackState.Presentation)] = [
+            ("touch-halo", .pointer(scale: 1.0)),
+            ("scroll-clockwise", .scroll(direction: .clockwise, scale: 1.0)),
+            ("scroll-counter-clockwise", .scroll(direction: .counterClockwise, scale: 1.0)),
+        ]
+        for appearance in [
+            ("light", NSAppearance.Name.aqua),
+            ("dark", NSAppearance.Name.darkAqua),
+        ] {
+            for (name, presentation) in presentations {
+                let view = SiriRemoteCursorFeedbackView(
+                    frame: NSRect(x: 0, y: 0, width: 104, height: 104)
+                )
+                view.appearance = NSAppearance(named: appearance.1)
+                view.presentation = presentation
+                guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+                    Issue.record("Unable to allocate cursor feedback bitmap")
+                    return
+                }
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                guard let data = bitmap.representation(using: .png, properties: [:]) else {
+                    Issue.record("Unable to encode cursor feedback PNG")
+                    return
+                }
+                let url = URL(fileURLWithPath: outputDirectory)
+                    .appendingPathComponent("\(appearance.0)-\(name).png")
+                try data.write(to: url, options: .atomic)
+            }
+        }
     }
 }

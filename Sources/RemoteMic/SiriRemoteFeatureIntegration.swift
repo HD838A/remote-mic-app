@@ -91,8 +91,17 @@ struct SiriRemotePowerSnapshot: Equatable {
 
 enum SiriRemoteTouchFeedbackKind: Equatable {
     case pointerMoved(deltaX: Double, deltaY: Double, speed: Double)
-    case scrolled(pixels: Double, speed: Double)
+    case scrolled(
+        pixels: Double,
+        speed: Double,
+        physicalDirection: SiriRemotePhysicalRotationDirection
+    )
     case clicked
+}
+
+enum SiriRemotePhysicalRotationDirection: String, Equatable {
+    case clockwise
+    case counterClockwise = "counter_clockwise"
 }
 
 final class SiriRemoteFeatureIntegration {
@@ -102,6 +111,7 @@ final class SiriRemoteFeatureIntegration {
     var onStatus: ((String) -> Void)?
     var onPowerSnapshot: ((SiriRemotePowerSnapshot) -> Void)?
     var onTouchFeedback: ((SiriRemoteTouchFeedbackKind) -> Void)?
+    var onCenterTapConfirmation: ((SiriRemoteDeviceIdentity) -> Bool)?
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private let feature: SayAllSiriRemoteFeature
@@ -141,11 +151,20 @@ final class SiriRemoteFeatureIntegration {
                     deltaY: deltaY,
                     speed: speed
                 ))
-            case let .scrolled(pixels, speed):
-                self?.onTouchFeedback?(.scrolled(pixels: pixels, speed: speed))
+            case let .scrolled(pixels, speed, physicalDirection):
+                self?.onTouchFeedback?(.scrolled(
+                    pixels: pixels,
+                    speed: speed,
+                    physicalDirection: physicalDirection == .clockwise
+                        ? .clockwise
+                        : .counterClockwise
+                ))
             case .clicked:
                 self?.onTouchFeedback?(.clicked)
             }
+        }
+        feature.onCenterTapConfirmation = { [weak self] device in
+            self?.onCenterTapConfirmation?(Self.hostDevice(device)) ?? false
         }
         feature.onPowerSnapshot = { [weak self] snapshot in
             guard let model = Self.hostModel(snapshot.model),
