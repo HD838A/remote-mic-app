@@ -757,6 +757,8 @@ final class AppSettings: ObservableObject {
         if kind == .entered {
             defaults.set(date, forKey: Keys.firstUseStepStartedAt)
         }
+
+        AppLogger.shared.write(event.runtimeLogMessage)
     }
 
     var firstUseEvents: [FirstUseEvent] {

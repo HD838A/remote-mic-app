@@ -1825,6 +1825,23 @@ struct OnboardingFlowTests {
         #expect(legacyEvents.first?.voiceResult == nil)
     }
 
+    @Test func firstUseEventsHaveStableRuntimeLogMessages() {
+        let event = FirstUseEvent(
+            timestamp: Date(timeIntervalSinceReferenceDate: 0),
+            kind: .blocked,
+            step: .voiceTest,
+            elapsedMilliseconds: 1_234,
+            failureReason: .voiceNoTranscript,
+            voiceAttemptID: 7,
+            voiceResult: .externalToolNoCommit
+        )
+
+        #expect(event.runtimeLogMessage ==
+            "ONBOARDING EVENT kind=blocked step=voiceTest elapsed_ms=1234 " +
+                "failure=voice.no_transcript attempt=7 voice_result=external_tool_no_commit"
+        )
+    }
+
     @Test func diagnosticSummaryContainsOnlyNormalizedState() {
         let capabilities = OnboardingCapabilities(
             bluetoothGranted: true,
