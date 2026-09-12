@@ -47,7 +47,7 @@ struct SiriRemoteCursorFeedbackState: Equatable {
         switch feedback {
         case let .pointerMoved(_, _, speed):
             return .pointer(scale: indicatorScale(forSpeed: speed))
-        case let .scrolled(pixels, speed, _):
+        case let .scrolled(pixels, speed):
             guard let direction = pageDirection(
                 forScrollPixels: pixels,
                 reversed: scrollArrowReversed
@@ -207,7 +207,7 @@ final class SiriRemoteCursorFeedbackController {
             ))
             show(at: NSEvent.mouseLocation, mode: "pointer")
             schedulePointerIdleEvaluation(after: 0.24)
-        case let .scrolled(pixels, speed, _):
+        case let .scrolled(pixels, speed):
             interactionState.scrolled()
             hoveredElement = nil
             hoveredCursorLocation = nil

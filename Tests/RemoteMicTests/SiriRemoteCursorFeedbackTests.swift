@@ -27,8 +27,7 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(SiriRemoteCursorFeedbackState.presentation(
             for: .scrolled(
                 pixels: 4,
-                speed: speed,
-                physicalDirection: .counterClockwise
+                speed: speed
             )
         ) == .scroll(direction: .up, arrowCount: 2, scale: scale))
         #expect(SiriRemoteCursorFeedbackState.baseIndicatorDiameter == 36)
@@ -50,26 +49,22 @@ struct SiriRemoteCursorFeedbackTests {
         let scale = SiriRemoteCursorFeedbackState.indicatorScale(forSpeed: speed)
         #expect(SiriRemoteCursorFeedbackState.presentation(for: .scrolled(
             pixels: 4,
-            speed: speed,
-            physicalDirection: .counterClockwise
+            speed: speed
         )) == .scroll(direction: .up, arrowCount: 2, scale: scale))
         #expect(SiriRemoteCursorFeedbackState.presentation(for: .scrolled(
             pixels: 4,
-            speed: speed,
-            physicalDirection: .clockwise
+            speed: speed
         )) == .scroll(direction: .up, arrowCount: 2, scale: scale))
         #expect(SiriRemoteCursorFeedbackState.presentation(
             for: .scrolled(
                 pixels: 4,
-                speed: speed,
-                physicalDirection: .counterClockwise
+                speed: speed
             ),
             scrollArrowReversed: true
         ) == .scroll(direction: .down, arrowCount: 2, scale: scale))
         #expect(SiriRemoteCursorFeedbackState.presentation(for: .scrolled(
             pixels: -4,
-            speed: speed,
-            physicalDirection: .clockwise
+            speed: speed
         )) == .scroll(direction: .down, arrowCount: 2, scale: scale))
     }
 
@@ -221,7 +216,7 @@ struct SiriRemoteCursorFeedbackTests {
         )
 
         #expect(integration.contains("feature.onTouchFeedback ="))
-        #expect(integration.contains("feature.onCenterTapConfirmation ="))
+        #expect(!integration.contains("feature.onCenterTapConfirmation ="))
         #expect(model.contains("siriRemoteFeature.onTouchFeedback ="))
         #expect(model.contains("siriRemoteFeature.onCenterTapConfirmation ="))
         #expect(model.contains("scrollArrowReversed: settings.siriRemoteScrollArrowReversed"))
