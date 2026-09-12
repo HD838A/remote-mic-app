@@ -2434,7 +2434,6 @@ struct OnboardingView: View {
         default:
             break
         }
-        AppLogger.shared.write("ONBOARDING STEP entered=\(step.rawValue)")
         settings.recordFirstUseEvent(.entered, step: step)
         lastRecordedFailure = nil
         DispatchQueue.main.async {
@@ -2834,6 +2833,10 @@ struct OnboardingView: View {
         AppLogger.shared.write(
             "ONBOARDING DIAGNOSTICS copied step=\(settings.onboardingStep.rawValue) " +
                 "failure=\(failureReason?.rawValue ?? "none")"
+        )
+        AppLogger.shared.writeDiagnosticSummary(
+            snapshot.redactedText,
+            event: "ONBOARDING DIAGNOSTICS"
         )
     }
 

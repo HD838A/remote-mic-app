@@ -438,6 +438,21 @@ struct FirstUseEvent: Codable, Equatable {
         "\(kind.rawValue)|\(step.rawValue)|\(failureReason?.rawValue ?? "none")|" +
             "\(voiceAttemptID.map(String.init) ?? "none")|\(voiceResult?.rawValue ?? "none")"
     }
+
+    var runtimeLogMessage: String {
+        var message = kind == .entered
+            ? "ONBOARDING STEP entered=\(step.rawValue)"
+            : "ONBOARDING EVENT kind=\(kind.rawValue) step=\(step.rawValue)"
+        message += " elapsed_ms=\(elapsedMilliseconds)"
+        message += " failure=\(failureReason?.rawValue ?? "none")"
+        if let voiceAttemptID {
+            message += " attempt=\(voiceAttemptID)"
+        }
+        if let voiceResult {
+            message += " voice_result=\(voiceResult.rawValue)"
+        }
+        return message
+    }
 }
 
 struct FirstUseDiagnosticSnapshot {

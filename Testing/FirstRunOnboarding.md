@@ -298,7 +298,7 @@
 15. 使用“活动监视器”记录无线麦进程 CPU，在语音测试页可见、完成向导后的设置页可见、设置窗口打开后再关闭三种状态下，各执行一次至少 30 秒的连续真实语音。
 16. 分别记录三种状态的平均 CPU、峰值 CPU、音频批次数、样本数和 `enqueue_failures`；如果仍持续接近占满一个 CPU 核心，再采集同一时段的 Time Profiler 调用树。
 17. 完成一次“开始、PCM、松开结束均正常但没有文字”的会话，确认松开后的 3 秒等待窗口内不显示终态失败；窗口结束后只出现一个原因，不再依次出现 `voice.no_samples → voice.session_not_ended → voice.no_transcript`。
-18. 复制设置诊断，确认 `diagnostic_schema=3`，当前 attempt 包含 App/Build/系统完整身份、`voice_attempt`、`voice_trigger_path`、输入框焦点丢失次数/维度/恢复/截止状态、首样本延迟、会话时长、文字等待时长，以及 `voice_audio_generation`、音频路线、收到/调度/实际播放/中断/pending 样本、入队失败、所选/实际设备稳定类型和绑定状态。
+18. 在每个 Onboarding 步骤进入、通过、阻断、重试、恢复和完成时检查 `runtime.log` 已实时出现对应的 `ONBOARDING STEP` 或 `ONBOARDING EVENT`；再复制 Onboarding 诊断，确认剪贴板和日志都包含同一份 `diagnostic_schema=3` 摘要。日志中应出现 `ONBOARDING DIAGNOSTICS BEGIN`、逐行 `FIELD` 和 `END`，当前 attempt 包含 App/Build/系统完整身份、`voice_attempt`、`voice_trigger_path`、输入框焦点丢失次数/维度/恢复/截止状态、首样本延迟、会话时长、文字等待时长，以及 `voice_audio_generation`、音频路线、收到/调度/实际播放/中断/pending 样本、入队失败、所选/实际设备稳定类型和绑定状态。
 19. 制造一次中间瞬时失焦但三秒截止前已恢复的会话，确认不会被归类为 `voice.input_target_focus_lost`；截止时仍失焦才允许使用该失败码。
 20. 制造一次 SayAll 音频完整送达、焦点稳定但没有文字的会话，确认日志为 `voice.external_tool_no_commit`、`voice_probable_cause_confirmed=false`、`voice_external_tool_microphone_observable=false`，并把 `microphone_matches_selected_device` 列为首个检查项。
 21. 制造入队失败、实际设备绑定错误、播放中断和截止时仍 pending，分别确认归类为 `voice.audio_delivery_failed`，且不会被第三方工具失败覆盖；正常排空中的 pending 不得在三秒截止前提前失败。
