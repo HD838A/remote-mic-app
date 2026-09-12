@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
 - [关闭原始录音开关仍保存当前音频](./2026-08-27-original-recording-cancel-commits-audio.md)
 - [Onboarding 语音测试页隐藏第三方配置](./2026-09-05-onboarding-voice-test-hidden-tool-configuration.md)
 - [1.9.19 偶发显示“暂时无法获取更新信息”](./2026-09-03-github-api-update-feed-unavailable/DEBUG.md)
@@ -52,7 +53,7 @@
 - [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md)
 - [真实候选版本号导致预发布生命周期测试夹具失败](./2026-08-13-preview-lifecycle-fixture-current-version.md)
 - [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md)
-- [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
+- [导入配置几乎不校验，可为遥控器按键装上任意应用与快捷键触发器](./2026-09-05-configuration-import-accepts-arbitrary-app-and-shortcut.md)
 - [安装/卸载脚本在音频服务缺失时于成功之后报错中止](./2026-09-05-installer-audio-service-restart-aborts-script.md)
 - [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md)
 
@@ -83,7 +84,6 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
-| 2026-08-27 | [关闭原始录音开关仍保存当前音频](./2026-08-27-original-recording-cancel-commits-audio.md) | 候选修复完成，自动化通过，等待 RC003 真机验收 |
 | 2026-09-11 | [苹果遥控器 Command 语音键再次无法唤醒目标输入法](./2026-09-11-siri-remote-command-voice-regression.md) | 候选修复与失败门禁完成，等待真实遥控器和目标输入法验收 |
 | 2026-09-03 | [1.9.19 偶发显示“暂时无法获取更新信息”](./2026-09-03-github-api-update-feed-unavailable/DEBUG.md) | 候选修复、自动化与生产通道部署完成，等待 `1.9.21` 真实 Sparkle UI 验收 |
 | 2026-09-01 | [1.9.18「语音键模拟 Fn 点按」自动关闭](./2026-09-01-fn-tap-auto-disable/DEBUG.md) | 根因确认并完成候选修复；自动化通过，等待 RC003 与 Typeless 真机验收 |
