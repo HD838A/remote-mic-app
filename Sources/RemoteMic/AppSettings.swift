@@ -269,6 +269,7 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let gainDB = "gainDB"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
+        static let lastKnownAudioDeviceUID = "lastKnownAudioDeviceUID"
         static let customMappingEnabled = "customMappingEnabled"
         static let legacyExclusiveHID = "exclusiveHID"
         static let buttonBindings = "buttonBindings"
@@ -316,8 +317,16 @@ final class AppSettings: ObservableObject {
     }
 
     @Published var selectedAudioDeviceUID: String {
-        didSet { defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID) }
+        didSet {
+            defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID)
+            if !selectedAudioDeviceUID.isEmpty {
+                lastKnownAudioDeviceUID = selectedAudioDeviceUID
+                defaults.set(selectedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
+            }
+        }
     }
+
+    private(set) var lastKnownAudioDeviceUID: String
 
     @Published var customMappingEnabled: Bool {
         didSet { defaults.set(customMappingEnabled, forKey: Keys.customMappingEnabled) }
@@ -516,6 +525,12 @@ final class AppSettings: ObservableObject {
         onboardingCompletedVersion >= Self.currentOnboardingVersion
     }
 
+    var hasHistoricalAudioConfiguration: Bool {
+        isOnboardingComplete || firstUseEvents.contains {
+            ($0.kind == .passed && $0.step == .audio) || $0.kind == .completed
+        }
+    }
+
     var peripheralIdentifier: UUID? {
         get {
             guard let raw = defaults.string(forKey: Keys.peripheralIdentifier) else { return nil }
@@ -533,7 +548,13 @@ final class AppSettings: ObservableObject {
         gainDB = defaults.object(forKey: Keys.gainDB) == nil
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
-        selectedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        let persistedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        selectedAudioDeviceUID = persistedAudioDeviceUID
+        lastKnownAudioDeviceUID = defaults.string(forKey: Keys.lastKnownAudioDeviceUID) ?? persistedAudioDeviceUID
+        if defaults.string(forKey: Keys.lastKnownAudioDeviceUID) == nil,
+           !persistedAudioDeviceUID.isEmpty {
+            defaults.set(persistedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
+        }
         if defaults.object(forKey: Keys.customMappingEnabled) != nil {
             customMappingEnabled = defaults.bool(forKey: Keys.customMappingEnabled)
         } else {
@@ -1459,6 +1480,7 @@ final class AppSettings: ObservableObject {
         [
             Keys.gainDB,
             Keys.selectedAudioDeviceUID,
+            Keys.lastKnownAudioDeviceUID,
             Keys.customMappingEnabled,
             Keys.legacyExclusiveHID,
             Keys.buttonBindings,
