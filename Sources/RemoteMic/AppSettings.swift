@@ -287,6 +287,7 @@ final class AppSettings: ObservableObject {
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
         static let voiceKeyMode = "voiceKeyMode"
+        static let siriRemoteScrollArrowReversed = "siriRemote.scrollArrowReversed"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
@@ -408,6 +409,15 @@ final class AppSettings: ObservableObject {
     @Published var voiceKeyMode: VoiceKeyMode {
         didSet {
             defaults.set(voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
+        }
+    }
+
+    @Published var siriRemoteScrollArrowReversed: Bool {
+        didSet {
+            defaults.set(
+                siriRemoteScrollArrowReversed,
+                forKey: Keys.siriRemoteScrollArrowReversed
+            )
         }
     }
 
@@ -620,6 +630,9 @@ final class AppSettings: ObservableObject {
         voiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
+        siriRemoteScrollArrowReversed = defaults.bool(
+            forKey: Keys.siriRemoteScrollArrowReversed
+        )
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )

@@ -1224,6 +1224,25 @@ struct SettingsView: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 16) {
+                    Toggle(isOn: $settings.siriRemoteScrollArrowReversed) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(localization.text("siri_remote.scroll_arrow.reverse.title"))
+                                .font(.system(size: 13, weight: .medium))
+                            Text(localization.text("siri_remote.scroll_arrow.reverse.detail"))
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .help(localization.text("siri_remote.scroll_arrow.reverse.help"))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(
+                        Color.primary.opacity(0.035),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+
                     SiriRemoteMappingPage(
                         selectedControlID: $selectedSiriRemoteControlID,
                         activeControlIDs: model.activeAppleRemoteControlIDs,

@@ -104,6 +104,27 @@ struct BuildSigningTests {
         #expect(modelSource.contains("SiriRemoteFeatureIntegration"))
     }
 
+    @Test func siriRemoteVoiceBuildsRejectAdHocSigning() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(buildSource.contains("REQUIRE_SIRI_REMOTE_SIGNING=\"${REQUIRE_SIRI_REMOTE_SIGNING:-1}\""))
+        #expect(buildSource.contains("Siri Remote voice builds require Developer ID Application signing"))
+        #expect(buildSource.contains("SAYALL_SIRI_REMOTE_INCLUDED\" == \"true\""))
+        #expect(verifySource.contains("Siri Remote voice app must use Developer ID Application signing"))
+        #expect(verifySource.contains("TeamIdentifier=L3QHLDRPAY"))
+    }
+
     @Test func macRemoteIsOptionalForPublicBuildsAndRequiredForRelease() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

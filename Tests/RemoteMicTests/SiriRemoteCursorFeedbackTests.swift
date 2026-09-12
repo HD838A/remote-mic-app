@@ -18,7 +18,7 @@ struct SiriRemoteCursorFeedbackTests {
     }
 
     @Test func pointerAndScrollUseTheSameSpeedScaleAndBaseSize() {
-        let speed = 30.0
+        let speed = 12.0
         let scale = SiriRemoteCursorFeedbackState.indicatorScale(forSpeed: speed)
 
         #expect(SiriRemoteCursorFeedbackState.presentation(
@@ -30,7 +30,7 @@ struct SiriRemoteCursorFeedbackTests {
                 speed: speed,
                 physicalDirection: .counterClockwise
             )
-        ) == .scroll(direction: .counterClockwise, scale: scale))
+        ) == .scroll(direction: .up, arrowCount: 2, scale: scale))
         #expect(SiriRemoteCursorFeedbackState.baseIndicatorDiameter == 36)
     }
 
@@ -45,19 +45,74 @@ struct SiriRemoteCursorFeedbackTests {
         ))
     }
 
-    @Test func scrollFeedbackUsesPhysicalRotationInsteadOfPageDirection() {
+    @Test func scrollFeedbackUsesPageIndicatorDirectionAndCanReverseOnlyTheCue() {
         let speed = 12.0
         let scale = SiriRemoteCursorFeedbackState.indicatorScale(forSpeed: speed)
         #expect(SiriRemoteCursorFeedbackState.presentation(for: .scrolled(
-            pixels: -4,
+            pixels: 4,
             speed: speed,
             physicalDirection: .counterClockwise
-        )) == .scroll(direction: .counterClockwise, scale: scale))
+        )) == .scroll(direction: .up, arrowCount: 2, scale: scale))
         #expect(SiriRemoteCursorFeedbackState.presentation(for: .scrolled(
             pixels: 4,
             speed: speed,
             physicalDirection: .clockwise
-        )) == .scroll(direction: .clockwise, scale: scale))
+        )) == .scroll(direction: .up, arrowCount: 2, scale: scale))
+        #expect(SiriRemoteCursorFeedbackState.presentation(
+            for: .scrolled(
+                pixels: 4,
+                speed: speed,
+                physicalDirection: .counterClockwise
+            ),
+            scrollArrowReversed: true
+        ) == .scroll(direction: .down, arrowCount: 2, scale: scale))
+        #expect(SiriRemoteCursorFeedbackState.presentation(for: .scrolled(
+            pixels: -4,
+            speed: speed,
+            physicalDirection: .clockwise
+        )) == .scroll(direction: .down, arrowCount: 2, scale: scale))
+    }
+
+    @Test func scrollArrowCountIsBoundedAndMonotonicWithSpeed() {
+        #expect(SiriRemoteCursorFeedbackState.arrowCount(forSpeed: 0) == 1)
+        #expect(SiriRemoteCursorFeedbackState.arrowCount(forSpeed: 7.99) == 1)
+        #expect(SiriRemoteCursorFeedbackState.arrowCount(forSpeed: 8) == 2)
+        #expect(SiriRemoteCursorFeedbackState.arrowCount(forSpeed: 23.99) == 2)
+        #expect(SiriRemoteCursorFeedbackState.arrowCount(forSpeed: 24) == 3)
+        #expect(SiriRemoteCursorFeedbackState.arrowCount(forSpeed: 500) == 3)
+    }
+
+    @Test func scrollArrowDirectionPreferenceDefaultsToMatchAndPersists() throws {
+        let suiteName = "RemoteMicTests.SiriRemoteScrollArrow.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        #expect(!settings.siriRemoteScrollArrowReversed)
+        settings.siriRemoteScrollArrowReversed = true
+        #expect(AppSettings(defaults: defaults).siriRemoteScrollArrowReversed)
+    }
+
+    @Test func scrollArrowSettingHasCompleteLocalizedCopy() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for localization in ["zh-Hans", "en"] {
+            let contents = try String(
+                contentsOf: root.appendingPathComponent(
+                    "Resources/\(localization).lproj/Localizable.strings"
+                ),
+                encoding: .utf8
+            )
+            for key in [
+                "siri_remote.scroll_arrow.reverse.title",
+                "siri_remote.scroll_arrow.reverse.detail",
+                "siri_remote.scroll_arrow.reverse.help",
+            ] {
+                #expect(contents.contains("\"\(key)\" ="))
+            }
+        }
     }
 
     @Test func feedbackFrameCentersOnTheVisibleCursorBody() {
@@ -83,7 +138,7 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(interaction.pointerBecameIdle(hasClickableTarget: true) == .holdForClick(
             SiriRemoteCursorFeedbackInteractionState.clickableTargetHoldDelay
         ))
-        #expect(SiriRemoteCursorFeedbackInteractionState.clickableTargetHoldDelay == 2.5)
+        #expect(SiriRemoteCursorFeedbackInteractionState.clickableTargetHoldDelay == 2.0)
         let firstConsumed = interaction.consumeOK()
         let duplicateConsumed = interaction.consumeOK()
         #expect(firstConsumed)
@@ -154,12 +209,22 @@ struct SiriRemoteCursorFeedbackTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
             encoding: .utf8
         )
+        let renderer = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/SettingsScreenshotRenderer.swift"
+            ),
+            encoding: .utf8
+        )
+        let settingsView = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
 
         #expect(integration.contains("feature.onTouchFeedback ="))
         #expect(integration.contains("feature.onCenterTapConfirmation ="))
         #expect(model.contains("siriRemoteFeature.onTouchFeedback ="))
         #expect(model.contains("siriRemoteFeature.onCenterTapConfirmation ="))
-        #expect(model.contains("siriRemoteCursorFeedback.handle(feedback)"))
+        #expect(model.contains("scrollArrowReversed: settings.siriRemoteScrollArrowReversed"))
         #expect(model.contains("siriRemoteCursorFeedback.stop()"))
         #expect(model.contains("siriRemoteCursorFeedback.activateHoveredElementIfAvailable()"))
         #expect(model.contains("appleRemoteHoverClickDevices.insert(event.device)"))
@@ -167,6 +232,15 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(model.contains("siriRemoteCursorFeedback.cancelInteraction(reason: \"voice_started\")"))
         #expect(model.contains("siriRemoteCursorFeedback.cancelInteraction(reason: \"device_reset\")"))
         #expect(model.contains("APPLE REMOTE HOVER_CLICK phase=ended result=consumed"))
+        #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SIRI_REMOTE"))
+        let directionToggle = try #require(settingsView.range(
+            of: "Toggle(isOn: $settings.siriRemoteScrollArrowReversed)"
+        ))
+        let siriMappingPage = try #require(settingsView.range(of: "SiriRemoteMappingPage("))
+        #expect(directionToggle.lowerBound < siriMappingPage.lowerBound)
+        #expect(settingsView[directionToggle.lowerBound...].prefix(900).contains(
+            ".font(.system(size: 12))"
+        ))
     }
 
     @MainActor
@@ -176,8 +250,9 @@ struct SiriRemoteCursorFeedbackTests {
         ], !outputDirectory.isEmpty else { return }
         let presentations: [(String, SiriRemoteCursorFeedbackState.Presentation)] = [
             ("touch-halo", .pointer(scale: 1.0)),
-            ("scroll-clockwise", .scroll(direction: .clockwise, scale: 1.0)),
-            ("scroll-counter-clockwise", .scroll(direction: .counterClockwise, scale: 1.0)),
+            ("scroll-up-slow", .scroll(direction: .up, arrowCount: 1, scale: 1.0)),
+            ("scroll-up-fast", .scroll(direction: .up, arrowCount: 3, scale: 2.2)),
+            ("scroll-down-medium", .scroll(direction: .down, arrowCount: 2, scale: 1.4)),
         ]
         for appearance in [
             ("light", NSAppearance.Name.aqua),

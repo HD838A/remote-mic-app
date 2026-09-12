@@ -619,7 +619,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         siriRemoteFeature.onStatus = { _ in }
         siriRemoteFeature.onTouchFeedback = { [weak self] feedback in
-            self?.siriRemoteCursorFeedback.handle(feedback)
+            guard let self else { return }
+            siriRemoteCursorFeedback.handle(
+                feedback,
+                scrollArrowReversed: settings.siriRemoteScrollArrowReversed
+            )
         }
         siriRemoteFeature.onCenterTapConfirmation = { [weak self] _ in
             self?.siriRemoteCursorFeedback.activateHoveredElementIfAvailable() ?? false
