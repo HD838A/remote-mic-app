@@ -2960,68 +2960,61 @@ struct SettingsView: View {
     }
 
     private var aboutPage: some View {
-        settingsPage(contentPadding: 14) {
+        settingsPage(contentPadding: 28) {
             PageHeader(title: localization.text("settings.page.title"))
         } content: {
             CompatibilityGlassContainer(spacing: 0) {
                 VStack(spacing: 0) {
                     Group {
-                        VStack(spacing: 10) {
-                            Text("settings.application_updates.title")
-                                .font(.title3.weight(.semibold))
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(alignment: .top, spacing: 28) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Image(nsImage: NSApp.applicationIconImage)
+                                    .resizable()
+                                    .frame(width: 72, height: 72)
+                                    .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+                                Text("app.name")
+                                    .font(.title3.weight(.semibold))
+                                Text("settings.application.tagline")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            .frame(minWidth: 190, maxWidth: 230, alignment: .leading)
 
-                            HStack(alignment: .top, spacing: 20) {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack(spacing: 12) {
-                                        Image(nsImage: NSApp.applicationIconImage)
-                                            .resizable()
-                                            .frame(width: 52, height: 52)
-                                            .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("app.name")
-                                                .font(.title3.weight(.semibold))
-                                            Text("settings.application.tagline")
-                                                .font(.system(size: 12))
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(2)
-                                        }
+                            Divider()
+
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 8) {
+                                    Text("about.version.current")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                    Button(action: revealPrivateEnrollmentIfNeeded) {
+                                        Text(currentVersion)
+                                            .font(.system(size: 13, weight: .medium))
+                                            .monospacedDigit()
                                     }
-
-                                    HStack(spacing: 8) {
-                                        Text("about.version.current")
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(.secondary)
-                                        Button(action: revealPrivateEnrollmentIfNeeded) {
-                                            Text(currentVersion)
-                                                .font(.system(size: 13, weight: .medium))
-                                                .monospacedDigit()
-                                        }
-                                        .buttonStyle(.plain)
-                                        .contentShape(Rectangle())
-                                        if case .available = updateInformation.state {
-                                            StatusPill(
-                                                text: localization.text("about.version.available"),
-                                                tint: .green
-                                            )
-                                        }
-                                    }
-
-                                    HStack(spacing: 10) {
-                                        Button(action: checkForUpdates) {
-                                            Label(
-                                                "menu.check_for_updates",
-                                                systemImage: "arrow.triangle.2.circlepath"
-                                            )
-                                        }
-                                        .compatibilityButtonStyle(.standard)
-
-                                        Button(
-                                            "about.version.recheck",
-                                            action: refreshUpdateInformation
+                                    .buttonStyle(.plain)
+                                    .contentShape(Rectangle())
+                                    if case .available = updateInformation.state {
+                                        StatusPill(
+                                            text: localization.text("about.version.available"),
+                                            tint: .green
                                         )
-                                        .compatibilityButtonStyle(.standard)
                                     }
+                                    Spacer(minLength: 8)
+                                }
+
+                                HStack(spacing: 12) {
+                                    Button(action: checkForUpdates) {
+                                        Label(
+                                            "menu.check_for_updates",
+                                            systemImage: "arrow.triangle.2.circlepath"
+                                        )
+                                    }
+                                    .compatibilityButtonStyle(.standard)
+                                    .fixedSize(horizontal: true, vertical: false)
+
+                                    Spacer(minLength: 12)
 
                                     Toggle(
                                         "about.version.check_prerelease",
@@ -3030,31 +3023,28 @@ struct SettingsView: View {
                                     .toggleStyle(.switch)
                                     .font(.system(size: 12))
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
 
                                 Divider()
 
-                                VStack(alignment: .leading, spacing: 12) {
-                                    updateInformationContent
-                                    if case let .available(update) = updateInformation.state {
-                                        HStack {
-                                            Spacer()
-                                            Button(action: checkForUpdates) {
-                                                Text(String(
-                                                    format: localization.text("about.version.update_to"),
-                                                    locale: localization.locale,
-                                                    arguments: [update.displayVersion]
-                                                ))
-                                            }
-                                            .compatibilityButtonStyle(.prominent)
+                                updateInformationContent
+                                if case let .available(update) = updateInformation.state {
+                                    HStack {
+                                        Spacer()
+                                        Button(action: checkForUpdates) {
+                                            Text(String(
+                                                format: localization.text("about.version.update_to"),
+                                                locale: localization.locale,
+                                                arguments: [update.displayVersion]
+                                            ))
                                         }
+                                        .compatibilityButtonStyle(.prominent)
                                     }
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
-
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(.bottom, 12)
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
                         .overlay(alignment: .bottom) { Divider() }
                     }
 
