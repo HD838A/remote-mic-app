@@ -141,7 +141,7 @@ xcrun swift test --disable-keychain
 
 `scripts/test.sh` 运行协议/策略自检并编译完整应用；Swift Testing 继续覆盖 ATVV、蓝牙生命周期、音频设备策略、按键、权限、配置兼容、Fn 映射、Typeless 会话生命周期、pre-roll、音频排空和测试音。
 
-默认 checkout 是完整的公开构建路径：`Package.swift` 不解析私有 Git URL，没有私有仓库权限也可以执行上述测试、生成 `dist/SayAll.app` 并启动公开功能。官方 CI 会先强制执行同一公开路径；只有在固定私有 Package 可访问时，才通过 `SAYALL_AI_PACKAGE_PATH`、`SAYALL_MACRO_PLATFORM_PATH` 和 `SAYALL_MAC_REMOTE_PACKAGE_PATH` 追加私有集成测试。受保护发布构建会强制要求这些 Package，不会使用公开兼容层生成发布包。
+默认 checkout 是完整的公开构建路径：`Package.swift` 不解析私有 Git URL，没有私有仓库权限也可以执行上述测试、生成 `dist/SayAll.app` 并启动公开功能。官方 CI 会先强制执行同一公开路径；访问固定依赖后，通过 `SAYALL_AI_PACKAGE_PATH`、`SAYALL_COMBINATION_ACTIONS_PATH` 和 `SAYALL_MAC_REMOTE_PACKAGE_PATH` 验证官方构建，其中免费的组合动作默认集成。付费键位方案保持默认关闭，只有显式设置 `SAYALL_BUTTON_PROFILES_PACKAGE_PATH` 才加入依赖图。受保护发布构建强制要求免费组合动作及其他官方依赖，但默认不包含付费键位方案。
 
 构建并启动应用：
 

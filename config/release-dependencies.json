@@ -5,9 +5,9 @@
       "repository": "GetSayAll/sayall-ai",
       "commit": "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"
     },
-    "sayAllMacroPlatform": {
-      "repository": "GetSayAll/sayall-macro-platform",
-      "commit": "60db6940d89bd401fe1c4a3563fe33113a436c8c"
+    "sayAllPrivatePlatform": {
+      "repository": "GetSayAll/sayall-private-platform",
+      "commit": "dc1b4ea12c24f85e0fc804c73946d18b6b2c69b8"
     },
     "sayAllMacRemote": {
       "repository": "GetSayAll/sayall-mac-remote",

@@ -40,9 +40,11 @@ EXPECTED_ARCHIVES=(
   SayAllMacroCore.xcframework.zip
   SayAllMacroMacOS.xcframework.zip
   SayAllMacroRemoteMic.xcframework.zip
+  SayAllButtonProfiles.xcframework.zip
   SayAllMembershipCore.xcframework.zip
   SayAllMembershipUI.xcframework.zip
-  SayAllMacroPlatform_SayAllMacroRemoteMic.bundle.zip
+  SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip
+  SayAllButtonProfiles_SayAllButtonProfiles.bundle.zip
 )
 EXPECTED_CHECKSUM_PATHS="$(printf './%s\n' "${EXPECTED_ARCHIVES[@]}" | LC_ALL=C sort)"
 ACTUAL_CHECKSUM_PATHS="$(awk '{print $2}' "$RELEASE_DIRECTORY/SHA256SUMS" | LC_ALL=C sort)"
@@ -61,7 +63,18 @@ if ! jq -e '
   .minimum_macos == "13.0" and
   .architectures == ["arm64", "x86_64"] and
   .linkage == "static" and
-  .resource_bundles == ["SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"]
+  .modules == [
+    "SayAllMembershipCore",
+    "SayAllMembershipUI",
+    "SayAllMacroCore",
+    "SayAllMacroMacOS",
+    "SayAllMacroRemoteMic",
+    "SayAllButtonProfiles"
+  ] and
+  .resource_bundles == [
+    "SayAllCombinationActions_SayAllMacroRemoteMic.bundle",
+    "SayAllButtonProfiles_SayAllButtonProfiles.bundle"
+  ]
 ' "$RELEASE_DIRECTORY/provenance.json" >/dev/null; then
   print -u2 "private artifact provenance is invalid, dirty, or incompatible"
   exit 1
@@ -111,7 +124,8 @@ for module_name in \
   SayAllMembershipUI \
   SayAllMacroCore \
   SayAllMacroMacOS \
-  SayAllMacroRemoteMic; do
+  SayAllMacroRemoteMic \
+  SayAllButtonProfiles; do
   unzip -q "$RELEASE_DIRECTORY/$module_name.xcframework.zip" \
     -d "$STAGING_DIRECTORY/Artifacts"
   framework="$STAGING_DIRECTORY/Artifacts/$module_name.xcframework/macos-arm64_x86_64/$module_name.framework"
@@ -120,10 +134,14 @@ for module_name in \
   lipo "$binary" -verify_arch arm64 x86_64
   test "$(plutil -extract MinimumOSVersion raw -o - "$framework/Info.plist")" = "13.0"
 done
-unzip -q "$RELEASE_DIRECTORY/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle.zip" \
+unzip -q "$RELEASE_DIRECTORY/SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip" \
   -d "$STAGING_DIRECTORY/Resources"
-test -f "$STAGING_DIRECTORY/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle/Contents/Resources/en.lproj/Localizable.strings"
-test -f "$STAGING_DIRECTORY/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle/Contents/Resources/zh-Hans.lproj/Localizable.strings"
+test -f "$STAGING_DIRECTORY/Resources/SayAllCombinationActions_SayAllMacroRemoteMic.bundle/Contents/Resources/en.lproj/Localizable.strings"
+test -f "$STAGING_DIRECTORY/Resources/SayAllCombinationActions_SayAllMacroRemoteMic.bundle/Contents/Resources/zh-Hans.lproj/Localizable.strings"
+unzip -q "$RELEASE_DIRECTORY/SayAllButtonProfiles_SayAllButtonProfiles.bundle.zip" \
+  -d "$STAGING_DIRECTORY/Resources"
+test -f "$STAGING_DIRECTORY/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle/Contents/Resources/en.lproj/Localizable.strings"
+test -f "$STAGING_DIRECTORY/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle/Contents/Resources/zh-Hans.lproj/Localizable.strings"
 
 cat > "$STAGING_DIRECTORY/Package.swift" <<'SWIFT'
 // swift-tools-version: 6.2
@@ -139,6 +157,10 @@ let package = Package(
             name: "SayAllMacroRemoteMic",
             targets: ["SayAllMacroCore", "SayAllMacroMacOS", "SayAllMacroRemoteMic"]
         ),
+        .library(
+            name: "SayAllButtonProfiles",
+            targets: ["SayAllMacroCore", "SayAllMacroMacOS", "SayAllMacroRemoteMic", "SayAllButtonProfiles"]
+        ),
     ],
     targets: [
         .binaryTarget(name: "SayAllMembershipCore", path: "Artifacts/SayAllMembershipCore.xcframework"),
@@ -146,6 +168,7 @@ let package = Package(
         .binaryTarget(name: "SayAllMacroCore", path: "Artifacts/SayAllMacroCore.xcframework"),
         .binaryTarget(name: "SayAllMacroMacOS", path: "Artifacts/SayAllMacroMacOS.xcframework"),
         .binaryTarget(name: "SayAllMacroRemoteMic", path: "Artifacts/SayAllMacroRemoteMic.xcframework"),
+        .binaryTarget(name: "SayAllButtonProfiles", path: "Artifacts/SayAllButtonProfiles.xcframework"),
     ]
 )
 SWIFT

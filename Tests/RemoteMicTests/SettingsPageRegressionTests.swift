@@ -245,12 +245,18 @@ struct SettingsPageRegressionTests {
 
         #expect(package.contains("SAYALL_MEMBERSHIP_PACKAGE_PATH"))
         #expect(package.contains("SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"))
+        #expect(package.contains("SAYALL_COMBINATION_ACTIONS_PATH"))
+        #expect(package.contains("SAYALL_BUTTON_PROFILES_PACKAGE_PATH"))
+        #expect(package.contains("SAYALL_BUTTON_PROFILES_PACKAGE_PATH requires SAYALL_COMBINATION_ACTIONS_PATH"))
         #expect(package.contains("private artifacts cannot be combined with private source packages"))
         #expect(package.contains("SayAllMembershipCore"))
         #expect(package.contains("SayAllMembershipUI"))
         #expect(membership.contains("#if canImport(SayAllMembershipCore)"))
         #expect(membership.contains("return AnyView(EmptyView())"))
         #expect(macro.contains("func executeBoundAction("))
+        #expect(macro.contains("#if canImport(SayAllButtonProfiles)"))
+        #expect(macro.contains("buttonProfilesFeature.executeBoundAction("))
+        #expect(macro.contains("feature.executeBoundMacro("))
         #expect(macro.contains("return false"))
         #expect(model.contains("overrideActionPerformer:"))
         #expect(model.contains("performButtonProfileBoundAction("))
@@ -258,10 +264,11 @@ struct SettingsPageRegressionTests {
         #expect(model.contains("webRemoteClient.onCommand"))
         #expect(model.contains("webRemoteClient.onButtonEvent"))
         #expect(model.contains("JSONDecoder().decode(ConfiguredButtonAction.self, from: payload)"))
-        #expect(settings.contains("case .macros, .buttonProfiles: macroFeature.isFeatureVisible"))
+        #expect(settings.contains("case .macros: macroFeature.isFeatureVisible"))
+        #expect(settings.contains("case .buttonProfiles: macroFeature.isButtonProfilesVisible"))
         #expect(settings.contains("case .membership: membershipFeature.isFeatureVisible"))
 
-        #if !canImport(SayAllMacroRemoteMic)
+        #if !canImport(SayAllMacroRemoteMic) && !canImport(SayAllButtonProfiles)
         let macroFeature = MacroFeatureIntegration(localeIdentifier: "zh-Hans")
         #expect(!macroFeature.executeBoundAction(
             profileID: nil,

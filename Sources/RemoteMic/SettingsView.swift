@@ -652,7 +652,8 @@ struct SettingsView: View {
         Self.sidebarSectionOrder.filter {
             switch $0 {
             case .privateFeature: privateFeature.isFeatureVisible
-            case .macros, .buttonProfiles: macroFeature.isFeatureVisible
+            case .macros: macroFeature.isFeatureVisible
+            case .buttonProfiles: macroFeature.isButtonProfilesVisible
             case .membership: membershipFeature.isFeatureVisible
             default: true
             }
@@ -728,7 +729,7 @@ struct SettingsView: View {
                 aboutPage
             }
         case .buttonProfiles:
-            if macroFeature.isFeatureVisible {
+            if macroFeature.isButtonProfilesVisible {
                 macroFeature.buttonProfilesView(
                     selectedRemoteProfileID: settings.selectedRemoteProfileID,
                     remoteModel: settings.selectedRemoteProfile?.model,
