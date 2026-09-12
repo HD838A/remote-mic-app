@@ -2,8 +2,7 @@
 
 ## 适用范围
 
-- 功能分支：`codex/cloudflare-download-cdn`
-- 目标候选：macOS `1.8.12` Pre-release
+- 适用版本：macOS `1.9.21` Pre-release 及后续版本
 - 官网：`https://sayall.app/`、`https://sayall.app/en/`
 - 固定下载入口：`https://download.sayall.app/mac`
 
@@ -24,7 +23,17 @@
 
 失败判定：跳到 GitHub 页面、跳到预览版、循环跳转、文件名错误、状态码不是 302/200，或返回 HTML 错误页。
 
-## 用例 2：版本化资产完整性
+## 用例 2：stable 与 preview appcast 通道
+
+1. 分别请求 `/mac/channels/stable/appcast.xml`、`/mac/channels/preview/appcast.xml`、`/mac/channels/stable/appcast-intel.xml` 和 `/mac/channels/preview/appcast-intel.xml`，不自动跟随重定向。
+2. 记录 `Location`、`Cache-Control`，再跟随下载并与对应 GitHub 固定 Tag appcast 比较。
+3. Preview 发布后重复检查四个入口；Stable 晋升后再次检查两个 stable 入口。
+
+预期结果：四个入口均返回 `302` 和 `Cache-Control: no-store`；stable 只指向最新正式 Release，preview 只指向最新公开 Pre-release；Apple Silicon 与 Intel 始终使用各自 appcast。最终字节与 GitHub 固定 Tag 完全相同。
+
+失败判定：客户端需要直接调用 GitHub Releases API、stable 指向 Pre-release、preview 回退到 stable、架构交叉、缓存旧通道超过发布脚本等待窗口，或最终 appcast 字节不同。
+
+## 用例 3：版本化资产完整性
 
 对候选标签分别下载 ZIP、DMG、安装 PKG、卸载 PKG、SHA256、appcast、中英文说明和 candidate provenance。
 
@@ -32,7 +41,7 @@
 
 失败判定：任意字节不同、缺少资产、缓存旧版本、返回压缩/转换后的不同字节、签名或公证失效。
 
-## 用例 3：HEAD 与断点续传
+## 用例 4：HEAD 与断点续传
 
 1. 对版本化 DMG 发起 `HEAD`。
 2. 发起 `Range: bytes=0-1023`。
@@ -42,7 +51,7 @@
 
 失败判定：Range 被忽略、返回完整文件、状态不是 206、长度错误或字节不同。
 
-## 用例 4：路径与方法限制
+## 用例 5：路径与方法限制
 
 测试任意 URL、其他仓库、版本不匹配文件名、未知资产、查询参数、POST 和上游不存在资产。
 
@@ -50,7 +59,7 @@
 
 失败判定：可借 Worker 代理任意 URL、版本路径和文件名不一致仍成功、错误页以 200 或安装包类型返回。
 
-## 用例 5：官网中英文下载入口
+## 用例 6：官网中英文下载入口
 
 1. 打开 `https://sayall.app/?analytics=qa`。
 2. 检查页头、Hero、安装要求和底部下载按钮。
@@ -61,20 +70,21 @@
 
 失败判定：仍有 Mac CTA 指向 GitHub latest、中文或英文漏改、下载事件丢失、按钮跳到预览版或页面布局回归。
 
-## 用例 6：Sparkle 候选发现和下载
+## 用例 7：Sparkle 候选发现和下载
 
 1. 使用当前正式版最终 ZIP 解压的 App。
 2. 使用 Sparkle 官方 CLI 对候选 GitHub 固定标签 appcast 执行一次性 `--probe`。
 3. 确认 appcast enclosure 指向 Cloudflare 固定标签 ZIP。
 4. 下载 enclosure，验证 Ed25519 签名、目标版本、Build、helper 权限和符号链接。
 
-预期结果：正式版能发现 `1.8.12`；ZIP 经 Cloudflare 下载且与 GitHub资产逐字节一致；不修改 App 的稳定 feed 或用户偏好。
+预期结果：正式版能发现 `1.9.21`；ZIP 经 Cloudflare 下载且与 GitHub 资产逐字节一致；不修改用户偏好。
 
 失败判定：旧版无法发现候选、enclosure 使用 `/mac` 或 `latest`、下载后签名失败、默认稳定 feed 被修改。
 
 ## 稳定功能回归
 
-- [x] App 内置 `SUFeedURL` 仍为 GitHub latest appcast。
+- [x] App 内置 `SUFeedURL` 使用 Cloudflare stable 通道，客户端不直接访问 GitHub Releases API。
+- [ ] 发布后 preview 通道两架构均指向 `1.9.21`，stable 通道两架构仍指向动态读取的正式版。
 - [x] 预发布开关缺失/默认关闭、明确关闭、开启、使用后再关闭的相关自动化回归通过；候选 UI 更新尚未执行。
 - [x] 当前 Stable latest 由 GitHub `releases/latest` 动态确认，Worker 与官网部署没有改变正式版。
 - [x] GitHub Release 页面和当前稳定 Tag 的 DMG 可直接下载，并与 CDN 字节一致。

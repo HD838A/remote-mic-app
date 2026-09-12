@@ -12,6 +12,10 @@ APP_DESTINATIONS=(
 APP_LABELS=("SayAll.app" "Remote Mic.app" "无线麦.app")
 BUNDLE_IDENTIFIER="com.hd838a.RemoteMic"
 DRIVER_BUNDLE_IDENTIFIER="com.hd838a.MiRemoteV2ch"
+HCI_SERVICE_LABEL="com.hd838a.SayAll.AppleRemoteHCIService"
+HCI_SERVICE_DESTINATION="${TARGET_VOLUME%/}/Library/PrivilegedHelperTools/$HCI_SERVICE_LABEL"
+HCI_SERVICE_PLIST="${TARGET_VOLUME%/}/Library/LaunchDaemons/$HCI_SERVICE_LABEL.plist"
+HCI_SERVICE_STATE="${TARGET_VOLUME%/}/Library/Application Support/RemoteMic/AppleRemoteHCI"
 UNINSTALL_TOKEN="$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
 ITEM_SOURCES=()
 ITEM_LABELS=()
@@ -19,6 +23,7 @@ ITEM_KINDS=()
 ITEM_DESTINATIONS=()
 MOVED_COUNT=0
 DRIVER_MOVED=0
+HCI_SERVICE_OWNED=0
 
 uses_chinese_locale() {
   local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
@@ -73,6 +78,45 @@ queue_owned_driver() {
   ITEM_KINDS+=("driver")
 }
 
+queue_owned_hci_service() {
+  if [[ -e "$HCI_SERVICE_DESTINATION" || -L "$HCI_SERVICE_DESTINATION" ]]; then
+    if [[ ! -x "$HCI_SERVICE_DESTINATION" ]] || \
+       ! /usr/bin/codesign --verify --strict "$HCI_SERVICE_DESTINATION" >/dev/null 2>&1 || \
+       [[ "$(/usr/bin/codesign -dvv "$HCI_SERVICE_DESTINATION" 2>&1 | \
+         /usr/bin/sed -n 's/^Identifier=//p')" != "$HCI_SERVICE_LABEL" ]]; then
+      installer_message \
+        "Apple Remote 系统服务无法确认为无线麦组件，卸载器已保留它。" \
+        "The Apple Remote system service could not be verified as a SayAll component and was left untouched."
+    else
+      HCI_SERVICE_OWNED=1
+      ITEM_SOURCES+=("$HCI_SERVICE_DESTINATION")
+      ITEM_LABELS+=("SayAllAppleRemoteHCIService.helper")
+      ITEM_KINDS+=("hci_service")
+    fi
+  fi
+
+  if [[ -e "$HCI_SERVICE_PLIST" || -L "$HCI_SERVICE_PLIST" ]]; then
+    if [[ ! -f "$HCI_SERVICE_PLIST" ]] || \
+       [[ "$(/usr/bin/plutil -extract Label raw -o - "$HCI_SERVICE_PLIST" 2>/dev/null || true)" != \
+         "$HCI_SERVICE_LABEL" ]]; then
+      installer_message \
+        "Apple Remote 系统服务配置无法确认归属，卸载器已保留它。" \
+        "The Apple Remote service configuration could not be verified and was left untouched."
+    else
+      ITEM_SOURCES+=("$HCI_SERVICE_PLIST")
+      ITEM_LABELS+=("$HCI_SERVICE_LABEL.plist")
+      ITEM_KINDS+=("hci_plist")
+    fi
+  fi
+
+  if [[ "$HCI_SERVICE_OWNED" -eq 1 && -d "$HCI_SERVICE_STATE" && \
+        ! -L "$HCI_SERVICE_STATE" ]]; then
+    ITEM_SOURCES+=("$HCI_SERVICE_STATE")
+    ITEM_LABELS+=("AppleRemoteHCI.state")
+    ITEM_KINDS+=("hci_state")
+  fi
+}
+
 prepare_trash_root() {
   local console_user console_uid user_home trash_created=0
 
@@ -112,6 +156,9 @@ trash_destination_for_item() {
   case "$label" in
     *.app) stem="${label%.app}"; extension=".app" ;;
     *.driver) stem="${label%.driver}"; extension=".driver" ;;
+    *.helper) stem="${label%.helper}"; extension=".helper" ;;
+    *.plist) stem="${label%.plist}"; extension=".plist" ;;
+    *.state) stem="${label%.state}"; extension=".state" ;;
     *) return 1 ;;
   esac
   candidate="$TRASH_ROOT/$stem (uninstalled $UNINSTALL_TOKEN)$extension"
@@ -137,6 +184,7 @@ for (( index=1; index<=${#APP_DESTINATIONS[@]}; index++ )); do
   queue_owned_app "${APP_DESTINATIONS[$index]}" "${APP_LABELS[$index]}"
 done
 queue_owned_driver
+queue_owned_hci_service
 
 if [[ "${#ITEM_SOURCES[@]}" -eq 0 ]]; then
   installer_message \
@@ -158,6 +206,13 @@ for label in "${ITEM_LABELS[@]}"; do
     break
   fi
 done
+
+if [[ "$TARGET_VOLUME" == "/" ]]; then
+  /bin/launchctl bootout "system/$HCI_SERVICE_LABEL" >/dev/null 2>&1 || true
+  if [[ "$HCI_SERVICE_OWNED" -eq 1 ]]; then
+    "$HCI_SERVICE_DESTINATION" --restore >/dev/null 2>&1 || true
+  fi
+fi
 
 for (( index=1; index<=${#ITEM_SOURCES[@]}; index++ )); do
   ITEM_DESTINATIONS+=("$(trash_destination_for_item "${ITEM_LABELS[$index]}")")

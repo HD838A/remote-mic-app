@@ -10,6 +10,116 @@ struct AudioDeviceInfo: Identifiable, Equatable {
     let name: String
 }
 
+extension VirtualAudioDeviceDiagnosticKind {
+    static func classify(_ device: AudioDeviceInfo?) -> Self {
+        guard let device else { return .unavailable }
+        if device.uid == "MiRemoteV2ch_UID" || device.name == "MiRemoteV 2ch" {
+            return .miRemoteV2ch
+        }
+        if device.uid == "BlackHole2ch_UID" || device.name == "BlackHole 2ch" {
+            return .blackHole2ch
+        }
+        return .other
+    }
+}
+
+enum VirtualAudioSelectionRecoverySource: String, Equatable {
+    case currentSelection = "current_selection"
+    case rememberedSelection = "remembered_selection"
+    case uniqueHistoricalCandidate = "unique_historical_candidate"
+    case none
+}
+
+enum VirtualAudioSelectionRecoveryReason: String, Equatable {
+    case noHistory = "no_history"
+    case rememberedDeviceUnavailable = "remembered_device_unavailable"
+    case noSupportedCandidate = "no_supported_candidate"
+    case multipleSupportedCandidates = "multiple_supported_candidates"
+}
+
+struct VirtualAudioSelectionRecoveryDecision: Equatable {
+    let uid: String?
+    let source: VirtualAudioSelectionRecoverySource
+    let reason: VirtualAudioSelectionRecoveryReason?
+    let kind: VirtualAudioDeviceDiagnosticKind
+    let supportedCandidateCount: Int
+}
+
+enum VirtualAudioSelectionRecoveryPolicy {
+    static func resolve(
+        selectedUID: String,
+        rememberedUID: String,
+        availableDevices: [AudioDeviceInfo],
+        hasHistoricalConfiguration: Bool
+    ) -> VirtualAudioSelectionRecoveryDecision {
+        let supported = availableDevices.filter {
+            switch VirtualAudioDeviceDiagnosticKind.classify($0) {
+            case .miRemoteV2ch, .blackHole2ch: return true
+            case .other, .unavailable: return false
+            }
+        }
+
+        if !selectedUID.isEmpty {
+            let selectedDevice = availableDevices.first { $0.uid == selectedUID }
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: selectedUID,
+                source: .currentSelection,
+                reason: nil,
+                kind: VirtualAudioDeviceDiagnosticKind.classify(selectedDevice),
+                supportedCandidateCount: supported.count
+            )
+        }
+
+        if !rememberedUID.isEmpty {
+            let rememberedDevice = availableDevices.first { $0.uid == rememberedUID }
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: rememberedDevice?.uid,
+                source: rememberedDevice == nil ? .none : .rememberedSelection,
+                reason: rememberedDevice == nil ? .rememberedDeviceUnavailable : nil,
+                kind: VirtualAudioDeviceDiagnosticKind.classify(rememberedDevice),
+                supportedCandidateCount: supported.count
+            )
+        }
+
+        guard hasHistoricalConfiguration else {
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: nil,
+                source: .none,
+                reason: .noHistory,
+                kind: .unavailable,
+                supportedCandidateCount: supported.count
+            )
+        }
+        guard supported.count == 1, let candidate = supported.first else {
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: nil,
+                source: .none,
+                reason: supported.isEmpty ? .noSupportedCandidate : .multipleSupportedCandidates,
+                kind: .unavailable,
+                supportedCandidateCount: supported.count
+            )
+        }
+        return VirtualAudioSelectionRecoveryDecision(
+            uid: candidate.uid,
+            source: .uniqueHistoricalCandidate,
+            reason: nil,
+            kind: VirtualAudioDeviceDiagnosticKind.classify(candidate),
+            supportedCandidateCount: supported.count
+        )
+    }
+}
+
+extension VirtualAudioOutputDiagnosticSnapshot {
+    var configurationHealthy: Bool {
+        VirtualAudioHealthPolicy.isConfigurationHealthy(
+            hasSelectedDevice: selectedDeviceKind != .unavailable,
+            engineRunning: engineRunning,
+            playerPlaying: playerPlaying,
+            boundToSelectedDevice: boundToSelectedDevice == true
+        )
+    }
+}
+
 enum AudioPlayerNodeSafety {
     static func play(_ player: AVAudioPlayerNode) -> Bool {
         RemoteMicTryPlayAudioPlayerNode(player)
@@ -364,6 +474,11 @@ enum DefaultInputFallbackPolicy {
 }
 
 final class VirtualAudioOutput {
+    private struct PendingDeliveryCounters {
+        var buffers = 0
+        var samples = 0
+    }
+
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
     private var engineConfigurationObserver: NSObjectProtocol?
@@ -372,6 +487,11 @@ final class VirtualAudioOutput {
     private var lastRejectedWriteLogDate = Date.distantPast
     private let playbackLock = NSLock()
     private var pendingVoiceBufferCount = 0
+    private var pendingVoiceSampleCount = 0
+    private var playbackGeneration: UInt64 = 0
+    private var playbackCounters = VirtualAudioPlaybackCounters()
+    private var playbackCountersByDeliveryGeneration: [Int: VirtualAudioPlaybackCounters] = [:]
+    private var pendingByDeliveryGeneration: [Int: PendingDeliveryCounters] = [:]
     private var pendingDrainLogContexts: [String] = []
     private var drainCompletion: (() -> Void)?
     private var drainGeneration: UInt64 = 0
@@ -533,7 +653,7 @@ final class VirtualAudioOutput {
     }
 
     @discardableResult
-    func enqueue(samples: [Int16]) -> Bool {
+    func enqueue(samples: [Int16], deliveryGeneration: Int = 0) -> Bool {
         guard !samples.isEmpty else {
             logRejectedWrite(reason: "empty_samples")
             return false
@@ -555,7 +675,16 @@ final class VirtualAudioOutput {
             rejectedWriteCount = 0
         }
         playbackLock.lock()
+        let generation = playbackGeneration
+        let sampleCount = samples.count
         pendingVoiceBufferCount += 1
+        pendingVoiceSampleCount += sampleCount
+        playbackCounters.scheduledBuffers += 1
+        playbackCounters.scheduledSamples += sampleCount
+        playbackCountersByDeliveryGeneration[deliveryGeneration, default: .init()].scheduledBuffers += 1
+        playbackCountersByDeliveryGeneration[deliveryGeneration, default: .init()].scheduledSamples += sampleCount
+        pendingByDeliveryGeneration[deliveryGeneration, default: .init()].buffers += 1
+        pendingByDeliveryGeneration[deliveryGeneration, default: .init()].samples += sampleCount
         playbackLock.unlock()
         player.scheduleBuffer(
             buffer,
@@ -563,7 +692,11 @@ final class VirtualAudioOutput {
             options: [],
             completionCallbackType: .dataPlayedBack
         ) { [weak self] _ in
-            self?.scheduledVoiceBufferDidFinish()
+            self?.scheduledVoiceBufferDidFinish(
+                sampleCount: sampleCount,
+                generation: generation,
+                deliveryGeneration: deliveryGeneration
+            )
         }
         return true
     }
@@ -573,7 +706,7 @@ final class VirtualAudioOutput {
     }
 
     func endSessionAfterDraining(
-        maximumDelay: TimeInterval = 0.75,
+        maximumDelay: TimeInterval? = 0.75,
         completion: @escaping () -> Void
     ) {
         playbackLock.lock()
@@ -590,8 +723,10 @@ final class VirtualAudioOutput {
             completion()
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + maximumDelay) { [weak self] in
-            self?.finishDrainIfNeeded(generation: generation, completion: completion)
+        if let maximumDelay {
+            DispatchQueue.main.asyncAfter(deadline: .now() + maximumDelay) { [weak self] in
+                self?.finishDrainIfNeeded(generation: generation, completion: completion)
+            }
         }
     }
 
@@ -617,7 +752,12 @@ final class VirtualAudioOutput {
     private func flushPlayer() {
         playbackLock.lock()
         let interruptedContexts = pendingVoiceBufferCount > 0 ? pendingDrainLogContexts : []
+        playbackCounters.interruptedBuffers += pendingVoiceBufferCount
+        playbackCounters.interruptedSamples += pendingVoiceSampleCount
+        recordPendingDeliveriesAsInterrupted()
         pendingVoiceBufferCount = 0
+        pendingVoiceSampleCount = 0
+        playbackGeneration &+= 1
         pendingDrainLogContexts.removeAll()
         drainCompletion = nil
         drainGeneration &+= 1
@@ -639,7 +779,12 @@ final class VirtualAudioOutput {
     func stop() {
         playbackLock.lock()
         let interruptedContexts = pendingVoiceBufferCount > 0 ? pendingDrainLogContexts : []
+        playbackCounters.interruptedBuffers += pendingVoiceBufferCount
+        playbackCounters.interruptedSamples += pendingVoiceSampleCount
+        recordPendingDeliveriesAsInterrupted()
         pendingVoiceBufferCount = 0
+        pendingVoiceSampleCount = 0
+        playbackGeneration &+= 1
         pendingDrainLogContexts.removeAll()
         drainCompletion = nil
         drainGeneration &+= 1
@@ -655,12 +800,34 @@ final class VirtualAudioOutput {
         selectedDevice = nil
     }
 
-    private func scheduledVoiceBufferDidFinish() {
+    private func scheduledVoiceBufferDidFinish(
+        sampleCount: Int,
+        generation: UInt64,
+        deliveryGeneration: Int
+    ) {
         var completion: (() -> Void)?
         var completionGeneration: UInt64?
         var drainedContexts: [String] = []
         playbackLock.lock()
+        guard generation == playbackGeneration else {
+            playbackLock.unlock()
+            return
+        }
         pendingVoiceBufferCount = max(0, pendingVoiceBufferCount - 1)
+        pendingVoiceSampleCount = max(0, pendingVoiceSampleCount - sampleCount)
+        playbackCounters.playedBuffers += 1
+        playbackCounters.playedSamples += sampleCount
+        playbackCountersByDeliveryGeneration[deliveryGeneration, default: .init()].playedBuffers += 1
+        playbackCountersByDeliveryGeneration[deliveryGeneration, default: .init()].playedSamples += sampleCount
+        if var pending = pendingByDeliveryGeneration[deliveryGeneration] {
+            pending.buffers = max(0, pending.buffers - 1)
+            pending.samples = max(0, pending.samples - sampleCount)
+            if pending.buffers == 0 && pending.samples == 0 {
+                pendingByDeliveryGeneration.removeValue(forKey: deliveryGeneration)
+            } else {
+                pendingByDeliveryGeneration[deliveryGeneration] = pending
+            }
+        }
         if pendingVoiceBufferCount == 0 {
             drainedContexts = pendingDrainLogContexts
             pendingDrainLogContexts.removeAll()
@@ -703,7 +870,6 @@ final class VirtualAudioOutput {
         let shouldFinish = generation == drainGeneration && drainCompletion != nil
         if shouldFinish {
             drainCompletion = nil
-            pendingVoiceBufferCount = 0
             drainGeneration &+= 1
         }
         playbackLock.unlock()
@@ -755,6 +921,58 @@ final class VirtualAudioOutput {
         return "\(basicDiagnosticState()) " +
             "actual_output={\(CoreAudioDeviceCatalog.deviceDiagnostic(actualOutput))} " +
             "bound_to_selected=\(isBound) \(CoreAudioDeviceCatalog.routeDiagnostic())"
+    }
+
+    func diagnosticSnapshot(deliveryGeneration: Int? = nil) -> VirtualAudioOutputDiagnosticSnapshot {
+        let actualOutput = currentOutputDevice()
+        let boundToSelected: Bool?
+        if let selectedDevice, let actualOutput {
+            boundToSelected = selectedDevice.id == actualOutput.id
+        } else {
+            boundToSelected = nil
+        }
+        playbackLock.lock()
+        let pendingBuffers: Int
+        let pendingSamples: Int
+        let counters: VirtualAudioPlaybackCounters
+        if let deliveryGeneration {
+            let pending = pendingByDeliveryGeneration[deliveryGeneration] ?? .init()
+            pendingBuffers = pending.buffers
+            pendingSamples = pending.samples
+            counters = playbackCountersByDeliveryGeneration[deliveryGeneration] ?? .init()
+            pruneDeliveryDiagnostics(keeping: deliveryGeneration)
+        } else {
+            pendingBuffers = pendingVoiceBufferCount
+            pendingSamples = pendingVoiceSampleCount
+            counters = playbackCounters
+        }
+        playbackLock.unlock()
+        return VirtualAudioOutputDiagnosticSnapshot(
+            selectedDeviceKind: .classify(selectedDevice),
+            actualDeviceKind: .classify(actualOutput),
+            engineRunning: engine?.isRunning == true,
+            playerPlaying: player?.isPlaying == true,
+            boundToSelectedDevice: boundToSelected,
+            pendingBuffers: pendingBuffers,
+            pendingSamples: pendingSamples,
+            counters: counters
+        )
+    }
+
+    private func recordPendingDeliveriesAsInterrupted() {
+        for (generation, pending) in pendingByDeliveryGeneration {
+            playbackCountersByDeliveryGeneration[generation, default: .init()].interruptedBuffers += pending.buffers
+            playbackCountersByDeliveryGeneration[generation, default: .init()].interruptedSamples += pending.samples
+        }
+        pendingByDeliveryGeneration.removeAll(keepingCapacity: true)
+    }
+
+    private func pruneDeliveryDiagnostics(keeping generation: Int) {
+        guard playbackCountersByDeliveryGeneration.count > 32 else { return }
+        let minimumGeneration = max(0, generation - 16)
+        playbackCountersByDeliveryGeneration = playbackCountersByDeliveryGeneration.filter {
+            $0.key >= minimumGeneration || pendingByDeliveryGeneration[$0.key] != nil
+        }
     }
 
     private func basicDiagnosticState() -> String {

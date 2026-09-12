@@ -7,23 +7,25 @@
 
 ## 合并后私有包版本与宿主集成
 
-组合动作默认开放已通过 PR [GetSayAll/sayall-macro-platform#4](https://github.com/GetSayAll/sayall-macro-platform/pull/4) 合入 `main`；本次按键捕获修复对应私有包 Draft PR [#5](https://github.com/GetSayAll/sayall-macro-platform/pull/5)。宿主验证固定使用修复提交的完整 commit：
+组合动作历史开放与按键捕获修复来自已弃用的 `sayall-macro-platform`；当前事实源已迁移到
+`GetSayAll/sayall-private-platform/packages/macos-button-profiles`。下方历史 PR 链接仅供审计，
+不得从旧仓库取代码。宿主验证固定使用当前私有包的完整 commit：
 
 ```text
-60db6940d89bd401fe1c4a3563fe33113a436c8c
+70e7710e9204300f1a5a715c85ef83a7dd87b10f
 ```
 
 本地开发或验证时，将私有包 checkout 到该 commit（不得使用浮动的 `main`）：
 
 ```bash
-git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform fetch origin main
-git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform checkout --detach 19080aa9e9f1289f9ab4cc5715f2067cb50c546e
+git -C /Users/andy/Develop/Src/AISrc/GetSayAll/sayall-private-platform fetch origin main
+git -C /Users/andy/Develop/Src/AISrc/GetSayAll/sayall-private-platform checkout --detach 70e7710e9204300f1a5a715c85ef83a7dd87b10f
 ```
 
 宿主通过 `Package.swift` 的 `SAYALL_MACRO_PLATFORM_PATH` 注入本地包；最小测试命令为：
 
 ```bash
-SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/sayall-macro-platform \
+SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/GetSayAll/sayall-private-platform/packages/macos-button-profiles \
 REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 swift test
 ```
@@ -38,7 +40,7 @@ swift test
 
 ## 测试前准备
 
-1. 本机存在私有仓库 `sayall-macro-platform`，并通过 `SAYALL_MACRO_PLATFORM_PATH` 注入构建。
+1. 本机存在私有仓库 `sayall-private-platform/packages/macos-button-profiles`，并通过 `SAYALL_MACRO_PLATFORM_PATH` 注入构建。
 2. 无线麦已获得输入监控和辅助功能权限。
 3. 准备一个没有组合动作资格数据的新 macOS 测试账户，以及一个保留旧组合动作资格数据的升级测试账户。
 4. 准备真实遥控器；另准备 iOS 或 Web Remote 检查同一绑定入口。
@@ -47,7 +49,7 @@ swift test
 本地构建命令：
 
 ```bash
-SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/sayall-macro-platform \
+SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/GetSayAll/sayall-private-platform/packages/macos-button-profiles \
 EARLY_ACCESS_SERVICE_URL=https://config.sayall.app \
 REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 REQUIRE_EARLY_ACCESS_CONFIGURATION=1 \
@@ -162,6 +164,24 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 - “按键确定位置 / 选择锁定”原有功能仍可用，不被组合动作页面的显式模式改写。
 
 失败判定：开关关闭时按键仍被吞掉、开关打开时误执行动作、关闭或隐藏后仍持续捕获、手机 / 网页与实体遥控器行为不一致，或原按键确定位置流程失效。
+
+### 用例三 H：重录共享快捷键不影响其他组合动作
+
+步骤：
+
+1. 创建 Routine A，添加第 2 步并录入 `Ctrl+A`。
+2. 复制 Routine A 为 Routine B，确认两者都显示并执行 `Ctrl+A`。
+3. 在 Routine A 重录第 2 步为 `Ctrl+B` 并保存。
+4. 分别测试 Routine A 和 Routine B，完全退出并重启 App 后再次测试。
+
+预期：
+
+- [ ] Routine A 第 2 步显示并执行 `Ctrl+B`。
+- [ ] Routine B 第 2 步仍显示并执行 `Ctrl+A`。
+- [ ] 原 `Ctrl+A` 快捷键 Profile 未被替换，其他主动复用它的步骤保持不变。
+- [ ] 重启后两个 Routine 仍保持各自快捷键。
+
+失败判定：Routine B 被改成 `Ctrl+B`、原 Profile 被覆盖、保存后出现半更新状态，或必须再次录入才能恢复。
 
 ### 用例三 A：最终 App 脱离构建缓存打开快捷指令
 

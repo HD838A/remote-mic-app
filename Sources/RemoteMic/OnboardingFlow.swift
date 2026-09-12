@@ -205,6 +205,45 @@ enum OnboardingTranscriptInputPolicy {
     }
 }
 
+enum OnboardingVoiceTestConfigurationPolicy {
+    static func expectsFnTap(for voiceTool: OnboardingVoiceTool) -> Bool {
+        voiceTool == .typeless
+    }
+
+    static func requiresGlobalVoiceConfirmation(for voiceTool: OnboardingVoiceTool) -> Bool {
+        voiceTool == .doubao
+    }
+
+    static func isSayAllVoiceKeyReady(
+        voiceTool: OnboardingVoiceTool,
+        voiceKeyMode: VoiceKeyMode,
+        voiceFnTapModeEnabled: Bool
+    ) -> Bool {
+        voiceKeyMode == .function &&
+            voiceFnTapModeEnabled == expectsFnTap(for: voiceTool)
+    }
+
+    static func isComplete(
+        voiceTool: OnboardingVoiceTool,
+        voiceKeyMode: VoiceKeyMode,
+        voiceFnTapModeEnabled: Bool,
+        audioOutputReady: Bool,
+        externalVoiceKeyConfirmed: Bool,
+        externalGlobalVoiceConfirmed: Bool,
+        externalMicrophoneConfirmed: Bool
+    ) -> Bool {
+        isSayAllVoiceKeyReady(
+            voiceTool: voiceTool,
+            voiceKeyMode: voiceKeyMode,
+            voiceFnTapModeEnabled: voiceFnTapModeEnabled
+        ) &&
+            audioOutputReady &&
+            externalVoiceKeyConfirmed &&
+            (!requiresGlobalVoiceConfirmation(for: voiceTool) || externalGlobalVoiceConfirmed) &&
+            externalMicrophoneConfirmed
+    }
+}
+
 enum OnboardingFlowPolicy {
     static func isPhysicalRemoteRecognized(
         at step: OnboardingStep,
