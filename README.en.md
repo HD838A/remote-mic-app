@@ -13,11 +13,6 @@
 <table>
   <tr>
     <td align="center">
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb"><img src="Screenshots/community-entry-qrcode.png" alt="SayAll permanent community entry" width="220"></a><br>
-      <strong>Permanent entry</strong><br>
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb">Open the latest community page</a>
-    </td>
-    <td align="center">
       <img src="Screenshots/wechat-group-qrcode.jpg" alt="SayAll WeChat group QR code" width="220"><br>
       <strong>WeChat group</strong><br>
       Scan in WeChat to join
@@ -29,6 +24,18 @@
     </td>
   </tr>
 </table>
+
+## Windows version
+
+The first Windows preview of SayAll is now available, focusing on the essential features:
+
+- Supports Xiaomi Bluetooth Remote 2 and 2 Pro.
+- Voice input currently supports only WeChat Input Method.
+- The voice-input shortcut is `Ctrl + Win`.
+
+You are welcome to try it. In principle, the Windows version of SayAll should not trigger warnings from game anti-cheat or antivirus software. If you have concerns, scan the source code with an AI tool before installing it.
+
+[Download the Windows preview](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
 
 iOS app beta: [Join the TestFlight public beta](https://testflight.apple.com/join/J8k8fb7v)
 
@@ -76,7 +83,7 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 ## Requirements
 
 - Apple Silicon Mac with macOS 14 or later, or Intel Mac with macOS 13 or later
-- Xiaomi Bluetooth Remote 2 Pro
+- Xiaomi Bluetooth Remote 2 or 2 Pro
 - For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
 
 ## Download and install
@@ -88,7 +95,7 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 
 The Apple Silicon installer is named `Remote-Mic-<version>.dmg`; the Intel installer is named `Remote-Mic-<version>-Intel.dmg`. They are not interchangeable.
 
-The DMG has one ordinary installation entry: double-click **Install Remote Mic.pkg** on Apple Silicon, or **Install Remote Mic Intel.pkg** on Intel Macs. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
+The DMG has one ordinary installation entry: double-click **Install SayAll.pkg** on Apple Silicon, or **Install SayAll Intel.pkg** on Intel Macs. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
 Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only through the official Cloudflare CDN entry or this project's GitHub Releases. To verify a DMG, use `Remote-Mic-<version>.dmg.sha256` from the same GitHub Release; it lists both architecture-specific DMGs by filename.
 
@@ -124,17 +131,17 @@ Under **Button Mapping**, the voice-button area lets you choose the default Fn/G
 
 Fn remains the default because it directly matches Fn-hold voice entry in apps such as Doubao and Weixin, Fn-tap entry in Typeless, and the remote's hold-to-capture/release-to-stop lifecycle. F18, F19, F20, or other uncommon keys could be added technically, but this version does not offer an arbitrary voice-key binding: the target voice app must use the same key, and RC003, iPhone, Apple Watch, Web, permissions, and input-source switching must all share one paired press/release lifecycle. Ordinary remote buttons can still use F1–F20 shortcuts.
 
-The optional **Short Voice Tap Focuses Input** setting is off by default. A short tap focuses the most likely chat composer in the current frontmost app, while a hold keeps using the selected Fn, Left Command, or Right Command trigger. The generic path uses macOS Accessibility. WeChat does not expose its composer, so only its main window uses a size-gated, window-relative click fallback. Turn off the target voice tool's own short-press activation. This option is mutually exclusive with **Simulate Fn Tap on Voice Key**.
+The voice button has no single-tap, double-tap, or long-press side effects. It is reserved for the low-latency press-to-start and release-to-stop voice session. To focus the frontmost app's input field, choose **Focus Input Field** under a normal button's **Custom Actions**; it uses macOS Accessibility and never reads the field contents.
 
 To confirm the audio path, send a one-second test tone or inspect input level in QuickTime Player's **New Audio Recording** window.
 
 ### Typeless compatibility
 
-Tap-to-toggle voice tools such as Typeless are incompatible with the 小米蓝牙遥控器 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
+Tap-to-toggle voice tools such as Typeless are incompatible with the Xiaomi Bluetooth Remote 2 and 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
 
-You must still **hold the 小米蓝牙遥控器 2 Pro voice key while speaking and release it to finish**. The 小米蓝牙遥控器 2 Pro firmware stops microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete 小米蓝牙遥控器 2 Pro HID mapping automatically disables the mode and restores the default Fn-hold mapping.
+You must still **hold the Xiaomi Bluetooth Remote 2 or 2 Pro voice key while speaking and release it to finish**. Both remote firmwares stop microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete remote HID mapping automatically disables the mode and restores the default Fn-hold mapping.
 
-If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install Remote Mic.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
+If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install SayAll.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
 
 ## Customize remote buttons
 
@@ -145,7 +152,7 @@ If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRe
 
 Open **Button Mapping** and enable custom mapping to change direction, OK, Back, Home, Menu, TV, Power, and volume buttons.
 
-Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, launching installed apps, and custom keyboard shortcuts. A shortcut can be chosen from common combinations such as Copy, Paste, and Spotlight, assembled from an on-page standard keyboard with modifiers, F1–F20, navigation keys, a numeric keypad, or standalone left/right modifiers, or recorded from a physical keyboard as before.
+Each ordinary button supports a single-click action and optional double-click and long-press actions. Available actions include keyboard input, system volume, playback control, launching installed apps, focusing the frontmost input field, and custom keyboard shortcuts. A shortcut can be chosen from common combinations such as Copy, Paste, and Spotlight, assembled from an on-page standard keyboard with modifiers, F1–F20, navigation keys, a numeric keypad, or standalone left/right modifiers, or recorded from a physical keyboard as before.
 
 **Open Custom App** lets you select any local `.app`, then either open it only, send its focus shortcut after activation, or record a target input field once and focus it automatically. Re-record the target if an app update changes its interface. SayAll does not use fixed screen coordinates or save text from the input field.
 
@@ -182,8 +189,7 @@ SayAll does not upload or store voice, does not change the system default input 
 ## Uninstall
 
 1. Quit SayAll.
-2. Download and run **Uninstall Remote Mic.pkg** from the same GitHub Release to remove MiRemoteV 2ch.
-3. Delete **SayAll.app** from Applications.
+2. Download and run `SayAll-<version>-Uninstaller.pkg` from the same GitHub Release to remove SayAll and MiRemoteV 2ch.
 
 Uninstalling the compatible microphone does not change or remove BlackHole.
 
@@ -193,7 +199,9 @@ When installing over an older release, the installer recognizes legacy `/Applica
 
 Read the [Troubleshooting Guide](TROUBLESHOOTING.en.md) first. The complete onboarding flow is in the [First-Install Guide](Resources/首次安装说明.en.md).
 
-For development, build, protocol, test, and release details, see the [Technical Documentation](TECHNICAL.en.md).
+Before developing any new feature, everyone—including the repository owner, maintainers, external contributors, and automated agents—must read and follow the canonical [New Feature Development Policy](FEATURE_DEVELOPMENT.md).
+
+For development, build, protocol, test, and release details, see the [Technical Documentation](TECHNICAL.en.md). Branch and pull-request management is defined in the [Branch and Commit Management Policy](BRANCH_MANAGEMENT.md).
 
 ## ⭐ Star History
 

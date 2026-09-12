@@ -133,9 +133,24 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    var applicationBundleIdentifier: String? {
+        switch self {
+        case .typeless:
+            return "now.typeless.desktop"
+        case .unselected, .doubao, .weixin, .other:
+            return nil
+        }
+    }
+
     var requiresFunctionKeySetup: Bool {
         preferredInputSourceID != nil
     }
+}
+
+enum OnboardingVoiceToolAvailability: String, Equatable, Hashable {
+    case available
+    case notInstalled
+    case unknown
 }
 
 struct OnboardingCapabilities: Equatable {
@@ -190,6 +205,45 @@ enum OnboardingTranscriptInputPolicy {
     }
 }
 
+enum OnboardingVoiceTestConfigurationPolicy {
+    static func expectsFnTap(for voiceTool: OnboardingVoiceTool) -> Bool {
+        voiceTool == .typeless
+    }
+
+    static func requiresGlobalVoiceConfirmation(for voiceTool: OnboardingVoiceTool) -> Bool {
+        voiceTool == .doubao
+    }
+
+    static func isSayAllVoiceKeyReady(
+        voiceTool: OnboardingVoiceTool,
+        voiceKeyMode: VoiceKeyMode,
+        voiceFnTapModeEnabled: Bool
+    ) -> Bool {
+        voiceKeyMode == .function &&
+            voiceFnTapModeEnabled == expectsFnTap(for: voiceTool)
+    }
+
+    static func isComplete(
+        voiceTool: OnboardingVoiceTool,
+        voiceKeyMode: VoiceKeyMode,
+        voiceFnTapModeEnabled: Bool,
+        audioOutputReady: Bool,
+        externalVoiceKeyConfirmed: Bool,
+        externalGlobalVoiceConfirmed: Bool,
+        externalMicrophoneConfirmed: Bool
+    ) -> Bool {
+        isSayAllVoiceKeyReady(
+            voiceTool: voiceTool,
+            voiceKeyMode: voiceKeyMode,
+            voiceFnTapModeEnabled: voiceFnTapModeEnabled
+        ) &&
+            audioOutputReady &&
+            externalVoiceKeyConfirmed &&
+            (!requiresGlobalVoiceConfirmation(for: voiceTool) || externalGlobalVoiceConfirmed) &&
+            externalMicrophoneConfirmed
+    }
+}
+
 enum OnboardingFlowPolicy {
     static func isPhysicalRemoteRecognized(
         at step: OnboardingStep,
@@ -201,9 +255,10 @@ enum OnboardingFlowPolicy {
 
     static func shouldAutoSelectPhysicalRemote(
         at step: OnboardingStep,
-        remoteConnected: Bool
+        remoteConnected: Bool,
+        suppressForUserBack: Bool = false
     ) -> Bool {
-        step == .remoteAvailability && remoteConnected
+        step == .remoteAvailability && remoteConnected && !suppressForUserBack
     }
 
     static func shouldRequestRemoteReconnect(
@@ -219,8 +274,10 @@ enum OnboardingFlowPolicy {
         voiceTool: OnboardingVoiceTool,
         remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
+        voiceKeyMode: VoiceKeyMode = .function,
         capabilities: OnboardingCapabilities
     ) -> Bool {
+        guard voiceKeyMode == .function else { return false }
         switch step {
         case .welcome:
             return true

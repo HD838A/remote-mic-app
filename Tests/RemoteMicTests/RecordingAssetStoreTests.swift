@@ -5,6 +5,25 @@ import Testing
 
 @Suite("Local recording assets")
 struct RecordingAssetStoreTests {
+    @Test func playbackFailuresUseSafeUserMessagesAndStableReasons() {
+        #expect(
+            RecordingPlaybackFailure.classify(RecordingAssetStoreError.missingAsset) == .missingAsset
+        )
+        #expect(
+            RecordingPlaybackFailure.classify(RecordingAssetStoreError.unsupportedFormat) == .invalidAsset
+        )
+        #expect(
+            RecordingPlaybackFailure.classify(
+                NSError(domain: "AVFoundation", code: -1)
+            ) == .invalidAsset
+        )
+        #expect(RecordingPlaybackFailure.missingAsset.logReason == "missing_asset")
+        #expect(
+            RecordingPlaybackFailure.missingAsset.messageKey ==
+                "statistics.transcripts.recording_playback_error.missing"
+        )
+    }
+
     @Test func commitsM4AAssetAndKeepsManifestMetadata() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("RemoteMicRecordingTests-\(UUID().uuidString)", isDirectory: true)
@@ -41,6 +60,15 @@ struct RecordingAssetStoreTests {
         #expect(try store.loadAll() == [manifest])
         #expect(try store.mediaURL(for: manifest).lastPathComponent == "original.m4a")
         #expect(!FileManager.default.fileExists(atPath: draft.temporaryMediaURL.path))
+        let originalDiagnostics = try store.integrityDiagnostics(for: manifest)
+        #expect(originalDiagnostics.actualByteCount == manifest.byteCount)
+        #expect(originalDiagnostics.byteCountMatches)
+        #expect(originalDiagnostics.sha256Matches)
+
+        try Data("fixture-Audio".utf8).write(to: store.mediaURL(for: manifest))
+        let changedDiagnostics = try store.integrityDiagnostics(for: manifest)
+        #expect(changedDiagnostics.byteCountMatches)
+        #expect(!changedDiagnostics.sha256Matches)
 
         try store.updateApplication(
             sessionID: sessionID,
@@ -163,6 +191,39 @@ struct RecordingAssetStoreTests {
         #expect(completion.wait(timeout: .now() + 3) == .success)
         #expect(committed?.applicationName == nil)
         #expect(committed?.bundleIdentifier == nil)
+    @Test func recordingOnlySessionKeepsApplicationMetadata() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RemoteMicRecordingOnlyTests-\(UUID().uuidString)", isDirectory: true)
+        let store = RecordingAssetStore(rootDirectoryURL: root)
+        let committed = DispatchSemaphore(value: 0)
+        var manifest: RecordingAssetManifest?
+        let coordinator = RecordingAssetCoordinator(
+            store: store,
+            isEnabled: { true },
+            onCommit: {
+                manifest = $0
+                committed.signal()
+            },
+            log: { _ in }
+        )
+        let sessionID = UUID()
+        coordinator.start(
+            sessionID: sessionID,
+            startedAt: Date(timeIntervalSince1970: 1_767_268_800),
+            source: .bluetoothRemote,
+            applicationMetadata: FrontmostApplicationMetadata(
+                applicationName: "Codex",
+                bundleIdentifier: "com.openai.codex"
+            )
+        )
+        coordinator.append(samples: Array(repeating: Int16(1200), count: 1_600))
+        coordinator.finish(endedAt: Date(timeIntervalSince1970: 1_767_268_802))
+
+        #expect(committed.wait(timeout: .now() + 3) == .success)
+        let committedManifest = try #require(manifest)
+        #expect(committedManifest.sessionID == sessionID)
+        #expect(committedManifest.applicationName == "Codex")
+        #expect(committedManifest.bundleIdentifier == "com.openai.codex")
         try FileManager.default.trashItem(at: root, resultingItemURL: nil)
     }
 }

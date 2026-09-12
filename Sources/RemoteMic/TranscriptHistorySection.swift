@@ -16,7 +16,34 @@ private struct TranscriptDayGroup: Identifiable {
 
 private struct RecordingDayGroup: Identifiable {
     let id: String
+    let dateKey: String
     let assets: [RecordingAssetManifest]
+}
+
+enum TranscriptHistoryPresentationPolicy {
+    static let recentWindow: TimeInterval = 7 * 24 * 60 * 60
+
+    static func visibleRecords(
+        _ records: [TranscriptRecord],
+        applicationKey: String?,
+        now: Date
+    ) -> [TranscriptRecord] {
+        let scoped = applicationKey.map { key in
+            records.filter { $0.applicationKey == key }
+        } ?? records.filter { $0.endedAt >= now.addingTimeInterval(-recentWindow) }
+        return scoped.sorted { $0.endedAt > $1.endedAt }
+    }
+
+    static func visibleAssets(
+        _ assets: [RecordingAssetManifest],
+        applicationKey: String?,
+        now: Date
+    ) -> [RecordingAssetManifest] {
+        let scoped = applicationKey.map { key in
+            assets.filter { ($0.applicationKey ?? "__unknown__") == key }
+        } ?? assets.filter { $0.endedAt >= now.addingTimeInterval(-recentWindow) }
+        return scoped.sorted { $0.endedAt > $1.endedAt }
+    }
 }
 
 private enum TranscriptDeletionRequest: Identifiable {
@@ -45,6 +72,16 @@ struct TranscriptHistorySection: View {
     @State private var expandedDayKeys: Set<String> = []
     @State private var copiedRecordID: UUID?
     @State private var deletionRequest: TranscriptDeletionRequest?
+    @State private var lastDisplayDiagnosticSignature: String?
+
+    private var recordingAssetsBySessionID: [UUID: RecordingAssetManifest] {
+        Dictionary(
+            model.recordingAssets.map { ($0.sessionID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    private var presentationNow: Date { Date() }
 
     private var applications: [TranscriptApplicationSummary] {
         let keys = Set(
@@ -92,14 +129,11 @@ struct TranscriptHistorySection: View {
     }
 
     private var dayGroups: [TranscriptDayGroup] {
-        let records: [TranscriptRecord]
-        if let activeApplicationKey {
-            records = model.transcriptRecords.filter {
-                $0.applicationKey == activeApplicationKey
-            }
-        } else {
-            records = model.transcriptRecords
-        }
+        let records = TranscriptHistoryPresentationPolicy.visibleRecords(
+            model.transcriptRecords,
+            applicationKey: activeApplicationKey,
+            now: presentationNow
+        )
         return Dictionary(grouping: records, by: \.localDateKey)
             .map { key, records in
                 TranscriptDayGroup(
@@ -114,14 +148,17 @@ struct TranscriptHistorySection: View {
     }
 
     private var recordingDayGroups: [RecordingDayGroup] {
-        let assets = activeApplicationKey.map { key in
-            model.recordingAssets.filter { ($0.applicationKey ?? "__unknown__") == key }
-        } ?? model.recordingAssets
+        let assets = TranscriptHistoryPresentationPolicy.visibleAssets(
+            model.recordingAssets,
+            applicationKey: activeApplicationKey,
+            now: presentationNow
+        )
         let transcriptSessionIDs = Set(model.transcriptRecords.map(\.sessionID))
         return Dictionary(grouping: assets, by: \.localDateKey)
             .map { key, assets in
                 RecordingDayGroup(
-                    id: key,
+                    id: "recording-\(key)",
+                    dateKey: key,
                     assets: assets
                         .filter { !transcriptSessionIDs.contains($0.sessionID) }
                         .sorted { $0.endedAt > $1.endedAt }
@@ -135,6 +172,25 @@ struct TranscriptHistorySection: View {
 
     private var totalEntryCount: Int {
         Set(model.transcriptRecords.map(\.sessionID) + model.recordingAssets.map(\.sessionID)).count
+    }
+
+    private var visibleTotalEntryCount: Int {
+        Set(
+            TranscriptHistoryPresentationPolicy.visibleRecords(
+                model.transcriptRecords,
+                applicationKey: nil,
+                now: presentationNow
+            ).map(\.sessionID)
+                + TranscriptHistoryPresentationPolicy.visibleAssets(
+                    model.recordingAssets,
+                    applicationKey: nil,
+                    now: presentationNow
+                ).map(\.sessionID)
+        ).count
+    }
+
+    private var hasEarlierEntries: Bool {
+        visibleTotalEntryCount < totalEntryCount
     }
 
     var body: some View {
@@ -155,18 +211,30 @@ struct TranscriptHistorySection: View {
             model.refreshRecordingAssets()
             normalizeSelection()
             normalizeExpandedDays()
+            logDisplayDiagnostics()
         }
         .onChange(of: applications.map(\.id)) { _ in
             normalizeSelection()
+            logDisplayDiagnostics()
         }
         .onChange(of: activeApplicationKey) { _ in
             resetExpandedDays()
+            logDisplayDiagnostics()
+        }
+        .onChange(of: model.transcriptRecords.count) { _ in
+            normalizeExpandedDays()
+            logDisplayDiagnostics()
         }
         .onChange(of: dayGroups.map(\.id)) { _ in
             normalizeExpandedDays()
+            logDisplayDiagnostics()
         }
         .onChange(of: recordingDayGroups.map(\.id)) { _ in
             normalizeExpandedDays()
+            logDisplayDiagnostics()
+        }
+        .onChange(of: expandedDayKeys) { _ in
+            logDisplayDiagnostics()
         }
         .alert(item: $deletionRequest, content: deletionAlert)
     }
@@ -197,7 +265,7 @@ struct TranscriptHistorySection: View {
                         .font(.system(size: 22, weight: .semibold))
                         .lineLimit(1)
                     Text(localizedEntryCount(
-                        selectedApplication?.count ?? totalEntryCount
+                        selectedApplication?.count ?? visibleTotalEntryCount
                     ))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -239,12 +307,61 @@ struct TranscriptHistorySection: View {
 
             applicationSwitcher
 
-            LazyVStack(alignment: .leading, spacing: 12) {
-                ForEach(dayGroups) { group in
-                    dayGroupView(group)
+            if let playbackFailure = model.recordingPlaybackError {
+                GlassPanel {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(localization.text(playbackFailure.messageKey))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button {
+                            model.clearRecordingPlaybackError()
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(.borderless)
+                        .help(localization.text("common.action.close"))
+                    }
+                    .padding(10)
                 }
-                ForEach(recordingDayGroups) { group in
-                    recordingDayGroupView(group)
+            }
+
+            if activeApplicationKey == nil && hasEarlierEntries {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isApplicationSwitcherExpanded = true
+                    }
+                } label: {
+                    Label(
+                        "statistics.transcripts.view_more_by_application",
+                        systemImage: "clock.arrow.circlepath"
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 8)
+            }
+
+            if dayGroups.isEmpty && recordingDayGroups.isEmpty {
+                GlassPanel {
+                    Text("statistics.transcripts.no_recent_records")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                }
+            } else {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(dayGroups) { group in
+                        dayGroupView(group)
+                    }
+                    ForEach(recordingDayGroups) { group in
+                        recordingDayGroupView(group)
+                    }
                 }
             }
         }
@@ -322,7 +439,7 @@ struct TranscriptHistorySection: View {
                     Text("statistics.transcripts.all_applications")
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
-                        Text(localizedCount(totalEntryCount))
+                        Text(localizedCount(visibleTotalEntryCount))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -345,7 +462,7 @@ struct TranscriptHistorySection: View {
         )
         .foregroundStyle(selectedApplicationKey == nil ? Color.accentColor : Color.primary)
         .accessibilityAddTraits(selectedApplicationKey == nil ? .isSelected : [])
-        .accessibilityValue(localizedEntryCount(totalEntryCount))
+        .accessibilityValue(localizedEntryCount(visibleTotalEntryCount))
     }
 
     private func applicationButton(
@@ -435,11 +552,11 @@ struct TranscriptHistorySection: View {
     }
 
     private func recordingDayGroupView(_ group: RecordingDayGroup) -> some View {
-        let isExpanded = expandedDayKeys.contains("recording-\(group.id)")
+        let isExpanded = expandedDayKeys.contains(group.id)
         return VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.easeInOut(duration: 0.18)) {
-                    let key = "recording-\(group.id)"
+                    let key = group.id
                     if expandedDayKeys.contains(key) { expandedDayKeys.remove(key) }
                     else { expandedDayKeys.insert(key) }
                 }
@@ -448,7 +565,7 @@ struct TranscriptHistorySection: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .frame(width: 14)
-                    Text(dayTitle(for: group.id, timeZoneIdentifier: group.assets.first?.timeZoneIdentifier))
+                        Text(dayTitle(for: group.dateKey, timeZoneIdentifier: group.assets.first?.timeZoneIdentifier))
                         .font(.system(size: 14, weight: .semibold))
                     Text("·")
                         .foregroundStyle(.tertiary)
@@ -521,11 +638,6 @@ struct TranscriptHistorySection: View {
                     }
                     .buttonStyle(.borderless)
                     .help(localization.text("statistics.transcripts.recording_export"))
-                    Button { model.revealRecording(asset) } label: {
-                        Image(systemName: "folder")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(localization.text("statistics.transcripts.recording_reveal"))
                     Button(role: .destructive) {
                         deletionRequest = .recording(asset)
                     } label: {
@@ -661,7 +773,7 @@ struct TranscriptHistorySection: View {
             .buttonStyle(.borderless)
             .help(localization.text("statistics.transcripts.delete_record"))
 
-            if let asset = model.recordingAssets.first(where: { $0.sessionID == record.sessionID }) {
+            if let asset = recordingAssetsBySessionID[record.sessionID] {
                 Button { model.playRecording(asset) } label: {
                     Image(systemName: "play.fill")
                 }
@@ -692,16 +804,78 @@ struct TranscriptHistorySection: View {
         }
     }
 
+    private func logDisplayDiagnostics() {
+        let loadedCount = model.transcriptRecords.count
+        guard loadedCount > 0 else {
+            lastDisplayDiagnosticSignature = nil
+            return
+        }
+
+        let eligibleCount = dayGroups.reduce(0) { $0 + $1.records.count }
+        let displayedCount = dayGroups.reduce(0) { count, group in
+            count + (expandedDayKeys.contains(group.id) ? group.records.count : 0)
+        }
+        guard displayedCount == 0 else {
+            lastDisplayDiagnosticSignature = nil
+            return
+        }
+
+        let reason: String
+        if eligibleCount > 0 {
+            reason = "date_groups_collapsed"
+        } else if let activeApplicationKey {
+            reason = model.transcriptRecords.contains {
+                $0.applicationKey == activeApplicationKey
+            } ? "grouping_empty" : "application_filter_no_match"
+        } else if model.transcriptRecords.allSatisfy({
+            $0.endedAt < presentationNow.addingTimeInterval(
+                -TranscriptHistoryPresentationPolicy.recentWindow
+            )
+        }) {
+            reason = "outside_recent_window"
+        } else {
+            reason = "no_visible_records"
+        }
+
+        let applicationKey = activeApplicationKey ?? "all"
+        let signature = "\(reason)|\(applicationKey)|\(loadedCount)|" +
+            "\(eligibleCount)|\(displayedCount)"
+        guard lastDisplayDiagnosticSignature != signature else { return }
+        lastDisplayDiagnosticSignature = signature
+        AppLogger.shared.write(
+            "TRANSCRIPT HISTORY display_failed " +
+                "reason=\(reason) application_key=\(applicationKey) " +
+                "loaded_count=\(loadedCount) eligible_count=\(eligibleCount) " +
+                "displayed_count=\(displayedCount)"
+        )
+    }
+
     private func normalizeExpandedDays() {
-        let validKeys = Set(dayGroups.map(\.id) + recordingDayGroups.map { "recording-\($0.id)" })
+        let validKeys = Set(dayGroups.map(\.id) + recordingDayGroups.map(\.id))
         expandedDayKeys.formIntersection(validKeys)
-        if expandedDayKeys.isEmpty, let newestDayKey = dayGroups.first?.id {
-            expandedDayKeys.insert(newestDayKey)
+        if expandedDayKeys.isEmpty {
+            expandedDayKeys.formUnion(newestExpandableDayKeys)
         }
     }
 
     private func resetExpandedDays() {
-        expandedDayKeys = Set(dayGroups.prefix(1).map(\.id))
+        expandedDayKeys = newestExpandableDayKeys
+    }
+
+    private var newestExpandableDayKeys: Set<String> {
+        var keys = Set<String>()
+        let newestTranscriptDate = dayGroups.first?.id
+        let newestRecordingDate = recordingDayGroups.first?.dateKey
+        let newestDate = [newestTranscriptDate, newestRecordingDate]
+            .compactMap { $0 }
+            .max()
+        if let newestTranscriptDate, newestTranscriptDate == newestDate {
+            keys.insert(newestTranscriptDate)
+        }
+        if let newestRecordingDate, newestRecordingDate == newestDate {
+            keys.insert("recording-\(newestRecordingDate)")
+        }
+        return keys
     }
 
     private func toggleDay(_ dayKey: String) {

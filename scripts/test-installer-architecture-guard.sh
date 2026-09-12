@@ -6,6 +6,9 @@ BUILD_SCRIPT="$ROOT/scripts/build-doubao-driver-pkg.sh"
 VERIFY_SCRIPT="$ROOT/scripts/verify-doubao-driver-pkg.sh"
 PREINSTALL="$ROOT/packaging/doubao-driver/install/preinstall"
 POSTINSTALL="$ROOT/packaging/doubao-driver/install/postinstall"
+SIRI_PREINSTALL="$ROOT/packaging/doubao-driver/siri-remote/install/preinstall"
+SIRI_POSTINSTALL="$ROOT/packaging/doubao-driver/siri-remote/install/postinstall"
+UNINSTALL_POSTINSTALL="$ROOT/packaging/doubao-driver/uninstall/postinstall"
 RESOURCES="$ROOT/packaging/doubao-driver/distribution/Resources"
 LOCK_TEST_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-installer-signing-lock-test.XXXXXX)"
 FAKE_PRODUCTSIGN="$LOCK_TEST_DIR/fake-productsign"
@@ -78,6 +81,14 @@ for distribution in \
   /usr/bin/grep -Fq 'my.result.message = system.localizedString' "$distribution"
   /usr/bin/grep -Fq '<installation-check script="installationCheck()"/>' "$distribution"
   /usr/bin/grep -Fq '>RemoteMicComponent.pkg</pkg-ref>' "$distribution"
+  /usr/bin/grep -Fq '>SiriRemoteComponent.pkg</pkg-ref>' "$distribution"
+  /usr/bin/grep -Fq '<options customize="always"' "$distribution"
+  /usr/bin/grep -Fq 'id="siri-remote"' "$distribution"
+  /usr/bin/grep -Fq 'function siriRemoteSupportWasPreviouslyInstalled()' "$distribution"
+  /usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote.plist' "$distribution"
+  /usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote.bom' "$distribution"
+  /usr/bin/grep -Fq '/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService' "$distribution"
+  /usr/bin/grep -Fq 'start_selected="siriRemoteSupportWasPreviouslyInstalled()"' "$distribution"
 done
 
 for strings_file in "$RESOURCES"/*.lproj/Localizable.strings; do
@@ -90,7 +101,7 @@ for strings_file in "$RESOURCES"/*.lproj/Localizable.strings; do
   /usr/bin/grep -Fq 'Apple Silicon' "$strings_file"
 done
 
-for package_script in "$PREINSTALL" "$POSTINSTALL"; do
+for package_script in "$PREINSTALL" "$POSTINSTALL" "$SIRI_PREINSTALL" "$SIRI_POSTINSTALL"; do
   /bin/zsh -n "$package_script"
   /usr/bin/grep -Fq '/usr/sbin/sysctl -in hw.optional.arm64' "$package_script"
   if /usr/bin/grep -Fq '/usr/bin/uname -m' "$package_script"; then
@@ -99,12 +110,36 @@ for package_script in "$PREINSTALL" "$POSTINSTALL"; do
   fi
 done
 
+for package_script in "$SIRI_PREINSTALL" "$SIRI_POSTINSTALL" "$UNINSTALL_POSTINSTALL"; do
+  /usr/bin/grep -Fq 'com.hd838a.SayAll.AppleRemoteHCIService' "$package_script"
+  /usr/bin/grep -Fq 'PrivilegedHelperTools' "$package_script"
+  /usr/bin/grep -Fq 'LaunchDaemons' "$package_script"
+done
+/usr/bin/grep -Fq 'launchctl bootstrap system' "$SIRI_POSTINSTALL"
+/usr/bin/grep -Fq 'launchctl bootout' "$SIRI_PREINSTALL"
+/usr/bin/grep -Fq 'launchctl bootout' "$UNINSTALL_POSTINSTALL"
+/usr/bin/grep -Fq -- '--restore' "$SIRI_PREINSTALL"
+/usr/bin/grep -Fq -- '--restore' "$UNINSTALL_POSTINSTALL"
+/usr/bin/grep -Fq 'APP_DESTINATION=' "$POSTINSTALL"
+if /usr/bin/grep -Eq 'HCI_SERVICE_DESTINATION=|HCI_SERVICE_PLIST=|launchctl bootstrap|launchctl bootout' \
+    "$PREINSTALL" "$POSTINSTALL"; then
+  print -u2 "base component scripts must not install or bootstrap Siri Remote system service"
+  exit 1
+fi
+/usr/bin/grep -Fq 'queue_owned_hci_service' "$UNINSTALL_POSTINSTALL"
+if /usr/bin/grep -Eq '(/bin/)?rm([[:space:]]|$)|unlink|find[[:space:]].*-delete' \
+    "$PREINSTALL" "$POSTINSTALL" "$UNINSTALL_POSTINSTALL"; then
+  print -u2 "installer scripts must never permanently delete HCI or driver files"
+  exit 1
+fi
+
 /usr/bin/grep -Fq '/usr/bin/productbuild' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'COMPONENT_PLIST=' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq '/usr/bin/pkgbuild' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq -- '--analyze' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'BundleIsRelocatable false' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'Applications/SayAll.app' "$BUILD_SCRIPT"
+/usr/bin/grep -Fq 'SIRI_REMOTE_COMPONENT_PACKAGE=' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'UNSIGNED_INSTALL_PACKAGE=' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'installer-signing-probe-productsign' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'run_locked_productsign installer-productsign' "$BUILD_SCRIPT"
@@ -117,6 +152,9 @@ fi
 assert_unsigned_stage_block \
   "$BUILD_SCRIPT" installer-component-pkgbuild /usr/bin/pkgbuild \
   '"$INSTALL_COMPONENT_PACKAGE"'
+assert_unsigned_stage_block \
+  "$BUILD_SCRIPT" siri-remote-component-pkgbuild /usr/bin/pkgbuild \
+  '"$SIRI_REMOTE_COMPONENT_PACKAGE"'
 assert_unsigned_stage_block \
   "$BUILD_SCRIPT" installer-productbuild /usr/bin/productbuild \
   '"$UNSIGNED_INSTALL_PACKAGE"'

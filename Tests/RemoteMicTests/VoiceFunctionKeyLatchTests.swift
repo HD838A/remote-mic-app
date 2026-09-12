@@ -25,6 +25,17 @@ struct VoiceFunctionKeyLatchTests {
         #expect(!latch.isHeld)
     }
 
+    @Test func appleRemoteVoiceOwnerDoesNotReleaseOtherSources() {
+        var latch = VoiceFunctionKeyLatch()
+
+        #expect(latch.transition(streaming: true, owner: .appleRemote) == .press)
+        #expect(latch.transition(streaming: true, owner: .bluetooth) == nil)
+        #expect(latch.transition(streaming: false, owner: .appleRemote) == nil)
+        #expect(latch.isHeld)
+        #expect(latch.transition(streaming: false, owner: .bluetooth) == .release)
+        #expect(!latch.isHeld)
+    }
+
     @Test func rollsBackFailedTransitions() {
         var latch = VoiceFunctionKeyLatch()
 

@@ -50,6 +50,37 @@ struct BluetoothLifecycleTests {
         #expect(firstBridgeState == .ready("first"))
     }
 
+    @Test func missingHIDServiceUsesFiniteReadyOnlyRecoveryDelays() {
+        let delays = (0 ... 5).map {
+            HIDMappingRecoveryPolicy.retryDelay(
+                forAttempt: $0,
+                started: true,
+                readyBridgeCount: 1,
+                hasMatchingServices: false
+            )
+        }
+
+        #expect(delays == [0.5, 1, 2, 4, 8, nil])
+        #expect(HIDMappingRecoveryPolicy.retryDelay(
+            forAttempt: 0,
+            started: false,
+            readyBridgeCount: 1,
+            hasMatchingServices: false
+        ) == nil)
+        #expect(HIDMappingRecoveryPolicy.retryDelay(
+            forAttempt: 0,
+            started: true,
+            readyBridgeCount: 0,
+            hasMatchingServices: false
+        ) == nil)
+        #expect(HIDMappingRecoveryPolicy.retryDelay(
+            forAttempt: 0,
+            started: true,
+            readyBridgeCount: 1,
+            hasMatchingServices: true
+        ) == nil)
+    }
+
     @Test func generationAndPhaseRejectStaleCallbacks() {
         let phase = BluetoothLifecyclePhase.connecting(1)
         #expect(phase.acceptsDidConnect(generation: 1))

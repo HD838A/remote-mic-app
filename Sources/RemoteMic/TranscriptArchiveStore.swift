@@ -74,21 +74,26 @@ enum TranscriptArchiveStoreError: Error {
 }
 
 final class TranscriptArchiveStore {
+    typealias Logger = (String) -> Void
+
     private let rootDirectoryURL: URL
     private let fileManager: FileManager
     private let trashItem: (URL) throws -> Void
+    private let log: Logger
     private let queue = DispatchQueue(label: "RemoteMic.transcriptArchive")
 
     init(
         rootDirectoryURL: URL = TranscriptArchiveStore.defaultRootDirectoryURL(),
         fileManager: FileManager = .default,
-        trashItem: ((URL) throws -> Void)? = nil
+        trashItem: ((URL) throws -> Void)? = nil,
+        log: @escaping Logger = AppLogger.shared.write
     ) {
         self.rootDirectoryURL = rootDirectoryURL
         self.fileManager = fileManager
         self.trashItem = trashItem ?? { url in
             try fileManager.trashItem(at: url, resultingItemURL: nil)
         }
+        self.log = log
     }
 
     func append(_ record: TranscriptRecord) throws {
@@ -139,17 +144,58 @@ final class TranscriptArchiveStore {
                     where fileURL.pathExtension == "json"
                 {
                     let localDateKey = fileURL.deletingPathExtension().lastPathComponent
-                    guard let dayFile = try? loadDayFile(at: fileURL),
-                          dayFile.formatVersion == TranscriptDayFile.currentFormatVersion,
-                          dayFile.applicationKey == applicationKey,
-                          dayFile.localDateKey == localDateKey,
-                          Self.isLocalDateKey(localDateKey)
-                    else { continue }
-                    records.append(contentsOf: dayFile.records.filter {
+                    guard Self.isLocalDateKey(localDateKey) else {
+                        log(
+                            "TRANSCRIPT ARCHIVE read_skipped reason=invalid_date " +
+                                "application_key=\(applicationKey)"
+                        )
+                        continue
+                    }
+                    let dayFile: TranscriptDayFile
+                    do {
+                        dayFile = try loadDayFile(at: fileURL)
+                    } catch {
+                        log(
+                            "TRANSCRIPT ARCHIVE read_failed reason=decode " +
+                                "application_key=\(applicationKey) date=\(localDateKey) " +
+                                AppLogger.errorFields(error)
+                        )
+                        continue
+                    }
+                    guard dayFile.formatVersion == TranscriptDayFile.currentFormatVersion else {
+                        log(
+                            "TRANSCRIPT ARCHIVE read_skipped reason=unsupported_format " +
+                                "application_key=\(applicationKey) date=\(localDateKey)"
+                        )
+                        continue
+                    }
+                    guard dayFile.applicationKey == applicationKey else {
+                        log(
+                            "TRANSCRIPT ARCHIVE read_skipped reason=application_key_mismatch " +
+                                "application_key=\(applicationKey) date=\(localDateKey)"
+                        )
+                        continue
+                    }
+                    guard dayFile.localDateKey == localDateKey else {
+                        log(
+                            "TRANSCRIPT ARCHIVE read_skipped reason=date_mismatch " +
+                                "application_key=\(applicationKey) date=\(localDateKey)"
+                        )
+                        continue
+                    }
+                    let validRecords = dayFile.records.filter {
                         $0.schemaVersion == TranscriptRecord.currentSchemaVersion &&
                             $0.applicationKey == applicationKey &&
                             $0.localDateKey == localDateKey
-                    })
+                    }
+                    if validRecords.count != dayFile.records.count {
+                        log(
+                            "TRANSCRIPT ARCHIVE records_skipped reason=invalid_record " +
+                                "application_key=\(applicationKey) date=\(localDateKey) " +
+                                "count=\(dayFile.records.count - validRecords.count)"
+                        )
+                    }
+                    records.append(contentsOf: validRecords)
                 }
             }
             return records.sorted { $0.endedAt > $1.endedAt }

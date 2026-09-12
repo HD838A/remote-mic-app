@@ -10,7 +10,6 @@ enum AppConfigurationError: Error {
 struct VoiceKeyConfigurationState: Equatable {
     let mode: VoiceKeyMode
     let fnTapModeEnabled: Bool
-    let shortTapFocusEnabled: Bool
 }
 
 private struct PersonalizedConfiguration: Codable {
@@ -30,7 +29,6 @@ private struct PersonalizedConfiguration: Codable {
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
-    let voiceShortTapFocusEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
 }
@@ -103,6 +101,42 @@ struct VoiceSessionUsageRecord: Codable, Equatable, Identifiable {
     let endedAt: Date
     let duration: TimeInterval
     let source: UsageEventSource?
+    let applicationName: String?
+
+    init(
+        id: UUID,
+        startedAt: Date?,
+        endedAt: Date,
+        duration: TimeInterval,
+        source: UsageEventSource?,
+        applicationName: String? = nil
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.duration = duration
+        self.source = source
+        self.applicationName = applicationName
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case startedAt
+        case endedAt
+        case duration
+        case source
+        case applicationName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        endedAt = try container.decode(Date.self, forKey: .endedAt)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        source = try container.decodeIfPresent(UsageEventSource.self, forKey: .source)
+        applicationName = try container.decodeIfPresent(String.self, forKey: .applicationName)
+    }
 }
 
 private struct DailyUsageMetadata: Codable {
@@ -235,6 +269,8 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let gainDB = "gainDB"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
+        static let lastUserSelectedInputDeviceUID = "lastUserSelectedInputDeviceUID"
+        static let lastKnownAudioDeviceUID = "lastKnownAudioDeviceUID"
         static let customMappingEnabled = "customMappingEnabled"
         static let legacyExclusiveHID = "exclusiveHID"
         static let buttonBindings = "buttonBindings"
@@ -252,8 +288,8 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
-        static let voiceShortTapFocusEnabled = "voiceShortTapFocusEnabled"
         static let voiceKeyMode = "voiceKeyMode"
+        static let siriRemoteScrollArrowReversed = "siriRemote.scrollArrowReversed"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
@@ -269,6 +305,7 @@ final class AppSettings: ObservableObject {
         static let onboardingControlMethod = "onboarding.controlMethod"
         static let onboardingVoiceTool = "onboarding.voiceTool"
         static let onboardingMigrationVersion = "onboarding.migrationVersion"
+        static let onboardingInstallStateMigrationVersion = "onboarding.installStateMigrationVersion"
         static let firstUseEvents = "onboarding.diagnostics.events"
         static let firstUseStepStartedAt = "onboarding.diagnostics.stepStartedAt"
         static let firstUseLastSignature = "onboarding.diagnostics.lastSignature"
@@ -281,8 +318,20 @@ final class AppSettings: ObservableObject {
     }
 
     @Published var selectedAudioDeviceUID: String {
-        didSet { defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID) }
+        didSet {
+            defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID)
+            if !selectedAudioDeviceUID.isEmpty {
+                lastKnownAudioDeviceUID = selectedAudioDeviceUID
+                defaults.set(selectedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
+            }
+        }
     }
+
+    var lastUserSelectedInputDeviceUID: String? {
+        get { defaults.string(forKey: Keys.lastUserSelectedInputDeviceUID) }
+        set { defaults.set(newValue, forKey: Keys.lastUserSelectedInputDeviceUID) }
+    }
+    private(set) var lastKnownAudioDeviceUID: String
 
     @Published var customMappingEnabled: Bool {
         didSet { defaults.set(customMappingEnabled, forKey: Keys.customMappingEnabled) }
@@ -371,20 +420,23 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    @Published var voiceShortTapFocusEnabled: Bool {
-        didSet {
-            defaults.set(
-                voiceShortTapFocusEnabled,
-                forKey: Keys.voiceShortTapFocusEnabled
-            )
-        }
-    }
-
     @Published var voiceKeyMode: VoiceKeyMode {
         didSet {
             defaults.set(voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
         }
     }
+
+    @Published var siriRemoteScrollArrowReversed: Bool {
+        didSet {
+            defaults.set(
+                siriRemoteScrollArrowReversed,
+                forKey: Keys.siriRemoteScrollArrowReversed
+            )
+        }
+    }
+
+    /// One-session notice for an existing Command mode normalized to Fn by Onboarding.
+    @Published private(set) var pendingOnboardingVoiceKeyMigration: VoiceKeyMode? = nil
 
     @Published var localTranscriptHistoryEnabled: Bool {
         didSet {
@@ -478,6 +530,12 @@ final class AppSettings: ObservableObject {
         onboardingCompletedVersion >= Self.currentOnboardingVersion
     }
 
+    var hasHistoricalAudioConfiguration: Bool {
+        isOnboardingComplete || firstUseEvents.contains {
+            ($0.kind == .passed && $0.step == .audio) || $0.kind == .completed
+        }
+    }
+
     var peripheralIdentifier: UUID? {
         get {
             guard let raw = defaults.string(forKey: Keys.peripheralIdentifier) else { return nil }
@@ -495,7 +553,13 @@ final class AppSettings: ObservableObject {
         gainDB = defaults.object(forKey: Keys.gainDB) == nil
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
-        selectedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        let persistedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        selectedAudioDeviceUID = persistedAudioDeviceUID
+        lastKnownAudioDeviceUID = defaults.string(forKey: Keys.lastKnownAudioDeviceUID) ?? persistedAudioDeviceUID
+        if defaults.string(forKey: Keys.lastKnownAudioDeviceUID) == nil,
+           !persistedAudioDeviceUID.isEmpty {
+            defaults.set(persistedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
+        }
         if defaults.object(forKey: Keys.customMappingEnabled) != nil {
             customMappingEnabled = defaults.bool(forKey: Keys.customMappingEnabled)
         } else {
@@ -588,14 +652,13 @@ final class AppSettings: ObservableObject {
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
-        let savedVoiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
-        voiceFnTapModeEnabled = savedVoiceFnTapModeEnabled
-        voiceShortTapFocusEnabled = !savedVoiceFnTapModeEnabled && defaults.bool(
-            forKey: Keys.voiceShortTapFocusEnabled
-        )
+        voiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
         voiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
+        siriRemoteScrollArrowReversed = defaults.bool(
+            forKey: Keys.siriRemoteScrollArrowReversed
+        )
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -703,6 +766,8 @@ final class AppSettings: ObservableObject {
         _ kind: FirstUseEventKind,
         step: OnboardingStep,
         failureReason: FirstUseFailureReason? = nil,
+        voiceAttemptID: Int? = nil,
+        voiceResult: FirstUseVoiceAttemptResult? = nil,
         at date: Date = Date()
     ) {
         let stepStartedAt = defaults.object(forKey: Keys.firstUseStepStartedAt) as? Date ?? date
@@ -711,7 +776,9 @@ final class AppSettings: ObservableObject {
             kind: kind,
             step: step,
             elapsedMilliseconds: max(0, Int(date.timeIntervalSince(stepStartedAt) * 1_000)),
-            failureReason: failureReason
+            failureReason: failureReason,
+            voiceAttemptID: voiceAttemptID,
+            voiceResult: voiceResult
         )
         if kind == .blocked,
            defaults.string(forKey: Keys.firstUseLastSignature) == event.deduplicationSignature {
@@ -729,6 +796,8 @@ final class AppSettings: ObservableObject {
         if kind == .entered {
             defaults.set(date, forKey: Keys.firstUseStepStartedAt)
         }
+
+        AppLogger.shared.write(event.runtimeLogMessage)
     }
 
     var firstUseEvents: [FirstUseEvent] {
@@ -738,12 +807,13 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
+        if voiceKeyMode != .function {
+            pendingOnboardingVoiceKeyMigration = voiceKeyMode
+            voiceKeyMode = .function
+        }
         let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
         if voiceFnTapModeEnabled != shouldEnableFnTap {
             voiceFnTapModeEnabled = shouldEnableFnTap
-        }
-        if shouldEnableFnTap {
-            voiceShortTapFocusEnabled = false
         }
         guard onboardingVoiceTool != voiceTool else { return }
         onboardingVoiceTool = voiceTool
@@ -763,16 +833,28 @@ final class AppSettings: ObservableObject {
         recordFirstUseEvent(.completed, step: .complete)
         onboardingStep = .complete
         onboardingCompletedVersion = Self.currentOnboardingVersion
+        pendingOnboardingVoiceKeyMigration = nil
     }
 
     func restartOnboarding() {
         onboardingVoiceTool = .unselected
         onboardingRemoteAvailability = .unselected
         onboardingControlMethod = .unselected
+        if voiceKeyMode != .function {
+            pendingOnboardingVoiceKeyMigration = voiceKeyMode
+        }
+        voiceKeyMode = .function
+        voiceFnTapModeEnabled = false
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
         defaults.removeObject(forKey: Keys.firstUseStepStartedAt)
         defaults.removeObject(forKey: Keys.firstUseLastSignature)
+    }
+
+    func consumePendingOnboardingVoiceKeyMigration() -> VoiceKeyMode? {
+        let pending = pendingOnboardingVoiceKeyMigration
+        pendingOnboardingVoiceKeyMigration = nil
+        return pending
     }
 
     func action(for button: RemoteButton) -> ButtonAction {
@@ -958,6 +1040,36 @@ final class AppSettings: ObservableObject {
         return profile.id
     }
 
+    @discardableResult
+    func registerAppleSiriRemote(
+        fingerprint: String,
+        model: XiaomiRemoteModel = .appleSiriRemoteA2854
+    ) -> UUID {
+#if !SAYALL_SIRI_REMOTE_ENABLED
+        // Community builds keep this compatibility entry point so old persisted
+        // state can be decoded, but never create or expose a Siri Remote profile.
+        return registerHIDRemote(fingerprint: fingerprint)
+#else
+        if let existing = remoteDeviceProfiles.first(where: { $0.hidFingerprint == fingerprint }) {
+            return existing.id
+        }
+        if let index = remoteDeviceProfiles.firstIndex(where: {
+            $0.bluetoothIdentifier == nil && $0.hidFingerprint == nil && $0.model == .unknown
+        }) {
+            remoteDeviceProfiles[index].hidFingerprint = fingerprint
+            remoteDeviceProfiles[index].model = model
+            return remoteDeviceProfiles[index].id
+        }
+        let profile = RemoteDeviceProfile(
+            model: model,
+            hidFingerprint: fingerprint,
+            mappings: mappingsForNewRemote()
+        )
+        remoteDeviceProfiles.append(profile)
+        return profile.id
+#endif
+    }
+
     func profileID(forBluetoothIdentifier identifier: UUID) -> UUID? {
         remoteDeviceProfiles.first(where: { $0.bluetoothIdentifier == identifier })?.id
     }
@@ -1128,6 +1240,7 @@ final class AppSettings: ObservableObject {
         _ duration: TimeInterval,
         startedAt: Date? = nil,
         source: UsageEventSource = .unknown,
+        applicationName: String? = nil,
         at date: Date = Date(),
         calendar: Calendar = .current
     ) {
@@ -1184,7 +1297,8 @@ final class AppSettings: ObservableObject {
                 startedAt: startedAt,
                 endedAt: date,
                 duration: duration,
-                source: source
+                source: source,
+                applicationName: applicationName
             )]
         )
     }
@@ -1338,15 +1452,57 @@ final class AppSettings: ObservableObject {
                 defaults.object(forKey: Keys.onboardingRemoteAvailability) != nil ||
                 defaults.object(forKey: Keys.onboardingControlMethod) != nil ||
                 defaults.object(forKey: Keys.onboardingVoiceTool) != nil
-            let isExistingInstall = previousBuild != nil || sparkleHadLaunchedBefore
+            let isExistingInstall = previousBuild != nil ||
+                sparkleHadLaunchedBefore ||
+                hasPersistedAppConfiguration
             if !isOnboardingComplete, !hasPersistedOnboardingState, isExistingInstall {
                 completeOnboarding()
             }
             defaults.set(Self.currentOnboardingVersion, forKey: Keys.onboardingMigrationVersion)
         }
 
+        if defaults.integer(forKey: Keys.onboardingInstallStateMigrationVersion) < Self.currentOnboardingVersion {
+            let hasPersistedOnboardingState =
+                defaults.object(forKey: Keys.onboardingCompletedVersion) != nil ||
+                defaults.object(forKey: Keys.onboardingStep) != nil ||
+                defaults.object(forKey: Keys.onboardingRemoteAvailability) != nil ||
+                defaults.object(forKey: Keys.onboardingControlMethod) != nil ||
+                defaults.object(forKey: Keys.onboardingVoiceTool) != nil
+            let isExistingInstall = previousBuild != nil ||
+                sparkleHadLaunchedBefore ||
+                hasPersistedAppConfiguration
+            if !isOnboardingComplete, !hasPersistedOnboardingState, isExistingInstall {
+                completeOnboarding()
+            }
+            defaults.set(Self.currentOnboardingVersion, forKey: Keys.onboardingInstallStateMigrationVersion)
+        }
+
         defaults.set(currentBuild, forKey: Keys.lastLaunchedBuild)
         return completedUpdate
+    }
+
+    private var hasPersistedAppConfiguration: Bool {
+        [
+            Keys.gainDB,
+            Keys.selectedAudioDeviceUID,
+            Keys.lastKnownAudioDeviceUID,
+            Keys.customMappingEnabled,
+            Keys.legacyExclusiveHID,
+            Keys.buttonBindings,
+            Keys.buttonShortcuts,
+            Keys.buttonApplicationProfileIDs,
+            Keys.secondaryButtonBindings,
+            Keys.customApplicationProfiles,
+            Keys.peripheralIdentifier,
+            Keys.applicationLanguage,
+            Keys.voiceFnTapModeEnabled,
+            Keys.voiceKeyMode,
+            Keys.totalButtonPressCount,
+            Keys.totalVoiceDuration,
+            Keys.dailyStatistics,
+            Keys.voiceSessionRanking,
+            Keys.trustedPhoneIdentityFingerprints,
+        ].contains { defaults.object(forKey: $0) != nil }
     }
 
     func exportedConfigurationData() throws -> Data {
@@ -1384,7 +1540,6 @@ final class AppSettings: ObservableObject {
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
-            voiceShortTapFocusEnabled: voiceShortTapFocusEnabled,
             voiceKeyMode: voiceKeyMode,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
         )
@@ -1396,8 +1551,7 @@ final class AppSettings: ObservableObject {
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {
         VoiceKeyConfigurationState(
             mode: voiceKeyMode,
-            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function,
-            shortTapFocusEnabled: voiceShortTapFocusEnabled && !voiceFnTapModeEnabled
+            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function
         )
     }
 
@@ -1407,9 +1561,7 @@ final class AppSettings: ObservableObject {
         let fnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
         return VoiceKeyConfigurationState(
             mode: mode,
-            fnTapModeEnabled: fnTapModeEnabled,
-            shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
-                !fnTapModeEnabled
+            fnTapModeEnabled: fnTapModeEnabled
         )
     }
 
@@ -1420,9 +1572,7 @@ final class AppSettings: ObservableObject {
             importedMode == .function
         let importedVoiceKeyConfiguration = VoiceKeyConfigurationState(
             mode: importedMode,
-            fnTapModeEnabled: importedFnTapModeEnabled,
-            shortTapFocusEnabled: (configuration.voiceShortTapFocusEnabled ?? false) &&
-                !importedFnTapModeEnabled
+            fnTapModeEnabled: importedFnTapModeEnabled
         )
 
         let importedBindings = Dictionary(
@@ -1477,7 +1627,6 @@ final class AppSettings: ObservableObject {
         }
         voiceKeyMode = importedVoiceKeyConfiguration.mode
         voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
-        voiceShortTapFocusEnabled = importedVoiceKeyConfiguration.shortTapFocusEnabled
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: configuration.continuousRecordingPowerBindingBackup
@@ -1889,5 +2038,7 @@ final class AppSettings: ObservableObject {
         .volumeDown: .volumeDown,
         .menu: .contextMenu,
         .tv: .appSwitcher,
+        .playPause: .playPause,
+        .mute: .volumeMute,
     ]
 }

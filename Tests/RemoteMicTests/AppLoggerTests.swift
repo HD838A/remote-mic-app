@@ -34,6 +34,30 @@ struct AppLoggerTests {
         #expect(output.filter { $0 == "\n" }.count == 1)
     }
 
+    @Test func writesDiagnosticSummaryAsOrderedMultilineBlock() throws {
+        let harness = try LoggerHarness()
+
+        harness.logger.write("ONBOARDING DIAGNOSTICS copied step=voice failure=none")
+        harness.logger.writeDiagnosticSummary(
+            "SayAll first-use diagnostics\ndiagnostic_schema=3\nrecent_events:\n- event=1\nsecond\rthird",
+            event: "ONBOARDING DIAGNOSTICS"
+        )
+        harness.logger.flush()
+
+        let lines = try harness.currentLog().split(separator: "\n").map(String.init)
+        #expect(lines.count == 9)
+        #expect(lines[0].contains("ONBOARDING DIAGNOSTICS copied step=voice failure=none"))
+        #expect(lines[1].contains("ONBOARDING DIAGNOSTICS BEGIN"))
+        #expect(lines[2].contains("ONBOARDING DIAGNOSTICS FIELD SayAll first-use diagnostics"))
+        #expect(lines[3].contains("ONBOARDING DIAGNOSTICS FIELD diagnostic_schema=3"))
+        #expect(lines[4].contains("ONBOARDING DIAGNOSTICS FIELD recent_events:"))
+        #expect(lines[5].contains("ONBOARDING DIAGNOSTICS FIELD - event=1"))
+        #expect(lines[6].contains("ONBOARDING DIAGNOSTICS FIELD second"))
+        #expect(lines[7].contains("ONBOARDING DIAGNOSTICS FIELD third"))
+        #expect(lines[8].contains("ONBOARDING DIAGNOSTICS END"))
+        #expect(lines.allSatisfy { !$0.contains("\r") && !$0.contains("\t") })
+    }
+
     @Test func errorFieldsUseStableDomainAndNumericCode() {
         let error = NSError(domain: "com.example failure\n", code: -17)
 

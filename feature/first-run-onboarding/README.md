@@ -1,5 +1,7 @@
 # 首次使用设置向导
 
+> 检查或修改本功能前，先阅读跨平台唯一规范入口 [`PRODUCT_SPEC.md`](PRODUCT_SPEC.md)，再阅读对应的 [macOS](platform-macos.md) 或 [Windows](platform-windows.md) 平台附件。本文保留当前功能说明和历史状态，不替代产品规范。
+
 ## 状态
 
 `v1.8.8 (100)` 已作为公开 Pre-release 发布；升级后蓝牙恢复候选修复已完成，等待真实环境人工验收。
@@ -97,6 +99,9 @@
 
 ## 相关资料
 
+- [跨平台产品规范](PRODUCT_SPEC.md)
+- [macOS 平台适配](platform-macos.md)
+- [Windows 平台适配](platform-windows.md)
 - [开发记录](development.md)
 - [功能测试说明](testing.md)
 - [完整人工测试手册](../../Testing/FirstRunOnboarding.md)

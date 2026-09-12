@@ -17,42 +17,6 @@ enum UpdateInformationState: Equatable {
 
 enum UpdateFeedResolutionError: Error {
     case invalidResponse
-    case feedNotFound
-}
-
-struct GitHubReleaseFeedRecord: Decodable, Equatable {
-    struct Asset: Decodable, Equatable {
-        let name: String
-        let browserDownloadURL: URL
-
-        private enum CodingKeys: String, CodingKey {
-            case name
-            case browserDownloadURL = "browser_download_url"
-        }
-    }
-
-    let draft: Bool
-    let prerelease: Bool
-    let tagName: String
-    let publishedAt: String?
-    let assets: [Asset]
-
-    private enum CodingKeys: String, CodingKey {
-        case draft
-        case prerelease
-        case tagName = "tag_name"
-        case publishedAt = "published_at"
-        case assets
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        draft = try container.decode(Bool.self, forKey: .draft)
-        prerelease = try container.decodeIfPresent(Bool.self, forKey: .prerelease) ?? false
-        tagName = try container.decodeIfPresent(String.self, forKey: .tagName) ?? ""
-        publishedAt = try container.decodeIfPresent(String.self, forKey: .publishedAt)
-        assets = try container.decode([Asset].self, forKey: .assets)
-    }
 }
 
 enum UpdateFeedResolver {
@@ -62,50 +26,117 @@ enum UpdateFeedResolver {
         let isPreRelease: Bool
     }
 
-    static func latestAppcastURL(
-        from data: Data,
-        assetName: String = "appcast.xml",
-        includePreRelease: Bool? = nil
-    ) throws -> URL {
-        try latestFeed(
-            from: data,
-            assetName: assetName,
-            includePreRelease: includePreRelease
-        ).url
+    struct FeedResolution: Equatable {
+        let stable: ResolvedFeed?
+        let preview: ResolvedFeed?
+
+        var selected: ResolvedFeed? {
+            UpdateFeedResolver.preferredFeed(stable: stable, preview: preview)
+        }
     }
 
-    static func latestFeed(
-        from data: Data,
-        assetName: String = "appcast.xml",
-        includePreRelease: Bool? = nil
-    ) throws -> ResolvedFeed {
-        let releases = try JSONDecoder().decode([GitHubReleaseFeedRecord].self, from: data)
-        let orderedReleases = releases.enumerated().sorted { lhs, rhs in
-            switch (lhs.element.publishedAt, rhs.element.publishedAt) {
-            case let (lhsDate?, rhsDate?) where lhsDate != rhsDate:
-                return lhsDate > rhsDate
-            default:
-                return lhs.offset < rhs.offset
-            }
-        }
-        guard let release = orderedReleases.lazy
-            .map(\.element)
-            .filter({ !$0.draft })
-            .filter({ release in
-                guard let includePreRelease else { return true }
-                return release.prerelease == includePreRelease
-            })
-            .first(where: { release in
-                release.assets.contains { $0.name == assetName }
-            }),
-            let feedURL = release.assets.first(where: { $0.name == assetName })?.browserDownloadURL,
-            let version = UpdateVersion.normalized(release.tagName)
-                ?? feedURL.pathComponents.dropLast().last.flatMap(UpdateVersion.normalized)
-        else {
-            throw UpdateFeedResolutionError.feedNotFound
-        }
-        return ResolvedFeed(url: feedURL, version: version, isPreRelease: release.prerelease)
+    typealias FeedDataLoader = @Sendable (URL) async throws -> Data
+
+    private static let maximumFeedSize = 1 * 1_024 * 1_024
+
+    static func testInjectedFeed(
+        environment: [String: String],
+        assetName: String,
+        includePreRelease: Bool
+    ) -> ResolvedFeed? {
+        guard environment["REMOTE_MIC_UI_TEST_MODE"] == "1",
+              includePreRelease,
+              let rawURL = environment["REMOTE_MIC_UI_TEST_FEED_URL"],
+              let url = URL(string: rawURL),
+              url.scheme == "http",
+              url.host == "127.0.0.1",
+              url.port != nil,
+              ["appcast.xml", "appcast-intel.xml"].contains(url.lastPathComponent),
+              url.lastPathComponent == assetName,
+              let rawVersion = environment["REMOTE_MIC_UI_TEST_VERSION"],
+              let version = UpdateVersion.normalized(rawVersion)
+        else { return nil }
+        return ResolvedFeed(url: url, version: version, isPreRelease: true)
     }
+
+    static func preferredFeed(
+        stable: ResolvedFeed?,
+        preview: ResolvedFeed?
+    ) -> ResolvedFeed? {
+        switch (stable, preview) {
+        case let (stable?, preview?):
+            return UpdateVersion.isNewer(preview.version, than: stable.version)
+                ? preview
+                : stable
+        case let (stable?, nil):
+            return stable
+        case let (nil, preview?):
+            return preview
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    static func resolvePreviewFeed(
+        stableURL: URL,
+        previewURL: URL,
+        loader: @escaping FeedDataLoader = { url in
+            try await UpdateFeedResolver.loadFeedData(from: url)
+        }
+    ) async -> FeedResolution {
+        async let stableData = try? loader(stableURL)
+        async let previewData = try? loader(previewURL)
+        let (stablePayload, previewPayload) = await (stableData, previewData)
+        return FeedResolution(
+            stable: stablePayload.flatMap {
+                resolvedFeed(url: stableURL, data: $0, isPreRelease: false)
+            },
+            preview: previewPayload.flatMap {
+                resolvedFeed(url: previewURL, data: $0, isPreRelease: true)
+            }
+        )
+    }
+
+    private static func loadFeedData(from url: URL) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 15
+        request.setValue("RemoteMic", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let response = response as? HTTPURLResponse,
+              response.statusCode == 200,
+              data.count <= maximumFeedSize
+        else {
+            throw UpdateFeedResolutionError.invalidResponse
+        }
+        return data
+    }
+
+    private static func resolvedFeed(
+        url: URL,
+        data: Data,
+        isPreRelease: Bool
+    ) -> ResolvedFeed? {
+        guard let text = String(data: data, encoding: .utf8),
+              let version = highestAppcastVersion(in: text)
+        else { return nil }
+        return ResolvedFeed(url: url, version: version, isPreRelease: isPreRelease)
+    }
+
+    private static func highestAppcastVersion(in text: String) -> String? {
+        let pattern = #"<sparkle:shortVersionString>\s*([^<]+?)\s*</sparkle:shortVersionString>"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        let versions = expression.matches(in: text, range: range).compactMap { match -> String? in
+            guard let versionRange = Range(match.range(at: 1), in: text) else { return nil }
+            return UpdateVersion.normalized(String(text[versionRange]))
+        }
+        return versions.reduce(nil) { current, candidate in
+            guard let current else { return candidate }
+            return UpdateVersion.isNewer(candidate, than: current) ? candidate : current
+        }
+    }
+
 }
 
 enum UpdateVersion {

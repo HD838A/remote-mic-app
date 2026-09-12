@@ -8,6 +8,7 @@ enum VoiceFunctionKeyTransition: Equatable {
 struct VoiceFunctionKeyLatch {
     enum Owner: Hashable {
         case bluetooth
+        case appleRemote
         case mobile
     }
 

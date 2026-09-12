@@ -489,3 +489,199 @@ Added a shared destination-readiness coordinator, connected every external confi
 - 独立打包 `RemoteMicMacroView` 在移走完整 SwiftPM 构建目录后真实渲染，状态 `0` 并输出 `PACKAGED_MACRO_VIEW_RENDERED`。
 - 无缓存宿主 App 正常启动并在 `800 × 650` 设置窗口打开关于页和快捷指令邀请码区域。
 - 尚未完成 Developer ID、公证、Intel 和有效资格宿主侧边栏真实点击。
+# Siri Remote 无损松键与快速再次按下调查
+
+## Observations
+
+- A2854 真机旧日志中，松键后立即 flush 的四次会话分别出现
+  `interrupted_samples=2560/1600/2560/1600`；16 kHz 下等于主动截断约
+  160/100/160/100 ms，因此立即 flush 会丢有效尾音，不能用于正常停止。
+- 当前实现已改为 helper 停止确认后等待 300 ms 解码 PCM 静默，再调用
+  `AudioOutput.endSessionAfterDraining(maximumDelay: nil)` 自然排空；正常路径不再设置
+  强制 flush 截止时间。
+- `BridgeAppModel.beginAppleRemoteVoice` 在 `appleRemoteVoiceStopping=true` 时只记录
+  `previous_session_draining` 并延后启动；`AppleRemoteAudioClient.beginCapture` 在
+  `captureStopping=true` 时也会拒绝启动。
+- 因此，用户在上一段停止或输出排空期间立刻再次按下时，新的主动采集最晚要等到上一段
+  完全排空后才启动；这可能丢失第二段开头，和“不丢字”目标冲突。
+- parser 在 sequence 不连续时会重新建立候选，累计三包后一次性返回这三包，因此重新锁定
+  本身不会丢掉候选阶段的前两包。
+- `completeCaptureStopOnQueue` 当前先把 `captureStopAcknowledgedAt` 清空，再计算
+  `completedNormally`，会把已经收到 helper ack 的正常停止误记为 `completion=forced`。
+
+## Hypotheses
+
+### H1：正常松键立即 flush 是末字丢失根因
+
+- Supports：真机四次停止均有 100–160 ms `interrupted_samples`；flush 的实现会把所有
+  pending buffer 记为 interrupted 并停止、重置 player。
+- Conflicts：无。
+- Test：正常路径改为无限时自然排空后，要求 `pending_after_samples=0` 且
+  `interrupted_samples=0`；真机确认最后一个字完整。
+
+### H2：停止/排空期间延后再次启动会丢第二段开头（ROOT HYPOTHESIS）
+
+- Supports：Bridge 明确 defer，新采集客户端明确拒绝 stopping 期间的 begin；helper 收到
+  stop 后会立即 `setActive(false)`，在旧输出排空结束前没有新的 `setActive(true)`。
+- Conflicts：若第二次按下发生在 helper stop 真正生效前，部分新包可能仍被 closing generation
+  接收；但这不覆盖 stop 已确认或输出仍在排空的窗口。
+- Test：构造 gate 的 `active → closing → resume`，要求 generation 不变且 closing 期间已经在途的
+  callback 与 resume 后的新 callback 都继续被接受；再检查 Bridge 的再次按下路径会取消旧停止
+  operation，而不是等待旧输出排空。
+
+### H3：parser 重新锁定新 sequence 时丢掉最初两包
+
+- Supports：重新锁定要求连续三包。
+- Conflicts：candidate 保存全部包，锁定时返回 `candidate.packets`，现有测试已证明首次锁定返回三包。
+- Test：输入一次已锁定 stream，再输入 sequence 回绕后的三个连续包，确认新 stream 的三包全部返回。
+
+### H4：自然 drain 本身会丢尾音
+
+- Supports：排空结束后仍会调用 `flushPlayer()` 重置节点。
+- Conflicts：该调用只发生在 pending 计数归零后；已播放计数已由 `.dataPlayedBack` 回调确认，
+  此时没有待播放样本可被截断。
+- Test：检查排空完成条件只在 `pendingVoiceBufferCount == 0` 触发，且无限时路径没有 timeout flush。
+
+## Experiments
+
+- H2：在现有 gate 测试中临时调用 `begin()` 模拟 closing 期间再次按下，并要求 generation
+  保持不变。测试实际得到 generation `1 → 2`，旧 generation callback 随即被拒绝，两个断言
+  均失败；实验代码随后撤回。结合 Bridge 的 defer 和 helper 的 `setActive(false)`，确认当前
+  状态机没有无损 resume 转移。
+- H3：输入已锁定 sequence `100,101,102`，再输入新 hold 的 `0,1,2`；测试通过，第二个
+  stream 的三包全部返回，`streamsLocked=2`。
+- H2 修复实验：增加 `closing → active` 的同 generation resume；快速再次按下不再等待旧
+  drain，helper 命令保持 stop → start 顺序，测试通过。
+- 主线程投递实验：在停止静默计时中加入 pending delivery 计数；只有计数归零才允许
+  `completeCaptureStopOnQueue`，全量测试通过。
+
+## Root Cause
+
+正常松键的旧丢字由 pending 音频被立即 flush 引起；当前剩余的快速再次按下丢字风险由
+`closing/draining` 状态缺少 resume 转移引起，导致 helper 已关闭麦克风后不能在下一次按下时
+立即重新激活，必须等待上一段输出完全排空。
+
+## Fix
+
+- 正常松键不调用立即 flush；保留同 generation，等待 helper ack、PCM 静默和主线程在途投递
+  归零后才关闭采集，再等待 `MiRemoteV 2ch` 自然排空。
+- 快速再次按下时，closing 阶段恢复同 generation；旧输出仍排空时取消 drain 并启动新采集，
+  保持同一 Fn/语音会话。
+- 修正 normal/forced 停止日志在清空 ack 字段前判断，增加主线程 pending 投递计数。
+
+## Validation
+
+- `swift test --filter AppleRemoteAudioTests`：10 项通过。
+- `swift test`：477 项、42 个 suite 全部通过。
+- 真机零丢字边界仍需用 A2854 + `MiRemoteV 2ch` 完成测试手册中的 10 次短按、5 次持续录音
+  和 5 次快速再次按下；自动化不能替代该验收。
+## 2026-09-06 Siri Remote 按键映射与页面状态
+
+### Observations
+
+- 环境：macOS，`无线麦SayAll.app` 1.9.19 (172)，Apple Siri Remote A2854，启用自定义按键功能。
+- 用户现场日志稳定复现：`play_pause` 与 `mute` 按下后只进入 `APPLE REMOTE SYSTEM_ACTION`，没有读取页面保存的按键映射。
+- 用户现场日志稳定复现：`power` 按下后记录 `result=unmapped`。
+- 用户把 `volume_down` 改为打开无线麦后，日志同时记录 `button=volume_down ... action=openRemoteMic` 和 App 打开成功；用户观察到系统音量仍被降低，说明自定义动作链路成功，但原生 Consumer HID 事件未被完整抑制。
+- `select` 在适配器中转换为通用 `RemoteButton.ok`；Siri Remote 页面却直接把 `activeRemoteButtons.rawValue` 作为活动 control ID，因此页面期待的 `select` 与实际发布的 `ok` 不一致。
+- `play_pause`、`mute`、`power` 当前返回 `remoteButton=nil`，不会进入通用活动按键集合；Siri 线条当前绑定 `model.isStreaming`，语音启动失败或尚未完成时不会表达物理按下态。
+- Siri Remote 私有页面当前把 `right` 卡片放在左列；左列相邻卡片中心距约 115px，明显大于 RC003 的 82.65px。
+
+### Hypotheses
+
+#### H1：媒体键和电源键被运行时特殊分支绕过（ROOT HYPOTHESIS）
+- Supports：日志分别显示 `SYSTEM_ACTION` 和 `unmapped`；源码中四个控制的 `remoteButton` 为 `nil`，另有只处理播放/静音的固定系统动作回调。
+- Conflicts：无。
+- Test：直接断言四个 control 到 `RemoteButton` 的映射；当前实现应对播放、静音、电源返回 `nil`。
+
+#### H2：系统原生按键副作用来自 Apple 事件没有给 `KeyboardEventSuppressor` 建立边沿窗口
+- Supports：音量减的自定义动作已成功；同一按键仍触发系统音量。RC003 路径在按下/释放时调用 `eventSuppressor.arm`，Apple 路径没有任何对应调用。
+- Conflicts：Apple Consumer 接口日志显示 `seized=true`，理论上独占本应阻止系统动作，但现场结果证明独占并未覆盖最终系统事件路径。
+- Test：对 Apple 映射事件按下/释放分别建立与 RC003 相同的原生事件抑制窗口，再用真实按键观察系统音量是否保持不变。
+
+#### H3：黄色线条缺失来自页面 ID 与通用按钮 ID 不一致，以及 Siri 键使用了会话态而非物理态
+- Supports：`select`→`ok` 有明确源码证据；播放、静音、电源未进入活动集合；日志中 Siri 音频启动失败时物理事件存在而 `isStreaming` 不成立。
+- Conflicts：方向键可正常高亮，说明 Canvas 绘制本身工作正常。
+- Test：把通用按钮反向规范化为 Siri control ID，并单独发布 Siri 物理按下态；逐键检查线条。
+
+#### H4：页面间距和右键列错误来自私有 placements 常量
+- Supports：`right.side == .left`；左列目标 Y 步长约 0.18×640=115.2px，而 RC003 为 0.145×570=82.65px。
+- Conflicts：无。
+- Test：以 RC003 的 82.65px 中心距重新计算 Siri Remote 两列位置，静态检查相邻卡片间距和边界。
+
+### Experiments
+
+- H1：临时增加 3 行诊断测试，断言 `playPause`、`mute`、`power` 的 `remoteButton` 均为 `nil`；单测通过，确认这三个页面可配置控制在运行时绕过通用映射。诊断测试随后已撤回。
+- H2：代码对照确认 RC003 在原生事件发生前后调用 `eventSuppressor.arm`，Apple 路径没有任何调用；结合音量减“自定义动作成功且系统音量同时改变”的实机日志，确认缺少边沿抑制窗口。
+- H3：代码对照确认页面传入 `activeRemoteButtons.rawValue`，而确定键被适配器转换为 `ok`；Siri 线条绑定的是 `isStreaming` 而不是硬件边沿。
+- H4：静态计算确认 RC003 相邻卡片中心距为 `0.145×570=82.65px`，Siri Remote 左列当前约为 `0.18×640=115.2px`，且 `right` 明确配置为左列。
+
+### Root Cause
+
+Siri Remote 新页面只完成了展示层映射，运行时仍把播放/静音当固定系统动作、把电源当未映射控制，同时遗漏原生事件抑制和 Siri 控制 ID 的活动态桥接；布局 placements 也没有复用 RC003 的卡片节奏。
+
+### Fix
+
+- 播放/暂停、静音和电源改为通用 `RemoteButton`，删除适配器及私有 Feature 中的固定系统动作旁路。
+- 为 A2854 控制项声明标准及现场候选原生事件，在 `began/ended` 时使用现有 `KeyboardEventSuppressor` 建立抑制窗口。
+- 按设备维护 A2854 原始 control ID 活动集合，设置页不再从通用按钮 ID 或语音流状态推断物理按下状态。
+- 两列卡片中心距改为 RC003 的 `82.65 pt`，“右”键 placement 改为右列。
+
+### Validation
+
+- 私有 Siri Remote Package：42 项测试通过。
+- 主仓库定向 Apple Siri Remote：17 项测试通过；包括音量减、播放/暂停、静音和电源候选原生事件的按下/释放抑制实验。
+- 主仓库全量：486 项、42 个 suite 通过。
+- 本地 App 构建和 `verify-app.sh` 通过；1020×772 生产窗口截图确认右键位于右列、卡片中心距收紧且当前可见区域无重叠。
+- 12 个可配置实体键的单击、双击、长按共 36 个入口已逐个打开并关闭编辑器，0 个失败。
+- 真实 A2854 的最终 CGEvent 类型、系统原生副作用和物理活动描边仍需真机按键验收；软件测试不能替代该边界。
+
+## 2026-09-07 组合动作重录快捷键串改
+
+### Observations
+
+- 用户场景：Routine A 的第 2 步为 `Ctrl+A`，Routine B 的第 2 步为 `Ctrl+B`；在重录 Routine A 第 2 步后，Routine B 第 2 步也被覆盖。
+- 公开宿主仅通过 `MacroFeatureIntegration` 调用私有 `SayAllMacroRemoteMic` 模块；组合动作编辑器位于 `sayall-private-platform/packages/macos-button-profiles`。
+- 私有编辑器录入快捷键时使用现有 `step.parameters.shortcutProfileKey` 作为保存 ID；该 ID 相同会由本机快捷键 Profile Store 原地替换记录。
+- 私有 `duplicateMacro` 只为复制步骤生成新的 `stepID`，没有为 `shortcutProfileKey` 生成新的所有权，因此复制后的动作步骤可与源动作共享同一个快捷键 Profile。
+- 现有测试只验证复制后的 `stepID` 不同，没有验证复制后快捷键 Profile 独立；当前没有覆盖“两个 Routine 分别重录”的测试或编辑日志。
+
+### Hypotheses
+
+#### H1：复制动作保留共享 `shortcutProfileKey`，重录按共享 ID 覆盖（ROOT HYPOTHESIS）
+
+- Supports：复制逻辑保留 `MacroParameters`；重录逻辑优先使用旧 `shortcutProfileKey`；Profile Store 对相同 ID 是替换语义。
+- Conflicts：尚未用最小运行实验确认两个 Routine 的最终值是否同时变化。
+- Test：按 UI 顺序创建 Ctrl+A、复制 Routine、再用复制步骤的同一 Profile ID 保存 Ctrl+B，检查源动作和副本是否都解析为 Ctrl+B。
+
+#### H2：SwiftUI `ForEach` 使用索引更新错误步骤
+
+- Supports：编辑器通过 `draft?.steps[index]` 修改步骤，异步录入完成后仍使用捕获的 `index`。
+- Conflicts：`ForEach` 的稳定 ID 是 `stepID`，且用户复现跨 Routine 而非同一 Routine 内移动步骤。
+- Test：不复制动作，创建两个独立步骤并重录第一个；若第二个不变，则索引不是跨 Routine 串改原因。
+
+#### H3：宏保存或“更新到最新版本”把相同内容广播到其他 Routine
+
+- Supports：`saveDraft` 会把同一宏的绑定更新到新版本。
+- Conflicts：Routine A/B 具有不同 `macroID`；绑定更新只按 `macroID` 过滤，不能解释另一 Routine 的步骤参数变化。
+- Test：在两个不同 `macroID` 的动作中使用不同 Profile ID，分别保存版本并检查另一动作的定义与 Profile 是否变化。
+
+### Experiments
+
+- 最小复制测试临时断言副本快捷键 Profile 独立性，旧实现失败并显示源与副本都为 `shortcut.shared`；实验断言随后撤回。
+- 当前事实源回归创建两个不同 `macroID` 的 Routine，共享 Ctrl+A Profile，重录其中一个为 Ctrl+B；修复后生成新 Profile ID，原 Profile 仍为 Ctrl+A，另一个 Routine 仍引用原 Profile。
+
+### Root Cause
+
+组合动作重录沿用已有 `shortcutProfileKey` 并原地更新全局 Profile；共享该 ID 的其他 Routine 因此一起显示和执行新快捷键。
+
+### Fix
+
+`sayall-private-platform/packages/macos-button-profiles` 的 `RemoteMicMacroController.saveShortcut` 现在对已存在的 Profile ID 采用 copy-on-write，自动生成新的 `shortcut.*` ID；页面只将新 ID 写回当前步骤，显式复用旧 Profile 的其他 Routine 不变。
+
+### Validation
+
+- 私有包定向回归：`swift test --disable-keychain --filter rerecordingSharedShortcutUsesCopyOnWriteAndKeepsOtherRoutineUnchanged` 通过。
+- 私有包全量 `swift test --disable-keychain`：51 项 XCTest + 86 项 Swift Testing，通过。
+- 宿主注入 `swift test --disable-keychain`：492 项、43 个 suite，通过。
+- 真实遥控器/第三方 App 流程仍需人工验收；未完成部分不表述为真机验收。

@@ -18,15 +18,20 @@ done
 [[ -d "$DIST" ]] || exit 1
 
 jq -e --slurpfile stage "$STAGE" '
-  .schemaVersion == 3 and .result == "passed" and .mode == "preview" and
+  .schemaVersion == 4 and .result == "passed" and .mode == "preview" and
   .tag == $stage[0].tag and .sourceCommit == $stage[0].sourceCommit and
+  .sourceBranch == $stage[0].sourceBranch and .sourceKind == $stage[0].sourceKind and
+  .sourceBaseTag == $stage[0].sourceBaseTag and .sourceBaseCommit == $stage[0].sourceBaseCommit and
+  .sourceWorkflowCommit == $stage[0].sourceWorkflowCommit and
   .sourceRunId == $stage[0].sourceRunId and .sourceRunAttempt == $stage[0].sourceRunAttempt and
   .signedArtifactId == $stage[0].signedArtifactId and
   .signedArtifactDigest == $stage[0].signedArtifactDigest and
   .assetManifestSHA256 == $stage[0].assetManifestSHA256 and
   .stagedAt == $stage[0].stagedAt and (.stagedAt | fromdateiso8601 > 0) and
   .target.version == $stage[0].version and .target.build == $stage[0].build and
-  .baseline.tag == "v1.8.3" and .baseline.version == "1.8.3" and
+  (.baseline.tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+  (.baseline.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
+  ((.baseline.version | split(".") | map(tonumber)) < (.target.version | split(".") | map(tonumber))) and
   .baseline.developerTeamId == "L3QHLDRPAY" and
   .baseline.signatureVerified == true and .baseline.notarizationValidated == true and
   .baseline.gatekeeperAccepted == true and .baseline.launched == true and

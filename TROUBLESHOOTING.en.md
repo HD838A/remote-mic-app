@@ -28,7 +28,7 @@ Remote Mic never changes system default input or output, so it and the target ap
 
 This usually means the remote and audio path work, but Doubao is not using an ordinary virtual audio device.
 
-1. Install MiRemoteV 2ch from **Install Remote Mic.pkg** in the DMG.
+1. Install MiRemoteV 2ch from **Install SayAll.pkg** in the DMG.
 2. Quit Doubao completely and reopen it.
 3. In Remote Mic, choose **Refresh Audio Devices** and select MiRemoteV 2ch.
 4. Click an editable text field so that its insertion cursor is visible, then hold the remote voice button.

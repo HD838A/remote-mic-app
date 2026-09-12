@@ -1,3 +1,4 @@
+import AppKit
 import Carbon
 import Foundation
 
@@ -24,6 +25,24 @@ enum OnboardingSystemFunctionKeyUsage: Equatable {
 }
 
 enum OnboardingInputSourceSwitcher {
+    static func availability(
+        for voiceTool: OnboardingVoiceTool
+    ) -> OnboardingVoiceToolAvailability {
+        if let inputSourceID = voiceTool.preferredInputSourceID {
+            return inputSource(withID: inputSourceID, includeAllInstalled: true) == nil
+                ? .notInstalled
+                : .available
+        }
+
+        if let bundleIdentifier = voiceTool.applicationBundleIdentifier {
+            return NSWorkspace.shared.urlForApplication(
+                withBundleIdentifier: bundleIdentifier
+            ) == nil ? .notInstalled : .available
+        }
+
+        return .available
+    }
+
     static func selectIfNeeded(
         _ voiceTool: OnboardingVoiceTool
     ) -> OnboardingInputSourceSwitchResult {

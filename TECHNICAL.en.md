@@ -103,13 +103,13 @@ Direction, Back, and volume buttons can hold-repeat. Normal physical button acti
 
 The RC003 voice button appears as keyboard F5 on usage page 0x07, usage 0x3E. `RemoteVoiceFunctionMapper` matches only RC003 vendor/product IDs and, by default, maps that usage to Apple vendor top-case Fn/Globe on usage page 0xFF, usage 0x03. While custom button mapping is enabled, the same component maps RC003 Keyboard Power usage 0x66 to F20 usage 0x6F.
 
-The opt-in Typeless compatibility mode first requires Accessibility permission, then transactionally maps F5 to usage 0 on every matching RC003 service. Missing targets or any partial failure roll back all changes, disable the setting, and restore the default Fn mapping. Once enabled, `VoiceFnTapSessionController` buffers pre-roll at physical voice-stream start and writes it to the loopback device only after the opening Fn tap succeeds. On release it waits for `VirtualAudioOutput.endSessionAfterDraining` before sending the matching closing Fn tap. Generations and cancellable tasks isolate rapid consecutive sessions and clean up on disable, disconnect, reconnect, or app exit; a failed opening tap never produces a closing tap.
+The opt-in Typeless compatibility mode first requires Accessibility permission, then transactionally maps F5 to usage 0 on every matching RC003 service. When no matching service has been enumerated yet, it preserves the user's setting, pauses the Fn-tap runtime, and enters the bounded HID recovery flow. Once targets are present, any incomplete target or write failure rolls back all changes, disables the setting, and restores the default Fn mapping. Once enabled, `VoiceFnTapSessionController` buffers pre-roll at physical voice-stream start and writes it to the loopback device only after the opening Fn tap succeeds. On release it waits for `VirtualAudioOutput.endSessionAfterDraining` before sending the matching closing Fn tap. Generations and cancellable tasks isolate rapid consecutive sessions and clean up on disable, disconnect, reconnect, or app exit; a failed opening tap never produces a closing tap.
 
-This mode only adapts the trigger semantics seen by the target app. The RC003 must still be physically held to capture audio; it does not provide continuous recording or independent transcription. Configuration import/export includes optional `voiceKeyMode`, `voiceFnTapModeEnabled`, and `voiceShortTapFocusEnabled`; legacy configurations keep new behavior off. Fn tap and short-tap focus are mutually exclusive. Mode changes, disconnects, and app exit release any held Command and restore the managed source usages while preserving unrelated runtime changes.
+This mode only adapts the trigger semantics seen by the target app. The RC003 must still be physically held to capture audio; it does not provide continuous recording or independent transcription. Configuration import/export includes optional `voiceKeyMode` and `voiceFnTapModeEnabled`; legacy configurations keep new behavior off. Mode changes, disconnects, and app exit release any held Command and restore the managed source usages while preserving unrelated runtime changes.
 
 The supported `voiceKeyMode` values are `fn` (default), `left_command`, and `right_command`. Command mode uses one shared voice-session lifecycle for RC003, iPhone, Apple Watch, and Web voice sources: voice start sends keyDown for the selected Command and voice end sends the matching keyUp. Ordinary keyboard Command events do not start input-source switching; only a confirmed voice session opens and closes the explicit input-source session.
 
-`VoiceShortTapFocusPolicy` reuses `HIDRemoteTiming.longPressMilliseconds`. When enabled, a session below that boundary cancels transcript capture, flushes the short audio attempt, and asynchronously calls `KeyboardInjector.focusFrontmostComposer`. Candidate ranking rejects search, settings, password, token, terminal, and code-editor fields. Electron and Chromium reuse the existing accessibility-tree activation and bounded retry path. WeChat exposes no composer, so only its exact bundle identifier uses a minimum-window-size gate and a window-relative click fallback.
+The ordinary-button `focusInput` custom action calls `KeyboardInjector.focusFrontmostComposer` to focus an editable field in the current frontmost app. It is non-repeating and requires Accessibility permission. The voice-button path never invokes input focusing, so double-click windows and long-press thresholds cannot delay the first voice response.
 
 ## Menu bar and window
 
@@ -132,11 +132,13 @@ On macOS 26, the settings window uses native `glassEffect`, glass button styles,
 Development verification:
 
     ./scripts/test.sh
-    swift test
+    swift test --disable-keychain
     ./scripts/build-app.sh
     ./scripts/verify-app.sh
 
 `scripts/test.sh` runs protocol and policy self-tests and compiles the full app. Swift Testing covers ATVV, Bluetooth lifecycle, audio-device policy, button mapping, permissions, configuration compatibility, Fn mapping, the Typeless session lifecycle, pre-roll, audio draining, and test-tone behavior.
+
+The default checkout is the complete public build path. `Package.swift` does not resolve private Git URLs, so contributors with public-repository access only can run the tests above, produce `dist/SayAll.app`, and launch the public functionality. Official CI always runs that public path first. When the pinned private packages are accessible, CI additionally supplies `SAYALL_AI_PACKAGE_PATH`, `SAYALL_MACRO_PLATFORM_PATH`, and `SAYALL_MAC_REMOTE_PACKAGE_PATH` for private integration tests. Protected release builds require those packages and never publish a build backed only by the public compatibility layer.
 
 Build and launch:
 
@@ -156,12 +158,12 @@ build-dmg.sh builds and verifies the app, driver, install PKG, and uninstall PKG
 
 - dist/SayAll.app
 - dist/MiRemoteV2ch.driver
-- dist/Install Remote Mic.pkg
-- dist/Uninstall Remote Mic.pkg
-- dist/Remote-Mic-<version>.dmg
-- dist/Remote-Mic-<version>.dmg.sha256
+- dist/Install SayAll.pkg
+- dist/Uninstall SayAll.pkg
+- `dist/Remote-Mic-<version>.dmg`
+- `dist/Remote-Mic-<version>.dmg.sha256`
 
-The DMG root contains only Install Remote Mic.pkg. The app-only ZIP and architecture-matched uninstall PKG remain advanced assets in the same Release. The install PKG is no longer uploaded again as a standalone Release asset, but it remains inside the DMG and continues to pass signature, notarization, Gatekeeper, and payload verification. It stages the driver internally and replaces an existing driver only when it is missing, damaged, built for the wrong architecture, invalidly signed, or a different version; a healthy current driver remains untouched.
+The DMG root contains only `Install SayAll.pkg`. The app-only ZIP and architecture-matched `SayAll-<version>-Installer.pkg` and `SayAll-<version>-Uninstaller.pkg` remain standalone assets in the same Release. The install PKG also remains inside the DMG and continues to pass signature, notarization, Gatekeeper, and payload verification. It stages the driver internally and replaces an existing driver only when it is missing, damaged, built for the wrong architecture, invalidly signed, or a different version; a healthy current driver remains untouched.
 
 verify-dmg.sh validates the SHA-256, HFS+ image, single root entry, and install-PKG payload. The app bundle, uninstall PKG, versions, architecture, minimum OS, signatures, localized resources, and absence of leaked local paths remain covered by their dedicated artifact verifiers. Official mode also validates the Developer ID Team, Hardened Runtime, PKG/DMG signatures, stapled notarization tickets, and Gatekeeper assessment.
 
@@ -171,9 +173,9 @@ Preview publication uses one main-based two-stage flow. Version and build metada
 
 The authorized current session downloads the public stable v1.8.3 archive and uses a local fixed feed that changes only the URL prefix. The stable App must complete a real Sparkle UI check, download, install, first launch, quit, and second launch before the Preview is public. The attestation binds the Run, attempt, artifact, manifest, appcast, version/build, Team ID, notarization, Gatekeeper, Sparkle helper permissions, and crash check.
 
-.github/workflows/mac-preview-publication.yml runs only on main, has no Apple Environment and reads no Apple, Match, Notary, or Sparkle private key. It is restricted to `HD838A/remote-mic-app` and checks out the dispatch event's exact `github.sha`, restores the exact artifact ID/digest, creates or reuses a lightweight tag at the same source SHA, uploads the 11 canonical payload assets plus candidate-provenance.json, and compares every GitHub fixed-tag download with the matching download.sayall.app fixed-tag byte. releases/latest must remain v1.8.3 during Preview publication.
+.github/workflows/mac-preview-publication.yml runs only on main, has no Apple Environment and reads no Apple, Match, Notary, or Sparkle private key. It is restricted to `HD838A/remote-mic-app` and checks out the dispatch event's exact `github.sha`, restores the exact artifact ID/digest, creates or reuses a lightweight tag at the same source SHA, uploads the 13 canonical payload assets plus candidate-provenance.json, and compares every GitHub fixed-tag download with the matching download.sayall.app fixed-tag byte. releases/latest must remain the stable release recorded before publication.
 
-The canonical asset set is generated by scripts/prepare-public-release-assets.sh and recorded in staged-assets.json. Version selection, staging, and first publication Tag creation probe all 11 fixed CDN paths; only HTTP 404 is available, 2xx/3xx means occupied, and authentication, permission, 5xx, timeout, or indeterminate responses fail closed. Install PKGs remain inside their matching DMGs rather than being uploaded as duplicate standalone assets. Infrastructure failures retry the same SHA, version, build, and successful artifact; they never create a new version, re-sign known-good bytes, or overwrite a tag.
+The canonical asset set is generated by scripts/prepare-public-release-assets.sh and recorded in staged-assets.json. Version selection, staging, and first publication Tag creation probe all 13 fixed CDN paths; only HTTP 404 is available, 2xx/3xx means occupied, and authentication, permission, 5xx, timeout, or indeterminate responses fail closed. Install PKGs remain inside their matching DMGs and are also published as standalone SayAll-branded assets for hardware-support downloads. Infrastructure failures retry the same SHA, version, build, and successful artifact; they never create a new version, re-sign known-good bytes, or overwrite a tag.
 
 scripts/stage-macos-preview.sh is a no-secret preflight and dispatcher only; it also checks the release workflows' explicit GH_TOKEN bindings before dispatch. Private internal Drafts continue through the private-draft-release path to GetSayAll/SayAll and never create a Draft in the public source repository.
 

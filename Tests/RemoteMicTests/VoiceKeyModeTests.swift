@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import IOKit.hidsystem
 import Testing
 @testable import RemoteMic
 
@@ -43,11 +44,53 @@ struct VoiceKeyModeTests {
             #expect(posted.count == 2)
             #expect(posted[0].0 == mode.keyCode)
             #expect(posted[0].1)
-            #expect(posted[0].2 == .maskCommand)
+            let expectedDeviceMask = CGEventFlags(rawValue: UInt64(
+                mode == .leftCommand ? NX_DEVICELCMDKEYMASK : NX_DEVICERCMDKEYMASK
+            ))
+            let oppositeDeviceMask = CGEventFlags(rawValue: UInt64(
+                mode == .leftCommand ? NX_DEVICERCMDKEYMASK : NX_DEVICELCMDKEYMASK
+            ))
+            #expect(posted[0].2.contains(.maskCommand))
+            #expect(posted[0].2.contains(expectedDeviceMask))
+            #expect(!posted[0].2.contains(oppositeDeviceMask))
             #expect(posted[1].0 == mode.keyCode)
             #expect(!posted[1].1)
             #expect(posted[1].2.isEmpty)
         }
+    }
+
+    @Test func appleRemoteCommandVoiceJourneyPostsOneSideSpecificDownAndMatchingUp() {
+        var latch = VoiceFunctionKeyLatch()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        for streaming in [true, false] {
+            guard let transition = latch.transition(streaming: streaming, owner: .appleRemote) else {
+                Issue.record("Apple Remote voice journey must emit both press and release")
+                continue
+            }
+            let isPressed = transition == .press
+            #expect(KeyboardInjector.setVoiceKeyPressed(
+                .rightCommand,
+                isPressed: isPressed,
+                accessibilityTrusted: { true },
+                keyStatePoster: poster
+            ))
+        }
+
+        let rightDeviceMask = CGEventFlags(rawValue: UInt64(NX_DEVICERCMDKEYMASK))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == VoiceKeyMode.rightCommand.keyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2.contains(.maskCommand))
+        #expect(posted[0].2.contains(rightDeviceMask))
+        #expect(posted[1].0 == VoiceKeyMode.rightCommand.keyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2.isEmpty)
+        #expect(!latch.isHeld)
     }
 
     @Test func commandModeRequiresAccessibilityButFnDoesNot() {
@@ -196,7 +239,70 @@ struct VoiceKeyModeTests {
 
         #expect(callbackSource.contains("let previousState"))
         #expect(callbackSource.contains("Self.shouldReapplyHIDSettings("))
+        #expect(callbackSource.contains("scheduleHIDMappingRecoveryIfNeeded()"))
+        #expect(callbackSource.contains(
+            "cancelHIDMappingRecovery(reason: \"bluetooth_not_ready\")"
+        ))
         #expect(!callbackSource.contains("let hadReadyBridge"))
+    }
+
+    @Test func hidRecoveryReappliesTheCurrentVoiceKeyModeWithoutForcingFn() throws {
+        #expect(HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+            hasMatchingServices: false
+        ))
+        #expect(!HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+            hasMatchingServices: true
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let recoveryStart = try #require(
+            source.range(of: "private func scheduleHIDMappingRecoveryIfNeeded()")
+        )
+        let recoveryEnd = try #require(source.range(
+            of: "private func completeHIDMappingRecoveryIfNeeded()",
+            range: recoveryStart.upperBound..<source.endIndex
+        ))
+        let recoverySource = source[recoveryStart.lowerBound..<recoveryEnd.lowerBound]
+
+        #expect(recoverySource.contains("self.applyHIDSettings()"))
+        #expect(!recoverySource.contains("settings.voiceKeyMode = .function"))
+
+        let applyStart = try #require(source.range(of: "func applyHIDSettings("))
+        let applyEnd = try #require(source.range(
+            of: "private func scheduleHIDMappingRecoveryIfNeeded()",
+            range: applyStart.upperBound..<source.endIndex
+        ))
+        let applySource = source[applyStart.lowerBound..<applyEnd.lowerBound]
+
+        #expect(applySource.contains("let requestedVoiceKeyMode = settings.voiceKeyMode"))
+        #expect(applySource.contains("requestedVoiceKeyMode != .function"))
+        #expect(applySource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: true)"))
+        #expect(applySource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: false)"))
+        #expect(applySource.contains(
+            "HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure"
+        ))
+        #expect(applySource.contains(
+            "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
+        ))
+
+        let enableStart = try #require(source.range(of: "private func enableVoiceFnTapMode()"))
+        let enableEnd = try #require(source.range(
+            of: "private func handleVoiceFnTapFailure",
+            range: enableStart.upperBound..<source.endIndex
+        ))
+        let enableSource = source[enableStart.lowerBound..<enableEnd.lowerBound]
+        #expect(enableSource.contains(
+            "HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure"
+        ))
+        #expect(enableSource.contains("settings.voiceFnTapModeEnabled = true"))
+        #expect(enableSource.contains("scheduleHIDMappingRecoveryIfNeeded()"))
     }
 
     @Test func bluetoothCommandVoiceRequiresNeutralizedHardwareKeyBeforeAcceptance() throws {
@@ -355,70 +461,6 @@ struct VoiceKeyModeTests {
         legacy.removeValue(forKey: "voiceKeyMode")
         try target.importConfiguration(from: try JSONSerialization.data(withJSONObject: legacy))
         #expect(target.voiceKeyMode == .function)
-    }
-
-    @Test func shortTapFocusPolicyUsesTheExistingLongPressBoundary() {
-        let threshold = Int(clamping: HIDRemoteTiming.longPressMilliseconds)
-        #expect(VoiceShortTapFocusPolicy.shouldFocus(
-            enabled: true,
-            durationMilliseconds: threshold - 1
-        ))
-        #expect(!VoiceShortTapFocusPolicy.shouldFocus(
-            enabled: true,
-            durationMilliseconds: threshold
-        ))
-        #expect(!VoiceShortTapFocusPolicy.shouldFocus(
-            enabled: false,
-            durationMilliseconds: 100
-        ))
-    }
-
-    @Test func shortTapFocusPersistsAndLegacyImportDefaultsOff() throws {
-        let sourceSuite = "RemoteMicTests.short-focus-source.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
-        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
-        let source = AppSettings(defaults: sourceDefaults)
-        source.voiceShortTapFocusEnabled = true
-        let exported = try source.exportedConfigurationData()
-
-        let object = try #require(JSONSerialization.jsonObject(with: exported) as? [String: Any])
-        #expect(object["voiceShortTapFocusEnabled"] as? Bool == true)
-
-        let targetSuite = "RemoteMicTests.short-focus-target.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
-        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
-        let target = AppSettings(defaults: targetDefaults)
-        try target.importConfiguration(from: exported)
-        #expect(target.voiceShortTapFocusEnabled)
-
-        var legacy = object
-        legacy.removeValue(forKey: "voiceShortTapFocusEnabled")
-        try target.importConfiguration(from: try JSONSerialization.data(withJSONObject: legacy))
-        #expect(!target.voiceShortTapFocusEnabled)
-    }
-
-    @Test func configurationImportRejectsShortTapFocusChangeDuringVoice() throws {
-        let sourceSuite = "RemoteMicTests.short-focus-preflight-source.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
-        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
-        let source = AppSettings(defaults: sourceDefaults)
-        source.voiceShortTapFocusEnabled = true
-        let data = try source.exportedConfigurationData()
-
-        let targetSuite = "RemoteMicTests.short-focus-preflight-target.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
-        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
-        let target = AppSettings(defaults: targetDefaults)
-
-        #expect(throws: AppConfigurationError.self) {
-            try BridgeAppModel.importConfiguration(
-                from: data,
-                into: target,
-                isStreaming: true,
-                releaseVoiceKey: { true }
-            )
-        }
-        #expect(!target.voiceShortTapFocusEnabled)
     }
 
     @Test func configurationImportRejectsUnsafeVoiceKeyChangesBeforeMutation() throws {

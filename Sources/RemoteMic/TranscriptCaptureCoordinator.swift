@@ -18,6 +18,29 @@ struct CapturedTranscript: Equatable {
     let text: String
 }
 
+struct FrontmostApplicationMetadata: Equatable, Sendable {
+    let applicationName: String
+    let bundleIdentifier: String
+
+    static func current(excludingBundleIdentifier: String? = nil) -> Self? {
+        guard let application = NSWorkspace.shared.frontmostApplication,
+              let bundleIdentifier = application.bundleIdentifier?.trimmingCharacters(
+                  in: .whitespacesAndNewlines
+              ),
+              !bundleIdentifier.isEmpty,
+              bundleIdentifier != excludingBundleIdentifier
+        else { return nil }
+
+        let localizedName = application.localizedName?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ) ?? ""
+        return Self(
+            applicationName: localizedName.isEmpty ? bundleIdentifier : localizedName,
+            bundleIdentifier: bundleIdentifier
+        )
+    }
+}
+
 struct TranscriptCaptureSnapshot: Equatable {
     let focusIdentity: String
     let applicationName: String

@@ -12,6 +12,9 @@ enum AppLinks {
     static let feedback = URL(
         string: "https://my.sayall.app/api/guest-entry?source=mac"
     )!
+    static let doubaoInputMethod = URL(
+        string: "https://shurufa.doubao.com/?from=sayall.app"
+    )!
 
     static func website(for locale: Locale) -> URL {
         locale.identifier.lowercased().hasPrefix("zh")

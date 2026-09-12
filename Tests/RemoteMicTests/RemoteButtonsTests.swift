@@ -348,6 +348,43 @@ struct RemoteButtonsTests {
         #expect(HIDRemoteTiming.repeatIntervalMilliseconds(for: .down) == 100)
     }
 
+    @Test func focusInputIsANonRepeatingCustomAction() {
+        #expect(ButtonAction.focusInput.category == .custom)
+        #expect(!ButtonAction.focusInput.allowsRepeat)
+        #expect(ButtonAction(rawValue: "focusInput") == .focusInput)
+    }
+
+    @Test func focusInputUsesFrontmostComposerFocuser() {
+        var called = false
+        let handled = KeyboardInjector.send(
+            .focusInput,
+            frontmostComposerFocuser: { completion in
+                called = true
+                completion(true)
+                return true
+            },
+            accessibilityTrusted: { true }
+        )
+
+        #expect(handled)
+        #expect(called)
+    }
+
+    @Test func focusInputRequiresAccessibilityPermission() {
+        var called = false
+        let handled = KeyboardInjector.send(
+            .focusInput,
+            frontmostComposerFocuser: { _ in
+                called = true
+                return true
+            },
+            accessibilityTrusted: { false }
+        )
+
+        #expect(!handled)
+        #expect(!called)
+    }
+
     @Test func scrollActionsKeepTheirStoredIdentifiers() throws {
         #expect(ButtonAction.scrollUp.rawValue == "scrollUp")
         #expect(ButtonAction.scrollDown.rawValue == "scrollDown")
@@ -765,6 +802,28 @@ struct RemoteButtonsTests {
         ) == shortcut)
     }
 
+    @Test func arrowShortcutIgnoresSystemFunctionMarkerWhenRecordedOrLoaded() throws {
+        let event = try #require(CGEvent(
+            keyboardEventSource: CGEventSource(stateID: .hidSystemState),
+            virtualKey: 123,
+            keyDown: true
+        ))
+        event.flags = [.maskCommand, .maskSecondaryFn]
+        let recorded = try #require(NSEvent(cgEvent: event))
+        let shortcut = CustomKeyboardShortcut(event: recorded)
+
+        #expect(shortcut.modifierFlags == .command)
+        #expect(shortcut.cgEventFlags == .maskCommand)
+
+        let legacy = CustomKeyboardShortcut(
+            keyCode: 123,
+            modifierFlags: [.command, .function],
+            keyLabel: "←"
+        )
+        #expect(legacy.modifierFlags == .command)
+        #expect(legacy.cgEventFlags == .maskCommand)
+    }
+
     @Test func shortcutPresetsAndStandardKeyboardExposeReservedAndUnpressableChoices() throws {
         let spotlight = KeyboardShortcutPreset.spotlight.shortcut
         #expect(spotlight.keyCode == 49)
@@ -1004,7 +1063,7 @@ struct RemoteButtonsTests {
         })
     }
 
-    @Test func customShortcutPostsRecordedKeyAndRequiresAccessibility() {
+    @Test func customShortcutPostsRecordedCombinationAndSingleKeyAndRequiresAccessibility() {
         let shortcut = CustomKeyboardShortcut(
             keyCode: 40,
             modifierFlags: [.control, .option],
@@ -1020,6 +1079,21 @@ struct RemoteButtonsTests {
         ))
         #expect(posted?.0 == 40)
         #expect(posted?.1 == [.maskControl, .maskAlternate])
+
+        let singleKey = CustomKeyboardShortcut(
+            keyCode: 49,
+            modifierFlags: [],
+            keyLabel: "Space"
+        )
+        posted = nil
+        #expect(KeyboardInjector.send(
+            .customShortcut,
+            shortcut: singleKey,
+            accessibilityTrusted: { true },
+            keyPoster: { posted = ($0, $1) }
+        ))
+        #expect(posted?.0 == 49)
+        #expect(posted?.1.isEmpty == true)
 
         posted = nil
         #expect(!KeyboardInjector.send(
@@ -2032,25 +2106,6 @@ struct RemoteButtonsTests {
         #expect(!target.voiceFnTapModeEnabled)
     }
 
-    @Test func importedFnTapModeWinsOverShortTapFocus() throws {
-        let suite = "RemoteMicTests.voice-focus-mutual.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let settings = AppSettings(defaults: defaults)
-        settings.voiceFnTapModeEnabled = true
-        settings.voiceShortTapFocusEnabled = true
-
-        let data = try settings.exportedConfigurationData()
-        let targetSuite = "RemoteMicTests.voice-focus-mutual-target.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
-        defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
-        let target = AppSettings(defaults: targetDefaults)
-        try target.importConfiguration(from: data)
-
-        #expect(target.voiceFnTapModeEnabled)
-        #expect(!target.voiceShortTapFocusEnabled)
-    }
-
     @Test func weChatComposerFallbackUsesTheLargestEligibleWindow() {
         let mainWindow = CGRect(x: 250, y: 40, width: 1_000, height: 1_000)
         let updateWindow = CGRect(x: 100, y: 100, width: 1_200, height: 900)
@@ -2797,31 +2852,25 @@ struct RemoteButtonsTests {
         #expect(restored.customApplicationProfile(id: profile.id) == profile)
     }
 
-    @Test func preReleaseUpdateFeedAlwaysFallsBackToStableFeed() throws {
-        let stableFeed = "https://example.com/releases/latest/download/appcast.xml"
-        let preReleaseFeed = try #require(
-            URL(string: "https://example.com/releases/download/v1.7.3/appcast.xml")
+    @Test func preReleaseUpdateFeedUsesTheCloudflarePreviewChannel() {
+        let selection = UpdateFeedSelection(
+            stableFeedURLString: "https://download.sayall.app/mac/channels/stable/appcast.xml"
         )
-        var selection = UpdateFeedSelection(stableFeedURLString: stableFeed)
 
-        selection.usePreReleaseFeed(preReleaseFeed)
-        #expect(
-            selection.feedURLString(checksForPreReleaseUpdates: true)
-                == preReleaseFeed.absoluteString
-        )
-        #expect(selection.feedURLString(checksForPreReleaseUpdates: false) == stableFeed)
-
-        selection.useStableFeed()
-        #expect(selection.feedURLString(checksForPreReleaseUpdates: true) == stableFeed)
-        #expect(selection.feedURLString(checksForPreReleaseUpdates: false) == stableFeed)
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: true)
+            == "https://download.sayall.app/mac/channels/preview/appcast.xml")
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: false)
+            == "https://download.sayall.app/mac/channels/stable/appcast.xml")
     }
 
     @Test func intelUpdateSelectionUsesTheIntelAppcastNameForPreReleaseResolution() {
         let selection = UpdateFeedSelection(
-            stableFeedURLString: "https://example.com/releases/latest/download/appcast-intel.xml"
+            stableFeedURLString: "https://download.sayall.app/mac/channels/stable/appcast-intel.xml"
         )
 
         #expect(selection.appcastAssetName == "appcast-intel.xml")
+        #expect(selection.feedURLString(checksForPreReleaseUpdates: true)
+            == "https://download.sayall.app/mac/channels/preview/appcast-intel.xml")
     }
 
     @Test func secondaryTriggerActionsPersistAndResetWithoutChangingSingleClick() throws {
