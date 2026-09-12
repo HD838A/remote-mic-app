@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
+- [关闭原始录音开关仍保存当前音频](./2026-08-27-original-recording-cancel-commits-audio.md)
 - [Onboarding 语音测试页隐藏第三方配置](./2026-09-05-onboarding-voice-test-hidden-tool-configuration.md)
 - [1.9.19 偶发显示“暂时无法获取更新信息”](./2026-09-03-github-api-update-feed-unavailable/DEBUG.md)
 - [Onboarding 语音诊断无法区分焦点、音频输出与第三方未提交](./2026-08-31-onboarding-voice-attempt-diagnostics/DEBUG.md)
