@@ -23,6 +23,92 @@ extension VirtualAudioDeviceDiagnosticKind {
     }
 }
 
+enum VirtualAudioSelectionRecoverySource: String, Equatable {
+    case currentSelection = "current_selection"
+    case rememberedSelection = "remembered_selection"
+    case uniqueHistoricalCandidate = "unique_historical_candidate"
+    case none
+}
+
+enum VirtualAudioSelectionRecoveryReason: String, Equatable {
+    case noHistory = "no_history"
+    case rememberedDeviceUnavailable = "remembered_device_unavailable"
+    case noSupportedCandidate = "no_supported_candidate"
+    case multipleSupportedCandidates = "multiple_supported_candidates"
+}
+
+struct VirtualAudioSelectionRecoveryDecision: Equatable {
+    let uid: String?
+    let source: VirtualAudioSelectionRecoverySource
+    let reason: VirtualAudioSelectionRecoveryReason?
+    let kind: VirtualAudioDeviceDiagnosticKind
+    let supportedCandidateCount: Int
+}
+
+enum VirtualAudioSelectionRecoveryPolicy {
+    static func resolve(
+        selectedUID: String,
+        rememberedUID: String,
+        availableDevices: [AudioDeviceInfo],
+        hasHistoricalConfiguration: Bool
+    ) -> VirtualAudioSelectionRecoveryDecision {
+        let supported = availableDevices.filter {
+            switch VirtualAudioDeviceDiagnosticKind.classify($0) {
+            case .miRemoteV2ch, .blackHole2ch: return true
+            case .other, .unavailable: return false
+            }
+        }
+
+        if !selectedUID.isEmpty {
+            let selectedDevice = availableDevices.first { $0.uid == selectedUID }
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: selectedUID,
+                source: .currentSelection,
+                reason: nil,
+                kind: VirtualAudioDeviceDiagnosticKind.classify(selectedDevice),
+                supportedCandidateCount: supported.count
+            )
+        }
+
+        if !rememberedUID.isEmpty {
+            let rememberedDevice = availableDevices.first { $0.uid == rememberedUID }
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: rememberedDevice?.uid,
+                source: rememberedDevice == nil ? .none : .rememberedSelection,
+                reason: rememberedDevice == nil ? .rememberedDeviceUnavailable : nil,
+                kind: VirtualAudioDeviceDiagnosticKind.classify(rememberedDevice),
+                supportedCandidateCount: supported.count
+            )
+        }
+
+        guard hasHistoricalConfiguration else {
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: nil,
+                source: .none,
+                reason: .noHistory,
+                kind: .unavailable,
+                supportedCandidateCount: supported.count
+            )
+        }
+        guard supported.count == 1, let candidate = supported.first else {
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: nil,
+                source: .none,
+                reason: supported.isEmpty ? .noSupportedCandidate : .multipleSupportedCandidates,
+                kind: .unavailable,
+                supportedCandidateCount: supported.count
+            )
+        }
+        return VirtualAudioSelectionRecoveryDecision(
+            uid: candidate.uid,
+            source: .uniqueHistoricalCandidate,
+            reason: nil,
+            kind: VirtualAudioDeviceDiagnosticKind.classify(candidate),
+            supportedCandidateCount: supported.count
+        )
+    }
+}
+
 extension VirtualAudioOutputDiagnosticSnapshot {
     var configurationHealthy: Bool {
         VirtualAudioHealthPolicy.isConfigurationHealthy(

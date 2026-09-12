@@ -1438,6 +1438,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioStartupGeneration &+= 1
         let generation = audioStartupGeneration
         let selectedDeviceUID = settings.selectedAudioDeviceUID
+        let rememberedDeviceUID = settings.lastKnownAudioDeviceUID
+        let hasHistoricalAudioConfiguration = settings.hasHistoricalAudioConfiguration
         audioStartupPending = true
         AppLogger.shared.write("AUDIO STARTUP scheduled id=\(generation)")
         audioPreparationQueue.async { [weak self] in
@@ -1445,10 +1447,26 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             let devices = CoreAudioDeviceCatalog.outputDevices()
             let devicesDiagnostic = Self.audioDevicesDiagnostic(devices)
             AppLogger.shared.write("AUDIO DEVICES startup id=\(generation) \(devicesDiagnostic)")
+            let selection = VirtualAudioSelectionRecoveryPolicy.resolve(
+                selectedUID: selectedDeviceUID,
+                rememberedUID: rememberedDeviceUID,
+                availableDevices: devices,
+                hasHistoricalConfiguration: hasHistoricalAudioConfiguration
+            )
+            if selection.source != .currentSelection {
+                let phase = selection.uid == nil ? "skipped" : "candidate"
+                AppLogger.shared.write(
+                    "AUDIO SELECTION RECOVERY phase=\(phase) source=\(selection.source.rawValue) " +
+                        "reason=\(selection.reason?.rawValue ?? "none") " +
+                        "kind=\(selection.kind.rawValue) " +
+                        "supported_candidates=\(selection.supportedCandidateCount) " +
+                        "historical=\(hasHistoricalAudioConfiguration)"
+                )
+            }
             AppLogger.shared.write(
                 "AUDIO REBIND begin reason=startup state={\(self.audioOutput.diagnosticState())}"
             )
-            let configured = self.audioOutput.configure(deviceUID: selectedDeviceUID)
+            let configured = self.audioOutput.configure(deviceUID: selection.uid ?? "")
             let audioStatus = self.audioOutput.status
             let isAudioOutputReady = self.audioOutput.isReadyForTestTone
             let testToneStatus = isAudioOutputReady
@@ -1462,6 +1480,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                         self?.audioOutput.stop()
                     }
                     return
+                }
+                if configured,
+                   selection.source != .currentSelection,
+                   let recoveredUID = selection.uid,
+                   self.settings.selectedAudioDeviceUID.isEmpty {
+                    self.settings.selectedAudioDeviceUID = recoveredUID
+                    AppLogger.shared.write(
+                        "AUDIO SELECTION RECOVERY phase=completed result=restored " +
+                        "source=\(selection.source.rawValue) kind=\(selection.kind.rawValue)"
+                    )
+                } else if !configured, selection.source != .currentSelection {
+                    AppLogger.shared.write(
+                        "AUDIO SELECTION RECOVERY phase=failed result=not_restored " +
+                            "source=\(selection.source.rawValue) reason=configure_failed " +
+                            "kind=\(selection.kind.rawValue)"
+                    )
                 }
                 self.audioStartupPending = false
                 self.publishAudioDevices(devices)
