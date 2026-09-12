@@ -284,11 +284,13 @@ enum VirtualAudioConnectionLifecyclePolicy {
         bluetoothVoiceActive: Bool,
         mobileVoiceActive: Bool,
         testToneActive: Bool,
-        systemSuspended: Bool
+        systemSuspended: Bool,
+        keepAliveWhileConnected: Bool
     ) -> Bool {
         if bluetoothVoiceActive || mobileVoiceActive || testToneActive {
             return true
         }
+        guard keepAliveWhileConnected else { return false }
         return readyBluetoothBridgeCount > 0 && !systemSuspended
     }
 

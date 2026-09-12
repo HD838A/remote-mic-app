@@ -257,7 +257,8 @@ struct VirtualAudioConnectionLifecycleTests {
             bluetoothVoiceActive: false,
             mobileVoiceActive: false,
             testToneActive: false,
-            systemSuspended: false
+            systemSuspended: false,
+            keepAliveWhileConnected: true
         ))
     }
 
@@ -267,14 +268,16 @@ struct VirtualAudioConnectionLifecycleTests {
             bluetoothVoiceActive: false,
             mobileVoiceActive: false,
             testToneActive: false,
-            systemSuspended: false
+            systemSuspended: false,
+            keepAliveWhileConnected: true
         ))
         #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 2,
             bluetoothVoiceActive: false,
             mobileVoiceActive: false,
             testToneActive: false,
-            systemSuspended: false
+            systemSuspended: false,
+            keepAliveWhileConnected: true
         ))
     }
 
@@ -284,7 +287,8 @@ struct VirtualAudioConnectionLifecycleTests {
             bluetoothVoiceActive: false,
             mobileVoiceActive: false,
             testToneActive: false,
-            systemSuspended: true
+            systemSuspended: true,
+            keepAliveWhileConnected: true
         ))
     }
 
@@ -294,7 +298,8 @@ struct VirtualAudioConnectionLifecycleTests {
             bluetoothVoiceActive: true,
             mobileVoiceActive: false,
             testToneActive: false,
-            systemSuspended: true
+            systemSuspended: true,
+            keepAliveWhileConnected: true
         ))
     }
 
@@ -304,15 +309,86 @@ struct VirtualAudioConnectionLifecycleTests {
             bluetoothVoiceActive: false,
             mobileVoiceActive: true,
             testToneActive: false,
-            systemSuspended: true
+            systemSuspended: true,
+            keepAliveWhileConnected: true
         ))
         #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 0,
             bluetoothVoiceActive: false,
             mobileVoiceActive: false,
             testToneActive: true,
-            systemSuspended: true
+            systemSuspended: true,
+            keepAliveWhileConnected: true
         ))
+    }
+
+    @Test func onDemandModeKeepsIdleConnectedBridgeInactive() {
+        #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            keepAliveWhileConnected: false
+        ))
+        #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 2,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            keepAliveWhileConnected: false
+        ))
+    }
+
+    @Test func onDemandModeActivatesOnlyWhileAVoiceSourceOrTestToneRuns() {
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: true,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            keepAliveWhileConnected: false
+        ))
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: true,
+            testToneActive: false,
+            systemSuspended: false,
+            keepAliveWhileConnected: false
+        ))
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: true,
+            systemSuspended: false,
+            keepAliveWhileConnected: false
+        ))
+    }
+
+    @Test func onDemandVoiceStopSchedulesDelayedReleaseAndEveryEntryCancelsIt() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains(
+            "scheduleOnDemandVirtualAudioRelease(reason: \"bluetooth_voice_stopped\")"
+        ))
+        #expect(source.contains(
+            "cancelScheduledOnDemandVirtualAudioRelease(trigger: \"ensure_\\(reason)\")"
+        ))
+        #expect(source.contains(
+            "cancelScheduledOnDemandVirtualAudioRelease(trigger: \"rebind_\\(reason)\")"
+        ))
+        #expect(BridgeAppModel.onDemandVirtualAudioReleaseDelay >= 1.0)
+        #expect(BridgeAppModel.onDemandVirtualAudioReleaseDelay <= 5.0)
     }
 
     @Test func overlappingWorkspaceEventsDoNotResumeAudioPrematurely() {
