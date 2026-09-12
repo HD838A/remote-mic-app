@@ -446,7 +446,7 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        let footer = try #require(settingsSource.range(of: "private var mappingFooter"))
+        let footer = try #require(settingsSource.range(of: "private func mappingFooter"))
         let selector = try #require(settingsSource.range(
             of: "private func remoteDeviceSelector",
             range: footer.upperBound..<settingsSource.endIndex
@@ -788,6 +788,10 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("Toggle(\"button_mapping.rapid_press\""))
         #expect(source.contains("button_mapping.rapid_press_hint_short"))
         #expect(source.contains("button_mapping.rapid_press_help"))
+        #expect(source.contains("mappingFooter(includeSiriScrollArrow: true)"))
+        #expect(source.contains("ScrollView(.horizontal, showsIndicators: true)"))
+        #expect(source.contains("siriRemoteScrollArrowControl"))
+        #expect(RemoteMappingLayout.remoteSize.height == 510)
         #expect(source.contains("!configured.action.allowsRepeat"))
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.contains("ButtonActionCategory.allCases"))

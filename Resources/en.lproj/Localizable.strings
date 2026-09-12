@@ -56,7 +56,7 @@
 "connection.status.connecting" = "Connecting to the remote";
 "connection.status.initializing_voice" = "Initializing the voice service";
 "connection.status.connected_to_device" = "Xiaomi remote connected";
-"connection.status.apple_remote_connected" = "Apple Siri Remote connected";
+"connection.status.apple_remote_connected" = "Apple Remote connected";
 "connection.status.reconnecting" = "Connection lost; preparing to reconnect";
 "connection.error.voice_service_timeout" = "Remote voice service initialization timed out";
 "connection.error.invalid_voice_response" = "The remote returned an invalid voice capability response";
@@ -330,7 +330,7 @@
 "audio.compatibility.help_plain" = "If your preferred voice tool cannot hear audio, choose the compatible microphone included with the installer. Existing audio devices are not replaced.";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Customize remote button actions while preserving voice input and Fn functions";
-"button_mapping.toggle.enabled" = "Enable Custom Button Controls";
+"button_mapping.toggle.enabled" = "Custom Buttons";
 "button_mapping.permission_prompt.title" = "Button Permissions Required";
 "button_mapping.permission_prompt.message" = "Custom button controls require Input Monitoring and Accessibility. Open the Permissions page to finish setup.";
 "button_mapping.permission_prompt.open" = "Open Permissions";

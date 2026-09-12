@@ -1224,25 +1224,6 @@ struct SettingsView: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 16) {
-                    Toggle(isOn: $settings.siriRemoteScrollArrowReversed) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(localization.text("siri_remote.scroll_arrow.reverse.title"))
-                                .font(.system(size: 13, weight: .medium))
-                            Text(localization.text("siri_remote.scroll_arrow.reverse.detail"))
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .toggleStyle(.switch)
-                    .help(localization.text("siri_remote.scroll_arrow.reverse.help"))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(
-                        Color.primary.opacity(0.035),
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    )
-
                     SiriRemoteMappingPage(
                         selectedControlID: $selectedSiriRemoteControlID,
                         activeControlIDs: model.activeAppleRemoteControlIDs,
@@ -1287,7 +1268,7 @@ struct SettingsView: View {
                             .id("mapping-action-editor")
                     }
 
-                    mappingFooter
+                    mappingFooter(includeSiriScrollArrow: true)
                 }
                 .padding(22)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1377,7 +1358,7 @@ struct SettingsView: View {
                                 .id("mapping-action-editor")
                         }
 
-                        mappingFooter
+                        mappingFooter()
                     }
                     .padding(22)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1476,7 +1457,7 @@ struct SettingsView: View {
         }
     }
 
-    private var mappingFooter: some View {
+    private func mappingFooter(includeSiriScrollArrow: Bool = false) -> some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
                 mappingHIDStatus
@@ -1486,12 +1467,31 @@ struct SettingsView: View {
                 mappingVoiceKeyModeControl
                 Divider()
                 mappingVoiceFnTapControl
+                if includeSiriScrollArrow {
+                    Divider()
+                    siriRemoteScrollArrowControl
+                }
                 HStack {
                     Spacer(minLength: 0)
                     mappingRestoreDefaultsButton
                 }
             }
         }
+    }
+
+    private var siriRemoteScrollArrowControl: some View {
+        Toggle(isOn: $settings.siriRemoteScrollArrowReversed) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(localization.text("siri_remote.scroll_arrow.reverse.title"))
+                    .font(.system(size: 13, weight: .medium))
+                Text(localization.text("siri_remote.scroll_arrow.reverse.detail"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.switch)
+        .help(localization.text("siri_remote.scroll_arrow.reverse.help"))
     }
 
     private var mappingHIDStatus: some View {
@@ -1595,11 +1595,14 @@ struct SettingsView: View {
                 }
             }
         } else {
-            HStack(spacing: 8) {
-                ForEach(connectedProfiles) { profile in
-                    remoteDeviceCard(profile)
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(spacing: 8) {
+                    ForEach(connectedProfiles) { profile in
+                        remoteDeviceCard(profile)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
