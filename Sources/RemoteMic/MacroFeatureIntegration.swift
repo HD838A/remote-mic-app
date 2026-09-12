@@ -4,6 +4,9 @@ import SwiftUI
 #if canImport(SayAllMacroRemoteMic)
 import SayAllMacroRemoteMic
 #endif
+#if canImport(SayAllButtonProfiles)
+import SayAllButtonProfiles
+#endif
 #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
 import SayAllSiriRemote
 #endif
@@ -25,18 +28,29 @@ struct ButtonProfileHostActionSection: Equatable {
 
 final class MacroFeatureIntegration: ObservableObject {
     @Published private(set) var isFeatureVisible = false
+    @Published private(set) var isButtonProfilesVisible = false
     @Published private(set) var shouldShowEnrollment = false
     @Published private(set) var isEditorActive = false
+    private var subscriptions = Set<AnyCancellable>()
+    private var enrollmentRevealRequested = false
 
 #if canImport(SayAllMacroRemoteMic)
     private let feature: SayAllMacroRemoteMicFeature
-    private var subscriptions = Set<AnyCancellable>()
-    private var enrollmentRevealRequested = false
+#endif
+#if canImport(SayAllButtonProfiles)
+    private let buttonProfilesFeature: SayAllButtonProfilesFeature
 #endif
 
     init(localeIdentifier: String = Locale.current.identifier) {
         #if canImport(SayAllMacroRemoteMic)
         feature = SayAllMacroRemoteMicFeature(localeIdentifier: localeIdentifier)
+        #endif
+#if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature = SayAllButtonProfilesFeature(
+            localeIdentifier: localeIdentifier
+        )
+#endif
+        #if canImport(SayAllMacroRemoteMic)
         feature.$isFeatureVisible
             .removeDuplicates()
             .assign(to: &$isFeatureVisible)
@@ -48,6 +62,15 @@ final class MacroFeatureIntegration: ObservableObject {
             }
             .store(in: &subscriptions)
         #endif
+#if canImport(SayAllButtonProfiles)
+        isButtonProfilesVisible = true
+        buttonProfilesFeature.$isButtonProfileBindingEditorActive
+            .removeDuplicates()
+            .sink { [weak self] active in
+                self?.setEditorActive(active)
+            }
+            .store(in: &subscriptions)
+#endif
     }
 
     var sectionTitle: String {
@@ -67,16 +90,16 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     var buttonProfilesSectionTitle: String {
-        #if canImport(SayAllMacroRemoteMic)
-        feature.buttonProfilesSectionTitle
+        #if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature.buttonProfilesSectionTitle
         #else
         ""
         #endif
     }
 
     var buttonProfilesSectionSystemImage: String {
-        #if canImport(SayAllMacroRemoteMic)
-        feature.buttonProfilesSectionSystemImage
+        #if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature.buttonProfilesSectionSystemImage
         #else
         "rectangle.3.group"
         #endif
@@ -87,16 +110,23 @@ final class MacroFeatureIntegration: ObservableObject {
         feature.updateLocaleIdentifier(identifier)
         objectWillChange.send()
         #endif
+        #if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature.updateLocaleIdentifier(identifier)
+        objectWillChange.send()
+        #endif
     }
 
     func refreshAccessIfNeeded(force: Bool = false) {
 #if canImport(SayAllMacroRemoteMic)
         feature.refreshAccessIfNeeded(force: force)
 #endif
+#if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature.refreshAccessIfNeeded(force: force)
+#endif
     }
 
     func updateButtonProfilesAccess(_ decision: HostButtonProfilesAccessDecision) {
-        #if canImport(SayAllMacroRemoteMic) && canImport(SayAllMembershipCore)
+        #if canImport(SayAllButtonProfiles) && canImport(SayAllMembershipCore)
         let packageDecision: ButtonProfilesAccessDecision
         switch decision {
         case let .allowed(validUntil):
@@ -108,12 +138,12 @@ final class MacroFeatureIntegration: ObservableObject {
         case .unavailable:
             packageDecision = .unavailable
         }
-        feature.updateButtonProfilesAccess(packageDecision)
+        buttonProfilesFeature.updateButtonProfilesAccess(packageDecision)
         #endif
     }
 
     func setEditorActive(_ active: Bool) {
-        isEditorActive = active && isFeatureVisible
+        isEditorActive = active && (isFeatureVisible || isButtonProfilesVisible)
     }
 
     func revealEnrollment() {
@@ -132,7 +162,7 @@ final class MacroFeatureIntegration: ObservableObject {
         #if SAYALL_MACRO_REMOTE_CAPABILITIES
         feature.settingsView(
             selectedRemoteProfileID: selectedRemoteProfileID,
-            remotePresentation: remotePresentation(for: remoteModel),
+            remotePresentation: combinationActionsRemotePresentation(for: remoteModel),
             configuredActionTitle: configuredActionTitle,
             onBindingEditorActivityChanged: { [weak self] active in
                 self?.setEditorActive(active)
@@ -165,11 +195,11 @@ final class MacroFeatureIntegration: ObservableObject {
         remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection]
     ) -> AnyView {
-        #if canImport(SayAllMacroRemoteMic)
+        #if canImport(SayAllButtonProfiles)
         #if SAYALL_MACRO_REMOTE_CAPABILITIES
-        return feature.buttonProfilesView(
+        return buttonProfilesFeature.buttonProfilesView(
             selectedRemoteProfileID: selectedRemoteProfileID,
-            remotePresentation: remotePresentation(for: remoteModel),
+            remotePresentation: buttonProfilesRemotePresentation(for: remoteModel),
             hostActionSections: hostActionSections.map { section in
                 RemoteMicHostActionSection(
                     id: section.id,
@@ -190,7 +220,7 @@ final class MacroFeatureIntegration: ObservableObject {
             }
         )
         #else
-        return feature.buttonProfilesView(
+        return buttonProfilesFeature.buttonProfilesView(
             selectedRemoteProfileID: selectedRemoteProfileID,
             hostActionSections: hostActionSections.map { section in
                 RemoteMicHostActionSection(
@@ -218,28 +248,28 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     #if SAYALL_MACRO_REMOTE_CAPABILITIES && canImport(SayAllMacroRemoteMic)
-    private func remotePresentation(
+    private func combinationActionsRemotePresentation(
         for model: XiaomiRemoteModel?
-    ) -> RemoteMicRemotePresentation {
+    ) -> SayAllMacroRemoteMic.RemoteMicRemotePresentation {
         switch model {
         case .rc001:
-            return .xiaomiRC001(displayName: "RC001")
+            return SayAllMacroRemoteMic.RemoteMicRemotePresentation.xiaomiRC001(displayName: "RC001")
         case .rc003, .unknown, nil:
-            return .xiaomiRC003(displayName: "RC003")
+            return SayAllMacroRemoteMic.RemoteMicRemotePresentation.xiaomiRC003(displayName: "RC003")
         case .appleSiriRemoteA2854, .appleSiriRemoteA2540:
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             let siriModel: SayAllSiriRemoteModel = model == .appleSiriRemoteA2540
                 ? .a2540
                 : .a2854
             let source = SayAllSiriRemoteDevicePresentation.presentation(for: siriModel)
-            let capabilities = RemoteMicRemoteModelCatalog.capabilities(
+            let capabilities = SayAllMacroRemoteMic.RemoteMicRemoteModelCatalog.capabilities(
                 for: source.model.stableModelID
             )!
             let anchors = Dictionary(uniqueKeysWithValues: source.anchors.compactMap {
                 controlID, anchor in
-                macroButton(forSiriControlID: controlID).map { ($0, anchor) }
+                combinationActionsMacroButton(forSiriControlID: controlID).map { ($0, anchor) }
             })
-            return RemoteMicRemotePresentation(
+            return SayAllMacroRemoteMic.RemoteMicRemotePresentation(
                 capabilities: capabilities,
                 displayName: source.displayName,
                 image: source.image,
@@ -248,10 +278,10 @@ final class MacroFeatureIntegration: ObservableObject {
             )
             #else
             let modelID = model == .appleSiriRemoteA2540
-                ? RemoteMicRemoteModelID.appleSiriRemoteA2540
-                : RemoteMicRemoteModelID.appleSiriRemoteA2854
-            return RemoteMicRemotePresentation(
-                capabilities: RemoteMicRemoteModelCatalog.capabilities(for: modelID)!,
+                ? SayAllMacroRemoteMic.RemoteMicRemoteModelID.appleSiriRemoteA2540
+                : SayAllMacroRemoteMic.RemoteMicRemoteModelID.appleSiriRemoteA2854
+            return SayAllMacroRemoteMic.RemoteMicRemotePresentation(
+                capabilities: SayAllMacroRemoteMic.RemoteMicRemoteModelCatalog.capabilities(for: modelID)!,
                 displayName: "Siri Remote",
                 image: nil,
                 aspectRatio: 423.0 / 1510.0,
@@ -261,7 +291,9 @@ final class MacroFeatureIntegration: ObservableObject {
         }
     }
 
-    private func macroButton(forSiriControlID controlID: String) -> RemoteMicMacroButton? {
+    private func combinationActionsMacroButton(
+        forSiriControlID controlID: String
+    ) -> SayAllMacroRemoteMic.RemoteMicMacroButton? {
         switch controlID {
         case "power": .power
         case "up": .up
@@ -278,6 +310,32 @@ final class MacroFeatureIntegration: ObservableObject {
         default: nil
         }
     }
+
+    #if canImport(SayAllButtonProfiles)
+    private func buttonProfilesRemotePresentation(
+        for model: XiaomiRemoteModel?
+    ) -> SayAllButtonProfiles.RemoteMicRemotePresentation {
+        switch model {
+        case .rc001:
+            return .xiaomiRC001(displayName: "RC001")
+        case .rc003, .unknown, nil:
+            return .xiaomiRC003(displayName: "RC003")
+        case .appleSiriRemoteA2854, .appleSiriRemoteA2540:
+            let modelID = model == .appleSiriRemoteA2540
+                ? SayAllButtonProfiles.RemoteMicRemoteModelID.appleSiriRemoteA2540
+                : SayAllButtonProfiles.RemoteMicRemoteModelID.appleSiriRemoteA2854
+            return SayAllButtonProfiles.RemoteMicRemotePresentation(
+                capabilities: SayAllButtonProfiles.RemoteMicRemoteModelCatalog.capabilities(
+                    for: modelID
+                )!,
+                displayName: "Siri Remote",
+                image: nil,
+                aspectRatio: 423.0 / 1510.0,
+                anchors: [:]
+            )
+        }
+    }
+    #endif
     #endif
 
     func hasActiveBinding(
@@ -285,21 +343,34 @@ final class MacroFeatureIntegration: ObservableObject {
         button: RemoteButton,
         trigger: ButtonTrigger
     ) -> Bool {
+        let freeBinding: Bool
         #if canImport(SayAllMacroRemoteMic)
-        feature.hasActiveBinding(
+        freeBinding = feature.hasActiveBinding(
             remoteProfileID: profileID,
             button: button.rawValue,
             trigger: trigger.rawValue
         )
         #else
-        false
+        freeBinding = false
+        #endif
+        #if canImport(SayAllButtonProfiles)
+        return buttonProfilesFeature.hasActiveBinding(
+            remoteProfileID: profileID,
+            button: button.rawValue,
+            trigger: trigger.rawValue
+        ) || freeBinding
+        #else
+        return freeBinding
         #endif
     }
 
     func noteButtonInteraction(button: RemoteButton) {
-        #if canImport(SayAllMacroRemoteMic)
+#if canImport(SayAllMacroRemoteMic)
         feature.noteButtonInteraction(button: button.rawValue)
-        #endif
+#endif
+#if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature.noteButtonInteraction(button: button.rawValue)
+#endif
     }
 
     @discardableResult
@@ -327,13 +398,22 @@ final class MacroFeatureIntegration: ObservableObject {
         hostActionPerformer: (Data) -> Bool,
         shortcutPerformer: (UInt16, [String]) -> Bool
     ) -> Bool {
-        #if canImport(SayAllMacroRemoteMic)
-        return feature.executeBoundAction(
+        #if canImport(SayAllButtonProfiles)
+        if buttonProfilesFeature.executeBoundAction(
             remoteProfileID: profileID,
             button: button.rawValue,
             trigger: trigger.rawValue,
             hostActionPerformer: hostActionPerformer,
             shortcutPerformer: shortcutPerformer
+        ) {
+            return true
+        }
+        #endif
+        #if canImport(SayAllMacroRemoteMic)
+        return feature.executeBoundMacro(
+            remoteProfileID: profileID,
+            button: button.rawValue,
+            trigger: trigger.rawValue
         )
         #else
         return false
@@ -341,8 +421,11 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     func stop() {
-        #if canImport(SayAllMacroRemoteMic)
+#if canImport(SayAllMacroRemoteMic)
         feature.stop()
-        #endif
+#endif
+#if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature.stop()
+#endif
     }
 }

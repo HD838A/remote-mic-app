@@ -69,10 +69,14 @@ fi
 /usr/bin/grep -Fq 'Detect private dependency access' "$ci_workflow"
 /usr/bin/grep -Fq 'Private dependency access is unavailable' "$ci_workflow"
 /usr/bin/grep -Fq "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new'" "$ci_workflow"
-/usr/bin/grep -Fq 'Run private integration tests' "$ci_workflow"
-/usr/bin/grep -Fq 'Build private release configuration' "$ci_workflow"
+/usr/bin/grep -Fq 'Run free combination actions integration tests' "$ci_workflow"
+/usr/bin/grep -Fq 'Build free combination actions release configuration' "$ci_workflow"
+/usr/bin/grep -Fq 'Run paid button profiles integration tests' "$ci_workflow"
+/usr/bin/grep -Fq 'Build paid button profiles release configuration' "$ci_workflow"
 /usr/bin/grep -Fq "if: steps.private-access.outputs.available == 'true'" "$ci_workflow"
-if [[ "$(/usr/bin/grep -c -- 'SAYALL_MAC_REMOTE_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
+if [[ "$(/usr/bin/grep -c -- 'SAYALL_COMBINATION_ACTIONS_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
+   [[ "$(/usr/bin/grep -c -- 'SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
+   [[ "$(/usr/bin/grep -c -- 'SAYALL_MAC_REMOTE_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
    [[ "$(/usr/bin/grep -c -- "if: steps.private-access.outputs.available == 'true'" "$ci_workflow")" -lt 7 ]]; then
   print -u2 "public CI must clear private package paths and private checks must remain conditional"
   exit 1
@@ -88,7 +92,8 @@ if env \
    -u SAYALL_SIRI_REMOTE_PACKAGE_PATH \
    -u SAYALL_ENABLE_SIRI_REMOTE \
    -u SAYALL_SIRI_REMOTE_UI_ONLY \
-   -u SAYALL_MACRO_PLATFORM_PATH \
+   -u SAYALL_COMBINATION_ACTIONS_PATH \
+   -u SAYALL_BUTTON_PROFILES_PACKAGE_PATH \
    -u SAYALL_MEMBERSHIP_PACKAGE_PATH \
    -u SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH \
    REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1 SAYALL_MAC_REMOTE_PACKAGE_PATH= \

@@ -138,7 +138,7 @@ Development verification:
 
 `scripts/test.sh` runs protocol and policy self-tests and compiles the full app. Swift Testing covers ATVV, Bluetooth lifecycle, audio-device policy, button mapping, permissions, configuration compatibility, Fn mapping, the Typeless session lifecycle, pre-roll, audio draining, and test-tone behavior.
 
-The default checkout is the complete public build path. `Package.swift` does not resolve private Git URLs, so contributors with public-repository access only can run the tests above, produce `dist/SayAll.app`, and launch the public functionality. Official CI always runs that public path first. When the pinned private packages are accessible, CI additionally supplies `SAYALL_AI_PACKAGE_PATH`, `SAYALL_MACRO_PLATFORM_PATH`, and `SAYALL_MAC_REMOTE_PACKAGE_PATH` for private integration tests. Protected release builds require those packages and never publish a build backed only by the public compatibility layer.
+The default checkout is the complete public build path. `Package.swift` does not resolve private Git URLs, so contributors with public-repository access only can run the tests above, produce `dist/SayAll.app`, and launch the public functionality. Official CI always runs that public path first. After checking out the pinned dependencies, it supplies `SAYALL_AI_PACKAGE_PATH`, `SAYALL_COMBINATION_ACTIONS_PATH`, and `SAYALL_MAC_REMOTE_PACKAGE_PATH`; the free combination-actions feature is included in official builds by default. Paid button profiles remain disabled unless `SAYALL_BUTTON_PROFILES_PACKAGE_PATH` is set explicitly. Protected release builds require the free combination-actions package and the other official dependencies, but do not include paid button profiles by default.
 
 Build and launch:
 

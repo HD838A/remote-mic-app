@@ -186,7 +186,7 @@ jobs:
             ssh-agent -k >/dev/null
           }
           check_access "${{ steps.release-dependencies.outputs.sayall_ai_repository }}" "$SAYALL_AI_DEPLOY_KEY"
-          check_access "${{ steps.release-dependencies.outputs.sayall_macro_platform_repository }}" "$SAYALL_MACRO_PLATFORM_DEPLOY_KEY"
+          check_access "${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}" "$SAYALL_MACRO_PLATFORM_DEPLOY_KEY"
           check_access "${{ steps.release-dependencies.outputs.sayall_mac_remote_repository }}" "$SAYALL_MAC_REMOTE_DEPLOY_KEY"
           echo "available=$available" >> "$GITHUB_OUTPUT"
           if [[ "$available" == true ]]; then
@@ -205,13 +205,13 @@ jobs:
           ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
           persist-credentials: false
 
-      - name: Check out private macro package
+      - name: Check out private macOS feature packages
         if: steps.private-access.outputs.available == 'true'
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_macro_platform_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}
-          path: .private-dependencies/sayall-macro-platform
+          repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
+          path: .private-dependencies/sayall-private-platform
           ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
@@ -219,7 +219,7 @@ jobs:
         if: steps.private-access.outputs.available == 'true'
         run: |
           echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
-          echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform" >> "$GITHUB_ENV"
+          echo "SAYALL_COMBINATION_ACTIONS_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-combination-actions" >> "$GITHUB_ENV"
 
       - name: Check out shared Mac remote package
         id: remote-package
@@ -252,7 +252,8 @@ jobs:
         if: needs.classify_changes.outputs.product_change == 'true'
         env:
           SAYALL_AI_PACKAGE_PATH: ""
-          SAYALL_MACRO_PLATFORM_PATH: ""
+          SAYALL_COMBINATION_ACTIONS_PATH: ""
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
           SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
         run: swift test --disable-keychain
 
@@ -260,7 +261,8 @@ jobs:
         if: needs.classify_changes.outputs.product_change == 'true'
         env:
           SAYALL_AI_PACKAGE_PATH: ""
-          SAYALL_MACRO_PLATFORM_PATH: ""
+          SAYALL_COMBINATION_ACTIONS_PATH: ""
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
           SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
         run: |
           swift test --disable-keychain --filter VoiceInputDestinationCoordinatorTests
@@ -274,18 +276,35 @@ jobs:
         if: needs.classify_changes.outputs.product_change == 'true'
         env:
           SAYALL_AI_PACKAGE_PATH: ""
-          SAYALL_MACRO_PLATFORM_PATH: ""
+          SAYALL_COMBINATION_ACTIONS_PATH: ""
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
           SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
         run: swift build --disable-keychain -c release --triple "${{ matrix.triple }}"
 
-      - name: Run private integration tests
+      - name: Run free combination actions integration tests
         if: steps.private-access.outputs.available == 'true'
         run: swift test --disable-keychain --scratch-path ".build-private/${{ matrix.variant }}"
 
-      - name: Build private release configuration
+      - name: Build free combination actions release configuration
         if: steps.private-access.outputs.available == 'true'
         run: |
           swift build --disable-keychain \
             --scratch-path ".build-private/${{ matrix.variant }}" \
+            -c release \
+            --triple "${{ matrix.triple }}"
+
+      - name: Run paid button profiles integration tests
+        if: steps.private-access.outputs.available == 'true'
+        env:
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ${{ github.workspace }}/.private-dependencies/sayall-private-platform/packages/macos-button-profiles
+        run: swift test --disable-keychain --scratch-path ".build-private-paid/${{ matrix.variant }}"
+
+      - name: Build paid button profiles release configuration
+        if: steps.private-access.outputs.available == 'true'
+        env:
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ${{ github.workspace }}/.private-dependencies/sayall-private-platform/packages/macos-button-profiles
+        run: |
+          swift build --disable-keychain \
+            --scratch-path ".build-private-paid/${{ matrix.variant }}" \
             -c release \
             --triple "${{ matrix.triple }}"

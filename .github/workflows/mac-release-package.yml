@@ -225,12 +225,12 @@ jobs:
           ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
           persist-credentials: false
 
-      - name: Check out private macro package
+      - name: Check out private macOS feature packages
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_macro_platform_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}
-          path: .private-dependencies/sayall-macro-platform
+          repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
+          path: .private-dependencies/sayall-private-platform
           ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
@@ -264,11 +264,11 @@ jobs:
       - name: Verify immutable private dependency checkouts
         env:
           SAYALL_AI_COMMIT: ${{ steps.release-dependencies.outputs.sayall_ai_commit }}
-          SAYALL_MACRO_PLATFORM_COMMIT: ${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}
+          SAYALL_PRIVATE_PLATFORM_COMMIT: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
           SAYALL_MAC_REMOTE_COMMIT: ${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}
         run: |
           test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "$SAYALL_AI_COMMIT"
-          test "$(git -C .private-dependencies/sayall-macro-platform rev-parse HEAD)" = "$SAYALL_MACRO_PLATFORM_COMMIT"
+          test "$(git -C .private-dependencies/sayall-private-platform rev-parse HEAD)" = "$SAYALL_PRIVATE_PLATFORM_COMMIT"
           test "$(git -C .private-dependencies/sayall-mac-remote rev-parse HEAD)" = "$SAYALL_MAC_REMOTE_COMMIT"
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = 5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d
           match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
@@ -281,10 +281,11 @@ jobs:
         run: |
           {
             echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai"
-            echo "SAYALL_MACRO_PLATFORM_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-macro-platform"
+            echo "SAYALL_COMBINATION_ACTIONS_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-combination-actions"
             echo "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
             echo "REQUIRE_SAYALL_AI_PACKAGE=1"
-            echo "REQUIRE_SAYALL_MACRO_PLATFORM=1"
+            echo "REQUIRE_SAYALL_COMBINATION_ACTIONS=1"
+            echo "REQUIRE_SAYALL_BUTTON_PROFILES=0"
             echo "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"
           } >> "$GITHUB_ENV"
 
