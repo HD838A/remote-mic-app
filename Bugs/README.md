@@ -52,6 +52,7 @@
 - [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md)
 - [真实候选版本号导致预发布生命周期测试夹具失败](./2026-08-13-preview-lifecycle-fixture-current-version.md)
 - [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md)
+- [安装/卸载脚本在音频服务缺失时于成功之后报错中止](./2026-09-05-installer-audio-service-restart-aborts-script.md)
 - [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md)
 
 本目录统一保存已经发现、调查或修复的问题。每个 Bug 使用独立 Markdown 文件，至少记录时间、状态、影响范围、功能点、简单描述和详细过程；无法从历史提交恢复的细节会明确标注，不补写推测。
@@ -204,4 +205,5 @@
 - 原始记录：日志、提交、版本历史或用户反馈
 
 详细过程按需要记录观察、假设、实验、根因、修复和验证；历史资料不足时应明确说明，不得补写推测。
+| 2026-08-31 | [Issue #106 默认返回键](./2026-08-31-default-back-button.md) | 候选修复完成，等待实体遥控器真机验收 |
 | 2026-08-31 | [Issue #283 恢复最近物理输入](./2026-08-31-default-input-restore.md) | 候选修复完成，等待 Wave Link 真机验收 |
