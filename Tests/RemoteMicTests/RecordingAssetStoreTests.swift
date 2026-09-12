@@ -191,6 +191,9 @@ struct RecordingAssetStoreTests {
         #expect(completion.wait(timeout: .now() + 3) == .success)
         #expect(committed?.applicationName == nil)
         #expect(committed?.bundleIdentifier == nil)
+        try FileManager.default.trashItem(at: root, resultingItemURL: nil)
+    }
+
     @Test func recordingOnlySessionKeepsApplicationMetadata() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("RemoteMicRecordingOnlyTests-\(UUID().uuidString)", isDirectory: true)

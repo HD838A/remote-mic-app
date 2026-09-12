@@ -12,7 +12,6 @@
 - [MiRemoteV 2ch 启动时历史选择丢失导致无法语音](./2026-09-12-miremotev-selection-lost-on-startup.md)
 
 - [回眸无可编辑输入框时录音归为未知应用且不可见](./2026-08-27-reflections-recording-metadata-fallback.md)
->>>>>>> origin/main
 - [1.9.13 搜索框与 cmux 语音输入边界](./2026-08-26-voice-input-search-and-cmux-boundary.md)
 - [休眠唤醒后蓝牙失效，以及豆包有电平但没有文字](./2026-08-25-sleep-wake-and-doubao-voice-failure.md)
 - [自定义快捷键连续快速按只有第一次生效](./2026-08-25-custom-shortcut-rapid-press-dropped.md)
