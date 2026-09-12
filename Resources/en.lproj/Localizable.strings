@@ -929,3 +929,24 @@
 "about.preferences.restart_onboarding_action" = "Run Again";
 "about.hardware.download" = "Download Installer";
 "common.action.copy" = "Copy";
+
+"settings.import_notice.title" = "Some imported entries were not adopted";
+"settings.import_notice.rejected" = "Skipped as untrusted: %1$@.";
+"settings.import_notice.missing_app" = "These applications are not installed on this Mac, so buttons pointing to them will not work yet: %1$@.";
+"settings.import_notice.next_step" = "Set the skipped items again to use them; this notice clears on relaunch.";
+"settings.import_notice.separator" = ", ";
+"settings.import_notice.item.button_mapping" = "remote button mappings";
+"settings.import_notice.item.custom_application" = "custom application actions";
+"settings.import_notice.item.audio_device" = "audio device selection";
+"settings.import_notice.item.other" = "other settings";
+"configuration.import.partial" = "Imported; some entries were not adopted (see the Button Mapping page)";
+"settings.corrupted.title" = "Some settings could not be read and were reset to defaults";
+"settings.corrupted.summary" = "Affected: %1$@.";
+"settings.corrupted.recovery" = "Your saved content was not deleted; it is still in the settings file. Contact us if you need help recovering it.";
+"settings.corrupted.next_step" = "Set the items above again to keep using them; this notice disappears once they decode cleanly.";
+"settings.corrupted.separator" = ", ";
+"settings.corrupted.item.button_mapping" = "remote button mappings";
+"settings.corrupted.item.custom_application" = "custom application actions";
+"settings.corrupted.item.remote_device" = "remote device profiles";
+"settings.corrupted.item.statistics" = "usage statistics";
+"settings.corrupted.item.other" = "other settings";

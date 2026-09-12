@@ -1326,6 +1326,9 @@ struct SettingsView: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 16) {
+                        configurationImportBanner
+                        corruptedSettingsBanner
+
                         RemoteMappingCanvas(
                             selectedButton: $selectedRemoteButton,
                             activeButtons: model.activeRemoteButtons,
@@ -1380,6 +1383,83 @@ struct SettingsView: View {
                             proxy.scrollTo("mapping-action-editor", anchor: .top)
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// Inline on purpose: an import that quietly dropped an entry must leave a trace the user
+    /// can still read afterwards, and the repository's interface rules keep page-level notices
+    /// flat inside the page rather than behind a sheet. Renders nothing when the last import
+    /// adopted everything, so a clean import keeps the page's layout.
+    @ViewBuilder
+    private var configurationImportBanner: some View {
+        if let notice = settings.configurationImportNotice {
+            let rejected = ConfigurationImportNoticeText.rejectedSummary(
+                for: notice.rejectedEntryStorageKeys,
+                localize: localization.text
+            )
+            let missing = ConfigurationImportNoticeText.missingApplicationSummary(
+                for: notice.applicationsMissingOnThisMac,
+                localize: localization.text
+            )
+            GlassPanel {
+                HStack(alignment: .top, spacing: 11) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(localization.text(ConfigurationImportNoticeText.titleKey))
+                            .font(.system(size: 12, weight: .semibold))
+                        if let rejected {
+                            Text(rejected)
+                                .font(.system(size: 12))
+                        }
+                        if let missing {
+                            Text(missing)
+                                .font(.system(size: 12))
+                        }
+                        Text(localization.text(ConfigurationImportNoticeText.nextStepKey))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    /// Inline on purpose: a sheet or alert here would be dismissed once and never seen again,
+    /// and the repository's interface rules keep page-level notices flat inside the page.
+    /// Renders nothing at all when no key failed to decode, so a healthy launch keeps its layout.
+    @ViewBuilder
+    private var corruptedSettingsBanner: some View {
+        if let summary = CorruptedSettingsNotice.summary(
+            for: settings.corruptedSettingKeys,
+            localize: localization.text
+        ) {
+            GlassPanel {
+                HStack(alignment: .top, spacing: 11) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(localization.text(CorruptedSettingsNotice.titleKey))
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(summary)
+                            .font(.system(size: 12))
+                        Text(localization.text(CorruptedSettingsNotice.recoveryKey))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                        Text(localization.text(CorruptedSettingsNotice.nextStepKey))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -3737,11 +3817,19 @@ struct SettingsView: View {
             try model.importConfiguration(from: Data(contentsOf: url))
             localization.select(settings.applicationLanguage)
             setDockIconVisible(settings.showDockIcon)
-            configurationStatus = ConfigurationStatus(
-                message: LocalizedMessage("configuration.import.success"),
-                tint: .green,
-                systemImage: "checkmark.circle.fill"
-            )
+            if settings.configurationImportNotice != nil {
+                configurationStatus = ConfigurationStatus(
+                    message: LocalizedMessage("configuration.import.partial"),
+                    tint: .orange,
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+            } else {
+                configurationStatus = ConfigurationStatus(
+                    message: LocalizedMessage("configuration.import.success"),
+                    tint: .green,
+                    systemImage: "checkmark.circle.fill"
+                )
+            }
         } catch AppConfigurationError.unsupportedVersion {
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.unsupported_version"),
@@ -4769,5 +4857,123 @@ private struct RC003Photo: View {
                     }
             }
         }
+    }
+}
+
+/// Turns the storage keys and application names in a `ConfigurationImportReport` into the
+/// warning the button mapping page shows. Storage keys are an implementation detail, so they
+/// are collapsed onto the settings a user recognizes; an unrecognized key still surfaces under
+/// a generic item so a future importable key cannot be dropped silently — silence about dropped
+/// entries is the exact defect this notice exists to close.
+enum ConfigurationImportNoticeText {
+    static let titleKey = "settings.import_notice.title"
+    static let rejectedKey = "settings.import_notice.rejected"
+    static let missingApplicationKey = "settings.import_notice.missing_app"
+    static let nextStepKey = "settings.import_notice.next_step"
+    static let separatorKey = "settings.import_notice.separator"
+    static let buttonMappingItemKey = "settings.import_notice.item.button_mapping"
+    static let customApplicationItemKey = "settings.import_notice.item.custom_application"
+    static let audioDeviceItemKey = "settings.import_notice.item.audio_device"
+    static let otherItemKey = "settings.import_notice.item.other"
+
+    /// Fixed display order, so the sentence reads the same no matter which order the import
+    /// happened to reject entries in.
+    private static let itemKeyOrder = [
+        buttonMappingItemKey,
+        customApplicationItemKey,
+        audioDeviceItemKey,
+        otherItemKey,
+    ]
+
+    private static let itemKeysByStorageKey: [String: String] = [
+        "buttonBindings": buttonMappingItemKey,
+        "buttonShortcuts": buttonMappingItemKey,
+        "buttonApplicationProfileIDs": buttonMappingItemKey,
+        "secondaryButtonBindings": buttonMappingItemKey,
+        "buttonRapidPressEnabled": buttonMappingItemKey,
+        "continuousRecordingPowerBindingBackup": buttonMappingItemKey,
+        "customApplicationProfiles": customApplicationItemKey,
+        "selectedAudioDeviceUID": audioDeviceItemKey,
+    ]
+
+    /// Deduplicated, order-stable localization keys naming what was skipped.
+    static func affectedItemKeys(for storageKeys: [String]) -> [String] {
+        let matched = Set(storageKeys.map { itemKeysByStorageKey[$0] ?? otherItemKey })
+        return itemKeyOrder.filter(matched.contains)
+    }
+
+    static func rejectedSummary(
+        for storageKeys: [String],
+        localize: (String) -> String
+    ) -> String? {
+        let itemKeys = affectedItemKeys(for: storageKeys)
+        guard !itemKeys.isEmpty else { return nil }
+        let list = itemKeys.map(localize).joined(separator: localize(separatorKey))
+        return String(format: localize(rejectedKey), list)
+    }
+
+    /// Names come from the imported file, so they are only ever displayed, never resolved.
+    static func missingApplicationSummary(
+        for applicationNames: [String],
+        localize: (String) -> String
+    ) -> String? {
+        guard !applicationNames.isEmpty else { return nil }
+        return String(
+            format: localize(missingApplicationKey),
+            applicationNames.joined(separator: localize(separatorKey))
+        )
+    }
+}
+
+/// Turns the storage keys published by `AppSettings.corruptedSettingKeys` into the warning the
+/// button mapping page shows. Storage keys are an implementation detail, so they are collapsed
+/// onto the settings a user recognizes. An unrecognized key still surfaces under a generic item
+/// so that adding a decoded key later cannot silently drop the warning again.
+enum CorruptedSettingsNotice {
+    static let titleKey = "settings.corrupted.title"
+    static let summaryKey = "settings.corrupted.summary"
+    static let recoveryKey = "settings.corrupted.recovery"
+    static let nextStepKey = "settings.corrupted.next_step"
+    static let separatorKey = "settings.corrupted.separator"
+    static let buttonMappingItemKey = "settings.corrupted.item.button_mapping"
+    static let customApplicationItemKey = "settings.corrupted.item.custom_application"
+    static let remoteDeviceItemKey = "settings.corrupted.item.remote_device"
+    static let statisticsItemKey = "settings.corrupted.item.statistics"
+    static let otherItemKey = "settings.corrupted.item.other"
+
+    private static let itemKeyOrder = [
+        buttonMappingItemKey,
+        customApplicationItemKey,
+        remoteDeviceItemKey,
+        statisticsItemKey,
+        otherItemKey,
+    ]
+
+    private static let itemKeysByStorageKey: [String: String] = [
+        "buttonBindings": buttonMappingItemKey,
+        "buttonShortcuts": buttonMappingItemKey,
+        "buttonApplicationProfileIDs": buttonMappingItemKey,
+        "secondaryButtonBindings": buttonMappingItemKey,
+        "buttonRapidPressEnabled": buttonMappingItemKey,
+        "continuousRecordingPowerBindingBackup": buttonMappingItemKey,
+        "customApplicationProfiles": customApplicationItemKey,
+        "remoteDeviceProfiles": remoteDeviceItemKey,
+        "usage.dailyStatistics": statisticsItemKey,
+        "usage.voiceSessionRanking": statisticsItemKey,
+    ]
+
+    static func affectedItemKeys(for storageKeys: [String]) -> [String] {
+        let matched = Set(storageKeys.map { itemKeysByStorageKey[$0] ?? otherItemKey })
+        return itemKeyOrder.filter(matched.contains)
+    }
+
+    static func summary(
+        for storageKeys: [String],
+        localize: (String) -> String
+    ) -> String? {
+        let itemKeys = affectedItemKeys(for: storageKeys)
+        guard !itemKeys.isEmpty else { return nil }
+        let list = itemKeys.map(localize).joined(separator: localize(separatorKey))
+        return String(format: localize(summaryKey), list)
     }
 }
