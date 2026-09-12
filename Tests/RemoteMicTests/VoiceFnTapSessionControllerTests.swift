@@ -46,6 +46,45 @@ struct VoiceFnTapSessionControllerTests {
         #expect(harness.functionKeyEvents == [true, false, true, false])
     }
 
+    @Test func aDrainAnswerThatNeverArrivesStillClosesTheSessionAndAcceptsTheNextPress() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.phase == .draining(1))
+
+        // The audio output was released mid-drain, so no drain answer ever arrives.
+        harness.drainCompletions.removeAll()
+        harness.scheduler.advance(by: 2)
+        #expect(harness.controller.phase == .stopping(1))
+        harness.scheduler.advance(by: 0.12)
+
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        #expect(harness.controller.startVoice())
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.controller.phase == .active(2))
+    }
+
+    @Test func aTimelyDrainCancelsTheDeadlineBeforeItCanCutTheNextSession() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .idle)
+
+        #expect(harness.controller.startVoice())
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.controller.phase == .active(2))
+        harness.scheduler.advance(by: 5)
+
+        #expect(harness.controller.phase == .active(2))
+        #expect(harness.drainCompletions.isEmpty)
+        #expect(harness.functionKeyEvents == [true, false, true, false, true, false])
+    }
+
     @Test func buffersPreRollAndStopsOnlyAfterDrain() {
         let harness = Harness()
         harness.controller.setEnabled(true)

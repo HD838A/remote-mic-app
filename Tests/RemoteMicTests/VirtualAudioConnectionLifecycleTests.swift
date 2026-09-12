@@ -5,6 +5,67 @@ import Testing
 
 @Suite("Virtual audio connection lifecycle")
 struct VirtualAudioConnectionLifecycleTests {
+    @Test func reconfiguringTheOutputMidDrainStillReportsTheDrainExactlyOnce() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var completionCount = 0
+        // A long fallback keeps the audio side's own timer out of this test: the only way
+        // the completion can arrive is through the interrupting path below.
+        output.endSessionAfterDraining(maximumDelay: 60) { completionCount += 1 }
+        #expect(completionCount == 0)
+
+        output.endSession()
+
+        #expect(completionCount == 1)
+        #expect(output.pendingVoiceBufferCountForDiagnostics == 0)
+        output.stop()
+        #expect(completionCount == 1)
+    }
+
+    @Test func tearingTheEngineDownMidDrainStillReportsTheDrainExactlyOnce() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var completionCount = 0
+        output.endSessionAfterDraining(maximumDelay: 60) { completionCount += 1 }
+
+        output.stop()
+
+        #expect(completionCount == 1)
+        output.endSession()
+        #expect(completionCount == 1)
+    }
+
+    @Test func aDrainCompletionThatTearsTheOutputDownAgainReportsOnlyOnce() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var completionCount = 0
+        // Mirrors the release path, whose completion calls `stop()` on the same output.
+        output.endSessionAfterDraining(maximumDelay: 60) { [weak output] in
+            completionCount += 1
+            output?.stop()
+        }
+
+        output.endSession()
+
+        #expect(completionCount == 1)
+    }
+
+    @Test func aSecondDrainRequestDoesNotStrandTheFirstWaiter() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var firstCount = 0
+        var secondCount = 0
+        output.endSessionAfterDraining(maximumDelay: 60) { firstCount += 1 }
+
+        output.endSessionAfterDraining(maximumDelay: 60) { secondCount += 1 }
+
+        #expect(firstCount == 1)
+        #expect(secondCount == 0)
+        output.endSession()
+        #expect(firstCount == 1)
+        #expect(secondCount == 1)
+    }
+
     @Test func healthyExplicitOutputIgnoresDefaultSystemOutputOnlyChanges() {
         #expect(VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
             details: "properties=default_system_output",
