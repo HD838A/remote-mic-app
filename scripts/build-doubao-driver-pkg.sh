@@ -6,6 +6,8 @@ source "$ROOT/scripts/release-variant.sh"
 OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 DRIVER="$OUTPUT_DIR/MiRemoteV2ch.driver"
 APP="$OUTPUT_DIR/SayAll.app"
+APPLE_REMOTE_HCI_SERVICE="$APP/Contents/Helpers/SayAllAppleRemoteHCIService"
+APPLE_REMOTE_HCI_PLIST="$ROOT/packaging/apple-remote-hci/com.hd838a.SayAll.AppleRemoteHCIService.plist"
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
 INSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_INSTALL_PACKAGE_NAME"
@@ -23,30 +25,48 @@ INSTALLER_SIGNING_LOCK_PATH="${INSTALLER_SIGNING_LOCK_PATH:-/private/tmp/remote-
 RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 WORK_DIR="$(/usr/bin/mktemp -d "$OUTPUT_DIR/.doubao-driver-package.XXXXXX")"
 PAYLOAD_ROOT="$WORK_DIR/payload"
+SIRI_REMOTE_PAYLOAD_ROOT="$WORK_DIR/siri-remote-payload"
 INSTALL_SCRIPTS="$WORK_DIR/install-scripts"
+SIRI_REMOTE_INSTALL_SCRIPTS="$WORK_DIR/siri-remote-install-scripts"
 UNINSTALL_SCRIPTS="$WORK_DIR/uninstall-scripts"
 COMPONENT_PLIST="$WORK_DIR/components.plist"
 INSTALL_COMPONENT_PACKAGE="$WORK_DIR/RemoteMicComponent.pkg"
-UNSIGNED_INSTALL_PACKAGE="$WORK_DIR/Install Remote Mic-unsigned.pkg"
-UNSIGNED_UNINSTALL_PACKAGE="$WORK_DIR/Uninstall Remote Mic-unsigned.pkg"
+SIRI_REMOTE_COMPONENT_PACKAGE="$WORK_DIR/SiriRemoteComponent.pkg"
+UNSIGNED_INSTALL_PACKAGE="$WORK_DIR/Install SayAll-unsigned.pkg"
+UNSIGNED_UNINSTALL_PACKAGE="$WORK_DIR/Uninstall SayAll-unsigned.pkg"
 SIGNING_PROBE_UNSIGNED_PACKAGE="$WORK_DIR/Installer Signing Probe-unsigned.pkg"
 SIGNING_PROBE_PACKAGE="$WORK_DIR/Installer Signing Probe.pkg"
 DISTRIBUTION="$ROOT/packaging/doubao-driver/distribution/$RELEASE_VARIANT.xml"
 DISTRIBUTION_RESOURCES="$ROOT/packaging/doubao-driver/distribution/Resources"
 
+move_existing_path_to_trash() {
+  local source_path="$1"
+  local label="$2"
+  local developer_user developer_home trash_root destination counter=0
+  [[ -e "$source_path" || -L "$source_path" ]] || return 0
+  developer_user="$(/usr/bin/id -un)"
+  developer_home="$(/usr/bin/dscl . -read "/Users/$developer_user" NFSHomeDirectory \
+    2>/dev/null | /usr/bin/sed -n 's/^NFSHomeDirectory: //p')"
+  if [[ "$developer_home" != /* || "$developer_home" == "/" || \
+        "$developer_home" == *'/../'* || "$developer_home" == *'/..' ]]; then
+    print -u2 "refusing to move $label because the developer Trash path is invalid"
+    return 1
+  fi
+  trash_root="$developer_home/.Trash"
+  /bin/mkdir -p -- "$trash_root"
+  destination="$trash_root/$label-$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
+  while [[ -e "$destination" || -L "$destination" ]]; do
+    counter=$((counter + 1))
+    destination="$trash_root/$label-$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$-$counter"
+  done
+  /bin/mv -n -- "$source_path" "$destination"
+  print "Moved previous $label to Trash: $destination"
+}
+
 cleanup() {
-  local user_home trash_directory trash_destination
   case "$WORK_DIR" in
     "$OUTPUT_DIR/.doubao-driver-package."*)
-      user_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
-      trash_directory="$user_home/.Trash"
-      trash_destination="$trash_directory/${WORK_DIR:t}.package-build.$(date -u +%Y%m%dT%H%M%SZ).$$"
-      if [[ -d "$trash_directory" && ! -e "$trash_destination" ]] && \
-          /bin/mv -n -- "$WORK_DIR" "$trash_destination"; then
-        print "PACKAGE WORKSPACE MOVED TO TRASH: $trash_destination"
-      else
-        print -u2 "PACKAGE WORKSPACE PRESERVED: $WORK_DIR"
-      fi
+      move_existing_path_to_trash "$WORK_DIR" "sayall-driver-package-work"
       ;;
     *) print -u2 "refusing to clean unexpected work path: $WORK_DIR" ;;
   esac
@@ -111,33 +131,19 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$INSTALLER_SIGNING_IDENTITY" ==
 fi
 "$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
 "$ROOT/scripts/verify-app.sh" "$APP"
+test -x "$APPLE_REMOTE_HCI_SERVICE"
+test -f "$APPLE_REMOTE_HCI_PLIST"
+/usr/bin/plutil -lint "$APPLE_REMOTE_HCI_PLIST"
 
-move_existing_package_to_trash() {
-  local package="$1"
-  local user_home trash_directory trash_destination counter=0
-  [[ -e "$package" || -L "$package" ]] || return 0
-  user_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
-  trash_directory="$user_home/.Trash"
-  test -d "$trash_directory"
-  trash_destination="$trash_directory/${package:t}.package-build.$(date -u +%Y%m%dT%H%M%SZ).$$"
-  while [[ -e "$trash_destination" || -L "$trash_destination" ]]; do
-    counter=$((counter + 1))
-    trash_destination="$trash_directory/${package:t}.package-build.$(date -u +%Y%m%dT%H%M%SZ).$$.$counter"
-  done
-  /bin/mv -n -- "$package" "$trash_destination"
-  print "PREVIOUS PACKAGE MOVED TO TRASH: $trash_destination"
-}
-
-for existing_package in \
-  "$INSTALL_PACKAGE" \
-  "$LEGACY_INSTALL_PACKAGE" \
-  "$UNINSTALL_PACKAGE" \
-  "$LEGACY_UNINSTALL_PACKAGE"; do
-  move_existing_package_to_trash "$existing_package"
-done
+move_existing_path_to_trash "$INSTALL_PACKAGE" "${INSTALL_PACKAGE:t}"
+move_existing_path_to_trash "$LEGACY_INSTALL_PACKAGE" "${LEGACY_INSTALL_PACKAGE:t}"
+move_existing_path_to_trash "$UNINSTALL_PACKAGE" "${UNINSTALL_PACKAGE:t}"
+move_existing_path_to_trash "$LEGACY_UNINSTALL_PACKAGE" "${LEGACY_UNINSTALL_PACKAGE:t}"
 /bin/mkdir -p \
   "$PAYLOAD_ROOT/Applications" \
-  "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer"
+  "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer" \
+  "$SIRI_REMOTE_PAYLOAD_ROOT/Library/LaunchDaemons" \
+  "$SIRI_REMOTE_PAYLOAD_ROOT/Library/PrivilegedHelperTools"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$APP" "$PAYLOAD_ROOT/Applications/SayAll.app"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
@@ -146,9 +152,21 @@ done
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/install" "$INSTALL_SCRIPTS"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$APPLE_REMOTE_HCI_SERVICE" \
+  "$SIRI_REMOTE_PAYLOAD_ROOT/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$APPLE_REMOTE_HCI_PLIST" \
+  "$SIRI_REMOTE_PAYLOAD_ROOT/Library/LaunchDaemons/com.hd838a.SayAll.AppleRemoteHCIService.plist"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/packaging/doubao-driver/siri-remote/install" "$SIRI_REMOTE_INSTALL_SCRIPTS"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$RELEASE_CONFIG_PLIST" "$INSTALL_SCRIPTS/release-variant.plist"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$RELEASE_CONFIG_PLIST" "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
 /usr/bin/plutil -replace PackageBuild -string "$BUILD" \
   "$INSTALL_SCRIPTS/release-variant.plist"
+/usr/bin/plutil -replace PackageBuild -string "$BUILD" \
+  "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
@@ -189,6 +207,16 @@ run_release_stage installer-component-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECOND
   --install-location / \
   --ownership recommended \
   "$INSTALL_COMPONENT_PACKAGE"
+
+run_release_stage siri-remote-component-pkgbuild "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
+  /usr/bin/pkgbuild \
+  --root "$SIRI_REMOTE_PAYLOAD_ROOT" \
+  --scripts "$SIRI_REMOTE_INSTALL_SCRIPTS" \
+  --identifier "com.hd838a.RemoteMic.siri-remote" \
+  --version "$VERSION" \
+  --install-location / \
+  --ownership recommended \
+  "$SIRI_REMOTE_COMPONENT_PACKAGE"
 
 run_release_stage installer-productbuild "$RELEASE_PRODUCTBUILD_TIMEOUT_SECONDS" \
   /usr/bin/productbuild \

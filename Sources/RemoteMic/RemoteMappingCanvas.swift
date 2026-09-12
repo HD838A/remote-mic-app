@@ -17,7 +17,7 @@ struct RemoteMappingPlacement: Identifiable {
 
 enum RemoteMappingLayout {
     static let canvasHeight: CGFloat = 570
-    static let remoteSize = CGSize(width: 202, height: 410)
+    static let remoteSize = CGSize(width: 251, height: 510)
     static let arrowCardGap: CGFloat = 7
 
     static let buttonPlacements: [RemoteMappingPlacement] = [
@@ -314,6 +314,8 @@ struct RemoteMappingCanvas: View {
         case .volumeDown: return "speaker.minus"
         case .menu: return "line.3.horizontal"
         case .tv: return "tv"
+        case .playPause: return "playpause.fill"
+        case .mute: return "speaker.slash"
         }
     }
 

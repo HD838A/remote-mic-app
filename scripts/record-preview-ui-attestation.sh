@@ -21,9 +21,16 @@ done
 [[ -d "$APP/Contents" ]] || { echo "installed App is invalid: $APP" >&2; exit 1; }
 
 jq -e '
-  .schemaVersion == 1 and .mode == "preview" and
+  .schemaVersion == 2 and .mode == "preview" and
   (.tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+  (.sourceBranch == "main" or (.sourceBranch | test("^hotfix/v[0-9]+[.][0-9]+[.][0-9]+$"))) and
+  (.sourceKind == "main" or .sourceKind == "hotfix") and
   (.sourceCommit | test("^[0-9a-f]{40}$")) and
+  (.sourceWorkflowCommit | test("^[0-9a-f]{40}$")) and
+  ((.sourceKind == "main" and .sourceBranch == "main" and .sourceBaseTag == "" and .sourceBaseCommit == "") or
+   (.sourceKind == "hotfix" and .sourceBranch == ("hotfix/" + .tag) and
+    (.sourceBaseTag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+    (.sourceBaseCommit | test("^[0-9a-f]{40}$")))) and
   (.sourceRunId | type == "number" and . > 0) and
   (.sourceRunAttempt | type == "number" and . > 0) and
   (.signedArtifactId | type == "number" and . > 0) and
@@ -82,8 +89,12 @@ jq -S --slurpfile stage "$STAGE" --slurpfile session "$SESSION" --slurpfile obse
   --arg mainExecutableSHA256 "$(shasum -a 256 "$main_executable" | awk '{print $1}')" \
   --arg infoPlistSHA256 "$(shasum -a 256 "$APP/Contents/Info.plist" | awk '{print $1}')" '
   $observation[0] + {
-    schemaVersion:3, result:"passed", mode:$stage[0].mode,
-    tag:$stage[0].tag, sourceCommit:$stage[0].sourceCommit,
+    schemaVersion:4, result:"passed", mode:$stage[0].mode,
+    tag:$stage[0].tag,
+    sourceBranch:$stage[0].sourceBranch, sourceKind:$stage[0].sourceKind,
+    sourceBaseTag:$stage[0].sourceBaseTag, sourceBaseCommit:$stage[0].sourceBaseCommit,
+    sourceCommit:$stage[0].sourceCommit,
+    sourceWorkflowCommit:$stage[0].sourceWorkflowCommit,
     stagedAt:$stage[0].stagedAt,
     sourceRunId:$stage[0].sourceRunId, sourceRunAttempt:$stage[0].sourceRunAttempt,
     signedArtifactId:$stage[0].signedArtifactId,

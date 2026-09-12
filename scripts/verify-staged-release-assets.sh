@@ -31,7 +31,7 @@ jq -e '
   (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
   .tag == ("v" + .version) and
   (.build | test("^[1-9][0-9]*$")) and
-  (.assets | type == "array" and length == 11) and
+  (.assets | type == "array" and length == 13) and
   ([.assets[].name] | length == (unique | length)) and
   all(.assets[];
     (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
@@ -44,10 +44,12 @@ jq -e '
 
 version="$(jq -r '.version' "$MANIFEST")"
 expected_names="$(printf '%s\n' \
-  "Remote-Mic-$version-Intel-Uninstaller.pkg" \
+  "SayAll-$version-Intel-Uninstaller.pkg" \
+  "SayAll-$version-Intel-Installer.pkg" \
   "Remote-Mic-$version-Intel.dmg" \
   "Remote-Mic-$version-Intel.zip" \
-  "Remote-Mic-$version-Uninstaller.pkg" \
+  "SayAll-$version-Uninstaller.pkg" \
+  "SayAll-$version-Installer.pkg" \
   "Remote-Mic-$version.dmg" \
   "Remote-Mic-$version.dmg.sha256" \
   "Remote-Mic-$version.en.txt" \
@@ -57,7 +59,7 @@ expected_names="$(printf '%s\n' \
   "appcast.xml" | LC_ALL=C /usr/bin/sort)"
 manifest_names="$(jq -r '.assets[].name' "$MANIFEST" | LC_ALL=C /usr/bin/sort)"
 [[ "$manifest_names" == "$expected_names" ]] || {
-  echo "staged asset manifest does not contain the canonical 11 public payload assets" >&2
+  echo "staged asset manifest does not contain the canonical 13 public payload assets" >&2
   exit 1
 }
 actual_names=""

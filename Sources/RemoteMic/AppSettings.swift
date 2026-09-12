@@ -101,6 +101,42 @@ struct VoiceSessionUsageRecord: Codable, Equatable, Identifiable {
     let endedAt: Date
     let duration: TimeInterval
     let source: UsageEventSource?
+    let applicationName: String?
+
+    init(
+        id: UUID,
+        startedAt: Date?,
+        endedAt: Date,
+        duration: TimeInterval,
+        source: UsageEventSource?,
+        applicationName: String? = nil
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.duration = duration
+        self.source = source
+        self.applicationName = applicationName
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case startedAt
+        case endedAt
+        case duration
+        case source
+        case applicationName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        endedAt = try container.decode(Date.self, forKey: .endedAt)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        source = try container.decodeIfPresent(UsageEventSource.self, forKey: .source)
+        applicationName = try container.decodeIfPresent(String.self, forKey: .applicationName)
+    }
 }
 
 private struct DailyUsageMetadata: Codable {
@@ -233,6 +269,8 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let gainDB = "gainDB"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
+        static let lastUserSelectedInputDeviceUID = "lastUserSelectedInputDeviceUID"
+        static let lastKnownAudioDeviceUID = "lastKnownAudioDeviceUID"
         static let customMappingEnabled = "customMappingEnabled"
         static let legacyExclusiveHID = "exclusiveHID"
         static let buttonBindings = "buttonBindings"
@@ -251,6 +289,7 @@ final class AppSettings: ObservableObject {
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
         static let voiceKeyMode = "voiceKeyMode"
+        static let siriRemoteScrollArrowReversed = "siriRemote.scrollArrowReversed"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
@@ -279,8 +318,20 @@ final class AppSettings: ObservableObject {
     }
 
     @Published var selectedAudioDeviceUID: String {
-        didSet { defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID) }
+        didSet {
+            defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID)
+            if !selectedAudioDeviceUID.isEmpty {
+                lastKnownAudioDeviceUID = selectedAudioDeviceUID
+                defaults.set(selectedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
+            }
+        }
     }
+
+    var lastUserSelectedInputDeviceUID: String? {
+        get { defaults.string(forKey: Keys.lastUserSelectedInputDeviceUID) }
+        set { defaults.set(newValue, forKey: Keys.lastUserSelectedInputDeviceUID) }
+    }
+    private(set) var lastKnownAudioDeviceUID: String
 
     @Published var customMappingEnabled: Bool {
         didSet { defaults.set(customMappingEnabled, forKey: Keys.customMappingEnabled) }
@@ -372,6 +423,15 @@ final class AppSettings: ObservableObject {
     @Published var voiceKeyMode: VoiceKeyMode {
         didSet {
             defaults.set(voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
+        }
+    }
+
+    @Published var siriRemoteScrollArrowReversed: Bool {
+        didSet {
+            defaults.set(
+                siriRemoteScrollArrowReversed,
+                forKey: Keys.siriRemoteScrollArrowReversed
+            )
         }
     }
 
@@ -470,6 +530,12 @@ final class AppSettings: ObservableObject {
         onboardingCompletedVersion >= Self.currentOnboardingVersion
     }
 
+    var hasHistoricalAudioConfiguration: Bool {
+        isOnboardingComplete || firstUseEvents.contains {
+            ($0.kind == .passed && $0.step == .audio) || $0.kind == .completed
+        }
+    }
+
     var peripheralIdentifier: UUID? {
         get {
             guard let raw = defaults.string(forKey: Keys.peripheralIdentifier) else { return nil }
@@ -515,7 +581,13 @@ final class AppSettings: ObservableObject {
         gainDB = defaults.object(forKey: Keys.gainDB) == nil
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
-        selectedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        let persistedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        selectedAudioDeviceUID = persistedAudioDeviceUID
+        lastKnownAudioDeviceUID = defaults.string(forKey: Keys.lastKnownAudioDeviceUID) ?? persistedAudioDeviceUID
+        if defaults.string(forKey: Keys.lastKnownAudioDeviceUID) == nil,
+           !persistedAudioDeviceUID.isEmpty {
+            defaults.set(persistedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
+        }
         if defaults.object(forKey: Keys.customMappingEnabled) != nil {
             customMappingEnabled = defaults.bool(forKey: Keys.customMappingEnabled)
         } else {
@@ -621,6 +693,9 @@ final class AppSettings: ObservableObject {
         voiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
+        siriRemoteScrollArrowReversed = defaults.bool(
+            forKey: Keys.siriRemoteScrollArrowReversed
+        )
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -772,6 +847,8 @@ final class AppSettings: ObservableObject {
         if kind == .entered {
             defaults.set(date, forKey: Keys.firstUseStepStartedAt)
         }
+
+        AppLogger.shared.write(event.runtimeLogMessage)
     }
 
     var firstUseEvents: [FirstUseEvent] {
@@ -1025,6 +1102,36 @@ final class AppSettings: ObservableObject {
         return profile.id
     }
 
+    @discardableResult
+    func registerAppleSiriRemote(
+        fingerprint: String,
+        model: XiaomiRemoteModel = .appleSiriRemoteA2854
+    ) -> UUID {
+#if !SAYALL_SIRI_REMOTE_ENABLED
+        // Community builds keep this compatibility entry point so old persisted
+        // state can be decoded, but never create or expose a Siri Remote profile.
+        return registerHIDRemote(fingerprint: fingerprint)
+#else
+        if let existing = remoteDeviceProfiles.first(where: { $0.hidFingerprint == fingerprint }) {
+            return existing.id
+        }
+        if let index = remoteDeviceProfiles.firstIndex(where: {
+            $0.bluetoothIdentifier == nil && $0.hidFingerprint == nil && $0.model == .unknown
+        }) {
+            remoteDeviceProfiles[index].hidFingerprint = fingerprint
+            remoteDeviceProfiles[index].model = model
+            return remoteDeviceProfiles[index].id
+        }
+        let profile = RemoteDeviceProfile(
+            model: model,
+            hidFingerprint: fingerprint,
+            mappings: mappingsForNewRemote()
+        )
+        remoteDeviceProfiles.append(profile)
+        return profile.id
+#endif
+    }
+
     func profileID(forBluetoothIdentifier identifier: UUID) -> UUID? {
         remoteDeviceProfiles.first(where: { $0.bluetoothIdentifier == identifier })?.id
     }
@@ -1195,6 +1302,7 @@ final class AppSettings: ObservableObject {
         _ duration: TimeInterval,
         startedAt: Date? = nil,
         source: UsageEventSource = .unknown,
+        applicationName: String? = nil,
         at date: Date = Date(),
         calendar: Calendar = .current
     ) {
@@ -1251,7 +1359,8 @@ final class AppSettings: ObservableObject {
                 startedAt: startedAt,
                 endedAt: date,
                 duration: duration,
-                source: source
+                source: source,
+                applicationName: applicationName
             )]
         )
     }
@@ -1438,6 +1547,7 @@ final class AppSettings: ObservableObject {
         [
             Keys.gainDB,
             Keys.selectedAudioDeviceUID,
+            Keys.lastKnownAudioDeviceUID,
             Keys.customMappingEnabled,
             Keys.legacyExclusiveHID,
             Keys.buttonBindings,
@@ -1990,5 +2100,7 @@ final class AppSettings: ObservableObject {
         .volumeDown: .volumeDown,
         .menu: .contextMenu,
         .tv: .appSwitcher,
+        .playPause: .playPause,
+        .mute: .volumeMute,
     ]
 }

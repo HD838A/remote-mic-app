@@ -184,6 +184,19 @@ elapsed_ms=3128
 
 当录音结束时仍有正常 pending 音频，不应立即输出终态失败；应等待该功能定义的排空/文字截止窗口，只有截止时仍 pending、播放不完整或已经中断才判定为音频投递失败。
 
+## 跨硬件首字低延迟与尾字完整性
+
+所有硬件输入都必须遵守同一音频完整性合同：按下后尽快产生首个有效 PCM，正常松键不通过
+flush 或清空缓存来结束会话，尾部数据必须按顺序自然投递并排空。日志至少应能关联：
+
+- `trigger_down_to_first_pcm_ms`：硬件按下到首个有效 PCM 的单调时钟耗时；
+- `trigger_down_to_first_transcript_observation_ms`：如能观察到目标工具文字变化，记录按下到首次文字观察的耗时；不可观察时写 `unknown`，不能推测成功；
+- `audio_received_samples`、`audio_scheduled_samples`、`audio_played_samples`、`audio_pending_samples`；
+- `audio_interrupted_samples`、`completion`、`reason` 和 `audio_generation`。
+
+正常终态必须满足 `audio_interrupted_samples=0` 且 pending 为零；`completion=forced` 或任何
+中断样本都属于完整性失败，需要进入异常恢复或人工验收，不能只记录为“停止成功”。
+
 ## 隐私与敏感信息红线
 
 任何运行日志、统一日志、用户可复制诊断、崩溃附加信息和测试证据都不得包含：

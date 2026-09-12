@@ -376,6 +376,19 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(fallback == usb)
     }
 
+    @Test func fallbackPrefersRememberedUserInputBeforeBuiltIn() {
+        let virtual = AudioDeviceInfo(id: 1, uid: "virtual", name: "MiRemoteV 2ch")
+        let builtIn = AudioDeviceInfo(id: 2, uid: "built-in", name: "MacBook Microphone")
+        let remembered = AudioDeviceInfo(id: 3, uid: "wave-xlr", name: "Elgato Wave XLR")
+        let fallback = DefaultInputFallbackPolicy.preferredFallback(
+            in: [virtual, builtIn, remembered],
+            excludingUID: virtual.uid,
+            builtInDeviceIDs: [builtIn.id],
+            preferredUID: remembered.uid
+        )
+        #expect(fallback == remembered)
+    }
+
     @Test func reconnectRestoresOnlyTheFallbackManagedByTheApp() {
         #expect(DefaultInputFallbackPolicy.shouldRestoreVirtualInput(
             managedVirtualUID: "virtual",
@@ -395,5 +408,26 @@ struct VirtualAudioConnectionLifecycleTests {
             managedFallbackUID: "built-in",
             currentDefaultUID: "built-in"
         ))
+    }
+
+    @Test func userChoiceDuringManagedFallbackIsRememberedAndClearsTheTransition() {
+        #expect(DefaultInputFallbackPolicy.observationDecision(
+            currentUID: "built-in-fallback",
+            selectedVirtualUID: "virtual",
+            managedFallbackUID: "built-in-fallback",
+            lastRememberedUID: "old-usb"
+        ) == .ignore)
+        #expect(DefaultInputFallbackPolicy.observationDecision(
+            currentUID: "new-wave-xlr",
+            selectedVirtualUID: "virtual",
+            managedFallbackUID: "built-in-fallback",
+            lastRememberedUID: "old-usb"
+        ) == .remember(uid: "new-wave-xlr", clearManagedTransition: true))
+        #expect(DefaultInputFallbackPolicy.observationDecision(
+            currentUID: "old-usb",
+            selectedVirtualUID: "virtual",
+            managedFallbackUID: "built-in-fallback",
+            lastRememberedUID: "old-usb"
+        ) == .clearManagedTransition)
     }
 }

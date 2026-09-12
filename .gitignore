@@ -1,4 +1,5 @@
 .build/
+.build-private/
 .build-app-*/
 dist/
 .swiftpm/

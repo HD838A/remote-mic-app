@@ -6,16 +6,16 @@
 
 ## Canonical 资产集合
 
-每个公开 Preview 必须有以下 11 项 payload，另加 1 项 candidate-provenance.json：
+每个公开 Preview 必须有以下 13 项 payload，另加 1 项 candidate-provenance.json：
 
 | 类别 | 文件 |
 | --- | --- |
-| Apple Silicon | Remote-Mic-VERSION.zip、Remote-Mic-VERSION.dmg、Remote-Mic-VERSION-Uninstaller.pkg、appcast.xml |
-| Intel Ventura | Remote-Mic-VERSION-Intel.zip、Remote-Mic-VERSION-Intel.dmg、Remote-Mic-VERSION-Intel-Uninstaller.pkg、appcast-intel.xml |
+| Apple Silicon | Remote-Mic-VERSION.zip、Remote-Mic-VERSION.dmg、SayAll-VERSION-Installer.pkg、SayAll-VERSION-Uninstaller.pkg、appcast.xml |
+| Intel Ventura | Remote-Mic-VERSION-Intel.zip、Remote-Mic-VERSION-Intel.dmg、SayAll-VERSION-Intel-Installer.pkg、SayAll-VERSION-Intel-Uninstaller.pkg、appcast-intel.xml |
 | 共享 | Remote-Mic-VERSION.zh.txt、Remote-Mic-VERSION.en.txt、Remote-Mic-VERSION.dmg.sha256 |
 | 来源证明 | candidate-provenance.json |
 
-内嵌 Install PKG 保留在对应 DMG 内，不重复作为公开独立资产上传。
+Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资产上传，供硬件支持公告直接下载。
 
 ## 用例 1：生成与 manifest
 
@@ -23,9 +23,9 @@
 2. 运行 scripts/verify-staged-release-assets.sh。
 3. 检查 staged-assets.json。
 
-预期：manifest schemaVersion 为 1，版本/tag/sourceCommit/build 合法，payload 恰好 11 项、名称唯一、无路径分隔符、无 symlink/非普通文件；每项 size 和 SHA-256 与文件完全一致。
+预期：manifest schemaVersion 为 1，版本/tag/sourceCommit/build 合法，payload 恰好 13 项、名称唯一、无路径分隔符、无 symlink/非普通文件；每项 size 和 SHA-256 与文件完全一致。
 
-失败判定：缺少任一架构、额外文件、重复名称、standalone Install PKG、空 manifest 或摘要不一致。
+失败判定：缺少任一架构、缺少独立 Install/Uninstall PKG、额外文件、重复名称、空 manifest 或摘要不一致。
 
 ## 用例 2：appcast 与说明
 
@@ -40,7 +40,7 @@
 对两个架构分别执行：
 
 1. hdiutil verify 和只读挂载。
-2. 确认 DMG 根目录只有 Install Remote Mic.pkg。
+2. 确认 Apple Silicon DMG 根目录只有 `Install SayAll.pkg`，Intel DMG 根目录只有 `Install SayAll Intel.pkg`。
 3. 验证外层 Developer ID Installer、staple、spctl -t install 和内嵌 App/driver 结构。
 4. 解压 ZIP，验证 Developer ID Application、Hardened Runtime、Sparkle helper 0755、Versions/Current 符号链接、最低系统和架构。
 
@@ -48,7 +48,7 @@
 
 ## 用例 4：GitHub、CDN 和 appcast 字节
 
-1. 从 GitHub fixed-tag URL 下载 11 项 payload。
+1. 从 GitHub fixed-tag URL 下载 13 项 payload。
 2. 从 download.sayall.app/mac/releases/TAG/ 下载同名 payload。
 3. 对每项执行 SHA-256 和 cmp；对 appcast 再检查 enclosure URL。
 4. 检查 releases/latest 仍为发布前动态记录的同一正式稳定版本。
@@ -57,7 +57,7 @@
 
 失败判定：只抽样下载、CDN 缺少新文件、缓存代理返回不同内容、appcast 指向 latest 或 latest 被改动。
 
-版本首次占用检查还必须对上述 11 个 CDN 固定路径执行 HEAD（必要时 Range GET）探测：只有 HTTP 404 算可用，2xx/3xx 算已占用，认证/权限/5xx/超时或未知响应必须 fail closed。
+版本首次占用检查还必须对上述 13 个 CDN 固定路径执行 HEAD（必要时 Range GET）探测：只有 HTTP 404 算可用，2xx/3xx 算已占用，认证/权限/5xx/超时或未知响应必须 fail closed。
 
 ## 用例 5：publication 重试
 

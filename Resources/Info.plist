@@ -48,6 +48,8 @@
 	<false/>
 	<key>SUAllowsAutomaticUpdates</key>
 	<false/>
+	<key>HardwareAnnouncementURL</key>
+	<string>https://download.sayall.app/mac/announcements/hardware.json</string>
 	<key>SUPublicEDKey</key>
 	<string>8dWQovCnGPucjMcQuCHfrAv4PtjuDjJSbHNmItqYiyc=</string>
 </dict>

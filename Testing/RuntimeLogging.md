@@ -23,6 +23,25 @@
 
 失败判定：普通行缺少任一元数据、记录外部输入事件来源 PID，或一个事件破坏为多行/非法 UTF-8。
 
+## 用例 1b：复制诊断与 runtime.log 一致
+
+1. 在 Onboarding 任意步骤点击“复制诊断”。
+2. 保存剪贴板中的脱敏摘要，并在 `runtime.log` 中定位同一时段的 `ONBOARDING DIAGNOSTICS BEGIN`。
+3. 按顺序读取 `FIELD` 行直到 `END`，去除每行前面的 AppLogger 元数据和 `ONBOARDING DIAGNOSTICS FIELD ` 前缀后，与剪贴板摘要逐行比对。
+
+预期：`copied` 审计事件先出现，随后是连续完整的 `BEGIN`、全部摘要字段和 `END`；每一行仍是合法 UTF-8 单行，摘要不包含用户输入、音频正文、路径、设备身份、凭据或第三方 App 私有状态。
+
+失败判定：日志只有 copied 索引、缺少任一摘要字段、诊断块被其他事件插入，或剪贴板与日志内容不一致。
+
+## 用例 1c：Onboarding 事件实时记录
+
+1. 依次进入 Onboarding 页面，制造一次通过、一次阻断、一次重试和一次恢复；完成向导后再检查完成事件。
+2. 按时间顺序检查 `runtime.log` 中的 `ONBOARDING STEP` 与 `ONBOARDING EVENT`。
+
+预期：进入事件即时记录为 `ONBOARDING STEP entered=<step>`；通过、阻断、重试、恢复和完成即时记录为 `ONBOARDING EVENT kind=<kind> step=<step>`，并带 `elapsed_ms`、`failure`，语音 attempt 额外带 `attempt` 和 `voice_result`。重复轮询产生的重复阻断事件不应刷屏。
+
+失败判定：必须等到点击复制诊断才出现步骤事件、缺少某种终态、事件顺序与用户操作不符，或去重后的阻断仍重复写入。
+
 ## 用例 2：大小轮转与可恢复退休
 
 1. 运行 `swift test --filter AppLoggerTests`，使用 1-byte 阈值连续写入 5 条事件。
