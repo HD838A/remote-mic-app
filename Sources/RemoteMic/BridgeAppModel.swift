@@ -461,6 +461,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var voiceSessionUsageSource: UsageEventSource?
     private var voiceSessionApplicationName: String?
     private var bluetoothVoiceActive = false
+    /// Pure-trigger session: the voice key emitted only its trigger while the remote's
+    /// audio is ignored. Published so the state is observable; the remote keeps its
+    /// stream open so STREAM_STOP still marks the release.
+    @Published private(set) var voiceTriggerOnlyActive = false
     private var loggedBluetoothVoiceAudioDeviceIdentifier: UUID?
     private var mobileVoiceLifecycle = MobileVoiceLifecycleState()
     private var pendingMobileVoiceRestartCompletion: ((RemoteVoiceStartResult) -> Void)?
@@ -1851,10 +1855,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
         let requestedVoiceKeyMode = settings.voiceKeyMode
         let accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
-        let requestedFnTapMode = settings.voiceFnTapModeEnabled && requestedVoiceKeyMode == .function
-        if settings.voiceFnTapModeEnabled != requestedFnTapMode {
-            settings.voiceFnTapModeEnabled = requestedFnTapMode
+        // The stored Fn-tap preference is normalized only by the mode (a non-Fn mode
+        // clears it), never by the capture toggle: pure-trigger mode merely gates the
+        // preference at runtime, and it comes back when capture is re-enabled.
+        let storedFnTapMode = settings.voiceFnTapModeEnabled && requestedVoiceKeyMode == .function
+        if settings.voiceFnTapModeEnabled != storedFnTapMode {
+            settings.voiceFnTapModeEnabled = storedFnTapMode
         }
+        let requestedFnTapMode = storedFnTapMode && settings.voiceKeyUsesRemoteMicrophone
         if !requestedFnTapMode, voiceFnTapSession.requiresCleanupBeforeMapping {
             voiceFnTapSession.setEnabled(false) { [weak self] in
                 self?.applyHIDSettings(
@@ -2191,14 +2199,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             settings.voiceFnTapModeEnabled = false
             return
         }
-        if enabled {
+        // While the remote microphone is not captured there is no audio drain to time
+        // the tap against, so the preference is stored but nothing is armed; it takes
+        // effect the moment capture is re-enabled.
+        if enabled, settings.voiceKeyUsesRemoteMicrophone {
             enableVoiceFnTapMode()
             return
         }
-        settings.voiceFnTapModeEnabled = false
+        settings.voiceFnTapModeEnabled = enabled
         voiceFnTapSession.setEnabled(false) { [weak self] in
             self?.applyHIDSettings()
         }
+    }
+
+    /// Flips the capture gate and re-evaluates HID settings so Fn-tap arms or disarms
+    /// with it. Flipping mid-stream leaves the active session untouched; the new gate
+    /// applies from the next press.
+    func setVoiceKeyCapturesRemoteMicrophone(_ enabled: Bool) {
+        guard settings.voiceKeyUsesRemoteMicrophone != enabled else { return }
+        settings.voiceKeyUsesRemoteMicrophone = enabled
+        AppLogger.shared.write("VOICE KEY capture_remote_mic=\(enabled)")
+        applyHIDSettings()
     }
 
     func importConfiguration(from data: Data) throws {
@@ -3506,13 +3527,37 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         guard Self.canStartBluetoothVoice(
             mode: settings.voiceKeyMode,
-            voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled,
+            voiceFnTapModeEnabled: settings.effectiveVoiceFnTapModeEnabled,
             isVoiceKeyNeutralized: voiceFunctionMapper.isVoiceKeyNeutralized
         ) else {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write(
                 "ATVV STREAM rejected reason=voice_key_not_neutralized " +
                     "mode=\(settings.voiceKeyMode.rawValue)"
+            )
+            return
+        }
+        guard settings.voiceKeyUsesRemoteMicrophone else {
+            // Pure-trigger mode: emit the hold only. The remote's audio is never captured
+            // or routed, so no virtual audio output is needed and the dictation tool can
+            // listen on the Mac's own (e.g. external) microphone. The remote keeps its
+            // stream open so STREAM_STOP still marks the release; the audio packets are
+            // ignored because no active voice device is ever set.
+            guard updateVoiceKeyState(
+                streaming: true,
+                forceSoftware: false,
+                owner: .bluetooth
+            ) else {
+                _ = bridge.requestMicrophoneClose()
+                AppLogger.shared.write(
+                    "ATVV STREAM trigger_only rejected reason=voice_key " +
+                        "mode=\(settings.voiceKeyMode.rawValue)"
+                )
+                return
+            }
+            voiceTriggerOnlyActive = true
+            AppLogger.shared.write(
+                "ATVV STREAM trigger_only mode=\(settings.voiceKeyMode.rawValue)"
             )
             return
         }
@@ -3595,6 +3640,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func bluetoothBridgeDidStopVoice(_ bridge: XiaomiBluetoothBridge) {
+        if voiceTriggerOnlyActive {
+            // A pure-trigger hold has no active device to match: release it on every stop
+            // before the active-device guard, exactly the inverse of the start path.
+            voiceTriggerOnlyActive = false
+            _ = releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
+            AppLogger.shared.write("ATVV STREAM trigger_only stopped")
+            return
+        }
         guard bridge.deviceIdentifier == activeBluetoothVoiceDeviceIdentifier else { return }
         if rc003VoiceExtensionTestEnabled,
            rc003VoiceExtensionActive,
