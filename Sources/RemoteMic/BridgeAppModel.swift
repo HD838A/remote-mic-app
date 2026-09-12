@@ -552,6 +552,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var appliedHIDPermissionSnapshot: HIDPermissionSnapshot?
     private var terminationObserver: NSObjectProtocol?
     private var completedUpdateHIDRecoveryWorkItem: DispatchWorkItem?
+    private var bluetoothWakeRecoveryPending = false
     private var hidMappingRecoveryWorkItem: DispatchWorkItem?
     private var hidMappingRecoveryAttempt = 0
     private var hidMappingRecoveryGeneration: UInt64 = 0
@@ -1589,6 +1590,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "mobile_voice=\(activeMobileVoiceSource != nil) " +
                 "test_tone=\(isPlayingTestTone) audio_ready=\(isAudioOutputReady)"
         )
+        bluetoothWakeRecoveryPending = BluetoothWakeRecoveryPolicy.pendingRecovery(
+            after: event,
+            current: bluetoothWakeRecoveryPending
+        )
         guard started, changed else { return }
         guard !audioStartupPending else {
             AppLogger.shared.write(
@@ -1620,8 +1625,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         resumeVirtualAudioOutputIfNeeded(reason: "system_\(event.rawValue)")
-        if BluetoothWakeRecoveryPolicy.shouldForceReconnect(event: event, started: started) {
+        if BluetoothWakeRecoveryPolicy.shouldForceReconnect(
+            pendingRecovery: bluetoothWakeRecoveryPending,
+            started: started,
+            readyBridgeCount: readyBluetoothBridgeCount
+        ) {
+            bluetoothWakeRecoveryPending = false
             recoverBluetoothAfterSystemWake()
+        } else if bluetoothWakeRecoveryPending, started, readyBluetoothBridgeCount > 0 {
+            bluetoothWakeRecoveryPending = false
+            AppLogger.shared.write(
+                "BLE WAKE recovery_skipped reason=bridges_already_ready " +
+                    "ready_bridges=\(readyBluetoothBridgeCount)"
+            )
         }
     }
 
