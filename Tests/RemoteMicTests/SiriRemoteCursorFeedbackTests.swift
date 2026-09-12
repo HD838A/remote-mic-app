@@ -228,13 +228,12 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(model.contains("siriRemoteCursorFeedback.cancelInteraction(reason: \"device_reset\")"))
         #expect(model.contains("APPLE REMOTE HOVER_CLICK phase=ended result=consumed"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SIRI_REMOTE"))
-        let directionToggle = try #require(settingsView.range(
-            of: "Toggle(isOn: $settings.siriRemoteScrollArrowReversed)"
+        #expect(settingsView.contains("mappingFooter(includeSiriScrollArrow: true)"))
+        let directionControl = try #require(settingsView.range(
+            of: "private var siriRemoteScrollArrowControl"
         ))
-        let siriMappingPage = try #require(settingsView.range(of: "SiriRemoteMappingPage("))
-        #expect(directionToggle.lowerBound < siriMappingPage.lowerBound)
-        #expect(settingsView[directionToggle.lowerBound...].prefix(900).contains(
-            ".font(.system(size: 12))"
+        #expect(settingsView[directionControl.lowerBound...].prefix(900).contains(
+            "Toggle(isOn: $settings.siriRemoteScrollArrowReversed)"
         ))
     }
 
