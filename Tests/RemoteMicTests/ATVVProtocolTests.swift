@@ -75,6 +75,90 @@ struct ATVVProtocolTests {
         #expect(frames == [Data([1, 2, 3]), Data([4, 5, 6])])
         #expect(accumulator.pending == Data([7]))
     }
+
+    @Test func commandActivationWiresEarlyBluetoothAudioBufferingBeforeRouting() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let start = try #require(source.range(of: "func bluetoothBridgeDidStartVoice"))
+        let stop = try #require(source.range(
+            of: "func bluetoothBridgeDidStopVoice",
+            range: start.upperBound..<source.endIndex
+        ))
+        let startSource = source[start.lowerBound..<stop.lowerBound]
+        let decode = try #require(source.range(of: "didDecode samples: [Int16]"))
+        let battery = try #require(source.range(
+            of: "didUpdateBatteryLevel",
+            range: decode.upperBound..<source.endIndex
+        ))
+        let decodeSource = source[decode.lowerBound..<battery.lowerBound]
+
+        #expect(decodeSource.contains("pendingCommandVoiceAudio.appendIfWaiting(samples)"))
+        let sessionStart = try #require(startSource.range(of: "voiceFnTapSession.startVoice()"))
+        let flush = try #require(startSource.range(of: "flushPendingCommandVoiceAudio(for: bridge)"))
+        #expect(sessionStart.lowerBound < flush.lowerBound)
+    }
+
+    @Test func commandVoiceJourneyFlushesPreRollBeforeRemainingAudioAndClearsOnStop() {
+        var buffer = CommandVoiceActivationAudioBuffer(maximumSampleCount: 4)
+        var routedSamples: [Int16] = []
+        var events: [String] = []
+
+        // STREAM_START → early AUDIO while the Command DOWN is pending.
+        events.append("stream_start")
+        buffer.begin()
+        let bufferedEarlyAudio = buffer.appendIfWaiting([1, 2])
+        events.append("early_audio_buffered")
+        #expect(bufferedEarlyAudio)
+        #expect(routedSamples.isEmpty)
+
+        // Confirmed DOWN → session start → flush pre-roll → remaining AUDIO routes directly.
+        events.append("command_down_confirmed")
+        events.append("session_started")
+        routedSamples.append(contentsOf: buffer.drain())
+        events.append("pre_roll_routed")
+        let bufferedRemainingAudio = buffer.appendIfWaiting([3, 4])
+        #expect(!bufferedRemainingAudio)
+        routedSamples.append(contentsOf: [3, 4])
+        events.append("remaining_audio_routed")
+
+        // STREAM_STOP leaves no buffered audio for a later session.
+        buffer.cancel()
+        events.append("stream_stop")
+        #expect(routedSamples == [1, 2, 3, 4])
+        #expect(buffer.drain().isEmpty)
+        #expect(events == [
+            "stream_start",
+            "early_audio_buffered",
+            "command_down_confirmed",
+            "session_started",
+            "pre_roll_routed",
+            "remaining_audio_routed",
+            "stream_stop"
+        ])
+    }
+
+    @Test func commandActivationPreRollEnforcesCapacityAndCancellation() {
+        var buffer = CommandVoiceActivationAudioBuffer(maximumSampleCount: 4)
+
+        buffer.begin()
+        let acceptedFirst = buffer.appendIfWaiting([1, 2])
+        let acceptedSecond = buffer.appendIfWaiting([3, 4, 5])
+        #expect(acceptedFirst)
+        #expect(acceptedSecond)
+        #expect(buffer.drain() == [2, 3, 4, 5])
+
+        buffer.begin()
+        let acceptedCancelled = buffer.appendIfWaiting([7, 8])
+        #expect(acceptedCancelled)
+        buffer.cancel()
+        #expect(buffer.drain().isEmpty)
+    }
 }
 
 @Suite("Bluetooth voice tail diagnostics")
