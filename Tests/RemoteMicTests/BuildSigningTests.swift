@@ -431,6 +431,10 @@ struct BuildSigningTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let fixture = root.appendingPathComponent("scripts/test-macos-release-flow.sh")
+        let fixtureSource = try String(contentsOf: fixture, encoding: .utf8)
+        #expect(fixtureSource.contains("-u SAYALL_SIRI_REMOTE_PACKAGE_PATH"))
+        #expect(fixtureSource.contains("-u SAYALL_MACRO_PLATFORM_PATH"))
+        #expect(fixtureSource.contains("-u SAYALL_MEMBERSHIP_PACKAGE_PATH"))
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [fixture.path]
