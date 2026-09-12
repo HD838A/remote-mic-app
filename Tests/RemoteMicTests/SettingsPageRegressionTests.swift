@@ -402,8 +402,26 @@ struct SettingsPageRegressionTests {
 
         #expect(mappingSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(mappingSource.contains("private var mappingHeaderToggle"))
-        #expect(mappingSource.contains(".frame(width: 320)"))
+        #expect(!mappingSource.contains(".frame(width: 400)"))
+        #expect(!mappingSource.contains(".frame(width: 320)"))
+        #expect(mappingSource.contains(".frame(maxWidth: .infinity, alignment: .trailing)"))
         #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
+
+        let siriMappingPage = try #require(settingsSource.range(
+            of: "private var siriRemoteMappingPage"
+        ))
+        let siriMappingEnd = try #require(settingsSource.range(
+            of: "private func siriRemoteButton",
+            range: siriMappingPage.upperBound..<settingsSource.endIndex
+        ))
+        let siriMappingSource = settingsSource[
+            siriMappingPage.lowerBound..<siriMappingEnd.lowerBound
+        ]
+        #expect(!siriMappingSource.contains(".frame(width: 400)"))
+        #expect(!siriMappingSource.contains(".frame(width: 320)"))
+        #expect(siriMappingSource.contains(
+            ".frame(maxWidth: .infinity, alignment: .trailing)"
+        ))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {
@@ -789,7 +807,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("button_mapping.rapid_press_hint_short"))
         #expect(source.contains("button_mapping.rapid_press_help"))
         #expect(source.contains("mappingFooter(includeSiriScrollArrow: true)"))
-        #expect(source.contains("ScrollView(.horizontal, showsIndicators: true)"))
+        #expect(source.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(source.contains("siriRemoteScrollArrowControl"))
         #expect(RemoteMappingLayout.remoteSize.height == 510)
         #expect(source.contains("!configured.action.allowsRepeat"))
@@ -957,6 +975,10 @@ struct SettingsPageRegressionTests {
         #expect(selectorSource.contains("model.isRemoteConnected($0.id)"))
         #expect(selectorSource.contains("ForEach(connectedProfiles)"))
         #expect(selectorSource.contains("remoteDeviceEmptyState(vertical: vertical)"))
+        #expect(selectorSource.contains("connectedProfiles.count <= 2"))
+        #expect(!selectorSource.contains("fillsWidth: connectedProfiles.count == 2"))
+        #expect(selectorSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
+        #expect(!selectorSource.contains("ScrollView(.horizontal, showsIndicators: true)"))
         #expect(!selectorSource.contains("ForEach(settings.remoteDeviceProfiles)"))
         #expect(source.contains("Button(\"connection.action.reconnect\")"))
     }

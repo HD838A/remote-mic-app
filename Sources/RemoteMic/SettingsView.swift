@@ -1200,9 +1200,8 @@ struct SettingsView: View {
                     PageHeader(title: localization.text("button_mapping.page.title"))
                         .fixedSize(horizontal: true, vertical: false)
                     mappingHeaderToggle
-                    Spacer()
                     remoteDeviceSelector()
-                        .frame(width: 400)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 HStack(alignment: .center, spacing: 14) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -1210,9 +1209,8 @@ struct SettingsView: View {
                             .fixedSize(horizontal: true, vertical: false)
                         mappingHeaderToggle
                     }
-                    Spacer(minLength: 14)
                     remoteDeviceSelector()
-                        .frame(width: 320)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .padding(.horizontal, 22)
@@ -1304,9 +1302,8 @@ struct SettingsView: View {
                     PageHeader(title: localization.text("button_mapping.page.title"))
                         .fixedSize(horizontal: true, vertical: false)
                     mappingHeaderToggle
-                    Spacer()
                     remoteDeviceSelector()
-                        .frame(width: 400)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
 
                 HStack(alignment: .center, spacing: 14) {
@@ -1315,9 +1312,8 @@ struct SettingsView: View {
                             .fixedSize(horizontal: true, vertical: false)
                         mappingHeaderToggle
                     }
-                    Spacer(minLength: 14)
                     remoteDeviceSelector()
-                        .frame(width: 320)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .padding(.horizontal, 22)
@@ -1594,8 +1590,15 @@ struct SettingsView: View {
                     remoteDeviceCard(profile, fillsWidth: true)
                 }
             }
+        } else if connectedProfiles.count <= 2 {
+            HStack(spacing: 8) {
+                ForEach(connectedProfiles) { profile in
+                    remoteDeviceCard(profile)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
-            ScrollView(.horizontal, showsIndicators: true) {
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(connectedProfiles) { profile in
                         remoteDeviceCard(profile)
