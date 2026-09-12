@@ -203,6 +203,64 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         return result + localizedKeyLabel(using: localization)
     }
 
+    /// Compact macOS-style representation used by the mapping UI.
+    func visualDisplayName(using localization: LocalizationStore) -> String {
+        if let standaloneModifier {
+            return standaloneModifier.symbol
+        }
+        var result = ""
+        if modifierFlags.contains(.control) { result += "⌃" }
+        if modifierFlags.contains(.option) { result += "⌥" }
+        if modifierFlags.contains(.shift) { result += "⇧" }
+        if modifierFlags.contains(.command) { result += "⌘" }
+        if modifierFlags.contains(.function) { result += "fn " }
+        return result + visualKeyLabel
+    }
+
+    /// Full keyboard wording used by tooltips and accessibility labels.
+    func detailedDisplayName(using localization: LocalizationStore) -> String {
+        if let standaloneModifier {
+            return standaloneModifier.displayName(using: localization)
+        }
+        var parts: [String] = []
+        if modifierFlags.contains(.control) { parts.append(localization.text("shortcut.modifier.control")) }
+        if modifierFlags.contains(.option) { parts.append(localization.text("shortcut.modifier.option")) }
+        if modifierFlags.contains(.shift) { parts.append(localization.text("shortcut.modifier.shift")) }
+        if modifierFlags.contains(.command) { parts.append(localization.text("shortcut.modifier.command")) }
+        if modifierFlags.contains(.function) { parts.append(localization.text("shortcut.modifier.function")) }
+        parts.append(detailedKeyLabel(using: localization))
+        return parts.joined(separator: " + ")
+    }
+
+    private var visualKeyLabel: String {
+        switch keyCode {
+        case 36: return "⏎"
+        case 48: return "⇥"
+        case 49: return "␠"
+        case 51: return "⌫"
+        case 53: return "⎋"
+        case 76: return "⌤"
+        case 117: return "⌦"
+        default: return keyLabel
+        }
+    }
+
+    private func detailedKeyLabel(using localization: LocalizationStore) -> String {
+        switch keyCode {
+        case 36: return localization.text("keyboard.key.return")
+        case 48: return localization.text("keyboard.key.tab")
+        case 49: return localization.text("keyboard.key.space")
+        case 51: return localization.text("keyboard.key.delete")
+        case 53: return localization.text("keyboard.key.escape")
+        case 76: return localization.text("keyboard.key.enter")
+        case 123: return localization.text("keyboard.key.left")
+        case 124: return localization.text("keyboard.key.right")
+        case 125: return localization.text("keyboard.key.down")
+        case 126: return localization.text("keyboard.key.up")
+        default: return localizedKeyLabel(using: localization)
+        }
+    }
+
     private func localizedKeyLabel(using localization: LocalizationStore) -> String {
         switch keyCode {
         case 36: return localization.text("keyboard.key.return")

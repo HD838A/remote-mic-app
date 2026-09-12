@@ -802,6 +802,42 @@ struct RemoteButtonsTests {
         ) == shortcut)
     }
 
+    @Test func customShortcutUsesIconDisplayAndFullTooltipNames() {
+        let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
+        localization.select(.english)
+
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 123,
+            modifierFlags: [.control, .option, .shift, .command],
+            keyLabel: "←"
+        )
+
+        #expect(shortcut.visualDisplayName(using: localization) == "⌃⌥⇧⌘←")
+        #expect(shortcut.detailedDisplayName(using: localization) == [
+            localization.text("shortcut.modifier.control"),
+            localization.text("shortcut.modifier.option"),
+            localization.text("shortcut.modifier.shift"),
+            localization.text("shortcut.modifier.command"),
+            localization.text("keyboard.key.left"),
+        ].joined(separator: " + "))
+
+        let specialKeys: [(UInt16, String, String, String)] = [
+            (36, "Return", "⏎", "keyboard.key.return"),
+            (48, "Tab", "⇥", "keyboard.key.tab"),
+            (51, "⌫", "⌫", "keyboard.key.delete"),
+            (123, "←", "←", "keyboard.key.left"),
+        ]
+        for (keyCode, keyLabel, visual, detailedKey) in specialKeys {
+            let value = CustomKeyboardShortcut(
+                keyCode: keyCode,
+                modifierFlags: [],
+                keyLabel: keyLabel
+            )
+            #expect(value.visualDisplayName(using: localization) == visual)
+            #expect(value.detailedDisplayName(using: localization) == localization.text(detailedKey))
+        }
+    }
+
     @Test func arrowShortcutIgnoresSystemFunctionMarkerWhenRecordedOrLoaded() throws {
         let event = try #require(CGEvent(
             keyboardEventSource: CGEventSource(stateID: .hidSystemState),

@@ -100,7 +100,6 @@
 "siri_remote.mapping.voice.title" = "Siri 语音键";
 "siri_remote.mapping.voice.fixed" = "固定语音输入";
 "siri_remote.mapping.voice.detail" = "按住 Siri 键，直接使用遥控器麦克风传输语音；该键不能作为普通按键重新配置。";
-"siri_remote.mapping.touch.detail" = "触摸面：中心/边缘手势控制鼠标，环形移动用于滚动；语音输入期间会屏蔽触摸事件。";
 "siri_remote.mapping.photo.missing" = "Siri Remote 图片不可用";
 "siri_remote.scroll_arrow.reverse.title" = "反转滚动箭头方向";
 "siri_remote.scroll_arrow.reverse.detail" = "打开后，箭头与页面右侧滚动指示器方向相反；只改变提示，不改变页面实际滚动。";
@@ -116,6 +115,12 @@
 "keyboard.key.page_up" = "Page Up（向上翻页）";
 "keyboard.key.end" = "End（行尾）";
 "keyboard.key.page_down" = "Page Down（向下翻页）";
+"keyboard.key.delete" = "Delete（删除）";
+"keyboard.key.escape" = "Escape（退出）";
+"keyboard.key.left" = "Left（左方向键）";
+"keyboard.key.right" = "Right（右方向键）";
+"keyboard.key.up" = "Up（上方向键）";
+"keyboard.key.down" = "Down（下方向键）";
 "trigger.single_click" = "单击";
 "trigger.double_click" = "双击";
 "trigger.long_press" = "长按";

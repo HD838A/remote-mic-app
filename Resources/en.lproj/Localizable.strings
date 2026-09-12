@@ -100,7 +100,6 @@
 "siri_remote.mapping.voice.title" = "Siri voice button";
 "siri_remote.mapping.voice.fixed" = "Fixed voice input";
 "siri_remote.mapping.voice.detail" = "Hold the Siri button to stream audio from the remote microphone. It is not configurable as a normal button.";
-"siri_remote.mapping.touch.detail" = "Touch surface: center/edge gestures control the pointer and circular movement scrolls. Touch input is suppressed while speaking.";
 "siri_remote.mapping.photo.missing" = "Siri Remote image unavailable";
 "siri_remote.scroll_arrow.reverse.title" = "Reverse scroll arrow direction";
 "siri_remote.scroll_arrow.reverse.detail" = "When enabled, the arrows point opposite to the page scroll indicator. This changes only the visual cue, not actual scrolling.";
@@ -116,6 +115,12 @@
 "keyboard.key.page_up" = "Page Up";
 "keyboard.key.end" = "End";
 "keyboard.key.page_down" = "Page Down";
+"keyboard.key.delete" = "Delete";
+"keyboard.key.escape" = "Escape";
+"keyboard.key.left" = "Left";
+"keyboard.key.right" = "Right";
+"keyboard.key.up" = "Up";
+"keyboard.key.down" = "Down";
 "trigger.single_click" = "Single-click";
 "trigger.double_click" = "Double-click";
 "trigger.long_press" = "Long-press";

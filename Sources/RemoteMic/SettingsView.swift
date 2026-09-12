@@ -258,6 +258,10 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    static var visibleCases: [Self] {
+        [.basicKeys, .systemAndMedia, .custom]
+    }
+
     var localizationKey: String {
         switch self {
         case .all: return "button_mapping.action_filter.all"
@@ -1220,9 +1224,10 @@ struct SettingsView: View {
 
             Divider()
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 16) {
-                    SiriRemoteMappingPage(
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        SiriRemoteMappingPage(
                         selectedControlID: $selectedSiriRemoteControlID,
                         activeControlIDs: model.activeAppleRemoteControlIDs,
                         voiceActive: model.activeAppleRemoteControlIDs.contains("siri"),
@@ -1230,7 +1235,6 @@ struct SettingsView: View {
                             voiceTitle: localization.text("siri_remote.mapping.voice.title"),
                             voiceFixed: localization.text("siri_remote.mapping.voice.fixed"),
                             voiceDetail: localization.text("siri_remote.mapping.voice.detail"),
-                            touchDetail: localization.text("siri_remote.mapping.touch.detail"),
                             missingPhoto: localization.text("siri_remote.mapping.photo.missing")
                         ),
                         buttonTitle: { controlID in
@@ -1253,26 +1257,42 @@ struct SettingsView: View {
                             else { return }
                             selectedSiriRemoteControlID = controlID
                             selectedRemoteButton = button
+                            mappingActionFilter = .all
                             isPresetApplicationActionsExpanded = false
                             mappingEditingTarget = ShortcutEditingTarget(
                                 button: button,
                                 trigger: trigger
                             )
                         }
-                    )
+                        )
 
-                    if let target = mappingEditingTarget {
-                        mappingEditorPanel(target)
-                            .id("mapping-action-editor")
+                        if let target = mappingEditingTarget {
+                            mappingEditorPanel(target)
+                                .id("mapping-action-editor")
+                        }
+
+                        mappingFooter(includeSiriScrollArrow: true)
                     }
-
-                    mappingFooter(includeSiriScrollArrow: true)
+                    .padding(22)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
-                .padding(22)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .id(settings.selectedRemoteProfileID)
+                .compatibilityScrollEdgeEffect()
+                .onAppear {
+                    guard mappingEditingTarget != nil else { return }
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("mapping-action-editor", anchor: .top)
+                    }
+                }
+                .onChange(of: mappingEditingTarget?.id) { targetID in
+                    guard targetID != nil else { return }
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo("mapping-action-editor", anchor: .top)
+                        }
+                    }
+                }
             }
-            .id(settings.selectedRemoteProfileID)
-            .compatibilityScrollEdgeEffect()
         }
     }
 
@@ -1865,7 +1885,7 @@ struct SettingsView: View {
 
     private var mappingActionFilterControl: some View {
         HStack(spacing: 8) {
-            ForEach(MappingActionFilter.allCases) { filter in
+            ForEach(MappingActionFilter.visibleCases) { filter in
                 let isSelected = mappingActionFilter == filter
                 Button {
                     guard mappingActionFilter != filter else { return }
@@ -1880,7 +1900,7 @@ struct SettingsView: View {
                                 ? Color(nsColor: .alternateSelectedControlTextColor)
                                 : Color.secondary
                         )
-                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .background(
                             isSelected ? Color.accentColor : Color.clear,
                             in: Capsule()
@@ -2073,12 +2093,12 @@ struct SettingsView: View {
                 .frame(height: 1)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        Label {
-                            Text(
-                                configured.shortcut?.displayName(using: localization) ??
+                        HStack(spacing: 10) {
+                            Label {
+                                Text(
+                                configured.shortcut?.visualDisplayName(using: localization) ??
                                     localization.text("shortcut.editor.not_recorded")
-                            )
+                                )
                         } icon: {
                             Image(systemName: configured.shortcut == nil ? "keyboard" : "keyboard.badge.checkmark")
                                 .foregroundStyle(configured.shortcut == nil ? Color.secondary : Color.green)
@@ -2088,6 +2108,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                         .padding(.horizontal, 12)
                         .background(.quaternary, in: RoundedRectangle(cornerRadius: 9))
+                        .help(configured.shortcut?.detailedDisplayName(using: localization) ?? "")
 
                         Button(configured.shortcut == nil ? "shortcut.action.record" : "shortcut.action.record_again") {
                             applicationShortcutCaptureProfileID = nil
@@ -2490,7 +2511,7 @@ struct SettingsView: View {
             return localization.text("button_mapping.action.not_set")
         }
         if configured.action == .customShortcut, let shortcut = configured.shortcut {
-            return shortcut.displayName(using: localization)
+            return shortcut.visualDisplayName(using: localization)
         }
         if configured.action == .openCustomApplication {
             return settings.customApplicationProfile(id: configured.applicationProfileID)?.displayName
