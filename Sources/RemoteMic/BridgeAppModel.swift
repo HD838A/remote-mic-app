@@ -619,7 +619,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         siriRemoteFeature.onStatus = { _ in }
         siriRemoteFeature.onTouchFeedback = { [weak self] feedback in
-            self?.siriRemoteCursorFeedback.handle(feedback)
+            guard let self else { return }
+            if case .clicked = feedback {
+                _ = siriRemoteCursorFeedback.activateHoveredElementIfAvailable()
+            }
+            siriRemoteCursorFeedback.handle(
+                feedback,
+                scrollArrowReversed: settings.siriRemoteScrollArrowReversed
+            )
+        }
+        siriRemoteFeature.onCenterTapConfirmation = { [weak self] _ in
+            self?.siriRemoteCursorFeedback.activateHoveredElementIfAvailable() ?? false
         }
         siriRemoteFeature.onPowerSnapshot = { [weak self] snapshot in
             self?.handleAppleRemotePowerSnapshot(snapshot)
@@ -3137,6 +3147,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         appleRemoteVoiceCaptureRetryWorkItem?.cancel()
         appleRemoteVoiceCaptureRetryWorkItem = nil
         appleRemoteVoiceCaptureRetryAttempt = 0
+        siriRemoteCursorFeedback.cancelInteraction(reason: "voice_started")
         siriRemoteFeature.setVoiceTouchSuppressed(true)
         if appleRemoteVoiceStopping {
             if siriRemoteFeature.resumeCaptureIfStopping() {

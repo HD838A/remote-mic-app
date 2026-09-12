@@ -83,7 +83,15 @@ if [[ "$(/usr/bin/grep -c -- 'swift test --disable-keychain' "$ci_workflow")" -l
   exit 1
 fi
 release_gate_log="$WORK_DIR/release-private-package-gate.log"
-if REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1 SAYALL_MAC_REMOTE_PACKAGE_PATH= \
+if env \
+   -u SAYALL_AI_PACKAGE_PATH \
+   -u SAYALL_SIRI_REMOTE_PACKAGE_PATH \
+   -u SAYALL_ENABLE_SIRI_REMOTE \
+   -u SAYALL_SIRI_REMOTE_UI_ONLY \
+   -u SAYALL_MACRO_PLATFORM_PATH \
+   -u SAYALL_MEMBERSHIP_PACKAGE_PATH \
+   -u SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH \
+   REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1 SAYALL_MAC_REMOTE_PACKAGE_PATH= \
    "$ROOT/scripts/build-app.sh" >"$release_gate_log" 2>&1; then
   print -u2 "release build must fail when the required Mac remote package is missing"
   exit 1

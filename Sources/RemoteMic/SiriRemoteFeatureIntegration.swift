@@ -91,7 +91,10 @@ struct SiriRemotePowerSnapshot: Equatable {
 
 enum SiriRemoteTouchFeedbackKind: Equatable {
     case pointerMoved(deltaX: Double, deltaY: Double, speed: Double)
-    case scrolled(pixels: Double, speed: Double)
+    case scrolled(
+        pixels: Double,
+        speed: Double
+    )
     case clicked
 }
 
@@ -102,6 +105,7 @@ final class SiriRemoteFeatureIntegration {
     var onStatus: ((String) -> Void)?
     var onPowerSnapshot: ((SiriRemotePowerSnapshot) -> Void)?
     var onTouchFeedback: ((SiriRemoteTouchFeedbackKind) -> Void)?
+    var onCenterTapConfirmation: ((SiriRemoteDeviceIdentity) -> Bool)?
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private let feature: SayAllSiriRemoteFeature
@@ -142,7 +146,10 @@ final class SiriRemoteFeatureIntegration {
                     speed: speed
                 ))
             case let .scrolled(pixels, speed):
-                self?.onTouchFeedback?(.scrolled(pixels: pixels, speed: speed))
+                self?.onTouchFeedback?(.scrolled(
+                    pixels: pixels,
+                    speed: speed
+                ))
             case .clicked:
                 self?.onTouchFeedback?(.clicked)
             }

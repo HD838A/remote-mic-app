@@ -104,6 +104,27 @@ struct BuildSigningTests {
         #expect(modelSource.contains("SiriRemoteFeatureIntegration"))
     }
 
+    @Test func siriRemoteVoiceBuildsRejectAdHocSigning() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(buildSource.contains("REQUIRE_SIRI_REMOTE_SIGNING=\"${REQUIRE_SIRI_REMOTE_SIGNING:-1}\""))
+        #expect(buildSource.contains("Siri Remote voice builds require Developer ID Application signing"))
+        #expect(buildSource.contains("SAYALL_SIRI_REMOTE_INCLUDED\" == \"true\""))
+        #expect(verifySource.contains("Siri Remote voice app must use Developer ID Application signing"))
+        #expect(verifySource.contains("TeamIdentifier=L3QHLDRPAY"))
+    }
+
     @Test func macRemoteIsOptionalForPublicBuildsAndRequiredForRelease() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -410,6 +431,10 @@ struct BuildSigningTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let fixture = root.appendingPathComponent("scripts/test-macos-release-flow.sh")
+        let fixtureSource = try String(contentsOf: fixture, encoding: .utf8)
+        #expect(fixtureSource.contains("-u SAYALL_SIRI_REMOTE_PACKAGE_PATH"))
+        #expect(fixtureSource.contains("-u SAYALL_MACRO_PLATFORM_PATH"))
+        #expect(fixtureSource.contains("-u SAYALL_MEMBERSHIP_PACKAGE_PATH"))
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [fixture.path]

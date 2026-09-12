@@ -64,6 +64,15 @@ case "$SAYALL_SIRI_REMOTE_INCLUDED" in
     test -x "$APPLE_REMOTE_HCI_SERVICE"
     test -f "$OPUS_DYLIB"
     test -d "$SAYALL_SIRI_REMOTE_RESOURCE_BUNDLE"
+    SIRI_REMOTE_SIGNATURE_DETAILS="$(codesign -dvvv "$APP" 2>&1)"
+    print -r -- "$SIRI_REMOTE_SIGNATURE_DETAILS" | rg -q '^Authority=Developer ID Application:' || {
+      print -u2 "Siri Remote voice app must use Developer ID Application signing; ad-hoc apps cannot connect to the installed HCI helper"
+      exit 1
+    }
+    print -r -- "$SIRI_REMOTE_SIGNATURE_DETAILS" | rg -q '^TeamIdentifier=L3QHLDRPAY$' || {
+      print -u2 "Siri Remote voice app has an unexpected Developer ID team"
+      exit 1
+    }
     ;;
   false|"")
     test ! -e "$APPLE_REMOTE_AUDIO_HELPER"

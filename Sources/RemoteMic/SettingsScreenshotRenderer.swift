@@ -59,6 +59,9 @@ enum SettingsScreenshotRenderer {
         let expandsShare = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_EXPAND_SHARE"
         ] == "1"
+        let usesSiriRemote = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_SIRI_REMOTE"
+        ] == "1"
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -73,6 +76,16 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+#if SAYALL_SIRI_REMOTE_ENABLED
+        if usesSiriRemote {
+            let profileID = settings.registerAppleSiriRemote(
+                fingerprint: "settings-screenshot-siri-remote"
+            )
+            settings.selectRemoteProfile(profileID)
+        }
+#else
+        _ = usesSiriRemote
+#endif
         if opensShortcutEditor {
             settings.customMappingEnabled = true
             settings.setAction(.customShortcut, for: .ok, trigger: .singleClick)

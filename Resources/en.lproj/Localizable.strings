@@ -56,7 +56,7 @@
 "connection.status.connecting" = "Connecting to the remote";
 "connection.status.initializing_voice" = "Initializing the voice service";
 "connection.status.connected_to_device" = "Xiaomi remote connected";
-"connection.status.apple_remote_connected" = "Apple Siri Remote connected";
+"connection.status.apple_remote_connected" = "Apple Remote connected";
 "connection.status.reconnecting" = "Connection lost; preparing to reconnect";
 "connection.error.voice_service_timeout" = "Remote voice service initialization timed out";
 "connection.error.invalid_voice_response" = "The remote returned an invalid voice capability response";
@@ -102,6 +102,9 @@
 "siri_remote.mapping.voice.detail" = "Hold the Siri button to stream audio from the remote microphone. It is not configurable as a normal button.";
 "siri_remote.mapping.touch.detail" = "Touch surface: center/edge gestures control the pointer and circular movement scrolls. Touch input is suppressed while speaking.";
 "siri_remote.mapping.photo.missing" = "Siri Remote image unavailable";
+"siri_remote.scroll_arrow.reverse.title" = "Reverse scroll arrow direction";
+"siri_remote.scroll_arrow.reverse.detail" = "When enabled, the arrows point opposite to the page scroll indicator. This changes only the visual cue, not actual scrolling.";
+"siri_remote.scroll_arrow.reverse.help" = "Off matches the page scroll indicator; on points in the opposite direction.";
 "keyboard.key_code" = "Key %1$@";
 "keyboard.key.return" = "Return";
 "keyboard.key.tab" = "Tab";
@@ -327,7 +330,7 @@
 "audio.compatibility.help_plain" = "If your preferred voice tool cannot hear audio, choose the compatible microphone included with the installer. Existing audio devices are not replaced.";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Customize remote button actions while preserving voice input and Fn functions";
-"button_mapping.toggle.enabled" = "Enable Custom Button Controls";
+"button_mapping.toggle.enabled" = "Custom Buttons";
 "button_mapping.permission_prompt.title" = "Button Permissions Required";
 "button_mapping.permission_prompt.message" = "Custom button controls require Input Monitoring and Accessibility. Open the Permissions page to finish setup.";
 "button_mapping.permission_prompt.open" = "Open Permissions";

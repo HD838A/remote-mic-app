@@ -56,7 +56,7 @@
 "connection.status.connecting" = "正在连接遥控器";
 "connection.status.initializing_voice" = "正在初始化语音服务";
 "connection.status.connected_to_device" = "小米遥控器已连接";
-"connection.status.apple_remote_connected" = "Apple Siri Remote 已连接";
+"connection.status.apple_remote_connected" = "苹果遥控器已连接";
 "connection.status.reconnecting" = "连接断开，准备重连";
 "connection.error.voice_service_timeout" = "遥控器语音服务初始化超时";
 "connection.error.invalid_voice_response" = "遥控器返回了无效的语音能力响应";
@@ -102,6 +102,9 @@
 "siri_remote.mapping.voice.detail" = "按住 Siri 键，直接使用遥控器麦克风传输语音；该键不能作为普通按键重新配置。";
 "siri_remote.mapping.touch.detail" = "触摸面：中心/边缘手势控制鼠标，环形移动用于滚动；语音输入期间会屏蔽触摸事件。";
 "siri_remote.mapping.photo.missing" = "Siri Remote 图片不可用";
+"siri_remote.scroll_arrow.reverse.title" = "反转滚动箭头方向";
+"siri_remote.scroll_arrow.reverse.detail" = "打开后，箭头与页面右侧滚动指示器方向相反；只改变提示，不改变页面实际滚动。";
+"siri_remote.scroll_arrow.reverse.help" = "关闭时箭头与页面右侧滚动指示器一致，打开时方向相反。";
 "keyboard.key_code" = "按键 %1$@";
 "keyboard.key.return" = "Return（回车）";
 "keyboard.key.tab" = "Tab（制表）";
@@ -327,7 +330,7 @@
 "audio.compatibility.help_plain" = "如果常用的语音工具收不到声音，可选择随安装包提供的兼容麦克风；已有音频设备不会被替换。";
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "自定义遥控器按键功能，并保留语音输入与 Fn 功能";
-"button_mapping.toggle.enabled" = "启用自定义按键功能";
+"button_mapping.toggle.enabled" = "自定义按键";
 "button_mapping.permission_prompt.title" = "需要开启按键权限";
 "button_mapping.permission_prompt.message" = "自定义按键需要“输入监控”和“辅助功能”权限，请前往权限页面完成设置。";
 "button_mapping.permission_prompt.open" = "前往权限页面";
