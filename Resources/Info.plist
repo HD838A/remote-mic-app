@@ -19,9 +19,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.9.19</string>
+	<string>1.9.21</string>
 	<key>CFBundleVersion</key>
-	<string>172</string>
+	<string>174</string>
     <key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
     <key>LSUIElement</key>
@@ -39,7 +39,7 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 	<key>SUFeedURL</key>
-	<string>https://github.com/HD838A/remote-mic-app/releases/latest/download/appcast.xml</string>
+	<string>https://download.sayall.app/mac/channels/stable/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUScheduledCheckInterval</key>
@@ -48,6 +48,8 @@
 	<false/>
 	<key>SUAllowsAutomaticUpdates</key>
 	<false/>
+	<key>HardwareAnnouncementURL</key>
+	<string>https://download.sayall.app/mac/announcements/hardware.json</string>
 	<key>SUPublicEDKey</key>
 	<string>8dWQovCnGPucjMcQuCHfrAv4PtjuDjJSbHNmItqYiyc=</string>
 </dict>

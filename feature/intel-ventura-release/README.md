@@ -6,7 +6,7 @@
 
 ## 用户功能介绍
 
-Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，并运行 `Install Remote Mic Intel.pkg`。应用功能、蓝牙遥控、按键映射和语音使用方式与 Apple Silicon 版本一致。若误开 Apple Silicon 安装包，系统 Installer 会在安装前说明架构不匹配，并提示改下 Intel 版本；Apple Silicon 用户误开 Intel 包时也会得到对应提示。
+Intel Mac 用户从同一 GitHub Release 下载文件名带 `Intel` 的 DMG，并运行 `Install SayAll Intel.pkg`。应用功能、蓝牙遥控、按键映射和语音使用方式与 Apple Silicon 版本一致。若误开 Apple Silicon 安装包，系统 Installer 会在安装前说明架构不匹配，并提示改下 Intel 版本；Apple Silicon 用户误开 Intel 包时也会得到对应提示。
 
 ## 范围与非目标
 

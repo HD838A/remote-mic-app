@@ -1,0 +1,47 @@
+name: Sync release history labels
+
+on:
+  release:
+    types: [published, prereleased, released, edited]
+  schedule:
+    - cron: "41 3 */3 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: release-history-labels
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Sync labels from GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/sync-release-history-labels.mjs
+
+      - name: Commit and push changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- Resources/zh-Hans.lproj/ReleaseHistory.md Resources/en.lproj/ReleaseHistory.md
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No release history label changes"
+            exit 0
+          fi
+          git commit --only -m "chore: sync release history labels" -- \
+            Resources/zh-Hans.lproj/ReleaseHistory.md \
+            Resources/en.lproj/ReleaseHistory.md
+          git push origin HEAD:main

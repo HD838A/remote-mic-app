@@ -6,9 +6,9 @@ MiRemoteV 2ch 是 Remote Mic 提供的独立双声道回环设备，用于让豆
 
 不需要安装 Xcode、Git，也不需要运行终端命令。
 
-1. 在 DMG 根目录双击 Install Remote Mic.pkg。
+1. 在 DMG 根目录双击 `Install SayAll.pkg`。
 2. 在系统安装器中按提示输入管理员密码。
-3. 安装器会同时安装 Remote Mic 和 MiRemoteV 2ch，重启 CoreAudio，并自动启动 Remote Mic。
+3. 安装器会同时安装无线麦SayAll.app 和 MiRemoteV 2ch，重启 CoreAudio，并自动启动 SayAll。
 4. 左键单击菜单栏图标，在“连接与语音”中点击“刷新音频设备”。
 5. 点击“选择 MiRemoteV 2ch”。
 6. 完全退出并重新打开豆包后再次测试。
@@ -21,11 +21,7 @@ MiRemoteV 2ch 是 Remote Mic 提供的独立双声道回环设备，用于让豆
 
 ## 卸载
 
-双击 DMG 根目录中的 Uninstall Remote Mic.pkg。它只删除：
-
-    /Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver
-
-卸载后会重启 CoreAudio，不会删除 Remote Mic 应用，也不会修改 BlackHole。
+从同一 Release 下载并双击 `SayAll-<版本>-Uninstaller.pkg`。它会校验并将无线麦SayAll.app、已识别的历史 App 与 MiRemoteV 2ch 移到 macOS 废纸篓，然后重启 CoreAudio；不会修改 BlackHole 或无线麦的本地设置。
 
 ## 技术与许可
 
