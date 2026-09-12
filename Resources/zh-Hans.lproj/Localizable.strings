@@ -137,10 +137,12 @@
 "action.context_menu" = "上下文菜单";
 "action.system_volume_up" = "系统音量 +";
 "action.system_volume_down" = "系统音量 -";
+"action.system_volume_up_short" = "Vol+";
+"action.system_volume_down_short" = "Vol-";
 "action.system_mute" = "系统静音";
 "action.play_pause" = "播放 / 暂停";
-"action.previous_command_left" = "上一首（⌘←）";
-"action.next_command_right" = "下一首（⌘→）";
+"action.previous_command_left" = "上一首（系统媒体）";
+"action.next_command_right" = "下一首（系统媒体）";
 "action.custom_shortcut" = "自定义快捷键";
 "action.focus_input" = "聚焦输入框";
 "action.open_custom_application" = "打开自定义 APP";
@@ -466,6 +468,10 @@
 "status_item.accessibility_label" = "小米蓝牙遥控器 2 Pro";
 "about.alert.description_with_version" = "版本 %1$@\n小米蓝牙遥控器 2 Pro 的无线语音与快捷操作工具。";
 "common.action.ok" = "好";
+"common.action.minimize" = "最小化";
+"common.action.hide" = "隐藏无线麦";
+"common.action.hide_others" = "隐藏其他";
+"common.action.show_all" = "显示全部";
 "common.action.copy_link" = "复制链接";
 "common.status.copied" = "已复制";
 "settings.section.about" = "关于";

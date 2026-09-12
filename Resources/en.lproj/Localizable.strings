@@ -137,10 +137,12 @@
 "action.context_menu" = "Context Menu";
 "action.system_volume_up" = "System Volume +";
 "action.system_volume_down" = "System Volume -";
+"action.system_volume_up_short" = "Vol+";
+"action.system_volume_down_short" = "Vol-";
 "action.system_mute" = "Mute System Audio";
 "action.play_pause" = "Play / Pause";
-"action.previous_command_left" = "Previous (⌘←)";
-"action.next_command_right" = "Next (⌘→)";
+"action.previous_command_left" = "Previous Track (System Media)";
+"action.next_command_right" = "Next Track (System Media)";
 "action.custom_shortcut" = "Custom Shortcut";
 "action.focus_input" = "Focus Input Field";
 "action.open_custom_application" = "Open Custom App";
@@ -466,6 +468,10 @@
 "status_item.accessibility_label" = "Xiaomi Bluetooth Remote 2 Pro";
 "about.alert.description_with_version" = "Version %1$@\nWireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro.";
 "common.action.ok" = "OK";
+"common.action.minimize" = "Minimize";
+"common.action.hide" = "Hide SayAll";
+"common.action.hide_others" = "Hide Others";
+"common.action.show_all" = "Show All";
 "common.action.copy_link" = "Copy Link";
 "common.status.copied" = "Copied";
 "settings.section.about" = "About";

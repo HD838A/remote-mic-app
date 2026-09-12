@@ -2502,8 +2502,8 @@ struct SettingsView: View {
         case .arrowLeft: return "←"
         case .arrowRight: return "→"
         case .deleteBackward: return "⌫"
-        case .volumeUp: return "+"
-        case .volumeDown: return "−"
+        case .volumeUp: return localization.text("action.system_volume_up_short")
+        case .volumeDown: return localization.text("action.system_volume_down_short")
         case .volumeMute: return "Mute"
         default: break
         }

@@ -78,9 +78,13 @@ struct UpdateCheckPolicy: Equatable {
 enum SettingsWindowActivationPolicy {
     static func value(
         showDockIcon: Bool,
-        isSettingsWindowOpen: Bool
+        isSettingsWindowOpen _: Bool
     ) -> NSApplication.ActivationPolicy {
-        showDockIcon || isSettingsWindowOpen ? .regular : .accessory
+        // The preference is authoritative even while Settings is visible. The
+        // window remains usable as an accessory app and can be reopened from
+        // the menu-bar item, so keeping a Dock icon here would make the
+        // "show Dock icon" setting appear ineffective.
+        showDockIcon ? .regular : .accessory
     }
 }
 
@@ -409,6 +413,25 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         let applicationMenuItem = NSMenuItem()
         let applicationMenu = NSMenu(title: localization.text("app.name"))
+        applicationMenu.addItem(menuItem("menu.about", action: #selector(showAbout)))
+        applicationMenu.addItem(.separator())
+        applicationMenu.addItem(responderMenuItem(
+            "common.action.hide",
+            action: "hide:",
+            keyEquivalent: "h"
+        ))
+        applicationMenu.addItem(responderMenuItem(
+            "common.action.hide_others",
+            action: "hideOtherApplications:",
+            keyEquivalent: "h",
+            modifierMask: [.command, .option]
+        ))
+        applicationMenu.addItem(responderMenuItem(
+            "common.action.show_all",
+            action: "unhideAllApplications:",
+            keyEquivalent: ""
+        ))
+        applicationMenu.addItem(.separator())
         let quitItem = NSMenuItem(
             title: localization.text("common.action.quit"),
             action: #selector(quit),
@@ -422,6 +445,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         let fileMenuItem = NSMenuItem()
         let fileMenu = NSMenu(title: localization.text("menu.file"))
+        fileMenu.addItem(responderMenuItem(
+            "common.action.minimize",
+            action: "performMiniaturize:",
+            keyEquivalent: "m"
+        ))
+        fileMenu.addItem(.separator())
         let closeItem = NSMenuItem(
             title: localization.text("common.action.close"),
             action: #selector(closeKeyWindow),
@@ -454,14 +483,15 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private func responderMenuItem(
         _ titleKey: String,
         action: String,
-        keyEquivalent: String
+        keyEquivalent: String,
+        modifierMask: NSEvent.ModifierFlags = [.command]
     ) -> NSMenuItem {
         let item = NSMenuItem(
             title: localization.text(titleKey),
             action: Selector(action),
             keyEquivalent: keyEquivalent
         )
-        item.keyEquivalentModifierMask = [.command]
+        item.keyEquivalentModifierMask = modifierMask
         // A nil target lets AppKit route the standard editing action to the focused text field.
         item.target = nil
         return item
