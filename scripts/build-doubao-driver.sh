@@ -19,6 +19,30 @@ RELEASE_DRIVER_BUILD_TIMEOUT_SECONDS="${RELEASE_DRIVER_BUILD_TIMEOUT_SECONDS:-15
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
 RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 
+move_existing_path_to_trash() {
+  local source_path="$1"
+  local label="$2"
+  local developer_user developer_home trash_root destination counter=0
+  [[ -e "$source_path" || -L "$source_path" ]] || return 0
+  developer_user="$(/usr/bin/id -un)"
+  developer_home="$(/usr/bin/dscl . -read "/Users/$developer_user" NFSHomeDirectory \
+    2>/dev/null | /usr/bin/sed -n 's/^NFSHomeDirectory: //p')"
+  if [[ "$developer_home" != /* || "$developer_home" == "/" || \
+        "$developer_home" == *'/../'* || "$developer_home" == *'/..' ]]; then
+    print -u2 "refusing to move $label because the developer Trash path is invalid"
+    return 1
+  fi
+  trash_root="$developer_home/.Trash"
+  /bin/mkdir -p -- "$trash_root"
+  destination="$trash_root/$label-$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
+  while [[ -e "$destination" || -L "$destination" ]]; do
+    counter=$((counter + 1))
+    destination="$trash_root/$label-$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$-$counter"
+  done
+  /bin/mv -n -- "$source_path" "$destination"
+  print "Moved previous $label to Trash: $destination"
+}
+
 if ! command -v git >/dev/null 2>&1; then
   print -u2 "Missing required command: git"
   exit 1
@@ -64,24 +88,8 @@ case "$OUTPUT" in
   *) print -u2 "refusing to replace unexpected output path: $OUTPUT"; exit 1 ;;
 esac
 
-move_existing_path_to_trash() {
-  local target="$1"
-  local user_home trash_directory trash_destination counter=0
-  [[ -e "$target" || -L "$target" ]] || return 0
-  user_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
-  trash_directory="$user_home/.Trash"
-  test -d "$trash_directory"
-  trash_destination="$trash_directory/${target:t}.driver-build.$(date -u +%Y%m%dT%H%M%SZ).$$"
-  while [[ -e "$trash_destination" || -L "$trash_destination" ]]; do
-    counter=$((counter + 1))
-    trash_destination="$trash_directory/${target:t}.driver-build.$(date -u +%Y%m%dT%H%M%SZ).$$.$counter"
-  done
-  /bin/mv -n -- "$target" "$trash_destination"
-  print "PREVIOUS DRIVER BUILD PATH MOVED TO TRASH: $trash_destination"
-}
-
-move_existing_path_to_trash "$WORK_ROOT"
-move_existing_path_to_trash "$OUTPUT"
+move_existing_path_to_trash "$WORK_ROOT" "sayall-driver-build"
+move_existing_path_to_trash "$OUTPUT" "MiRemoteV2ch.driver"
 mkdir -p "${WORK_ROOT:h}" "${OUTPUT:h}"
 run_release_stage driver-source-clone 60 git clone --depth 1 --branch "$BLACKHOLE_TAG" \
   https://github.com/ExistentialAudio/BlackHole.git "$SOURCE_ROOT"

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <installer-gui-script minSpecVersion="1">
-    <title>Remote Mic</title>
-    <options customize="never" hostArchitectures="arm64,x86_64"/>
+    <title>SayAll</title>
+    <options customize="always" hostArchitectures="arm64,x86_64"/>
     <script><![CDATA[
 function hardwareIsAppleSilicon() {
     return system.sysctl('hw.optional.arm64') == 1;
@@ -9,6 +9,13 @@ function hardwareIsAppleSilicon() {
 
 function currentSystemMajorVersion() {
     return parseInt(system.version.ProductVersion.split('.')[0], 10);
+}
+
+function siriRemoteSupportWasPreviouslyInstalled() {
+    return system.files.fileExistsAtPath('/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist') ||
+        system.files.fileExistsAtPath('/var/db/receipts/com.hd838a.RemoteMic.siri-remote.bom') ||
+        system.files.fileExistsAtPath('/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService') ||
+        system.files.fileExistsAtPath('/Library/LaunchDaemons/com.hd838a.SayAll.AppleRemoteHCIService.plist');
 }
 
 function installationCheck() {
@@ -28,9 +35,16 @@ function installationCheck() {
     <installation-check script="installationCheck()"/>
     <choices-outline>
         <line choice="remote-mic"/>
+        <line choice="siri-remote"/>
     </choices-outline>
     <choice id="remote-mic" visible="false" start_selected="true">
         <pkg-ref id="com.hd838a.RemoteMic.installer"/>
     </choice>
+    <choice id="siri-remote" title="Siri Remote 支持 / Siri Remote support"
+            description="首次安装默认不选；检测到已有 Siri Remote 支持时自动选中。 / Off for first install; selected automatically when existing Siri Remote support is detected."
+            start_selected="siriRemoteSupportWasPreviouslyInstalled()">
+        <pkg-ref id="com.hd838a.RemoteMic.siri-remote"/>
+    </choice>
     <pkg-ref id="com.hd838a.RemoteMic.installer" auth="Root">RemoteMicComponent.pkg</pkg-ref>
+    <pkg-ref id="com.hd838a.RemoteMic.siri-remote" auth="Root">SiriRemoteComponent.pkg</pkg-ref>
 </installer-gui-script>

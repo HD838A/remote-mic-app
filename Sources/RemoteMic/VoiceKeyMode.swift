@@ -1,4 +1,6 @@
+import CoreGraphics
 import Foundation
+import IOKit.hidsystem
 
 /// The key emitted for a voice session.
 ///
@@ -17,6 +19,17 @@ enum VoiceKeyMode: String, Codable, CaseIterable, Identifiable {
         case .function: return 63
         case .leftCommand: return 55
         case .rightCommand: return 54
+        }
+    }
+
+    var eventFlags: CGEventFlags {
+        switch self {
+        case .function:
+            return .maskSecondaryFn
+        case .leftCommand:
+            return [.maskCommand, CGEventFlags(rawValue: UInt64(NX_DEVICELCMDKEYMASK))]
+        case .rightCommand:
+            return [.maskCommand, CGEventFlags(rawValue: UInt64(NX_DEVICERCMDKEYMASK))]
         }
     }
 

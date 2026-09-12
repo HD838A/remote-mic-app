@@ -23,6 +23,92 @@ extension VirtualAudioDeviceDiagnosticKind {
     }
 }
 
+enum VirtualAudioSelectionRecoverySource: String, Equatable {
+    case currentSelection = "current_selection"
+    case rememberedSelection = "remembered_selection"
+    case uniqueHistoricalCandidate = "unique_historical_candidate"
+    case none
+}
+
+enum VirtualAudioSelectionRecoveryReason: String, Equatable {
+    case noHistory = "no_history"
+    case rememberedDeviceUnavailable = "remembered_device_unavailable"
+    case noSupportedCandidate = "no_supported_candidate"
+    case multipleSupportedCandidates = "multiple_supported_candidates"
+}
+
+struct VirtualAudioSelectionRecoveryDecision: Equatable {
+    let uid: String?
+    let source: VirtualAudioSelectionRecoverySource
+    let reason: VirtualAudioSelectionRecoveryReason?
+    let kind: VirtualAudioDeviceDiagnosticKind
+    let supportedCandidateCount: Int
+}
+
+enum VirtualAudioSelectionRecoveryPolicy {
+    static func resolve(
+        selectedUID: String,
+        rememberedUID: String,
+        availableDevices: [AudioDeviceInfo],
+        hasHistoricalConfiguration: Bool
+    ) -> VirtualAudioSelectionRecoveryDecision {
+        let supported = availableDevices.filter {
+            switch VirtualAudioDeviceDiagnosticKind.classify($0) {
+            case .miRemoteV2ch, .blackHole2ch: return true
+            case .other, .unavailable: return false
+            }
+        }
+
+        if !selectedUID.isEmpty {
+            let selectedDevice = availableDevices.first { $0.uid == selectedUID }
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: selectedUID,
+                source: .currentSelection,
+                reason: nil,
+                kind: VirtualAudioDeviceDiagnosticKind.classify(selectedDevice),
+                supportedCandidateCount: supported.count
+            )
+        }
+
+        if !rememberedUID.isEmpty {
+            let rememberedDevice = availableDevices.first { $0.uid == rememberedUID }
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: rememberedDevice?.uid,
+                source: rememberedDevice == nil ? .none : .rememberedSelection,
+                reason: rememberedDevice == nil ? .rememberedDeviceUnavailable : nil,
+                kind: VirtualAudioDeviceDiagnosticKind.classify(rememberedDevice),
+                supportedCandidateCount: supported.count
+            )
+        }
+
+        guard hasHistoricalConfiguration else {
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: nil,
+                source: .none,
+                reason: .noHistory,
+                kind: .unavailable,
+                supportedCandidateCount: supported.count
+            )
+        }
+        guard supported.count == 1, let candidate = supported.first else {
+            return VirtualAudioSelectionRecoveryDecision(
+                uid: nil,
+                source: .none,
+                reason: supported.isEmpty ? .noSupportedCandidate : .multipleSupportedCandidates,
+                kind: .unavailable,
+                supportedCandidateCount: supported.count
+            )
+        }
+        return VirtualAudioSelectionRecoveryDecision(
+            uid: candidate.uid,
+            source: .uniqueHistoricalCandidate,
+            reason: nil,
+            kind: VirtualAudioDeviceDiagnosticKind.classify(candidate),
+            supportedCandidateCount: supported.count
+        )
+    }
+}
+
 extension VirtualAudioOutputDiagnosticSnapshot {
     var configurationHealthy: Bool {
         VirtualAudioHealthPolicy.isConfigurationHealthy(
@@ -141,7 +227,10 @@ enum CoreAudioDeviceCatalog {
         }
     }
 
-    static func preferredFallbackInput(excludingUID excludedUID: String) -> AudioDeviceInfo? {
+    static func preferredFallbackInput(
+        excludingUID excludedUID: String,
+        preferredUID: String? = nil
+    ) -> AudioDeviceInfo? {
         let devices = inputDevices()
         let builtInDeviceIDs = Set(devices.compactMap { device in
             transportType(for: device.id) == kAudioDeviceTransportTypeBuiltIn ? device.id : nil
@@ -149,7 +238,8 @@ enum CoreAudioDeviceCatalog {
         return DefaultInputFallbackPolicy.preferredFallback(
             in: devices,
             excludingUID: excludedUID,
-            builtInDeviceIDs: builtInDeviceIDs
+            builtInDeviceIDs: builtInDeviceIDs,
+            preferredUID: preferredUID
         )
     }
 
@@ -334,12 +424,23 @@ enum VirtualAudioHealthPolicy {
 }
 
 enum DefaultInputFallbackPolicy {
+    enum ObservationDecision: Equatable {
+        case ignore
+        case clearManagedTransition
+        case remember(uid: String, clearManagedTransition: Bool)
+    }
+
     static func preferredFallback(
         in devices: [AudioDeviceInfo],
         excludingUID excludedUID: String,
-        builtInDeviceIDs: Set<AudioDeviceID>
+        builtInDeviceIDs: Set<AudioDeviceID>,
+        preferredUID: String? = nil
     ) -> AudioDeviceInfo? {
         let candidates = devices.filter { $0.uid != excludedUID }
+        if let preferredUID,
+           let preferred = candidates.first(where: { $0.uid == preferredUID }) {
+            return preferred
+        }
         return candidates.first { builtInDeviceIDs.contains($0.id) } ?? candidates.first
     }
 
@@ -350,6 +451,25 @@ enum DefaultInputFallbackPolicy {
         currentDefaultUID: String?
     ) -> Bool {
         managedVirtualUID == selectedVirtualUID && currentDefaultUID == managedFallbackUID
+    }
+
+    static func observationDecision(
+        currentUID: String?,
+        selectedVirtualUID: String,
+        managedFallbackUID: String?,
+        lastRememberedUID: String?
+    ) -> ObservationDecision {
+        guard let currentUID,
+              currentUID != selectedVirtualUID,
+              currentUID != managedFallbackUID
+        else { return .ignore }
+        if currentUID == lastRememberedUID {
+            return managedFallbackUID == nil ? .ignore : .clearManagedTransition
+        }
+        return .remember(
+            uid: currentUID,
+            clearManagedTransition: managedFallbackUID != nil
+        )
     }
 }
 
@@ -586,7 +706,7 @@ final class VirtualAudioOutput {
     }
 
     func endSessionAfterDraining(
-        maximumDelay: TimeInterval = 0.75,
+        maximumDelay: TimeInterval? = 0.75,
         completion: @escaping () -> Void
     ) {
         playbackLock.lock()
@@ -603,8 +723,10 @@ final class VirtualAudioOutput {
             completion()
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + maximumDelay) { [weak self] in
-            self?.finishDrainIfNeeded(generation: generation, completion: completion)
+        if let maximumDelay {
+            DispatchQueue.main.asyncAfter(deadline: .now() + maximumDelay) { [weak self] in
+                self?.finishDrainIfNeeded(generation: generation, completion: completion)
+            }
         }
     }
 

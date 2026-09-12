@@ -6,7 +6,7 @@ MiRemoteV 2ch is Remote Mic's standalone stereo loopback device. It allows Douba
 
 You do not need Xcode, Git, or Terminal.
 
-1. Double-click Install Remote Mic.pkg at the root of the DMG.
+1. Double-click `Install SayAll.pkg` at the root of the DMG.
 2. Enter an administrator password when macOS Installer asks.
 3. The installer adds Remote Mic and MiRemoteV 2ch, restarts Core Audio, and launches Remote Mic.
 4. Left-click the menu bar icon, then select **Refresh Audio Devices** in **Connection & Voice**.
@@ -21,11 +21,7 @@ If QuickTime receives sound but Doubao does not, click an editable text field in
 
 ## Uninstall
 
-Double-click Uninstall Remote Mic.pkg at the root of the DMG. It removes only:
-
-    /Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver
-
-It restarts Core Audio without deleting Remote Mic or changing BlackHole.
+Download and double-click `SayAll-<version>-Uninstaller.pkg` from the same Release. It verifies and moves SayAll, recognized legacy app bundles, and MiRemoteV 2ch to the macOS Trash, then restarts Core Audio. It does not modify BlackHole or SayAll's local settings.
 
 ## Technology and License
 
