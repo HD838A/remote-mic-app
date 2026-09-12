@@ -2089,15 +2089,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func startHIDMonitors(powerKeySuppressed: Bool) {
         stopHIDMonitors()
+        let backOnlyMode = !settings.customMappingEnabled && (
+            settings.onboardingControlMethod == .physicalRemote ||
+            settings.onboardingRemoteAvailability == .hasRemote ||
+            settings.remoteDeviceProfiles.contains { $0.hidFingerprint != nil }
+        )
         hidPowerKeySuppressed = powerKeySuppressed
         hidAllowedLocationIDs = settings.customMappingEnabled
             ? voiceFunctionMapper.powerSuppressedLocationIDs
             : nil
-        guard settings.customMappingEnabled else {
+        guard settings.customMappingEnabled || backOnlyMode else {
             hidStatus = LocalizedMessage("button_mapping.status.system_managed")
             return
         }
-        _ = hidEventSuppressor.start()
+        if settings.customMappingEnabled { _ = hidEventSuppressor.start() }
         for profile in settings.remoteDeviceProfiles {
             guard !profile.model.isAppleSiriRemote,
                   let fingerprint = profile.hidFingerprint
@@ -2109,10 +2114,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             hidMonitors[fingerprint] = monitor
             monitor.start(
                 powerKeySuppressed: powerKeySuppressed,
-                allowedLocationIDs: hidAllowedLocationIDs
+                allowedLocationIDs: hidAllowedLocationIDs,
+                allowBackOnly: backOnlyMode
             )
         }
-        startHIDDiscoveryIfNeeded()
+        startHIDDiscoveryIfNeeded(allowBackOnly: backOnlyMode)
     }
 
     private func stopHIDMonitors() {
@@ -2124,8 +2130,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         activeRemoteButtons = []
     }
 
-    private func startHIDDiscoveryIfNeeded() {
-        guard settings.customMappingEnabled, discoveryHIDMonitor == nil else { return }
+    private func startHIDDiscoveryIfNeeded(allowBackOnly: Bool = false) {
+        guard (settings.customMappingEnabled || allowBackOnly), discoveryHIDMonitor == nil else { return }
         let monitor = makeHIDMonitor(
             profileID: nil,
             targetFingerprint: nil,
@@ -2137,7 +2143,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         discoveryHIDMonitor = monitor
         monitor.start(
             powerKeySuppressed: hidPowerKeySuppressed,
-            allowedLocationIDs: hidAllowedLocationIDs
+            allowedLocationIDs: hidAllowedLocationIDs,
+            allowBackOnly: allowBackOnly
         )
     }
 
