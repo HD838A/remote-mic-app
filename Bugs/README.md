@@ -52,6 +52,7 @@
 - [GitHub Actions 无法读取私有 Mac 远控组件](./2026-08-13-private-mac-remote-package-ci-access.md)
 - [真实候选版本号导致预发布生命周期测试夹具失败](./2026-08-13-preview-lifecycle-fixture-current-version.md)
 - [语音记录在快速发送或连续语音时丢失](./2026-08-17-transcript-history-quick-send-loss.md)
+- [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
 - [安装/卸载脚本在音频服务缺失时于成功之后报错中止](./2026-09-05-installer-audio-service-restart-aborts-script.md)
 - [Codex MCP 配置使用无效 TOML 转义](./codex-mcp-invalid-toml-escaping.md)
 
