@@ -217,6 +217,38 @@ enum AppleRemoteInteractionPolicy {
     }
 }
 
+struct AppleRemoteCircularNavigationAccumulator {
+    static let stepThreshold = 18.0
+    static let maximumStepsPerEvent = 3
+
+    private(set) var pendingPixels = 0.0
+
+    mutating func consume(_ pixels: Double) -> Int {
+        guard pixels != 0 else { return 0 }
+        if pendingPixels != 0, pendingPixels.sign != pixels.sign {
+            pendingPixels = 0
+        }
+        pendingPixels += pixels
+        let availableSteps = Int(abs(pendingPixels) / Self.stepThreshold)
+        guard availableSteps > 0 else { return 0 }
+
+        let emittedSteps = min(availableSteps, Self.maximumStepsPerEvent)
+        let direction = pendingPixels > 0 ? 1 : -1
+        pendingPixels -= Double(direction * emittedSteps) * Self.stepThreshold
+        return direction * emittedSteps
+    }
+
+    mutating func reset() {
+        pendingPixels = 0
+    }
+
+    static func movesLeft(for steps: Int) -> Bool {
+        // The Siri Remote click-wheel contract emits negative pixels clockwise
+        // and positive pixels counter-clockwise.
+        steps > 0
+    }
+}
+
 struct MobileRemoteButtonObservation: Equatable {
     let source: UsageEventSource
     let button: RemoteButton
@@ -533,6 +565,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var appleRemoteRepeatOperationCounter: UInt64 = 0
     private let appleRemoteAppSwitcherSession = KeyboardInjector.AppSwitcherSession()
     private var appleRemoteAppSwitcherTimeout: DispatchSourceTimer?
+    private var appleRemoteCircularNavigation = AppleRemoteCircularNavigationAccumulator()
     private var appleRemoteVoiceDevices = Set<SiriRemoteDeviceIdentity>()
     private var appleRemoteVoiceStopping = false
     private var appleRemoteVoiceStopOperation: UInt64 = 0
@@ -627,6 +660,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 feedback,
                 scrollArrowReversed: settings.siriRemoteScrollArrowReversed
             )
+        }
+        siriRemoteFeature.onContextualScroll = { [weak self] pixels in
+            self?.handleAppleRemoteContextualScroll(pixels) ?? false
         }
         siriRemoteFeature.onCenterTapConfirmation = { [weak self] _ in
             self?.siriRemoteCursorFeedback.activateHoveredElementIfAvailable() ?? false
@@ -3072,11 +3108,62 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "trigger=\(trigger.rawValue) success=\(submitted)"
         )
         if submitted {
+            if !wasActive {
+                appleRemoteCircularNavigation.reset()
+                siriRemoteFeature.setTouchRoutingMode(.circularNavigation)
+                AppLogger.shared.write(
+                    "APPLE REMOTE TOUCH_CONTEXT phase=started result=active " +
+                        "context=app_switcher direction=clockwise_next"
+                )
+            }
             scheduleAppleRemoteAppSwitcherTimeout()
         } else if wasActive {
             finishAppleRemoteAppSwitcher(reason: "tab_failed", confirmed: false)
         }
         return submitted
+    }
+
+    private func handleAppleRemoteContextualScroll(_ pixels: Double) -> Bool {
+        guard appleRemoteAppSwitcherSession.isActive else {
+            AppLogger.shared.write(
+                "APPLE REMOTE TOUCH_CONTEXT phase=ignored result=context_inactive " +
+                    "context=app_switcher"
+            )
+            return false
+        }
+
+        let steps = appleRemoteCircularNavigation.consume(pixels)
+        guard steps != 0 else {
+            AppLogger.shared.write(
+                "APPLE REMOTE TOUCH_CONTEXT phase=accumulating result=pending " +
+                    "context=app_switcher pixels=\(pixels)"
+            )
+            return true
+        }
+
+        let movesLeft = AppleRemoteCircularNavigationAccumulator.movesLeft(for: steps)
+        for completedStep in 0..<abs(steps) {
+            guard appleRemoteAppSwitcherSession.moveSelection(left: movesLeft) else {
+                AppLogger.shared.write(
+                    "APPLE REMOTE TOUCH_CONTEXT phase=navigate result=failed " +
+                        "context=app_switcher direction=\(movesLeft ? "left" : "right") " +
+                        "completed_steps=\(completedStep) requested_steps=\(abs(steps))"
+                )
+                finishAppleRemoteAppSwitcher(
+                    reason: "touch_navigate_failed",
+                    confirmed: false
+                )
+                return false
+            }
+        }
+
+        scheduleAppleRemoteAppSwitcherTimeout()
+        AppLogger.shared.write(
+            "APPLE REMOTE TOUCH_CONTEXT phase=navigate result=submitted " +
+                "context=app_switcher direction=\(movesLeft ? "left" : "right") " +
+                "steps=\(abs(steps)) pixels=\(pixels)"
+        )
+        return true
     }
 
     private func handleAppleRemoteAppSwitcherControlPress(
@@ -3134,6 +3221,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func finishAppleRemoteAppSwitcher(reason: String, confirmed: Bool) {
         appleRemoteAppSwitcherTimeout?.cancel()
         appleRemoteAppSwitcherTimeout = nil
+        appleRemoteCircularNavigation.reset()
+        siriRemoteFeature.setTouchRoutingMode(.standard)
         if appleRemoteAppSwitcherSession.isActive {
             _ = appleRemoteAppSwitcherSession.cancel()
         }
@@ -3143,6 +3232,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func beginAppleRemoteVoice(for device: SiriRemoteDeviceIdentity) {
+        if appleRemoteAppSwitcherSession.isActive {
+            finishAppleRemoteAppSwitcher(reason: "voice_started", confirmed: false)
+        }
         guard appleRemoteVoiceDevices.insert(device).inserted else { return }
         appleRemoteVoiceCaptureRetryWorkItem?.cancel()
         appleRemoteVoiceCaptureRetryWorkItem = nil

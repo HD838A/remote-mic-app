@@ -1198,101 +1198,45 @@ struct SettingsView: View {
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private var siriRemoteMappingPage: some View {
-        VStack(spacing: 0) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 14) {
-                    PageHeader(title: localization.text("button_mapping.page.title"))
-                        .fixedSize(horizontal: true, vertical: false)
-                    mappingHeaderToggle
-                    remoteDeviceSelector()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+        hardwareMappingPage(includeSiriScrollArrow: true) {
+            SiriRemoteMappingCanvas(
+                selectedControlID: $selectedSiriRemoteControlID,
+                activeControlIDs: model.activeAppleRemoteControlIDs,
+                voiceActive: model.activeAppleRemoteControlIDs.contains("siri"),
+                labels: SiriRemoteMappingCanvas.Labels(
+                    voiceTitle: localization.text("siri_remote.mapping.voice.title"),
+                    voiceFixed: localization.text("siri_remote.mapping.voice.fixed"),
+                    voiceDetail: localization.text("siri_remote.mapping.voice.detail"),
+                    missingPhoto: localization.text("siri_remote.mapping.photo.missing")
+                ),
+                buttonTitle: { controlID in
+                    siriRemoteButton(for: controlID)?.displayName(using: localization)
+                        ?? controlID
+                },
+                triggerTitle: { triggerID in
+                    ButtonTrigger(rawValue: triggerID)?.displayName(using: localization)
+                        ?? triggerID
+                },
+                actionSummary: { controlID, triggerID in
+                    guard let button = siriRemoteButton(for: controlID),
+                          let trigger = ButtonTrigger(rawValue: triggerID)
+                    else { return localization.text("action.disabled") }
+                    return mappingActionSummary(for: button, trigger: trigger)
+                },
+                onEdit: { controlID, triggerID in
+                    guard let button = siriRemoteButton(for: controlID),
+                          let trigger = ButtonTrigger(rawValue: triggerID)
+                    else { return }
+                    selectedSiriRemoteControlID = controlID
+                    selectedRemoteButton = button
+                    mappingActionFilter = .all
+                    isPresetApplicationActionsExpanded = false
+                    mappingEditingTarget = ShortcutEditingTarget(
+                        button: button,
+                        trigger: trigger
+                    )
                 }
-                HStack(alignment: .center, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        PageHeader(title: localization.text("button_mapping.page.title"))
-                            .fixedSize(horizontal: true, vertical: false)
-                        mappingHeaderToggle
-                    }
-                    remoteDeviceSelector()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-            .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Divider()
-
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        SiriRemoteMappingPage(
-                        selectedControlID: $selectedSiriRemoteControlID,
-                        activeControlIDs: model.activeAppleRemoteControlIDs,
-                        voiceActive: model.activeAppleRemoteControlIDs.contains("siri"),
-                        labels: SiriRemoteMappingPage.Labels(
-                            voiceTitle: localization.text("siri_remote.mapping.voice.title"),
-                            voiceFixed: localization.text("siri_remote.mapping.voice.fixed"),
-                            voiceDetail: localization.text("siri_remote.mapping.voice.detail"),
-                            missingPhoto: localization.text("siri_remote.mapping.photo.missing")
-                        ),
-                        buttonTitle: { controlID in
-                            siriRemoteButton(for: controlID)?.displayName(using: localization)
-                                ?? controlID
-                        },
-                        triggerTitle: { triggerID in
-                            ButtonTrigger(rawValue: triggerID)?.displayName(using: localization)
-                                ?? triggerID
-                        },
-                        actionSummary: { controlID, triggerID in
-                            guard let button = siriRemoteButton(for: controlID),
-                                  let trigger = ButtonTrigger(rawValue: triggerID)
-                            else { return localization.text("action.disabled") }
-                            return mappingActionSummary(for: button, trigger: trigger)
-                        },
-                        onEdit: { controlID, triggerID in
-                            guard let button = siriRemoteButton(for: controlID),
-                                  let trigger = ButtonTrigger(rawValue: triggerID)
-                            else { return }
-                            selectedSiriRemoteControlID = controlID
-                            selectedRemoteButton = button
-                            mappingActionFilter = .all
-                            isPresetApplicationActionsExpanded = false
-                            mappingEditingTarget = ShortcutEditingTarget(
-                                button: button,
-                                trigger: trigger
-                            )
-                        }
-                        )
-
-                        if let target = mappingEditingTarget {
-                            mappingEditorPanel(target)
-                                .id("mapping-action-editor")
-                        }
-
-                        mappingFooter(includeSiriScrollArrow: true)
-                    }
-                    .padding(22)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                .id(settings.selectedRemoteProfileID)
-                .compatibilityScrollEdgeEffect()
-                .onAppear {
-                    guard mappingEditingTarget != nil else { return }
-                    DispatchQueue.main.async {
-                        proxy.scrollTo("mapping-action-editor", anchor: .top)
-                    }
-                }
-                .onChange(of: mappingEditingTarget?.id) { targetID in
-                    guard targetID != nil else { return }
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            proxy.scrollTo("mapping-action-editor", anchor: .top)
-                        }
-                    }
-                }
-            }
+            )
         }
     }
 
@@ -1316,6 +1260,36 @@ struct SettingsView: View {
     #endif
 
     private var mappingPage: some View {
+        hardwareMappingPage {
+            RemoteMappingCanvas(
+                selectedButton: $selectedRemoteButton,
+                activeButtons: model.activeRemoteButtons,
+                voiceActive: model.isStreaming,
+                actionSummary: mappingActionSummary,
+                onEdit: { button, trigger in
+                    selectedRemoteButton = button
+                    mappingActionFilter = .all
+                    isPresetApplicationActionsExpanded = false
+                    mappingEditingTarget = ShortcutEditingTarget(
+                        button: button,
+                        trigger: trigger
+                    )
+                }
+            )
+            .onReceive(model.$activeRemoteButtons) { buttons in
+                selectedRemoteButton = MappingSelectionPolicy.selection(
+                    current: selectedRemoteButton,
+                    activeButtons: buttons,
+                    isLocked: isMappingSelectionLocked
+                )
+            }
+        }
+    }
+
+    private func hardwareMappingPage<HardwareCanvas: View>(
+        includeSiriScrollArrow: Bool = false,
+        @ViewBuilder hardwareCanvas: @escaping () -> HardwareCanvas
+    ) -> some View {
         VStack(spacing: 0) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: 14) {
@@ -1346,35 +1320,14 @@ struct SettingsView: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 16) {
-                        RemoteMappingCanvas(
-                            selectedButton: $selectedRemoteButton,
-                            activeButtons: model.activeRemoteButtons,
-                            voiceActive: model.isStreaming,
-                            actionSummary: mappingActionSummary,
-                            onEdit: { button, trigger in
-                                selectedRemoteButton = button
-                                mappingActionFilter = .all
-                                isPresetApplicationActionsExpanded = false
-                                mappingEditingTarget = ShortcutEditingTarget(
-                                    button: button,
-                                    trigger: trigger
-                                )
-                            }
-                        )
-                        .onReceive(model.$activeRemoteButtons) { buttons in
-                            selectedRemoteButton = MappingSelectionPolicy.selection(
-                                current: selectedRemoteButton,
-                                activeButtons: buttons,
-                                isLocked: isMappingSelectionLocked
-                            )
-                        }
+                        hardwareCanvas()
 
                         if let target = mappingEditingTarget {
                             mappingEditorPanel(target)
                                 .id("mapping-action-editor")
                         }
 
-                        mappingFooter()
+                        mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)
                     }
                     .padding(22)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1382,15 +1335,9 @@ struct SettingsView: View {
                 .id(settings.selectedRemoteProfileID)
                 .compatibilityScrollEdgeEffect()
                 .onAppear {
-                    guard let target = mappingEditingTarget else { return }
-                    let scrollTarget = settings.configuredAction(
-                        for: target.button,
-                        trigger: target.trigger
-                    ).action == .customShortcut
-                        ? "mapping-shortcut-editor-\(target.id)"
-                        : "mapping-action-editor"
+                    guard mappingEditingTarget != nil else { return }
                     DispatchQueue.main.async {
-                        proxy.scrollTo(scrollTarget, anchor: .top)
+                        proxy.scrollTo("mapping-action-editor", anchor: .top)
                     }
                 }
                 .onChange(of: mappingEditingTarget?.id) { targetID in

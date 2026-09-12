@@ -98,6 +98,11 @@ enum SiriRemoteTouchFeedbackKind: Equatable {
     case clicked
 }
 
+enum SiriRemoteTouchRoutingMode: String, Equatable {
+    case standard
+    case circularNavigation = "circular_navigation"
+}
+
 final class SiriRemoteFeatureIntegration {
     var onConnection: ((SiriRemoteConnection) -> Void)?
     var onControlEvent: ((SiriRemoteControlEvent) -> Void)?
@@ -105,6 +110,7 @@ final class SiriRemoteFeatureIntegration {
     var onStatus: ((String) -> Void)?
     var onPowerSnapshot: ((SiriRemotePowerSnapshot) -> Void)?
     var onTouchFeedback: ((SiriRemoteTouchFeedbackKind) -> Void)?
+    var onContextualScroll: ((Double) -> Bool)?
     var onCenterTapConfirmation: ((SiriRemoteDeviceIdentity) -> Bool)?
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
@@ -153,6 +159,9 @@ final class SiriRemoteFeatureIntegration {
             case .clicked:
                 self?.onTouchFeedback?(.clicked)
             }
+        }
+        feature.onContextualScroll = { [weak self] pixels in
+            self?.onContextualScroll?(pixels) ?? false
         }
         feature.onPowerSnapshot = { [weak self] snapshot in
             guard let model = Self.hostModel(snapshot.model),
@@ -221,6 +230,15 @@ final class SiriRemoteFeatureIntegration {
     func setVoiceTouchSuppressed(_ suppressed: Bool) {
         #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
         feature.setVoiceTouchSuppressed(suppressed)
+        #endif
+    }
+
+    func setTouchRoutingMode(_ mode: SiriRemoteTouchRoutingMode) {
+        #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+        guard let privateMode = SayAllSiriRemoteTouchRoutingMode(rawValue: mode.rawValue) else {
+            return
+        }
+        feature.setTouchRoutingMode(privateMode)
         #endif
     }
 

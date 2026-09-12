@@ -5,7 +5,7 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
-    @Test func siriRemoteMappingPageIsRoutedSeparatelyFromXiaomiPages() throws {
+    @Test func everyHardwareMappingPageUsesTheSharedHostEditor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -21,7 +21,10 @@ struct SettingsPageRegressionTests {
         #expect(settingsSource.contains("#if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)"))
         #expect(settingsSource.contains("siriRemoteMappingPage"))
         #expect(settingsSource.contains("model.isAppleSiriRemote"))
-        #expect(settingsSource.contains("SiriRemoteMappingPage("))
+        #expect(settingsSource.contains("SiriRemoteMappingCanvas("))
+        #expect(settingsSource.contains("private func hardwareMappingPage<HardwareCanvas: View>"))
+        #expect(settingsSource.components(separatedBy: "hardwareMappingPage").count >= 4)
+        #expect(settingsSource.components(separatedBy: "mappingEditorPanel(target)").count == 2)
         #expect(packageSource.contains("SAYALL_SIRI_REMOTE_ENABLED"))
         #expect(packageSource.contains("SAYALL_SIRI_REMOTE_PACKAGE_PATH"))
     }
@@ -394,11 +397,15 @@ struct SettingsPageRegressionTests {
         )
 
         let mappingPage = try #require(settingsSource.range(of: "private var mappingPage"))
-        let editorPanel = try #require(settingsSource.range(
-            of: "private func mappingEditorPanel",
+        let sharedPage = try #require(settingsSource.range(
+            of: "private func hardwareMappingPage<HardwareCanvas: View>",
             range: mappingPage.upperBound..<settingsSource.endIndex
         ))
-        let mappingSource = settingsSource[mappingPage.lowerBound..<editorPanel.lowerBound]
+        let editorPanel = try #require(settingsSource.range(
+            of: "private func mappingEditorPanel",
+            range: sharedPage.upperBound..<settingsSource.endIndex
+        ))
+        let mappingSource = settingsSource[sharedPage.lowerBound..<editorPanel.lowerBound]
 
         #expect(mappingSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(mappingSource.contains("private var mappingHeaderToggle"))
@@ -407,21 +414,8 @@ struct SettingsPageRegressionTests {
         #expect(mappingSource.contains(".frame(maxWidth: .infinity, alignment: .trailing)"))
         #expect(mappingSource.contains(".fixedSize(horizontal: true, vertical: false)"))
 
-        let siriMappingPage = try #require(settingsSource.range(
-            of: "private var siriRemoteMappingPage"
-        ))
-        let siriMappingEnd = try #require(settingsSource.range(
-            of: "private func siriRemoteButton",
-            range: siriMappingPage.upperBound..<settingsSource.endIndex
-        ))
-        let siriMappingSource = settingsSource[
-            siriMappingPage.lowerBound..<siriMappingEnd.lowerBound
-        ]
-        #expect(!siriMappingSource.contains(".frame(width: 400)"))
-        #expect(!siriMappingSource.contains(".frame(width: 320)"))
-        #expect(siriMappingSource.contains(
-            ".frame(maxWidth: .infinity, alignment: .trailing)"
-        ))
+        #expect(settingsSource.contains("hardwareMappingPage(includeSiriScrollArrow: true)"))
+        #expect(settingsSource.contains("hardwareMappingPage {"))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {
@@ -442,16 +436,15 @@ struct SettingsPageRegressionTests {
         #expect(connectionSource.contains("private var connectionRemotePhoto"))
         #expect(connectionSource.contains("SiriRemoteConnectionPhoto()"))
 
-        let siriPage = try #require(source.range(of: "private var siriRemoteMappingPage"))
-        let siriSource = source[siriPage.lowerBound..<mappingPage.lowerBound]
-        #expect(siriSource.contains(".id(settings.selectedRemoteProfileID)"))
-
         let mappingEnd = try #require(source.range(
             of: "private func mappingEditorPanel",
             range: mappingPage.upperBound..<source.endIndex
         ))
         let mappingSource = source[mappingPage.lowerBound..<mappingEnd.lowerBound]
         #expect(mappingSource.contains(".id(settings.selectedRemoteProfileID)"))
+        #expect(mappingSource.components(
+            separatedBy: ".id(settings.selectedRemoteProfileID)"
+        ).count == 2)
     }
 
     @Test func mappingFooterUsesCompactLayoutAtMinimumWindowWidth() throws {
@@ -806,7 +799,10 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("Toggle(\"button_mapping.rapid_press\""))
         #expect(source.contains("button_mapping.rapid_press_hint_short"))
         #expect(source.contains("button_mapping.rapid_press_help"))
-        #expect(source.contains("mappingFooter(includeSiriScrollArrow: true)"))
+        #expect(source.contains("hardwareMappingPage(includeSiriScrollArrow: true)"))
+        #expect(source.contains(
+            "mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)"
+        ))
         #expect(source.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(source.contains("siriRemoteScrollArrowControl"))
         #expect(RemoteMappingLayout.remoteSize.height == 510)

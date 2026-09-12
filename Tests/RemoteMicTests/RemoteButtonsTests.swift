@@ -973,6 +973,39 @@ struct RemoteButtonsTests {
         #expect(posted[9].2.isEmpty)
     }
 
+    @Test func appleRemoteCircularNavigationAccumulatesNoiseAndPreservesDirection() {
+        var accumulator = AppleRemoteCircularNavigationAccumulator()
+
+        #expect(accumulator.consume(8) == 0)
+        #expect(accumulator.consume(9) == 0)
+        #expect(accumulator.consume(1) == 1)
+        #expect(accumulator.pendingPixels == 0)
+        #expect(accumulator.consume(-18) == -1)
+    }
+
+    @Test func appleRemoteCircularNavigationDropsOppositeDirectionRemainder() {
+        var accumulator = AppleRemoteCircularNavigationAccumulator()
+
+        #expect(accumulator.consume(12) == 0)
+        #expect(accumulator.consume(-7) == 0)
+        #expect(accumulator.pendingPixels == -7)
+        #expect(accumulator.consume(-11) == -1)
+    }
+
+    @Test func appleRemoteCircularNavigationCapsBurstAndCanReset() {
+        var accumulator = AppleRemoteCircularNavigationAccumulator()
+
+        #expect(accumulator.consume(AppleRemoteCircularNavigationAccumulator.stepThreshold * 5) == 3)
+        #expect(accumulator.pendingPixels == AppleRemoteCircularNavigationAccumulator.stepThreshold * 2)
+        accumulator.reset()
+        #expect(accumulator.pendingPixels == 0)
+    }
+
+    @Test func appleRemoteCircularNavigationMapsClickWheelDirectionToAppSwitcher() {
+        #expect(!AppleRemoteCircularNavigationAccumulator.movesLeft(for: -1))
+        #expect(AppleRemoteCircularNavigationAccumulator.movesLeft(for: 1))
+    }
+
     @Test func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherControls.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
