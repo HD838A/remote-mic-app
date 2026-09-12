@@ -13,11 +13,6 @@
 <table>
   <tr>
     <td align="center">
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb"><img src="Screenshots/community-entry-qrcode.png" alt="无线麦 APP 飞书固定入口" width="220"></a><br>
-      <strong>飞书固定入口</strong><br>
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb">点击打开最新加群页面</a>
-    </td>
-    <td align="center">
       <img src="Screenshots/wechat-group-qrcode.jpg" alt="无线麦 APP 微信群二维码" width="220"><br>
       <strong>微信群二维码</strong><br>
       微信扫码加入交流群
@@ -32,8 +27,15 @@
 
 ## Windows 版本
 
-Windows 版本正在开发，敬请期待！
-无线麦 SayAll.app Windows 版本地址：[https://github.com/GetSayAll/remote-mic-app-windows](https://github.com/GetSayAll/remote-mic-app-windows)，目前还没有内测版本放出，敬请期待。
+无线麦 App Windows 版本的第一个预览版已经发布，当前以基本功能为主：
+
+- 支持小米蓝牙遥控器 2 和 2 Pro；
+- 语音输入目前仅支持微信输入法；
+- 语音输入快捷键为 `Ctrl + Win`。
+
+欢迎下载体验。无线麦 App Windows 版本理论上不会被游戏反作弊或杀毒软件警告；如有顾虑，建议先使用 AI 扫描源码，再安装试用。
+
+[下载 Windows 预览版](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
 
 iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8k8fb7v)
 
@@ -81,7 +83,7 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 ## 使用要求
 
 - Apple Silicon Mac（macOS 14 或更高版本），或 Intel Mac（macOS 13 或更高版本）；
-- 小米蓝牙遥控器 2 Pro；
+- 小米蓝牙遥控器 2 或 2 Pro；
 - 使用语音输入时，需要安装随安装包提供的兼容麦克风，或在 Mac 上已有 BlackHole 2ch 等回环音频设备。
 
 ## 下载与安装
@@ -93,7 +95,7 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 `Remote-Mic-<版本>-Intel.dmg`，两者不能混用。
 
-打开 DMG 后只需双击唯一的 `Install Remote Mic.pkg`；Intel Mac 使用 `Install Remote Mic Intel.pkg`。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
+打开 DMG 后只需双击唯一的 `Install SayAll.pkg`；Intel Mac 使用 `Install SayAll Intel.pkg`。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
 自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从官网 Cloudflare CDN 固定入口或本项目 GitHub Releases 下载；如需核验，请使用同一 GitHub Release 中的 `Remote-Mic-<版本>.dmg.sha256`，它会按文件名列出两种架构的 DMG。
 
@@ -137,11 +139,11 @@ Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 
 
 ### Typeless 兼容
 
-Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝牙遥控器 2 Pro 默认的 Fn 长按行为不兼容。在“按键映射”的语音键区域开启“语音键模拟 Fn 点按”后，无线麦会在语音流开始和排空结束时各发送一次 Fn 点按。Typeless 和无线麦仍需选择同一个回环设备，并需授予无线麦“辅助功能”权限。
+Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝牙遥控器 2 和 2 Pro 默认的 Fn 长按行为不兼容。在“按键映射”的语音键区域开启“语音键模拟 Fn 点按”后，无线麦会在语音流开始和排空结束时各发送一次 Fn 点按。Typeless 和无线麦仍需选择同一个回环设备，并需授予无线麦“辅助功能”权限。
 
-该模式仍然要求**按住小米蓝牙遥控器 2 Pro 语音键说话、松开结束**；小米蓝牙遥控器 2 Pro 固件在松开语音键后不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或小米蓝牙遥控器 2 Pro HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
+该模式仍然要求**按住小米蓝牙遥控器 2 或 2 Pro 语音键说话、松开结束**；这两款遥控器的固件在松开语音键后都不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或遥控器 HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
 
-豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 `Install Remote Mic.pkg`，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
+豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 `Install SayAll.pkg`，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
 
 ![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
 
@@ -191,7 +193,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 ## 卸载
 
 1. 退出无线麦。
-2. 从同一 GitHub Release 下载并运行 `Uninstall Remote Mic.pkg`。
+2. 从同一 GitHub Release 下载并运行 `SayAll-<版本>-Uninstaller.pkg`。
 
 卸载器会核对 Bundle ID，然后把已识别的 `SayAll.app`、历史 `Remote Mic.app` / `无线麦.app` 和 `MiRemoteV 2ch` 移到 macOS 废纸篓，需要时可恢复。它不会修改 BlackHole 或无线麦的本地设置；同名但无法确认归属的内容会保留在原位。
 
@@ -199,7 +201,9 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 请先查看[排障指南](TROUBLESHOOTING.md)。首次安装的完整步骤见[首次安装说明](Resources/首次安装说明.md)。
 
-开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)；新增或重命名仓库文件前请阅读[文件命名规范](FILE_NAMING.md)。
+所有人开发新功能前，包括仓库作者、维护者、外部贡献者和自动化 Agent，都必须阅读并遵守[新功能开发规范](FEATURE_DEVELOPMENT.md)。
+
+开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)；分支与 PR 管理见[分支与提交管理策略](BRANCH_MANAGEMENT.md)；新增或重命名仓库文件前请阅读[文件命名规范](FILE_NAMING.md)。
 
 后续开发计划见 [TODO](TODO.md)。
 

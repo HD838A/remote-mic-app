@@ -21,7 +21,7 @@
 - Move SayAll, legacy app paths, and the driver to the Trash during uninstall, with rollback on replacement failure.
 - Remove the Finder entry from recording-only Reflections records while keeping playback, export, and Trash actions.
 
-## 1.9.18 (Pre-release)
+## 1.9.18 (Stable)
 
 - Improved Reflections browsing stability for large histories, avoiding duplicate, blank, and jittery rows.
 - All Apps now shows the last 7 days by default; select an app to view its complete history.
@@ -104,7 +104,7 @@
 - Added clearer upgrade checks and recovery guidance when permissions are missing.
 - Enhanced layered HID button-path diagnostics to continue investigating intermittent lost input.
 
-## 1.8.25 (Pre-release)
+## 1.8.25 (Stable)
 
 - Opening an installer for the wrong architecture now clearly points to the correct version for the current Mac.
 - Updated SayAll branding and standardized the in-app website link on sayall.app.
@@ -191,7 +191,7 @@
 - Added Command-W, Command-X, Command-A, Command-Z, Command-Shift-Z, Command-F, and Command-S to Basic Keys, so common window, editing, search, and save actions can be mapped directly to remote buttons.
 - Remote Mic now supports the standard Command-Q shortcut to quit and Command-W to close the Settings window while keeping the menu-bar app running.
 
-## 1.8.3 (Pre-release)
+## 1.8.3 (Stable)
 
 - Fixed custom button controls remaining visibly enabled but inactive after a Sparkle upgrade until the toggle was turned off and on. The app now waits for the previous process to release HID access and rebuilds button monitoring automatically after an update.
 
@@ -215,7 +215,7 @@
 - Fixed cross-device button routing, unexpected selection changes, and continuous actions or system error sounds when holding custom shortcuts, navigation buttons, or Delete.
 - When custom button controls are enabled without the required permissions, the app now explains what is missing, opens the Permissions page, and applies the setting after authorization.
 
-## 1.7.8 (Pre-release)
+## 1.7.8 (Stable)
 
 - Redesigned Connection & Voice around the physical remote, voice output, compatible microphone, and phone connections while retaining reconnect, device selection, TestFlight, Mobile Web, and trusted-device controls.
 - Redesigned Button Mapping to show every button's single-click, double-click, and long-press settings at a glance, with an option to lock the button currently being edited.
@@ -227,30 +227,30 @@
 - Configurable Mobile Web and nearby iPhone/iPad buttons now support the same single-click, double-click, and long-press actions as the physical remote while keeping gesture state isolated between connection types.
 - Added a hard launch gate for the final ZIP and PKG artifacts: both must pass two launches, a normal quit, and crash-report checks on an interactive Mac with the remote connected before publication.
 
-## 1.7.5
+## 1.7.5 (Stable)
 
 - Silently falls back to the stable update feed when no pre-release exists or the candidate lookup times out or is temporarily unavailable, without showing an error alert.
 - Corrected daily and weekly history attribution: usage without a known date remains available only in All Time and is no longer guessed to be earlier activity.
 - Added richer on-device aggregate metadata for future statistics views, including input source, control or voice entry point, hourly distribution, voice-session counts and duration, longest session, and first/last activity times; device identifiers, user text, and audio are not stored.
 
-## 1.7.4
+## 1.7.4 (Stable)
 
 - Clarified the on-device voice-session ranking description so its storage scope and displayed results are easier to understand.
 
-## 1.7.3
+## 1.7.3 (Stable)
 
 - Fixed update-channel fallback so enabling pre-release checks can never prevent stable updates from being detected when the candidate feed is unavailable or stale.
 - Added a private, on-device Top 10 list of the longest voice sessions recorded from this version onward; no usage data is uploaded.
 
-## 1.7.2
+## 1.7.2 (Stable)
 
 - Replaced the remote-control product image with a clearer, consistent rendering across the connection and button-mapping pages while preserving interactive button alignment.
 
-## 1.7.1
+## 1.7.1 (Stable)
 
 - Fixed weekly charts not reconciling with all-time totals. They now show the recent seven weeks plus an Earlier bucket for legacy and older history without inventing dates, and voice labels use precise clock durations that add up to the all-time value.
 
-## 1.7.0
+## 1.7.0 (Stable)
 
 - Fixed production builds that omitted the Mobile Web relay endpoint; release builds and final App verification now fail when the endpoint is missing.
 - Clarified that the iOS TestFlight beta does not require an invite code, and fixed duplicate Return submission and unreliable QR-sheet transitions.
@@ -291,21 +291,21 @@
 - Fixed the iPhone middle controls to Back / TV / Volume Up on the first row and Home / Menu / Volume Down on the second row.
 - Synced concise, bounded action titles to the corresponding iPhone buttons when the Mac uses non-default button mappings.
 
-## 1.6.4
+## 1.6.4 (Stable)
 
 - Made phone remote control an optional, on-demand backup. Nearby phone connections now remain off at Mac launch and start only after the user clicks Connect Phone.
 
-## 1.6.3
+## 1.6.3 (Stable)
 
 - Changed the first-connection verification code shown on iPhone and Mac from six digits to two digits, with matching values on both devices.
 
-## 1.6.2
+## 1.6.2 (Stable)
 
 - Remembered an approved phone installation for future nearby connections, with a Settings action to clear trusted phones.
 - Improved pairing-code synchronization and visibility, including reconnecting after the iOS App restarts.
 - Fixed microphone startup failures that could occur even when iPhone microphone access was already enabled, while keeping technical errors out of user-facing messages.
 
-## 1.6.1
+## 1.6.1 (Stable)
 
 - Added nearby iPhone/iPad remote control and push-to-talk with pairing-code verification and encrypted transport.
 - Reused the Mac's current button mappings and routed phone microphone audio into the existing virtual audio output.
@@ -316,18 +316,18 @@
 - Replaced implementation terminology in ordinary screens with user-facing product language and added a bilingual Glossary entry to About.
 - Hid the visible window title and separator so the page background blends naturally with the native macOS window controls.
 
-## 1.5.1
+## 1.5.1 (Stable)
 
 - Opened the main window by default on ordinary launches, with an About-page preference to disable it.
 - Always brought the main window and update-completed confirmation to the front after an update relaunch.
 
-## 1.5.0
+## 1.5.0 (Stable)
 
 - Redesigned About so the version and update check appear together.
 - Made every language option permanently visible and added in-app version history.
 - Synchronized the macOS 14 support, installation, release, and technical documentation.
 
-## 1.4.13
+## 1.4.13 (Stable)
 
 - Fixed an AppKit exception caused by reusing attached menu items while rebuilding the menu after a language change.
 
@@ -336,12 +336,12 @@
 - Lowered the minimum system version to macOS 14.0 while remaining Apple Silicon only.
 - Kept Liquid Glass on macOS 26 and added compatible styling for macOS 14/15.
 
-## 1.4.11
+## 1.4.11 (Stable)
 
 - Added configuration import and export.
 - Added local-only button-press and voice-duration usage totals.
 
-## 1.4.10
+## 1.4.10 (Stable)
 
 - Fixed terminal input refocusing when cmux was already frontmost.
 
@@ -358,10 +358,10 @@
 - Added guarded pre-release publishing and full-release promotion.
 - Added automatic input focus after opening supported apps.
 
-## 1.4.6
+## 1.4.6 (Stable)
 
 - Fixed installation asking ordinary users to download the Xcode Command Line Tools.
 
-## 1.4.5
+## 1.4.5 (Stable)
 
 - Fixed a crash after sleep/wake or audio-route changes when reopening the app window.

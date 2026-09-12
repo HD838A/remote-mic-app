@@ -4,6 +4,9 @@ import Combine
 import CoreBluetooth
 import SayAllMacRemoteCore
 import SayAllMacRemoteUI
+#if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+import SayAllSiriRemote
+#endif
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -32,7 +35,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .statistics: return "settings.section.statistics"
         case .transcripts: return "settings.section.transcripts"
         case .permissions: return "settings.section.permissions"
-        case .about: return "settings.section.about"
+        case .about: return "settings.section.settings"
         }
     }
 
@@ -44,11 +47,128 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .buttonProfiles: return "rectangle.3.group"
         case .membership: return "crown.fill"
         case .mapping: return "keyboard"
-        case .statistics: return "chart.bar.xaxis"
+        case .statistics: return "person.crop.circle"
         case .transcripts: return "text.bubble.fill"
         case .permissions: return "shield.lefthalf.filled"
-        case .about: return "info.circle"
+        case .about: return "gearshape"
         }
+    }
+}
+
+enum SettingsPermissionKind {
+    case bluetooth
+    case inputMonitoring
+    case accessibility
+}
+
+enum SettingsPermissionAction: Equatable {
+    case request
+    case openSystemSettings(String)
+
+    var titleKey: String {
+        switch self {
+        case .request:
+            "permission.action.request"
+        case .openSystemSettings:
+            "permission.action.open_settings"
+        }
+    }
+}
+
+struct SettingsNavigationState: Equatable {
+    let selectedSection: SettingsSection
+    let expandedShareSection: SettingsSection?
+}
+
+struct SettingsDiagnosticSnapshot: Equatable {
+    let appVersion: String
+    let bluetoothGranted: Bool
+    let inputMonitoringGranted: Bool
+    let accessibilityGranted: Bool
+    let runtimeLogAvailable: Bool
+
+    var summary: String {
+        [
+            "SayAll settings diagnostics",
+            "app_version=\(appVersion)",
+            "permission_bluetooth=\(bluetoothGranted)",
+            "permission_input_monitoring=\(inputMonitoringGranted)",
+            "permission_accessibility=\(accessibilityGranted)",
+            "runtime_log_available=\(runtimeLogAvailable)",
+        ].joined(separator: "\n")
+    }
+
+    var auditLog: String {
+        "SETTINGS DIAGNOSTICS copied permission_bluetooth=\(bluetoothGranted) " +
+            "permission_input_monitoring=\(inputMonitoringGranted) " +
+            "permission_accessibility=\(accessibilityGranted)"
+    }
+}
+
+enum RemoteBatteryPresentationPolicy {
+    static func shouldShowBattery(
+        model: XiaomiRemoteModel,
+        level: Int?,
+        powerState: RemotePowerState?
+    ) -> Bool {
+        guard model.isAppleSiriRemote else { return true }
+        guard level == nil else { return true }
+        return powerState == .charging || powerState == .externalPower
+    }
+}
+
+enum SettingsPageBehavior {
+    static func visibleSection(for requestedSection: SettingsSection) -> SettingsSection {
+        requestedSection == .permissions ? .about : requestedSection
+    }
+
+    static let shareNavigationState = SettingsNavigationState(
+        selectedSection: .about,
+        expandedShareSection: .about
+    )
+
+    static func permissionAction(
+        for permission: SettingsPermissionKind,
+        isGranted: Bool
+    ) -> SettingsPermissionAction {
+        switch permission {
+        case .bluetooth:
+            .openSystemSettings("x-apple.systempreferences:com.apple.BluetoothSettings")
+        case .inputMonitoring:
+            isGranted
+                ? .openSystemSettings(
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+                )
+                : .request
+        case .accessibility:
+            isGranted
+                ? .openSystemSettings(
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+                )
+                : .request
+        }
+    }
+
+    static func perform(
+        _ action: SettingsPermissionAction,
+        requestPermission: () -> Void,
+        openSystemSettings: (String) -> Void
+    ) {
+        switch action {
+        case .request:
+            requestPermission()
+        case let .openSystemSettings(url):
+            openSystemSettings(url)
+        }
+    }
+
+    static func copyDiagnosticSummary(
+        _ snapshot: SettingsDiagnosticSnapshot,
+        writeToPasteboard: (String) -> Void,
+        writeAuditLog: (String) -> Void
+    ) {
+        writeToPasteboard(snapshot.summary)
+        writeAuditLog(snapshot.auditLog)
     }
 }
 
@@ -130,6 +250,37 @@ private struct ConfigurationStatus {
     let systemImage: String
 }
 
+private enum MappingActionFilter: String, CaseIterable, Identifiable {
+    case all
+    case basicKeys
+    case systemAndMedia
+    case custom
+
+    var id: String { rawValue }
+
+    var localizationKey: String {
+        switch self {
+        case .all: return "button_mapping.action_filter.all"
+        case .basicKeys: return ButtonActionCategory.basicKeys.localizationKey
+        case .systemAndMedia: return ButtonActionCategory.systemAndMedia.localizationKey
+        case .custom: return ButtonActionCategory.custom.localizationKey
+        }
+    }
+
+    func includes(_ category: ButtonActionCategory) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .basicKeys:
+            return category == .basicKeys
+        case .systemAndMedia:
+            return category == .systemAndMedia
+        case .custom:
+            return category == .custom || category == .applications
+        }
+    }
+}
+
 enum MappingSelectionPolicy {
     static func selection(
         current: RemoteButton,
@@ -175,6 +326,7 @@ struct SettingsView: View {
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @ObservedObject private var loginItemService: LoginItemService
     @ObservedObject private var updateInformation: UpdateInformationStore
+    @ObservedObject private var hardwareAnnouncements: HardwareAnnouncementStore
     @EnvironmentObject private var localization: LocalizationStore
 
     private let checkForUpdates: () -> Void
@@ -187,19 +339,20 @@ struct SettingsView: View {
         .macros,
         .buttonProfiles,
         .membership,
-        .statistics,
         .transcripts,
         .connection,
         .privateFeature,
-        .permissions,
         .about,
+        .statistics,
     ]
 
     @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
+    @State private var selectedSiriRemoteControlID = "select"
     @State private var isMappingSelectionLocked = true
-    @State private var selectedUsagePeriod: UsageStatisticsPeriod = .today
+    @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
+    @State private var mappingActionFilter: MappingActionFilter = .all
     @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
@@ -225,6 +378,7 @@ struct SettingsView: View {
     init(
         model: BridgeAppModel,
         updateInformation: UpdateInformationStore,
+        hardwareAnnouncements: HardwareAnnouncementStore = HardwareAnnouncementStore(),
         checkForUpdates: @escaping () -> Void = {},
         refreshUpdateInformation: @escaping () -> Void = {},
         setDockIconVisible: @escaping (Bool) -> Void = { _ in },
@@ -242,6 +396,7 @@ struct SettingsView: View {
         membershipFeature = model.membershipFeature
         loginItemService = model.loginItemService
         self.updateInformation = updateInformation
+        self.hardwareAnnouncements = hardwareAnnouncements
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
@@ -463,13 +618,14 @@ struct SettingsView: View {
             WindowDragArea()
                 .frame(height: 56)
                 .accessibilityHidden(true)
-            ForEach(visibleSections) { section in
+            ForEach(visibleSections.filter { $0 != .statistics }) { section in
                 sidebarButton(section)
             }
             Spacer(minLength: 0)
             Button {
-                selectedSection = .about
-                expandedShareSection = .about
+                let navigation = SettingsPageBehavior.shareNavigationState
+                selectedSection = navigation.selectedSection
+                expandedShareSection = navigation.expandedShareSection
             } label: {
                 VStack(spacing: 7) {
                     Image(systemName: "square.and.arrow.up")
@@ -485,6 +641,9 @@ struct SettingsView: View {
             .compatibilityFocusEffectDisabled()
             .foregroundStyle(Color.secondary)
             .accessibilityLabel(Text("share.sidebar.accessibility_label"))
+            if visibleSections.contains(.statistics) {
+                sidebarButton(.statistics)
+            }
         }
         .background(Color(nsColor: .controlBackgroundColor))
     }
@@ -531,7 +690,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var selectedPage: some View {
-        switch selectedSection {
+        switch SettingsPageBehavior.visibleSection(for: selectedSection) {
         case .connection:
             connectionPage
         case .privateFeature:
@@ -545,6 +704,7 @@ struct SettingsView: View {
                 VStack(spacing: 0) {
                     macroFeature.settingsView(
                         selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                        remoteModel: settings.selectedRemoteProfile?.model,
                         configuredActionTitle: { buttonValue, triggerValue in
                             guard let button = RemoteButton(rawValue: buttonValue),
                                   let trigger = ButtonTrigger(rawValue: triggerValue)
@@ -571,6 +731,7 @@ struct SettingsView: View {
             if macroFeature.isFeatureVisible {
                 macroFeature.buttonProfilesView(
                     selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                    remoteModel: settings.selectedRemoteProfile?.model,
                     hostActionSections: buttonProfileHostActionSections
                 )
             } else {
@@ -583,21 +744,30 @@ struct SettingsView: View {
                 aboutPage
             }
         case .mapping:
-            mappingPage
+            if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
+                #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+                siriRemoteMappingPage
+                #else
+                mappingPage
+                #endif
+            } else {
+                mappingPage
+            }
         case .statistics:
             statisticsPage
         case .transcripts:
             transcriptHistoryPage
         case .permissions:
-            permissionsPage
+            aboutPage
         case .about:
             aboutPage
         }
     }
 
     private func settingsPage<Header: View, Content: View>(
+        contentPadding: CGFloat = 22,
         @ViewBuilder header: () -> Header,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         VStack(spacing: 0) {
             header()
@@ -608,12 +778,28 @@ struct SettingsView: View {
 
             Divider()
 
-            ScrollView(.vertical, showsIndicators: false) {
-                content()
-                    .padding(22)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    content()
+                        .padding(contentPadding)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .compatibilityScrollEdgeEffect()
+                .onChange(of: expandedShareSection) { section in
+                    guard let section else { return }
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            proxy.scrollTo(shareAnchor(for: section), anchor: .bottom)
+                        }
+                    }
+                }
+                .onAppear {
+                    guard let section = expandedShareSection else { return }
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(shareAnchor(for: section), anchor: .bottom)
+                    }
+                }
             }
-            .compatibilityScrollEdgeEffect()
         }
     }
 
@@ -822,8 +1008,7 @@ struct SettingsView: View {
             VStack(spacing: 16) {
                 remoteDeviceSelector(vertical: true)
 
-                RC003Photo()
-                    .frame(width: 82, height: 166)
+                connectionRemotePhoto
 
                 VStack(alignment: .leading, spacing: 9) {
                     connectionStatusLine(
@@ -858,6 +1043,21 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
 
             }
+        }
+    }
+
+    @ViewBuilder
+    private var connectionRemotePhoto: some View {
+        if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
+            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+            SiriRemoteConnectionPhoto()
+            #else
+            RC003Photo()
+                .frame(width: 82, height: 166)
+            #endif
+        } else {
+            RC003Photo()
+                .frame(width: 82, height: 166)
         }
     }
 
@@ -992,6 +1192,109 @@ struct SettingsView: View {
         }
     }
 
+    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+    private var siriRemoteMappingPage: some View {
+        VStack(spacing: 0) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 14) {
+                    PageHeader(title: localization.text("button_mapping.page.title"))
+                        .fixedSize(horizontal: true, vertical: false)
+                    mappingHeaderToggle
+                    remoteDeviceSelector()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                HStack(alignment: .center, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        PageHeader(title: localization.text("button_mapping.page.title"))
+                            .fixedSize(horizontal: true, vertical: false)
+                        mappingHeaderToggle
+                    }
+                    remoteDeviceSelector()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Divider()
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 16) {
+                    SiriRemoteMappingPage(
+                        selectedControlID: $selectedSiriRemoteControlID,
+                        activeControlIDs: model.activeAppleRemoteControlIDs,
+                        voiceActive: model.activeAppleRemoteControlIDs.contains("siri"),
+                        labels: SiriRemoteMappingPage.Labels(
+                            voiceTitle: localization.text("siri_remote.mapping.voice.title"),
+                            voiceFixed: localization.text("siri_remote.mapping.voice.fixed"),
+                            voiceDetail: localization.text("siri_remote.mapping.voice.detail"),
+                            touchDetail: localization.text("siri_remote.mapping.touch.detail"),
+                            missingPhoto: localization.text("siri_remote.mapping.photo.missing")
+                        ),
+                        buttonTitle: { controlID in
+                            siriRemoteButton(for: controlID)?.displayName(using: localization)
+                                ?? controlID
+                        },
+                        triggerTitle: { triggerID in
+                            ButtonTrigger(rawValue: triggerID)?.displayName(using: localization)
+                                ?? triggerID
+                        },
+                        actionSummary: { controlID, triggerID in
+                            guard let button = siriRemoteButton(for: controlID),
+                                  let trigger = ButtonTrigger(rawValue: triggerID)
+                            else { return localization.text("action.disabled") }
+                            return mappingActionSummary(for: button, trigger: trigger)
+                        },
+                        onEdit: { controlID, triggerID in
+                            guard let button = siriRemoteButton(for: controlID),
+                                  let trigger = ButtonTrigger(rawValue: triggerID)
+                            else { return }
+                            selectedSiriRemoteControlID = controlID
+                            selectedRemoteButton = button
+                            isPresetApplicationActionsExpanded = false
+                            mappingEditingTarget = ShortcutEditingTarget(
+                                button: button,
+                                trigger: trigger
+                            )
+                        }
+                    )
+
+                    if let target = mappingEditingTarget {
+                        mappingEditorPanel(target)
+                            .id("mapping-action-editor")
+                    }
+
+                    mappingFooter(includeSiriScrollArrow: true)
+                }
+                .padding(22)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .id(settings.selectedRemoteProfileID)
+            .compatibilityScrollEdgeEffect()
+        }
+    }
+
+    private func siriRemoteButton(for controlID: String) -> RemoteButton? {
+        switch controlID {
+        case "power": return .power
+        case "up": return .up
+        case "left": return .left
+        case "select": return .ok
+        case "right": return .right
+        case "down": return .down
+        case "back": return .back
+        case "tv": return .tv
+        case "play_pause": return .playPause
+        case "volume_up": return .volumeUp
+        case "mute": return .mute
+        case "volume_down": return .volumeDown
+        default: return nil
+        }
+    }
+    #endif
+
     private var mappingPage: some View {
         VStack(spacing: 0) {
             ViewThatFits(in: .horizontal) {
@@ -999,9 +1302,8 @@ struct SettingsView: View {
                     PageHeader(title: localization.text("button_mapping.page.title"))
                         .fixedSize(horizontal: true, vertical: false)
                     mappingHeaderToggle
-                    Spacer()
                     remoteDeviceSelector()
-                        .frame(width: 400)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
 
                 HStack(alignment: .center, spacing: 14) {
@@ -1010,9 +1312,8 @@ struct SettingsView: View {
                             .fixedSize(horizontal: true, vertical: false)
                         mappingHeaderToggle
                     }
-                    Spacer(minLength: 14)
                     remoteDeviceSelector()
-                        .frame(width: 320)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .padding(.horizontal, 22)
@@ -1034,6 +1335,7 @@ struct SettingsView: View {
                             actionSummary: mappingActionSummary,
                             onEdit: { button, trigger in
                                 selectedRemoteButton = button
+                                mappingActionFilter = .all
                                 isPresetApplicationActionsExpanded = false
                                 mappingEditingTarget = ShortcutEditingTarget(
                                     button: button,
@@ -1054,11 +1356,12 @@ struct SettingsView: View {
                                 .id("mapping-action-editor")
                         }
 
-                        mappingFooter
+                        mappingFooter()
                     }
                     .padding(22)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+                .id(settings.selectedRemoteProfileID)
                 .compatibilityScrollEdgeEffect()
                 .onAppear {
                     guard let target = mappingEditingTarget else { return }
@@ -1195,7 +1498,7 @@ struct SettingsView: View {
         }
     }
 
-    private var mappingFooter: some View {
+    private func mappingFooter(includeSiriScrollArrow: Bool = false) -> some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
                 mappingHIDStatus
@@ -1205,12 +1508,31 @@ struct SettingsView: View {
                 mappingVoiceKeyModeControl
                 Divider()
                 mappingVoiceFnTapControl
+                if includeSiriScrollArrow {
+                    Divider()
+                    siriRemoteScrollArrowControl
+                }
                 HStack {
                     Spacer(minLength: 0)
                     mappingRestoreDefaultsButton
                 }
             }
         }
+    }
+
+    private var siriRemoteScrollArrowControl: some View {
+        Toggle(isOn: $settings.siriRemoteScrollArrowReversed) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(localization.text("siri_remote.scroll_arrow.reverse.title"))
+                    .font(.system(size: 13, weight: .medium))
+                Text(localization.text("siri_remote.scroll_arrow.reverse.detail"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.switch)
+        .help(localization.text("siri_remote.scroll_arrow.reverse.help"))
     }
 
     private var mappingHIDStatus: some View {
@@ -1313,12 +1635,22 @@ struct SettingsView: View {
                     remoteDeviceCard(profile, fillsWidth: true)
                 }
             }
-        } else {
+        } else if connectedProfiles.count <= 2 {
             HStack(spacing: 8) {
                 ForEach(connectedProfiles) { profile in
                     remoteDeviceCard(profile)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(connectedProfiles) { profile in
+                        remoteDeviceCard(profile)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
@@ -1361,6 +1693,12 @@ struct SettingsView: View {
         let selected = settings.selectedRemoteProfileID == profile.id
         let connected = model.isRemoteConnected(profile.id)
         let batteryLevel = model.batteryLevel(for: profile.id)
+        let powerState = model.powerState(for: profile.id)
+        let showsBattery = RemoteBatteryPresentationPolicy.shouldShowBattery(
+            model: profile.model,
+            level: batteryLevel,
+            powerState: powerState
+        )
         return Button {
             model.selectRemoteProfile(profile.id)
         } label: {
@@ -1379,18 +1717,16 @@ struct SettingsView: View {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 7) {
                         remoteConnectionLabel(connected: connected)
-                        remoteBatteryLabel(
-                            level: batteryLevel,
-                            powerState: model.powerState(for: profile.id)
-                        )
+                        if showsBattery {
+                            remoteBatteryLabel(level: batteryLevel, powerState: powerState)
+                        }
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 7) {
                             remoteConnectionLabel(connected: connected)
-                            remoteBatteryLabel(
-                                level: batteryLevel,
-                                powerState: model.powerState(for: profile.id)
-                            )
+                            if showsBattery {
+                                remoteBatteryLabel(level: batteryLevel, powerState: powerState)
+                            }
                         }
                     }
                 }
@@ -1510,7 +1846,9 @@ struct SettingsView: View {
             trigger == .singleClick &&
             settings.experimentalContinuousRecordingEnabled
         return VStack(alignment: .leading, spacing: 16) {
-            ForEach(ButtonActionCategory.allCases) { category in
+            mappingActionFilterControl
+
+            ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
                 let groupedActions = actions.filter { $0.category == category }
                 if !groupedActions.isEmpty {
                     mappingActionGroup(
@@ -1568,6 +1906,44 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var mappingActionFilterControl: some View {
+        HStack(spacing: 8) {
+            ForEach(MappingActionFilter.allCases) { filter in
+                let isSelected = mappingActionFilter == filter
+                Button {
+                    guard mappingActionFilter != filter else { return }
+                    mappingActionFilter = filter
+                    isPresetApplicationActionsExpanded = filter == .custom
+                } label: {
+                    Text(localization.text(filter.localizationKey))
+                        .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
+                        .lineLimit(1)
+                        .foregroundStyle(
+                            isSelected
+                                ? Color(nsColor: .alternateSelectedControlTextColor)
+                                : Color.secondary
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(
+                            isSelected ? Color.accentColor : Color.clear,
+                            in: Capsule()
+                        )
+                        .overlay {
+                            Capsule()
+                                .stroke(
+                                    isSelected ? Color.clear : Color.secondary.opacity(0.22),
+                                    lineWidth: 1
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(8)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func mappingRapidPressControl(button: RemoteButton) -> some View {
@@ -2226,95 +2602,10 @@ struct SettingsView: View {
         }
     }
 
+    // Legacy entry point retained for callers that still ask for the old route.
+    // The visible navigation now renders permissions and diagnostics inline in Settings.
     private var permissionsPage: some View {
-        settingsPage {
-            PageHeader(title: localization.text("permissions.page.title"))
-        } content: {
-            CompatibilityGlassContainer(spacing: 14) {
-                GlassPanel {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("permissions.required.title")
-                            .font(.headline)
-                            .padding(.bottom, 8)
-
-                        permissionRow(
-                            index: 1,
-                            symbol: "antenna.radiowaves.left.and.right",
-                            title: localization.text("permission.bluetooth.title"),
-                            detail: localization.text("permission.bluetooth.description"),
-                            state: bluetoothPermissionState,
-                            actionTitle: localization.text("permission.bluetooth.open_settings")
-                        ) {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        }
-
-                        Divider().padding(.leading, 62)
-
-                        permissionRow(
-                            index: 2,
-                            symbol: "keyboard",
-                            title: localization.text("permission.input_monitoring.title"),
-                            detail: localization.text("permission.input_monitoring.description"),
-                            state: inputMonitoringGranted ? .granted : .pending,
-                            actionTitle: localization.text("permission.action.request")
-                        ) {
-                            model.requestInputMonitoringPermission()
-                        }
-
-                        Divider().padding(.leading, 62)
-
-                        permissionRow(
-                            index: 3,
-                            symbol: "accessibility",
-                            title: localization.text("permission.accessibility.title"),
-                            detail: localization.text("permission.accessibility.description"),
-                            state: accessibilityGranted ? .granted : .pending,
-                            actionTitle: localization.text("permission.action.request")
-                        ) {
-                            model.requestAccessibilityPermission()
-                        }
-
-                        if settings.isOnboardingComplete,
-                           !inputMonitoringGranted || !accessibilityGranted {
-                            Divider().padding(.leading, 62)
-                            Label("permissions.upgrade_identity_help", systemImage: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.vertical, 12)
-                        }
-                    }
-                }
-
-                GlassPanel {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("diagnostics.title")
-                            .font(.headline)
-                        HStack(spacing: 12) {
-                            Image(systemName: "doc.text.magnifyingglass")
-                                .font(.title3)
-                                .foregroundStyle(Color.accentColor)
-                                .frame(width: 34, height: 34)
-                                .compatibilityTintedGlass(
-                                    tint: Color.accentColor.opacity(0.14),
-                                    in: Circle()
-                                )
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("diagnostics.logs.title")
-                                Text("diagnostics.logs.privacy")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
-                                .compatibilityButtonStyle(.standard)
-                        }
-                    }
-                }
-            }
-        }
+        aboutPage
     }
 
     private var statisticsPage: some View {
@@ -2322,40 +2613,6 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 PageHeader(title: localization.text("statistics.page.title"))
                 Spacer(minLength: 20)
-                HStack(spacing: 8) {
-                    ForEach(UsageStatisticsPeriod.allCases) { period in
-                        Button {
-                            selectedUsagePeriod = period
-                        } label: {
-                            Text(localization.text(usagePeriodLocalizationKey(period)))
-                                .font(.system(size: 15, weight: .semibold))
-                                .frame(width: 92, height: 38)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(
-                            selectedUsagePeriod == period ? Color.white : Color.primary
-                        )
-                        .background(
-                            selectedUsagePeriod == period
-                                ? Color.accentColor
-                                : Color(nsColor: .controlBackgroundColor),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(
-                                    selectedUsagePeriod == period
-                                        ? Color.accentColor
-                                        : Color(nsColor: .separatorColor).opacity(0.65),
-                                    lineWidth: 1
-                                )
-                        }
-                        .accessibilityAddTraits(
-                            selectedUsagePeriod == period ? .isSelected : []
-                        )
-                    }
-                }
                 StatusPill(
                     text: localization.text("about.privacy.local_only"),
                     tint: .green
@@ -2364,10 +2621,269 @@ struct SettingsView: View {
         } content: {
             CompatibilityGlassContainer(spacing: 14) {
                 VStack(spacing: 14) {
-                    sharePanel(for: .statistics)
-                    statisticsPeriodContent
-                    voiceSessionRankingCard
+                    statisticsSummaryGrid
+                    GeometryReader { proxy in
+                        let availableWidth = max(0, proxy.size.width - 14)
+                        let rankingWidth = max(360, availableWidth * 0.42)
+                        HStack(alignment: .top, spacing: 14) {
+                            statisticsRankingPanel
+                                .frame(width: rankingWidth, alignment: .top)
+                            VStack(spacing: 14) {
+                                statisticsCalendarPanel
+                                statisticsVoiceSessionRankingPanel
+                            }
+                                .frame(width: max(0, availableWidth - rankingWidth), alignment: .top)
+                        }
+                    }
+                    .frame(minHeight: 648)
                 }
+            }
+        }
+    }
+
+    private var statisticsSummaryGrid: some View {
+        // Keep the approved layout as one row at the default width; only the narrowest windows wrap.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                ForEach(statisticsMetrics) { metric in
+                    ProfileMetricCard(metric: metric)
+                        .frame(minWidth: 170, maxWidth: .infinity)
+                }
+            }
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: 12
+            ) {
+                ForEach(statisticsMetrics) { metric in
+                    ProfileMetricCard(metric: metric)
+                }
+            }
+        }
+    }
+
+    private var statisticsMetrics: [ProfileMetric] {
+        [
+            ProfileMetric(
+                id: "total-buttons",
+                systemImage: "keyboard",
+                title: localization.text("statistics.metric.total_button_count"),
+                value: localizedNumber(settings.usageStatistics(for: .total).buttonPressCount),
+                unit: localization.text("statistics.metric.count_unit")
+            ),
+            ProfileMetric(
+                id: "total-voice",
+                systemImage: "waveform",
+                title: localization.text("statistics.metric.total_voice_duration"),
+                value: voiceDurationText(for: .total),
+                unit: nil
+            ),
+            ProfileMetric(
+                id: "week-buttons",
+                systemImage: "chart.line.uptrend.xyaxis",
+                title: localization.text("statistics.metric.week_button_count"),
+                value: localizedNumber(settings.usageStatistics(for: .thisWeek).buttonPressCount),
+                unit: localization.text("statistics.metric.count_unit")
+            ),
+            ProfileMetric(
+                id: "longest-voice",
+                systemImage: "clock",
+                title: localization.text("statistics.metric.longest_voice"),
+                value: chartDurationText(
+                    seconds: UsageStatisticsPresentation.wholeSeconds(
+                        settings.usageMetadata(for: .total).longestVoiceSessionDuration
+                    )
+                ),
+                unit: nil
+            ),
+        ]
+    }
+
+    private var statisticsRankingPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("statistics.ranking.title")
+                    .font(.title3.weight(.semibold))
+
+                statisticsRankingSection(
+                    title: localization.text("statistics.ranking.actions"),
+                    systemImage: "keyboard",
+                    entries: statisticsActionRanking
+                ) { entry in
+                    HStack(spacing: 8) {
+                        Text(entry.title).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(localizedNumber(entry.count))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                        Text(localization.text("statistics.metric.count_unit"))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                statisticsRankingSection(
+                    title: localization.text("statistics.ranking.buttons"),
+                    systemImage: "rectangle.grid.1x2",
+                    entries: statisticsButtonRanking
+                ) { entry in
+                    HStack(spacing: 8) {
+                        Text(entry.title)
+                        Spacer(minLength: 4)
+                        Text(localizedNumber(entry.count))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                        Text(localization.text("statistics.metric.count_unit"))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+            }
+        }
+    }
+
+    private func statisticsRankingSection<Row: View>(
+        title: String,
+        systemImage: String,
+        entries: [StatisticsRankingEntry],
+        @ViewBuilder row: @escaping (StatisticsRankingEntry) -> Row
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold))
+            if entries.isEmpty {
+                Text("statistics.ranking.empty")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(entries.prefix(10).enumerated()), id: \.element.id) { index, entry in
+                    HStack(spacing: 7) {
+                        Text("\(index + 1)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(index < 3 ? Color.accentColor : Color.secondary)
+                            .frame(width: 18, alignment: .leading)
+                        row(entry)
+                    }
+                    .padding(.vertical, 3)
+                    if index < min(entries.count, 10) - 1 { Divider() }
+                }
+            }
+        }
+    }
+
+    private var statisticsCalendarPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("statistics.calendar.title")
+                        .font(.title3.weight(.semibold))
+                    Spacer(minLength: 8)
+                    Text("statistics.calendar.hint")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                        .lineLimit(2)
+                        .frame(maxWidth: 160, alignment: .trailing)
+                }
+
+                StatisticsHeatmap(
+                    days: statisticsCalendarDays,
+                    selectedDate: $selectedStatisticsDate,
+                    localization: localization
+                )
+
+                if let selectedStatisticsDate {
+                    HStack {
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 7) {
+                            Text(calendarDateText(selectedStatisticsDate))
+                                .font(.subheadline.weight(.semibold))
+                            Button {
+                                selectedSection = .transcripts
+                            } label: {
+                                Label(
+                                    "statistics.calendar.open_reflections",
+                                    systemImage: "arrow.up.right"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color.accentColor)
+                        }
+                        .padding(10)
+                        .background(
+                            Color(nsColor: .controlBackgroundColor),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .top)
+        }
+    }
+
+    private var statisticsVoiceSessionRankingPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 7) {
+                Label(
+                    localization.text("statistics.ranking.voice_sessions"),
+                    systemImage: "waveform"
+                )
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.orange)
+
+                if settings.voiceSessionRanking.isEmpty {
+                    Text("statistics.voice_ranking.empty")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(settings.voiceSessionRanking.prefix(10).enumerated()), id: \.element.id) {
+                        index, record in
+                        Button {
+                            selectedSection = .transcripts
+                        } label: {
+                            HStack(spacing: 7) {
+                                Text("\(index + 1)")
+                                    .foregroundStyle(.orange)
+                                    .frame(width: 18, alignment: .leading)
+                                Text(chartDurationText(
+                                    seconds: UsageStatisticsPresentation.wholeSeconds(record.duration)
+                                ))
+                                .monospacedDigit()
+                                Text("·").foregroundStyle(.secondary)
+                                Text(record.applicationName ?? localization.text(
+                                    "statistics.ranking.unknown_app"
+                                )).lineLimit(1)
+                                Spacer(minLength: 3)
+                                Text(voiceSessionDateText(record.endedAt))
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 5)
+                        if index < min(settings.voiceSessionRanking.count, 10) - 1 {
+                            Divider()
+                        }
+                    }
+                }
+
+                Button {
+                    selectedSection = .transcripts
+                } label: {
+                    HStack(spacing: 4) {
+                        Spacer()
+                        Text("statistics.ranking.view_all")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
             }
         }
     }
@@ -2407,339 +2923,233 @@ struct SettingsView: View {
         }
     }
 
+    // Kept as a source boundary for existing regression checks; the ranking now lives inline above.
     private var voiceSessionRankingCard: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Image(systemName: "trophy.fill")
-                        .font(.headline)
-                        .foregroundStyle(.orange)
-                        .frame(width: 32, height: 32)
-                        .compatibilityTintedGlass(tint: Color.orange.opacity(0.14), in: Circle())
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("statistics.voice_ranking.title")
-                            .font(.headline)
-                        Text("statistics.voice_ranking.description")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if settings.voiceSessionRanking.isEmpty {
-                    Text("statistics.voice_ranking.empty")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(settings.voiceSessionRanking.enumerated()), id: \.element.id) {
-                            index, record in
-                            HStack(spacing: 12) {
-                                Text("#\(index + 1)")
-                                    .font(.system(.body, design: .rounded).weight(.semibold))
-                                    .foregroundStyle(index < 3 ? Color.orange : Color.secondary)
-                                    .monospacedDigit()
-                                    .frame(width: 36, alignment: .leading)
-
-                                Text(chartDurationText(
-                                    seconds: UsageStatisticsPresentation.wholeSeconds(
-                                        record.duration
-                                    )
-                                ))
-                                .font(.system(.body, design: .rounded).weight(.semibold))
-                                .monospacedDigit()
-
-                                Spacer(minLength: 12)
-
-                                Text(voiceSessionDateText(record.endedAt))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 9)
-
-                            if index < settings.voiceSessionRanking.count - 1 {
-                                Divider()
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        EmptyView()
     }
 
-    @ViewBuilder
-    private var statisticsPeriodContent: some View {
-        switch selectedUsagePeriod {
-        case .today:
-            HStack(alignment: .top, spacing: 14) {
-                UsageBarChart(
-                    title: localization.text("statistics.metric.button_count"),
-                    subtitle: localization.text("statistics.chart.last_seven_days"),
-                    systemImage: "button.programmable",
-                    points: dailyUsageChartPoints,
-                    metric: .buttonPressCount,
-                    tint: .blue
-                )
-                UsageBarChart(
-                    title: localization.text("statistics.metric.voice_duration"),
-                    subtitle: localization.text("statistics.chart.last_seven_days"),
-                    systemImage: "waveform",
-                    points: dailyUsageChartPoints,
-                    metric: .voiceDuration,
-                    tint: .orange
-                )
+    private var inlinePermissionsSection: some View {
+        let bluetoothAction = SettingsPageBehavior.permissionAction(
+            for: .bluetooth,
+            isGranted: bluetoothPermissionState == .granted
+        )
+        let inputMonitoringAction = SettingsPageBehavior.permissionAction(
+            for: .inputMonitoring,
+            isGranted: inputMonitoringGranted
+        )
+        let accessibilityAction = SettingsPageBehavior.permissionAction(
+            for: .accessibility,
+            isGranted: accessibilityGranted
+        )
+
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("settings.permissions.title")
+                .font(.title3.weight(.semibold))
+
+            permissionRow(
+                symbol: "antenna.radiowaves.left.and.right",
+                title: localization.text("permission.bluetooth.title"),
+                detail: localization.text("permission.bluetooth.description"),
+                state: bluetoothPermissionState,
+                actionTitle: localization.text("permission.bluetooth.open_settings")
+            ) {
+                performPermissionAction(bluetoothAction) {}
             }
 
-        case .thisWeek:
-            HStack(alignment: .top, spacing: 14) {
-                UsageBarChart(
-                    title: localization.text("statistics.metric.button_count"),
-                    subtitle: localization.text("statistics.chart.weekly_history"),
-                    systemImage: "button.programmable",
-                    points: weeklyUsageChartPoints,
-                    metric: .buttonPressCount,
-                    tint: .blue
-                )
-                UsageBarChart(
-                    title: localization.text("statistics.metric.voice_duration"),
-                    subtitle: localization.text("statistics.chart.weekly_history"),
-                    systemImage: "waveform",
-                    points: weeklyUsageChartPoints,
-                    metric: .voiceDuration,
-                    tint: .orange
-                )
-            }
+            Divider().padding(.leading, 48)
 
-        case .total:
-            GlassPanel {
-                HStack(spacing: 14) {
-                    UsageStatisticCard(
-                        systemImage: "button.programmable",
-                        title: localization.text("statistics.metric.button_count"),
-                        value: buttonPressCountText(for: .total),
-                        tint: .blue
-                    )
-                    UsageStatisticCard(
-                        systemImage: "waveform",
-                        title: localization.text("statistics.metric.voice_duration"),
-                        value: voiceDurationText(for: .total),
-                        tint: .orange
-                    )
+            permissionRow(
+                symbol: "keyboard",
+                title: localization.text("permission.input_monitoring.title"),
+                detail: localization.text("permission.input_monitoring.description"),
+                state: inputMonitoringGranted ? .granted : .pending,
+                actionTitle: localization.text(inputMonitoringAction.titleKey)
+            ) {
+                performPermissionAction(inputMonitoringAction) {
+                    model.requestInputMonitoringPermission()
                 }
             }
-            .frame(minHeight: 330, alignment: .top)
+
+            Divider().padding(.leading, 48)
+
+            permissionRow(
+                symbol: "accessibility",
+                title: localization.text("permission.accessibility.title"),
+                detail: localization.text("permission.accessibility.description"),
+                state: accessibilityGranted ? .granted : .pending,
+                actionTitle: localization.text(accessibilityAction.titleKey)
+            ) {
+                performPermissionAction(accessibilityAction) {
+                    model.requestAccessibilityPermission()
+                }
+            }
+
+            if settings.isOnboardingComplete,
+               !inputMonitoringGranted || !accessibilityGranted {
+                Divider().padding(.leading, 48)
+                Label("permissions.upgrade_identity_help", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 9)
+            }
         }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var inlineDiagnosticsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("settings.diagnostics.title")
+                .font(.title3.weight(.semibold))
+            Text("diagnostics.logs.privacy")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 21, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("diagnostics.logs.title")
+                        .font(.subheadline.weight(.semibold))
+                    Text("diagnostics.logs.last_entry")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
+                    .compatibilityButtonStyle(.standard)
+                Button("diagnostics.logs.copy_summary") { copySettingsDiagnosticSummary() }
+                    .compatibilityButtonStyle(.standard)
+            }
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Divider() }
     }
 
     private var aboutPage: some View {
-        settingsPage {
-            PageHeader(title: localization.text("menu.about"))
+        settingsPage(contentPadding: 28) {
+            PageHeader(title: localization.text("settings.page.title"))
         } content: {
-            CompatibilityGlassContainer(spacing: 14) {
-                VStack(spacing: 14) {
-                    HStack(spacing: 18) {
-                        Image(nsImage: NSApp.applicationIconImage)
-                            .resizable()
-                            .frame(width: 72, height: 72)
-                            .shadow(color: .black.opacity(0.14), radius: 10, y: 5)
-
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("app.name")
-                                .font(.system(size: 28, weight: .semibold))
-                            Text("about.page.hero_description")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 20)
-
-                        Link(destination: localization.localizedWebsiteURL) {
-                            Label("about.support.website", systemImage: "globe")
-                                .frame(minWidth: 104)
-                        }
-                        .compatibilityButtonStyle(.prominent)
-
-                        Link(destination: AppLinks.githubRepository) {
-                            Label("about.support.github", systemImage: "link")
-                                .frame(minWidth: 104)
-                        }
-                        .compatibilityButtonStyle(.standard)
-                    }
-                    .padding(.horizontal, 6)
-
-                    GlassPanel {
-                        HStack(spacing: 14) {
-                            Image(systemName: "bubble.left.and.bubble.right")
-                                .font(.title3)
-                                .foregroundStyle(Color.accentColor)
-                                .frame(width: 34)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("about.support.feedback")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("about.support.feedback_description")
+            CompatibilityGlassContainer(spacing: 0) {
+                VStack(spacing: 0) {
+                    Group {
+                        HStack(alignment: .top, spacing: 28) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Image(nsImage: NSApp.applicationIconImage)
+                                    .resizable()
+                                    .frame(width: 72, height: 72)
+                                    .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+                                Text("app.name")
+                                    .font(.title3.weight(.semibold))
+                                Text("settings.application.tagline")
                                     .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(2)
                             }
-                            Spacer(minLength: 20)
-                            Link(destination: AppLinks.feedback) {
-                                Label("about.support.feedback_action", systemImage: "arrow.up.right")
-                            }
-                            .compatibilityButtonStyle(.standard)
-                        }
-                    }
-
-                    sharePanel(for: .about)
-
-                    GlassPanel {
-                        VStack(spacing: 16) {
-                            HStack(alignment: .top, spacing: 24) {
-                                VStack(alignment: .leading, spacing: 14) {
-                                    Text("about.version.title")
-                                        .font(.headline)
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("about.version.current")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                        Button(action: revealPrivateEnrollmentIfNeeded) {
-                                            Text(currentVersion)
-                                                .font(.system(size: 28, weight: .semibold))
-                                                .monospacedDigit()
-                                        }
-                                        .buttonStyle(.plain)
-                                        .contentShape(Rectangle())
-                                    }
-
-                                    if case let .available(update) = updateInformation.state {
-                                        HStack(spacing: 8) {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text("about.version.latest")
-                                                    .font(.subheadline)
-                                                    .foregroundStyle(.secondary)
-                                                Text(update.displayVersion)
-                                                    .font(.system(size: 28, weight: .semibold))
-                                                    .monospacedDigit()
-                                            }
-                                            StatusPill(
-                                                text: localization.text("about.version.available"),
-                                                tint: .green
-                                            )
-                                        }
-
-                                        HStack(spacing: 10) {
-                                            Button(action: checkForUpdates) {
-                                                Text(String(
-                                                    format: localization.text("about.version.update_to"),
-                                                    locale: localization.locale,
-                                                    arguments: [update.displayVersion]
-                                                ))
-                                                .frame(maxWidth: .infinity)
-                                            }
-                                            .compatibilityButtonStyle(.prominent)
-
-                                            Button(
-                                                "about.version.recheck",
-                                                action: refreshUpdateInformation
-                                            )
-                                            .compatibilityButtonStyle(.standard)
-                                        }
-                                    } else {
-                                        HStack(spacing: 10) {
-                                            Button(action: checkForUpdates) {
-                                                Label(
-                                                    "menu.check_for_updates",
-                                                    systemImage: "arrow.triangle.2.circlepath"
-                                                )
-                                                .frame(maxWidth: .infinity)
-                                            }
-                                            .compatibilityButtonStyle(.prominent)
-
-                                            Button(
-                                                "about.version.recheck",
-                                                action: refreshUpdateInformation
-                                            )
-                                            .compatibilityButtonStyle(.standard)
-                                        }
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Divider()
-
-                                VStack(alignment: .leading, spacing: 12) {
-                                    updateInformationContent
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            .frame(minWidth: 190, maxWidth: 230, alignment: .leading)
 
                             Divider()
 
-                            HStack(spacing: 20) {
-                                Spacer()
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 8) {
+                                    Text("about.version.current")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                    Button(action: revealPrivateEnrollmentIfNeeded) {
+                                        Text(currentVersion)
+                                            .font(.system(size: 13, weight: .medium))
+                                            .monospacedDigit()
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contentShape(Rectangle())
+                                    if case .available = updateInformation.state {
+                                        StatusPill(
+                                            text: localization.text("about.version.available"),
+                                            tint: .green
+                                        )
+                                    }
+                                    Spacer(minLength: 8)
+                                }
 
-                                VStack(alignment: .trailing, spacing: 3) {
+                                HStack(spacing: 12) {
+                                    Button(action: checkForUpdates) {
+                                        Label(
+                                            "menu.check_for_updates",
+                                            systemImage: "arrow.triangle.2.circlepath"
+                                        )
+                                    }
+                                    .compatibilityButtonStyle(.standard)
+                                    .fixedSize(horizontal: true, vertical: false)
+
+                                    Spacer(minLength: 12)
+
                                     Toggle(
                                         "about.version.check_prerelease",
                                         isOn: $settings.checksForPreReleaseUpdates
                                     )
                                     .toggleStyle(.switch)
-                                    Text("about.version.check_prerelease_help_short")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    .font(.system(size: 12))
+                                }
+
+                                Divider()
+
+                                updateInformationContent
+                                if case let .available(update) = updateInformation.state {
+                                    HStack {
+                                        Spacer()
+                                        Button(action: checkForUpdates) {
+                                            Text(String(
+                                                format: localization.text("about.version.update_to"),
+                                                locale: localization.locale,
+                                                arguments: [update.displayVersion]
+                                            ))
+                                        }
+                                        .compatibilityButtonStyle(.prominent)
+                                    }
                                 }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
+                        .overlay(alignment: .bottom) { Divider() }
                     }
 
-                    if privateFeature.shouldShowEnrollment {
-                        privateFeature.enrollmentView()
-                    }
+                    hardwareAnnouncementPanel
 
-                    if macroFeature.shouldShowEnrollment {
-                        macroFeature.enrollmentView()
-                    }
+                    inlinePermissionsSection
 
-                    GlassPanel {
-                        VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("settings.general.title")
+                            .font(.title3.weight(.semibold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Group {
+                            VStack(spacing: 0) {
                             HStack(spacing: 14) {
-                                Image(systemName: "square.and.arrow.up")
+                                Image(systemName: "arrow.up.arrow.down")
                                     .font(.title3)
                                     .foregroundStyle(Color.accentColor)
                                     .frame(width: 34)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.configuration.export")
+                                    Text("about.configuration.title")
                                         .font(.subheadline.weight(.semibold))
                                     Text("about.configuration.export_description")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
-                                Spacer()
+                                Spacer(minLength: 16)
                                 Button("about.configuration.export", action: exportConfiguration)
                                     .compatibilityButtonStyle(.standard)
                                     .frame(width: 92)
-                            }
-                            .padding(.vertical, 10)
-
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Image(systemName: "square.and.arrow.down")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.configuration.import")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.configuration.import_description")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
                                 Button("about.configuration.import", action: importConfiguration)
                                     .compatibilityButtonStyle(.standard)
                                     .frame(width: 92)
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
 
                             if let configurationStatus {
                                 Divider()
@@ -2775,74 +3185,71 @@ struct SettingsView: View {
                                 .labelsHidden()
                                 .toggleStyle(.switch)
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
 
                             Divider()
 
                             HStack(spacing: 14) {
-                                Image(systemName: "rectangle.portrait.and.arrow.forward")
+                                Image(systemName: "power")
                                     .font(.title3)
                                     .foregroundStyle(Color.accentColor)
                                     .frame(width: 34)
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text("about.preferences.launch_at_login")
+                                    Text("settings.general.launch_behavior")
                                         .font(.subheadline.weight(.semibold))
-                                    Text("about.preferences.launch_at_login_help")
+                                    Text("settings.general.launch_behavior_help")
                                         .font(.system(size: 12))
                                         .foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
-                                    if loginItemService.requiresApproval {
-                                        Text("about.preferences.launch_at_login_requires_approval")
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(.orange)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    } else if loginItemService.didFailToUpdate {
-                                        Text("about.preferences.launch_at_login_update_failed")
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(.red)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
                                 }
-                                Spacer(minLength: 16)
-                                VStack(alignment: .trailing, spacing: 8) {
-                                    Toggle("", isOn: Binding(
-                                        get: { loginItemService.isEnabled },
-                                        set: { loginItemService.setEnabled($0) }
-                                    ))
-                                    .labelsHidden()
-                                    .toggleStyle(.switch)
+                                Spacer(minLength: 12)
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("about.preferences.launch_at_login")
+                                            .font(.system(size: 12, weight: .medium))
+                                        Toggle("", isOn: Binding(
+                                            get: { loginItemService.isEnabled },
+                                            set: { loginItemService.setEnabled($0) }
+                                        ))
+                                        .labelsHidden()
+                                        .toggleStyle(.switch)
+                                    }
 
-                                    if loginItemService.requiresApproval {
-                                        Button(
-                                            "about.preferences.launch_at_login_open_system_settings",
-                                            action: loginItemService.openLoginItemsSettings
-                                        )
-                                        .compatibilityButtonStyle(.standard)
+                                    Divider()
+                                        .frame(height: 34)
+
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("about.preferences.open_main_window_at_launch")
+                                            .font(.system(size: 12, weight: .medium))
+                                        Toggle("", isOn: $settings.openMainWindowAtLaunch)
+                                            .labelsHidden()
+                                            .toggleStyle(.switch)
                                     }
                                 }
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
 
-                            Divider()
-
-                            HStack(spacing: 14) {
-                                Image(systemName: "macwindow")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 34)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.preferences.open_main_window_at_launch")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.preferences.open_main_window_help")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Toggle("", isOn: $settings.openMainWindowAtLaunch)
-                                    .labelsHidden()
-                                    .toggleStyle(.switch)
+                            if loginItemService.requiresApproval {
+                                Text("about.preferences.launch_at_login_requires_approval")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                                    .padding(.bottom, 8)
+                                Button(
+                                    "about.preferences.launch_at_login_open_system_settings",
+                                    action: loginItemService.openLoginItemsSettings
+                                )
+                                .compatibilityButtonStyle(.standard)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                            } else if loginItemService.didFailToUpdate {
+                                Text("about.preferences.launch_at_login_update_failed")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                                    .padding(.bottom, 8)
                             }
-                            .padding(.vertical, 10)
 
                             Divider()
 
@@ -2872,7 +3279,7 @@ struct SettingsView: View {
                                 .frame(width: 300)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
 
                             Divider()
 
@@ -2895,9 +3302,22 @@ struct SettingsView: View {
                                 }
                                 .compatibilityButtonStyle(.standard)
                             }
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 8)
+                            }
                         }
                     }
+                    .padding(.vertical, 12)
+                    .overlay(alignment: .bottom) { Divider() }
+
+                    if privateFeature.shouldShowEnrollment {
+                        privateFeature.enrollmentView()
+                    }
+
+                    if macroFeature.shouldShowEnrollment {
+                        macroFeature.enrollmentView()
+                    }
+
+                    inlineDiagnosticsSection
 
                     if model.isRC003VoiceExtensionTestEnabled {
                         Text("测试长时间语音功能")
@@ -2906,14 +3326,79 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.vertical, 8)
                     }
+
+                    settingsSupportSection
+
+                    sharePanel(for: .about)
+                        .padding(.top, 14)
                 }
             }
         }
         .onAppear {
+            hardwareAnnouncements.refresh()
+            guard !SettingsVisualRenderingPolicy.isScreenshotHarness else { return }
             guard UpdateCheckPolicy(
                 checksForPreReleaseUpdates: settings.checksForPreReleaseUpdates
             ).refreshesAboutInformationOnAppear else { return }
             refreshUpdateInformation()
+        }
+    }
+
+    private var settingsSupportSection: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 21, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("about.support.feedback")
+                    .font(.subheadline.weight(.semibold))
+                Text("about.support.feedback_description")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 16)
+            Link(destination: localization.localizedWebsiteURL) {
+                Label("about.support.website", systemImage: "globe")
+            }
+            .compatibilityButtonStyle(.standard)
+            Link(destination: AppLinks.githubRepository) {
+                Label("about.support.github", systemImage: "link")
+            }
+            .compatibilityButtonStyle(.standard)
+            Link(destination: AppLinks.feedback) {
+                Label("about.support.feedback_action", systemImage: "arrow.up.right")
+            }
+            .compatibilityButtonStyle(.standard)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    @ViewBuilder
+    private var hardwareAnnouncementPanel: some View {
+        ForEach(hardwareAnnouncements.announcements) { announcement in
+            GlassPanel {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "sparkles")
+                        .font(.title3)
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 34)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(announcement.title(for: localization.locale))
+                            .font(.subheadline.weight(.semibold))
+                        Text(announcement.message(for: localization.locale))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    Link(destination: announcement.downloadURL) {
+                        Label("about.hardware.download", systemImage: "arrow.down.circle")
+                    }
+                    .compatibilityButtonStyle(.prominent)
+                }
+            }
         }
     }
 
@@ -2954,6 +3439,11 @@ struct SettingsView: View {
                 }
             }
         }
+        .id(shareAnchor(for: section))
+    }
+
+    private func shareAnchor(for section: SettingsSection) -> String {
+        "settings-share-\(section.rawValue)"
     }
 
     private func sectionTitle(_ section: SettingsSection) -> String {
@@ -2983,7 +3473,7 @@ struct SettingsView: View {
             Text("about.version.information_title")
                 .font(.headline)
             Text("about.version.information_idle")
-                .font(.subheadline)
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         case .checking:
             Text("about.version.information_title")
@@ -2992,7 +3482,7 @@ struct SettingsView: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("about.version.checking")
-                    .font(.subheadline)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
         case .upToDate:
@@ -3000,14 +3490,14 @@ struct SettingsView: View {
                 .font(.headline)
                 .foregroundStyle(.green)
             Text("about.version.up_to_date_description")
-                .font(.subheadline)
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         case .unavailable:
             Label("about.version.information_unavailable", systemImage: "wifi.exclamationmark")
                 .font(.headline)
                 .foregroundStyle(.orange)
             Text("about.version.information_unavailable_description")
-                .font(.subheadline)
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         case let .available(update):
             Text(String(
@@ -3019,18 +3509,17 @@ struct SettingsView: View {
 
             if update.releaseNotes.isEmpty {
                 Text("about.version.release_notes_unavailable")
-                    .font(.subheadline)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(Array(update.releaseNotes.enumerated()), id: \.offset) { index, note in
-                    HStack(alignment: .top, spacing: 10) {
+                    HStack(alignment: .top, spacing: 6) {
                         Text("\(index + 1)")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width: 24, height: 24)
-                            .background(Color.accentColor.opacity(0.13), in: Circle())
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18, alignment: .trailing)
                         Text(note)
-                            .font(.subheadline)
+                            .font(.system(size: 12))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -3191,6 +3680,60 @@ struct SettingsView: View {
         return formatter.string(from: date)
     }
 
+    private func calendarDateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.setLocalizedDateFormatFromTemplate("yMMMd")
+        return formatter.string(from: date)
+    }
+
+    private var statisticsActionRanking: [StatisticsRankingEntry] {
+        let metadata = settings.usageMetadata(for: .total)
+        var counts: [String: UInt64] = [:]
+        for button in RemoteButton.allCases {
+            let count = metadata.buttonPressCountByControl["button.\(button.rawValue)"] ?? 0
+            guard count > 0 else { continue }
+            let action = settings.configuredAction(for: button, trigger: .singleClick)
+            guard action.action != .disabled else { continue }
+            let title = mappingActionSummary(for: button, trigger: .singleClick)
+            counts[title, default: 0] += count
+        }
+        return counts.map { StatisticsRankingEntry(title: $0.key, count: $0.value) }
+            .sorted { $0.count == $1.count ? $0.title < $1.title : $0.count > $1.count }
+    }
+
+    private var statisticsButtonRanking: [StatisticsRankingEntry] {
+        let metadata = settings.usageMetadata(for: .total)
+        return RemoteButton.allCases.compactMap { button in
+            let count = metadata.buttonPressCountByControl["button.\(button.rawValue)"] ?? 0
+            guard count > 0 else { return nil }
+            return StatisticsRankingEntry(
+                title: button.displayName(using: localization),
+                count: count
+            )
+        }
+        .sorted { $0.count == $1.count ? $0.title < $1.title : $0.count > $1.count }
+    }
+
+    private var statisticsCalendarDays: [StatisticsCalendarDay] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        calendar.locale = localization.locale
+        // Keep the heatmap to the latest 26 weeks so each day remains readable.
+        let buckets = settings.dailyUsageStatistics(days: 26 * 7, calendar: calendar)
+        guard let first = buckets.first else { return [] }
+        let leading = (calendar.component(.weekday, from: first.startDate) - calendar.firstWeekday + 7) % 7
+        let padded = Array(repeating: StatisticsCalendarDay.empty, count: leading) + buckets.map {
+            StatisticsCalendarDay(
+                date: $0.startDate,
+                buttonPressCount: $0.statistics.buttonPressCount,
+                voiceDuration: $0.statistics.voiceDuration
+            )
+        }
+        let cellCount = ((padded.count + 6) / 7) * 7
+        return padded + Array(repeating: StatisticsCalendarDay.empty, count: cellCount - padded.count)
+    }
+
     private func usagePeriodLocalizationKey(_ period: UsageStatisticsPeriod) -> String {
         switch period {
         case .today: return "statistics.period.today"
@@ -3274,7 +3817,6 @@ struct SettingsView: View {
     }
 
     private func permissionRow(
-        index: Int,
         symbol: String,
         title: String,
         detail: String,
@@ -3282,40 +3824,70 @@ struct SettingsView: View {
         actionTitle: String,
         action: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 14) {
-            Text("\(index)")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(Color.accentColor, in: Circle())
-
+        HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 19, weight: .semibold))
+                .font(.system(size: 21, weight: .medium))
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 42, height: 42)
-                .compatibilityTintedGlass(
-                    tint: Color.accentColor.opacity(0.14),
-                    in: Circle()
-                )
+                .frame(width: 34)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                 Text(detail)
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 16)
-            StatusPill(text: state.title(using: localization), tint: state.tint)
-            if state != .granted {
-                Button(actionTitle, action: action)
-                    .compatibilityButtonStyle(.standard)
-                    .frame(width: 112)
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(state.tint)
+                    .frame(width: 8, height: 8)
+                Text(state.title(using: localization))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
+            .frame(width: 78, alignment: .leading)
+            Button(actionTitle, action: action)
+                .compatibilityButtonStyle(.standard)
+                .frame(width: 126)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
+    }
+
+    private func openSettingsURL(_ string: String) {
+        guard let url = URL(string: string) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func performPermissionAction(
+        _ action: SettingsPermissionAction,
+        requestPermission: () -> Void
+    ) {
+        SettingsPageBehavior.perform(
+            action,
+            requestPermission: requestPermission,
+            openSystemSettings: openSettingsURL
+        )
+    }
+
+    private func copySettingsDiagnosticSummary() {
+        let snapshot = SettingsDiagnosticSnapshot(
+            appVersion: currentVersion,
+            bluetoothGranted: bluetoothPermissionState == .granted,
+            inputMonitoringGranted: inputMonitoringGranted,
+            accessibilityGranted: accessibilityGranted,
+            runtimeLogAvailable: FileManager.default.fileExists(atPath: AppLogger.shared.logURL.path)
+        )
+        SettingsPageBehavior.copyDiagnosticSummary(
+            snapshot,
+            writeToPasteboard: { summary in
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(summary, forType: .string)
+            },
+            writeAuditLog: AppLogger.shared.write
+        )
     }
 
     private var connectionBadge: String {
@@ -3819,6 +4391,221 @@ private struct ShareCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+private struct StatisticsRankingEntry: Identifiable {
+    let title: String
+    let count: UInt64
+
+    var id: String { "\(title)-\(count)" }
+}
+
+private struct StatisticsCalendarDay: Identifiable {
+    let date: Date?
+    let buttonPressCount: UInt64
+    let voiceDuration: TimeInterval
+
+    static let empty = StatisticsCalendarDay(date: nil, buttonPressCount: 0, voiceDuration: 0)
+
+    var id: String {
+        date.map { String($0.timeIntervalSinceReferenceDate) } ?? UUID().uuidString
+    }
+
+    var intensity: Double {
+        let buttonIntensity = min(Double(buttonPressCount) / 40, 1)
+        let voiceIntensity = min(max(voiceDuration, 0) / 300, 1)
+        return min(1, max(buttonIntensity, voiceIntensity))
+    }
+}
+
+private struct ProfileMetricCard: View {
+    let systemImage: String
+    let title: String
+    let value: String
+    let unit: String?
+    let tint: Color
+
+    init(metric: ProfileMetric) {
+        systemImage = metric.systemImage
+        title = metric.title
+        value = metric.value
+        unit = metric.unit
+        tint = .accentColor
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 42, height: 42)
+                .compatibilityTintedGlass(tint: tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(value)
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    if let unit {
+                        Text(unit)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(tint)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+        .compatibilityTintedGlass(
+            tint: tint.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+    }
+}
+
+private struct ProfileMetric: Identifiable {
+    let id: String
+    let systemImage: String
+    let title: String
+    let value: String
+    let unit: String?
+}
+
+private struct StatisticsHeatmap: View {
+    let days: [StatisticsCalendarDay]
+    @Binding var selectedDate: Date?
+    let localization: LocalizationStore
+
+    private let cellSpacing: CGFloat = 3
+    private let weekdayLabelWidth: CGFloat = 30
+
+    private var monthMarkers: [(column: Int, label: String)] {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.setLocalizedDateFormatFromTemplate("MMM")
+        var markers: [(column: Int, label: String)] = []
+        var seen = Set<String>()
+        var nextAvailableColumn = 0
+        for column in 0..<max(1, days.count / 7) {
+            let columnDays = days.dropFirst(column * 7).prefix(7)
+            guard let date = columnDays.compactMap(\.date).first else { continue }
+            let key = formatter.string(from: date)
+            guard seen.insert(key).inserted else { continue }
+            let displayColumn = max(column, nextAvailableColumn)
+            markers.append((displayColumn, key))
+            nextAvailableColumn = displayColumn + 2
+        }
+        return markers
+    }
+
+    private var weekdayLabels: [String] {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        let symbols = formatter.shortWeekdaySymbols ?? []
+        guard symbols.count == 7 else { return [] }
+        return Array(symbols.dropFirst()) + [symbols[0]]
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let columnCount = max(1, days.count / 7)
+            let availableWidth = max(0, proxy.size.width - weekdayLabelWidth - 8)
+            let cellSize = max(
+                14,
+                min(
+                    28,
+                    (availableWidth - CGFloat(max(0, columnCount - 1)) * cellSpacing)
+                        / CGFloat(columnCount)
+                )
+            )
+            let gridWidth = CGFloat(columnCount) * cellSize
+                + CGFloat(max(0, columnCount - 1)) * cellSpacing
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ZStack(alignment: .topLeading) {
+                        ForEach(Array(monthMarkers.enumerated()), id: \.offset) { _, marker in
+                            Text(marker.label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .frame(width: 36, alignment: .leading)
+                                .offset(x: CGFloat(marker.column) * (cellSize + cellSpacing))
+                        }
+                    }
+                    .frame(width: gridWidth, height: 18, alignment: .leading)
+
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: cellSpacing) {
+                            ForEach(Array(weekdayLabels.enumerated()), id: \.offset) { _, label in
+                                Text(label)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .frame(
+                                        width: weekdayLabelWidth,
+                                        height: max(cellSize, 16),
+                                        alignment: .leading
+                                    )
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: cellSpacing) {
+                            ForEach(0..<7, id: \.self) { row in
+                                HStack(spacing: cellSpacing) {
+                                    ForEach(0..<columnCount, id: \.self) { column in
+                                        let index = row * columnCount + column
+                                        let day = days[index]
+                                        Button {
+                                            guard let date = day.date else { return }
+                                            selectedDate = date
+                                        } label: {
+                                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                .fill(fillColor(for: day))
+                                                .overlay {
+                                                    if let date = day.date,
+                                                       Calendar.current.isDateInToday(date) {
+                                                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                            .stroke(Color.accentColor, lineWidth: 1)
+                                                    }
+                                                }
+                                                .frame(width: cellSize, height: cellSize)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help(day.date.map { dateText($0) } ?? "")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.trailing, 6)
+            }
+        }
+        // Reserve enough vertical space for all seven weekday rows, including
+        // the largest square cells and the month-label gutter. Without this
+        // explicit height the GeometryReader can collapse and clip rows.
+        .frame(height: 250, alignment: .top)
+    }
+
+    private func fillColor(for day: StatisticsCalendarDay) -> Color {
+        guard day.date != nil else { return .clear }
+        if day.intensity == 0 { return Color(nsColor: .separatorColor).opacity(0.28) }
+        return Color.accentColor.opacity(0.22 + day.intensity * 0.78)
+    }
+
+    private func dateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = localization.locale
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
     }
 }
 

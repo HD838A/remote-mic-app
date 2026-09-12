@@ -28,7 +28,7 @@
 
 这通常表示遥控器和音频链路已经工作，但豆包没有使用普通虚拟音频设备。
 
-1. 使用 DMG 中的 Install Remote Mic.pkg 安装 `MiRemoteV 2ch`。
+1. 使用 DMG 中的 Install SayAll.pkg 安装 `MiRemoteV 2ch`。
 2. 完全退出并重新打开豆包。
 3. 在无线麦中点击“刷新音频设备”，选择 `MiRemoteV 2ch`。
 4. 单击可编辑输入框，确认插入光标已经出现，再按住遥控器语音键。

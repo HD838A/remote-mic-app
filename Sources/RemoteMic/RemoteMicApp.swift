@@ -25,6 +25,14 @@ struct UpdateFeedSelection {
         return name
     }
 
+    var validatedStableFeedURL: URL? {
+        stableFeedURL
+    }
+
+    var validatedPreReleaseFeedURL: URL? {
+        preReleaseFeedURL
+    }
+
     private var stableFeedURL: URL? {
         guard let stableFeedURLString,
               let components = URLComponents(string: stableFeedURLString),
@@ -168,6 +176,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     private let model = BridgeAppModel()
     private let updateInformation = UpdateInformationStore()
+    private let hardwareAnnouncements = HardwareAnnouncementStore()
     private lazy var localization = LocalizationStore(settings: model.settings)
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu?
@@ -181,6 +190,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         stableFeedURLString: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
     )
     private var updateCheckTask: Task<Void, Never>?
+    private var resolvedUpdateFeedURLString: String?
     private var updaterStarted = false
     private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: false,
@@ -255,7 +265,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if shouldOpenPermissionRepair {
-                    self.showSettingsWindow(initialSection: .permissions)
+                    self.showSettingsWindow(initialSection: .about)
                 } else {
                     self.showSettings()
                 }
@@ -609,6 +619,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             .sink { [weak self] isEnabled in
                 guard let self else { return }
                 updateCheckTask?.cancel()
+                resolvedUpdateFeedURLString = nil
                 updateInformation.reset()
                 let policy = UpdateCheckPolicy(checksForPreReleaseUpdates: isEnabled)
                 if updaterStarted {
@@ -650,6 +661,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             includePreRelease: includePreRelease
         ) {
             return testFeed.url.absoluteString
+        }
+        if includePreRelease, let resolvedUpdateFeedURLString {
+            return resolvedUpdateFeedURLString
         }
         return updateFeedSelection.feedURLString(
             checksForPreReleaseUpdates: includePreRelease
@@ -728,6 +742,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             rootView: RemoteMicRootView(
                 model: model,
                 updateInformation: updateInformation,
+                hardwareAnnouncements: hardwareAnnouncements,
                 checkForUpdates: { [weak self] in self?.checkForUpdates() },
                 refreshUpdateInformation: { [weak self] in
                     self?.refreshUpdateInformation()
@@ -822,22 +837,55 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 assetName: updateFeedSelection.appcastAssetName,
                 includePreRelease: includePreRelease
             )
-            let feedURLString = testFeed?.url.absoluteString
-                ?? updateFeedSelection.feedURLString(
-                    checksForPreReleaseUpdates: includePreRelease
-                )
-            guard feedURLString != nil else {
-                updateInformation.setUnavailable()
+            resolvedUpdateFeedURLString = nil
+            if includePreRelease {
+                let resolution: UpdateFeedResolver.FeedResolution
+                if let testFeed {
+                    resolution = UpdateFeedResolver.FeedResolution(
+                        stable: nil,
+                        preview: testFeed
+                    )
+                } else if let stableURL = updateFeedSelection.validatedStableFeedURL,
+                          let previewURL = updateFeedSelection.validatedPreReleaseFeedURL {
+                    resolution = await UpdateFeedResolver.resolvePreviewFeed(
+                        stableURL: stableURL,
+                        previewURL: previewURL
+                    )
+                } else {
+                    resolution = UpdateFeedResolver.FeedResolution(stable: nil, preview: nil)
+                }
+                guard !Task.isCancelled else { return }
+                guard let selectedFeed = resolution.selected else {
+                    updateInformation.setUnavailable()
+                    AppLogger.shared.write(
+                        "UPDATE CHECK prerelease_enabled=true resolved=false " +
+                            "stable_version=unknown preview_version=unknown " +
+                            "selected_channel=unknown source=cloudflare_channel user_alert=false"
+                    )
+                    return
+                }
+                resolvedUpdateFeedURLString = selectedFeed.url.absoluteString
                 AppLogger.shared.write(
-                    "UPDATE CHECK prerelease_enabled=\(includePreRelease) resolved=false " +
-                        "source=cloudflare_channel user_alert=false"
+                    "UPDATE CHECK prerelease_enabled=true resolved=true " +
+                        "stable_version=\(resolution.stable?.version ?? "unknown") " +
+                        "preview_version=\(resolution.preview?.version ?? "unknown") " +
+                        "selected_channel=\(selectedFeed.isPreRelease ? "preview" : "stable") " +
+                        "source=\(testFeed == nil ? "cloudflare_channel" : "ui_test")"
                 )
-                return
+            } else {
+                guard updateFeedSelection.feedURLString(checksForPreReleaseUpdates: false) != nil else {
+                    updateInformation.setUnavailable()
+                    AppLogger.shared.write(
+                        "UPDATE CHECK prerelease_enabled=false resolved=false " +
+                            "source=cloudflare_channel user_alert=false"
+                    )
+                    return
+                }
+                AppLogger.shared.write(
+                    "UPDATE CHECK prerelease_enabled=false resolved=true " +
+                        "selected_channel=stable source=cloudflare_channel"
+                )
             }
-            AppLogger.shared.write(
-                "UPDATE CHECK prerelease_enabled=\(includePreRelease) resolved=true " +
-                    "source=\(testFeed == nil ? "cloudflare_channel" : "ui_test")"
-            )
             startUpdaterIfNeeded()
             guard !updaterController.updater.sessionInProgress else { return }
             switch purpose {

@@ -4,6 +4,9 @@ import SwiftUI
 #if canImport(SayAllMacroRemoteMic)
 import SayAllMacroRemoteMic
 #endif
+#if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+import SayAllSiriRemote
+#endif
 
 struct ButtonProfileHostAction: Equatable {
     let id: String
@@ -122,9 +125,20 @@ final class MacroFeatureIntegration: ObservableObject {
 
     func settingsView(
         selectedRemoteProfileID: UUID?,
+        remoteModel: XiaomiRemoteModel?,
         configuredActionTitle: @escaping (String, String) -> String?
     ) -> AnyView {
         #if canImport(SayAllMacroRemoteMic)
+        #if SAYALL_MACRO_REMOTE_CAPABILITIES
+        feature.settingsView(
+            selectedRemoteProfileID: selectedRemoteProfileID,
+            remotePresentation: remotePresentation(for: remoteModel),
+            configuredActionTitle: configuredActionTitle,
+            onBindingEditorActivityChanged: { [weak self] active in
+                self?.setEditorActive(active)
+            }
+        )
+        #else
         feature.settingsView(
             selectedRemoteProfileID: selectedRemoteProfileID,
             configuredActionTitle: configuredActionTitle,
@@ -132,6 +146,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 self?.setEditorActive(active)
             }
         )
+        #endif
         #else
         AnyView(EmptyView())
         #endif
@@ -147,9 +162,34 @@ final class MacroFeatureIntegration: ObservableObject {
 
     func buttonProfilesView(
         selectedRemoteProfileID: UUID?,
+        remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection]
     ) -> AnyView {
         #if canImport(SayAllMacroRemoteMic)
+        #if SAYALL_MACRO_REMOTE_CAPABILITIES
+        return feature.buttonProfilesView(
+            selectedRemoteProfileID: selectedRemoteProfileID,
+            remotePresentation: remotePresentation(for: remoteModel),
+            hostActionSections: hostActionSections.map { section in
+                RemoteMicHostActionSection(
+                    id: section.id,
+                    title: section.title,
+                    actions: section.actions.map { action in
+                        RemoteMicHostActionDescriptor(
+                            reference: RemoteMicHostActionReference(
+                                id: action.id,
+                                displayName: action.title,
+                                payload: action.payload
+                            ),
+                            detail: action.detail,
+                            systemImage: action.systemImage,
+                            isAvailable: action.isAvailable
+                        )
+                    }
+                )
+            }
+        )
+        #else
         return feature.buttonProfilesView(
             selectedRemoteProfileID: selectedRemoteProfileID,
             hostActionSections: hostActionSections.map { section in
@@ -171,10 +211,74 @@ final class MacroFeatureIntegration: ObservableObject {
                 )
             }
         )
+        #endif
         #else
         return AnyView(EmptyView())
         #endif
     }
+
+    #if SAYALL_MACRO_REMOTE_CAPABILITIES && canImport(SayAllMacroRemoteMic)
+    private func remotePresentation(
+        for model: XiaomiRemoteModel?
+    ) -> RemoteMicRemotePresentation {
+        switch model {
+        case .rc001:
+            return .xiaomiRC001(displayName: "RC001")
+        case .rc003, .unknown, nil:
+            return .xiaomiRC003(displayName: "RC003")
+        case .appleSiriRemoteA2854, .appleSiriRemoteA2540:
+            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+            let siriModel: SayAllSiriRemoteModel = model == .appleSiriRemoteA2540
+                ? .a2540
+                : .a2854
+            let source = SayAllSiriRemoteDevicePresentation.presentation(for: siriModel)
+            let capabilities = RemoteMicRemoteModelCatalog.capabilities(
+                for: source.model.stableModelID
+            )!
+            let anchors = Dictionary(uniqueKeysWithValues: source.anchors.compactMap {
+                controlID, anchor in
+                macroButton(forSiriControlID: controlID).map { ($0, anchor) }
+            })
+            return RemoteMicRemotePresentation(
+                capabilities: capabilities,
+                displayName: source.displayName,
+                image: source.image,
+                aspectRatio: source.aspectRatio,
+                anchors: anchors
+            )
+            #else
+            let modelID = model == .appleSiriRemoteA2540
+                ? RemoteMicRemoteModelID.appleSiriRemoteA2540
+                : RemoteMicRemoteModelID.appleSiriRemoteA2854
+            return RemoteMicRemotePresentation(
+                capabilities: RemoteMicRemoteModelCatalog.capabilities(for: modelID)!,
+                displayName: "Siri Remote",
+                image: nil,
+                aspectRatio: 423.0 / 1510.0,
+                anchors: [:]
+            )
+            #endif
+        }
+    }
+
+    private func macroButton(forSiriControlID controlID: String) -> RemoteMicMacroButton? {
+        switch controlID {
+        case "power": .power
+        case "up": .up
+        case "left": .left
+        case "select": .ok
+        case "right": .right
+        case "down": .down
+        case "back": .back
+        case "tv": .tv
+        case "play_pause": .playPause
+        case "volume_up": .volumeUp
+        case "mute": .mute
+        case "volume_down": .volumeDown
+        default: nil
+        }
+    }
+    #endif
 
     func hasActiveBinding(
         profileID: UUID?,

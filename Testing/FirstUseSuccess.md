@@ -46,7 +46,7 @@
 ## 用例 4：单一安装入口（后续候选产物）
 
 1. 打开 Apple Silicon 和 Intel DMG。
-2. 检查根目录只存在对应的 `Install Remote Mic*.pkg`。
+2. 检查根目录只存在对应的 `Install SayAll*.pkg`。
 3. 分别在未安装、健康同版本、损坏、错误架构和旧版本驱动状态安装。
 4. 在没有 Xcode 或 Command Line Tools 的普通用户机器执行。
 
@@ -57,7 +57,7 @@
 ## 用例 5：旧版 Remote Mic 到 SayAll 的 PKG 升级时序
 
 1. 在独立测试账号安装一个已完成 Onboarding 的旧版 `/Applications/Remote Mic.app`，并保持无线麦运行。
-2. 使用正式 Developer ID 签名的 `Install Remote Mic.pkg` 安装 1.9.x；不要手动删除旧 App。
+2. 使用正式 Developer ID 签名的 `Install SayAll.pkg` 安装 1.9.x；不要手动删除旧 App。
 3. 观察安装期间的进程、`/var/log/install.log`，以及安装完成后的 `runtime.log`。
 4. 确认安装器先停止旧 `RemoteMic` 进程，再更新 MiRemoteV 2ch 或重启 `coreaudiod`；新 App 验证后旧 App 被移入废纸篓并启动 `SayAll.app`。
 5. 进入 Onboarding 音频页，确认 `MiRemoteV 2ch` 可枚举、可选择，实体遥控器按键和语音测试可继续。
