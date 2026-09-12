@@ -86,6 +86,16 @@ enum StandaloneKeyboardModifier: String, CaseIterable, Identifiable {
         }
     }
 
+    var symbol: String {
+        switch self {
+        case .leftCommand, .rightCommand: return "⌘"
+        case .leftOption, .rightOption: return "⌥"
+        case .leftControl, .rightControl: return "⌃"
+        case .leftShift, .rightShift: return "⇧"
+        case .function: return "fn"
+        }
+    }
+
     var shortcut: CustomKeyboardShortcut {
         CustomKeyboardShortcut(
             keyCode: keyCode,
@@ -110,6 +120,19 @@ struct StandardKeyboardKey: Identifiable, Equatable {
     let keyCode: UInt16
     let keyLabel: String
     let widthUnits: Double
+
+    var visualLabel: String {
+        switch keyCode {
+        case 36: return "⏎"
+        case 48: return "⇥"
+        case 49: return "␠"
+        case 51: return "⌫"
+        case 53: return "⎋"
+        case 76: return "⌤"
+        case 117: return "⌦"
+        default: return keyLabel
+        }
+    }
 
     init(_ id: String, keyCode: UInt16, label: String, widthUnits: Double = 1) {
         self.id = id
@@ -396,12 +419,14 @@ struct KeyboardShortcutPicker: View {
                 ForEach(KeyboardShortcutPreset.allCases) { preset in
                     let candidate = preset.shortcut
                     shortcutChoiceButton(
-                        title: preset.displayName(using: localization),
-                        shortcutName: candidate.displayName(using: localization),
+                        title: candidate.visualDisplayName(using: localization),
+                        shortcutName: "",
                         selected: shortcutMatches(candidate)
                     ) {
                         selectedModifierFlagsRawValue = candidate.modifierFlags.rawValue
                         onSelect(candidate)
+                    } detail: {
+                        candidate.detailedDisplayName(using: localization)
                     }
                 }
             }
@@ -462,9 +487,6 @@ struct KeyboardShortcutPicker: View {
             HStack(spacing: 7) {
                 Text(modifier.symbol)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                Text(modifier.displayName(using: localization))
-                    .font(.system(size: 12, weight: .medium))
-                    .lineLimit(1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 9)
@@ -475,6 +497,8 @@ struct KeyboardShortcutPicker: View {
             )
         }
         .buttonStyle(.plain)
+        .help(modifier.displayName(using: localization))
+        .accessibilityLabel(Text(modifier.displayName(using: localization)))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -503,7 +527,7 @@ struct KeyboardShortcutPicker: View {
         return Button {
             onSelect(candidate)
         } label: {
-            Text(key.keyLabel)
+            Text(key.visualLabel)
                 .font(.system(size: 12, weight: selected ? .semibold : .regular, design: .rounded))
                 .lineLimit(1)
                 .frame(
@@ -522,11 +546,12 @@ struct KeyboardShortcutPicker: View {
                 }
         }
         .buttonStyle(.plain)
+        .help(candidate.detailedDisplayName(using: localization))
         .accessibilityLabel(
             String(
                 format: localization.text("shortcut.picker.keyboard.key_accessibility"),
                 locale: localization.locale,
-                arguments: [candidate.displayName(using: localization)]
+                arguments: [candidate.detailedDisplayName(using: localization)]
             )
         )
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -548,12 +573,14 @@ struct KeyboardShortcutPicker: View {
                 ForEach(StandaloneKeyboardModifier.allCases) { modifier in
                     let candidate = modifier.shortcut
                     shortcutChoiceButton(
-                        title: modifier.displayName(using: localization),
+                        title: candidate.visualDisplayName(using: localization),
                         shortcutName: "",
                         selected: shortcutMatches(candidate)
                     ) {
                         selectedModifierFlagsRawValue = 0
                         onSelect(candidate)
+                    } detail: {
+                        modifier.displayName(using: localization)
                     }
                 }
             }
@@ -564,7 +591,8 @@ struct KeyboardShortcutPicker: View {
         title: String,
         shortcutName: String,
         selected: Bool,
-        action: @escaping () -> Void
+        action: @escaping () -> Void,
+        detail: (() -> String)? = nil
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -596,6 +624,8 @@ struct KeyboardShortcutPicker: View {
             }
         }
         .buttonStyle(.plain)
+        .help(detail?() ?? title)
+        .accessibilityLabel(Text(detail?() ?? title))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 

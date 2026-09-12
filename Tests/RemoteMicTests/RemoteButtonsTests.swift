@@ -802,6 +802,42 @@ struct RemoteButtonsTests {
         ) == shortcut)
     }
 
+    @Test func customShortcutUsesIconDisplayAndFullTooltipNames() {
+        let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
+        localization.select(.english)
+
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 123,
+            modifierFlags: [.control, .option, .shift, .command],
+            keyLabel: "←"
+        )
+
+        #expect(shortcut.visualDisplayName(using: localization) == "⌃⌥⇧⌘←")
+        #expect(shortcut.detailedDisplayName(using: localization) == [
+            localization.text("shortcut.modifier.control"),
+            localization.text("shortcut.modifier.option"),
+            localization.text("shortcut.modifier.shift"),
+            localization.text("shortcut.modifier.command"),
+            localization.text("keyboard.key.left"),
+        ].joined(separator: " + "))
+
+        let specialKeys: [(UInt16, String, String, String)] = [
+            (36, "Return", "⏎", "keyboard.key.return"),
+            (48, "Tab", "⇥", "keyboard.key.tab"),
+            (51, "⌫", "⌫", "keyboard.key.delete"),
+            (123, "←", "←", "keyboard.key.left"),
+        ]
+        for (keyCode, keyLabel, visual, detailedKey) in specialKeys {
+            let value = CustomKeyboardShortcut(
+                keyCode: keyCode,
+                modifierFlags: [],
+                keyLabel: keyLabel
+            )
+            #expect(value.visualDisplayName(using: localization) == visual)
+            #expect(value.detailedDisplayName(using: localization) == localization.text(detailedKey))
+        }
+    }
+
     @Test func arrowShortcutIgnoresSystemFunctionMarkerWhenRecordedOrLoaded() throws {
         let event = try #require(CGEvent(
             keyboardEventSource: CGEventSource(stateID: .hidSystemState),
@@ -935,6 +971,39 @@ struct RemoteButtonsTests {
         #expect(posted[9].0 == KeyboardInjector.leftCommandKeyCode)
         #expect(!posted[9].1)
         #expect(posted[9].2.isEmpty)
+    }
+
+    @Test func appleRemoteCircularNavigationAccumulatesNoiseAndPreservesDirection() {
+        var accumulator = AppleRemoteCircularNavigationAccumulator()
+
+        #expect(accumulator.consume(8) == 0)
+        #expect(accumulator.consume(9) == 0)
+        #expect(accumulator.consume(1) == 1)
+        #expect(accumulator.pendingPixels == 0)
+        #expect(accumulator.consume(-18) == -1)
+    }
+
+    @Test func appleRemoteCircularNavigationDropsOppositeDirectionRemainder() {
+        var accumulator = AppleRemoteCircularNavigationAccumulator()
+
+        #expect(accumulator.consume(12) == 0)
+        #expect(accumulator.consume(-7) == 0)
+        #expect(accumulator.pendingPixels == -7)
+        #expect(accumulator.consume(-11) == -1)
+    }
+
+    @Test func appleRemoteCircularNavigationCapsBurstAndCanReset() {
+        var accumulator = AppleRemoteCircularNavigationAccumulator()
+
+        #expect(accumulator.consume(AppleRemoteCircularNavigationAccumulator.stepThreshold * 5) == 3)
+        #expect(accumulator.pendingPixels == AppleRemoteCircularNavigationAccumulator.stepThreshold * 2)
+        accumulator.reset()
+        #expect(accumulator.pendingPixels == 0)
+    }
+
+    @Test func appleRemoteCircularNavigationMapsClickWheelDirectionToAppSwitcher() {
+        #expect(!AppleRemoteCircularNavigationAccumulator.movesLeft(for: -1))
+        #expect(AppleRemoteCircularNavigationAccumulator.movesLeft(for: 1))
     }
 
     @Test func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp() throws {

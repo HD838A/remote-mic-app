@@ -133,6 +133,10 @@ struct AppleSiriRemoteAdapterTests {
         #expect(source.contains("appleRemoteAppSwitcherSession.moveSelection(left: button == .left)"))
         #expect(source.contains("finishAppleRemoteAppSwitcher(reason: \"timeout\", confirmed: false)"))
         #expect(source.contains("return performAppleRemoteAppSwitcher(for: button, trigger: trigger)"))
+        #expect(source.contains("siriRemoteFeature.setTouchRoutingMode(.circularNavigation)"))
+        #expect(source.contains("siriRemoteFeature.setTouchRoutingMode(.standard)"))
+        #expect(source.contains("handleAppleRemoteContextualScroll(pixels)"))
+        #expect(source.contains("reason: \"voice_started\""))
         #expect(source.contains("phase=release_ignored"))
     }
 
