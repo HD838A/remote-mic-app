@@ -35,7 +35,7 @@ xcrun swiftc \
 "$OUTPUT"
 
 if [[ "$SKIP_SWIFT_PACKAGE_BUILD" == "0" ]]; then
-  xcrun swift build
+  xcrun swift build --disable-keychain
 else
   print "SWIFT PACKAGE BUILD SKIPPED: already completed by the current CI job"
 fi

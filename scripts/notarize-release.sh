@@ -128,8 +128,19 @@ ZH_NOTES_BASENAME="${ZH_RELEASE_NOTES:t}"
 EN_NOTES_BASENAME="${EN_RELEASE_NOTES:t}"
 
 cleanup() {
+  local user_home trash_directory trash_destination
   case "$WORK_DIR" in
-    /private/tmp/remotemic-notarize-release.*) /bin/rm -rf -- "$WORK_DIR" ;;
+    /private/tmp/remotemic-notarize-release.*)
+      user_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+      trash_directory="$user_home/.Trash"
+      trash_destination="$trash_directory/${WORK_DIR:t}.notarize-release.$(date -u +%Y%m%dT%H%M%SZ).$$"
+      if [[ -d "$trash_directory" && ! -e "$trash_destination" ]] && \
+          /bin/mv -n -- "$WORK_DIR" "$trash_destination"; then
+        print "NOTARIZATION WORKSPACE MOVED TO TRASH: $trash_destination"
+      else
+        print -u2 "NOTARIZATION WORKSPACE PRESERVED: $WORK_DIR"
+      fi
+      ;;
     *) print -u2 "refusing to clean unexpected notarization work path: $WORK_DIR" ;;
   esac
 }
@@ -333,7 +344,18 @@ if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
     "$OUTPUT_DIR"/appcast.xml|"$OUTPUT_DIR"/appcast-intel.xml) ;;
     *) print -u2 "refusing to replace unexpected appcast path: $APPCAST"; exit 1 ;;
   esac
-  /bin/rm -f -- "$UPDATE_ZIP" "$APPCAST" "$ZH_RELEASE_NOTES" "$EN_RELEASE_NOTES"
+  for previous_sparkle_output in \
+    "$UPDATE_ZIP" "$APPCAST" "$ZH_RELEASE_NOTES" "$EN_RELEASE_NOTES"; do
+    if [[ -e "$previous_sparkle_output" || -L "$previous_sparkle_output" ]]; then
+      USER_HOME_DIRECTORY="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+      TRASH_DIRECTORY="$USER_HOME_DIRECTORY/.Trash"
+      TRASH_DESTINATION="$TRASH_DIRECTORY/${previous_sparkle_output:t}.notarize-release.$(date -u +%Y%m%dT%H%M%SZ).$$"
+      test -d "$TRASH_DIRECTORY"
+      test ! -e "$TRASH_DESTINATION"
+      /bin/mv -n -- "$previous_sparkle_output" "$TRASH_DESTINATION"
+      print "PREVIOUS SPARKLE OUTPUT MOVED TO TRASH: $TRASH_DESTINATION"
+    fi
+  done
   /usr/bin/ditto -c -k --keepParent "$APP" "$UPDATE_ZIP"
   /bin/mkdir -p "$SPARKLE_ARCHIVES"
   /usr/bin/ditto --norsrc --noqtn --noacl "$UPDATE_ZIP" "$SPARKLE_ARCHIVES/$ZIP_BASENAME"

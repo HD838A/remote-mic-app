@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import IOKit.hidsystem
 import Testing
 @testable import RemoteMic
 
@@ -43,11 +44,53 @@ struct VoiceKeyModeTests {
             #expect(posted.count == 2)
             #expect(posted[0].0 == mode.keyCode)
             #expect(posted[0].1)
-            #expect(posted[0].2 == .maskCommand)
+            let expectedDeviceMask = CGEventFlags(rawValue: UInt64(
+                mode == .leftCommand ? NX_DEVICELCMDKEYMASK : NX_DEVICERCMDKEYMASK
+            ))
+            let oppositeDeviceMask = CGEventFlags(rawValue: UInt64(
+                mode == .leftCommand ? NX_DEVICERCMDKEYMASK : NX_DEVICELCMDKEYMASK
+            ))
+            #expect(posted[0].2.contains(.maskCommand))
+            #expect(posted[0].2.contains(expectedDeviceMask))
+            #expect(!posted[0].2.contains(oppositeDeviceMask))
             #expect(posted[1].0 == mode.keyCode)
             #expect(!posted[1].1)
             #expect(posted[1].2.isEmpty)
         }
+    }
+
+    @Test func appleRemoteCommandVoiceJourneyPostsOneSideSpecificDownAndMatchingUp() {
+        var latch = VoiceFunctionKeyLatch()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        for streaming in [true, false] {
+            guard let transition = latch.transition(streaming: streaming, owner: .appleRemote) else {
+                Issue.record("Apple Remote voice journey must emit both press and release")
+                continue
+            }
+            let isPressed = transition == .press
+            #expect(KeyboardInjector.setVoiceKeyPressed(
+                .rightCommand,
+                isPressed: isPressed,
+                accessibilityTrusted: { true },
+                keyStatePoster: poster
+            ))
+        }
+
+        let rightDeviceMask = CGEventFlags(rawValue: UInt64(NX_DEVICERCMDKEYMASK))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == VoiceKeyMode.rightCommand.keyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2.contains(.maskCommand))
+        #expect(posted[0].2.contains(rightDeviceMask))
+        #expect(posted[1].0 == VoiceKeyMode.rightCommand.keyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2.isEmpty)
+        #expect(!latch.isHeld)
     }
 
     @Test func commandModeRequiresAccessibilityButFnDoesNot() {
@@ -204,6 +247,13 @@ struct VoiceKeyModeTests {
     }
 
     @Test func hidRecoveryReappliesTheCurrentVoiceKeyModeWithoutForcingFn() throws {
+        #expect(HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+            hasMatchingServices: false
+        ))
+        #expect(!HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure(
+            hasMatchingServices: true
+        ))
+
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -235,6 +285,24 @@ struct VoiceKeyModeTests {
         #expect(applySource.contains("requestedVoiceKeyMode != .function"))
         #expect(applySource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: true)"))
         #expect(applySource.contains("applyVoiceFunctionMapping(neutralizeVoiceKey: false)"))
+        #expect(applySource.contains(
+            "HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure"
+        ))
+        #expect(applySource.contains(
+            "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
+        ))
+
+        let enableStart = try #require(source.range(of: "private func enableVoiceFnTapMode()"))
+        let enableEnd = try #require(source.range(
+            of: "private func handleVoiceFnTapFailure",
+            range: enableStart.upperBound..<source.endIndex
+        ))
+        let enableSource = source[enableStart.lowerBound..<enableEnd.lowerBound]
+        #expect(enableSource.contains(
+            "HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure"
+        ))
+        #expect(enableSource.contains("settings.voiceFnTapModeEnabled = true"))
+        #expect(enableSource.contains("scheduleHIDMappingRecoveryIfNeeded()"))
     }
 
     @Test func bluetoothCommandVoiceRequiresNeutralizedHardwareKeyBeforeAcceptance() throws {

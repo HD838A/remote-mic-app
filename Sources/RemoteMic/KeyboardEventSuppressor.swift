@@ -85,7 +85,10 @@ final class KeyboardEventSuppressor {
     }
 
     func arm(button: RemoteButton, edge: RemoteEventEdge) {
-        let nativeEvents = button.nativeEvents
+        arm(nativeEvents: button.nativeEvents, edge: edge)
+    }
+
+    func arm(nativeEvents: Set<RemoteNativeEvent>, edge: RemoteEventEdge) {
         guard !nativeEvents.isEmpty else { return }
         let now = ProcessInfo.processInfo.systemUptime
         lock.lock()

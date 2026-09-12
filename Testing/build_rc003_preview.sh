@@ -16,10 +16,12 @@ IDENTITY="${CODE_SIGN_IDENTITY:-Developer ID Application: lei qian (L3QHLDRPAY)}
 
 mkdir -p "$OUT_ROOT" "$ROOT/dist"
 swift build -c debug \
+  --disable-keychain \
   --scratch-path "$SCRATCH" \
   --cache-path "$CACHE" \
   --triple arm64-apple-macosx14.0
 BIN_DIR="$(swift build -c debug \
+  --disable-keychain \
   --scratch-path "$SCRATCH" \
   --cache-path "$CACHE" \
   --triple arm64-apple-macosx14.0 \

@@ -271,6 +271,25 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func remoteInputDiagnosticDistinguishesVoiceFromControlButtons() {
+        var diagnostic = FirstUseRemoteInputDiagnostic()
+
+        diagnostic.recordVoiceButtonPress()
+        diagnostic.recordVoiceButtonPress()
+
+        #expect(diagnostic.voiceButtonPressCount == 2)
+        #expect(diagnostic.controlButtonObservationCount == 0)
+        #expect(diagnostic.lastInputKind == .voice)
+        #expect(diagnostic.shouldShowVoiceButtonCorrection)
+
+        diagnostic.recordControlButtonObservation()
+
+        #expect(diagnostic.voiceButtonPressCount == 2)
+        #expect(diagnostic.controlButtonObservationCount == 1)
+        #expect(diagnostic.lastInputKind == .control)
+        #expect(!diagnostic.shouldShowVoiceButtonCorrection)
+    }
+
     @Test func everyRequiredCapabilityBlocksItsStepUntilVerified() {
         var capabilities = OnboardingCapabilities()
 
@@ -548,7 +567,11 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("allRecognizedVoiceToolsUnavailable"))
         #expect(viewSource.contains("onboarding.voice_tool.none_detected"))
         #expect(viewSource.contains("onboarding.voice_tool.other.setup_detail"))
-        #expect(viewSource.contains("onboarding.voice_test.other_detail"))
+        #expect(viewSource.contains("onboarding.voice_test.configuration.detail"))
+        #expect(viewSource.contains("externalToolConfigurationConfirmationCard"))
+        #expect(viewSource.contains("externalToolVoiceKeyConfirmed"))
+        #expect(viewSource.contains("externalToolGlobalVoiceConfirmed"))
+        #expect(viewSource.contains("externalToolMicrophoneConfirmed"))
         #expect(viewSource.contains("if voiceToolAvailability[.doubao] == .notInstalled"))
         #expect(!viewSource.contains("settings.onboardingVoiceTool == .doubao,\n"))
         #expect(viewSource.contains("localization.text(settings.onboardingVoiceTool.titleKey)"))
@@ -591,13 +614,78 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains(".onChange(of: transcript)"))
         #expect(!viewSource.contains(".onChange(of: transcript) { _, updatedText in"))
         #expect(viewSource.contains("OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput"))
-        #expect(viewSource.contains("policyAllowsContinue && voiceAttempt.phase == .passed"))
+        #expect(viewSource.contains("voiceAttempt.phase == .passed &&"))
+        #expect(viewSource.contains("externalToolConfigurationConfirmed"))
+        #expect(viewSource.contains("sayAllVoiceKeyConfigurationReady"))
+        #expect(viewSource.contains("sayAllAudioOutputConfigurationText"))
+        #expect(viewSource.contains(".foregroundStyle(onboardingAudioReady ? Color.green : Color.red)"))
         #expect(viewSource.contains(".eventSourceStateID"))
         #expect(viewSource.contains(".eventSourceUnixProcessID"))
         #expect(viewSource.contains("manualTranscriptInputObserved = true"))
         #expect(viewSource.contains("ONBOARDING TRANSCRIPT manual_keyboard_input=true"))
         #expect(viewSource.contains("voiceSessionStarted = true"))
         #expect(viewSource.contains("transcript = \"\""))
+    }
+
+    @Test func voiceTestConfigurationPolicyMatchesEachToolAndRequiresEveryConfirmation() {
+        #expect(!OnboardingVoiceTestConfigurationPolicy.expectsFnTap(for: .doubao))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.expectsFnTap(for: .weixin))
+        #expect(OnboardingVoiceTestConfigurationPolicy.expectsFnTap(for: .typeless))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.expectsFnTap(for: .other))
+
+        #expect(OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .doubao))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .weixin))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .typeless))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .other))
+
+        #expect(OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: .doubao,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false
+        ))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: .doubao,
+            voiceKeyMode: .rightCommand,
+            voiceFnTapModeEnabled: false
+        ))
+        #expect(OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: .typeless,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: true
+        ))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: .typeless,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false
+        ))
+
+        #expect(!OnboardingVoiceTestConfigurationPolicy.isComplete(
+            voiceTool: .doubao,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            audioOutputReady: true,
+            externalVoiceKeyConfirmed: true,
+            externalGlobalVoiceConfirmed: false,
+            externalMicrophoneConfirmed: true
+        ))
+        #expect(OnboardingVoiceTestConfigurationPolicy.isComplete(
+            voiceTool: .doubao,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            audioOutputReady: true,
+            externalVoiceKeyConfirmed: true,
+            externalGlobalVoiceConfirmed: true,
+            externalMicrophoneConfirmed: true
+        ))
+        #expect(OnboardingVoiceTestConfigurationPolicy.isComplete(
+            voiceTool: .typeless,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: true,
+            audioOutputReady: true,
+            externalVoiceKeyConfirmed: true,
+            externalGlobalVoiceConfirmed: false,
+            externalMicrophoneConfirmed: true
+        ))
     }
 
     @Test func transcriptInputPolicyRejectsSyntheticAndUnknownEventSources() {
@@ -647,6 +735,79 @@ struct OnboardingFlowTests {
             sourceStateID: 1,
             sourceUnixProcessID: nil
         ))
+    }
+
+    @Test func voiceTestConfigurationRequiresTheExpectedTriggerForEveryTool() {
+        for tool in [OnboardingVoiceTool.doubao, .weixin, .other] {
+            #expect(OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+                voiceTool: tool,
+                voiceKeyMode: .function,
+                voiceFnTapModeEnabled: false
+            ))
+            #expect(!OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+                voiceTool: tool,
+                voiceKeyMode: .function,
+                voiceFnTapModeEnabled: true
+            ))
+        }
+
+        #expect(OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: .typeless,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: true
+        ))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: .typeless,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false
+        ))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: .doubao,
+            voiceKeyMode: .rightCommand,
+            voiceFnTapModeEnabled: false
+        ))
+    }
+
+    @Test func voiceTestConfigurationGateRequiresEveryVisibleConfirmation() {
+        #expect(OnboardingVoiceTestConfigurationPolicy.isComplete(
+            voiceTool: .weixin,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            audioOutputReady: true,
+            externalVoiceKeyConfirmed: true,
+            externalGlobalVoiceConfirmed: false,
+            externalMicrophoneConfirmed: true
+        ))
+        #expect(!OnboardingVoiceTestConfigurationPolicy.isComplete(
+            voiceTool: .doubao,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            audioOutputReady: true,
+            externalVoiceKeyConfirmed: true,
+            externalGlobalVoiceConfirmed: false,
+            externalMicrophoneConfirmed: true
+        ))
+        #expect(OnboardingVoiceTestConfigurationPolicy.isComplete(
+            voiceTool: .doubao,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            audioOutputReady: true,
+            externalVoiceKeyConfirmed: true,
+            externalGlobalVoiceConfirmed: true,
+            externalMicrophoneConfirmed: true
+        ))
+
+        for missingCheck in 0..<3 {
+            #expect(!OnboardingVoiceTestConfigurationPolicy.isComplete(
+                voiceTool: .weixin,
+                voiceKeyMode: .function,
+                voiceFnTapModeEnabled: false,
+                audioOutputReady: missingCheck != 0,
+                externalVoiceKeyConfirmed: missingCheck != 1,
+                externalGlobalVoiceConfirmed: true,
+                externalMicrophoneConfirmed: missingCheck != 2
+            ))
+        }
     }
 
     @Test func voiceSamplePresentationPublishesOnlyTheFirstNonemptyBatchPerSession() {
@@ -800,7 +961,7 @@ struct OnboardingFlowTests {
             of: ".onReceive(model.$lastRemoteButtonPress.compactMap { $0 })"
         ))
         let buttonReceiveEnd = try #require(viewSource.range(
-            of: ".onReceive(model.$isStreaming)",
+            of: ".onReceive(model.$isStreaming",
             range: buttonReceiveStart.upperBound..<viewSource.endIndex
         ))
         let buttonReceiveSource = viewSource[buttonReceiveStart.lowerBound..<buttonReceiveEnd.lowerBound]
@@ -915,6 +1076,30 @@ struct OnboardingFlowTests {
         let recoverySource = viewSource[recoveryStart.lowerBound..<recoveryEnd.lowerBound]
         #expect(recoverySource.contains("case .remoteButtonNotReady, .controlsNotConfirmed:"))
         #expect(recoverySource.contains("model.applyHIDSettings()"))
+    }
+
+    @Test func remoteStepCorrectsVoiceButtonMistakesWithoutWeakeningTheControlGate() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingScreenshotRenderer.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewSource.contains("recordRemoteVoiceButtonPress()"))
+        #expect(viewSource.contains("onboarding.remote.voice_button_mistake.title"))
+        #expect(viewSource.contains("onboarding.remote.voice_button_mistake.detail"))
+        #expect(viewSource.contains("onboarding.remote.button_waiting_detail"))
+        #expect(viewSource.contains("ONBOARDING REMOTE_INPUT observed=voice"))
+        #expect(viewSource.contains("ONBOARDING REMOTE_INPUT observed=control"))
+        #expect(viewSource.contains("isComplete: !observedRemoteButtons.isEmpty"))
+        #expect(rendererSource.contains("REMOTE_MIC_ONBOARDING_SCREENSHOT_REMOTE_INPUT"))
     }
 
     @Test func completionPageExplainsARegressedRuntimeCondition() throws {
@@ -1290,7 +1475,7 @@ struct OnboardingFlowTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicRootView.swift"),
             encoding: .utf8
         )
-        #expect(appSource.contains("showSettingsWindow(initialSection: .permissions)"))
+        #expect(appSource.contains("showSettingsWindow(initialSection: .about)"))
         #expect(appSource.contains("UPDATE PERMISSION_REPAIR"))
         #expect(rootViewSource.contains("initialSection: initialSettingsSection"))
     }
@@ -1359,36 +1544,73 @@ struct OnboardingFlowTests {
             samplesReceived: true,
             transcriptionAppeared: true,
             triggerReady: true,
-            focusLost: false
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
         ) == .passed)
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: false,
             transcriptionAppeared: false,
             triggerReady: true,
-            focusLost: false
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .noSamples,
+            finalObservation: true
         ) == .noSamples)
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: true,
             transcriptionAppeared: false,
             triggerReady: false,
-            focusLost: false
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
         ) == .inputTargetNotReady)
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: true,
             transcriptionAppeared: false,
             triggerReady: true,
-            focusLost: true
+            focusReadyAtDeadline: false,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
         ) == .inputTargetFocusLost)
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: true,
             transcriptionAppeared: false,
             triggerReady: true,
-            focusLost: false
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .enqueueFailed,
+            finalObservation: true
+        ) == .audioDeliveryFailed)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
         ) == .externalToolNoCommit)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .playbackPending,
+            finalObservation: false
+        ) == .externalToolNoCommit)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .playbackPending,
+            finalObservation: true
+        ) == .audioDeliveryFailed)
     }
 
     @Test func voiceAttemptIntermediatePhasesAreNotFailures() {
@@ -1431,6 +1653,99 @@ struct OnboardingFlowTests {
             voiceAttempt: attempt
         )
         #expect(context.failureReason == .voiceExternalToolNoCommit)
+    }
+
+    @Test func recoveredTransientFocusLossDoesNotOverrideTheExternalToolBoundary() {
+        let result = FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
+        )
+        var attempt = FirstUseVoiceAttemptDiagnostic(
+            phase: .failed,
+            focusLost: true,
+            focusLossCount: 1,
+            focusRecovered: true,
+            focusReadyAtDeadline: true,
+            externalToolVoiceKeyUserConfirmed: true,
+            externalToolMicrophoneUserConfirmed: true,
+            result: result
+        )
+        attempt.audioDelivery = deliveredAudioDiagnostic()
+
+        #expect(result == .externalToolNoCommit)
+        #expect(attempt.probableCause == "external_tool_no_commit")
+        #expect(!attempt.probableCauseConfirmed)
+    }
+
+    @Test func focusStillMissingAtTheDeadlineIsAConfirmedSayAllFailure() {
+        let result = FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: false,
+            audioDeliveryResult: .deliveredToSelectedDevice,
+            finalObservation: true
+        )
+
+        #expect(result == .inputTargetFocusLost)
+        #expect(FirstUseVoiceAttemptDiagnostic(
+            phase: .failed,
+            focusReadyAtDeadline: false,
+            result: result
+        ).probableCauseConfirmed)
+    }
+
+    @Test func unconfirmedExternalMicrophoneIsReportedAsAnUnverifiedNextCheck() {
+        var attempt = FirstUseVoiceAttemptDiagnostic(
+            phase: .failed,
+            focusReadyAtDeadline: true,
+            externalToolVoiceKeyUserConfirmed: true,
+            externalToolMicrophoneUserConfirmed: false,
+            result: .externalToolNoCommit
+        )
+        attempt.audioDelivery = deliveredAudioDiagnostic()
+
+        #expect(attempt.probableCause == "external_tool_microphone_not_confirmed")
+        #expect(!attempt.probableCauseConfirmed)
+        #expect(attempt.result.diagnosticBoundary == "external_tool_internal_state_unavailable")
+    }
+
+    @Test func unconfirmedExternalVoiceKeyIsReportedBeforeOtherExternalChecks() {
+        var attempt = FirstUseVoiceAttemptDiagnostic(
+            phase: .failed,
+            focusReadyAtDeadline: true,
+            externalToolVoiceKeyUserConfirmed: false,
+            externalToolGlobalVoiceApplicable: true,
+            externalToolGlobalVoiceUserConfirmed: false,
+            externalToolMicrophoneUserConfirmed: false,
+            result: .externalToolNoCommit
+        )
+        attempt.audioDelivery = deliveredAudioDiagnostic()
+
+        #expect(attempt.probableCause == "external_tool_voice_key_not_confirmed")
+        #expect(!attempt.probableCauseConfirmed)
+    }
+
+    @Test func unconfirmedDoubaoGlobalVoiceIsReportedAfterVoiceKeyConfirmation() {
+        var attempt = FirstUseVoiceAttemptDiagnostic(
+            phase: .failed,
+            focusReadyAtDeadline: true,
+            externalToolVoiceKeyUserConfirmed: true,
+            externalToolGlobalVoiceApplicable: true,
+            externalToolGlobalVoiceUserConfirmed: false,
+            externalToolMicrophoneUserConfirmed: true,
+            result: .externalToolNoCommit
+        )
+        attempt.audioDelivery = deliveredAudioDiagnostic()
+
+        #expect(attempt.probableCause == "external_tool_global_voice_not_confirmed")
+        #expect(!attempt.probableCauseConfirmed)
     }
 
     @Test func voiceTestUsesNativeFirstResponderAsTheFocusFact() throws {
@@ -1510,6 +1825,23 @@ struct OnboardingFlowTests {
         #expect(legacyEvents.first?.voiceResult == nil)
     }
 
+    @Test func firstUseEventsHaveStableRuntimeLogMessages() {
+        let event = FirstUseEvent(
+            timestamp: Date(timeIntervalSinceReferenceDate: 0),
+            kind: .blocked,
+            step: .voiceTest,
+            elapsedMilliseconds: 1_234,
+            failureReason: .voiceNoTranscript,
+            voiceAttemptID: 7,
+            voiceResult: .externalToolNoCommit
+        )
+
+        #expect(event.runtimeLogMessage ==
+            "ONBOARDING EVENT kind=blocked step=voiceTest elapsed_ms=1234 " +
+                "failure=voice.no_transcript attempt=7 voice_result=external_tool_no_commit"
+        )
+    }
+
     @Test func diagnosticSummaryContainsOnlyNormalizedState() {
         let capabilities = OnboardingCapabilities(
             bluetoothGranted: true,
@@ -1535,7 +1867,12 @@ struct OnboardingFlowTests {
             context: FirstUseDiagnosticContext(
                 step: .permissions,
                 capabilities: capabilities,
-                hasSelectedAudioUID: false
+                hasSelectedAudioUID: false,
+                remoteInput: FirstUseRemoteInputDiagnostic(
+                    voiceButtonPressCount: 2,
+                    controlButtonObservationCount: 0,
+                    lastInputKind: .voice
+                )
             ),
             voiceAttempt: FirstUseVoiceAttemptDiagnostic(
                 attemptID: 2,
@@ -1549,6 +1886,8 @@ struct OnboardingFlowTests {
                 firstSampleLatencyMilliseconds: 24,
                 sessionDurationMilliseconds: 1_500,
                 transcriptWaitMilliseconds: 3_000,
+                externalToolVoiceKeyUserConfirmed: true,
+                externalToolExpectedVoiceKey: "fn_tap",
                 result: .externalToolNoCommit
             ),
             bluetoothStatus: "connection.status.searching",
@@ -1561,19 +1900,61 @@ struct OnboardingFlowTests {
         let text = snapshot.redactedText
         #expect(text.contains("failure=permission.input_monitoring_denied"))
         #expect(text.contains("voice_attempt=2"))
-        #expect(text.contains("diagnostic_schema=2"))
+        #expect(text.contains("diagnostic_schema=3"))
         #expect(text.contains("app_version=1.8.14"))
         #expect(text.contains("app_build=106"))
         #expect(text.contains("onboarding_voice_key_policy=fn_only"))
         #expect(text.contains("voice_key_policy_compliant=true"))
+        #expect(text.contains("remote_voice_button_press_count=2"))
+        #expect(text.contains("remote_control_button_observation_count=0"))
+        #expect(text.contains("remote_last_input_kind=voice"))
+        #expect(text.contains("remote_voice_button_mistake_detected=true"))
         #expect(text.contains("macos_version="))
         #expect(text.contains("macos_build="))
         #expect(text.contains("app_language=zh-Hans"))
         #expect(text.contains("voice_terminal_result=external_tool_no_commit"))
+        #expect(text.contains("voice_probable_cause_confirmed=false"))
+        #expect(text.contains("voice_external_tool_voice_key_observable=false"))
+        #expect(text.contains("voice_external_tool_voice_key_user_confirmed=true"))
+        #expect(text.contains("voice_external_tool_expected_voice_key=fn_tap"))
+        #expect(text.contains("voice_external_tool_global_voice_observable=false"))
+        #expect(text.contains("voice_external_tool_global_voice_applicable=false"))
+        #expect(text.contains("voice_external_tool_microphone_observable=false"))
+        #expect(text.contains("voice_external_tool_expected_microphone=unavailable"))
+        #expect(text.contains("voice_external_tool_next_checks=trigger_mode_matches_fn"))
+        #expect(text.contains("voice_audio_delivery_result=unavailable"))
+        #expect(text.contains("voice_focus_ready_at_deadline=unknown"))
         #expect(text.contains("voice_first_sample_latency_ms=24"))
         #expect(text.contains("voice_diagnostic_boundary=external_tool_internal_state_unavailable"))
         #expect(!text.contains("/Users/"))
         #expect(!text.contains("UUID"))
         #expect(!text.contains("无线麦已经连接成功"))
+    }
+
+    private func deliveredAudioDiagnostic() -> VoiceAudioDeliveryDiagnostic {
+        let start = VirtualAudioOutputDiagnosticSnapshot(
+            selectedDeviceKind: .miRemoteV2ch,
+            actualDeviceKind: .miRemoteV2ch,
+            engineRunning: true,
+            playerPlaying: true,
+            boundToSelectedDevice: true
+        )
+        var observation = start
+        observation.counters = VirtualAudioPlaybackCounters(
+            scheduledBuffers: 1,
+            scheduledSamples: 320,
+            playedBuffers: 1,
+            playedSamples: 320
+        )
+        return VoiceAudioDeliveryDiagnostic(
+            generation: 1,
+            source: UsageEventSource.bluetoothRemote.rawValue,
+            route: .virtualAudioDirect,
+            sessionEnded: true,
+            receivedBatches: 1,
+            receivedSamples: 320,
+            outputAtStart: start,
+            outputAtObservation: observation
+        )
     }
 }
