@@ -264,7 +264,7 @@ struct HardwareSimulationIntegrationTests {
             settings.setAction(.disabled, for: button, trigger: .doubleClick)
             settings.setAction(.disabled, for: button, trigger: .longPress)
         }
-        let interval = try #require(HIDRemoteTiming.repeatIntervalMilliseconds(for: button))
+        let interval = try #require(HIDRemoteTiming.repeatIntervalMilliseconds(for: .volumeDown))
         let firstRepeatAt = 10 + HIDRemoteTiming.repeatStartMilliseconds
         let releaseAt: UInt64 = 760
         let repeatCount = Int((releaseAt - firstRepeatAt) / interval) + 1
@@ -292,7 +292,7 @@ struct HardwareSimulationIntegrationTests {
             settings.setAction(.disabled, for: button, trigger: .doubleClick)
             settings.setAction(.disabled, for: button, trigger: .longPress)
         }
-        let interval = try #require(HIDRemoteTiming.repeatIntervalMilliseconds(for: button))
+        let interval = try #require(HIDRemoteTiming.repeatIntervalMilliseconds(for: action))
         let firstRepeatAt = 10 + HIDRemoteTiming.repeatStartMilliseconds
         let releaseAt: UInt64 = 760
         let repeatCount = Int((releaseAt - firstRepeatAt) / interval) + 1

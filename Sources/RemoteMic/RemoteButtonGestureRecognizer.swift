@@ -118,6 +118,20 @@ struct RemoteButtonGestureRecognizer {
         return [.trigger(button, .longPress)]
     }
 
+    /// A press held past the double-click window without a long-press binding
+    /// becomes a hold: the gesture is consumed now, so the eventual release is a
+    /// no-op instead of a delayed single click.
+    mutating func holdConfirmed(_ button: RemoteButton) {
+        guard let state = states[button], state.isPressed, !state.longPressTriggered else {
+            return
+        }
+        states.removeValue(forKey: button)
+    }
+
+    mutating func cancel(_ button: RemoteButton) {
+        states.removeValue(forKey: button)
+    }
+
     mutating func reset() {
         states.removeAll()
     }

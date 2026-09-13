@@ -17,16 +17,24 @@ enum HIDRemoteTiming {
     static let doubleClickMilliseconds: UInt64 = 300
     static let longPressMilliseconds: UInt64 = 550
     static let repeatStartMilliseconds: UInt64 = 350
+    /// Hold-repeat of a single-click action starts once the double-click window
+    /// closes with the button still pressed (no long-press binding on the button).
+    static let holdRepeatStartMilliseconds: UInt64 = doubleClickMilliseconds
     static let stableReleaseMilliseconds: UInt64 = 600
     static let permissionPollMilliseconds: UInt64 = 1_000
     static let appSwitcherTimeoutMilliseconds: UInt64 = 15_000
     static let appSwitcherFrontmostPollMilliseconds: UInt64 = 500
     static let appSwitcherConfirmationProbeMilliseconds: UInt64 = 300
 
-    static func repeatIntervalMilliseconds(for button: RemoteButton) -> UInt64? {
-        switch button {
-        case .back: 50
-        case .up, .down, .left, .right, .volumeUp, .volumeDown: 100
+    /// Repeat cadence is a property of the ACTION, not the physical button:
+    /// every trigger path (raw press, held single click, held long press) shares
+    /// this single table. `nil` means the action never auto-repeats.
+    static func repeatIntervalMilliseconds(for action: ButtonAction) -> UInt64? {
+        switch action {
+        case .scrollUp, .scrollDown,
+             .arrowUp, .arrowDown, .arrowLeft, .arrowRight,
+             .volumeUp, .volumeDown: 100
+        case .deleteBackward: 120
         default: nil
         }
     }
