@@ -84,6 +84,10 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-09-13 | [Issue #413 Dock 图标开关无效](./2026-09-13-issue-413-dock-icon-toggle.md) | 候选修复完成，等待真实 Dock 验收 |
+| 2026-09-13 | [Issue #407 系统音量动作名称不清](./2026-09-13-issue-407-system-volume-label.md) | 修复完成，自动化通过 |
+| 2026-09-13 | [Issue #386 上一首/下一首系统媒体事件](./2026-09-13-issue-386-system-media-track.md) | 候选修复完成，等待真实播放器与遥控器验收 |
+| 2026-09-13 | [Issue #412 窗口菜单项与快捷键缺失](./2026-09-13-issue-412-window-menu-actions.md) | 候选修复完成，等待不同 macOS 版本人工验收 |
 | 2026-09-11 | [苹果遥控器 Command 语音键再次无法唤醒目标输入法](./2026-09-11-siri-remote-command-voice-regression.md) | 候选修复与失败门禁完成，等待真实遥控器和目标输入法验收 |
 | 2026-09-03 | [1.9.19 偶发显示“暂时无法获取更新信息”](./2026-09-03-github-api-update-feed-unavailable/DEBUG.md) | 候选修复、自动化与生产通道部署完成，等待 `1.9.21` 真实 Sparkle UI 验收 |
 | 2026-09-01 | [1.9.18「语音键模拟 Fn 点按」自动关闭](./2026-09-01-fn-tap-auto-disable/DEBUG.md) | 根因确认并完成候选修复；自动化通过，等待 RC003 与 Typeless 真机验收 |

@@ -579,11 +579,14 @@ struct SettingsPageRegressionTests {
         #expect(appSource.contains("isSettingsWindowOpen = false"))
         #expect(!appSource.contains("window.canHide = false"))
         #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
+        #expect(appSource.contains("performMiniaturize:"))
+        #expect(appSource.contains("hideOtherApplications:"))
+        #expect(appSource.contains("unhideAllApplications:"))
 
         #expect(SettingsWindowActivationPolicy.value(
             showDockIcon: false,
             isSettingsWindowOpen: true
-        ) == .regular)
+        ) == .accessory)
         #expect(SettingsWindowActivationPolicy.value(
             showDockIcon: false,
             isSettingsWindowOpen: false

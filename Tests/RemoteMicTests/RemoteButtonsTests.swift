@@ -1120,8 +1120,6 @@ struct RemoteButtonsTests {
             (.commandFind, 3, .maskCommand),
             (.commandSave, 1, .maskCommand),
             (.commandDelete, 51, .maskCommand),
-            (.previousCommandLeft, 123, .maskCommand),
-            (.nextCommandRight, 124, .maskCommand),
         ]
 
         for (action, keyCode, modifiers) in expected {
@@ -1134,6 +1132,19 @@ struct RemoteButtonsTests {
             #expect(posted?.0 == keyCode)
             #expect(posted?.1 == modifiers)
         }
+
+        var systemTypes: [Int32] = []
+        #expect(KeyboardInjector.send(
+            .previousCommandLeft,
+            accessibilityTrusted: { true },
+            systemKeyPoster: { systemTypes.append($0) }
+        ))
+        #expect(KeyboardInjector.send(
+            .nextCommandRight,
+            accessibilityTrusted: { true },
+            systemKeyPoster: { systemTypes.append($0) }
+        ))
+        #expect(systemTypes == [18, 17])
     }
 
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {
