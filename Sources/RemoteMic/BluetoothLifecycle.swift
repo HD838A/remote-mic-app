@@ -135,11 +135,41 @@ enum BluetoothCentralRecoveryEvent {
 }
 
 enum BluetoothWakeRecoveryPolicy {
-    static func shouldForceReconnect(
-        event: SystemAudioLifecycleEvent,
-        started: Bool
+    /// A system sleep tears down the CoreBluetooth connection cycle, so a
+    /// reconnect has to run after the following wake.
+    ///
+    /// The intent must outlive the wake event itself: macOS can deliver
+    /// `systemDidWake` while the display is still asleep, and the resume path is
+    /// still suspended by `screenSleeping` at that point, so it returns before
+    /// reaching Bluetooth recovery. Arming a flag lets the recovery run at the
+    /// first moment the app is actually no longer suspended.
+    ///
+    /// `systemDidWake` arms on its own as well, so a wake whose `systemWillSleep`
+    /// was never observed still recovers.
+    ///
+    /// Display-only sleep/wake cycles never arm it — those happen constantly
+    /// while the machine stays awake and must not restart the connection cycle.
+    static func pendingRecovery(
+        after event: SystemAudioLifecycleEvent,
+        current: Bool
     ) -> Bool {
-        started && event == .systemDidWake
+        switch event {
+        case .systemWillSleep, .systemDidWake:
+            return true
+        case .screenDidSleep, .screenDidWake, .sessionDidResignActive, .sessionDidBecomeActive:
+            return current
+        }
+    }
+
+    /// A short sleep can end with CoreBluetooth restoring the connection before
+    /// the resume path runs. Forcing a reconnect then tears down a bridge that
+    /// already came back, so recovery only runs while no bridge is ready.
+    static func shouldForceReconnect(
+        pendingRecovery: Bool,
+        started: Bool,
+        readyBridgeCount: Int
+    ) -> Bool {
+        started && pendingRecovery && readyBridgeCount == 0
     }
 }
 
