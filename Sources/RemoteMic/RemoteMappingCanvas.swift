@@ -316,6 +316,9 @@ struct RemoteMappingCanvas: View {
         case .tv: return "tv"
         case .playPause: return "playpause.fill"
         case .mute: return "speaker.slash"
+        // 这三颗键只属于 Chromecase 遥控器，由它自己的画布渲染；小米画布的卡片集合是
+        // `RemoteButton.xiaomiCases`，不会出现它们，这里只是满足枚举穷尽性。
+        case .youtube, .netflix, .input: return "questionmark"
         }
     }
 

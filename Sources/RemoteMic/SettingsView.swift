@@ -4,6 +4,9 @@ import Combine
 import CoreBluetooth
 import SayAllMacRemoteCore
 import SayAllMacRemoteUI
+#if SAYALL_CHROMECASE_ENABLED && canImport(SayAllChromecase)
+import SayAllChromecase
+#endif
 #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
 import SayAllSiriRemote
 #endif
@@ -111,6 +114,8 @@ enum RemoteBatteryPresentationPolicy {
         level: Int?,
         powerState: RemotePowerState?
     ) -> Bool {
+        // Chromecase 不宣告电池能力，界面不得显示永远是「未知」的电量位。
+        guard !model.isChromecaseRemote else { return false }
         guard model.isAppleSiriRemote else { return true }
         guard level == nil else { return true }
         return powerState == .charging || powerState == .externalPower
@@ -386,6 +391,7 @@ struct SettingsView: View {
     @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var selectedSiriRemoteControlID = "select"
+    @State private var selectedChromecaseControlID = "select"
     @State private var isMappingSelectionLocked = true
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
@@ -791,6 +797,12 @@ struct SettingsView: View {
                 #else
                 mappingPage
                 #endif
+            } else if settings.selectedRemoteProfile?.model.isChromecaseRemote == true {
+                #if SAYALL_CHROMECASE_ENABLED && canImport(SayAllChromecase)
+                chromecaseMappingPage
+                #else
+                mappingPage
+                #endif
             } else {
                 mappingPage
             }
@@ -855,6 +867,9 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         audioSettingsPanel
                         audioCompatibilityPanel
+                        #if SAYALL_CHROMECASE_ENABLED
+                        chromecasePanel
+                        #endif
                         phoneConnectionsPanel
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -862,6 +877,103 @@ struct SettingsView: View {
             }
         }
     }
+
+    #if SAYALL_CHROMECASE_ENABLED
+    /// Chromecase（ATVV 语音遥控器）面板。私有包缺失时整块内容不会出现在界面上。
+    private var chromecasePanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("chromecase.section_title")
+                            .font(.headline)
+                        Text("chromecase.section_subtitle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 16)
+                    StatusPill(
+                        text: chromecaseStatusText,
+                        tint: chromecaseStatusTint
+                    )
+                }
+
+                if case .unsupported = model.chromecaseStatus {
+                    // 具体原因由包提供且只有中文，按「界面文案归宿主」的约定只写日志，界面用本地化文案。
+                    Text("chromecase.status.unsupported.detail")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Toggle(isOn: Binding(
+                    get: { settings.chromecaseEnabled },
+                    set: { newValue in
+                        settings.chromecaseEnabled = newValue
+                        model.applyChromecaseSettings()
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("chromecase.enabled.title")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("chromecase.enabled.detail")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+            }
+        }
+    }
+
+    /// 语音键模式选择器。挂在按键页靠下的位置（仅 Chromecase 档案的按键页显示）；
+    /// 从连接设置页迁移过来，避免同一控件出现在两处。
+    private var chromecaseVoiceModeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider()
+
+            Text("chromecase.mode.title")
+                .font(.system(size: 13, weight: .medium))
+
+            Picker("", selection: Binding(
+                get: { settings.chromecaseVoiceMode },
+                set: { newValue in
+                    settings.chromecaseVoiceMode = newValue
+                    model.applyChromecaseSettings()
+                }
+            )) {
+                ForEach(ChromecaseVoiceMode.allCases) { mode in
+                    Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .disabled(!settings.chromecaseEnabled)
+
+            Text(LocalizedStringKey(settings.chromecaseVoiceMode.detailLocalizationKey))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var chromecaseStatusText: String {
+        if case .connected(let displayName) = model.chromecaseStatus {
+            return displayName
+        }
+        return localization.text(model.chromecaseStatus.localizationKey)
+    }
+
+    private var chromecaseStatusTint: Color {
+        switch model.chromecaseStatus {
+        case .connected: return .green
+        case .searching, .connecting: return .orange
+        case .unsupported, .unauthorized: return .red
+        case .disabled, .unavailable, .disconnected: return .secondary
+        }
+    }
+    #endif
 
     private var phoneConnectionsPanel: some View {
         GlassPanel {
@@ -1096,6 +1208,13 @@ struct SettingsView: View {
             RC003Photo()
                 .frame(width: 82, height: 166)
             #endif
+        } else if settings.selectedRemoteProfile?.model.isChromecaseRemote == true {
+            #if SAYALL_CHROMECASE_ENABLED && canImport(SayAllChromecase)
+            ChromecaseConnectionPhoto()
+            #else
+            RC003Photo()
+                .frame(width: 82, height: 166)
+            #endif
         } else {
             RC003Photo()
                 .frame(width: 82, height: 166)
@@ -1296,6 +1415,59 @@ struct SettingsView: View {
     }
     #endif
 
+    #if SAYALL_CHROMECASE_ENABLED && canImport(SayAllChromecase)
+    /// Chromecase 按键页。
+    ///
+    /// 与小米/苹果按键页共用同一个页面框架（页头、设备选择器、动作编辑器、页脚），
+    /// 只有中间的遥控器画布由私有包提供，因此三种遥控器的页面功能完全一致。
+    private var chromecaseMappingPage: some View {
+        hardwareMappingPage {
+            ChromecaseMappingCanvas(
+                selectedControlID: $selectedChromecaseControlID,
+                activeControlIDs: model.activeChromecaseControlIDs,
+                voiceActive: model.isChromecaseVoiceActive,
+                labels: ChromecaseMappingCanvas.Labels(
+                    voiceTitle: localization.text("chromecase.mapping.voice.title"),
+                    voiceFixed: localization.text("chromecase.mapping.voice.fixed"),
+                    voiceDetail: localization.text("chromecase.mapping.voice.detail"),
+                    missingPhoto: localization.text("chromecase.mapping.photo.missing")
+                ),
+                buttonTitle: { controlID in
+                    chromecaseButton(for: controlID)?.displayName(using: localization)
+                        ?? controlID
+                },
+                triggerTitle: { triggerID in
+                    ButtonTrigger(rawValue: triggerID)?.displayName(using: localization)
+                        ?? triggerID
+                },
+                actionSummary: { controlID, triggerID in
+                    guard let button = chromecaseButton(for: controlID),
+                          let trigger = ButtonTrigger(rawValue: triggerID)
+                    else { return localization.text("action.disabled") }
+                    return mappingActionSummary(for: button, trigger: trigger)
+                },
+                onEdit: { controlID, triggerID in
+                    guard let button = chromecaseButton(for: controlID),
+                          let trigger = ButtonTrigger(rawValue: triggerID)
+                    else { return }
+                    selectedChromecaseControlID = controlID
+                    selectedRemoteButton = button
+                    mappingActionFilter = .all
+                    isPresetApplicationActionsExpanded = false
+                    mappingEditingTarget = ShortcutEditingTarget(
+                        button: button,
+                        trigger: trigger
+                    )
+                }
+            )
+        }
+    }
+
+    private func chromecaseButton(for controlID: String) -> RemoteButton? {
+        ChromecaseRemoteControl(rawValue: controlID)?.remoteButton
+    }
+    #endif
+
     private var mappingPage: some View {
         hardwareMappingPage {
             RemoteMappingCanvas(
@@ -1365,6 +1537,12 @@ struct SettingsView: View {
                         if let target = mappingEditingTarget {
                             mappingEditorPanel(target)
                                 .id("mapping-action-editor")
+                        }
+
+                        // 语音键模式仅 Chromecase 遥控器有（该遥控器是唯一支持「按一次说话」的），
+                        // 放在按键页靠下的位置，方便随时切换手感。
+                        if settings.selectedRemoteProfile?.model.isChromecaseRemote == true {
+                            chromecaseVoiceModeSection
                         }
 
                         mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)

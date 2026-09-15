@@ -81,12 +81,19 @@ let sourceMacroCapabilitiesAvailable = combinationActionsPackagePath.map {
 } ?? false
 let privateArtifactsAvailable = !(privateArtifactPackagePath ?? "").isEmpty
 let macroCapabilitiesAvailable = sourceMacroCapabilitiesAvailable || privateArtifactsAvailable
+let chromecasePackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_CHROMECASE_PACKAGE_PATH"
+]
+let chromecaseEnabled = !(chromecasePackagePath ?? "").isEmpty
 let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
     ? .macOS(.v13)
     : .macOS(.v14)
 var remoteMicSwiftSettings: [SwiftSetting] = []
 if siriRemoteEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+}
+if chromecaseEnabled {
+    remoteMicSwiftSettings.append(.define("SAYALL_CHROMECASE_ENABLED"))
 }
 if macRemoteEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
@@ -114,6 +121,16 @@ if let siriRemotePath = siriRemotePackagePath, !siriRemotePath.isEmpty {
     packageDependencies.append(.package(path: siriRemotePath))
     remoteMicDependencies.append(
         .product(name: "SayAllSiriRemote", package: packageIdentity)
+    )
+}
+
+if let chromecasePath = chromecasePackagePath, !chromecasePath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: chromecasePath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: chromecasePath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllChromecase", package: packageIdentity)
     )
 }
 
@@ -294,9 +311,16 @@ let package = Package(
             dependencies: remoteMicTestDependencies + ["SayAllMCPKit", "AppleRemoteHCIProtocol"],
             path: "Tests/RemoteMicTests",
             exclude: macRemoteEnabled ? [] : ["WatchBluetoothVoiceJourneyTests.swift"],
-            swiftSettings: siriRemoteEnabled
-                ? [.define("SAYALL_SIRI_REMOTE_ENABLED")]
-                : []
+            swiftSettings: {
+                var settings: [SwiftSetting] = []
+                if siriRemoteEnabled {
+                    settings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+                }
+                if chromecaseEnabled {
+                    settings.append(.define("SAYALL_CHROMECASE_ENABLED"))
+                }
+                return settings
+            }()
         ),
     ],
     swiftLanguageModes: [.v5]

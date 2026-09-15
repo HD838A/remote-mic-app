@@ -6,9 +6,13 @@ enum VoiceFunctionKeyTransition: Equatable {
 }
 
 struct VoiceFunctionKeyLatch {
+    /// 语音键按下者。多个 owner 同时按住时按引用计数处理：
+    /// 只有最后一个 owner 释放才会真正抬起语音键，因此各路硬件互不取消。
     enum Owner: Hashable {
         case bluetooth
         case appleRemote
+        /// Chromecase 遥控器。与 Siri Remote 独立，两者同时收音时互不影响。
+        case chromecase
         case mobile
     }
 

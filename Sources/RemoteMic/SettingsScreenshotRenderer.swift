@@ -62,6 +62,9 @@ enum SettingsScreenshotRenderer {
         let usesSiriRemote = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SIRI_REMOTE"
         ] == "1"
+        let usesChromecase = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_CHROMECASE"
+        ] == "1"
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -85,6 +88,14 @@ enum SettingsScreenshotRenderer {
         }
 #else
         _ = usesSiriRemote
+#endif
+#if SAYALL_CHROMECASE_ENABLED
+        if usesChromecase {
+            let profileID = settings.registerChromecaseRemote()
+            settings.selectRemoteProfile(profileID)
+        }
+#else
+        _ = usesChromecase
 #endif
         if opensShortcutEditor {
             settings.customMappingEnabled = true

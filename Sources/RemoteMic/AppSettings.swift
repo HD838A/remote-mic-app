@@ -307,6 +307,8 @@ final class AppSettings: ObservableObject {
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
         static let voiceKeyMode = "voiceKeyMode"
         static let siriRemoteScrollArrowReversed = "siriRemote.scrollArrowReversed"
+        static let chromecaseEnabled = "chromecase.enabled"
+        static let chromecaseVoiceMode = "chromecase.voiceMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
@@ -449,6 +451,20 @@ final class AppSettings: ObservableObject {
                 siriRemoteScrollArrowReversed,
                 forKey: Keys.siriRemoteScrollArrowReversed
             )
+        }
+    }
+
+    /// Chromecase 遥控器总开关。私有包缺失时该设置无副作用，设置页也不会展示。
+    @Published var chromecaseEnabled: Bool {
+        didSet {
+            defaults.set(chromecaseEnabled, forKey: Keys.chromecaseEnabled)
+        }
+    }
+
+    /// Chromecase 语音手势模式。默认 `toggle`（按一下开始、再按一下结束）。
+    @Published var chromecaseVoiceMode: ChromecaseVoiceMode {
+        didSet {
+            defaults.set(chromecaseVoiceMode.rawValue, forKey: Keys.chromecaseVoiceMode)
         }
     }
 
@@ -713,6 +729,13 @@ final class AppSettings: ObservableObject {
         siriRemoteScrollArrowReversed = defaults.bool(
             forKey: Keys.siriRemoteScrollArrowReversed
         )
+        // 首次运行默认开启：私有包只会被编入有该硬件的构建，让用户先找开关再测试没有意义。
+        chromecaseEnabled = defaults.object(forKey: Keys.chromecaseEnabled) == nil
+            ? true
+            : defaults.bool(forKey: Keys.chromecaseEnabled)
+        chromecaseVoiceMode = ChromecaseVoiceMode(
+            rawValue: defaults.string(forKey: Keys.chromecaseVoiceMode) ?? ""
+        ) ?? .productDefault
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
@@ -1147,6 +1170,30 @@ final class AppSettings: ObservableObject {
         remoteDeviceProfiles.append(profile)
         return profile.id
 #endif
+    }
+
+    /// 注册 Chromecase 遥控器的设备档案。
+    ///
+    /// 按**型号**识别，不存任何设备标识：私有包给的 `instanceKey` 是进程内的，写进偏好会每次
+    /// 启动都生成新档案，用户的映射就丢了。苹果遥控器用 HID fingerprint，本型号没有稳定的
+    /// 宿主侧 HID 指纹，因此以型号为准（同时最多只有一台该型号遥控器）。
+    @discardableResult
+    func registerChromecaseRemote() -> UUID {
+        if let existing = remoteDeviceProfiles.first(where: { $0.model == .chromecaseVoiceRemote }) {
+            return existing.id
+        }
+        if let index = remoteDeviceProfiles.firstIndex(where: {
+            $0.bluetoothIdentifier == nil && $0.hidFingerprint == nil && $0.model == .unknown
+        }) {
+            remoteDeviceProfiles[index].model = .chromecaseVoiceRemote
+            return remoteDeviceProfiles[index].id
+        }
+        let profile = RemoteDeviceProfile(
+            model: .chromecaseVoiceRemote,
+            mappings: mappingsForNewRemote()
+        )
+        remoteDeviceProfiles.append(profile)
+        return profile.id
     }
 
     func profileID(forBluetoothIdentifier identifier: UUID) -> UUID? {

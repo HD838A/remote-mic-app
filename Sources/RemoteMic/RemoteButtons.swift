@@ -16,6 +16,10 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
     case tv
     case playPause = "play_pause"
     case mute
+    /// Chromecase 遥控器专有按键。这三颗键在小米遥控器上不存在，因此不进 `xiaomiCases`。
+    case youtube
+    case netflix
+    case input
 
     /// Buttons physically present on the Xiaomi RC001/RC003 layout.
     /// Siri Remote has its own private page and does not use this list.
@@ -44,6 +48,11 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         // adapter and are not part of Xiaomi HID discovery.
         case .playPause: return 0x1000
         case .mute: return 0x1001
+        // Reserved values: decoded by the Chromecase adapter's own HID channel
+        // (usage 0x0E/0x0F/0x11 in that remote's report), never by Xiaomi discovery.
+        case .youtube: return 0x1002
+        case .netflix: return 0x1003
+        case .input: return 0x1004
         }
     }
 
@@ -63,6 +72,9 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         case .tv: return "TV"
         case .playPause: return localization.text("remote.button.short.play_pause")
         case .mute: return localization.text("remote.button.short.mute")
+        case .youtube: return "YouTube"
+        case .netflix: return "NETFLIX"
+        case .input: return localization.text("remote.button.short.input")
         }
     }
 
@@ -82,6 +94,9 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         case .tv: return localization.text("remote.button.full.tv")
         case .playPause: return localization.text("remote.button.full.play_pause")
         case .mute: return localization.text("remote.button.full.mute")
+        case .youtube: return localization.text("remote.button.full.youtube")
+        case .netflix: return localization.text("remote.button.full.netflix")
+        case .input: return localization.text("remote.button.full.input")
         }
     }
 
@@ -113,6 +128,9 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         case .back: return nil
         case .playPause: return .systemKey(type: 2)
         case .mute: return .systemKey(type: 3)
+        // Chromecase 的三颗专有键由私有包的 HID 通道独占读取：映射开启时设备被整个独占，
+        // 系统侧不会同时收到事件，因此不存在需要抑制的原生事件。
+        case .youtube, .netflix, .input: return nil
         }
     }
 
