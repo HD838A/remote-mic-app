@@ -1,6 +1,6 @@
 # SayAll Workshop Agent 自动化测试手册
 
-适用分支：`codex/sayall-agent-automation` 及其后通过 PR 合入 `main` 的版本。
+适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/sayall-agent-automation` 只作为历史审计来源。
 
 本手册验证仓库侧的受控闭环，不把测试自动批准当作生产权限。测试前必须使用独立的 Workshop 测试配置和专用模型 API 凭据；生产 Worker 保持 `AGENT_ENVIRONMENT=production`、`AGENT_TEST_AUTO_APPROVE=false`。
 
@@ -71,7 +71,7 @@
 
 ## 稳定回归项
 
-- `swift test`、仓库自检和现有 macOS CI 必需检查仍按项目既有手册执行。
+- 本地 `swift test --disable-keychain`、仓库自检和现有 macOS CI 必需检查仍按项目既有手册执行。
 - Agent PR 必须保持 Draft，默认分支规则、签名/公证和发布 Environment 不得被改变。
 - 私有依赖 CI 的人工安全门禁不能被 Agent 标签、Issue 评论或客户端字段绕过。
 - 测试完成后关闭测试自动批准，撤销测试授权并关闭/归档测试 Issue；保留 Run、Workflow、Commit 和 PR 作为可审计证据。

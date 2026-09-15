@@ -96,10 +96,70 @@ struct BuildSigningTests {
         #expect(packageSource.contains("requires SAYALL_SIRI_REMOTE_PACKAGE_PATH"))
         #expect(buildSource.contains("SAYALL_SIRI_REMOTE_INCLUDED=false"))
         #expect(buildSource.contains("SayAllSiriRemoteIncluded"))
-        #expect(buildSource.contains("export SAYALL_SIRI_REMOTE_UI_ONLY=1"))
+        #expect(buildSource.contains("unset SAYALL_SIRI_REMOTE_UI_ONLY"))
+        #expect(!buildSource.contains("export SAYALL_SIRI_REMOTE_UI_ONLY=1"))
         #expect(buildSource.contains("$SAYALL_SIRI_REMOTE_INCLUDED\" == \"true\""))
         #expect(modelSource.contains("#if SAYALL_SIRI_REMOTE_ENABLED"))
-        #expect(modelSource.contains("appleRemoteAudioClient.start()"))
+        #expect(modelSource.contains("siriRemoteFeature.start()"))
+        #expect(modelSource.contains("SiriRemoteFeatureIntegration"))
+    }
+
+    @Test func siriRemoteVoiceBuildsRejectAdHocSigning() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(buildSource.contains("REQUIRE_SIRI_REMOTE_SIGNING=\"${REQUIRE_SIRI_REMOTE_SIGNING:-1}\""))
+        #expect(buildSource.contains("Siri Remote voice builds require Developer ID Application signing"))
+        #expect(buildSource.contains("SAYALL_SIRI_REMOTE_INCLUDED\" == \"true\""))
+        #expect(verifySource.contains("Siri Remote voice app must use Developer ID Application signing"))
+        #expect(verifySource.contains("TeamIdentifier=L3QHLDRPAY"))
+    }
+
+    @Test func macRemoteIsOptionalForPublicBuildsAndRequiredForRelease() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let packageSource = try String(
+            contentsOf: root.appendingPathComponent("Package.swift"),
+            encoding: .utf8
+        )
+        let resolvedSource = try String(
+            contentsOf: root.appendingPathComponent("Package.resolved"),
+            encoding: .utf8
+        )
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let workflowSource = try String(
+            contentsOf: root.appendingPathComponent(
+                ".github/workflows/mac-release-package.yml"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(packageSource.contains("SAYALL_MAC_REMOTE_PACKAGE_PATH"))
+        #expect(packageSource.contains("Sources/PublicRemoteCompatibility/Core"))
+        #expect(packageSource.contains("Sources/PublicRemoteCompatibility/UI"))
+        #expect(!packageSource.contains("https://github.com/GetSayAll/sayall-mac-remote.git"))
+        #expect(!resolvedSource.contains("sayall-mac-remote"))
+        #expect(buildSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE"))
+        #expect(buildSource.contains("A SayAll Mac remote package is required for this build"))
+        #expect(workflowSource.contains(
+            "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
+        ))
+        #expect(workflowSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"))
     }
 
     @Test func productionReleaseRequiresAndVerifiesWebRemoteConfiguration() throws {
@@ -154,12 +214,13 @@ struct BuildSigningTests {
         #expect(buildSource.contains("DEFAULT_SCRATCH_PATH=\"/private/tmp/remote-mic-swiftpm/"))
         #expect(!buildSource.contains("DEFAULT_SCRATCH_PATH=\"$ROOT/.build-app-sayall-ai\""))
         #expect(notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=1"))
-        #expect(notarizeSource.contains("export REQUIRE_SAYALL_MACRO_PLATFORM=1"))
+        #expect(notarizeSource.contains("export REQUIRE_SAYALL_COMBINATION_ACTIONS=1"))
+        #expect(notarizeSource.contains("export REQUIRE_SAYALL_BUTTON_PROFILES="))
         #expect(verifySource.contains("App is missing the required SayAllAI package marker"))
         #expect(verifySource.contains("CFBundleDevelopmentRegion"))
     }
 
-    @Test func optionalMacroPlatformResourcesArePackagedAndVerified() throws {
+    @Test func freeAndPaidMacOSFeatureResourcesArePackagedAndVerifiedSeparately() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -173,14 +234,21 @@ struct BuildSigningTests {
             encoding: .utf8
         )
 
-        #expect(buildSource.contains("SAYALL_MACRO_PLATFORM_PATH"))
-        #expect(buildSource.contains("SayAllMacroPlatformIncluded"))
-        #expect(buildSource.contains("SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"))
-        #expect(buildSource.contains("SayAll macro platform resource bundle is missing"))
+        #expect(buildSource.contains("SAYALL_COMBINATION_ACTIONS_PATH"))
+        #expect(buildSource.contains("SAYALL_BUTTON_PROFILES_PACKAGE_PATH"))
+        #expect(buildSource.contains("SayAllCombinationActionsIncluded"))
+        #expect(buildSource.contains("SayAllButtonProfilesIncluded"))
+        #expect(buildSource.contains("SayAllCombinationActions_SayAllMacroRemoteMic.bundle"))
+        #expect(buildSource.contains("SayAllButtonProfiles_SayAllButtonProfiles.bundle"))
+        #expect(buildSource.contains("SayAll combination actions resource bundle is missing"))
+        #expect(buildSource.contains("SayAll button profiles resource bundle is missing"))
         #expect(buildSource.contains("SayAll macro page bypasses the packaged resource resolver"))
-        #expect(verifySource.contains("REQUIRE_SAYALL_MACRO_PLATFORM"))
-        #expect(verifySource.contains("SayAllMacroPlatformIncluded"))
-        #expect(verifySource.contains("App is missing the required SayAll macro platform marker"))
+        #expect(verifySource.contains("REQUIRE_SAYALL_COMBINATION_ACTIONS"))
+        #expect(verifySource.contains("REQUIRE_SAYALL_BUTTON_PROFILES"))
+        #expect(verifySource.contains("SayAllCombinationActionsIncluded"))
+        #expect(verifySource.contains("SayAllButtonProfilesIncluded"))
+        #expect(verifySource.contains("App is missing the required SayAll combination actions marker"))
+        #expect(verifySource.contains("App is missing the required SayAll button profiles marker"))
         #expect(verifySource.contains("en.lproj/Localizable.strings"))
         #expect(verifySource.contains("zh-Hans.lproj/Localizable.strings"))
         #expect(verifySource.contains("zh-hans.lproj/Localizable.strings"))
@@ -218,15 +286,18 @@ struct BuildSigningTests {
         let privateArtifactResolution = try #require(
             buildSource.range(of: "SAYALL_PRIVATE_ARTIFACT_INCLUDED=true")
         )
-        let macroRequirement = try #require(
-            buildSource.range(of: "A SayAll macro platform package is required for this build")
+        let combinationActionsRequirement = try #require(
+            buildSource.range(of: "A SayAll combination actions package is required for this build")
         )
-        #expect(privateArtifactResolution.lowerBound < macroRequirement.lowerBound)
+        #expect(privateArtifactResolution.lowerBound < combinationActionsRequirement.lowerBound)
         #expect(verifySource.contains("App is missing the required private artifact package marker"))
         #expect(prepareSource.contains("checksum manifest digest does not match the trusted value"))
         #expect(prepareSource.contains("repository_state.dirty == false"))
         #expect(prepareSource.contains("PREPARED_SHA256SUMS"))
         #expect(prepareSource.contains("lipo \"$binary\" -verify_arch arm64 x86_64"))
+        #expect(prepareSource.contains("SayAllButtonProfiles.xcframework.zip"))
+        #expect(prepareSource.contains("SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip"))
+        #expect(prepareSource.contains("SayAllButtonProfiles_SayAllButtonProfiles.bundle.zip"))
         #expect(prepareSource.contains("MinimumOSVersion"))
         #expect(!prepareSource.contains("rm -rf"))
     }
@@ -371,6 +442,11 @@ struct BuildSigningTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let fixture = root.appendingPathComponent("scripts/test-macos-release-flow.sh")
+        let fixtureSource = try String(contentsOf: fixture, encoding: .utf8)
+        #expect(fixtureSource.contains("-u SAYALL_SIRI_REMOTE_PACKAGE_PATH"))
+        #expect(fixtureSource.contains("-u SAYALL_COMBINATION_ACTIONS_PATH"))
+        #expect(fixtureSource.contains("-u SAYALL_BUTTON_PROFILES_PACKAGE_PATH"))
+        #expect(fixtureSource.contains("-u SAYALL_MEMBERSHIP_PACKAGE_PATH"))
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [fixture.path]
@@ -719,6 +795,10 @@ struct BuildSigningTests {
         #expect(promotionSource.contains("verify-public-release-source.sh"))
         #expect(promotionSource.contains("--arg commit \"$source_commit\""))
         #expect(promotionSource.contains("Candidate provenance is invalid"))
+        #expect(promotionSource.contains("provenance_schema"))
+        #expect(promotionSource.contains("Unsupported candidate provenance schema"))
+        #expect(promotionSource.contains("legacy-release-main"))
+        #expect(promotionSource.contains("expected_asset_count"))
         #expect(promotionSource.contains("asset set"))
         #expect(!promotionSource.contains("run-release-stage"))
         #expect(!promotionSource.contains("codesign"))
@@ -766,9 +846,11 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("RELEASE_CREDENTIALS_DEPLOY_KEY"))
         #expect(workflowSource.contains("APPLE_SIGNING_MATCH_DEPLOY_KEY"))
         #expect(workflowSource.contains("RELEASE_AGE_IDENTITY"))
-        #expect(workflowSource.contains("GetSayAll/sayall-mac-remote"))
+        #expect(workflowSource.contains(
+            "steps.release-dependencies.outputs.sayall_mac_remote_repository"
+        ))
         #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
-        #expect(workflowSource.contains("swift package config set-mirror"))
+        #expect(workflowSource.contains("SAYALL_MAC_REMOTE_PACKAGE_PATH"))
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
         #expect(workflowSource.contains("package-macos-release-in-actions.sh"))
@@ -793,5 +875,155 @@ struct BuildSigningTests {
         #expect(!workflowSource.contains("SPARKLE_PRIVATE_KEY_BASE64"))
         #expect(!workflowSource.contains("pull_request:"))
         #expect(!workflowSource.contains("push:"))
+    }
+
+    @Test func audioServiceRestartNeverAbortsInstallerScripts() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let scriptPaths = [
+            "scripts/install-doubao-driver.sh",
+            "scripts/uninstall-doubao-driver.sh",
+            "packaging/doubao-driver/install/postinstall",
+            "packaging/doubao-driver/uninstall/postinstall",
+        ]
+
+        // Static gate: no script may invoke a process killer as a bare statement.
+        // Under `set -euo pipefail` a non-matching killall exits non-zero and
+        // aborts the script *after* the driver payload was already installed or
+        // removed, so the installer reports failure for work that succeeded.
+        // Allowed forms: the pgrep-guarded restart branch, or an explicit
+        // best-effort `|| true` (e.g. stopping the app before trashing it).
+        let bareKiller = try NSRegularExpression(
+            pattern: #"(?m)^[[:space:]]*(?:/usr/bin/)?(?:killall|pkill)[^|\n]*$"#
+        )
+        for path in scriptPaths {
+            let source = try String(
+                contentsOf: root.appendingPathComponent(path),
+                encoding: .utf8
+            )
+            #expect(source.contains("set -euo pipefail"))
+            #expect(
+                source.contains("restart_audio_service() {"),
+                "\(path) must route the audio-service restart through the guarded function"
+            )
+            #expect(
+                source.contains("pgrep -qx coreaudiod"),
+                "\(path) must check whether the audio service runs before restarting it"
+            )
+            let range = NSRange(source.startIndex..., in: source)
+            #expect(
+                bareKiller.firstMatch(in: source, range: range) == nil,
+                "\(path) calls a process killer as an unguarded bare statement"
+            )
+        }
+
+        // Behavioral proof: run the shipped restart_audio_service function from
+        // every script with pgrep/killall stubs that fail. The absolute paths in
+        // the pkg scripts are rewritten to bare names in the extracted copy so
+        // PATH stubs can intercept them; the shipped text itself is asserted
+        // above. All three scenarios must exit 0 and report honestly.
+        let scenarios: [(pgrep: Int32, killall: Int32, expectedMessage: String)] = [
+            (1, 1, "not running"),
+            (0, 1, "could not be restarted"),
+            (0, 0, "Restarted"),
+        ]
+        for path in scriptPaths {
+            for scenario in scenarios {
+                let result = try runRestartAudioServiceScenario(
+                    scriptAt: root.appendingPathComponent(path),
+                    pgrepExitCode: scenario.pgrep,
+                    killallExitCode: scenario.killall
+                )
+                #expect(
+                    result.status == 0,
+                    "\(path) aborted with status \(result.status) (pgrep=\(scenario.pgrep) killall=\(scenario.killall)): \(result.output)"
+                )
+                #expect(
+                    result.output.contains(scenario.expectedMessage),
+                    "\(path) reported \(result.output) instead of \(scenario.expectedMessage)"
+                )
+            }
+        }
+    }
+
+    /// Extracts the shipped `restart_audio_service` function from a script and
+    /// runs it under `set -euo pipefail` with PATH stubs for pgrep and killall
+    /// whose exit codes are injected. Returns the exit status and combined output.
+    private func runRestartAudioServiceScenario(
+        scriptAt scriptURL: URL,
+        pgrepExitCode: Int32,
+        killallExitCode: Int32
+    ) throws -> (status: Int32, output: String) {
+        let work = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("remote-mic-audio-restart-\(UUID().uuidString)")
+        let fakeBin = work.appendingPathComponent("bin")
+        defer { try? FileManager.default.removeItem(at: work) }
+        try FileManager.default.createDirectory(at: fakeBin, withIntermediateDirectories: true)
+        for (tool, code) in [("pgrep", pgrepExitCode), ("killall", killallExitCode)] {
+            let stub = fakeBin.appendingPathComponent(tool)
+            try "#!/bin/sh\nexit \(code)\n".write(to: stub, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: stub.path
+            )
+        }
+
+        let extracted = try extractRestartAudioServiceFunction(from: scriptURL)
+        // Absolute paths bypass PATH stubs, so the harness copy rewrites them
+        // to bare names; the shipped text itself is asserted by the static gate.
+        let testableBody = extracted
+            .replacingOccurrences(of: "/usr/bin/pgrep", with: "pgrep")
+            .replacingOccurrences(of: "/usr/bin/killall", with: "killall")
+        let harness = """
+            set -euo pipefail
+            installer_message() { print -- "$2"; }
+            \(testableBody)
+            restart_audio_service
+            """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-c", harness]
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = "\(fakeBin.path):\(environment["PATH"] ?? "/usr/bin:/bin")"
+        process.environment = environment
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        process.waitUntilExit()
+        let output = String(
+            decoding: pipe.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+        )
+        return (process.terminationStatus, output)
+    }
+
+    /// Returns the text of the shipped `restart_audio_service` zsh function.
+    /// Failing the extraction must fail the test, so a renamed or removed
+    /// function cannot silently disable the behavioral coverage.
+    private func extractRestartAudioServiceFunction(from scriptURL: URL) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/awk")
+        process.arguments = [
+            "/^restart_audio_service\\(\\) \\{/,/^\\}/",
+            scriptURL.path,
+        ]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        process.waitUntilExit()
+        let output = String(
+            decoding: pipe.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+        )
+        try #require(
+            process.terminationStatus == 0 && output.contains("restart_audio_service() {"),
+            "could not extract restart_audio_service from \(scriptURL.path)"
+        )
+        return output
     }
 }

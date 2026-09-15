@@ -120,6 +120,7 @@ struct AppleSiriRemoteAdapterTests {
     }
 
     @Test func appSwitcherUsesHeldCommandLifecycleForSiriRemote() throws {
+        #expect(HIDRemoteTiming.appSwitcherVisibilityProbeMilliseconds == [0, 150, 500, 1_000])
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -133,7 +134,34 @@ struct AppleSiriRemoteAdapterTests {
         #expect(source.contains("appleRemoteAppSwitcherSession.moveSelection(left: button == .left)"))
         #expect(source.contains("finishAppleRemoteAppSwitcher(reason: \"timeout\", confirmed: false)"))
         #expect(source.contains("return performAppleRemoteAppSwitcher(for: button, trigger: trigger)"))
+        #expect(source.contains("siriRemoteFeature.setTouchRoutingMode(.circularNavigation)"))
+        #expect(source.contains("siriRemoteFeature.setTouchRoutingMode(.standard)"))
+        #expect(source.contains("handleAppleRemoteContextualScroll(pixels)"))
+        #expect(source.contains("siriRemoteFeature.onCenterTapConfirmation ="))
+        #expect(source.contains("reason: confirmed ? \"touch_confirmed\" : \"touch_confirm_failed\""))
+        #expect(source.contains("startAppleRemoteAppSwitcherLifecycle()"))
+        #expect(source.contains("beginAppleRemoteAppSwitcherDiagnostics()"))
+        #expect(source.contains("operation_id=\\(appleRemoteAppSwitcherOperationLabel)"))
+        #expect(source.contains("touch_navigation_steps="))
+        #expect(source.contains("button_confirmation_count="))
+        #expect(source.contains("phase=visibility_probe"))
+        #expect(source.contains("probe_delay_ms="))
+        #expect(source.contains("ordinary_window_count="))
+        #expect(source.contains("onscreen_window_count="))
+        #expect(source.contains("user_visible="))
+        #expect(source.contains("diagnostic_boundary=window_content_unavailable"))
+        #expect(source.contains("phase=terminal terminal_result="))
+        #expect(source.contains("visible_target_confirmed"))
+        #expect(source.contains("frontmost_changed_no_visible_window"))
+        #expect(source.contains("reason: \"voice_started\""))
         #expect(source.contains("phase=release_ignored"))
+
+        let injectorSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/KeyboardInjector.swift"),
+            encoding: .utf8
+        )
+        #expect(injectorSource.contains("applicationVisibilitySnapshot("))
+        #expect(!injectorSource.contains("kCGWindowName"))
     }
 
     @Test func treatsEveryNonzeroHIDValueAsPressed() {

@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 分支：`codex/remove-secret-ai-entry` 及其合入后的版本。
+- 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/remove-secret-ai-entry` 只作为历史审计来源。
 - 范围：公开 Mac 宿主与可选私有组件之间的显示、生命周期和稳定功能边界。
 - 本手册不记录资格获取方式、内部触发方式、邀请码或服务配置。
 
@@ -23,7 +23,7 @@
 
 ## 用例 B：无私有组件构建
 
-1. 清除 `SAYALL_AI_PACKAGE_PATH`、`SAYALL_MACRO_PLATFORM_PATH`、`SAYALL_MEMBERSHIP_PACKAGE_PATH` 和 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`，不要依赖宿主目录旁边的私有仓库自动探测。
+1. 清除 `SAYALL_AI_PACKAGE_PATH`、`SAYALL_COMBINATION_ACTIONS_PATH`、`SAYALL_BUTTON_PROFILES_PACKAGE_PATH`、`SAYALL_MEMBERSHIP_PACKAGE_PATH` 和 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`，不要依赖宿主目录旁边的 Package 自动探测。
 2. 完成测试与 Release 构建。
 3. 启动 App 并逐一检查全部设置页。
 

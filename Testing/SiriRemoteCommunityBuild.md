@@ -1,6 +1,6 @@
 # 社区版与私有版 Siri Remote 构建边界
 
-适用版本：`codex/community-siri-optional` 及合入后的 `main`。
+适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/community-siri-optional` 只作为历史审计来源。
 
 ## 目标
 
@@ -15,7 +15,7 @@
 ```bash
 env -u SAYALL_SIRI_REMOTE_PACKAGE_PATH \
   -u SAYALL_ENABLE_SIRI_REMOTE \
-  swift test --disable-sandbox
+  swift test --disable-keychain --disable-sandbox
 
 env -u SAYALL_SIRI_REMOTE_PACKAGE_PATH \
   -u SAYALL_ENABLE_SIRI_REMOTE \
@@ -38,7 +38,7 @@ env -u SAYALL_SIRI_REMOTE_PACKAGE_PATH \
 ```bash
 export SAYALL_SIRI_REMOTE_PACKAGE_PATH=/absolute/path/to/sayall-private-platform/packages/audio-input-kit/siri-remote
 export SAYALL_SIRI_REMOTE_UI_ONLY=1
-swift test --disable-sandbox
+swift test --disable-keychain --disable-sandbox
 
 CONFIGURATION=release SIGNING_IDENTITY=- ./scripts/build-app.sh
 ./scripts/verify-app.sh dist/SayAll.app

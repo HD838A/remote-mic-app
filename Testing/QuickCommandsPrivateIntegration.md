@@ -1,4 +1,4 @@
-# 组合动作私有模块集成测试手册
+# 免费组合动作 Package 集成测试手册
 
 ## 适用版本或分支
 
@@ -7,38 +7,39 @@
 
 ## 合并后私有包版本与宿主集成
 
-组合动作默认开放已通过 PR [GetSayAll/sayall-macro-platform#4](https://github.com/GetSayAll/sayall-macro-platform/pull/4) 合入 `main`；本次按键捕获修复对应私有包 Draft PR [#5](https://github.com/GetSayAll/sayall-macro-platform/pull/5)。宿主验证固定使用修复提交的完整 commit：
+组合动作历史开放与按键捕获修复来自已弃用的 `sayall-macro-platform`；当前免费组合动作事实源已迁移到
+`GetSayAll/sayall-private-platform/packages/macos-combination-actions`，付费键位方案则独立位于
+`packages/macos-button-profiles`。下方历史 PR 链接仅供审计，不得从旧仓库取代码。宿主验证固定使用当前平台仓库的完整 commit：
 
 ```text
-60db6940d89bd401fe1c4a3563fe33113a436c8c
+999c39c5a47f0b1ab370c3940f3aca6750c24c8e
 ```
 
 本地开发或验证时，将私有包 checkout 到该 commit（不得使用浮动的 `main`）：
 
 ```bash
-git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform fetch origin main
-git -C /Users/andy/Develop/Src/AISrc/sayall-macro-platform checkout --detach 19080aa9e9f1289f9ab4cc5715f2067cb50c546e
+git -C /path/to/sayall-private-platform fetch origin main
+git -C /path/to/sayall-private-platform checkout --detach 999c39c5a47f0b1ab370c3940f3aca6750c24c8e
 ```
 
-宿主通过 `Package.swift` 的 `SAYALL_MACRO_PLATFORM_PATH` 注入本地包；最小测试命令为：
+宿主通过 `Package.swift` 的 `SAYALL_COMBINATION_ACTIONS_PATH` 注入免费 Package；最小测试命令为：
 
 ```bash
-SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/sayall-macro-platform \
-REQUIRE_SAYALL_MACRO_PLATFORM=1 \
-swift test
+SAYALL_COMBINATION_ACTIONS_PATH=/path/to/sayall-private-platform/packages/macos-combination-actions \
+swift test --disable-keychain --scratch-path .build-combination-actions
 ```
 
-构建 App 时继续使用 `./scripts/build-app.sh`，并同时设置 `SAYALL_MACRO_PLATFORM_PATH` 与 `REQUIRE_SAYALL_MACRO_PLATFORM=1`；构建后运行 `REQUIRE_SAYALL_MACRO_PLATFORM=1 ./scripts/verify-app.sh "dist/SayAll.app"` 检查模块确实被打包。CI、Preview staging 和签名发布 workflow 都必须使用同一个 40 位 SHA；修改 pin 后在宿主仓库执行：
+构建 App 时继续使用 `./scripts/build-app.sh`，并同时设置 `SAYALL_COMBINATION_ACTIONS_PATH` 与 `REQUIRE_SAYALL_COMBINATION_ACTIONS=1`；构建后运行 `REQUIRE_SAYALL_COMBINATION_ACTIONS=1 ./scripts/verify-app.sh "dist/SayAll.app"` 检查免费 Package 确实被打包。官方 CI 和签名发布默认集成组合动作，但不设置 `SAYALL_BUTTON_PROFILES_PACKAGE_PATH`，因此不会带入付费键位方案。CI、Preview staging 和签名发布 workflow 都必须使用同一个 40 位 SHA；修改 pin 后在宿主仓库执行：
 
 ```bash
 ./scripts/verify-release-dependency-pins.sh
 ```
 
-该脚本会确认 macOS CI、预览和正式发布三条 workflow 的私有包 revision 一致且为完整 SHA。私有包缺失时，公开构建仍应保持组合动作入口隐藏并回退到原按键行为；本手册中的自动化验证不能替代最终签名包、真实遥控器、Intel Mac 和不同前后台状态的人工验收。
+该脚本会确认 macOS CI、预览和正式发布三条 workflow 的平台仓库 revision 一致且为完整 SHA。免费 Package 缺失时，兼容构建仍应保持组合动作入口隐藏并回退到原按键行为；本手册中的自动化验证不能替代最终签名包、真实遥控器、Intel Mac 和不同前后台状态的人工验收。
 
 ## 测试前准备
 
-1. 本机存在私有仓库 `sayall-macro-platform`，并通过 `SAYALL_MACRO_PLATFORM_PATH` 注入构建。
+1. 本机存在 `sayall-private-platform/packages/macos-combination-actions`，并通过 `SAYALL_COMBINATION_ACTIONS_PATH` 注入构建。
 2. 无线麦已获得输入监控和辅助功能权限。
 3. 准备一个没有组合动作资格数据的新 macOS 测试账户，以及一个保留旧组合动作资格数据的升级测试账户。
 4. 准备真实遥控器；另准备 iOS 或 Web Remote 检查同一绑定入口。
@@ -47,9 +48,9 @@ swift test
 本地构建命令：
 
 ```bash
-SAYALL_MACRO_PLATFORM_PATH=/Users/andy/Develop/Src/AISrc/sayall-macro-platform \
+SAYALL_COMBINATION_ACTIONS_PATH=/path/to/sayall-private-platform/packages/macos-combination-actions \
 EARLY_ACCESS_SERVICE_URL=https://config.sayall.app \
-REQUIRE_SAYALL_MACRO_PLATFORM=1 \
+REQUIRE_SAYALL_COMBINATION_ACTIONS=1 \
 REQUIRE_EARLY_ACCESS_CONFIGURATION=1 \
 ./scripts/build-app.sh
 ```
@@ -59,7 +60,7 @@ REQUIRE_EARLY_ACCESS_CONFIGURATION=1 \
 构建结果位于 `dist/SayAll.app`。使用以下命令检查资源包、包含标记和签名结构：
 
 ```bash
-REQUIRE_SAYALL_MACRO_PLATFORM=1 \
+REQUIRE_SAYALL_COMBINATION_ACTIONS=1 \
 ./scripts/verify-app.sh "dist/SayAll.app"
 ```
 
@@ -67,7 +68,7 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 
 ## 用例一：公开构建回归
 
-步骤：不设置 `SAYALL_MACRO_PLATFORM_PATH` 构建并启动 App。
+步骤：清除 `SAYALL_COMBINATION_ACTIONS_PATH` 与 `SAYALL_BUTTON_PROFILES_PACKAGE_PATH`，构建并启动兼容 App。
 
 预期：关于页没有组合动作邀请码入口，侧边栏没有“组合动作”；普通单击、双击、长按映射全部维持原行为。
 
@@ -75,7 +76,7 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 
 ## 用例二：组合动作免邀请码
 
-步骤：注入私有模块后，先使用没有旧组合动作资格数据的新账户启动 App，再使用保留旧有效、过期或已撤销资格数据的升级账户启动；每次都检查“关于”页、侧边栏、组合动作页面和资格服务请求。
+步骤：注入免费组合动作 Package 后，先使用没有旧组合动作资格数据的新账户启动 App，再使用保留旧有效、过期或已撤销资格数据的升级账户启动；每次都检查“关于”页、侧边栏、组合动作页面和资格服务请求。
 
 预期：所有账户都直接显示“组合动作”侧边栏并可创建、保存和执行本机动作；“关于”页不显示组合动作邀请码录入区域；启动、打开页面和完全退出后重新启动均不请求组合动作资格服务，也不因组合动作创建设备身份。旧资格数据只为兼容保留，其缺失、过期或撤销都不影响组合动作入口和执行。
 
@@ -163,6 +164,24 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 
 失败判定：开关关闭时按键仍被吞掉、开关打开时误执行动作、关闭或隐藏后仍持续捕获、手机 / 网页与实体遥控器行为不一致，或原按键确定位置流程失效。
 
+### 用例三 H：重录共享快捷键不影响其他组合动作
+
+步骤：
+
+1. 创建 Routine A，添加第 2 步并录入 `Ctrl+A`。
+2. 复制 Routine A 为 Routine B，确认两者都显示并执行 `Ctrl+A`。
+3. 在 Routine A 重录第 2 步为 `Ctrl+B` 并保存。
+4. 分别测试 Routine A 和 Routine B，完全退出并重启 App 后再次测试。
+
+预期：
+
+- [ ] Routine A 第 2 步显示并执行 `Ctrl+B`。
+- [ ] Routine B 第 2 步仍显示并执行 `Ctrl+A`。
+- [ ] 原 `Ctrl+A` 快捷键 Profile 未被替换，其他主动复用它的步骤保持不变。
+- [ ] 重启后两个 Routine 仍保持各自快捷键。
+
+失败判定：Routine B 被改成 `Ctrl+B`、原 Profile 被覆盖、保存后出现半更新状态，或必须再次录入才能恢复。
+
 ### 用例三 A：最终 App 脱离构建缓存打开快捷指令
 
 步骤：
@@ -172,7 +191,7 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 3. 不提供组合动作资格，启动 App 并点击侧边栏“组合动作”。
 4. 分别验证已有宏列表和没有宏时的空状态；退出后再次启动重复点击。
 
-预期：页面标题、空状态、按钮、步骤编辑和绑定区域均正常显示；进程持续运行；本地化来自 `Contents/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle`。
+预期：页面标题、空状态、按钮、步骤编辑和绑定区域均正常显示；进程持续运行；本地化来自 `Contents/Resources/SayAllCombinationActions_SayAllMacroRemoteMic.bundle`。
 
 失败判定：`EXC_BREAKPOINT / SIGTRAP`、`could not load resource bundle`、页面显示原始本地化 key、只有构建缓存存在时才可打开，或第二次启动行为与第一次不同。
 
@@ -196,7 +215,7 @@ REQUIRE_SAYALL_MACRO_PLATFORM=1 \
 
 - RC003 普通语音：`STREAM_START → AUDIO → STREAM_STOP`。
 - Fn 语音、Nearby、Web Remote、虚拟音频和普通按键映射。
-- `800 × 650` 窗口逐一点击全部侧边栏入口，确认页面和滚动不裁切。
+- 使用截图 harness 在 `800 × 650` 做窄宽压力检查，并在真实生产最小窗口 `1020 × 772` 逐一点击全部侧边栏入口，确认页面和滚动不裁切。
 
 ## 安装与覆盖升级
 
@@ -237,6 +256,6 @@ log show --last 30m \
 
 `1.8.22 (114)` 再次发生同类崩溃，但边界从当时的资格入口缩小到实际 `RemoteMicMacroView`：资格入口已经安全解析，页面空状态和通用本地化仍直接使用 `.module`。修复分支已让私有模块 37 项测试通过；宿主构建门禁先失败后通过；Apple Silicon Release App 和结构验证通过；独立打包页面在移走完整 SwiftPM 构建目录后真实渲染成功；无缓存宿主 App 可打开设置与当时的邀请码区域。这一段只记录历史故障，不代表当前组合动作仍要求邀请码。
 
-自动化只能验证编译边界、组合动作开放状态、事件路由和 App 结构。当前开放状态仍需在最终 Developer ID 包上复验：无组合动作资格的新账户直接进入、旧资格数据不影响入口、Intel Mac 安装、真实遥控器、第三方 App 输入框、系统权限、`800 × 650` 全侧边栏点击以及不同前后台状态；未完成部分不得表述为已完成真机验证。
+自动化只能验证编译边界、组合动作开放状态、事件路由和 App 结构。当前开放状态仍需在最终 Developer ID 包上复验：无组合动作资格的新账户直接进入、旧资格数据不影响入口、Intel Mac 安装、真实遥控器、第三方 App 输入框、系统权限、生产最小窗口 `1020 × 772` 全侧边栏点击、`800 × 650` 离屏压力截图以及不同前后台状态；未完成部分不得表述为已完成真机验证。
 
-2026-08-14 增加本地化与编辑菜单回归：自动化已确认中英文资源不会回退为原始 key，并确认 Edit 菜单将常用编辑快捷键转发给聚焦输入框；最终签名 App 的 `800 × 650` 页面点击、真实键盘操作和两种系统语言仍需人工验收。
+2026-08-14 增加本地化与编辑菜单回归：自动化已确认中英文资源不会回退为原始 key，并确认 Edit 菜单将常用编辑快捷键转发给聚焦输入框；最终签名 App 的生产最小窗口 `1020 × 772` 页面点击、`800 × 650` 离屏压力截图、真实键盘操作和两种系统语言仍需人工验收。

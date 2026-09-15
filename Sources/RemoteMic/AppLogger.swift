@@ -111,11 +111,31 @@ final class AppLogger {
         let eventDate = now()
         let normalizedMessage = Self.singleLine(message)
         queue.async { [self] in
-            let timestamp = formatter.string(from: eventDate)
-            let line = "\(timestamp) pid=\(metadata.processID) " +
-                "ver=\(metadata.version) build=\(metadata.build) " +
-                "\(normalizedMessage)\n"
-            append(Data(line.utf8))
+            append(formattedLine(eventDate: eventDate, message: normalizedMessage))
+        }
+    }
+
+    /// Writes a complete redacted diagnostic snapshot without flattening its fields.
+    /// Each physical log line remains a valid single-line AppLogger record.
+    func writeDiagnosticSummary(_ summary: String, event: String) {
+        guard isEnabled else { return }
+        let eventDate = now()
+        let normalizedEvent = Self.singleLine(event)
+        let normalizedLines = summary
+            .split(omittingEmptySubsequences: false) { character in
+                character == "\n" || character == "\r"
+            }
+            .map { Self.singleLine(String($0)) }
+        queue.async { [self] in
+            var data = formattedLine(eventDate: eventDate, message: "\(normalizedEvent) BEGIN")
+            for line in normalizedLines {
+                data.append(formattedLine(
+                    eventDate: eventDate,
+                    message: "\(normalizedEvent) FIELD \(line)"
+                ))
+            }
+            data.append(formattedLine(eventDate: eventDate, message: "\(normalizedEvent) END"))
+            append(data)
         }
     }
 
@@ -164,6 +184,14 @@ final class AppLogger {
             }
             appendAtomically(data)
         }
+    }
+
+    private func formattedLine(eventDate: Date, message: String) -> Data {
+        let timestamp = formatter.string(from: eventDate)
+        let line = "\(timestamp) pid=\(metadata.processID) " +
+            "ver=\(metadata.version) build=\(metadata.build) " +
+            "\(message)\n"
+        return Data(line.utf8)
     }
 
     private func shouldRotate(forAdditionalBytes additionalBytes: UInt64) -> Bool {

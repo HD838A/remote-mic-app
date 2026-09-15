@@ -11,6 +11,13 @@ function currentSystemMajorVersion() {
     return parseInt(system.version.ProductVersion.split('.')[0], 10);
 }
 
+function siriRemoteSupportWasPreviouslyInstalled() {
+    return system.files.fileExistsAtPath('/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist') ||
+        system.files.fileExistsAtPath('/var/db/receipts/com.hd838a.RemoteMic.siri-remote.bom') ||
+        system.files.fileExistsAtPath('/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService') ||
+        system.files.fileExistsAtPath('/Library/LaunchDaemons/com.hd838a.SayAll.AppleRemoteHCIService.plist');
+}
+
 function installationCheck() {
     if (hardwareIsAppleSilicon()) {
         my.result.type = 'Fatal';
@@ -34,8 +41,8 @@ function installationCheck() {
         <pkg-ref id="com.hd838a.RemoteMic.installer"/>
     </choice>
     <choice id="siri-remote" title="Siri Remote 支持 / Siri Remote support"
-            description="安装 Apple Siri Remote 的系统服务；默认不安装，可在自定安装中勾选。 / Installs the Apple Siri Remote system service; off by default."
-            start_selected="false">
+            description="首次安装默认不选；检测到已有 Siri Remote 支持时自动选中。 / Off for first install; selected automatically when existing Siri Remote support is detected."
+            start_selected="siriRemoteSupportWasPreviouslyInstalled()">
         <pkg-ref id="com.hd838a.RemoteMic.siri-remote"/>
     </choice>
     <pkg-ref id="com.hd838a.RemoteMic.installer" auth="Root">RemoteMicComponent.pkg</pkg-ref>

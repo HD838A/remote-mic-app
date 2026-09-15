@@ -2,7 +2,7 @@
 
 ## 适用版本或分支
 
-- 分支：`codex/macos-commerce-host-bridge` 及其合入后的版本。
+- 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/macos-commerce-host-bridge` 只作为历史审计来源。
 - 范围：无线麦SayAll.app 的可选会员页面、Plus 按键方案页面，以及实体遥控器、Nearby iPhone / Apple Watch 和 Web Remote 的宿主动作路由。
 - 本仓库只维护公开宿主桥接；会员、订单、权益校验和收费方案源码不在公开仓库中。
 
@@ -19,29 +19,31 @@
 公开构建不得依赖私有 Package：
 
 ```bash
-swift test
-swift build -c release
+swift test --disable-keychain
+swift build --disable-keychain -c release
 ```
 
-内部集成构建在本机显式注入两个私有 Package：
+内部集成构建显式注入免费组合动作、付费键位方案和会员 Package；付费键位方案缺少免费依赖时必须直接失败：
 
 ```bash
-SAYALL_MACRO_PLATFORM_PATH=/path/to/private/macos-button-profiles \
+SAYALL_COMBINATION_ACTIONS_PATH=/path/to/sayall-private-platform/packages/macos-combination-actions \
+SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/sayall-private-platform/packages/macos-button-profiles \
 SAYALL_MEMBERSHIP_PACKAGE_PATH=/path/to/private/macos-membership \
-swift test
+swift test --disable-keychain --scratch-path .build-free-paid
 
-SAYALL_MACRO_PLATFORM_PATH=/path/to/private/macos-button-profiles \
+SAYALL_COMBINATION_ACTIONS_PATH=/path/to/sayall-private-platform/packages/macos-combination-actions \
+SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/sayall-private-platform/packages/macos-button-profiles \
 SAYALL_MEMBERSHIP_PACKAGE_PATH=/path/to/private/macos-membership \
-swift build -c release
+swift build --disable-keychain --scratch-path .build-free-paid -c release
 ```
 
 路径示例只能留在本机命令记录中，不得写入提交、产物、日志或公开发布说明。
 
 ## 用例一：公开构建完全回退
 
-步骤：不设置两个私有 Package 路径，构建并启动 App，逐一打开设置侧边栏，并用实体遥控器、Nearby 和 Web Remote 触发单击、双击和长按。
+步骤：不设置付费键位方案与会员 Package 路径，构建并启动 App，逐一打开设置侧边栏，并用实体遥控器、Nearby 和 Web Remote 触发单击、双击和长按。官方构建仍应设置免费组合动作路径。
 
-预期：不显示“按键方案”和“会员”页面；App 不创建会员会话、不请求会员服务；全部按键继续执行原公开映射。
+预期：显示免费的“组合动作”，不显示“按键方案”和“会员”页面；App 不创建会员会话、不请求会员服务；未绑定组合动作的按键继续执行原公开映射。
 
 失败判定：公开构建因缺少私有 Package 无法编译或启动，出现空白私有页面，或任意按键被不存在的私有方案吞掉。
 
@@ -91,7 +93,7 @@ swift build -c release
 
 ## 用例七：页面与升级回滚
 
-步骤：在 `800 × 650` 及生产默认窗口尺寸逐一打开“按键方案”和“会员”，检查中英文、浅色和深色；随后从不含私有 Package 的旧版升级到内部构建，再回滚到公开构建。
+步骤：在真实生产窗口最小尺寸 `1020 × 772` 逐一打开“按键方案”和“会员”，并使用截图 harness 在 `800 × 650` 做窄宽压力渲染，检查中英文、浅色和深色；随后从不含私有 Package 的旧版升级到内部构建，再回滚到公开构建。
 
 预期：侧边栏、页头、主要控件和滚动无裁切，中文字号不小于 12pt；升级保留公开按键映射和私有方案数据；回滚后私有入口隐藏，公开按键继续可用，旧版不会解析私有方案文件。
 
@@ -104,6 +106,6 @@ swift build -c release
 ## 验证边界
 
 - 自动化：验证可选 Package、服务 URL 安全边界、页面显隐、三类入口接线、宿主 payload 只解码公开动作，以及无私有 Package 时返回公开回退。
-- 构建：分别验证无私有 Package 和同时注入两个私有 Package 的 Debug / Release 编译链接。
+- 构建：分别验证无额外 Package、仅免费组合动作、免费组合动作加付费键位方案与会员 Package 的 Debug / Release 编译链接，并验证仅设置付费路径时失败关闭。
 - 尚不能由自动化替代：真实会员服务、真实支付、签名与公证安装包、RC001 / RC003、iPhone、Apple Watch、Web Remote、双设备、第三方 App、7 天真实时间跨度、升级与回滚现场。
 - 部署：生产会员 API 地址、密钥与支付回调均不在本仓库提交，完成部署前不能把本功能描述为生产可用。

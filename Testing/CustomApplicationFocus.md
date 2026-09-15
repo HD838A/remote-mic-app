@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 功能分支：`codex/shortcut-capture-conflicts`
+- 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/shortcut-capture-conflicts` 只作为历史审计来源
 - 功能状态：第一阶段开发验证中
 - 测试目标：验证遥控器普通按键可以打开任意 macOS `.app`，并按配置只激活 APP、发送聚焦快捷键，或聚焦用户记录的 Accessibility 输入框。
 - 本手册不把单元测试、构建成功或系统自带 APP 测试等同于第三方 APP 验收。
@@ -195,7 +195,7 @@
 - [x] 自动化确认基础按键中的 Command-Return、Shift-Return、Command-C、Command-V、Command-Q 和 Command-Delete 均只执行一次，不因 App 连发策略而重复；Command-Delete 的真实遥控器与 TextEdit 响应仍按 `feature/common-mac-shortcuts/testing.md` 人工验收。
 - [x] 系统与媒体中的“上一首（⌘←）”和“下一首（⌘→）”均只执行一次。
 - [x] “禁用按键”只显示在动作编辑标题栏、位于关闭按钮左侧；开启后当前触发不执行动作，关闭后恢复为 Escape，动作网格中不再出现“禁用”。
-- [x] 按键映射页面在 `800 × 650` 窗口下没有裁切、错位或异常改变窗口大小。
+- [x] 按键映射页面的 `800 × 650` 离屏压力截图没有裁切或错位；真实生产窗口在最小 `1020 × 772` 下没有异常改变窗口大小。
 - [x] 按键映射卡片、动作按钮、帮助文字和状态文字的中文显示字号均不小于 12pt。
 - [x] 点击单击、双击或长按后在同一页面完成动作选择和附加配置，不出现按键编辑 Popover、快捷键 Sheet 或输入框学习 Alert。
 - [x] 切换所有侧边栏页面后，页面内容和导航状态正常。

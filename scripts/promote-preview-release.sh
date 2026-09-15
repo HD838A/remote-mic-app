@@ -88,61 +88,114 @@ work_dir="$(/usr/bin/mktemp -d /private/tmp/sayall-stable-promotion.XXXXXX)"
 $GH_BIN release download "$TAG" --repo "$REPOSITORY" \
   --pattern candidate-provenance.json --dir "$work_dir"
 provenance="$work_dir/candidate-provenance.json"
-jq -e \
-  --arg repository "$REPOSITORY" --arg tag "$TAG" '
-    .schemaVersion == 5 and .repository == $repository and .tag == $tag and
-    .tagCommit == .sourceCommit and
-    (.sourceBranch == "main" or (.sourceBranch | test("^hotfix/v[0-9]+[.][0-9]+[.][0-9]+$"))) and
-    (.sourceKind == "main" or .sourceKind == "hotfix") and
-    (.sourceCommit | test("^[0-9a-f]{40}$")) and
-    (.sourceWorkflowCommit | test("^[0-9a-f]{40}$")) and
-    ((.sourceKind == "main" and .sourceBranch == "main" and .sourceBaseTag == "" and .sourceBaseCommit == "") or
-     (.sourceKind == "hotfix" and .sourceBranch == ("hotfix/" + .tag) and
-      (.sourceBaseTag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
-      (.sourceBaseCommit | test("^[0-9a-f]{40}$")))) and
-    (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
-    .tag == ("v" + .version) and
-    (.build | test("^[1-9][0-9]*$")) and
-    (.sourceRunId | type == "number" and . > 0 and floor == .) and
-    (.sourceRunAttempt | type == "number" and . > 0 and floor == .) and
-    (.signedArtifactId | type == "number" and . > 0 and floor == .) and
-    (.signedArtifactDigest | test("^sha256:[0-9a-f]{64}$")) and
-    (.stagedAt | fromdateiso8601 > 0) and
-    .publishedAt == .stagedAt and
-    (.assetManifestSHA256 | test("^[0-9a-f]{64}$")) and
-    (.uiAttestationSHA256 | test("^[0-9a-f]{64}$")) and
-    (.payloadAssets | type == "array" and length == 13) and
-    ([.payloadAssets[].name] | length == (unique | length)) and
-    all(.payloadAssets[];
-      (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
-      (.size | type == "number" and . >= 0 and floor == .) and
-      (.sha256 | test("^[0-9a-f]{64}$"))) and
-    ([
-      "SayAll-" + .version + "-Intel-Uninstaller.pkg",
-      "SayAll-" + .version + "-Intel-Installer.pkg",
-      "Remote-Mic-" + .version + "-Intel.dmg",
-      "Remote-Mic-" + .version + "-Intel.zip",
-      "SayAll-" + .version + "-Uninstaller.pkg",
-      "SayAll-" + .version + "-Installer.pkg",
-      "Remote-Mic-" + .version + ".dmg",
-      "Remote-Mic-" + .version + ".dmg.sha256",
-      "Remote-Mic-" + .version + ".en.txt",
-      "Remote-Mic-" + .version + ".zh.txt",
-      "Remote-Mic-" + .version + ".zip",
-      "appcast-intel.xml",
-      "appcast.xml"
-    ] | sort) == ([.payloadAssets[].name] | sort)
-  ' "$provenance" >/dev/null || {
-  echo "Candidate provenance is invalid" >&2
-  exit 1
-}
+provenance_schema="$(jq -r '.schemaVersion // empty' "$provenance")"
+case "$provenance_schema" in
+  5)
+    jq -e \
+      --arg repository "$REPOSITORY" --arg tag "$TAG" '
+        .schemaVersion == 5 and .repository == $repository and .tag == $tag and
+        .tagCommit == .sourceCommit and
+        (.sourceBranch == "main" or (.sourceBranch | test("^hotfix/v[0-9]+[.][0-9]+[.][0-9]+$"))) and
+        (.sourceKind == "main" or .sourceKind == "hotfix") and
+        (.sourceCommit | test("^[0-9a-f]{40}$")) and
+        (.sourceWorkflowCommit | test("^[0-9a-f]{40}$")) and
+        ((.sourceKind == "main" and .sourceBranch == "main" and .sourceBaseTag == "" and .sourceBaseCommit == "") or
+         (.sourceKind == "hotfix" and .sourceBranch == ("hotfix/" + .tag) and
+          (.sourceBaseTag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+          (.sourceBaseCommit | test("^[0-9a-f]{40}$")))) and
+        (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
+        .tag == ("v" + .version) and
+        (.build | test("^[1-9][0-9]*$")) and
+        (.sourceRunId | type == "number" and . > 0 and floor == .) and
+        (.sourceRunAttempt | type == "number" and . > 0 and floor == .) and
+        (.signedArtifactId | type == "number" and . > 0 and floor == .) and
+        (.signedArtifactDigest | test("^sha256:[0-9a-f]{64}$")) and
+        (.stagedAt | fromdateiso8601 > 0) and
+        .publishedAt == .stagedAt and
+        (.assetManifestSHA256 | test("^[0-9a-f]{64}$")) and
+        (.uiAttestationSHA256 | test("^[0-9a-f]{64}$")) and
+        (.payloadAssets | type == "array" and length == 13) and
+        ([.payloadAssets[].name] | length == (unique | length)) and
+        all(.payloadAssets[];
+          (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
+          (.size | type == "number" and . >= 0 and floor == .) and
+          (.sha256 | test("^[0-9a-f]{64}$"))) and
+        ([
+          "SayAll-" + .version + "-Intel-Uninstaller.pkg",
+          "SayAll-" + .version + "-Intel-Installer.pkg",
+          "Remote-Mic-" + .version + "-Intel.dmg",
+          "Remote-Mic-" + .version + "-Intel.zip",
+          "SayAll-" + .version + "-Uninstaller.pkg",
+          "SayAll-" + .version + "-Installer.pkg",
+          "Remote-Mic-" + .version + ".dmg",
+          "Remote-Mic-" + .version + ".dmg.sha256",
+          "Remote-Mic-" + .version + ".en.txt",
+          "Remote-Mic-" + .version + ".zh.txt",
+          "Remote-Mic-" + .version + ".zip",
+          "appcast-intel.xml",
+          "appcast.xml"
+        ] | sort) == ([.payloadAssets[].name] | sort)
+      ' "$provenance" >/dev/null || { echo "Candidate provenance is invalid" >&2; exit 1; }
+    source_commit="$(jq -r '.sourceCommit' "$provenance")"
+    source_branch="$(jq -r '.sourceBranch' "$provenance")"
+    source_kind="$(jq -r '.sourceKind' "$provenance")"
+    source_base_tag="$(jq -r '.sourceBaseTag' "$provenance")"
+    source_base_commit="$(jq -r '.sourceBaseCommit' "$provenance")"
+    source_workflow_commit="$(jq -r '.sourceWorkflowCommit' "$provenance")"
+    expected_run_branch="main"
+    expected_run_sha="$source_workflow_commit"
+    expected_asset_count=14
+    ;;
+  4)
+    jq -e \
+      --arg repository "$REPOSITORY" --arg tag "$TAG" '
+        .schemaVersion == 4 and .repository == $repository and .tag == $tag and
+        .tagCommit == .sourceCommit and (.sourceCommit | test("^[0-9a-f]{40}$")) and
+        (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and .tag == ("v" + .version) and
+        (.build | test("^[1-9][0-9]*$")) and
+        (.sourceRunId | type == "number" and . > 0 and floor == .) and
+        (.sourceRunAttempt | type == "number" and . > 0 and floor == .) and
+        (.signedArtifactId | type == "number" and . > 0 and floor == .) and
+        (.signedArtifactDigest | test("^sha256:[0-9a-f]{64}$")) and
+        (.stagedAt | fromdateiso8601 > 0) and .publishedAt == .stagedAt and
+        (.assetManifestSHA256 | test("^[0-9a-f]{64}$")) and
+        (.uiAttestationSHA256 | test("^[0-9a-f]{64}$")) and
+        (.payloadAssets | type == "array" and length == 11) and
+        ([.payloadAssets[].name] | length == (unique | length)) and
+        all(.payloadAssets[];
+          (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
+          (.size | type == "number" and . >= 0 and floor == .) and
+          (.sha256 | test("^[0-9a-f]{64}$"))) and
+        ([
+          "Remote-Mic-" + .version + "-Intel-Uninstaller.pkg",
+          "Remote-Mic-" + .version + "-Intel.dmg",
+          "Remote-Mic-" + .version + "-Intel.zip",
+          "Remote-Mic-" + .version + "-Uninstaller.pkg",
+          "Remote-Mic-" + .version + ".dmg",
+          "Remote-Mic-" + .version + ".dmg.sha256",
+          "Remote-Mic-" + .version + ".en.txt",
+          "Remote-Mic-" + .version + ".zh.txt",
+          "Remote-Mic-" + .version + ".zip",
+          "appcast-intel.xml",
+          "appcast.xml"
+        ] | sort) == ([.payloadAssets[].name] | sort)
+      ' "$provenance" >/dev/null || { echo "Legacy candidate provenance is invalid" >&2; exit 1; }
+    source_commit="$(jq -r '.sourceCommit' "$provenance")"
+    source_branch="release-main"
+    source_kind="legacy-release-main"
+    source_base_tag=""
+    source_base_commit=""
+    source_workflow_commit="$source_commit"
+    expected_run_branch="release-main"
+    expected_run_sha="$source_commit"
+    expected_asset_count=12
+    ;;
+  *)
+    echo "Unsupported candidate provenance schema: $provenance_schema" >&2
+    exit 1
+    ;;
+esac
 
-source_commit="$(jq -r '.sourceCommit' "$provenance")"
-source_branch="$(jq -r '.sourceBranch' "$provenance")"
-source_kind="$(jq -r '.sourceKind' "$provenance")"
-source_base_tag="$(jq -r '.sourceBaseTag' "$provenance")"
-source_base_commit="$(jq -r '.sourceBaseCommit' "$provenance")"
-source_workflow_commit="$(jq -r '.sourceWorkflowCommit' "$provenance")"
 source_run_id="$(jq -r '.sourceRunId' "$provenance")"
 source_run_attempt="$(jq -r '.sourceRunAttempt' "$provenance")"
 signed_artifact_id="$(jq -r '.signedArtifactId' "$provenance")"
@@ -156,15 +209,15 @@ else
   exit 1
 fi
 printf '%s\n' "$run_json" | jq -e \
-  --arg repository "$REPOSITORY" --arg workflowCommit "$source_workflow_commit" \
+  --arg repository "$REPOSITORY" --arg expectedBranch "$expected_run_branch" --arg expectedSha "$expected_run_sha" \
   --argjson run "$source_run_id" --argjson attempt "$source_run_attempt" \
   '.id == $run and .repository.full_name == $repository and
    .event == "workflow_dispatch" and
    .path == ".github/workflows/mac-release-package.yml" and
-   .head_branch == "main" and .head_sha == $workflowCommit and
+   .head_branch == $expectedBranch and .head_sha == $expectedSha and
    .run_attempt == $attempt and .status == "completed" and
    .conclusion == "success"' >/dev/null || {
-  echo "candidate provenance is not bound to a successful main-controlled staging Run" >&2
+  echo "candidate provenance is not bound to a successful protected staging Run" >&2
   exit 1
 }
 
@@ -177,7 +230,7 @@ else
   exit 1
 fi
 printf '%s\n' "$artifact_json" | jq -e \
-  --arg repository "$REPOSITORY" --arg workflowCommit "$source_workflow_commit" \
+  --arg expectedBranch "$expected_run_branch" --arg expectedSha "$expected_run_sha" \
   --arg commit "$source_commit" \
   --arg version "$(jq -r '.version' "$provenance")" \
   --arg digest "$signed_artifact_digest" --argjson artifact "$signed_artifact_id" \
@@ -185,8 +238,8 @@ printf '%s\n' "$artifact_json" | jq -e \
   '.id == $artifact and .expired == false and .digest == $digest and
    (.name == ("mac-preview-payload-v" + $version + "-" + $commit)) and
    .workflow_run.id == $run and
-   .workflow_run.head_branch == "main" and
-   .workflow_run.head_sha == $workflowCommit' >/dev/null || {
+   .workflow_run.head_branch == $expectedBranch and
+   .workflow_run.head_sha == $expectedSha' >/dev/null || {
   echo "candidate provenance is not bound to the exact protected staging artifact" >&2
   exit 1
 }
@@ -204,11 +257,11 @@ else
 fi
 stage_record_info="$(printf '%s\n' "$stage_artifacts" | jq -r \
   --arg name "mac-preview-stage-v$version-$source_commit" \
-  --argjson run "$source_run_id" --arg workflowCommit "$source_workflow_commit" '
+  --argjson run "$source_run_id" --arg expectedBranch "$expected_run_branch" --arg expectedSha "$expected_run_sha" '
     [.artifacts[] | select(.name == $name and .expired == false) |
       select(.workflow_run.id == $run and
-             .workflow_run.head_branch == "main" and
-             .workflow_run.head_sha == $workflowCommit)] |
+             .workflow_run.head_branch == $expectedBranch and
+             .workflow_run.head_sha == $expectedSha)] |
     if length == 1 then .[0] | [.id, (.digest // ""), .name] | @tsv else empty end
   ')"
 [[ -n "$stage_record_info" ]] || {
@@ -279,35 +332,53 @@ done < <(/usr/bin/find "$stage_record_root" -name preview-stage-record.json -typ
   exit 1
 }
 stage_record="${stage_record_candidates[0]}"
-jq -e \
-  --arg tag "$TAG" --arg version "$version" --arg commit "$source_commit" \
-  --arg sourceBranch "$source_branch" --arg sourceKind "$source_kind" \
-  --arg sourceBaseTag "$source_base_tag" --arg sourceBaseCommit "$source_base_commit" \
-  --arg workflowCommit "$source_workflow_commit" \
-  --argjson run "$source_run_id" --argjson attempt "$source_run_attempt" \
-  --argjson artifact "$signed_artifact_id" --arg digest "$signed_artifact_digest" \
-  --arg manifest "$manifest_sha" --arg stagedAt "$staged_at" \
-  '.schemaVersion == 2 and .mode == "preview" and
-   .sourceBranch == $sourceBranch and .sourceKind == $sourceKind and
-   .sourceBaseTag == $sourceBaseTag and .sourceBaseCommit == $sourceBaseCommit and
-   .tag == $tag and .version == $version and .sourceCommit == $commit and
-   .sourceWorkflowCommit == $workflowCommit and
-   .sourceRunId == $run and .sourceRunAttempt == $attempt and
-   .signedArtifactId == $artifact and .signedArtifactDigest == $digest and
-   .assetManifestSHA256 == $manifest and .stagedAt == $stagedAt' \
-  "$stage_record" >/dev/null || {
-  echo "candidate provenance is not bound to the exact Preview staging record" >&2
-  exit 1
-}
-
-RELEASE_SOURCE_CHECKOUT_MODE=none \
-RELEASE_SOURCE_REMOTE_MODE=published \
-RELEASE_SOURCE_EXPECTED_BASE_TAG="$source_base_tag" \
-RELEASE_SOURCE_EXPECTED_BASE_COMMIT="$source_base_commit" \
-RELEASE_SOURCE_REQUIRE_CURRENT_STABLE_BASE="$needs_promotion" \
-GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
-  "$ROOT/scripts/verify-public-release-source.sh" \
-  "$source_branch" "$source_commit" "$version" >/dev/null
+case "$provenance_schema" in
+  5)
+    jq -e \
+      --arg tag "$TAG" --arg version "$version" --arg commit "$source_commit" \
+      --arg sourceBranch "$source_branch" --arg sourceKind "$source_kind" \
+      --arg sourceBaseTag "$source_base_tag" --arg sourceBaseCommit "$source_base_commit" \
+      --arg workflowCommit "$source_workflow_commit" \
+      --argjson run "$source_run_id" --argjson attempt "$source_run_attempt" \
+      --argjson artifact "$signed_artifact_id" --arg digest "$signed_artifact_digest" \
+      --arg manifest "$manifest_sha" --arg stagedAt "$staged_at" \
+      '.schemaVersion == 2 and .mode == "preview" and
+       .sourceBranch == $sourceBranch and .sourceKind == $sourceKind and
+       .sourceBaseTag == $sourceBaseTag and .sourceBaseCommit == $sourceBaseCommit and
+       .tag == $tag and .version == $version and .sourceCommit == $commit and
+       .sourceWorkflowCommit == $workflowCommit and
+       .sourceRunId == $run and .sourceRunAttempt == $attempt and
+       .signedArtifactId == $artifact and .signedArtifactDigest == $digest and
+       .assetManifestSHA256 == $manifest and .stagedAt == $stagedAt' \
+      "$stage_record" >/dev/null || { echo "candidate provenance is not bound to the exact Preview staging record" >&2; exit 1; }
+    RELEASE_SOURCE_CHECKOUT_MODE=none \
+    RELEASE_SOURCE_REMOTE_MODE=published \
+    RELEASE_SOURCE_EXPECTED_BASE_TAG="$source_base_tag" \
+    RELEASE_SOURCE_EXPECTED_BASE_COMMIT="$source_base_commit" \
+    RELEASE_SOURCE_REQUIRE_CURRENT_STABLE_BASE="$needs_promotion" \
+    GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
+      "$ROOT/scripts/verify-public-release-source.sh" \
+      "$source_branch" "$source_commit" "$version" >/dev/null
+    ;;
+  4)
+    jq -e \
+      --arg tag "$TAG" --arg version "$version" --arg commit "$source_commit" \
+      --argjson run "$source_run_id" --argjson attempt "$source_run_attempt" \
+      --argjson artifact "$signed_artifact_id" --arg digest "$signed_artifact_digest" \
+      --arg manifest "$manifest_sha" --arg stagedAt "$staged_at" \
+      '.schemaVersion == 1 and .mode == "preview" and
+       .tag == $tag and .version == $version and .sourceCommit == $commit and
+       .sourceRunId == $run and .sourceRunAttempt == $attempt and
+       .signedArtifactId == $artifact and .signedArtifactDigest == $digest and
+       .assetManifestSHA256 == $manifest and .stagedAt == $stagedAt' \
+      "$stage_record" >/dev/null || { echo "legacy candidate provenance is not bound to the exact Preview staging record" >&2; exit 1; }
+    git fetch --no-tags origin release-main
+    git merge-base --is-ancestor "$source_commit" "origin/release-main" || {
+      echo "legacy candidate source is not contained in frozen origin/release-main" >&2
+      exit 1
+    }
+    ;;
+esac
 
 remote_tag_refs="$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
   echo "unable to verify the remote Tag $TAG" >&2
@@ -323,7 +394,7 @@ tag_commit="$(printf '%s\n' "$remote_tag_refs" | /usr/bin/awk '$2 ~ /\^\{\}$/ {p
   exit 1
 }
 remote_assets="$(printf '%s\n' "$release_json" | jq -r '.assets[] | [.name, (.size | tostring), (.digest // "")] | @tsv')"
-[[ "$(printf '%s\n' "$remote_assets" | /usr/bin/awk 'NF {count++} END {print count+0}')" -eq 14 ]] || {
+[[ "$(printf '%s\n' "$remote_assets" | /usr/bin/awk 'NF {count++} END {print count+0}')" -eq "$expected_asset_count" ]] || {
   echo "Pre-release asset set changed" >&2
   exit 1
 }

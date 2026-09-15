@@ -116,8 +116,16 @@ struct LocalizationTests {
         let englishInfo = try strings(at: englishDirectory.appendingPathComponent("InfoPlist.strings"))
 
         #expect(english["action.command_delete"] == "Command-Delete")
+        #expect(english["button_mapping.action_filter.all"] == "All")
+        #expect(english["shortcut.editor.instructions"]?.contains("single key") == true)
+        #expect(english["shortcut.editor.instructions"]?.contains("recorded alone") == true)
         #expect(english["action.scroll_up"] == "Scroll Up")
         #expect(english["action.scroll_down"] == "Scroll Down")
+        #expect(english["keyboard.key.delete"] == "Delete")
+        #expect(english["keyboard.key.left"] == "Left")
+        #expect(english["keyboard.key.right"] == "Right")
+        #expect(english["keyboard.key.up"] == "Up")
+        #expect(english["keyboard.key.down"] == "Down")
         #expect(english["about.support.feedback"] == "Feedback")
         #expect(english["onboarding.remote.first_pairing.wake"] == "Hold TV for about 2 seconds until the white light at the bottom starts flashing.")
         #expect(english["onboarding.remote.first_pairing.pair"] == "Then hold Home + Menu together to enter Bluetooth pairing mode.")
@@ -126,6 +134,8 @@ struct LocalizationTests {
         #expect(english["onboarding.remote.voice_button_mistake.detail"] == "This step checks a normal control button. Press the center OK button or an arrow button instead.")
         #expect(english["onboarding.voice_tool.weixin.title"] == "WeChat Input Method")
         #expect(english["onboarding.voice_tool.system_fn.conflict"] == "macOS is still using Fn")
+        #expect(english["remote.device.model.apple_siri_remote_a2854"] == "Apple Remote Type-C")
+        #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote Lightning")
 
         #expect(!english.isEmpty)
         for (key, value) in english {
@@ -139,6 +149,9 @@ struct LocalizationTests {
             let localizedInfo = try strings(at: directory.appendingPathComponent("InfoPlist.strings"))
             if directory.lastPathComponent == "zh-Hans.lproj" {
                 #expect(localized["action.command_delete"] == "Command-Delete")
+                #expect(localized["button_mapping.action_filter.all"] == "全部")
+                #expect(localized["shortcut.editor.instructions"]?.contains("单个按键") == true)
+                #expect(localized["shortcut.editor.instructions"]?.contains("单独录入") == true)
                 #expect(localized["action.scroll_up"] == "向上滚动")
                 #expect(localized["action.scroll_down"] == "向下滚动")
                 #expect(localized["about.support.feedback"] == "问题反馈")
@@ -149,6 +162,8 @@ struct LocalizationTests {
                 #expect(localized["onboarding.remote.voice_button_mistake.detail"] == "这一步检查普通控制键。请改为短按圆盘中间的确定键或任意方向键。")
                 #expect(localized["onboarding.voice_tool.weixin.title"] == "微信输入法")
                 #expect(localized["onboarding.voice_tool.system_fn.conflict"] == "系统仍在使用 Fn")
+                #expect(localized["remote.device.model.apple_siri_remote_a2854"] == "苹果遥控器 Type-C")
+                #expect(localized["remote.device.model.apple_siri_remote_a2540"] == "苹果遥控器 Lightning")
             }
             #expect(Set(localized.keys) == Set(english.keys))
             #expect(Set(localizedInfo.keys) == Set(englishInfo.keys))

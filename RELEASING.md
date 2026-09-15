@@ -6,7 +6,7 @@
 
 - Preview：普通版本从精确 `origin/main` SHA 构建一次；紧急 Hotfix 只允许从当前稳定 Tag 派生的精确 `origin/hotfix/vX.Y.Z` SHA 构建。两者都必须完成真实 UI 升级后才能发布公开 Pre-release。
 - Stable：用户明确指定一个已经发布并验证通过的 Pre-release，将它改为正式版；不重新构建。
-- 发布 Workflow 只能从精确 `origin/main` 运行。普通源码也只能来自 `main`；`hotfix/vX.Y.Z` 是唯一允许的源码例外，`release-main` 冻结为只读历史并被门禁明确拒绝。
+- 发布 Workflow 只能从精确 `origin/main` 运行。普通新候选源码只能来自 `main`；`hotfix/vX.Y.Z` 是唯一允许的新候选源码例外。`release-main` 冻结为只读历史，但已公开的旧 Pre-release 可按兼容晋升门禁完成正式化。
 - 私有内部 Draft：使用 private-draft-release skill 的独立路径，目标仓库固定为 GetSayAll/SayAll，不在公开源码仓库创建内部 Draft。
 - “发布正式版”不是独立构建命令。没有指定现有 Pre-release 时，只能准备 Preview 或报告缺少授权。
 - stable latest 不写死版本号。Preview 开始前、公开后和失败恢复前后都必须动态读取 `releases/latest`，确认其为正式稳定版且前后一致；流程不得修改 stable feed。
@@ -18,8 +18,8 @@
 1. 记录用户请求时间 request_started_at 和 request_id。T_ready 表示源码已进入精确 `main` 或已批准 Hotfix 分支、源码分支 CI 和依赖 pin 已通过、版本/Build/Release Notes 已冻结的时刻；Preview 和 Stable 从 T_ready 起均以 30 分钟为纯发布目标。重试不重置时间，也不以时间目标替代签名、公证、staple 或 UI 验收。
 2. fetch `origin main --tags`，确认发布控制 worktree 干净、HEAD 与 `origin/main` 精确一致。普通源码必须是同一 `main` SHA；Hotfix 源码必须是 `origin/hotfix/vX.Y.Z` 的精确 HEAD，并由脚本验证当前稳定 Tag、版本和线性历史。
 3. 检查产品 Commit 已经通过普通 PR 合入 main。若用户指定 Commit 尚未合入，先在独立集成分支重放指定改动，逐个解决机械冲突，完成普通 PR、双架构 CI 后再继续；冲突涉及产品取舍时报告并暂停该取舍，不接触 Apple 凭据。
-4. 检查 config/release-dependencies.json、Package.swift、Package.resolved 和受保护 workflow 使用相同的完整依赖 SHA；运行 scripts/verify-release-dependency-pins.sh。
-5. 运行 scripts/verify-release-ready-main-ci.sh，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成 Swift tests、项目 self-test 和 Release build。脚本名为历史兼容名称；发布控制面 fixture 不得冒充产品 CI。
+4. 检查 `config/release-dependencies.json` 与受保护 workflow 使用相同的私有依赖完整 SHA，同时确认公开 `Package.swift`、`Package.resolved` 不解析私有仓库；运行 `scripts/verify-release-dependency-pins.sh`。
+5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方 CI 探测到私有 deploy key 可用时，还必须完成固定私有 Commit 的集成测试和双架构 Release build；脚本名为历史兼容名称，发布控制面 fixture 不得冒充产品 CI。
 
 ### Hotfix 准备
 
@@ -52,6 +52,7 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 受保护 workflow 的 package job 才能读取 Apple/Match/Notary/Sparkle 凭据，并且必须：
 
 - 在 mac-release Environment 内使用只读 Match、隔离临时 Keychain 和最小权限；
+- 按 `config/release-dependencies.json` checkout 并验证全部发布所需私有 Package；缺少权限、路径、固定 Commit 或组件时立即失败，不得降级为公开兼容层发布；
 - 独立构建 Apple Silicon/macOS 14 与 Intel Ventura/macOS 13 两条 lane；
 - 对 App、Framework、XPC、Helper、Installer、DMG 和 ZIP 完成 Developer ID 签名、Apple 公证、staple、Gatekeeper 和权限/符号链接校验；
 - 使用独立 SwiftPM scratch/output，独立提交可并行的 PKG 公证；
@@ -102,10 +103,10 @@ publication 失败时先查询远端状态。若 Tag、Release、资产和摘要
 
 - Release 存在且当前是公开 Pre-release；
 - candidate-provenance.json、Tag Commit 和 source Commit 一致；
-- 普通候选 Tag Commit 已包含在当前 `origin/main`；Hotfix 候选仍是对应远端 Hotfix 分支的精确 HEAD，并绑定当前稳定基线。
+- 当前 schema 5 的普通候选 Tag Commit 已包含在 `origin/main`，Hotfix 候选仍是对应远端 Hotfix 分支的精确 HEAD 并绑定当前稳定基线；历史 schema 4 候选则必须包含在冻结的 `origin/release-main`。
 - 13 项 payload 与 provenance 的大小、SHA-256、GitHub digest 完全一致。
 - provenance 中的 sourceRunId/sourceRunAttempt 指向成功的 `.github/workflows/mac-release-package.yml` `workflow_dispatch` Run，且 Run 的 `head_branch=main`、`head_sha=sourceWorkflowCommit`、attempt 完全一致；sourceBranch/sourceCommit 则绑定实际源码。signedArtifactId/digest 指向同一 Run 的未过期 payload artifact，另有唯一未过期的 Preview stage-record artifact，记录 `mode=preview` 并与 provenance 的源码、控制面、artifact、manifest、Tag 和时间戳一致。
-- 目标仓库固定为 `HD838A/remote-mic-app`，Stable promotion 也只从精确 `origin/main` 控制面执行。
+- 目标仓库固定为 `HD838A/remote-mic-app`，Stable promotion 也只从精确 `origin/main` 控制面执行。晋升按 provenance schema 验证候选身份：schema 5 使用当前 `main`/Hotfix 规则，schema 4 仅允许已公开且可追溯到冻结 `release-main` 的历史候选；未知 schema 或不完整 provenance 一律拒绝。
 
 随后唯一的远端突变是 gh release edit --prerelease=false --latest。Tag、Release Notes、appcast、ZIP、DMG、PKG 和 provenance 均保持原字节；晋升不重新构建、签名、公证、staple 或上传。若上一次突变已成功且该 Tag 已是 `releases/latest`，重试只做完整只读复验，不再次突变；所有候选晋升共享一个并发锁，并在突变前再次核对 stable latest。
 
@@ -122,3 +123,9 @@ publication 失败时先查询远端状态。若 Tag、Release、资产和摘要
 ## 发布后报告
 
 报告 source Commit、版本、Build、两个架构、Run/attempt/artifact ID 与摘要、测试结果、签名/公证/下载字节验证、Sparkle UI 证明、Release 状态和 stable latest。分别报告从 request_started_at 到结果的总耗时，以及从 T_ready 起的 Preview/Stable 纯发布耗时；说明任何未执行的真实硬件、第三方 App 或可见 UI 验收。不得在日志、提交、Release Notes 或聊天中输出证书、私钥、密码、P8、Match 凭据或 Token。
+
+## Release Notes
+
+- 只记录普通用户能够看到或受益的功能、体验、兼容性和可靠性变化。
+- 不写提交标题、哈希、CI、文档维护、测试数量、签名、公证、分支规范或发布流程。
+- 已撤回、删除或从未公开的版本不进入 App 内版本历史。

@@ -1,6 +1,23 @@
 import Combine
 import Foundation
 
+/// What an import refused to adopt. An exported configuration file is the app's only trust
+/// boundary: it travels between Macs through downloads and chat, and it carries application
+/// paths, bundle identifiers and keyboard shortcuts that a remote button later launches or
+/// synthesizes. Entries that cannot be trusted are dropped instead of installed, and this
+/// report is what turns a silent drop into something the user is told about.
+struct ConfigurationImportReport: Equatable {
+    /// Storage keys of the settings that lost at least one entry.
+    var rejectedEntryStorageKeys: [String] = []
+    /// Custom applications that are structurally fine but absent from this Mac. They are kept
+    /// so a configuration exported from a better-equipped Mac survives the trip.
+    var applicationsMissingOnThisMac: [String] = []
+
+    var isClean: Bool {
+        rejectedEntryStorageKeys.isEmpty && applicationsMissingOnThisMac.isEmpty
+    }
+}
+
 enum AppConfigurationError: Error {
     case unsupportedVersion
     case invalidValues
@@ -102,6 +119,42 @@ struct VoiceSessionUsageRecord: Codable, Equatable, Identifiable {
     let endedAt: Date
     let duration: TimeInterval
     let source: UsageEventSource?
+    let applicationName: String?
+
+    init(
+        id: UUID,
+        startedAt: Date?,
+        endedAt: Date,
+        duration: TimeInterval,
+        source: UsageEventSource?,
+        applicationName: String? = nil
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.duration = duration
+        self.source = source
+        self.applicationName = applicationName
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case startedAt
+        case endedAt
+        case duration
+        case source
+        case applicationName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        endedAt = try container.decode(Date.self, forKey: .endedAt)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        source = try container.decodeIfPresent(UsageEventSource.self, forKey: .source)
+        applicationName = try container.decodeIfPresent(String.self, forKey: .applicationName)
+    }
 }
 
 private struct DailyUsageMetadata: Codable {
@@ -234,6 +287,8 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let gainDB = "gainDB"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
+        static let lastUserSelectedInputDeviceUID = "lastUserSelectedInputDeviceUID"
+        static let lastKnownAudioDeviceUID = "lastKnownAudioDeviceUID"
         static let customMappingEnabled = "customMappingEnabled"
         static let legacyExclusiveHID = "exclusiveHID"
         static let buttonBindings = "buttonBindings"
@@ -253,6 +308,7 @@ final class AppSettings: ObservableObject {
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
         static let voiceKeyMode = "voiceKeyMode"
+        static let siriRemoteScrollArrowReversed = "siriRemote.scrollArrowReversed"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
         static let localOriginalAudioRecordingEnabled = "localOriginalAudioRecordingEnabled"
         static let continuousRecordingPowerBindingBackup = "continuousRecordingPowerBindingBackup"
@@ -281,8 +337,20 @@ final class AppSettings: ObservableObject {
     }
 
     @Published var selectedAudioDeviceUID: String {
-        didSet { defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID) }
+        didSet {
+            defaults.set(selectedAudioDeviceUID, forKey: Keys.selectedAudioDeviceUID)
+            if !selectedAudioDeviceUID.isEmpty {
+                lastKnownAudioDeviceUID = selectedAudioDeviceUID
+                defaults.set(selectedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
+            }
+        }
     }
+
+    var lastUserSelectedInputDeviceUID: String? {
+        get { defaults.string(forKey: Keys.lastUserSelectedInputDeviceUID) }
+        set { defaults.set(newValue, forKey: Keys.lastUserSelectedInputDeviceUID) }
+    }
+    private(set) var lastKnownAudioDeviceUID: String
 
     @Published var customMappingEnabled: Bool {
         didSet { defaults.set(customMappingEnabled, forKey: Keys.customMappingEnabled) }
@@ -381,6 +449,15 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published var siriRemoteScrollArrowReversed: Bool {
+        didSet {
+            defaults.set(
+                siriRemoteScrollArrowReversed,
+                forKey: Keys.siriRemoteScrollArrowReversed
+            )
+        }
+    }
+
     /// One-session notice for an existing Command mode normalized to Fn by Onboarding.
     @Published private(set) var pendingOnboardingVoiceKeyMigration: VoiceKeyMode? = nil
 
@@ -476,6 +553,12 @@ final class AppSettings: ObservableObject {
         onboardingCompletedVersion >= Self.currentOnboardingVersion
     }
 
+    var hasHistoricalAudioConfiguration: Bool {
+        isOnboardingComplete || firstUseEvents.contains {
+            ($0.kind == .passed && $0.step == .audio) || $0.kind == .completed
+        }
+    }
+
     var peripheralIdentifier: UUID? {
         get {
             guard let raw = defaults.string(forKey: Keys.peripheralIdentifier) else { return nil }
@@ -486,24 +569,60 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// Keys whose stored data existed but could not be decoded on the last load. The raw
+    /// bytes are preserved under "<key>.corrupt" so a reset is recoverable and visible
+    /// instead of looking like a first run.
+    @Published private(set) var corruptedSettingKeys: [String] = []
+
+    /// Splits "never saved" from "saved but unreadable". Only the latter is a fault, and
+    /// silently treating it as a first run is what let user configuration disappear.
+    /// Static because callers run inside `init` before the instance is fully formed.
+    private static func decodeSetting<T: Decodable>(
+        _ type: T.Type,
+        forKey key: String,
+        from defaults: UserDefaults,
+        corrupted: inout [String]
+    ) -> T? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            defaults.set(data, forKey: "\(key).corrupt")
+            corrupted.append(key)
+            AppLogger.shared.write(
+                "SETTINGS decode_failed key=\(key) bytes=\(data.count) error=\(error)"
+            )
+            return nil
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
+        var corruptedKeys: [String] = []
         self.defaults = defaults
         remoteDeviceProfiles = []
         selectedRemoteProfileID = nil
         gainDB = defaults.object(forKey: Keys.gainDB) == nil
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
-        selectedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        let persistedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        selectedAudioDeviceUID = persistedAudioDeviceUID
+        lastKnownAudioDeviceUID = defaults.string(forKey: Keys.lastKnownAudioDeviceUID) ?? persistedAudioDeviceUID
+        if defaults.string(forKey: Keys.lastKnownAudioDeviceUID) == nil,
+           !persistedAudioDeviceUID.isEmpty {
+            defaults.set(persistedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
+        }
         if defaults.object(forKey: Keys.customMappingEnabled) != nil {
             customMappingEnabled = defaults.bool(forKey: Keys.customMappingEnabled)
         } else {
             customMappingEnabled = defaults.bool(forKey: Keys.legacyExclusiveHID)
         }
 
-        if
-            let data = defaults.data(forKey: Keys.buttonBindings),
-            let decoded = try? JSONDecoder().decode([String: ButtonAction].self, from: data)
-        {
+        if let decoded = Self.decodeSetting(
+            [String: ButtonAction].self,
+            forKey: Keys.buttonBindings,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) {
             buttonBindings = Self.defaultBindings.merging(
                 Dictionary(uniqueKeysWithValues: decoded.compactMap { key, value in
                     RemoteButton(rawValue: key).map { ($0, value) }
@@ -513,10 +632,12 @@ final class AppSettings: ObservableObject {
             buttonBindings = Self.defaultBindings
         }
 
-        if
-            let data = defaults.data(forKey: Keys.buttonShortcuts),
-            let decoded = try? JSONDecoder().decode([String: CustomKeyboardShortcut].self, from: data)
-        {
+        if let decoded = Self.decodeSetting(
+            [String: CustomKeyboardShortcut].self,
+            forKey: Keys.buttonShortcuts,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) {
             buttonShortcuts = Dictionary(uniqueKeysWithValues: decoded.compactMap { key, value in
                 RemoteButton(rawValue: key).map { ($0, value) }
             })
@@ -524,10 +645,12 @@ final class AppSettings: ObservableObject {
             buttonShortcuts = [:]
         }
 
-        if
-            let data = defaults.data(forKey: Keys.buttonApplicationProfileIDs),
-            let decoded = try? JSONDecoder().decode([String: UUID].self, from: data)
-        {
+        if let decoded = Self.decodeSetting(
+            [String: UUID].self,
+            forKey: Keys.buttonApplicationProfileIDs,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) {
             buttonApplicationProfileIDs = Dictionary(
                 uniqueKeysWithValues: decoded.compactMap { key, value in
                     RemoteButton(rawValue: key).map { ($0, value) }
@@ -537,10 +660,12 @@ final class AppSettings: ObservableObject {
             buttonApplicationProfileIDs = [:]
         }
 
-        if
-            let data = defaults.data(forKey: Keys.buttonRapidPressEnabled),
-            let decoded = try? JSONDecoder().decode([String: Bool].self, from: data)
-        {
+        if let decoded = Self.decodeSetting(
+            [String: Bool].self,
+            forKey: Keys.buttonRapidPressEnabled,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) {
             buttonRapidPressEnabled = Dictionary(
                 uniqueKeysWithValues: decoded.compactMap { key, value in
                     RemoteButton(rawValue: key).map { ($0, value) }
@@ -550,13 +675,12 @@ final class AppSettings: ObservableObject {
             buttonRapidPressEnabled = [:]
         }
 
-        if
-            let data = defaults.data(forKey: Keys.secondaryButtonBindings),
-            let decoded = try? JSONDecoder().decode(
-                [String: [String: ConfiguredButtonAction]].self,
-                from: data
-            )
-        {
+        if let decoded = Self.decodeSetting(
+            [String: [String: ConfiguredButtonAction]].self,
+            forKey: Keys.secondaryButtonBindings,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) {
             secondaryButtonBindings = Dictionary(uniqueKeysWithValues: decoded.compactMap { buttonKey, bindings in
                 guard let button = RemoteButton(rawValue: buttonKey) else { return nil }
                 let parsed = Dictionary(uniqueKeysWithValues: bindings.compactMap { triggerKey, binding in
@@ -568,10 +692,12 @@ final class AppSettings: ObservableObject {
             secondaryButtonBindings = [:]
         }
 
-        customApplicationProfiles = defaults
-            .data(forKey: Keys.customApplicationProfiles)
-            .flatMap { try? JSONDecoder().decode([CustomApplicationProfile].self, from: $0) }
-            ?? []
+        customApplicationProfiles = Self.decodeSetting(
+            [CustomApplicationProfile].self,
+            forKey: Keys.customApplicationProfiles,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) ?? []
 
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
@@ -593,28 +719,40 @@ final class AppSettings: ObservableObject {
         voiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
+        siriRemoteScrollArrowReversed = defaults.bool(
+            forKey: Keys.siriRemoteScrollArrowReversed
+        )
         localTranscriptHistoryEnabled = defaults.bool(
             forKey: Keys.localTranscriptHistoryEnabled
         )
         localOriginalAudioRecordingEnabled = defaults.bool(
             forKey: Keys.localOriginalAudioRecordingEnabled
         )
-        continuousRecordingPowerBindingBackup = defaults
-            .data(forKey: Keys.continuousRecordingPowerBindingBackup)
-            .flatMap { try? JSONDecoder().decode(ConfiguredButtonAction.self, from: $0) }
+        continuousRecordingPowerBindingBackup = Self.decodeSetting(
+            ConfiguredButtonAction.self,
+            forKey: Keys.continuousRecordingPowerBindingBackup,
+            from: defaults,
+            corrupted: &corruptedKeys
+        )
         totalButtonPressCount = (
             defaults.object(forKey: Keys.totalButtonPressCount) as? NSNumber
         )?.uint64Value ?? 0
         totalVoiceDuration = defaults.object(forKey: Keys.totalVoiceDuration) == nil
             ? 0
             : max(0, defaults.double(forKey: Keys.totalVoiceDuration))
-        dailyStatistics = defaults.data(forKey: Keys.dailyStatistics)
-            .flatMap { try? JSONDecoder().decode([String: DailyUsageStatistics].self, from: $0) }
-            ?? [:]
+        dailyStatistics = Self.decodeSetting(
+            [String: DailyUsageStatistics].self,
+            forKey: Keys.dailyStatistics,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) ?? [:]
         voiceSessionRanking = Self.normalizedVoiceSessionRanking(
-            defaults.data(forKey: Keys.voiceSessionRanking)
-                .flatMap { try? JSONDecoder().decode([VoiceSessionUsageRecord].self, from: $0) }
-                ?? []
+            Self.decodeSetting(
+                [VoiceSessionUsageRecord].self,
+                forKey: Keys.voiceSessionRanking,
+                from: defaults,
+                corrupted: &corruptedKeys
+            ) ?? []
         )
         trustedPhoneIdentityFingerprints = Set(
             defaults.stringArray(forKey: Keys.trustedPhoneIdentityFingerprints) ?? []
@@ -658,8 +796,12 @@ final class AppSettings: ObservableObject {
             buttonRapidPressEnabled: buttonRapidPressEnabled
         )
         if
-            let data = defaults.data(forKey: Keys.remoteDeviceProfiles),
-            let decoded = try? JSONDecoder().decode([RemoteDeviceProfile].self, from: data),
+            let decoded = Self.decodeSetting(
+                [RemoteDeviceProfile].self,
+                forKey: Keys.remoteDeviceProfiles,
+                from: defaults,
+                corrupted: &corruptedKeys
+            ),
             !decoded.isEmpty
         {
             remoteDeviceProfiles = decoded
@@ -689,6 +831,7 @@ final class AppSettings: ObservableObject {
             enabled: experimentalContinuousRecordingEnabled,
             backup: continuousRecordingPowerBindingBackup
         )
+        corruptedSettingKeys = corruptedKeys
     }
 
     func setOnboardingStep(_ step: OnboardingStep) {
@@ -730,12 +873,25 @@ final class AppSettings: ObservableObject {
         if kind == .entered {
             defaults.set(date, forKey: Keys.firstUseStepStartedAt)
         }
+
+        AppLogger.shared.write(event.runtimeLogMessage)
     }
 
     var firstUseEvents: [FirstUseEvent] {
-        defaults.data(forKey: Keys.firstUseEvents)
-            .flatMap { try? JSONDecoder().decode([FirstUseEvent].self, from: $0) }
-            ?? []
+        // Deliberately not reported through corruptedSettingKeys: a computed getter can run
+        // many times and would append duplicates, and onboarding telemetry is not user
+        // configuration that deserves a configuration-loss warning. It still logs and backs
+        // up the unreadable bytes, so the loss stays recoverable.
+        guard let data = defaults.data(forKey: Keys.firstUseEvents) else { return [] }
+        do {
+            return try JSONDecoder().decode([FirstUseEvent].self, from: data)
+        } catch {
+            defaults.set(data, forKey: "\(Keys.firstUseEvents).corrupt")
+            AppLogger.shared.write(
+                "SETTINGS decode_failed key=\(Keys.firstUseEvents) bytes=\(data.count) error=\(error)"
+            )
+            return []
+        }
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
@@ -973,7 +1129,10 @@ final class AppSettings: ObservableObject {
     }
 
     @discardableResult
-    func registerAppleSiriRemote(fingerprint: String) -> UUID {
+    func registerAppleSiriRemote(
+        fingerprint: String,
+        model: XiaomiRemoteModel = .appleSiriRemoteA2854
+    ) -> UUID {
 #if !SAYALL_SIRI_REMOTE_ENABLED
         // Community builds keep this compatibility entry point so old persisted
         // state can be decoded, but never create or expose a Siri Remote profile.
@@ -986,11 +1145,11 @@ final class AppSettings: ObservableObject {
             $0.bluetoothIdentifier == nil && $0.hidFingerprint == nil && $0.model == .unknown
         }) {
             remoteDeviceProfiles[index].hidFingerprint = fingerprint
-            remoteDeviceProfiles[index].model = .appleSiriRemoteA2854
+            remoteDeviceProfiles[index].model = model
             return remoteDeviceProfiles[index].id
         }
         let profile = RemoteDeviceProfile(
-            model: .appleSiriRemoteA2854,
+            model: model,
             hidFingerprint: fingerprint,
             mappings: mappingsForNewRemote()
         )
@@ -1169,6 +1328,7 @@ final class AppSettings: ObservableObject {
         _ duration: TimeInterval,
         startedAt: Date? = nil,
         source: UsageEventSource = .unknown,
+        applicationName: String? = nil,
         at date: Date = Date(),
         calendar: Calendar = .current
     ) {
@@ -1225,7 +1385,8 @@ final class AppSettings: ObservableObject {
                 startedAt: startedAt,
                 endedAt: date,
                 duration: duration,
-                source: source
+                source: source,
+                applicationName: applicationName
             )]
         )
     }
@@ -1412,6 +1573,7 @@ final class AppSettings: ObservableObject {
         [
             Keys.gainDB,
             Keys.selectedAudioDeviceUID,
+            Keys.lastKnownAudioDeviceUID,
             Keys.customMappingEnabled,
             Keys.legacyExclusiveHID,
             Keys.buttonBindings,
@@ -1492,8 +1654,20 @@ final class AppSettings: ObservableObject {
         )
     }
 
+    /// What the last import in this session refused to adopt, or `nil` when it adopted
+    /// everything. In memory only: it describes one user action, not stored state, and it must
+    /// not outlive the session in which the user imported the file.
+    @Published private(set) var configurationImportNotice: ConfigurationImportReport?
+
+    /// Adopts a payload that arrived from outside this Mac. Document-level values still reject
+    /// the whole file (an unknown format or an impossible gain means nothing in it can be
+    /// trusted), but a single bad entry only loses that entry: throwing the file away would
+    /// punish a user whose configuration is 99% fine. Everything dropped is published in
+    /// `configurationImportNotice` so the user is told rather than silently downgraded.
     func importConfiguration(from data: Data) throws {
         let configuration = try Self.validatedConfiguration(from: data)
+        var rejected: Set<String> = []
+        var missingApplications: [String] = []
         let importedMode = configuration.voiceKeyMode ?? .function
         let importedFnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) &&
             importedMode == .function
@@ -1503,47 +1677,110 @@ final class AppSettings: ObservableObject {
         )
 
         let importedBindings = Dictionary(
-            uniqueKeysWithValues: configuration.buttonBindings.compactMap { key, value in
-                RemoteButton(rawValue: key).map { ($0, value) }
-            }
+            uniqueKeysWithValues: configuration.buttonBindings
+                .compactMap { key, value -> (RemoteButton, ButtonAction)? in
+                    guard let button = RemoteButton(rawValue: key) else {
+                        rejected.insert(Keys.buttonBindings)
+                        return nil
+                    }
+                    return (button, value)
+                }
         )
         let importedShortcuts = Dictionary(
-            uniqueKeysWithValues: configuration.buttonShortcuts.compactMap { key, value in
-                RemoteButton(rawValue: key).map { ($0, value) }
-            }
+            uniqueKeysWithValues: configuration.buttonShortcuts
+                .compactMap { key, value -> (RemoteButton, CustomKeyboardShortcut)? in
+                    guard let button = RemoteButton(rawValue: key),
+                          let shortcut = Self.validatedShortcut(value)
+                    else {
+                        rejected.insert(Keys.buttonShortcuts)
+                        return nil
+                    }
+                    return (button, shortcut)
+                }
         )
         let importedApplicationProfileIDs = Dictionary(
-            uniqueKeysWithValues: (configuration.buttonApplicationProfileIDs ?? [:]).compactMap { key, value in
-                RemoteButton(rawValue: key).map { ($0, value) }
-            }
+            uniqueKeysWithValues: (configuration.buttonApplicationProfileIDs ?? [:])
+                .compactMap { key, value -> (RemoteButton, UUID)? in
+                    guard let button = RemoteButton(rawValue: key) else {
+                        rejected.insert(Keys.buttonApplicationProfileIDs)
+                        return nil
+                    }
+                    return (button, value)
+                }
         )
         let importedRapidPressEnabled = Dictionary(
-            uniqueKeysWithValues: (configuration.buttonRapidPressEnabled ?? [:]).compactMap { key, value in
-                RemoteButton(rawValue: key).map { ($0, value) }
-            }
+            uniqueKeysWithValues: (configuration.buttonRapidPressEnabled ?? [:])
+                .compactMap { key, value -> (RemoteButton, Bool)? in
+                    guard let button = RemoteButton(rawValue: key) else {
+                        rejected.insert(Keys.buttonRapidPressEnabled)
+                        return nil
+                    }
+                    return (button, value)
+                }
         )
         let importedSecondaryBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] =
             Dictionary(
-                uniqueKeysWithValues: configuration.secondaryButtonBindings.compactMap { buttonKey, bindings in
-                    guard let button = RemoteButton(rawValue: buttonKey) else { return nil }
+                uniqueKeysWithValues: configuration.secondaryButtonBindings.compactMap {
+                    buttonKey, bindings -> (RemoteButton, [ButtonTrigger: ConfiguredButtonAction])? in
+                    guard let button = RemoteButton(rawValue: buttonKey) else {
+                        rejected.insert(Keys.secondaryButtonBindings)
+                        return nil
+                    }
                     let parsed = Dictionary(
-                        uniqueKeysWithValues: bindings.compactMap { triggerKey, binding in
-                            ButtonTrigger(rawValue: triggerKey).map { ($0, binding) }
+                        uniqueKeysWithValues: bindings.compactMap {
+                            triggerKey, binding -> (ButtonTrigger, ConfiguredButtonAction)? in
+                            guard let trigger = ButtonTrigger(rawValue: triggerKey),
+                                  let validated = Self.validatedConfiguredAction(binding)
+                            else {
+                                rejected.insert(Keys.secondaryButtonBindings)
+                                return nil
+                            }
+                            return (trigger, validated)
                         }
                     )
                     return parsed.isEmpty ? nil : (button, parsed)
                 }
             )
 
+        let importedApplicationProfiles = (configuration.customApplicationProfiles ?? [])
+            .compactMap { profile -> CustomApplicationProfile? in
+                switch Self.validatedApplicationProfile(profile) {
+                case let .usable(profile):
+                    return profile
+                case let .notInstalledOnThisMac(profile):
+                    missingApplications.append(profile.displayName)
+                    return profile
+                case .rejected:
+                    rejected.insert(Keys.customApplicationProfiles)
+                    return nil
+                }
+            }
+        let importedAudioDeviceUID: String
+        if configuration.selectedAudioDeviceUID.count <= Self.maximumImportedIdentifierLength {
+            importedAudioDeviceUID = configuration.selectedAudioDeviceUID
+        } else {
+            importedAudioDeviceUID = ""
+            rejected.insert(Keys.selectedAudioDeviceUID)
+        }
+        let importedRecordingBackup: ConfiguredButtonAction?
+        if let backup = configuration.continuousRecordingPowerBindingBackup {
+            importedRecordingBackup = Self.validatedConfiguredAction(backup)
+            if importedRecordingBackup == nil {
+                rejected.insert(Keys.continuousRecordingPowerBindingBackup)
+            }
+        } else {
+            importedRecordingBackup = nil
+        }
+
         gainDB = configuration.gainDB
-        selectedAudioDeviceUID = configuration.selectedAudioDeviceUID
+        selectedAudioDeviceUID = importedAudioDeviceUID
         customMappingEnabled = configuration.customMappingEnabled
         buttonBindings = Self.defaultBindings.merging(importedBindings) { _, imported in imported }
         buttonShortcuts = importedShortcuts
         buttonApplicationProfileIDs = importedApplicationProfileIDs
         secondaryButtonBindings = importedSecondaryBindings
         buttonRapidPressEnabled = importedRapidPressEnabled
-        customApplicationProfiles = configuration.customApplicationProfiles ?? []
+        customApplicationProfiles = importedApplicationProfiles
         applicationLanguage = configuration.applicationLanguage
         showDockIcon = configuration.showDockIcon
         if let showStatusBarIcon = configuration.showStatusBarIcon {
@@ -1559,8 +1796,138 @@ final class AppSettings: ObservableObject {
         voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
-            backup: configuration.continuousRecordingPowerBindingBackup
+            backup: importedRecordingBackup
         )
+
+        let report = ConfigurationImportReport(
+            rejectedEntryStorageKeys: rejected.sorted(),
+            applicationsMissingOnThisMac: missingApplications.sorted()
+        )
+        if !report.isClean {
+            AppLogger.shared.write(
+                "SETTINGS import_filtered rejected=\(report.rejectedEntryStorageKeys.joined(separator: ",")) " +
+                    "missing_apps=\(report.applicationsMissingOnThisMac.count)"
+            )
+        }
+        configurationImportNotice = report.isClean ? nil : report
+    }
+
+    /// Bundle identifiers, audio device identifiers and display names are matched or displayed,
+    /// never executed, so a length bound is the whole requirement for them.
+    private static let maximumImportedIdentifierLength = 256
+    private static let maximumImportedPathLength = 1_024
+    private static let maximumImportedKeyLabelLength = 64
+    /// macOS virtual key codes are 7-bit; this app's own label table stops at 126 and
+    /// `RemoteButton.nativeEvent` never exceeds it. A larger code is not a key.
+    private static let maximumImportedKeyCode: UInt16 = 127
+
+    /// `nil` when the shortcut is outside what the app can record or inject. A shortcut that
+    /// passes is rebuilt through the normal initializer, which applies exactly the mask a freshly
+    /// recorded shortcut gets — only bits the app never records are discarded.
+    private static func validatedShortcut(
+        _ shortcut: CustomKeyboardShortcut
+    ) -> CustomKeyboardShortcut? {
+        guard shortcut.keyCode <= maximumImportedKeyCode,
+              shortcut.keyLabel.count <= maximumImportedKeyLabelLength
+        else { return nil }
+        return CustomKeyboardShortcut(
+            keyCode: shortcut.keyCode,
+            modifierFlags: shortcut.modifierFlags,
+            keyLabel: shortcut.keyLabel
+        )
+    }
+
+    /// `nil` when the binding carries a shortcut the app cannot trust. The whole binding goes,
+    /// because a `customShortcut` action without its shortcut is a button that does nothing.
+    private static func validatedConfiguredAction(
+        _ binding: ConfiguredButtonAction
+    ) -> ConfiguredButtonAction? {
+        guard let shortcut = binding.shortcut else { return binding }
+        guard let validated = validatedShortcut(shortcut) else { return nil }
+        var result = binding
+        result.shortcut = validated
+        return result
+    }
+
+    private enum ImportedApplicationProfile {
+        case usable(CustomApplicationProfile)
+        case notInstalledOnThisMac(CustomApplicationProfile)
+        case rejected
+    }
+
+    /// The dangerous half of an imported payload: this is what a remote button launches.
+    ///
+    /// Only a structurally malformed entry is dropped. An entry whose path resolves to nothing,
+    /// or to a bundle whose identifier no longer matches the declared one, is kept and reported
+    /// instead: `KeyboardInjector.resolveCustomApplicationURL` re-checks that match before
+    /// opening anything, so dropping it here would destroy a binding without adding safety —
+    /// and refusing it outright would break the entire point of moving a configuration to a Mac
+    /// that has not installed everything yet.
+    private static func validatedApplicationProfile(
+        _ profile: CustomApplicationProfile
+    ) -> ImportedApplicationProfile {
+        guard profile.displayName.count <= maximumImportedIdentifierLength,
+              isWellFormedBundleIdentifier(profile.bundleIdentifier),
+              isWellFormedApplicationBundlePath(profile.applicationPath)
+        else { return .rejected }
+
+        var sanitized = profile
+        // Both focus paths are already nil-guarded at use, so clearing an untrusted detail
+        // degrades focus rather than losing the application.
+        sanitized.focusShortcut = profile.focusShortcut.flatMap(validatedShortcut)
+        sanitized.accessibilityTarget = profile.accessibilityTarget
+            .flatMap(validatedAccessibilityTarget)
+
+        let url = URL(fileURLWithPath: sanitized.applicationPath)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return .notInstalledOnThisMac(sanitized)
+        }
+        guard Bundle(url: url)?.bundleIdentifier == sanitized.bundleIdentifier else {
+            // The launch path re-checks this match and falls back to a bundle-identifier
+            // lookup, so degrading beats deleting a binding the user still wants.
+            return .notInstalledOnThisMac(sanitized)
+        }
+        return .usable(sanitized)
+    }
+
+    private static func isWellFormedBundleIdentifier(_ identifier: String) -> Bool {
+        guard !identifier.isEmpty,
+              identifier.count <= maximumImportedIdentifierLength,
+              !identifier.hasPrefix("."),
+              !identifier.hasSuffix("."),
+              !identifier.contains("..")
+        else { return false }
+        // Deliberately not ASCII-only: Script Editor derives
+        // com.apple.ScriptEditor.id.<app name> from the app's name verbatim, so a CJK-named
+        // app has a non-ASCII identifier that the picker already accepts. What matters here
+        // is that the identifier cannot smuggle path or separator characters.
+        return identifier.allSatisfy { character in
+            character.isLetter || character.isNumber || ".-_".contains(character)
+        }
+    }
+
+    private static func isWellFormedApplicationBundlePath(_ path: String) -> Bool {
+        guard path.hasPrefix("/"), path.count <= maximumImportedPathLength else { return false }
+        guard !path.split(separator: "/").contains("..") else { return false }
+        return URL(fileURLWithPath: path).pathExtension.lowercased() == "app"
+    }
+
+    private static func validatedAccessibilityTarget(
+        _ target: AccessibilityFocusTarget
+    ) -> AccessibilityFocusTarget? {
+        let fields = [
+            target.role, target.identifier, target.title, target.description,
+            target.help, target.placeholder, target.context, target.windowTitle,
+        ]
+        guard fields.allSatisfy({ $0.count <= maximumImportedIdentifierLength }) else {
+            return nil
+        }
+        if let frame = target.normalizedFrame {
+            guard [frame.x, frame.y, frame.width, frame.height].allSatisfy(\.isFinite) else {
+                return nil
+            }
+        }
+        return target
     }
 
     private static func validatedConfiguration(from data: Data) throws -> PersonalizedConfiguration {

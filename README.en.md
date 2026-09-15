@@ -13,11 +13,6 @@
 <table>
   <tr>
     <td align="center">
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb"><img src="Screenshots/community-entry-qrcode.png" alt="SayAll permanent community entry" width="220"></a><br>
-      <strong>Permanent entry</strong><br>
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb">Open the latest community page</a>
-    </td>
-    <td align="center">
       <img src="Screenshots/wechat-group-qrcode.jpg" alt="SayAll WeChat group QR code" width="220"><br>
       <strong>WeChat group</strong><br>
       Scan in WeChat to join
@@ -29,6 +24,18 @@
     </td>
   </tr>
 </table>
+
+## Windows version
+
+The first Windows preview of SayAll is now available, focusing on the essential features:
+
+- Supports Xiaomi Bluetooth Remote 2 and 2 Pro.
+- Voice input currently supports only WeChat Input Method.
+- The voice-input shortcut is `Ctrl + Win`.
+
+You are welcome to try it. In principle, the Windows version of SayAll should not trigger warnings from game anti-cheat or antivirus software. If you have concerns, scan the source code with an AI tool before installing it.
+
+[Download the Windows preview](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
 
 iOS app beta: [Join the TestFlight public beta](https://testflight.apple.com/join/J8k8fb7v)
 
@@ -192,7 +199,9 @@ When installing over an older release, the installer recognizes legacy `/Applica
 
 Read the [Troubleshooting Guide](TROUBLESHOOTING.en.md) first. The complete onboarding flow is in the [First-Install Guide](Resources/首次安装说明.en.md).
 
-For development, build, protocol, test, and release details, see the [Technical Documentation](TECHNICAL.en.md).
+Before developing any new feature, everyone—including the repository owner, maintainers, external contributors, and automated agents—must read and follow the canonical [New Feature Development Policy](FEATURE_DEVELOPMENT.md).
+
+For development, build, protocol, test, and release details, see the [Technical Documentation](TECHNICAL.en.md). Branch and pull-request management is defined in the [Branch and Commit Management Policy](BRANCH_MANAGEMENT.md).
 
 ## ⭐ Star History
 

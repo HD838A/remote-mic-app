@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 分支：`codex/allow-repeated-custom-shortcut-presses`（基线 `6e809dc`）
+- 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；历史开发分支为 `codex/allow-repeated-custom-shortcut-presses`，基线为 `6e809dc`
 - 平台：macOS 14 及以上；RC001 或 RC003，`mode=seized` 与 `mode=monitored` 两条监听路径都需覆盖
 - 目标：确认新开关关闭时行为与上一正式版完全一致，打开后同一按键的连续快按每次都执行，并确认被丢弃的按下现在有日志。
 - 对应 Bug：[自定义快捷键连续快速按只有第一次生效](../Bugs/2026-08-25-custom-shortcut-rapid-press-dropped.md)
@@ -91,7 +91,7 @@
 
 ## 用例七：设置页面几何与文字
 
-1. 把设置窗口调整到 `800 × 650`。
+1. 使用设置页截图 harness 以 `800 × 650` 做窄宽压力渲染；真实设置窗口保持生产最小尺寸 `1020 × 772`。
 2. 逐一点击全部侧边栏入口，重点检查「按键映射」页。
 3. 展开一个绑定为自定义快捷键的按键，检查新开关和说明文字。
 

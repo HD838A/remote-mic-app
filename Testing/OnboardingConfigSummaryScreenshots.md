@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 分支：`codex/onboarding-voice-test-config-summary-20260905`
+- 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原截图分支 `codex/onboarding-voice-test-config-summary-20260905` 只作为历史审计来源
 - 截图日期：2026-09-05
 - 渲染来源：生产 `OnboardingView` 的锁屏离屏截图入口，不是设计稿或重绘图
 - 窗口内容尺寸：`1020 × 772`；PNG 尺寸：`2040 × 1608`

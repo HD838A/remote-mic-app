@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 分支：`codex/fix-issue-137`（包含原修复及 Issue #137 丢失 release 自愈）
+- 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原 Issue #137 修复分支 `codex/fix-issue-137`（包含原修复及丢失 release 自愈）只作为历史审计来源
 - 平台：macOS；RC001 或 RC003 处于非独占 `HID CONNECTED mode=monitored` 监听路径
 - 目标：确认遥控器方向键连发、松开、断连和状态重置后，不会继续拦截 MacBook 实体方向键。
 

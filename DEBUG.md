@@ -1,3 +1,57 @@
+# Siri Remote AppSwitcher 后续失效与目标窗口未显示诊断
+
+## Observations
+
+- 用户在当前 Mac 的真实苹果遥控器上复现：圆周导航开始时可用，多轮使用后不再切换；微信无论使用圆周触摸导航还是实体方向/确定键导航，都没有真正显示窗口。
+- 正确现场进程为 `1.9.21 (174)`、PID `15341`，相关时段约为 2026-09-13 08:03 UTC。日志多轮出现 `phase=start`、`TOUCH_CONTEXT phase=navigate`、`phase=ended command_release=true`，以及 `phase=selection_observed selected=com.tencent.xinWeChat`。
+- 现有 `success=true` 只证明 CGEvent 构造并提交，`selected=com.tencent.xinWeChat` 只证明 `NSWorkspace.frontmostApplication` 当时返回微信 Bundle ID；两者都不能证明微信存在用户可见窗口。
+- 本机微信进程自更早时间已存在，因此“进程存在”不能证明本轮 AppSwitcher 操作让微信窗口显示。
+- 现有日志缺少同一轮操作的关联 ID、累计导航输入、进程 active/hidden 状态、普通窗口计数、屏幕上窗口计数和唯一用户可见终态，暂时不能从现场证据区分事件丢失、系统未接受、无可见窗口或被其他 App 抢回前台。
+
+## Hypotheses
+
+### H1：后续轮次的 AppSwitcher 会话状态未正确重置
+
+- 支持：用户观察到开始几次正常、随后失效，符合跨轮状态残留或超时清理不完整的表象。
+- 冲突：现有日志多轮都有 `phase=start` 和 `command_release=true`，没有直接证明 `isActive` 卡住。
+- Test：为每轮生成 `operation_id`，记录开始、每种导航输入、结束前后 `is_active`、Command 释放和唯一终态，检查失效轮次是否完整进入新会话。
+
+### H2：CGEvent 已提交，但 macOS AppSwitcher 没有接受后续导航或确认
+
+- 支持：现有 `success=true` 是本地提交结果，不是 WindowServer 或 AppSwitcher 接受确认。
+- 冲突：部分轮次随后观察到前台 Bundle ID 变化，说明至少某些提交产生了系统状态变化。
+- Test：关联每轮 Tab、左右、触摸步数与确认方式，并在确认后分阶段观察前台变化和目标可见性。
+
+### H3：微信成为 frontmost，但没有用户可见的普通窗口
+
+- 支持：现场明确“微信 App 没有打开”，而日志只记录 `selected=com.tencent.xinWeChat`；微信进程此前已长期存在。
+- 冲突：`frontmostApplication` 通常意味着应用被激活，但不能保证有 on-screen 普通窗口。
+- Test：确认后只用公开 API 记录目标进程 `isActive/isHidden/isTerminated/activationPolicy`，并按 PID、layer 0、正面积统计全部普通窗口与屏幕上普通窗口，不读取窗口标题或内容。
+
+### H4：目标短暂成为 frontmost，随后被其他 App 抢回
+
+- 支持：当前只有一次延迟探针，可能错过快速切换过程。
+- 冲突：现场缺少分阶段时间序列，尚无直接证据。
+- Test：在确认后的 0/150/500/1000 ms 做有限探针，记录每阶段 frontmost Bundle ID 和目标窗口可见性，避免高频常驻轮询。
+
+## Experiment
+
+- 使用独立 Swift 单次实验读取当前前台 App 的公开 `NSRunningApplication` 状态，并用 `CGWindowListCopyWindowInfo` 按 PID、layer 0 统计普通窗口与屏幕上窗口；不读取或输出窗口标题、路径和内容。
+- 当前 Codex 前台样本成功得到 `active=true hidden=false terminated=false activation_policy=0 ordinary_window_count=7 onscreen_window_count=1`，证明所需字段在当前 macOS/会话环境可采集。
+- 该实验只确认日志可观测性，不复现苹果遥控器问题，也不支持任何根因结论。
+
+## Conclusion
+
+- 当前证据不足以确认 H1–H4 中哪一个是根因。本轮只补充可关联、低频、脱敏的诊断日志，不修改 AppSwitcher 导航、确认或 App 激活行为。
+
+## Validation
+
+- 社区构建执行 `swift test --disable-keychain`：506 项、40 个 suite 全部通过。
+- 指定私有 Siri Remote Package 执行完整集成 `swift test --disable-keychain`：543 项、44 个 suite 全部通过，包括 Siri Remote 宿主接线测试。
+- 自动化覆盖公开窗口过滤、用户可见判定、四阶段探针配置、关联字段和禁止读取 `kCGWindowName`；没有执行真实遥控器与系统 Cmd-Tab 用户旅程，因此不能把根因标记为已确认。
+
+---
+
 # Onboarding iPhone / Web 分支门禁调查
 
 ## Observations
@@ -635,3 +689,53 @@ Siri Remote 新页面只完成了展示层映射，运行时仍把播放/静音�
 - 本地 App 构建和 `verify-app.sh` 通过；1020×772 生产窗口截图确认右键位于右列、卡片中心距收紧且当前可见区域无重叠。
 - 12 个可配置实体键的单击、双击、长按共 36 个入口已逐个打开并关闭编辑器，0 个失败。
 - 真实 A2854 的最终 CGEvent 类型、系统原生副作用和物理活动描边仍需真机按键验收；软件测试不能替代该边界。
+
+## 2026-09-07 组合动作重录快捷键串改
+
+### Observations
+
+- 用户场景：Routine A 的第 2 步为 `Ctrl+A`，Routine B 的第 2 步为 `Ctrl+B`；在重录 Routine A 第 2 步后，Routine B 第 2 步也被覆盖。
+- 公开宿主仅通过 `MacroFeatureIntegration` 调用私有 `SayAllMacroRemoteMic` 模块；组合动作编辑器位于 `sayall-private-platform/packages/macos-button-profiles`。
+- 私有编辑器录入快捷键时使用现有 `step.parameters.shortcutProfileKey` 作为保存 ID；该 ID 相同会由本机快捷键 Profile Store 原地替换记录。
+- 私有 `duplicateMacro` 只为复制步骤生成新的 `stepID`，没有为 `shortcutProfileKey` 生成新的所有权，因此复制后的动作步骤可与源动作共享同一个快捷键 Profile。
+- 现有测试只验证复制后的 `stepID` 不同，没有验证复制后快捷键 Profile 独立；当前没有覆盖“两个 Routine 分别重录”的测试或编辑日志。
+
+### Hypotheses
+
+#### H1：复制动作保留共享 `shortcutProfileKey`，重录按共享 ID 覆盖（ROOT HYPOTHESIS）
+
+- Supports：复制逻辑保留 `MacroParameters`；重录逻辑优先使用旧 `shortcutProfileKey`；Profile Store 对相同 ID 是替换语义。
+- Conflicts：尚未用最小运行实验确认两个 Routine 的最终值是否同时变化。
+- Test：按 UI 顺序创建 Ctrl+A、复制 Routine、再用复制步骤的同一 Profile ID 保存 Ctrl+B，检查源动作和副本是否都解析为 Ctrl+B。
+
+#### H2：SwiftUI `ForEach` 使用索引更新错误步骤
+
+- Supports：编辑器通过 `draft?.steps[index]` 修改步骤，异步录入完成后仍使用捕获的 `index`。
+- Conflicts：`ForEach` 的稳定 ID 是 `stepID`，且用户复现跨 Routine 而非同一 Routine 内移动步骤。
+- Test：不复制动作，创建两个独立步骤并重录第一个；若第二个不变，则索引不是跨 Routine 串改原因。
+
+#### H3：宏保存或“更新到最新版本”把相同内容广播到其他 Routine
+
+- Supports：`saveDraft` 会把同一宏的绑定更新到新版本。
+- Conflicts：Routine A/B 具有不同 `macroID`；绑定更新只按 `macroID` 过滤，不能解释另一 Routine 的步骤参数变化。
+- Test：在两个不同 `macroID` 的动作中使用不同 Profile ID，分别保存版本并检查另一动作的定义与 Profile 是否变化。
+
+### Experiments
+
+- 最小复制测试临时断言副本快捷键 Profile 独立性，旧实现失败并显示源与副本都为 `shortcut.shared`；实验断言随后撤回。
+- 当前事实源回归创建两个不同 `macroID` 的 Routine，共享 Ctrl+A Profile，重录其中一个为 Ctrl+B；修复后生成新 Profile ID，原 Profile 仍为 Ctrl+A，另一个 Routine 仍引用原 Profile。
+
+### Root Cause
+
+组合动作重录沿用已有 `shortcutProfileKey` 并原地更新全局 Profile；共享该 ID 的其他 Routine 因此一起显示和执行新快捷键。
+
+### Fix
+
+`sayall-private-platform/packages/macos-button-profiles` 的 `RemoteMicMacroController.saveShortcut` 现在对已存在的 Profile ID 采用 copy-on-write，自动生成新的 `shortcut.*` ID；页面只将新 ID 写回当前步骤，显式复用旧 Profile 的其他 Routine 不变。
+
+### Validation
+
+- 私有包定向回归：`swift test --disable-keychain --filter rerecordingSharedShortcutUsesCopyOnWriteAndKeepsOtherRoutineUnchanged` 通过。
+- 私有包全量 `swift test --disable-keychain`：51 项 XCTest + 86 项 Swift Testing，通过。
+- 宿主注入 `swift test --disable-keychain`：492 项、43 个 suite，通过。
+- 真实遥控器/第三方 App 流程仍需人工验收；未完成部分不表述为真机验收。

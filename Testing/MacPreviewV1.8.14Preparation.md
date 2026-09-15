@@ -33,10 +33,10 @@
 
 ## 自动化验证计划
 
-- `swift test --filter 'RemoteButtonsTests|LocalizationTests'`
-- `swift test --filter OnboardingFlowTests`
-- `swift test --filter BuildSigningTests`
-- `swift test`
+- `swift test --disable-keychain --filter 'RemoteButtonsTests|LocalizationTests'`
+- `swift test --disable-keychain --filter OnboardingFlowTests`
+- `swift test --disable-keychain --filter BuildSigningTests`
+- `swift test --disable-keychain`
 - `scripts/test.sh`
 - Apple Silicon 与 Intel Release 编译（只编译，不执行安装打包）
 - `zsh -n` 校验全部受影响安装脚本

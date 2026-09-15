@@ -2,7 +2,7 @@
 
 ## 适用版本或分支
 
-- 分支：`codex/fix-miremotev-audio-stale`
+- 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/fix-miremotev-audio-stale` 只作为历史审计来源
 - 平台：macOS 13 Intel 与 macOS 14+ Apple Silicon
 - 音频设备：`MiRemoteV 2ch`
 - 语音来源：RC001/RC003、iPhone、Apple Watch、Web
@@ -24,6 +24,23 @@
 预期：无需主动 `MIC_OPEN`，`STREAM_START → AUDIO → STREAM_STOP` 每次都可用；没有 `AUDIO HEALTH stale` 或非预期重绑。
 
 失败判定：任一次无声、首字或尾音丢失、缓冲持续不排空、出现 enqueue failure，或需要手动重新选择设备。
+
+## 用例 1A：重启后音频选择丢失时的历史选择恢复
+
+1. 在无线麦SayAll.app中明确选择 `MiRemoteV 2ch`，确认至少完成过一次音频配置或首次设置。
+2. 退出并重新启动 App；在启动后的前 10 秒内记录 `AUDIO DEVICES startup`、`AUDIO SELECTION RECOVERY` 和 `AUDIO REBIND` 日志。
+3. 不进入设置页重新选择设备，直接执行一次短语音并确认文字完整上屏。
+4. 如需复现旧问题，可在测试偏好域中将当前选择置空，但保留历史选择；不要在真实用户偏好域中修改其他设置。
+
+预期：
+
+- 当前选择仍存在时，继续使用当前选择，不产生恢复候选日志。
+- 当前选择为空且历史 `MiRemoteV 2ch` 仍被枚举到时，出现 `source=remembered_selection`，随后出现 `phase=completed result=restored`；语音无需手动重选即可工作。
+- 没有历史 UID 但只有一个受支持虚拟设备时，出现 `source=unique_historical_candidate` 并成功恢复。
+- 同时枚举 `MiRemoteV 2ch` 与 `BlackHole 2ch` 时不自动猜测，出现 `phase=skipped ... reason=multiple_supported_candidates`。
+- 历史设备已不存在时不切换到其他设备，出现 `phase=skipped ... reason=remembered_device_unavailable`。
+
+失败判定：启动后仍反复出现 `audio.output.none_selected`，恢复候选配置失败却没有 `phase=failed result=not_restored`，或必须重新进入设置页选择设备才能恢复。
 
 ## 用例 2：播放器/路由异常后的自动恢复
 

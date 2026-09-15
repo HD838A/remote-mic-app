@@ -2,7 +2,7 @@
 
 ## 适用版本或分支
 
-- 分支：`codex/fix-window-background-drag`
+- 版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/fix-window-background-drag` 仅用于历史审计
 - 平台：macOS 14 及以上
 - 设备：RC001、RC003；双遥控器用例需两只已登记设备
 - 虚拟设备：`MiRemoteV 2ch`

@@ -76,6 +76,92 @@ struct UpdateInformationTests {
             == "https://download.sayall.app/mac/channels/preview/appcast-intel.xml")
     }
 
+    @Test func previewChecksStillSelectANewerStableRelease() throws {
+        let stable = UpdateFeedResolver.ResolvedFeed(
+            url: try #require(URL(string: "https://download.sayall.app/mac/channels/stable/appcast.xml")),
+            version: "1.9.21",
+            isPreRelease: false
+        )
+        let preview = UpdateFeedResolver.ResolvedFeed(
+            url: try #require(URL(string: "https://download.sayall.app/mac/channels/preview/appcast.xml")),
+            version: "1.9.20",
+            isPreRelease: true
+        )
+
+        #expect(UpdateFeedResolver.preferredFeed(stable: stable, preview: preview) == stable)
+    }
+
+    @Test func previewChecksSelectANewerPreviewReleaseAndTolerateOneMissingChannel() throws {
+        let stable = UpdateFeedResolver.ResolvedFeed(
+            url: try #require(URL(string: "https://download.sayall.app/mac/channels/stable/appcast.xml")),
+            version: "1.9.20",
+            isPreRelease: false
+        )
+        let preview = UpdateFeedResolver.ResolvedFeed(
+            url: try #require(URL(string: "https://download.sayall.app/mac/channels/preview/appcast.xml")),
+            version: "1.9.22",
+            isPreRelease: true
+        )
+
+        #expect(UpdateFeedResolver.preferredFeed(stable: stable, preview: preview) == preview)
+        #expect(UpdateFeedResolver.preferredFeed(stable: stable, preview: nil) == stable)
+        #expect(UpdateFeedResolver.preferredFeed(stable: nil, preview: preview) == preview)
+        #expect(UpdateFeedResolver.preferredFeed(stable: nil, preview: nil) == nil)
+    }
+
+    @Test func previewFeedResolutionComparesBothChannels() async throws {
+        let stableURL = try #require(URL(
+            string: "https://download.sayall.app/mac/channels/stable/appcast.xml"
+        ))
+        let previewURL = try #require(URL(
+            string: "https://download.sayall.app/mac/channels/preview/appcast.xml"
+        ))
+        let stableXML = """
+        <rss><channel><item><sparkle:shortVersionString>1.9.21</sparkle:shortVersionString></item></channel></rss>
+        """
+        let previewXML = """
+        <rss><channel><item><sparkle:shortVersionString>1.9.20</sparkle:shortVersionString></item></channel></rss>
+        """
+
+        let resolution = await UpdateFeedResolver.resolvePreviewFeed(
+            stableURL: stableURL,
+            previewURL: previewURL
+        ) { url in
+            Data((url == stableURL ? stableXML : previewXML).utf8)
+        }
+
+        #expect(resolution.stable?.version == "1.9.21")
+        #expect(resolution.preview?.version == "1.9.20")
+        #expect(resolution.selected == resolution.stable)
+    }
+
+    @Test func feedResolutionUsesTheHighestVersionInEachAppcast() async throws {
+        let stableURL = try #require(URL(
+            string: "https://download.sayall.app/mac/channels/stable/appcast.xml"
+        ))
+        let previewURL = try #require(URL(
+            string: "https://download.sayall.app/mac/channels/preview/appcast.xml"
+        ))
+        let stableXML = """
+        <rss><channel>
+        <item><sparkle:shortVersionString>1.9.19</sparkle:shortVersionString></item>
+        <item><sparkle:shortVersionString>1.9.21</sparkle:shortVersionString></item>
+        </channel></rss>
+        """
+
+        let resolution = await UpdateFeedResolver.resolvePreviewFeed(
+            stableURL: stableURL,
+            previewURL: previewURL
+        ) { url in
+            guard url == stableURL else { throw UpdateFeedResolutionError.invalidResponse }
+            return Data(stableXML.utf8)
+        }
+
+        #expect(resolution.stable?.version == "1.9.21")
+        #expect(resolution.preview == nil)
+        #expect(resolution.selected == resolution.stable)
+    }
+
     @Test func cloudflareChannelSelectionRejectsUnexpectedStableFeedURLs() {
         let invalidFeeds = [
             "http://download.sayall.app/mac/channels/stable/appcast.xml",

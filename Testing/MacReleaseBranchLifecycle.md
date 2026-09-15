@@ -73,9 +73,9 @@
 2. 运行 promote-preview-release.sh。
 3. 比较晋升前后的全部资产名称、大小和 digest。
 
-预期：普通候选 Commit 已进入 `origin/main`；Hotfix 候选仍是对应远端 Hotfix HEAD 且稳定基线一致。通过 GitHub API 核对 provenance 对应的 main-controlled Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变，并等待 Cloudflare stable 两架构通道逐字节切换到该 Tag。
+预期：当前 schema 5 普通候选 Commit 已进入 `origin/main`，Hotfix 候选仍是对应远端 Hotfix HEAD 且稳定基线一致；历史 schema 4 候选包含在冻结的 `origin/release-main`。通过 GitHub API 核对 provenance 对应的 staging Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变，并等待 Cloudflare stable 两架构通道逐字节切换到该 Tag。
 
-失败判定：选择 Draft/不存在的 Release、来源为 `release-main`/功能分支、Hotfix 基线或远端 HEAD 不匹配、触发构建/签名/上传或替换资产。
+失败判定：选择 Draft/不存在的 Release、来源为未被支持 provenance schema 绑定的分支、Hotfix 基线或远端 HEAD 不匹配、历史候选不再包含于冻结 `release-main`、触发构建/签名/上传或替换资产。
 
 ## 用例 8：同 SHA 故障恢复
 
@@ -91,7 +91,7 @@
 - Private Draft 只写入 GetSayAll/SayAll，不污染公开源码仓库。
 - 两架构资产和固定 Tag URL 完整，13 项 payload 加 provenance 的摘要一致。
 - 所有调用 gh 的 workflow step 都显式设置 GH_TOKEN。
-- `release-main` push 不触发 macOS CI，所有发布 Workflow 都拒绝从该分支 dispatch。
+- `release-main` push 不触发 macOS CI，所有新的发布 Workflow 都拒绝从该分支 dispatch；历史候选正式化必须从精确 `main` 控制面触发，并通过兼容晋升门禁。
 
 ## 日志与边界
 

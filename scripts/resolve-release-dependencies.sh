@@ -14,9 +14,9 @@ command -v jq >/dev/null 2>&1 || { print -u2 "Missing required command: jq"; exi
 
 jq -e '
   .schemaVersion == 1 and
-  (.dependencies | keys | sort) == ["sayAllAI", "sayAllMacRemote", "sayAllMacroPlatform"] and
+  (.dependencies | keys | sort) == ["sayAllAI", "sayAllMacRemote", "sayAllPrivatePlatform"] and
   .dependencies.sayAllAI.repository == "GetSayAll/sayall-ai" and
-  .dependencies.sayAllMacroPlatform.repository == "GetSayAll/sayall-macro-platform" and
+  .dependencies.sayAllPrivatePlatform.repository == "GetSayAll/sayall-private-platform" and
   .dependencies.sayAllMacRemote.repository == "GetSayAll/sayall-mac-remote" and
   ([.dependencies[] | .commit] | all(.[]; type == "string" and test("^[0-9a-f]{40}$")))
 ' "$MANIFEST" >/dev/null || {
@@ -33,8 +33,8 @@ case "$MODE" in
     {
       print "sayall_ai_repository=$(jq -r '.dependencies.sayAllAI.repository' "$MANIFEST")"
       print "sayall_ai_commit=$(jq -r '.dependencies.sayAllAI.commit' "$MANIFEST")"
-      print "sayall_macro_platform_repository=$(jq -r '.dependencies.sayAllMacroPlatform.repository' "$MANIFEST")"
-      print "sayall_macro_platform_commit=$(jq -r '.dependencies.sayAllMacroPlatform.commit' "$MANIFEST")"
+      print "sayall_private_platform_repository=$(jq -r '.dependencies.sayAllPrivatePlatform.repository' "$MANIFEST")"
+      print "sayall_private_platform_commit=$(jq -r '.dependencies.sayAllPrivatePlatform.commit' "$MANIFEST")"
       print "sayall_mac_remote_repository=$(jq -r '.dependencies.sayAllMacRemote.repository' "$MANIFEST")"
       print "sayall_mac_remote_commit=$(jq -r '.dependencies.sayAllMacRemote.commit' "$MANIFEST")"
     } >> "$GITHUB_OUTPUT"

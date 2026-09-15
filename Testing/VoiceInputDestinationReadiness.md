@@ -2,7 +2,7 @@
 
 ## 适用版本
 
-- 开发分支：`codex/system-voice-input-readiness`
+- 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原开发分支 `codex/system-voice-input-readiness` 只作为历史审计来源
 - 计划预览版：`1.8.9`
 - 适用平台：macOS 14 及以上
 

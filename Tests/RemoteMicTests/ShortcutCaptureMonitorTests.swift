@@ -5,6 +5,94 @@ import Testing
 
 @Suite("Shortcut capture monitor")
 struct ShortcutCaptureMonitorTests {
+    @Test func eventTapListensForMainKeysAndModifierChanges() {
+        let keyDownMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        let flagsChangedMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
+
+        #expect(ShortcutCaptureMonitor.captureEventMask & keyDownMask != 0)
+        #expect(ShortcutCaptureMonitor.captureEventMask & flagsChangedMask != 0)
+    }
+
+    @Test func capturesAndSuppressesASingleKeyWithoutModifiers() throws {
+        var captured: [CustomKeyboardShortcut] = []
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { captured.append($0) },
+            dispatchCallback: { $0() }
+        )
+        let space = try #require(keyEvent(keyCode: 49, flags: []))
+
+        #expect(monitor.handle(type: .keyDown, event: space))
+        #expect(captured == [
+            CustomKeyboardShortcut(
+                keyCode: 49,
+                modifierFlags: [],
+                keyLabel: "Space"
+            ),
+        ])
+    }
+
+    @Test func capturesEveryStandaloneModifierOnRelease() throws {
+        for modifier in StandaloneKeyboardModifier.allCases {
+            var captured: [CustomKeyboardShortcut] = []
+            let monitor = ShortcutCaptureMonitor(
+                onCapture: { captured.append($0) },
+                dispatchCallback: { $0() }
+            )
+            let down = try #require(keyEvent(
+                keyCode: CGKeyCode(modifier.keyCode),
+                flags: modifier.shortcut.cgEventFlags
+            ))
+            let up = try #require(keyEvent(
+                keyCode: CGKeyCode(modifier.keyCode),
+                flags: []
+            ))
+
+            #expect(monitor.handle(type: .flagsChanged, event: down))
+            #expect(captured.isEmpty)
+            #expect(monitor.handle(type: .flagsChanged, event: up))
+            #expect(captured == [modifier.shortcut])
+        }
+    }
+
+    @Test func modifierFollowedByMainKeyCapturesTheCombination() throws {
+        var captured: [CustomKeyboardShortcut] = []
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { captured.append($0) },
+            dispatchCallback: { $0() }
+        )
+        let commandDown = try #require(keyEvent(keyCode: 55, flags: .maskCommand))
+        let commandSpace = try #require(keyEvent(keyCode: 49, flags: .maskCommand))
+        let commandUp = try #require(keyEvent(keyCode: 55, flags: []))
+
+        #expect(monitor.handle(type: .flagsChanged, event: commandDown))
+        #expect(captured.isEmpty)
+        #expect(monitor.handle(type: .keyDown, event: commandSpace))
+        #expect(captured == [KeyboardShortcutPreset.spotlight.shortcut])
+        #expect(monitor.handle(type: .flagsChanged, event: commandUp))
+        #expect(captured.count == 1)
+    }
+
+    @Test func multipleModifiersWithoutAMainKeyDoNotBecomeAStandaloneShortcut() throws {
+        var captured: [CustomKeyboardShortcut] = []
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { captured.append($0) },
+            dispatchCallback: { $0() }
+        )
+        let commandDown = try #require(keyEvent(keyCode: 55, flags: .maskCommand))
+        let shiftDown = try #require(keyEvent(
+            keyCode: 56,
+            flags: [.maskCommand, .maskShift]
+        ))
+        let shiftUp = try #require(keyEvent(keyCode: 56, flags: .maskCommand))
+        let commandUp = try #require(keyEvent(keyCode: 55, flags: []))
+
+        #expect(monitor.handle(type: .flagsChanged, event: commandDown))
+        #expect(monitor.handle(type: .flagsChanged, event: shiftDown))
+        #expect(monitor.handle(type: .flagsChanged, event: shiftUp))
+        #expect(monitor.handle(type: .flagsChanged, event: commandUp))
+        #expect(captured.isEmpty)
+    }
+
     @Test func capturesAndSuppressesAReservedCommandShortcutOnce() throws {
         var captured: [CustomKeyboardShortcut] = []
         let monitor = ShortcutCaptureMonitor(

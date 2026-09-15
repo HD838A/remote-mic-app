@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import IOKit.hidsystem
 import Testing
 @testable import RemoteMic
 
@@ -43,11 +44,53 @@ struct VoiceKeyModeTests {
             #expect(posted.count == 2)
             #expect(posted[0].0 == mode.keyCode)
             #expect(posted[0].1)
-            #expect(posted[0].2 == .maskCommand)
+            let expectedDeviceMask = CGEventFlags(rawValue: UInt64(
+                mode == .leftCommand ? NX_DEVICELCMDKEYMASK : NX_DEVICERCMDKEYMASK
+            ))
+            let oppositeDeviceMask = CGEventFlags(rawValue: UInt64(
+                mode == .leftCommand ? NX_DEVICERCMDKEYMASK : NX_DEVICELCMDKEYMASK
+            ))
+            #expect(posted[0].2.contains(.maskCommand))
+            #expect(posted[0].2.contains(expectedDeviceMask))
+            #expect(!posted[0].2.contains(oppositeDeviceMask))
             #expect(posted[1].0 == mode.keyCode)
             #expect(!posted[1].1)
             #expect(posted[1].2.isEmpty)
         }
+    }
+
+    @Test func appleRemoteCommandVoiceJourneyPostsOneSideSpecificDownAndMatchingUp() {
+        var latch = VoiceFunctionKeyLatch()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        for streaming in [true, false] {
+            guard let transition = latch.transition(streaming: streaming, owner: .appleRemote) else {
+                Issue.record("Apple Remote voice journey must emit both press and release")
+                continue
+            }
+            let isPressed = transition == .press
+            #expect(KeyboardInjector.setVoiceKeyPressed(
+                .rightCommand,
+                isPressed: isPressed,
+                accessibilityTrusted: { true },
+                keyStatePoster: poster
+            ))
+        }
+
+        let rightDeviceMask = CGEventFlags(rawValue: UInt64(NX_DEVICERCMDKEYMASK))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == VoiceKeyMode.rightCommand.keyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2.contains(.maskCommand))
+        #expect(posted[0].2.contains(rightDeviceMask))
+        #expect(posted[1].0 == VoiceKeyMode.rightCommand.keyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2.isEmpty)
+        #expect(!latch.isHeld)
     }
 
     @Test func commandModeRequiresAccessibilityButFnDoesNot() {
@@ -157,6 +200,16 @@ struct VoiceKeyModeTests {
     }
 
     @Test func inputMonitoringLossPreservesAnActiveExplicitCommandSession() throws {
+        #expect(VoiceKeySessionPreservationPolicy.shouldPreserveInputSourceSession(
+            latchHeld: false,
+            heldMode: nil,
+            pendingMode: .rightCommand
+        ))
+        #expect(!VoiceKeySessionPreservationPolicy.shouldPreserveInputSourceSession(
+            latchHeld: false,
+            heldMode: nil,
+            pendingMode: .function
+        ))
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -174,7 +227,7 @@ struct VoiceKeyModeTests {
 
         #expect(applySource.contains("preservingExplicitVoiceSession:"))
         #expect(applySource.contains(
-            "voiceKeyLatch.isHeld && heldVoiceKeyMode?.requiresAccessibility == true"
+            "VoiceKeySessionPreservationPolicy"
         ))
     }
 
@@ -391,6 +444,60 @@ struct VoiceKeyModeTests {
         #expect(prepared == 1)
         #expect(restored == 1)
         #expect(!monitor.functionKeyIsPressedForDiagnostics)
+    }
+
+    @Test func commandVoiceConfirmsInputSourceBeforeInjectingTrigger() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let prepare = try #require(source.range(of: "preferredInputSourceMonitor.beginVoiceSession()"))
+        let inject = try #require(source.range(of: "KeyboardInjector.setVoiceKeyPressed", range: prepare.upperBound..<source.endIndex))
+        #expect(prepare.lowerBound < inject.lowerBound)
+        let monitor = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/PreferredInputSourceMonitor.swift"),
+            encoding: .utf8
+        )
+        #expect(monitor.contains("waitForInputSourceActivation("))
+    }
+
+    @Test func commandVoicePreparationIsReleasedWhenKeyDownInjectionFails() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let updateStart = try #require(source.range(of: "private func updateVoiceKeyState("))
+        let updateEnd = try #require(source.range(
+            of: "private func releaseVoiceKeyIfNeeded(",
+            range: updateStart.upperBound..<source.endIndex
+        ))
+        let updateSource = source[updateStart.lowerBound..<updateEnd.lowerBound]
+        let injectionStart = try #require(updateSource.range(
+            of: "guard KeyboardInjector.setVoiceKeyPressed"
+        ))
+        let injectionEnd = try #require(updateSource.range(
+            of: "if mode != .function, !shouldHold",
+            range: injectionStart.upperBound..<updateSource.endIndex
+        ))
+        let injectionFailureSource = updateSource[
+            injectionStart.lowerBound..<injectionEnd.lowerBound
+        ]
+
+        #expect(injectionFailureSource.contains(
+            "preferredInputSourceMonitor.endVoiceSession()"
+        ))
+        let pendingCancellation = try #require(updateSource.range(
+            of: "heldVoiceKeyMode == nil, pendingVoiceKeyMode != nil"
+        ))
+        #expect(pendingCancellation.lowerBound < injectionStart.lowerBound)
     }
 
     @Test func configurationDefaultsLegacyAndRoundTripsCommandMode() throws {

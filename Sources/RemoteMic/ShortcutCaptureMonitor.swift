@@ -24,6 +24,8 @@ enum ShortcutCaptureStartFailure: Error, Equatable {
 
 final class ShortcutCaptureMonitor {
     typealias CallbackDispatcher = (@escaping () -> Void) -> Void
+    static let captureEventMask = CGEventMask(1 << CGEventType.keyDown.rawValue) |
+        CGEventMask(1 << CGEventType.flagsChanged.rawValue)
 
     private let onCapture: (CustomKeyboardShortcut) -> Void
     private let accessibilityTrusted: () -> Bool
@@ -32,6 +34,9 @@ final class ShortcutCaptureMonitor {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var didCapture = false
+    private var pressedModifierKeyCodes: Set<UInt16> = []
+    private var standaloneModifierCandidate: StandaloneKeyboardModifier?
+    private var modifierChordDetected = false
 
     init(
         onCapture: @escaping (CustomKeyboardShortcut) -> Void,
@@ -53,15 +58,17 @@ final class ShortcutCaptureMonitor {
 
         lock.lock()
         didCapture = false
+        pressedModifierKeyCodes.removeAll()
+        standaloneModifierCandidate = nil
+        modifierChordDetected = false
         lock.unlock()
 
         let context = Unmanaged.passUnretained(self).toOpaque()
-        let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
         guard let eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: eventMask,
+            eventsOfInterest: Self.captureEventMask,
             callback: shortcutCaptureEventTapCallback,
             userInfo: context
         ) else {
@@ -100,9 +107,13 @@ final class ShortcutCaptureMonitor {
             }
             return false
         }
-        guard type == .keyDown else { return false }
+        guard type == .keyDown || type == .flagsChanged else { return false }
         guard event.getIntegerValueField(.eventSourceUserData) != KeyboardInjector.syntheticEventMarker else {
             return false
+        }
+
+        if type == .flagsChanged {
+            return handleModifierFlagsChanged(event)
         }
 
         lock.lock()
@@ -119,6 +130,9 @@ final class ShortcutCaptureMonitor {
             return false
         }
         didCapture = true
+        pressedModifierKeyCodes.removeAll()
+        standaloneModifierCandidate = nil
+        modifierChordDetected = false
         lock.unlock()
 
         let shortcut = CustomKeyboardShortcut(event: nsEvent)
@@ -126,6 +140,55 @@ final class ShortcutCaptureMonitor {
         dispatchCallback {
             capture(shortcut)
         }
+        return true
+    }
+
+    private func handleModifierFlagsChanged(_ event: CGEvent) -> Bool {
+        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+        guard let modifier = StandaloneKeyboardModifier.allCases.first(where: {
+            $0.keyCode == keyCode
+        }) else {
+            return false
+        }
+
+        lock.lock()
+        if didCapture {
+            lock.unlock()
+            return true
+        }
+
+        if pressedModifierKeyCodes.contains(keyCode) {
+            pressedModifierKeyCodes.remove(keyCode)
+            let shouldCapture = pressedModifierKeyCodes.isEmpty &&
+                !modifierChordDetected &&
+                standaloneModifierCandidate == modifier
+            if pressedModifierKeyCodes.isEmpty {
+                standaloneModifierCandidate = nil
+                modifierChordDetected = false
+            }
+            if shouldCapture {
+                didCapture = true
+            }
+            lock.unlock()
+
+            if shouldCapture {
+                let capture = onCapture
+                let shortcut = modifier.shortcut
+                dispatchCallback {
+                    capture(shortcut)
+                }
+            }
+            return true
+        }
+
+        pressedModifierKeyCodes.insert(keyCode)
+        if pressedModifierKeyCodes.count == 1 && !modifierChordDetected {
+            standaloneModifierCandidate = modifier
+        } else {
+            standaloneModifierCandidate = nil
+            modifierChordDetected = true
+        }
+        lock.unlock()
         return true
     }
 

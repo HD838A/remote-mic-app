@@ -23,7 +23,7 @@
 
 | 位置或用途 | 命名方式 | 示例 |
 | --- | --- | --- |
-| 仓库固定入口 | 使用生态约定或项目既有的大写名称 | `README.md`、`AGENTS.md`、`TODO.md`、`LICENSE.md` |
+| 仓库固定入口 | 使用生态约定或项目既有的大写名称 | `README.md`、`AGENTS.md`、`DOCUMENTATION.md`、`TODO.md`、`LICENSE.md` |
 | 根目录全仓规范、流程或技术参考 | `UPPER_SNAKE_CASE.md` | `BRANCH_MANAGEMENT.md`、`FILE_NAMING.md`、`LOGGING.md`、`RELEASING.md`、`TECHNICAL.md` |
 | 功能目录 | 小写 `kebab-case` | `feature/first-run-onboarding/`、`feature/local-transcript-history/` |
 | 功能目录入口 | 固定为 `README.md` | `feature/first-run-onboarding/README.md` |
@@ -51,6 +51,7 @@
 - 当前中文主文档使用基础文件名，例如 `README.md`、`TECHNICAL.md`。
 - 英文对应文件在扩展名前增加 `.en`，例如 `README.en.md`、`TECHNICAL.en.md`。
 - 同一组文档的目录、基础名称和用途必须一致，语言代码不能放在目录名或文件名开头。
+- 规范类文档以中文主文件为权威，英文文件只做同步翻译；修改中文规范的同一 PR 必须同步检查英文翻译，英文不得保留与中文或当前实现冲突的独立规则。
 - 新增其他语言前必须先确定仓库统一的语言代码和回退规则，不能在不同目录混用不同格式。
 
 ## 名称选择流程

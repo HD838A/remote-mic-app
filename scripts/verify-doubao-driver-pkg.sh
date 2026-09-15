@@ -108,7 +108,11 @@ case "$MODE" in
     /usr/bin/grep -Fq 'SiriRemoteComponent.pkg</pkg-ref>' "$DISTRIBUTION"
     /usr/bin/grep -Fq '<options customize="always"' "$DISTRIBUTION"
     /usr/bin/grep -Fq 'id="siri-remote"' "$DISTRIBUTION"
-    /usr/bin/grep -Fq 'start_selected="false"' "$DISTRIBUTION"
+    /usr/bin/grep -Fq 'function siriRemoteSupportWasPreviouslyInstalled()' "$DISTRIBUTION"
+    /usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote.plist' "$DISTRIBUTION"
+    /usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote.bom' "$DISTRIBUTION"
+    /usr/bin/grep -Fq '/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService' "$DISTRIBUTION"
+    /usr/bin/grep -Fq 'start_selected="siriRemoteSupportWasPreviouslyInstalled()"' "$DISTRIBUTION"
     case "$RELEASE_VARIANT" in
       apple-silicon)
         WRONG_ARCHITECTURE_KEY="wrong_architecture_apple_silicon"
@@ -147,6 +151,16 @@ case "$MODE" in
       /usr/sbin/installer -showChoicesXML -pkg "$PACKAGE" -target / \
         > "$INSTALLER_CHOICES" 2> "$INSTALLER_ERROR"
       /usr/bin/grep -Fq '<string>remote-mic</string>' "$INSTALLER_CHOICES"
+      EXPECTED_SIRI_REMOTE_SELECTION=0
+      if /usr/sbin/pkgutil --pkg-info com.hd838a.RemoteMic.siri-remote >/dev/null 2>&1 || \
+         [[ -e /Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService ]] || \
+         [[ -e /Library/LaunchDaemons/com.hd838a.SayAll.AppleRemoteHCIService.plist ]]; then
+        EXPECTED_SIRI_REMOTE_SELECTION=1
+      fi
+      test "$(/usr/bin/plutil -extract 0.childItems.1.choiceIdentifier raw -o - \
+        "$INSTALLER_CHOICES")" = "siri-remote"
+      test "$(/usr/bin/plutil -extract 0.childItems.1.choiceIsSelected raw -o - \
+        "$INSTALLER_CHOICES")" = "$EXPECTED_SIRI_REMOTE_SELECTION"
     else
       if /usr/sbin/installer -showChoicesXML -pkg "$PACKAGE" -target / \
           > "$INSTALLER_CHOICES" 2> "$INSTALLER_ERROR"; then
@@ -262,7 +276,16 @@ case "$MODE" in
     /usr/bin/grep -Fq 'if [[ "$CURRENT_ARCHITECTURE" != "$EXPECTED_ARCHITECTURE" ]]; then' \
       "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fqx 'if [[ "$DRIVER_CHANGED" -eq 1 ]]; then' "$SCRIPTS_DIR/postinstall"
-    /usr/bin/grep -Fqx '  /usr/bin/killall coreaudiod' "$SCRIPTS_DIR/postinstall"
+    # The audio-service restart must exist, and must be guarded so a missing or
+    # unresponsive coreaudiod cannot abort the installer after the driver was
+    # already written to disk.
+    /usr/bin/grep -Fq '/usr/bin/pgrep -qx coreaudiod' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'elif /usr/bin/killall coreaudiod; then' "$SCRIPTS_DIR/postinstall"
+    if /usr/bin/grep -Eq '^[[:space:]]*/usr/bin/killall coreaudiod[[:space:]]*$' \
+      "$SCRIPTS_DIR/postinstall"; then
+      print -u2 "postinstall must not call killall unguarded"
+      exit 1
+    fi
     /usr/bin/grep -Fq '/bin/launchctl asuser "$CONSOLE_UID"' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq '/usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"' "$SCRIPTS_DIR/postinstall"
     SIRI_PACKAGE_INFO="$SIRI_REMOTE_COMPONENT_PACKAGE/PackageInfo"
@@ -312,7 +335,12 @@ case "$MODE" in
       /usr/bin/plutil -convert xml1 -o - -- - | /usr/bin/grep -c '<string>')" = "1"
     HCI_MINIMUM_SYSTEM="$(/usr/bin/otool -l "$PAYLOAD_HCI_SERVICE" | \
       /usr/bin/awk '/LC_BUILD_VERSION/{seen=1; next} seen && /minos/{print $2; exit}')"
-    test "$HCI_MINIMUM_SYSTEM" = "$RELEASE_MIN_SYSTEM_VERSION"
+    autoload -Uz is-at-least
+    if [[ -z "$HCI_MINIMUM_SYSTEM" ]] || \
+       ! is-at-least "$HCI_MINIMUM_SYSTEM" "$RELEASE_MIN_SYSTEM_VERSION"; then
+      print -u2 "packaged Apple Remote HCI service requires a newer macOS than the app release floor"
+      exit 1
+    fi
     test "$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - \
       "$PAYLOAD_APP/Contents/Info.plist")" = "$RELEASE_MIN_SYSTEM_VERSION"
     test "$(/usr/bin/plutil -extract SUFeedURL raw -o - \
@@ -364,6 +392,15 @@ case "$MODE" in
       "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fq 'BlackHole and local settings were not changed.' \
       "$EXPANDED/Scripts/postinstall"
+    # Same guard as the installer: the audio-service restart after the driver
+    # was moved to Trash must never abort the uninstaller.
+    /usr/bin/grep -Fq '/usr/bin/pgrep -qx coreaudiod' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'elif /usr/bin/killall coreaudiod; then' "$EXPANDED/Scripts/postinstall"
+    if /usr/bin/grep -Eq '^[[:space:]]*/usr/bin/killall coreaudiod[[:space:]]*$' \
+      "$EXPANDED/Scripts/postinstall"; then
+      print -u2 "uninstall postinstall must not call killall unguarded"
+      exit 1
+    fi
     if /usr/bin/grep -Eq '(/bin/)?rm([[:space:]]|$)|unlink|find[[:space:]].*-delete' \
         "$EXPANDED/Scripts/postinstall"; then
       print -u2 "uninstaller must move recognized items to Trash instead of permanently deleting them"

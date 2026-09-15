@@ -4,6 +4,7 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
     case rc001
     case rc003
     case appleSiriRemoteA2854 = "apple_siri_remote_a2854"
+    case appleSiriRemoteA2540 = "apple_siri_remote_a2540"
     case unknown
 
     var id: String { rawValue }
@@ -18,8 +19,28 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
 #else
             return "remote.device.model.unknown"
 #endif
+        case .appleSiriRemoteA2540:
+#if SAYALL_SIRI_REMOTE_ENABLED
+            return "remote.device.model.apple_siri_remote_a2540"
+#else
+            return "remote.device.model.unknown"
+#endif
         case .unknown: return "remote.device.model.unknown"
         }
+    }
+
+    var stableHardwareModelID: String? {
+        switch self {
+        case .rc001: "xiaomi-remote-rc001"
+        case .rc003: "xiaomi-remote-2-pro"
+        case .appleSiriRemoteA2854: "apple-siri-remote-a2854"
+        case .appleSiriRemoteA2540: "apple-siri-remote-a2540"
+        case .unknown: nil
+        }
+    }
+
+    var isAppleSiriRemote: Bool {
+        self == .appleSiriRemoteA2854 || self == .appleSiriRemoteA2540
     }
 
     static func identified(by modelNumber: String) -> XiaomiRemoteModel? {

@@ -12,13 +12,13 @@
 ## 运行命令
 
 ```zsh
-swift test --filter VoiceInputDestinationCoordinatorTests
-swift test --filter CoreVoiceInputJourneyTests
-swift test --filter VoiceFnTapSessionControllerTests
+swift test --disable-keychain --filter VoiceInputDestinationCoordinatorTests
+swift test --disable-keychain --filter CoreVoiceInputJourneyTests
+swift test --disable-keychain --filter VoiceFnTapSessionControllerTests
 /Users/andy/Develop/Src/AISrc/hardware-simulation/scripts/test-remote-mic.sh <仓库路径>
-swift test
+swift test --disable-keychain
 ./scripts/test.sh
-swift build -c release
+swift build --disable-keychain -c release
 ./scripts/build-app.sh
 ./scripts/verify-app.sh "dist/SayAll.app"
 ```

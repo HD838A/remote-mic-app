@@ -65,36 +65,6 @@ extract_ref() {
   ' "$workflow"
 }
 
-extract_manifest_ref() {
-  /usr/bin/awk '
-    /url:[[:space:]]*"https:\/\/github.com\/GetSayAll\/sayall-mac-remote.git"/ {
-      found = 1
-      next
-    }
-    found && /revision:[[:space:]]*"/ {
-      sub(/^.*revision:[[:space:]]*"/, "")
-      sub(/".*$/, "")
-      print
-      exit
-    }
-  ' "$PACKAGE_MANIFEST"
-}
-
-extract_resolved_ref() {
-  /usr/bin/awk '
-    /"identity"[[:space:]]*:[[:space:]]*"sayall-mac-remote"/ {
-      found = 1
-      next
-    }
-    found && /"revision"[[:space:]]*:/ {
-      sub(/^.*"revision"[[:space:]]*:[[:space:]]*"/, "")
-      sub(/".*$/, "")
-      print
-      exit
-    }
-  ' "$PACKAGE_RESOLVED"
-}
-
 for workflow in "${WORKFLOWS[@]}"; do
   test -f "$workflow"
 done
@@ -108,7 +78,7 @@ test -f "$DEPENDENCY_MANIFEST"
 test -x "$ROOT/scripts/resolve-release-dependencies.sh"
 dependencies_json="$(REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/resolve-release-dependencies.sh" json)"
 sayall_ai_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllAI.commit')"
-sayall_macro_platform_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllMacroPlatform.commit')"
+sayall_private_platform_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllPrivatePlatform.commit')"
 sayall_mac_remote_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllMacRemote.commit')"
 
 for workflow in "${WORKFLOWS[@]}"; do
@@ -116,7 +86,7 @@ for workflow in "${WORKFLOWS[@]}"; do
     print -u2 "${workflow:t} must resolve the versioned release dependency manifest"
     exit 1
   }
-  for commit in "$sayall_ai_commit" "$sayall_macro_platform_commit" "$sayall_mac_remote_commit"; do
+  for commit in "$sayall_ai_commit" "$sayall_private_platform_commit" "$sayall_mac_remote_commit"; do
     if grep -Fq "$commit" "$workflow"; then
       print -u2 "${workflow:t} must not duplicate a product dependency commit outside the versioned manifest"
       exit 1
@@ -125,21 +95,23 @@ for workflow in "${WORKFLOWS[@]}"; do
 done
 
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_macro_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 
-manifest_ref="$(extract_manifest_ref)"
-resolved_ref="$(extract_resolved_ref)"
-if [[ "$manifest_ref" != "$sayall_mac_remote_commit" || "$resolved_ref" != "$sayall_mac_remote_commit" ]]; then
-  print -u2 "SayAllMacRemote commit differs across the versioned manifest, Package.swift, and Package.resolved"
+grep -Fq 'SAYALL_MAC_REMOTE_PACKAGE_PATH' "$PACKAGE_MANIFEST"
+grep -Fq 'SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote' \
+  "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+if grep -Fq 'https://github.com/GetSayAll/sayall-mac-remote.git' "$PACKAGE_MANIFEST" || \
+   grep -Fq '"identity" : "sayall-mac-remote"' "$PACKAGE_RESOLVED"; then
+  print -u2 "public SwiftPM metadata must not resolve the private SayAllMacRemote repository"
   exit 1
 fi
 
 print "SayAllAI: $sayall_ai_commit"
-print "SayAllMacroPlatform: $sayall_macro_platform_commit"
+print "SayAllPrivatePlatform: $sayall_private_platform_commit"
 print "SayAllMacRemote: $sayall_mac_remote_commit"
 
 for credential_repository in "${CREDENTIAL_REPOSITORIES[@]}"; do

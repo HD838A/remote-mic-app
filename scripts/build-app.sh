@@ -10,14 +10,19 @@ DISPLAY_NAME="SayAll"
 OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 APP_DIR="$OUTPUT_DIR/$DISPLAY_NAME.app"
 SIGNING_IDENTITY="${CODE_SIGN_IDENTITY:--}"
+REQUIRE_SIRI_REMOTE_SIGNING="${REQUIRE_SIRI_REMOTE_SIGNING:-1}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_WEB_REMOTE_CONFIGURATION="${REQUIRE_WEB_REMOTE_CONFIGURATION:-0}"
 REQUIRE_EARLY_ACCESS_CONFIGURATION="${REQUIRE_EARLY_ACCESS_CONFIGURATION:-0}"
 REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
-REQUIRE_SAYALL_MACRO_PLATFORM="${REQUIRE_SAYALL_MACRO_PLATFORM:-0}"
+REQUIRE_SAYALL_COMBINATION_ACTIONS="${REQUIRE_SAYALL_COMBINATION_ACTIONS:-0}"
+REQUIRE_SAYALL_BUTTON_PROFILES="${REQUIRE_SAYALL_BUTTON_PROFILES:-0}"
+REQUIRE_SAYALL_MAC_REMOTE_PACKAGE="${REQUIRE_SAYALL_MAC_REMOTE_PACKAGE:-0}"
 REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE:-0}"
 SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
-SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:-}"
+SAYALL_COMBINATION_ACTIONS_PATH="${SAYALL_COMBINATION_ACTIONS_PATH:-}"
+SAYALL_BUTTON_PROFILES_PACKAGE_PATH="${SAYALL_BUTTON_PROFILES_PACKAGE_PATH:-}"
+SAYALL_MAC_REMOTE_PACKAGE_PATH="${SAYALL_MAC_REMOTE_PACKAGE_PATH:-}"
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
 SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
@@ -36,6 +41,10 @@ case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
   *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
 esac
+case "$REQUIRE_SIRI_REMOTE_SIGNING" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SIRI_REMOTE_SIGNING must be 0 or 1"; exit 1 ;;
+esac
 case "$REQUIRE_WEB_REMOTE_CONFIGURATION" in
   0|1) ;;
   *) print -u2 "REQUIRE_WEB_REMOTE_CONFIGURATION must be 0 or 1"; exit 1 ;;
@@ -48,9 +57,17 @@ case "$REQUIRE_SAYALL_AI_PACKAGE" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_AI_PACKAGE must be 0 or 1"; exit 1 ;;
 esac
-case "$REQUIRE_SAYALL_MACRO_PLATFORM" in
+case "$REQUIRE_SAYALL_COMBINATION_ACTIONS" in
   0|1) ;;
-  *) print -u2 "REQUIRE_SAYALL_MACRO_PLATFORM must be 0 or 1"; exit 1 ;;
+  *) print -u2 "REQUIRE_SAYALL_COMBINATION_ACTIONS must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_SAYALL_BUTTON_PROFILES" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_BUTTON_PROFILES must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_SAYALL_MAC_REMOTE_PACKAGE" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE must be 0 or 1"; exit 1 ;;
 esac
 case "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" in
   0|1) ;;
@@ -103,37 +120,68 @@ if [[ -n "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" ]]; then
   fi
   SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:A}"
   export SAYALL_SIRI_REMOTE_PACKAGE_PATH
-  # The host already owns the runtime Apple Remote targets.  The private
-  # package contributes the gated UI/resources here; forcing UI-only avoids
-  # SwiftPM target-name collisions when the private package also contains its
-  # standalone runtime helpers.
-  export SAYALL_SIRI_REMOTE_UI_ONLY=1
+  # The private package owns the Siri Remote runtime and UI. Its internal
+  # targets use unique names so the full feature can be linked into the host.
+  unset SAYALL_SIRI_REMOTE_UI_ONLY
   export SAYALL_ENABLE_SIRI_REMOTE=1
   SAYALL_SIRI_REMOTE_INCLUDED=true
+  SIRI_REMOTE_SOURCE_ROOT="$SAYALL_SIRI_REMOTE_PACKAGE_PATH/Sources/SayAllSiriRemote"
+  SIRI_REMOTE_RESOURCE_RESOLVER="$SIRI_REMOTE_SOURCE_ROOT/SiriRemoteResources.swift"
+  if [[ ! -f "$SIRI_REMOTE_RESOURCE_RESOLVER" ]] || \
+      ! /usr/bin/grep -Eq 'Bundle\.main\.resourceURL' "$SIRI_REMOTE_RESOURCE_RESOLVER"; then
+    print -u2 "Siri Remote resource resolver is missing or does not prefer the packaged App resource bundle"
+    exit 1
+  fi
+  for siri_remote_source in \
+    SiriRemoteDeviceCapabilities.swift \
+    SiriRemoteConnectionPhoto.swift \
+    SiriRemoteMappingPage.swift; do
+    if /usr/bin/grep -Eq 'Bundle\.module' "$SIRI_REMOTE_SOURCE_ROOT/$siri_remote_source"; then
+      print -u2 "Siri Remote source bypasses the packaged resource resolver: $siri_remote_source"
+      exit 1
+    fi
+  done
 else
   unset SAYALL_ENABLE_SIRI_REMOTE
   SAYALL_SIRI_REMOTE_INCLUDED=false
 fi
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" &&
+      "$REQUIRE_SIRI_REMOTE_SIGNING" == "1" &&
+      "$SIGNING_IDENTITY" == "-" ]]; then
+  print -u2 "Siri Remote voice builds require Developer ID Application signing; ad-hoc builds cannot connect to the installed HCI helper"
+  exit 1
+fi
 
-if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" ]]; then
-  if [[ ! -f "$SAYALL_MACRO_PLATFORM_PATH/Package.swift" ]]; then
-    print -u2 "SAYALL_MACRO_PLATFORM_PATH must contain Package.swift"
+if [[ -n "$SAYALL_COMBINATION_ACTIONS_PATH" ]]; then
+  if [[ ! -f "$SAYALL_COMBINATION_ACTIONS_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_COMBINATION_ACTIONS_PATH must contain Package.swift"
     exit 1
   fi
-  SAYALL_MACRO_PLATFORM_PATH="${SAYALL_MACRO_PLATFORM_PATH:A}"
-  MACRO_PAGE_SOURCE="$SAYALL_MACRO_PLATFORM_PATH/Sources/SayAllMacroRemoteMic/RemoteMicMacroView.swift"
+  SAYALL_COMBINATION_ACTIONS_PATH="${SAYALL_COMBINATION_ACTIONS_PATH:A}"
+  MACRO_PAGE_SOURCE="$SAYALL_COMBINATION_ACTIONS_PATH/Sources/SayAllMacroRemoteMic/RemoteMicMacroView.swift"
   if [[ ! -f "$MACRO_PAGE_SOURCE" ]] || \
       /usr/bin/grep -Eq 'bundle:[[:space:]]*\.module' "$MACRO_PAGE_SOURCE"; then
     print -u2 "SayAll macro page bypasses the packaged resource resolver"
     exit 1
   fi
-  export SAYALL_MACRO_PLATFORM_PATH
-  SAYALL_MACRO_PLATFORM_INCLUDED=true
+  export SAYALL_COMBINATION_ACTIONS_PATH
+  SAYALL_COMBINATION_ACTIONS_INCLUDED=true
 else
-  SAYALL_MACRO_PLATFORM_INCLUDED=false
+  SAYALL_COMBINATION_ACTIONS_INCLUDED=false
+fi
+if [[ -n "$SAYALL_BUTTON_PROFILES_PACKAGE_PATH" ]]; then
+  if [[ ! -f "$SAYALL_BUTTON_PROFILES_PACKAGE_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_BUTTON_PROFILES_PACKAGE_PATH must contain Package.swift"
+    exit 1
+  fi
+  SAYALL_BUTTON_PROFILES_PACKAGE_PATH="${SAYALL_BUTTON_PROFILES_PACKAGE_PATH:A}"
+  export SAYALL_BUTTON_PROFILES_PACKAGE_PATH
+  SAYALL_BUTTON_PROFILES_INCLUDED=true
+else
+  SAYALL_BUTTON_PROFILES_INCLUDED=false
 fi
 if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
-  if [[ -n "$SAYALL_MACRO_PLATFORM_PATH" || -n "${SAYALL_MEMBERSHIP_PACKAGE_PATH:-}" ]]; then
+  if [[ -n "$SAYALL_COMBINATION_ACTIONS_PATH" || -n "${SAYALL_MEMBERSHIP_PACKAGE_PATH:-}" ]]; then
     print -u2 "private artifacts cannot be combined with private source packages"
     exit 1
   fi
@@ -169,17 +217,48 @@ if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
   SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:A}"
   export SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH
   SAYALL_PRIVATE_ARTIFACT_INCLUDED=true
-  SAYALL_MACRO_PLATFORM_INCLUDED=true
+  SAYALL_COMBINATION_ACTIONS_INCLUDED=true
+  if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
+        "$SAYALL_BUTTON_PROFILES_PACKAGE_PATH" != "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
+    print -u2 "private artifacts cannot be combined with a paid source package"
+    exit 1
+  fi
 else
   SAYALL_PRIVATE_ARTIFACT_INCLUDED=false
+  if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
+        "$SAYALL_COMBINATION_ACTIONS_INCLUDED" != "true" ]]; then
+    print -u2 "SAYALL_BUTTON_PROFILES_PACKAGE_PATH requires SAYALL_COMBINATION_ACTIONS_PATH"
+    exit 1
+  fi
 fi
 if [[ "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" == "1" && \
       "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" != "true" ]]; then
   print -u2 "A prepared private artifact package is required for this build"
   exit 1
 fi
-if [[ "$REQUIRE_SAYALL_MACRO_PLATFORM" == "1" && "$SAYALL_MACRO_PLATFORM_INCLUDED" != "true" ]]; then
-  print -u2 "A SayAll macro platform package is required for this build"
+if [[ "$REQUIRE_SAYALL_COMBINATION_ACTIONS" == "1" &&
+      "$SAYALL_COMBINATION_ACTIONS_INCLUDED" != "true" ]]; then
+  print -u2 "A SayAll combination actions package is required for this build"
+  exit 1
+fi
+if [[ "$REQUIRE_SAYALL_BUTTON_PROFILES" == "1" &&
+      "$SAYALL_BUTTON_PROFILES_INCLUDED" != "true" ]]; then
+  print -u2 "A SayAll button profiles package is required for this build"
+  exit 1
+fi
+if [[ -n "$SAYALL_MAC_REMOTE_PACKAGE_PATH" ]]; then
+  if [[ ! -f "$SAYALL_MAC_REMOTE_PACKAGE_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_MAC_REMOTE_PACKAGE_PATH must contain Package.swift"
+    exit 1
+  fi
+  SAYALL_MAC_REMOTE_PACKAGE_PATH="${SAYALL_MAC_REMOTE_PACKAGE_PATH:A}"
+  export SAYALL_MAC_REMOTE_PACKAGE_PATH
+  SAYALL_MAC_REMOTE_INCLUDED=true
+else
+  SAYALL_MAC_REMOTE_INCLUDED=false
+fi
+if [[ "$REQUIRE_SAYALL_MAC_REMOTE_PACKAGE" == "1" && "$SAYALL_MAC_REMOTE_INCLUDED" != "true" ]]; then
+  print -u2 "A SayAll Mac remote package is required for this build"
   exit 1
 fi
 
@@ -189,12 +268,16 @@ if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" && "$SAYALL_AI_INCLUDED" == 
   SCRATCH_FLAVOR="sayall-ai-private-artifacts"
 elif [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="private-artifacts"
-elif [[ "$SAYALL_AI_INCLUDED" == "true" && "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
-  SCRATCH_FLAVOR="sayall-ai-macro-platform"
+elif [[ "$SAYALL_AI_INCLUDED" == "true" && "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="sayall-ai-combination-actions-button-profiles"
+elif [[ "$SAYALL_AI_INCLUDED" == "true" && "$SAYALL_COMBINATION_ACTIONS_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="sayall-ai-combination-actions"
 elif [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="sayall-ai"
-elif [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
-  SCRATCH_FLAVOR="macro-platform"
+elif [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="combination-actions-button-profiles"
+elif [[ "$SAYALL_COMBINATION_ACTIONS_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="combination-actions"
 else
   SCRATCH_FLAVOR="public"
 fi
@@ -277,8 +360,11 @@ ditto --norsrc --noextattr --noqtn --noacl \
 plutil -remove SayAllAIIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllAIIncluded -bool "$SAYALL_AI_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
-plutil -remove SayAllMacroPlatformIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
-plutil -insert SayAllMacroPlatformIncluded -bool "$SAYALL_MACRO_PLATFORM_INCLUDED" \
+plutil -remove SayAllCombinationActionsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllCombinationActionsIncluded -bool "$SAYALL_COMBINATION_ACTIONS_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllButtonProfilesIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllButtonProfilesIncluded -bool "$SAYALL_BUTTON_PROFILES_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
@@ -412,19 +498,33 @@ if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
     "$SAYALL_AI_RESOURCE_BUNDLE" \
     "$APP_DIR/Contents/Resources/SayAllAI_SayAllAI.bundle"
 fi
-if [[ "$SAYALL_MACRO_PLATFORM_INCLUDED" == "true" ]]; then
+if [[ "$SAYALL_COMBINATION_ACTIONS_INCLUDED" == "true" ]]; then
   if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
-    SAYALL_MACRO_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+    SAYALL_MACRO_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllCombinationActions_SayAllMacroRemoteMic.bundle"
   else
-    SAYALL_MACRO_RESOURCE_BUNDLE="$BIN_DIR/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+    SAYALL_MACRO_RESOURCE_BUNDLE="$BIN_DIR/SayAllCombinationActions_SayAllMacroRemoteMic.bundle"
   fi
   if [[ ! -d "$SAYALL_MACRO_RESOURCE_BUNDLE" ]]; then
-    print -u2 "SayAll macro platform resource bundle is missing from the Swift build"
+    print -u2 "SayAll combination actions resource bundle is missing from the Swift build"
     exit 1
   fi
   ditto --norsrc --noextattr --noqtn --noacl \
     "$SAYALL_MACRO_RESOURCE_BUNDLE" \
-    "$APP_DIR/Contents/Resources/SayAllMacroPlatform_SayAllMacroRemoteMic.bundle"
+    "$APP_DIR/Contents/Resources/SayAllCombinationActions_SayAllMacroRemoteMic.bundle"
+fi
+if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" ]]; then
+  if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+    SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle"
+  else
+    SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE="$BIN_DIR/SayAllButtonProfiles_SayAllButtonProfiles.bundle"
+  fi
+  if [[ ! -d "$SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE" ]]; then
+    print -u2 "SayAll button profiles resource bundle is missing from the Swift build"
+    exit 1
+  fi
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE" \
+    "$APP_DIR/Contents/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle"
 fi
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then

@@ -34,8 +34,8 @@
 发布分支创建前需完成：
 
 - `git diff --check`
-- `swift test --filter HardwareSimulationIntegrationTests`
-- `swift test --filter SettingsPageRegressionTests`
+- `swift test --disable-keychain --filter HardwareSimulationIntegrationTests`
+- `swift test --disable-keychain --filter SettingsPageRegressionTests`
 - Apple Silicon 与 Intel 配置变体的完整 Swift 测试和 `scripts/test.sh`
 - Apple Silicon `arm64-apple-macosx14.0` 与 Intel `x86_64-apple-macosx13.0` 的非打包 Release 编译
 - 确认 `scripts/verify-release-ready-main-ci.sh` 的产品代码先进入 `main` 门禁仍然成立

@@ -13,11 +13,6 @@
 <table>
   <tr>
     <td align="center">
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb"><img src="Screenshots/community-entry-qrcode.png" alt="无线麦 APP 飞书固定入口" width="220"></a><br>
-      <strong>飞书固定入口</strong><br>
-      <a href="https://my.feishu.cn/docx/AgEhdekvKoVDUkxkdT0c7BDcnjb">点击打开最新加群页面</a>
-    </td>
-    <td align="center">
       <img src="Screenshots/wechat-group-qrcode.jpg" alt="无线麦 APP 微信群二维码" width="220"><br>
       <strong>微信群二维码</strong><br>
       微信扫码加入交流群
@@ -32,8 +27,15 @@
 
 ## Windows 版本
 
-Windows 版本正在开发，敬请期待！
-无线麦 SayAll.app Windows 版本地址：[https://github.com/GetSayAll/remote-mic-app-windows](https://github.com/GetSayAll/remote-mic-app-windows)，目前还没有内测版本放出，敬请期待。
+无线麦 App Windows 版本的第一个预览版已经发布，当前以基本功能为主：
+
+- 支持小米蓝牙遥控器 2 和 2 Pro；
+- 语音输入目前仅支持微信输入法；
+- 语音输入快捷键为 `Ctrl + Win`。
+
+欢迎下载体验。无线麦 App Windows 版本理论上不会被游戏反作弊或杀毒软件警告；如有顾虑，建议先使用 AI 扫描源码，再安装试用。
+
+[下载 Windows 预览版](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
 
 iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8k8fb7v)
 
@@ -199,7 +201,9 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 请先查看[排障指南](TROUBLESHOOTING.md)。首次安装的完整步骤见[首次安装说明](Resources/首次安装说明.md)。
 
-开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)；新增或重命名仓库文件前请阅读[文件命名规范](FILE_NAMING.md)。
+所有人开发新功能前，包括仓库作者、维护者、外部贡献者和自动化 Agent，都必须阅读并遵守[新功能开发规范](FEATURE_DEVELOPMENT.md)。
+
+开发、构建、协议、测试和发布信息见[技术文档](TECHNICAL.md)；分支与 PR 管理见[分支与提交管理策略](BRANCH_MANAGEMENT.md)；新增或重命名仓库文件前请阅读[文件命名规范](FILE_NAMING.md)。
 
 后续开发计划见 [TODO](TODO.md)。
 
@@ -249,3 +253,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 - [Vibe PPT Web Template](https://github.com/GetSayAll/vibe-ppt-web-template)
 - [Claude Code Config](https://github.com/HD838A/claude-code-config)
 - [DJI 4G Mac](https://github.com/HD838A/dji-4g-mac)
+
+## 开发者文档
+
+开发者、贡献者和自动化 Agent 请从 [项目文档导航](DOCUMENTATION.md) 开始。

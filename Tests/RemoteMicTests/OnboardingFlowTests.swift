@@ -1482,7 +1482,7 @@ struct OnboardingFlowTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicRootView.swift"),
             encoding: .utf8
         )
-        #expect(appSource.contains("showSettingsWindow(initialSection: .permissions)"))
+        #expect(appSource.contains("showSettingsWindow(initialSection: .about)"))
         #expect(appSource.contains("UPDATE PERMISSION_REPAIR"))
         #expect(rootViewSource.contains("initialSection: initialSettingsSection"))
     }
@@ -1830,6 +1830,23 @@ struct OnboardingFlowTests {
         let legacyEvents = try JSONDecoder().decode([FirstUseEvent].self, from: legacyData)
         #expect(legacyEvents.first?.voiceAttemptID == nil)
         #expect(legacyEvents.first?.voiceResult == nil)
+    }
+
+    @Test func firstUseEventsHaveStableRuntimeLogMessages() {
+        let event = FirstUseEvent(
+            timestamp: Date(timeIntervalSinceReferenceDate: 0),
+            kind: .blocked,
+            step: .voiceTest,
+            elapsedMilliseconds: 1_234,
+            failureReason: .voiceNoTranscript,
+            voiceAttemptID: 7,
+            voiceResult: .externalToolNoCommit
+        )
+
+        #expect(event.runtimeLogMessage ==
+            "ONBOARDING EVENT kind=blocked step=voiceTest elapsed_ms=1234 " +
+                "failure=voice.no_transcript attempt=7 voice_result=external_tool_no_commit"
+        )
     }
 
     @Test func diagnosticSummaryContainsOnlyNormalizedState() {

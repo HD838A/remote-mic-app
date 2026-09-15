@@ -1,0 +1,28 @@
+name: Repository Governance
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    name: Repository governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify governance invariants and scope
+        env:
+          GOVERNANCE_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          GOVERNANCE_PR_BODY: ${{ github.event_name == 'pull_request' && github.event.pull_request.body || '' }}
+          GOVERNANCE_PR_IS_DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft || false }}
+        run: ./scripts/verify-repository-governance.sh "$GOVERNANCE_BASE_SHA"

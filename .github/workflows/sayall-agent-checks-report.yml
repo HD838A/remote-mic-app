@@ -10,7 +10,9 @@ permissions: {}
 jobs:
   report:
     name: Report protected CI result
-    if: github.event.workflow_run.event == 'pull_request'
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'codex/sayall-agent-')
     runs-on: ubuntu-latest
     permissions:
       actions: read

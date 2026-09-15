@@ -22,12 +22,54 @@ enum KeyboardInjector {
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
     typealias ScrollPoster = (Int32) -> Void
 
+    struct ApplicationVisibilitySnapshot: Equatable {
+        let bundleIdentifier: String
+        let processActive: Bool?
+        let processHidden: Bool?
+        let processTerminated: Bool?
+        let activationPolicy: String
+        let ordinaryWindowCount: Int?
+        let onscreenWindowCount: Int?
+
+        var hasVisibleWindow: Bool? {
+            onscreenWindowCount.map { $0 > 0 }
+        }
+
+        var isUserVisible: Bool? {
+            guard let processActive,
+                  let processHidden,
+                  let processTerminated,
+                  let onscreenWindowCount
+            else { return nil }
+            return processActive && !processHidden && !processTerminated && onscreenWindowCount > 0
+        }
+    }
+
     final class AppSwitcherSession {
         private let keyStatePoster: KeyStatePoster
+        private var diagnosticLogger: ((String) -> Void)?
         private(set) var isActive = false
 
         init(keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState) {
             self.keyStatePoster = keyStatePoster
+        }
+
+        func setDiagnosticLogger(_ logger: @escaping (String) -> Void) {
+            diagnosticLogger = logger
+        }
+
+        private func post(
+            _ keyCode: CGKeyCode,
+            isDown: Bool,
+            flags: CGEventFlags,
+            role: String
+        ) -> Bool {
+            let result = keyStatePoster(keyCode, isDown, flags)
+            diagnosticLogger?(
+                "role=\(role) key_code=\(keyCode) edge=\(isDown ? "down" : "up") " +
+                    "command=\(flags.contains(.maskCommand)) success=\(result)"
+            )
+            return result
         }
 
         @discardableResult
@@ -36,11 +78,11 @@ enum KeyboardInjector {
                 return postTab()
             }
 
-            guard keyStatePoster(leftCommandKeyCode, true, .maskCommand) else {
+            guard post(leftCommandKeyCode, isDown: true, flags: .maskCommand, role: "command") else {
                 return false
             }
             guard postTab() else {
-                _ = keyStatePoster(leftCommandKeyCode, false, [])
+                _ = post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
                 return false
             }
             isActive = true
@@ -50,7 +92,7 @@ enum KeyboardInjector {
         @discardableResult
         func cancel() -> Bool {
             guard isActive else { return true }
-            let released = keyStatePoster(leftCommandKeyCode, false, [])
+            let released = post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
             isActive = false
             return released
         }
@@ -64,14 +106,14 @@ enum KeyboardInjector {
         func moveSelection(left: Bool) -> Bool {
             guard isActive else { return false }
             let keyCode: CGKeyCode = left ? 123 : 124
-            let pressed = keyStatePoster(keyCode, true, .maskCommand)
-            let released = keyStatePoster(keyCode, false, .maskCommand)
+            let pressed = post(keyCode, isDown: true, flags: .maskCommand, role: "selection")
+            let released = post(keyCode, isDown: false, flags: .maskCommand, role: "selection")
             return pressed && released
         }
 
         private func postTab() -> Bool {
-            let pressed = keyStatePoster(48, true, .maskCommand)
-            let released = keyStatePoster(48, false, .maskCommand)
+            let pressed = post(48, isDown: true, flags: .maskCommand, role: "tab")
+            let released = post(48, isDown: false, flags: .maskCommand, role: "tab")
             return pressed && released
         }
     }
@@ -198,13 +240,7 @@ enum KeyboardInjector {
         keyStatePoster: KeyStatePoster = postKeyState
     ) -> Bool {
         guard accessibilityTrusted() else { return false }
-        let flags: CGEventFlags
-        switch mode {
-        case .function:
-            flags = isPressed ? .maskSecondaryFn : []
-        case .leftCommand, .rightCommand:
-            flags = isPressed ? .maskCommand : []
-        }
+        let flags = isPressed ? mode.eventFlags : []
         return keyStatePoster(
             mode.keyCode,
             isPressed,
@@ -1829,6 +1865,79 @@ enum KeyboardInjector {
             }
             .filter { $0.width > 0 && $0.height > 0 }
             .max { $0.width * $0.height < $1.width * $1.height }
+    }
+
+    static func ordinaryWindowCount(
+        windowInfo: [[String: Any]],
+        processIdentifier: pid_t
+    ) -> Int {
+        windowInfo.reduce(into: 0) { count, entry in
+            guard let owner = entry[kCGWindowOwnerPID as String] as? NSNumber,
+                  owner.int32Value == processIdentifier,
+                  let layer = entry[kCGWindowLayer as String] as? NSNumber,
+                  layer.intValue == 0,
+                  let bounds = entry[kCGWindowBounds as String] as? NSDictionary,
+                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+                  frame.width > 0,
+                  frame.height > 0
+            else { return }
+            count += 1
+        }
+    }
+
+    static func applicationVisibilitySnapshot(
+        bundleIdentifier: String
+    ) -> ApplicationVisibilitySnapshot {
+        let applications = NSRunningApplication.runningApplications(
+            withBundleIdentifier: bundleIdentifier
+        )
+        guard let application = applications.first(where: { $0.isActive && !$0.isTerminated })
+            ?? applications.first(where: { !$0.isTerminated })
+        else {
+            return ApplicationVisibilitySnapshot(
+                bundleIdentifier: bundleIdentifier,
+                processActive: false,
+                processHidden: false,
+                processTerminated: true,
+                activationPolicy: "unknown",
+                ordinaryWindowCount: 0,
+                onscreenWindowCount: 0
+            )
+        }
+
+        let allWindows = CGWindowListCopyWindowInfo(
+            [.optionAll, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]]
+        let onscreenWindows = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]]
+        let activationPolicy: String = switch application.activationPolicy {
+        case .regular: "regular"
+        case .accessory: "accessory"
+        case .prohibited: "prohibited"
+        @unknown default: "unknown"
+        }
+        return ApplicationVisibilitySnapshot(
+            bundleIdentifier: bundleIdentifier,
+            processActive: application.isActive,
+            processHidden: application.isHidden,
+            processTerminated: application.isTerminated,
+            activationPolicy: activationPolicy,
+            ordinaryWindowCount: allWindows.map {
+                ordinaryWindowCount(
+                    windowInfo: $0,
+                    processIdentifier: application.processIdentifier
+                )
+            },
+            onscreenWindowCount: onscreenWindows.map {
+                ordinaryWindowCount(
+                    windowInfo: $0,
+                    processIdentifier: application.processIdentifier
+                )
+            }
+        )
     }
 
     private static func frontmostWindowFrame() -> CGRect? {

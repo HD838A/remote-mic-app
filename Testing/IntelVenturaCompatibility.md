@@ -16,9 +16,9 @@ Apple Silicon 与 Intel 继续分别发布，不生成 Universal 包。两个安
 在 `main` 运行：
 
 ```zsh
-RELEASE_VARIANT=intel swift test
+RELEASE_VARIANT=intel swift test --disable-keychain
 RELEASE_VARIANT=intel ./scripts/test.sh
-RELEASE_VARIANT=intel swift build -c release --triple x86_64-apple-macosx13.0
+RELEASE_VARIANT=intel swift build --disable-keychain -c release --triple x86_64-apple-macosx13.0
 RELEASE_VARIANT=intel ./scripts/build-app.sh
 RELEASE_VARIANT=intel ./scripts/verify-app.sh
 RELEASE_VARIANT=intel ./scripts/build-doubao-driver.sh

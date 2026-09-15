@@ -4,10 +4,6 @@ import PackageDescription
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
-    .package(
-        url: "https://github.com/GetSayAll/sayall-mac-remote.git",
-        revision: "7d1b3c2e1d88913bafaa3a401c939eb218a1f363"
-    ),
 ]
 var remoteMicDependencies: [Target.Dependency] = [
     "AudioExceptionGuard",
@@ -17,14 +13,45 @@ var remoteMicDependencies: [Target.Dependency] = [
     "AppleRemotePacketLogger",
     "SayAllMCPKit",
     .product(name: "Sparkle", package: "Sparkle"),
-    .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
-    .product(name: "SayAllMacRemoteUI", package: "sayall-mac-remote"),
 ]
 var remoteMicTestDependencies: [Target.Dependency] = [
     "RemoteMic",
     "AppleRemoteAudioCore",
-    .product(name: "SayAllMacRemoteCore", package: "sayall-mac-remote"),
 ]
+var packageTargets: [Target] = []
+let macRemotePackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_MAC_REMOTE_PACKAGE_PATH"
+]
+let macRemoteEnabled = !(macRemotePackagePath ?? "").isEmpty
+if let macRemotePackagePath, !macRemotePackagePath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: macRemotePackagePath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: macRemotePackagePath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllMacRemoteCore", package: packageIdentity)
+    )
+    remoteMicDependencies.append(
+        .product(name: "SayAllMacRemoteUI", package: packageIdentity)
+    )
+    remoteMicTestDependencies.append(
+        .product(name: "SayAllMacRemoteCore", package: packageIdentity)
+    )
+} else {
+    remoteMicDependencies += ["SayAllMacRemoteCore", "SayAllMacRemoteUI"]
+    remoteMicTestDependencies.append("SayAllMacRemoteCore")
+    packageTargets += [
+        .target(
+            name: "SayAllMacRemoteCore",
+            path: "Sources/PublicRemoteCompatibility/Core"
+        ),
+        .target(
+            name: "SayAllMacRemoteUI",
+            dependencies: ["SayAllMacRemoteCore"],
+            path: "Sources/PublicRemoteCompatibility/UI"
+        ),
+    ]
+}
 let siriRemotePackagePath = ProcessInfo.processInfo.environment[
     "SAYALL_SIRI_REMOTE_PACKAGE_PATH"
 ]
@@ -39,9 +66,34 @@ if siriRemoteExplicitlyEnabled && (siriRemotePackagePath ?? "").isEmpty {
 let privateArtifactPackagePath = ProcessInfo.processInfo.environment[
     "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"
 ]
+let combinationActionsPackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_COMBINATION_ACTIONS_PATH"
+]
+let buttonProfilesPackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_BUTTON_PROFILES_PACKAGE_PATH"
+]
+let sourceMacroCapabilitiesAvailable = combinationActionsPackagePath.map {
+    FileManager.default.fileExists(
+        atPath: URL(fileURLWithPath: $0)
+            .appendingPathComponent("Sources/SayAllMacroRemoteMic/RemoteMicRemoteCapabilities.swift")
+            .path
+    )
+} ?? false
+let privateArtifactsAvailable = !(privateArtifactPackagePath ?? "").isEmpty
+let macroCapabilitiesAvailable = sourceMacroCapabilitiesAvailable || privateArtifactsAvailable
 let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
     ? .macOS(.v13)
     : .macOS(.v14)
+var remoteMicSwiftSettings: [SwiftSetting] = []
+if siriRemoteEnabled {
+    remoteMicSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+}
+if macRemoteEnabled {
+    remoteMicSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
+}
+if macroCapabilitiesAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_MACRO_REMOTE_CAPABILITIES"))
+}
 
 if let privateFeaturePath = ProcessInfo.processInfo.environment[
     "SAYALL_AI_PACKAGE_PATH"
@@ -65,15 +117,28 @@ if let siriRemotePath = siriRemotePackagePath, !siriRemotePath.isEmpty {
     )
 }
 
-if let macroPlatformPath = ProcessInfo.processInfo.environment[
-    "SAYALL_MACRO_PLATFORM_PATH"
-], !macroPlatformPath.isEmpty {
-    let packageIdentity = URL(fileURLWithPath: macroPlatformPath)
+if let combinationActionsPath = combinationActionsPackagePath, !combinationActionsPath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: combinationActionsPath)
         .lastPathComponent
         .lowercased()
-    packageDependencies.append(.package(path: macroPlatformPath))
+    packageDependencies.append(.package(path: combinationActionsPath))
     remoteMicDependencies.append(
         .product(name: "SayAllMacroRemoteMic", package: packageIdentity)
+    )
+}
+
+if let buttonProfilesPath = buttonProfilesPackagePath,
+   !buttonProfilesPath.isEmpty,
+   (privateArtifactPackagePath ?? "").isEmpty {
+    guard !(combinationActionsPackagePath ?? "").isEmpty else {
+        fatalError("SAYALL_BUTTON_PROFILES_PACKAGE_PATH requires SAYALL_COMBINATION_ACTIONS_PATH")
+    }
+    let packageIdentity = URL(fileURLWithPath: buttonProfilesPath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: buttonProfilesPath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllButtonProfiles", package: packageIdentity)
     )
 }
 
@@ -94,7 +159,7 @@ if let membershipPackagePath = ProcessInfo.processInfo.environment[
 
 if let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty {
     let sourcePackageVariables = [
-        "SAYALL_MACRO_PLATFORM_PATH",
+        "SAYALL_COMBINATION_ACTIONS_PATH",
         "SAYALL_MEMBERSHIP_PACKAGE_PATH",
     ]
     if sourcePackageVariables.contains(where: {
@@ -112,9 +177,17 @@ if let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty {
     remoteMicDependencies.append(
         .product(name: "SayAllMembershipUI", package: packageIdentity)
     )
-    remoteMicDependencies.append(
-        .product(name: "SayAllMacroRemoteMic", package: packageIdentity)
-    )
+    remoteMicDependencies.append(.product(name: "SayAllMacroRemoteMic", package: packageIdentity))
+    if let buttonProfilesPackagePath, !buttonProfilesPackagePath.isEmpty {
+        let artifactURL = URL(fileURLWithPath: privateArtifactPackagePath).standardizedFileURL
+        let paidURL = URL(fileURLWithPath: buttonProfilesPackagePath).standardizedFileURL
+        guard paidURL == artifactURL else {
+            fatalError("private artifacts cannot be combined with a paid source package")
+        }
+        remoteMicDependencies.append(
+            .product(name: "SayAllButtonProfiles", package: packageIdentity)
+        )
+    }
 }
 
 if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
@@ -147,14 +220,12 @@ let package = Package(
         ),
     ],
     dependencies: packageDependencies,
-    targets: [
+    targets: packageTargets + [
         .executableTarget(
             name: "RemoteMic",
             dependencies: remoteMicDependencies,
             path: "Sources/RemoteMic",
-            swiftSettings: siriRemoteEnabled
-                ? [.define("SAYALL_SIRI_REMOTE_ENABLED")]
-                : [],
+            swiftSettings: remoteMicSwiftSettings,
             linkerSettings: [
                 .linkedFramework("Network"),
             ]
@@ -222,6 +293,7 @@ let package = Package(
             name: "RemoteMicTests",
             dependencies: remoteMicTestDependencies + ["SayAllMCPKit", "AppleRemoteHCIProtocol"],
             path: "Tests/RemoteMicTests",
+            exclude: macRemoteEnabled ? [] : ["WatchBluetoothVoiceJourneyTests.swift"],
             swiftSettings: siriRemoteEnabled
                 ? [.define("SAYALL_SIRI_REMOTE_ENABLED")]
                 : []

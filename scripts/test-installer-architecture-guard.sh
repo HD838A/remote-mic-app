@@ -84,7 +84,11 @@ for distribution in \
   /usr/bin/grep -Fq '>SiriRemoteComponent.pkg</pkg-ref>' "$distribution"
   /usr/bin/grep -Fq '<options customize="always"' "$distribution"
   /usr/bin/grep -Fq 'id="siri-remote"' "$distribution"
-  /usr/bin/grep -Fq 'start_selected="false"' "$distribution"
+  /usr/bin/grep -Fq 'function siriRemoteSupportWasPreviouslyInstalled()' "$distribution"
+  /usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote.plist' "$distribution"
+  /usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote.bom' "$distribution"
+  /usr/bin/grep -Fq '/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService' "$distribution"
+  /usr/bin/grep -Fq 'start_selected="siriRemoteSupportWasPreviouslyInstalled()"' "$distribution"
 done
 
 for strings_file in "$RESOURCES"/*.lproj/Localizable.strings; do

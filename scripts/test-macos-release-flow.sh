@@ -65,7 +65,43 @@ fi
 /usr/bin/grep -Fq 'verify-public-release-source.sh' "$package_workflow"
 /usr/bin/grep -Fq 'working-directory: release-source' "$package_workflow"
 /usr/bin/grep -Fq "branches: [main, 'hotfix/**']" "$ci_workflow"
-/usr/bin/grep -Fq 'swift test --filter BuildSigningTests' "$ci_workflow"
+/usr/bin/grep -Fq 'swift test --disable-keychain --filter BuildSigningTests' "$ci_workflow"
+/usr/bin/grep -Fq 'Detect private dependency access' "$ci_workflow"
+/usr/bin/grep -Fq 'Private dependency access is unavailable' "$ci_workflow"
+/usr/bin/grep -Fq "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new'" "$ci_workflow"
+/usr/bin/grep -Fq 'Run free combination actions integration tests' "$ci_workflow"
+/usr/bin/grep -Fq 'Build free combination actions release configuration' "$ci_workflow"
+/usr/bin/grep -Fq 'Run paid button profiles integration tests' "$ci_workflow"
+/usr/bin/grep -Fq 'Build paid button profiles release configuration' "$ci_workflow"
+/usr/bin/grep -Fq "if: steps.private-access.outputs.available == 'true'" "$ci_workflow"
+if [[ "$(/usr/bin/grep -c -- 'SAYALL_COMBINATION_ACTIONS_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
+   [[ "$(/usr/bin/grep -c -- 'SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
+   [[ "$(/usr/bin/grep -c -- 'SAYALL_MAC_REMOTE_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
+   [[ "$(/usr/bin/grep -c -- "if: steps.private-access.outputs.available == 'true'" "$ci_workflow")" -lt 7 ]]; then
+  print -u2 "public CI must clear private package paths and private checks must remain conditional"
+  exit 1
+fi
+if [[ "$(/usr/bin/grep -c -- 'swift test --disable-keychain' "$ci_workflow")" -lt 4 ]] || \
+   [[ "$(/usr/bin/grep -c -- 'swift build --disable-keychain' "$ci_workflow")" -lt 1 ]]; then
+  print -u2 "public and private CI SwiftPM entry points must disable macOS Keychain lookup"
+  exit 1
+fi
+release_gate_log="$WORK_DIR/release-private-package-gate.log"
+if env \
+   -u SAYALL_AI_PACKAGE_PATH \
+   -u SAYALL_SIRI_REMOTE_PACKAGE_PATH \
+   -u SAYALL_ENABLE_SIRI_REMOTE \
+   -u SAYALL_SIRI_REMOTE_UI_ONLY \
+   -u SAYALL_COMBINATION_ACTIONS_PATH \
+   -u SAYALL_BUTTON_PROFILES_PACKAGE_PATH \
+   -u SAYALL_MEMBERSHIP_PACKAGE_PATH \
+   -u SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH \
+   REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1 SAYALL_MAC_REMOTE_PACKAGE_PATH= \
+   "$ROOT/scripts/build-app.sh" >"$release_gate_log" 2>&1; then
+  print -u2 "release build must fail when the required Mac remote package is missing"
+  exit 1
+fi
+/usr/bin/grep -Fq 'A SayAll Mac remote package is required for this build' "$release_gate_log"
 if /usr/bin/grep -Eq 'release_mode|expected_pipeline_digest|qualification|candidateBranch|requestId|gh release|git tag|contents:[[:space:]]*write' "$package_workflow"; then
   print -u2 "protected staging workflow still contains publication or legacy qualification state"
   exit 1
@@ -103,6 +139,11 @@ ui_prep_source="$ROOT/scripts/prepare-staged-preview-ui-test.sh"
 /usr/bin/grep -Fq -- 'source_branch=$source_branch' "$ROOT/scripts/stage-macos-preview.sh"
 /usr/bin/grep -Fq -- '--ref main' "$ROOT/scripts/publish-staged-preview.sh"
 /usr/bin/grep -Fq 'origin/main' "$ROOT/scripts/promote-preview-release.sh"
+/usr/bin/grep -Fq 'provenance_schema' "$ROOT/scripts/promote-preview-release.sh"
+/usr/bin/grep -Fq 'Unsupported candidate provenance schema' "$ROOT/scripts/promote-preview-release.sh"
+/usr/bin/grep -Fq 'legacy-release-main' "$ROOT/scripts/promote-preview-release.sh"
+/usr/bin/grep -Fq 'expected_asset_count' "$ROOT/scripts/promote-preview-release.sh"
+/usr/bin/grep -Fq '.schemaVersion == 4' "$ROOT/scripts/promote-preview-release.sh"
 /usr/bin/grep -Fq '.head_branch == "main"' "$recovery_source"
 /usr/bin/grep -Fq '.head_branch == "main"' "$ui_prep_source"
 /usr/bin/grep -Fq 'hotfix/vX.Y.Z' "$ROOT/scripts/verify-public-release-source.sh"
