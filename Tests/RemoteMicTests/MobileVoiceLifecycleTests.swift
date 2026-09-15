@@ -82,7 +82,8 @@ struct MobileVoiceLifecycleTests {
             bluetoothVoiceActive: false,
             mobileVoiceActive: lifecycle.activeSource != nil,
             testToneActive: false,
-            systemSuspended: suspension.isSuspended
+            systemSuspended: suspension.isSuspended,
+            keepAliveWhileConnected: false
         ))
 
         #expect(lifecycle.completeStop(
@@ -95,7 +96,8 @@ struct MobileVoiceLifecycleTests {
             bluetoothVoiceActive: false,
             mobileVoiceActive: lifecycle.activeSource != nil,
             testToneActive: false,
-            systemSuspended: suspension.isSuspended
+            systemSuspended: suspension.isSuspended,
+            keepAliveWhileConnected: false
         ))
 
         let restartedGeneration = try #require(
@@ -110,7 +112,8 @@ struct MobileVoiceLifecycleTests {
             bluetoothVoiceActive: false,
             mobileVoiceActive: lifecycle.activeSource != nil,
             testToneActive: false,
-            systemSuspended: suspension.isSuspended
+            systemSuspended: suspension.isSuspended,
+            keepAliveWhileConnected: false
         ))
     }
 }
