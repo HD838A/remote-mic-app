@@ -8,7 +8,9 @@ struct RemoteMicRootView: View {
     let checkForUpdates: () -> Void
     let refreshUpdateInformation: () -> Void
     let setDockIconVisible: (Bool) -> Void
-    private let initialSettingsSection: SettingsSection?
+    let setStatusBarIconVisible: (Bool) -> Void
+    let syncEntryPointVisibility: () -> Void
+    private let initialSettingsSection: SettingsSection
 
     init(
         model: BridgeAppModel,
@@ -17,7 +19,9 @@ struct RemoteMicRootView: View {
         checkForUpdates: @escaping () -> Void,
         refreshUpdateInformation: @escaping () -> Void,
         setDockIconVisible: @escaping (Bool) -> Void,
-        initialSettingsSection: SettingsSection? = nil
+        setStatusBarIconVisible: @escaping (Bool) -> Void,
+        syncEntryPointVisibility: @escaping () -> Void,
+        initialSettingsSection: SettingsSection = .connection
     ) {
         self.model = model
         settings = model.settings
@@ -26,6 +30,8 @@ struct RemoteMicRootView: View {
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
+        self.setStatusBarIconVisible = setStatusBarIconVisible
+        self.syncEntryPointVisibility = syncEntryPointVisibility
         self.initialSettingsSection = initialSettingsSection
     }
 
@@ -39,6 +45,8 @@ struct RemoteMicRootView: View {
                     checkForUpdates: checkForUpdates,
                     refreshUpdateInformation: refreshUpdateInformation,
                     setDockIconVisible: setDockIconVisible,
+                    setStatusBarIconVisible: setStatusBarIconVisible,
+                    syncEntryPointVisibility: syncEntryPointVisibility,
                     initialSection: initialSettingsSection
                 )
             } else {
