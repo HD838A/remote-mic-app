@@ -2814,7 +2814,7 @@ struct SettingsView: View {
         switch action {
         case .focusInput: return "scope"
         case .showDesktop: return "macwindow"
-        case .appSwitcher: return "command"
+        case .appSwitcher, .switchToPreviousApp: return "command"
         case .volumeUp, .volumeDown, .volumeMute: return "speaker.wave.2"
         case .playPause, .previousCommandLeft, .nextCommandRight: return "play.circle"
         case .toggleLongRecording: return "record.circle"

@@ -364,6 +364,8 @@ enum KeyboardInjector {
             keyPoster(contextualMenuKeyCode, [])
         case .appSwitcher:
             keyPoster(48, .maskCommand)
+        case .switchToPreviousApp:
+            return switchToPreviousApp(keyStatePoster: keyStatePoster)
         case .volumeUp:
             postSystemKey(type: 0)
         case .volumeDown:
@@ -1799,6 +1801,32 @@ enum KeyboardInjector {
         ]
         .filter { !$0.isEmpty }
         .joined(separator: " ")
+    }
+
+    /// A complete Command-Tab tap, separate from the persistent selection session.
+    /// Attempt both releases even if an earlier event could not be submitted.
+    static func switchToPreviousApp(
+        keyStatePoster: KeyStatePoster,
+        diagnosticLogger: (String) -> Void = { AppLogger.shared.write($0) }
+    ) -> Bool {
+        let operationID = UUID().uuidString
+        let prefix = "KEYBOARD PREVIOUS_APP operation_id=\(operationID)"
+        diagnosticLogger("\(prefix) phase=requested")
+        let commandDown = keyStatePoster(leftCommandKeyCode, true, .maskCommand)
+        var tabDown = false
+        var tabUp = false
+        if commandDown {
+            tabDown = keyStatePoster(48, true, .maskCommand)
+            tabUp = keyStatePoster(48, false, .maskCommand)
+        }
+        let commandUp = keyStatePoster(leftCommandKeyCode, false, [])
+        let submitted = commandDown && tabDown && tabUp && commandUp
+        diagnosticLogger(
+            "\(prefix) phase=completed result=\(submitted ? "submitted" : "failed") " +
+                "command_down=\(commandDown) tab_down=\(tabDown) " +
+                "tab_up=\(tabUp) command_up=\(commandUp) user_visible_result=unknown"
+        )
+        return submitted
     }
 
     private static func postKey(code: CGKeyCode, flags: CGEventFlags = []) {

@@ -998,6 +998,114 @@ struct RemoteButtonsTests {
         #expect(postedStates[1].2.isEmpty)
     }
 
+    @Test func previousAppActionPostsACompleteTapOnEveryInvocation() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        for _ in 0..<2 {
+            #expect(KeyboardInjector.send(
+                .switchToPreviousApp,
+                accessibilityTrusted: { true },
+                keyPoster: { _, _ in Issue.record("Must send explicit key states") },
+                keyStatePoster: {
+                    posted.append(($0, $1, $2))
+                    return true
+                }
+            ))
+        }
+        #expect(posted.map { $0.0 } == [55, 48, 48, 55, 55, 48, 48, 55])
+        #expect(posted.map { $0.1 } == [true, true, false, false, true, true, false, false])
+        #expect(posted.map { $0.2 } == [
+            .maskCommand, .maskCommand, .maskCommand, [],
+            .maskCommand, .maskCommand, .maskCommand, [],
+        ])
+    }
+
+    @Test(arguments: 0..<4)
+    func previousAppActionAttemptsReleaseAfterSubmissionFailure(failureIndex: Int) {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var diagnostics: [String] = []
+        #expect(!KeyboardInjector.switchToPreviousApp(
+            keyStatePoster: {
+                posted.append(($0, $1, $2))
+                return posted.count - 1 != failureIndex
+            },
+            diagnosticLogger: { diagnostics.append($0) }
+        ))
+        #expect(posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(posted.last?.1 == false)
+        #expect(posted.last?.2 == [])
+        #expect(posted.count == (failureIndex == 0 ? 2 : 4))
+        #expect(diagnostics.count == 2)
+        #expect(diagnostics[0].contains("phase=requested"))
+        #expect(diagnostics[1].contains("result=failed"))
+        #expect(diagnostics[1].contains("user_visible_result=unknown"))
+        // A failed invocation does not leave a persistent selection session.
+        var next: [CGKeyCode] = []
+        #expect(KeyboardInjector.switchToPreviousApp(
+            keyStatePoster: { code, _, _ in next.append(code); return true },
+            diagnosticLogger: { _ in }
+        ))
+        #expect(next == [55, 48, 48, 55])
+    }
+
+    @Test func previousAppActionRequiresAccessibilityPermission() {
+        #expect(!KeyboardInjector.send(
+            .switchToPreviousApp,
+            accessibilityTrusted: { false },
+            keyPoster: { _, _ in Issue.record("Permission denied must not post keys") },
+            keyStatePoster: { _, _, _ in
+                Issue.record("Permission denied must not post key states")
+                return true
+            }
+        ))
+    }
+
+    @Test func previousAppActionIsOptInAndDoesNotRepeatWhileHeld() throws {
+        #expect(ButtonAction.switchToPreviousApp.category == .systemAndMedia)
+        #expect(!ButtonAction.switchToPreviousApp.allowsRepeat)
+        #expect(AppSettings.defaultBindings[.tv] == .appSwitcher)
+        #expect(ButtonAction.pickerActions(
+            installedBundleIdentifiers: [],
+            current: .appSwitcher,
+            experimentalContinuousRecordingEnabled: false
+        ).contains(.switchToPreviousApp))
+
+        let suiteName = "RemoteButtonsTests.previousApp.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.switchToPreviousApp, for: .tv)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        #expect(AppSettings(defaults: defaults).action(for: .tv) == .switchToPreviousApp)
+        let scheduler = RemoteButtonsTestScheduler()
+        var actions: [ButtonAction] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in actions.append(configured.action); return true },
+            appSwitcherKeyStatePoster: { _, _, _ in
+                Issue.record("One-press switching must not open a persistent switcher session")
+                return true
+            }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "previous-app", profileID: profileID)
+        let down = Data([UInt8(RemoteButton.tv.hidUsage), 0, 0, 0, 0, 0])
+        let up = Data(repeating: 0, count: 6)
+        monitor.handleSimulatedReport(reportID: 1, data: down)
+        monitor.handleSimulatedReport(reportID: 1, data: down)
+        scheduler.advance(toMilliseconds: 1_000)
+        #expect(actions == [.switchToPreviousApp])
+        monitor.handleSimulatedReport(reportID: 1, data: up)
+        scheduler.advance(toMilliseconds: 2_000)
+        monitor.handleSimulatedReport(reportID: 1, data: down)
+        monitor.handleSimulatedReport(reportID: 1, data: up)
+        #expect(actions == [.switchToPreviousApp, .switchToPreviousApp])
+        monitor.stop()
+    }
+
     @Test func appSwitcherSessionKeepsCommandHeldAcrossTabSelections() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let session = KeyboardInjector.AppSwitcherSession(

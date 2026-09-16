@@ -179,6 +179,7 @@
 "action.previous_command_left" = "Previous (⌘←)";
 "action.next_command_right" = "Next (⌘→)";
 "action.custom_shortcut" = "Custom Shortcut";
+"action.switch_to_previous_app" = "Previous App";
 "action.focus_input" = "Focus Input Field";
 "action.open_custom_application" = "Open Custom App";
 "action.toggle_long_recording" = "Toggle Continuous Recording";
