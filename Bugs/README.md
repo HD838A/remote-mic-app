@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [自定义组合快捷键缺少修饰键释放](./2026-09-16-custom-shortcut-missing-modifier-release.md)
+
 - [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
 - [关闭原始录音开关仍保存当前音频](./2026-08-27-original-recording-cancel-commits-audio.md)
 - [Onboarding 语音测试页隐藏第三方配置](./2026-09-05-onboarding-voice-test-hidden-tool-configuration.md)

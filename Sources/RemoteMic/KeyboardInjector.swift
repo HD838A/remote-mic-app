@@ -268,7 +268,9 @@ enum KeyboardInjector {
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
-        scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) }
+        scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) },
+        shortcutEventPoster: (CGEvent) -> Bool = ShortcutEventSequence.post,
+        shortcutHardwareFlags: () -> CGEventFlags = { CGEventSource.flagsState(.hidSystemState) }
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -393,6 +395,14 @@ enum KeyboardInjector {
                             "success=\(submitted)"
                     )
                     return submitted
+                }
+                if !eventFlags.isEmpty {
+                    return ShortcutEventSequence.send(
+                        keyCode: CGKeyCode(shortcut.keyCode),
+                        modifiers: eventFlags,
+                        hardwareFlags: shortcutHardwareFlags,
+                        eventPoster: shortcutEventPoster
+                    )
                 }
                 keyPoster(CGKeyCode(shortcut.keyCode), eventFlags)
                 AppLogger.shared.write(
