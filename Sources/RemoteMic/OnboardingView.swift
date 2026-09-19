@@ -174,7 +174,16 @@ struct OnboardingView: View {
                 recordRemoteVoiceButtonPress()
             case .voiceTest:
                 if isStreaming {
-                    beginVoiceAttempt(triggerPath: model.activeVoiceSource?.rawValue ?? "unknown")
+                    // Guard against re-entering an attempt already in progress: a
+                    // resubscription of this publisher (triggered by the state
+                    // mutation inside beginVoiceAttempt itself re-evaluating the
+                    // view body) can redeliver the current `true` value, which
+                    // previously restarted the attempt in a tight loop that
+                    // pegged the CPU. Only a genuine idle -> streaming
+                    // transition should begin a new attempt.
+                    if voiceAttempt.phase != .recording {
+                        beginVoiceAttempt(triggerPath: model.activeVoiceSource?.rawValue ?? "unknown")
+                    }
                 } else if voiceSessionStarted {
                     endVoiceAttempt()
                 }
