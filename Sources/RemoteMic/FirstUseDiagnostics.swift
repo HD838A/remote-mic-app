@@ -296,11 +296,17 @@ enum FirstUseVoiceAttemptPolicy {
         triggerReady: Bool,
         focusReadyAtDeadline: Bool,
         audioDeliveryResult: VoiceAudioDeliveryResult,
-        finalObservation: Bool
+        finalObservation: Bool,
+        localTranscription: Bool = false
     ) -> FirstUseVoiceAttemptResult {
         if manualInputObserved { return .manualInput }
         if !samplesReceived { return .noSamples }
         if !triggerReady { return .inputTargetNotReady }
+        if localTranscription {
+            if transcriptionAppeared { return .passed }
+            if !focusReadyAtDeadline { return .inputTargetFocusLost }
+            return .externalToolNoCommit
+        }
         if audioDeliveryResult.isConfirmedFailure { return .audioDeliveryFailed }
         if finalObservation,
            audioDeliveryResult != .deliveredToSelectedDevice {
@@ -343,6 +349,7 @@ struct FirstUseRemoteInputDiagnostic: Equatable {
 
 struct FirstUseDiagnosticContext: Equatable {
     let step: OnboardingStep
+    let voiceTool: OnboardingVoiceTool
     let remoteAvailability: OnboardingRemoteAvailability
     let controlMethod: OnboardingControlMethod
     let capabilities: OnboardingCapabilities
@@ -352,6 +359,7 @@ struct FirstUseDiagnosticContext: Equatable {
 
     init(
         step: OnboardingStep,
+        voiceTool: OnboardingVoiceTool = .other,
         remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
         capabilities: OnboardingCapabilities,
@@ -360,6 +368,7 @@ struct FirstUseDiagnosticContext: Equatable {
         remoteInput: FirstUseRemoteInputDiagnostic = FirstUseRemoteInputDiagnostic()
     ) {
         self.step = step
+        self.voiceTool = voiceTool
         self.remoteAvailability = remoteAvailability
         self.controlMethod = controlMethod
         self.capabilities = capabilities
@@ -387,6 +396,7 @@ struct FirstUseDiagnosticContext: Equatable {
             if !capabilities.remoteConnected { return .remoteNotFound }
             if !capabilities.remoteButtonObserved { return .remoteButtonNotReady }
         case .audio:
+            if voiceTool == .local { return nil }
             if !hasSelectedAudioUID { return .audioNoOutputDevice }
             if !capabilities.audioOutputSelected { return .audioSelectedDeviceMissing }
             if !controlMethod.usesOnDemandAudioOutput && !capabilities.audioReady {
@@ -406,7 +416,7 @@ struct FirstUseDiagnosticContext: Equatable {
         case .complete:
             guard OnboardingFlowPolicy.canContinue(
                 from: .complete,
-                voiceTool: .other,
+                voiceTool: voiceTool,
                 remoteAvailability: remoteAvailability,
                 controlMethod: controlMethod,
                 capabilities: capabilities

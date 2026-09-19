@@ -260,7 +260,8 @@ struct OnboardingView: View {
                   voiceSessionEnded,
                   !manualTranscriptInputObserved else { return }
             refreshVoiceAttemptObservableState(atDeadline: false)
-            if voiceAttempt.audioDelivery.result == .deliveredToSelectedDevice {
+            if settings.onboardingVoiceTool == .local ||
+                voiceAttempt.audioDelivery.result == .deliveredToSelectedDevice {
                 finishVoiceAttempt(result: .passed)
             }
         }
@@ -396,25 +397,6 @@ struct OnboardingView: View {
 
             onboardingVoiceKeyMigrationNotice
 
-            if allRecognizedVoiceToolsUnavailable {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Color.orange)
-                    Text("onboarding.voice_tool.none_detected")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.22), lineWidth: 1)
-                }
-            }
-
             LazyVGrid(
                 columns: [
                     GridItem(.flexible(), spacing: 10, alignment: .top),
@@ -477,20 +459,6 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.plain)
                 }
-            }
-
-            if voiceToolAvailability[.doubao] == .notInstalled {
-                HStack(spacing: 8) {
-                    Text("onboarding.voice_tool.doubao.install_detail")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                    Link(
-                        "onboarding.voice_tool.doubao.install",
-                        destination: AppLinks.doubaoInputMethod
-                    )
-                    .font(.system(size: 12, weight: .semibold))
-                }
-                .fixedSize(horizontal: false, vertical: true)
             }
 
             if settings.onboardingVoiceTool == .other {
@@ -1078,11 +1046,6 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Link(destination: AppLinks.testFlightPublicBeta) {
-                Label("onboarding.iphone_remote.install", systemImage: "arrow.up.right.square")
-            }
-            .buttonStyle(.borderedProminent)
-
             statusCard(
                 icon: model.isPhoneRemoteConnected
                     ? "checkmark.circle.fill"
@@ -1158,13 +1121,26 @@ struct OnboardingView: View {
 
     private var audioContent: some View {
         VStack(alignment: .leading, spacing: 18) {
-            onboardingTitle("onboarding.audio.title")
-            Text("onboarding.audio.detail")
+            onboardingTitle(settings.onboardingVoiceTool == .local
+                ? "onboarding.audio.local_title"
+                : "onboarding.audio.title")
+            Text(settings.onboardingVoiceTool == .local
+                ? "onboarding.audio.local_detail"
+                : "onboarding.audio.detail")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if supportedAudioDevices.isEmpty {
+            if settings.onboardingVoiceTool == .local {
+                statusCard(
+                    icon: localTranscriptionReady ? "checkmark.circle.fill" : "hourglass",
+                    title: localization.text("onboarding.audio.local_title"),
+                    detail: localization.text(localTranscriptionReady
+                        ? "onboarding.audio.local_ready"
+                        : "onboarding.audio.local_loading"),
+                    isComplete: localTranscriptionReady
+                )
+            } else if supportedAudioDevices.isEmpty {
                 statusCard(
                     icon: "waveform.badge.magnifyingglass",
                     title: localization.text("onboarding.audio.no_devices"),
@@ -1179,21 +1155,23 @@ struct OnboardingView: View {
                 }
             }
 
-            statusCard(
-                icon: onboardingAudioReady
-                    ? "checkmark.circle.fill"
-                    : "speaker.wave.2",
-                title: selectedAudioDeviceTitle,
-                detail: selectedAudioDeviceDetail,
-                isComplete: onboardingAudioReady
-            )
+            if settings.onboardingVoiceTool != .local {
+                statusCard(
+                    icon: onboardingAudioReady
+                        ? "checkmark.circle.fill"
+                        : "speaker.wave.2",
+                    title: selectedAudioDeviceTitle,
+                    detail: selectedAudioDeviceDetail,
+                    isComplete: onboardingAudioReady
+                )
 
-            if failureReason == .audioNoOutputDevice ||
-                failureReason == .audioSelectedDeviceMissing {
-                Button("audio.compatibility.open_install_guide") {
-                    model.openDoubaoDriverInstructions(using: localization)
+                if failureReason == .audioNoOutputDevice ||
+                    failureReason == .audioSelectedDeviceMissing {
+                    Button("audio.compatibility.open_install_guide") {
+                        model.openDoubaoDriverInstructions(using: localization)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
             }
         }
     }
@@ -1238,7 +1216,18 @@ struct OnboardingView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 
-            externalToolConfigurationConfirmationCard
+            if settings.onboardingVoiceTool == .local {
+                statusCard(
+                    icon: localTranscriptionReady ? "checkmark.circle.fill" : "hourglass",
+                    title: localization.text("onboarding.audio.local_title"),
+                    detail: localization.text(localTranscriptionReady
+                        ? "onboarding.audio.local_ready"
+                        : "onboarding.audio.local_loading"),
+                    isComplete: localTranscriptionReady
+                )
+            } else {
+                externalToolConfigurationConfirmationCard
+            }
 
             ZStack(alignment: .topLeading) {
                 OnboardingTranscriptEditor(
@@ -1738,25 +1727,33 @@ struct OnboardingView: View {
             }
         case .audio:
             sidePanel(titleKey: "onboarding.side.audio") {
-                sideCheck("onboarding.side.device_found", isComplete: !supportedAudioDevices.isEmpty)
-                sideCheck("onboarding.side.device_selected", isComplete: audioOutputSelected)
-                sideCheck(
-                    settings.onboardingControlMethod.usesOnDemandAudioOutput
-                        ? "onboarding.side.audio_on_demand"
-                        : "onboarding.side.audio_ready",
-                    isComplete: onboardingAudioReady
-                )
+                if settings.onboardingVoiceTool == .local {
+                    sideCheck("onboarding.side.local_model", isComplete: localTranscriptionReady)
+                } else {
+                    sideCheck("onboarding.side.device_found", isComplete: !supportedAudioDevices.isEmpty)
+                    sideCheck("onboarding.side.device_selected", isComplete: audioOutputSelected)
+                    sideCheck(
+                        settings.onboardingControlMethod.usesOnDemandAudioOutput
+                            ? "onboarding.side.audio_on_demand"
+                            : "onboarding.side.audio_ready",
+                        isComplete: onboardingAudioReady
+                    )
+                }
             }
         case .voiceTest:
             sidePanel(titleKey: "onboarding.side.voice_test") {
                 sideCheck("onboarding.side.voice_key", isComplete: voiceSessionStarted && voiceSessionEnded)
                 sideCheck("onboarding.side.samples", isComplete: voiceSamplesReceived)
-                sideCheck(
-                    settings.onboardingControlMethod.usesOnDemandAudioOutput
-                        ? "onboarding.side.audio_on_demand"
-                        : "onboarding.side.audio_ready",
-                    isComplete: onboardingAudioReady
-                )
+                if settings.onboardingVoiceTool == .local {
+                    sideCheck("onboarding.side.local_model", isComplete: localTranscriptionReady)
+                } else {
+                    sideCheck(
+                        settings.onboardingControlMethod.usesOnDemandAudioOutput
+                            ? "onboarding.side.audio_on_demand"
+                            : "onboarding.side.audio_ready",
+                        isComplete: onboardingAudioReady
+                    )
+                }
                 sideCheck("onboarding.side.transcript", isComplete: verifiedTranscriptionAppeared)
             }
         case .controls:
@@ -1915,8 +1912,10 @@ struct OnboardingView: View {
             accessibilityGranted: accessibilityGranted,
             remoteConnected: selectedControlConnected,
             remoteButtonObserved: !observedRemoteButtons.isEmpty,
-            audioReady: model.isAudioOutputReady,
+            audioReady: settings.onboardingVoiceTool == .local
+                ? localTranscriptionReady : model.isAudioOutputReady,
             audioOutputSelected: audioOutputSelected,
+            localTranscriptionReady: localTranscriptionReady,
             voiceSessionStarted: voiceSessionStarted,
             voiceSamplesReceived: voiceSamplesReceived,
             voiceSessionEnded: voiceSessionEnded,
@@ -1949,9 +1948,11 @@ struct OnboardingView: View {
     }
 
     private var visibleVoiceTools: [OnboardingVoiceTool] {
-        var tools: [OnboardingVoiceTool] = [.doubao]
-        if voiceToolAvailability[.weixin] == .available {
-            tools.append(.weixin)
+        // Keep an existing selection visible for compatibility, but do not
+        // recommend Chinese input methods to new users of this fork.
+        var tools: [OnboardingVoiceTool] = [.local]
+        if [.doubao, .weixin].contains(settings.onboardingVoiceTool) {
+            tools.append(settings.onboardingVoiceTool)
         }
         if voiceToolAvailability[.typeless] == .available {
             tools.append(.typeless)
@@ -1960,17 +1961,11 @@ struct OnboardingView: View {
         return tools
     }
 
-    private var allRecognizedVoiceToolsUnavailable: Bool {
-        [OnboardingVoiceTool.doubao, .weixin, .typeless].allSatisfy {
-            voiceToolAvailability[$0] == .notInstalled
-        }
-    }
-
     private var voiceToolSelectionIsValid: Bool {
         switch settings.onboardingVoiceTool {
         case .unselected:
             return false
-        case .other:
+        case .local, .other:
             return true
         case .doubao, .weixin, .typeless:
             return voiceToolAvailability[settings.onboardingVoiceTool] == .available
@@ -1980,10 +1975,12 @@ struct OnboardingView: View {
     private var diagnosticContext: FirstUseDiagnosticContext {
         FirstUseDiagnosticContext(
             step: settings.onboardingStep,
+            voiceTool: settings.onboardingVoiceTool,
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
             capabilities: capabilities,
-            hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty,
+            hasSelectedAudioUID: settings.onboardingVoiceTool == .local ||
+                !settings.selectedAudioDeviceUID.isEmpty,
             voiceAttempt: settings.onboardingStep == .voiceTest ? voiceAttempt : nil,
             remoteInput: remoteInputDiagnostic
         )
@@ -2013,15 +2010,22 @@ struct OnboardingView: View {
     }
 
     private var audioOutputSelected: Bool {
-        OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
+        if settings.onboardingVoiceTool == .local { return true }
+        return OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
             selectedUID: settings.selectedAudioDeviceUID,
             availableSupportedUIDs: supportedAudioDevices.lazy.map(\.uid)
         )
     }
 
     private var onboardingAudioReady: Bool {
-        audioOutputSelected &&
+        if settings.onboardingVoiceTool == .local { return localTranscriptionReady }
+        return audioOutputSelected &&
             (settings.onboardingControlMethod.usesOnDemandAudioOutput || model.isAudioOutputReady)
+    }
+
+    private var localTranscriptionReady: Bool {
+        if case .ready = model.embeddedTranscriptionStatus { return true }
+        return false
     }
 
     private var selectedAudioDeviceTitle: String {
@@ -2211,6 +2215,7 @@ struct OnboardingView: View {
 
     private func voiceToolIcon(_ tool: OnboardingVoiceTool) -> String {
         switch tool {
+        case .local: return "waveform.circle.fill"
         case .doubao: return "quote.bubble.fill"
         case .weixin: return "message.fill"
         case .typeless: return "waveform.badge.mic"
@@ -2271,7 +2276,7 @@ struct OnboardingView: View {
                     content: .screenshot("weixin-input-settings")
                 ),
             ]
-        case .unselected, .typeless, .other:
+        case .unselected, .local, .typeless, .other:
             return []
         }
 
@@ -2678,7 +2683,8 @@ struct OnboardingView: View {
             triggerReady: voiceAttempt.triggerReady,
             focusReadyAtDeadline: targetReadyAtEnd,
             audioDeliveryResult: voiceAttempt.audioDelivery.result,
-            finalObservation: false
+            finalObservation: false,
+            localTranscription: settings.onboardingVoiceTool == .local
         )
         if result == .manualInput || result == .noSamples || result == .audioDeliveryFailed {
             finishVoiceAttempt(result: result)
@@ -2690,7 +2696,8 @@ struct OnboardingView: View {
     private func scheduleVoiceTranscriptDeadline(attemptID: Int) {
         let token = UUID()
         voiceTranscriptDeadlineToken = token
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+        let timeout: TimeInterval = settings.onboardingVoiceTool == .local ? 15 : 3
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
             guard settings.onboardingStep == .voiceTest,
                   voiceTranscriptDeadlineToken == token,
                   voiceAttempt.attemptID == attemptID,
@@ -2703,7 +2710,8 @@ struct OnboardingView: View {
                 triggerReady: voiceAttempt.triggerReady,
                 focusReadyAtDeadline: voiceAttempt.focusReadyAtDeadline == true,
                 audioDeliveryResult: voiceAttempt.audioDelivery.result,
-                finalObservation: true
+                finalObservation: true,
+                localTranscription: settings.onboardingVoiceTool == .local
             )
             finishVoiceAttempt(result: result)
         }

@@ -22,8 +22,6 @@
 	<string>1.9.21</string>
 	<key>CFBundleVersion</key>
 	<string>227</string>
-	<key>HardwareAnnouncementURL</key>
-	<string>https://download.sayall.app/mac/announcements/hardware.json</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
@@ -45,11 +43,7 @@
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUFeedURL</key>
-	<string>https://download.sayall.app/mac/channels/stable/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>8dWQovCnGPucjMcQuCHfrAv4PtjuDjJSbHNmItqYiyc=</string>
+	<false/>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
 </dict>

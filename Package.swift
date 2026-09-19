@@ -4,6 +4,17 @@ import PackageDescription
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
+    // Embedded on-device speech-to-text (MIT-licensed), so a single build of
+    // this fork can transcribe the remote's voice button locally without a
+    // separate dictation app or virtual-microphone hop. See
+    // Sources/RemoteMic/EmbeddedTranscriptionEngine.swift.
+    .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", from: "0.9.0"),
+    // WhisperKit's own Hugging Face repo (argmaxinc/whisperkit-coreml) has no
+    // Cantonese model. A genuinely Cantonese-native fine-tune exists
+    // elsewhere on the Hub, but its file layout doesn't match WhisperKit's
+    // built-in downloader, so it's fetched directly via the same Hub client
+    // WhisperKit itself uses internally. See EmbeddedTranscriptionEngine.swift.
+    .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.0.0"),
 ]
 var remoteMicDependencies: [Target.Dependency] = [
     "AudioExceptionGuard",
@@ -13,6 +24,8 @@ var remoteMicDependencies: [Target.Dependency] = [
     "AppleRemotePacketLogger",
     "SayAllMCPKit",
     .product(name: "Sparkle", package: "Sparkle"),
+    .product(name: "Hub", package: "swift-transformers"),
+    .product(name: "WhisperKit", package: "argmax-oss-swift"),
 ]
 var remoteMicTestDependencies: [Target.Dependency] = [
     "RemoteMic",

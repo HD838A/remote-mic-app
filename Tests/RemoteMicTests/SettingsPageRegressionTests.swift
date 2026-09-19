@@ -747,7 +747,6 @@ struct SettingsPageRegressionTests {
             "model.setVoiceFnTapModeEnabled",
             "model.togglePhoneRemoteConnection()",
             "model.toggleWatchRemoteConnection()",
-            "copyTestFlightPublicBetaLink()",
             "requestWebRemoteSession()",
             "settings.clearTrustedPhoneIdentities()",
             "settings.setAction(action, for: button, trigger: trigger)",
@@ -761,7 +760,8 @@ struct SettingsPageRegressionTests {
             #expect(source.contains(requiredAction), Comment(rawValue: requiredAction))
         }
 
-        #expect(source.contains("AppLinks.testFlightPublicBeta"))
+        #expect(!source.contains("AppLinks.testFlightPublicBeta"))
+        #expect(source.contains("localTranscriptionPanel"))
         let phoneEntry = try #require(source.range(of: "connection.phone.ios_title"))
         let watchEntry = try #require(source.range(of: "connection.watch.title"))
         let webEntry = try #require(source.range(

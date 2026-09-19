@@ -107,6 +107,7 @@ enum OnboardingControlMethod: String, CaseIterable, Codable, Identifiable {
 
 enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
     case unselected
+    case local
     case doubao
     case weixin
     case typeless
@@ -128,7 +129,7 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
             return "com.bytedance.inputmethod.doubaoime.pinyin"
         case .weixin:
             return "com.tencent.inputmethod.wetype.pinyin"
-        case .unselected, .typeless, .other:
+        case .unselected, .local, .typeless, .other:
             return nil
         }
     }
@@ -137,7 +138,7 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .typeless:
             return "now.typeless.desktop"
-        case .unselected, .doubao, .weixin, .other:
+        case .unselected, .local, .doubao, .weixin, .other:
             return nil
         }
     }
@@ -162,6 +163,7 @@ struct OnboardingCapabilities: Equatable {
     var remoteButtonObserved = false
     var audioReady = false
     var audioOutputSelected = false
+    var localTranscriptionReady = false
     var voiceSessionStarted = false
     var voiceSamplesReceived = false
     var voiceSessionEnded = false
@@ -232,7 +234,14 @@ enum OnboardingVoiceTestConfigurationPolicy {
         externalGlobalVoiceConfirmed: Bool,
         externalMicrophoneConfirmed: Bool
     ) -> Bool {
-        isSayAllVoiceKeyReady(
+        if voiceTool == .local {
+            return isSayAllVoiceKeyReady(
+                voiceTool: voiceTool,
+                voiceKeyMode: voiceKeyMode,
+                voiceFnTapModeEnabled: voiceFnTapModeEnabled
+            ) && audioOutputReady
+        }
+        return isSayAllVoiceKeyReady(
             voiceTool: voiceTool,
             voiceKeyMode: voiceKeyMode,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled
@@ -301,6 +310,7 @@ enum OnboardingFlowPolicy {
         case .remote:
             return capabilities.remoteConnected && capabilities.remoteButtonObserved
         case .audio:
+            if voiceTool == .local { return capabilities.localTranscriptionReady }
             return capabilities.audioOutputSelected &&
                 (controlMethod.usesOnDemandAudioOutput || capabilities.audioReady)
         case .voiceTest:
@@ -312,6 +322,10 @@ enum OnboardingFlowPolicy {
         case .controls:
             return capabilities.testedRemoteButtonCount >= 3
         case .complete:
+            let audioReady = voiceTool == .local
+                ? capabilities.localTranscriptionReady
+                : capabilities.audioOutputSelected &&
+                    (controlMethod.usesOnDemandAudioOutput || capabilities.audioReady)
             return isControlSelectionValid(
                 remoteAvailability: remoteAvailability,
                 controlMethod: controlMethod
@@ -320,9 +334,7 @@ enum OnboardingFlowPolicy {
                 (!controlMethod.requiresInputMonitoringPermission ||
                     capabilities.inputMonitoringGranted) &&
                 capabilities.accessibilityGranted &&
-                capabilities.remoteConnected &&
-                capabilities.audioOutputSelected &&
-                (controlMethod.usesOnDemandAudioOutput || capabilities.audioReady)
+                capabilities.remoteConnected && audioReady
         }
     }
 
@@ -336,6 +348,7 @@ enum OnboardingFlowPolicy {
     ) -> OnboardingStep? {
         let context = FirstUseDiagnosticContext(
             step: step,
+            voiceTool: voiceTool,
             remoteAvailability: remoteAvailability,
             controlMethod: controlMethod,
             capabilities: capabilities,

@@ -486,6 +486,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         qos: .utility
     )
     private let audioOutput = VirtualAudioOutput()
+    // Embedded on-device transcription (WhisperKit, MIT-licensed): tapped
+    // alongside every audioOutput.enqueue() call site so the remote's voice
+    // button can produce typed text directly, without a virtual-microphone
+    // hop or a separate dictation app. See EmbeddedTranscriptionEngine.swift.
+    private let embeddedTranscriptionEngine = EmbeddedTranscriptionEngine()
+    private let embeddedTranscriptionHUD = TranscriptionStatusHUD()
+    /// Surfaced read-only in Settings (Buttons page, near Voice Trigger Key)
+    /// so it's visible which model is actually driving the remote button's
+    /// built-in transcription, without needing to check the runtime log.
+    @Published private(set) var embeddedTranscriptionStatus: EmbeddedTranscriptionEngine.Status = .loading
+    private var embeddedTranscriptionBuffer: [Int16] = []
+    // The Xiaomi remote's BLE audio stream sometimes drops and reconnects
+    // mid-hold, surfacing as several short back-to-back voice sessions
+    // (observed gaps as low as ~200ms) instead of one continuous one. Rather
+    // than transcribe each fragment alone — usually too short to produce
+    // real text — delay the flush briefly; a new session starting within
+    // that window cancels it and keeps accumulating into the same buffer.
+    private static let embeddedTranscriptionCoalesceDelay: TimeInterval = 0.5
+    private var embeddedTranscriptionFlushWorkItem: DispatchWorkItem?
     private var recordingPlayback: AVAudioPlayer?
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
         AppLogger.shared.write(message)
@@ -1108,6 +1127,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func startIfNeeded() {
         guard !started else { return }
         started = true
+        // Load and warm up the embedded transcription model here, at app
+        // launch — not only when a voice session first begins. Loading is
+        // quick, but Core ML's on-device compilation of the compute graph
+        // only happens lazily on its first real prediction, observed taking
+        // upwards of 90 seconds; doing that now means it happens quietly in
+        // the background well before the first remote press, not during it.
+        Task { [embeddedTranscriptionEngine] in
+            await embeddedTranscriptionEngine.prewarm()
+            let status = await embeddedTranscriptionEngine.status()
+            await MainActor.run { [weak self] in
+                self?.embeddedTranscriptionStatus = status
+            }
+        }
         startAudioSubsystem()
 #if SAYALL_SIRI_REMOTE_ENABLED
         siriRemoteFeature.start()
@@ -3975,6 +4007,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
               !samples.isEmpty
         else { return }
         recordingAssetCoordinator.append(samples: samples)
+        embeddedTranscriptionBuffer.append(contentsOf: samples)
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
         let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
         let accepted = audioOutput.enqueue(
@@ -4381,6 +4414,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     ) {
         guard identifier == activeBluetoothVoiceDeviceIdentifier else { return }
         recordingAssetCoordinator.append(samples: samples)
+        embeddedTranscriptionBuffer.append(contentsOf: samples)
         let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
         let handledByFnTapMode = voiceFnTapSession.receive(samples)
         let enqueued: Bool
@@ -5451,6 +5485,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         recordingAssetCoordinator.append(samples: samples)
+        embeddedTranscriptionBuffer.append(contentsOf: samples)
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
         mobileVoiceAudioBatchCount += 1
         mobileVoiceAudioSignalMetrics.append(samples)
@@ -5638,6 +5673,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("RECORDING ASSET application_fallback unavailable")
         }
         transcriptCaptureCoordinator.startSession(sessionID: sessionID, startedAt: startedAt, source: source)
+        if let pendingFlush = embeddedTranscriptionFlushWorkItem {
+            // A new session started while a just-ended one was still in its
+            // coalescing window: this is very likely the same physical hold
+            // reconnecting mid-utterance, not a new one. Keep the buffered
+            // audio instead of discarding it.
+            pendingFlush.cancel()
+            embeddedTranscriptionFlushWorkItem = nil
+        } else {
+            embeddedTranscriptionBuffer.removeAll(keepingCapacity: true)
+        }
+        Task { [embeddedTranscriptionEngine] in await embeddedTranscriptionEngine.prewarm() }
+        DispatchQueue.main.async { [embeddedTranscriptionHUD] in
+            embeddedTranscriptionHUD.show(.recording)
+        }
         isStreaming = true
     }
 
@@ -5682,6 +5731,74 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         // 会话因别的原因结束（用户关闭语音、切换输入源）时，必须让 Chromecase 包内的
         // latched 状态同步清空；否则下一次点按会被误判成「结束」而不是「开始」。
         chromecaseFeature.notifyHostVoiceSessionEnded()
+        scheduleEmbeddedTranscriptionFlush()
+    }
+
+    /// Delays handing the buffer to the transcription engine by
+    /// `embeddedTranscriptionCoalesceDelay`, so that a new voice session
+    /// starting almost immediately after this one — the Xiaomi remote's
+    /// BLE audio stream reconnecting mid-hold — can cancel this flush and
+    /// keep accumulating into the same buffer instead of transcribing a
+    /// too-short fragment on its own.
+    private func scheduleEmbeddedTranscriptionFlush() {
+        embeddedTranscriptionFlushWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.embeddedTranscriptionFlushWorkItem = nil
+            self?.transcribeEmbeddedBufferAndInsertIfReady()
+        }
+        embeddedTranscriptionFlushWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.embeddedTranscriptionCoalesceDelay,
+            execute: workItem
+        )
+    }
+
+    /// Hands the samples buffered during the just-ended voice session to the
+    /// embedded transcription engine, then types the recognized text into
+    /// whatever currently has keyboard focus — the whole point of this
+    /// fork. Runs off the main actor's synchronous path (fire-and-forget)
+    /// so a slow first-load or a long phrase never blocks stopping the
+    /// voice session itself.
+    private func transcribeEmbeddedBufferAndInsertIfReady() {
+        guard !embeddedTranscriptionBuffer.isEmpty else { return }
+        let samples = embeddedTranscriptionBuffer
+        embeddedTranscriptionBuffer.removeAll(keepingCapacity: true)
+        DispatchQueue.main.async { [embeddedTranscriptionHUD] in
+            embeddedTranscriptionHUD.show(.transcribing)
+        }
+        Task { [embeddedTranscriptionEngine, embeddedTranscriptionHUD] in
+            let text: String?
+            do {
+                text = try await embeddedTranscriptionEngine.transcribe(pcm16: samples)
+            } catch {
+                AppLogger.shared.write(
+                    "EMBEDDED WHISPER transcribe_failed error_type=\(type(of: error))"
+                )
+                await MainActor.run { embeddedTranscriptionHUD.hide() }
+                return
+            }
+            guard let text, !text.isEmpty else {
+                await MainActor.run { embeddedTranscriptionHUD.show(.noSpeech) }
+                return
+            }
+            await MainActor.run {
+                let destination = VoiceInputDestinationSnapshot.system()
+                guard destination.isSafeEditableDestination else {
+                    AppLogger.shared.write(
+                        "EMBEDDED WHISPER insert_skipped reason=destination_not_safe"
+                    )
+                    embeddedTranscriptionHUD.hide()
+                    return
+                }
+                guard KeyboardInjector.typeUnicodeText(text) else {
+                    AppLogger.shared.write("EMBEDDED WHISPER insert_failed reason=post_failed")
+                    embeddedTranscriptionHUD.hide()
+                    return
+                }
+                AppLogger.shared.write("EMBEDDED WHISPER insert_completed chars=\(text.count)")
+                embeddedTranscriptionHUD.show(.inserted(characterCount: text.count))
+            }
+        }
     }
 
     private var currentVoiceUsageSource: UsageEventSource {
@@ -6474,6 +6591,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func receiveChromecaseAudio(_ samples: [Int16]) {
         guard chromecaseVoiceActive || chromecaseVoiceStopping, !samples.isEmpty else { return }
         recordingAssetCoordinator.append(samples: samples)
+        // Tapped once here, before the preroll gate below: preroll'd samples
+        // are re-delivered to audioOutput.enqueue() later by
+        // flushChromecaseAudioPreroll(), which would double-count them here.
+        embeddedTranscriptionBuffer.append(contentsOf: samples)
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
 
         // 预卷门控：会话开头 prerollDelay 秒的音频先攒在内存，到期再一次性排入播放器。

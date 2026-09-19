@@ -248,6 +248,7 @@
 "remote.device.model.apple_siri_remote_a2854" = "蘋果遙控器 Type-C";
 "remote.device.model.apple_siri_remote_a2540" = "蘋果遙控器 Lightning";
 "remote.device.model.chromecase_voice_remote" = "Chromecase 遙控器";
+"remote.device.model.unrecognized" = "未辨識的遙控器";
 "remote.device.model.unknown" = "小米遙控器";
 "remote.device.custom_name" = "自定義名稱";
 "remote.device.bind_button" = "繫結普通按鍵";
@@ -286,6 +287,12 @@
 "connection.voice_key_mode.unverified" = "修飾鍵模式尚未驗證";
 "connection.voice_key_mode.unverified_detail" = "請在目標語音工具中同步配置相同的觸發鍵（左/右 Command 或右 Option）並實際說一句確認文字上屏。無線麥無法讀取第三方工具的內部設定；如果沒有文字，請改回 Fn/地球鍵。";
 "connection.voice_key_mode.command_permission" = "修飾鍵模式需要輔助使用權限";
+"connection.embedded_transcription.title" = "本機轉寫";
+"connection.embedded_transcription.loading" = "正在載入模型…";
+"connection.embedded_transcription.ready_cantonese" = "已就緒——粵語模型已啟用";
+"connection.embedded_transcription.ready_fallback" = "已就緒——備用模型（暫不支援粵語書面轉寫）";
+"connection.embedded_transcription.failed" = "載入失敗——遙控器語音鍵將無法產生文字";
+"connection.embedded_transcription.model_link" = "查看 Hugging Face 粵語模型";
 "connection.action.reconnect" = "立即重新連接";
 "connection.phone.section_title" = "iPhone、Apple Watch 與網頁版";
 "connection.phone.ios_title" = "iOS App（推薦）";
@@ -295,7 +302,7 @@
 "connection.phone.qr_help" = "在 iPhone 無線麥的 Mac 頁面點按「掃描 QR 碼」，可直接連接這台 Mac；自動發現仍會保留作為備用。";
 "connection.phone.qr_refresh" = "QR 碼短時有效並會自動更新；停止等待或重新開啟後，需要掃描新的 QR 碼。";
 "connection.phone.qr_accessibility" = "iPhone 連接 QR 碼";
-"connection.phone.ios_help" = "先連接手機開始等待，再從 TestFlight 安裝並開啟 iOS App 。";
+"connection.phone.ios_help" = "如果已有相容的 iOS App，可在此連接。此分支不提供 iOS App。";
 "connection.phone.not_enabled" = "尚未開啟";
 "connection.trusted_devices.title" = "受信任的移動裝置";
 "connection.trusted_devices.help" = "iPhone 和 Apple Watch 遙控是備用功能。每次啟動後需主動點選對應連接入口，才會開啟附近連接；清除記錄後，所有裝置都需要重新確認授權。";
@@ -321,9 +328,9 @@
 "connection.web.help_short" = "備用方式，需要邀請碼；開啟後顯示一次性 QR 碼。";
 "connection.web.invite.title" = "輸入網頁連接邀請碼";
 "connection.web.invite.description" = "驗證成功後才會開啟手機網頁版連接。";
-"connection.web.invite.ios_eyebrow" = "iOS · TestFlight 公測";
-"connection.web.invite.ios_title" = "推薦使用 iOS App 體驗";
-"connection.web.invite.ios_description" = "iOS 公測不需要邀請碼。安裝無線麥 iOS 公測版，即可獲得更方便、完整的手機遙控體驗。";
+"connection.web.invite.ios_eyebrow" = "手機遙控";
+"connection.web.invite.ios_title" = "如有相容的 iOS App 可繼續使用";
+"connection.web.invite.ios_description" = "此分支不提供 iOS App。你可以在手機瀏覽器使用網頁版遙控器。";
 "connection.web.invite.testflight_open" = "開啟 TestFlight 公測";
 "connection.web.invite.placeholder" = "邀請碼";
 "connection.web.invite.unlock" = "開啟連接";
@@ -603,7 +610,7 @@
 "about.version.history" = "版本歷史";
 "help.glossary.open" = "術語表";
 "about.support.github" = "GitHub";
-"about.support.website" = "官網";
+"about.support.website" = "專案主頁";
 "about.support.feedback" = "問題回報";
 "about.support.feedback_action" = "送出回報";
 "about.support.feedback_description" = "回報無線麥SayAll.app的問題，或提出改進建議。";
@@ -615,7 +622,7 @@
 "share.hide_action" = "收起";
 "share.card.title" = "掃碼或複製連結";
 "share.card.description" = "可用手機掃描 QR 碼，也可複製同一個官網連結。";
-"share.qr.accessibility_label" = "無線麥SayAll.app官網 QR 碼";
+"share.qr.accessibility_label" = "此分支專案主頁 QR 碼";
 "share.copy_action" = "複製連結";
 "share.copy.accessibility_hint" = "複製 QR 碼中編碼的同一個連結。";
 "share.copy_succeeded" = "連結已複製";
@@ -669,7 +676,9 @@
 "onboarding.welcome.feature.verify" = "每項設定都現場檢查，出問題時直接告訴你原因";
 "onboarding.voice_tool.title" = "你準備在哪個工具裡說話？";
 "onboarding.voice_tool.detail" = "選擇常用工具，我們會為它準備合適的語音鍵方式。以後仍可在設定中修改。";
-"onboarding.voice_tool.none_detected" = "未檢測到豆包輸入法、微信輸入法或 Typeless。你仍可選擇「其他語音工具」，但請先安裝並開啟一個支援語音輸入的工具。";
+"onboarding.voice_tool.local.title" = "本機粵語轉寫";
+"onboarding.voice_tool.local.detail" = "用遙控器說話，在這台 Mac 上直接輸入文字；無需語音輸入法或虛擬咪高峰。";
+"onboarding.voice_tool.none_detected" = "未偵測到 Typeless。如果已使用其他語音輸入工具，可以選擇「其他語音工具」。";
 "onboarding.voice_tool.unselected.title" = "尚未選擇";
 "onboarding.voice_tool.unselected.detail" = "尚未選擇常用語音工具。";
 "onboarding.voice_tool.doubao.title" = "豆包輸入法";
@@ -753,7 +762,7 @@
 "onboarding.remote.retry_input" = "重新檢測按鍵";
 "onboarding.remote.open_bluetooth" = "開啟藍牙設定";
 "onboarding.iphone_remote.title" = "用 iPhone 連接這台 Mac";
-"onboarding.iphone_remote.detail" = "安裝並開啟無線麥 iOS App ，選擇這台 Mac，並核對雙方顯示的校驗碼。";
+"onboarding.iphone_remote.detail" = "如果已有相容的 iOS App，請開啟它、選擇這台 Mac 並核對校驗碼。此分支不提供 iOS App。";
 "onboarding.iphone_remote.install" = "安裝或開啟 iOS App";
 "onboarding.iphone_remote.connected" = "iPhone 已連接";
 "onboarding.iphone_remote.waiting" = "正在等待 iPhone";
@@ -773,6 +782,10 @@
 "onboarding.web_remote.button_detail" = "連接後，在網頁版遙控器上按任意普通按鍵。";
 "onboarding.audio.title" = "選擇虛擬音訊裝置";
 "onboarding.audio.detail" = "請選擇 MiRemoteV 2ch 或 BlackHole 2ch。揚聲器和其他普通音訊裝置不能完成語音輸入鏈路。";
+"onboarding.audio.local_title" = "準備本機轉寫";
+"onboarding.audio.local_detail" = "粵語模型及備用模型會在這台 Mac 上載入。首次下載可能需要一些時間。";
+"onboarding.audio.local_loading" = "正在載入模型。請保持視窗開啟，準備好後再繼續。";
+"onboarding.audio.local_ready" = "本機轉寫已就緒。現用模型顯示於「連接」頁面。";
 "onboarding.audio.device_detail" = "請先安裝或啟用 MiRemoteV 2ch 或 BlackHole 2ch，然後重新檢查。";
 "onboarding.audio.no_devices" = "未檢測到支援的虛擬音訊裝置";
 "onboarding.audio.selected" = "已選擇 %1$@";
@@ -909,6 +922,7 @@
 "onboarding.side.device_found" = "支援的虛擬音訊裝置已檢測";
 "onboarding.side.device_selected" = "虛擬音訊裝置已選中";
 "onboarding.side.audio_ready" = "音訊輸出正常";
+"onboarding.side.local_model" = "本機語音模型已就緒";
 "onboarding.side.audio_on_demand" = "語音開始時連接音訊";
 "onboarding.side.voice_key" = "語音鍵已按下並鬆開";
 "onboarding.side.samples" = "語音聲音已收到";

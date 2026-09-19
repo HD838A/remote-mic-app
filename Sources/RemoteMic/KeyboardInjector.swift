@@ -1833,6 +1833,65 @@ enum KeyboardInjector {
         return true
     }
 
+    /// Types arbitrary Unicode text — including CJK text such as embedded
+    /// Whisper's Cantonese/Chinese output — into whatever currently has
+    /// keyboard focus, as if it had been typed on the keyboard.
+    ///
+    /// Unlike `postKey`, this does not map to a virtual key code at all: it
+    /// attaches the text directly to a synthetic key event via
+    /// `keyboardSetUnicodeString`, which is how macOS lets an event carry
+    /// characters with no corresponding physical key (emoji, CJK, accented
+    /// letters). Events are capped at a small chunk size — some
+    /// applications truncate very long single events — so long dictated
+    /// sentences are split into several key events posted back to back.
+    @discardableResult
+    static func typeUnicodeText(_ text: String) -> Bool {
+        guard !text.isEmpty else { return true }
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
+        var succeeded = true
+        for chunk in Self.chunkedForTyping(text) {
+            guard let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                  let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            else {
+                succeeded = false
+                continue
+            }
+            let utf16 = Array(chunk.utf16)
+            down.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+            up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+            down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            down.post(tap: .cghidEventTap)
+            up.post(tap: .cghidEventTap)
+        }
+        return succeeded
+    }
+
+    /// Splits `text` into pieces of at most `maximumUTF16Count` UTF-16 units
+    /// each, never inside a grapheme cluster (so a base character is never
+    /// separated from a combining mark, and a surrogate-pair emoji is never
+    /// split in half).
+    private static func chunkedForTyping(
+        _ text: String,
+        maximumUTF16Count: Int = 20
+    ) -> [String] {
+        var chunks: [String] = []
+        var current = ""
+        var currentUTF16Count = 0
+        for character in text {
+            let characterUTF16Count = character.utf16.count
+            if currentUTF16Count + characterUTF16Count > maximumUTF16Count, !current.isEmpty {
+                chunks.append(current)
+                current = ""
+                currentUTF16Count = 0
+            }
+            current.append(character)
+            currentUTF16Count += characterUTF16Count
+        }
+        if !current.isEmpty { chunks.append(current) }
+        return chunks
+    }
+
     /// Scroll events are delivered to the window under the event location, not
     /// to the focused application, so a remote press must aim at the frontmost
     /// window instead of wherever the mouse happens to rest.

@@ -287,6 +287,12 @@
 "connection.voice_key_mode.unverified" = "修饰键模式尚未验证";
 "connection.voice_key_mode.unverified_detail" = "请在目标语音工具中同步配置相同的触发键（左/右 Command 或右 Option）并实际说一句确认文字上屏。无线麦无法读取第三方工具的内部设置；如果没有文字，请改回 Fn/地球键。";
 "connection.voice_key_mode.command_permission" = "修饰键模式需要辅助功能权限";
+"connection.embedded_transcription.title" = "本地转写";
+"connection.embedded_transcription.loading" = "正在加载模型…";
+"connection.embedded_transcription.ready_cantonese" = "已就绪——粤语模型已启用";
+"connection.embedded_transcription.ready_fallback" = "已就绪——备用模型（暂不支持粤语书面转写）";
+"connection.embedded_transcription.failed" = "加载失败——遥控器语音键将无法生成文字";
+"connection.embedded_transcription.model_link" = "查看 Hugging Face 粤语模型";
 "connection.action.reconnect" = "立即重新连接";
 "connection.phone.section_title" = "iPhone、Apple Watch 与网页版";
 "connection.phone.ios_title" = "iOS App（推荐）";
@@ -296,7 +302,7 @@
 "connection.phone.qr_help" = "在 iPhone 无线麦的 Mac 页面点按“扫描二维码”，可直接连接这台 Mac；自动发现仍会保留作为备用。";
 "connection.phone.qr_refresh" = "二维码短时有效并会自动更新；停止等待或重新开启后，需要扫描新的二维码。";
 "connection.phone.qr_accessibility" = "iPhone 连接二维码";
-"connection.phone.ios_help" = "先连接手机开始等待，再从 TestFlight 安装并打开 iOS App。";
+"connection.phone.ios_help" = "如果已有兼容的 iOS App，可在此连接。此分支不提供 iOS App。";
 "connection.phone.not_enabled" = "尚未开启";
 "connection.trusted_devices.title" = "受信任的移动设备";
 "connection.trusted_devices.help" = "iPhone 和 Apple Watch 遥控是备用功能。每次启动后需主动点击对应连接入口，才会开启附近连接；清除记录后，所有设备都需要重新确认授权。";
@@ -322,9 +328,9 @@
 "connection.web.help_short" = "备用方式，需要邀请码；开启后显示一次性二维码。";
 "connection.web.invite.title" = "输入网页连接邀请码";
 "connection.web.invite.description" = "验证成功后才会打开手机网页版连接。";
-"connection.web.invite.ios_eyebrow" = "iOS · TestFlight 公测";
-"connection.web.invite.ios_title" = "推荐使用 iOS App 体验";
-"connection.web.invite.ios_description" = "iOS 公测不需要邀请码。安装无线麦 iOS 公测版，即可获得更方便、完整的手机遥控体验。";
+"connection.web.invite.ios_eyebrow" = "手机遥控";
+"connection.web.invite.ios_title" = "如有兼容的 iOS App 可继续使用";
+"connection.web.invite.ios_description" = "此分支不提供 iOS App。你可以在手机浏览器使用网页版遥控器。";
 "connection.web.invite.testflight_open" = "打开 TestFlight 公测";
 "connection.web.invite.placeholder" = "邀请码";
 "connection.web.invite.unlock" = "打开连接";
@@ -604,7 +610,7 @@
 "about.version.history" = "版本历史";
 "help.glossary.open" = "术语表";
 "about.support.github" = "GitHub";
-"about.support.website" = "官网";
+"about.support.website" = "项目主页";
 "about.support.feedback" = "问题反馈";
 "about.support.feedback_action" = "提交反馈";
 "about.support.feedback_description" = "反馈无线麦SayAll.app的问题，或提出改进建议。";
@@ -616,7 +622,7 @@
 "share.hide_action" = "收起";
 "share.card.title" = "扫码或复制链接";
 "share.card.description" = "可用手机扫描二维码，也可复制同一个官网链接。";
-"share.qr.accessibility_label" = "无线麦SayAll.app官网二维码";
+"share.qr.accessibility_label" = "此分支项目主页二维码";
 "share.copy_action" = "复制链接";
 "share.copy.accessibility_hint" = "复制二维码中编码的同一个链接。";
 "share.copy_succeeded" = "链接已复制";
@@ -670,7 +676,9 @@
 "onboarding.welcome.feature.verify" = "每项设置都现场检查，出问题时直接告诉你原因";
 "onboarding.voice_tool.title" = "你准备在哪个工具里说话？";
 "onboarding.voice_tool.detail" = "选择常用工具，我们会为它准备合适的语音键方式。以后仍可在设置中修改。";
-"onboarding.voice_tool.none_detected" = "未检测到豆包输入法、微信输入法或 Typeless。你仍可选择“其他语音工具”，但请先安装并打开一个支持语音输入的工具。";
+"onboarding.voice_tool.local.title" = "本机粤语转写";
+"onboarding.voice_tool.local.detail" = "用遥控器说话，在这台 Mac 上直接输入文字；无需语音输入法或虚拟麦克风。";
+"onboarding.voice_tool.none_detected" = "未检测到 Typeless。如果已使用其他语音输入工具，可以选择“其他语音工具”。";
 "onboarding.voice_tool.unselected.title" = "尚未选择";
 "onboarding.voice_tool.unselected.detail" = "尚未选择常用语音工具。";
 "onboarding.voice_tool.doubao.title" = "豆包输入法";
@@ -754,7 +762,7 @@
 "onboarding.remote.retry_input" = "重新检测按键";
 "onboarding.remote.open_bluetooth" = "打开蓝牙设置";
 "onboarding.iphone_remote.title" = "用 iPhone 连接这台 Mac";
-"onboarding.iphone_remote.detail" = "安装并打开无线麦 iOS App，选择这台 Mac，并核对双方显示的校验码。";
+"onboarding.iphone_remote.detail" = "如果已有兼容的 iOS App，请打开它、选择这台 Mac 并核对校验码。此分支不提供 iOS App。";
 "onboarding.iphone_remote.install" = "安装或打开 iOS App";
 "onboarding.iphone_remote.connected" = "iPhone 已连接";
 "onboarding.iphone_remote.waiting" = "正在等待 iPhone";
@@ -774,6 +782,10 @@
 "onboarding.web_remote.button_detail" = "连接后，在网页版遥控器上按任意普通按键。";
 "onboarding.audio.title" = "选择虚拟音频设备";
 "onboarding.audio.detail" = "请选择 MiRemoteV 2ch 或 BlackHole 2ch。扬声器和其他普通音频设备不能完成语音输入链路。";
+"onboarding.audio.local_title" = "准备本机转写";
+"onboarding.audio.local_detail" = "粤语模型和备用模型会在这台 Mac 上加载。首次下载可能需要一些时间。";
+"onboarding.audio.local_loading" = "正在加载模型。请保持窗口开启，准备好后再继续。";
+"onboarding.audio.local_ready" = "本机转写已就绪。当前模型显示在“连接”页面。";
 "onboarding.audio.device_detail" = "请先安装或启用 MiRemoteV 2ch 或 BlackHole 2ch，然后重新检查。";
 "onboarding.audio.no_devices" = "未检测到支持的虚拟音频设备";
 "onboarding.audio.selected" = "已选择 %1$@";
@@ -910,6 +922,7 @@
 "onboarding.side.device_found" = "支持的虚拟音频设备已检测";
 "onboarding.side.device_selected" = "虚拟音频设备已选中";
 "onboarding.side.audio_ready" = "音频输出正常";
+"onboarding.side.local_model" = "本机语音模型已就绪";
 "onboarding.side.audio_on_demand" = "语音开始时连接音频";
 "onboarding.side.voice_key" = "语音键已按下并松开";
 "onboarding.side.samples" = "语音声音已收到";

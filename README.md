@@ -1,59 +1,8 @@
-# 无线麦
+# 无线麦 SayAll · 粤语本地转写分支
 
-[English](README.en.md)
+[English](README.en.md) · [本分支源码](https://github.com/unfla-sh/MiRemote2Pro-Whisper) · [问题反馈](https://github.com/unfla-sh/MiRemote2Pro-Whisper/issues)
 
-[官网](https://sayall.app/) · [配置教程](https://sayall.app/tutorial/)
-
-<p>
-  <a href="https://github.com/HD838A/remote-mic-app/stargazers">
-    <img src="https://img.shields.io/github/stars/HD838A/remote-mic-app?style=social" alt="GitHub Stars">
-  </a>
-</p>
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="Screenshots/wechat-group-qrcode.jpg" alt="无线麦 APP 微信群二维码" width="220"><br>
-      <strong>微信群二维码</strong><br>
-      微信扫码加入交流群
-    </td>
-    <td align="center">
-      <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="无线麦小红书二维码" width="220"></a><br>
-      <strong>小红书</strong><br>
-      扫码关注无线麦
-    </td>
-  </tr>
-</table>
-
-## 视频介绍
-
-《可能是我最近用过最不像工具的工具》展示了无线麦如何把蓝牙语音遥控器变成随手表达、控制 Mac 和与 AI 协作的新入口。
-
-<p align="center">
-  <a href="https://www.bilibili.com/video/BV13Pep6BEXe">
-    <img src="Screenshots/video-introduction-cover.jpg" alt="《可能是我最近用过最不像工具的工具》视频封面" width="960">
-  </a>
-</p>
-
-<p align="center"><a href="https://www.bilibili.com/video/BV13Pep6BEXe">点击封面或前往 Bilibili 观看原视频</a></p>
-
-视频作者：[可乐不甜的跑焦日记](https://space.bilibili.com/327214328)
-
-## Windows 版本
-
-无线麦 App Windows 版本的第一个预览版已经发布，当前以基本功能为主：
-
-- 支持小米蓝牙遥控器 2 和 2 Pro；
-- 语音输入目前仅支持微信输入法；
-- 语音输入快捷键为 `Ctrl + Win`。
-
-欢迎下载体验。无线麦 App Windows 版本理论上不会被游戏反作弊或杀毒软件警告；如有顾虑，建议先使用 AI 扫描源码，再安装试用。
-
-[下载 Windows 预览版](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
-
-iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8k8fb7v)
-
-Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停；当前 App Store 上架重点只包含 iOS App 与其内嵌的 Apple Watch App。
+本分支加入 Hugging Face 粤语/英语 Whisper 模型，在 Mac 本机把遥控器语音转成文字。它与原版 SayAll 独立；原版官网、下载、TestFlight、微信群及豆包/微信输入法不是本分支的服务或必要依赖。以下部分功能说明继承自上游，尚待逐项核对。
 
 ![无线麦——为 Vibe Coding 而生的语音遥控器](Screenshots/Remote-Mic-Introduce-1.png)
 
@@ -98,20 +47,11 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 - Apple Silicon Mac（macOS 14 或更高版本），或 Intel Mac（macOS 13 或更高版本）；
 - 小米蓝牙遥控器 2 或 2 Pro；
-- 使用语音输入时，需要安装随安装包提供的兼容麦克风，或在 Mac 上已有 BlackHole 2ch 等回环音频设备。
+- 使用内置转写时，首次会下载粤语模型和备用模型；无需虚拟麦克风或第三方语音输入法。
 
 ## 下载与安装
 
-- 配置教程：[打开官网配置教程](https://sayall.app/tutorial/)。
-
-- 最新正式版（Apple Silicon）：通过 [Cloudflare CDN 固定入口](https://download.sayall.app/mac) 下载。当前正式版入口仅提供 Apple Silicon 安装包，且不需要随版本更新。
-- 最新预览版（Apple Silicon / Intel）：前往 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases)，在发布列表中寻找最新标记为 **Pre-release** 的 macOS 候选版本，并按 Mac 芯片下载对应 DMG。在包含 Intel 安装包的版本晋升为正式版前，Intel 用户请下载名称带 `Intel` 的最新预览版 DMG。
-
-Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 `Remote-Mic-<版本>-Intel.dmg`，两者不能混用。
-
-打开 DMG 后只需双击唯一的 `Install SayAll.pkg`；Intel Mac 使用 `Install SayAll Intel.pkg`。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
-
-自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从官网 Cloudflare CDN 固定入口或本项目 GitHub Releases 下载；如需核验，请使用同一 GitHub Release 中的 `Remote-Mic-<版本>.dmg.sha256`，它会按文件名列出两种架构的 DMG。
+此分支目前请从[本分支 Releases](https://github.com/unfla-sh/MiRemote2Pro-Whisper/releases)查看是否已有可用安装包；没有发布包时请从源码构建。不要把原版 SayAll 的 CDN 或安装包当作本分支更新。
 
 ## 首次使用
 
@@ -137,19 +77,19 @@ Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 
 
 “应用语言”会完整展示“跟随系统”“简体中文”和“English”三个选项。设置窗口、状态、菜单和内置帮助会随选择刷新；系统权限提示和第三方界面仍会在下次打开时按 macOS 自身的语言显示。
 
-应用每天自动检查一次更新，发现新版本后由用户确认是否安装；不会静默下载或自动安装。“关于”页面和右键菜单中的“检查更新…”均可随时手动检查。“关于”页的“检查预发布版本”默认关闭；开启后，自动检查和手动检查都会包含 GitHub 上最新的 pre-release 候选版本。Sparkle 仅更新应用本体，兼容麦克风驱动仍由 DMG 中的安装包管理。旧版如果仍安装在 `Remote Mic.app` 或 `无线麦.app` 路径，应用内更新会沿用原路径；要迁移到标准 `SayAll.app` 文件名，请运行一次新版 DMG 中的安装 PKG。
+此分支暂未提供独立更新源。自动更新及上游硬件公告已关闭；请到本分支 Releases 查看新构建。
 
 ## 使用语音输入
 
-1. 打开“连接与语音”页面。
-2. 点击“刷新音频设备”。
-3. 选择 `MiRemoteV 2ch`，或选择你已经安装的其他回环音频设备。
-4. 在需要听写或语音输入的应用中选择同一个设备作为麦克风。
-5. 单击目标输入框，按住遥控器语音键说话，松开后结束。
+1. 首次设置时选择“本机粤语转写”。
+2. 在音频步骤等待模型加载；“连接与语音”页面会显示当前模型，并提供 Hugging Face 模型页面链接。
+3. 聚焦可编辑输入框，按住遥控器语音键说话，松开后文字会在这台 Mac 上输入。
+
+第三方语音工具和虚拟麦克风只用于保留的旧流程。
 
 在“按键映射”页的“语音键”区域可以选择语音触发方式：默认的 Fn/地球键、左 Command 长按、右 Command 长按或右 Option 长按。Fn/地球键保持旧版本行为；修饰键模式需要无线麦的“辅助功能”权限，并会在语音开始时按下所选按键、结束时释放。目标语音应用必须支持对应的单独按键长按；许多应用会把左右同侧按键合并为通用修饰键，需在目标应用中实际测试。长按期间同时按其他键可能触发修饰键快捷键。右 Option 是最少被使用的修饰键，适合作为专用语音触发键，也有语音输入软件以其为触发键。
 
-默认使用 Fn，是为了直接兼容豆包、微信等 Fn 长按语音入口和 Typeless 的 Fn 点按入口，同时让遥控器“按住采音、松开停止”的生命周期与快捷键一致。技术上可以继续扩展 F18、F19、F20 等低频键，但当前版本不支持任意自定义语音键：目标语音应用也必须配置同一个键，而且 RC003、iPhone、Apple Watch、网页版、权限与输入源切换都要共享同一套成对按下/释放逻辑。普通遥控器按键仍可单独配置 F1–F20。
+默认使用 Fn，以保持遥控器“按住采音、松开停止”的生命周期；旧版第三方语音工具仍可按需使用。技术上可以继续扩展 F18、F19、F20 等低频键，但当前版本不支持任意自定义语音键：目标语音应用也必须配置同一个键，而且 RC003、iPhone、Apple Watch、网页版、权限与输入源切换都要共享同一套成对按下/释放逻辑。普通遥控器按键仍可单独配置 F1–F20。
 
 语音键不承担短按、双击或长按附加动作，只负责按下即开始、释放即结束的实时语音会话。需要聚焦前台 App 输入框时，请在普通按键的“自定义动作”中选择“聚焦输入框”；该动作使用 macOS Accessibility，不读取输入内容。
 
@@ -160,10 +100,6 @@ Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 
 Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝牙遥控器 2 和 2 Pro 默认的 Fn 长按行为不兼容。在“按键映射”的语音键区域开启“语音键模拟 Fn 点按”后，无线麦会在语音流开始和排空结束时各发送一次 Fn 点按。Typeless 和无线麦仍需选择同一个回环设备，并需授予无线麦“辅助功能”权限。
 
 该模式仍然要求**按住小米蓝牙遥控器 2 或 2 Pro 语音键说话、松开结束**；这两款遥控器的固件在松开语音键后都不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或遥控器 HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
-
-豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 `Install SayAll.pkg`，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
-
-![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
 
 ### 遥控器与语音工具的搭配
 
@@ -231,52 +167,13 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 后续开发计划见 [TODO](TODO.md)。
 
-## ⭐ Star History
-
-<p align="center">
-  <a href="https://github.com/HD838A/remote-mic-app/stargazers">
-    <img src="https://raw.githubusercontent.com/HD838A/remote-mic-app/star-history/assets/star-history.svg" alt="Star History Chart" width="100%">
-  </a>
-</p>
-
-## ☕️ 请我买 Token
-
-如果「无线麦 SayAll」对你有帮助，欢迎自愿请我买一点 Token。
-
-这些支持会用于支付 AI 开发工具的 Token 费用，帮助我继续为大家开发新功能、优化已有功能、修复问题，让这个项目能够持续迭代。
-
-赞赏完全自愿，不影响软件使用，也不构成任何服务承诺。金额随意，量力而行；无论是否赞赏，都感谢你的使用、反馈和分享。
-
-谢谢你支持「无线麦 SayAll」继续变得更好。
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="Screenshots/donation-wechat.jpg" alt="微信赞赏码" width="280">
-      <br>
-      微信
-    </td>
-  </tr>
-</table>
-
 ## 许可与来源
 
-本仓库中的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可。iOS App 已由独立私有仓库维护，并继续通过上方 TestFlight 公测入口分发。macOS App 的 Logo 和 App Icon 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本仓库中的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可。本分支目前不分发 iOS App。macOS App 的 Logo 和 App Icon 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-项目最初 fork 自 [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge)，现由本仓库独立维护。
+本分支派生自 [HD838A/remote-mic-app](https://github.com/HD838A/remote-mic-app)；上游项目更早派生自 [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge)。
 
 `MiRemoteV 2ch` 的设备命名及让豆包枚举设备的 USB transport 兼容方案参考自 [VincentKingHsu/MiRemoteVoice](https://github.com/VincentKingHsu/MiRemoteVoice) `v1.0.0-beta.1`（MIT）；该项目的兼容驱动同样基于 BlackHole。本项目不复用 MiRemoteVoice 的二进制替换脚本，而是从 [ExistentialAudio/BlackHole](https://github.com/ExistentialAudio/BlackHole) `v0.7.1`（固定提交 `e2b22aaaba4e507a097131704bf96dabc004d9cf`）源码独立派生构建 `MiRemoteV2ch.driver`，适用 `GPL-3.0`。它使用独立标识，可与已安装的 BlackHole 并存，不覆盖或删除其文件。
-
-## 官网
-
-- 中文官网：[sayall.app](https://sayall.app/)
-- English website：[sayall.app/en](https://sayall.app/en/)
-
-## 其他作品
-
-- [Vibe PPT Web Template](https://github.com/GetSayAll/vibe-ppt-web-template)
-- [Claude Code Config](https://github.com/HD838A/claude-code-config)
-- [DJI 4G Mac](https://github.com/HD838A/dji-4g-mac)
 
 ## 开发者文档
 

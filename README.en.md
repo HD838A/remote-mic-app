@@ -1,59 +1,8 @@
-# SayAll
+# SayAll · local Cantonese transcription fork
 
-[简体中文](README.md)
+[简体中文](README.md) · [Fork source](https://github.com/unfla-sh/MiRemote2Pro-Whisper) · [Issues](https://github.com/unfla-sh/MiRemote2Pro-Whisper/issues)
 
-[Website](https://sayall.app/en/) · [Setup tutorial](https://sayall.app/en/tutorial/)
-
-<p>
-  <a href="https://github.com/HD838A/remote-mic-app/stargazers">
-    <img src="https://img.shields.io/github/stars/HD838A/remote-mic-app?style=social" alt="GitHub Stars">
-  </a>
-</p>
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="Screenshots/wechat-group-qrcode.jpg" alt="SayAll WeChat group QR code" width="220"><br>
-      <strong>WeChat group</strong><br>
-      Scan in WeChat to join
-    </td>
-    <td align="center">
-      <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="SayAll Xiaohongshu QR code" width="220"></a><br>
-      <strong>Xiaohongshu</strong><br>
-      Scan to follow SayAll
-    </td>
-  </tr>
-</table>
-
-## Video introduction
-
-“Possibly the least tool-like tool I have used lately” shows how SayAll turns a Bluetooth voice remote into a new way to express ideas, control your Mac, and work with AI. The video is in Chinese.
-
-<p align="center">
-  <a href="https://www.bilibili.com/video/BV13Pep6BEXe">
-    <img src="Screenshots/video-introduction-cover.jpg" alt="Video cover for Possibly the least tool-like tool I have used lately" width="960">
-  </a>
-</p>
-
-<p align="center"><a href="https://www.bilibili.com/video/BV13Pep6BEXe">Click the cover or watch the original video on Bilibili</a></p>
-
-Video by [可乐不甜的跑焦日记](https://space.bilibili.com/327214328)
-
-## Windows version
-
-The first Windows preview of SayAll is now available, focusing on the essential features:
-
-- Supports Xiaomi Bluetooth Remote 2 and 2 Pro.
-- Voice input currently supports only WeChat Input Method.
-- The voice-input shortcut is `Ctrl + Win`.
-
-You are welcome to try it. In principle, the Windows version of SayAll should not trigger warnings from game anti-cheat or antivirus software. If you have concerns, scan the source code with an AI tool before installing it.
-
-[Download the Windows preview](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
-
-iOS app beta: [Join the TestFlight public beta](https://testflight.apple.com/join/J8k8fb7v)
-
-The Mac app continues to be distributed directly. Mac App Store submission is paused, while the current App Store launch focus is the iOS app and its Apple Watch app.
+This fork adds on-device Cantonese and English transcription from a Hugging Face Whisper model. It is independent of the original SayAll site, downloads, TestFlight, WeChat group, and Doubao or WeChat input methods. Some feature descriptions below are inherited from upstream and still need review.
 
 ![SayAll — a voice remote for Vibe Coding](Screenshots/Remote-Mic-Introduce-1.png)
 
@@ -98,20 +47,11 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 
 - Apple Silicon Mac with macOS 14 or later, or Intel Mac with macOS 13 or later
 - Xiaomi Bluetooth Remote 2 or 2 Pro
-- For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
+- For built-in transcription, the app downloads the Cantonese and fallback models on first use; no virtual microphone or external dictation app is required.
 
 ## Download and install
 
-- Setup tutorial: [Open the website tutorial](https://sayall.app/en/tutorial/).
-
-- Latest stable release (Apple Silicon): download it through the permanent [Cloudflare CDN entry](https://download.sayall.app/mac). The current stable entry provides only the Apple Silicon package and does not change between versions.
-- Latest pre-release (Apple Silicon / Intel): open [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases), find the newest macOS candidate marked **Pre-release** in the release list, and download the DMG for your Mac architecture. Until a release containing the Intel package is promoted to stable, Intel users should download the latest pre-release DMG whose name includes `Intel`.
-
-The Apple Silicon installer is named `Remote-Mic-<version>.dmg`; the Intel installer is named `Remote-Mic-<version>-Intel.dmg`. They are not interchangeable.
-
-The DMG has one ordinary installation entry: double-click **Install SayAll.pkg** on Apple Silicon, or **Install SayAll Intel.pkg** on Intel Macs. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
-
-Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only through the official Cloudflare CDN entry or this project's GitHub Releases. To verify a DMG, use `Remote-Mic-<version>.dmg.sha256` from the same GitHub Release; it lists both architecture-specific DMGs by filename.
+Check [this fork’s Releases](https://github.com/unfla-sh/MiRemote2Pro-Whisper/releases) for a build. If none is available, build from source. The original SayAll CDN and installers are not releases of this fork.
 
 ## First use
 
@@ -135,19 +75,19 @@ SayAll opens its main window by default on ordinary launches. The **About** page
 
 **App Language** displays **System Default**, **简体中文**, and **English** together. The settings window, status text, menu, and built-in help follow the selection. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
 
-The app checks for updates once per day and asks before installing a newer version; it does not silently download or install updates. **Check for Updates…** is available from both the About page and the right-click menu. **Check for pre-release updates** on the About page is off by default; when enabled, automatic and manual checks also include the latest GitHub pre-release candidate. Sparkle updates the app bundle only; the compatible microphone driver is managed by the installer in the DMG. If an older installation still uses the Remote Mic.app or 无线麦.app path, an in-app update keeps that existing path. Run the installer PKG from a new DMG once to migrate it to the canonical SayAll.app filename.
+This fork has no update feed yet. Automatic updates and upstream hardware announcements are disabled; check this fork’s Releases for builds.
 
 ## Use voice input
 
-1. Open **Connection & Voice**.
-2. Select **Refresh Audio Devices**.
-3. Select **MiRemoteV 2ch**, or another loopback device you already installed.
-4. Choose the same device as the microphone in the app that receives dictation or voice input.
-5. Click the target text field, hold the remote voice button to speak, then release it to finish.
+1. In first-run setup, select **On-device Cantonese transcription**.
+2. Wait for the models to load on the audio step. The **Connection & Voice** page shows the active model and links to its Hugging Face page.
+3. Focus an editable text field, hold the remote voice button while speaking, then release. Recognized text is inserted on this Mac.
+
+A compatible external dictation app and virtual microphone remain optional for legacy workflows.
 
 Under **Button Mapping**, the voice-button area lets you choose the default Fn/Globe behavior, a Left Command hold, a Right Command hold, or a Right Option hold. Modifier-key modes require SayAll Accessibility permission and press the selected key when voice starts, then release it when voice ends. The target voice app must support that standalone key; many apps merge both sides into a generic modifier, so verify the target app directly. Pressing another key while the modifier is held may trigger a modifier shortcut. Right Option is the least-used modifier, making it a good dedicated voice trigger, and several voice input tools accept it as their trigger key.
 
-Fn remains the default because it directly matches Fn-hold voice entry in apps such as Doubao and Weixin, Fn-tap entry in Typeless, and the remote's hold-to-capture/release-to-stop lifecycle. F18, F19, F20, or other uncommon keys could be added technically, but this version does not offer an arbitrary voice-key binding: the target voice app must use the same key, and RC003, iPhone, Apple Watch, Web, permissions, and input-source switching must all share one paired press/release lifecycle. Ordinary remote buttons can still use F1–F20 shortcuts.
+Fn remains the default for the remote’s hold-to-capture/release-to-stop lifecycle and optional external dictation tools. F18, F19, F20, or other uncommon keys could be added technically, but this version does not offer an arbitrary voice-key binding: the target voice app must use the same key, and RC003, iPhone, Apple Watch, Web, permissions, and input-source switching must all share one paired press/release lifecycle. Ordinary remote buttons can still use F1–F20 shortcuts.
 
 The voice button has no single-tap, double-tap, or long-press side effects. It is reserved for the low-latency press-to-start and release-to-stop voice session. To focus the frontmost app's input field, choose **Focus Input Field** under a normal button's **Custom Actions**; it uses macOS Accessibility and never reads the field contents.
 
@@ -158,8 +98,6 @@ To confirm the audio path, send a one-second test tone or inspect input level in
 Tap-to-toggle voice tools such as Typeless are incompatible with the Xiaomi Bluetooth Remote 2 and 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
 
 You must still **hold the Xiaomi Bluetooth Remote 2 or 2 Pro voice key while speaking and release it to finish**. Both remote firmwares stop microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete remote HID mapping automatically disables the mode and restores the default Fn-hold mapping.
-
-If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install SayAll.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
 
 ### Choosing the right mode for your remote and voice tool
 
@@ -227,24 +165,10 @@ Before developing any new feature, everyone—including the repository owner, ma
 
 For development, build, protocol, test, and release details, see the [Technical Documentation](TECHNICAL.en.md). Branch and pull-request management is defined in the [Branch and Commit Management Policy](BRANCH_MANAGEMENT.md).
 
-## ⭐ Star History
-
-<p align="center">
-  <a href="https://github.com/HD838A/remote-mic-app/stargazers">
-    <img src="https://raw.githubusercontent.com/HD838A/remote-mic-app/star-history/assets/star-history.svg" alt="Star History Chart" width="100%">
-  </a>
-</p>
-
 ## License and sources
 
-The macOS app, driver, and related software code in this repository are GPL-3.0-only. The iOS app is now maintained in a separate private repository and continues to be distributed through the TestFlight beta link above. The macOS app logo and app icon are proprietary brand assets that require a separate grant; see [LOGO-LICENSE.en.md](LOGO-LICENSE.en.md). Full copyright and third-party information is available in [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The macOS app, driver, and related software code in this repository are GPL-3.0-only. This fork does not currently distribute an iOS app. The macOS app logo and app icon are proprietary brand assets that require a separate grant; see [LOGO-LICENSE.en.md](LOGO-LICENSE.en.md). Full copyright and third-party information is available in [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The project was originally forked from [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge) and is now maintained independently in this repository.
+This fork derives from [HD838A/remote-mic-app](https://github.com/HD838A/remote-mic-app), which itself derives from [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge).
 
 The MiRemoteV 2ch naming and USB-transport compatibility approach for Doubao device enumeration were informed by [VincentKingHsu/MiRemoteVoice](https://github.com/VincentKingHsu/MiRemoteVoice) v1.0.0-beta.1 (MIT). This project does not reuse that project's binary replacement script. Instead, it independently derives MiRemoteV2ch.driver from [ExistentialAudio/BlackHole](https://github.com/ExistentialAudio/BlackHole) v0.7.1 at commit e2b22aaaba4e507a097131704bf96dabc004d9cf under GPL-3.0. The driver has a separate identity, coexists with BlackHole, and never overwrites or removes BlackHole files.
-
-## Other projects
-
-- [Vibe PPT Web Template](https://github.com/GetSayAll/vibe-ppt-web-template)
-- [Claude Code Config](https://github.com/HD838A/claude-code-config)
-- [DJI 4G Mac](https://github.com/HD838A/dji-4g-mac)

@@ -15,95 +15,28 @@ struct LocalizationTests {
         localization.select(.english)
         #expect(localization.language == .english)
         #expect(localization.locale.identifier == "en")
-        #expect(localization.localizedWebsiteURL.absoluteString == "https://sayall.app/en/")
+        #expect(localization.localizedWebsiteURL.absoluteString == AppLinks.githubRepository.absoluteString)
         #expect(AppSettings(defaults: defaults).applicationLanguage == .english)
 
         localization.select(.simplifiedChinese)
         #expect(localization.language == .simplifiedChinese)
         #expect(localization.locale.identifier == "zh-Hans")
-        #expect(localization.localizedWebsiteURL.absoluteString == "https://sayall.app/")
+        #expect(localization.localizedWebsiteURL.absoluteString == AppLinks.githubRepository.absoluteString)
         #expect(AppSettings(defaults: defaults).applicationLanguage == .simplifiedChinese)
     }
 
-    @Test func appLinksProvideThePublicTestFlightBetaEverywhere() throws {
-        let expectedURL = "https://testflight.apple.com/join/J8k8fb7v"
-        #expect(AppLinks.testFlightPublicBeta.absoluteString == expectedURL)
-
+    @Test func forkLinksDoNotSendUsersToUpstreamServices() throws {
+        #expect(AppLinks.website(for: Locale(identifier: "en")) == AppLinks.githubRepository)
+        #expect(AppLinks.website(for: Locale(identifier: "zh-Hant")) == AppLinks.githubRepository)
+        #expect(AppLinks.feedback.absoluteString ==
+            "https://github.com/unfla-sh/MiRemote2Pro-Whisper/issues")
         for readmeName in ["README.md", "README.en.md"] {
             let readme = try String(
                 contentsOf: repositoryRoot.appendingPathComponent(readmeName),
                 encoding: .utf8
             )
-            #expect(readme.contains(expectedURL))
-        }
-
-        let expression = try NSRegularExpression(
-            pattern: #"https://testflight\.apple\.com/join/[A-Za-z0-9]+"#
-        )
-        let allowedExtensions = Set([
-            "json", "md", "plist", "sh", "strings", "swift", "ts", "tsx", "yaml", "yml"
-        ])
-        let ignoredDirectories = Set([".build", ".git", ".swiftpm", "dist"])
-        let enumerator = try #require(
-            FileManager.default.enumerator(
-                at: repositoryRoot,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-        )
-        var referencedURLs: Set<String> = []
-
-        while let fileURL = enumerator.nextObject() as? URL {
-            let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
-            if resourceValues.isDirectory == true {
-                if ignoredDirectories.contains(fileURL.lastPathComponent) {
-                    enumerator.skipDescendants()
-                }
-                continue
-            }
-            guard allowedExtensions.contains(fileURL.pathExtension.lowercased()),
-                  let contents = try? String(contentsOf: fileURL, encoding: .utf8)
-            else {
-                continue
-            }
-            let range = NSRange(contents.startIndex..., in: contents)
-            for match in expression.matches(in: contents, range: range) {
-                guard let matchRange = Range(match.range, in: contents) else { continue }
-                referencedURLs.insert(String(contents[matchRange]))
-            }
-        }
-
-        #expect(referencedURLs == [expectedURL])
-    }
-
-    @Test func readmesUseVersionIndependentMacDownloadEntries() throws {
-        let stableURL = "https://download.sayall.app/mac"
-        let previewURL = "https://github.com/HD838A/remote-mic-app/releases"
-        let expectations = [
-            ("README.md", "## 下载与安装", "- 最新正式版（Apple Silicon）：", "- 最新预览版（Apple Silicon / Intel）："),
-            ("README.en.md", "## Download and install", "- Latest stable release (Apple Silicon):", "- Latest pre-release (Apple Silicon / Intel):"),
-        ]
-
-        for (readmeName, sectionHeading, stablePrefix, previewPrefix) in expectations {
-            let readme = try String(
-                contentsOf: repositoryRoot.appendingPathComponent(readmeName),
-                encoding: .utf8
-            )
-            let sectionStart = try #require(readme.range(of: sectionHeading))
-            let remainingReadme = readme[sectionStart.upperBound...]
-            let sectionEnd = remainingReadme.range(of: "\n## ")?.lowerBound ?? readme.endIndex
-            let downloadSection = readme[sectionStart.lowerBound..<sectionEnd]
-            let stableEntry = try #require(
-                downloadSection.split(separator: "\n").first { $0.hasPrefix(stablePrefix) }
-            )
-            let previewEntry = try #require(
-                downloadSection.split(separator: "\n").first { $0.hasPrefix(previewPrefix) }
-            )
-
-            #expect(stableEntry.contains("](\(stableURL))"))
-            #expect(!stableEntry.contains("/releases/"))
-            #expect(previewEntry.contains("](\(previewURL))"))
-            #expect(!previewEntry.contains("/releases/tag/"))
+            #expect(readme.contains("https://github.com/unfla-sh/MiRemote2Pro-Whisper/releases"))
+            #expect(!readme.contains("https://testflight.apple.com/join/"))
         }
     }
 

@@ -3,21 +3,22 @@ import Testing
 @testable import RemoteMic
 
 struct FeedbackLinkTests {
-    @Test func feedbackUsesPublicMacGuestEntryWithoutCredentials() throws {
+    @Test func feedbackUsesThisForksOwnIssueTrackerWithoutCredentials() throws {
+        // This fork has no equivalent to upstream's my.sayall.app feedback
+        // backend, so feedback goes to this fork's own GitHub Issues.
         let components = try #require(URLComponents(
             url: AppLinks.feedback,
             resolvingAgainstBaseURL: false
         ))
 
         #expect(components.scheme == "https")
-        #expect(components.host == "my.sayall.app")
-        #expect(components.path == "/api/guest-entry")
-        #expect(components.queryItems == [URLQueryItem(name: "source", value: "mac")])
+        #expect(components.host == "github.com")
+        #expect(components.path == "/unfla-sh/MiRemote2Pro-Whisper/issues")
 
         let forbiddenNames = ["code", "token", "device", "device_id", "deviceid"]
         #expect(components.queryItems?.allSatisfy {
             !forbiddenNames.contains($0.name.lowercased())
-        } == true)
+        } != false)
     }
 
     @Test func aboutPageOwnsFeedbackWithoutKeepingTheStatusMenuEntry() throws {

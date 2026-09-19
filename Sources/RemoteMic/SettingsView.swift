@@ -410,7 +410,6 @@ struct SettingsView: View {
     @State private var isWebRemoteInvitePresented = false
     @State private var isWebRemoteInviteInvalidPresented = false
     @State private var isWebRemoteInviteAuthorized = false
-    @State private var isTestFlightLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
     @State private var expandedShareSection: SettingsSection?
@@ -590,26 +589,6 @@ struct SettingsView: View {
                     }
                 }
 
-                HStack(spacing: 10) {
-                    Link(destination: AppLinks.testFlightPublicBeta) {
-                        Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
-                    }
-                    .compatibilityButtonStyle(.prominent)
-
-                    Button {
-                        copyTestFlightPublicBetaLink()
-                    } label: {
-                        Label(
-                            localization.text(
-                                isTestFlightLinkCopied
-                                    ? "common.status.copied"
-                                    : "common.action.copy_link"
-                            ),
-                            systemImage: isTestFlightLinkCopied ? "checkmark" : "doc.on.doc"
-                        )
-                    }
-                    .compatibilityButtonStyle(.standard)
-                }
             }
             .padding(18)
             .background(
@@ -869,8 +848,11 @@ struct SettingsView: View {
                     connectionDevicePanel
                         .frame(width: 230)
                     VStack(spacing: 14) {
+                        localTranscriptionPanel
                         audioSettingsPanel
-                        audioCompatibilityPanel
+                        if [.doubao, .weixin].contains(settings.onboardingVoiceTool) {
+                            audioCompatibilityPanel
+                        }
                         // Chromecase 连接卡片已按产品要求移除：启用开关默认常开，
                         // 语音键模式在按键页底部，状态见侧边栏「连接」的设备列表。
                         phoneConnectionsPanel
@@ -977,24 +959,6 @@ struct SettingsView: View {
                             model.isPhoneRemoteConnectionEnabled ? .standard : .prominent
                         )
 
-                        Link(destination: AppLinks.testFlightPublicBeta) {
-                            Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
-                        }
-                        .compatibilityButtonStyle(.standard)
-
-                        Button {
-                            copyTestFlightPublicBetaLink()
-                        } label: {
-                            Label(
-                                localization.text(
-                                    isTestFlightLinkCopied
-                                        ? "common.status.copied"
-                                        : "common.action.copy_link"
-                                ),
-                                systemImage: isTestFlightLinkCopied ? "checkmark" : "doc.on.doc"
-                            )
-                        }
-                        .compatibilityButtonStyle(.standard)
                     }
 
                     if let invitation = model.phoneRemoteInvitation {
@@ -1266,6 +1230,20 @@ struct SettingsView: View {
                     Spacer()
                 }
             }
+        }
+    }
+
+    private var localTranscriptionPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 8) {
+                embeddedTranscriptionStatusRow
+                Link(
+                    "connection.embedded_transcription.model_link",
+                    destination: URL(string: "https://huggingface.co/hyperkit/whisper-large-v3-turbo-cantonese-yue-english-coreml")!
+                )
+                .font(.system(size: 12))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -1794,6 +1772,45 @@ struct SettingsView: View {
             }
         }
         .help(localization.text("connection.voice_key_mode.help"))
+    }
+
+    /// Read-only: shows which embedded transcription model is actually
+    /// driving the Voice Trigger Key above, so it doesn't require checking
+    /// the runtime log to tell. See `EmbeddedTranscriptionEngine.swift`.
+    private var embeddedTranscriptionStatusRow: some View {
+        let (systemImage, tint, key): (String, Color, String) = {
+            switch model.embeddedTranscriptionStatus {
+            case .loading:
+                return ("hourglass", .secondary, "connection.embedded_transcription.loading")
+            case .ready(usesCantoneseModel: true):
+                return (
+                    "checkmark.circle.fill", .green,
+                    "connection.embedded_transcription.ready_cantonese"
+                )
+            case .ready(usesCantoneseModel: false):
+                return (
+                    "checkmark.circle.fill", .yellow,
+                    "connection.embedded_transcription.ready_fallback"
+                )
+            case .failed:
+                return (
+                    "exclamationmark.triangle.fill", .red,
+                    "connection.embedded_transcription.failed"
+                )
+            }
+        }()
+        return Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("connection.embedded_transcription.title")
+                    .font(.system(size: 12, weight: .medium))
+                Text(LocalizedStringKey(key))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+        }
     }
 
     private var mappingVoiceFnTapControl: some View {
@@ -3346,10 +3363,10 @@ struct SettingsView: View {
                                 Spacer(minLength: 16)
                                 Button("about.configuration.export", action: exportConfiguration)
                                     .compatibilityButtonStyle(.standard)
-                                    .frame(width: 92)
+                                    .frame(minWidth: 92)
                                 Button("about.configuration.import", action: importConfiguration)
                                     .compatibilityButtonStyle(.standard)
-                                    .frame(width: 92)
+                                    .frame(minWidth: 92)
                             }
                             .padding(.vertical, 8)
 
@@ -4053,7 +4070,7 @@ struct SettingsView: View {
             .frame(width: 78, alignment: .leading)
             Button(actionTitle, action: action)
                 .compatibilityButtonStyle(.standard)
-                .frame(width: 126)
+                .frame(minWidth: 126)
         }
         .padding(.vertical, 8)
     }
@@ -4129,7 +4146,6 @@ struct SettingsView: View {
     private func requestWebRemoteSession() {
         guard isWebRemoteInviteAuthorized else {
             webRemoteInviteCode = ""
-            isTestFlightLinkCopied = false
             isWebRemoteInvitePresented = true
             return
         }
@@ -4156,14 +4172,6 @@ struct SettingsView: View {
             return
         }
         isWebRemoteInviteAuthorized = true
-    }
-
-    private func copyTestFlightPublicBetaLink() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        isTestFlightLinkCopied = pasteboard.writeObjects([
-            AppLinks.testFlightPublicBeta.absoluteString as NSString
-        ])
     }
 
     private func openWebRemoteSession() {

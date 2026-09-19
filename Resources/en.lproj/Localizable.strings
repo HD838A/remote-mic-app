@@ -287,6 +287,12 @@
 "connection.voice_key_mode.unverified" = "Modifier-key mode is not verified";
 "connection.voice_key_mode.unverified_detail" = "Configure the same trigger key (Left/Right Command or Right Option) in the target voice tool and confirm a real dictated phrase. SayAll cannot read the tool's internal settings; switch back to Fn/Globe if no text appears.";
 "connection.voice_key_mode.command_permission" = "Modifier-key mode requires Accessibility permission";
+"connection.embedded_transcription.title" = "Local Transcription";
+"connection.embedded_transcription.loading" = "Loading model…";
+"connection.embedded_transcription.ready_cantonese" = "Ready — Cantonese model active";
+"connection.embedded_transcription.ready_fallback" = "Ready — fallback model (Cantonese script unavailable)";
+"connection.embedded_transcription.failed" = "Failed to load — the remote's voice button won't produce text";
+"connection.embedded_transcription.model_link" = "View Cantonese model on Hugging Face";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "iPhone, Apple Watch, and Web";
 "connection.phone.ios_title" = "iOS App (Recommended)";
@@ -296,7 +302,7 @@
 "connection.phone.qr_help" = "On the Mac page in SayAll for iPhone, tap Scan QR Code to connect directly to this Mac. Automatic discovery remains available as a fallback.";
 "connection.phone.qr_refresh" = "The code expires shortly and refreshes automatically. Scan a new code after stopping or restarting phone connections.";
 "connection.phone.qr_accessibility" = "iPhone connection QR code";
-"connection.phone.ios_help" = "Start phone connection on this Mac, then install and open the iOS app from TestFlight.";
+"connection.phone.ios_help" = "Connect a compatible iOS app if you already have one. This fork does not distribute an iOS app.";
 "connection.phone.not_enabled" = "Not Started";
 "connection.trusted_devices.title" = "Trusted Mobile Devices";
 "connection.trusted_devices.help" = "iPhone and Apple Watch controls are optional backups. Use a connection entry after each launch to enable nearby connections. Clearing this list requires every device to be approved again.";
@@ -322,9 +328,9 @@
 "connection.web.help_short" = "A backup option that needs an invite code and creates a one-time QR code.";
 "connection.web.invite.title" = "Enter Web Remote Invite Code";
 "connection.web.invite.description" = "The Mobile Web connection opens after the code is verified.";
-"connection.web.invite.ios_eyebrow" = "iOS · TestFlight Beta";
-"connection.web.invite.ios_title" = "For the best experience, use the iOS app";
-"connection.web.invite.ios_description" = "The iOS beta does not require an invite code. Install the SayAll iOS beta for a more convenient and complete phone remote experience.";
+"connection.web.invite.ios_eyebrow" = "Phone remote";
+"connection.web.invite.ios_title" = "Use a compatible iOS app if available";
+"connection.web.invite.ios_description" = "This fork does not provide an iOS app. You can use the web remote in your phone browser.";
 "connection.web.invite.testflight_open" = "Open TestFlight";
 "connection.web.invite.placeholder" = "Invite code";
 "connection.web.invite.unlock" = "Open Connection";
@@ -604,7 +610,7 @@
 "about.version.history" = "Version History";
 "help.glossary.open" = "Glossary";
 "about.support.github" = "GitHub";
-"about.support.website" = "Website";
+"about.support.website" = "Project page";
 "about.support.feedback" = "Feedback";
 "about.support.feedback_action" = "Send Feedback";
 "about.support.feedback_description" = "Report a problem or suggest an improvement for SayAll.";
@@ -616,7 +622,7 @@
 "share.hide_action" = "Hide";
 "share.card.title" = "Scan or copy the link";
 "share.card.description" = "Scan the QR code with a phone, or copy the same official website link.";
-"share.qr.accessibility_label" = "QR code for the SayAll website";
+"share.qr.accessibility_label" = "QR code for this fork's project page";
 "share.copy_action" = "Copy Link";
 "share.copy.accessibility_hint" = "Copies the same link encoded in the QR code.";
 "share.copy_succeeded" = "Link copied";
@@ -670,7 +676,9 @@
 "onboarding.welcome.feature.verify" = "Verify each setting live and see exactly what needs attention";
 "onboarding.voice_tool.title" = "Where do you want to dictate?";
 "onboarding.voice_tool.detail" = "Choose your usual tool and we’ll prepare the right voice-key behavior. You can change it later in Settings.";
-"onboarding.voice_tool.none_detected" = "Doubao Input Method, WeChat Input Method, and Typeless were not detected. You can still choose “Another Voice Tool”, but first install and open a tool that supports voice input.";
+"onboarding.voice_tool.local.title" = "On-device Cantonese transcription";
+"onboarding.voice_tool.local.detail" = "Speak into the remote and insert text directly on this Mac. No dictation app or virtual microphone is required.";
+"onboarding.voice_tool.none_detected" = "Typeless was not detected. You can choose another voice input tool if you already use one.";
 "onboarding.voice_tool.unselected.title" = "Not Selected";
 "onboarding.voice_tool.unselected.detail" = "No voice tool selected yet.";
 "onboarding.voice_tool.doubao.title" = "Doubao Input Method";
@@ -754,7 +762,7 @@
 "onboarding.remote.retry_input" = "Retry Button Detection";
 "onboarding.remote.open_bluetooth" = "Open Bluetooth Settings";
 "onboarding.iphone_remote.title" = "Connect an iPhone to this Mac";
-"onboarding.iphone_remote.detail" = "Install and open the SayAll iOS app, select this Mac, and verify the matching pairing code.";
+"onboarding.iphone_remote.detail" = "If you already have a compatible iOS app, open it, select this Mac, and verify the matching pairing code. This fork does not distribute an iOS app.";
 "onboarding.iphone_remote.install" = "Install or Open the iOS App";
 "onboarding.iphone_remote.connected" = "iPhone connected";
 "onboarding.iphone_remote.waiting" = "Waiting for iPhone";
@@ -774,6 +782,10 @@
 "onboarding.web_remote.button_detail" = "After connecting, press any normal button in the web remote.";
 "onboarding.audio.title" = "Choose a virtual audio device";
 "onboarding.audio.detail" = "Select MiRemoteV 2ch or BlackHole 2ch. Speakers and other ordinary audio devices cannot complete the voice-input path.";
+"onboarding.audio.local_title" = "Prepare local transcription";
+"onboarding.audio.local_detail" = "The Cantonese and fallback models load on this Mac. The first download may take a while.";
+"onboarding.audio.local_loading" = "Loading models. Keep this window open and continue when ready.";
+"onboarding.audio.local_ready" = "Local transcription is ready. The active model is shown on the Connection page.";
 "onboarding.audio.device_detail" = "Install or enable MiRemoteV 2ch or BlackHole 2ch, then check again.";
 "onboarding.audio.no_devices" = "No supported virtual audio device was detected";
 "onboarding.audio.selected" = "%1$@ selected";
@@ -910,6 +922,7 @@
 "onboarding.side.device_found" = "Supported virtual audio device detected";
 "onboarding.side.device_selected" = "Virtual audio device selected";
 "onboarding.side.audio_ready" = "Audio output ready";
+"onboarding.side.local_model" = "Local speech model ready";
 "onboarding.side.audio_on_demand" = "Audio connects when voice starts";
 "onboarding.side.voice_key" = "Voice key pressed and released";
 "onboarding.side.samples" = "Voice audio received";

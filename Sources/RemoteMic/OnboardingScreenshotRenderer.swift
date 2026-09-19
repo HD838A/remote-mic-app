@@ -97,7 +97,7 @@ enum OnboardingScreenshotRenderer {
         if let requestedVoiceKeyMode {
             settings.voiceKeyMode = requestedVoiceKeyMode
         }
-        settings.setOnboardingVoiceTool(requestedVoiceTool ?? .doubao)
+        settings.setOnboardingVoiceTool(requestedVoiceTool ?? .local)
         settings.setOnboardingRemoteAvailability(
             controlMethod == .physicalRemote ? .hasRemote : .noRemote
         )

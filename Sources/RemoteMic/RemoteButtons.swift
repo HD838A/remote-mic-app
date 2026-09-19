@@ -724,6 +724,10 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         experimentalContinuousRecordingEnabled: Bool
     ) -> [ButtonAction] {
         allCases.filter { action in
+            if [.openWeChat, .openWeCom, .openNeteaseMusic].contains(action),
+               action != current {
+                return false
+            }
             guard action.isEnabled(
                 experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled
             ) else {

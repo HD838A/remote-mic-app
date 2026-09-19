@@ -667,6 +667,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     private func startUpdaterIfNeeded() {
         guard !updaterStarted else { return }
+        // A fork must not use the original project's update feed or key.
+        // Re-enable only after this fork publishes and signs its own appcast.
+        guard updateFeedSelection.validatedStableFeedURL != nil else { return }
         updaterController.updater.automaticallyChecksForUpdates =
             UpdateCheckPolicy(
                 checksForPreReleaseUpdates: model.settings.checksForPreReleaseUpdates

@@ -37,14 +37,10 @@ private struct HardwareAnnouncementEnvelope: Decodable {
 }
 
 enum HardwareAnnouncementSource {
-    static let defaultURL = URL(
-        string: "https://download.sayall.app/mac/announcements/hardware.json"
-    )!
-
     static func resolve(
         bundle: Bundle = .main,
         environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> URL {
+    ) -> URL? {
         if environment["REMOTE_MIC_UI_TEST_MODE"] == "1",
            let injected = environment["REMOTE_MIC_UI_TEST_HARDWARE_ANNOUNCEMENTS_URL"],
            let url = URL(string: injected),
@@ -58,13 +54,15 @@ enum HardwareAnnouncementSource {
            isAllowed(url) {
             return url
         }
-        return defaultURL
+        // This fork has no announcement feed. Do not contact the original
+        // project's server when a fork-owned URL has not been configured.
+        return nil
     }
 
     private static func isAllowed(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }
-        if url.scheme == "https" && host == "download.sayall.app" { return true }
-        if url.scheme == "https" && host == "raw.githubusercontent.com" { return true }
+        if url.scheme == "https" && host == "raw.githubusercontent.com",
+           url.path.hasPrefix("/unfla-sh/MiRemote2Pro-Whisper/") { return true }
         return false
     }
 }
@@ -74,14 +72,14 @@ final class HardwareAnnouncementStore: ObservableObject {
     @Published private(set) var isLoading = false
 
     private let session: URLSession
-    private let sourceURL: () -> URL
+    private let sourceURL: () -> URL?
     private let logger: (String) -> Void
     private var task: URLSessionDataTask?
     private var requestGeneration = 0
 
     init(
         session: URLSession = .shared,
-        sourceURL: @escaping () -> URL = { HardwareAnnouncementSource.resolve() },
+        sourceURL: @escaping () -> URL? = { HardwareAnnouncementSource.resolve() },
         logger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
         self.session = session
@@ -97,9 +95,15 @@ final class HardwareAnnouncementStore: ObservableObject {
         task?.cancel()
         requestGeneration &+= 1
         let generation = requestGeneration
+        guard let url = sourceURL() else {
+            announcements = []
+            isLoading = false
+            logger("HARDWARE ANNOUNCEMENT skipped reason=no_fork_feed")
+            return
+        }
         isLoading = true
         logger("HARDWARE ANNOUNCEMENT request_started")
-        var request = URLRequest(url: sourceURL())
+        var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 12
         let task = session.dataTask(with: request) { [weak self] data, response, error in

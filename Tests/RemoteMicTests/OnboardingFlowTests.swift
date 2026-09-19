@@ -409,6 +409,50 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func localTranscriptionRequiresAModelButNoExternalVoiceToolOrVirtualDevice() {
+        var capabilities = OnboardingCapabilities()
+        #expect(OnboardingVoiceTool.local.preferredInputSourceID == nil)
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .voiceTool, voiceTool: .local, capabilities: capabilities
+        ))
+        #expect(!OnboardingFlowPolicy.canContinue(
+            from: .audio, voiceTool: .local, capabilities: capabilities
+        ))
+        capabilities.localTranscriptionReady = true
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .audio, voiceTool: .local, capabilities: capabilities
+        ))
+        #expect(OnboardingVoiceTestConfigurationPolicy.isComplete(
+            voiceTool: .local,
+            voiceKeyMode: .function,
+            voiceFnTapModeEnabled: false,
+            audioOutputReady: true,
+            externalVoiceKeyConfirmed: false,
+            externalGlobalVoiceConfirmed: false,
+            externalMicrophoneConfirmed: false
+        ))
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: true,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .unavailable,
+            finalObservation: true,
+            localTranscription: true
+        ) == .passed)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: true,
+            samplesReceived: true,
+            transcriptionAppeared: true,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .unavailable,
+            finalObservation: true,
+            localTranscription: true
+        ) == .manualInput)
+    }
+
     @Test func fnInputMethodsRequireTheSystemFnActionToBeReleased() {
         var capabilities = OnboardingCapabilities()
 
@@ -564,15 +608,15 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("GridItem(.flexible(), spacing: 10, alignment: .top)"))
         #expect(viewSource.contains(".frame(height: 112, alignment: .top)"))
         #expect(viewSource.contains("inputMethodGuide(for: settings.onboardingVoiceTool)"))
-        #expect(viewSource.contains("allRecognizedVoiceToolsUnavailable"))
-        #expect(viewSource.contains("onboarding.voice_tool.none_detected"))
+        #expect(!viewSource.contains("allRecognizedVoiceToolsUnavailable"))
         #expect(viewSource.contains("onboarding.voice_tool.other.setup_detail"))
         #expect(viewSource.contains("onboarding.voice_test.configuration.detail"))
         #expect(viewSource.contains("externalToolConfigurationConfirmationCard"))
         #expect(viewSource.contains("externalToolVoiceKeyConfirmed"))
         #expect(viewSource.contains("externalToolGlobalVoiceConfirmed"))
         #expect(viewSource.contains("externalToolMicrophoneConfirmed"))
-        #expect(viewSource.contains("if voiceToolAvailability[.doubao] == .notInstalled"))
+        #expect(viewSource.contains("var tools: [OnboardingVoiceTool] = [.local]"))
+        #expect(!viewSource.contains("AppLinks.doubaoInputMethod"))
         #expect(!viewSource.contains("settings.onboardingVoiceTool == .doubao,\n"))
         #expect(viewSource.contains("localization.text(settings.onboardingVoiceTool.titleKey)"))
         #expect(rendererSource.contains("allowsInputSourceSwitching: false"))

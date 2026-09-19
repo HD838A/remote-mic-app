@@ -433,8 +433,6 @@ plutil -insert SayAllChromecaseIncluded -bool "$SAYALL_CHROMECASE_INCLUDED" \
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   plutil -replace LSMinimumSystemVersion -string "$RELEASE_MIN_SYSTEM_VERSION" \
     "$APP_DIR/Contents/Info.plist"
-  plutil -replace SUFeedURL -string "$RELEASE_FEED_URL" \
-    "$APP_DIR/Contents/Info.plist"
 fi
 if [[ -n "${REMOTE_WEB_RELAY_URL:-}" ]]; then
   plutil -remove RemoteWebRelayURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
