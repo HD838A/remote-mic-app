@@ -384,9 +384,16 @@ enum OnboardingLaunchPolicy {
     static func shouldShowMainWindow(
         isComplete: Bool,
         completedUpdate: Bool,
-        openMainWindowAtLaunch: Bool
+        openMainWindowAtLaunch: Bool,
+        showDockIcon: Bool = true,
+        showStatusBarIcon: Bool = true
     ) -> Bool {
-        !isComplete || completedUpdate || openMainWindowAtLaunch
+        // When both Dock and menu-bar icons are hidden, launching the app is the
+        // remaining way to reopen Settings, so always present the main window.
+        !isComplete
+            || completedUpdate
+            || openMainWindowAtLaunch
+            || (!showDockIcon && !showStatusBarIcon)
     }
 }
 

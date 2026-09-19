@@ -42,6 +42,7 @@ private struct PersonalizedConfiguration: Codable {
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let showDockIcon: Bool
+    let showStatusBarIcon: Bool?
     let openMainWindowAtLaunch: Bool?
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
@@ -301,6 +302,7 @@ final class AppSettings: ObservableObject {
         static let selectedRemoteProfileID = "selectedRemoteProfileID"
         static let applicationLanguage = "applicationLanguage"
         static let showDockIcon = "showDockIcon"
+        static let showStatusBarIcon = "showStatusBarIcon"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
@@ -409,6 +411,10 @@ final class AppSettings: ObservableObject {
 
     @Published var showDockIcon: Bool {
         didSet { defaults.set(showDockIcon, forKey: Keys.showDockIcon) }
+    }
+
+    @Published var showStatusBarIcon: Bool {
+        didSet { defaults.set(showStatusBarIcon, forKey: Keys.showStatusBarIcon) }
     }
 
     @Published var openMainWindowAtLaunch: Bool {
@@ -715,6 +721,9 @@ final class AppSettings: ObservableObject {
         showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
             ? true
             : defaults.bool(forKey: Keys.showDockIcon)
+        showStatusBarIcon = defaults.object(forKey: Keys.showStatusBarIcon) == nil
+            ? true
+            : defaults.bool(forKey: Keys.showStatusBarIcon)
         openMainWindowAtLaunch = defaults.object(forKey: Keys.openMainWindowAtLaunch) == nil
             ? true
             : defaults.bool(forKey: Keys.openMainWindowAtLaunch)
@@ -1662,6 +1671,7 @@ final class AppSettings: ObservableObject {
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             showDockIcon: showDockIcon,
+            showStatusBarIcon: showStatusBarIcon,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
@@ -1820,6 +1830,9 @@ final class AppSettings: ObservableObject {
         customApplicationProfiles = importedApplicationProfiles
         applicationLanguage = configuration.applicationLanguage
         showDockIcon = configuration.showDockIcon
+        if let showStatusBarIcon = configuration.showStatusBarIcon {
+            self.showStatusBarIcon = showStatusBarIcon
+        }
         if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {
             self.openMainWindowAtLaunch = openMainWindowAtLaunch
         }

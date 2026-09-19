@@ -1417,6 +1417,13 @@ struct OnboardingFlowTests {
             completedUpdate: false,
             openMainWindowAtLaunch: false
         ))
+        #expect(OnboardingLaunchPolicy.shouldShowMainWindow(
+            isComplete: true,
+            completedUpdate: false,
+            openMainWindowAtLaunch: false,
+            showDockIcon: false,
+            showStatusBarIcon: false
+        ))
     }
 
     @Test func completedUpdateOpensPermissionRepairOnlyWhenARequiredPermissionIsMissing() throws {
