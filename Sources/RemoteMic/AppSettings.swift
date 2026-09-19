@@ -739,9 +739,11 @@ final class AppSettings: ObservableObject {
             corrupted: &corruptedKeys
         ) ?? []
 
+        // English is the shipped default; the picker still offers "System",
+        // 简体中文 and 繁體中文.
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
-        ) ?? .system
+        ) ?? .default
         showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
             ? true
             : defaults.bool(forKey: Keys.showDockIcon)

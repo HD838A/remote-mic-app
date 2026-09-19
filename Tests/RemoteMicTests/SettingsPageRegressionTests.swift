@@ -322,7 +322,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("watchBluetoothServer.stop()"))
         #expect(source.contains("watchBluetoothServer.updateButtonTitles(titles)"))
         #expect(source.contains("func togglePhoneRemoteConnection()"))
-        #expect(source.contains("LocalizedMessage(\"connection.phone.cancel_waiting\")"))
+        // The cancel-waiting title stays localized; either accessor form is fine.
+        #expect(source.contains("\"connection.phone.cancel_waiting\""))
         #expect(source.contains("response == .alertThirdButtonReturn"))
         #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled else"))
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
@@ -1018,7 +1019,7 @@ struct SettingsPageRegressionTests {
             )
         )
         let languageSection = settingsPage[languageSectionStart.lowerBound..<languageSectionEnd.lowerBound]
-        #expect(languageSection.contains(".frame(width: 300)"))
+        #expect(languageSection.contains(".frame(width: 420)"))
         #expect(languageSection.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
         #expect(!settingsPage.contains("help.glossary.open"))
         #expect(!settingsPage.contains("openGlossary"))

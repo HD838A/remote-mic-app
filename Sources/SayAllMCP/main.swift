@@ -49,7 +49,7 @@ private final class SayAllMCPStdioServer {
     }
 
     func run() throws {
-        writeError("无线麦SayAll.app history MCP server is running on stdio.\n")
+        writeError("SayAll history MCP server is running on stdio.\n")
         while let line = readLine(strippingNewline: true) {
             guard !line.isEmpty else { continue }
             do {
@@ -220,8 +220,8 @@ private final class SayAllMCPStdioServer {
     private static let tools: [[String: Any]] = [
         [
             "name": "list_transcript_apps",
-            "title": "List 无线麦SayAll.app transcript applications",
-            "description": "List applications represented in the user's local 无线麦SayAll.app voice transcript history. Does not return transcript text.",
+            "title": "List SayAll transcript applications",
+            "description": "List applications represented in the user's local SayAll voice transcript history. Does not return transcript text.",
             "inputSchema": ["type": "object", "additionalProperties": false],
             "outputSchema": [
                 "type": "object",
@@ -236,8 +236,8 @@ private final class SayAllMCPStdioServer {
         ],
         [
             "name": "query_transcripts",
-            "title": "Query 无线麦SayAll.app transcripts",
-            "description": "Read authorized local 无线麦SayAll.app transcript records with optional time and application filters. Results are paginated.",
+            "title": "Query SayAll transcripts",
+            "description": "Read authorized local SayAll transcript records with optional time and application filters. Results are paginated.",
             "inputSchema": [
                 "type": "object",
                 "additionalProperties": false,

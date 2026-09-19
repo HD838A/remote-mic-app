@@ -3478,7 +3478,7 @@ struct SettingsView: View {
                                 }
                                 .labelsHidden()
                                 .pickerStyle(.segmented)
-                                .frame(width: 300)
+                                .frame(width: 420)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 8)
@@ -3522,7 +3522,7 @@ struct SettingsView: View {
                     inlineDiagnosticsSection
 
                     if model.isRC003VoiceExtensionTestEnabled {
-                        Text("测试长时间语音功能")
+                        Text(localization.text("diagnostics.long_voice_test.title"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .center)

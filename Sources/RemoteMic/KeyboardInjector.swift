@@ -1259,6 +1259,7 @@ enum KeyboardInjector {
         let terms = [
             "password", "passcode", "secret", "api key", "apikey", "token", "credit card",
             "密码", "口令", "密钥", "令牌", "银行卡",
+            "密碼", "金鑰", "權杖", "銀行卡",
         ]
         return terms.contains(where: value.contains)
     }
@@ -1471,6 +1472,7 @@ enum KeyboardInjector {
             "title", "rename", "api key", "apikey", "token", "password", "secret",
             "command palette", "address bar", "approval", "permission", "code editor", "monaco",
             "标题", "重命名", "密钥", "令牌", "密码", "审批", "权限", "代码编辑器",
+            "標題", "重新命名", "金鑰", "權杖", "密碼", "審批", "權限", "程式碼編輯器",
         ]
         guard !excludedTerms.contains(where: semanticText.contains) else { return nil }
 
@@ -1478,13 +1480,16 @@ enum KeyboardInjector {
             "composer", "prompt-editor", "prompt_editor", "chat-input", "chat_input",
             "message-input", "message_input", "prompt input", "message input",
             "消息输入", "输入消息", "发送消息",
+            "訊息輸入", "輸入訊息", "傳送訊息",
         ]
         let supportingTerms = [
             "message", "prompt", "reply", "ask claude", "ask anything", "chat", "提问", "回复",
+            "提問", "回覆",
         ]
         let explicitlyAllowedTerms = [
             "search", "find", "filter", "settings", "preferences", "terminal", "console", "shell", "xterm",
             "搜索", "查找", "筛选", "设置", "偏好", "终端", "控制台",
+            "搜尋", "尋找", "篩選", "設定", "偏好設定", "終端機", "主控台",
         ]
         let hasStrongSemanticMatch = strongTerms.contains(where: semanticText.contains)
         let hasSupportingSemanticMatch = supportingTerms.contains(where: semanticText.contains)

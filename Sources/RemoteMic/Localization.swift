@@ -3,8 +3,12 @@ import Foundation
 
 enum AppLanguage: String, CaseIterable, Codable, Identifiable {
     case system
-    case simplifiedChinese = "zh-Hans"
     case english = "en"
+    case simplifiedChinese = "zh-Hans"
+    case traditionalChinese = "zh-Hant"
+
+    /// The language used when nothing is stored yet and when a lookup misses.
+    static let `default` = AppLanguage.english
 
     var id: String { rawValue }
 
@@ -141,6 +145,8 @@ final class LocalizationStore: ObservableObject {
         switch language {
         case .simplifiedChinese:
             return Locale(identifier: "zh-Hans")
+        case .traditionalChinese:
+            return Locale(identifier: "zh-Hant")
         case .english:
             return Locale(identifier: "en")
         case .system:

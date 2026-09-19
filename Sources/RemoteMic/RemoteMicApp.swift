@@ -508,7 +508,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             switch language {
             case .system:
                 title = localization.text("language.system")
-            case .simplifiedChinese, .english:
+            case .english, .simplifiedChinese, .traditionalChinese:
                 title = language.nativeDisplayName
             }
             let languageItem = NSMenuItem(title: title, action: #selector(selectLanguage(_:)), keyEquivalent: "")

@@ -221,7 +221,7 @@ private final class HCIConfigurationStore {
         ] as CFDictionary
         try writeAuthorizationRight(
             definition,
-            description: "允许无线麦接收 Apple Remote 蓝牙音频。" as CFString
+            description: "Allow SayAll to receive Apple Remote Bluetooth audio." as CFString
         )
     }
 

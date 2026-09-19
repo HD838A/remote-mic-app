@@ -1357,7 +1357,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func exportRecording(_ asset: RecordingAssetManifest) {
         guard let sourceURL = try? recordingAssetStore.mediaURL(for: asset) else { return }
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "回眸-\(asset.localDateKey).m4a"
+        let localization = LocalizationStore(settings: settings)
+        let filenamePrefix = localization.text("recording.export.filename_prefix")
+        panel.nameFieldStringValue = "\(filenamePrefix)-\(asset.localDateKey).m4a"
         panel.allowedFileTypes = ["m4a"]
         panel.begin { response in
             guard response == .OK, let destinationURL = panel.url else { return }
@@ -4486,25 +4488,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 return
             }
             NSApp.activate(ignoringOtherApps: true)
+            let localization = LocalizationStore(settings: self.settings)
             let alert = NSAlert()
-            alert.messageText = "允许“\(deviceName)”连接无线麦？"
-            if Self.isAppleWatchDeviceName(deviceName) {
-                alert.informativeText = "这块 Apple Watch 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 Apple Watch 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
-            } else {
-                alert.informativeText = "这台 iPhone 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 iPhone 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
-            }
+            alert.messageText = LocalizedMessage(
+                "connection.approval.title",
+                arguments: [deviceName]
+            ).text(using: localization)
+            alert.informativeText = localization.text(
+                Self.isAppleWatchDeviceName(deviceName)
+                    ? "connection.approval.watch_body"
+                    : "connection.approval.phone_body"
+            )
             let codeLabel = NSTextField(labelWithString: pairingCode.map(String.init).joined(separator: " "))
             codeLabel.frame = NSRect(x: 0, y: 0, width: 300, height: 44)
             codeLabel.alignment = .center
             codeLabel.font = .monospacedDigitSystemFont(ofSize: 30, weight: .bold)
             codeLabel.textColor = .controlAccentColor
-            codeLabel.setAccessibilityLabel("校验码 \(pairingCode)")
+            codeLabel.setAccessibilityLabel(
+                LocalizedMessage(
+                    "connection.approval.code_accessibility",
+                    arguments: [pairingCode]
+                ).text(using: localization)
+            )
             alert.accessoryView = codeLabel
-            alert.addButton(withTitle: "允许连接")
-            alert.addButton(withTitle: "拒绝")
-            alert.addButton(withTitle: LocalizedMessage("connection.phone.cancel_waiting").text(
-                using: LocalizationStore(settings: self.settings)
-            ))
+            alert.addButton(withTitle: localization.text("connection.approval.allow"))
+            alert.addButton(withTitle: localization.text("connection.approval.deny"))
+            alert.addButton(withTitle: localization.text("connection.phone.cancel_waiting"))
             self.phoneApprovalAlert = alert
             let response = alert.runModal()
             guard self.phoneApprovalAlert === alert else {
@@ -4541,9 +4550,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     ) {
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
+            let localization = LocalizationStore(settings: self.settings)
             let alert = NSAlert()
-            alert.messageText = "允许“\(deviceName)”连接网页版？"
-            alert.informativeText = "手机浏览器将通过一次性会话控制无线麦。请确认手机上显示的 4 位校验码与下方一致。本次允许不会保存为长期受信任设备。"
+            alert.messageText = LocalizedMessage(
+                "connection.approval.web_title",
+                arguments: [deviceName]
+            ).text(using: localization)
+            alert.informativeText = localization.text("connection.approval.web_body")
             let codeLabel = NSTextField(
                 labelWithString: pairingCode.map(String.init).joined(separator: " ")
             )
@@ -4551,10 +4564,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             codeLabel.alignment = .center
             codeLabel.font = .monospacedDigitSystemFont(ofSize: 30, weight: .bold)
             codeLabel.textColor = .controlAccentColor
-            codeLabel.setAccessibilityLabel("校验码 \(pairingCode)")
+            codeLabel.setAccessibilityLabel(
+                LocalizedMessage(
+                    "connection.approval.code_accessibility",
+                    arguments: [pairingCode]
+                ).text(using: localization)
+            )
             alert.accessoryView = codeLabel
-            alert.addButton(withTitle: "允许连接")
-            alert.addButton(withTitle: "拒绝")
+            alert.addButton(withTitle: localization.text("connection.approval.allow"))
+            alert.addButton(withTitle: localization.text("connection.approval.deny"))
             self.webApprovalAlert = alert
             let allowed = alert.runModal() == .alertFirstButtonReturn
             guard self.webApprovalAlert === alert else {

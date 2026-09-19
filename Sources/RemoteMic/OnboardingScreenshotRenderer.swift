@@ -218,7 +218,7 @@ enum OnboardingScreenshotRenderer {
             backing: .buffered,
             defer: false
         )
-        window.title = "无线麦"
+        window.title = "SayAll"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none

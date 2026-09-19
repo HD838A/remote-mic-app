@@ -463,7 +463,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
                     authorization,
                     $0,
                     rule,
-                    "允许无线麦接收 Apple Remote 蓝牙音频。" as CFString,
+                    "Allow SayAll to receive Apple Remote Bluetooth audio." as CFString,
                     nil,
                     nil
                 )

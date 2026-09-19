@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "無線麥";
+"CFBundleName" = "無線麥";
+"NSBluetoothAlwaysUsageDescription" = "連接小米藍牙遙控器 2 Pro，接收按鍵與語音資料。";

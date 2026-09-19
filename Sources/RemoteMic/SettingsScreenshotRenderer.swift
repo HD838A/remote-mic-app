@@ -180,6 +180,8 @@ enum SettingsScreenshotRenderer {
         switch language {
         case .simplifiedChinese:
             notes = "优化设置页面结构\n权限与日志集中管理\n修复已知问题"
+        case .traditionalChinese:
+            notes = "最佳化設定頁面結構\n權限與日誌集中管理\n修復已知問題"
         case .system, .english:
             notes = "Refined the Settings layout\nCentralized permissions and logs\nFixed known issues"
         }
@@ -260,9 +262,10 @@ enum SettingsScreenshotRenderer {
     }
 
     private static func screenshotLanguage(from value: String?) throws -> AppLanguage {
-        switch value?.lowercased() ?? "zh-hans" {
-        case "zh-hans", "zh", "chinese": return .simplifiedChinese
+        switch value?.lowercased() ?? "en" {
         case "en", "english": return .english
+        case "zh-hans", "zh", "chinese": return .simplifiedChinese
+        case "zh-hant", "zh-tw", "traditional": return .traditionalChinese
         case let value: throw RenderingError.invalidLanguage(value)
         }
     }

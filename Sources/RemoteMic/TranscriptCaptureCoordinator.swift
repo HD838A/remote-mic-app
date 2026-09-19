@@ -123,6 +123,7 @@ struct TranscriptCaptureSnapshot: Equatable {
             "credit card", "search", "find", "filter", "address bar", "settings",
             "preferences", "command palette", "密码", "口令", "密钥", "令牌",
             "信用卡", "搜索", "查找", "筛选", "设置", "偏好",
+            "密碼", "金鑰", "權杖", "搜尋", "尋找", "篩選", "設定", "偏好設定",
         ]
         return !sensitiveTerms.contains(where: normalized.contains)
     }
