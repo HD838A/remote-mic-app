@@ -1221,10 +1221,17 @@ struct RemoteButtonsTests {
             .customShortcut,
             shortcut: shortcut,
             accessibilityTrusted: { true },
-            keyPoster: { posted = ($0, $1) }
+            keyPoster: { posted = ($0, $1) },
+            shortcutEventPoster: { event in
+                if event.type == .keyDown {
+                    posted = (CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)), event.flags)
+                }
+                return true
+            },
+            shortcutHardwareFlags: { [] }
         ))
         #expect(posted?.0 == 40)
-        #expect(posted?.1 == [.maskControl, .maskAlternate])
+        #expect(posted?.1.contains([.maskControl, .maskAlternate]) == true)
 
         let singleKey = CustomKeyboardShortcut(
             keyCode: 49,
