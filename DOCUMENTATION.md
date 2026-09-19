@@ -28,6 +28,7 @@
   - [`feature/button-mapping/PRODUCT_SPEC.md`](feature/button-mapping/PRODUCT_SPEC.md)
   - [`feature/common-phrases/PRODUCT_SPEC.md`](feature/common-phrases/PRODUCT_SPEC.md)
   - [`feature/first-run-onboarding/PRODUCT_SPEC.md`](feature/first-run-onboarding/PRODUCT_SPEC.md)
+  - [`feature/physical-microphone-passthrough/PRODUCT_SPEC.md`](feature/physical-microphone-passthrough/PRODUCT_SPEC.md)
 - 平台附件使用 `feature/<feature>/platform-<platform>.md`，只能映射平台差异。当前 Onboarding 附件为：
   - [`feature/first-run-onboarding/platform-macos.md`](feature/first-run-onboarding/platform-macos.md)
   - [`feature/first-run-onboarding/platform-windows.md`](feature/first-run-onboarding/platform-windows.md)

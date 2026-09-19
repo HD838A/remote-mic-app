@@ -33,6 +33,8 @@ private struct PersonalizedConfiguration: Codable {
     let formatVersion: Int
     let gainDB: Double
     let selectedAudioDeviceUID: String
+    let physicalMicrophonePassthroughEnabled: Bool?
+    let selectedPhysicalMicrophoneUID: String?
     let customMappingEnabled: Bool
     let buttonBindings: [String: ButtonAction]
     let buttonShortcuts: [String: CustomKeyboardShortcut]
@@ -286,6 +288,8 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let gainDB = "gainDB"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
+        static let physicalMicrophonePassthroughEnabled = "physicalMicrophonePassthroughEnabled"
+        static let selectedPhysicalMicrophoneUID = "selectedPhysicalMicrophoneUID"
         static let lastUserSelectedInputDeviceUID = "lastUserSelectedInputDeviceUID"
         static let lastKnownAudioDeviceUID = "lastKnownAudioDeviceUID"
         static let customMappingEnabled = "customMappingEnabled"
@@ -345,6 +349,21 @@ final class AppSettings: ObservableObject {
                 lastKnownAudioDeviceUID = selectedAudioDeviceUID
                 defaults.set(selectedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
             }
+        }
+    }
+
+    @Published var physicalMicrophonePassthroughEnabled: Bool {
+        didSet {
+            defaults.set(
+                physicalMicrophonePassthroughEnabled,
+                forKey: Keys.physicalMicrophonePassthroughEnabled
+            )
+        }
+    }
+
+    @Published var selectedPhysicalMicrophoneUID: String {
+        didSet {
+            defaults.set(selectedPhysicalMicrophoneUID, forKey: Keys.selectedPhysicalMicrophoneUID)
         }
     }
 
@@ -646,6 +665,12 @@ final class AppSettings: ObservableObject {
             : defaults.double(forKey: Keys.gainDB)
         let persistedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
         selectedAudioDeviceUID = persistedAudioDeviceUID
+        physicalMicrophonePassthroughEnabled = defaults.bool(
+            forKey: Keys.physicalMicrophonePassthroughEnabled
+        )
+        selectedPhysicalMicrophoneUID = defaults.string(
+            forKey: Keys.selectedPhysicalMicrophoneUID
+        ) ?? ""
         lastKnownAudioDeviceUID = defaults.string(forKey: Keys.lastKnownAudioDeviceUID) ?? persistedAudioDeviceUID
         if defaults.string(forKey: Keys.lastKnownAudioDeviceUID) == nil,
            !persistedAudioDeviceUID.isEmpty {
@@ -1649,6 +1674,8 @@ final class AppSettings: ObservableObject {
         [
             Keys.gainDB,
             Keys.selectedAudioDeviceUID,
+            Keys.physicalMicrophonePassthroughEnabled,
+            Keys.selectedPhysicalMicrophoneUID,
             Keys.lastKnownAudioDeviceUID,
             Keys.customMappingEnabled,
             Keys.legacyExclusiveHID,
@@ -1674,6 +1701,8 @@ final class AppSettings: ObservableObject {
             formatVersion: 1,
             gainDB: gainDB,
             selectedAudioDeviceUID: selectedAudioDeviceUID,
+            physicalMicrophonePassthroughEnabled: physicalMicrophonePassthroughEnabled,
+            selectedPhysicalMicrophoneUID: selectedPhysicalMicrophoneUID,
             customMappingEnabled: customMappingEnabled,
             buttonBindings: Dictionary(
                 uniqueKeysWithValues: buttonBindings.map { ($0.key.rawValue, $0.value) }
@@ -1837,6 +1866,16 @@ final class AppSettings: ObservableObject {
             importedAudioDeviceUID = ""
             rejected.insert(Keys.selectedAudioDeviceUID)
         }
+        let importedPhysicalMicrophoneUID: String
+        if let selectedPhysicalMicrophoneUID = configuration.selectedPhysicalMicrophoneUID,
+           selectedPhysicalMicrophoneUID.count <= Self.maximumImportedIdentifierLength {
+            importedPhysicalMicrophoneUID = selectedPhysicalMicrophoneUID
+        } else if configuration.selectedPhysicalMicrophoneUID == nil {
+            importedPhysicalMicrophoneUID = ""
+        } else {
+            importedPhysicalMicrophoneUID = ""
+            rejected.insert(Keys.selectedPhysicalMicrophoneUID)
+        }
         let importedRecordingBackup: ConfiguredButtonAction?
         if let backup = configuration.continuousRecordingPowerBindingBackup {
             importedRecordingBackup = Self.validatedConfiguredAction(backup)
@@ -1849,6 +1888,9 @@ final class AppSettings: ObservableObject {
 
         gainDB = configuration.gainDB
         selectedAudioDeviceUID = importedAudioDeviceUID
+        selectedPhysicalMicrophoneUID = importedPhysicalMicrophoneUID
+        physicalMicrophonePassthroughEnabled =
+            configuration.physicalMicrophonePassthroughEnabled ?? false
         customMappingEnabled = configuration.customMappingEnabled
         buttonBindings = Self.defaultBindings.merging(importedBindings) { _, imported in imported }
         buttonShortcuts = importedShortcuts

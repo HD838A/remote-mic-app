@@ -458,6 +458,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var remoteBatteryLevels: [UUID: Int] = [:]
     @Published private(set) var remotePowerStates: [UUID: RemotePowerState] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
+    @Published private(set) var physicalMicrophoneDevices: [AudioDeviceInfo] = []
+    @Published private(set) var physicalMicrophoneStatus = LocalizedMessage(
+        "audio.physical_microphone.status.disabled"
+    )
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
     @Published private(set) var isAudioOutputReady = false
@@ -485,6 +489,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         qos: .utility
     )
     private let audioOutput = VirtualAudioOutput()
+    private let physicalMicrophonePassthrough = PhysicalMicrophonePassthrough()
+    private lazy var physicalMicrophoneActivationMonitor = PhysicalMicrophoneActivationMonitor(
+        onToggle: { [weak self] in
+            self?.togglePhysicalMicrophonePassthrough()
+        }
+    )
     private var recordingPlayback: AVAudioPlayer?
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
         AppLogger.shared.write(message)
@@ -1111,6 +1121,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         siriRemoteFeature.start()
 #endif
         applyHIDSettings()
+        physicalMicrophoneActivationMonitor.start()
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -1130,6 +1141,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         privateFeature.stop()
         macroFeature.stop()
         preferredInputSourceMonitor.stop()
+        physicalMicrophoneActivationMonitor.stop()
         transcriptCaptureCoordinator.cancel()
         recordingAssetCoordinator.cancel(reason: "app_stop")
         stopRecordingPlayback()
@@ -1152,6 +1164,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             logReason: "app_stop"
         )
         stopLongRecording(reason: "app_stop")
+        physicalMicrophonePassthrough.stop()
         finishRC003VoiceExtensionTest(reason: "app_stop")
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
@@ -1667,13 +1680,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write("AUDIO DEVICES refresh_requested id=\(generation)")
         audioPreparationQueue.async { [weak self] in
             let devices = CoreAudioDeviceCatalog.outputDevices()
-            let diagnostic = Self.audioDevicesDiagnostic(devices)
+            let inputs = CoreAudioDeviceCatalog.inputDevices()
+            let diagnostic = Self.audioDevicesDiagnostic(devices, inputs: inputs)
             DispatchQueue.main.async { [weak self] in
                 guard let self,
                       self.started,
                       self.audioDeviceRefreshGeneration == generation
                 else { return }
-                self.publishAudioDevices(devices)
+                self.publishAudioDevices(devices, inputs: inputs)
+                self.applyPhysicalMicrophonePassthrough(reason: "device_refresh")
                 AppLogger.shared.write("AUDIO DEVICES refreshed id=\(generation) \(diagnostic)")
             }
         }
@@ -1690,7 +1705,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         audioPreparationQueue.async { [weak self] in
             guard let self else { return }
             let devices = CoreAudioDeviceCatalog.outputDevices()
-            let devicesDiagnostic = Self.audioDevicesDiagnostic(devices)
+            let inputs = CoreAudioDeviceCatalog.inputDevices()
+            let devicesDiagnostic = Self.audioDevicesDiagnostic(devices, inputs: inputs)
             AppLogger.shared.write("AUDIO DEVICES startup id=\(generation) \(devicesDiagnostic)")
             let selection = VirtualAudioSelectionRecoveryPolicy.resolve(
                 selectedUID: selectedDeviceUID,
@@ -1743,11 +1759,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     )
                 }
                 self.audioStartupPending = false
-                self.publishAudioDevices(devices)
+                self.publishAudioDevices(devices, inputs: inputs)
                 self.audioStatus = audioStatus
                 self.isAudioOutputReady = isAudioOutputReady
                 self.testToneStatus = testToneStatus
                 self.startObservingAudioHardware()
+                self.applyPhysicalMicrophonePassthrough(reason: "startup")
                 if self.systemAudioSuspensionState.isSuspended {
                     AppLogger.shared.write(
                         "SYSTEM AUDIO startup_release reasons=\(self.systemAudioSuspensionState.diagnostic) " +
@@ -1764,13 +1781,23 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
-    private func publishAudioDevices(_ devices: [AudioDeviceInfo]) {
+    private func publishAudioDevices(
+        _ devices: [AudioDeviceInfo],
+        inputs: [AudioDeviceInfo] = CoreAudioDeviceCatalog.inputDevices()
+    ) {
         audioDevices = devices
+        physicalMicrophoneDevices = inputs.filter {
+            VirtualAudioDeviceDiagnosticKind.classify($0) == .other
+        }
         doubaoAudioStatus = DoubaoAudioDevicePolicy.status(in: devices)
     }
 
-    private static func audioDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
+    private static func audioDevicesDiagnostic(
+        _ devices: [AudioDeviceInfo],
+        inputs: [AudioDeviceInfo] = CoreAudioDeviceCatalog.inputDevices()
+    ) -> String {
         "outputs={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(devices))} " +
+            "inputs={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(inputs))} " +
             CoreAudioDeviceCatalog.routeDiagnostic()
     }
 
@@ -1806,11 +1833,130 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func applyAudioSettings(reason: String = "settings_change") {
         stopLongRecording(reason: "audio_reconfigure")
+        applyPhysicalMicrophonePassthrough(reason: reason)
         guard shouldKeepVirtualAudioActive else {
             releaseVirtualAudioOutputIfUnused(reason: reason)
             return
         }
         _ = configureVirtualAudioOutput(reason: reason)
+    }
+
+    func applyPhysicalMicrophonePassthrough(reason: String = "settings_change") {
+        physicalMicrophonePassthrough.stop(logResult: false)
+        guard settings.physicalMicrophonePassthroughEnabled else {
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.disabled"
+            )
+            return
+        }
+        guard !settings.selectedPhysicalMicrophoneUID.isEmpty,
+              !settings.selectedAudioDeviceUID.isEmpty
+        else {
+            physicalMicrophonePassthrough.stop()
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.select_devices"
+            )
+            return
+        }
+
+        let authorization = AVCaptureDevice.authorizationStatus(for: .audio)
+        if authorization == .notDetermined {
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.permission_required"
+            )
+            AppLogger.shared.write(
+                "MIC PASSTHROUGH permission phase=requested reason=\(reason)"
+            )
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    AppLogger.shared.write(
+                        "MIC PASSTHROUGH permission phase=completed result=\(granted ? "granted" : "denied")"
+                    )
+                    self.applyPhysicalMicrophonePassthrough(reason: "permission_result")
+                }
+            }
+            return
+        }
+        guard authorization == .authorized else {
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.permission_required"
+            )
+            return
+        }
+
+        let prepared = physicalMicrophonePassthrough.prepare(
+            inputUID: settings.selectedPhysicalMicrophoneUID,
+            outputUID: settings.selectedAudioDeviceUID
+        )
+        physicalMicrophoneStatus = LocalizedMessage(
+            prepared
+                ? "audio.physical_microphone.status.waiting"
+                : "audio.physical_microphone.status.failed"
+        )
+        AppLogger.shared.write(
+            "MIC PASSTHROUGH APPLY reason=\(reason) prepared=\(prepared)"
+        )
+    }
+
+    private func togglePhysicalMicrophonePassthrough() {
+        guard settings.physicalMicrophonePassthroughEnabled else { return }
+        if case .running = physicalMicrophonePassthrough.state {
+            physicalMicrophonePassthrough.stopCapture()
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.waiting"
+            )
+            return
+        }
+        startPhysicalMicrophonePassthrough()
+    }
+
+    private func startPhysicalMicrophonePassthrough() {
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+              !settings.selectedPhysicalMicrophoneUID.isEmpty,
+              !settings.selectedAudioDeviceUID.isEmpty
+        else {
+            applyPhysicalMicrophonePassthrough(reason: "right_command_invalid_configuration")
+            return
+        }
+
+        if case .disabled = physicalMicrophonePassthrough.state {
+            _ = physicalMicrophonePassthrough.prepare(
+                inputUID: settings.selectedPhysicalMicrophoneUID,
+                outputUID: settings.selectedAudioDeviceUID
+            )
+        }
+        let configured = physicalMicrophonePassthrough.startCapture()
+        switch physicalMicrophonePassthrough.state {
+        case let .running(inputName, outputName):
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.running",
+                arguments: [inputName, outputName]
+            )
+        case .permissionRequired:
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.permission_required"
+            )
+        case .deviceUnavailable:
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.device_unavailable"
+            )
+        case .failed:
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.failed"
+            )
+        case .disabled:
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.disabled"
+            )
+        case .waiting:
+            physicalMicrophoneStatus = LocalizedMessage(
+                "audio.physical_microphone.status.waiting"
+            )
+        }
+        AppLogger.shared.write(
+            "MIC PASSTHROUGH APPLY reason=right_command_toggle success=\(configured)"
+        )
     }
 
     func handleSystemAudioLifecycle(_ event: SystemAudioLifecycleEvent) {
