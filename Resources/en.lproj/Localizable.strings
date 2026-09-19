@@ -355,6 +355,15 @@
 "audio.section.title" = "Audio Settings";
 "audio.voice_output.section_title" = "Voice Output";
 "audio.output.title" = "Voice output";
+"audio.physical_microphone.title" = "Mac microphone";
+"audio.physical_microphone.enable" = "Mix in a physical microphone";
+"audio.physical_microphone.select" = "Choose microphone";
+"audio.physical_microphone.status.disabled" = "When off, the virtual microphone receives remote audio only.";
+"audio.physical_microphone.status.select_devices" = "Choose a physical microphone and voice output device.";
+"audio.physical_microphone.status.permission_required" = "Allow SayAll to access the microphone.";
+"audio.physical_microphone.status.device_unavailable" = "The selected microphone is unavailable. Refresh devices and try again.";
+"audio.physical_microphone.status.failed" = "Could not start microphone passthrough. Select the devices again.";
+"audio.physical_microphone.status.running" = "%1$@ is routed to %2$@; keyboard and remote dictation now share one input.";
 "audio.output.disabled" = "No voice output";
 "audio.gain.title" = "Gain";
 "audio.gain.help" = "0 dB keeps the original volume. Higher values make the voice louder and also amplify background noise. Start with 6–12 dB.";

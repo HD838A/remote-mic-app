@@ -1200,6 +1200,41 @@ struct SettingsView: View {
                     .frame(maxWidth: 270)
                 }
 
+                HStack(spacing: 14) {
+                    Text("audio.physical_microphone.title")
+                        .frame(width: 92, alignment: .leading)
+                    Toggle("audio.physical_microphone.enable", isOn: Binding(
+                        get: { settings.physicalMicrophonePassthroughEnabled },
+                        set: { enabled in
+                            settings.physicalMicrophonePassthroughEnabled = enabled
+                            model.applyPhysicalMicrophonePassthrough()
+                        }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    Picker("", selection: Binding(
+                        get: { settings.selectedPhysicalMicrophoneUID },
+                        set: { value in
+                            settings.selectedPhysicalMicrophoneUID = value
+                            model.applyPhysicalMicrophonePassthrough()
+                        }
+                    )) {
+                        Text("audio.physical_microphone.select").tag("")
+                        ForEach(model.physicalMicrophoneDevices, id: \.uid) { device in
+                            Text(device.name).tag(device.uid)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 220)
+                    .disabled(!settings.physicalMicrophonePassthroughEnabled)
+                }
+
+                Text(model.physicalMicrophoneStatus.text(using: localization))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 106)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 14) {
                         Text("audio.gain.title")

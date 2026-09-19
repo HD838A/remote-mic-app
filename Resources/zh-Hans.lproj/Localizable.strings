@@ -355,6 +355,15 @@
 "audio.section.title" = "音频设置";
 "audio.voice_output.section_title" = "语音输出";
 "audio.output.title" = "语音输出";
+"audio.physical_microphone.title" = "电脑麦克风";
+"audio.physical_microphone.enable" = "混入电脑麦克风";
+"audio.physical_microphone.select" = "选择麦克风";
+"audio.physical_microphone.status.disabled" = "关闭后，虚拟麦克风只接收遥控器声音。";
+"audio.physical_microphone.status.select_devices" = "请选择电脑麦克风和语音输出设备。";
+"audio.physical_microphone.status.permission_required" = "需要允许无线麦访问麦克风。";
+"audio.physical_microphone.status.device_unavailable" = "所选麦克风暂时不可用，请刷新设备。";
+"audio.physical_microphone.status.failed" = "电脑麦克风直通启动失败，请重新选择设备。";
+"audio.physical_microphone.status.running" = "%1$@ 已接入 %2$@；键盘和遥控器语音可共用同一入口。";
 "audio.output.disabled" = "不输出语音";
 "audio.gain.title" = "增益";
 "audio.gain.help" = "0 dB 保持原始音量；数值越大声音越响，也会放大环境噪声。建议先从 6–12 dB 开始。";
