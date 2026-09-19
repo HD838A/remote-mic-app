@@ -21,6 +21,7 @@ enum KeyboardInjector {
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
     typealias ScrollPoster = (Int32) -> Void
+    typealias SystemKeyPoster = (Int32) -> Void
 
     struct ApplicationVisibilitySnapshot: Equatable {
         let bundleIdentifier: String
@@ -268,7 +269,8 @@ enum KeyboardInjector {
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
-        scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) }
+        scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) },
+        systemKeyPoster: SystemKeyPoster = postSystemKey
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -371,11 +373,11 @@ enum KeyboardInjector {
         case .volumeMute:
             postSystemKey(type: 7)
         case .playPause:
-            postSystemKey(type: 16)
+            systemKeyPoster(16)
         case .previousCommandLeft:
-            keyPoster(123, .maskCommand)
+            systemKeyPoster(18)
         case .nextCommandRight:
-            keyPoster(124, .maskCommand)
+            systemKeyPoster(17)
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags
