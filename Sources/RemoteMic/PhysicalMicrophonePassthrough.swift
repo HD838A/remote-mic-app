@@ -7,6 +7,7 @@ enum PhysicalMicrophonePassthroughState: Equatable {
     case disabled
     case permissionRequired
     case deviceUnavailable
+    case waiting(inputName: String, outputName: String)
     case running(inputName: String, outputName: String)
     case failed
 }
@@ -21,14 +22,17 @@ final class PhysicalMicrophonePassthrough {
     private var captureEngine: AVAudioEngine?
     private var playbackEngine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
+    private var preparedInputName: String?
+    private var preparedOutputName: String?
+    private var tapInstalled = false
     private var generation: UInt64 = 0
 
     private(set) var state: PhysicalMicrophonePassthroughState = .disabled
 
     @discardableResult
-    func configure(inputUID: String, outputUID: String) -> Bool {
+    func prepare(inputUID: String, outputUID: String) -> Bool {
         stop(logResult: false)
-        AppLogger.shared.write("MIC PASSTHROUGH phase=requested")
+        AppLogger.shared.write("MIC PASSTHROUGH PREPARE phase=requested")
 
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
             state = .permissionRequired
@@ -114,44 +118,25 @@ final class PhysicalMicrophonePassthrough {
         }
         playbackEngine.connect(player, to: playbackEngine.mainMixerNode, format: inputFormat)
 
-        stateLock.lock()
-        generation &+= 1
-        let activeGeneration = generation
-        stateLock.unlock()
-
-        inputNode.installTap(
-            onBus: 0,
-            bufferSize: 512,
-            format: inputFormat
-        ) { [weak self, weak player] buffer, _ in
-            guard let self, let player,
-                  self.isCurrentGeneration(activeGeneration),
-                  let copiedBuffer = Self.copy(buffer)
-            else { return }
-            player.scheduleBuffer(copiedBuffer)
-        }
-
         do {
             playbackEngine.prepare()
             try playbackEngine.start()
             player.play()
-            captureEngine.prepare()
-            try captureEngine.start()
             self.captureEngine = captureEngine
             self.playbackEngine = playbackEngine
             self.player = player
-            state = .running(inputName: input.name, outputName: output.name)
+            preparedInputName = input.name
+            preparedOutputName = output.name
+            state = .waiting(inputName: input.name, outputName: output.name)
             AppLogger.shared.write(
-                "MIC PASSTHROUGH phase=completed result=running " +
+                "MIC PASSTHROUGH PREPARE phase=completed result=waiting " +
                     "input={\(CoreAudioDeviceCatalog.deviceDiagnostic(input))} " +
                     "output={\(CoreAudioDeviceCatalog.deviceDiagnostic(output))}"
             )
             return true
         } catch {
-            inputNode.removeTap(onBus: 0)
             player.stop()
             playbackEngine.stop()
-            captureEngine.stop()
             state = .failed
             AppLogger.shared.write(
                 "MIC PASSTHROUGH phase=failed result=start_failed " +
@@ -161,12 +146,74 @@ final class PhysicalMicrophonePassthrough {
         }
     }
 
+    @discardableResult
+    func startCapture() -> Bool {
+        guard case let .waiting(inputName, outputName) = state,
+              let captureEngine,
+              let player
+        else { return false }
+
+        stateLock.lock()
+        generation &+= 1
+        let activeGeneration = generation
+        stateLock.unlock()
+        let inputNode = captureEngine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 512, format: inputFormat) {
+            [weak self, weak player] buffer, _ in
+            guard let self, let player,
+                  self.isCurrentGeneration(activeGeneration),
+                  let copiedBuffer = Self.copy(buffer)
+            else { return }
+            player.scheduleBuffer(copiedBuffer)
+        }
+        tapInstalled = true
+
+        do {
+            captureEngine.prepare()
+            try captureEngine.start()
+            state = .running(inputName: inputName, outputName: outputName)
+            AppLogger.shared.write(
+                "MIC PASSTHROUGH CAPTURE phase=completed result=running " +
+                    "input=\(inputName) output=\(outputName)"
+            )
+            return true
+        } catch {
+            inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+            state = .waiting(inputName: inputName, outputName: outputName)
+            AppLogger.shared.write(
+                "MIC PASSTHROUGH CAPTURE phase=failed result=start_failed " +
+                    AppLogger.errorFields(error)
+            )
+            return false
+        }
+    }
+
+    func stopCapture() {
+        stateLock.lock()
+        generation &+= 1
+        stateLock.unlock()
+        if tapInstalled {
+            captureEngine?.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
+        captureEngine?.stop()
+        if let inputName = preparedInputName, let outputName = preparedOutputName {
+            state = .waiting(inputName: inputName, outputName: outputName)
+        } else {
+            state = .disabled
+        }
+        AppLogger.shared.write("MIC PASSTHROUGH CAPTURE phase=completed result=stopped")
+    }
+
     func stop(logResult: Bool = true) {
         stateLock.lock()
         generation &+= 1
         stateLock.unlock()
-        if captureEngine != nil {
+        if tapInstalled {
             captureEngine?.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
         }
         captureEngine?.stop()
         player?.stop()
@@ -174,6 +221,8 @@ final class PhysicalMicrophonePassthrough {
         captureEngine = nil
         playbackEngine = nil
         player = nil
+        preparedInputName = nil
+        preparedOutputName = nil
         state = .disabled
         if logResult {
             AppLogger.shared.write("MIC PASSTHROUGH phase=completed result=stopped")
