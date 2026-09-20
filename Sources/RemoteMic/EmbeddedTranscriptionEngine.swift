@@ -11,6 +11,15 @@ import WhisperKit
 /// output (`VirtualAudioOutput`); this engine taps the same samples and
 /// turns them into text directly, with no virtual audio device and no
 /// second app required.
+///
+/// No longer the primary engine — real-remote testing showed every
+/// WhisperKit-based Cantonese model tried here either collapses (this
+/// model, and a from-scratch WenetSpeech-Yue conversion, both empty-output
+/// on WhisperKit's decoder) or normalizes to standard written Chinese (the
+/// `fallback` model below, always). `SenseVoiceTranscriptionEngine` does
+/// neither and is now primary; this engine is kept only as its automatic
+/// fallback if SenseVoice fails to load — see
+/// `BridgeAppModel.transcribeEmbeddedBufferAndInsertIfReady()`.
 actor EmbeddedTranscriptionEngine {
     private struct LoadedModels {
         /// `nil` if the Cantonese model failed to download/load — every

@@ -490,12 +490,23 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     // alongside every audioOutput.enqueue() call site so the remote's voice
     // button can produce typed text directly, without a virtual-microphone
     // hop or a separate dictation app. See EmbeddedTranscriptionEngine.swift.
+    /// The automatic fallback if `senseVoiceEngine` fails to load — see
+    /// `transcribeEmbeddedBufferAndInsertIfReady()`.
     private let embeddedTranscriptionEngine = EmbeddedTranscriptionEngine()
+    /// The primary local transcription engine — see
+    /// SenseVoiceTranscriptionEngine.swift.
+    private let senseVoiceEngine = SenseVoiceTranscriptionEngine()
     private let embeddedTranscriptionHUD = TranscriptionStatusHUD()
     private var usesLocalTranscription: Bool { settings.onboardingVoiceTool == .local }
     /// Surfaced read-only in Settings (Buttons page, near Voice Trigger Key)
     /// so it's visible which model is actually driving the remote button's
     /// built-in transcription, without needing to check the runtime log.
+    /// Reuses `EmbeddedTranscriptionEngine.Status`'s shape for the combined
+    /// two-engine picture: `usesCantoneseModel: true` means `senseVoiceEngine`
+    /// (native Cantonese script) is active; `false` means it failed to load
+    /// and `embeddedTranscriptionEngine` (WhisperKit, standard-Chinese
+    /// normalized) is carrying transcription instead; `.failed` means both
+    /// engines failed to load.
     @Published private(set) var embeddedTranscriptionStatus: EmbeddedTranscriptionEngine.Status = .loading
     /// Best-effort estimate in `[0, 1]` while `embeddedTranscriptionStatus`
     /// is `.loading` — see `EmbeddedTranscriptionEngine.currentLoadProgress()`
@@ -1141,9 +1152,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         // upwards of 90 seconds; doing that now means it happens quietly in
         // the background well before the first remote press, not during it.
         beginPollingEmbeddedTranscriptionProgress()
-        Task { [embeddedTranscriptionEngine] in
-            await embeddedTranscriptionEngine.prewarm()
-            let status = await embeddedTranscriptionEngine.status()
+        Task { [embeddedTranscriptionEngine, senseVoiceEngine] in
+            async let senseVoicePrewarm: Void = senseVoiceEngine.prewarm()
+            async let fallbackPrewarm: Void = embeddedTranscriptionEngine.prewarm()
+            _ = await (senseVoicePrewarm, fallbackPrewarm)
+            let status = await Self.combinedTranscriptionStatus(
+                senseVoiceEngine: senseVoiceEngine,
+                fallbackEngine: embeddedTranscriptionEngine
+            )
             await MainActor.run { [weak self] in
                 self?.embeddedTranscriptionStatus = status
                 self?.embeddedTranscriptionProgressPollTask?.cancel()
@@ -1175,8 +1191,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         embeddedTranscriptionStatus = .loading
         AppLogger.shared.write("EMBEDDED WHISPER model_load_retry_requested")
         beginPollingEmbeddedTranscriptionProgress()
-        Task { [embeddedTranscriptionEngine] in
-            let status = await embeddedTranscriptionEngine.retryAfterFailure()
+        Task { [embeddedTranscriptionEngine, senseVoiceEngine] in
+            async let senseVoiceRetry = senseVoiceEngine.retryAfterFailure()
+            async let fallbackRetry = embeddedTranscriptionEngine.retryAfterFailure()
+            _ = await (senseVoiceRetry, fallbackRetry)
+            let status = await Self.combinedTranscriptionStatus(
+                senseVoiceEngine: senseVoiceEngine,
+                fallbackEngine: embeddedTranscriptionEngine
+            )
             await MainActor.run { [weak self] in
                 self?.embeddedTranscriptionStatus = status
                 self?.embeddedTranscriptionProgressPollTask?.cancel()
@@ -1184,18 +1206,40 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
-    /// Samples `EmbeddedTranscriptionEngine.currentLoadProgress()` twice a
-    /// second while a load is in flight, for the loading-state UI in
-    /// Settings and Onboarding. Cancelled by the caller once loading
-    /// finishes (success or failure) — see `startIfNeeded()` and
-    /// `retryEmbeddedTranscriptionModelLoading()`.
+    /// Combines both engines' status into the shape published as
+    /// `embeddedTranscriptionStatus` — see that property's doc comment.
+    private static func combinedTranscriptionStatus(
+        senseVoiceEngine: SenseVoiceTranscriptionEngine,
+        fallbackEngine: EmbeddedTranscriptionEngine
+    ) async -> EmbeddedTranscriptionEngine.Status {
+        if await senseVoiceEngine.status() == .ready {
+            return .ready(usesCantoneseModel: true)
+        }
+        switch await fallbackEngine.status() {
+        case .ready:
+            return .ready(usesCantoneseModel: false)
+        case .failed, .loading:
+            return .failed
+        }
+    }
+
+    /// Samples both engines' `currentLoadProgress()` twice a second while a
+    /// load is in flight, for the loading-state UI in Settings and
+    /// Onboarding. Reports the further-along of the two, and whether
+    /// either is still downloading, since they load in parallel. Cancelled
+    /// by the caller once loading finishes (success or failure) — see
+    /// `startIfNeeded()` and `retryEmbeddedTranscriptionModelLoading()`.
     private func beginPollingEmbeddedTranscriptionProgress() {
         embeddedTranscriptionProgressPollTask?.cancel()
         embeddedTranscriptionLoadingProgress = 0
-        embeddedTranscriptionProgressPollTask = Task { [weak self, embeddedTranscriptionEngine] in
+        embeddedTranscriptionProgressPollTask = Task { [weak self, embeddedTranscriptionEngine, senseVoiceEngine] in
             while !Task.isCancelled {
-                let progress = await embeddedTranscriptionEngine.currentLoadProgress()
-                let isDownloading = await embeddedTranscriptionEngine.isDownloadingModel
+                let senseVoiceProgress = await senseVoiceEngine.currentLoadProgress()
+                let fallbackProgress = await embeddedTranscriptionEngine.currentLoadProgress()
+                let progress = max(senseVoiceProgress, fallbackProgress)
+                let senseVoiceDownloading = await senseVoiceEngine.isDownloadingModel
+                let fallbackDownloading = await embeddedTranscriptionEngine.isDownloadingModel
+                let isDownloading = senseVoiceDownloading || fallbackDownloading
                 await MainActor.run {
                     self?.embeddedTranscriptionLoadingProgress = progress
                     self?.embeddedTranscriptionIsDownloading = isDownloading
@@ -5752,6 +5796,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             embeddedTranscriptionBuffer.removeAll(keepingCapacity: true)
         }
         if usesLocalTranscription {
+            Task { [senseVoiceEngine] in await senseVoiceEngine.prewarm() }
             Task { [embeddedTranscriptionEngine] in await embeddedTranscriptionEngine.prewarm() }
             DispatchQueue.main.async { [embeddedTranscriptionHUD] in
                 embeddedTranscriptionHUD.show(.recording)
@@ -5840,16 +5885,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         DispatchQueue.main.async { [embeddedTranscriptionHUD] in
             embeddedTranscriptionHUD.show(.transcribing)
         }
-        Task { [embeddedTranscriptionEngine, embeddedTranscriptionHUD] in
-            let text: String?
+        Task { [senseVoiceEngine, embeddedTranscriptionEngine, embeddedTranscriptionHUD] in
+            // `nil` from a successful call means genuine silence/no-speech
+            // (a normal outcome, shown as `.noSpeech`, no fallback needed);
+            // a thrown error means the engine itself failed (e.g. never
+            // loaded), which *does* fall back to the other engine.
+            var text: String?
             do {
-                text = try await embeddedTranscriptionEngine.transcribe(pcm16: samples)
+                text = try await senseVoiceEngine.transcribe(pcm16: samples)
             } catch {
                 AppLogger.shared.write(
-                    "EMBEDDED WHISPER transcribe_failed error_type=\(type(of: error))"
+                    "SENSEVOICE transcribe_failed error_type=\(type(of: error)) falling_back=true"
                 )
-                await MainActor.run { embeddedTranscriptionHUD.hide() }
-                return
+                do {
+                    text = try await embeddedTranscriptionEngine.transcribe(pcm16: samples)
+                } catch {
+                    AppLogger.shared.write(
+                        "EMBEDDED WHISPER transcribe_failed error_type=\(type(of: error))"
+                    )
+                    await MainActor.run { embeddedTranscriptionHUD.hide() }
+                    return
+                }
             }
             guard let text, !text.isEmpty else {
                 await MainActor.run { embeddedTranscriptionHUD.show(.noSpeech) }
@@ -5859,17 +5915,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 let destination = VoiceInputDestinationSnapshot.system()
                 guard destination.isSafeEditableDestination else {
                     AppLogger.shared.write(
-                        "EMBEDDED WHISPER insert_skipped reason=destination_not_safe"
+                        "EMBEDDED TRANSCRIPTION insert_skipped reason=destination_not_safe"
                     )
                     embeddedTranscriptionHUD.hide()
                     return
                 }
                 guard KeyboardInjector.typeUnicodeText(text) else {
-                    AppLogger.shared.write("EMBEDDED WHISPER insert_failed reason=post_failed")
+                    AppLogger.shared.write("EMBEDDED TRANSCRIPTION insert_failed reason=post_failed")
                     embeddedTranscriptionHUD.hide()
                     return
                 }
-                AppLogger.shared.write("EMBEDDED WHISPER insert_completed chars=\(text.count)")
+                AppLogger.shared.write("EMBEDDED TRANSCRIPTION insert_completed chars=\(text.count)")
                 embeddedTranscriptionHUD.show(.inserted(characterCount: text.count))
             }
         }

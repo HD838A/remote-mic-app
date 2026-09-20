@@ -15,6 +15,15 @@ var packageDependencies: [Package.Dependency] = [
     // built-in downloader, so it's fetched directly via the same Hub client
     // WhisperKit itself uses internally. See EmbeddedTranscriptionEngine.swift.
     .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.0.0"),
+    // Evaluated as a candidate replacement for the WhisperKit-based
+    // Cantonese path: SenseVoice is a non-autoregressive CTC model, so it
+    // structurally can't hit the autoregressive decoder collapse
+    // WhisperKit exhibits with "yue" (see EmbeddedTranscriptionEngine.swift
+    // and SenseVoiceTranscriptionEngine.swift for the full comparison).
+    // Requires macOS 14+, same as this fork's shipped LSMinimumSystemVersion,
+    // but higher than the Package.swift "intel" release variant's macOS 13
+    // floor -- revisit if that variant is ever built again.
+    .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.1.0"),
 ]
 var remoteMicDependencies: [Target.Dependency] = [
     "AudioExceptionGuard",
@@ -26,6 +35,7 @@ var remoteMicDependencies: [Target.Dependency] = [
     .product(name: "Sparkle", package: "Sparkle"),
     .product(name: "Hub", package: "swift-transformers"),
     .product(name: "WhisperKit", package: "argmax-oss-swift"),
+    .product(name: "FluidAudio", package: "FluidAudio"),
 ]
 var remoteMicTestDependencies: [Target.Dependency] = [
     "RemoteMic",
