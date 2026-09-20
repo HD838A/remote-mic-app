@@ -291,6 +291,7 @@
 "connection.voice_tool_picker.help" = "可隨時切換，不需要重新走一遍設定；切換後會自動調整語音觸發鍵和音訊路由。";
 "connection.embedded_transcription.title" = "本機轉寫";
 "connection.embedded_transcription.loading" = "正在載入模型…";
+"connection.embedded_transcription.downloading" = "正在下載模型…";
 "connection.embedded_transcription.ready_cantonese" = "已就緒——粵語模型已啟用";
 "connection.embedded_transcription.ready_fallback" = "已就緒——備用模型（暫不支援粵語書面轉寫）";
 "connection.embedded_transcription.failed" = "載入失敗——遙控器語音鍵將無法產生文字";
@@ -787,7 +788,8 @@
 "onboarding.audio.detail" = "請選擇 MiRemoteV 2ch 或 BlackHole 2ch。揚聲器和其他普通音訊裝置不能完成語音輸入鏈路。";
 "onboarding.audio.local_title" = "準備本機轉寫";
 "onboarding.audio.local_detail" = "粵語模型及備用模型會在這台 Mac 上載入。首次下載可能需要一些時間。";
-"onboarding.audio.local_loading" = "正在載入模型。請保持視窗開啟，準備好後再繼續。";
+"onboarding.audio.local_loading" = "正在載入模型（%d%%）。請保持視窗開啟，準備好後再繼續。";
+"onboarding.audio.local_downloading" = "正在下載模型（%d%%）。請保持視窗開啟，準備好後再繼續。";
 "onboarding.audio.local_ready" = "本機轉寫已就緒。現用模型顯示於「連接」頁面。";
 "onboarding.audio.local_failed" = "本機模型未能載入。請檢查網絡連線後重試；已下載的模型會留在這台 Mac 上。";
 "onboarding.audio.local_retry" = "重試載入模型";

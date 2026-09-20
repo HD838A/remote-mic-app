@@ -88,8 +88,48 @@ actor EmbeddedTranscriptionEngine {
         case failed
     }
 
+    /// Neither Core ML nor WhisperKit expose a progress callback for the
+    /// on-device compute-graph loading/compilation that dominates total
+    /// load time — only file download has a real byte-based fraction, and
+    /// downloading only happens at all on a first-ever launch or after a
+    /// cache clear. So `currentLoadProgress()` is a best-effort *estimate*,
+    /// not a measurement: it's the elapsed time since loading started,
+    /// divided by how long the *entire* load (download + Core ML
+    /// load/compile + warmup) took the last time it completed successfully
+    /// on this Mac (persisted in `UserDefaults`), falling back to a fixed
+    /// guess on a first-ever run. It's capped short of 100% until loading
+    /// actually finishes, so a slower-than-usual run never claims to be
+    /// further along than it really is. `isDownloadingModel` distinguishes
+    /// the (usually brief) download step for the UI's label text only —
+    /// the percentage itself stays time-based throughout so it never jumps
+    /// backwards when downloading finishes and loading begins.
+    private var loadStartedAt: Date?
+    private(set) var isDownloadingModel = false
+
+    private static let typicalTotalDurationKey = "EmbeddedTranscription.typicalTotalDurationMs"
+    private static let defaultTypicalTotalDurationMs: Double = 180_000
+
+    private static func recordTypicalTotalDuration(_ milliseconds: Int) {
+        UserDefaults.standard.set(milliseconds, forKey: typicalTotalDurationKey)
+    }
+
+    private static func typicalTotalDurationMilliseconds() -> Double {
+        let stored = UserDefaults.standard.double(forKey: typicalTotalDurationKey)
+        return stored > 0 ? stored : defaultTypicalTotalDurationMs
+    }
+
     init(logger: @escaping (String) -> Void = AppLogger.shared.write) {
         self.logger = logger
+    }
+
+    /// Best-effort estimate of overall load progress in `[0, 1]`, for
+    /// display only — see the doc comment on the properties above for why
+    /// this can't be an exact measurement. Callers should poll this
+    /// periodically (e.g. every half second) while `status()` is `.loading`.
+    func currentLoadProgress() -> Double {
+        guard let loadStartedAt else { return 0 }
+        let elapsedMilliseconds = Date().timeIntervalSince(loadStartedAt) * 1_000
+        return min(0.97, elapsedMilliseconds / Self.typicalTotalDurationMilliseconds())
     }
 
     /// Begins loading (and, on first run, downloading) both models in the
@@ -215,9 +255,11 @@ actor EmbeddedTranscriptionEngine {
     @discardableResult
     private func loadModels() -> Task<LoadedModels, Error> {
         if let loadTask { return loadTask }
+        let overallStartedAt = Date()
+        loadStartedAt = overallStartedAt
         let task = Task<LoadedModels, Error> { [logger] in
-            async let cantoneseTask = Self.loadCantoneseModel(logger: logger)
-            async let fallbackTask = Self.loadFallbackModel(logger: logger)
+            async let cantoneseTask = self.loadCantoneseModel(logger: logger)
+            async let fallbackTask = self.loadFallbackModel(logger: logger)
             let cantonese = await cantoneseTask
             let fallback = try await fallbackTask
             let models = LoadedModels(cantonese: cantonese, fallback: fallback)
@@ -235,6 +277,8 @@ actor EmbeddedTranscriptionEngine {
             _ = try? await models.fallback.transcribe(audioArray: Self.warmupNoise)
             let warmupElapsedMilliseconds = Int(Date().timeIntervalSince(warmupStartedAt) * 1_000)
             logger("EMBEDDED WHISPER model_warmup_completed elapsed_ms=\(warmupElapsedMilliseconds)")
+            let totalElapsedMilliseconds = Int(Date().timeIntervalSince(overallStartedAt) * 1_000)
+            Self.recordTypicalTotalDuration(totalElapsedMilliseconds)
             return models
         }
         loadTask = task
@@ -246,33 +290,38 @@ actor EmbeddedTranscriptionEngine {
     /// (network error, Hub layout change upstream, Core ML load failure),
     /// so the caller can use `fallback` alone rather than leaving dictation
     /// broken while this is worked out.
-    private static func loadCantoneseModel(logger: (String) -> Void) async -> WhisperKit? {
+    private func loadCantoneseModel(logger: (String) -> Void) async -> WhisperKit? {
         do {
-            logger("EMBEDDED WHISPER cantonese_model_load_started repo=\(cantoneseModelRepo)")
+            logger("EMBEDDED WHISPER cantonese_model_load_started repo=\(Self.cantoneseModelRepo)")
             let startedAt = Date()
-            let hub = HubApi(downloadBase: downloadBase)
-            let repo = Hub.Repo(id: cantoneseModelRepo, type: .models)
+            isDownloadingModel = true
+            let hub = HubApi(downloadBase: Self.downloadBase)
+            let repo = Hub.Repo(id: Self.cantoneseModelRepo, type: .models)
             let modelFolder = try await hub.snapshot(from: repo, matching: ["*"])
+            isDownloadingModel = false
             let configuration = WhisperKitConfig(modelFolder: modelFolder.path, download: false)
             let pipeline = try await WhisperKit(configuration)
             let elapsedMilliseconds = Int(Date().timeIntervalSince(startedAt) * 1_000)
             logger("EMBEDDED WHISPER cantonese_model_load_completed elapsed_ms=\(elapsedMilliseconds)")
             return pipeline
         } catch {
+            isDownloadingModel = false
             logger("EMBEDDED WHISPER cantonese_model_load_failed error_type=\(type(of: error))")
             return nil
         }
     }
 
-    private static func loadFallbackModel(logger: (String) -> Void) async throws -> WhisperKit {
-        logger("EMBEDDED WHISPER model_load_started model=\(fallbackModelName)")
+    private func loadFallbackModel(logger: (String) -> Void) async throws -> WhisperKit {
+        logger("EMBEDDED WHISPER model_load_started model=\(Self.fallbackModelName)")
         let startedAt = Date()
         let configuration = WhisperKitConfig(
-            model: fallbackModelName,
-            downloadBase: downloadBase,
+            model: Self.fallbackModelName,
+            downloadBase: Self.downloadBase,
             download: true
         )
+        isDownloadingModel = true
         let pipeline = try await WhisperKit(configuration)
+        isDownloadingModel = false
         let elapsedMilliseconds = Int(Date().timeIntervalSince(startedAt) * 1_000)
         logger("EMBEDDED WHISPER model_load_completed elapsed_ms=\(elapsedMilliseconds)")
         return pipeline

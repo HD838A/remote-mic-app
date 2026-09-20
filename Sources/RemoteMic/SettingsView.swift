@@ -1852,13 +1852,39 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("connection.embedded_transcription.title")
                     .font(.system(size: 12, weight: .medium))
-                Text(LocalizedStringKey(key))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                if model.embeddedTranscriptionStatus == .loading {
+                    embeddedTranscriptionLoadingDetail
+                } else {
+                    Text(LocalizedStringKey(key))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
             }
         } icon: {
             Image(systemName: systemImage)
                 .foregroundStyle(tint)
+        }
+    }
+
+    /// Percentage is a best-effort estimate — see
+    /// `EmbeddedTranscriptionEngine.currentLoadProgress()` — so the label
+    /// always keeps the underlying phase text visible alongside it rather
+    /// than replacing it with a bare number.
+    private var embeddedTranscriptionLoadingDetail: some View {
+        let percentText = "\(Int((model.embeddedTranscriptionLoadingProgress * 100).rounded()))%"
+        let phaseKey = model.embeddedTranscriptionIsDownloading
+            ? "connection.embedded_transcription.downloading"
+            : "connection.embedded_transcription.loading"
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(LocalizedStringKey(phaseKey))
+                Text(percentText)
+                    .monospacedDigit()
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            ProgressView(value: model.embeddedTranscriptionLoadingProgress)
+                .frame(width: 160)
         }
     }
 

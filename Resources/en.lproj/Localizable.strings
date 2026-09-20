@@ -291,6 +291,7 @@
 "connection.voice_tool_picker.help" = "Switch anytime without redoing setup. Changing this updates the voice trigger key and audio routing to match.";
 "connection.embedded_transcription.title" = "Local Transcription";
 "connection.embedded_transcription.loading" = "Loading model…";
+"connection.embedded_transcription.downloading" = "Downloading model…";
 "connection.embedded_transcription.ready_cantonese" = "Ready — Cantonese model active";
 "connection.embedded_transcription.ready_fallback" = "Ready — fallback model (Cantonese script unavailable)";
 "connection.embedded_transcription.failed" = "Failed to load — the remote's voice button won't produce text";
@@ -787,7 +788,8 @@
 "onboarding.audio.detail" = "Select MiRemoteV 2ch or BlackHole 2ch. Speakers and other ordinary audio devices cannot complete the voice-input path.";
 "onboarding.audio.local_title" = "Prepare local transcription";
 "onboarding.audio.local_detail" = "The Cantonese and fallback models load on this Mac. The first download may take a while.";
-"onboarding.audio.local_loading" = "Loading models. Keep this window open and continue when ready.";
+"onboarding.audio.local_loading" = "Loading models (%d%%). Keep this window open and continue when ready.";
+"onboarding.audio.local_downloading" = "Downloading models (%d%%). Keep this window open and continue when ready.";
 "onboarding.audio.local_ready" = "Local transcription is ready. The active model is shown on the Connection page.";
 "onboarding.audio.local_failed" = "The local model could not load. Check the network connection, then retry. Downloaded models remain on this Mac.";
 "onboarding.audio.local_retry" = "Retry model loading";

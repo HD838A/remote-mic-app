@@ -497,6 +497,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     /// so it's visible which model is actually driving the remote button's
     /// built-in transcription, without needing to check the runtime log.
     @Published private(set) var embeddedTranscriptionStatus: EmbeddedTranscriptionEngine.Status = .loading
+    /// Best-effort estimate in `[0, 1]` while `embeddedTranscriptionStatus`
+    /// is `.loading` — see `EmbeddedTranscriptionEngine.currentLoadProgress()`
+    /// for what this can and can't measure.
+    @Published private(set) var embeddedTranscriptionLoadingProgress: Double = 0
+    @Published private(set) var embeddedTranscriptionIsDownloading = false
+    private var embeddedTranscriptionProgressPollTask: Task<Void, Never>?
     private var embeddedTranscriptionBuffer: [Int16] = []
     // The Xiaomi remote's BLE audio stream sometimes drops and reconnects
     // mid-hold, surfacing as several short back-to-back voice sessions
@@ -1134,11 +1140,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         // only happens lazily on its first real prediction, observed taking
         // upwards of 90 seconds; doing that now means it happens quietly in
         // the background well before the first remote press, not during it.
+        beginPollingEmbeddedTranscriptionProgress()
         Task { [embeddedTranscriptionEngine] in
             await embeddedTranscriptionEngine.prewarm()
             let status = await embeddedTranscriptionEngine.status()
             await MainActor.run { [weak self] in
                 self?.embeddedTranscriptionStatus = status
+                self?.embeddedTranscriptionProgressPollTask?.cancel()
             }
         }
         startAudioSubsystem()
@@ -1166,10 +1174,33 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard embeddedTranscriptionStatus == .failed else { return }
         embeddedTranscriptionStatus = .loading
         AppLogger.shared.write("EMBEDDED WHISPER model_load_retry_requested")
+        beginPollingEmbeddedTranscriptionProgress()
         Task { [embeddedTranscriptionEngine] in
             let status = await embeddedTranscriptionEngine.retryAfterFailure()
             await MainActor.run { [weak self] in
                 self?.embeddedTranscriptionStatus = status
+                self?.embeddedTranscriptionProgressPollTask?.cancel()
+            }
+        }
+    }
+
+    /// Samples `EmbeddedTranscriptionEngine.currentLoadProgress()` twice a
+    /// second while a load is in flight, for the loading-state UI in
+    /// Settings and Onboarding. Cancelled by the caller once loading
+    /// finishes (success or failure) — see `startIfNeeded()` and
+    /// `retryEmbeddedTranscriptionModelLoading()`.
+    private func beginPollingEmbeddedTranscriptionProgress() {
+        embeddedTranscriptionProgressPollTask?.cancel()
+        embeddedTranscriptionLoadingProgress = 0
+        embeddedTranscriptionProgressPollTask = Task { [weak self, embeddedTranscriptionEngine] in
+            while !Task.isCancelled {
+                let progress = await embeddedTranscriptionEngine.currentLoadProgress()
+                let isDownloading = await embeddedTranscriptionEngine.isDownloadingModel
+                await MainActor.run {
+                    self?.embeddedTranscriptionLoadingProgress = progress
+                    self?.embeddedTranscriptionIsDownloading = isDownloading
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000)
             }
         }
     }

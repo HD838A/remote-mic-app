@@ -1137,11 +1137,11 @@ struct OnboardingView: View {
                     icon: localTranscriptionReady ? "checkmark.circle.fill" :
                         (localTranscriptionFailed ? "exclamationmark.triangle.fill" : "hourglass"),
                     title: localization.text("onboarding.audio.local_title"),
-                    detail: localization.text(localTranscriptionReady
-                        ? "onboarding.audio.local_ready"
+                    detail: localTranscriptionReady
+                        ? localization.text("onboarding.audio.local_ready")
                         : (localTranscriptionFailed
-                            ? "onboarding.audio.local_failed"
-                            : "onboarding.audio.local_loading")),
+                            ? localization.text("onboarding.audio.local_failed")
+                            : localTranscriptionLoadingDetailText),
                     isComplete: localTranscriptionReady
                 )
                 if localTranscriptionFailed {
@@ -1231,11 +1231,11 @@ struct OnboardingView: View {
                     icon: localTranscriptionReady ? "checkmark.circle.fill" :
                         (localTranscriptionFailed ? "exclamationmark.triangle.fill" : "hourglass"),
                     title: localization.text("onboarding.audio.local_title"),
-                    detail: localization.text(localTranscriptionReady
-                        ? "onboarding.audio.local_ready"
+                    detail: localTranscriptionReady
+                        ? localization.text("onboarding.audio.local_ready")
                         : (localTranscriptionFailed
-                            ? "onboarding.audio.local_failed"
-                            : "onboarding.audio.local_loading")),
+                            ? localization.text("onboarding.audio.local_failed")
+                            : localTranscriptionLoadingDetailText),
                     isComplete: localTranscriptionReady
                 )
                 if localTranscriptionFailed {
@@ -2049,6 +2049,16 @@ struct OnboardingView: View {
 
     private var localTranscriptionFailed: Bool {
         model.embeddedTranscriptionStatus == .failed
+    }
+
+    /// Percentage is a best-effort estimate — see
+    /// `EmbeddedTranscriptionEngine.currentLoadProgress()`.
+    private var localTranscriptionLoadingDetailText: String {
+        let percent = Int((model.embeddedTranscriptionLoadingProgress * 100).rounded())
+        let phaseKey = model.embeddedTranscriptionIsDownloading
+            ? "onboarding.audio.local_downloading"
+            : "onboarding.audio.local_loading"
+        return String(format: localization.text(phaseKey), percent)
     }
 
     private var selectedAudioDeviceTitle: String {
