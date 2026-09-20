@@ -573,6 +573,16 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case playPause
     case previousCommandLeft
     case nextCommandRight
+    case minimizeWindow
+    case closeAllWindows
+    case newTab
+    case nextTab
+    case previousTab
+    case toggleFullScreen
+    case missionControl
+    case applicationWindows
+    case spotlight
+    case lockScreen
     case customShortcut
     case focusInput
     case openCustomApplication
@@ -627,6 +637,16 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .playPause: return localization.text("action.play_pause")
         case .previousCommandLeft: return localization.text("action.previous_command_left")
         case .nextCommandRight: return localization.text("action.next_command_right")
+        case .minimizeWindow: return localization.text("action.minimize_window")
+        case .closeAllWindows: return localization.text("action.close_all_windows")
+        case .newTab: return localization.text("action.new_tab")
+        case .nextTab: return localization.text("action.next_tab")
+        case .previousTab: return localization.text("action.previous_tab")
+        case .toggleFullScreen: return localization.text("action.toggle_full_screen")
+        case .missionControl: return localization.text("action.mission_control")
+        case .applicationWindows: return localization.text("action.application_windows")
+        case .spotlight: return localization.text("action.spotlight")
+        case .lockScreen: return localization.text("action.lock_screen")
         case .customShortcut: return localization.text("action.custom_shortcut")
         case .focusInput: return localization.text("action.focus_input")
         case .openCustomApplication: return localization.text("action.open_custom_application")
@@ -673,10 +693,11 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .commandPaste, .commandClose, .commandQuit, .commandCut, .commandSelectAll,
              .commandUndo, .commandRedo, .commandFind, .commandSave, .commandDelete,
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .scrollUp, .scrollDown,
-             .deleteBackward:
+             .deleteBackward, .minimizeWindow, .closeAllWindows, .newTab, .nextTab, .previousTab:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
-             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
+             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording,
+             .toggleFullScreen, .missionControl, .applicationWindows, .spotlight, .lockScreen:
             return .systemAndMedia
         case .customShortcut, .focusInput, .openCustomApplication:
             return .custom
@@ -707,6 +728,13 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .commandDelete,
             .previousCommandLeft,
             .nextCommandRight,
+            .minimizeWindow,
+            .closeAllWindows,
+            .newTab,
+            .nextTab,
+            .previousTab,
+            .toggleFullScreen,
+            .lockScreen,
         ].contains(self) && presetApplication == nil && !isAppInternal
     }
 

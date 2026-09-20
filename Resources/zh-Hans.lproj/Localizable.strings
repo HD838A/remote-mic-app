@@ -181,6 +181,16 @@
 "action.play_pause" = "播放 / 暂停";
 "action.previous_command_left" = "上一首（⌘←）";
 "action.next_command_right" = "下一首（⌘→）";
+"action.minimize_window" = "最小化窗口";
+"action.close_all_windows" = "关闭所有窗口";
+"action.new_tab" = "新建标签页";
+"action.next_tab" = "下一个标签页";
+"action.previous_tab" = "上一个标签页";
+"action.toggle_full_screen" = "切换全屏";
+"action.mission_control" = "调度中心";
+"action.application_windows" = "应用程序窗口";
+"action.spotlight" = "聚焦搜索";
+"action.lock_screen" = "锁定屏幕";
 "action.custom_shortcut" = "自定义快捷键";
 "action.focus_input" = "聚焦输入框";
 "action.open_custom_application" = "打开自定义 APP";

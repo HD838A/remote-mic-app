@@ -181,6 +181,16 @@
 "action.play_pause" = "Play / Pause";
 "action.previous_command_left" = "Previous (⌘←)";
 "action.next_command_right" = "Next (⌘→)";
+"action.minimize_window" = "Minimize Window";
+"action.close_all_windows" = "Close All Windows";
+"action.new_tab" = "New Tab";
+"action.next_tab" = "Next Tab";
+"action.previous_tab" = "Previous Tab";
+"action.toggle_full_screen" = "Toggle Full Screen";
+"action.mission_control" = "Mission Control";
+"action.application_windows" = "Application Windows";
+"action.spotlight" = "Spotlight Search";
+"action.lock_screen" = "Lock Screen";
 "action.custom_shortcut" = "Custom Shortcut";
 "action.focus_input" = "Focus Input Field";
 "action.open_custom_application" = "Open Custom App";

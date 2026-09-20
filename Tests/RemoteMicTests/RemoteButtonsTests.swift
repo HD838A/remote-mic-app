@@ -218,6 +218,16 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
+        #expect(ButtonAction.minimizeWindow.category == .basicKeys)
+        #expect(ButtonAction.closeAllWindows.category == .basicKeys)
+        #expect(ButtonAction.newTab.category == .basicKeys)
+        #expect(ButtonAction.nextTab.category == .basicKeys)
+        #expect(ButtonAction.previousTab.category == .basicKeys)
+        #expect(ButtonAction.toggleFullScreen.category == .systemAndMedia)
+        #expect(ButtonAction.missionControl.category == .systemAndMedia)
+        #expect(ButtonAction.applicationWindows.category == .systemAndMedia)
+        #expect(ButtonAction.spotlight.category == .systemAndMedia)
+        #expect(ButtonAction.lockScreen.category == .systemAndMedia)
         #expect(ButtonAction.customShortcut.category == .custom)
         #expect(ButtonAction.openCustomApplication.category == .custom)
         #expect(ButtonAction.openCodex.category == .applications)
@@ -241,9 +251,46 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.commandDelete.allowsRepeat)
         #expect(!ButtonAction.previousCommandLeft.allowsRepeat)
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
+        #expect(!ButtonAction.minimizeWindow.allowsRepeat)
+        #expect(!ButtonAction.closeAllWindows.allowsRepeat)
+        #expect(!ButtonAction.newTab.allowsRepeat)
+        #expect(!ButtonAction.nextTab.allowsRepeat)
+        #expect(!ButtonAction.previousTab.allowsRepeat)
+        #expect(!ButtonAction.toggleFullScreen.allowsRepeat)
+        #expect(!ButtonAction.lockScreen.allowsRepeat)
+        #expect(ButtonAction.missionControl.allowsRepeat)
+        #expect(ButtonAction.applicationWindows.allowsRepeat)
+        #expect(ButtonAction.spotlight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
         #expect(ButtonAction.volumeDown.allowsRepeat)
         #expect(ButtonAction.deleteBackward.allowsRepeat)
+    }
+
+    @Test func newWindowAndSystemActionsPostTheExpectedKeyCodesAndModifiers() {
+        let expectations: [(ButtonAction, CGKeyCode, CGEventFlags)] = [
+            (.minimizeWindow, 46, .maskCommand),
+            (.closeAllWindows, 13, [.maskAlternate, .maskCommand]),
+            (.newTab, 17, .maskCommand),
+            (.nextTab, 30, [.maskCommand, .maskShift]),
+            (.previousTab, 33, [.maskCommand, .maskShift]),
+            (.toggleFullScreen, 3, [.maskControl, .maskCommand]),
+            (.missionControl, 126, .maskControl),
+            (.applicationWindows, 125, .maskControl),
+            (.spotlight, 49, .maskCommand),
+            (.lockScreen, 12, [.maskControl, .maskCommand]),
+        ]
+
+        for (action, expectedCode, expectedFlags) in expectations {
+            var posted: [(CGKeyCode, CGEventFlags)] = []
+            #expect(KeyboardInjector.send(
+                action,
+                accessibilityTrusted: { true },
+                keyPoster: { posted.append(($0, $1)) }
+            ))
+            #expect(posted.count == 1, "\(action.rawValue) should post exactly one key event")
+            #expect(posted.first?.0 == expectedCode, "\(action.rawValue) key code")
+            #expect(posted.first?.1 == expectedFlags, "\(action.rawValue) modifier flags")
+        }
     }
 
     @Test func electronComposerFocusWaitsLongEnoughForTheManualAccessibilityTree() {

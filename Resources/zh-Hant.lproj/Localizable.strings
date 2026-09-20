@@ -181,6 +181,16 @@
 "action.play_pause" = "播放 / 暫停";
 "action.previous_command_left" = "上一首（⌘←）";
 "action.next_command_right" = "下一首（⌘→）";
+"action.minimize_window" = "最小化視窗";
+"action.close_all_windows" = "關閉所有視窗";
+"action.new_tab" = "開新標籤頁";
+"action.next_tab" = "下一個標籤頁";
+"action.previous_tab" = "上一個標籤頁";
+"action.toggle_full_screen" = "切換全螢幕";
+"action.mission_control" = "調度中心";
+"action.application_windows" = "應用程式視窗";
+"action.spotlight" = "聚焦搜尋";
+"action.lock_screen" = "鎖定螢幕";
 "action.custom_shortcut" = "自定義快速鍵";
 "action.focus_input" = "聚焦輸入框";
 "action.open_custom_application" = "開啟自定義 APP";

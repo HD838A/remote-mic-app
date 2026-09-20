@@ -376,6 +376,26 @@ enum KeyboardInjector {
             keyPoster(123, .maskCommand)
         case .nextCommandRight:
             keyPoster(124, .maskCommand)
+        case .minimizeWindow:
+            keyPoster(46, .maskCommand)
+        case .closeAllWindows:
+            keyPoster(13, [.maskAlternate, .maskCommand])
+        case .newTab:
+            keyPoster(17, .maskCommand)
+        case .nextTab:
+            keyPoster(30, [.maskCommand, .maskShift])
+        case .previousTab:
+            keyPoster(33, [.maskCommand, .maskShift])
+        case .toggleFullScreen:
+            keyPoster(3, [.maskControl, .maskCommand])
+        case .missionControl:
+            keyPoster(126, .maskControl)
+        case .applicationWindows:
+            keyPoster(125, .maskControl)
+        case .spotlight:
+            keyPoster(49, .maskCommand)
+        case .lockScreen:
+            keyPoster(12, [.maskControl, .maskCommand])
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags
