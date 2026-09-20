@@ -287,6 +287,8 @@
 "connection.voice_key_mode.unverified" = "修飾鍵模式尚未驗證";
 "connection.voice_key_mode.unverified_detail" = "請在目標語音工具中同步配置相同的觸發鍵（左/右 Command 或右 Option）並實際說一句確認文字上屏。無線麥無法讀取第三方工具的內部設定；如果沒有文字，請改回 Fn/地球鍵。";
 "connection.voice_key_mode.command_permission" = "修飾鍵模式需要輔助使用權限";
+"connection.voice_tool_picker.title" = "語音輸入方式";
+"connection.voice_tool_picker.help" = "可隨時切換，不需要重新走一遍設定；切換後會自動調整語音觸發鍵和音訊路由。";
 "connection.embedded_transcription.title" = "本機轉寫";
 "connection.embedded_transcription.loading" = "正在載入模型…";
 "connection.embedded_transcription.ready_cantonese" = "已就緒——粵語模型已啟用";

@@ -287,6 +287,8 @@
 "connection.voice_key_mode.unverified" = "修饰键模式尚未验证";
 "connection.voice_key_mode.unverified_detail" = "请在目标语音工具中同步配置相同的触发键（左/右 Command 或右 Option）并实际说一句确认文字上屏。无线麦无法读取第三方工具的内部设置；如果没有文字，请改回 Fn/地球键。";
 "connection.voice_key_mode.command_permission" = "修饰键模式需要辅助功能权限";
+"connection.voice_tool_picker.title" = "语音输入方式";
+"connection.voice_tool_picker.help" = "可随时切换，无需重新走一遍设置；切换后会自动调整语音触发键和音频路由。";
 "connection.embedded_transcription.title" = "本地转写";
 "connection.embedded_transcription.loading" = "正在加载模型…";
 "connection.embedded_transcription.ready_cantonese" = "已就绪——粤语模型已启用";

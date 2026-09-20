@@ -287,6 +287,8 @@
 "connection.voice_key_mode.unverified" = "Modifier-key mode is not verified";
 "connection.voice_key_mode.unverified_detail" = "Configure the same trigger key (Left/Right Command or Right Option) in the target voice tool and confirm a real dictated phrase. SayAll cannot read the tool's internal settings; switch back to Fn/Globe if no text appears.";
 "connection.voice_key_mode.command_permission" = "Modifier-key mode requires Accessibility permission";
+"connection.voice_tool_picker.title" = "Dictation Method";
+"connection.voice_tool_picker.help" = "Switch anytime without redoing setup. Changing this updates the voice trigger key and audio routing to match.";
 "connection.embedded_transcription.title" = "Local Transcription";
 "connection.embedded_transcription.loading" = "Loading model…";
 "connection.embedded_transcription.ready_cantonese" = "Ready — Cantonese model active";

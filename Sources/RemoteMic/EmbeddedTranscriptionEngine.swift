@@ -147,6 +147,25 @@ actor EmbeddedTranscriptionEngine {
                 sampleCount: samples.count,
                 // "yue" per the model's own README; usePrefillCache disabled
                 // per the doc comment above this model's declaration.
+                //
+                // A from-scratch replacement model was evaluated and ruled
+                // out here: a fine-tune of Whisper-medium on ASLP-lab's
+                // WenetSpeech-Yue (21,800h, colloquial-script transcripts)
+                // was converted WeNet -> OpenAI -> HF -> CoreML (verified
+                // byte-exact against the tied embedding weights, and its
+                // plain-PyTorch `generate()` output was verified correct on
+                // a reference clip regardless of forced language). It still
+                // hit the exact same empty-output collapse as this model
+                // when driven through WhisperKit's CoreML decoder -- 0/6 on
+                // "yue"+usePrefillCache defaulted true, same on "zh", same
+                // on the original "yue"+usePrefillCache:false combination.
+                // Since a model verified correct in plain PyTorch still
+                // collapses specifically through WhisperKit's static-KV-cache
+                // greedy decoder, the fault is isolated to that decoding
+                // path for this class of Cantonese fine-tune, not to the
+                // model weights or any DecodingOptions combination -- so
+                // there is no known fix left to try here without changes to
+                // WhisperKit itself.
                 decodeOptions: DecodingOptions(language: "yue", usePrefillCache: false),
                 modelLabel: "cantonese",
                 logger: logger

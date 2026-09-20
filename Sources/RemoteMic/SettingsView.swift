@@ -848,6 +848,7 @@ struct SettingsView: View {
                     connectionDevicePanel
                         .frame(width: 230)
                     VStack(spacing: 14) {
+                        voiceToolPicker
                         localTranscriptionPanel
                         if settings.onboardingVoiceTool != .local {
                             audioSettingsPanel
@@ -1232,6 +1233,39 @@ struct SettingsView: View {
                     Spacer()
                 }
             }
+        }
+    }
+
+    private static let voiceToolPickerOptions: [OnboardingVoiceTool] = [
+        .local, .doubao, .weixin, .typeless, .other,
+    ]
+
+    private var voiceToolPicker: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("connection.voice_tool_picker.title")
+                    .font(.system(size: 12, weight: .medium))
+                Picker(
+                    "connection.voice_tool_picker.title",
+                    selection: Binding(
+                        get: { settings.onboardingVoiceTool },
+                        set: { newValue in
+                            settings.setOnboardingVoiceTool(newValue)
+                            model.applyHIDSettings()
+                        }
+                    )
+                ) {
+                    ForEach(Self.voiceToolPickerOptions) { tool in
+                        Text(LocalizedStringKey(tool.titleKey)).tag(tool)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                Text("connection.voice_tool_picker.help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
