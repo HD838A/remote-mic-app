@@ -949,7 +949,7 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
-        if voiceKeyMode != .function {
+        if voiceTool != .local && voiceKeyMode != .function {
             pendingOnboardingVoiceKeyMigration = voiceKeyMode
             voiceKeyMode = .function
         }

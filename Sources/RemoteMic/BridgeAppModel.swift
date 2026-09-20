@@ -492,6 +492,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     // hop or a separate dictation app. See EmbeddedTranscriptionEngine.swift.
     private let embeddedTranscriptionEngine = EmbeddedTranscriptionEngine()
     private let embeddedTranscriptionHUD = TranscriptionStatusHUD()
+    private var usesLocalTranscription: Bool { settings.onboardingVoiceTool == .local }
     /// Surfaced read-only in Settings (Buttons page, near Voice Trigger Key)
     /// so it's visible which model is actually driving the remote button's
     /// built-in transcription, without needing to check the runtime log.
@@ -1159,6 +1160,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write(
             "APP START version=\(version) rc003_test=\(rc003VoiceExtensionTestEnabled)"
         )
+    }
+
+    func retryEmbeddedTranscriptionModelLoading() {
+        guard embeddedTranscriptionStatus == .failed else { return }
+        embeddedTranscriptionStatus = .loading
+        AppLogger.shared.write("EMBEDDED WHISPER model_load_retry_requested")
+        Task { [embeddedTranscriptionEngine] in
+            let status = await embeddedTranscriptionEngine.retryAfterFailure()
+            await MainActor.run { [weak self] in
+                self?.embeddedTranscriptionStatus = status
+            }
+        }
     }
 
     func stop() {
@@ -2175,7 +2188,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
         let requestedVoiceKeyMode = settings.voiceKeyMode
         let accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
-        let requestedFnTapMode = settings.voiceFnTapModeEnabled && requestedVoiceKeyMode == .function
+        let requestedFnTapMode = !usesLocalTranscription &&
+            settings.voiceFnTapModeEnabled && requestedVoiceKeyMode == .function
         if settings.voiceFnTapModeEnabled != requestedFnTapMode {
             settings.voiceFnTapModeEnabled = requestedFnTapMode
         }
@@ -2196,7 +2210,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             allowVoiceKeyModeFallback: allowVoiceKeyModeFallback
         )
         var powerKeySuppressed: Bool
-        if requestedFnTapMode, accessibilityGranted {
+        if usesLocalTranscription {
+            powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
+            voiceFnTapSession.setEnabled(false)
+        } else if requestedFnTapMode, accessibilityGranted {
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: true)
             if voiceFunctionMapper.isVoiceKeyNeutralized {
                 voiceFnTapSession.setEnabled(true)
@@ -3837,7 +3854,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         appleRemoteAudioStopInterruptedBuffers = 0
         appleRemoteAudioStopInterruptedSamples = 0
         loggedAppleRemoteAudioDevice = false
-        guard ensureVirtualAudioOutputReady(reason: "apple_remote_voice_start") else {
+        guard usesLocalTranscription || ensureVirtualAudioOutputReady(reason: "apple_remote_voice_start") else {
             appleRemoteVoiceDevices.remove(device)
             siriRemoteFeature.setVoiceTouchSuppressed(false)
             AppLogger.shared.write(
@@ -4007,9 +4024,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
               !samples.isEmpty
         else { return }
         recordingAssetCoordinator.append(samples: samples)
-        embeddedTranscriptionBuffer.append(contentsOf: samples)
+        if usesLocalTranscription { embeddedTranscriptionBuffer.append(contentsOf: samples) }
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
         let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
+        if usesLocalTranscription {
+            recordVoiceAudioReceipt(samples: samples, route: .localModel)
+            appleRemoteAudioBatchCount += 1
+            appleRemoteAudioSampleCount += samples.count
+            return
+        }
         let accepted = audioOutput.enqueue(
             samples: samples,
             deliveryGeneration: deliveryGeneration
@@ -4205,14 +4228,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("ATVV STREAM rejected_busy")
             return
         }
-        if settings.voiceKeyMode != .function || settings.voiceFnTapModeEnabled {
+        if usesLocalTranscription || settings.voiceKeyMode != .function || settings.voiceFnTapModeEnabled {
             applyHIDSettings(allowVoiceKeyModeFallback: false)
         }
-        guard Self.canStartBluetoothVoice(
+        guard (usesLocalTranscription && voiceFunctionMapper.isVoiceKeyNeutralized) ||
+            (!usesLocalTranscription && Self.canStartBluetoothVoice(
             mode: settings.voiceKeyMode,
             voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled,
             isVoiceKeyNeutralized: voiceFunctionMapper.isVoiceKeyNeutralized
-        ) else {
+        )) else {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write(
                 "ATVV STREAM rejected reason=voice_key_not_neutralized " +
@@ -4220,7 +4244,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
-        guard ensureVirtualAudioOutputReady(reason: "bluetooth_voice_start") else {
+        guard usesLocalTranscription || ensureVirtualAudioOutputReady(reason: "bluetooth_voice_start") else {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write("ATVV STREAM rejected_audio_output")
             return
@@ -4281,7 +4305,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "RC003 EXTENSION physical_segment_reopened trace=\(activeBluetoothVoiceTraceID ?? 0)"
             )
         } else {
-            _ = voiceFnTapSession.startVoice()
+            if !usesLocalTranscription { _ = voiceFnTapSession.startVoice() }
             beginVoiceSessionIfNeeded()
             if rc003VoiceExtensionTestEnabled {
                 rc003VoiceExtensionActive = true
@@ -4414,8 +4438,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     ) {
         guard identifier == activeBluetoothVoiceDeviceIdentifier else { return }
         recordingAssetCoordinator.append(samples: samples)
-        embeddedTranscriptionBuffer.append(contentsOf: samples)
+        if usesLocalTranscription { embeddedTranscriptionBuffer.append(contentsOf: samples) }
         let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
+        if usesLocalTranscription {
+            recordVoiceAudioReceipt(samples: samples, route: .localModel)
+            bluetoothVoiceDecodedBatchCount += 1
+            bluetoothVoiceDecodedSampleCount += samples.count
+            bluetoothVoiceTailDiagnostics.append(samples, at: ProcessInfo.processInfo.systemUptime)
+            publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
+            bluetoothVoiceTraceRoute = "local_transcription"
+            return
+        }
         let handledByFnTapMode = voiceFnTapSession.receive(samples)
         let enqueued: Bool
         if handledByFnTapMode {
@@ -5138,7 +5171,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return .busy
         }
         cancelVirtualAudioReleaseIfPending(trigger: "mobile_voice_start_\(source.logName)")
-        guard ensureVirtualAudioOutputReady(reason: "mobile_voice_start") else {
+        guard usesLocalTranscription || ensureVirtualAudioOutputReady(reason: "mobile_voice_start") else {
             AppLogger.shared.write(
                 "MOBILE VOICE start_rejected reason=audio_output requested=\(source.logName)"
             )
@@ -5485,11 +5518,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
         recordingAssetCoordinator.append(samples: samples)
-        embeddedTranscriptionBuffer.append(contentsOf: samples)
+        if usesLocalTranscription { embeddedTranscriptionBuffer.append(contentsOf: samples) }
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
         mobileVoiceAudioBatchCount += 1
         mobileVoiceAudioSignalMetrics.append(samples)
         let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
+        if usesLocalTranscription {
+            recordVoiceAudioReceipt(samples: samples, route: .localModel)
+            return
+        }
         let accepted = audioOutput.enqueue(
             samples: samples,
             deliveryGeneration: deliveryGeneration
@@ -5683,9 +5720,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         } else {
             embeddedTranscriptionBuffer.removeAll(keepingCapacity: true)
         }
-        Task { [embeddedTranscriptionEngine] in await embeddedTranscriptionEngine.prewarm() }
-        DispatchQueue.main.async { [embeddedTranscriptionHUD] in
-            embeddedTranscriptionHUD.show(.recording)
+        if usesLocalTranscription {
+            Task { [embeddedTranscriptionEngine] in await embeddedTranscriptionEngine.prewarm() }
+            DispatchQueue.main.async { [embeddedTranscriptionHUD] in
+                embeddedTranscriptionHUD.show(.recording)
+            }
         }
         isStreaming = true
     }
@@ -5731,7 +5770,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         // 会话因别的原因结束（用户关闭语音、切换输入源）时，必须让 Chromecase 包内的
         // latched 状态同步清空；否则下一次点按会被误判成「结束」而不是「开始」。
         chromecaseFeature.notifyHostVoiceSessionEnded()
-        scheduleEmbeddedTranscriptionFlush()
+        if usesLocalTranscription {
+            scheduleEmbeddedTranscriptionFlush()
+        } else {
+            embeddedTranscriptionBuffer.removeAll(keepingCapacity: true)
+        }
     }
 
     /// Delays handing the buffer to the transcription engine by
@@ -5760,7 +5803,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     /// so a slow first-load or a long phrase never blocks stopping the
     /// voice session itself.
     private func transcribeEmbeddedBufferAndInsertIfReady() {
-        guard !embeddedTranscriptionBuffer.isEmpty else { return }
+        guard usesLocalTranscription, !embeddedTranscriptionBuffer.isEmpty else { return }
         let samples = embeddedTranscriptionBuffer
         embeddedTranscriptionBuffer.removeAll(keepingCapacity: true)
         DispatchQueue.main.async { [embeddedTranscriptionHUD] in
@@ -5836,6 +5879,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         forceSoftware: Bool,
         owner: VoiceFunctionKeyLatch.Owner
     ) -> Bool {
+        if usesLocalTranscription && !voiceKeyLatch.isHeld {
+            return true
+        }
         let mode = streaming
             ? settings.voiceKeyMode
             : (heldVoiceKeyMode ?? pendingVoiceKeyMode ?? settings.voiceKeyMode)
@@ -6143,6 +6189,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     /// 返回值沿用既有判据：松开是否成功（`phase=completed result=stopped|release_failed`）。
     @discardableResult
     private func finishChromecaseFunctionKeyDrive() -> Bool {
+        if usesLocalTranscription { return releaseVoiceKeyIfNeeded() }
         let drive = chromecaseFunctionKeyDrive
         chromecaseFunctionKeyTapRelease?.cancel()
         chromecaseFunctionKeyTapRelease = nil
@@ -6206,13 +6253,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         loggedChromecaseAudioDevice = false
         chromecaseAudioPrerollOpenedAt = ProcessInfo.processInfo.systemUptime
         chromecaseAudioPrerollBatches = []
-        guard ensureVirtualAudioOutputReady(reason: "chromecase_voice_start") else {
+        guard usesLocalTranscription || ensureVirtualAudioOutputReady(reason: "chromecase_voice_start") else {
             AppLogger.shared.write(
                 "CHROMECASE VOICE phase=failed result=audio_output_unavailable route=MiRemoteV_2ch"
             )
             return
         }
-        guard beginChromecaseFunctionKeyDrive() else {
+        guard usesLocalTranscription || beginChromecaseFunctionKeyDrive() else {
             AppLogger.shared.write(
                 "CHROMECASE VOICE phase=failed result=voice_key_press_failed"
             )
@@ -6594,8 +6641,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         // Tapped once here, before the preroll gate below: preroll'd samples
         // are re-delivered to audioOutput.enqueue() later by
         // flushChromecaseAudioPreroll(), which would double-count them here.
-        embeddedTranscriptionBuffer.append(contentsOf: samples)
+        if usesLocalTranscription { embeddedTranscriptionBuffer.append(contentsOf: samples) }
         publishCurrentVoiceSampleReceiptIfNeeded(sampleCount: samples.count)
+        if usesLocalTranscription {
+            recordVoiceAudioReceipt(samples: samples, route: .localModel)
+            chromecaseAudioBatchCount += 1
+            chromecaseAudioSampleCount += samples.count
+            return
+        }
 
         // 预卷门控：会话开头 prerollDelay 秒的音频先攒在内存，到期再一次性排入播放器。
         // 背景：写入端（宿主写 MiRemoteV 输出端）比读取端（豆包打开该设备输入流）先启动，

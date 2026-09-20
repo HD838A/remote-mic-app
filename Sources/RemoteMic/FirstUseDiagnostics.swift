@@ -30,6 +30,7 @@ struct VirtualAudioOutputDiagnosticSnapshot: Equatable {
 
 enum VoiceAudioDeliveryRoute: String, Equatable {
     case none
+    case localModel = "local_model"
     case virtualAudioDirect = "virtual_audio_direct"
     case virtualAudioViaFnTap = "virtual_audio_via_fn_tap"
 }
@@ -45,6 +46,7 @@ enum VoiceAudioDeliveryResult: String, Equatable {
     case playbackPending = "playback_pending"
     case playbackIncomplete = "playback_incomplete"
     case deliveredToSelectedDevice = "delivered_to_selected_device"
+    case localModelReceived = "local_model_received"
 
     var isConfirmedFailure: Bool {
         switch self {
@@ -52,7 +54,7 @@ enum VoiceAudioDeliveryResult: String, Equatable {
              .playbackInterrupted:
             return true
         case .unavailable, .receiving, .noSamples, .playbackPending,
-             .playbackIncomplete, .deliveredToSelectedDevice:
+             .playbackIncomplete, .deliveredToSelectedDevice, .localModelReceived:
             return false
         }
     }
@@ -105,6 +107,9 @@ enum VoiceAudioDeliveryPolicy {
         guard diagnostic.receivedSamples > 0 else {
             return diagnostic.sessionEnded ? .noSamples : .receiving
         }
+        if diagnostic.route == .localModel {
+            return diagnostic.sessionEnded ? .localModelReceived : .receiving
+        }
         guard diagnostic.outputAtStart.selectedDeviceKind != .unavailable,
               diagnostic.outputAtStart.engineRunning,
               diagnostic.outputAtStart.playerPlaying
@@ -142,6 +147,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
     case voiceInputTargetFocusLost = "voice.input_target_focus_lost"
     case voiceAudioDeliveryFailed = "voice.audio_delivery_failed"
     case voiceExternalToolNoCommit = "voice.external_tool_no_commit"
+    case voiceLocalModelNoCommit = "voice.local_model_no_commit"
     case controlsNotConfirmed = "controls.not_confirmed"
     case completeRuntimeRegressed = "complete.runtime_regressed"
 
@@ -163,7 +169,8 @@ enum FirstUseFailureReason: String, Codable, Equatable {
              .voiceInputTargetNotReady,
              .voiceInputTargetFocusLost,
              .voiceAudioDeliveryFailed,
-             .voiceExternalToolNoCommit:
+             .voiceExternalToolNoCommit,
+             .voiceLocalModelNoCommit:
             return .voiceTest
         case .controlsNotConfirmed:
             return .controls
@@ -190,6 +197,7 @@ enum FirstUseVoiceAttemptResult: String, Codable, Equatable {
     case noSamples = "no_samples"
     case manualInput = "manual_input"
     case externalToolNoCommit = "external_tool_no_commit"
+    case localModelNoCommit = "local_model_no_commit"
 
     var failureReason: FirstUseFailureReason? {
         switch self {
@@ -207,6 +215,8 @@ enum FirstUseVoiceAttemptResult: String, Codable, Equatable {
             return .voiceManualInput
         case .externalToolNoCommit:
             return .voiceExternalToolNoCommit
+        case .localModelNoCommit:
+            return .voiceLocalModelNoCommit
         }
     }
 
@@ -219,13 +229,15 @@ enum FirstUseVoiceAttemptResult: String, Codable, Equatable {
         case .noSamples: return "audio_samples_not_received"
         case .manualInput: return "manual_input_observed"
         case .externalToolNoCommit: return "transcript_commit_not_observed"
+        case .localModelNoCommit: return "local_transcript_commit_not_observed"
         }
     }
 
     var diagnosticBoundary: String {
-        self == .externalToolNoCommit
-            ? "external_tool_internal_state_unavailable"
-            : "sayall_observable_state"
+        switch self {
+        case .externalToolNoCommit: return "external_tool_internal_state_unavailable"
+        default: return "sayall_observable_state"
+        }
     }
 }
 
@@ -278,6 +290,8 @@ struct FirstUseVoiceAttemptDiagnostic: Equatable {
             return externalToolMicrophoneUserConfirmed
                 ? "external_tool_no_commit"
                 : "external_tool_microphone_not_confirmed"
+        case .localModelNoCommit:
+            return "local_model_no_commit"
         default:
             return result.rawValue
         }
@@ -305,7 +319,7 @@ enum FirstUseVoiceAttemptPolicy {
         if localTranscription {
             if transcriptionAppeared { return .passed }
             if !focusReadyAtDeadline { return .inputTargetFocusLost }
-            return .externalToolNoCommit
+            return .localModelNoCommit
         }
         if audioDeliveryResult.isConfirmedFailure { return .audioDeliveryFailed }
         if finalObservation,

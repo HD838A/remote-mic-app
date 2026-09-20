@@ -849,7 +849,9 @@ struct SettingsView: View {
                         .frame(width: 230)
                     VStack(spacing: 14) {
                         localTranscriptionPanel
-                        audioSettingsPanel
+                        if settings.onboardingVoiceTool != .local {
+                            audioSettingsPanel
+                        }
                         if [.doubao, .weixin].contains(settings.onboardingVoiceTool) {
                             audioCompatibilityPanel
                         }
@@ -1237,6 +1239,12 @@ struct SettingsView: View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 8) {
                 embeddedTranscriptionStatusRow
+                if model.embeddedTranscriptionStatus == .failed {
+                    Button("connection.embedded_transcription.retry") {
+                        model.retryEmbeddedTranscriptionModelLoading()
+                    }
+                    .buttonStyle(.bordered)
+                }
                 Link(
                     "connection.embedded_transcription.model_link",
                     destination: URL(string: "https://huggingface.co/hyperkit/whisper-large-v3-turbo-cantonese-yue-english-coreml")!
@@ -1674,11 +1682,18 @@ struct SettingsView: View {
                 Divider()
                 mappingSelectionLockControl
                 Divider()
-                mappingVoiceKeyModeControl
+                if settings.onboardingVoiceTool == .local {
+                    Label("connection.local_voice_button.help", systemImage: "waveform")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                } else {
+                    mappingVoiceKeyModeControl
+                }
                 // 「语音键模拟 Fn 点按」只对「不会按一次收音」的遥控器有意义：
                 // 它把按住模拟成点按，用来驱动只认点按的工具。Chromecase 自己能按一次收音，
                 // 驱动方式由语音模式直接决定，页面不出现该开关（见能力矩阵文档）。
-                if VoiceFunctionKeyTapApplicability.isApplicable(capabilities: capabilities) {
+                if settings.onboardingVoiceTool != .local &&
+                    VoiceFunctionKeyTapApplicability.isApplicable(capabilities: capabilities) {
                     Divider()
                     mappingVoiceFnTapControl
                 }

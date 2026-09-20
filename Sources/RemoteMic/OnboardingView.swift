@@ -480,7 +480,8 @@ struct OnboardingView: View {
                 }
             }
 
-            if settings.onboardingVoiceTool != .unselected {
+            if settings.onboardingVoiceTool != .unselected &&
+                settings.onboardingVoiceTool != .local {
                 onboardingVoiceKeyControl
             }
         }
@@ -521,7 +522,7 @@ struct OnboardingView: View {
 
     @ViewBuilder
     private var onboardingVoiceKeyMigrationNotice: some View {
-        if let voiceKeyMigrationSource {
+        if settings.onboardingVoiceTool != .local, let voiceKeyMigrationSource {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
                     .font(.system(size: 17, weight: .medium))
@@ -640,8 +641,8 @@ struct OnboardingView: View {
 
             VStack(spacing: 10) {
                 ForEach([
-                    OnboardingControlMethod.iPhoneApp,
-                    .webRemote,
+                    OnboardingControlMethod.webRemote,
+                    .iPhoneApp,
                 ]) { method in
                     Button {
                         selectControlMethod(method)
@@ -660,7 +661,7 @@ struct OnboardingView: View {
                                 HStack(spacing: 8) {
                                     Text(localization.text(method.titleKey))
                                         .font(.system(size: 15, weight: .semibold))
-                                    if method == .iPhoneApp {
+                                    if method == .webRemote {
                                         Text("onboarding.control_method.recommended")
                                             .font(.system(size: 12, weight: .semibold))
                                             .foregroundStyle(Color.accentColor)
@@ -670,8 +671,8 @@ struct OnboardingView: View {
                                                 Color.accentColor.opacity(0.10),
                                                 in: Capsule()
                                             )
-                                    } else if method == .webRemote {
-                                        Text("onboarding.control_method.no_iphone")
+                                    } else if method == .iPhoneApp {
+                                        Text("onboarding.control_method.already_installed")
                                             .font(.system(size: 12, weight: .semibold))
                                             .foregroundStyle(.secondary)
                                     }
@@ -1133,13 +1134,22 @@ struct OnboardingView: View {
 
             if settings.onboardingVoiceTool == .local {
                 statusCard(
-                    icon: localTranscriptionReady ? "checkmark.circle.fill" : "hourglass",
+                    icon: localTranscriptionReady ? "checkmark.circle.fill" :
+                        (localTranscriptionFailed ? "exclamationmark.triangle.fill" : "hourglass"),
                     title: localization.text("onboarding.audio.local_title"),
                     detail: localization.text(localTranscriptionReady
                         ? "onboarding.audio.local_ready"
-                        : "onboarding.audio.local_loading"),
+                        : (localTranscriptionFailed
+                            ? "onboarding.audio.local_failed"
+                            : "onboarding.audio.local_loading")),
                     isComplete: localTranscriptionReady
                 )
+                if localTranscriptionFailed {
+                    Button("onboarding.audio.local_retry") {
+                        model.retryEmbeddedTranscriptionModelLoading()
+                    }
+                    .buttonStyle(.bordered)
+                }
             } else if supportedAudioDevices.isEmpty {
                 statusCard(
                     icon: "waveform.badge.magnifyingglass",
@@ -1218,13 +1228,22 @@ struct OnboardingView: View {
 
             if settings.onboardingVoiceTool == .local {
                 statusCard(
-                    icon: localTranscriptionReady ? "checkmark.circle.fill" : "hourglass",
+                    icon: localTranscriptionReady ? "checkmark.circle.fill" :
+                        (localTranscriptionFailed ? "exclamationmark.triangle.fill" : "hourglass"),
                     title: localization.text("onboarding.audio.local_title"),
                     detail: localization.text(localTranscriptionReady
                         ? "onboarding.audio.local_ready"
-                        : "onboarding.audio.local_loading"),
+                        : (localTranscriptionFailed
+                            ? "onboarding.audio.local_failed"
+                            : "onboarding.audio.local_loading")),
                     isComplete: localTranscriptionReady
                 )
+                if localTranscriptionFailed {
+                    Button("onboarding.audio.local_retry") {
+                        model.retryEmbeddedTranscriptionModelLoading()
+                    }
+                    .buttonStyle(.bordered)
+                }
             } else {
                 externalToolConfigurationConfirmationCard
             }
@@ -2028,6 +2047,10 @@ struct OnboardingView: View {
         return false
     }
 
+    private var localTranscriptionFailed: Bool {
+        model.embeddedTranscriptionStatus == .failed
+    }
+
     private var selectedAudioDeviceTitle: String {
         guard let selectedAudioDevice else {
             return localization.text("onboarding.audio.select_required")
@@ -2308,6 +2331,7 @@ struct OnboardingView: View {
 
     private func selectVoiceTool(_ tool: OnboardingVoiceTool) {
         settings.setOnboardingVoiceTool(tool)
+        model.applyHIDSettings()
         AppLogger.shared.write(
             "ONBOARDING VOICE_TOOL selected=\(tool.rawValue) voice_key_policy=fn_only"
         )
@@ -2317,6 +2341,8 @@ struct OnboardingView: View {
     }
 
     private func enforceOnboardingVoiceKeyPolicy() {
+        guard settings.onboardingVoiceTool != .local,
+              settings.onboardingVoiceTool != .unselected else { return }
         if let pending = settings.consumePendingOnboardingVoiceKeyMigration() {
             voiceKeyMigrationSource = pending
         }
@@ -2509,7 +2535,8 @@ struct OnboardingView: View {
              .voiceNoTranscript,
              .voiceInputTargetNotReady,
              .voiceInputTargetFocusLost,
-             .voiceExternalToolNoCommit:
+             .voiceExternalToolNoCommit,
+             .voiceLocalModelNoCommit:
             resetVoiceTestForRetry()
         case .voiceNoSamples, .voiceAudioDeliveryFailed:
             model.applyAudioSettings(reason: "onboarding_voice_retry")

@@ -1,5 +1,23 @@
 # TODO
 
+## Cantonese local transcription fork handoff (2026-09-20)
+
+The active fork is `/Users/anthonykwok/sayappclone` (without the hyphen), at `unfla-sh/MiRemote2Pro-Whisper`. The supplied `/Users/anthonykwok/sayapp-clone` directory is empty. The model is speech-to-text (STT), not text-to-speech (TTS). Commit `669851a` contains the initial integration; this section tracks work still needed before calling it ready for users. Older TODO entries below describe the upstream SayAll product and do not establish this fork's release status.
+
+- [x] Show local transcription/model status on the Connection page and make local transcription the default first-run route. Keep existing users' selected legacy tools visible for compatibility.
+- [x] Replace visible upstream website, feedback, TestFlight and Doubao download links with fork-specific links or local workflow copy. Disable the inherited hardware announcement feed and Sparkle feed in the local app build.
+- [x] Build an ad-hoc local QA app and pass focused Swift tests. This is not a signed, notarized release or a real-device acceptance result.
+- [x] Audit every voice start path so local mode never sends Fn/other dictation trigger events that can wake WeChat, Doubao, or another input method; retain safe release of any previously held key. Confirm transcription only runs when local mode is selected.
+  - Every voice-start entry point (Apple Remote, Bluetooth ATVV, mobile, Chromecase) now branches on `usesLocalTranscription`: it neutralizes the hardware Fn key without pressing it, skips Fn-tap mode and `ensureVirtualAudioOutputReady`, and rejects the session outright if neutralization fails rather than falling through to a third-party trigger. `setOnboardingVoiceTool` no longer forces `voiceKeyMode` back to `.function` when local is selected.
+- [x] Add a clear model-load failure state and retry action. Confirm offline restart with cached models and first-run download failures recover without reinstalling.
+  - `EmbeddedTranscriptionEngine.retryAfterFailure()` clears a completed failed load task without duplicating an in-flight one; a "Retry model loading" action is wired into both the Connection page panel and the Onboarding audio step whenever status is `.failed`. Cached-model offline restart relies on `WhisperKitConfig(download: true)`'s own on-disk cache and has not been separately verified with the network actually pulled.
+- [x] Finish full Swift test suite, rebuild the QA app after final edits, inspect packaged Info.plist, and complete light/dark onboarding and Settings screenshot review. Run `git diff --check`.
+  - 647 tests pass, `git diff --check` is clean, the packaged `Contents/Info.plist` has no `SUFeedURL`/`HardwareAnnouncementURL`/`SUPublicEDKey`, and the Connection/Buttons pages were reviewed via `SettingsScreenshotRenderer` in both light and dark appearance with no truncation or layout breaks.
+- [ ] Test with a real RC001/RC003 or supported remote and a real editable target: press latency, first PCM/word, tail preservation, repeated sessions, device disconnect/reconnect, Cantonese text, model fallback, focus safety and Accessibility permission recovery. Record results in `Testing/FirstRunOnboarding.md`; screenshots and unit tests alone do not satisfy this gate.
+- [ ] Audit and replace inherited release tooling before publishing: `scripts/release-variant.sh`, preview/staging/publishing scripts, appcasts/CDN URLs, private package pins and signing workflow still point to upstream infrastructure. No fork release has been published or update channel validated.
+- [ ] Decide whether to remove legacy WeChat/Doubao integration completely. New setup hides their choices and the action picker hides China app launch presets, but compatibility code, driver build, prior saved mappings, and historical docs remain. Explicitly migrate or remove them if zero integration is required.
+- [ ] Review product branding and historical docs/`TODO.md` entries that still claim upstream website, iOS/Watch app, TestFlight, Chinese social channels, private services or hardware support for this fork. Verify any remaining network calls or optional private features before distribution.
+
 - [ ] 蓝牙遥控器系统自定义名称（[#406](https://github.com/HD838A/remote-mic-app/issues/406)）
 	- 已接入按设备身份读取名称、历史编号和事件刷新；A2854 独立 API 实验已验证改名读取和重连身份稳定，并补充序列号默认名识别；候选程序实际运行、截图及端到端验收待完成，保持 Draft。
 	- 验证入口：[BluetoothDeviceNames](Testing/BluetoothDeviceNames.md)。

@@ -78,6 +78,7 @@ enum SettingsScreenshotRenderer {
 
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
+        settings.setOnboardingVoiceTool(.local)
         settings.completeOnboarding()
 #if SAYALL_SIRI_REMOTE_ENABLED
         if usesSiriRemote {

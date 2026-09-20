@@ -431,6 +431,11 @@ struct OnboardingFlowTests {
             externalGlobalVoiceConfirmed: false,
             externalMicrophoneConfirmed: false
         ))
+        #expect(OnboardingVoiceTestConfigurationPolicy.isSayAllVoiceKeyReady(
+            voiceTool: .local,
+            voiceKeyMode: .leftCommand,
+            voiceFnTapModeEnabled: false
+        ))
         #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
             manualInputObserved: false,
             samplesReceived: true,
@@ -451,6 +456,21 @@ struct OnboardingFlowTests {
             finalObservation: true,
             localTranscription: true
         ) == .manualInput)
+        #expect(FirstUseVoiceAttemptPolicy.terminalResultAfterSession(
+            manualInputObserved: false,
+            samplesReceived: true,
+            transcriptionAppeared: false,
+            triggerReady: true,
+            focusReadyAtDeadline: true,
+            audioDeliveryResult: .unavailable,
+            finalObservation: true,
+            localTranscription: true
+        ) == .localModelNoCommit)
+        var localAudio = VoiceAudioDeliveryDiagnostic(generation: 1)
+        localAudio.route = .localModel
+        localAudio.receivedSamples = 16_000
+        localAudio.sessionEnded = true
+        #expect(localAudio.result == .localModelReceived)
     }
 
     @Test func fnInputMethodsRequireTheSystemFnActionToBeReleased() {

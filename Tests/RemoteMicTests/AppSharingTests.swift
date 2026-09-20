@@ -3,18 +3,18 @@ import Testing
 @testable import RemoteMic
 
 struct AppSharingTests {
-    @Test func localizedWebsiteShareLinksIncludeTheMacShareSource() throws {
+    @Test func localizedForkShareLinksIncludeTheMacShareSource() throws {
         let chinese = try components(AppShareLink.url(for: Locale(identifier: "zh-Hans")))
         let english = try components(AppShareLink.url(for: Locale(identifier: "en")))
 
         #expect(chinese.scheme == "https")
-        #expect(chinese.host == "sayall.app")
-        #expect(chinese.path == "/")
+        #expect(chinese.host == "github.com")
+        #expect(chinese.path == "/unfla-sh/MiRemote2Pro-Whisper")
         #expect(chinese.queryItems == [URLQueryItem(name: "from", value: "mac_share")])
 
         #expect(english.scheme == "https")
-        #expect(english.host == "sayall.app")
-        #expect(english.path == "/en/")
+        #expect(english.host == "github.com")
+        #expect(english.path == "/unfla-sh/MiRemote2Pro-Whisper")
         #expect(english.queryItems == [URLQueryItem(name: "from", value: "mac_share")])
     }
 

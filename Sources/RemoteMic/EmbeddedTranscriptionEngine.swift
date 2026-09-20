@@ -99,6 +99,20 @@ actor EmbeddedTranscriptionEngine {
         _ = loadModels()
     }
 
+    /// A failed download/load is kept in `loadTask` until the user retries.
+    /// Only reset a completed failed task so an in-flight load is not duplicated.
+    func retryAfterFailure() async -> Status {
+        if let loadTask {
+            do {
+                _ = try await loadTask.value
+                return await status()
+            } catch {
+                self.loadTask = nil
+            }
+        }
+        return await status()
+    }
+
     /// Reports which model(s) are actually available right now, for display
     /// in Settings. Suspends until loading finishes if it's still in
     /// progress — callers should treat this as a one-shot status fetch (see

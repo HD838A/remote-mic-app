@@ -221,7 +221,8 @@ enum OnboardingVoiceTestConfigurationPolicy {
         voiceKeyMode: VoiceKeyMode,
         voiceFnTapModeEnabled: Bool
     ) -> Bool {
-        voiceKeyMode == .function &&
+        if voiceTool == .local { return !voiceFnTapModeEnabled }
+        return voiceKeyMode == .function &&
             voiceFnTapModeEnabled == expectsFnTap(for: voiceTool)
     }
 

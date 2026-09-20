@@ -402,7 +402,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(.separator())
         menu.addItem(menuItem("menu.about", action: #selector(showAbout)))
         menu.addItem(versionMenuItem())
-        menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
+        if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String != nil {
+            menu.addItem(menuItem("menu.check_for_updates", action: #selector(checkForUpdates)))
+        }
         menu.addItem(menuItem("about.support.github", action: #selector(openGitHub)))
         menu.addItem(menuItem("about.support.website", action: #selector(openWebsite)))
         menu.addItem(.separator())
@@ -852,6 +854,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func performUpdateCheck(_ purpose: UpdateCheckPurpose) {
+        guard Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String != nil else {
+            updateInformation.setUnavailable()
+            return
+        }
         updateCheckTask?.cancel()
         updateCheckTask = Task { [weak self] in
             guard let self else { return }
