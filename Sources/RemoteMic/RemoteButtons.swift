@@ -699,11 +699,11 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording,
              .toggleFullScreen, .missionControl, .applicationWindows, .spotlight, .lockScreen:
             return .systemAndMedia
-        case .customShortcut, .focusInput, .openCustomApplication:
+        case .customShortcut, .focusInput:
             return .custom
-        case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
-             .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
-             .openZed:
+        case .openCustomApplication, .openRemoteMic, .openCodex, .openClaude, .openCmux,
+             .openWeChat, .openCursor, .openXcode, .openSlack, .openWeCom, .openNeteaseMusic,
+             .openChrome, .openSafari, .openZed:
             return .applications
         }
     }

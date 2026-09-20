@@ -229,7 +229,8 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.spotlight.category == .systemAndMedia)
         #expect(ButtonAction.lockScreen.category == .systemAndMedia)
         #expect(ButtonAction.customShortcut.category == .custom)
-        #expect(ButtonAction.openCustomApplication.category == .custom)
+        #expect(ButtonAction.focusInput.category == .custom)
+        #expect(ButtonAction.openCustomApplication.category == .applications)
         #expect(ButtonAction.openCodex.category == .applications)
         #expect(Set(ButtonAction.allCases.map(\.category)) == Set(ButtonActionCategory.allCases))
     }
