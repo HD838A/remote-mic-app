@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Onboarding 输入工具未运行、配对状态残留与语音测试页裁切](./2026-09-22-onboarding-tool-runtime-and-voice-test-gates.md)
 - [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md)
 - [虚拟设备被静音时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md)
 - [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)

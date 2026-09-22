@@ -6,11 +6,11 @@
 
 | 产品能力 | macOS 实现 |
 | --- | --- |
-| 主控制来源 | 小米蓝牙遥控器 2 / 2 Pro，通过 CoreBluetooth 语音链路和 IOHID 普通按键链路验证 |
-| 替代控制来源 | iPhone Nearby 与手机网页版 |
+| 主控制来源 | 小米蓝牙遥控器 2 / 2 Pro；私有 Package 存在时增加 Siri Remote 与 Chromecast 语音遥控器 |
+| 替代控制来源 | 仅 `SAYALL_MAC_REMOTE_ENABLED` 构建显示 iPhone / Apple Watch App 与手机网页版 |
 | 必要权限 | 蓝牙、输入监控、辅助功能；具体分支仍以生产能力要求为准 |
-| 语音工具 | 豆包输入法、微信输入法、Typeless、其他支持语音输入的工具 |
-| Onboarding 语音键 | 豆包、微信和其他工具使用 Fn/地球键长按；Typeless 使用 Fn 点按开始/结束 |
+| 语音工具 | 豆包输入法、微信输入法、Typeless、Vokie、腾讯 ChatterFly、其他支持语音输入的工具 |
+| Onboarding 语音键 | 按工具 Profile 或用户学习 Binding 配置；Fn 只是稳定兜底，不是唯一策略 |
 | 音频路线 | SayAll 输出到受支持的虚拟音频设备，第三方工具把同一设备选择为麦克风 |
 | 输入目标 | 原生 AppKit 文本编辑器必须成为当前 key window 的 first responder |
 | 完成证据 | 当前来源连接、普通按键、语音开始、真实样本、音频投递、语音结束、第三方文字写入和三个不同普通按键 |
@@ -26,11 +26,16 @@
 
 ### 输入法与语音键
 
-- Onboarding 统一使用 Fn/地球键，不在首次流程中提供左/右 Command 选择。
-- 旧设置为左/右 Command 时，进入或重跑 Onboarding 应切回 Fn，并显著提示用户发生了什么变化。
-- 豆包和微信只能通过公开 Text Input Sources API 按精确 Input Source ID 选择；不得按显示名称模糊匹配。
-- Typeless 和其他独立工具不执行系统输入源切换。
-- SayAll 不读取豆包、微信或 Typeless 的私有配置；语音识别键、全局唤起和麦克风只能显示期望值并由用户确认。
+- 豆包、微信默认 hold 为 Fn、toggle 为右 Command；Typeless、Vokie、ChatterFly 已知 toggle 默认键为 Fn。Vokie 与 ChatterFly 的 hold 默认键未确认前不得自动生成 hold 默认方案。
+- 默认快捷键只进入“使用推荐配置”快速路径；用户声明修改过快捷键时，权限完成后通过 `ShortcutCaptureMonitor` 学习当前快捷键和 hold/toggle 语义。
+- 选择工具或主动重跑 Onboarding 不得立即改写正式 `VoiceKeyMode`、Fn 点按或 Chromecast 模式。
+- 配对计划只创建 staged Binding；真实文字测试通过后才提交 verified Binding，失败、返回或退出时恢复原配置。
+- 当前可学习并注入的语音键限于 Fn、左/右 Command 与右 Option；不能表达的组合必须明确提示，不得静默降级。
+- 豆包和微信只能通过公开 Text Input Sources API 按精确 Input Source ID 选择；不得按显示名称模糊匹配。Onboarding 选择工具时只观察当前输入源，不自动启用或切换；用户明确点击后才执行一次切换，避免 Radio 选择触发系统确认或设置界面。
+- Typeless、Vokie、ChatterFly 和其他独立工具不执行系统输入源切换。
+- 进入 Typeless 或 Vokie 的语音测试页时，必须通过公开 Bundle ID/URL Scheme 尝试后台启动目标 App，但不得抢走 SayAll 输入框焦点；自动拉起失败、状态未知或目标仍未运行时必须阻止完成并显示“重新打开”，运行后仍保留真实语音文字门禁。
+- SayAll 不读取任何第三方工具的私有配置；语音识别键、全局唤起和麦克风只能显示期望值并由用户确认。
+- `sayall://launch` 只负责激活与 Vokie 状态回流；received/configured/ready 都不能替代真实语音文字门禁。
 
 ### 音频
 
@@ -45,6 +50,8 @@
 
 ### 控制来源
 
+- 控制来源在单页中按 Package 门禁显示：公开构建只有小米遥控器；Siri、Chromecast 和 Mac Remote Package 分别增加对应入口。
+- iPhone、Apple Watch 和 Web App 均支持 hold/toggle；旧版未上报实际模式时按 hold 兼容并要求用户确认。
 - 实体遥控器必须由生产 BLE/HID 证据确认，macOS 系统蓝牙列表中的“已连接”不能单独通过。
 - iPhone 与网页版必须由各自生产会话和事件来源确认，不能由同时在线的实体遥控器代替。
 - 语音键仍遵守按下即开始、释放即结束的实时路径；不得加入双击等待或长按阈值。

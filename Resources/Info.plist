@@ -18,6 +18,19 @@
 	<string>SayAll</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>com.hd838a.RemoteMic.launch</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sayall</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>1.9.21</string>
 	<key>CFBundleVersion</key>

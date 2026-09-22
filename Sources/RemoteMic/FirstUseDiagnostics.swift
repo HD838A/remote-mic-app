@@ -462,6 +462,7 @@ struct FirstUseDiagnosticSnapshot {
     let architecture: String
     let voiceTool: OnboardingVoiceTool
     let voiceKeyMode: VoiceKeyMode
+    var voiceFnTapModeEnabled = false
     let context: FirstUseDiagnosticContext
     let voiceAttempt: FirstUseVoiceAttemptDiagnostic
     let bluetoothStatus: String
@@ -469,8 +470,25 @@ struct FirstUseDiagnosticSnapshot {
     let audioStatus: String
     let events: [FirstUseEvent]
     let appLanguage: String
+    var controlSource: OnboardingControlSource = .unselected
+    var voiceBinding: VoiceToolUserBinding? = nil
     let generatedAt = Date()
-    let onboardingVoiceKeyPolicy = "fn_only"
+
+    var onboardingVoiceKeyPolicy: String {
+        voiceBinding == nil ? "unresolved" : "profile_or_user_binding"
+    }
+
+    var voiceKeyPolicyCompliant: Bool {
+        guard let voiceBinding,
+              let plan = OnboardingVoicePairingPlan.resolve(
+                tool: voiceBinding.tool,
+                controlSource: controlSource,
+                preferredGesture: voiceBinding.gestureMode,
+                userBinding: voiceBinding
+              ) else { return false }
+        return voiceBinding.shortcut == voiceKeyMode &&
+            plan.fnTapModeEnabled == voiceFnTapModeEnabled
+    }
 
     var redactedText: String {
         let capabilities = context.capabilities
@@ -496,8 +514,13 @@ struct FirstUseDiagnosticSnapshot {
             "step=\(context.step.rawValue)",
             "voice_tool=\(voiceTool.rawValue)",
             "voice_key_mode=\(voiceKeyMode.rawValue)",
+            "voice_fn_tap_mode_enabled=\(voiceFnTapModeEnabled)",
             "onboarding_voice_key_policy=\(onboardingVoiceKeyPolicy)",
-            "voice_key_policy_compliant=\(voiceKeyMode == .function)",
+            "voice_key_policy_compliant=\(voiceKeyPolicyCompliant)",
+            "control_source=\(controlSource.rawValue)",
+            "voice_gesture=\(voiceBinding?.gestureMode.rawValue ?? "unresolved")",
+            "voice_binding_source=\(voiceBinding?.source.rawValue ?? "unresolved")",
+            "voice_binding_validation=\(voiceBinding?.validationState.rawValue ?? "unresolved")",
             "remote_availability=\(context.remoteAvailability.rawValue)",
             "control_method=\(context.controlMethod.rawValue)",
             "failure=\(context.failureReason?.rawValue ?? "none")",
@@ -549,7 +572,7 @@ struct FirstUseDiagnosticSnapshot {
             "voice_external_tool_microphone_observable=false",
             "voice_external_tool_microphone_user_confirmed=\(voiceAttempt.externalToolMicrophoneUserConfirmed)",
             "voice_external_tool_expected_microphone=\(voiceAttempt.audioDelivery.outputAtStart.selectedDeviceKind.rawValue)",
-            "voice_external_tool_next_checks=trigger_mode_matches_fn,global_voice_enabled_if_required,microphone_matches_selected_device,voice_input_enabled,session_duration_sufficient",
+            "voice_external_tool_next_checks=trigger_matches_binding,global_voice_enabled_if_required,microphone_matches_selected_device,voice_input_enabled,session_duration_sufficient",
             "voice_audio_generation=\(voiceAttempt.audioDelivery.generation)",
             "voice_audio_source=\(voiceAttempt.audioDelivery.source)",
             "voice_audio_route=\(voiceAttempt.audioDelivery.route.rawValue)",

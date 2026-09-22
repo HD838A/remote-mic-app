@@ -29,6 +29,12 @@ struct VoiceKeyConfigurationState: Equatable {
     let fnTapModeEnabled: Bool
 }
 
+private struct OnboardingVoiceConfigurationSnapshot: Codable {
+    let voiceKeyMode: VoiceKeyMode
+    let voiceFnTapModeEnabled: Bool
+    let chromecastVoiceMode: ChromecaseVoiceMode
+}
+
 private struct PersonalizedConfiguration: Codable {
     let formatVersion: Int
     let gainDB: Double
@@ -324,7 +330,12 @@ final class AppSettings: ObservableObject {
         static let onboardingStep = "onboarding.step"
         static let onboardingRemoteAvailability = "onboarding.remoteAvailability"
         static let onboardingControlMethod = "onboarding.controlMethod"
+        static let onboardingControlSource = "onboarding.controlSource"
         static let onboardingVoiceTool = "onboarding.voiceTool"
+        static let onboardingVoiceBindingPreference = "onboarding.voiceBindingPreference"
+        static let onboardingPreferredGesture = "onboarding.preferredGesture"
+        static let onboardingVerifiedVoiceBinding = "onboarding.verifiedVoiceBinding"
+        static let onboardingTrialSnapshot = "onboarding.trialSnapshot"
         static let onboardingMigrationVersion = "onboarding.migrationVersion"
         static let onboardingInstallStateMigrationVersion = "onboarding.installStateMigrationVersion"
         static let firstUseEvents = "onboarding.diagnostics.events"
@@ -585,9 +596,43 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published private(set) var onboardingControlSource: OnboardingControlSource {
+        didSet {
+            defaults.set(onboardingControlSource.rawValue, forKey: Keys.onboardingControlSource)
+        }
+    }
+
     @Published private(set) var onboardingVoiceTool: OnboardingVoiceTool {
         didSet { defaults.set(onboardingVoiceTool.rawValue, forKey: Keys.onboardingVoiceTool) }
     }
+
+    @Published private(set) var onboardingVoiceBindingPreference: OnboardingVoiceBindingPreference {
+        didSet {
+            defaults.set(
+                onboardingVoiceBindingPreference.rawValue,
+                forKey: Keys.onboardingVoiceBindingPreference
+            )
+        }
+    }
+
+    @Published private(set) var onboardingPreferredGesture: VoiceGestureMode? {
+        didSet {
+            defaults.set(onboardingPreferredGesture?.rawValue, forKey: Keys.onboardingPreferredGesture)
+        }
+    }
+
+    @Published private(set) var verifiedVoiceToolBinding: VoiceToolUserBinding? {
+        didSet {
+            if let verifiedVoiceToolBinding,
+               let data = try? JSONEncoder().encode(verifiedVoiceToolBinding) {
+                defaults.set(data, forKey: Keys.onboardingVerifiedVoiceBinding)
+            } else {
+                defaults.removeObject(forKey: Keys.onboardingVerifiedVoiceBinding)
+            }
+        }
+    }
+
+    @Published private(set) var stagedVoiceToolBinding: VoiceToolUserBinding?
 
     var isOnboardingComplete: Bool {
         onboardingCompletedVersion >= Self.currentOnboardingVersion
@@ -639,6 +684,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         var corruptedKeys: [String] = []
         self.defaults = defaults
+        Self.restoreInterruptedOnboardingTrial(in: defaults)
         remoteDeviceProfiles = []
         selectedRemoteProfileID = nil
         gainDB = defaults.object(forKey: Keys.gainDB) == nil
@@ -823,6 +869,9 @@ final class AppSettings: ObservableObject {
                 ? .unselected
                 : .physicalRemote)
         onboardingControlMethod = persistedControlMethod
+        onboardingControlSource = defaults.string(forKey: Keys.onboardingControlSource)
+            .flatMap(OnboardingControlSource.init(rawValue:))
+            ?? OnboardingControlSource.migrated(from: persistedControlMethod)
         onboardingRemoteAvailability = defaults.string(
             forKey: Keys.onboardingRemoteAvailability
         )
@@ -840,6 +889,20 @@ final class AppSettings: ObservableObject {
         onboardingVoiceTool = defaults.string(forKey: Keys.onboardingVoiceTool)
             .flatMap(OnboardingVoiceTool.init(rawValue:))
             ?? .unselected
+        onboardingVoiceBindingPreference = defaults.string(
+            forKey: Keys.onboardingVoiceBindingPreference
+        )
+            .flatMap(OnboardingVoiceBindingPreference.init(rawValue:))
+            ?? .documentedDefault
+        onboardingPreferredGesture = defaults.string(forKey: Keys.onboardingPreferredGesture)
+            .flatMap(VoiceGestureMode.init(rawValue:))
+        verifiedVoiceToolBinding = Self.decodeSetting(
+            VoiceToolUserBinding.self,
+            forKey: Keys.onboardingVerifiedVoiceBinding,
+            from: defaults,
+            corrupted: &corruptedKeys
+        )
+        stagedVoiceToolBinding = nil
         let legacyMappings = RemoteDeviceMappings(
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
@@ -947,19 +1010,130 @@ final class AppSettings: ObservableObject {
     }
 
     func setOnboardingVoiceTool(_ voiceTool: OnboardingVoiceTool) {
-        if voiceKeyMode != .function {
-            pendingOnboardingVoiceKeyMigration = voiceKeyMode
-            voiceKeyMode = .function
-        }
-        let shouldEnableFnTap = voiceTool == .typeless && voiceKeyMode == .function
-        if voiceFnTapModeEnabled != shouldEnableFnTap {
-            voiceFnTapModeEnabled = shouldEnableFnTap
-        }
         guard onboardingVoiceTool != voiceTool else { return }
+        discardOnboardingVoiceTrial()
         onboardingVoiceTool = voiceTool
+        onboardingVoiceBindingPreference = .documentedDefault
+        onboardingPreferredGesture = nil
+        stagedVoiceToolBinding = nil
+    }
+
+    func setOnboardingVoiceBindingPreference(_ preference: OnboardingVoiceBindingPreference) {
+        guard onboardingVoiceBindingPreference != preference else { return }
+        discardOnboardingVoiceTrial()
+        onboardingVoiceBindingPreference = preference
+        stagedVoiceToolBinding = nil
+    }
+
+    func setOnboardingPreferredGesture(_ gesture: VoiceGestureMode?) {
+        guard onboardingPreferredGesture != gesture else { return }
+        discardOnboardingVoiceTrial()
+        onboardingPreferredGesture = gesture
+        stagedVoiceToolBinding = nil
+    }
+
+    func setOnboardingControlSource(_ source: OnboardingControlSource) {
+        guard onboardingControlSource != source else { return }
+        onboardingControlSource = source
+        onboardingControlMethod = source.legacyControlMethod
+        switch source {
+        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+            onboardingRemoteAvailability = .hasRemote
+        case .appleCompanion, .webRemote:
+            onboardingRemoteAvailability = .noRemote
+        case .unselected:
+            onboardingRemoteAvailability = .unselected
+        }
+        discardOnboardingVoiceTrial()
+    }
+
+    func beginOnboardingVoiceTrial(_ plan: OnboardingVoicePairingPlan) {
+        if defaults.data(forKey: Keys.onboardingTrialSnapshot) == nil {
+            let snapshot = OnboardingVoiceConfigurationSnapshot(
+                voiceKeyMode: voiceKeyMode,
+                voiceFnTapModeEnabled: voiceFnTapModeEnabled,
+                chromecastVoiceMode: chromecaseVoiceMode
+            )
+            if let data = try? JSONEncoder().encode(snapshot) {
+                defaults.set(data, forKey: Keys.onboardingTrialSnapshot)
+            }
+        }
+        stagedVoiceToolBinding = plan.binding
+        voiceKeyMode = plan.binding.shortcut
+        voiceFnTapModeEnabled = plan.fnTapModeEnabled && plan.binding.shortcut == .function
+        if let chromecastVoiceMode = plan.chromecastVoiceMode {
+            chromecaseVoiceMode = chromecastVoiceMode
+        }
+        AppLogger.shared.write(
+            "ONBOARDING BINDING staged tool=\(plan.binding.tool.rawValue) " +
+                "control_source=\(plan.controlSource.rawValue) " +
+                "gesture=\(plan.binding.gestureMode.rawValue) " +
+                "shortcut=\(plan.binding.shortcut.rawValue) " +
+                "fn_tap=\(plan.fnTapModeEnabled) " +
+                "binding_source=\(plan.binding.source.rawValue)"
+        )
+    }
+
+    func stageLearnedOnboardingBinding(
+        shortcut: VoiceKeyMode,
+        gesture: VoiceGestureMode
+    ) -> OnboardingVoicePairingPlan? {
+        let binding = VoiceToolUserBinding(
+            tool: onboardingVoiceTool,
+            shortcut: shortcut,
+            gestureMode: gesture,
+            source: .userLearned,
+            validationState: .staged,
+            verifiedToolVersion: nil,
+            verifiedAt: nil
+        )
+        guard let plan = OnboardingVoicePairingPlan.resolve(
+            tool: onboardingVoiceTool,
+            controlSource: onboardingControlSource,
+            preferredGesture: gesture,
+            userBinding: binding
+        ) else { return nil }
+        beginOnboardingVoiceTrial(plan)
+        return plan
+    }
+
+    func verifyOnboardingVoiceBinding(at date: Date = Date()) {
+        guard let stagedVoiceToolBinding else { return }
+        let verified = stagedVoiceToolBinding.verified(at: date)
+        verifiedVoiceToolBinding = verified
+        self.stagedVoiceToolBinding = nil
+        defaults.removeObject(forKey: Keys.onboardingTrialSnapshot)
+        AppLogger.shared.write(
+            "ONBOARDING BINDING verified tool=\(verified.tool.rawValue) " +
+                "gesture=\(verified.gestureMode.rawValue) " +
+                "shortcut=\(verified.shortcut.rawValue) " +
+                "binding_source=\(verified.source.rawValue)"
+        )
+    }
+
+    func discardOnboardingVoiceTrial() {
+        guard let data = defaults.data(forKey: Keys.onboardingTrialSnapshot),
+              let snapshot = try? JSONDecoder().decode(
+                OnboardingVoiceConfigurationSnapshot.self,
+                from: data
+              ) else {
+            stagedVoiceToolBinding = nil
+            defaults.removeObject(forKey: Keys.onboardingTrialSnapshot)
+            return
+        }
+        voiceKeyMode = snapshot.voiceKeyMode
+        voiceFnTapModeEnabled = snapshot.voiceFnTapModeEnabled && snapshot.voiceKeyMode == .function
+        chromecaseVoiceMode = snapshot.chromecastVoiceMode
+        stagedVoiceToolBinding = nil
+        defaults.removeObject(forKey: Keys.onboardingTrialSnapshot)
+        AppLogger.shared.write("ONBOARDING BINDING discarded reason=trial_not_verified")
     }
 
     func setOnboardingControlMethod(_ controlMethod: OnboardingControlMethod) {
+        if onboardingControlSource == .unselected ||
+            onboardingControlSource.legacyControlMethod != controlMethod {
+            onboardingControlSource = .migrated(from: controlMethod)
+        }
         guard onboardingControlMethod != controlMethod else { return }
         onboardingControlMethod = controlMethod
     }
@@ -977,14 +1151,13 @@ final class AppSettings: ObservableObject {
     }
 
     func restartOnboarding() {
+        discardOnboardingVoiceTrial()
         onboardingVoiceTool = .unselected
         onboardingRemoteAvailability = .unselected
         onboardingControlMethod = .unselected
-        if voiceKeyMode != .function {
-            pendingOnboardingVoiceKeyMigration = voiceKeyMode
-        }
-        voiceKeyMode = .function
-        voiceFnTapModeEnabled = false
+        onboardingControlSource = .unselected
+        onboardingVoiceBindingPreference = .documentedDefault
+        onboardingPreferredGesture = nil
         onboardingStep = .welcome
         onboardingCompletedVersion = 0
         defaults.removeObject(forKey: Keys.firstUseStepStartedAt)
@@ -995,6 +1168,25 @@ final class AppSettings: ObservableObject {
         let pending = pendingOnboardingVoiceKeyMigration
         pendingOnboardingVoiceKeyMigration = nil
         return pending
+    }
+
+    private static func restoreInterruptedOnboardingTrial(in defaults: UserDefaults) {
+        guard let data = defaults.data(forKey: Keys.onboardingTrialSnapshot),
+              let snapshot = try? JSONDecoder().decode(
+                OnboardingVoiceConfigurationSnapshot.self,
+                from: data
+              ) else {
+            defaults.removeObject(forKey: Keys.onboardingTrialSnapshot)
+            return
+        }
+        defaults.set(snapshot.voiceKeyMode.rawValue, forKey: Keys.voiceKeyMode)
+        defaults.set(
+            snapshot.voiceFnTapModeEnabled && snapshot.voiceKeyMode == .function,
+            forKey: Keys.voiceFnTapModeEnabled
+        )
+        defaults.set(snapshot.chromecastVoiceMode.rawValue, forKey: Keys.chromecaseVoiceMode)
+        defaults.removeObject(forKey: Keys.onboardingTrialSnapshot)
+        AppLogger.shared.write("ONBOARDING BINDING restored reason=interrupted_trial")
     }
 
     func action(for button: RemoteButton) -> ButtonAction {

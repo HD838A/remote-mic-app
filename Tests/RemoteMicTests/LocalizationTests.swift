@@ -4,6 +4,24 @@ import Testing
 
 @Suite("Application localization")
 struct LocalizationTests {
+    @Test func screenshotResourceFallbackLoadsRepositoryLocalizations() throws {
+        let suiteName = "RemoteMicTests.Localization.ScreenshotFallback.(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.applicationLanguage = .simplifiedChinese
+        let localization = LocalizationStore(
+            settings: settings,
+            resourceBundle: RemoteMicResourceBundle.mainOrDevelopment
+        )
+
+        #expect(
+            localization.text("onboarding.control_source.detail") ==
+                "优先选择实体遥控器；只有当前安装包实际支持的设备和备用方式会显示。"
+        )
+    }
+
     @Test func languageSelectionPersistsAndUpdatesTheLocaleImmediately() throws {
         let suiteName = "RemoteMicTests.Localization.(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

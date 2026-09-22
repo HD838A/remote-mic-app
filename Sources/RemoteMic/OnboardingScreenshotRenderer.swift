@@ -75,6 +75,9 @@ enum OnboardingScreenshotRenderer {
         let requestedControlMethod = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD"
         ].flatMap(OnboardingControlMethod.init(rawValue:))
+        let requestedControlSource = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE"
+        ].flatMap(OnboardingControlSource.init(rawValue:))
         let systemFunctionKeyAvailable = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_SYSTEM_FN_AVAILABLE"
         ].map { $0 != "0" } ?? true
@@ -94,14 +97,12 @@ enum OnboardingScreenshotRenderer {
             FirstUseRemoteInputDiagnostic()
         }
         let controlMethod = requestedControlMethod ?? .physicalRemote
+        let controlSource = requestedControlSource ?? .migrated(from: controlMethod)
         if let requestedVoiceKeyMode {
             settings.voiceKeyMode = requestedVoiceKeyMode
         }
         settings.setOnboardingVoiceTool(requestedVoiceTool ?? .doubao)
-        settings.setOnboardingRemoteAvailability(
-            controlMethod == .physicalRemote ? .hasRemote : .noRemote
-        )
-        settings.setOnboardingControlMethod(controlMethod)
+        settings.setOnboardingControlSource(controlSource)
         let screenshotAudioDevices = [
             AudioDeviceInfo(id: 1, uid: DoubaoAudioDevicePolicy.deviceUID, name: "MiRemoteV 2ch"),
             AudioDeviceInfo(id: 2, uid: "BlackHole2ch_UID", name: "BlackHole 2ch"),
@@ -110,7 +111,10 @@ enum OnboardingScreenshotRenderer {
             settings: settings,
             initialAudioDevices: screenshotAudioDevices
         )
-        let localization = LocalizationStore(settings: settings)
+        let localization = LocalizationStore(
+            settings: settings,
+            resourceBundle: RemoteMicResourceBundle.mainOrDevelopment
+        )
 
         _ = NSApplication.shared
         let previousAppearance = NSApp.appearance
@@ -135,6 +139,9 @@ enum OnboardingScreenshotRenderer {
                     .doubao: allVoiceToolsUnavailable ? .notInstalled : .available,
                     .weixin: allVoiceToolsUnavailable ? .notInstalled : .available,
                     .typeless: allVoiceToolsUnavailable ? .notInstalled : .available,
+                    .vokie: allVoiceToolsUnavailable ? .notInstalled : .available,
+                    .chatterFly: .unknown,
+                    .other: .unknown,
                 ],
                 initialInputMethodGuideStep: requestedGuideStep,
                 remoteInputDiagnosticOverride: remoteInputDiagnostic
@@ -177,9 +184,6 @@ enum OnboardingScreenshotRenderer {
             .voiceTool,
             .remoteAvailability,
         ]
-        if controlMethod != .physicalRemote {
-            steps.append(.controlMethod)
-        }
         steps.append(contentsOf: [
             .permissions,
             .remote,
@@ -198,7 +202,7 @@ enum OnboardingScreenshotRenderer {
         switch step {
         case .welcome: return "welcome"
         case .voiceTool: return "voice-tool"
-        case .remoteAvailability: return "remote-availability"
+        case .remoteAvailability: return "control-source"
         case .controlMethod: return "control-method"
         case .permissions: return "permissions"
         case .remote: return "remote"

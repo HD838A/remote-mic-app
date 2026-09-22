@@ -488,6 +488,36 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     )
     private let audioOutput = VirtualAudioOutput()
     private var recordingPlayback: AVAudioPlayer?
+
+    func isOnboardingControlSourceConnected(_ source: OnboardingControlSource) -> Bool {
+        switch source {
+        case .xiaomiRemote:
+            return connectedRemoteProfileIDs.contains { profileID in
+                guard let model = settings.remoteDeviceProfiles.first(where: {
+                    $0.id == profileID
+                })?.model else { return false }
+                return !model.usesPrivateAdapter
+            }
+        case .siriRemote:
+            return !connectedAppleRemoteProfileIDs.isEmpty
+        case .chromecastRemote:
+            return !connectedChromecaseProfileIDs.isEmpty
+        case .appleCompanion:
+            return isPhoneRemoteConnected || isWatchRemoteConnected
+        case .webRemote:
+            if case .connected = webRemoteState { return true }
+            return false
+        case .unselected:
+            return false
+        }
+    }
+
+    var activePhysicalVoiceControlSource: OnboardingControlSource? {
+        if bluetoothVoiceActive { return .xiaomiRemote }
+        if !appleRemoteVoiceDevices.isEmpty || appleRemoteVoiceStopping { return .siriRemote }
+        if chromecaseVoiceActive || chromecaseVoiceStopping { return .chromecastRemote }
+        return nil
+    }
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
         AppLogger.shared.write(message)
     })
@@ -2445,7 +2475,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             guard let self, let monitor else {
                 return profileID.map { ($0, true) }
             }
-            self.lastRemoteButtonPress = button
             let existingProfileID = profileID
                 ?? self.settings.profileID(forHIDFingerprint: fingerprint)
             let resolvedProfileID = existingProfileID
@@ -2464,6 +2493,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 }
             }
             self.selectRemoteProfile(resolvedProfileID)
+            self.lastRemoteButtonPress = button
             self.settings.recordButtonPress(
                 control: .remoteButton(button),
                 source: .bluetoothRemote

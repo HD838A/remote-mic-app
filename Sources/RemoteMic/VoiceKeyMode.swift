@@ -51,3 +51,16 @@ enum VoiceKeyMode: String, Codable, CaseIterable, Identifiable {
         "connection.voice_key.mode.\(rawValue)"
     }
 }
+
+extension VoiceKeyMode {
+    init?(standaloneModifier: StandaloneKeyboardModifier) {
+        switch standaloneModifier {
+        case .function: self = .function
+        case .leftCommand: self = .leftCommand
+        case .rightCommand: self = .rightCommand
+        case .rightOption: self = .rightOption
+        case .leftOption, .leftControl, .rightControl, .leftShift, .rightShift:
+            return nil
+        }
+    }
+}

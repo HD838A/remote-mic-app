@@ -320,6 +320,9 @@ let package = Package(
                 if chromecaseEnabled {
                     settings.append(.define("SAYALL_CHROMECASE_ENABLED"))
                 }
+                if macRemoteEnabled {
+                    settings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
+                }
                 return settings
             }()
         ),

@@ -282,6 +282,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     func applicationWillTerminate(_ notification: Notification) {
         model.privateFeature.hideHUDImmediately()
         model.stop()
+        model.settings.discardOnboardingVoiceTrial()
         updateCheckTask?.cancel()
         terminationSignalSources.forEach { $0.cancel() }
         terminationSignalSources.removeAll()
@@ -310,6 +311,23 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     ) -> Bool {
         showSettings()
         return true
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let request = urls.lazy.compactMap(SayAllDeepLinkRequest.parse).first else {
+            return
+        }
+        AppLogger.shared.write(
+            "DEEPLINK SAYALL source=\(request.source ?? "unknown") " +
+                "status=\(request.status?.rawValue ?? "none") " +
+                "reason=\(request.reason ?? "none")"
+        )
+        NotificationCenter.default.post(
+            name: .sayAllDeepLinkReceived,
+            object: request
+        )
+        showSettings()
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func installTerminationSignalHandlers() {

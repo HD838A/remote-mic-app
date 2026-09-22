@@ -163,13 +163,8 @@ final class SiriRemoteFeatureIntegration {
                 fingerprint: connection.fingerprint,
                 isConnected: connection.isConnected
             ))
-            // 型号自己的代码声明它有什么能力；宿主照着这份数据决定触摸类设置是否出现。
-            self?.onDeclaredCapabilitiesChange?(
-                Self.hostCapabilities(
-                    connection.capabilities,
-                    isConnected: connection.isConnected
-                )
-            )
+            // 当前私有包版本尚未公开能力集合；清空自报值后由宿主按型号默认能力回退。
+            self?.onDeclaredCapabilitiesChange?([])
         }
         feature.onControlEvent = { [weak self] event in
             guard let control = SiriRemoteControl(rawValue: event.control.rawValue),
@@ -227,31 +222,6 @@ final class SiriRemoteFeatureIntegration {
         }
         #endif
     }
-
-    /// 把私有包的能力集合映射为宿主镜像。
-    ///
-    /// 未连接时给出空集合（上层据此回退到型号默认表）；能力位**全量**映射，
-    /// 私有包将来新增能力位时这里会因 switch 不穷尽而编译报错，不会被静默丢掉。
-    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
-    private static func hostCapabilities(
-        _ capabilities: Set<SayAllSiriRemote.RemoteHardwareCapability>,
-        isConnected: Bool
-    ) -> SiriRemoteDeclaredCapabilities {
-        guard isConnected else { return [] }
-        var declared: SiriRemoteDeclaredCapabilities = []
-        for capability in capabilities {
-            switch capability {
-            case .controlEdges: declared.insert(.controlEdges)
-            case .touchSurface: declared.insert(.touchSurface)
-            case .continuousScroll: declared.insert(.continuousScroll)
-            case .voiceStream: declared.insert(.voiceStream)
-            case .batteryLevel: declared.insert(.batteryLevel)
-            case .powerState: declared.insert(.powerState)
-            }
-        }
-        return declared
-    }
-    #endif
 
     func start() {
         #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)

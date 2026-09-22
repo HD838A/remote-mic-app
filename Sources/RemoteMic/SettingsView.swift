@@ -1478,11 +1478,6 @@ struct SettingsView: View {
                         trigger: trigger
                     )
                 },
-                // 置灰表 = 默认表去掉已放开的键（主开关全放开 / 按键级豁免）。
-                systemReservedControlIDs: ChromecaseRemoteControl.canvasReservedControlIDs(
-                    allowSystemReservedKeys: settings.chromecaseAllowSystemReservedKeys,
-                    exceptions: settings.chromecaseSystemReservedExceptions
-                )
             )
         }
     }
