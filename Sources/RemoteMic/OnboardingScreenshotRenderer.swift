@@ -148,7 +148,6 @@ enum OnboardingScreenshotRenderer {
                     .weixin: allVoiceToolsUnavailable ? .notInstalled : .available,
                     .typeless: allVoiceToolsUnavailable ? .notInstalled : .available,
                     .vokie: allVoiceToolsUnavailable ? .notInstalled : .available,
-                    .chatterFly: .unknown,
                     .other: .unknown,
                 ],
                 initialInputMethodGuideStep: requestedGuideStep,
@@ -190,12 +189,12 @@ enum OnboardingScreenshotRenderer {
         var steps: [OnboardingStep] = [
             .welcome,
             .remoteAvailability,
-            .voiceTool,
         ]
         steps.append(contentsOf: [
             .permissions,
             .remote,
             .audio,
+            .voiceTool,
             .voiceTest,
             .controls,
             .complete,

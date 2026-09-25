@@ -75,12 +75,11 @@ struct OnboardingVoicePairingPlanTests {
         #expect(weixin.defaultShortcutByMode[.hold] == .function)
         #expect(weixin.defaultShortcutByMode[.toggle] == .rightCommand)
 
-        for tool in [OnboardingVoiceTool.typeless, .vokie, .chatterFly] {
+        for tool in [OnboardingVoiceTool.typeless, .vokie] {
             let profile = VoiceToolAdapterProfile.profile(for: tool)
             #expect(profile.defaultShortcutByMode[.toggle] == .function)
         }
         #expect(VoiceToolAdapterProfile.profile(for: .vokie).defaultShortcutByMode[.hold] == nil)
-        #expect(VoiceToolAdapterProfile.profile(for: .chatterFly).defaultShortcutByMode[.hold] == nil)
     }
 
     @Test func holdOnlyRemoteUsesNativeHoldForDoubaoAndFnConversionForToggleOnlyTools() throws {
@@ -92,7 +91,7 @@ struct OnboardingVoicePairingPlanTests {
         #expect(doubao.binding.shortcut == .function)
         #expect(!doubao.fnTapModeEnabled)
 
-        for tool in [OnboardingVoiceTool.typeless, .vokie, .chatterFly] {
+        for tool in [OnboardingVoiceTool.typeless, .vokie] {
             let plan = try #require(OnboardingVoicePairingPlan.resolve(
                 tool: tool,
                 controlSource: .xiaomiRemote

@@ -15,7 +15,7 @@ enum OnboardingStep: String, CaseIterable, Codable {
     /// The public flow keeps the control-device decision immediately after the welcome page.
     /// The legacy control-method case remains decodable so an interrupted older flow can resume.
     static let visibleCases: [Self] = [
-        .welcome, .remoteAvailability, .voiceTool, .permissions, .remote, .audio,
+        .welcome, .remoteAvailability, .permissions, .remote, .audio, .voiceTool,
         .voiceTest, .controls, .complete,
     ]
 
@@ -25,9 +25,9 @@ enum OnboardingStep: String, CaseIterable, Codable {
 
     var requiresRuntime: Bool {
         switch self {
-        case .welcome, .voiceTool, .remoteAvailability, .controlMethod:
+        case .welcome, .remoteAvailability, .controlMethod:
             return false
-        case .permissions, .remote, .audio, .voiceTest, .controls, .complete:
+        case .permissions, .remote, .audio, .voiceTool, .voiceTest, .controls, .complete:
             return true
         }
     }
@@ -66,9 +66,9 @@ enum OnboardingPhase: String, CaseIterable {
 
     static func phase(for step: OnboardingStep) -> OnboardingPhase {
         switch step {
-        case .welcome, .voiceTool, .remoteAvailability, .controlMethod:
+        case .welcome, .remoteAvailability, .controlMethod:
             return .prepare
-        case .permissions, .remote, .audio:
+        case .permissions, .remote, .audio, .voiceTool:
             return .setup
         case .voiceTest, .controls, .complete:
             return .tryIt
@@ -127,7 +127,6 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
     case weixin
     case typeless
     case vokie
-    case chatterFly = "chatterfly"
     case other
 
     var id: String { rawValue }
@@ -146,7 +145,7 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
             return "com.bytedance.inputmethod.doubaoime.pinyin"
         case .weixin:
             return "com.tencent.inputmethod.wetype.pinyin"
-        case .unselected, .typeless, .vokie, .chatterFly, .other:
+        case .unselected, .typeless, .vokie, .other:
             return nil
         }
     }
@@ -155,7 +154,7 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .vokie:
             return URL(string: "vokie://launch")
-        case .unselected, .doubao, .weixin, .typeless, .chatterFly, .other:
+        case .unselected, .doubao, .weixin, .typeless, .other:
             return nil
         }
     }
@@ -164,13 +163,71 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .typeless:
             return "now.typeless.desktop"
-        case .unselected, .doubao, .weixin, .vokie, .chatterFly, .other:
+        case .unselected, .doubao, .weixin, .vokie, .other:
             return nil
         }
     }
 
     var requiresFunctionKeySetup: Bool {
         preferredInputSourceID != nil
+    }
+}
+
+enum OnboardingAIAssistantPrompt {
+    static let chinese = """
+    请在这台 Mac 上直接完成“无线麦SayAll.app”的配置。我的遥控器已经通过蓝牙连接。
+
+    不要操作屏幕、不要点击窗口，也不要只给我操作建议。请使用无线麦提供的本机配置命令，通过终端完成配置并验证结果：
+
+    1. 先在终端定位已安装的无线麦SayAll.app：
+       APP_PATH="$(mdfind 'kMDItemCFBundleIdentifier == \"com.hd838a.RemoteMic\"' | head -n 1)"; [ -n "$APP_PATH" ] || APP_PATH="/Applications/SayAll.app"
+       [ -x "$APP_PATH/Contents/MacOS/RemoteMic" ] || APP_PATH="/Applications/无线麦SayAll.app"
+       "$APP_PATH/Contents/MacOS/RemoteMic" --agent-configure --auto --json
+    2. 自动选择当前已连接的遥控器；如果有多个候选且无法判断，只向我询问一次。
+    3. 自动选择已安装且可用的语音工具：豆包、微信输入法、Vokie、Typeless 或其他工具；如果有多个候选且无法判断，只询问我一次。
+    4. 让本次 Onboarding 使用 Fn，并按控制设备与语音工具匹配的“按住”或“按一次”方式配置。
+    5. 选择可用的无线麦音频设备作为语音输入路线，并保留当前增益；如果需要，可把增益调整到适合小声或气声的范围。
+    6. 只修改无线麦自己的配置，不读取或修改第三方语音工具的私有文件、数据库、沙盒或未公开协议。
+    7. 配置成功后，将无线麦向导停在真实语音测试步骤，不要跳过语音、音频、按键和文字上屏验证，也不要把写入配置当成验证成功。
+    8. 如果需要 macOS 权限、用户选择或真实说话测试，明确告诉我还缺哪一步；否则告诉我配置已准备完成。
+
+    请使用命令返回的 JSON 结果判断成功或失败，并在失败时说明具体原因。不要伪造完成状态。
+    """
+
+    static let english = """
+    Configure “SayAll” directly on this Mac. My remote is already connected over Bluetooth.
+
+    Do not operate the screen, click windows, or only give instructions. Use the app’s local headless configuration command from the terminal, then verify its result:
+
+    1. Locate the installed SayAll app without opening a window, then run:
+       APP_PATH="$(mdfind 'kMDItemCFBundleIdentifier == \"com.hd838a.RemoteMic\"' | head -n 1)"; [ -n "$APP_PATH" ] || APP_PATH="/Applications/SayAll.app"
+       [ -x "$APP_PATH/Contents/MacOS/RemoteMic" ] || APP_PATH="/Applications/无线麦SayAll.app"
+       "$APP_PATH/Contents/MacOS/RemoteMic" --agent-configure --auto --json
+    2. Select the currently connected remote automatically; ask me at most once if multiple candidates cannot be distinguished.
+    3. Select an installed and available voice tool: Doubao, WeChat Input, Vokie, Typeless, or Other; ask me at most once if multiple candidates cannot be distinguished.
+    4. Use Fn for this onboarding run and apply the hold-or-toggle behavior matched to the selected remote and voice tool.
+    5. Select an available SayAll audio device for voice input and keep the current gain; adjust it only if needed for a quiet or breathy voice.
+    6. Modify only SayAll’s own configuration. Do not read or modify private files, databases, sandboxes, or undocumented protocols of third-party voice tools.
+    7. After configuration, leave SayAll at the real voice-test step. Do not skip voice, audio, button, or text-on-screen verification, and do not treat a written configuration as proof of success.
+    8. If macOS permissions, a user choice, or a real spoken test is still required, tell me exactly what remains; otherwise report that configuration is prepared.
+
+    Use the command’s JSON result to determine success or failure, and explain the concrete reason if it fails. Never fabricate completion.
+    """
+
+    static func text(for locale: Locale) -> String {
+        locale.identifier.lowercased().hasPrefix("zh") ? chinese : english
+    }
+}
+
+enum OnboardingVoiceGesturePrompt {
+    static func text(for mode: VoiceGestureMode, locale: Locale) -> String {
+        let isChinese = locale.identifier.lowercased().hasPrefix("zh")
+        switch (isChinese, mode) {
+        case (true, .hold): return "按住语音键说话，说完松开。"
+        case (true, .toggle): return "按一下语音键开始说话，再按一下结束。"
+        case (false, .hold): return "Hold the voice key while speaking, then release it."
+        case (false, .toggle): return "Press the voice key once to start, then once more to finish."
+        }
     }
 }
 
@@ -254,21 +311,15 @@ struct VoiceToolAdapterProfile: Equatable {
                 installationProbe: .publicURLScheme,
                 evidenceState: .pending
             )
-        case .chatterFly:
-            return Self(
-                tool: tool,
-                supportedModes: [.hold, .toggle],
-                defaultShortcutByMode: [.toggle: .function],
-                recommendedMode: .toggle,
-                installationProbe: .publicURLScheme,
-                evidenceState: .pending
-            )
         case .other:
             return Self(
                 tool: tool,
                 supportedModes: [.hold, .toggle],
-                defaultShortcutByMode: [:],
-                recommendedMode: nil,
+                // The third-party tool remains unobserved; Fn is only the
+                // temporary Onboarding trigger and still requires the user's
+                // real voice-text confirmation before it can be committed.
+                defaultShortcutByMode: [.hold: .function, .toggle: .function],
+                recommendedMode: .hold,
                 installationProbe: .none,
                 evidenceState: .unknown
             )

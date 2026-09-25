@@ -20,7 +20,7 @@
 
 ## 测试前准备
 
-1. 准备已安装 MiRemoteV 2ch 与 BlackHole 2ch 的测试 Mac；保留蓝牙扬声器或其他普通输出设备，用于确认只有这两种受支持虚拟设备可以通过向导。另按构建能力准备 RC003、苹果遥控器第 6 / 7 代、Chromecast 语音遥控器、iPhone、Apple Watch、可用 Safari 的手机，以及豆包、微信、Typeless、Vokie、ChatterFly 和至少一个其他语音工具。
+1. 准备已安装 MiRemoteV 2ch 与 BlackHole 2ch 的测试 Mac；保留蓝牙扬声器或其他普通输出设备，用于确认只有这两种受支持虚拟设备可以通过向导。另按构建能力准备 RC003、苹果遥控器第 6 / 7 代、Chromecast 语音遥控器、iPhone、Apple Watch、可用 Safari 的手机，以及豆包、微信、Typeless、Vokie 和至少一个其他语音工具。
 2. 退出其他 Remote Mic 实例，备份需要保留的个性化设置。
 3. 使用独立测试账号或清除本 App 的 Onboarding 测试键，确保进入全新流程；不要删除用户正式配置。
 4. 打开 `~/Library/Logs/RemoteMic/runtime.log`，记录每个失败用例的大致时间。
@@ -30,7 +30,7 @@
 
 流程自动化必须分为两层：进程内离屏交互和真实环境验收。进程内层复用生产 `OnboardingView`，在屏幕外的 `NSWindow` 中加载页面，并通过仅供测试注入的 action probe 驱动生产 `Button`、`Link`、`Toggle` action，检查状态更新和导航断言；它不使用屏幕坐标、`CGEvent` 或外部辅助功能点击，因此锁屏、屏幕熄灭或当前用户未登录都不应阻止这层测试。`真实环境` 仍记录需要权限、遥控器、手机或第三方工具的结果；它不能用离屏测试替代。
 
-当前 PR 的 `OnboardingFlowTests.offscreenOnboardingRegistersAndDrivesEveryInteractiveControl` 逐页覆盖生产 Onboarding 中的所有可点击控件：欢迎、返回/继续、实体设备、更多控制方式展开、备用来源、按住/按一次、六个输入工具、权限行、音频设备、语音测试确认、重新打开、失败恢复、诊断复制和完成动作。系统设置、真实硬件、第三方 App 启动结果和真实文字上屏仍按下表进入现场层。
+当前 PR 的 `OnboardingFlowTests.offscreenOnboardingRegistersAndDrivesEveryInteractiveControl` 逐页覆盖生产 Onboarding 中的所有可点击控件：欢迎、AI 配置提示复制、返回/继续、实体设备、更多控制方式展开、备用来源、按住/按一次、五个输入工具、权限行、音频设备、语音测试确认、重新打开、失败恢复、诊断复制和完成动作。系统设置、真实硬件、第三方 App 启动结果和真实文字上屏仍按下表进入现场层。
 
 如果外部 UI 自动化工具报告“Mac 已锁定”或无法取得辅助功能权限，只能将其记录为该自动化通道不可用，不能把“解锁 Mac”列为 Onboarding 的产品前置条件，也不能因此修改用户流程。需要屏幕级坐标、系统权限弹窗、真实蓝牙/音频或第三方 App 文字上屏的用例，单独安排在已登录的现场验收中。
 
@@ -42,7 +42,7 @@
 | 控制来源 | 小米、苹果第 6/7 代卡片 | 只显示当前 Package 支持的实体设备；卡片左侧和右栏使用真图 | Package 过滤、资源解析 | 需逐项点击 | 连接需真机 |
 | 控制来源 | 更多控制方式、Chromecast、iPhone/Watch、网页版 | 默认折叠；展开后才能选择当前构建支持的备用方式 | 折叠状态、Package 过滤 | 需逐项点击 | 连接需真机 |
 | 控制来源 | 按住说话、按一次说话 | 只选择模式；不提前启动语音 | 支持模式门禁 | 需逐项点击 | 各硬件需真机 |
-| 输入工具 | 豆包、微信、Vokie、Typeless、ChatterFly、其他卡片 | 只更新选中态；固定顺序且不打开系统设置 | 选择副作用、排序、Fn staged Binding | 需逐项点击 | 安装状态需真机 |
+| 输入工具 | 豆包、微信、Vokie、Typeless、其他卡片 | 只更新选中态；固定顺序且不打开系统设置 | 选择副作用、排序、Fn staged Binding | 需逐项点击 | 安装状态需真机 |
 | 输入工具 | 安装豆包 | 仅在明确点击后打开官方入口 | URL 门禁 | 需点击 | 浏览器需真机 |
 | 权限 | 蓝牙、输入监控、辅助功能三整行 | 打开正确系统设置；授权后回到本页刷新 | 权限门禁 | 需点击 | TCC 状态需真机 |
 | 连接 | 打开蓝牙设置、重新连接、重新检测按键 | 打开对应入口或重新启动当前来源；实体遥控器、iPhone/Watch、网页版分别显示对应恢复说明，不因点击直接通过 | 恢复去重、来源映射 | 需点击 | 遥控器需真机 |
@@ -66,10 +66,10 @@
 
 适用范围：当前 macOS Onboarding 的语音工具安装状态与语音触发键流程；原分支 `codex/onboarding-voice-shortcuts-install-state` 只作为历史审计来源。
 
-1. 分别准备豆包、微信、Typeless、Vokie 已安装/未安装和 ChatterFly 安装状态未知的环境。安装状态只能通过公开 Input Sources、NSWorkspace、Bundle ID 或公开 URL Scheme 判断。
-2. 首次进入工具页，确认固定排序为豆包、微信、Vokie、Typeless、ChatterFly、其他；安装状态只改变状态文案，不得移动卡片。都未安装时推荐豆包，Vokie 仍显示并标记“深度适配”。
+1. 分别准备豆包、微信、Typeless、Vokie 已安装/未安装的环境。安装状态只能通过公开 Input Sources、NSWorkspace、Bundle ID 或公开 URL Scheme 判断。
+2. 首次进入工具页，确认固定排序为豆包、微信、Vokie、Typeless、其他；安装状态只改变状态文案，不得移动卡片。都未安装时推荐豆包，Vokie 仍显示可选择卡片，但不显示“深度适配”。
 3. 页面不显示“快捷键配置来源”“使用推荐配置”“我修改过快捷键”、Command/Option 选择或研发证据状态；本次 staged 语音键固定为 Fn。
-4. 验证默认 Profile：豆包/微信 hold=Fn、toggle=右 Command；Typeless/Vokie/ChatterFly toggle=Fn；Vokie/ChatterFly hold 默认键保持待确认，不能自动生成。
+4. 验证默认 Profile：豆包/微信 hold=Fn、toggle=右 Command；Typeless/Vokie toggle=Fn；Onboarding 本次 staged 语音键始终固定为 Fn。
 5. 预先把正式语音键设置为右 Option 或 Command，选择工具、返回、退出或主动重跑 Onboarding，确认正式配置没有变化。
 6. 选择任一工具和任一控制来源后，进入权限页才应用 Fn staged 配置；返回或退出未完成流程后恢复进入前的正式配置。
 7. 选择“其他语音工具”时必须走学习路径，并明确要求工具支持语音输入、由用户选择麦克风和完成真实文字测试。
@@ -77,7 +77,7 @@
 
 选择“其他语音工具”后进入语音测试页：确认页面再次显示所选虚拟音频设备，并提醒用户在第三方工具中开启语音输入、把该设备设为麦克风。未安装或未打开任何支持语音输入的工具时，语音测试不得通过；应显示针对第三方工具未提交文字的恢复说明。
 
-失败判定：默认值被伪装成已检测配置、选择工具或重跑即覆盖正式配置、用户已修改快捷键却仍强制套用默认值、Vokie/ChatterFly 未确认 hold 默认键仍被自动使用、学习路径读取第三方私有配置、退出未完成流程不恢复、或没有真实文字上屏就持久化 Binding，均视为失败。
+失败判定：默认值被伪装成已检测配置、选择工具或重跑即覆盖正式配置、用户已修改快捷键却仍强制套用默认值、学习路径读取第三方私有配置、退出未完成流程不恢复、或没有真实文字上屏就持久化 Binding，均视为失败。
 
 ## 用例：单页控制来源与 Package 门禁
 
@@ -144,13 +144,13 @@
 
 ## 用例 2：输入工具与安装状态
 
-分别从头运行六次：豆包输入法、微信输入法、Typeless、Vokie、ChatterFly、其他语音工具。
+分别从头运行五次：豆包输入法、微信输入法、Vokie、Typeless、其他语音工具。
 
 预期结果：
 
 - 未选择工具时不能继续；六张工具卡按两列铺开、等高并顶部对齐，`1020 × 772` 下不依赖页面内部滚动。
-- 输入工具卡片始终按豆包、微信、Vokie、Typeless、ChatterFly、其他的固定顺序显示；安装状态只改变卡片状态文案，不得因为当前输入源变化而重新排序或移动选中卡片。
-- 没有检测到任何已安装工具时显示豆包推荐安装；Vokie 即使未安装也保留可选择卡片和“深度适配”标记，但在合作方正式下载 URL 未配置前不得编造下载地址或伪装安装完成。
+- 输入工具卡片始终按豆包、微信、Vokie、Typeless、其他的固定顺序显示；安装状态只改变卡片状态文案，不得因为当前输入源变化而重新排序或移动选中卡片。
+- 没有检测到任何已安装工具时显示豆包推荐安装；Vokie 即使未安装也保留可选择卡片，但不显示“深度适配”或伪造安装完成。
 - 选择豆包或微信时只更新卡片选中态，不调用系统输入源切换 API，也不自动打开系统设置；离开工具页、回到前台或聚焦语音测试输入框时不重复触发。
 - 工具页不显示配置来源或学习路径；所有工具的 Onboarding staged 语音键统一为 Fn，控制来源仍可选择按住/按一次语义。
 - 能力矩阵中的默认快捷键只用于后续配置说明；Onboarding 本次 staged 语音键始终固定为 Fn，不因工具默认值或用户历史配置改变。
@@ -161,16 +161,16 @@
 
 ## 用例 2A：完成后按已验证 Binding 准备输入工具
 
-分别用豆包输入法、微信输入法、Typeless、Vokie、ChatterFly 和其他语音工具完成 Onboarding，并覆盖 Fn、左/右 Command 与右 Option：
+分别用豆包输入法、微信输入法、Typeless、Vokie 和其他语音工具完成 Onboarding，并覆盖 Fn、左/右 Command 与右 Option：
 
 1. 完成后切换到 ABC 或另一个非目标输入源，并让无线麦在后台运行。
 2. 用本次已验证 Binding 从所选控制来源开始语音，观察输入源，再完成一次真实语音输入。
 3. 结束语音，手动切换回其他输入源，再重复一次。
 4. 保持目标输入法已经选中，再开始一次语音。
-5. 对 Typeless、Vokie、ChatterFly 和其他语音工具重复上述操作。
+5. 对 Typeless、Vokie 和其他语音工具重复上述操作。
 6. 重新启动无线麦后再次执行豆包或微信分支。
 
-预期结果：豆包和微信在真实语音会话开始时使用精确 ID 准备已经启用的目标输入法，不依赖 Binding 是否为 Fn；同一会话只准备一次，目标输入法已经选中时没有可见抖动。会话结束时，如果用户没有主动改选其他输入法，恢复语音开始前的输入源；用户在语音期间主动改选后不得覆盖。退出并重启后仍记住所选工具和 verified Binding。Typeless、Vokie、ChatterFly 和其他工具不切换系统输入源。无线麦不拦截或假设 `Control + Space` 及其他输入法快捷键。
+预期结果：豆包和微信在真实语音会话开始时使用精确 ID 准备已经启用的目标输入法，不依赖 Binding 是否为 Fn；同一会话只准备一次，目标输入法已经选中时没有可见抖动。会话结束时，如果用户没有主动改选其他输入法，恢复语音开始前的输入源；用户在语音期间主动改选后不得覆盖。退出并重启后仍记住所选工具和 verified Binding。Typeless、Vokie 和其他工具不切换系统输入源。无线麦不拦截或假设 `Control + Space` 及其他输入法快捷键。
 
 失败判定：按显示名称误选相似输入法、Command/Option Binding 不准备豆包或微信、一次会话重复切换、日常路径重复弹出“是否启用”确认、非输入法工具也切换系统输入源、切换失败阻断录音、结束时覆盖用户主动选择、旧会话恢复新会话的输入源、重启后丢失 Binding，或只有 App 前台时可用。
 
@@ -421,11 +421,11 @@
 ## 用例 9：锁屏离屏截图隐藏入口
 
 1. 保持 Mac 锁屏或不依赖当前屏幕读取权限。
-2. 使用生产隐藏入口构建一次 App，并通过 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark` 生成截图；第 2 页为 `02-control-source.png`，第 3 页为 `03-voice-tool.png`。
+2. 使用生产隐藏入口构建一次 App，并通过 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark` 生成截图；第 2 页为 `02-control-source.png`，第 6 页为 `06-voice-tool.png`。
 3. 公开构建设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote`，浅色和深色各生成 9 张。
 4. 完整 Package 构建分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote|siri_remote|chromecast_remote|apple_companion|web_remote`；Apple 来源再用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPLE_REMOTE_GENERATION=generation_6|generation_7` 分开生成。六个来源浅色和深色各 9 张，共 108 张。
-5. 对输入工具页额外覆盖豆包、微信、Typeless、Vokie、ChatterFly、其他工具，以及 available/not-installed/unknown；至少为“全部不可用”“Vokie 未安装”“ChatterFly unknown”生成浅/深色状态截图。语音测试页另覆盖 Vokie/Typeless 未运行与运行中状态。
-6. 分别覆盖六个输入工具，确认固定排序、Fn staged 配置和按住/按一次摘要无裁切。对 Vokie 额外覆盖 `partial`、`failed` 回流提示。
+5. 对输入工具页额外覆盖豆包、微信、Typeless、Vokie、其他工具，以及 available/not-installed/unknown；至少为“全部不可用”“Vokie 未安装”生成浅/深色状态截图。语音测试页另覆盖 Vokie/Typeless 未运行与运行中状态。
+6. 分别覆盖五个输入工具，确认固定排序、Fn staged 配置和按住/按一次摘要无裁切。对 Vokie 额外覆盖 `partial`、`failed` 回流提示。
 7. 对旧正式配置设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_KEY_MODE=left_command|right_command|right_option`，确认重新运行不会在欢迎或工具选择时立即覆盖；旧 Fn-only 迁移提示不得再被当作现行配置规则。
 8. 逐张用图像查看工具检查窗口 chrome、标题、导航、状态卡、右栏、裁切、对比度和中文字号，并在执行前后核对用户正式 Onboarding 进度未变化。
    - 连接失败卡必须完整显示在底部导航上方；重点检查 Chromecast 浅色/深色 `05-remote.png`。
@@ -467,7 +467,7 @@
 - 自动化覆盖“语音 bridge Ready 或生产 HID 普通按键任一成立即可识别实体控制”，但普通键盘和系统蓝牙列表状态均不在该证据链中；它不能替代 RC001 / RC003 真实时序和后续语音基线。
 - 自动化覆盖从系统蓝牙设置返回时刷新 discovery，以及多个 HID service 部分成功时按 Location ID 只监听安全设备；它不能替代真实新配对、双遥控器、电源键锁屏保护和 IOHID 热插拔验收。
 - 自动化覆盖遥控器页回到前台时同时刷新 BLE/HID、音频页回到前台重新枚举设备、HID 错误与重试入口接线，以及完成页对当前权限/BLE/音频的最终重验；它不能模拟真实系统设置、驱动安装和硬件时序。
-- 编译与单元测试不能证明真实系统权限、RC003、苹果遥控器第 6 / 7 代、Chromecast、iPhone/Watch Nearby、手机 Safari 网页版、MiRemoteV 2ch、BlackHole 2ch、豆包、微信输入法、Typeless、Vokie、ChatterFly 或文字上屏。自动化可以证明两种受支持虚拟设备通过、普通输出被拒绝，但第三方工具真实写入仍需现场验收。
+- 编译与单元测试不能证明真实系统权限、RC003、苹果遥控器第 6 / 7 代、Chromecast、iPhone/Watch Nearby、手机 Safari 网页版、MiRemoteV 2ch、BlackHole 2ch、豆包、微信输入法、Typeless、Vokie 或文字上屏。自动化可以证明两种受支持虚拟设备通过、普通输出被拒绝，但第三方工具真实写入仍需现场验收。
 - 本次 Onboarding 策略固定使用 Fn；第三方工具内部快捷键、模式、麦克风和冲突状态仍不可观察，必须由用户确认并通过真实文字上屏。
 - 代理可在有图形会话时检查页面布局和基础交互，但不能替代用户机器上的权限历史、真实硬件和第三方 App 配置。
 - 代理可在锁屏状态通过隐藏离屏入口验证生产页面的静态布局和浅色/深色外观；这不证明权限弹窗、遥控器、驱动或文字上屏链路真实通过。

@@ -29,7 +29,6 @@ struct OnboardingFlowTests {
                 .weixin: .available,
                 .typeless: .available,
                 .vokie: .available,
-                .chatterFly: .unknown,
                 .other: .unknown,
             ],
             interactionProbe: probe
@@ -94,6 +93,60 @@ struct OnboardingFlowTests {
         }
     }
 
+    @Test func legacyChatterFlySelectionMigratesToUnselected() throws {
+        let suiteName = "RemoteMicTests.Onboarding.ChatterFlyMigration.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set("chatterfly", forKey: "onboarding.voiceTool")
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.onboardingVoiceTool == .unselected)
+        #expect(defaults.string(forKey: "onboarding.voiceTool") == OnboardingVoiceTool.unselected.rawValue)
+    }
+
+    @Test func voiceTestPromptUsesOnlyTheSelectedGesture() {
+        let hold = OnboardingVoiceGesturePrompt.text(for: .hold, locale: Locale(identifier: "zh-Hans"))
+        let toggle = OnboardingVoiceGesturePrompt.text(for: .toggle, locale: Locale(identifier: "zh-Hans"))
+        #expect(hold.contains("按住"))
+        #expect(toggle.contains("按一下"))
+        #expect(!hold.contains("Fn"))
+        #expect(!toggle.contains("Fn"))
+        #expect(!hold.contains("快捷键"))
+        #expect(!toggle.contains("快捷键"))
+    }
+
+    @Test func welcomePromptDescribesHeadlessAgentConfiguration() {
+        let prompt = OnboardingAIAssistantPrompt.chinese
+        #expect(prompt.contains("--agent-configure"))
+        #expect(prompt.contains("--json"))
+        #expect(prompt.contains("不要操作屏幕"))
+        #expect(prompt.contains("停在真实语音测试步骤"))
+        #expect(!prompt.contains("/Users/"))
+    }
+
+    @Test func agentConfigurationCommandIsHeadlessAndKeepsVerificationAsASeparateStep() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let commandSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/AgentConfigurationCommand.swift"),
+            encoding: .utf8
+        )
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        #expect(commandSource.contains("--verify"))
+        #expect(commandSource.contains("onboarding.agent_configuration_backup"))
+        #expect(commandSource.contains("recoverInterruptedConfigurationIfNeeded"))
+        #expect(commandSource.contains("real_voice_test"))
+        #expect(commandSource.contains("permission_required"))
+        #expect(appSource.contains("--agent-configure"))
+        #expect(!commandSource.contains("NSAppleScript"))
+        #expect(!commandSource.contains("CGWindowList"))
+    }
+
     @Test func controlSourcePresentationUsesSourceSpecificPairingAndButtons() throws {
         let xiaomiPairing = OnboardingView.physicalRemotePairingKeys(for: .xiaomiRemote)
         #expect(xiaomiPairing.firstStep == "onboarding.remote.first_pairing.wake")
@@ -139,13 +192,13 @@ struct OnboardingFlowTests {
     @Test func navigationOrderIsStableAndGroupedIntoThreePhases() {
         #expect(OnboardingStep.welcome.previous == nil)
         #expect(OnboardingStep.welcome.next == .remoteAvailability)
-        #expect(OnboardingStep.remoteAvailability.next == .voiceTool)
-        #expect(OnboardingStep.voiceTool.next == .permissions)
+        #expect(OnboardingStep.remoteAvailability.next == .permissions)
         #expect(OnboardingStep.controlMethod.normalized == .remoteAvailability)
-        #expect(OnboardingStep.controlMethod.next == .voiceTool)
+        #expect(OnboardingStep.controlMethod.next == .permissions)
         #expect(OnboardingStep.permissions.next == .remote)
         #expect(OnboardingStep.remote.next == .audio)
-        #expect(OnboardingStep.audio.next == .voiceTest)
+        #expect(OnboardingStep.audio.next == .voiceTool)
+        #expect(OnboardingStep.voiceTool.next == .voiceTest)
         #expect(OnboardingStep.voiceTest.next == .controls)
         #expect(OnboardingStep.controls.next == .complete)
         #expect(OnboardingStep.complete.next == nil)
@@ -685,7 +738,7 @@ struct OnboardingFlowTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
-        for tool in [OnboardingVoiceTool.doubao, .weixin, .typeless, .vokie, .chatterFly, .other] {
+        for tool in [OnboardingVoiceTool.doubao, .weixin, .vokie, .typeless, .other] {
             settings.voiceKeyMode = .rightCommand
             settings.voiceFnTapModeEnabled = true
             settings.setOnboardingVoiceTool(tool)
@@ -735,6 +788,13 @@ struct OnboardingFlowTests {
         #expect(settings.voiceKeyMode == .function)
         #expect(settings.voiceFnTapModeEnabled)
         #expect(OnboardingVoiceTool.typeless.applicationBundleIdentifier == "now.typeless.desktop")
+
+        defaults.set(true, forKey: AppSettings.agentConfigurationPendingKey)
+        let resumed = AppSettings(defaults: defaults)
+        #expect(resumed.stagedVoiceToolBinding == plan.binding)
+        #expect(resumed.voiceKeyMode == .function)
+        resumed.discardOnboardingVoiceTrial()
+        #expect(resumed.stagedVoiceToolBinding == nil)
     }
 
     @Test func inputMethodSetupUsesProductionScreenshotsAndSafeScreenshotOverrides() throws {
@@ -928,7 +988,6 @@ struct OnboardingFlowTests {
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .weixin))
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .typeless))
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .vokie))
-        #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .chatterFly))
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .other))
     }
 
@@ -1121,7 +1180,7 @@ struct OnboardingFlowTests {
             ".onReceive(model.$hasReceivedCurrentVoiceSamples.removeDuplicates())"
         ))
         #expect(viewSource.contains("routeConnectedPhysicalRemoteIfNeeded()"))
-        #expect(viewSource.contains("settings.setOnboardingStep(.voiceTool)"))
+        #expect(viewSource.contains("selectControlSource(.xiaomiRemote)"))
     }
 
     @Test func rootViewObservesSettingsWithoutSubscribingToTheWholeBridgeModel() throws {
@@ -1607,7 +1666,7 @@ struct OnboardingFlowTests {
             isComplete: false,
             step: .welcome
         ))
-        #expect(!OnboardingLaunchPolicy.shouldStartRuntime(
+        #expect(OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: false,
             step: .voiceTool
         ))
@@ -2176,7 +2235,7 @@ struct OnboardingFlowTests {
 
         let welcome = try OnboardingOffscreenFixture(step: .welcome)
         defer { welcome.close() }
-        #expect(Set(welcome.probe.actions.keys) == ["continue"])
+        #expect(Set(welcome.probe.actions.keys) == ["welcome.copy-ai-prompt", "continue"])
         invoke("continue", on: welcome)
         #expect(welcome.settings.onboardingStep == .remoteAvailability)
 
@@ -2185,12 +2244,12 @@ struct OnboardingFlowTests {
             voiceTool: .doubao,
             systemFunctionKeyAvailable: false,
             initialInputMethodGuideStep: 2,
+            controlSource: .xiaomiRemote,
             voiceToolAvailability: [
                 .doubao: .notInstalled,
                 .weixin: .available,
                 .typeless: .available,
                 .vokie: .available,
-                .chatterFly: .unknown,
                 .other: .unknown,
             ]
         )
@@ -2201,14 +2260,14 @@ struct OnboardingFlowTests {
         }
         invoke("voice-tool.doubao.install", on: voiceTool)
         #expect(voiceTool.probe.openedURLs.last == AppLinks.doubaoInputMethod)
-        for tool in [OnboardingVoiceTool.doubao, .weixin, .typeless, .vokie, .chatterFly, .other] {
+        for tool in [OnboardingVoiceTool.doubao, .weixin, .vokie, .typeless, .other] {
             let id = "voice-tool.\(tool.rawValue)"
             invoke(id, on: voiceTool)
             #expect(voiceTool.settings.onboardingVoiceTool == tool)
         }
         invoke("voice-tool.typeless", on: voiceTool)
         invoke("continue", on: voiceTool)
-        #expect(voiceTool.settings.onboardingStep == .permissions)
+        #expect(voiceTool.settings.onboardingStep == .voiceTest)
         invoke("back", on: voiceTool)
 
         let remoteSource = try OnboardingOffscreenFixture(
@@ -2233,22 +2292,21 @@ struct OnboardingFlowTests {
         }
         #endif
         invoke("control-source.xiaomi_remote", on: remoteSource)
-        for mode in VoiceGestureMode.allCases {
-            invoke("gesture.\(mode.rawValue)", on: remoteSource)
-            #expect(remoteSource.settings.onboardingPreferredGesture == mode)
-        }
         invoke("continue", on: remoteSource)
         invoke("back", on: remoteSource)
 
         let vokieSource = try OnboardingOffscreenFixture(
-            step: .remoteAvailability,
+            step: .voiceTool,
             voiceTool: .vokie,
-            controlSource: .xiaomiRemote
+            controlSource: .webRemote
         )
         defer { vokieSource.close() }
-        #expect(vokieSource.probe.actions.keys.contains("vokie.open"))
-        invoke("vokie.open", on: vokieSource)
-        #expect(vokieSource.probe.openedURLs.last?.scheme == "vokie")
+        for mode in VoiceGestureMode.allCases {
+            #expect(vokieSource.probe.actions["gesture.\(mode.rawValue)"] != nil)
+            invoke("gesture.\(mode.rawValue)", on: vokieSource)
+            #expect(vokieSource.settings.onboardingPreferredGesture == mode)
+        }
+        #expect(!vokieSource.probe.actions.keys.contains("vokie.open"))
 
         let iPhone = try OnboardingOffscreenFixture(
             step: .remote,
@@ -2285,15 +2343,13 @@ struct OnboardingFlowTests {
         defer { permissions.close() }
         for id in [
             "permission.bluetooth", "permission.input-monitoring", "permission.accessibility",
-            "shortcut.start", "continue",
+            "continue",
         ] {
             #expect(permissions.probe.actions.keys.contains(id), "missing permission action: \(id)")
         }
         invoke("permission.bluetooth", on: permissions)
         invoke("permission.input-monitoring", on: permissions)
         invoke("permission.accessibility", on: permissions)
-        invoke("shortcut.start", on: permissions)
-        #expect(permissions.probe.actions.keys.contains("shortcut.start"))
         invoke("continue", on: permissions)
         invoke("back", on: permissions)
 
@@ -2468,7 +2524,6 @@ private final class OnboardingOffscreenFixture {
                 .weixin: .available,
                 .typeless: .available,
                 .vokie: .available,
-                .chatterFly: .unknown,
                 .other: .unknown,
             ],
             initialInputMethodGuideStep: initialInputMethodGuideStep,

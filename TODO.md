@@ -196,14 +196,14 @@
   - 首次启动使用可恢复、不可跳过的多步骤 Onboarding，而不是一次弹出全部权限或只展示功能介绍。当前流程依次覆盖：欢迎、单页选择当前构建实际包含的控制来源、选择输入工具、对应必要权限、所选来源真实连接与普通按键、音频回环设备选择、同一来源真实语音文字测试、三个普通按键和完成页。
   - 2026-08-18 修复手机分支按需音频门禁：iPhone/网页版要求受支持的虚拟音频设备已选择且仍存在，实际输出在语音开始时建立并由下一页真实声音和文字验证；停止语音后的正常释放不再阻塞完成页。实体遥控器仍要求持续输出就绪。三种控制方式统一要求蓝牙、输入监控和辅助功能全部开启，手机本地网络由下一页真实连接验证；本地测试包强制注入并校验 Web Relay 配置后才可交付。
   - [ ] 在 Onboarding 第一页增加遥控器蓝牙配对提示：同时长按“主页 Home + 菜单 Menu”可使遥控器进入蓝牙配对模式。当用户需要首次配对、清除旧连接后重新配对，或连接排障需要重置配对关系时，明确展示这组按键和后续在 macOS“系统设置 → 蓝牙”中重新连接的操作；不能把进入配对模式误写成 App 已自动完成蓝牙重置。
-  - [x] 豆包专用快捷键/麦克风配置指引已从 Onboarding 主流程移除：当前页面只显示选择结果和面向用户的语音测试核对项，不把豆包配置套用到 Typeless、Vokie、ChatterFly 等独立语音工具；需要更详细的配置说明时另行维护帮助内容。
+  - [x] 豆包专用快捷键/麦克风配置指引已从 Onboarding 主流程移除：当前页面只显示选择结果和面向用户的语音测试核对项，不把豆包配置套用到 Typeless、Vokie 等独立语音工具；需要更详细的配置说明时另行维护帮助内容。
   - [x] 新用户 Onboarding 已改为 staged 语音键统一固定为 Fn，不再根据工具历史配置自动覆盖正式快捷键；真实文字通过后才提交验证后的 Binding。 <!-- workshop:status=已完成;priority=P1 -->
   - [ ] Onboarding 语音测试输入框页提供 0–24 dB 增益说明与调节，支持用户用小声/气声反复测试；自动化已覆盖页面与持久化路径，仍需真实遥控器、音频设备和第三方输入工具验收。
-    - 2026-09-21 已完成候选实现：新增版本化 Profile/Binding/PairingPlan，首批覆盖豆包、微信、Typeless、Vokie、ChatterFly 与其他工具；工具页固定按豆包、微信、Vokie、Typeless、ChatterFly、其他排序。
+    - 2026-09-25 已完成候选实现：新增版本化 Profile/Binding/PairingPlan，覆盖豆包、微信、Vokie、Typeless 与其他工具；工具页固定按豆包、微信、Vokie、Typeless、其他排序，历史 ChatterFly 值迁移为未选择。
     - 工具页不展示快捷键来源、学习路径或 Command/Option 选择；本次 Onboarding 的 staged 语音键统一固定为 Fn，选择工具时不立即改写正式配置。
     - 新配置采用 staged → verified 事务：只有真实会话开始、PCM、正常停止、第三方配置确认与文字上屏全部通过后才持久化；返回、退出或异常中断恢复原配置。
     - 控制来源已合并成单页并按 Package 门禁：公开构建只显示小米遥控器；完整包增加苹果遥控器第 6/7 代、Chromecast 及 Apple companion/Web 备用方式，实体设备优先展示。
-    - Vokie 已加入深度适配入口、`vokie://launch` 配置唤起和 `sayall://launch` 回流；回流状态不能替代真实语音门禁。合作方正式下载 URL、shortcut/microphoneId 最终编码、Vokie/ChatterFly 当前版本截图与真实默认值证据仍待确认。
+    - Vokie 使用公开 `vokie://launch` 唤起和 `sayall://launch` 回流；回流状态不能替代真实语音门禁，也不读取第三方私有配置。
     - 自动化已覆盖默认矩阵、来源转换、Fn 点按、Chromecast 原生 toggle、事务回滚、Package 编译门禁与 Deep Link 解析；仍需完成公开/完整包生产截图、私有 Package 构建、真实第三方工具、iPhone/Watch/Web 模式上报、各硬件真实语音文字与 macOS 14/15/当前系统验收后才能勾选。
     - 详细方案与证据保存在私有资料库 `projects/remote-mic-app/research/onboarding-voice-shortcuts-and-input-method-visibility/v1/ONBOARDING-OPTIMIZATION-PLAN.md`；公开仓只保留行为、兼容边界和验证状态。
     - Secure Input 仅作为实体遥控器普通按键无响应时的候选诊断；需在真实密码输入/安全键盘场景验证“重新检测”恢复路径，并确认普通按键页不执行用户已有映射。

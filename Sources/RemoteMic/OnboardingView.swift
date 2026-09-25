@@ -130,6 +130,7 @@ struct OnboardingView: View {
     @State private var secureInputActive: Bool?
     @State private var secureInputWaitStartedAtUptime: TimeInterval?
     @State private var lastLoggedSecureInputState: Bool?
+    @State private var aiPromptCopyResult: Bool?
 
     private let permissionRefreshTimer = Timer.publish(
         every: 1,
@@ -416,8 +417,18 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .scrollIndicators(.visible)
 
-            HStack {
-                Spacer()
+            HStack(spacing: 10) {
+                if settings.onboardingStep == .welcome {
+                    onboardingActionButton(id: "welcome.copy-ai-prompt") {
+                        copyAIAssistantPrompt()
+                    } label: {
+                        Text(verbatim: localization.text(aiPromptCopyStatusKey))
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+                Spacer(minLength: 0)
                 onboardingActionButton(id: "continue", action: continueFlow) {
                     Text(localization.text(primaryActionKey))
                         .font(.system(size: 14, weight: .semibold))
@@ -534,12 +545,6 @@ struct OnboardingView: View {
                                     .foregroundStyle(.secondary)
                                     .multilineTextAlignment(.leading)
                                     .lineLimit(3, reservesSpace: true)
-                                if tool == .vokie,
-                                   voiceToolAvailability[tool] != .notInstalled {
-                                    Text(verbatim: localization.text("onboarding.voice_tool.vokie.deep_integration"))
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(Color.accentColor)
-                                }
                                 if voiceToolAvailability[tool] == .notInstalled {
                                     Text(verbatim: localization.text("onboarding.voice_tool.status.not_installed"))
                                         .font(.system(size: 12, weight: .medium))
@@ -605,6 +610,10 @@ struct OnboardingView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
                 }
+            }
+
+            if settings.onboardingControlSource.supportedGestureModes.count > 1 {
+                gestureModeChoice
             }
 
         }
@@ -758,14 +767,6 @@ struct OnboardingView: View {
                 }
             }
 
-            if settings.onboardingControlSource.supportedGestureModes.count > 1 {
-                gestureModeChoice
-            }
-
-            if settings.onboardingVoiceTool != .unselected,
-               let plan = proposedPairingPlan {
-                pairingPlanSummary(plan)
-            }
         }
     }
 
@@ -924,18 +925,10 @@ struct OnboardingView: View {
                 Image(systemName: "arrow.triangle.2.circlepath")
             }
                 .font(.system(size: 13, weight: .semibold))
-            Text(
-                LocalizedMessage(
-                    "onboarding.pairing_plan.summary",
-                    arguments: [
-                        localization.text("onboarding.gesture.\(plan.binding.gestureMode.rawValue)"),
-                        localization.text(plan.binding.shortcut.localizationKey),
-                        localization.text(plan.fnTapModeEnabled
-                            ? "onboarding.pairing_plan.fn_tap_on"
-                            : "onboarding.pairing_plan.fn_tap_off"),
-                    ]
-                ).text(using: localization)
-            )
+            Text(OnboardingVoiceGesturePrompt.text(
+                for: plan.binding.gestureMode,
+                locale: localization.locale
+            ))
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -1282,9 +1275,6 @@ struct OnboardingView: View {
                 )
             }
 
-            if settings.onboardingVoiceBindingPreference == .learnCurrent {
-                shortcutLearningCard
-            }
         }
     }
 
@@ -1701,11 +1691,22 @@ struct OnboardingView: View {
     }
 
     private var voiceTestContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             onboardingTitle("onboarding.voice_test.title")
             Text(verbatim: localization.text("onboarding.voice_test.detail"))
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
+
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "mic.fill")
+                    .foregroundStyle(Color.accentColor)
+                Text(voiceGestureInstruction)
+                    .font(.system(size: 13, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
 
             externalToolConfigurationConfirmationCard
 
@@ -1745,7 +1746,7 @@ struct OnboardingView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .frame(minHeight: 120, maxHeight: 138)
+            .frame(minHeight: 104, maxHeight: 112)
 
             HStack(spacing: 12) {
                 Image(systemName: voiceSamplesReceived ? "waveform.circle.fill" : "waveform")
@@ -1762,7 +1763,7 @@ struct OnboardingView: View {
     }
 
     private var onboardingGainCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             Label {
                 Text(verbatim: localization.text("onboarding.voice_test.gain.title"))
                     .font(.system(size: 13, weight: .semibold))
@@ -1796,7 +1797,7 @@ struct OnboardingView: View {
             }
 
         }
-        .padding(10)
+        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
         .overlay {
@@ -1817,7 +1818,7 @@ struct OnboardingView: View {
     }
 
     private var externalToolConfigurationConfirmationCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Label {
                 Text(
                     LocalizedMessage(
@@ -1840,12 +1841,6 @@ struct OnboardingView: View {
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-
-            configurationStatusRow(
-                label: localization.text("onboarding.voice_test.configuration.sayall_voice_key"),
-                value: sayAllVoiceKeyConfigurationText,
-                isComplete: sayAllVoiceKeyConfigurationReady
-            )
 
             configurationStatusRow(
                 label: localization.text("onboarding.voice_test.configuration.sayall_audio_output"),
@@ -1876,15 +1871,7 @@ struct OnboardingView: View {
             Divider()
 
             onboardingToggle(id: "voice-test.confirm.voice-key", isOn: $externalToolVoiceKeyConfirmed) {
-                Text(
-                    LocalizedMessage(
-                        "onboarding.voice_test.configuration.voice_key_checkbox",
-                        arguments: [
-                            localization.text(settings.onboardingVoiceTool.titleKey),
-                            externalToolExpectedVoiceKeyText,
-                        ]
-                    ).text(using: localization)
-                )
+                Text(verbatim: localization.text("onboarding.voice_test.configuration.voice_gesture_checkbox"))
                 .font(.system(size: 12, weight: .medium))
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -2380,7 +2367,7 @@ struct OnboardingView: View {
                     .interpolation(.none)
                     .resizable()
                     .frame(width: 220, height: 220)
-                    .padding(12)
+        .padding(8)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
                 Text(verbatim: localization.text("onboarding.iphone_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
@@ -2740,12 +2727,13 @@ struct OnboardingView: View {
             return settings.onboardingControlSource != .unselected
         }
         return policyAllowsContinue &&
-            (settings.onboardingStep != .voiceTool || voiceToolSelectionIsValid)
+            (settings.onboardingStep != .voiceTool ||
+                (voiceToolSelectionIsValid && proposedPairingPlan != nil))
     }
 
     private var visibleVoiceTools: [OnboardingVoiceTool] {
         [
-            .doubao, .weixin, .vokie, .typeless, .chatterFly, .other,
+            .doubao, .weixin, .vokie, .typeless, .other,
         ]
     }
 
@@ -2761,7 +2749,7 @@ struct OnboardingView: View {
             return false
         case .other:
             return true
-        case .chatterFly, .typeless, .vokie:
+        case .typeless, .vokie:
             return true
         case .doubao, .weixin:
             return voiceToolAvailability[settings.onboardingVoiceTool] == .available
@@ -2935,17 +2923,21 @@ struct OnboardingView: View {
         }
     }
 
-    private var externalToolExpectedVoiceKeyText: String {
-        guard let plan = proposedPairingPlan else {
-            return localization.text("onboarding.pairing_plan.needs_learning")
+    private var aiPromptCopyStatusKey: String {
+        switch aiPromptCopyResult {
+        case true: return "onboarding.welcome.ai_prompt.copied"
+        case false: return "onboarding.welcome.ai_prompt.failed"
+        case nil: return "onboarding.welcome.ai_prompt.action"
         }
-        return LocalizedMessage(
-            "onboarding.voice_test.configuration.binding_expected",
-            arguments: [
-                localization.text(plan.binding.shortcut.localizationKey),
-                localization.text("onboarding.gesture.\(plan.binding.gestureMode.rawValue)"),
-            ]
-        ).text(using: localization)
+    }
+
+    private func copyAIAssistantPrompt() {
+        let prompt = OnboardingAIAssistantPrompt.text(for: localization.locale)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let copied = pasteboard.setString(prompt, forType: .string)
+        aiPromptCopyResult = copied
+        AppLogger.shared.write("ONBOARDING AI_PROMPT copied=\(copied)")
     }
 
     private var externalToolExpectedVoiceKeyDiagnosticValue: String {
@@ -2959,24 +2951,14 @@ struct OnboardingView: View {
             settings.voiceFnTapModeEnabled == plan.fnTapModeEnabled
     }
 
-    private var sayAllVoiceKeyConfigurationText: String {
-        guard !sayAllVoiceKeyConfigurationReady else {
-            return externalToolExpectedVoiceKeyText
+    private var voiceGestureInstruction: String {
+        guard let plan = proposedPairingPlan else {
+            return localization.text("onboarding.voice_test.waiting_voice")
         }
-        let current: String
-        if settings.voiceKeyMode == .function {
-            current = localization.text(
-                settings.voiceFnTapModeEnabled
-                    ? "onboarding.voice_test.configuration.voice_key_fn_tap"
-                    : "onboarding.voice_test.configuration.voice_key_fn_hold"
-            )
-        } else {
-            current = localization.text(settings.voiceKeyMode.localizationKey)
-        }
-        return LocalizedMessage(
-            "onboarding.voice_test.configuration.sayall_voice_key_mismatch",
-            arguments: [current, externalToolExpectedVoiceKeyText]
-        ).text(using: localization)
+        return OnboardingVoiceGesturePrompt.text(
+            for: plan.binding.gestureMode,
+            locale: localization.locale
+        )
     }
 
     private var sayAllAudioOutputConfigurationText: String {
@@ -3103,7 +3085,6 @@ struct OnboardingView: View {
         case .weixin: return "message.fill"
         case .typeless: return "waveform.badge.mic"
         case .vokie: return "sparkles.rectangle.stack.fill"
-        case .chatterFly: return "bird.fill"
         case .other: return "ellipsis.circle.fill"
         case .unselected: return "circle"
         }
@@ -3172,7 +3153,7 @@ struct OnboardingView: View {
                     content: .screenshot("weixin-input-settings")
                 ),
             ]
-        case .unselected, .typeless, .vokie, .chatterFly, .other:
+        case .unselected, .typeless, .vokie, .other:
             return []
         }
 
@@ -3236,7 +3217,6 @@ struct OnboardingView: View {
 
     private func selectPreferredGesture(_ gesture: VoiceGestureMode) {
         settings.setOnboardingPreferredGesture(gesture)
-        stageCurrentDocumentedPairingPlanIfPossible()
     }
 
     private func stageCurrentDocumentedPairingPlanIfPossible() {
@@ -3262,7 +3242,7 @@ struct OnboardingView: View {
         }
         var availability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability] = [:]
         for tool in [
-            OnboardingVoiceTool.doubao, .weixin, .typeless, .vokie, .chatterFly, .other,
+            OnboardingVoiceTool.doubao, .weixin, .typeless, .vokie, .other,
         ] {
             availability[tool] = OnboardingInputSourceSwitcher.availability(for: tool)
         }
@@ -3281,7 +3261,6 @@ struct OnboardingView: View {
         }
         settings.setOnboardingControlSource(source)
         showAlternativeControlSources = availableAlternativeControlSources.contains(source)
-        model.applyHIDSettings()
         if source.supportedGestureModes.count == 1 {
             settings.setOnboardingPreferredGesture(source.supportedGestureModes.first)
         } else {
@@ -3293,7 +3272,6 @@ struct OnboardingView: View {
         secureInputActive = nil
         secureInputWaitStartedAtUptime = nil
         lastLoggedSecureInputState = nil
-        stageCurrentDocumentedPairingPlanIfPossible()
     }
 
     private func selectAppleRemote(_ generation: OnboardingAppleRemoteGeneration) {
@@ -3485,6 +3463,12 @@ struct OnboardingView: View {
         refreshPermissionStates()
         switch step {
         case .voiceTool:
+            // The current flow always uses the documented Fn-based path. Keep
+            // legacy learn-current state readable, but do not expose or resume
+            // that obsolete capture UI in a normal onboarding run.
+            if settings.onboardingVoiceBindingPreference != .documentedDefault {
+                settings.setOnboardingVoiceBindingPreference(.documentedDefault)
+            }
             refreshVoiceToolAvailability()
             refreshSelectedInputMethodStatus()
             refreshSystemFunctionKeyUsage()
@@ -4139,7 +4123,7 @@ struct OnboardingView: View {
             settings.recordFirstUseEvent(.passed, step: settings.onboardingStep)
         }
         if settings.onboardingStep == .remoteAvailability {
-            settings.setOnboardingStep(.voiceTool)
+            settings.setOnboardingStep(.permissions)
             return
         }
         if settings.onboardingStep == .permissions {
@@ -4157,9 +4141,6 @@ struct OnboardingView: View {
     }
 
     private var previousStep: OnboardingStep? {
-        if settings.onboardingStep == .permissions {
-            return .voiceTool
-        }
         return settings.onboardingStep.previous
     }
 
@@ -4168,7 +4149,7 @@ struct OnboardingView: View {
             "ONBOARDING NAVIGATION from=\(settings.onboardingStep.rawValue) " +
                 "to=\(previous.rawValue) reason=user_back"
         )
-        if settings.onboardingStep == .permissions, previous == .voiceTool {
+        if settings.stagedVoiceToolBinding != nil {
             settings.discardOnboardingVoiceTrial()
             model.applyHIDSettings()
         }

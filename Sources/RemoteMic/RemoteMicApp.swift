@@ -88,6 +88,10 @@ enum SettingsWindowActivationPolicy {
 enum RemoteMicApp {
     @MainActor
     static func main() {
+        if ProcessInfo.processInfo.arguments.contains("--agent-configure") {
+            let arguments = Array(ProcessInfo.processInfo.arguments.dropFirst())
+            exit(AgentConfigurationCommand.run(arguments: arguments))
+        }
         if let screenshotDirectory = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
         ] {
