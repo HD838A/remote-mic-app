@@ -81,6 +81,11 @@ final class KeyboardEventSuppressor {
         }
         if let eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
+            // 只 disable 不会把 event tap 从 WindowServer 的 tap 列表中摘除，必须
+            // invalidate 底层 CFMachPort。否则每次 start/stop 都会残留一个 tap，
+            // 长时间后台运行后累积到数千个，使 WindowServer 在每个输入事件上付出
+            // 遍历全部残留 tap 的代价。
+            CFMachPortInvalidate(eventTap)
         }
         runLoopSource = nil
         eventTap = nil
