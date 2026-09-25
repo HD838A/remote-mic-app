@@ -96,7 +96,7 @@ final class HIDRemoteMonitor {
     private var gestureRecognizer = RemoteButtonGestureRecognizer()
     private var doubleClickTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     private var longPressTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
-    private var permissionMonitor: HIDRemoteScheduledTask?
+    private var permissionPollToken: UUID?
     private var appSwitcherTimeout: HIDRemoteScheduledTask?
     private var appSwitcherFrontmostMonitor: HIDRemoteScheduledTask?
     private var appSwitcherConfirmationProbe: HIDRemoteScheduledTask?
@@ -271,8 +271,7 @@ final class HIDRemoteMonitor {
     }
 
     func stop() {
-        permissionMonitor?.cancel()
-        permissionMonitor = nil
+        stopPermissionMonitor()
         resetInputState()
         if ownsEventSuppressor { eventSuppressor.stop() }
         probedDevices.forEach {
@@ -1281,16 +1280,22 @@ final class HIDRemoteMonitor {
     }
 
     private func startPermissionMonitor() {
-        let timer = scheduler.schedule(
-            afterMilliseconds: HIDRemoteTiming.permissionPollMilliseconds,
-            repeatingEveryMilliseconds: HIDRemoteTiming.permissionPollMilliseconds
-        ) { [weak self] in
+        stopPermissionMonitor()
+        // 权限是进程级全局状态，轮询由 HIDPermissionPoll 统一承载：
+        // 每个 monitor 实例各自起一个 1 Hz 定时器会让 IOHIDCheckAccess
+        // 每秒被调用「实例数」次，而每次调用都会产生一次真实的 TCC IPC。
+        permissionPollToken = HIDPermissionPoll.shared.subscribe { [weak self] in
             guard let self, self.manager != nil else { return }
             if !self.runtimePermissionsAreValid() {
                 self.releaseForRevokedPermissions()
             }
         }
-        permissionMonitor = timer
+    }
+
+    private func stopPermissionMonitor() {
+        guard let permissionPollToken else { return }
+        HIDPermissionPoll.shared.unsubscribe(permissionPollToken)
+        self.permissionPollToken = nil
     }
 
     private func releaseForRevokedPermissions() {

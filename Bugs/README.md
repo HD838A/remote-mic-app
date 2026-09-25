@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [权限轮询位于 HIDRemoteMonitor 实例内部，每秒产生 N 次冗余 TCC IPC](./2026-09-25-per-instance-permission-poll.md)
 - [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md)
 - [虚拟设备被静音时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md)
 - [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
