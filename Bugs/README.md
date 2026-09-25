@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [键盘事件抑制器停止时未 invalidate CFMachPort，event tap 随重连逐次累积](./2026-09-25-keyboard-event-suppressor-tap-leak.md)
 - [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md)
 - [虚拟设备被静音时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md)
 - [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
