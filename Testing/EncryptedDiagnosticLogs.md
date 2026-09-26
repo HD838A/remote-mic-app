@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-验证本地加密日志、公钥缺失闭锁、内部解密边界和用户主动 Sentry 上传。当前 DSN 为空，因此公开开发环境只执行本地与过滤逻辑；真实 Sentry 控制台验收需要受控测试项目。
+验证本地加密日志、公钥缺失闭锁、内部解密边界和用户主动 Sentry 上传。仓库 `.env` 与公开开发构建继续保持 DSN 为空；真实网络发送只在注入受控测试 DSN 的本机测试包中执行。2026-09-27 已完成一次受控 Sentry 控制台验收，生产构建仍不得从仓库读取 DSN 或私钥。
 
 ## 设计不变量
 
@@ -77,7 +77,7 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 2. 触发上传。
 3. 检查 Sentry 测试项目中收到的日志正文和属性。
 
-预期只收到批准的 `PUBLIC_EVENT` 环境/语音事件和通过独立 schema 校验的 `PRIVATE_EVENT`。公开正文字段必须来自白名单；私有记录只允许通用信封和最多 32 个单行 token 属性。Sentry 属性只允许 `diagnostic.user_initiated=true`、`diagnostic.schema_version=1` 和非负的 `diagnostic.sequence`。同一个 `operation_id` 的 started/completed（或 failed/rejected）事件应能还原一次语音会话，并可按 `source` 与 `remote_model_family` 区分硬件或移动来源。
+预期只收到批准的 `PUBLIC_EVENT` 环境/语音事件和通过独立 schema 校验的 `PRIVATE_EVENT`。公开正文字段必须来自白名单；私有记录只允许通用信封和最多 32 个单行 token 属性。应用写入的自定义属性只允许 `diagnostic.user_initiated=true`、`diagnostic.schema_version=1` 和非负的 `diagnostic.sequence`；Sentry 平台仍可附加时间、severity、trace、payload size 和 SDK 版本等非用户元数据。同一个 `operation_id` 的 started/completed（或 failed/rejected）事件应能还原一次语音会话，并可按 `source` 与 `remote_model_family` 区分硬件或移动来源。
 
 下面的内容必须被拒绝或永不生成：
 
@@ -110,5 +110,7 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 ## 证据与边界
 
 - 自动化证据：`AppLoggerTests`、`DiagnosticLogUploaderTests`、私有 Package 事件存储测试、全量 `swift test --disable-keychain` 和 `swift build --disable-keychain`。
-- 内部工具证据：受控私钥可以读取测试 `.rmlog`；公开 App 不含私钥。
-- 尚不能由公开仓库证明：生产私钥保管、真实 Sentry 项目权限、真实网络接收和用户现场日志解密。这些必须在私有受控环境记录，不把真实日志或密钥提交到仓库。
+- 内部工具证据：受控私钥可以读取测试 `.rmlog`；公开 App 不含私钥。内部工具以 `0600` 原子创建明文，拒绝覆盖已有文件和符号链接。
+- 2026-09-27 受控 E2E：测试 App 首轮主动发送 20 条安全诊断事件，其中 8 条为跨重启保留的类型化私有事件；发送成功后 pending 归零，再次发送显示没有可发送事件。Sentry 查询确认 `email=`、`token=`、`order_id=`、`payment_id=`、`checkout_url=`、`bundle=`、`/Users/`、`package_path=` 和 `device.name=` 均为零命中，展开事件没有 Sentry User。项目端 Data Scrubber、Default Scrubbers 和“禁止存储 IP”均已开启；开关保存后发送的新合成事件同样没有 IP 字段或 Sentry User。
+- 本地文件证据：目录权限为 `0700`、文件权限为 `0600`、头部为 `RMLG2\n`，`strings` 无法读出事件正文；内部工具成功按顺序解密，明文验收文件随后移入废纸篓。
+- 尚未完成：生产私钥的正式保管、备份与轮换，以及真实用户主动提供现场 `.rmlog` 后的受控支持流程验收。真实日志或密钥不得提交仓库。

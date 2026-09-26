@@ -3,7 +3,7 @@
 - [ ] 完成加密诊断日志与 Sentry 受控验收
   - 本地日志已改为每次启动独立的公钥包裹 AES-GCM `.rmlog`；App 不保存解密私钥，公开宿主不提供解密能力。
   - 用户主动发送时，Sentry 只接收公开白名单事件和可选私有 provider 的类型化安全事件；不读取本地日志，不上传身份、真实订单/支付标识、用户内容、设备身份或第三方 App 私有状态。
-  - 自动化测试和 DSN 为空路径已完成；私有业务事件可跨重启保留并仅在成功发送后标记。生产公钥轮换、内部解密工具、受控 Sentry 测试项目和真实用户现场验收完成后再勾选。
+  - 自动化测试和 DSN 为空路径已完成；私有业务事件可跨重启保留并仅在成功发送后标记。2026-09-27 已完成内部解密工具和受控 Sentry 测试项目验收，包含真实网络发送、敏感字段零命中、重复发送去重、密文权限与内部解密。生产公钥轮换/保管和真实用户现场日志支持流程完成后再勾选。
   - 详见 [`feature/encrypted-diagnostic-logs/README.md`](feature/encrypted-diagnostic-logs/README.md) 与 [`Testing/EncryptedDiagnosticLogs.md`](Testing/EncryptedDiagnosticLogs.md)。
 
 - [ ] 蓝牙遥控器系统自定义名称（[#406](https://github.com/HD838A/remote-mic-app/issues/406)）

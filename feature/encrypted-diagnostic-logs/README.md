@@ -27,4 +27,4 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 
 完整步骤见 [`Testing/EncryptedDiagnosticLogs.md`](../../Testing/EncryptedDiagnosticLogs.md) 和 [`LOGGING.md`](../../LOGGING.md)。
 
-真实 Sentry 接收、生产私钥保管和用户现场日志解密需在受控环境另行验收；当前公开开发环境的 DSN 为空。
+公开开发环境的 DSN 保持为空。2026-09-27 已在受控测试项目完成真实 Sentry 接收、类型化私有事件确认、敏感字段零命中、重复发送去重和内部工具解密验收；生产私钥保管/轮换与真实用户现场日志支持流程仍需生产环境验收。
