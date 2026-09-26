@@ -218,6 +218,18 @@ struct DiagnosticLogUploaderTests {
         #expect(!line.contains("https://"))
     }
 
+    @Test func privateBusinessRecordNormalizesTimestampToWireMilliseconds() throws {
+        let record = try #require(PrivateDiagnosticUploadRecord(
+            recordID: "pe_abcdefghijklmnopqrstuv",
+            occurredAt: Date(timeIntervalSince1970: 2_000_000_000.123_456),
+            category: "PRIVATE_FLOW",
+            fields: ["phase": "completed"]
+        ))
+
+        #expect(PrivateDiagnosticUploadRecord.parse(record.canonicalLine) == record)
+        #expect(record.canonicalLine.contains("occurred_at_ms=2000000000123"))
+    }
+
     @Test func privateBusinessRecordRejectsReservedEnvelopeFields() {
         #expect(PrivateDiagnosticUploadRecord(
             recordID: "pe_abcdefghijklmnopqrstuv",

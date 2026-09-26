@@ -14,7 +14,9 @@ struct PrivateDiagnosticUploadRecord: Equatable, Sendable {
         category: String,
         fields: [String: String]
     ) {
-        guard Self.matches(recordID, pattern: #"^[a-z]{2}_[A-Za-z0-9_-]{20,64}$"#),
+        let occurredAtMS = Int64(occurredAt.timeIntervalSince1970 * 1_000)
+        guard occurredAtMS >= 0,
+              Self.matches(recordID, pattern: #"^[a-z]{2}_[A-Za-z0-9_-]{20,64}$"#),
               Self.matches(category, pattern: #"^[A-Z][A-Z0-9_]{0,63}$"#),
               !fields.isEmpty,
               fields.count <= 32,
@@ -22,7 +24,7 @@ struct PrivateDiagnosticUploadRecord: Equatable, Sendable {
               fields.allSatisfy({ Self.isValid(field: $0.key, value: $0.value) })
         else { return nil }
         self.recordID = recordID
-        self.occurredAt = occurredAt
+        self.occurredAt = Date(timeIntervalSince1970: Double(occurredAtMS) / 1_000)
         self.category = category
         self.fields = fields
     }
