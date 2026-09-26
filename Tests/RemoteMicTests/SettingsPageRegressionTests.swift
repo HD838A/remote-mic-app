@@ -5,6 +5,25 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func connectionPageKeepsCompatibilityAudioControlsWithoutExtraTools() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("audio.action.refresh_devices"))
+        #expect(settingsSource.contains("audioCompatibilityPanel"))
+        #expect(settingsSource.contains("model.selectDoubaoAudioDevice()"))
+        #expect(settingsSource.contains("model.openDoubaoDriverInstructions(using: localization)"))
+        #expect(!settingsSource.contains("audio.action.learn_virtual_microphones"))
+        #expect(!settingsSource.contains("audio.action.send_test_tone"))
+        #expect(!settingsSource.contains("model.testToneStatus.text(using: localization)"))
+    }
+
     @Test func everyHardwareMappingPageUsesTheSharedHostEditor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -758,9 +777,6 @@ struct SettingsPageRegressionTests {
             "model.reconnect()",
             "model.applyAudioSettings()",
             "model.refreshAudioDevices()",
-            "model.sendTestTone()",
-            "model.selectDoubaoAudioDevice()",
-            "model.openDoubaoDriverInstructions(using: localization)",
             "model.setVoiceFnTapModeEnabled",
             "model.togglePhoneRemoteConnection()",
             "model.toggleWatchRemoteConnection()",

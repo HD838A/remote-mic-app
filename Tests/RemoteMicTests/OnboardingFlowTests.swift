@@ -696,7 +696,7 @@ struct OnboardingFlowTests {
         ))
     }
 
-    @Test func voiceToolSelectionDoesNotRequireChangingTheSystemFnAction() {
+    @Test func voiceToolSelectionKeepsSystemFnInstructionAdvisory() {
         let capabilities = OnboardingCapabilities()
 
         #expect(OnboardingVoiceTool.doubao.preferredInputSourceID == "com.bytedance.inputmethod.doubaoime.pinyin")
@@ -826,6 +826,7 @@ struct OnboardingFlowTests {
         for resourceName in [
             "doubao-menu", "doubao-settings", "weixin-input-menu",
             "weixin-input-settings", "system-fn", "weixin-app-shortcuts",
+            "vokie-step-1", "vokie-step-2",
         ] {
             #expect(viewSource.contains(resourceName))
             for appearance in ["light", "dark"] {
@@ -842,11 +843,14 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("OnboardingInputSourceSwitcher.selectionState(for: tool)"))
         #expect(viewSource.contains("ensureSelectedVoiceToolRunning()"))
         #expect(!viewSource.contains("voiceToolSortRank"))
-        #expect(viewSource.contains("openKeyboardSettings()"))
         #expect(!viewSource.contains("\n            ScrollView {"))
         #expect(viewSource.contains("GridItem(.flexible(), spacing: 8, alignment: .top)"))
-        #expect(viewSource.contains(".frame(height: 104, alignment: .top)"))
-        #expect(!viewSource.contains("inputMethodGuide(for: settings.onboardingVoiceTool)\n"))
+        #expect(viewSource.contains("minHeight: 120, maxHeight: 120, alignment: .top"))
+        #expect(viewSource.contains("let physicalColumns = [GridItem(.flexible())]"))
+        #expect(viewSource.contains("columns: physicalColumns"))
+        #expect(viewSource.contains("inputMethodGuide(for: settings.onboardingVoiceTool)"))
+        #expect(viewSource.contains("content: .systemFunctionKey"))
+        #expect(viewSource.contains("onboarding.voice_tool.guide.release_system_fn"))
         #expect(viewSource.contains("allRecognizedVoiceToolsUnavailable"))
         #expect(viewSource.contains("onboarding.voice_tool.none_detected"))
         #expect(viewSource.contains("onboarding.voice_tool.other.setup_detail"))
@@ -900,7 +904,8 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains(".onChange(of: transcript)"))
         #expect(!viewSource.contains(".onChange(of: transcript) { _, updatedText in"))
         #expect(viewSource.contains("OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput"))
-        #expect(viewSource.contains("voiceAttempt.phase == .passed &&"))
+        #expect(viewSource.contains("verifiedTranscriptionAppeared &&"))
+        #expect(viewSource.contains("selectedVoiceToolRuntimeReady"))
         #expect(viewSource.contains("externalToolConfigurationConfirmed"))
         #expect(viewSource.contains("sayAllVoiceKeyConfigurationReady"))
         #expect(viewSource.contains("sayAllAudioOutputConfigurationText"))
@@ -2258,6 +2263,13 @@ struct OnboardingFlowTests {
         for id in ["continue", "voice-tool.doubao.install"] {
             #expect(voiceTool.probe.actions.keys.contains(id), "missing voice-tool action: \(id)")
         }
+        for index in 0...3 {
+            #expect(voiceTool.probe.actions.keys.contains("input-guide.\(index)"))
+        }
+        #expect(voiceTool.probe.actions.keys.contains("keyboard-settings.open"))
+        invoke("keyboard-settings.open", on: voiceTool)
+        #expect(voiceTool.probe.openedURLs.last?.absoluteString ==
+            "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
         invoke("voice-tool.doubao.install", on: voiceTool)
         #expect(voiceTool.probe.openedURLs.last == AppLinks.doubaoInputMethod)
         for tool in [OnboardingVoiceTool.doubao, .weixin, .vokie, .typeless, .other] {
@@ -2266,6 +2278,11 @@ struct OnboardingFlowTests {
             #expect(voiceTool.settings.onboardingVoiceTool == tool)
         }
         invoke("voice-tool.typeless", on: voiceTool)
+        invoke("continue", on: voiceTool)
+        #expect(voiceTool.settings.onboardingStep == .voiceTool)
+        for index in 0...3 {
+            invoke("input-guide.\(index)", on: voiceTool)
+        }
         invoke("continue", on: voiceTool)
         #expect(voiceTool.settings.onboardingStep == .voiceTest)
         invoke("back", on: voiceTool)
@@ -2301,6 +2318,13 @@ struct OnboardingFlowTests {
             controlSource: .webRemote
         )
         defer { vokieSource.close() }
+        #expect(vokieSource.probe.actions["voice-tool.vokie.website"] != nil)
+        invoke("voice-tool.vokie.website", on: vokieSource)
+        #expect(vokieSource.probe.openedURLs.last == AppLinks.vokieWebsite)
+        #expect(AppLinks.vokieWebsite.query == "from=sayall.app")
+        for index in 0...3 {
+            #expect(vokieSource.probe.actions.keys.contains("input-guide.\(index)"))
+        }
         for mode in VoiceGestureMode.allCases {
             #expect(vokieSource.probe.actions["gesture.\(mode.rawValue)"] != nil)
             invoke("gesture.\(mode.rawValue)", on: vokieSource)
@@ -2484,7 +2508,7 @@ private final class OnboardingOffscreenFixture {
         voiceTool: OnboardingVoiceTool = .doubao,
         bindingPreference: OnboardingVoiceBindingPreference = .documentedDefault,
         systemFunctionKeyAvailable: Bool = true,
-        initialInputMethodGuideStep: Int = 0,
+        initialInputMethodGuideStep: Int? = nil,
         controlSource: OnboardingControlSource? = nil,
         voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil
     ) throws {

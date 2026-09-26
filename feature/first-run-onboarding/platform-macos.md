@@ -27,7 +27,10 @@
 ### 输入法与语音键
 
 - 输入工具固定按豆包、微信、Vokie、Typeless、其他排序；安装状态变化不得重排页面。
+- 控制设备卡片中的设备名称必须保持单行；空间不足时优先调整卡片内部布局，不得把型号名称拆成两行。
 - Onboarding 不展示配置来源、快捷键学习或 Command/Option 选择，所有工具的本次 staged 语音键固定为 Fn。
+- 工具页右栏对五个工具都显示对应四项步骤：豆包、微信和 Vokie 的工具步骤使用按外观切换的真实截图，Typeless 与其他工具使用简短操作说明；第 3 项统一显示“去除系统 Fn 占用”的 macOS 键盘设置截图、公开状态和打开设置操作。
+- Vokie 卡片使用“智能整理，不占用输入法，实时显示文字”的简短介绍，并提供 `https://vokie.com` 官方入口。
 - 选择工具或主动重跑 Onboarding 不得立即改写正式 `VoiceKeyMode`、Fn 点按或 Chromecast 模式。
 - 配对计划只创建 staged Binding；真实文字测试通过后才提交 verified Binding，失败、返回或退出时恢复原配置。
 - 豆包和微信只能通过公开 Text Input Sources API 按精确 Input Source ID 选择；不得按显示名称模糊匹配。Onboarding 选择工具时只观察当前输入源，不自动启用或切换；用户明确点击后才执行一次切换，避免 Radio 选择触发系统确认或设置界面。
@@ -68,6 +71,7 @@
 - 默认内容尺寸为 `1020 × 772`，完整当前页面和底部导航不依赖页面内部滚动。
 - 中文最终显示字号不得小于 12pt。
 - 浅色和深色必须保持整个窗口视觉体系一致。
+- 主设置“连接”页只保留主要音频设备、增益、状态和刷新操作，不显示豆包兼容专用卡片、BlackHole 获取入口或测试音按钮。
 - 用户可见文案必须遵守 [`PRODUCT_SPEC.md`](PRODUCT_SPEC.md) 的“用户可见文案必须使用产品语言”不变量；平台实现不得把研发、测试或内部验收状态引入页面。
 - macOS 页面或流程变化必须按 [`design-qa.md`](../../design-qa.md) 和 [`Testing/FirstRunOnboarding.md`](../../Testing/FirstRunOnboarding.md) 完成检查。
 

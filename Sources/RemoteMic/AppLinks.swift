@@ -15,6 +15,7 @@ enum AppLinks {
     static let doubaoInputMethod = URL(
         string: "https://shurufa.doubao.com/?from=sayall.app"
     )!
+    static let vokieWebsite = URL(string: "https://vokie.com/?from=sayall.app")!
 
     static func website(for locale: Locale) -> URL {
         locale.identifier.lowercased().hasPrefix("zh")

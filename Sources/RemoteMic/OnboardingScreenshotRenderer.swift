@@ -71,7 +71,7 @@ enum OnboardingScreenshotRenderer {
         ].flatMap(VoiceKeyMode.init(rawValue:))
         let requestedGuideStep = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"
-        ].flatMap(Int.init) ?? 0
+        ].flatMap(Int.init)
         let requestedControlMethod = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD"
         ].flatMap(OnboardingControlMethod.init(rawValue:))
