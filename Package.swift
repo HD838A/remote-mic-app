@@ -320,6 +320,9 @@ let package = Package(
                 if chromecastEnabled {
                     settings.append(.define("SAYALL_CHROMECAST_ENABLED"))
                 }
+                if macRemoteEnabled {
+                    settings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
+                }
                 return settings
             }()
         ),

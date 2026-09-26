@@ -5,6 +5,7 @@ import Foundation
 enum OnboardingInputSourceSwitchResult: String, Equatable {
     case notApplicable
     case selected
+    case notSelected = "not_selected"
     case unavailable
     case failed
 }
@@ -25,9 +26,75 @@ enum OnboardingSystemFunctionKeyUsage: Equatable {
 }
 
 enum OnboardingInputSourceSwitcher {
+    static func applicationURL(for voiceTool: OnboardingVoiceTool) -> URL? {
+        if let bundleIdentifier = voiceTool.applicationBundleIdentifier {
+            return NSWorkspace.shared.urlForApplication(
+                withBundleIdentifier: bundleIdentifier
+            )
+        }
+
+        if let launchURL = voiceTool.publicLaunchURL {
+            return NSWorkspace.shared.urlForApplication(toOpen: launchURL)
+        }
+
+        return nil
+    }
+
+    static func runtimeState(
+        for voiceTool: OnboardingVoiceTool
+    ) -> OnboardingVoiceToolRuntimeState {
+        guard OnboardingVoiceToolRuntimePolicy.requiresRunningApplication(for: voiceTool) else {
+            return .notApplicable
+        }
+        guard let applicationURL = applicationURL(for: voiceTool) else {
+            return .unknown
+        }
+
+        let bundleIdentifier = Bundle(url: applicationURL)?.bundleIdentifier
+        let isRunning = NSWorkspace.shared.runningApplications.contains { application in
+            if let bundleIdentifier,
+               application.bundleIdentifier == bundleIdentifier {
+                return true
+            }
+            return application.bundleURL?.standardizedFileURL == applicationURL.standardizedFileURL
+        }
+        return isRunning ? .running : .notRunning
+    }
+
+    static func selectionState(
+        for voiceTool: OnboardingVoiceTool
+    ) -> OnboardingInputSourceSwitchResult {
+        guard let inputSourceID = voiceTool.preferredInputSourceID else {
+            return .notApplicable
+        }
+        guard inputSource(withID: inputSourceID, includeAllInstalled: true) != nil else {
+            return .unavailable
+        }
+        return isSelected(voiceTool) ? .selected : .notSelected
+    }
+
+    @discardableResult
+    static func launchApplication(
+        for voiceTool: OnboardingVoiceTool,
+        activates: Bool,
+        completion: ((Bool) -> Void)? = nil
+    ) -> Bool {
+        guard let applicationURL = applicationURL(for: voiceTool) else {
+            completion?(false)
+            return false
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = activates
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { app, error in
+            completion?(app != nil && error == nil)
+        }
+        return true
+    }
+
     static func availability(
         for voiceTool: OnboardingVoiceTool
     ) -> OnboardingVoiceToolAvailability {
+        let profile = VoiceToolAdapterProfile.profile(for: voiceTool)
         if let inputSourceID = voiceTool.preferredInputSourceID {
             return inputSource(withID: inputSourceID, includeAllInstalled: true) == nil
                 ? .notInstalled
@@ -40,7 +107,14 @@ enum OnboardingInputSourceSwitcher {
             ) == nil ? .notInstalled : .available
         }
 
-        return .available
+        if profile.installationProbe == .publicURLScheme {
+            guard let launchURL = voiceTool.publicLaunchURL else { return .unknown }
+            return NSWorkspace.shared.urlForApplication(toOpen: launchURL) == nil
+                ? .notInstalled
+                : .available
+        }
+
+        return profile.installationProbe == .none ? .unknown : .available
     }
 
     static func selectIfNeeded(

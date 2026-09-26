@@ -46,7 +46,7 @@ enum ChromecastLinkStatus: Equatable {
 }
 
 /// 语音手势模式。`toggle` 为本产品默认；`hold` 保留给习惯按住说话的用户。
-enum ChromecastVoiceMode: String, CaseIterable, Identifiable {
+enum ChromecastVoiceMode: String, CaseIterable, Codable, Identifiable {
     case toggle
     case hold
 

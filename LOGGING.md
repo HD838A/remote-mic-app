@@ -139,6 +139,8 @@ probable_cause_confirmed=false
 
 - 不能把“没有日志”当作成功，也不能把“请求已发出”当作最终功能可用。
 
+Onboarding 普通按键页还需记录一次性、脱敏的 `ONBOARDING CONTROLS ... action=suppressed`，证明本次检测观察到了事件但没有执行用户已有映射。实体遥控器无按键时，安全输入只记录布尔状态变化、恢复请求和恢复结果：不得记录 PID、前台 App、进程名或 IORegistry 信息；安全输入状态也不能单独生成完成失败终态。
+
 ## 推荐字段格式
 
 事件建议使用以下顺序，便于人读和机器解析：
