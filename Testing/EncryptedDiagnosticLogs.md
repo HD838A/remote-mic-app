@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-验证本地加密日志、公钥缺失闭锁、内部解密边界和用户主动 Sentry 上传。仓库 `.env` 与公开开发构建继续保持 DSN 为空；真实网络发送只在注入受控测试 DSN 的本机测试包中执行。2026-09-27 已完成一次受控 Sentry 控制台验收，生产构建仍不得从仓库读取 DSN 或私钥。
+验证本地加密日志、公钥缺失闭锁、内部解密边界和用户主动安全诊断上传。公开仓库不包含 Sentry SDK 或 DSN；真实网络发送只在私有 Package 和私有受控构建中执行。生产构建仍不得从仓库读取 DSN 或私钥。
 
 ## 设计不变量
 
@@ -53,7 +53,7 @@ swift test --disable-keychain --filter AppLoggerTests
 - 文件大小上限生效；
 - 公钥缺失时没有明文回退。
 
-## 用例 D：DSN 为空
+## 用例 D：公开构建缺少私有传输
 
 执行：
 
@@ -63,15 +63,15 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 
 预期：
 
-- DSN 为空返回 `serviceNotConfigured`；
-- 没有调用 sender；
+- 公开构建返回 `serviceNotConfigured`；
+- 没有调用私有传输；
 - 不读取 `.rmlog`；
 - 不初始化 Sentry；
 - 不删除或修改本地日志。
 
 ## 用例 E：Sentry 白名单过滤
 
-仅在受控测试 DSN 可用时执行，禁止使用生产账号和真实用户数据。
+仅在私有 Package 和受控测试 DSN 可用时执行，禁止使用生产账号和真实用户数据。
 
 1. 准备一个批准的环境事件、一个批准的语音会话事件、一个可选私有 provider 的安全记录和一个未批准的公开事件。
 2. 触发上传。

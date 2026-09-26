@@ -1,5 +1,4 @@
 import Foundation
-import Sentry
 
 struct DiagnosticLogEntry: Equatable {
     let sequence: Int
@@ -16,11 +15,12 @@ enum DiagnosticLogUploadError: Error, Equatable {
 final class DiagnosticLogUploader: @unchecked Sendable {
     static let shared = DiagnosticLogUploader()
 
-    typealias Sender = (_ entries: [DiagnosticLogEntry], _ dsn: String) throws -> Void
+    typealias Sender = (_ entries: [DiagnosticLogEntry]) throws -> Void
+    typealias ConfigurationStateProvider = () -> DiagnosticUploadConfigurationState
 
     private let eventProvider: () -> [PublicDiagnosticEvent]
     private let publicEventAcknowledger: ([PublicDiagnosticEvent]) -> Void
-    private let dsnProvider: () -> String?
+    private let configurationStateProvider: ConfigurationStateProvider
     private let sender: Sender
     private let queue = DispatchQueue(label: "RemoteMic.diagnosticUpload", qos: .userInitiated)
     private weak var privateEventProvider: (any PrivateDiagnosticUploadProvider)?
@@ -32,12 +32,14 @@ final class DiagnosticLogUploader: @unchecked Sendable {
         publicEventAcknowledger: @escaping ([PublicDiagnosticEvent]) -> Void = {
             AppLogger.shared.markPublicDiagnosticEventsUploaded($0)
         },
-        dsnProvider: @escaping () -> String? = { DiagnosticLogUploader.configuredDSN() },
-        sender: @escaping Sender = DiagnosticLogUploader.sendToSentry
+        configurationStateProvider: @escaping ConfigurationStateProvider = {
+            DiagnosticUploadTransportFactory.configurationState
+        },
+        sender: @escaping Sender = DiagnosticUploadTransportFactory.send
     ) {
         self.eventProvider = eventProvider
         self.publicEventAcknowledger = publicEventAcknowledger
-        self.dsnProvider = dsnProvider
+        self.configurationStateProvider = configurationStateProvider
         self.sender = sender
     }
 
@@ -53,8 +55,8 @@ final class DiagnosticLogUploader: @unchecked Sendable {
                 DispatchQueue.main.async { completion(.failure(.uploadFailed)) }
                 return
             }
-            guard let dsn = self.validatedDSN() else {
-                let result = self.dsnFailure()
+            guard self.configurationStateProvider() == .configured else {
+                let result = self.configurationFailure()
                 DispatchQueue.main.async { completion(result) }
                 return
             }
@@ -75,7 +77,7 @@ final class DiagnosticLogUploader: @unchecked Sendable {
                         return
                     }
                     do {
-                        try self.sender(entries, dsn)
+                        try self.sender(entries)
                     } catch {
                         DispatchQueue.main.async { completion(.failure(.uploadFailed)) }
                         return
@@ -98,7 +100,9 @@ final class DiagnosticLogUploader: @unchecked Sendable {
     func uploadSynchronously(
         privateRecords: [PrivateDiagnosticUploadRecord]
     ) -> Result<Int, DiagnosticLogUploadError> {
-        guard let dsn = validatedDSN() else { return dsnFailure() }
+        guard configurationStateProvider() == .configured else {
+            return configurationFailure()
+        }
         let approvedPublicEvents = approvedPublicEvents()
         let publicEntries = Self.publicEntries(approvedPublicEvents)
         let entries = publicEntries + Self.privateEntries(
@@ -108,7 +112,7 @@ final class DiagnosticLogUploader: @unchecked Sendable {
         guard !entries.isEmpty else { return .failure(.noLogs) }
 
         do {
-            try sender(entries, dsn)
+            try sender(entries)
             publicEventAcknowledger(approvedPublicEvents)
             return .success(entries.count)
         } catch {
@@ -116,25 +120,20 @@ final class DiagnosticLogUploader: @unchecked Sendable {
         }
     }
 
-    private func validatedDSN() -> String? {
-        guard let dsn = dsnProvider()?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !dsn.isEmpty,
-              Self.isValidDSN(dsn) else { return nil }
-        return dsn
-    }
-
-    private func dsnFailure() -> Result<Int, DiagnosticLogUploadError> {
-        guard let dsn = dsnProvider()?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !dsn.isEmpty else { return .failure(.serviceNotConfigured) }
-        return .failure(.invalidServiceConfiguration)
+    private func configurationFailure() -> Result<Int, DiagnosticLogUploadError> {
+        switch configurationStateProvider() {
+        case .unavailable:
+            return .failure(.serviceNotConfigured)
+        case .invalid:
+            return .failure(.invalidServiceConfiguration)
+        case .configured:
+            return .failure(.uploadFailed)
+        }
     }
 
     private func approvedPublicEvents() -> [PublicDiagnosticEvent] {
         eventProvider().filter { event in
-            guard event.isApprovedForUpload,
-                  PublicDiagnosticEvent.parse(event.canonicalLine) != nil
-            else { return false }
-            return true
+            event.isApprovedForUpload && PublicDiagnosticEvent.parse(event.canonicalLine) != nil
         }
     }
 
@@ -142,7 +141,7 @@ final class DiagnosticLogUploader: @unchecked Sendable {
         _ events: [PublicDiagnosticEvent]
     ) -> [DiagnosticLogEntry] {
         events.enumerated().map { index, event in
-            return DiagnosticLogEntry(sequence: index, message: event.canonicalLine)
+            DiagnosticLogEntry(sequence: index, message: event.canonicalLine)
         }
     }
 
@@ -170,153 +169,5 @@ final class DiagnosticLogUploader: @unchecked Sendable {
             approved.append(record)
         }
         return approved
-    }
-
-    static func configuredDSN(
-        environment: [String: String] = ProcessInfo.processInfo.environment,
-        infoDictionary: [String: Any]? = Bundle.main.infoDictionary
-    ) -> String? {
-        let value = environment["REMOTE_MIC_SENTRY_DSN"] ??
-            infoDictionary?["SayAllSentryDSN"] as? String
-        guard let value, !value.isEmpty else { return nil }
-        return value
-    }
-
-    private static func isValidDSN(_ dsn: String) -> Bool {
-        guard let components = URLComponents(string: dsn) else { return false }
-        return components.scheme == "https" &&
-            components.host != nil &&
-            components.user != nil &&
-            components.password == nil &&
-            components.port == nil &&
-            components.query == nil &&
-            components.fragment == nil &&
-            components.path.split(separator: "/").last != nil
-    }
-
-    private static func sendToSentry(entries: [DiagnosticLogEntry], dsn: String) throws {
-        let cacheDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SayAll-Sentry-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: cacheDirectory,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
-        )
-        defer {
-            runOnMainThread {
-                if SentrySDK.isEnabled {
-                    SentrySDK.close()
-                }
-            }
-            try? FileManager.default.trashItem(at: cacheDirectory, resultingItemURL: nil)
-        }
-
-        runOnMainThread {
-            SentrySDK.start { options in
-                options.dsn = dsn
-                options.enableLogs = true
-                options.enableCrashHandler = false
-                options.enableUncaughtNSExceptionReporting = false
-                options.enableSigtermReporting = false
-                options.enableAutoSessionTracking = false
-                options.enableWatchdogTerminationTracking = false
-                options.enableAutoPerformanceTracing = false
-                options.enableNetworkTracking = false
-                options.enableNetworkBreadcrumbs = false
-                options.enableFileIOTracing = false
-                options.enableDataSwizzling = false
-                options.enableFileManagerSwizzling = false
-                options.enableSwizzling = false
-                options.enableCoreDataTracing = false
-                options.enableAppHangTracking = false
-                options.enableAutoBreadcrumbTracking = false
-                options.enableCaptureFailedRequests = false
-                options.enableMetricKit = false
-                options.enableMetricKitRawPayload = false
-                options.enableMetrics = false
-                options.sendClientReports = false
-                options.attachStacktrace = false
-                options.sendDefaultPii = false
-                options.maxBreadcrumbs = 0
-                options.tracesSampleRate = 0
-                options.cacheDirectoryPath = cacheDirectory.path
-                options.shutdownTimeInterval = 0
-                options.beforeSendLog = { log in
-                    let canonicalBody: String
-                    if let event = PublicDiagnosticEvent.parse(log.body),
-                       event.isApprovedForUpload {
-                        canonicalBody = event.canonicalLine
-                    } else if let record = PrivateDiagnosticUploadRecord.parse(log.body) {
-                        canonicalBody = record.canonicalLine
-                    } else {
-                        return nil
-                    }
-
-                    var attributes: [String: SentryLog.Attribute] = [
-                        "diagnostic.user_initiated": SentryLog.Attribute(boolean: true),
-                        "diagnostic.schema_version": SentryLog.Attribute(integer: PublicDiagnosticEvent.schemaVersion),
-                    ]
-                    if let sequence = log.attributes["diagnostic.sequence"]?.value as? Int,
-                       sequence >= 0 {
-                        attributes["diagnostic.sequence"] = SentryLog.Attribute(integer: sequence)
-                    }
-                    return SentryLog(
-                        level: log.level,
-                        body: canonicalBody,
-                        attributes: attributes
-                    )
-                }
-            }
-            SentrySDK.configureScope { scope in
-                scope.clear()
-            }
-            SentrySDK.setUser(nil)
-        }
-        guard SentrySDK.isEnabled else { throw DiagnosticLogUploadError.uploadFailed }
-
-        let sentryLogger = SentrySDK.logger
-        for entry in entries {
-            let canonicalBody: String
-            if let event = PublicDiagnosticEvent.parse(entry.message),
-               event.isApprovedForUpload {
-                canonicalBody = event.canonicalLine
-            } else if let record = PrivateDiagnosticUploadRecord.parse(entry.message) {
-                canonicalBody = record.canonicalLine
-            } else {
-                continue
-            }
-            sentryLogger.info(
-                canonicalBody,
-                attributes: [
-                    "diagnostic.sequence": entry.sequence,
-                    "diagnostic.user_initiated": true,
-                ]
-            )
-        }
-        SentrySDK.flush(timeout: 25)
-        guard !hasPendingSentryEnvelopes(in: cacheDirectory) else {
-            throw DiagnosticLogUploadError.uploadFailed
-        }
-    }
-
-    private static func runOnMainThread(_ work: () -> Void) {
-        if Thread.isMainThread {
-            work()
-        } else {
-            DispatchQueue.main.sync(execute: work)
-        }
-    }
-
-    private static func hasPendingSentryEnvelopes(in directory: URL) -> Bool {
-        guard let enumerator = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: [.isRegularFileKey]
-        ) else { return false }
-        for case let url as URL in enumerator where url.pathComponents.contains("envelopes") {
-            if (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
-                return true
-            }
-        }
-        return false
     }
 }

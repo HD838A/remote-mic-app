@@ -21,7 +21,7 @@
 
 ### 用户主动发送的 Sentry 安全诊断
 
-Sentry 只在用户明确点击“发送诊断信息”后启动一次。未点击时不初始化 SDK、不读取待发送私有记录，也不产生网络请求。
+Sentry 只在用户明确点击“发送诊断信息”后启动一次。未点击时不初始化 SDK、不读取待发送私有记录，也不产生网络请求。Sentry SDK、DSN 解析、最终过滤和网络发送只存在于私有 Package 的 `SayAllDiagnosticsHostAdapter`；公开仓库不依赖 Sentry，也不注入 DSN。
 
 公开宿主可发送两类已经类型化的安全记录：
 
@@ -50,14 +50,15 @@ PUBLIC_EVENT schema_version=1 operation_id=voice_bluetooth_4 component=voice act
 PRIVATE_EVENT schema_version=1 record_id=pe_abcdefghijklmnopqrstuv occurred_at_ms=2000000000000 category=PRIVATE_FLOW action=stage phase=completed result=observed retryable=false elapsed_ms=842
 ```
 
-发送流程必须是：
+公开宿主与私有传输适配器之间的流程必须是：
 
 ```text
 用户点击发送
-  → 校验 DSN
+  → 检查私有传输适配器是否已配置
   → 读取公开内存事件和可选私有安全记录
   → 丢弃无法按各自 schema 完整重建的记录
-  → 启动一次性 Sentry 实例
+  → 将 canonical 安全事件交给私有传输适配器
+  → 私有适配器校验 DSN 并启动一次性 Sentry 实例
   → beforeSendLog 再次解析并重建 canonical 正文
   → 清空 User、Tags 和 Contexts，关闭自动采集
   → flush 并确认没有待发送 envelope
@@ -65,7 +66,7 @@ PRIVATE_EVENT schema_version=1 record_id=pe_abcdefghijklmnopqrstuv occurred_at_m
   → 关闭 Sentry 并移除临时缓存
 ```
 
-Sentry 必须关闭自动崩溃、Session、性能、网络、Breadcrumb、MetricKit、文件和 Core Data 追踪、默认 PII、附件和内存快照。DSN 只允许从构建环境注入；不得写入源码、普通日志或事件正文。发送失败、记录被拒绝或 DSN 缺失时，不得把私有记录标记为已上传。
+Sentry 必须关闭自动崩溃、Session、性能、网络、Breadcrumb、MetricKit、文件和 Core Data 追踪、默认 PII、附件和内存快照。生产 DSN 只允许由私有发布环境通过私有注入脚本写入最终 App；不得写入公开源码、公开构建脚本、普通日志或事件正文。发送失败、记录被拒绝或 DSN 缺失时，不得把私有记录标记为已上传。
 
 Sentry 正文和属性不得包含账号、邮箱、Token、验证码、订单号、支付单号、checkout URL、价格、精确权益到期时间、用户内容、音频、路径、设备身份、Bundle ID、Package 名称、构建开关原名、私有错误正文或第三方 App 私有状态。需要排查登录、绑定、支付、订单和权益链路时，只能由私有模块上报稳定业务分类、短生命周期关联号、HTTP 状态类别、阶段、结果和原因码；真实对象标识仍不得上传。
 

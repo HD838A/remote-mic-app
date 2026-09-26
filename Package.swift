@@ -4,7 +4,6 @@ import PackageDescription
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
-    .package(url: "https://github.com/getsentry/sentry-cocoa", exact: "9.26.0"),
 ]
 var remoteMicDependencies: [Target.Dependency] = [
     "AudioExceptionGuard",
@@ -13,7 +12,6 @@ var remoteMicDependencies: [Target.Dependency] = [
     "AppleRemoteHCIProtocol",
     "AppleRemotePacketLogger",
     "SayAllMCPKit",
-    .product(name: "Sentry", package: "sentry-cocoa"),
     .product(name: "Sparkle", package: "Sparkle"),
 ]
 var remoteMicTestDependencies: [Target.Dependency] = [
@@ -102,6 +100,13 @@ if macRemoteEnabled {
 }
 if macroCapabilitiesAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_MACRO_REMOTE_CAPABILITIES"))
+}
+var remoteMicTestSwiftSettings: [SwiftSetting] = []
+if siriRemoteEnabled {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+}
+if chromecastEnabled {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
 }
 
 if let privateFeaturePath = ProcessInfo.processInfo.environment[
@@ -202,7 +207,11 @@ if let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty {
     remoteMicDependencies.append(
         .product(name: "SayAllMembershipHostAdapter", package: packageIdentity)
     )
+    remoteMicDependencies.append(
+        .product(name: "SayAllDiagnosticsTransport", package: packageIdentity)
+    )
     remoteMicSwiftSettings.append(.define("SAYALL_MEMBERSHIP_ENABLED"))
+    remoteMicSwiftSettings.append(.define("SAYALL_DIAGNOSTICS_ENABLED"))
     remoteMicDependencies.append(.product(name: "SayAllMacroRemoteMic", package: packageIdentity))
     remoteMicDependencies.append(
         .product(name: "SayAllButtonProfiles", package: packageIdentity)
@@ -314,16 +323,7 @@ let package = Package(
             dependencies: remoteMicTestDependencies + ["SayAllMCPKit", "AppleRemoteHCIProtocol"],
             path: "Tests/RemoteMicTests",
             exclude: macRemoteEnabled ? [] : ["WatchBluetoothVoiceJourneyTests.swift"],
-            swiftSettings: {
-                var settings: [SwiftSetting] = []
-                if siriRemoteEnabled {
-                    settings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
-                }
-                if chromecastEnabled {
-                    settings.append(.define("SAYALL_CHROMECAST_ENABLED"))
-                }
-                return settings
-            }()
+            swiftSettings: remoteMicTestSwiftSettings
         ),
     ],
     swiftLanguageModes: [.v5]

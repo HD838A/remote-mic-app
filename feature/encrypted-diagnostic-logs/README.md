@@ -14,7 +14,7 @@
 
 ## 实现范围
 
-`AppLogger` 负责本地加密写入和进程内公开安全事件缓冲；可选私有 provider 负责自己的安全事件持久化；`DiagnosticLogUploader` 只负责用户主动触发后的统一校验和 Sentry 发送。三者不通过读取本地日志文件互相连接。
+`AppLogger` 负责本地加密写入和进程内公开安全事件缓冲；可选私有 provider 负责自己的安全事件持久化；公开宿主的 `DiagnosticLogUploader` 只负责用户主动触发后的事件编排，实际 Sentry 发送由私有 Package 的 `SayAllDiagnosticsHostAdapter` 完成。三者不通过读取本地日志文件互相连接。
 
 ## 验证
 
@@ -27,4 +27,4 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 
 完整步骤见 [`Testing/EncryptedDiagnosticLogs.md`](../../Testing/EncryptedDiagnosticLogs.md) 和 [`LOGGING.md`](../../LOGGING.md)。
 
-公开开发环境的 DSN 保持为空。2026-09-27 已在受控测试项目完成真实 Sentry 接收、类型化私有事件确认、敏感字段零命中、重复发送去重和内部工具解密验收；生产私钥保管/轮换与真实用户现场日志支持流程仍需生产环境验收。
+公开开发环境和公开构建不包含 Sentry DSN 或 Sentry SDK。受控 Sentry 验收只能使用私有 Package 和私有构建环境；生产私钥保管/轮换与真实用户现场日志支持流程仍需生产环境验收。

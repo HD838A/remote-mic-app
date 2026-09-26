@@ -4,19 +4,15 @@ import Testing
 
 @Suite("Diagnostic log uploader")
 struct DiagnosticLogUploaderTests {
-    @Test func configuredDSNUsesEnvironmentBeforeBundleAndAllowsEmptyConfiguration() {
-        #expect(DiagnosticLogUploader.configuredDSN(
-            environment: ["REMOTE_MIC_SENTRY_DSN": "https://env@example.ingest.sentry.io/1"],
-            infoDictionary: ["SayAllSentryDSN": "https://bundle@example.ingest.sentry.io/2"]
-        ) == "https://env@example.ingest.sentry.io/1")
-        #expect(DiagnosticLogUploader.configuredDSN(
-            environment: [:],
-            infoDictionary: ["SayAllSentryDSN": "https://bundle@example.ingest.sentry.io/2"]
-        ) == "https://bundle@example.ingest.sentry.io/2")
-        #expect(DiagnosticLogUploader.configuredDSN(
-            environment: [:],
-            infoDictionary: [:]
-        ) == nil)
+    @Test func unavailableConfigurationDoesNotInvokeSender() {
+        var senderCalled = false
+        let uploader = DiagnosticLogUploader(
+            configurationStateProvider: { .unavailable },
+            sender: { _ in senderCalled = true }
+        )
+
+        #expect(uploader.uploadSynchronously() == .failure(.serviceNotConfigured))
+        #expect(!senderCalled)
     }
 
     @Test func missingDSNDoesNotInvokeSender() throws {
@@ -24,8 +20,8 @@ struct DiagnosticLogUploaderTests {
         var senderCalled = false
         let uploader = DiagnosticLogUploader(
             eventProvider: { [event] },
-            dsnProvider: { nil },
-            sender: { _, _ in senderCalled = true }
+            configurationStateProvider: { .unavailable },
+            sender: { _ in senderCalled = true }
         )
 
         #expect(uploader.uploadSynchronously() == .failure(.serviceNotConfigured))
@@ -44,8 +40,8 @@ struct DiagnosticLogUploaderTests {
         var received: [DiagnosticLogEntry] = []
         let uploader = DiagnosticLogUploader(
             eventProvider: { [approved, rejected] },
-            dsnProvider: { "https://public@example.ingest.sentry.io/1" },
-            sender: { entries, _ in received = entries }
+            configurationStateProvider: { .configured },
+            sender: { entries in received = entries }
         )
 
         #expect(uploader.uploadSynchronously() == .success(1))
@@ -58,8 +54,8 @@ struct DiagnosticLogUploaderTests {
         var senderCalled = false
         let uploader = DiagnosticLogUploader(
             eventProvider: { [] },
-            dsnProvider: { "https://public@example.ingest.sentry.io/1" },
-            sender: { _, _ in senderCalled = true }
+            configurationStateProvider: { .configured },
+            sender: { _ in senderCalled = true }
         )
 
         #expect(uploader.uploadSynchronously() == .failure(.noLogs))
@@ -74,27 +70,22 @@ struct DiagnosticLogUploaderTests {
                 eventRead = true
                 return [event]
             },
-            dsnProvider: { "not-a-dsn" },
-            sender: { _, _ in }
+            configurationStateProvider: { .invalid },
+            sender: { _ in }
         )
 
         #expect(uploader.uploadSynchronously() == .failure(.invalidServiceConfiguration))
         #expect(!eventRead)
     }
 
-    @Test func DSNWithQueryOrPasswordIsRejected() throws {
+    @Test func invalidConfigurationIsRejectedBeforeEventRead() throws {
         let event = try #require(Self.environmentEvent())
-        for dsn in [
-            "https://public:secret@example.ingest.sentry.io/1",
-            "https://public@example.ingest.sentry.io/1?pii=true",
-        ] {
-            let uploader = DiagnosticLogUploader(
-                eventProvider: { [event] },
-                dsnProvider: { dsn },
-                sender: { _, _ in }
-            )
-            #expect(uploader.uploadSynchronously() == .failure(.invalidServiceConfiguration))
-        }
+        let uploader = DiagnosticLogUploader(
+            eventProvider: { [event] },
+            configurationStateProvider: { .invalid },
+            sender: { _ in }
+        )
+        #expect(uploader.uploadSynchronously() == .failure(.invalidServiceConfiguration))
     }
 
     @Test func parserRejectsUnknownFieldsAndSensitiveValues() {
@@ -183,8 +174,8 @@ struct DiagnosticLogUploaderTests {
         let uploader = DiagnosticLogUploader(
             eventProvider: { [approved, rejected] },
             publicEventAcknowledger: { acknowledged = $0 },
-            dsnProvider: { "https://public@example.ingest.sentry.io/1" },
-            sender: { _, _ in }
+            configurationStateProvider: { .configured },
+            sender: { _ in }
         )
 
         #expect(uploader.uploadSynchronously() == .success(1))
@@ -197,8 +188,8 @@ struct DiagnosticLogUploaderTests {
         let uploader = DiagnosticLogUploader(
             eventProvider: { [approved] },
             publicEventAcknowledger: { acknowledged = $0 },
-            dsnProvider: { "https://public@example.ingest.sentry.io/1" },
-            sender: { _, _ in throw DiagnosticLogUploadError.uploadFailed }
+            configurationStateProvider: { .configured },
+            sender: { _ in throw DiagnosticLogUploadError.uploadFailed }
         )
 
         #expect(uploader.uploadSynchronously() == .failure(.uploadFailed))
@@ -244,8 +235,8 @@ struct DiagnosticLogUploaderTests {
         var received: [DiagnosticLogEntry] = []
         let uploader = DiagnosticLogUploader(
             eventProvider: { [] },
-            dsnProvider: { "https://public@example.ingest.sentry.io/1" },
-            sender: { entries, _ in received = entries }
+            configurationStateProvider: { .configured },
+            sender: { entries in received = entries }
         )
 
         #expect(uploader.uploadSynchronously(privateRecords: [record]) == .success(1))
@@ -257,8 +248,8 @@ struct DiagnosticLogUploaderTests {
         let provider = RecordingPrivateDiagnosticProvider(records: [record])
         let uploader = DiagnosticLogUploader(
             eventProvider: { [] },
-            dsnProvider: { "https://public@example.ingest.sentry.io/1" },
-            sender: { entries, _ in
+            configurationStateProvider: { .configured },
+            sender: { entries in
                 #expect(entries.map(\.message) == [record.canonicalLine])
             }
         )
@@ -278,8 +269,8 @@ struct DiagnosticLogUploaderTests {
         )
         let uploader = DiagnosticLogUploader(
             eventProvider: { [] },
-            dsnProvider: { nil },
-            sender: { _, _ in Issue.record("Sender must not be called") }
+            configurationStateProvider: { .unavailable },
+            sender: { _ in Issue.record("Sender must not be called") }
         )
         uploader.setPrivateEventProvider(provider)
 
@@ -296,8 +287,8 @@ struct DiagnosticLogUploaderTests {
         let provider = RecordingPrivateDiagnosticProvider(records: [record])
         let uploader = DiagnosticLogUploader(
             eventProvider: { [] },
-            dsnProvider: { "https://public@example.ingest.sentry.io/1" },
-            sender: { _, _ in throw DiagnosticLogUploadError.uploadFailed }
+            configurationStateProvider: { .configured },
+            sender: { _ in throw DiagnosticLogUploadError.uploadFailed }
         )
         uploader.setPrivateEventProvider(provider)
 

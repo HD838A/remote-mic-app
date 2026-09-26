@@ -170,8 +170,8 @@ final class AppLogger: PublicDiagnosticEventSink {
         }
     }
 
-    /// Adds a typed event to the in-memory Sentry buffer and to the encrypted
-    /// local file. The Sentry uploader never reads the local file.
+    /// Adds a typed event to the in-memory diagnostic buffer and to the
+    /// encrypted local file. The private transport never reads the local file.
     func record(_ event: PublicDiagnosticEvent) {
         guard isEnabled else { return }
         queue.async { [weak self] in

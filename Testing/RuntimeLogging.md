@@ -56,12 +56,11 @@ swift test --disable-keychain --filter AppLoggerTests
 
 预期：只出现稳定分类、错误 domain/code、计数、样本数和耗时；不出现用户语音、文字、剪贴板、路径、窗口标题、BLE 地址/名称、CoreAudio UID、第三方 App 私有配置或凭据。`received`、`decoded`、`enqueued` 不得被记成最终成功。
 
-## 用例 6：本地 Sentry DSN 为空
+## 用例 6：公开构建不包含私有诊断传输
 
-确认项目根目录 `.env` 包含空值：
+确认公开仓库没有 Sentry 依赖、DSN 注入或私有 Package 路径：
 
 ```dotenv
-REMOTE_MIC_SENTRY_DSN=
 SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64=
 ```
 
@@ -71,11 +70,11 @@ SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64=
 swift test --disable-keychain --filter DiagnosticLogUploaderTests
 ```
 
-预期：无 DSN 时返回 `serviceNotConfigured`，不调用发送器、不初始化 Sentry、不读取本地 `.rmlog`，本地日志不被删除。
+预期：公开构建返回 `serviceNotConfigured`，不调用私有传输、不初始化 Sentry、不读取本地 `.rmlog`，本地日志不被删除。
 
 ## 用例 7：Sentry 发送内容（需受控 DSN）
 
-只有在私有受控环境提供测试 DSN 后执行；不使用生产账号或真实用户数据。
+只有在私有 Package 和私有受控构建环境提供测试 DSN 后执行；不使用生产账号或真实用户数据。公开仓库本身不执行该用例。
 
 1. 在内存中放入一个批准的环境快照、一个未批准的公开事件，以及可选私有 provider 的安全记录。
 2. 点击“发送诊断信息”或调用上传器测试入口。
