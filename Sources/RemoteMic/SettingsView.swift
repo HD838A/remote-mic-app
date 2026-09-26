@@ -1302,23 +1302,11 @@ struct SettingsView: View {
                         Text("audio.action.refresh_devices")
                     }
                         .compatibilityButtonStyle(.standard)
-                    Link("audio.action.learn_virtual_microphones", destination: URL(string: "https://existential.audio/blackhole/")!)
-                        .compatibilityButtonStyle(.standard)
-                    Button("audio.action.send_test_tone") { model.sendTestTone() }
-                        .compatibilityButtonStyle(.standard)
-                        .disabled(!model.canSendTestTone)
                 }
 
                 Text("audio.output.privacy_help")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-
-                HStack {
-                    Text(model.testToneStatus.text(using: localization))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
             }
         }
     }

@@ -5,19 +5,18 @@ import Foundation
 // 权威文档：公开仓 `remote/遥控器与输入工具能力矩阵.md`。**改这里必须同步改那份文档**，
 // 反之亦然：界面该显示什么、语音键该怎么驱动，都只能从这份矩阵推导，不允许在页面里各写一套判断。
 //
-// 矩阵（2026-09-19 由用户提供并确认；未测试项按原文标注）：
+// 矩阵（2026-09-20 由用户补充默认快捷键；未测试项按原文标注）：
 //
 //   遥控器            长按收音  按一次收音  触摸面
 //   小米 RC001/RC003    ✅        ❌        ❌
 //   Chromecast          ✅        ✅        ❌
 //   Apple Siri Remote   ✅      未测试      ✅
 //
-//   输入工具          长按收音  按一次收音
-//   Typeless            ❌        ✅
-//   豆包输入法           ✅        ✅（长按模式 / 免按模式）
-//   微信输入法           ✅        ✅
-//   Vokie               ✅        ✅
-//   腾讯 ChatterFly      ✅        ✅
+//   输入工具          长按收音  长按默认键  按一次收音  按一次默认键
+//   Typeless            ❌       不支持       ✅          Fn
+//   豆包输入法           ✅       Fn          ✅          右 Command
+//   微信输入法           ✅       Fn          ✅          右 Command
+//   Vokie               ✅       待确认       ✅          Fn
 //
 // 由此得到的搭配规则：
 // 1. 「语音键模拟 Fn 点按」只在**不会按一次收音**的遥控器上才有意义（它把「按住」模拟成「点按」，
@@ -42,11 +41,11 @@ extension XiaomiRemoteModel {
 
 extension OnboardingVoiceTool {
     /// 是否支持「长按收音」（按住说话、松手结束）。
-    /// 已知工具里只有 Typeless 不支持；豆包、微信输入法、Vokie、腾讯 ChatterFly 均支持。
+    /// 已知工具里只有 Typeless 不支持；豆包、微信输入法和 Vokie 支持。
     var supportsHoldVoiceRecording: Bool {
         switch self {
         case .typeless: return false
-        case .doubao, .weixin, .unselected, .other: return true
+        case .doubao, .weixin, .vokie, .unselected, .other: return true
         }
     }
 }

@@ -5,6 +5,25 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func connectionPageKeepsCompatibilityAudioControlsWithoutExtraTools() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("audio.action.refresh_devices"))
+        #expect(settingsSource.contains("audioCompatibilityPanel"))
+        #expect(settingsSource.contains("model.selectDoubaoAudioDevice()"))
+        #expect(settingsSource.contains("model.openDoubaoDriverInstructions(using: localization)"))
+        #expect(!settingsSource.contains("audio.action.learn_virtual_microphones"))
+        #expect(!settingsSource.contains("audio.action.send_test_tone"))
+        #expect(!settingsSource.contains("model.testToneStatus.text(using: localization)"))
+    }
+
     @Test func everyHardwareMappingPageUsesTheSharedHostEditor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -758,9 +777,6 @@ struct SettingsPageRegressionTests {
             "model.reconnect()",
             "model.applyAudioSettings()",
             "model.refreshAudioDevices()",
-            "model.sendTestTone()",
-            "model.selectDoubaoAudioDevice()",
-            "model.openDoubaoDriverInstructions(using: localization)",
             "model.setVoiceFnTapModeEnabled",
             "model.togglePhoneRemoteConnection()",
             "model.toggleWatchRemoteConnection()",
@@ -908,8 +924,8 @@ struct SettingsPageRegressionTests {
         #expect(chinese.contains(#""remote.device.model.rc003" = "小米蓝牙遥控器 2 Pro";"#))
         #expect(english.contains(#""remote.device.model.rc001" = "Xiaomi Bluetooth Remote 2";"#))
         #expect(english.contains(#""remote.device.model.rc003" = "Xiaomi Bluetooth Remote 2 Pro";"#))
-        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2854" = "苹果遥控器 Type-C";"#))
-        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2540" = "苹果遥控器 Lightning";"#))
+        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2854" = "苹果遥控器第 7 代";"#))
+        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2540" = "苹果遥控器第 6 代";"#))
 
         let cardStart = try #require(settingsSource.range(of: "private func remoteDeviceCard"))
         let cardEnd = try #require(settingsSource.range(
@@ -1158,7 +1174,7 @@ struct SettingsPageRegressionTests {
         #expect(settings.contains("macroFeature.enrollmentView"))
         #expect(settings.contains("macroFeature.setEditorActive(false)"))
         #expect(settings.contains("if section != .macros"))
-        #expect(model.contains("return (resolvedProfileID, !self.macroFeature.isEditorActive)"))
+        #expect(model.contains("!self.macroFeature.isEditorActive && !suppressConfiguredAction"))
         #expect(model.contains("if macroFeature.isEditorActive"))
         #expect(chinese.contains("输入框"))
         #expect(chinese.contains("MCP / TOML"))
