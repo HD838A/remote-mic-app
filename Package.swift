@@ -4,6 +4,7 @@ import PackageDescription
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
+    .package(url: "https://github.com/getsentry/sentry-cocoa", exact: "9.26.0"),
 ]
 var remoteMicDependencies: [Target.Dependency] = [
     "AudioExceptionGuard",
@@ -12,6 +13,7 @@ var remoteMicDependencies: [Target.Dependency] = [
     "AppleRemoteHCIProtocol",
     "AppleRemotePacketLogger",
     "SayAllMCPKit",
+    .product(name: "Sentry", package: "sentry-cocoa"),
     .product(name: "Sparkle", package: "Sparkle"),
 ]
 var remoteMicTestDependencies: [Target.Dependency] = [

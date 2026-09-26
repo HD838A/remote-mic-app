@@ -28,6 +28,8 @@ SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
 SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
 SAYALL_CHROMECAST_PACKAGE_PATH="${SAYALL_CHROMECAST_PACKAGE_PATH:-}"
 SAYALL_MEMBERSHIP_API_BASE_URL="${SAYALL_MEMBERSHIP_API_BASE_URL:-}"
+SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="${SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64:-}"
+REMOTE_MIC_SENTRY_DSN="${REMOTE_MIC_SENTRY_DSN:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
@@ -445,6 +447,16 @@ plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_IN
 if [[ -n "$SAYALL_MEMBERSHIP_API_BASE_URL" ]]; then
   plutil -remove SayAllMembershipAPIBaseURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
   plutil -insert SayAllMembershipAPIBaseURL -string "$SAYALL_MEMBERSHIP_API_BASE_URL" \
+    "$APP_DIR/Contents/Info.plist"
+fi
+plutil -remove SayAllDiagnosticPublicKey "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
+  plutil -insert SayAllDiagnosticPublicKey -string "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" \
+    "$APP_DIR/Contents/Info.plist"
+fi
+plutil -remove SayAllSentryDSN "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+if [[ -n "$REMOTE_MIC_SENTRY_DSN" ]]; then
+  plutil -insert SayAllSentryDSN -string "$REMOTE_MIC_SENTRY_DSN" \
     "$APP_DIR/Contents/Info.plist"
 fi
 plutil -remove SayAllSiriRemoteIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true

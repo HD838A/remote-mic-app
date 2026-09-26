@@ -6,6 +6,7 @@
 
 | 功能 | 状态 | 说明 |
 | --- | --- | --- |
+| [加密诊断日志](./encrypted-diagnostic-logs/) | 候选代码完成，等待受控 Sentry/私钥验收 | 本地 `.rmlog` 使用公钥包裹的 AES-GCM 加密；用户主动发送时，Sentry 只接收公开白名单事件和可选私有 provider 的类型化安全事件。 |
 | [关于页版本中心](./about-update-center/) | 验证中 | 集中展示版本、更新内容、版本历史与正式/预发布更新通道。 |
 | [Apple Watch 直连遥控与收音](./apple-watch-direct-remote/) | 候选代码完成，等待真机验收 | Mac 提供独立 Watch 入口，并复用按需开启的附近连接、现有按键映射与移动语音链路。 |
 | [常用 macOS 快捷键](./common-mac-shortcuts/) | 已完成 | 常用固定快捷键与无线麦标准退出、关窗行为。 |

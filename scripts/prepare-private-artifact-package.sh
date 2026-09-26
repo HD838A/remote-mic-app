@@ -44,6 +44,7 @@ EXPECTED_ARCHIVES=(
   SayAllMembershipCore.xcframework.zip
   SayAllMembershipUI.xcframework.zip
   SayAllMembershipHostAdapter.xcframework.zip
+  SayAllMembership_SayAllMembershipUI.bundle.zip
   SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip
   SayAllButtonProfiles_SayAllButtonProfiles.bundle.zip
 )
@@ -74,6 +75,7 @@ if ! jq -e '
     "SayAllButtonProfiles"
   ] and
   .resource_bundles == [
+    "SayAllMembership_SayAllMembershipUI.bundle",
     "SayAllCombinationActions_SayAllMacroRemoteMic.bundle",
     "SayAllButtonProfiles_SayAllButtonProfiles.bundle"
   ]
@@ -137,6 +139,10 @@ for module_name in \
   lipo "$binary" -verify_arch arm64 x86_64
   test "$(plutil -extract MinimumOSVersion raw -o - "$framework/Info.plist")" = "13.0"
 done
+unzip -q "$RELEASE_DIRECTORY/SayAllMembership_SayAllMembershipUI.bundle.zip" \
+  -d "$STAGING_DIRECTORY/Resources"
+test -f "$STAGING_DIRECTORY/Resources/SayAllMembership_SayAllMembershipUI.bundle/Contents/Resources/MembershipCenterCopy.json"
+test -f "$STAGING_DIRECTORY/Resources/SayAllMembership_SayAllMembershipUI.bundle/Contents/Resources/AppIcon.png"
 unzip -q "$RELEASE_DIRECTORY/SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip" \
   -d "$STAGING_DIRECTORY/Resources"
 test -f "$STAGING_DIRECTORY/Resources/SayAllCombinationActions_SayAllMacroRemoteMic.bundle/Contents/Resources/en.lproj/Localizable.strings"

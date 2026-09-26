@@ -3290,12 +3290,20 @@ struct SettingsView: View {
                     Text("diagnostics.logs.last_entry")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
+                    Text(model.diagnosticUploadStatus.text(using: localization))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
-                    .compatibilityButtonStyle(.standard)
-                Button("diagnostics.logs.copy_summary") { copySettingsDiagnosticSummary() }
-                    .compatibilityButtonStyle(.standard)
+                VStack(alignment: .trailing, spacing: 8) {
+                    Button("diagnostics.logs.send") { model.sendDiagnosticLogs() }
+                        .compatibilityButtonStyle(.prominent)
+                        .disabled(model.isSendingDiagnosticLogs)
+                    Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
+                        .compatibilityButtonStyle(.standard)
+                    Button("diagnostics.logs.copy_summary") { copySettingsDiagnosticSummary() }
+                        .compatibilityButtonStyle(.standard)
+                }
             }
         }
         .padding(.vertical, 12)

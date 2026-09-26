@@ -2,101 +2,97 @@
 
 ## 适用范围
 
-- 版本：当前待验证 PR 或已合入 `main` 的精确 Commit；历史功能分支 `codex/improve-runtime-log-quality-20260824` 只作为对应 Bug 记录中的审计证据
-- 功能：`runtime.log` 实例元数据、单行格式、可恢复轮转、错误字段、音频日志降噪与验收日志收集
+本手册验证当前 `.rmlog` 会话文件、顺序元数据、加密失败闭锁和普通运行日志的脱敏边界。`.rmlog` 是二进制加密文件，不能用 Finder 直接打开，也不能把它当作 UTF-8 `runtime.log` 阅读。
 
 ## 测试前准备
 
-1. 退出其他无线麦SayAll.app 实例，记录待测 App 的短版本、Build 和自身 PID。
-2. 打开 `~/Library/Logs/RemoteMic/`，保留现有文件，不清空、不覆盖，也不永久删除用户日志。
-3. 准备 MiRemoteV 2ch 或 BlackHole 2ch；真实 BLE 项准备 RC001 / RC003。
-4. 小阈值轮转由 `AppLoggerTests` 在独立临时目录执行，不为测试而扩大或破坏用户的正式日志。
-5. 执行 `swift test --disable-keychain` 前后检查用户日志没有来自测试 runner 的新增行；测试中的显式 logger 只使用临时路径。
+1. 记录待测版本、Build 和 App 进程 PID；退出其他 SayAll 实例。
+2. 不清空或覆盖 `~/Library/Logs/RemoteMic/`，保留既有文件用于回收和权限检查。
+3. 本地测试使用临时目录和测试公钥；测试私钥只在测试进程内存中生成，不写入仓库。
+4. 所有 SwiftPM 命令使用 `--disable-keychain`。
 
-## 用例 1：逐行实例元数据与单行格式
+## 用例 1：会话文件与权限
 
-1. 启动 App，触发设置切换、测试音和一次遥控器状态变化。
-2. 检查新写入的每一行。
-3. 运行 `swift test --disable-keychain --filter AppLoggerTests` 的控制字符用例。
+1. 在配置了测试/构建公钥的包中启动 App，触发一次普通设置操作。
+2. 查看 `~/Library/Logs/RemoteMic/` 中新出现的 `sayall.app-YYYY-MM-DD-session-XXXXXXXX.rmlog`。
+3. 检查目录权限为 `0700`、文件权限为 `0600`，文件头为 `RMLG2`。
+4. 重启 App，再触发一次操作，确认创建新的 session 文件，不覆盖旧文件。
 
-预期：每行以 UTC 毫秒时间开头，随后为 `pid=<SayAll PID> ver=<短版本> build=<Build>`；同一进程三项值稳定。单个事件不跨行，不包含 NUL、Tab 或其他控制字符，文件可作为 UTF-8 读取。
+预期：文件正文不能直接读出 `APP`、用户文字或其他明文；解密后每条记录包含 UTC 时间、`pid`、`ver`、`build` 和单调递增 `seq`。不同进程追加时不能产生交叉或半条记录。
 
-失败判定：普通行缺少任一元数据、记录外部输入事件来源 PID，或一个事件破坏为多行/非法 UTF-8。
+失败判定：出现明文回退、权限过宽、第二次启动覆盖旧文件、记录缺少 `seq`，或日志目录出现用户目录之外的路径/身份信息。
 
-## 用例 1b：复制诊断与 runtime.log 一致
+## 用例 2：公钥缺失必须闭锁
 
-1. 在 Onboarding 任意步骤点击“复制诊断”。
-2. 保存剪贴板中的脱敏摘要，并在 `runtime.log` 中定位同一时段的 `ONBOARDING DIAGNOSTICS BEGIN`。
-3. 按顺序读取 `FIELD` 行直到 `END`，去除每行前面的 AppLogger 元数据和 `ONBOARDING DIAGNOSTICS FIELD ` 前缀后，与剪贴板摘要逐行比对。
+1. 使用未注入 `SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64` 且 Bundle 没有 `SayAllDiagnosticPublicKey` 的本地包启动。
+2. 触发普通日志和一次类型化环境事件。
+3. 检查日志目录与系统开发日志。
 
-预期：`copied` 审计事件先出现，随后是连续完整的 `BEGIN`、全部摘要字段和 `END`；每一行仍是合法 UTF-8 单行，摘要不包含用户输入、音频正文、路径、设备身份、凭据或第三方 App 私有状态。
+预期：不创建明文或伪装成加密的日志文件；系统开发日志最多记录 `encryption_public_key_missing` 等稳定原因。App 不崩溃，Sentry 仍不会因为缺少本地公钥而自动启动。
 
-失败判定：日志只有 copied 索引、缺少任一摘要字段、诊断块被其他事件插入，或剪贴板与日志内容不一致。
+## 用例 3：顺序、控制字符和大小上限
 
-## 用例 1c：Onboarding 事件实时记录
+运行：
 
-1. 依次进入 Onboarding 页面，制造一次通过、一次阻断、一次重试和一次恢复；完成向导后再检查完成事件。
-2. 按时间顺序检查 `runtime.log` 中的 `ONBOARDING STEP` 与 `ONBOARDING EVENT`。
+```bash
+swift test --disable-keychain --filter AppLoggerTests
+```
 
-预期：进入事件即时记录为 `ONBOARDING STEP entered=<step>`；通过、阻断、重试、恢复和完成即时记录为 `ONBOARDING EVENT kind=<kind> step=<step>`，并带 `elapsed_ms`、`failure`，语音 attempt 额外带 `attempt` 和 `voice_result`。重复轮询产生的重复阻断事件不应刷屏。
+预期测试覆盖：加密记录、内部测试解密、`seq` 顺序、控制字符归一化、诊断摘要的 BEGIN/FIELD/END 顺序、公钥缺失 fail closed、文件大小上限和 XCTest 进程禁用共享日志。
 
-失败判定：必须等到点击复制诊断才出现步骤事件、缺少某种终态、事件顺序与用户操作不符，或去重后的阻断仍重复写入。
+失败判定：任何测试失败，或为了测试读取了生产用户文件。
 
-## 用例 2：大小轮转与可恢复退休
+## 用例 4：内部解密工具边界
 
-1. 运行 `swift test --disable-keychain --filter AppLoggerTests`，使用 1-byte 阈值连续写入 5 条事件。
-2. 同一临时路径使用两个 logger 并发追加 1,000 条带中文的事件。
-3. 检查临时目录中的当前文件、`.1`～`.3`、隐藏 lock 文件和 retirement handler 保存的旧归档。
-4. 在 Finder 废纸篓中确认生产默认 retirement 使用可恢复移动；不得出现永久删除命令或直接截断旧文件。
+1. 由受控支持环境取得与构建公钥对应的私钥，不将私钥复制到用户机器或公开仓库。
+2. 使用内部工具解析 `RMLG2` 头、解包文件密钥，再按长度前缀和 `seq` 顺序解密 AES-GCM 记录。
+3. 篡改一条记录或关联数据后再次解密。
 
-预期：当前文件是最新事件，`.1`～`.3` 按新到旧排列，第 5 次轮转淘汰的最旧文件仍可恢复。两个 logger 的 1,000 条消息全部存在、每行完整且可解码为 UTF-8。retirement 或移动失败时保留数据，当前日志可以继续追加。
+预期：原文件可按时间和 `seq` 顺序读取；篡改记录验证失败并停止该记录，不把损坏内容当作成功日志。公开 App 只负责加密，不具备解密能力。
 
-失败判定：出现 `.4`、归档顺序颠倒、旧文件被永久删除/截断/覆盖，或轮转失败导致后续日志完全停止。
+## 用例 5：普通日志隐私
 
-## 用例 3：机器错误字段与 BLE 电源状态
+触发权限、蓝牙、音频、输入工具和语音会话的成功、失败、取消、超时、重试与恢复路径，并由内部工具查看解密结果。
 
-1. 用自动化构造带本地化说明的 NSError。
-2. 断网触发一次更新检查失败。
-3. 连接支持电池状态的遥控器，等待一次电源状态读取。
+预期：只出现稳定分类、错误 domain/code、计数、样本数和耗时；不出现用户语音、文字、剪贴板、路径、窗口标题、BLE 地址/名称、CoreAudio UID、第三方 App 私有配置或凭据。`received`、`decoded`、`enqueued` 不得被记成最终成功。
 
-预期：机器错误使用成对的 `*_domain=<稳定域> *_code=<数字>` 字段；单个错误为 `error_domain/error_code`，同一事件有多个错误时使用 `seize_error_domain/seize_error_code` 等稳定上下文前缀。用户界面仍显示可读提示。BLE 行使用 `state=on_battery|external_power|charging|unknown|unavailable`。
+## 用例 6：本地 Sentry DSN 为空
 
-失败判定：日志出现系统语言相关错误句子、只有 `error=<数字>` / `seize_error=<数字>` 而没有对应 domain/code、未转义空格、`Optional(` 或 Swift 模块名。
+确认项目根目录 `.env` 包含空值：
 
-## 用例 4：音频恢复与空释放降噪
+```dotenv
+REMOTE_MIC_SENTRY_DSN=
+SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64=
+```
 
-1. 连续改变系统音频路由，触发多次一秒防抖恢复通知。
-2. 观察防抖窗口后的恢复日志。
-3. 在音频引擎、播放器、所选设备和待播放缓冲都为空时，重复触发释放入口。
-4. 再执行一次真实测试音或语音并结束。
+执行：
 
-预期：连续通知只产生最终一组 `AUDIO RECOVERY begin/completed`，begin 带 `coalesced_events=<数量>`；全空状态不写重复 `AUDIO RELEASE requested/completed`；存在实际资源或缓冲时仍完成排空和释放。
+```bash
+swift test --disable-keychain --filter DiagnosticLogUploaderTests
+```
 
-失败判定：仍为每个被替换任务记录 `scheduled`、全空状态继续刷释放日志，或真实音频资源无法释放。
+预期：无 DSN 时返回 `serviceNotConfigured`，不调用发送器、不初始化 Sentry、不读取本地 `.rmlog`，本地日志不被删除。
 
-## 用例 5：验收脚本跨轮转收集
+## 用例 7：Sentry 发送内容（需受控 DSN）
 
-1. 执行 `scripts/voice-acceptance.sh prepare`，记录 session 路径。
-2. 核对 session 内的 `start-log-id`、`start-log-offset` 和 `runtime-cursors.log` 已记录 device、inode 与 byte offset。
-3. 在会话开始后先写入一条标记，再让起始日志轮转到 `.1`，在新当前日志写入第二条标记，然后执行 `snapshot`。
-4. 核对 session 内的 `runtime.log` 按顺序只包含开始 offset 之后的两条标记；再次 `snapshot` 不应重复已有内容。
-5. 同时启动两个 `snapshot`，确认 session 排他锁让它们串行提交且不重复日志。
-6. 在隔离夹具设置 `VOICE_ACCEPTANCE_TEST_FAILPOINT=after_runtime_append`，模拟“内容已追加、游标尚未提交”后中断；取消 failpoint 再次执行，确认 pending 事务被恢复且内容不重复。
-7. 将 `VOICE_ACCEPTANCE_LOG_COMMAND` 指向失败命令，确认本次命令非零退出、此前 `unified-*` 证据仍保留，并在 `unified-failures.log` 记录失败文件。
-8. 使用隔离夹具连续轮转四次，使游标 inode 超出 `.3` 留存范围，再执行 `snapshot`。
+只有在私有受控环境提供测试 DSN 后执行；不使用生产账号或真实用户数据。
 
-预期：脚本从记录的 inode/offset 开始，按 `.3`、`.2`、`.1`、当前文件的时间顺序追加新内容，保留轮转前后的本会话事件，不混入 offset 之前的行，也不重复此前已收集内容。并发调用由 session 锁串行化；中断事务可恢复；每次 unified log 使用唯一文件并写入 `unified-snapshots.log`。起始 inode 已不在留存范围时命令非零退出并明确报告 `is no longer retained; snapshot aborted`。
+1. 在内存中放入一个批准的环境快照、一个未批准的公开事件，以及可选私有 provider 的安全记录。
+2. 点击“发送诊断信息”或调用上传器测试入口。
+3. 在 Sentry 测试项目检查事件。
 
-失败判定：轮转前事件丢失、同一归档重复收集、开始 offset 之前日志混入、并发/中断导致重复、unified log 失败覆盖旧证据，或找不到起始 inode 时仍返回成功。
+预期只产生批准的 `PUBLIC_EVENT` 和通过独立 schema 校验的 `PRIVATE_EVENT`。公开字段限于 `LOGGING.md` 白名单；私有事件只包含通用信封、稳定业务阶段、粗粒度状态、原因码、重试、耗时和短生命周期关联号。无 User、Tags、Contexts、附件、崩溃、Session、性能、网络、Breadcrumb、IP、Bundle ID、路径、身份或真实业务对象标识。
 
-## 稳定功能回归
+以下情况必须被拒绝：公开事件未知字段、重复保留字段、换行、URL、路径、自由文本、邮箱、Token、验证码、原始订单/支付标识、checkout URL、价格、精确权益到期时间、Bundle/Package 名称、BLE 名称和 `localizedDescription`。发送失败不得把私有记录标记为已上传。
 
-- RC003 普通 `STREAM_START → AUDIO → STREAM_STOP`、Nearby iPhone、Watch 和 Web 语音保持正常。
-- 测试音可播放并完成；系统睡眠/唤醒后的音频释放与恢复不变。
-- 设置页和菜单栏“显示日志”仍打开同一日志目录。
-- App 不记录音频内容、输入文字、Token、设备 UUID、前台 App 或外部事件来源 PID。
+## 自动化与人工边界
 
-## 日志收集与验证边界
+- 自动化可证明格式、字段白名单、加密写入、公钥闭锁、DSN 缺失和 Sentry 发送器调用边界。
+- 自动化不能证明生产私钥保管、真实 Sentry 控制台配置、真实网络发送或用户现场日志解密；这些必须在受控环境单独验收。
+- 全量回归命令：
 
-- 提交问题时优先提供 `scripts/voice-acceptance.sh` 输出的 session 路径及命令最后打印的具体 `unified-*` 文件；手工收集时提供准确 UTC 时间，并同时保留当前 `runtime.log` 与存在的 `.1`～`.3`。
-- 自动化只证明格式、轮转和策略；真实 CoreAudio 路由风暴、CoreBluetooth 错误、废纸篓权限与多天留存仍需签名候选包验收。
+```bash
+swift test --disable-keychain
+swift build --disable-keychain
+git diff --check
+```

@@ -2763,6 +2763,32 @@ struct OnboardingView: View {
             voiceResult: result
         )
         lastRecordedFailure = failure
+        let delivery = voiceAttempt.audioDelivery
+        let totalElapsedMilliseconds = (voiceAttempt.sessionDurationMilliseconds ?? 0) +
+            (voiceAttempt.transcriptWaitMilliseconds ?? 0)
+        let publicEvent = PublicDiagnosticEvent(
+            operationID: "onboarding_voice_\(voiceAttempt.attemptID)",
+            component: "onboarding",
+            action: "voice_test",
+            phase: "completed",
+            result: result == .passed ? "passed" : "failed",
+            reason: result.rawValue,
+            elapsedMS: totalElapsedMilliseconds,
+            receivedSamples: delivery.receivedSamples,
+            scheduledSamples: delivery.scheduledSamples,
+            playedSamples: delivery.playedSamples,
+            interruptedSamples: delivery.interruptedSamples,
+            pendingSamples: delivery.outputAtObservation.pendingSamples,
+            failureCount: delivery.enqueueFailures,
+            source: "onboarding",
+            audioDeviceKind: AppEnvironmentSnapshot.audioDeviceKind(
+                for: settings.selectedAudioDeviceUID
+            ),
+            voiceTool: settings.onboardingVoiceTool.rawValue
+        )
+        if let publicEvent, publicEvent.isApprovedForUpload {
+            AppLogger.shared.record(publicEvent)
+        }
         AppLogger.shared.write(
             "ONBOARDING VOICE_ATTEMPT terminal attempt=\(voiceAttempt.attemptID) " +
                 "result=\(result.rawValue) observed_failure=\(result.observedFailure) " +

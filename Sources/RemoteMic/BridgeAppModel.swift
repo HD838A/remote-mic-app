@@ -472,6 +472,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var phoneRemoteInvitation: PhoneRemoteInvitation?
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
+    @Published private(set) var diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.ready")
+    @Published private(set) var isSendingDiagnosticLogs = false
     @Published private(set) var transcriptRecords: [TranscriptRecord] = []
     @Published private(set) var recordingAssets: [RecordingAssetManifest] = []
     @Published private(set) var recordingPlaybackError: RecordingPlaybackFailure?
@@ -487,6 +489,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         qos: .utility
     )
     private let audioOutput = VirtualAudioOutput()
+    private let diagnosticLogUploader: DiagnosticLogUploader
     private var recordingPlayback: AVAudioPlayer?
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
         AppLogger.shared.write(message)
@@ -572,6 +575,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var mobileVoiceAudioEnqueueFailureCount = 0
     private var mobileVoiceAudioSourceMismatchCount = 0
     private var mobileVoiceAudioSignalMetrics = WatchBluetoothAudioSignalMetrics()
+    private var mobileVoiceOperationCounter: UInt64 = 0
+    private var activeMobileVoiceOperationID: String?
+    private var activeMobileVoiceStartedAt: Date?
     private var longRecordingRequested = false
     private var longRecordingGeneration: UInt64 = 0
     private var longRecordingOpenTimer: DispatchSourceTimer?
@@ -656,6 +662,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var appleRemoteAudioStopInterruptedBuffers = 0
     private var appleRemoteAudioStopInterruptedSamples = 0
     private var loggedAppleRemoteAudioDevice = false
+    private var appleRemoteVoiceOperationCounter: UInt64 = 0
+    private var activeAppleRemoteVoiceOperationID: String?
+    private var activeAppleRemoteVoiceStartedAt: Date?
 
     // MARK: - Chromecast（可选私有包）
 
@@ -665,6 +674,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var chromecastVoiceActive = false
     private var chromecastVoiceStopping = false
     private var chromecastVoiceStopOperation: UInt64 = 0
+    private var chromecastVoiceOperationCounter: UInt64 = 0
+    private var activeChromecastVoiceOperationID: String?
+    private var activeChromecastVoiceStartedAt: Date?
     private var chromecastAudioBatchCount = 0
     private var chromecastAudioSampleCount = 0
     private var chromecastAudioEnqueueFailureCount = 0
@@ -749,7 +761,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         rc003VoiceExtensionTestEnabled: Bool =
             ProcessInfo.processInfo.arguments.contains("--rc003-voice-extension-test") ||
             (Bundle.main.object(forInfoDictionaryKey: "RC003VoiceExtensionTestEnabled") as? Bool == true),
-        recordingAssetStore: RecordingAssetStore = RecordingAssetStore()
+        recordingAssetStore: RecordingAssetStore = RecordingAssetStore(),
+        diagnosticLogUploader: DiagnosticLogUploader = .shared
     ) {
         self.settings = settings
         self.privateFeature = privateFeature
@@ -759,6 +772,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.transcriptArchiveStore = transcriptArchiveStore
         self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
         self.recordingAssetStore = recordingAssetStore
+        self.diagnosticLogUploader = diagnosticLogUploader
+        self.diagnosticLogUploader.setPrivateEventProvider(membershipFeature)
         audioDevices = initialAudioDevices
         appleRemoteAppSwitcherSession.setDiagnosticLogger { [weak self] message in
             AppLogger.shared.write(
@@ -1175,6 +1190,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         chromecastVoiceActive = false
         isChromecastVoiceActive = false
         chromecastVoiceStopping = false
+        activeChromecastVoiceOperationID = nil
+        activeChromecastVoiceStartedAt = nil
         // 按键通道必须先清干净再停 HID：否则残留的「按住」状态会拖到下一次启动。
         resetChromecastButtonState(reason: "app_stop")
         connectedChromecastProfileIDs.removeAll()
@@ -1197,8 +1214,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         appleRemoteVoiceDevices.removeAll()
         appleRemoteVoiceStopping = false
         appleRemoteVoiceStopOperation &+= 1
+        activeAppleRemoteVoiceOperationID = nil
+        activeAppleRemoteVoiceStartedAt = nil
 #endif
         let cancelledPendingRestart = mobileVoiceLifecycle.reset()
+        activeMobileVoiceOperationID = nil
+        activeMobileVoiceStartedAt = nil
         let completion = pendingMobileVoiceRestartCompletion
         pendingMobileVoiceRestartCompletion = nil
         if cancelledPendingRestart {
@@ -1522,6 +1543,22 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "input=\(previous?.inputMonitoringGranted ?? false)->\(current.inputMonitoringGranted) " +
                 "accessibility=\(previous?.accessibilityGranted ?? false)->\(current.accessibilityGranted) " +
                 "recovery=apply_settings"
+        )
+        recordPublicDiagnosticEvent(
+            component: "permission",
+            action: "input_monitoring",
+            phase: "observed",
+            result: current.inputMonitoringGranted ? "granted" : "denied",
+            reason: "status_changed",
+            source: "app"
+        )
+        recordPublicDiagnosticEvent(
+            component: "permission",
+            action: "accessibility",
+            phase: "observed",
+            result: current.accessibilityGranted ? "granted" : "denied",
+            reason: "status_changed",
+            source: "app"
         )
         applyHIDSettings()
     }
@@ -1885,6 +1922,24 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             "AUDIO REBIND finished reason=\(reason) success=\(configured) status=\(audioStatus.key) " +
                 "ready=\(isAudioOutputReady) selected_available=\(selectedAudioDeviceIsAvailable) " +
                 "state={\(audioOutput.diagnosticState())}"
+        )
+        let publicReason: String
+        if reason.contains("voice") {
+            publicReason = "voice_start"
+        } else if reason.contains("test_tone") {
+            publicReason = "test_tone"
+        } else if reason.contains("startup") {
+            publicReason = "startup"
+        } else {
+            publicReason = "recovery"
+        }
+        recordPublicDiagnosticEvent(
+            component: "audio",
+            action: "configure",
+            phase: "completed",
+            result: configured && isAudioOutputReady ? "ready" : "failed",
+            reason: publicReason,
+            source: "app"
         )
         if configured {
             restoreManagedDefaultInputIfAppropriate(reason: reason)
@@ -2639,7 +2694,178 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func openLogFolder() {
-        NSWorkspace.shared.activateFileViewerSelecting([AppLogger.shared.logURL])
+        NSWorkspace.shared.open(AppLogger.shared.logDirectoryURL)
+    }
+
+    private func recordPublicDiagnosticEvent(
+        operationID: String? = nil,
+        component: String,
+        action: String,
+        phase: String,
+        result: String,
+        reason: String,
+        source: String? = nil,
+        remoteModelFamily: String? = nil,
+        elapsedMS: Int? = nil,
+        receivedSamples: Int? = nil,
+        scheduledSamples: Int? = nil,
+        playedSamples: Int? = nil,
+        interruptedSamples: Int? = nil,
+        pendingSamples: Int? = nil,
+        failureCount: Int? = nil
+    ) {
+        let commonArguments = (
+            component: component,
+            action: action,
+            phase: phase,
+            result: result,
+            reason: reason,
+            source: source,
+            remoteModelFamily: remoteModelFamily,
+            audioDeviceKind: ["environment", "audio", "voice", "onboarding"].contains(component)
+                ? AppEnvironmentSnapshot.audioDeviceKind(for: settings.selectedAudioDeviceUID)
+                : nil,
+            voiceTool: ["environment", "voice", "onboarding"].contains(component)
+                ? settings.onboardingVoiceTool.rawValue
+                : nil,
+            elapsedMS: elapsedMS,
+            receivedSamples: receivedSamples,
+            scheduledSamples: scheduledSamples,
+            playedSamples: playedSamples,
+            interruptedSamples: interruptedSamples,
+            pendingSamples: pendingSamples,
+            failureCount: failureCount
+        )
+        let event: PublicDiagnosticEvent?
+        if let operationID {
+            event = PublicDiagnosticEvent(
+                operationID: operationID,
+                component: commonArguments.component,
+                action: commonArguments.action,
+                phase: commonArguments.phase,
+                result: commonArguments.result,
+                reason: commonArguments.reason,
+                elapsedMS: commonArguments.elapsedMS,
+                receivedSamples: commonArguments.receivedSamples,
+                scheduledSamples: commonArguments.scheduledSamples,
+                playedSamples: commonArguments.playedSamples,
+                interruptedSamples: commonArguments.interruptedSamples,
+                pendingSamples: commonArguments.pendingSamples,
+                failureCount: commonArguments.failureCount,
+                source: commonArguments.source,
+                remoteModelFamily: commonArguments.remoteModelFamily,
+                audioDeviceKind: commonArguments.audioDeviceKind,
+                voiceTool: commonArguments.voiceTool
+            )
+        } else {
+            event = PublicDiagnosticEvent(
+                component: commonArguments.component,
+                action: commonArguments.action,
+                phase: commonArguments.phase,
+                result: commonArguments.result,
+                reason: commonArguments.reason,
+                elapsedMS: commonArguments.elapsedMS,
+                receivedSamples: commonArguments.receivedSamples,
+                scheduledSamples: commonArguments.scheduledSamples,
+                playedSamples: commonArguments.playedSamples,
+                interruptedSamples: commonArguments.interruptedSamples,
+                pendingSamples: commonArguments.pendingSamples,
+                failureCount: commonArguments.failureCount,
+                source: commonArguments.source,
+                remoteModelFamily: commonArguments.remoteModelFamily,
+                audioDeviceKind: commonArguments.audioDeviceKind,
+                voiceTool: commonArguments.voiceTool
+            )
+        }
+        guard let event, event.isApprovedForUpload else { return }
+        AppLogger.shared.record(event)
+    }
+
+    private func recordVoiceSessionCompletion(
+        operationID: String,
+        source: String,
+        remoteModelFamily: String?,
+        startedAt: Date?,
+        receivedSamples: Int,
+        failureCount: Int,
+        stopReason: String
+    ) {
+        let diagnostic = voiceAudioDeliveryDiagnostic
+        let received = max(receivedSamples, diagnostic.receivedSamples)
+        let scheduled = diagnostic.scheduledSamples
+        let played = diagnostic.playedSamples
+        let interrupted = diagnostic.interruptedSamples
+        let pending = diagnostic.outputAtObservation.pendingSamples
+        let totalFailures = max(failureCount, diagnostic.enqueueFailures)
+        let failureReason: String?
+        if received == 0 {
+            failureReason = "no_samples"
+        } else if totalFailures > 0 {
+            failureReason = "audio_enqueue_failed"
+        } else if interrupted > 0 {
+            failureReason = "playback_interrupted"
+        } else if pending > 0 || scheduled < received || played < received {
+            failureReason = "audio_incomplete"
+        } else {
+            failureReason = nil
+        }
+        recordPublicDiagnosticEvent(
+            operationID: operationID,
+            component: "voice",
+            action: "session",
+            phase: failureReason == nil ? "completed" : "failed",
+            result: failureReason == nil ? "passed" : "failed",
+            reason: failureReason ?? Self.publicVoiceStopReason(stopReason),
+            source: source,
+            remoteModelFamily: remoteModelFamily,
+            elapsedMS: startedAt.map { max(0, Int(Date().timeIntervalSince($0) * 1_000)) },
+            receivedSamples: received,
+            scheduledSamples: scheduled,
+            playedSamples: played,
+            interruptedSamples: interrupted,
+            pendingSamples: pending,
+            failureCount: totalFailures
+        )
+    }
+
+    private static func publicVoiceStopReason(_ reason: String) -> String {
+        let approvedReasons: Set<String> = [
+            "released", "voice_stop", "voice_stopped", "hold_release",
+            "toggle_second_tap", "host_stop", "cancelled.link_unavailable",
+            "app_stop", "device_disconnected",
+        ]
+        return approvedReasons.contains(reason) ? reason : "session_stopped"
+    }
+
+    func sendDiagnosticLogs() {
+        guard !isSendingDiagnosticLogs else { return }
+        isSendingDiagnosticLogs = true
+        diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.sending")
+        AppLogger.shared.write("DIAGNOSTIC UPLOAD requested_by_user")
+        diagnosticLogUploader.upload { [weak self] result in
+            guard let self else { return }
+            self.isSendingDiagnosticLogs = false
+            switch result {
+            case let .success(count):
+                self.diagnosticUploadStatus = LocalizedMessage(
+                    "diagnostics.upload.success",
+                    arguments: [String(count)]
+                )
+                AppLogger.shared.write("DIAGNOSTIC UPLOAD completed count=\(count)")
+            case let .failure(error):
+                switch error {
+                case .serviceNotConfigured:
+                    self.diagnosticUploadStatus = LocalizedMessage(
+                        "diagnostics.upload.not_configured"
+                    )
+                case .noLogs:
+                    self.diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.no_logs")
+                case .invalidServiceConfiguration, .uploadFailed:
+                    self.diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.failed")
+                }
+                AppLogger.shared.write("DIAGNOSTIC UPLOAD failed reason=\(error)")
+            }
+        }
     }
 
     func openProjectFolder() {
@@ -3804,6 +4030,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
+        appleRemoteVoiceOperationCounter &+= 1
+        let operationID = "apple_remote_voice_\(appleRemoteVoiceOperationCounter)"
         appleRemoteAudioBatchCount = 0
         appleRemoteAudioSampleCount = 0
         appleRemoteAudioEnqueueFailureCount = 0
@@ -3818,6 +4046,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write(
                 "APPLE REMOTE VOICE phase=failed result=audio_output_unavailable route=MiRemoteV_2ch"
             )
+            recordPublicDiagnosticEvent(
+                operationID: operationID,
+                component: "voice",
+                action: "session",
+                phase: "failed",
+                result: "failed",
+                reason: "audio_output_unavailable",
+                source: "bluetooth",
+                remoteModelFamily: "apple_remote"
+            )
             return
         }
         guard updateVoiceKeyState(
@@ -3830,9 +4068,21 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write(
                 "APPLE REMOTE VOICE phase=failed result=voice_key_press_failed"
             )
+            recordPublicDiagnosticEvent(
+                operationID: operationID,
+                component: "voice",
+                action: "session",
+                phase: "failed",
+                result: "failed",
+                reason: "voice_key_press_failed",
+                source: "bluetooth",
+                remoteModelFamily: "apple_remote"
+            )
             return
         }
         beginVoiceSessionIfNeeded()
+        activeAppleRemoteVoiceOperationID = operationID
+        activeAppleRemoteVoiceStartedAt = Date()
         guard siriRemoteFeature.beginCapture() else {
             AppLogger.shared.write(
                 "APPLE REMOTE VOICE phase=pending result=audio_capture_not_ready " +
@@ -3847,6 +4097,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write(
             "APPLE REMOTE VOICE phase=started result=triggered audio_capture=requested " +
                 "audio_source=apple_remote_microphone route=MiRemoteV_2ch"
+        )
+        recordPublicDiagnosticEvent(
+            operationID: operationID,
+            component: "voice",
+            action: "session",
+            phase: "started",
+            result: "accepted",
+            reason: "voice_start",
+            source: "bluetooth",
+            remoteModelFamily: "apple_remote"
         )
     }
 
@@ -3905,6 +4165,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "APPLE REMOTE VOICE phase=failed result=audio_capture_retry_exhausted " +
                     "attempts=\(appleRemoteVoiceCaptureRetryAttempt)"
             )
+            if let operationID = activeAppleRemoteVoiceOperationID {
+                recordPublicDiagnosticEvent(
+                    operationID: operationID,
+                    component: "voice",
+                    action: "session",
+                    phase: "failed",
+                    result: "failed",
+                    reason: "audio_capture_retry_exhausted",
+                    source: "bluetooth",
+                    remoteModelFamily: "apple_remote"
+                )
+            }
             return
         }
         let attempt = appleRemoteVoiceCaptureRetryAttempt
@@ -3921,6 +4193,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                         "retry_attempt=\(attempt + 1) audio_source=apple_remote_microphone " +
                         "route=MiRemoteV_2ch"
                 )
+                if let operationID = self.activeAppleRemoteVoiceOperationID {
+                    self.recordPublicDiagnosticEvent(
+                        operationID: operationID,
+                        component: "voice",
+                        action: "session",
+                        phase: "started",
+                        result: "accepted",
+                        reason: "voice_start_retry",
+                        source: "bluetooth",
+                        remoteModelFamily: "apple_remote"
+                    )
+                }
                 return
             }
             AppLogger.shared.write(
@@ -3972,6 +4256,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "audio_samples=\(appleRemoteAudioSampleCount) " +
                 "enqueue_failures=\(appleRemoteAudioEnqueueFailureCount) route=MiRemoteV_2ch"
         )
+        if let operationID = activeAppleRemoteVoiceOperationID {
+            recordVoiceSessionCompletion(
+                operationID: operationID,
+                source: "bluetooth",
+                remoteModelFamily: "apple_remote",
+                startedAt: activeAppleRemoteVoiceStartedAt,
+                receivedSamples: appleRemoteAudioSampleCount,
+                failureCount: appleRemoteAudioEnqueueFailureCount + (released ? 0 : 1),
+                stopReason: reason
+            )
+        }
+        activeAppleRemoteVoiceOperationID = nil
+        activeAppleRemoteVoiceStartedAt = nil
         if !deferredDevices.isEmpty {
             deferredDevices.forEach { beginAppleRemoteVoice(for: $0) }
         }
@@ -4092,10 +4389,43 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
+    private static func publicBluetoothConnectionState(
+        _ state: BluetoothBridgeState
+    ) -> (phase: String, result: String, reason: String) {
+        switch state {
+        case .stopped:
+            return ("stopped", "stopped", "bridge_stopped")
+        case .bluetoothUnavailable:
+            return ("failed", "unavailable", "bluetooth_unavailable")
+        case .scanning:
+            return ("started", "pending", "scanning")
+        case .connecting:
+            return ("started", "pending", "connecting")
+        case .discovering:
+            return ("started", "pending", "discovering")
+        case .ready:
+            return ("completed", "connected", "ready")
+        case .reconnecting:
+            return ("started", "pending", "reconnecting")
+        case .failed:
+            return ("failed", "failed", "bridge_failed")
+        }
+    }
+
     func bluetoothBridge(
         _ bridge: XiaomiBluetoothBridge,
         didChange state: BluetoothBridgeState
     ) {
+        let publicState = Self.publicBluetoothConnectionState(state)
+        recordPublicDiagnosticEvent(
+            component: "remote",
+            action: "connection",
+            phase: publicState.phase,
+            result: publicState.result,
+            reason: publicState.reason,
+            source: "bluetooth",
+            remoteModelFamily: "xiaomi"
+        )
         let bridgeObjectID = ObjectIdentifier(bridge)
         let previousState = bluetoothBridgeStates[bridgeObjectID]
         let shouldReapplyHIDSettings = Self.shouldReapplyHIDSettings(
@@ -4166,6 +4496,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard let identifier = bridge.deviceIdentifier else { return }
         if identifier == activeBluetoothVoiceDeviceIdentifier, bluetoothVoiceActive {
             AppLogger.shared.write("ATVV STREAM ignored_duplicate_start")
+            recordPublicDiagnosticEvent(
+                component: "voice",
+                action: "session",
+                phase: "rejected",
+                result: "duplicate",
+                reason: "duplicate_start",
+                source: "bluetooth",
+                remoteModelFamily: "xiaomi"
+            )
             return
         }
         let isRC003Continuation = rc003VoiceExtensionTestEnabled &&
@@ -4177,6 +4516,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
            activeBluetoothVoiceDeviceIdentifier != identifier {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write("ATVV STREAM rejected_busy")
+            recordPublicDiagnosticEvent(
+                component: "voice",
+                action: "session",
+                phase: "rejected",
+                result: "busy",
+                reason: "another_session_active",
+                source: "bluetooth",
+                remoteModelFamily: "xiaomi"
+            )
             return
         }
         if settings.voiceKeyMode != .function || settings.voiceFnTapModeEnabled {
@@ -4192,11 +4540,29 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "ATVV STREAM rejected reason=voice_key_not_neutralized " +
                     "mode=\(settings.voiceKeyMode.rawValue)"
             )
+            recordPublicDiagnosticEvent(
+                component: "voice",
+                action: "session",
+                phase: "rejected",
+                result: "failed",
+                reason: "voice_key_not_neutralized",
+                source: "bluetooth",
+                remoteModelFamily: "xiaomi"
+            )
             return
         }
         guard ensureVirtualAudioOutputReady(reason: "bluetooth_voice_start") else {
             _ = bridge.requestMicrophoneClose()
             AppLogger.shared.write("ATVV STREAM rejected_audio_output")
+            recordPublicDiagnosticEvent(
+                component: "voice",
+                action: "session",
+                phase: "rejected",
+                result: "failed",
+                reason: "audio_output_unavailable",
+                source: "bluetooth",
+                remoteModelFamily: "xiaomi"
+            )
             return
         }
         pendingCommandVoiceAudio.cancel()
@@ -4213,6 +4579,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             activeBluetoothVoiceDeviceIdentifier = nil
             AppLogger.shared.write(
                 "ATVV STREAM rejected reason=voice_key mode=\(settings.voiceKeyMode.rawValue)"
+            )
+            recordPublicDiagnosticEvent(
+                component: "voice",
+                action: "session",
+                phase: "rejected",
+                result: "failed",
+                reason: "voice_key_press_failed",
+                source: "bluetooth",
+                remoteModelFamily: "xiaomi"
             )
             return
         }
@@ -4231,6 +4606,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothVoiceTailDiagnostics.reset()
         AppLogger.shared.write(
             "ATVV STREAM accepted trace=\(bluetoothVoiceTraceCounter) model=\(model.rawValue)"
+        )
+        recordPublicDiagnosticEvent(
+            operationID: "voice_bluetooth_\(bluetoothVoiceTraceCounter)",
+            component: "voice",
+            action: "session",
+            phase: "started",
+            result: "accepted",
+            reason: "trigger_observed",
+            source: "bluetooth",
+            remoteModelFamily: "xiaomi"
         )
         cancelVirtualAudioReleaseIfPending(trigger: "bluetooth_voice_start")
         if !isAudioOutputReady {
@@ -4350,6 +4735,30 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         audioOutput.logWhenPendingVoiceAudioDrains(
             context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
+        )
+        let delivery = voiceAudioDeliveryDiagnosticSnapshot()
+        let publicVoiceResult: (phase: String, result: String, reason: String) =
+            bluetoothVoiceDecodedSampleCount == 0
+                ? ("failed", "failed", "no_samples")
+                : bluetoothVoiceEnqueueFailureCount > 0
+                    ? ("failed", "failed", "audio_enqueue_failed")
+                    : ("completed", "passed", "voice_stopped")
+        recordPublicDiagnosticEvent(
+            operationID: "voice_bluetooth_\(traceID)",
+            component: "voice",
+            action: "session",
+            phase: publicVoiceResult.phase,
+            result: publicVoiceResult.result,
+            reason: publicVoiceResult.reason,
+            source: "bluetooth",
+            remoteModelFamily: "xiaomi",
+            elapsedMS: durationMilliseconds,
+            receivedSamples: delivery.receivedSamples,
+            scheduledSamples: delivery.scheduledSamples,
+            playedSamples: delivery.playedSamples,
+            interruptedSamples: delivery.interruptedSamples,
+            pendingSamples: delivery.outputAtObservation.pendingSamples,
+            failureCount: delivery.enqueueFailures
         )
         activeBluetoothVoiceTraceID = nil
         bluetoothVoiceTraceStartedAt = nil
@@ -5107,10 +5516,21 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func startPhoneVoice(source: MobileVoiceSource) -> RemoteVoiceStartResult {
+        mobileVoiceOperationCounter &+= 1
+        let operationID = "mobile_voice_\(mobileVoiceOperationCounter)"
         guard activeMobileVoiceSource == nil else {
             AppLogger.shared.write(
                 "MOBILE VOICE start_rejected reason=busy requested=\(source.logName) " +
                     "active=\(activeMobileVoiceSource?.logName ?? "none")"
+            )
+            recordPublicDiagnosticEvent(
+                operationID: operationID,
+                component: "voice",
+                action: "session",
+                phase: "rejected",
+                result: "busy",
+                reason: "busy",
+                source: source.logName
             )
             return .busy
         }
@@ -5118,6 +5538,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard ensureVirtualAudioOutputReady(reason: "mobile_voice_start") else {
             AppLogger.shared.write(
                 "MOBILE VOICE start_rejected reason=audio_output requested=\(source.logName)"
+            )
+            recordPublicDiagnosticEvent(
+                operationID: operationID,
+                component: "voice",
+                action: "session",
+                phase: "failed",
+                result: "failed",
+                reason: "audio_output_unavailable",
+                source: source.logName
             )
             releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_configure_failed")
             return .unavailable
@@ -5130,6 +5559,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write(
                 "MOBILE VOICE start_rejected reason=function_key requested=\(source.logName)"
             )
+            recordPublicDiagnosticEvent(
+                operationID: operationID,
+                component: "voice",
+                action: "session",
+                phase: "failed",
+                result: "failed",
+                reason: "voice_key_press_failed",
+                source: source.logName
+            )
             releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_function_key_failed")
             return .unavailable
         }
@@ -5140,6 +5578,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         mobileVoiceAudioSourceMismatchCount = 0
         mobileVoiceAudioSignalMetrics = WatchBluetoothAudioSignalMetrics()
         beginVoiceSessionIfNeeded()
+        activeMobileVoiceOperationID = operationID
+        activeMobileVoiceStartedAt = Date()
+        recordPublicDiagnosticEvent(
+            operationID: operationID,
+            component: "voice",
+            action: "session",
+            phase: "started",
+            result: "accepted",
+            reason: "voice_start",
+            source: source.logName
+        )
         AppLogger.shared.write("MOBILE VOICE started source=\(source.logName)")
         return .started
     }
@@ -5171,6 +5620,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "MOBILE VOICE stop_ignored requested=\(source.logName) " +
                     "active=\(activeMobileVoiceSource?.logName ?? "none")"
             )
+            recordPublicDiagnosticEvent(
+                component: "voice",
+                action: "session",
+                phase: "rejected",
+                result: "inactive",
+                reason: "stop_without_active_session",
+                source: source.logName
+            )
             return
         case let .ignoredAlreadyStopping(cancelledPendingRestart):
             if cancelledPendingRestart {
@@ -5196,11 +5653,39 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 case .stopped:
                     self.releaseVoiceKeyIfNeeded(owner: .mobile, forceSoftware: true)
                     self.endVoiceSessionIfNeeded()
+                    if let operationID = self.activeMobileVoiceOperationID {
+                        self.recordVoiceSessionCompletion(
+                            operationID: operationID,
+                            source: source.logName,
+                            remoteModelFamily: nil,
+                            startedAt: self.activeMobileVoiceStartedAt,
+                            receivedSamples: self.mobileVoiceAudioSignalMetrics.sampleCount,
+                            failureCount: self.mobileVoiceAudioEnqueueFailureCount +
+                                self.mobileVoiceAudioSourceMismatchCount,
+                            stopReason: "voice_stop"
+                        )
+                    }
+                    self.activeMobileVoiceOperationID = nil
+                    self.activeMobileVoiceStartedAt = nil
                     AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
                     self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
                 case let .restart(restartSource):
                     self.releaseVoiceKeyIfNeeded(owner: .mobile, forceSoftware: true)
                     self.endVoiceSessionIfNeeded()
+                    if let operationID = self.activeMobileVoiceOperationID {
+                        self.recordVoiceSessionCompletion(
+                            operationID: operationID,
+                            source: source.logName,
+                            remoteModelFamily: nil,
+                            startedAt: self.activeMobileVoiceStartedAt,
+                            receivedSamples: self.mobileVoiceAudioSignalMetrics.sampleCount,
+                            failureCount: self.mobileVoiceAudioEnqueueFailureCount +
+                                self.mobileVoiceAudioSourceMismatchCount,
+                            stopReason: "voice_stop"
+                        )
+                    }
+                    self.activeMobileVoiceOperationID = nil
+                    self.activeMobileVoiceStartedAt = nil
                     AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
                     let completion = self.pendingMobileVoiceRestartCompletion
                     self.pendingMobileVoiceRestartCompletion = nil
@@ -6088,12 +6573,26 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             chromecastVoiceActive = true
             isChromecastVoiceActive = true
             audioOutput.cancelPendingDrain()
+            if let operationID = activeChromecastVoiceOperationID {
+                recordPublicDiagnosticEvent(
+                    operationID: operationID,
+                    component: "voice",
+                    action: "session",
+                    phase: "started",
+                    result: "resumed",
+                    reason: "rapid_repress",
+                    source: "chromecast",
+                    remoteModelFamily: "chromecast"
+                )
+            }
             AppLogger.shared.write(
                 "CHROMECAST VOICE phase=resumed result=continued_session reason=rapid_repress"
             )
             return
         }
         guard !chromecastVoiceActive else { return }
+        chromecastVoiceOperationCounter &+= 1
+        let operationID = "chromecast_voice_\(chromecastVoiceOperationCounter)"
         chromecastAudioBatchCount = 0
         chromecastAudioSampleCount = 0
         chromecastAudioEnqueueFailureCount = 0
@@ -6104,17 +6603,49 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write(
                 "CHROMECAST VOICE phase=failed result=audio_output_unavailable route=MiRemoteV_2ch"
             )
+            recordPublicDiagnosticEvent(
+                operationID: operationID,
+                component: "voice",
+                action: "session",
+                phase: "failed",
+                result: "failed",
+                reason: "audio_output_unavailable",
+                source: "chromecast",
+                remoteModelFamily: "chromecast"
+            )
             return
         }
         guard beginChromecastFunctionKeyDrive() else {
             AppLogger.shared.write(
                 "CHROMECAST VOICE phase=failed result=voice_key_press_failed"
             )
+            recordPublicDiagnosticEvent(
+                operationID: operationID,
+                component: "voice",
+                action: "session",
+                phase: "failed",
+                result: "failed",
+                reason: "voice_key_press_failed",
+                source: "chromecast",
+                remoteModelFamily: "chromecast"
+            )
             return
         }
         chromecastVoiceActive = true
         isChromecastVoiceActive = true
         beginVoiceSessionIfNeeded()
+        activeChromecastVoiceOperationID = operationID
+        activeChromecastVoiceStartedAt = Date()
+        recordPublicDiagnosticEvent(
+            operationID: operationID,
+            component: "voice",
+            action: "session",
+            phase: "started",
+            result: "accepted",
+            reason: "voice_start",
+            source: "chromecast",
+            remoteModelFamily: "chromecast"
+        )
         AppLogger.shared.write(
             "CHROMECAST VOICE phase=started result=triggered " +
                 "audio_source=chromecast_microphone route=MiRemoteV_2ch " +
@@ -6170,6 +6701,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let outputAfterStop = audioOutput.diagnosticSnapshot(
             deliveryGeneration: deliveryGeneration
         )
+        voiceAudioDeliveryDiagnostic.outputAtObservation = outputAfterStop
         AppLogger.shared.write(
             "CHROMECAST AUDIO playback_stop phase=completed result=drained " +
                 "completion=\(reason.isNormal ? "normal" : "forced") reason=\(reason.logToken) " +
@@ -6183,6 +6715,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "audio_samples=\(chromecastAudioSampleCount) " +
                 "enqueue_failures=\(chromecastAudioEnqueueFailureCount) route=MiRemoteV_2ch"
         )
+        if let operationID = activeChromecastVoiceOperationID {
+            recordVoiceSessionCompletion(
+                operationID: operationID,
+                source: "chromecast",
+                remoteModelFamily: "chromecast",
+                startedAt: activeChromecastVoiceStartedAt,
+                receivedSamples: chromecastAudioSampleCount,
+                failureCount: chromecastAudioEnqueueFailureCount + (released ? 0 : 1),
+                stopReason: reason.logToken
+            )
+        }
+        activeChromecastVoiceOperationID = nil
+        activeChromecastVoiceStartedAt = nil
     }
 
     // MARK: - Chromecast 普通按键（键位映射）
