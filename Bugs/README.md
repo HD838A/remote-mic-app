@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md)
 - [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)
 - [Onboarding 输入工具未运行、配对状态残留与语音测试页裁切](./2026-09-22-onboarding-tool-runtime-and-voice-test-gates.md)
 - [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md)
@@ -88,6 +89,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-09-27 | [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md) | 修复完成；构建、定向回归与修复前后对照通过，等待真机长时间运行与遥控器反复重连验收 |
 | 2026-09-26 | [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)（Issue #497） | 未复现、根因未确认；已补针对性日志与受门控的会话恢复，等待双账户真机复现验收 |
 | 2026-09-21 | [Onboarding 语音文字在松键后消失](./2026-09-21-onboarding-voice-text-disappears-on-release.md) | 修复已实现，等待微信输入法、豆包、Typeless 与实体遥控器真实验收 |
 | 2026-09-20 | [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md) | 已修复（候选）；`OnboardingFlowTests` 50 项与本机真机语音测试通过，等待合入与发布后验证 |

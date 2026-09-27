@@ -60,13 +60,15 @@ final class KeyboardEventSuppressor {
             eventTap,
             0
         ) else {
+            // tapCreate 成功即已在 WindowServer 侧登记端口；此处失败若不释放端口，
+            // 该 tap 会残留到进程退出，必须与 stop() 走同一条清理路径。
+            EventTapPort.release(port: eventTap, source: nil)
             return false
         }
 
         self.eventTap = eventTap
         self.runLoopSource = runLoopSource
-        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: eventTap, enable: true)
+        EventTapPort.activate(port: eventTap, source: runLoopSource)
         isRunning = true
         return true
     }
@@ -76,12 +78,7 @@ final class KeyboardEventSuppressor {
         pendingEvents.removeAll()
         heldEventCounts.removeAll()
         lock.unlock()
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        if let eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
-        }
+        EventTapPort.release(port: eventTap, source: runLoopSource)
         runLoopSource = nil
         eventTap = nil
         isRunning = false
