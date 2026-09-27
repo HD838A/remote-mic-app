@@ -19,10 +19,11 @@
 
 ### 上游报告的独立观测
 
-- Issue #476 给出同一根因与最小实验：**100 次 create/stop 循环不调用 `CFMachPortInvalidate` 时残留 100 个 tap；显式调用后残留 0 个**；同一会话实测累积 2,378 个本 App tap。
-- Issue #446 及 2026-09-24 评论：另一位用户在 **macOS 26.6.2**、`1.9.21 (174)` 上实测 1872 个已禁用 tap，重启后只剩 1 个。
-- Issue #337（2026-09-03）是最早的同类描述。
-- 三处目前未串联。#446 的 macOS 26.6.2 实测说明该现象**不限于 macOS 27**，因此本次反馈把它归因于 9/19 系统升级不构成回归判定依据。
+- [@peterhon168](https://github.com/peterhon168) 在 Issue #476 给出同一根因与最小实验：**100 次 create/stop 循环不调用 `CFMachPortInvalidate` 时残留 100 个 tap；显式调用后残留 0 个**；同一会话实测累积 2,378 个本 App tap。
+- [@idootop](https://github.com/idootop) 的 Issue #446 以「长时间后台运行、多次开合屏幕后触控板手势极其卡顿，退出无线麦即恢复」的形式描述了该症状；[@L33Z22L11](https://github.com/L33Z22L11) 在同一条 Issue 的 [2026-09-24 评论](https://github.com/HD838A/remote-mic-app/issues/446#issuecomment-5805743571)中给出独立实测：**macOS 26.6.2**、`1.9.21 (174)` 上累积 1,872 个已禁用 tap，重启后只剩 1 个。
+- [@leafney](https://github.com/leafney) 的 Issue #337（2026-09-03）是最早的同类描述。
+- 上述观测说明该现象**不限于 macOS 27**，因此本次反馈把它归因于 9/19 系统升级不构成回归判定依据。三处已在本次修复中串联，并以同一根因与修复版本逐条回复关闭。
+- 署名直接落在本记录与被引用对象处，本仓库不为外部贡献另设名单文件。
 
 ### 当前代码（修复前）
 
@@ -109,6 +110,6 @@ event tap 的生命周期包含创建（`CGEvent.tapCreate` + `CFMachPortCreateR
 
 ## 与 PR #493 的关系
 
-[PR #493](https://github.com/HD838A/remote-mic-app/pull/493)（`fix/keyboard-event-suppressor-tap-leak`，Draft）曾针对同一 Bug 提出部分修复：只改 `KeyboardEventSuppressor.stop()` 一处，未覆盖 `ShortcutCaptureMonitor` 与两处 `start()` 失败分支，也没有任何自动化断言；即便合并，`ShortcutCaptureMonitor` 仍会继续泄漏。
+[@btiger](https://github.com/btiger) 的 [PR #493](https://github.com/HD838A/remote-mic-app/pull/493)（`fix/keyboard-event-suppressor-tap-leak`，Draft，来自 fork）曾针对同一 Bug 提出部分修复：只改 `KeyboardEventSuppressor.stop()` 一处，未覆盖 `ShortcutCaptureMonitor` 与两处 `start()` 失败分支，也没有任何自动化断言；即便合并，`ShortcutCaptureMonitor` 仍会继续泄漏。该 PR 本身也提供了独立佐证：其本机 `runtime.log` 中单实例连续运行 4.96 天、`HID START` 1,039 次，与 #476 实测的残留 tap 数可对账。
 
 该 PR 的原始排查记录（当时计划新增的 `Bugs/2026-09-25-keyboard-event-suppressor-tap-leak.md`）没有合入主线，因此仓库中不保留第二份同 Bug 文档——两份并存容易留下「已修复」的错误印象。其中有独立价值的本机日志统计已并入本记录的「本机日志统计」。本记录对应的修复分支是完整范围版本，同时关闭 #493 以避免两个 PR 各说各话。
