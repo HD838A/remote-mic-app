@@ -115,6 +115,13 @@ run_release_stage() {
   fi
 }
 
+write_package_build_metadata() {
+  local plist_path="$1"
+  if ! /usr/bin/plutil -replace PackageBuild -string "$BUILD" "$plist_path" 2>/dev/null; then
+    /usr/bin/plutil -insert PackageBuild -string "$BUILD" "$plist_path"
+  fi
+}
+
 run_locked_productsign() {
   local stage="$1"
   local input_package="$2"
@@ -163,10 +170,8 @@ move_existing_path_to_trash "$LEGACY_UNINSTALL_PACKAGE" "${LEGACY_UNINSTALL_PACK
   "$RELEASE_CONFIG_PLIST" "$INSTALL_SCRIPTS/release-variant.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$RELEASE_CONFIG_PLIST" "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
-/usr/bin/plutil -replace PackageBuild -string "$BUILD" \
-  "$INSTALL_SCRIPTS/release-variant.plist"
-/usr/bin/plutil -replace PackageBuild -string "$BUILD" \
-  "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
+write_package_build_metadata "$INSTALL_SCRIPTS/release-variant.plist"
+write_package_build_metadata "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 

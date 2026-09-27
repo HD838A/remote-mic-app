@@ -144,6 +144,7 @@ fi
 /usr/bin/grep -Fq 'UNSIGNED_INSTALL_PACKAGE=' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'installer-signing-probe-productsign' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq 'run_locked_productsign installer-productsign' "$BUILD_SCRIPT"
+/usr/bin/grep -Fq 'plutil -insert PackageBuild -string "$BUILD"' "$BUILD_SCRIPT"
 /usr/bin/grep -Fq '/usr/bin/lockf -k -t "$INSTALLER_SIGNING_LOCK_TIMEOUT_SECONDS"' \
   "$BUILD_SCRIPT"
 if /usr/bin/grep -Fq 'INSTALL_COMPONENT_SIGNING_ARGS' "$BUILD_SCRIPT"; then
