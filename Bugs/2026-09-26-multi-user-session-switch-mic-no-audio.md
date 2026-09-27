@@ -104,26 +104,27 @@ BLE RECOVERY phase=requested trigger=session_activated state=... lifecycle=... c
 
 ## 验证
 
-新增的自动化用例（已写入 `Tests/RemoteMicTests/BluetoothLifecycleTests.swift`，**由 CI 执行**）：
+新增的自动化用例（`Tests/RemoteMicTests/BluetoothLifecycleTests.swift`）：
 
-- `sessionResumeRecoversVoiceLinkOnlyWhenNoBridgeIsReady`：真值表覆盖「就绪 / 无桥 / 未启动 /
-  有活跃语音」四种不应恢复的情况，以及「有桥但都没就绪」这一应恢复的情况。
+- `sessionResumeRecoversVoiceLinkOnlyWhenNoBridgeIsReady`：真值表覆盖「任一桥就绪 / 无已配置桥 /
+  未启动 / 有活跃语音」四种不应恢复的情况，以及「有桥但都没就绪」这一应恢复的情况。
 - `sessionResumeRecoveryIsWiredIntoTheSystemAudioLifecycle`：源码回归，防止 `handleSystemAudioLifecycle`
   丢失恢复调用或退回「系统唤醒专用」的旧命名。
 
-本机实际执行的验证：
+本机实际执行的验证（Xcode 27.0 / `27A266a`，Swift 6.4；把 `DEVELOPER_DIR` 指向本机 Xcode）：
 
 | 命令 | 结果 |
 | --- | --- |
+| `swift test --disable-keychain --filter BluetoothLifecycleTests` | `Build complete!`，**19/19 通过**（含新增两项与既有 `onlySystemWakeForcesBluetoothRecovery`，无回归） |
+| `swift test --disable-keychain`（全量稳定基线回归） | **712 用例 / 54 套件全部通过** |
 | `SKIP_SWIFT_PACKAGE_BUILD=1 zsh scripts/test.sh` | 自检 **48/48 通过**（真实编译了改动的 `BluetoothLifecycle.swift`） |
-| 手动重建本地依赖模块后对 `Sources/RemoteMic/*.swift` 做 `-typecheck` | 退出码 **0**、错误数 **0**（仅既有弃用告警） |
-| 新策略真值表 7 条断言（独立编译并真跑） | 全部 PASS |
-| `git diff --check` | 通过 |
+| `./scripts/verify-repository-governance.sh origin/main` | `repository governance check passed` |
+| `git diff --check origin/main...HEAD` | 通过 |
 
-**本机无法执行的项（不得记作已通过）**：这台机器只装了 CommandLineTools、没有完整 Xcode，
-其 `swift` 对 `Package.swift` 直接报 `unable to type-check this expression in reasonable time`，
-因此 `swift build` / `swift test` 在本机任何 worktree 都无法运行；`import Testing` 的类型检查
-也做不了（CLT 不含 swift-testing）。**构建与测试门禁只能由 CI 承担。**
+**环境说明**：本机默认 `xcode-select` 指向 CommandLineTools，其 `swift` 6.3.3 对 `Package.swift`
+报 `unable to type-check this expression in reasonable time`，`swift build` / `swift test` 会失败；
+把 `DEVELOPER_DIR` 指向本机完整 Xcode 后即可正常构建与测试。**CI 仍是构建与双架构门禁**：
+本机只验证 arm64，Intel Ventura 与签名相关检查仍由 CI 承担。
 
 **未完成的边界（必须明确，不能当成已验收）：**
 
