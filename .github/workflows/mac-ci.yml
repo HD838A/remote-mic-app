@@ -83,6 +83,7 @@ jobs:
               scripts/verify-release-dependency-pins.sh|\
               scripts/verify-release-workflow-gh-token.sh|\
               scripts/verify-release-control-plane-diff.sh|\
+              scripts/test-verify-release-ready-main-ci.sh|\
               scripts/test-macos-release-flow.sh|\
               scripts/test-prepare-preview-release.sh|\
               Tests/RemoteMicTests/BuildSigningTests.swift)
