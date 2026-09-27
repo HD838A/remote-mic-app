@@ -19,7 +19,8 @@ for script in \
   verify-preview-cdn-availability.sh \
   verify-staged-release-assets.sh recover-preview-stage.sh publish-staged-preview.sh \
   publish-preview-release.sh promote-preview-release.sh prepare-staged-preview-ui-test.sh \
-  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh; do
+  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh \
+  test-verify-release-ready-main-ci.sh; do
   [[ -x "$ROOT/scripts/$script" ]] || {
     print -u2 "release helper is not executable: $script"
     exit 1
@@ -32,14 +33,17 @@ for script in \
   verify-preview-cdn-availability.sh \
   recover-preview-stage.sh publish-staged-preview.sh publish-preview-release.sh \
   promote-preview-release.sh prepare-staged-preview-ui-test.sh \
-  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh; do
+  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh \
+  test-verify-release-ready-main-ci.sh; do
   case "$script" in
-    prepare-public-release-assets.sh|stage-macos-preview.sh|prepare-preview-release.sh)
+    prepare-public-release-assets.sh|stage-macos-preview.sh|prepare-preview-release.sh|test-verify-release-ready-main-ci.sh)
       zsh -n "$ROOT/scripts/$script" ;;
     *)
       bash -n "$ROOT/scripts/$script" ;;
   esac
 done
+
+"$ROOT/scripts/test-verify-release-ready-main-ci.sh"
 
 package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
