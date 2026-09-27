@@ -67,7 +67,10 @@ fi
 /usr/bin/grep -Fq 'mac-preview-stage-v' "$package_workflow"
 /usr/bin/grep -Fq 'test "$TRIGGER_REF_NAME" = main' "$package_workflow"
 /usr/bin/grep -Fq 'verify-public-release-source.sh' "$package_workflow"
-/usr/bin/grep -Fq 'working-directory: release-source' "$package_workflow"
+if [[ "$(/usr/bin/grep -c -- 'working-directory: release-source' "$package_workflow")" -lt 2 ]]; then
+  print -u2 "both release-source identity checks must run inside the exact source checkout"
+  exit 1
+fi
 /usr/bin/grep -Fq "branches: [main, 'hotfix/**']" "$ci_workflow"
 /usr/bin/grep -Fq 'swift test --disable-keychain --filter BuildSigningTests' "$ci_workflow"
 /usr/bin/grep -Fq 'Detect private dependency access' "$ci_workflow"
