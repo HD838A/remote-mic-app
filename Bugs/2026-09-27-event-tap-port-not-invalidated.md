@@ -32,6 +32,25 @@
 - 放大路径：`BridgeAppModel.startHIDMonitors()` 首行即 `stopHIDMonitors()`（其中调用 `hidEventSuppressor.stop()`），随后再 `start()`，因此**每次调用都是一次 stop+start 配对**；`shouldReapplyHIDSettings` 在蓝牙桥 `previousState == nil` 或从非 ready 进入 ready 时返回 true，而 `applyHIDSettings()` 在 `BridgeAppModel`、`OnboardingView`、`SettingsView` 中共有 21 处调用点。即**遥控器每次重连泄漏一个 tap**。
 - 同一缺陷的第二种形态：两处 `start()` 在 `CFMachPortCreateRunLoopSource` 返回 nil 时直接返回失败，而 `tapCreate` 已经成功登记的端口没有被释放。
 
+### 本机日志统计（2026-09-25 排查）
+
+只读解析本机 `~/Library/Logs/RemoteMic/runtime.log`（覆盖 2026-09-20T01:33:50Z – 2026-09-25T04:54:49Z，共 31,807 行），不依赖任何 tap 计数工具：
+
+- **长跑实例存在**：`pid=16211` 自 2026-09-20T01:36:46 连续运行到 2026-09-25T02:30:36，历时 **4.96 天**，占全部日志的 30,922 行。这是「tap 在进程生命周期内累积」的前提。
+- **该实例的 start/stop 周期为千次量级**：
+
+  | 事件 | 次数（pid=16211） |
+  | --- | --- |
+  | `HID START mode=adaptive` | 1,039 |
+  | `HID PERMISSIONS` | 1,039 |
+  | `HID CONNECTED` | 992 |
+  | `HID DISCONNECTED` | 502 |
+
+  折合约 **8.4 次/小时、201.8 次/天**。
+- **与 #476 实测对账**：按 #476「一次 HID restart 使计数 +2」的单点实测外推，1,039 次 start 约为 **2,078** 个残留 tap，与 #476 实测的 2,378 个偏差约 13%；反推 #476 对应约 1,189 个周期。两个独立来源同量级。
+- **同机 WindowServer 负载异常**：同一会话内 WindowServer 累计 CPU 30:45、进程已运行 1:50:30，**会话均值约 28.0% CPU**；GPU 累计 37:16.93，折合约 **33.8%**。远高于「文字输入常驻工具」应有水平，且与 #476 指认的 `add_event_vector_to_tap` 热点一致。
+- **已排除的混淆项**：日志中大量 `HID CONNECTED mode=monitored seize_error_code=-536870207`（IOKit `kIOReturnNotPrivileged`，`0xE00002C1`）**不是缺陷**。`HIDRemoteMonitor.swift` 在独占 seize 失败后回退非独占 monitor 路径，成功时即以该字段记录 seize 失败码；`Bugs/2026-08-21-issue-137-missing-hid-key-up-blocks-arrows.md` 也把该组合记为 monitored 路径的正常表现。
+
 ## 假设
 
 ### H1：两处 `stop()` 未 invalidate 底层端口导致 tap 泄漏（根因）
@@ -40,7 +59,7 @@
 
 ### H2：泄漏速率由遥控器重连次数驱动
 
-`startHIDMonitors` 必为 stop+start 配对，而 `shouldReapplyHIDSettings` 在每次重连后触发重建。本仓库另一份记录（`Bugs/2026-09-25-keyboard-event-suppressor-tap-leak.md`，见「与其他记录的关系」）从 `runtime.log` 统计出单实例 4.96 天内 `HID START` 1,039 次、折合约 8.4 次/小时，与 #476 实测的 2,378 个 tap 同量级。本记录未独立复核该计数，置信度中等。
+`startHIDMonitors` 必为 stop+start 配对，而 `shouldReapplyHIDSettings` 在每次重连后触发重建。本机日志统计（见「本机日志统计」）给出单实例 4.96 天内 `HID START` 1,039 次、折合约 8.4 次/小时，与 #476 实测的 2,378 个 tap 同量级。本记录未独立复核该计数，置信度中等。
 
 ### H3：用户的 11 MB 运行日志是同源症状而非独立问题
 
@@ -82,12 +101,14 @@ event tap 的生命周期包含创建（`CGEvent.tapCreate` + `CFMachPortCreateR
 ## 当前验证边界
 
 - **未做真机长时间运行验收**：真实的长时间常驻、蓝牙重连节奏、睡眠唤醒需要在实体遥控器与正式安装包上验证；自动化只能证明端口在进程内按 start/stop 次数正确释放。
-- **未取得用户现场文件**：`runtime.log`（约 11 MB）、`windowserver.sample.txt` 与截图仍未拿到，H3 未验证；H2 的重连速率引用另一份记录的本机日志计数，未独立复核。
+- **未取得用户现场文件**：`runtime.log`（约 11 MB）、`windowserver.sample.txt` 与截图仍未拿到，H3 未验证；H2 的重连速率引自本机 `runtime.log` 统计（见「本机日志统计」），未独立复核。
 - **未做 WindowServer 负载 A/B**：修复前后 WindowServer CPU/GPU 占用没有实测对照。
 - **未处理重连频率本身**：泄漏堵住后残留不再累积，但「为何约 8.4 次/小时重建 HID 监听」属独立工作项，关联 Issue #441 与 `Bugs/2026-08-24-ble-cached-reconnect-storm.md`。
 - `releaseInvalidatesThePort` 与 `repeatedActivateReleaseCyclesDoNotAccumulateTaps` 守护的是本次新增的共用释放路径，**不是**本 Bug「失败 → 通过」的例证；承担修复前后对照的是那两个直接驱动生产监听器的用例。
 - 本机测试进程在运行时具备创建 active event tap 的条件，因此两个生产监听器用例实际执行而非跳过；在缺少辅助功能权限的环境（如无 GUI 的 CI）中这两个用例会跳过，仅前两个用例提供保护。
 
-## 与其他记录的关系
+## 与 PR #493 的关系
 
-`Bugs/2026-09-25-keyboard-event-suppressor-tap-leak.md` 与本记录针对同一 Bug 的同一根因，但只覆盖 `KeyboardEventSuppressor` 一处、未处理 `ShortcutCaptureMonitor` 与两处 `start()` 失败分支。本记录是其完整范围版本；两份合并时应以本记录为准，避免留下「已修复」的错误印象。
+[PR #493](https://github.com/HD838A/remote-mic-app/pull/493)（`fix/keyboard-event-suppressor-tap-leak`，Draft）曾针对同一 Bug 提出部分修复：只改 `KeyboardEventSuppressor.stop()` 一处，未覆盖 `ShortcutCaptureMonitor` 与两处 `start()` 失败分支，也没有任何自动化断言；即便合并，`ShortcutCaptureMonitor` 仍会继续泄漏。
+
+该 PR 的原始排查记录（当时计划新增的 `Bugs/2026-09-25-keyboard-event-suppressor-tap-leak.md`）没有合入主线，因此仓库中不保留第二份同 Bug 文档——两份并存容易留下「已修复」的错误印象。其中有独立价值的本机日志统计已并入本记录的「本机日志统计」。本记录对应的修复分支是完整范围版本，同时关闭 #493 以避免两个 PR 各说各话。
