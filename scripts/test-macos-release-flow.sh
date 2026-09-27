@@ -49,6 +49,7 @@ package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
 stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
+notarize_release="$ROOT/scripts/notarize-release.sh"
 
 /usr/bin/grep -Fq -- '--disable-keychain' "$ROOT/scripts/build-app.sh"
 /usr/bin/grep -Fq 'xcrun swift build --disable-keychain' "$ROOT/scripts/test.sh"
@@ -70,6 +71,9 @@ fi
 /usr/bin/grep -Fq '/.private-release/' "$package_workflow"
 /usr/bin/grep -Fq 'test "$TRIGGER_REF_NAME" = main' "$package_workflow"
 /usr/bin/grep -Fq 'verify-public-release-source.sh' "$package_workflow"
+/usr/bin/grep -Fq 'RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-420}"' "$notarize_release"
+/usr/bin/grep -Fq 'RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-450}"' "$notarize_release"
+/usr/bin/grep -Fq 'export RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS' "$notarize_release"
 if [[ "$(/usr/bin/grep -c -- 'REPOSITORY_ROOT: \${{ github.workspace }}' "$package_workflow")" -lt 1 ]]; then
   print -u2 "protected package verification must point the verifier at the checked-out repository"
   exit 1
