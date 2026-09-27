@@ -43,7 +43,7 @@ struct MembershipFeatureConfiguration: Equatable {
     }
 }
 
-final class MembershipFeatureIntegration: ObservableObject {
+final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable {
     @Published private(set) var isFeatureVisible = false
     @Published private(set) var buttonProfilesAccessDecision: HostButtonProfilesAccessDecision = .unavailable
     @Published private(set) var accountDisplayName: String? = nil
@@ -160,4 +160,33 @@ final class MembershipFeatureIntegration: ObservableObject {
         }
     }
     #endif
+}
+
+extension MembershipFeatureIntegration: PrivateDiagnosticUploadProvider {
+    func pendingPrivateDiagnosticRecords() async -> [PrivateDiagnosticUploadRecord] {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        return await Task { @MainActor [weak self] in
+            guard let adapter = self?.adapter else { return [] }
+            let records = await adapter.pendingPrivateDiagnosticRecords()
+            return records.compactMap { record in
+                PrivateDiagnosticUploadRecord(
+                    recordID: record.recordID,
+                    occurredAt: record.occurredAt,
+                    category: record.category,
+                    fields: record.fields
+                )
+            }
+        }.value
+        #else
+        return []
+        #endif
+    }
+
+    func markPrivateDiagnosticRecordsUploaded(_ recordIDs: Set<String>) async {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        await Task { @MainActor [weak self] in
+            await self?.adapter?.markPrivateDiagnosticRecordsUploaded(recordIDs)
+        }.value
+        #endif
+    }
 }

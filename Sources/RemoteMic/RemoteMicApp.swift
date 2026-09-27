@@ -217,6 +217,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let environmentEvent = AppEnvironmentSnapshot.current(
+            settings: model.settings
+        ).publicEvent {
+            AppLogger.shared.record(environmentEvent)
+        }
         let currentBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
         let completedUpdate = model.settings.recordLaunchAndDetectCompletedUpdate(
             currentBuild: currentBuild,

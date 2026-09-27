@@ -1,8 +1,9 @@
+import CryptoKit
 import Darwin
 import Foundation
 import OSLog
 
-final class AppLogger {
+final class AppLogger: PublicDiagnosticEventSink {
     struct Metadata: Equatable {
         let processID: Int32
         let version: String
@@ -31,45 +32,60 @@ final class AppLogger {
     let logURL: URL
     let isEnabled: Bool
 
+    var logDirectoryURL: URL {
+        logURL.deletingLastPathComponent()
+    }
+
     private static let systemLogger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "SayAll",
         category: "AppLogger"
     )
-    private static let defaultMaximumFileSize = 10 * 1_024 * 1_024
-    private static let defaultArchiveCount = 3
+    private static let defaultMaximumFileSize: UInt64 = 10 * 1_024 * 1_024
+    private static let maximumPublicEvents = 256
 
     private let queue = DispatchQueue(label: "RemoteMic.logger")
     private let formatter: ISO8601DateFormatter
     private let metadata: Metadata
     private let maximumFileSize: UInt64
-    private let archiveCount: Int
     private let fileManager: FileManager
-    private let retirementHandler: RetirementHandler
     private let now: () -> Date
     private let reportFailure: (String) -> Void
+    private let sessionID: Data
+    private var fileKey: SymmetricKey?
+    private var nextSequence: UInt64 = 0
+    private var publicEvents: [PublicDiagnosticEvent] = []
 
     private convenience init() {
         let fileManager = FileManager.default
         let base = fileManager.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs", isDirectory: true)
             .appendingPathComponent("RemoteMic", isDirectory: true)
+        let sessionName = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+            .prefix(8)
+        let day = Self.dayIdentifier(Date())
         self.init(
-            logURL: base.appendingPathComponent("runtime.log"),
+            logURL: base.appendingPathComponent(
+                "sayall.app-\(day)-session-\(sessionName).rmlog"
+            ),
             metadata: .current(),
             fileManager: fileManager,
+            publicKeyDataProvider: { DiagnosticLogPublicKeyConfiguration.current() },
             isEnabled: Self.shouldEnableSharedLogging()
         )
     }
 
     init(
         logURL: URL,
-        metadata: Metadata,
-        maximumFileSize: UInt64 = UInt64(defaultMaximumFileSize),
-        archiveCount: Int = defaultArchiveCount,
+        metadata: Metadata = .current(),
+        maximumFileSize: UInt64 = AppLogger.defaultMaximumFileSize,
+        archiveCount _: Int = 0,
         fileManager: FileManager = .default,
-        retirementHandler: RetirementHandler? = nil,
+        retirementHandler _: RetirementHandler? = nil,
         now: @escaping () -> Date = Date.init,
         reportFailure: ((String) -> Void)? = nil,
+        publicKeyDataProvider: @escaping () -> Data? = {
+            DiagnosticLogPublicKeyConfiguration.current()
+        },
         isEnabled: Bool = true
     ) {
         self.logURL = logURL
@@ -80,15 +96,12 @@ final class AppLogger {
             build: Self.stableToken(metadata.build)
         )
         self.maximumFileSize = max(1, maximumFileSize)
-        self.archiveCount = max(0, archiveCount)
         self.fileManager = fileManager
-        self.retirementHandler = retirementHandler ?? { url in
-            try fileManager.trashItem(at: url, resultingItemURL: nil)
-        }
         self.now = now
         self.reportFailure = reportFailure ?? { message in
             Self.systemLogger.error("\(message, privacy: .public)")
         }
+        self.sessionID = DiagnosticLogEnvelope.sessionID()
 
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -98,50 +111,109 @@ final class AppLogger {
         guard isEnabled else { return }
         do {
             try fileManager.createDirectory(
-                at: logURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
+                at: logDirectoryURL,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
             )
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: logDirectoryURL.path
+            )
+
+            guard let publicKeyData = publicKeyDataProvider() else {
+                diagnose("encryption_public_key_missing")
+                return
+            }
+            let session = try DiagnosticLogEnvelope.makeSession(
+                publicKeyData: publicKeyData,
+                sessionID: sessionID
+            )
+            try session.header.write(to: logURL, options: .atomic)
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: logURL.path
+            )
+            self.fileKey = session.fileKey
         } catch {
-            diagnose("directory_create_failed", error: error)
+            diagnose("session_file_create_failed", error: error)
         }
     }
 
     func write(_ message: String) {
         guard isEnabled else { return }
-        let eventDate = now()
-        let normalizedMessage = Self.singleLine(message)
-        queue.async { [self] in
-            append(formattedLine(eventDate: eventDate, message: normalizedMessage))
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.appendRecord(message: message, date: self.now())
         }
     }
 
-    /// Writes a complete redacted diagnostic snapshot without flattening its fields.
-    /// Each physical log line remains a valid single-line AppLogger record.
+    /// Writes a redacted diagnostic snapshot as ordered encrypted records.
     func writeDiagnosticSummary(_ summary: String, event: String) {
         guard isEnabled else { return }
-        let eventDate = now()
         let normalizedEvent = Self.singleLine(event)
-        let normalizedLines = summary
+        let lines = summary
             .split(omittingEmptySubsequences: false) { character in
                 character == "\n" || character == "\r"
             }
             .map { Self.singleLine(String($0)) }
-        queue.async { [self] in
-            var data = formattedLine(eventDate: eventDate, message: "\(normalizedEvent) BEGIN")
-            for line in normalizedLines {
-                data.append(formattedLine(
-                    eventDate: eventDate,
-                    message: "\(normalizedEvent) FIELD \(line)"
-                ))
+        queue.async { [weak self] in
+            guard let self else { return }
+            let eventDate = self.now()
+            self.appendRecord(message: "\(normalizedEvent) BEGIN", date: eventDate)
+            for line in lines {
+                self.appendRecord(
+                    message: "\(normalizedEvent) FIELD \(line)",
+                    date: eventDate
+                )
             }
-            data.append(formattedLine(eventDate: eventDate, message: "\(normalizedEvent) END"))
-            append(data)
+            self.appendRecord(message: "\(normalizedEvent) END", date: eventDate)
+        }
+    }
+
+    /// Adds a typed event to the in-memory diagnostic buffer and to the
+    /// encrypted local file. The private transport never reads the local file.
+    func record(_ event: PublicDiagnosticEvent) {
+        guard isEnabled else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.publicEvents.append(event)
+            if self.publicEvents.count > Self.maximumPublicEvents {
+                self.publicEvents.removeFirst(self.publicEvents.count - Self.maximumPublicEvents)
+            }
+            self.appendRecord(message: event.canonicalLine, date: self.now())
+        }
+    }
+
+    func write(publicEvent: PublicDiagnosticEvent) {
+        record(publicEvent)
+    }
+
+    func publicDiagnosticEvents() -> [PublicDiagnosticEvent] {
+        guard isEnabled else { return [] }
+        return queue.sync { publicEvents }
+    }
+
+    func markPublicDiagnosticEventsUploaded(_ uploadedEvents: [PublicDiagnosticEvent]) {
+        guard isEnabled, !uploadedEvents.isEmpty else { return }
+        queue.sync {
+            for uploadedEvent in uploadedEvents {
+                guard let index = publicEvents.firstIndex(of: uploadedEvent) else { continue }
+                publicEvents.remove(at: index)
+            }
         }
     }
 
     func flush() {
         guard isEnabled else { return }
         queue.sync {}
+    }
+
+    /// Test-only style entry point that still writes encrypted data.
+    func writeSynchronously(_ message: String, at date: Date) {
+        guard isEnabled else { return }
+        queue.sync {
+            appendRecord(message: message, date: date)
+        }
     }
 
     static func shouldEnableSharedLogging(
@@ -168,8 +240,7 @@ final class AppLogger {
         fieldPrefix: String = "error"
     ) -> String {
         let prefix = stableToken(fieldPrefix)
-        return "\(prefix)_domain=\(stableToken(domain)) " +
-            "\(prefix)_code=\(code)"
+        return "\(prefix)_domain=\(stableToken(domain)) \(prefix)_code=\(code)"
     }
 
     static func optionalErrorFields(_ error: Error?) -> String {
@@ -177,132 +248,69 @@ final class AppLogger {
         return errorFields(error)
     }
 
-    private func append(_ data: Data) {
-        withExclusiveLogLock {
-            if shouldRotate(forAdditionalBytes: UInt64(data.count)) {
-                rotateIfPossible()
+    static func stableToken(_ value: String) -> String {
+        let token = String(value.unicodeScalars.map { scalar -> Character in
+            switch scalar.value {
+            case 48 ... 57, 65 ... 90, 97 ... 122, 45, 46, 95:
+                return Character(String(scalar))
+            default:
+                return "_"
             }
-            appendAtomically(data)
-        }
+        })
+        return token.isEmpty ? "unknown" : token
     }
 
-    private func formattedLine(eventDate: Date, message: String) -> Data {
-        let timestamp = formatter.string(from: eventDate)
-        let line = "\(timestamp) pid=\(metadata.processID) " +
-            "ver=\(metadata.version) build=\(metadata.build) " +
-            "\(message)\n"
-        return Data(line.utf8)
-    }
-
-    private func shouldRotate(forAdditionalBytes additionalBytes: UInt64) -> Bool {
-        guard fileManager.fileExists(atPath: logURL.path) else { return false }
+    private func appendRecord(message: String, date: Date) {
         do {
-            let attributes = try fileManager.attributesOfItem(atPath: logURL.path)
-            guard let fileSize = attributes[.size] as? NSNumber else {
-                reportFailure("file_size_unavailable")
-                return false
-            }
-            let currentSize = fileSize.uint64Value
-            return currentSize >= maximumFileSize ||
-                additionalBytes > maximumFileSize - currentSize
-        } catch {
-            diagnose("file_size_failed", error: error)
-            return false
-        }
-    }
+            guard let fileKey else { throw DiagnosticLogEnvelope.Error.invalidRecord }
+            let sequence = nextSequence
+            let line = "\(formatter.string(from: date)) pid=\(metadata.processID) " +
+                "ver=\(metadata.version) build=\(metadata.build) seq=\(sequence) " +
+                "\(Self.singleLine(message))\n"
+            let sealed = try AES.GCM.seal(
+                Data(line.utf8),
+                using: fileKey,
+                authenticating: DiagnosticLogEnvelope.associatedData(
+                    sessionID: sessionID,
+                    sequence: sequence
+                )
+            )
+            guard let combined = sealed.combined,
+                  combined.count <= Int(UInt32.max)
+            else { throw DiagnosticLogEnvelope.Error.invalidRecord }
 
-    private func rotateIfPossible() {
-        guard archiveCount > 0 else { return }
-
-        let oldestArchiveURL = archiveURL(index: archiveCount)
-        if fileManager.fileExists(atPath: oldestArchiveURL.path) {
-            do {
-                try retirementHandler(oldestArchiveURL)
-            } catch {
-                diagnose("archive_retirement_failed", error: error)
-                return
-            }
-            guard !fileManager.fileExists(atPath: oldestArchiveURL.path) else {
-                reportFailure("archive_retirement_incomplete")
-                return
-            }
-        }
-
-        if archiveCount > 1 {
-            for index in stride(from: archiveCount - 1, through: 1, by: -1) {
-                let sourceURL = archiveURL(index: index)
-                guard fileManager.fileExists(atPath: sourceURL.path) else { continue }
-                let destinationURL = archiveURL(index: index + 1)
-                guard !fileManager.fileExists(atPath: destinationURL.path) else {
-                    reportFailure("archive_destination_occupied")
-                    return
+            var length = UInt32(combined.count).bigEndian
+            var record = withUnsafeBytes(of: &length) { Data($0) }
+            record.append(combined)
+            let appended = try withExclusiveLogLock {
+                let existingSize = fileSize(at: logURL)
+                guard existingSize + UInt64(record.count) <= maximumFileSize else {
+                    reportFailure("encrypted_log_size_limit_reached")
+                    return false
                 }
-                do {
-                    try fileManager.moveItem(at: sourceURL, to: destinationURL)
-                } catch {
-                    diagnose("archive_move_failed", error: error)
-                    return
-                }
+                try appendAtomically(record)
+                return true
             }
-        }
-
-        let firstArchiveURL = archiveURL(index: 1)
-        guard !fileManager.fileExists(atPath: firstArchiveURL.path) else {
-            reportFailure("archive_destination_occupied")
-            return
-        }
-        do {
-            try fileManager.moveItem(at: logURL, to: firstArchiveURL)
+            if appended {
+                nextSequence += 1
+            }
         } catch {
-            diagnose("current_log_move_failed", error: error)
+            diagnose("encrypted_log_write_failed", error: error)
         }
     }
 
-    private var lockURL: URL {
-        logURL.deletingLastPathComponent()
-            .appendingPathComponent(".\(logURL.lastPathComponent).lock")
-    }
-
-    private func withExclusiveLogLock(_ operation: () -> Void) {
-        let descriptor = Darwin.open(
-            lockURL.path,
-            O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW,
-            mode_t(S_IRUSR | S_IWUSR)
-        )
-        guard descriptor >= 0 else {
-            diagnosePOSIX("lock_open_failed", code: errno)
-            return
-        }
-        defer { _ = Darwin.close(descriptor) }
-
-        while flock(descriptor, LOCK_EX) != 0 {
-            let errorCode = errno
-            if errorCode == EINTR { continue }
-            diagnosePOSIX("lock_acquire_failed", code: errorCode)
-            return
-        }
-        defer {
-            if flock(descriptor, LOCK_UN) != 0 {
-                diagnosePOSIX("lock_release_failed", code: errno)
-            }
-        }
-
-        operation()
-    }
-
-    private func appendAtomically(_ data: Data) {
+    private func appendAtomically(_ data: Data) throws {
         let descriptor = Darwin.open(
             logURL.path,
             O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW,
             mode_t(S_IRUSR | S_IWUSR)
         )
         guard descriptor >= 0 else {
-            diagnosePOSIX("file_append_open_failed", code: errno)
-            return
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
         defer { _ = Darwin.close(descriptor) }
 
-        data.withUnsafeBytes { buffer in
+        try data.withUnsafeBytes { buffer in
             guard let baseAddress = buffer.baseAddress else { return }
             var offset = 0
             while offset < buffer.count {
@@ -317,25 +325,46 @@ final class AppLogger {
                 }
                 let errorCode = written == 0 ? EIO : errno
                 if errorCode == EINTR { continue }
-                diagnosePOSIX("file_append_failed", code: errorCode)
-                return
+                throw POSIXError(POSIXErrorCode(rawValue: errorCode) ?? .EIO)
             }
         }
     }
 
-    private func archiveURL(index: Int) -> URL {
-        URL(fileURLWithPath: "\(logURL.path).\(index)")
-    }
-
-    private func diagnose(_ operation: String, error: Error) {
-        reportFailure("\(operation) \(Self.errorFields(error))")
-    }
-
-    private func diagnosePOSIX(_ operation: String, code: Int32) {
-        diagnose(
-            operation,
-            error: NSError(domain: NSPOSIXErrorDomain, code: Int(code))
+    private func withExclusiveLogLock<T>(_ operation: () throws -> T) throws -> T {
+        let lockURL = logURL.deletingLastPathComponent()
+            .appendingPathComponent(".sayall-diagnostic-log.lock")
+        let descriptor = Darwin.open(
+            lockURL.path,
+            O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW,
+            mode_t(S_IRUSR | S_IWUSR)
         )
+        guard descriptor >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        defer { _ = Darwin.close(descriptor) }
+
+        while flock(descriptor, LOCK_EX) != 0 {
+            let errorCode = errno
+            if errorCode == EINTR { continue }
+            throw POSIXError(POSIXErrorCode(rawValue: errorCode) ?? .EIO)
+        }
+        defer { _ = flock(descriptor, LOCK_UN) }
+        return try operation()
+    }
+
+    private func fileSize(at url: URL) -> UInt64 {
+        guard let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+              let value = attributes[.size] as? NSNumber
+        else { return 0 }
+        return value.uint64Value
+    }
+
+    private func diagnose(_ operation: String, error: Error? = nil) {
+        if let error {
+            reportFailure("\(operation) \(Self.errorFields(error))")
+        } else {
+            reportFailure(operation)
+        }
     }
 
     private static func singleLine(_ message: String) -> String {
@@ -349,15 +378,12 @@ final class AppLogger {
         })
     }
 
-    static func stableToken(_ value: String) -> String {
-        let token = String(value.unicodeScalars.map { scalar -> Character in
-            switch scalar.value {
-            case 48 ... 57, 65 ... 90, 97 ... 122, 45, 46, 95:
-                return Character(String(scalar))
-            default:
-                return "_"
-            }
-        })
-        return token.isEmpty ? "unknown" : token
+    private static func dayIdentifier(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 }

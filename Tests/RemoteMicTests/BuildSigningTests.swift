@@ -303,6 +303,8 @@ struct BuildSigningTests {
         #expect(prepareSource.contains("lipo \"$binary\" -verify_arch arm64 x86_64"))
         #expect(prepareSource.contains("SayAllMembershipHostAdapter.xcframework.zip"))
         #expect(prepareSource.contains("name: \"SayAllMembershipHostAdapter\""))
+        #expect(prepareSource.contains("SayAllMembership_SayAllMembershipUI.bundle.zip"))
+        #expect(prepareSource.contains("MembershipCenterCopy.json"))
         #expect(prepareSource.contains("SayAllButtonProfiles.xcframework.zip"))
         #expect(prepareSource.contains("SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip"))
         #expect(prepareSource.contains("SayAllButtonProfiles_SayAllButtonProfiles.bundle.zip"))
