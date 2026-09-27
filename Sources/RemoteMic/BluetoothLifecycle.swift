@@ -251,6 +251,29 @@ enum BluetoothWakeRecoveryPolicy {
     ) -> Bool {
         started && event == .systemDidWake
     }
+
+    /// 挂起原因全部解除后，是否需要主动重建蓝牙语音链路。
+    ///
+    /// 场景：同机多账户（快速用户切换 / 重新登录）下，另一个账户的实例可能在这台遥控器上
+    /// 建立了连接，本账户的 BLE 链路在会话离开前台期间被顶掉。切回后旧实现只尝试重绑虚拟
+    /// 音频，不会主动重建蓝牙链路；由于 `VirtualAudioConnectionLifecyclePolicy.shouldBeActive`
+    /// 要求至少一台桥就绪，界面会长期停在「正在查找…」，用户必须手动点「立即重新连接」。
+    ///
+    /// 这个判定只在「有已配置的桥、当前一台都没就绪、且没有正在进行中的语音」时才为真：
+    /// - 任一桥就绪 → 完全空操作，不打断健康连接；
+    /// - 有活跃语音 → 不介入，不打断正在进行的会话；
+    /// - 没有已配置的桥 → 不凭空启动连接。
+    /// 与 `.systemDidWake` 的 `shouldForceReconnect` 互补：后者是系统唤醒的强恢复，
+    /// 这里是「链路已经掉了」的按需恢复。
+    static func shouldRecoverVoiceLinkAfterResume(
+        started: Bool,
+        configuredBridgeCount: Int,
+        readyBridgeCount: Int,
+        voiceLinkActive: Bool
+    ) -> Bool {
+        guard started, !voiceLinkActive, configuredBridgeCount > 0 else { return false }
+        return readyBridgeCount == 0
+    }
 }
 
 struct BluetoothCentralRecoveryTransition: Equatable {

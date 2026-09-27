@@ -67,7 +67,7 @@
 
 - 尚未在真实反馈 Mac 上执行睡眠→唤醒→首次按键/首次语音，也尚未用真实 RC001/RC003 和豆包输入法验收。
 - 自动化测试不能证明 CoreBluetooth、macOS 电源唤醒时序、MiRemoteV 2ch HAL 或豆包最终文字提交。
-- 下一次现场日志应重点收集 `BLE WAKE`、`BLE CENTRAL`、`AUDIO RECOVERY`、`AUDIO REBIND`、`AUDIO WRITE rejected reason=...`、`ATVV STREAM summary ... audio_state=...` 以及 `TRANSCRIPT CAPTURE` 的同一 trace/时间段。
+- 下一次现场日志应重点收集 `BLE RECOVERY`、`BLE CENTRAL`、`AUDIO RECOVERY`、`AUDIO REBIND`、`AUDIO WRITE rejected reason=...`、`ATVV STREAM summary ... audio_state=...` 以及 `TRANSCRIPT CAPTURE` 的同一 trace/时间段。
 
 ## 2026-08-28 现场复现：BLE Ready 时 HID service 尚未出现
 

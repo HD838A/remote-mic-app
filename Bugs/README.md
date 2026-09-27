@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)
 - [Onboarding 输入工具未运行、配对状态残留与语音测试页裁切](./2026-09-22-onboarding-tool-runtime-and-voice-test-gates.md)
 - [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md)
 - [虚拟设备被静音时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md)
@@ -87,6 +88,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-09-26 | [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)（Issue #497） | 未复现、根因未确认；已补针对性日志与受门控的会话恢复，等待双账户真机复现验收 |
 | 2026-09-21 | [Onboarding 语音文字在松键后消失](./2026-09-21-onboarding-voice-text-disappears-on-release.md) | 修复已实现，等待微信输入法、豆包、Typeless 与实体遥控器真实验收 |
 | 2026-09-20 | [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md) | 已修复（候选）；`OnboardingFlowTests` 50 项与本机真机语音测试通过，等待合入与发布后验证 |
 | 2026-09-20 | [虚拟设备被静音或音量过低时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md) | 自动解除静音与低于 0.2 的音量保护完成；MiRemoteV 2ch 属性自愈实测通过，等待 BlackHole 与完整语音链路验收 |

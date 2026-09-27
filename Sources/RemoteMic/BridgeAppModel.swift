@@ -1608,7 +1608,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
-    private func recoverBluetoothAfterSystemWake() {
+    private func recoverBluetoothVoiceLink(reason: String) {
         let targets: [XiaomiBluetoothBridge]
         if let selectedBluetoothBridge {
             targets = [selectedBluetoothBridge]
@@ -1616,17 +1616,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             targets = Array(bluetoothBridges.values)
         }
         AppLogger.shared.write(
-            "BLE WAKE recovery_begin target_bridges=\(targets.count) " +
+            "BLE RECOVERY phase=begin trigger=\(reason) target_bridges=\(targets.count) " +
+                "configured_bridges=\(bluetoothBridges.count) " +
                 "discovery=\(discoveryBluetoothBridge != nil) " +
                 "ready_bridges=\(readyBluetoothBridgeCount)"
         )
         if targets.isEmpty, discoveryBluetoothBridge == nil {
             startBluetoothConnections()
-            AppLogger.shared.write("BLE WAKE recovery_started_missing_bridges")
+            AppLogger.shared.write(
+                "BLE RECOVERY phase=begin trigger=\(reason) cause=started_missing_bridges"
+            )
             return
         }
-        targets.forEach { $0.recoverAfterSystemWake() }
-        discoveryBluetoothBridge?.recoverAfterSystemWake()
+        targets.forEach { $0.recoverVoiceLink(reason: reason) }
+        discoveryBluetoothBridge?.recoverVoiceLink(reason: reason)
     }
 
     func refreshRemoteDiscovery() {
@@ -1893,6 +1896,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "suspended=\(systemAudioSuspensionState.isSuspended) " +
                 "reasons=\(systemAudioSuspensionState.diagnostic) started=\(started) " +
                 "ready_bridges=\(readyBluetoothBridgeCount) " +
+                "configured_bridges=\(bluetoothBridges.count) " +
+                "discovery_bridge=\(discoveryBluetoothBridge != nil) " +
                 "bluetooth_voice=\(bluetoothVoiceActive) " +
                 "mobile_voice=\(activeMobileVoiceSource != nil) " +
                 "test_tone=\(isPlayingTestTone) audio_ready=\(isAudioOutputReady)"
@@ -1929,7 +1934,21 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         resumeVirtualAudioOutputIfNeeded(reason: "system_\(event.rawValue)")
         if BluetoothWakeRecoveryPolicy.shouldForceReconnect(event: event, started: started) {
-            recoverBluetoothAfterSystemWake()
+            recoverBluetoothVoiceLink(reason: "system_wake")
+        } else if BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume(
+            started: started,
+            configuredBridgeCount: bluetoothBridges.count,
+            readyBridgeCount: readyBluetoothBridgeCount,
+            voiceLinkActive: hasActiveVirtualAudioSource
+        ) {
+            AppLogger.shared.write(
+                "SYSTEM AUDIO voice_link_recovery event=\(event.rawValue) " +
+                    "cause=no_ready_bridge ready_bridges=0 " +
+                    "configured_bridges=\(bluetoothBridges.count) " +
+                    "discovery_bridge=\(discoveryBluetoothBridge != nil) " +
+                    "audio_ready=\(isAudioOutputReady)"
+            )
+            recoverBluetoothVoiceLink(reason: "session_activated")
         }
     }
 

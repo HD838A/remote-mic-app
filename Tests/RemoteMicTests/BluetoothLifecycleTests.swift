@@ -19,6 +19,67 @@ struct BluetoothLifecycleTests {
         ))
     }
 
+    @Test func sessionResumeRecoversVoiceLinkOnlyWhenNoBridgeIsReady() {
+        // 同机多账户切回：有已配置的桥、一台都没就绪、没有活跃语音 → 需要主动恢复。
+        #expect(BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume(
+            started: true,
+            configuredBridgeCount: 2,
+            readyBridgeCount: 0,
+            voiceLinkActive: false
+        ))
+
+        // 任一桥已就绪 → 完全空操作，不打断健康连接。
+        #expect(!BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume(
+            started: true,
+            configuredBridgeCount: 2,
+            readyBridgeCount: 1,
+            voiceLinkActive: false
+        ))
+
+        // 正在进行的语音会话 → 不介入。
+        #expect(!BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume(
+            started: true,
+            configuredBridgeCount: 2,
+            readyBridgeCount: 0,
+            voiceLinkActive: true
+        ))
+
+        // 没有已配置的桥 → 不凭空启动连接。
+        #expect(!BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume(
+            started: true,
+            configuredBridgeCount: 0,
+            readyBridgeCount: 0,
+            voiceLinkActive: false
+        ))
+
+        // 未启动 → 不恢复。
+        #expect(!BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume(
+            started: false,
+            configuredBridgeCount: 2,
+            readyBridgeCount: 0,
+            voiceLinkActive: false
+        ))
+    }
+
+    @Test func sessionResumeRecoveryIsWiredIntoTheSystemAudioLifecycle() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        // 会话切回前台后必须能走到蓝牙语音链路恢复，并把触发原因写成稳定枚举。
+        #expect(source.contains("BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume("))
+        #expect(source.contains("recoverBluetoothVoiceLink(reason: \"session_activated\")"))
+        #expect(source.contains("recoverBluetoothVoiceLink(reason: \"system_wake\")"))
+        // 恢复入口不能退回成「系统唤醒专用」的旧命名。
+        #expect(!source.contains("recoverBluetoothAfterSystemWake"))
+        #expect(!source.contains("recoverAfterSystemWake"))
+    }
+
     @Test func everyBridgeFirstReadyReappliesHIDMappingsButDuplicateReadyDoesNot() {
         #expect(BridgeAppModel.shouldReapplyHIDSettings(
             previousState: nil,
