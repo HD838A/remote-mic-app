@@ -65,6 +65,9 @@ fi
 /usr/bin/grep -Fq 'prepare-public-release-assets.sh' "$package_workflow"
 /usr/bin/grep -Fq 'mac-preview-payload-v' "$package_workflow"
 /usr/bin/grep -Fq 'mac-preview-stage-v' "$package_workflow"
+/usr/bin/grep -Fq 'Exclude ephemeral release inputs from source status' "$package_workflow"
+/usr/bin/grep -Fq '/.private-dependencies/' "$package_workflow"
+/usr/bin/grep -Fq '/.private-release/' "$package_workflow"
 /usr/bin/grep -Fq 'test "$TRIGGER_REF_NAME" = main' "$package_workflow"
 /usr/bin/grep -Fq 'verify-public-release-source.sh' "$package_workflow"
 if [[ "$(/usr/bin/grep -c -- 'REPOSITORY_ROOT: \${{ github.workspace }}' "$package_workflow")" -lt 1 ]]; then

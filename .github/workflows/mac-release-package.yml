@@ -217,6 +217,15 @@ jobs:
             brew install "${missing[@]}"
           fi
 
+      - name: Exclude ephemeral release inputs from source status
+        run: |
+          cat >> .git/info/exclude <<'EOF'
+          /.private-dependencies/
+          /.private-release/
+          /.build-*/
+          /dist/
+          EOF
+
       - name: Check out private feature package
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
