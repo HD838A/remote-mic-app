@@ -185,8 +185,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          REPOSITORY_ROOT: ${{ github.workspace }}
           RELEASE_SOURCE_CHECKOUT_MODE: detached
-        working-directory: release-source
         run: |
           "$RUNNER_TEMP/verify-public-release-source.sh" \
             "${{ inputs.source_branch }}" "${{ inputs.expected_commit }}"

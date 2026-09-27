@@ -67,8 +67,8 @@ fi
 /usr/bin/grep -Fq 'mac-preview-stage-v' "$package_workflow"
 /usr/bin/grep -Fq 'test "$TRIGGER_REF_NAME" = main' "$package_workflow"
 /usr/bin/grep -Fq 'verify-public-release-source.sh' "$package_workflow"
-if [[ "$(/usr/bin/grep -c -- 'working-directory: release-source' "$package_workflow")" -lt 2 ]]; then
-  print -u2 "both release-source identity checks must run inside the exact source checkout"
+if [[ "$(/usr/bin/grep -c -- 'REPOSITORY_ROOT: \${{ github.workspace }}' "$package_workflow")" -lt 1 ]]; then
+  print -u2 "protected package verification must point the verifier at the checked-out repository"
   exit 1
 fi
 /usr/bin/grep -Fq "branches: [main, 'hotfix/**']" "$ci_workflow"
