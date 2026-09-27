@@ -108,6 +108,9 @@ if siriRemoteEnabled {
 if chromecastEnabled {
     remoteMicTestSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
 }
+if macRemoteEnabled {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
+}
 
 if let privateFeaturePath = ProcessInfo.processInfo.environment[
     "SAYALL_AI_PACKAGE_PATH"
