@@ -145,7 +145,9 @@ jobs:
       - name: Run documentation checks
         if: needs.classify_changes.outputs.docs_only == 'true'
         run: |
-          for file in $(git diff --name-only HEAD^ HEAD -- '*.md' 'Screenshots/*'); do
+          # 删除的文件不会存在于工作区：用 --diff-filter=d 排除它们，否则任何删除
+          # .md 或 Screenshots 的文档 PR 都会在这一步必然失败。
+          for file in $(git diff --diff-filter=d --name-only HEAD^ HEAD -- '*.md' 'Screenshots/*'); do
             test -f "$file"
           done
           echo "Documentation-only change passed."
