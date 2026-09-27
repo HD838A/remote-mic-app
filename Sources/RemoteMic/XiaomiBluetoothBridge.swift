@@ -231,14 +231,18 @@ final class XiaomiBluetoothBridge: NSObject {
         finishAttempt(reconnectAfter: 0.1)
     }
 
-    func recoverAfterSystemWake() {
+    /// 主动重建本桥的语音链路，重新从发现/连接开始。
+    ///
+    /// `reason` 是稳定枚举（`system_wake` / `session_activated`），只用于把「系统唤醒」和
+    /// 「会话切回前台」两种触发区分开，不参与状态机判定。
+    func recoverVoiceLink(reason: String) {
         guard shouldRun else {
-            AppLogger.shared.write("BLE WAKE recovery_skipped reason=bridge_stopped")
+            AppLogger.shared.write("BLE RECOVERY phase=skipped cause=bridge_stopped trigger=\(reason)")
             return
         }
         let centralState = central.map { String($0.state.rawValue) } ?? "none"
         AppLogger.shared.write(
-            "BLE WAKE recovery_requested state=\(String(describing: state)) " +
+            "BLE RECOVERY phase=requested trigger=\(reason) state=\(String(describing: state)) " +
                 "lifecycle=\(String(describing: lifecycle)) " +
                 "central_state=\(centralState) " +
                 "generation=\(generationCounter)"

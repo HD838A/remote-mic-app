@@ -48,6 +48,7 @@
   - AVFoundation 最小复现和自动化回归已通过；真实 MiRemoteV、睡眠唤醒、RC001/RC003 与第三方语音工具仍按 `Testing/MiRemoteVAudioStaleRecovery.md` 验收。
   - 2026-09-12 补充启动兼容恢复：已完成配置但当前 UID 为空时，优先恢复仍可枚举的最近一次明确选择；只有一个受支持候选时才允许历史配置恢复，多候选或历史设备缺失均不猜测。自动化覆盖持久化、恢复决策和失败日志，真实重启与第三方工具验收仍待完成。
   - 2026-09-20 补充静音与低音量自愈：配置及每次语音开始前只检查稳定识别的 MiRemoteV 2ch / BlackHole 2ch；明确静音时解除静音，volume 严格低于 `0.2` 时恢复到 `1.0`，阈值及以上保持不变。App 新安装 PCM 增益继续默认为 `10 dB`，已有用户保存值不变。真实 MiRemoteV input/output 属性自愈和自动化已通过，BlackHole 与第三方文字上屏仍按 `Testing/VirtualAudioAudibilityRecovery.md` 验收。
+  - 2026-09-27 补充会话切回按需恢复（同机多账户反馈）：挂起原因全部解除后，若所有已配置的桥都没就绪且没有活跃语音，则主动重建蓝牙语音链路，等价于用户手动点「立即重新连接」；任一桥就绪或有活跃语音时与改动前完全等价（空操作）。同时把该链路补齐日志：`SYSTEM AUDIO` 新增 `configured_bridges` / `discovery_bridge`，恢复决策写 `SYSTEM AUDIO voice_link_recovery`，蓝牙恢复统一为 `BLE RECOVERY phase=... trigger=system_wake|session_activated`。策略真值表与接线回归已自动化；**未复现、未真机验收**，真机流程见 `Testing/MacIdleSleepAudioRelease.md` 用例七，调查状态见 `Bugs/2026-09-26-multi-user-session-switch-mic-no-audio.md`。
 
 - [x] 建立可选私有功能组件集成边界
   - 私有功能的源码、测试、资源和内部文档由独立私有组件维护；本仓库只保留稳定的可选适配层和语音会话生命周期契约。

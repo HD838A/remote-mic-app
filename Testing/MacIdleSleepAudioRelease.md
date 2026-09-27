@@ -86,6 +86,53 @@
 
 失败判定：任何旧设置被错误恢复、断连设备导致音频提前重启、用户手动选择被覆盖，或移动语音/测试音被系统事件直接截断。
 
+## 用例七：同机多账户快速用户切换后语音可用
+
+适用分支：合入 `main` 后的 `main`（原改动分支 `codex/session-switch-audio-recovery-20260927`，已合入）。在该文档既有休眠/唤醒用例之上追加，**用例一~六仍需全部通过**。
+
+对应问题见 [`Bugs/2026-09-26-multi-user-session-switch-mic-no-audio.md`](../Bugs/2026-09-26-multi-user-session-switch-mic-no-audio.md)。该问题**尚未复现**，本用例是把它从「无法定性」推进到「可定性」的真机流程，**通过不等于根因已确认**。
+
+### 测试前准备
+
+1. 同一台 Mac 上准备两个真实用户账户 A、B，都安装并运行无线麦SayAll.app。
+2. 在 A 中选择 `MiRemoteV 2ch`，并确认实体遥控器的 BLE、HID、普通按键与真实语音文字上屏均正常。
+3. 两个账户都保留 `~/Library/Logs/RemoteMic/runtime.log`，并记录开始 UTC 时间。
+
+### 步骤
+
+1. 在 A 中确认遥控器为 ready 且语音正常。
+2. 用菜单栏「切换用户」切到 B，让 B 的 App 运行起来（可用同一台遥控器做一次按键或语音）。
+3. 切回 A，**不做任何手动操作**：不要点「立即重新连接」，不要重新选择音频设备，不要重开 App。
+4. 切回后 10 秒内按住语音键说一句话并等待文字上屏。
+5. 重复两次（共三次语音）。
+
+### 预期日志顺序（A 账户）
+
+1. `SYSTEM AUDIO event=session_did_resign_active changed=true suspended=true reasons=session_inactive`
+2. `SYSTEM AUDIO event=session_did_become_active changed=true suspended=false reasons=none ready_bridges=0 configured_bridges=1`
+3. `SYSTEM AUDIO resume_skipped reason=system_session_did_become_active required=false`
+4. `SYSTEM AUDIO voice_link_recovery event=session_did_become_active cause=no_ready_bridge ready_bridges=0 configured_bridges=1`
+5. `BLE RECOVERY phase=begin trigger=session_activated ...` 与 `BLE RECOVERY phase=requested trigger=session_activated ...`
+6. 随后出现 `BLE SCANNING` / `BLE CONNECTED` / `BLE READY`，紧接着 `AUDIO REBIND reason=bluetooth_ready` 等音频重建日志。
+
+预期用户结果：切回后**不需要任何手动操作**即可语音，三次均不丢首字、不断尾。
+
+如果第 5 步之后的桥始终没有进入 ready：日志应出现 `BLE DISCONNECTED` 与 `BLE RECONNECT scheduled failure_count=...`。此时记录退避间隔、失败次数和最终是否 ready，并按 Bug 文档里的 H3（两个账户实例争抢同一台遥控器）继续调查，**不得据此判定为已修复**。
+
+### 稳定功能回归项
+
+1. 单账户下锁屏再解锁（会话切回）不应出现 `BLE RECOVERY trigger=session_activated`：桥本来就 ready，门控应为完全空操作。
+2. 正在按住语音键说话时切换会话，不应出现 `BLE RECOVERY`（活跃语音门控）。
+3. 没有配置任何遥控器时切换会话，不应凭空启动蓝牙连接。
+4. 用例一~六全部仍通过，尤其不得出现音频被提前释放或重建。
+
+### 失败判定
+
+- 切回后仍需手动点「立即重新连接」或重开 App 才能语音；
+- 桥已经 ready 时仍出现 `BLE RECOVERY trigger=session_activated`（说明门控失效，可能打断健康连接）；
+- 正在进行的语音被 `BLE RECOVERY` 打断，或出现尾字丢失；
+- 三次语音中任何一次丢首字、断尾或无声。
+
 ## 日志收集
 
 发生问题时提供：
@@ -96,13 +143,14 @@
 - App 版本、macOS 版本、Mac 型号、遥控器型号和所选音频设备；
 - 使用的真实语音工具及其麦克风选择方式。
 
-重点检索日志前缀：`SYSTEM AUDIO`、`AUDIO RELEASE`、`AUDIO REBIND`、`AUDIO DEFAULT_INPUT`、`ATVV STREAM`、`MOBILE VOICE`。
+重点检索日志前缀：`SYSTEM AUDIO`、`SYSTEM AUDIO voice_link_recovery`、`AUDIO RELEASE`、`AUDIO REBIND`、`AUDIO DEFAULT_INPUT`、`BLE RECOVERY`、`BLE DISCONNECTED`、`BLE RECONNECT`、`ATVV STREAM`、`MOBILE VOICE`。
 
 ## 验证边界
 
 - 自动化可以证明生命周期策略、重叠事件状态、活跃语音保护和原有蓝牙/Fn 会话基线。
 - Release 构建只能证明代码可编译和组装。
 - 只有真实 macOS 电源管理、真实 MiRemoteV 2ch、真实遥控器和 `pmset` 才能证明 CoreAudio 断言确实消失并且 Mac 能进入自动休眠。
+- 用例七的「会话切回」只涉及快速用户切换与解锁，不依赖休眠/唤醒，因此不需要 `pmset`；但只有**真实双账户 + 真实遥控器 + 真实第三方语音工具**才能证明切回后确实恢复拾音，单机单账户与单元测试都不能替代。
 
 ## Issue #283 回归：恢复最近物理输入
 
