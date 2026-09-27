@@ -167,7 +167,7 @@ jobs:
         shell: bash
         env:
           SAYALL_AI_DEPLOY_KEY: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
-          SAYALL_MACRO_PLATFORM_DEPLOY_KEY: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
+          SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
           SAYALL_MAC_REMOTE_DEPLOY_KEY: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
         run: |
           available=true
@@ -187,7 +187,7 @@ jobs:
             ssh-agent -k >/dev/null
           }
           check_access "${{ steps.release-dependencies.outputs.sayall_ai_repository }}" "$SAYALL_AI_DEPLOY_KEY"
-          check_access "${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}" "$SAYALL_MACRO_PLATFORM_DEPLOY_KEY"
+          check_access "${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}" "$SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY"
           check_access "${{ steps.release-dependencies.outputs.sayall_mac_remote_repository }}" "$SAYALL_MAC_REMOTE_DEPLOY_KEY"
           echo "available=$available" >> "$GITHUB_OUTPUT"
           if [[ "$available" == true ]]; then
@@ -213,7 +213,7 @@ jobs:
           repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
           ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
           path: .private-dependencies/sayall-private-platform
-          ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
+          ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
       - name: Configure private packages

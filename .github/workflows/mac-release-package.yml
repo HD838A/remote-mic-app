@@ -232,7 +232,7 @@ jobs:
           repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
           ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
           path: .private-dependencies/sayall-private-platform
-          ssh-key: ${{ secrets.SAYALL_MACRO_PLATFORM_DEPLOY_KEY }}
+          ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
       - name: Check out shared Mac remote package

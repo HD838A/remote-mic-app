@@ -75,6 +75,12 @@ fi
 /usr/bin/grep -Fq 'swift test --disable-keychain --filter BuildSigningTests' "$ci_workflow"
 /usr/bin/grep -Fq 'Detect private dependency access' "$ci_workflow"
 /usr/bin/grep -Fq 'Private dependency access is unavailable' "$ci_workflow"
+/usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$ci_workflow"
+/usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$package_workflow"
+if /usr/bin/grep -Eq 'SAYALL_MACRO_PLATFORM_DEPLOY_KEY' "$ci_workflow" "$package_workflow"; then
+  print -u2 "private platform checkout must not use the retired deploy secret name"
+  exit 1
+fi
 /usr/bin/grep -Fq "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new'" "$ci_workflow"
 /usr/bin/grep -Fq 'Run free combination actions integration tests' "$ci_workflow"
 /usr/bin/grep -Fq 'Build free combination actions release configuration' "$ci_workflow"
