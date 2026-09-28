@@ -84,6 +84,8 @@ fi
 /usr/bin/grep -Fq 'Private dependency access is unavailable' "$ci_workflow"
 /usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$ci_workflow"
 /usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$package_workflow"
+/usr/bin/grep -Fq 'test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift' "$package_workflow"
+/usr/bin/grep -Fq 'SAYALL_SIRI_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote' "$package_workflow"
 /usr/bin/grep -Fq 'remoteMicTestSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))' "$ROOT/Package.swift"
 if /usr/bin/grep -Eq 'SAYALL_MACRO_PLATFORM_DEPLOY_KEY' "$ci_workflow" "$package_workflow"; then
   print -u2 "private platform checkout must not use the retired deploy secret name"
