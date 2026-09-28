@@ -1046,7 +1046,7 @@ struct OnboardingView: View {
                 }
             }
             .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, minHeight: tool == .vokie ? 76 : 88, alignment: .top)
+            .frame(maxWidth: .infinity, minHeight: tool == .vokie ? 76 : 80, alignment: .top)
 
             if tool == .vokie {
                 onboardingLink(id: "voice-tool.vokie.website", destination: AppLinks.vokieWebsite) {
@@ -1058,7 +1058,7 @@ struct OnboardingView: View {
             }
         }
         .padding(10)
-        .frame(maxWidth: .infinity, minHeight: 108, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: tool == .vokie ? 108 : 100, alignment: .top)
         .background(
             isSelected
                 ? Color.accentColor.opacity(0.09)

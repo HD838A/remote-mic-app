@@ -845,7 +845,7 @@ struct OnboardingFlowTests {
         #expect(!viewSource.contains("voiceToolSortRank"))
         #expect(!viewSource.contains("\n            ScrollView {"))
         #expect(viewSource.contains("GridItem(.flexible(), spacing: 8, alignment: .top)"))
-        #expect(viewSource.contains("minHeight: 108, alignment: .top"))
+        #expect(viewSource.contains("minHeight: tool == .vokie ? 108 : 100, alignment: .top"))
         #expect(!viewSource.contains("minHeight: 120, maxHeight: 120, alignment: .top"))
         #expect(!viewSource.contains(".lineLimit(3, reservesSpace: true)"))
         #expect(viewSource.contains(".frame(minHeight: 54)"))

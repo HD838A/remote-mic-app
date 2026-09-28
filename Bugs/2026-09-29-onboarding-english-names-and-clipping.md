@@ -79,4 +79,18 @@
 - 语音测试页使用更短的产品文案和更紧凑的输入框/确认卡布局，保留配置确认、真实文字和增益调节门禁。
 - 生产离屏截图入口新增 `REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE`，支持明确生成中文、英文或跟随系统的截图。
 
-验证结果将在提交前补充，包括定向/完整 Swift 测试、Release App 构建、中英文浅色/深色生产截图逐张检查，以及未覆盖的真实第三方 App 与硬件边界。
+视觉复核又发现并修复两处同类问题：
+
+- Apple 遥控器普通按键页的 `Play/Pause button` 在生产宽度下会被截断，用户可见名称缩短为 `Play/Pause`，并增加英文资源回归断言。
+- `Other Voice App` 选中时，左侧说明卡会压到固定底部导航区域；非 Vokie 卡片在保留完整文案的前提下收紧最小高度，Vokie 的介绍和站点入口保持原高度。
+
+最终验证：
+
+- `DEVELOPER_DIR=/Users/andy/Downloads/Xcode.app/Contents/Developer swift test --disable-keychain`：731 tests / 56 suites 全部通过。
+- 使用生产 `OnboardingView` 隐藏离屏入口生成并复核 184 张最终 PNG：公开包 36 张、完整 Package 控制来源 108 张、五种语音工具步骤 40 张；全部为 `2040 × 1600` PNG。
+- 截图证据目录：`Screenshots/design-drafts/onboarding-english-issue-492/`；最终清单 `SHA256SUMS-final.txt` 共 184 项，清单 SHA-256 为 `609227d8675602cb5fd09bbe161bb33ba2bda9405fb2af06a749836d0c8a1a30`。
+- 完整本地包：`dist/SayAll.app`。验证为 Developer ID Application、Team ID `L3QHLDRPAY`、Hardened Runtime；包含小米、Apple、Chromecast 和 Mac Remote 能力，不包含 AI、组合动作、键位方案或会员私有能力。
+- 启动烟测：从上述 `dist/SayAll.app` 启动后，其 `Contents/MacOS/RemoteMic` 进程保持运行。
+- 官网内容构建：12 pages；analytics 4/4；download proxy 14/14。官网只完成源码验证，没有部署生产。
+
+验证边界：未在本次自动化环境完成真实小米/Apple/Chromecast 遥控器、macOS 权限、真实音频路线，以及 Doubao、WeType、Vokie、Typeless 的现场文字上屏验收。截图、单元测试、签名和启动烟测不能替代这些真实环境用例。

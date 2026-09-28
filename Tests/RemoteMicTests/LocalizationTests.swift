@@ -173,6 +173,7 @@ struct LocalizationTests {
         #expect(english["onboarding.voice_tool.system_fn.conflict"] == "macOS is still using Fn")
         #expect(english["remote.device.model.apple_siri_remote_a2854"] == "Apple Remote generation 7")
         #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote generation 6")
+        #expect(english["remote.button.full.play_pause"] == "Play/Pause")
 
         #expect(!english.isEmpty)
         for (key, value) in english {

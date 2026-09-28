@@ -99,7 +99,7 @@
 "remote.button.full.volume_down" = "Volume -";
 "remote.button.full.menu" = "Menu button";
 "remote.button.full.tv" = "TV button";
-"remote.button.full.play_pause" = "Play/Pause button";
+"remote.button.full.play_pause" = "Play/Pause";
 "remote.button.full.mute" = "Mute button";
 "remote.button.full.youtube" = "YouTube button";
 "remote.button.full.netflix" = "NETFLIX button";
