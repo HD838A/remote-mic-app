@@ -130,7 +130,13 @@ struct LocalizationTests {
         let englishDirectory = try #require(
             localizationDirectories.first { $0.lastPathComponent == "en.lproj" }
         )
+        let simplifiedChineseDirectory = try #require(
+            localizationDirectories.first { $0.lastPathComponent == "zh-Hans.lproj" }
+        )
         let english = try strings(at: englishDirectory.appendingPathComponent("Localizable.strings"))
+        let chinese = try strings(
+            at: simplifiedChineseDirectory.appendingPathComponent("Localizable.strings")
+        )
         let englishInfo = try strings(at: englishDirectory.appendingPathComponent("InfoPlist.strings"))
 
         #expect(english["action.command_delete"] == "Command-Delete")
@@ -150,10 +156,24 @@ struct LocalizationTests {
         #expect(english["onboarding.remote.button_waiting_detail"] == "Press the center OK button or an arrow button. Do not press the microphone/voice button.")
         #expect(english["onboarding.remote.voice_button_mistake.title"] == "That was the voice button")
         #expect(english["onboarding.remote.voice_button_mistake.detail"] == "This step checks a normal control button. Press the center OK button or an arrow button instead.")
-        #expect(english["onboarding.voice_tool.weixin.title"] == "WeChat Input Method")
+        #expect(english["onboarding.voice_tool.doubao.title"] == "Doubao")
+        #expect(english["onboarding.voice_tool.weixin.title"] == "WeType")
+        #expect(english["onboarding.voice_tool.other.title"] == "Other Voice App")
+        #expect(english["onboarding.controls.siri.detail"]?.contains("Apple Remote") == true)
+        #expect(english["onboarding.controls.siri.detail"]?.contains("Siri Remote") == false)
+        #expect(chinese["onboarding.controls.siri.detail"]?.contains("苹果遥控器") == true)
+        #expect(chinese["onboarding.controls.siri.detail"]?.contains("Siri Remote") == false)
+        #expect(english["onboarding.voice_tool.detail"]?.contains("voice typing") == true)
+        #expect(english.values.contains { $0.contains("WeChat Input Method") } == false)
+        #expect(english.values.contains { $0.contains("Doubao Input Method") } == false)
+        #expect(english.contains { entry in
+            entry.key.hasPrefix("onboarding.") &&
+                entry.value.localizedCaseInsensitiveContains("voice tool")
+        } == false)
         #expect(english["onboarding.voice_tool.system_fn.conflict"] == "macOS is still using Fn")
         #expect(english["remote.device.model.apple_siri_remote_a2854"] == "Apple Remote generation 7")
         #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote generation 6")
+        #expect(english["remote.button.full.play_pause"] == "Play/Pause")
 
         #expect(!english.isEmpty)
         for (key, value) in english {
