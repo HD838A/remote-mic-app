@@ -790,11 +790,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func observeAppIconPreference() {
-        model.settings.$appIconChoice
+        model.settings.$appIconIdentifier
             .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] choice in
-                self?.appIconController.apply(choice, source: "preference")
+            .sink { [weak self] identifier in
+                self?.appIconController.apply(identifier, source: "preference")
             }
             .store(in: &subscriptions)
     }

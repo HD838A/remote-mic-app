@@ -1191,12 +1191,13 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(settingsSource.contains("appIconPreferenceRow"))
-        #expect(settingsSource.contains("ForEach(appIconCatalog.availableChoices)"))
-        #expect(settingsSource.contains("settings.appIconChoice = choice"))
+        #expect(settingsSource.contains("ForEach(appIconCatalog.options)"))
+        #expect(settingsSource.contains("settings.appIconIdentifier = option.id"))
         #expect(!settingsSource.contains("Picker(\"about.preferences.app_icon\""))
-        #expect(controllerSource.contains("static let alternateResourceName = \"AppIconAlternate\""))
-        #expect(controllerSource.contains("alternateImage == nil ? [.primary]"))
-        #expect(buildSource.contains("Resources/AppIconAlternate.png"))
+        #expect(controllerSource.contains("struct AppIconIdentifier"))
+        #expect(controllerSource.contains("let options: [AppIconOption]"))
+        #expect(controllerSource.contains("subdirectory: \"AppIcons\""))
+        #expect(buildSource.contains("Resources/AppIcons"))
     }
 
     @Test func settingsPageOffersAnOptInLoginItemWithSystemApprovalRecovery() throws {

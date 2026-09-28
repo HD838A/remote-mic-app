@@ -3376,7 +3376,9 @@ struct SettingsView: View {
     }
 
     private var appIconPreferenceRow: some View {
-        let selectedChoice = appIconCatalog.resolvedChoice(for: settings.appIconChoice)
+        let selectedIdentifier = appIconCatalog.resolvedIdentifier(
+            for: settings.appIconIdentifier
+        )
 
         return HStack(alignment: .center, spacing: 14) {
             Image(systemName: "app.badge")
@@ -3393,16 +3395,16 @@ struct SettingsView: View {
             }
             Spacer(minLength: 16)
             HStack(spacing: 8) {
-                ForEach(appIconCatalog.availableChoices) { choice in
+                ForEach(appIconCatalog.options) { option in
                     Button {
-                        settings.appIconChoice = choice
+                        settings.appIconIdentifier = option.id
                     } label: {
                         VStack(spacing: 5) {
                             ZStack(alignment: .bottomTrailing) {
-                                Image(nsImage: appIconCatalog.image(for: choice))
+                                Image(nsImage: option.image)
                                     .resizable()
                                     .frame(width: 38, height: 38)
-                                if selectedChoice == choice {
+                                if selectedIdentifier == option.id {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.system(size: 13, weight: .semibold))
                                         .symbolRenderingMode(.palette)
@@ -3410,14 +3412,14 @@ struct SettingsView: View {
                                         .background(Circle().fill(.background))
                                 }
                             }
-                            Text(appIconTitle(choice))
+                            Text(LocalizedStringKey(option.titleKey))
                                 .font(.system(size: 12, weight: .medium))
                                 .lineLimit(1)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
                         .background(
-                            selectedChoice == choice
+                            selectedIdentifier == option.id
                                 ? Color.accentColor.opacity(0.10)
                                 : Color.clear,
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -3425,7 +3427,7 @@ struct SettingsView: View {
                         .overlay {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(
-                                    selectedChoice == choice
+                                    selectedIdentifier == option.id
                                         ? Color.accentColor.opacity(0.55)
                                         : Color.secondary.opacity(0.18),
                                     lineWidth: 1
@@ -3433,21 +3435,14 @@ struct SettingsView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(appIconTitle(choice)))
-                    .accessibilityAddTraits(selectedChoice == choice ? .isSelected : [])
+                    .accessibilityLabel(Text(LocalizedStringKey(option.titleKey)))
+                    .accessibilityAddTraits(
+                        selectedIdentifier == option.id ? .isSelected : []
+                    )
                 }
             }
         }
         .padding(.vertical, 8)
-    }
-
-    private func appIconTitle(_ choice: AppIconChoice) -> LocalizedStringKey {
-        switch choice {
-        case .primary:
-            return "about.preferences.app_icon_primary"
-        case .alternate:
-            return "about.preferences.app_icon_alternate"
-        }
     }
 
     private var aboutPage: some View {
@@ -3459,7 +3454,9 @@ struct SettingsView: View {
                     Group {
                         HStack(alignment: .top, spacing: 28) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Image(nsImage: appIconCatalog.image(for: settings.appIconChoice))
+                                Image(nsImage: appIconCatalog.image(
+                                    for: settings.appIconIdentifier
+                                ))
                                     .resizable()
                                     .frame(width: 72, height: 72)
                                     .shadow(color: .black.opacity(0.12), radius: 6, y: 3)

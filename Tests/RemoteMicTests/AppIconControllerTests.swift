@@ -5,32 +5,44 @@ import Testing
 struct AppIconControllerTests {
     @Test @MainActor
     func catalogOnlyOffersImagesThatAreActuallyAvailable() {
-        let primary = NSImage(size: NSSize(width: 64, height: 64))
-        let primaryOnly = AppIconCatalog(primaryImage: primary, alternateImage: nil)
+        let standard = NSImage(size: NSSize(width: 64, height: 64))
+        let standardOnly = AppIconCatalog(standardImage: standard)
 
-        #expect(primaryOnly.availableChoices == [.primary])
-        #expect(primaryOnly.resolvedChoice(for: .alternate) == .primary)
-        #expect(primaryOnly.image(for: .alternate) === primary)
+        #expect(standardOnly.options.map(\.id) == [.standard])
+        let missingIdentifier = AppIconIdentifier(rawValue: "missing")
+        #expect(standardOnly.resolvedIdentifier(for: missingIdentifier) == .standard)
+        #expect(standardOnly.image(for: missingIdentifier) === standard)
 
-        let alternate = NSImage(size: NSSize(width: 64, height: 64))
-        let complete = AppIconCatalog(primaryImage: primary, alternateImage: alternate)
+        let midnightIdentifier = AppIconIdentifier(rawValue: "midnight")
+        let midnight = NSImage(size: NSSize(width: 64, height: 64))
+        let complete = AppIconCatalog(
+            standardImage: standard,
+            additionalOptions: [
+                AppIconOption(
+                    id: midnightIdentifier,
+                    titleKey: "about.preferences.app_icon_midnight",
+                    image: midnight
+                ),
+            ]
+        )
 
-        #expect(complete.availableChoices == [.primary, .alternate])
-        #expect(complete.resolvedChoice(for: .alternate) == .alternate)
-        #expect(complete.image(for: .alternate) === alternate)
+        #expect(complete.options.map(\.id) == [.standard, midnightIdentifier])
+        #expect(complete.resolvedIdentifier(for: midnightIdentifier) == midnightIdentifier)
+        #expect(complete.image(for: midnightIdentifier) === midnight)
     }
 
     @Test @MainActor
     func controllerAppliesTheResolvedImageAndFallsBackSafely() {
-        let primary = NSImage(size: NSSize(width: 64, height: 64))
+        let standard = NSImage(size: NSSize(width: 64, height: 64))
         var appliedImage: NSImage?
         let controller = AppIconController(
-            catalog: AppIconCatalog(primaryImage: primary, alternateImage: nil),
+            catalog: AppIconCatalog(standardImage: standard),
             applyImage: { appliedImage = $0 }
         )
 
-        #expect(controller.apply(.alternate, source: "test") == .primary)
-        #expect(appliedImage === primary)
+        let missingIdentifier = AppIconIdentifier(rawValue: "missing")
+        #expect(controller.apply(missingIdentifier, source: "test") == .standard)
+        #expect(appliedImage === standard)
     }
 
     @Test
@@ -40,15 +52,16 @@ struct AppIconControllerTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
-        #expect(settings.appIconChoice == .primary)
+        #expect(settings.appIconIdentifier == .standard)
 
-        settings.appIconChoice = .alternate
+        let midnightIdentifier = AppIconIdentifier(rawValue: "midnight")
+        settings.appIconIdentifier = midnightIdentifier
         let reloaded = AppSettings(defaults: defaults)
-        #expect(reloaded.appIconChoice == .alternate)
+        #expect(reloaded.appIconIdentifier == midnightIdentifier)
     }
 
     @Test
-    func appIconChoiceRoundTripsThroughConfigurationExportAndImport() throws {
+    func appIconIdentifierRoundTripsThroughConfigurationExportAndImport() throws {
         let sourceSuite = "RemoteMic.AppIconControllerTests.Source.\(UUID().uuidString)"
         let destinationSuite = "RemoteMic.AppIconControllerTests.Destination.\(UUID().uuidString)"
         let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
@@ -59,11 +72,12 @@ struct AppIconControllerTests {
         }
 
         let source = AppSettings(defaults: sourceDefaults)
-        source.appIconChoice = .alternate
+        let midnightIdentifier = AppIconIdentifier(rawValue: "midnight")
+        source.appIconIdentifier = midnightIdentifier
         let data = try source.exportedConfigurationData()
 
         let destination = AppSettings(defaults: destinationDefaults)
         try destination.importConfiguration(from: data)
-        #expect(destination.appIconChoice == .alternate)
+        #expect(destination.appIconIdentifier == midnightIdentifier)
     }
 }

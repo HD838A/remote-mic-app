@@ -25,12 +25,12 @@
 
 ## 用例 1A：App 图标选择与资源缺失回退
 
-1. 在未包含 `AppIconAlternate.png` 的构建中打开“设置 → 通用”，检查“应用图标”行。
-2. 在包含经过确认的 `Resources/AppIconAlternate.png` 的构建中重新打开同一页面，依次选择“默认”和“备用”。
+1. 在未包含 `Resources/AppIcons/` 图标资源的构建中打开“设置 → 通用”，检查“应用图标”行。
+2. 把经过确认的图标按图形语义命名为稳定 `kebab-case` 标识，保存到 `Resources/AppIcons/<icon-id>.png` 并注册对应本地化名称；重新构建后依次选择“默认”和每个新增图标。
 3. 每次选择后检查 Dock、Command-Tab 应用切换器和设置页顶部品牌图标，再退出并重新启动 App。
 4. 使用已保存“备用”选择的偏好启动一个不包含备用资源的构建。
 
-预期结果：页面使用紧凑的页面内图标按钮，不使用下拉框、Popover 或 Sheet；未包含备用资源时只显示真实可用的默认图标，不显示空白或伪造占位项；包含备用资源时两个选项均显示原始图像，点击后立即更新 Dock、应用切换器和设置页顶部图标，重启后保持选择；保存值指向缺失资源时安全回退默认图标，App 正常启动。Finder、Launchpad 和 App 包文件继续显示签名安装包的主图标，不把运行时切换误报为修改安装包。
+预期结果：页面使用紧凑的页面内图标按钮，不使用下拉框、Popover 或 Sheet；没有附加资源时只显示真实可用的默认图标，不显示空白或伪造占位项；存在多个已注册资源时按稳定顺序全部显示，点击后立即更新 Dock、应用切换器和设置页顶部图标，重启后保持选择；保存标识指向缺失资源时安全回退默认图标，App 正常启动。Finder、Launchpad 和 App 包文件继续显示签名安装包的主图标，不把运行时切换误报为修改安装包。
 
 失败判定：出现空白图标、低分辨率缩放或透明边缘异常；选择后 Dock、应用切换器或设置页仍显示旧图标；重启后丢失选择；资源缺失导致崩溃、不可见选项被选中，或运行时修改 App 包文件。
 
@@ -126,7 +126,7 @@
 
 ## 日志收集
 
-1. App 日志：`~/Library/Logs/RemoteMic/runtime.log`，重点搜索 `UPDATE CHECK`、`source=cloudflare_channel`、`HARDWARE ANNOUNCEMENT` 与 `APP_ICON CHANGE`；图标日志只包含 `primary` / `alternate`、阶段、结果与稳定原因码。
+1. App 日志：`~/Library/Logs/RemoteMic/runtime.log`，重点搜索 `UPDATE CHECK`、`source=cloudflare_channel`、`HARDWARE ANNOUNCEMENT` 与 `APP_ICON CHANGE`；图标日志只包含 `standard` 或已注册的稳定图标标识、阶段、结果与稳定原因码。
 2. Console：按进程筛选 `RemoteMic`、`Autoupdate`、`Updater` 和 `Installer`。
 3. 崩溃报告：`~/Library/Logs/DiagnosticReports/` 中本次测试时间之后的 Remote Mic 报告。
 4. Sparkle CLI 使用 `--verbose` 保存完整输出；退出码 `4` 表示没有新版本，不判失败。
@@ -137,4 +137,4 @@
 
 公告自动化只能验证 JSON 解码、过期过滤、受信任来源和链接传递；无法替代真实后端/CDN 可用性、默认浏览器下载、PKG 签名/公证或用户在升级后重新启动 App 的验收。
 
-App 图标自动化可以验证可用选项过滤、缺失资源回退、偏好持久化、设置页结构以及构建脚本仅在资源存在时打包备用图标；备用图标的清晰度、透明边缘、Dock 与 Command-Tab 实际刷新、重启后的视觉结果仍需在用户提供最终原始资产后使用真实生产 App 人工验收。
+App 图标自动化可以验证任意数量选项的过滤、缺失资源回退、稳定标识持久化、设置页结构以及构建脚本按目录打包图标；新增图标的清晰度、透明边缘、Dock 与 Command-Tab 实际刷新、重启后的视觉结果仍需在用户提供最终原始资产后使用真实生产 App 人工验收。

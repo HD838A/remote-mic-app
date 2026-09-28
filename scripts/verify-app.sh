@@ -479,8 +479,11 @@ fi
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"
-if [[ -f "$ROOT/Resources/AppIconAlternate.png" ]]; then
-  test -f "$APP/Contents/Resources/AppIconAlternate.png"
+if [[ -d "$ROOT/Resources/AppIcons" ]]; then
+  while IFS= read -r source_icon; do
+    relative_icon_path="${source_icon#$ROOT/Resources/AppIcons/}"
+    test -f "$APP/Contents/Resources/AppIcons/$relative_icon_path"
+  done < <(find "$ROOT/Resources/AppIcons" -type f | LC_ALL=C sort)
 fi
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"

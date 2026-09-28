@@ -1,71 +1,110 @@
 import AppKit
 import Foundation
 
-enum AppIconChoice: String, CaseIterable, Codable, Identifiable {
-    case primary
-    case alternate
+struct AppIconIdentifier: RawRepresentable, Hashable, Identifiable, Codable {
+    static let standard = AppIconIdentifier(rawValue: "standard")
+
+    let rawValue: String
 
     var id: String { rawValue }
+
+    init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        rawValue = try container.decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+struct AppIconOption: Identifiable {
+    let id: AppIconIdentifier
+    let titleKey: String
+    let image: NSImage
+}
+
+private struct BundledAppIconDefinition {
+    let id: AppIconIdentifier
+    let resourceName: String
+    let titleKey: String
 }
 
 struct AppIconCatalog {
-    static let alternateResourceName = "AppIconAlternate"
+    // Register future icons here with a stable semantic ID and a matching
+    // Resources/AppIcons/<resourceName>.png file.
+    private static let bundledDefinitions: [BundledAppIconDefinition] = []
 
-    let primaryImage: NSImage
-    let alternateImage: NSImage?
+    let options: [AppIconOption]
 
-    var availableChoices: [AppIconChoice] {
-        alternateImage == nil ? [.primary] : [.primary, .alternate]
-    }
-
-    init(primaryImage: NSImage, alternateImage: NSImage?) {
-        self.primaryImage = primaryImage
-        self.alternateImage = alternateImage
+    init(standardImage: NSImage, additionalOptions: [AppIconOption] = []) {
+        options = [
+            AppIconOption(
+                id: .standard,
+                titleKey: "about.preferences.app_icon_standard",
+                image: standardImage
+            ),
+        ] + additionalOptions.filter { $0.id != .standard }
     }
 
     @MainActor
     static func live(
         resourceBundle: Bundle = RemoteMicResourceBundle.mainOrDevelopment
     ) -> AppIconCatalog {
-        let primaryImage = image(
+        let standardImage = image(
             named: "AppIcon",
             extension: "icns",
             in: resourceBundle
         ) ?? NSApplication.shared.applicationIconImage ?? NSImage(
             size: NSSize(width: 512, height: 512)
         )
-        let alternateImage = image(
-            named: alternateResourceName,
-            extension: "png",
-            in: resourceBundle
-        )
-        return AppIconCatalog(
-            primaryImage: primaryImage,
-            alternateImage: alternateImage
-        )
-    }
-
-    func resolvedChoice(for requestedChoice: AppIconChoice) -> AppIconChoice {
-        requestedChoice == .alternate && alternateImage == nil ? .primary : requestedChoice
-    }
-
-    func image(for requestedChoice: AppIconChoice) -> NSImage {
-        switch resolvedChoice(for: requestedChoice) {
-        case .primary:
-            return primaryImage
-        case .alternate:
-            return alternateImage ?? primaryImage
+        let additionalOptions = bundledDefinitions.compactMap { definition in
+            image(
+                named: definition.resourceName,
+                extension: "png",
+                subdirectory: "AppIcons",
+                in: resourceBundle
+            ).map {
+                AppIconOption(
+                    id: definition.id,
+                    titleKey: definition.titleKey,
+                    image: $0
+                )
+            }
         }
+        return AppIconCatalog(
+            standardImage: standardImage,
+            additionalOptions: additionalOptions
+        )
+    }
+
+    func resolvedIdentifier(for requestedIdentifier: AppIconIdentifier) -> AppIconIdentifier {
+        options.contains { $0.id == requestedIdentifier } ? requestedIdentifier : .standard
+    }
+
+    func image(for requestedIdentifier: AppIconIdentifier) -> NSImage {
+        option(for: requestedIdentifier).image
+    }
+
+    private func option(for requestedIdentifier: AppIconIdentifier) -> AppIconOption {
+        options.first { $0.id == requestedIdentifier } ?? options[0]
     }
 
     private static func image(
         named resourceName: String,
         extension resourceExtension: String,
+        subdirectory: String? = nil,
         in bundle: Bundle
     ) -> NSImage? {
         guard let url = bundle.url(
             forResource: resourceName,
-            withExtension: resourceExtension
+            withExtension: resourceExtension,
+            subdirectory: subdirectory
         ) else { return nil }
         return NSImage(contentsOf: url)
     }
@@ -94,24 +133,27 @@ final class AppIconController {
     }
 
     @discardableResult
-    func apply(_ requestedChoice: AppIconChoice, source: String) -> AppIconChoice {
+    func apply(
+        _ requestedIdentifier: AppIconIdentifier,
+        source: String
+    ) -> AppIconIdentifier {
         operationID &+= 1
         let currentOperationID = operationID
         AppLogger.shared.write(
             "APP_ICON CHANGE operation_id=\(currentOperationID) phase=requested " +
-                "source=\(source) requested=\(requestedChoice.rawValue)"
+                "source=\(source) requested=\(requestedIdentifier.rawValue)"
         )
 
-        let appliedChoice = catalog.resolvedChoice(for: requestedChoice)
-        applyImage(catalog.image(for: appliedChoice))
-        let result = appliedChoice == requestedChoice ? "applied" : "fallback"
-        let reason = appliedChoice == requestedChoice
+        let appliedIdentifier = catalog.resolvedIdentifier(for: requestedIdentifier)
+        applyImage(catalog.image(for: appliedIdentifier))
+        let result = appliedIdentifier == requestedIdentifier ? "applied" : "fallback"
+        let reason = appliedIdentifier == requestedIdentifier
             ? "selection_available"
             : "resource_unavailable"
         AppLogger.shared.write(
             "APP_ICON CHANGE operation_id=\(currentOperationID) phase=completed " +
-                "result=\(result) reason=\(reason) applied=\(appliedChoice.rawValue)"
+                "result=\(result) reason=\(reason) applied=\(appliedIdentifier.rawValue)"
         )
-        return appliedChoice
+        return appliedIdentifier
     }
 }

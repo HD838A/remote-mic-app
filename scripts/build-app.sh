@@ -570,10 +570,10 @@ for icon_resource in \
     "$ROOT/Resources/$icon_resource" \
     "$APP_DIR/Contents/Resources/$icon_resource"
 done
-if [[ -f "$ROOT/Resources/AppIconAlternate.png" ]]; then
+if [[ -d "$ROOT/Resources/AppIcons" ]]; then
   ditto --norsrc --noextattr --noqtn --noacl \
-    "$ROOT/Resources/AppIconAlternate.png" \
-    "$APP_DIR/Contents/Resources/AppIconAlternate.png"
+    "$ROOT/Resources/AppIcons" \
+    "$APP_DIR/Contents/Resources/AppIcons"
 fi
 LOCALIZATION_DIRS=("$ROOT"/Resources/*.lproj(N))
 if (( ${#LOCALIZATION_DIRS} == 0 )); then
