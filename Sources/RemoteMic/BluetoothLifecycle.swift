@@ -157,6 +157,11 @@ enum BluetoothLifecyclePhase: Equatable {
         }
     }
 
+    var isReady: Bool {
+        if case .ready = self { return true }
+        return false
+    }
+
     func acceptsDidConnect(generation: UInt64) -> Bool {
         self == .connecting(generation)
     }
@@ -199,6 +204,38 @@ enum BluetoothLifecyclePhase: Equatable {
         default:
             return false
         }
+    }
+}
+
+struct BluetoothSystemSuspensionState {
+    private(set) var isSuspended = false
+    private(set) var connectionCycleNeeded = false
+
+    @discardableResult
+    mutating func suspend(phase: BluetoothLifecyclePhase) -> Bool {
+        guard !isSuspended else { return false }
+        isSuspended = true
+        if !phase.isReady {
+            connectionCycleNeeded = true
+        }
+        return true
+    }
+
+    mutating func markConnectionCycleNeeded() {
+        connectionCycleNeeded = true
+    }
+
+    @discardableResult
+    mutating func resume() -> Bool {
+        guard isSuspended else { return false }
+        isSuspended = false
+        return true
+    }
+
+    mutating func consumeConnectionCycleNeeded() -> Bool {
+        guard !isSuspended, connectionCycleNeeded else { return false }
+        connectionCycleNeeded = false
+        return true
     }
 }
 
