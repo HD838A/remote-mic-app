@@ -50,6 +50,7 @@ publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
 stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
 notarize_release="$ROOT/scripts/notarize-release.sh"
+opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
 
 /usr/bin/grep -Fq -- '--disable-keychain' "$ROOT/scripts/build-app.sh"
 /usr/bin/grep -Fq 'xcrun swift build --disable-keychain' "$ROOT/scripts/test.sh"
@@ -86,6 +87,14 @@ fi
 /usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$package_workflow"
 /usr/bin/grep -Fq 'test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift' "$package_workflow"
 /usr/bin/grep -Fq 'SAYALL_SIRI_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote' "$package_workflow"
+/usr/bin/grep -Fq 'RELEASE_VARIANT=apple-silicon ./scripts/build-apple-remote-opus.sh' "$package_workflow"
+/usr/bin/grep -Fq 'RELEASE_VARIANT=intel ./scripts/build-apple-remote-opus.sh' "$package_workflow"
+/usr/bin/grep -Fq 'CONFIGURE_HOST_ARGS=(--host "$CROSS_HOST")' "$opus_build"
+/usr/bin/grep -Fq 'CC="$CLANG_PATH -target $RELEASE_TRIPLE -isysroot $SDK_PATH"' "$opus_build"
+if /usr/bin/grep -Fq 'must be built on a $RELEASE_ARCH host' "$opus_build"; then
+  print -u2 "Apple Remote Opus must support cross-compiling the Intel release on an Apple Silicon runner"
+  exit 1
+fi
 /usr/bin/grep -Fq 'remoteMicTestSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))' "$ROOT/Package.swift"
 if /usr/bin/grep -Eq 'SAYALL_MACRO_PLATFORM_DEPLOY_KEY' "$ci_workflow" "$package_workflow"; then
   print -u2 "private platform checkout must not use the retired deploy secret name"
