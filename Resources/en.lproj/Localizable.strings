@@ -272,6 +272,10 @@
 "connection.status.voice_title" = "Voice";
 "connection.status.voice_streaming" = "Streaming remote voice";
 "connection.status.voice_ready" = "Voice is ready. Hold the microphone button to speak";
+"connection.voice_key_compatibility.title" = "The voice button is temporarily unavailable";
+"connection.voice_key_compatibility.karabiner_detail" = "Karabiner-Elements may be taking control of the remote. Open Devices, find the Xiaomi Bluetooth Voice Remote, turn off “Modify events” or set the device to “Ignore”, then recheck.";
+"connection.voice_key_compatibility.other_detail" = "Another keyboard, mouse, or device-remapping tool may be using the remote. Check and pause those tools, then recheck.";
+"connection.voice_key_compatibility.recheck" = "Recheck voice button";
 "connection.status.waiting_voice_button" = "Waiting for the microphone button";
 "connection.status.voice_active" = "Voice active";
 "common.status.ready" = "Ready";

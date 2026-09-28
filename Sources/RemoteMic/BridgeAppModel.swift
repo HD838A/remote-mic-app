@@ -430,6 +430,20 @@ private enum RecordingPlaybackStage: String {
     case startPlayback = "start_playback"
 }
 
+enum VoiceKeyCompatibilityWarning: Equatable {
+    case karabiner
+    case otherInputTool
+
+    var messageKey: String {
+        switch self {
+        case .karabiner:
+            return "connection.voice_key_compatibility.karabiner_detail"
+        case .otherInputTool:
+            return "connection.voice_key_compatibility.other_detail"
+        }
+    }
+}
+
 final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
@@ -472,6 +486,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var phoneRemoteInvitation: PhoneRemoteInvitation?
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
+    @Published private(set) var voiceKeyCompatibilityWarning: VoiceKeyCompatibilityWarning?
     @Published private(set) var diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.ready")
     @Published private(set) var isSendingDiagnosticLogs = false
     @Published private(set) var transcriptRecords: [TranscriptRecord] = []
@@ -1522,6 +1537,30 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         !isStreaming && allowVoiceKeyModeFallback
     }
 
+    static func voiceKeyCompatibilityWarning(
+        remoteConnected: Bool,
+        usesPrivateAdapter: Bool,
+        customMappingEnabled: Bool,
+        hidStatusKey: String,
+        voiceShortcutStatusKey: String,
+        karabinerRunning: Bool
+    ) -> VoiceKeyCompatibilityWarning? {
+        guard remoteConnected, !usesPrivateAdapter, customMappingEnabled else { return nil }
+
+        let isExclusiveAccess = hidStatusKey == "button_mapping.error.exclusive_access" ||
+            hidStatusKey == "button_mapping.error.exclusive_access.karabiner"
+        if isExclusiveAccess {
+            return hidStatusKey == "button_mapping.error.exclusive_access.karabiner" && karabinerRunning
+                ? .karabiner
+                : .otherInputTool
+        }
+
+        let isVoiceKeyMappingUnavailable = voiceShortcutStatusKey == "voice_button.status.waiting" ||
+            hidStatusKey == "button_mapping.status.disconnected" ||
+            hidStatusKey == "button_mapping.status.waiting_for_device"
+        return isVoiceKeyMappingUnavailable && karabinerRunning ? .karabiner : nil
+    }
+
     @discardableResult
     static func importConfiguration(
         from data: Data,
@@ -1606,6 +1645,35 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             bluetoothBridges.values.forEach { $0.reconnectNow() }
             discoveryBluetoothBridge?.reconnectNow()
         }
+    }
+
+    func recheckRemoteInput() {
+        guard started, !isStreaming else { return }
+        AppLogger.shared.write("HID USER_RECHECK requested")
+        applyHIDSettings()
+        refreshVoiceKeyCompatibilityWarning()
+    }
+
+    func refreshVoiceKeyCompatibilityWarning() {
+        let warning = Self.voiceKeyCompatibilityWarning(
+            remoteConnected: isConnected,
+            usesPrivateAdapter: settings.selectedRemoteProfile?.model.usesPrivateAdapter == true,
+            customMappingEnabled: settings.customMappingEnabled,
+            hidStatusKey: hidStatus.key,
+            voiceShortcutStatusKey: voiceShortcutStatus.key,
+            karabinerRunning: HIDRemoteMonitor.isKarabinerElementsRunning()
+        )
+        guard warning != voiceKeyCompatibilityWarning else { return }
+        voiceKeyCompatibilityWarning = warning
+        let reason: String
+        switch warning {
+        case .karabiner: reason = "karabiner"
+        case .otherInputTool: reason = "other_input_tool"
+        case nil: reason = "none"
+        }
+        AppLogger.shared.write(
+            "HID VOICE_KEY_COMPATIBILITY state=\(warning == nil ? "clear" : "warning") reason=\(reason)"
+        )
     }
 
     private func recoverBluetoothVoiceLink(reason: String) {
@@ -2359,6 +2427,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         syncChromecastRuntimeState()
 #endif
         completeHIDMappingRecoveryIfNeeded()
+        refreshVoiceKeyCompatibilityWarning()
     }
 
     private func scheduleHIDMappingRecoveryIfNeeded() {
@@ -2539,6 +2608,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             if monitor.profileID == self.settings.selectedRemoteProfileID || monitor.profileID == nil {
                 self.hidStatus = value
+                self.refreshVoiceKeyCompatibilityWarning()
             }
         }
         monitor.onActiveButtons = { [weak self] profileID, buttons in

@@ -272,6 +272,10 @@
 "connection.status.voice_title" = "语音状态";
 "connection.status.voice_streaming" = "正在传输遥控器语音";
 "connection.status.voice_ready" = "语音已就绪，按住麦克风键即可说话";
+"connection.voice_key_compatibility.title" = "语音键暂时无法使用";
+"connection.voice_key_compatibility.karabiner_detail" = "Karabiner-Elements 可能正在接管遥控器。请打开“设备”，找到“小米蓝牙语音遥控器”，关闭“Modify events”或将设备设为“Ignore”，然后重新检测。";
+"connection.voice_key_compatibility.other_detail" = "遥控器可能被其他键盘、鼠标或设备映射工具占用。请检查并暂停相关工具，然后重新检测。";
+"connection.voice_key_compatibility.recheck" = "重新检测语音键";
 "connection.status.waiting_voice_button" = "等待麦克风键";
 "connection.status.voice_active" = "语音中";
 "common.status.ready" = "已就绪";
