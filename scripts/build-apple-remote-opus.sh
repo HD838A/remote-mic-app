@@ -12,10 +12,16 @@ SOURCE_ROOT="$BUILD_ROOT/opus-$OPUS_VERSION"
 INSTALL_ROOT="$BUILD_ROOT/install"
 OUTPUT="$INSTALL_ROOT/lib/libopus.0.dylib"
 SDK_PATH="$(xcrun --show-sdk-path --sdk macosx)"
-
-if [[ "$(uname -m)" != "$RELEASE_ARCH" ]]; then
-  print -u2 "Apple Remote Opus must be built on a $RELEASE_ARCH host for $RELEASE_VARIANT"
-  exit 1
+CLANG_PATH="$(xcrun --find clang)"
+HOST_ARCH="$(uname -m)"
+CONFIGURE_HOST_ARGS=()
+if [[ "$HOST_ARCH" != "$RELEASE_ARCH" ]]; then
+  case "$RELEASE_ARCH" in
+    arm64) CROSS_HOST="aarch64-apple-darwin" ;;
+    x86_64) CROSS_HOST="x86_64-apple-darwin" ;;
+    *) print -u2 "Unsupported Apple Remote Opus architecture: $RELEASE_ARCH"; exit 1 ;;
+  esac
+  CONFIGURE_HOST_ARGS=(--host "$CROSS_HOST")
 fi
 
 if [[ -f "$OUTPUT" ]]; then
@@ -49,10 +55,11 @@ mkdir -p "$INSTALL_ROOT"
   cd "$SOURCE_ROOT"
   export MACOSX_DEPLOYMENT_TARGET="$RELEASE_MIN_SYSTEM_VERSION"
   export SDKROOT="$SDK_PATH"
-  CC="$(xcrun --find clang)" \
-  CFLAGS="-target $RELEASE_TRIPLE -isysroot $SDK_PATH -O2" \
-  LDFLAGS="-target $RELEASE_TRIPLE -isysroot $SDK_PATH -Wl,-dead_strip" \
+  CC="$CLANG_PATH -target $RELEASE_TRIPLE -isysroot $SDK_PATH" \
+  CFLAGS="-O2" \
+  LDFLAGS="-Wl,-dead_strip" \
     ./configure \
+      "${CONFIGURE_HOST_ARGS[@]}" \
       --prefix="$INSTALL_ROOT" \
       --disable-doc \
       --disable-extra-programs \

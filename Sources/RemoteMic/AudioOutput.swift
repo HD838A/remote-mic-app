@@ -10,6 +10,78 @@ struct AudioDeviceInfo: Identifiable, Equatable {
     let name: String
 }
 
+struct VirtualAudioDeviceLevelObservation: Equatable {
+    var mute: Bool?
+    var volume: Float32?
+
+    var requiresAudibilityRepair: Bool {
+        VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: mute) ||
+            VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: volume)
+    }
+}
+
+struct VirtualAudioDeviceAudibilitySnapshot: Equatable {
+    var output = VirtualAudioDeviceLevelObservation()
+    var input = VirtualAudioDeviceLevelObservation()
+
+    var requiresAudibilityRepair: Bool {
+        output.requiresAudibilityRepair || input.requiresAudibilityRepair
+    }
+
+    var hasObservation: Bool {
+        output.mute != nil || output.volume != nil || input.mute != nil || input.volume != nil
+    }
+
+    var diagnostic: String {
+        "output_mute=\(Self.optionalBoolean(output.mute)) " +
+            "output_volume_scalar=\(Self.optionalScalar(output.volume)) " +
+            "output_volume_low=\(Self.optionalBoolean(output.volume.map { VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: $0) })) " +
+            "input_mute=\(Self.optionalBoolean(input.mute)) " +
+            "input_volume_scalar=\(Self.optionalScalar(input.volume)) " +
+            "input_volume_low=\(Self.optionalBoolean(input.volume.map { VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: $0) })) " +
+            "minimum_volume_scalar=\(VirtualAudioDeviceLevelPolicy.minimumUsableVolume)"
+    }
+
+    private static func optionalBoolean(_ value: Bool?) -> String {
+        value.map(String.init) ?? "unknown"
+    }
+
+    private static func optionalScalar(_ value: Float32?) -> String {
+        guard let value, value.isFinite else { return "unknown" }
+        let rounded = (Double(value) * 1_000).rounded() / 1_000
+        return String(rounded)
+    }
+}
+
+struct VirtualAudioDeviceAudibilityRepairResult: Equatable {
+    var applicable = false
+    var before = VirtualAudioDeviceAudibilitySnapshot()
+    var after = VirtualAudioDeviceAudibilitySnapshot()
+    var unmuteAttempted = false
+    var volumeRestoreAttempted = false
+    var writeFailed = false
+
+    var isReady: Bool {
+        !applicable || (
+            !after.requiresAudibilityRepair &&
+                (!before.requiresAudibilityRepair || after.hasObservation)
+        )
+    }
+}
+
+enum VirtualAudioDeviceLevelPolicy {
+    static let minimumUsableVolume: Float32 = 0.2
+
+    static func requiresUnmute(mute: Bool?) -> Bool {
+        mute == true
+    }
+
+    static func requiresVolumeRestore(volume: Float32?) -> Bool {
+        guard let volume, volume.isFinite else { return false }
+        return volume < minimumUsableVolume
+    }
+}
+
 extension VirtualAudioDeviceDiagnosticKind {
     static func classify(_ device: AudioDeviceInfo?) -> Self {
         guard let device else { return .unavailable }
@@ -128,6 +200,11 @@ enum AudioPlayerNodeSafety {
 
 enum CoreAudioDeviceCatalog {
     private static let propertyLock = NSRecursiveLock()
+
+    private static let virtualAudioScopes: [AudioObjectPropertyScope] = [
+        kAudioDevicePropertyScopeOutput,
+        kAudioDevicePropertyScopeInput,
+    ]
 
     static func outputDevices() -> [AudioDeviceInfo] {
         withPropertyLock {
@@ -252,6 +329,64 @@ enum CoreAudioDeviceCatalog {
         return "name=\(device.name) id=\(device.id)"
     }
 
+    static func virtualAudioAudibilitySnapshot(
+        for device: AudioDeviceInfo?
+    ) -> VirtualAudioDeviceAudibilitySnapshot {
+        guard let device else { return .init() }
+        let kind = VirtualAudioDeviceDiagnosticKind.classify(device)
+        guard kind == .miRemoteV2ch || kind == .blackHole2ch else { return .init() }
+        return withPropertyLock {
+            virtualAudioAudibilitySnapshotLocked(for: device.id)
+        }
+    }
+
+    static func ensureVirtualAudioDeviceAudible(
+        _ device: AudioDeviceInfo
+    ) -> VirtualAudioDeviceAudibilityRepairResult {
+        let kind = VirtualAudioDeviceDiagnosticKind.classify(device)
+        guard kind == .miRemoteV2ch || kind == .blackHole2ch else {
+            return .init()
+        }
+
+        return withPropertyLock {
+            let before = virtualAudioAudibilitySnapshotLocked(for: device.id)
+            var result = VirtualAudioDeviceAudibilityRepairResult(
+                applicable: true,
+                before: before,
+                after: before
+            )
+
+            for scope in virtualAudioScopes {
+                let observation = deviceLevelObservationLocked(for: device.id, scope: scope)
+                if VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: observation.mute) {
+                    result.unmuteAttempted = true
+                    if !setUInt32PropertyLocked(
+                        device.id,
+                        selector: kAudioDevicePropertyMute,
+                        scope: scope,
+                        value: 0
+                    ) {
+                        result.writeFailed = true
+                    }
+                }
+                if VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: observation.volume) {
+                    result.volumeRestoreAttempted = true
+                    if !setFloat32PropertyLocked(
+                        device.id,
+                        selector: kAudioDevicePropertyVolumeScalar,
+                        scope: scope,
+                        value: 1
+                    ) {
+                        result.writeFailed = true
+                    }
+                }
+            }
+
+            result.after = virtualAudioAudibilitySnapshotLocked(for: device.id)
+            return result
+        }
+    }
+
     private static func defaultDevice(selector: AudioObjectPropertySelector) -> AudioDeviceInfo? {
         var address = AudioObjectPropertyAddress(
             mSelector: selector,
@@ -291,6 +426,141 @@ enum CoreAudioDeviceCatalog {
             &value
         ) == noErr else { return nil }
         return value?.takeUnretainedValue() as String?
+    }
+
+    private static func virtualAudioAudibilitySnapshotLocked(
+        for deviceID: AudioDeviceID
+    ) -> VirtualAudioDeviceAudibilitySnapshot {
+        VirtualAudioDeviceAudibilitySnapshot(
+            output: deviceLevelObservationLocked(
+                for: deviceID,
+                scope: kAudioDevicePropertyScopeOutput
+            ),
+            input: deviceLevelObservationLocked(
+                for: deviceID,
+                scope: kAudioDevicePropertyScopeInput
+            )
+        )
+    }
+
+    private static func deviceLevelObservationLocked(
+        for deviceID: AudioDeviceID,
+        scope: AudioObjectPropertyScope
+    ) -> VirtualAudioDeviceLevelObservation {
+        VirtualAudioDeviceLevelObservation(
+            mute: uint32PropertyLocked(
+                deviceID,
+                selector: kAudioDevicePropertyMute,
+                scope: scope
+            ).map { $0 != 0 },
+            volume: float32PropertyLocked(
+                deviceID,
+                selector: kAudioDevicePropertyVolumeScalar,
+                scope: scope
+            )
+        )
+    }
+
+    private static func uint32PropertyLocked(
+        _ objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope
+    ) -> UInt32? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: scope,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectHasProperty(objectID, &address) else { return nil }
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(
+            objectID,
+            &address,
+            0,
+            nil,
+            &size,
+            &value
+        ) == noErr else { return nil }
+        return value
+    }
+
+    private static func float32PropertyLocked(
+        _ objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope
+    ) -> Float32? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: scope,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        guard AudioObjectHasProperty(objectID, &address) else { return nil }
+        var value: Float32 = 0
+        var size = UInt32(MemoryLayout<Float32>.size)
+        guard AudioObjectGetPropertyData(
+            objectID,
+            &address,
+            0,
+            nil,
+            &size,
+            &value
+        ) == noErr else { return nil }
+        return value
+    }
+
+    private static func setUInt32PropertyLocked(
+        _ objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope,
+        value: UInt32
+    ) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: scope,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var settable = DarwinBoolean(false)
+        guard AudioObjectHasProperty(objectID, &address),
+              AudioObjectIsPropertySettable(objectID, &address, &settable) == noErr,
+              settable.boolValue
+        else { return false }
+        var mutableValue = value
+        return AudioObjectSetPropertyData(
+            objectID,
+            &address,
+            0,
+            nil,
+            UInt32(MemoryLayout<UInt32>.size),
+            &mutableValue
+        ) == noErr
+    }
+
+    private static func setFloat32PropertyLocked(
+        _ objectID: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope,
+        value: Float32
+    ) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: scope,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var settable = DarwinBoolean(false)
+        guard AudioObjectHasProperty(objectID, &address),
+              AudioObjectIsPropertySettable(objectID, &address, &settable) == noErr,
+              settable.boolValue
+        else { return false }
+        var mutableValue = value
+        return AudioObjectSetPropertyData(
+            objectID,
+            &address,
+            0,
+            nil,
+            UInt32(MemoryLayout<Float32>.size),
+            &mutableValue
+        ) == noErr
     }
 
     private static func channelCount(
@@ -542,6 +812,28 @@ final class VirtualAudioOutput {
             "AUDIO CONFIGURE begin target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
                 "previous={\(previousState)}"
         )
+
+        let audibilityRepair = CoreAudioDeviceCatalog.ensureVirtualAudioDeviceAudible(device)
+        if audibilityRepair.applicable {
+            AppLogger.shared.write(
+                "AUDIO AUDIBILITY repair " +
+                    "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue) " +
+                    "unmute_attempted=\(audibilityRepair.unmuteAttempted) " +
+                    "volume_restore_attempted=\(audibilityRepair.volumeRestoreAttempted) " +
+                    "write_failed=\(audibilityRepair.writeFailed) " +
+                    "before={\(audibilityRepair.before.diagnostic)} " +
+                    "after={\(audibilityRepair.after.diagnostic)} " +
+                    "result=\(audibilityRepair.isReady ? "ready" : "below_minimum")"
+            )
+        }
+        guard audibilityRepair.isReady else {
+            status = LocalizedMessage("audio.output.selected_unavailable")
+            AppLogger.shared.write(
+                "AUDIO CONFIGURE failed reason=virtual_device_level_below_minimum " +
+                    "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue)"
+            )
+            return false
+        }
 
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
@@ -990,12 +1282,13 @@ final class VirtualAudioOutput {
 
     private var isConfigurationHealthy: Bool {
         let actualOutput = currentOutputDevice()
+        let audibility = CoreAudioDeviceCatalog.virtualAudioAudibilitySnapshot(for: selectedDevice)
         return VirtualAudioHealthPolicy.isConfigurationHealthy(
             hasSelectedDevice: selectedDevice != nil,
             engineRunning: engine?.isRunning == true,
             playerPlaying: player?.isPlaying == true,
             boundToSelectedDevice: selectedDevice?.id == actualOutput?.id
-        )
+        ) && !audibility.requiresAudibilityRepair
     }
 
     private func currentOutputDevice() -> AudioDeviceInfo? {

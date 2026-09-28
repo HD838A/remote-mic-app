@@ -16,6 +16,7 @@ typedef void (*SAYAppleRemoteTouchCallback)(
     const SAYAppleRemoteTouchContact *contacts,
     int32_t contactCount,
     double timestamp,
+    uint64_t sourceID,
     void *context
 );
 
@@ -28,5 +29,6 @@ SAYAppleRemoteTouchSession *SAYAppleRemoteTouchSessionCreate(
 bool SAYAppleRemoteTouchSessionStart(SAYAppleRemoteTouchSession *session);
 void SAYAppleRemoteTouchSessionStop(SAYAppleRemoteTouchSession *session);
 void SAYAppleRemoteTouchSessionDestroy(SAYAppleRemoteTouchSession *session);
+uint64_t SAYAppleRemoteTouchSourceIDForHIDDevice(const void *device);
 
 #endif

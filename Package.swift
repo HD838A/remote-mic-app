@@ -81,10 +81,10 @@ let sourceMacroCapabilitiesAvailable = combinationActionsPackagePath.map {
 } ?? false
 let privateArtifactsAvailable = !(privateArtifactPackagePath ?? "").isEmpty
 let macroCapabilitiesAvailable = sourceMacroCapabilitiesAvailable || privateArtifactsAvailable
-let chromecasePackagePath = ProcessInfo.processInfo.environment[
-    "SAYALL_CHROMECASE_PACKAGE_PATH"
+let chromecastPackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_CHROMECAST_PACKAGE_PATH"
 ]
-let chromecaseEnabled = !(chromecasePackagePath ?? "").isEmpty
+let chromecastEnabled = !(chromecastPackagePath ?? "").isEmpty
 let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
     ? .macOS(.v13)
     : .macOS(.v14)
@@ -92,14 +92,24 @@ var remoteMicSwiftSettings: [SwiftSetting] = []
 if siriRemoteEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
 }
-if chromecaseEnabled {
-    remoteMicSwiftSettings.append(.define("SAYALL_CHROMECASE_ENABLED"))
+if chromecastEnabled {
+    remoteMicSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
 }
 if macRemoteEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
 }
 if macroCapabilitiesAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_MACRO_REMOTE_CAPABILITIES"))
+}
+var remoteMicTestSwiftSettings: [SwiftSetting] = []
+if siriRemoteEnabled {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+}
+if chromecastEnabled {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
+}
+if macRemoteEnabled {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
 }
 
 if let privateFeaturePath = ProcessInfo.processInfo.environment[
@@ -122,17 +132,28 @@ if let siriRemotePath = siriRemotePackagePath, !siriRemotePath.isEmpty {
     remoteMicDependencies.append(
         .product(name: "SayAllSiriRemote", package: packageIdentity)
     )
-}
-
-if let chromecasePath = chromecasePackagePath, !chromecasePath.isEmpty {
-    let packageIdentity = URL(fileURLWithPath: chromecasePath)
-        .lastPathComponent
-        .lowercased()
-    packageDependencies.append(.package(path: chromecasePath))
-    remoteMicDependencies.append(
-        .product(name: "SayAllChromecase", package: packageIdentity)
+    // 测试目标同样要能引用私有包：能力与型号自报做跨仓一致性校验
+    // （见 Tests/RemoteMicTests/SiriCapabilityContractTests.swift）。
+    remoteMicTestDependencies.append(
+        .product(name: "SayAllSiriRemote", package: packageIdentity)
     )
 }
+
+if let chromecastPath = chromecastPackagePath, !chromecastPath.isEmpty {
+    let packageIdentity = URL(fileURLWithPath: chromecastPath)
+        .lastPathComponent
+        .lowercased()
+    packageDependencies.append(.package(path: chromecastPath))
+    remoteMicDependencies.append(
+        .product(name: "SayAllChromecast", package: packageIdentity)
+    )
+    // 测试目标也要能引用私有包：能力矩阵要与型号自报的能力声明做跨仓一致性校验
+    // （见 Tests/RemoteMicTests/ChromecastCapabilityContractTests.swift）。
+    remoteMicTestDependencies.append(
+        .product(name: "SayAllChromecast", package: packageIdentity)
+    )
+}
+
 
 if let combinationActionsPath = combinationActionsPackagePath, !combinationActionsPath.isEmpty {
     let packageIdentity = URL(fileURLWithPath: combinationActionsPath)
@@ -159,25 +180,23 @@ if let buttonProfilesPath = buttonProfilesPackagePath,
     )
 }
 
-if let membershipPackagePath = ProcessInfo.processInfo.environment[
-    "SAYALL_MEMBERSHIP_PACKAGE_PATH"
-], !membershipPackagePath.isEmpty {
-    let packageIdentity = URL(fileURLWithPath: membershipPackagePath)
-        .lastPathComponent
-        .lowercased()
-    packageDependencies.append(.package(path: membershipPackagePath))
-    remoteMicDependencies.append(
-        .product(name: "SayAllMembershipCore", package: packageIdentity)
-    )
-    remoteMicDependencies.append(
-        .product(name: "SayAllMembershipUI", package: packageIdentity)
+let unsupportedMembershipSourceVariables = [
+    "SAYALL_MEMBERSHIP_PACKAGE_PATH",
+    "SAYALL_MEMBERSHIP_ADAPTER_PACKAGE_PATH",
+]
+if unsupportedMembershipSourceVariables.contains(where: {
+    !(ProcessInfo.processInfo.environment[$0] ?? "").isEmpty
+}) {
+    fatalError(
+        "membership source packages are not supported; " +
+            "use SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"
     )
 }
 
 if let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty {
     let sourcePackageVariables = [
         "SAYALL_COMBINATION_ACTIONS_PATH",
-        "SAYALL_MEMBERSHIP_PACKAGE_PATH",
+        "SAYALL_BUTTON_PROFILES_PACKAGE_PATH",
     ]
     if sourcePackageVariables.contains(where: {
         !(ProcessInfo.processInfo.environment[$0] ?? "").isEmpty
@@ -189,22 +208,17 @@ if let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty {
         .lowercased()
     packageDependencies.append(.package(path: privateArtifactPackagePath))
     remoteMicDependencies.append(
-        .product(name: "SayAllMembershipCore", package: packageIdentity)
+        .product(name: "SayAllMembershipHostAdapter", package: packageIdentity)
     )
     remoteMicDependencies.append(
-        .product(name: "SayAllMembershipUI", package: packageIdentity)
+        .product(name: "SayAllDiagnosticsTransport", package: packageIdentity)
     )
+    remoteMicSwiftSettings.append(.define("SAYALL_MEMBERSHIP_ENABLED"))
+    remoteMicSwiftSettings.append(.define("SAYALL_DIAGNOSTICS_ENABLED"))
     remoteMicDependencies.append(.product(name: "SayAllMacroRemoteMic", package: packageIdentity))
-    if let buttonProfilesPackagePath, !buttonProfilesPackagePath.isEmpty {
-        let artifactURL = URL(fileURLWithPath: privateArtifactPackagePath).standardizedFileURL
-        let paidURL = URL(fileURLWithPath: buttonProfilesPackagePath).standardizedFileURL
-        guard paidURL == artifactURL else {
-            fatalError("private artifacts cannot be combined with a paid source package")
-        }
-        remoteMicDependencies.append(
-            .product(name: "SayAllButtonProfiles", package: packageIdentity)
-        )
-    }
+    remoteMicDependencies.append(
+        .product(name: "SayAllButtonProfiles", package: packageIdentity)
+    )
 }
 
 if let hardwareSimulationPath = ProcessInfo.processInfo.environment[
@@ -258,6 +272,7 @@ let package = Package(
             publicHeadersPath: "include",
             linkerSettings: [
                 .linkedFramework("CoreFoundation"),
+                .linkedFramework("IOKit"),
             ]
         ),
         .target(
@@ -311,16 +326,7 @@ let package = Package(
             dependencies: remoteMicTestDependencies + ["SayAllMCPKit", "AppleRemoteHCIProtocol"],
             path: "Tests/RemoteMicTests",
             exclude: macRemoteEnabled ? [] : ["WatchBluetoothVoiceJourneyTests.swift"],
-            swiftSettings: {
-                var settings: [SwiftSetting] = []
-                if siriRemoteEnabled {
-                    settings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
-                }
-                if chromecaseEnabled {
-                    settings.append(.define("SAYALL_CHROMECASE_ENABLED"))
-                }
-                return settings
-            }()
+            swiftSettings: remoteMicTestSwiftSettings
         ),
     ],
     swiftLanguageModes: [.v5]

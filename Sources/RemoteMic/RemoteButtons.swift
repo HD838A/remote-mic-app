@@ -16,7 +16,7 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
     case tv
     case playPause = "play_pause"
     case mute
-    /// Chromecase 遥控器专有按键。这三颗键在小米遥控器上不存在，因此不进 `xiaomiCases`。
+    /// Chromecast 遥控器专有按键。这三颗键在小米遥控器上不存在，因此不进 `xiaomiCases`。
     case youtube
     case netflix
     case input
@@ -48,7 +48,7 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         // adapter and are not part of Xiaomi HID discovery.
         case .playPause: return 0x1000
         case .mute: return 0x1001
-        // Reserved values: decoded by the Chromecase adapter's own HID channel
+        // Reserved values: decoded by the Chromecast adapter's own HID channel
         // (usage 0x0E/0x0F/0x11 in that remote's report), never by Xiaomi discovery.
         case .youtube: return 0x1002
         case .netflix: return 0x1003
@@ -128,7 +128,7 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         case .back: return nil
         case .playPause: return .systemKey(type: 2)
         case .mute: return .systemKey(type: 3)
-        // Chromecase 的三颗专有键由私有包的 HID 通道独占读取：映射开启时设备被整个独占，
+        // Chromecast 的三颗专有键由私有包的 HID 通道独占读取：映射开启时设备被整个独占，
         // 系统侧不会同时收到事件，因此不存在需要抑制的原生事件。
         case .youtube, .netflix, .input: return nil
         }

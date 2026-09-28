@@ -6,6 +6,70 @@
 
 本规范适用于新增功能、现有功能修改、Bug 修复、状态机、异步任务、蓝牙、HID、音频、权限、输入法、Nearby、网页连接、更新与安装流程。用户如何收集日志和运行日志验收分别见现有调查文档及 [`Testing/RuntimeLogging.md`](Testing/RuntimeLogging.md)。
 
+## 诊断存储与主动上传通道
+
+运行日志的内容规范保持不变，但存储与发送分为两个互不穿透的通道。
+
+### 本地公钥加密日志
+
+- 每次 App 启动创建独立的 `.rmlog` session 文件；文件头使用 `RMLG2`，正文记录逐条使用 AES-GCM 加密。
+- App 每次启动随机生成文件密钥，再使用构建时注入的 Curve25519 公钥包裹该密钥。匹配的私钥只存在于内部支持环境，不进入公开仓库、App 包、用户机器或 Sentry。
+- 每条记录包含 UTC 时间、进程 ID、版本、Build 和单调递增的 `seq`。同一 session 文件由串行队列按调用顺序追加；多个进程分别生成自己的 session 文件，不宣称跨进程全局排序。
+- 日志目录权限必须为 `0700`，文件权限必须为 `0600`。公钥缺失、文件创建失败或加密失败时 fail closed，不得回退到明文。
+- 用户可以打开日志目录并把加密文件交给支持人员；App 自身不具备解密能力。内部解密工具和私钥属于私有支持基础设施。
+- Sentry 上传器不读取、解密、附加或删除 `.rmlog`、旧版 `runtime.log` 或其他本地日志文件。
+
+### 用户主动发送的 Sentry 安全诊断
+
+Sentry 只在用户明确点击“发送诊断信息”后启动一次。未点击时不初始化 SDK、不读取待发送私有记录，也不产生网络请求。Sentry SDK、DSN 解析、最终过滤和网络发送只存在于私有 Package 的 `SayAllDiagnosticsHostAdapter`；公开仓库不依赖 Sentry，也不注入 DSN。
+
+公开宿主可发送两类已经类型化的安全记录：
+
+1. 当前进程内存中的 `PublicDiagnosticEvent`；
+2. 可选私有模块通过 `PrivateDiagnosticUploadProvider` 提供的独立安全记录。
+
+私有模块的原始日志、数据库、响应正文和内部对象不得通过 `AppLogger.shared.write`、本地日志文件或自由文本穿透到 Sentry。公开宿主不维护私有业务事件目录或状态机，只验证通用的 `PRIVATE_EVENT` 信封、字段数量、单行 token、保留字段和敏感字段红线。私有 provider 负责在自己的仓库中定义业务枚举、最多保留 256 条、默认保留 7 天并跨重启持久化；公开宿主单次最多接收 256 条并按记录 ID 去重。
+
+公开安全事件当前只允许以下产品级消息：
+
+| 事件 | 诊断用途 | 允许的主要内容 |
+| --- | --- | --- |
+| `environment.snapshot` | 确认版本和最小运行环境 | App 版本/Build、系统主版本、CPU 架构、语言、稳定设备类别、输入工具枚举、构建通道、不可逆能力摘要 |
+| `permission.input_monitoring` / `permission.accessibility` | 定位权限阻断 | `granted` / `denied` 和稳定阶段 |
+| `remote.connection` | 还原连接状态转换 | 来源、设备家族、阶段、结果和稳定原因码 |
+| `audio.configure` | 判断音频出口是否可用 | 稳定音频设备类别、`ready` / `failed` 和原因码 |
+| `voice.session` | 判断语音主链路是否完整 | 进程内操作号、来源、耗时、收到/调度/播放/中断/pending 样本计数和失败计数 |
+| `onboarding.voice_test` | 判断首次语音测试卡点 | 稳定终态、耗时、音频完整性计数和输入工具枚举 |
+| `PRIVATE_EVENT` | 接收可选私有模块已经脱敏的高价值业务时序 | 通用类别、时间、短生命周期关联号、稳定阶段/结果/原因、重试与耗时等单行 token；具体目录只在私有仓库定义 |
+
+规范化示例：
+
+```text
+PUBLIC_EVENT schema_version=1 operation_id=voice_bluetooth_4 component=voice action=session phase=completed result=passed reason=voice_stopped elapsed_ms=3128 received_samples=64000 scheduled_samples=64000 played_samples=64000 interrupted_samples=0 pending_samples=0 failure_count=0 source=bluetooth remote_model_family=xiaomi audio_device_kind=sayall_virtual voice_tool=doubao
+
+PRIVATE_EVENT schema_version=1 record_id=pe_abcdefghijklmnopqrstuv occurred_at_ms=2000000000000 category=PRIVATE_FLOW action=stage phase=completed result=observed retryable=false elapsed_ms=842
+```
+
+公开宿主与私有传输适配器之间的流程必须是：
+
+```text
+用户点击发送
+  → 检查私有传输适配器是否已配置
+  → 读取公开内存事件和可选私有安全记录
+  → 丢弃无法按各自 schema 完整重建的记录
+  → 将 canonical 安全事件交给私有传输适配器
+  → 私有适配器校验 DSN 并启动一次性 Sentry 实例
+  → beforeSendLog 再次解析并重建 canonical 正文
+  → 清空 User、Tags 和 Contexts，关闭自动采集
+  → flush 并确认没有待发送 envelope
+  → 仅在发送成功后按记录 ID 通知私有 provider 标记已上传
+  → 关闭 Sentry 并移除临时缓存
+```
+
+Sentry 必须关闭自动崩溃、Session、性能、网络、Breadcrumb、MetricKit、文件和 Core Data 追踪、默认 PII、附件和内存快照。生产 DSN 只允许由私有发布环境通过私有注入脚本写入最终 App；不得写入公开源码、公开构建脚本、普通日志或事件正文。发送失败、记录被拒绝或 DSN 缺失时，不得把私有记录标记为已上传。
+
+Sentry 正文和属性不得包含账号、邮箱、Token、验证码、订单号、支付单号、checkout URL、价格、精确权益到期时间、用户内容、音频、路径、设备身份、Bundle ID、Package 名称、构建开关原名、私有错误正文或第三方 App 私有状态。需要排查登录、绑定、支付、订单和权益链路时，只能由私有模块上报稳定业务分类、短生命周期关联号、HTTP 状态类别、阶段、结果和原因码；真实对象标识仍不得上传。
+
 ## 基本原则
 
 - 日志是产品功能的一部分。新增或修改功能时，必须同步设计、实现和验证日志，不能等用户出问题后再补。
@@ -138,6 +202,8 @@ probable_cause_confirmed=false
 ```
 
 - 不能把“没有日志”当作成功，也不能把“请求已发出”当作最终功能可用。
+
+Onboarding 普通按键页还需记录一次性、脱敏的 `ONBOARDING CONTROLS ... action=suppressed`，证明本次检测观察到了事件但没有执行用户已有映射。实体遥控器无按键时，安全输入只记录布尔状态变化、恢复请求和恢复结果：不得记录 PID、前台 App、进程名或 IORegistry 信息；安全输入状态也不能单独生成完成失败终态。
 
 ## 推荐字段格式
 

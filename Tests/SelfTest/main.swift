@@ -561,6 +561,61 @@ check(
     "Typeless Fn tap session buffers pre-roll and stops after drain"
 )
 
+let foreignProductNames = [
+    "Chromecast Remote", "CHROMECAST-REMOTE", "  Chromecast   Remote  ",
+    "chromecast 遥控器", "Remote-G10", "G10",
+]
+check(
+    foreignProductNames.allSatisfy { ForeignVoiceRemoteProduct.isRejected(name: $0) },
+    "other product names are rejected by the Xiaomi bridge"
+)
+
+let ownProductNames: [String?] = [nil, "", "   ", "MI RC", "小米蓝牙语音遥控器", "ARN9"]
+check(
+    ownProductNames.allSatisfy { !ForeignVoiceRemoteProduct.isRejected(name: $0) },
+    "missing or Xiaomi names are not rejected"
+)
+
+let savedForeignIdentifier = UUID()
+let savedForeignDecision = VoiceRemoteAdmission.decide(
+    identifier: savedForeignIdentifier,
+    targetIdentifier: savedForeignIdentifier,
+    advertisesVoiceService: true,
+    name: "Chromecast Remote",
+    advertisedName: nil
+)
+let savedOwnIdentifier = UUID()
+let savedOwnDecision = VoiceRemoteAdmission.decide(
+    identifier: savedOwnIdentifier,
+    targetIdentifier: savedOwnIdentifier,
+    advertisesVoiceService: false,
+    name: "客厅遥控器",
+    advertisedName: nil
+)
+check(
+    !savedForeignDecision.isAdopted && savedOwnDecision.isAdopted,
+    "saved identity never overrides the foreign product veto, but still survives renaming"
+)
+// App 内置每款遥控器的真机图：认不出型号就不能采用，否则界面会给未验证设备套上别的型号的图。
+let unsupportedFresh = VoiceRemoteAdmission.decide(
+    identifier: UUID(),
+    targetIdentifier: nil,
+    advertisesVoiceService: true,
+    name: "客厅遥控器",
+    advertisedName: nil
+)
+let unnamedFresh = VoiceRemoteAdmission.decide(
+    identifier: UUID(),
+    targetIdentifier: nil,
+    advertisesVoiceService: true,
+    name: nil,
+    advertisedName: nil
+)
+check(
+    unsupportedFresh == .rejectUnrecognizedName("客厅遥控器") && unnamedFresh == .rejectUnnamed,
+    "a voice device is adopted only with a saved identity or a verified model name"
+)
+
 print("RESULT passed=\(passed) failed=\(failed)")
 if failed > 0 {
     exit(1)

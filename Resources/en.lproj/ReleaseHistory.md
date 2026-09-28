@@ -3,6 +3,10 @@
 ## 1.9.21 (Pre-release)
 
 - Improves update check reliability and reduces intermittent failures to retrieve update information.
+- Adds “Let an AI tool configure it” to prepare voice settings for a connected remote without operating the window.
+- Simplifies first-run voice-tool selection and removes the unsupported ChatterFly option.
+- Shows the hold-or-toggle instruction that matches the selected controller and voice tool during the voice test.
+- Improves first-run voice verification, gain adjustment, and ordinary-button detection.
 
 ## 1.9.20 (Pre-release)
 

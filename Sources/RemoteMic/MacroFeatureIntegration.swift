@@ -126,7 +126,7 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     func updateButtonProfilesAccess(_ decision: HostButtonProfilesAccessDecision) {
-        #if canImport(SayAllButtonProfiles) && canImport(SayAllMembershipCore)
+        #if canImport(SayAllButtonProfiles)
         let packageDecision: ButtonProfilesAccessDecision
         switch decision {
         case let .allowed(validUntil):
@@ -254,7 +254,7 @@ final class MacroFeatureIntegration: ObservableObject {
         switch model {
         case .rc001:
             return SayAllMacroRemoteMic.RemoteMicRemotePresentation.xiaomiRC001(displayName: "RC001")
-        case .rc003, .unknown, nil:
+        case .rc003, .chromecastVoiceRemote, .unknown, nil:
             return SayAllMacroRemoteMic.RemoteMicRemotePresentation.xiaomiRC003(displayName: "RC003")
         case .appleSiriRemoteA2854, .appleSiriRemoteA2540:
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
@@ -318,7 +318,7 @@ final class MacroFeatureIntegration: ObservableObject {
         switch model {
         case .rc001:
             return .xiaomiRC001(displayName: "RC001")
-        case .rc003, .unknown, nil:
+        case .rc003, .chromecastVoiceRemote, .unknown, nil:
             return .xiaomiRC003(displayName: "RC003")
         case .appleSiriRemoteA2854, .appleSiriRemoteA2540:
             let modelID = model == .appleSiriRemoteA2540

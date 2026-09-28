@@ -62,8 +62,11 @@ enum SettingsScreenshotRenderer {
         let usesSiriRemote = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SIRI_REMOTE"
         ] == "1"
-        let usesChromecase = ProcessInfo.processInfo.environment[
-            "REMOTE_MIC_SETTINGS_SCREENSHOT_CHROMECASE"
+        let usesChromecast = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_CHROMECAST"
+        ] == "1"
+        let showsRemoteCards = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_CARDS"
         ] == "1"
         try FileManager.default.createDirectory(
             at: outputDirectory,
@@ -79,6 +82,33 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        var remoteCardSystemNames: [UUID: String] = [:]
+        var remoteCardBatteryLevels: [UUID: Int] = [:]
+        var remoteCardPowerStates: [UUID: RemotePowerState] = [:]
+        if showsRemoteCards {
+            let xiaomiID = settings.registerBluetoothRemote(
+                identifier: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
+            )
+            settings.updateRemoteProfileModel(xiaomiID, model: .rc003)
+            settings.bindHIDFingerprint("settings-screenshot-xiaomi", to: xiaomiID)
+            let appleID = settings.registerHIDRemote(fingerprint: "settings-screenshot-apple-remote")
+            settings.updateRemoteProfileModel(appleID, model: .appleSiriRemoteA2854)
+            let chromecastID = settings.registerChromecastRemote()
+            settings.selectRemoteProfile(appleID)
+            remoteCardSystemNames = [
+                xiaomiID: "书房遥控器",
+                appleID: "客厅 Apple TV",
+                chromecastID: "Bedroom Remote",
+            ]
+            remoteCardBatteryLevels = [
+                xiaomiID: 78,
+                chromecastID: 42,
+            ]
+            remoteCardPowerStates = [
+                xiaomiID: .charging,
+                chromecastID: .onBattery,
+            ]
+        }
 #if SAYALL_SIRI_REMOTE_ENABLED
         if usesSiriRemote {
             let profileID = settings.registerAppleSiriRemote(
@@ -89,13 +119,13 @@ enum SettingsScreenshotRenderer {
 #else
         _ = usesSiriRemote
 #endif
-#if SAYALL_CHROMECASE_ENABLED
-        if usesChromecase {
-            let profileID = settings.registerChromecaseRemote()
+#if SAYALL_CHROMECAST_ENABLED
+        if usesChromecast {
+            let profileID = settings.registerChromecastRemote()
             settings.selectRemoteProfile(profileID)
         }
 #else
-        _ = usesChromecase
+        _ = usesChromecast
 #endif
         if opensShortcutEditor {
             settings.customMappingEnabled = true
@@ -108,8 +138,21 @@ enum SettingsScreenshotRenderer {
         }
         seedStatisticsForScreenshot(settings)
         let model = BridgeAppModel(settings: settings)
-        let updateInformation = UpdateInformationStore()
+        if showsRemoteCards {
+            model.configureRemoteCardsForSettingsScreenshot(
+                profileIDs: Set(remoteCardSystemNames.keys),
+                systemNames: remoteCardSystemNames,
+                batteryLevels: remoteCardBatteryLevels,
+                powerStates: remoteCardPowerStates
+            )
+        }
+        let updateInformation = UpdateInformationStore(userDefaults: defaults)
         seedAvailableUpdate(updateInformation, language: language)
+        if ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_UPDATE_SEEN"
+        ] == "1" {
+            updateInformation.markAvailableUpdateSeen()
+        }
         let localization = LocalizationStore(settings: settings)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)

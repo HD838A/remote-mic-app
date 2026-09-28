@@ -19,7 +19,8 @@ for script in \
   verify-preview-cdn-availability.sh \
   verify-staged-release-assets.sh recover-preview-stage.sh publish-staged-preview.sh \
   publish-preview-release.sh promote-preview-release.sh prepare-staged-preview-ui-test.sh \
-  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh; do
+  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh \
+  test-verify-release-ready-main-ci.sh; do
   [[ -x "$ROOT/scripts/$script" ]] || {
     print -u2 "release helper is not executable: $script"
     exit 1
@@ -32,19 +33,24 @@ for script in \
   verify-preview-cdn-availability.sh \
   recover-preview-stage.sh publish-staged-preview.sh publish-preview-release.sh \
   promote-preview-release.sh prepare-staged-preview-ui-test.sh \
-  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh; do
+  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh \
+  test-verify-release-ready-main-ci.sh; do
   case "$script" in
-    prepare-public-release-assets.sh|stage-macos-preview.sh|prepare-preview-release.sh)
+    prepare-public-release-assets.sh|stage-macos-preview.sh|prepare-preview-release.sh|test-verify-release-ready-main-ci.sh)
       zsh -n "$ROOT/scripts/$script" ;;
     *)
       bash -n "$ROOT/scripts/$script" ;;
   esac
 done
 
+"$ROOT/scripts/test-verify-release-ready-main-ci.sh"
+
 package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
 stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
+notarize_release="$ROOT/scripts/notarize-release.sh"
+opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
 
 /usr/bin/grep -Fq -- '--disable-keychain' "$ROOT/scripts/build-app.sh"
 /usr/bin/grep -Fq 'xcrun swift build --disable-keychain' "$ROOT/scripts/test.sh"
@@ -61,13 +67,39 @@ fi
 /usr/bin/grep -Fq 'prepare-public-release-assets.sh' "$package_workflow"
 /usr/bin/grep -Fq 'mac-preview-payload-v' "$package_workflow"
 /usr/bin/grep -Fq 'mac-preview-stage-v' "$package_workflow"
+/usr/bin/grep -Fq 'Exclude ephemeral release inputs from source status' "$package_workflow"
+/usr/bin/grep -Fq '/.private-dependencies/' "$package_workflow"
+/usr/bin/grep -Fq '/.private-release/' "$package_workflow"
 /usr/bin/grep -Fq 'test "$TRIGGER_REF_NAME" = main' "$package_workflow"
 /usr/bin/grep -Fq 'verify-public-release-source.sh' "$package_workflow"
-/usr/bin/grep -Fq 'working-directory: release-source' "$package_workflow"
+/usr/bin/grep -Fq 'RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-420}"' "$notarize_release"
+/usr/bin/grep -Fq 'RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-450}"' "$notarize_release"
+/usr/bin/grep -Fq 'export RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS' "$notarize_release"
+if [[ "$(/usr/bin/grep -c -- 'REPOSITORY_ROOT: \${{ github.workspace }}' "$package_workflow")" -lt 1 ]]; then
+  print -u2 "protected package verification must point the verifier at the checked-out repository"
+  exit 1
+fi
 /usr/bin/grep -Fq "branches: [main, 'hotfix/**']" "$ci_workflow"
 /usr/bin/grep -Fq 'swift test --disable-keychain --filter BuildSigningTests' "$ci_workflow"
 /usr/bin/grep -Fq 'Detect private dependency access' "$ci_workflow"
 /usr/bin/grep -Fq 'Private dependency access is unavailable' "$ci_workflow"
+/usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$ci_workflow"
+/usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$package_workflow"
+/usr/bin/grep -Fq 'test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift' "$package_workflow"
+/usr/bin/grep -Fq 'SAYALL_SIRI_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote' "$package_workflow"
+/usr/bin/grep -Fq 'RELEASE_VARIANT=apple-silicon ./scripts/build-apple-remote-opus.sh' "$package_workflow"
+/usr/bin/grep -Fq 'RELEASE_VARIANT=intel ./scripts/build-apple-remote-opus.sh' "$package_workflow"
+/usr/bin/grep -Fq 'CONFIGURE_HOST_ARGS=(--host "$CROSS_HOST")' "$opus_build"
+/usr/bin/grep -Fq 'CC="$CLANG_PATH -target $RELEASE_TRIPLE -isysroot $SDK_PATH"' "$opus_build"
+if /usr/bin/grep -Fq 'must be built on a $RELEASE_ARCH host' "$opus_build"; then
+  print -u2 "Apple Remote Opus must support cross-compiling the Intel release on an Apple Silicon runner"
+  exit 1
+fi
+/usr/bin/grep -Fq 'remoteMicTestSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))' "$ROOT/Package.swift"
+if /usr/bin/grep -Eq 'SAYALL_MACRO_PLATFORM_DEPLOY_KEY' "$ci_workflow" "$package_workflow"; then
+  print -u2 "private platform checkout must not use the retired deploy secret name"
+  exit 1
+fi
 /usr/bin/grep -Fq "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new'" "$ci_workflow"
 /usr/bin/grep -Fq 'Run free combination actions integration tests' "$ci_workflow"
 /usr/bin/grep -Fq 'Build free combination actions release configuration' "$ci_workflow"
@@ -94,6 +126,7 @@ if env \
    -u SAYALL_SIRI_REMOTE_UI_ONLY \
    -u SAYALL_COMBINATION_ACTIONS_PATH \
    -u SAYALL_BUTTON_PROFILES_PACKAGE_PATH \
+   -u SAYALL_MEMBERSHIP_ADAPTER_PACKAGE_PATH \
    -u SAYALL_MEMBERSHIP_PACKAGE_PATH \
    -u SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH \
    REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1 SAYALL_MAC_REMOTE_PACKAGE_PATH= \

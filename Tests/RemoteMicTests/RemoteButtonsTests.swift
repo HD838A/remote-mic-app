@@ -38,6 +38,77 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func karabinerRunningDetectionUsesOnlyPublicApplicationIdentifiers() {
+        #expect(HIDRemoteMonitor.isKarabinerElementsRunning(
+            bundleIdentifiers: ["org.pqrs.Karabiner-Elements"]
+        ))
+        #expect(HIDRemoteMonitor.isKarabinerElementsRunning(
+            bundleIdentifiers: ["org.pqrs.karabiner.karabiner_grabber"]
+        ))
+        #expect(!HIDRemoteMonitor.isKarabinerElementsRunning(
+            bundleIdentifiers: ["com.example.OtherHIDTool"]
+        ))
+    }
+
+    @Test func voiceKeyCompatibilityWarningDistinguishesKarabinerFromOtherHIDTools() {
+        #expect(BridgeAppModel.voiceKeyCompatibilityWarning(
+            remoteConnected: true,
+            usesPrivateAdapter: false,
+            customMappingEnabled: true,
+            hidStatusKey: "button_mapping.error.exclusive_access.karabiner",
+            voiceShortcutStatusKey: "voice_button.status.fn_enabled",
+            karabinerRunning: true
+        ) == .karabiner)
+        #expect(BridgeAppModel.voiceKeyCompatibilityWarning(
+            remoteConnected: true,
+            usesPrivateAdapter: false,
+            customMappingEnabled: true,
+            hidStatusKey: "button_mapping.error.exclusive_access",
+            voiceShortcutStatusKey: "voice_button.status.fn_enabled",
+            karabinerRunning: false
+        ) == .otherInputTool)
+        #expect(BridgeAppModel.voiceKeyCompatibilityWarning(
+            remoteConnected: true,
+            usesPrivateAdapter: false,
+            customMappingEnabled: true,
+            hidStatusKey: "button_mapping.error.exclusive_access.karabiner",
+            voiceShortcutStatusKey: "voice_button.status.fn_enabled",
+            karabinerRunning: false
+        ) == .otherInputTool)
+        #expect(BridgeAppModel.voiceKeyCompatibilityWarning(
+            remoteConnected: true,
+            usesPrivateAdapter: false,
+            customMappingEnabled: true,
+            hidStatusKey: "button_mapping.status.connected",
+            voiceShortcutStatusKey: "voice_button.status.waiting",
+            karabinerRunning: true
+        ) == .karabiner)
+        #expect(BridgeAppModel.voiceKeyCompatibilityWarning(
+            remoteConnected: true,
+            usesPrivateAdapter: false,
+            customMappingEnabled: true,
+            hidStatusKey: "button_mapping.status.disconnected",
+            voiceShortcutStatusKey: "voice_button.status.fn_enabled",
+            karabinerRunning: true
+        ) == .karabiner)
+        #expect(BridgeAppModel.voiceKeyCompatibilityWarning(
+            remoteConnected: true,
+            usesPrivateAdapter: false,
+            customMappingEnabled: true,
+            hidStatusKey: "button_mapping.status.connected",
+            voiceShortcutStatusKey: "voice_button.status.fn_enabled",
+            karabinerRunning: true
+        ) == nil)
+        #expect(BridgeAppModel.voiceKeyCompatibilityWarning(
+            remoteConnected: false,
+            usesPrivateAdapter: false,
+            customMappingEnabled: true,
+            hidStatusKey: "button_mapping.error.exclusive_access",
+            voiceShortcutStatusKey: "voice_button.status.fn_enabled",
+            karabinerRunning: true
+        ) == nil)
+    }
+
     @Test func discoveryProbesMatchedDevicesWithoutBindingTheEnumerationWinner() {
         #expect(HIDRemoteMonitor.deviceMatchDecision(
             reportingFingerprint: "unbound-remote",
@@ -2125,7 +2196,7 @@ struct RemoteButtonsTests {
             encoding: .utf8
         )
         #expect(source.contains("settings.registerHIDRemote(fingerprint: fingerprint)"))
-        #expect(source.contains("return (resolvedProfileID, !self.macroFeature.isEditorActive)"))
+        #expect(source.contains("!self.macroFeature.isEditorActive && !suppressConfiguredAction"))
         #expect(!source.contains("pendingHIDBindingProfileID"))
     }
 

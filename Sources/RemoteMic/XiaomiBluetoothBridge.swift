@@ -33,6 +33,7 @@ protocol XiaomiBluetoothBridgeDelegate: AnyObject {
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdateBatteryLevel level: Int?)
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didIdentifyRemoteModel model: XiaomiRemoteModel)
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdatePowerState state: RemotePowerState?)
+    func bluetoothBridgeDeviceNameDidChange(_ bridge: XiaomiBluetoothBridge)
 }
 
 private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegate {
@@ -42,6 +43,10 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
     init(generation: UInt64, owner: XiaomiBluetoothBridge) {
         self.generation = generation
         self.owner = owner
+    }
+
+    func peripheralDidUpdateName(_ peripheral: CBPeripheral) {
+        owner?.handleNameUpdate(peripheral: peripheral, generation: generation)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
@@ -106,6 +111,8 @@ final class XiaomiBluetoothBridge: NSObject {
     private weak var delegate: XiaomiBluetoothBridgeDelegate?
     private let targetIdentifier: UUID?
     private let excludedIdentifiers: () -> Set<UUID>
+    /// 已被判定为「别的产品」的标识；本桥此后一律不再连接，也不再走扫描回退。
+    private var rejectedIdentifiers = Set<UUID>()
     private var central: CBCentralManager?
     private var centralGeneration: UInt64?
     private var peripheral: CBPeripheral?
@@ -149,6 +156,20 @@ final class XiaomiBluetoothBridge: NSObject {
 
     var deviceIdentifier: UUID? {
         peripheral?.identifier ?? targetIdentifier
+    }
+
+    /// Refresh the system snapshot without changing the bridge's connection or audio state.
+    func currentSystemDeviceName() -> String? {
+        guard shouldRun, let central, central.state == .poweredOn,
+              let peripheral, case .ready = lifecycle
+        else { return nil }
+        return central.retrieveConnectedPeripherals(withServices: [serviceUUID])
+            .first(where: { $0.identifier == peripheral.identifier })?.name
+    }
+
+    fileprivate func handleNameUpdate(peripheral: CBPeripheral, generation: UInt64) {
+        guard shouldRun, isCurrent(peripheral), lifecycle == .ready(generation) else { return }
+        delegate?.bluetoothBridgeDeviceNameDidChange(self)
     }
 
     private(set) var state: BluetoothBridgeState = .stopped {
@@ -210,14 +231,18 @@ final class XiaomiBluetoothBridge: NSObject {
         finishAttempt(reconnectAfter: 0.1)
     }
 
-    func recoverAfterSystemWake() {
+    /// 主动重建本桥的语音链路，重新从发现/连接开始。
+    ///
+    /// `reason` 是稳定枚举（`system_wake` / `session_activated`），只用于把「系统唤醒」和
+    /// 「会话切回前台」两种触发区分开，不参与状态机判定。
+    func recoverVoiceLink(reason: String) {
         guard shouldRun else {
-            AppLogger.shared.write("BLE WAKE recovery_skipped reason=bridge_stopped")
+            AppLogger.shared.write("BLE RECOVERY phase=skipped cause=bridge_stopped trigger=\(reason)")
             return
         }
         let centralState = central.map { String($0.state.rawValue) } ?? "none"
         AppLogger.shared.write(
-            "BLE WAKE recovery_requested state=\(String(describing: state)) " +
+            "BLE RECOVERY phase=requested trigger=\(reason) state=\(String(describing: state)) " +
                 "lifecycle=\(String(describing: lifecycle)) " +
                 "central_state=\(centralState) " +
                 "generation=\(generationCounter)"
@@ -317,21 +342,48 @@ final class XiaomiBluetoothBridge: NSObject {
         if reconnectPolicy.allowsCachedTargetRetrieval,
            let identifier = targetIdentifier,
            let saved = central.retrievePeripherals(withIdentifiers: [identifier]).first {
-            connect(
+            // 已保存身份不再无条件采纳：早先版本把别的产品（Chromecast Remote）误存成 Xiaomi
+            // 档案后，只按 UUID 连接会让这个错误一直重连、并且和私有 Chromecast 包抢同一台设备。
+            // 被拒绝时不 return：按「设备不在」继续走既有扫描/重试路径，不新增状态分支。
+            if adopt(
                 saved,
                 using: central,
                 generation: generation,
                 source: "target_identifier",
+                advertisesVoiceService: true,
+                advertisedName: nil,
                 usesCachedTarget: true
-            )
-            return
+            ) {
+                return
+            }
         }
 
-        if targetIdentifier == nil,
-           let connected = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
-            .first(where: { isCandidate($0) && !excludedIdentifiers().contains($0.identifier) }) {
-            connect(connected, using: central, generation: generation, source: "connected_peripheral")
-            return
+        if targetIdentifier == nil {
+            // ATVV 服务是通用服务，可能同时命中多台遥控器。这里把候选连名字一起记一行：
+            // 否则「取回了候选但名字不符」与「根本没取回候选」在日志里完全一样，无法二分。
+            let connectedCandidates = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
+            if !connectedCandidates.isEmpty {
+                AppLogger.shared.write(
+                    "BLE SYSTEM CONNECTED CANDIDATES count=\(connectedCandidates.count) "
+                        + "names="
+                        + connectedCandidates.map { $0.name ?? "unknown" }.joined(separator: ",")
+                )
+            }
+            // 逐个过准入：第一台被拒绝（别的产品）时继续看下一台，而不是整批放弃。
+            for candidate in connectedCandidates
+            where !excludedIdentifiers().contains(candidate.identifier)
+                && !rejectedIdentifiers.contains(candidate.identifier) {
+                if adopt(
+                    candidate,
+                    using: central,
+                    generation: generation,
+                    source: "connected_peripheral",
+                    advertisesVoiceService: true,
+                    advertisedName: nil
+                ) {
+                    return
+                }
+            }
         }
 
         state = .scanning
@@ -340,6 +392,54 @@ final class XiaomiBluetoothBridge: NSObject {
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
         )
         AppLogger.shared.write("BLE SCANNING")
+    }
+
+    /// 三条发现路径——已保存标识、系统已连接设备、扫描广播——**必须共用这一份判定**。
+    /// 分成三份写就会出现「某条路径漏掉/误收」这类只在特定配对状态下复现的缺陷。
+    @discardableResult
+    private func adopt(
+        _ candidate: CBPeripheral,
+        using central: CBCentralManager,
+        generation: UInt64,
+        source: String,
+        advertisesVoiceService: Bool,
+        advertisedName: String?,
+        usesCachedTarget: Bool = false
+    ) -> Bool {
+        let decision = VoiceRemoteAdmission.decide(
+            identifier: candidate.identifier,
+            targetIdentifier: targetIdentifier,
+            advertisesVoiceService: advertisesVoiceService,
+            name: candidate.name,
+            advertisedName: advertisedName
+        )
+        switch decision {
+        case .adoptSavedIdentity, .adoptRecognizedName:
+            connect(
+                candidate,
+                using: central,
+                generation: generation,
+                source: source,
+                usesCachedTarget: usesCachedTarget
+            )
+            return true
+        case .ignore:
+            return false
+        case .rejectForeignProduct, .rejectUnrecognizedName, .rejectUnnamed:
+            reject(candidate, reason: decision.logReason, source: source)
+            return false
+        }
+    }
+
+    /// 明确记录并拒绝一台设备，此后本桥不再尝试连接它。
+    ///
+    /// 必须是显式日志：设备名对不上、名字不认识、根本没拿到名字，这三种情况在没有原因字段的
+    /// 日志里长得完全一样，无法二分「为什么这台遥控器没被接管」。
+    private func reject(_ candidate: CBPeripheral, reason: String, source: String) {
+        guard rejectedIdentifiers.insert(candidate.identifier).inserted else { return }
+        AppLogger.shared.write(
+            "BLE REJECTED reason=\(reason) source=\(source) name=\(candidate.name ?? "unknown")"
+        )
     }
 
     private func connect(
@@ -365,10 +465,6 @@ final class XiaomiBluetoothBridge: NSObject {
         startConnectionTimeout(generation: generation)
         central.connect(candidate, options: nil)
         AppLogger.shared.write("BLE CONNECTING source=\(source) name=\(candidate.name ?? "unknown")")
-    }
-
-    private func isCandidate(_ candidate: CBPeripheral) -> Bool {
-        XiaomiVoiceRemoteNameMatcher.matches(candidate.name)
     }
 
     private func resetPeripheral() {
@@ -864,15 +960,28 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               lifecycle == .scanning(generation),
               self.peripheral == nil,
               !excludedIdentifiers().contains(peripheral.identifier),
-              targetIdentifier == nil || peripheral.identifier == targetIdentifier,
-              serviceMatch || isCandidate(peripheral) || XiaomiVoiceRemoteNameMatcher.matches(advertisedName)
+              !rejectedIdentifiers.contains(peripheral.identifier)
         else { return }
-        connect(peripheral, using: central, generation: generation, source: "scan")
+        adopt(
+            peripheral,
+            using: central,
+            generation: generation,
+            source: "scan",
+            advertisesVoiceService: serviceMatch,
+            advertisedName: advertisedName
+        )
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         guard self.central === central else { return }
         guard shouldRun else {
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
+        // 最后一道闸：无论从哪条路径连上来的，只要名字说明它是别的产品就立刻断开。
+        // 前面几处判定可能因为「当时拿不到名字」而放行，这一层保证不会真的接管它。
+        if ForeignVoiceRemoteProduct.isRejected(name: peripheral.name) {
+            reject(peripheral, reason: "foreign_product", source: "did_connect")
             central.cancelPeripheralConnection(peripheral)
             return
         }
@@ -1209,7 +1318,11 @@ extension XiaomiBluetoothBridge {
                 AppLogger.shared.write("BLE MODEL unrecognized modelNumber=\(normalizedModelNumber)")
                 return
             }
-            AppLogger.shared.write("BLE MODEL identified=\(model.rawValue)")
+            // 原始型号串必须一起记：广播名与型号**不是**一一对应（本机这台广播名是
+            // 「小米蓝牙语音遥控器」，DIS 报的却是 RC003），只有原始串能支撑型号目录。
+            AppLogger.shared.write(
+                "BLE MODEL identified=\(model.rawValue) modelNumber=\(normalizedModelNumber)"
+            )
             delegate?.bluetoothBridge(self, didIdentifyRemoteModel: model)
             return
         }

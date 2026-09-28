@@ -39,6 +39,8 @@
 
 Video by [可乐不甜的跑焦日记](https://space.bilibili.com/327214328)
 
+> 3D-printed Xiaomi Bluetooth Remote 2 Pro shell by the same creator: [View it on MakerWorld](https://makerworld.com.cn/zh/models/2965815-vibegrip-ma-shang-wo-wei-vibe-coding-zuo-de-xiao-m?appSharePlatform=sayall.app)
+
 ## Windows version
 
 The first Windows preview of SayAll is now available, focusing on the essential features:
@@ -121,6 +123,8 @@ Starting with v1.3.0, official release packages are signed with an Apple Develop
 4. Launch SayAll and grant Bluetooth access when asked.
 5. To customize ordinary buttons, also grant Input Monitoring and Accessibility. Restarting the app is required only after changing those macOS permissions.
 
+Device cards in **Connection & Voice** and **Button Mapping** prefer the custom name from macOS Bluetooth settings. Duplicate names are numbered from 1; unnamed devices keep their existing model numbering. After renaming, return to SayAll or reopen the relevant page to refresh. Offline devices keep their last known name. System name synchronization currently covers Xiaomi and Apple remotes; standalone system API checks have passed on A2854, while full compatibility of the candidate app still awaits validation.
+
 The menu bar icon is dimmed when no device is connected and remains clickable. An active connection from a physical remote, iPhone, Apple Watch, or web remote restores its normal appearance; voice transmission uses the active icon. Hover to read the current status. A connection does not mean audio or input permissions are ready.
 
 SayAll appears in the Dock and remains in the menu bar after launch:
@@ -158,6 +162,12 @@ Tap-to-toggle voice tools such as Typeless are incompatible with the Xiaomi Blue
 You must still **hold the Xiaomi Bluetooth Remote 2 or 2 Pro voice key while speaking and release it to finish**. Both remote firmwares stop microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete remote HID mapping automatically disables the mode and restores the default Fn-hold mapping.
 
 If Doubao Input Method cannot see an ordinary virtual microphone, install **MiRemoteV 2ch** with **Install SayAll.pkg**, then select it in SayAll. See the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
+
+### Choosing the right mode for your remote and voice tool
+
+Remotes differ in how they record: the Xiaomi remote only records while held; the Chromecast voice remote also supports "tap once to start, tap once more to stop"; the Siri Remote adds a touch surface. Voice tools differ too: some record while a key is held, others toggle on a tap. Mismatched pairs show up as "pressing once to stop does not end recording" or "recording ends right after it starts".
+
+The capabilities of every remote and voice tool, and the mode each combination needs (including whether **Simulate Fn Tap on Voice Key** should be on), are listed in the [Remote and Voice Tool Capability Matrix](remote/遥控器与输入工具能力矩阵.md) (in Chinese).
 
 ## Customize remote buttons
 

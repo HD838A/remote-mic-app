@@ -44,6 +44,7 @@ private func appleRemoteTouchFrame(
     contacts: UnsafePointer<SAYAppleRemoteTouchContact>?,
     contactCount: Int32,
     timestamp: Double,
+    sourceID: UInt64,
     context: UnsafeMutableRawPointer?
 ) {
     guard let context else { return }
@@ -62,7 +63,11 @@ private func appleRemoteTouchFrame(
     } else {
         values = []
     }
-    adapter.handleTouchFrame(contacts: values, timestampUptime: timestamp)
+    adapter.handleTouchFrame(
+        sourceID: sourceID,
+        contacts: values,
+        timestampUptime: timestamp
+    )
 }
 
 enum AppleSiriRemoteControl: String, CaseIterable, Equatable {
@@ -158,6 +163,11 @@ final class AppleSiriRemoteAdapter {
         let device: IOHIDDevice
         let identity: RemoteHardwareDeviceIdentity
         let fingerprint: String
+        let touchSourceID: UInt64
+    }
+
+    private struct TouchState {
+        var contactsWereActive = false
     }
 
     private struct ControlKey: Hashable {
@@ -165,6 +175,13 @@ final class AppleSiriRemoteAdapter {
         let control: AppleSiriRemoteControl
     }
 
+    /// 本文件是**开放仓库的骨架**，不会被实例化：真正驱动苹果遥控器的是私有包
+    /// `SayAllSiriRemote`（`SAYALL_SIRI_REMOTE_ENABLED` 时启用），能力位是那里上报的。
+    ///
+    /// 能力只有一个来源——型号自己的代码 `SayAllSiriRemoteModel.capabilities`。
+    /// **不要把这里那份清单当成事实依据去改**：它与宿主界面无关（宿主从不读它），
+    /// 改了也不会生效，只会制造第二份真相。真正的自报通道见
+    /// `SiriRemoteFeatureIntegration.onDeclaredCapabilitiesChange`。
     static let descriptor = RemoteHardwareDescriptor(
         adapterID: "apple_siri_remote",
         modelID: "a2854",
@@ -186,8 +203,10 @@ final class AppleSiriRemoteAdapter {
     private var permissionTimer: DispatchSourceTimer?
     private var touchSession: OpaquePointer?
     private var touchIsRunning = false
-    private var touchDeviceIdentity: RemoteHardwareDeviceIdentity?
-    private var touchContactsWereActive = false
+    private var preferredTouchDeviceIdentity: RemoteHardwareDeviceIdentity?
+    private var touchIdentityBySourceID: [UInt64: RemoteHardwareDeviceIdentity] = [:]
+    private var touchFallbackIdentity: RemoteHardwareDeviceIdentity?
+    private var touchStates: [RemoteHardwareDeviceIdentity: TouchState] = [:]
     private var touchSequence: UInt64 = 0
     private var coalescedControlReports: [ControlKey: Int] = [:]
     private let touchLock = NSLock()
@@ -282,9 +301,14 @@ final class AppleSiriRemoteAdapter {
             ))
         }
         interfaces.removeAll()
+        touchLock.lock()
+        touchIdentityBySourceID.removeAll()
+        touchFallbackIdentity = nil
+        touchLock.unlock()
         interfaceCountByIdentity.removeAll()
         fingerprintByIdentity.removeAll()
         coalescedControlReports.removeAll()
+        preferredTouchDeviceIdentity = nil
         guard let manager else { return }
         IOHIDManagerUnscheduleFromRunLoop(
             manager,
@@ -356,11 +380,25 @@ final class AppleSiriRemoteAdapter {
         interfaces[key] = Interface(
             device: device,
             identity: identity,
-            fingerprint: fingerprint
+            fingerprint: fingerprint,
+            touchSourceID: SAYAppleRemoteTouchSourceIDForHIDDevice(
+                Unmanaged.passUnretained(device).toOpaque()
+            )
         )
+        let touchSourceID = interfaces[key]?.touchSourceID ?? 0
+        if touchSourceID != 0 {
+            touchLock.lock()
+            touchIdentityBySourceID[touchSourceID] = identity
+            touchLock.unlock()
+        }
         let previousCount = interfaceCountByIdentity[identity, default: 0]
         interfaceCountByIdentity[identity] = previousCount + 1
         fingerprintByIdentity[identity] = fingerprint
+        touchLock.lock()
+        touchFallbackIdentity = interfaceCountByIdentity.count == 1
+            ? interfaceCountByIdentity.keys.first
+            : nil
+        touchLock.unlock()
         if previousCount == 0 {
             onConnection?(Connection(
                 device: identity,
@@ -372,7 +410,7 @@ final class AppleSiriRemoteAdapter {
             "APPLE REMOTE DEVICE phase=connected model=a2854 " +
                 "interface_page=\(stableHex(usagePage)) seized=\(isSeized)"
         )
-        updateTouchSessionForConnectedDevices()
+        updateTouchSessionForConnectedDevices(forceRestart: true)
     }
 
     fileprivate func deviceDidRemove(_ device: IOHIDDevice) {
@@ -404,7 +442,17 @@ final class AppleSiriRemoteAdapter {
         } else {
             interfaceCountByIdentity[interface.identity] = remainingCount
         }
-        updateTouchSessionForConnectedDevices()
+        touchLock.lock()
+        touchIdentityBySourceID = interfaces.values.reduce(into: [:]) { result, value in
+            if value.touchSourceID != 0 {
+                result[value.touchSourceID] = value.identity
+            }
+        }
+        touchFallbackIdentity = interfaceCountByIdentity.count == 1
+            ? interfaceCountByIdentity.keys.first
+            : nil
+        touchLock.unlock()
+        updateTouchSessionForConnectedDevices(forceRestart: true)
     }
 
     fileprivate func handleInputValue(_ value: IOHIDValue, from device: IOHIDDevice) {
@@ -426,13 +474,16 @@ final class AppleSiriRemoteAdapter {
         ))
         switch result {
         case let .emitted(event):
+            if event.phase == .began {
+                preferredTouchDeviceIdentity = event.device
+            }
             let coalescedEvents = coalescedControlReports.removeValue(forKey: controlKey) ?? 0
             logger(
                 "APPLE REMOTE CONTROL phase=\(event.phase.rawValue) control=\(control.rawValue) " +
                     "sequence=\(event.sequence) coalesced_events=\(coalescedEvents)"
             )
             onControlEvent?(event)
-            if event.phase == .began, !touchIsRunning {
+            if event.phase == .began || !touchIsRunning {
                 updateTouchSessionForConnectedDevices()
             }
         case let .ignored(reason):
@@ -453,28 +504,34 @@ final class AppleSiriRemoteAdapter {
     }
 
     fileprivate func handleTouchFrame(
+        sourceID: UInt64,
         contacts: [RemoteHardwareTouchContact],
         timestampUptime: TimeInterval
     ) {
         touchLock.lock()
-        guard let identity = touchDeviceIdentity else {
+        let identity = touchIdentityBySourceID[sourceID]
+            ?? (sourceID == 0 ? touchFallbackIdentity : nil)
+        guard let identity else {
             touchLock.unlock()
+            logger("APPLE REMOTE TOUCH frame result=unmapped_source")
             return
         }
+        var state = touchStates[identity, default: TouchState()]
         let phase: RemoteHardwareTouchPhase
         if contacts.isEmpty {
-            guard touchContactsWereActive else {
+            guard state.contactsWereActive else {
                 touchLock.unlock()
                 return
             }
             phase = .ended
-            touchContactsWereActive = false
-        } else if touchContactsWereActive {
+            state.contactsWereActive = false
+        } else if state.contactsWereActive {
             phase = .changed
         } else {
             phase = .began
-            touchContactsWereActive = true
+            state.contactsWereActive = true
         }
+        touchStates[identity] = state
         touchSequence &+= 1
         let event = RemoteHardwareTouchEvent(
             device: identity,
@@ -487,6 +544,95 @@ final class AppleSiriRemoteAdapter {
         DispatchQueue.main.async { [weak self] in
             self?.onTouchEvent?(event)
         }
+    }
+
+    private func updateTouchSessionForConnectedDevices(forceRestart: Bool = false) {
+        guard customMappingEnabled, !interfaceCountByIdentity.isEmpty else {
+            cancelActiveTouch(reason: .superseded)
+            stopTouchSession()
+            return
+        }
+        if forceRestart, touchIsRunning {
+            cancelActiveTouch(reason: .superseded)
+            stopTouchSession()
+            logger("APPLE REMOTE TOUCH phase=refresh reason=device_topology")
+        }
+        if touchSession == nil {
+            touchSession = SAYAppleRemoteTouchSessionCreate(
+                appleRemoteTouchFrame,
+                Unmanaged.passUnretained(self).toOpaque()
+            )
+        }
+        guard let touchSession else {
+            logger("APPLE REMOTE TOUCH unavailable reason=framework_or_symbols")
+            return
+        }
+        if !touchIsRunning {
+            touchIsRunning = SAYAppleRemoteTouchSessionStart(touchSession)
+            logger(
+                "APPLE REMOTE TOUCH phase=start selection=all_connected_devices " +
+                    "device_count=\(interfaceCountByIdentity.count) " +
+                    "result=\(touchIsRunning ? "attached" : "surface_unavailable")"
+            )
+        }
+    }
+
+    static func selectTouchIdentity(
+        available: Set<RemoteHardwareDeviceIdentity>,
+        preferred: RemoteHardwareDeviceIdentity?,
+        current: RemoteHardwareDeviceIdentity?
+    ) -> RemoteHardwareDeviceIdentity? {
+        if let current, available.contains(current) {
+            return current
+        }
+        if let preferred, available.contains(preferred) {
+            return preferred
+        }
+        return available.count == 1 ? available.first : nil
+    }
+
+    private func stopTouchSession() {
+        if let touchSession {
+            SAYAppleRemoteTouchSessionStop(touchSession)
+        }
+        touchLock.lock()
+        touchStates.removeAll()
+        touchLock.unlock()
+        touchIsRunning = false
+    }
+
+    private func destroyTouchSession() {
+        guard let touchSession else { return }
+        SAYAppleRemoteTouchSessionDestroy(touchSession)
+        self.touchSession = nil
+        touchIsRunning = false
+    }
+
+    private func cancelActiveTouch(reason: RemoteHardwareLifecycleCancellationReason) {
+        touchLock.lock()
+        let activeIdentities = touchStates.compactMap { identity, state in
+            state.contactsWereActive ? identity : nil
+        }
+        guard !activeIdentities.isEmpty else {
+            touchLock.unlock()
+            return
+        }
+        activeIdentities.forEach { identity in
+            touchStates[identity]?.contactsWereActive = false
+        }
+        let events = activeIdentities.map { identity -> RemoteHardwareTouchEvent in
+            touchSequence &+= 1
+            return RemoteHardwareTouchEvent(
+                device: identity,
+                phase: .cancelled,
+                contacts: [],
+                timestampUptime: ProcessInfo.processInfo.systemUptime,
+                sequence: touchSequence
+            )
+        }
+        touchLock.unlock()
+        logger("APPLE REMOTE TOUCH phase=cancelled reason=\(reason.rawValue) count=\(events.count)")
+        events.forEach { onTouchEvent?($0) }
     }
 
     private func emit(_ events: [RemoteHardwareControlEvent]) {
@@ -516,81 +662,6 @@ final class AppleSiriRemoteAdapter {
         }
         permissionTimer = timer
         timer.resume()
-    }
-
-    private func updateTouchSessionForConnectedDevices() {
-        guard customMappingEnabled,
-              interfaceCountByIdentity.count == 1,
-              let identity = interfaceCountByIdentity.keys.first
-        else {
-            cancelActiveTouch(reason: .superseded)
-            touchLock.lock()
-            touchDeviceIdentity = nil
-            touchLock.unlock()
-            stopTouchSession()
-            if customMappingEnabled, interfaceCountByIdentity.count > 1 {
-                logger("APPLE REMOTE TOUCH unavailable reason=multiple_devices")
-            }
-            return
-        }
-        touchLock.lock()
-        touchDeviceIdentity = identity
-        touchLock.unlock()
-        if touchSession == nil {
-            touchSession = SAYAppleRemoteTouchSessionCreate(
-                appleRemoteTouchFrame,
-                Unmanaged.passUnretained(self).toOpaque()
-            )
-        }
-        guard let touchSession else {
-            logger("APPLE REMOTE TOUCH unavailable reason=framework_or_symbols")
-            return
-        }
-        if !touchIsRunning {
-            touchIsRunning = SAYAppleRemoteTouchSessionStart(touchSession)
-            logger(
-                "APPLE REMOTE TOUCH phase=start result=\(touchIsRunning ? "attached" : "surface_unavailable")"
-            )
-        }
-    }
-
-    private func stopTouchSession() {
-        if let touchSession {
-            SAYAppleRemoteTouchSessionStop(touchSession)
-        }
-        touchLock.lock()
-        touchDeviceIdentity = nil
-        touchLock.unlock()
-        touchIsRunning = false
-    }
-
-    private func destroyTouchSession() {
-        guard let touchSession else { return }
-        SAYAppleRemoteTouchSessionDestroy(touchSession)
-        self.touchSession = nil
-        touchIsRunning = false
-    }
-
-    private func cancelActiveTouch(reason: RemoteHardwareLifecycleCancellationReason) {
-        touchLock.lock()
-        guard touchContactsWereActive,
-              let identity = touchDeviceIdentity
-        else {
-            touchLock.unlock()
-            return
-        }
-        touchContactsWereActive = false
-        touchSequence &+= 1
-        let event = RemoteHardwareTouchEvent(
-            device: identity,
-            phase: .cancelled,
-            contacts: [],
-            timestampUptime: ProcessInfo.processInfo.systemUptime,
-            sequence: touchSequence
-        )
-        touchLock.unlock()
-        logger("APPLE REMOTE TOUCH phase=cancelled reason=\(reason.rawValue)")
-        onTouchEvent?(event)
     }
 
     private func integerProperty(_ key: String, device: IOHIDDevice) -> Int? {
@@ -624,7 +695,7 @@ struct AppleSiriRemoteTouchInterpreter {
     private static let circularLowSpeed = 0.01
     private static let circularHighSpeed = 0.07
     private static let tapMaximumDuration = 0.22
-    private static let tapMaximumDistance = 0.07
+    private static let tapMaximumDistance = 0.03
 
     private let tuning: RemoteHardwareTouchTuning
     private var lastPosition: CGPoint?
@@ -635,6 +706,7 @@ struct AppleSiriRemoteTouchInterpreter {
     private var emittedScroll = 0.0
     private var circularStarted = false
     private var circularEligible = false
+    private var tapCandidate = false
     private var didMoveOrScroll = false
     private var suppressesCurrentContact = false
 
@@ -654,6 +726,7 @@ struct AppleSiriRemoteTouchInterpreter {
             lastPosition = point
             startPosition = point
             startedAt = event.timestampUptime
+            tapCandidate = true
             circularEligible = hypot(point.x - 0.5, point.y - 0.5) >= tuning.minimumCircularRadius
             if circularEligible {
                 lastAngle = atan2(point.y - 0.5, point.x - 0.5)
@@ -665,13 +738,29 @@ struct AppleSiriRemoteTouchInterpreter {
                   let previous = lastPosition
             else { return [] }
             defer { lastPosition = point }
-            if circularEligible {
-                return circularOutput(point: point)
-            }
             let deltaX = point.x - previous.x
             let deltaY = point.y - previous.y
             let speed = hypot(deltaX, deltaY)
-            guard speed >= Self.pointerDeadzone else { return [] }
+            let elapsed = event.timestampUptime - (startedAt ?? event.timestampUptime)
+            let displacement = startPosition.map {
+                hypot(point.x - $0.x, point.y - $0.y)
+            } ?? .infinity
+            if circularEligible {
+                tapCandidate = false
+                return circularOutput(point: point)
+            }
+            if tapCandidate,
+               elapsed <= Self.tapMaximumDuration,
+               displacement <= Self.tapMaximumDistance {
+                return []
+            }
+            guard speed >= Self.pointerDeadzone else {
+                tapCandidate = false
+                return []
+            }
+            let movementX = tapCandidate ? point.x - (startPosition?.x ?? previous.x) : deltaX
+            let movementY = tapCandidate ? point.y - (startPosition?.y ?? previous.y) : deltaY
+            tapCandidate = false
             didMoveOrScroll = true
             let gain = interpolatedGain(
                 speed: speed,
@@ -681,13 +770,14 @@ struct AppleSiriRemoteTouchInterpreter {
                 maximum: Self.pointerMaximumAcceleration
             )
             return [.move(
-                deltaX: deltaX * Self.pointerScale * Self.pointerSpeed * gain,
-                deltaY: -deltaY * Self.pointerScale * Self.pointerSpeed * gain
+                deltaX: movementX * Self.pointerScale * Self.pointerSpeed * gain,
+                deltaY: -movementY * Self.pointerScale * Self.pointerSpeed * gain
             )]
         case .ended:
             defer { reset() }
             guard !suppressesCurrentContact,
                   !didMoveOrScroll,
+                  tapCandidate,
                   let startPosition,
                   let lastPosition,
                   let startedAt,
@@ -771,6 +861,7 @@ struct AppleSiriRemoteTouchInterpreter {
         emittedScroll = 0
         circularStarted = false
         circularEligible = false
+        tapCandidate = false
         didMoveOrScroll = false
         suppressesCurrentContact = false
     }

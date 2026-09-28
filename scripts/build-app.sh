@@ -19,14 +19,16 @@ REQUIRE_SAYALL_COMBINATION_ACTIONS="${REQUIRE_SAYALL_COMBINATION_ACTIONS:-0}"
 REQUIRE_SAYALL_BUTTON_PROFILES="${REQUIRE_SAYALL_BUTTON_PROFILES:-0}"
 REQUIRE_SAYALL_MAC_REMOTE_PACKAGE="${REQUIRE_SAYALL_MAC_REMOTE_PACKAGE:-0}"
 REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE:-0}"
-REQUIRE_SAYALL_CHROMECASE="${REQUIRE_SAYALL_CHROMECASE:-0}"
+REQUIRE_SAYALL_CHROMECAST="${REQUIRE_SAYALL_CHROMECAST:-0}"
 SAYALL_AI_PACKAGE_PATH="${SAYALL_AI_PACKAGE_PATH:-}"
 SAYALL_COMBINATION_ACTIONS_PATH="${SAYALL_COMBINATION_ACTIONS_PATH:-}"
 SAYALL_BUTTON_PROFILES_PACKAGE_PATH="${SAYALL_BUTTON_PROFILES_PACKAGE_PATH:-}"
 SAYALL_MAC_REMOTE_PACKAGE_PATH="${SAYALL_MAC_REMOTE_PACKAGE_PATH:-}"
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
 SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
-SAYALL_CHROMECASE_PACKAGE_PATH="${SAYALL_CHROMECASE_PACKAGE_PATH:-}"
+SAYALL_CHROMECAST_PACKAGE_PATH="${SAYALL_CHROMECAST_PACKAGE_PATH:-}"
+SAYALL_MEMBERSHIP_API_BASE_URL="${SAYALL_MEMBERSHIP_API_BASE_URL:-}"
+SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="${SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
@@ -75,9 +77,9 @@ case "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE must be 0 or 1"; exit 1 ;;
 esac
-case "$REQUIRE_SAYALL_CHROMECASE" in
+case "$REQUIRE_SAYALL_CHROMECAST" in
   0|1) ;;
-  *) print -u2 "REQUIRE_SAYALL_CHROMECASE must be 0 or 1"; exit 1 ;;
+  *) print -u2 "REQUIRE_SAYALL_CHROMECAST must be 0 or 1"; exit 1 ;;
 esac
 case "$RELEASE_STAGE_TIMEOUTS" in
   0|1) ;;
@@ -158,38 +160,38 @@ if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" &&
   exit 1
 fi
 
-# Chromecase 走标准 CoreBluetooth（ATVV GATT），不产出 helper、LaunchDaemon 或安装器组件，
+# Chromecast 走标准 CoreBluetooth（ATVV GATT），不产出 helper、LaunchDaemon 或安装器组件，
 # 因此不要求 Developer ID 签名，ad-hoc 构建即可用于真机验证。
-if [[ -n "$SAYALL_CHROMECASE_PACKAGE_PATH" ]]; then
-  if [[ ! -f "$SAYALL_CHROMECASE_PACKAGE_PATH/Package.swift" ]]; then
-    print -u2 "SAYALL_CHROMECASE_PACKAGE_PATH must contain Package.swift"
+if [[ -n "$SAYALL_CHROMECAST_PACKAGE_PATH" ]]; then
+  if [[ ! -f "$SAYALL_CHROMECAST_PACKAGE_PATH/Package.swift" ]]; then
+    print -u2 "SAYALL_CHROMECAST_PACKAGE_PATH must contain Package.swift"
     exit 1
   fi
-  SAYALL_CHROMECASE_PACKAGE_PATH="${SAYALL_CHROMECASE_PACKAGE_PATH:A}"
-  export SAYALL_CHROMECASE_PACKAGE_PATH
-  SAYALL_CHROMECASE_INCLUDED=true
+  SAYALL_CHROMECAST_PACKAGE_PATH="${SAYALL_CHROMECAST_PACKAGE_PATH:A}"
+  export SAYALL_CHROMECAST_PACKAGE_PATH
+  SAYALL_CHROMECAST_INCLUDED=true
   # 按键页的遥控器素材随私有包打进 App，因此解析器必须优先读 App 的 Resources；
   # 退回 SwiftPM 内嵌的构建机路径会让发布包找不到图片，界面只会显示占位块。
-  CHROMECASE_SOURCE_ROOT="$SAYALL_CHROMECASE_PACKAGE_PATH/Sources/SayAllChromecase"
-  CHROMECASE_RESOURCE_RESOLVER="$CHROMECASE_SOURCE_ROOT/ChromecaseResources.swift"
-  if [[ ! -f "$CHROMECASE_RESOURCE_RESOLVER" ]] || \
-      ! /usr/bin/grep -Eq 'Bundle\.main\.resourceURL' "$CHROMECASE_RESOURCE_RESOLVER"; then
-    print -u2 "Chromecase resource resolver is missing or does not prefer the packaged App resource bundle"
+  CHROMECAST_SOURCE_ROOT="$SAYALL_CHROMECAST_PACKAGE_PATH/Sources/SayAllChromecast"
+  CHROMECAST_RESOURCE_RESOLVER="$CHROMECAST_SOURCE_ROOT/ChromecastResources.swift"
+  if [[ ! -f "$CHROMECAST_RESOURCE_RESOLVER" ]] || \
+      ! /usr/bin/grep -Eq 'Bundle\.main\.resourceURL' "$CHROMECAST_RESOURCE_RESOLVER"; then
+    print -u2 "Chromecast resource resolver is missing or does not prefer the packaged App resource bundle"
     exit 1
   fi
   # 只检查画布源文件；解析器本身必须保留 `Bundle.module` 作为兜底分支。
-  for chromecase_source in \
-    ChromecaseMappingPage.swift; do
-    if /usr/bin/grep -Eq 'Bundle\.module' "$CHROMECASE_SOURCE_ROOT/$chromecase_source"; then
-      print -u2 "Chromecase source bypasses the packaged resource resolver: $chromecase_source"
+  for chromecast_source in \
+    ChromecastMappingPage.swift; do
+    if /usr/bin/grep -Eq 'Bundle\.module' "$CHROMECAST_SOURCE_ROOT/$chromecast_source"; then
+      print -u2 "Chromecast source bypasses the packaged resource resolver: $chromecast_source"
       exit 1
     fi
   done
 else
-  SAYALL_CHROMECASE_INCLUDED=false
+  SAYALL_CHROMECAST_INCLUDED=false
 fi
-if [[ "$REQUIRE_SAYALL_CHROMECASE" == "1" && "$SAYALL_CHROMECASE_INCLUDED" != "true" ]]; then
-  print -u2 "A SayAll Chromecase package is required for this build"
+if [[ "$REQUIRE_SAYALL_CHROMECAST" == "1" && "$SAYALL_CHROMECAST_INCLUDED" != "true" ]]; then
+  print -u2 "A SayAll Chromecast package is required for this build"
   exit 1
 fi
 
@@ -221,8 +223,14 @@ if [[ -n "$SAYALL_BUTTON_PROFILES_PACKAGE_PATH" ]]; then
 else
   SAYALL_BUTTON_PROFILES_INCLUDED=false
 fi
+if [[ -n "${SAYALL_MEMBERSHIP_PACKAGE_PATH:-}" || \
+      -n "${SAYALL_MEMBERSHIP_ADAPTER_PACKAGE_PATH:-}" ]]; then
+  print -u2 "membership source packages are not supported; use SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"
+  exit 1
+fi
 if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
-  if [[ -n "$SAYALL_COMBINATION_ACTIONS_PATH" || -n "${SAYALL_MEMBERSHIP_PACKAGE_PATH:-}" ]]; then
+  if [[ -n "$SAYALL_COMBINATION_ACTIONS_PATH" || \
+        -n "$SAYALL_BUTTON_PROFILES_PACKAGE_PATH" ]]; then
     print -u2 "private artifacts cannot be combined with private source packages"
     exit 1
   fi
@@ -259,11 +267,7 @@ if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
   export SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH
   SAYALL_PRIVATE_ARTIFACT_INCLUDED=true
   SAYALL_COMBINATION_ACTIONS_INCLUDED=true
-  if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
-        "$SAYALL_BUTTON_PROFILES_PACKAGE_PATH" != "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
-    print -u2 "private artifacts cannot be combined with a paid source package"
-    exit 1
-  fi
+  SAYALL_BUTTON_PROFILES_INCLUDED=true
 else
   SAYALL_PRIVATE_ARTIFACT_INCLUDED=false
   if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
@@ -286,6 +290,21 @@ if [[ "$REQUIRE_SAYALL_BUTTON_PROFILES" == "1" &&
       "$SAYALL_BUTTON_PROFILES_INCLUDED" != "true" ]]; then
   print -u2 "A SayAll button profiles package is required for this build"
   exit 1
+fi
+if [[ -n "$SAYALL_MEMBERSHIP_API_BASE_URL" ]] && ! print -r -- "$SAYALL_MEMBERSHIP_API_BASE_URL" | \
+    rg -q '^(https://[^[:space:]]+|http://127\.0\.0\.1(:[0-9]+)?(/[^[:space:]]*)?)$'; then
+  print -u2 "SAYALL_MEMBERSHIP_API_BASE_URL must use HTTPS or local http://127.0.0.1"
+  exit 1
+fi
+if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
+      "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+  SAYALL_MEMBERSHIP_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllMembership_SayAllMembershipUI.bundle"
+  if [[ ! -d "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE" ||
+        ! -f "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE/Contents/Resources/MembershipCenterCopy.json" ||
+        ! -f "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE/Contents/Resources/AppIcon.png" ]]; then
+    print -u2 "Prepared private artifacts are missing the SayAll membership resource bundle"
+    exit 1
+  fi
 fi
 if [[ -n "$SAYALL_MAC_REMOTE_PACKAGE_PATH" ]]; then
   if [[ ! -f "$SAYALL_MAC_REMOTE_PACKAGE_PATH/Package.swift" ]]; then
@@ -325,8 +344,8 @@ fi
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="${SCRATCH_FLAVOR}-siri-remote"
 fi
-if [[ "$SAYALL_CHROMECASE_INCLUDED" == "true" ]]; then
-  SCRATCH_FLAVOR="${SCRATCH_FLAVOR}-chromecase"
+if [[ "$SAYALL_CHROMECAST_INCLUDED" == "true" ]]; then
+  SCRATCH_FLAVOR="${SCRATCH_FLAVOR}-chromecast"
 fi
 DEFAULT_SCRATCH_PATH="/private/tmp/remote-mic-swiftpm/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
 DEFAULT_CACHE_PATH="/private/tmp/remote-mic-swiftpm-cache/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
@@ -356,8 +375,8 @@ APPLE_REMOTE_HCI_SERVICE_PATH="$BIN_DIR/AppleRemoteHCIService"
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   SIRI_REMOTE_RESOURCE_BUNDLE="$BIN_DIR/SayAllSiriRemote_SayAllSiriRemote.bundle"
 fi
-if [[ "$SAYALL_CHROMECASE_INCLUDED" == "true" ]]; then
-  CHROMECASE_RESOURCE_BUNDLE="$BIN_DIR/SayAllChromecase_SayAllChromecase.bundle"
+if [[ "$SAYALL_CHROMECAST_INCLUDED" == "true" ]]; then
+  CHROMECAST_RESOURCE_BUNDLE="$BIN_DIR/SayAllChromecast_SayAllChromecast.bundle"
 fi
 
 case "$APP_DIR" in
@@ -402,13 +421,13 @@ if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   ditto --norsrc --noextattr --noqtn --noacl \
     "$SIRI_REMOTE_RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/SayAllSiriRemote_SayAllSiriRemote.bundle"
 fi
-if [[ "$SAYALL_CHROMECASE_INCLUDED" == "true" ]]; then
-  if [[ ! -d "$CHROMECASE_RESOURCE_BUNDLE" ]]; then
-    print -u2 "SayAllChromecase resource bundle is missing from the Swift build"
+if [[ "$SAYALL_CHROMECAST_INCLUDED" == "true" ]]; then
+  if [[ ! -d "$CHROMECAST_RESOURCE_BUNDLE" ]]; then
+    print -u2 "SayAllChromecast resource bundle is missing from the Swift build"
     exit 1
   fi
   ditto --norsrc --noextattr --noqtn --noacl \
-    "$CHROMECASE_RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/SayAllChromecase_SayAllChromecase.bundle"
+    "$CHROMECAST_RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/SayAllChromecast_SayAllChromecast.bundle"
 fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
@@ -424,11 +443,21 @@ plutil -insert SayAllButtonProfilesIncluded -bool "$SAYALL_BUTTON_PROFILES_INCLU
 plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
+if [[ -n "$SAYALL_MEMBERSHIP_API_BASE_URL" ]]; then
+  plutil -remove SayAllMembershipAPIBaseURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+  plutil -insert SayAllMembershipAPIBaseURL -string "$SAYALL_MEMBERSHIP_API_BASE_URL" \
+    "$APP_DIR/Contents/Info.plist"
+fi
+plutil -remove SayAllDiagnosticPublicKey "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
+  plutil -insert SayAllDiagnosticPublicKey -string "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" \
+    "$APP_DIR/Contents/Info.plist"
+fi
 plutil -remove SayAllSiriRemoteIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllSiriRemoteIncluded -bool "$SAYALL_SIRI_REMOTE_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
-plutil -remove SayAllChromecaseIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
-plutil -insert SayAllChromecaseIncluded -bool "$SAYALL_CHROMECASE_INCLUDED" \
+plutil -remove SayAllChromecastIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllChromecastIncluded -bool "$SAYALL_CHROMECAST_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   plutil -replace LSMinimumSystemVersion -string "$RELEASE_MIN_SYSTEM_VERSION" \
@@ -583,6 +612,12 @@ if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" ]]; then
   ditto --norsrc --noextattr --noqtn --noacl \
     "$SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE" \
     "$APP_DIR/Contents/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle"
+fi
+if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
+      "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE" \
+    "$APP_DIR/Contents/Resources/SayAllMembership_SayAllMembershipUI.bundle"
 fi
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then

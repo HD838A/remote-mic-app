@@ -88,6 +88,10 @@ enum SettingsWindowActivationPolicy {
 enum RemoteMicApp {
     @MainActor
     static func main() {
+        if ProcessInfo.processInfo.arguments.contains("--agent-configure") {
+            let arguments = Array(ProcessInfo.processInfo.arguments.dropFirst())
+            exit(AgentConfigurationCommand.run(arguments: arguments))
+        }
         if let screenshotDirectory = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
         ] {
@@ -213,6 +217,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let environmentEvent = AppEnvironmentSnapshot.current(
+            settings: model.settings
+        ).publicEvent {
+            AppLogger.shared.record(environmentEvent)
+        }
         let currentBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
         let completedUpdate = model.settings.recordLaunchAndDetectCompletedUpdate(
             currentBuild: currentBuild,
@@ -282,6 +291,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     func applicationWillTerminate(_ notification: Notification) {
         model.privateFeature.hideHUDImmediately()
         model.stop()
+        model.settings.discardOnboardingVoiceTrial()
         updateCheckTask?.cancel()
         terminationSignalSources.forEach { $0.cancel() }
         terminationSignalSources.removeAll()
@@ -297,6 +307,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        model.refreshRemoteDeviceNames(reason: .foreground)
         model.privateFeature.refreshAccessIfNeeded()
         model.macroFeature.refreshAccessIfNeeded()
         model.membershipFeature.refreshIfNeeded()
@@ -309,6 +320,23 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     ) -> Bool {
         showSettings()
         return true
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let request = urls.lazy.compactMap(SayAllDeepLinkRequest.parse).first else {
+            return
+        }
+        AppLogger.shared.write(
+            "DEEPLINK SAYALL source=\(request.source ?? "unknown") " +
+                "status=\(request.status?.rawValue ?? "none") " +
+                "reason=\(request.reason ?? "none")"
+        )
+        NotificationCenter.default.post(
+            name: .sayAllDeepLinkReceived,
+            object: request
+        )
+        showSettings()
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func installTerminationSignalHandlers() {

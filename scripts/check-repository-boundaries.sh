@@ -72,4 +72,24 @@ if git grep -n -I -E \
   exit 1
 fi
 
+if git grep -n -I -E \
+  '(^|[[:space:]])import[[:space:]]+SayAllMembership(Core|UI)([[:space:]]|$)' \
+  -- \
+  'Sources/**/*.swift'; then
+  print -u2 "public host imported private membership implementation modules directly"
+  exit 1
+fi
+
+if git grep -n -I -F \
+  '.product(name: "SayAllMembershipCore"' \
+  -- \
+  Package.swift || \
+  git grep -n -I -F \
+    '.product(name: "SayAllMembershipUI"' \
+    -- \
+    Package.swift; then
+  print -u2 "public package linked private membership implementation products directly"
+  exit 1
+fi
+
 print "REPOSITORY BOUNDARY PASS"

@@ -111,6 +111,7 @@ struct SettingsCorruptionRecoveryTests {
         #expect(settings.buttonBindings == AppSettings.defaultBindings)
         #expect(settings.customApplicationProfiles.isEmpty)
         #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.gainDB == 10)
     }
 
     @Test func validStoredSettingsReloadWithoutBeingReportedAsCorrupt() throws {
@@ -136,6 +137,15 @@ struct SettingsCorruptionRecoveryTests {
         for key in ["buttonBindings", "customApplicationProfiles", "remoteDeviceProfiles"] {
             #expect(defaults.data(forKey: "\(key).corrupt") == nil)
         }
+    }
+
+    @Test func storedGainOverridesTheTenDecibelFirstRunDefault() throws {
+        var suiteName = ""
+        let defaults = try isolatedDefaults("storedGain", suiteName: &suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(6.0, forKey: "gainDB")
+
+        #expect(AppSettings(defaults: defaults).gainDB == 6)
     }
 
     @Test func unreadableFirstUseEventsFallBackToEmptyAndPreserveTheirBytes() throws {

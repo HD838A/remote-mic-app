@@ -1,8 +1,13 @@
 #include "AppleRemoteSupport.h"
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/hid/IOHIDDevice.h>
+#include <IOKit/hid/IOHIDLib.h>
 #include <dlfcn.h>
 #include <stdlib.h>
+
+#define SAY_APPLE_REMOTE_MAX_TOUCH_DEVICES 32
 
 typedef const void *MTDeviceRef;
 
@@ -42,6 +47,7 @@ typedef int32_t (*MTDeviceGetSensorSurfaceDimensionsFunction)(
     int32_t *width,
     int32_t *height
 );
+typedef io_service_t (*MTDeviceGetServiceFunction)(MTDeviceRef device);
 typedef int32_t (*MTDeviceStartFunction)(MTDeviceRef device, int32_t mode);
 typedef int32_t (*MTDeviceStopFunction)(MTDeviceRef device);
 typedef void (*MTFrameCallback)(
@@ -61,17 +67,42 @@ typedef void (*MTUnregisterCallbackFunction)(MTDeviceRef device, MTFrameCallback
 
 struct SAYAppleRemoteTouchSession {
     void *framework;
-    MTDeviceRef device;
+    MTDeviceRef devices[SAY_APPLE_REMOTE_MAX_TOUCH_DEVICES];
+    uint64_t sourceIDs[SAY_APPLE_REMOTE_MAX_TOUCH_DEVICES];
+    size_t deviceCount;
     SAYAppleRemoteTouchCallback callback;
     void *context;
     MTDeviceCreateListFunction createList;
     MTDeviceIsBuiltInFunction isBuiltIn;
     MTDeviceGetSensorSurfaceDimensionsFunction getDimensions;
+    MTDeviceGetServiceFunction getService;
     MTDeviceStartFunction startDevice;
     MTDeviceStopFunction stopDevice;
     MTRegisterCallbackFunction registerCallback;
     MTUnregisterCallbackFunction unregisterCallback;
 };
+
+static uint64_t SAYAppleRemoteRegistryUInt64(io_service_t service, CFStringRef key) {
+    if (service == IO_OBJECT_NULL) {
+        return 0;
+    }
+    CFTypeRef property = IORegistryEntryCreateCFProperty(
+        service,
+        key,
+        kCFAllocatorDefault,
+        0
+    );
+    if (property == NULL || CFGetTypeID(property) != CFNumberGetTypeID()) {
+        if (property != NULL) {
+            CFRelease(property);
+        }
+        return 0;
+    }
+    uint64_t result = 0;
+    CFNumberGetValue((CFNumberRef)property, kCFNumberSInt64Type, &result);
+    CFRelease(property);
+    return result;
+}
 
 static void SAYAppleRemoteTouchFrame(
     MTDeviceRef device,
@@ -81,7 +112,6 @@ static void SAYAppleRemoteTouchFrame(
     size_t frame,
     void *context
 ) {
-    (void)device;
     (void)frame;
     SAYAppleRemoteTouchSession *session = context;
     if (session == NULL || session->callback == NULL) {
@@ -102,7 +132,14 @@ static void SAYAppleRemoteTouchFrame(
         contacts[count].hasContactSize = touch.zTotal > 0;
         count++;
     }
-    session->callback(contacts, count, timestamp, session->context);
+    uint64_t sourceID = 0;
+    for (size_t index = 0; index < session->deviceCount; index++) {
+        if (session->devices[index] == device) {
+            sourceID = session->sourceIDs[index];
+            break;
+        }
+    }
+    session->callback(contacts, count, timestamp, sourceID, session->context);
 }
 
 static bool SAYAppleRemoteResolveSymbols(SAYAppleRemoteTouchSession *session) {
@@ -111,6 +148,10 @@ static bool SAYAppleRemoteResolveSymbols(SAYAppleRemoteTouchSession *session) {
     session->getDimensions = (MTDeviceGetSensorSurfaceDimensionsFunction)dlsym(
         session->framework,
         "MTDeviceGetSensorSurfaceDimensions"
+    );
+    session->getService = (MTDeviceGetServiceFunction)dlsym(
+        session->framework,
+        "MTDeviceGetService"
     );
     session->startDevice = (MTDeviceStartFunction)dlsym(session->framework, "MTDeviceStart");
     session->stopDevice = (MTDeviceStopFunction)dlsym(session->framework, "MTDeviceStop");
@@ -123,6 +164,7 @@ static bool SAYAppleRemoteResolveSymbols(SAYAppleRemoteTouchSession *session) {
         "MTUnregisterContactFrameCallback"
     );
     return session->createList != NULL
+        && session->getService != NULL
         && session->getDimensions != NULL
         && session->startDevice != NULL
         && session->stopDevice != NULL
@@ -162,7 +204,11 @@ bool SAYAppleRemoteTouchSessionStart(SAYAppleRemoteTouchSession *session) {
     }
 
     const CFIndex deviceCount = CFArrayGetCount(devices);
+    bool startedAny = false;
     for (CFIndex index = 0; index < deviceCount; index++) {
+        if (session->deviceCount >= SAY_APPLE_REMOTE_MAX_TOUCH_DEVICES) {
+            break;
+        }
         MTDeviceRef device = CFArrayGetValueAtIndex(devices, index);
         int32_t width = 0;
         int32_t height = 0;
@@ -174,30 +220,55 @@ bool SAYAppleRemoteTouchSessionStart(SAYAppleRemoteTouchSession *session) {
         if (isBuiltIn || maximumDimension <= 0 || maximumDimension >= 6000) {
             continue;
         }
-        session->device = device;
+        io_service_t service = session->getService(device);
+        const uint64_t sourceID = SAYAppleRemoteRegistryUInt64(
+            service,
+            CFSTR("LocationID")
+        );
         CFRetain(device);
         session->registerCallback(device, SAYAppleRemoteTouchFrame, session);
         const bool started = session->startDevice(device, 0) == 0;
         if (!started) {
             session->unregisterCallback(device, SAYAppleRemoteTouchFrame);
             CFRelease(device);
-            session->device = NULL;
+            continue;
         }
-        CFRelease(devices);
-        return started;
+        session->devices[session->deviceCount] = device;
+        session->sourceIDs[session->deviceCount] = sourceID;
+        session->deviceCount++;
+        startedAny = true;
     }
     CFRelease(devices);
-    return false;
+    return startedAny;
 }
 
 void SAYAppleRemoteTouchSessionStop(SAYAppleRemoteTouchSession *session) {
-    if (session == NULL || session->device == NULL) {
+    if (session == NULL) {
         return;
     }
-    session->unregisterCallback(session->device, SAYAppleRemoteTouchFrame);
-    session->stopDevice(session->device);
-    CFRelease(session->device);
-    session->device = NULL;
+    for (size_t index = 0; index < session->deviceCount; index++) {
+        MTDeviceRef device = session->devices[index];
+        if (device == NULL) {
+            continue;
+        }
+        session->unregisterCallback(device, SAYAppleRemoteTouchFrame);
+        session->stopDevice(device);
+        CFRelease(device);
+        session->devices[index] = NULL;
+        session->sourceIDs[index] = 0;
+    }
+    session->deviceCount = 0;
+}
+
+uint64_t SAYAppleRemoteTouchSourceIDForHIDDevice(const void *device) {
+    if (device == NULL) {
+        return 0;
+    }
+    io_service_t service = IOHIDDeviceGetService((IOHIDDeviceRef)device);
+    if (service == IO_OBJECT_NULL) {
+        return 0;
+    }
+    return SAYAppleRemoteRegistryUInt64(service, CFSTR("LocationID"));
 }
 
 void SAYAppleRemoteTouchSessionDestroy(SAYAppleRemoteTouchSession *session) {

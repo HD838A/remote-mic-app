@@ -43,6 +43,10 @@ EXPECTED_ARCHIVES=(
   SayAllButtonProfiles.xcframework.zip
   SayAllMembershipCore.xcframework.zip
   SayAllMembershipUI.xcframework.zip
+  SayAllMembershipHostAdapter.xcframework.zip
+  SayAllDiagnosticsTransport.xcframework.zip
+  SayAllDiagnosticsSentry.xcframework.zip
+  SayAllMembership_SayAllMembershipUI.bundle.zip
   SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip
   SayAllButtonProfiles_SayAllButtonProfiles.bundle.zip
 )
@@ -66,12 +70,16 @@ if ! jq -e '
   .modules == [
     "SayAllMembershipCore",
     "SayAllMembershipUI",
+    "SayAllMembershipHostAdapter",
+    "SayAllDiagnosticsTransport",
+    "SayAllDiagnosticsSentry",
     "SayAllMacroCore",
     "SayAllMacroMacOS",
     "SayAllMacroRemoteMic",
     "SayAllButtonProfiles"
   ] and
   .resource_bundles == [
+    "SayAllMembership_SayAllMembershipUI.bundle",
     "SayAllCombinationActions_SayAllMacroRemoteMic.bundle",
     "SayAllButtonProfiles_SayAllButtonProfiles.bundle"
   ]
@@ -102,7 +110,8 @@ for archive_name in "${EXPECTED_ARCHIVES[@]}"; do
     exit 1
   fi
   if unzip -p "$archive_path" \
-      | LC_ALL=C grep -aE '/Users/[^/[:space:]]+|/private/tmp|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{16,}' >/dev/null; then
+      | strings \
+      | LC_ALL=C grep -E '(^|/)private/tmp/|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{16,}' >/dev/null; then
     print -u2 "archive contains a local path or credential-like material: $archive_name"
     exit 1
   fi
@@ -111,8 +120,8 @@ done
 STAGING_DIRECTORY="$(mktemp -d "$OUTPUT_PARENT/.${OUTPUT_BASENAME}.staging.XXXXXX")"
 PACKAGE_COMPLETED=0
 report_incomplete_package() {
-  local status="$?"
-  if [[ "$status" -ne 0 && "$PACKAGE_COMPLETED" -ne 1 ]]; then
+  local exit_status="$?"
+  if [[ "$exit_status" -ne 0 && "$PACKAGE_COMPLETED" -ne 1 ]]; then
     print -u2 "preparation failed; preserved staging directory: $STAGING_DIRECTORY"
   fi
 }
@@ -122,6 +131,7 @@ mkdir -p "$STAGING_DIRECTORY/Artifacts" "$STAGING_DIRECTORY/Resources"
 for module_name in \
   SayAllMembershipCore \
   SayAllMembershipUI \
+  SayAllMembershipHostAdapter \
   SayAllMacroCore \
   SayAllMacroMacOS \
   SayAllMacroRemoteMic \
@@ -134,6 +144,25 @@ for module_name in \
   lipo "$binary" -verify_arch arm64 x86_64
   test "$(plutil -extract MinimumOSVersion raw -o - "$framework/Info.plist")" = "13.0"
 done
+unzip -q "$RELEASE_DIRECTORY/SayAllDiagnosticsTransport.xcframework.zip" \
+  -d "$STAGING_DIRECTORY/Artifacts"
+transport_framework="$STAGING_DIRECTORY/Artifacts/SayAllDiagnosticsTransport.xcframework/macos-arm64_x86_64/SayAllDiagnosticsTransport.framework"
+test -n "$transport_framework"
+transport_binary="$(find "$transport_framework" -maxdepth 1 -type f ! -name Info.plist -print -quit)"
+test -f "$transport_binary"
+lipo "$transport_binary" -verify_arch arm64 x86_64
+test "$(plutil -extract MinimumOSVersion raw -o - "$transport_framework/Info.plist")" = "13.0"
+unzip -q "$RELEASE_DIRECTORY/SayAllDiagnosticsSentry.xcframework.zip" \
+  -d "$STAGING_DIRECTORY/Artifacts"
+sentry_framework="$STAGING_DIRECTORY/Artifacts/SayAllDiagnosticsSentry.xcframework/macos-arm64_arm64e_x86_64/Sentry.framework"
+test -f "$sentry_framework/Sentry"
+lipo "$sentry_framework/Sentry" -verify_arch arm64 x86_64
+sentry_info_plist="$sentry_framework/Versions/A/Resources/Info.plist"
+test -f "$sentry_info_plist"
+unzip -q "$RELEASE_DIRECTORY/SayAllMembership_SayAllMembershipUI.bundle.zip" \
+  -d "$STAGING_DIRECTORY/Resources"
+test -f "$STAGING_DIRECTORY/Resources/SayAllMembership_SayAllMembershipUI.bundle/Contents/Resources/MembershipCenterCopy.json"
+test -f "$STAGING_DIRECTORY/Resources/SayAllMembership_SayAllMembershipUI.bundle/Contents/Resources/AppIcon.png"
 unzip -q "$RELEASE_DIRECTORY/SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip" \
   -d "$STAGING_DIRECTORY/Resources"
 test -f "$STAGING_DIRECTORY/Resources/SayAllCombinationActions_SayAllMacroRemoteMic.bundle/Contents/Resources/en.lproj/Localizable.strings"
@@ -151,8 +180,18 @@ let package = Package(
     name: "SayAllPrivateArtifacts",
     platforms: [.macOS(.v13)],
     products: [
-        .library(name: "SayAllMembershipCore", targets: ["SayAllMembershipCore"]),
-        .library(name: "SayAllMembershipUI", targets: ["SayAllMembershipCore", "SayAllMembershipUI"]),
+        .library(
+            name: "SayAllMembershipHostAdapter",
+            targets: [
+                "SayAllMembershipCore",
+                "SayAllMembershipUI",
+                "SayAllMembershipHostAdapter",
+            ]
+        ),
+        .library(
+            name: "SayAllDiagnosticsTransport",
+            targets: ["SayAllDiagnosticsTransport", "Sentry"]
+        ),
         .library(
             name: "SayAllMacroRemoteMic",
             targets: ["SayAllMacroCore", "SayAllMacroMacOS", "SayAllMacroRemoteMic"]
@@ -165,6 +204,18 @@ let package = Package(
     targets: [
         .binaryTarget(name: "SayAllMembershipCore", path: "Artifacts/SayAllMembershipCore.xcframework"),
         .binaryTarget(name: "SayAllMembershipUI", path: "Artifacts/SayAllMembershipUI.xcframework"),
+        .binaryTarget(
+            name: "SayAllMembershipHostAdapter",
+            path: "Artifacts/SayAllMembershipHostAdapter.xcframework"
+        ),
+        .binaryTarget(
+            name: "SayAllDiagnosticsTransport",
+            path: "Artifacts/SayAllDiagnosticsTransport.xcframework"
+        ),
+        .binaryTarget(
+            name: "Sentry",
+            path: "Artifacts/SayAllDiagnosticsSentry.xcframework"
+        ),
         .binaryTarget(name: "SayAllMacroCore", path: "Artifacts/SayAllMacroCore.xcframework"),
         .binaryTarget(name: "SayAllMacroMacOS", path: "Artifacts/SayAllMacroMacOS.xcframework"),
         .binaryTarget(name: "SayAllMacroRemoteMic", path: "Artifacts/SayAllMacroRemoteMic.xcframework"),

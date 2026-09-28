@@ -4,8 +4,8 @@ import Combine
 import CoreBluetooth
 import SayAllMacRemoteCore
 import SayAllMacRemoteUI
-#if SAYALL_CHROMECASE_ENABLED && canImport(SayAllChromecase)
-import SayAllChromecase
+#if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+import SayAllChromecast
 #endif
 #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
 import SayAllSiriRemote
@@ -114,8 +114,8 @@ enum RemoteBatteryPresentationPolicy {
         level: Int?,
         powerState: RemotePowerState?
     ) -> Bool {
-        // Chromecase 不宣告电池能力，界面不得显示永远是「未知」的电量位。
-        guard !model.isChromecaseRemote else { return false }
+        // Chromecast 不宣告电池能力，界面不得显示永远是「未知」的电量位。
+        guard !model.isChromecastRemote else { return false }
         guard model.isAppleSiriRemote else { return true }
         guard level == nil else { return true }
         return powerState == .charging || powerState == .externalPower
@@ -123,6 +123,8 @@ enum RemoteBatteryPresentationPolicy {
 }
 
 enum SettingsPageBehavior {
+    static let sidebarTopDragHeight: CGFloat = 20
+
     static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
         .macros,
@@ -169,6 +171,17 @@ enum SettingsPageBehavior {
 
     static func visibleSection(for requestedSection: SettingsSection) -> SettingsSection {
         requestedSection == .permissions ? .about : requestedSection
+    }
+
+    static func showsUpdateBadge(
+        for section: SettingsSection,
+        hasUnseenUpdate: Bool
+    ) -> Bool {
+        section == .about && hasUnseenUpdate
+    }
+
+    static func marksUpdateAsSeen(whenSelecting section: SettingsSection) -> Bool {
+        section == .about
     }
 
     static let shareNavigationState = SettingsNavigationState(
@@ -371,6 +384,55 @@ struct VersionTapRevealCounter {
     }
 }
 
+private struct StatisticsColumnsLayout: Layout {
+    private let spacing: CGFloat = 14
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+
+        let width = proposal.width ?? 0
+        let availableWidth = max(0, width - spacing)
+        let rankingWidth = max(360, availableWidth * 0.42)
+        let rightWidth = max(0, availableWidth - rankingWidth)
+        let leftSize = subviews[0].sizeThatFits(
+            ProposedViewSize(width: rankingWidth, height: nil)
+        )
+        let rightSize = subviews[1].sizeThatFits(
+            ProposedViewSize(width: rightWidth, height: nil)
+        )
+        return CGSize(width: width, height: max(leftSize.height, rightSize.height))
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        guard subviews.count == 2 else { return }
+
+        let availableWidth = max(0, bounds.width - spacing)
+        let rankingWidth = max(360, availableWidth * 0.42)
+        subviews[0].place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: rankingWidth, height: bounds.height)
+        )
+        subviews[1].place(
+            at: CGPoint(x: bounds.minX + rankingWidth + spacing, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(
+                width: max(0, availableWidth - rankingWidth),
+                height: bounds.height
+            )
+        )
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
@@ -391,7 +453,7 @@ struct SettingsView: View {
     @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var selectedSiriRemoteControlID = "select"
-    @State private var selectedChromecaseControlID = "select"
+    @State private var selectedChromecastControlID = "select"
     @State private var isMappingSelectionLocked = true
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
@@ -478,12 +540,16 @@ struct SettingsView: View {
             minHeight: minimumContentSize.height
         )
         .onAppear {
+            model.refreshRemoteDeviceNames(reason: .page)
             refreshPermissionStates()
             loginItemService.refresh()
             macroFeature.setEditorActive(false)
             membershipFeature.refreshIfNeeded()
         }
         .onChange(of: selectedSection) { section in
+            if section == .connection || section == .mapping {
+                model.refreshRemoteDeviceNames(reason: .page)
+            }
             if section != .macros, section != .buttonProfiles {
                 macroFeature.setEditorActive(false)
             }
@@ -665,7 +731,7 @@ struct SettingsView: View {
     private var sidebar: some View {
         VStack(spacing: 0) {
             WindowDragArea()
-                .frame(height: 56)
+                .frame(height: SettingsPageBehavior.sidebarTopDragHeight)
                 .accessibilityHidden(true)
             ForEach(visibleSections.filter { $0 != .statistics }) { section in
                 sidebarButton(section)
@@ -708,16 +774,31 @@ struct SettingsView: View {
 
     private func sidebarButton(_ section: SettingsSection) -> some View {
         Button {
-            selectedSection = section
+            selectSidebarSection(section)
         } label: {
             VStack(spacing: 7) {
-                Image(systemName: sectionSystemImage(section))
-                    .font(.system(size: 21, weight: .semibold))
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: sectionSystemImage(section))
+                        .font(.system(size: 21, weight: .semibold))
+                    if SettingsPageBehavior.showsUpdateBadge(
+                        for: section,
+                        hasUnseenUpdate: updateInformation.hasUnseenUpdate
+                    ) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 7, height: 7)
+                            .offset(x: 4, y: -3)
+                            .accessibilityHidden(true)
+                    }
+                }
                 if section == .privateFeature
                     || section == .macros
                     || section == .buttonProfiles
                     || section == .membership {
                     Text(sectionTitle(section))
+                        .font(.system(size: 13, weight: .semibold))
+                } else if section == .statistics {
+                    Text(membershipFeature.accountDisplayName ?? localization.text("settings.section.login"))
                         .font(.system(size: 13, weight: .semibold))
                 } else {
                     Text(section.title)
@@ -733,6 +814,19 @@ struct SettingsView: View {
         .foregroundStyle(selectedSection == section ? Color.accentColor : Color.secondary)
         .background(selectedSection == section ? Color.accentColor.opacity(0.10) : Color.clear)
         .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
+        .accessibilityValue(
+            SettingsPageBehavior.showsUpdateBadge(
+                for: section,
+                hasUnseenUpdate: updateInformation.hasUnseenUpdate
+            ) ? Text("settings.update_badge.accessibility_value") : Text("")
+        )
+    }
+
+    private func selectSidebarSection(_ section: SettingsSection) {
+        selectedSection = section
+        if SettingsPageBehavior.marksUpdateAsSeen(whenSelecting: section) {
+            updateInformation.markAvailableUpdateSeen()
+        }
     }
 
     @ViewBuilder
@@ -797,9 +891,9 @@ struct SettingsView: View {
                 #else
                 mappingPage
                 #endif
-            } else if settings.selectedRemoteProfile?.model.isChromecaseRemote == true {
-                #if SAYALL_CHROMECASE_ENABLED && canImport(SayAllChromecase)
-                chromecaseMappingPage
+            } else if settings.selectedRemoteProfile?.model.isChromecastRemote == true {
+                #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+                chromecastMappingPage
                 #else
                 mappingPage
                 #endif
@@ -860,6 +954,9 @@ struct SettingsView: View {
         settingsPage {
             PageHeader(title: localization.text("connection.page.title"))
         } content: {
+            if let warning = model.voiceKeyCompatibilityWarning {
+                voiceKeyCompatibilityWarningPanel(warning)
+            }
             CompatibilityGlassContainer(spacing: 14) {
                 HStack(alignment: .top, spacing: 14) {
                     connectionDevicePanel
@@ -867,112 +964,82 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         audioSettingsPanel
                         audioCompatibilityPanel
-                        #if SAYALL_CHROMECASE_ENABLED
-                        chromecasePanel
-                        #endif
+                        // Chromecast 连接卡片已按产品要求移除：启用开关默认常开，
+                        // 语音键模式在按键页底部，状态见侧边栏「连接」的设备列表。
                         phoneConnectionsPanel
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
         }
+        .onAppear {
+            model.refreshVoiceKeyCompatibilityWarning()
+        }
     }
 
-    #if SAYALL_CHROMECASE_ENABLED
-    /// Chromecase（ATVV 语音遥控器）面板。私有包缺失时整块内容不会出现在界面上。
-    private var chromecasePanel: some View {
+    private func voiceKeyCompatibilityWarningPanel(
+        _ warning: VoiceKeyCompatibilityWarning
+    ) -> some View {
         GlassPanel {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("chromecase.section_title")
-                            .font(.headline)
-                        Text("chromecase.section_subtitle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 16)
-                    StatusPill(
-                        text: chromecaseStatusText,
-                        tint: chromecaseStatusTint
-                    )
-                }
-
-                if case .unsupported = model.chromecaseStatus {
-                    // 具体原因由包提供且只有中文，按「界面文案归宿主」的约定只写日志，界面用本地化文案。
-                    Text("chromecase.status.unsupported.detail")
-                        .font(.caption)
+            VStack(alignment: .leading, spacing: 10) {
+                Label {
+                    Text("connection.voice_key_compatibility.title")
+                        .font(.system(size: 13, weight: .semibold))
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Toggle(isOn: Binding(
-                    get: { settings.chromecaseEnabled },
-                    set: { newValue in
-                        settings.chromecaseEnabled = newValue
-                        model.applyChromecaseSettings()
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("chromecase.enabled.title")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("chromecase.enabled.detail")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                Text(LocalizedMessage(warning.messageKey).text(using: localization))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("connection.voice_key_compatibility.recheck") {
+                    model.recheckRemoteInput()
                 }
-                .toggleStyle(.switch)
+                .compatibilityButtonStyle(.standard)
             }
         }
     }
 
-    /// 语音键模式选择器。挂在按键页靠下的位置（仅 Chromecase 档案的按键页显示）；
+    #if SAYALL_CHROMECAST_ENABLED
+    /// 语音键模式选择器。挂在按键页靠下的位置（仅 Chromecast 档案的按键页显示）；
     /// 从连接设置页迁移过来，避免同一控件出现在两处。
-    private var chromecaseVoiceModeSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var chromecastVoiceModeSection: some View {
+        // 选项只列设备**自报**支持的模式：自报不支持「按一次说话」时，这个选项根本不出现。
+        let capabilities = model.selectedRemoteVoiceCapabilities
+        let offeredModes = ChromecastVoiceMode.allCases.filter { mode in
+            mode != .toggle || capabilities.supportsToggleVoiceRecording
+        }
+        return VStack(alignment: .leading, spacing: 10) {
             Divider()
 
-            Text("chromecase.mode.title")
+            Text("chromecast.mode.title")
                 .font(.system(size: 13, weight: .medium))
 
             Picker("", selection: Binding(
-                get: { settings.chromecaseVoiceMode },
+                get: { model.effectiveChromecastVoiceMode },
                 set: { newValue in
-                    settings.chromecaseVoiceMode = newValue
-                    model.applyChromecaseSettings()
+                    settings.chromecastVoiceMode = newValue
+                    model.applyChromecastSettings()
                 }
             )) {
-                ForEach(ChromecaseVoiceMode.allCases) { mode in
+                ForEach(offeredModes) { mode in
                     Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .disabled(!settings.chromecaseEnabled)
+            .disabled(!settings.chromecastEnabled)
 
-            Text(LocalizedStringKey(settings.chromecaseVoiceMode.detailLocalizationKey))
+            Text(LocalizedStringKey(model.effectiveChromecastVoiceMode.detailLocalizationKey))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var chromecaseStatusText: String {
-        if case .connected(let displayName) = model.chromecaseStatus {
-            return displayName
-        }
-        return localization.text(model.chromecaseStatus.localizationKey)
-    }
-
-    private var chromecaseStatusTint: Color {
-        switch model.chromecaseStatus {
-        case .connected: return .green
-        case .searching, .connecting: return .orange
-        case .unsupported, .unauthorized: return .red
-        case .disabled, .unavailable, .disconnected: return .secondary
-        }
-    }
     #endif
 
     private var phoneConnectionsPanel: some View {
@@ -1205,18 +1272,26 @@ struct SettingsView: View {
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             SiriRemoteConnectionPhoto()
             #else
-            RC003Photo()
+            UnrecognizedRemotePhoto()
                 .frame(width: 82, height: 166)
             #endif
-        } else if settings.selectedRemoteProfile?.model.isChromecaseRemote == true {
-            #if SAYALL_CHROMECASE_ENABLED && canImport(SayAllChromecase)
-            ChromecaseConnectionPhoto()
+        } else if settings.selectedRemoteProfile?.model.isChromecastRemote == true {
+            #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+            ChromecastConnectionPhoto()
             #else
-            RC003Photo()
+            UnrecognizedRemotePhoto()
                 .frame(width: 82, height: 166)
             #endif
+        } else if let model = settings.selectedRemoteProfile?.model,
+                  let resource = VoiceRemoteCatalog.photoResource(for: model) {
+            // 型号在目录里 → 用目录指定的那张真机图。
+            RemoteCatalogPhoto(resourceName: resource)
+                .frame(width: 82, height: 166)
         } else {
-            RC003Photo()
+            // 型号目录里没有这个型号（.unknown、或还没选设备）：**不套用任何一款真机图**。
+            // App 里每张图都对应一个验证过的型号，给未识别设备画上 RC003 等于界面声称
+            // 支持一台从未验证过的遥控器。
+            UnrecognizedRemotePhoto()
                 .frame(width: 82, height: 166)
         }
     }
@@ -1295,23 +1370,11 @@ struct SettingsView: View {
                         Text("audio.action.refresh_devices")
                     }
                         .compatibilityButtonStyle(.standard)
-                    Link("audio.action.learn_virtual_microphones", destination: URL(string: "https://existential.audio/blackhole/")!)
-                        .compatibilityButtonStyle(.standard)
-                    Button("audio.action.send_test_tone") { model.sendTestTone() }
-                        .compatibilityButtonStyle(.standard)
-                        .disabled(!model.canSendTestTone)
                 }
 
                 Text("audio.output.privacy_help")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-
-                HStack {
-                    Text(model.testToneStatus.text(using: localization))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
             }
         }
     }
@@ -1415,25 +1478,25 @@ struct SettingsView: View {
     }
     #endif
 
-    #if SAYALL_CHROMECASE_ENABLED && canImport(SayAllChromecase)
-    /// Chromecase 按键页。
+    #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+    /// Chromecast 按键页。
     ///
     /// 与小米/苹果按键页共用同一个页面框架（页头、设备选择器、动作编辑器、页脚），
     /// 只有中间的遥控器画布由私有包提供，因此三种遥控器的页面功能完全一致。
-    private var chromecaseMappingPage: some View {
+    private var chromecastMappingPage: some View {
         hardwareMappingPage {
-            ChromecaseMappingCanvas(
-                selectedControlID: $selectedChromecaseControlID,
-                activeControlIDs: model.activeChromecaseControlIDs,
-                voiceActive: model.isChromecaseVoiceActive,
-                labels: ChromecaseMappingCanvas.Labels(
-                    voiceTitle: localization.text("chromecase.mapping.voice.title"),
-                    voiceFixed: localization.text("chromecase.mapping.voice.fixed"),
-                    voiceDetail: localization.text("chromecase.mapping.voice.detail"),
-                    missingPhoto: localization.text("chromecase.mapping.photo.missing")
+            ChromecastMappingCanvas(
+                selectedControlID: $selectedChromecastControlID,
+                activeControlIDs: model.activeChromecastControlIDs,
+                voiceActive: model.isChromecastVoiceActive,
+                labels: ChromecastMappingCanvas.Labels(
+                    voiceTitle: localization.text("chromecast.mapping.voice.title"),
+                    voiceFixed: localization.text("chromecast.mapping.voice.fixed"),
+                    voiceDetail: localization.text("chromecast.mapping.voice.detail"),
+                    missingPhoto: localization.text("chromecast.mapping.photo.missing")
                 ),
                 buttonTitle: { controlID in
-                    chromecaseButton(for: controlID)?.displayName(using: localization)
+                    chromecastButton(for: controlID)?.displayName(using: localization)
                         ?? controlID
                 },
                 triggerTitle: { triggerID in
@@ -1441,16 +1504,28 @@ struct SettingsView: View {
                         ?? triggerID
                 },
                 actionSummary: { controlID, triggerID in
-                    guard let button = chromecaseButton(for: controlID),
+                    guard let button = chromecastButton(for: controlID),
                           let trigger = ButtonTrigger(rawValue: triggerID)
                     else { return localization.text("action.disabled") }
+                    // 系统占用键（left/right/select）不在本 App 的映射范围内：单击槽位展示该键
+                    // 在系统侧的实际行为，其余槽位无动作。行为由 macOS 配件服务（BT-AACP）产生，
+                    // 详见 Testing/ChromecastVoicePitfalls.md。
+                    if let control = ChromecastRemoteControl(rawValue: controlID),
+                       ChromecastRemoteControl.isSystemManaged(
+                           control,
+                           allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
+                           exceptions: settings.chromecastSystemReservedExceptions
+                       ) {
+                        guard trigger == .singleClick else { return "—" }
+                        return localization.text("chromecast.mapping.system.\(controlID)")
+                    }
                     return mappingActionSummary(for: button, trigger: trigger)
                 },
                 onEdit: { controlID, triggerID in
-                    guard let button = chromecaseButton(for: controlID),
+                    guard let button = chromecastButton(for: controlID),
                           let trigger = ButtonTrigger(rawValue: triggerID)
                     else { return }
-                    selectedChromecaseControlID = controlID
+                    selectedChromecastControlID = controlID
                     selectedRemoteButton = button
                     mappingActionFilter = .all
                     isPresetApplicationActionsExpanded = false
@@ -1458,13 +1533,18 @@ struct SettingsView: View {
                         button: button,
                         trigger: trigger
                     )
-                }
+                },
+                // 置灰表 = 默认表去掉已放开的键（主开关全放开 / 按键级豁免）。
+                systemReservedControlIDs: ChromecastRemoteControl.canvasReservedControlIDs(
+                    allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
+                    exceptions: settings.chromecastSystemReservedExceptions
+                )
             )
         }
     }
 
-    private func chromecaseButton(for controlID: String) -> RemoteButton? {
-        ChromecaseRemoteControl(rawValue: controlID)?.remoteButton
+    private func chromecastButton(for controlID: String) -> RemoteButton? {
+        ChromecastRemoteControl(rawValue: controlID)?.remoteButton
     }
     #endif
 
@@ -1527,33 +1607,47 @@ struct SettingsView: View {
             Divider()
 
             ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        configurationImportBanner
-                        corruptedSettingsBanner
+                Group {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 16) {
+                            Color.clear
+                                .frame(height: 0)
+                                .id("mapping-page-top")
+                            configurationImportBanner
+                            corruptedSettingsBanner
 
-                        hardwareCanvas()
+                            hardwareCanvas()
 
-                        if let target = mappingEditingTarget {
-                            mappingEditorPanel(target)
-                                .id("mapping-action-editor")
+                            if let target = mappingEditingTarget {
+                                mappingEditorPanel(target)
+                                    .id("mapping-action-editor")
+                            }
+
+                            #if SAYALL_CHROMECAST_ENABLED
+                            // 语音键模式仅 Chromecast 遥控器有（该遥控器是唯一支持「按一次说话」的），
+                            // 放在按键页靠下的位置，方便随时切换手感。
+                            if settings.selectedRemoteProfile?.model.isChromecastRemote == true {
+                                chromecastVoiceModeSection
+                            }
+                            #endif
+
+                            mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)
                         }
-
-                        #if SAYALL_CHROMECASE_ENABLED
-                        // 语音键模式仅 Chromecase 遥控器有（该遥控器是唯一支持「按一次说话」的），
-                        // 放在按键页靠下的位置，方便随时切换手感。
-                        if settings.selectedRemoteProfile?.model.isChromecaseRemote == true {
-                            chromecaseVoiceModeSection
-                        }
-                        #endif
-
-                        mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)
+                        .padding(22)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
-                    .padding(22)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .id(settings.selectedRemoteProfileID)
+                    .compatibilityScrollEdgeEffect()
                 }
-                .id(settings.selectedRemoteProfileID)
-                .compatibilityScrollEdgeEffect()
+                .onChange(of: settings.selectedRemoteProfileID) { _ in
+                    // 编辑器属于上一只遥控器；切换设备后不得把旧编辑区带到新页面。
+                    mappingEditingTarget = nil
+                    shortcutCaptureTarget = nil
+                    applicationShortcutCaptureProfileID = nil
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("mapping-page-top", anchor: .top)
+                    }
+                }
                 .onAppear {
                     guard mappingEditingTarget != nil else { return }
                     DispatchQueue.main.async {
@@ -1718,16 +1812,27 @@ struct SettingsView: View {
     }
 
     private func mappingFooter(includeSiriScrollArrow: Bool = false) -> some View {
-        GlassPanel {
+        // 能力一律取自「链路自报优先、型号默认兜底」的判定结果（见 RemoteVoiceCapabilities）。
+        let capabilities = model.selectedRemoteVoiceCapabilities
+        return GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
                 mappingHIDStatus
                 Divider()
                 mappingSelectionLockControl
                 Divider()
                 mappingVoiceKeyModeControl
-                Divider()
-                mappingVoiceFnTapControl
-                if includeSiriScrollArrow {
+                // 「语音键模拟 Fn 点按」只对「不会按一次收音」的遥控器有意义：
+                // 它把按住模拟成点按，用来驱动只认点按的工具。Chromecast 自己能按一次收音，
+                // 驱动方式由语音模式直接决定，页面不出现该开关（见能力矩阵文档）。
+                if VoiceFunctionKeyTapApplicability.isApplicable(capabilities: capabilities) {
+                    Divider()
+                    mappingVoiceFnTapControl
+                }
+                // 触摸面（滑动箭头/光标）只有具备触摸面的遥控器才显示，页面请求之外再加一道能力门禁。
+                if TouchSurfaceControlApplicability.isApplicable(
+                    capabilities: capabilities,
+                    pageRequestsControl: includeSiriScrollArrow
+                ) {
                     Divider()
                     siriRemoteScrollArrowControl
                 }
@@ -1843,9 +1948,11 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func remoteDeviceSelector(vertical: Bool = false) -> some View {
-        let connectedProfiles = settings.remoteDeviceProfiles.filter {
-            model.isRemoteConnected($0.id)
-        }
+        let connectedProfiles = RemoteDeviceNamePolicy.sortedForCards(
+            settings.remoteDeviceProfiles.filter { model.isRemoteConnected($0.id) },
+            modelName: remoteModelName,
+            systemName: { model.systemDeviceName(for: $0) }
+        )
         if connectedProfiles.isEmpty {
             remoteDeviceEmptyState(vertical: vertical)
         } else if vertical {
@@ -1913,6 +2020,8 @@ struct SettingsView: View {
         let connected = model.isRemoteConnected(profile.id)
         let batteryLevel = model.batteryLevel(for: profile.id)
         let powerState = model.powerState(for: profile.id)
+        let modelName = remoteModelName(profile)
+        let systemName = remoteSystemName(profile)
         let showsBattery = RemoteBatteryPresentationPolicy.shouldShowBattery(
             model: profile.model,
             level: batteryLevel,
@@ -1923,7 +2032,8 @@ struct SettingsView: View {
         } label: {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
-                    Text(remoteDisplayName(profile))
+                    Text(modelName)
+                        .help(modelName)
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
                     Spacer(minLength: 0)
@@ -1933,6 +2043,11 @@ struct SettingsView: View {
                             .help(localization.text("remote.device.current"))
                     }
                 }
+                Text(systemName)
+                    .help(systemName)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 7) {
                         remoteConnectionLabel(connected: connected)
@@ -1965,6 +2080,7 @@ struct SettingsView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text("\(modelName), \(systemName)"))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -2041,13 +2157,13 @@ struct SettingsView: View {
         }
     }
 
-    private func remoteDisplayName(_ profile: RemoteDeviceProfile) -> String {
-        let base = localization.text(profile.displayNameFallbackKey)
-        let peers = settings.remoteDeviceProfiles.filter { $0.model == profile.model }
-        guard peers.count > 1,
-              let index = peers.firstIndex(where: { $0.id == profile.id })
-        else { return base }
-        return "\(base) \(index + 1)"
+    private func remoteModelName(_ profile: RemoteDeviceProfile) -> String {
+        localization.text(profile.displayNameFallbackKey)
+    }
+
+    private func remoteSystemName(_ profile: RemoteDeviceProfile) -> String {
+        model.systemDeviceName(for: profile)
+            ?? localization.text("remote.device.system_name_unknown")
     }
 
     private func mappingTriggerEditor(
@@ -2842,20 +2958,13 @@ struct SettingsView: View {
             CompatibilityGlassContainer(spacing: 14) {
                 VStack(spacing: 14) {
                     statisticsSummaryGrid
-                    GeometryReader { proxy in
-                        let availableWidth = max(0, proxy.size.width - 14)
-                        let rankingWidth = max(360, availableWidth * 0.42)
-                        HStack(alignment: .top, spacing: 14) {
-                            statisticsRankingPanel
-                                .frame(width: rankingWidth, alignment: .top)
-                            VStack(spacing: 14) {
-                                statisticsCalendarPanel
-                                statisticsVoiceSessionRankingPanel
-                            }
-                                .frame(width: max(0, availableWidth - rankingWidth), alignment: .top)
+                    StatisticsColumnsLayout {
+                        statisticsRankingPanel
+                        VStack(spacing: 14) {
+                            statisticsCalendarPanel
+                            statisticsVoiceSessionRankingPanel
                         }
                     }
-                    .frame(minHeight: 648)
                 }
             }
         }
@@ -3237,12 +3346,20 @@ struct SettingsView: View {
                     Text("diagnostics.logs.last_entry")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
+                    Text(model.diagnosticUploadStatus.text(using: localization))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
-                    .compatibilityButtonStyle(.standard)
-                Button("diagnostics.logs.copy_summary") { copySettingsDiagnosticSummary() }
-                    .compatibilityButtonStyle(.standard)
+                VStack(alignment: .trailing, spacing: 8) {
+                    Button("diagnostics.logs.send") { model.sendDiagnosticLogs() }
+                        .compatibilityButtonStyle(.prominent)
+                        .disabled(model.isSendingDiagnosticLogs)
+                    Button("diagnostics.logs.show_in_finder") { model.openLogFolder() }
+                        .compatibilityButtonStyle(.standard)
+                    Button("diagnostics.logs.copy_summary") { copySettingsDiagnosticSummary() }
+                        .compatibilityButtonStyle(.standard)
+                }
             }
         }
         .padding(.vertical, 12)
@@ -5015,20 +5132,14 @@ private struct DeviceStatusStep: View {
     }
 }
 
-private enum RC003ImageResource {
-    static let image: NSImage? = {
-        guard let url = Bundle.main.url(
-            forResource: "RC003-remote-photo",
-            withExtension: "png"
-        ) else { return nil }
-        return NSImage(contentsOf: url)
-    }()
-}
+/// 按型号目录给出的资源名加载真机图。资源名来自 `VoiceRemoteCatalog`，不在这里硬编码。
+private struct RemoteCatalogPhoto: View {
+    let resourceName: String
 
-private struct RC003Photo: View {
     var body: some View {
         Group {
-            if let photo = RC003ImageResource.image {
+            if let url = Bundle.main.url(forResource: resourceName, withExtension: "png"),
+               let photo = NSImage(contentsOf: url) {
                 Image(nsImage: photo)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -5042,6 +5153,29 @@ private struct RC003Photo: View {
                     }
             }
         }
+    }
+}
+
+/// 型号目录里没有这个型号时的占位。
+///
+/// 关键：这里**不显示任何真机图**。App 内置每款遥控器的真机图与按键页，给未识别设备套上
+/// 别款的图，界面就等于声称一台从未验证过的设备「已连接、能用」。
+private struct UnrecognizedRemotePhoto: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(.quaternary)
+            .overlay {
+                VStack(spacing: 6) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Text("remote.device.model.unrecognized")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(8)
+            }
     }
 }
 

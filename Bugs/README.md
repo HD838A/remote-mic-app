@@ -1,7 +1,11 @@
 # Bug 记录
 
 - [自定义组合快捷键缺少修饰键释放](./2026-09-16-custom-shortcut-missing-modifier-release.md)
-
+- [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md)
+- [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)
+- [Onboarding 输入工具未运行、配对状态残留与语音测试页裁切](./2026-09-22-onboarding-tool-runtime-and-voice-test-gates.md)
+- [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md)
+- [虚拟设备被静音时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md)
 - [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
 - [关闭原始录音开关仍保存当前音频](./2026-08-27-original-recording-cancel-commits-audio.md)
 - [Onboarding 语音测试页隐藏第三方配置](./2026-09-05-onboarding-voice-test-hidden-tool-configuration.md)
@@ -86,6 +90,11 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-09-27 | [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md) | 修复完成；构建、定向回归与修复前后对照通过，等待真机长时间运行与遥控器反复重连验收 |
+| 2026-09-26 | [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)（Issue #497） | 未复现、根因未确认；已补针对性日志与受门控的会话恢复，等待双账户真机复现验收 |
+| 2026-09-21 | [Onboarding 语音文字在松键后消失](./2026-09-21-onboarding-voice-text-disappears-on-release.md) | 修复已实现，等待微信输入法、豆包、Typeless 与实体遥控器真实验收 |
+| 2026-09-20 | [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md) | 已修复（候选）；`OnboardingFlowTests` 50 项与本机真机语音测试通过，等待合入与发布后验证 |
+| 2026-09-20 | [虚拟设备被静音或音量过低时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md) | 自动解除静音与低于 0.2 的音量保护完成；MiRemoteV 2ch 属性自愈实测通过，等待 BlackHole 与完整语音链路验收 |
 | 2026-09-11 | [苹果遥控器 Command 语音键再次无法唤醒目标输入法](./2026-09-11-siri-remote-command-voice-regression.md) | 候选修复与失败门禁完成，等待真实遥控器和目标输入法验收 |
 | 2026-09-03 | [1.9.19 偶发显示“暂时无法获取更新信息”](./2026-09-03-github-api-update-feed-unavailable/DEBUG.md) | 候选修复、自动化与生产通道部署完成，等待 `1.9.21` 真实 Sparkle UI 验收 |
 | 2026-09-01 | [1.9.18「语音键模拟 Fn 点按」自动关闭](./2026-09-01-fn-tap-auto-disable/DEBUG.md) | 根因确认并完成候选修复；自动化通过，等待 RC003 与 Typeless 真机验收 |

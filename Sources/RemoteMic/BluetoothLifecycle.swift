@@ -1,22 +1,132 @@
 import Foundation
 
 enum XiaomiVoiceRemoteNameMatcher {
-    private static let approvedNames: Set<String> = [
-        "mi rc",
-        "xiaomi bluetooth remote 2",
-        "xiaomi bluetooth remote 2 pro",
-        "小米蓝牙语音遥控器",
-        // 蓝牙遥控器 2 / 2 Pro (model ARN9) advertise under these names.
-        "小米蓝牙遥控器2",
-        "小米蓝牙遥控器2 pro",
-        "arn9",
-    ]
+    /// 白名单集中在 `VoiceRemoteCatalog.adoptedAdvertisedNames`，这里不再单独维护一份。
+    private static let approvedNames: Set<String> = VoiceRemoteCatalog.adoptedAdvertisedNames
 
     static func matches(_ rawName: String?) -> Bool {
-        guard let rawName else { return false }
+        recognizedName(rawName) != nil
+    }
+
+    /// 返回命中的规范名，便于日志说明「按哪个名字认出来的」。
+    static func recognizedName(_ rawName: String?) -> String? {
+        guard let rawName else { return nil }
         let normalized = rawName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalized.isEmpty else { return false }
-        return approvedNames.contains(normalized)
+        guard !normalized.isEmpty, approvedNames.contains(normalized) else { return nil }
+        return normalized
+    }
+}
+
+/// 别的产品也会用同一个通用 ATVV 服务。它们是私有 Chromecast 适配包的目标，
+/// **宿主的 Xiaomi 桥必须一律拒绝**——否则会出现「连上了 Chromecast Remote、界面显示
+/// Xiaomi 遥控器已连接、按键与语音键全无反应」，而且两条链路会互相抢同一台设备。
+///
+/// 名单与私有包 `ChromecastRemoteModel.advertisedNameHints`（含 RemoteG10 样机）保持一致；
+/// 归一化规则也与 `ChromecastRemoteModelMatcher` 一致（大小写、下划线、连字符、连续空格）。
+enum ForeignVoiceRemoteProduct {
+    /// 真机日志里出现过裸 `name=Chromecast`（Bluetooth 系统名不带 Remote），所以裸名也必须算；
+    /// 只写 `chromecast remote` 会漏掉这类变体。
+    private static let rejectedNames: Set<String> = [
+        "chromecast",
+        "chromecast remote",
+        "chromecast 遥控器",
+        "remote g10",
+        "remoteg10",
+        "g10",
+    ]
+
+    static func isRejected(name: String?) -> Bool {
+        rejectedName(name) != nil
+    }
+
+    static func rejectedName(_ name: String?) -> String? {
+        guard let normalized = normalized(name) else { return nil }
+        return rejectedNames.contains(normalized) ? normalized : nil
+    }
+
+    private static func normalized(_ name: String?) -> String? {
+        guard let name else { return nil }
+        let trimmed = name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+        let collapsed = trimmed.split(separator: " ").joined(separator: " ")
+        return collapsed.isEmpty ? nil : collapsed
+    }
+}
+
+/// 遥控器发现准入结论。
+///
+/// 为什么必须是「白名单 + 明确结论」而不是布尔值：App 里每款遥控器都有**真机图片**和按键页，
+/// 采用一台认不出来的 ATVV 设备就等于给它套上别的型号的图和按键集合，界面会声称一个从未
+/// 验证过的设备「已连接」。宁可明确不采用，也不能猜。
+enum VoiceRemoteAdmissionDecision: Equatable {
+    /// 已保存身份命中：用户此前采用过这台设备，改名后依然可用。
+    case adoptSavedIdentity
+    /// 名称命中本产品的已知型号。
+    case adoptRecognizedName(String)
+    /// 别的产品（Chromecast Remote / RemoteG10 等）。
+    case rejectForeignProduct(String)
+    /// 广播/上报了名字，但不是任何已知型号：不采用（无身份、又认不出）。
+    case rejectUnrecognizedName(String)
+    /// 完全拿不到名字：无法证明是已知型号，不采用。
+    case rejectUnnamed
+    /// 与本桥无关（既不是 ATVV 设备，也不是本桥的目标标识）。
+    case ignore
+
+    var isAdopted: Bool {
+        switch self {
+        case .adoptSavedIdentity, .adoptRecognizedName: return true
+        case .rejectForeignProduct, .rejectUnrecognizedName, .rejectUnnamed, .ignore: return false
+        }
+    }
+
+    /// 用于日志的机器可读原因。拒绝必须带原因：设备名对不上、名字没拿到、名字不认识，
+    /// 这几种情况在没有原因字段的日志里长得完全一样，无法二分。
+    var logReason: String {
+        switch self {
+        case .adoptSavedIdentity: return "saved_identity"
+        case .adoptRecognizedName: return "recognized_name"
+        case .rejectForeignProduct: return "foreign_product"
+        case .rejectUnrecognizedName: return "unrecognized_name"
+        case .rejectUnnamed: return "unnamed"
+        case .ignore: return "ignore"
+        }
+    }
+}
+
+/// 把「发现了什么」翻译成「能不能采用」的纯判定。
+///
+/// 三条发现路径——已保存标识、系统已连接设备、扫描广播——**必须共用这一份判定**，
+/// 否则「遥控器已在系统设置里配对过」这类设备会被其中一条路径漏掉或误收。
+enum VoiceRemoteAdmission {
+    static func decide(
+        identifier: UUID,
+        targetIdentifier: UUID?,
+        advertisesVoiceService: Bool,
+        name: String?,
+        advertisedName: String?
+    ) -> VoiceRemoteAdmissionDecision {
+        let nameForMatch = advertisedName ?? name
+        // 别的产品优先否决，且优先于已保存身份：早先版本误把 Chromecast Remote 存成
+        // Xiaomi 档案的情况真实发生过，只按 UUID 采纳会让这个错误一直重连下去。
+        if let foreign = ForeignVoiceRemoteProduct.rejectedName(nameForMatch) {
+            return .rejectForeignProduct(foreign)
+        }
+        if let targetIdentifier {
+            // 身份优先于名称：用户改过名的遥控器仍然必须是同一台设备。
+            return identifier == targetIdentifier ? .adoptSavedIdentity : .ignore
+        }
+        if let recognized = XiaomiVoiceRemoteNameMatcher.recognizedName(nameForMatch) {
+            return .adoptRecognizedName(recognized)
+        }
+        guard advertisesVoiceService else { return .ignore }
+        if let nameForMatch, !nameForMatch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .rejectUnrecognizedName(nameForMatch)
+        }
+        // 只认名字，不认「服务存在」：ATVV 是通用服务，协议相同不等于型号相同。
+        return .rejectUnnamed
     }
 }
 
@@ -140,6 +250,29 @@ enum BluetoothWakeRecoveryPolicy {
         started: Bool
     ) -> Bool {
         started && event == .systemDidWake
+    }
+
+    /// 挂起原因全部解除后，是否需要主动重建蓝牙语音链路。
+    ///
+    /// 场景：同机多账户（快速用户切换 / 重新登录）下，另一个账户的实例可能在这台遥控器上
+    /// 建立了连接，本账户的 BLE 链路在会话离开前台期间被顶掉。切回后旧实现只尝试重绑虚拟
+    /// 音频，不会主动重建蓝牙链路；由于 `VirtualAudioConnectionLifecyclePolicy.shouldBeActive`
+    /// 要求至少一台桥就绪，界面会长期停在「正在查找…」，用户必须手动点「立即重新连接」。
+    ///
+    /// 这个判定只在「有已配置的桥、当前一台都没就绪、且没有正在进行中的语音」时才为真：
+    /// - 任一桥就绪 → 完全空操作，不打断健康连接；
+    /// - 有活跃语音 → 不介入，不打断正在进行的会话；
+    /// - 没有已配置的桥 → 不凭空启动连接。
+    /// 与 `.systemDidWake` 的 `shouldForceReconnect` 互补：后者是系统唤醒的强恢复，
+    /// 这里是「链路已经掉了」的按需恢复。
+    static func shouldRecoverVoiceLinkAfterResume(
+        started: Bool,
+        configuredBridgeCount: Int,
+        readyBridgeCount: Int,
+        voiceLinkActive: Bool
+    ) -> Bool {
+        guard started, !voiceLinkActive, configuredBridgeCount > 0 else { return false }
+        return readyBridgeCount == 0
     }
 }
 

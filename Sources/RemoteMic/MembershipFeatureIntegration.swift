@@ -2,9 +2,8 @@ import Combine
 import Foundation
 import SwiftUI
 
-#if canImport(SayAllMembershipCore) && canImport(SayAllMembershipUI)
-import SayAllMembershipCore
-import SayAllMembershipUI
+#if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+import SayAllMembershipHostAdapter
 #endif
 
 enum HostButtonProfilesAccessDecision: Equatable {
@@ -44,14 +43,15 @@ struct MembershipFeatureConfiguration: Equatable {
     }
 }
 
-final class MembershipFeatureIntegration: ObservableObject {
+final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable {
     @Published private(set) var isFeatureVisible = false
     @Published private(set) var buttonProfilesAccessDecision: HostButtonProfilesAccessDecision = .unavailable
+    @Published private(set) var accountDisplayName: String? = nil
 
     private var localeIdentifier: String
 
-    #if canImport(SayAllMembershipCore) && canImport(SayAllMembershipUI)
-    @MainActor private var controller: MembershipCenterController?
+    #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+    @MainActor private var adapter: MembershipHostAdapter?
     private var subscriptions = Set<AnyCancellable>()
     #endif
 
@@ -60,7 +60,7 @@ final class MembershipFeatureIntegration: ObservableObject {
         configuration: MembershipFeatureConfiguration? = .current()
     ) {
         self.localeIdentifier = localeIdentifier
-        #if canImport(SayAllMembershipCore) && canImport(SayAllMembershipUI)
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
         if let configuration {
             Task { @MainActor [weak self] in
                 self?.configure(configuration)
@@ -70,9 +70,10 @@ final class MembershipFeatureIntegration: ObservableObject {
     }
 
     var sectionTitle: String {
-        #if canImport(SayAllMembershipCore) && canImport(SayAllMembershipUI)
-        MembershipCenterLocalization(locale: Locale(identifier: localeIdentifier))
-            .text("membership.title")
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        Locale(identifier: localeIdentifier).identifier.lowercased().hasPrefix("zh")
+            ? "会员"
+            : "Membership"
         #else
         ""
         #endif
@@ -82,9 +83,9 @@ final class MembershipFeatureIntegration: ObservableObject {
 
     func updateLocaleIdentifier(_ identifier: String) {
         localeIdentifier = identifier
-        #if canImport(SayAllMembershipCore) && canImport(SayAllMembershipUI)
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
         Task { @MainActor [weak self] in
-            self?.controller?.updateLocaleIdentifier(identifier)
+            self?.adapter?.updateLocaleIdentifier(identifier)
         }
         #endif
         objectWillChange.send()
@@ -92,64 +93,100 @@ final class MembershipFeatureIntegration: ObservableObject {
 
     @MainActor
     func refreshIfNeeded() {
-        #if canImport(SayAllMembershipCore) && canImport(SayAllMembershipUI)
-        guard let controller else { return }
-        if controller.membershipSessionState == .uninitialized {
-            controller.prepareMembershipSession()
-        } else {
-            controller.refreshMembership()
-        }
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        adapter?.refreshIfNeeded()
         #endif
     }
 
     @MainActor
     func settingsView() -> AnyView {
-        #if canImport(SayAllMembershipCore) && canImport(SayAllMembershipUI)
-        guard let controller else { return AnyView(EmptyView()) }
-        return AnyView(MembershipCenterView(
-            model: controller,
-            localization: MembershipCenterLocalization(
-                locale: Locale(identifier: localeIdentifier)
-            )
-        ))
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        adapter?.settingsView() ?? AnyView(EmptyView())
         #else
-        return AnyView(EmptyView())
+        AnyView(EmptyView())
         #endif
     }
 
-    #if canImport(SayAllMembershipCore) && canImport(SayAllMembershipUI)
+    #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
     @MainActor
     private func configure(_ configuration: MembershipFeatureConfiguration) {
-        guard controller == nil else { return }
-        let controller = MembershipCenterController(
+        guard adapter == nil else { return }
+        let adapter = MembershipHostAdapter(
             baseURL: configuration.baseURL,
             issuer: configuration.issuer,
             keychainService: configuration.keychainService,
             appVersion: configuration.appVersion,
             localeIdentifier: localeIdentifier
         )
-        self.controller = controller
-        isFeatureVisible = true
-        controller.$membershipAccount
-            .map(Self.buttonProfilesAccessDecision)
+        self.adapter = adapter
+        adapter.$isFeatureVisible
             .removeDuplicates()
-            .assign(to: &$buttonProfilesAccessDecision)
-        controller.prepareMembershipSession()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] value in
+                self?.isFeatureVisible = value
+            }
+            .store(in: &subscriptions)
+        adapter.$buttonProfilesAccessDecision
+            .map(Self.mapAccessDecision)
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] value in
+                self?.buttonProfilesAccessDecision = value
+            }
+            .store(in: &subscriptions)
+        adapter.$accountDisplayName
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] value in
+                self?.accountDisplayName = value
+            }
+            .store(in: &subscriptions)
     }
 
-    private static func buttonProfilesAccessDecision(
-        account: MembershipAccountState
+    private static func mapAccessDecision(
+        _ decision: MembershipHostButtonProfilesAccessDecision
     ) -> HostButtonProfilesAccessDecision {
-        switch MembershipAccessController.evaluate(.buttonProfiles, account: account) {
+        switch decision {
         case let .allowed(validUntil):
             return .allowed(validUntil: validUntil)
         case let .temporarilyOffline(validUntil):
             return .temporarilyOffline(validUntil: validUntil)
-        case .requires:
+        case .requiresPlus:
             return .requiresPlus
         case .unavailable:
+            return .unavailable
+        @unknown default:
             return .unavailable
         }
     }
     #endif
+}
+
+extension MembershipFeatureIntegration: PrivateDiagnosticUploadProvider {
+    func pendingPrivateDiagnosticRecords() async -> [PrivateDiagnosticUploadRecord] {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        return await Task { @MainActor [weak self] in
+            guard let adapter = self?.adapter else { return [] }
+            let records = await adapter.pendingPrivateDiagnosticRecords()
+            return records.compactMap { record in
+                PrivateDiagnosticUploadRecord(
+                    recordID: record.recordID,
+                    occurredAt: record.occurredAt,
+                    category: record.category,
+                    fields: record.fields
+                )
+            }
+        }.value
+        #else
+        return []
+        #endif
+    }
+
+    func markPrivateDiagnosticRecordsUploaded(_ recordIDs: Set<String>) async {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        await Task { @MainActor [weak self] in
+            await self?.adapter?.markPrivateDiagnosticRecordsUploaded(recordIDs)
+        }.value
+        #endif
+    }
 }

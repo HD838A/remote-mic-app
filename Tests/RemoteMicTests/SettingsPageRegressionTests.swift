@@ -5,6 +5,42 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func connectionPageKeepsCompatibilityAudioControlsWithoutExtraTools() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("audio.action.refresh_devices"))
+        #expect(settingsSource.contains("audioCompatibilityPanel"))
+        #expect(settingsSource.contains("model.selectDoubaoAudioDevice()"))
+        #expect(settingsSource.contains("model.openDoubaoDriverInstructions(using: localization)"))
+        #expect(!settingsSource.contains("audio.action.learn_virtual_microphones"))
+        #expect(!settingsSource.contains("audio.action.send_test_tone"))
+        #expect(!settingsSource.contains("model.testToneStatus.text(using: localization)"))
+    }
+
+    @Test func connectionPageShowsVoiceKeyCompatibilityWarningOnlyFromModelState() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("model.voiceKeyCompatibilityWarning"))
+        #expect(settingsSource.contains("model.refreshVoiceKeyCompatibilityWarning()"))
+        #expect(settingsSource.contains("model.recheckRemoteInput()"))
+        #expect(settingsSource.contains("warning.messageKey"))
+        #expect(settingsSource.contains("connection.voice_key_compatibility.title"))
+    }
+
     @Test func everyHardwareMappingPageUsesTheSharedHostEditor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -246,18 +282,28 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(package.contains("SAYALL_MEMBERSHIP_PACKAGE_PATH"))
+        #expect(package.contains("SAYALL_MEMBERSHIP_ADAPTER_PACKAGE_PATH"))
+        #expect(package.contains("membership source packages are not supported"))
         #expect(package.contains("SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"))
         #expect(package.contains("SAYALL_COMBINATION_ACTIONS_PATH"))
         #expect(package.contains("SAYALL_BUTTON_PROFILES_PACKAGE_PATH"))
         #expect(package.contains("SAYALL_BUTTON_PROFILES_PACKAGE_PATH requires SAYALL_COMBINATION_ACTIONS_PATH"))
         #expect(package.contains("private artifacts cannot be combined with private source packages"))
-        #expect(package.contains("SayAllMembershipCore"))
-        #expect(package.contains("SayAllMembershipUI"))
-        #expect(membership.contains("#if canImport(SayAllMembershipCore)"))
-        #expect(membership.contains("return AnyView(EmptyView())"))
+        #expect(package.contains("SayAllMembershipHostAdapter"))
+        #expect(package.contains("SAYALL_MEMBERSHIP_ENABLED"))
+        #expect(!package.contains("membershipAdapterPackagePath"))
+        #expect(!package.contains(".product(name: \"SayAllMembershipCore\""))
+        #expect(!package.contains(".product(name: \"SayAllMembershipUI\""))
+        #expect(membership.contains("#if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)"))
+        #expect(membership.contains("import SayAllMembershipHostAdapter"))
+        #expect(!membership.contains("import SayAllMembershipCore"))
+        #expect(!membership.contains("import SayAllMembershipUI"))
+        #expect(membership.contains("AnyView(EmptyView())"))
+        #expect(membership.contains("@unknown default:"))
         #expect(macro.contains("func executeBoundAction("))
         #expect(macro.contains("#if canImport(SayAllButtonProfiles)"))
+        #expect(!macro.contains("canImport(SayAllMembershipCore)"))
+        #expect(macro.contains(".chromecastVoiceRemote"))
         #expect(macro.contains("buttonProfilesFeature.executeBoundAction("))
         #expect(macro.contains("feature.executeBoundMacro("))
         #expect(macro.contains("return false"))
@@ -522,11 +568,19 @@ struct SettingsPageRegressionTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
             encoding: .utf8
         )
+        let sidebarStart = try #require(settingsSource.range(of: "private var sidebar: some View {"))
+        let visibleSectionsStart = try #require(settingsSource.range(
+            of: "private var visibleSections: [SettingsSection]",
+            range: sidebarStart.upperBound..<settingsSource.endIndex
+        ))
+        let sidebarSource = settingsSource[sidebarStart.lowerBound..<visibleSectionsStart.lowerBound]
 
         #expect(appSource.contains("window.isMovableByWindowBackground = false"))
         #expect(!appSource.contains("window.isMovableByWindowBackground = true"))
         #expect(settingsSource.contains("WindowDragArea()"))
         #expect(settingsSource.contains("window?.performDrag(with: event)"))
+        #expect(settingsSource.contains("SettingsPageBehavior.sidebarTopDragHeight"))
+        #expect(!sidebarSource.contains(".ignoresSafeArea(.container, edges: .top)"))
     }
 
     @Test func settingsWindowEstablishesItsFullSizeBeforeCentering() throws {
@@ -740,9 +794,6 @@ struct SettingsPageRegressionTests {
             "model.reconnect()",
             "model.applyAudioSettings()",
             "model.refreshAudioDevices()",
-            "model.sendTestTone()",
-            "model.selectDoubaoAudioDevice()",
-            "model.openDoubaoDriverInstructions(using: localization)",
             "model.setVoiceFnTapModeEnabled",
             "model.togglePhoneRemoteConnection()",
             "model.toggleWatchRemoteConnection()",
@@ -797,8 +848,14 @@ struct SettingsPageRegressionTests {
         #expect(!source.contains("remoteDeviceBindingPanel"))
         #expect(!source.contains("SidebarGlassModifier"))
         #expect(source.contains(".focusEffectDisabled()"))
-        #expect(source.contains(".frame(height: 56)"))
-        #expect(source.contains(".ignoresSafeArea(.container, edges: .top)"))
+        #expect(source.contains("SettingsPageBehavior.sidebarTopDragHeight"))
+        let sidebarStart = try #require(source.range(of: "private var sidebar: some View {"))
+        let visibleSectionsStart = try #require(source.range(
+            of: "private var visibleSections: [SettingsSection]",
+            range: sidebarStart.upperBound..<source.endIndex
+        ))
+        let sidebarSource = source[sidebarStart.lowerBound..<visibleSectionsStart.lowerBound]
+        #expect(!sidebarSource.contains(".ignoresSafeArea(.container, edges: .top)"))
         #expect(source.contains("showsAnchor: activeButtons.contains(placement.button)"))
         #expect(source.contains(".toggleStyle(.switch)"))
         #expect(source.contains("button_mapping.permission_prompt.open"))
@@ -884,8 +941,8 @@ struct SettingsPageRegressionTests {
         #expect(chinese.contains(#""remote.device.model.rc003" = "小米蓝牙遥控器 2 Pro";"#))
         #expect(english.contains(#""remote.device.model.rc001" = "Xiaomi Bluetooth Remote 2";"#))
         #expect(english.contains(#""remote.device.model.rc003" = "Xiaomi Bluetooth Remote 2 Pro";"#))
-        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2854" = "苹果遥控器 Type-C";"#))
-        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2540" = "苹果遥控器 Lightning";"#))
+        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2854" = "苹果遥控器第 7 代";"#))
+        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2540" = "苹果遥控器第 6 代";"#))
 
         let cardStart = try #require(settingsSource.range(of: "private func remoteDeviceCard"))
         let cardEnd = try #require(settingsSource.range(
@@ -895,6 +952,11 @@ struct SettingsPageRegressionTests {
         let cardSource = settingsSource[cardStart.lowerBound..<cardEnd.lowerBound]
         #expect(cardSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(cardSource.contains("fillsWidth ? nil : 232"))
+        #expect(cardSource.contains("let modelName = remoteModelName(profile)"))
+        #expect(cardSource.contains("let systemName = remoteSystemName(profile)"))
+        #expect(cardSource.contains("Text(modelName)"))
+        #expect(cardSource.contains("Text(systemName)"))
+        #expect(cardSource.contains(".accessibilityLabel(Text(\"\\(modelName), \\(systemName)\"))"))
         #expect(cardSource.contains("remoteBatteryLabel("))
         #expect(cardSource.contains("let powerState = model.powerState(for: profile.id)"))
         #expect(cardSource.contains("if showsBattery"))
@@ -978,6 +1040,9 @@ struct SettingsPageRegressionTests {
         let selectorSource = source[selectorStart.lowerBound..<selectorEnd.lowerBound]
 
         #expect(selectorSource.contains("model.isRemoteConnected($0.id)"))
+        #expect(selectorSource.contains("RemoteDeviceNamePolicy.sortedForCards("))
+        #expect(selectorSource.contains("modelName: remoteModelName"))
+        #expect(selectorSource.contains("systemName: { model.systemDeviceName(for: $0) }"))
         #expect(selectorSource.contains("ForEach(connectedProfiles)"))
         #expect(selectorSource.contains("remoteDeviceEmptyState(vertical: vertical)"))
         #expect(selectorSource.contains("connectedProfiles.count <= 2"))
@@ -986,6 +1051,7 @@ struct SettingsPageRegressionTests {
         #expect(!selectorSource.contains("ScrollView(.horizontal, showsIndicators: true)"))
         #expect(!selectorSource.contains("ForEach(settings.remoteDeviceProfiles)"))
         #expect(source.contains("Button(\"connection.action.reconnect\")"))
+        #expect(source.contains("remote.device.system_name_unknown"))
     }
 
     @Test func settingsPageKeepsVersionFeaturesTogetherAndLanguagesVisible() throws {
@@ -1125,7 +1191,7 @@ struct SettingsPageRegressionTests {
         #expect(settings.contains("macroFeature.enrollmentView"))
         #expect(settings.contains("macroFeature.setEditorActive(false)"))
         #expect(settings.contains("if section != .macros"))
-        #expect(model.contains("return (resolvedProfileID, !self.macroFeature.isEditorActive)"))
+        #expect(model.contains("!self.macroFeature.isEditorActive && !suppressConfiguredAction"))
         #expect(model.contains("if macroFeature.isEditorActive"))
         #expect(chinese.contains("输入框"))
         #expect(chinese.contains("MCP / TOML"))
@@ -1152,6 +1218,56 @@ struct SettingsPageRegressionTests {
             .about,
             .statistics,
         ])
+    }
+
+    @Test func updateBadgeBelongsOnlyToTheSettingsSidebarEntry() throws {
+        for section in SettingsSection.allCases {
+            #expect(SettingsPageBehavior.showsUpdateBadge(
+                for: section,
+                hasUnseenUpdate: true
+            ) == (section == .about))
+            #expect(SettingsPageBehavior.marksUpdateAsSeen(
+                whenSelecting: section
+            ) == (section == .about))
+        }
+        #expect(!SettingsPageBehavior.showsUpdateBadge(
+            for: .about,
+            hasUnseenUpdate: false
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("selectSidebarSection(section)"))
+        #expect(source.contains("updateInformation.markAvailableUpdateSeen()"))
+    }
+
+    @Test func profileSidebarUsesTheLoginFallbackAndSanitizedAccountDisplayName() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let integration = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MembershipFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(source.contains(
+            "membershipFeature.accountDisplayName ?? localization.text(\"settings.section.login\")"
+        ))
+        #expect(integration.contains("@Published private(set) var accountDisplayName: String?"))
+        #expect(integration.contains("adapter.$accountDisplayName"))
     }
 
     @Test func defaultSettingsPageTracksTheFirstVisibleSidebarSection() throws {
@@ -1455,14 +1571,41 @@ struct SettingsPageRegressionTests {
         #expect(heatmapSource.contains("height: max(cellSize, 16)"))
         #expect(source.contains("dailyUsageStatistics(days: 26 * 7, calendar: calendar)"))
         #expect(source.contains("let rankingWidth = max(360, availableWidth * 0.42)"))
-        #expect(source.contains(".frame(width: rankingWidth, alignment: .top)"))
+        #expect(source.contains("ProposedViewSize(width: rankingWidth, height: nil)"))
         #expect(source.contains("statisticsVoiceSessionRankingPanel"))
-        #expect(source.contains("statisticsCalendarPanel\n                                statisticsVoiceSessionRankingPanel"))
+        #expect(source.contains("statisticsCalendarPanel\n                            statisticsVoiceSessionRankingPanel"))
         #expect(source.contains("entries.prefix(10)"))
         #expect(source.contains("settings.voiceSessionRanking.prefix(10)"))
         #expect(source.contains(".frame(maxWidth: .infinity, alignment: .top)"))
         #expect(source.contains(".frame(height: 250, alignment: .top)"))
         #expect(source.contains("ForEach(0..<7, id: \\.self)"))
+    }
+
+    @Test func profileStatisticsReportsIntrinsicHeightForBottomContent() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let layoutStart = try #require(source.range(of: "private struct StatisticsColumnsLayout"))
+        let settingsStart = try #require(source.range(of: "struct SettingsView"))
+        let layoutSource = source[layoutStart.lowerBound..<settingsStart.lowerBound]
+        let statisticsStart = try #require(source.range(of: "private var statisticsPage"))
+        let summaryStart = try #require(source.range(
+            of: "private var statisticsSummaryGrid",
+            range: statisticsStart.upperBound..<source.endIndex
+        ))
+        let statisticsSource = source[statisticsStart.lowerBound..<summaryStart.lowerBound]
+
+        #expect(layoutSource.contains("max(leftSize.height, rightSize.height)"))
+        #expect(layoutSource.contains("ProposedViewSize(width: rankingWidth, height: nil)"))
+        #expect(statisticsSource.contains("StatisticsColumnsLayout"))
+        #expect(!statisticsSource.contains("GeometryReader"))
+        #expect(!statisticsSource.contains(".frame(minHeight: 648)"))
+        #expect(source.contains("statistics.ranking.view_all"))
     }
 
     @Test func corruptedSettingsBannerIsInlineAndNeverShrinksChineseBelowTwelvePoints() throws {
@@ -1528,5 +1671,21 @@ struct SettingsPageRegressionTests {
             settingsSource[mappingPage.upperBound..<mappingPageEnd.lowerBound]
                 .contains("corruptedSettingsBanner")
         )
+    }
+
+    @Test func mappingPageResetsEditorAndScrollsToTopWhenRemoteChanges() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains(".id(\"mapping-page-top\")"))
+        #expect(source.contains(".onChange(of: settings.selectedRemoteProfileID)"))
+        #expect(source.contains("mappingEditingTarget = nil"))
+        #expect(source.contains("proxy.scrollTo(\"mapping-page-top\", anchor: .top)"))
+        #expect(source.contains("Group {\n                    ScrollView(.vertical, showsIndicators: false)"))
     }
 }

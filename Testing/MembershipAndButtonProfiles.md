@@ -9,8 +9,8 @@
 ## 测试前准备
 
 1. 准备不注入任何私有 Package 的公开构建。
-2. 准备注入会员与按键方案 Package 的内部构建；使用独立 Worktree，不把私有源码或本机绝对路径提交到本仓库。
-3. 内部构建通过 `SAYALL_MEMBERSHIP_API_BASE_URL` 提供测试服务地址。生产或远程测试只允许 `https`；`http://127.0.0.1:<port>` 仅用于本机开发。
+2. 准备注入统一私有二进制构件 Package 的内部构建；不把私有源码、二进制构件或本机绝对路径提交到本仓库。
+3. 内部构建只通过 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 注入会员、组合动作和付费键位方案，并通过 `SAYALL_MEMBERSHIP_API_BASE_URL` 提供测试服务地址。生产或远程测试只允许 `https`；`http://127.0.0.1:<port>` 仅用于本机开发。
 4. 准备 Free、Plus、会员刚过期、网络断开但租约仍有效、租约已过期五种脱敏测试状态。
 5. 准备真实实体遥控器、Nearby iPhone 或 Apple Watch，以及 Web Remote；分别记录当前公开按键映射作为回退基线。
 
@@ -23,17 +23,13 @@ swift test --disable-keychain
 swift build --disable-keychain -c release
 ```
 
-内部集成构建显式注入免费组合动作、付费键位方案和会员 Package；付费键位方案缺少免费依赖时必须直接失败：
+内部集成构建只注入一个经过校验的私有二进制构件 Package；会员、组合动作和付费键位方案必须来自同一份构件清单：
 
 ```bash
-SAYALL_COMBINATION_ACTIONS_PATH=/path/to/sayall-private-platform/packages/macos-combination-actions \
-SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/sayall-private-platform/packages/macos-button-profiles \
-SAYALL_MEMBERSHIP_PACKAGE_PATH=/path/to/private/macos-membership \
+SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/path/to/prepared-private-artifact-package \
 swift test --disable-keychain --scratch-path .build-free-paid
 
-SAYALL_COMBINATION_ACTIONS_PATH=/path/to/sayall-private-platform/packages/macos-combination-actions \
-SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/sayall-private-platform/packages/macos-button-profiles \
-SAYALL_MEMBERSHIP_PACKAGE_PATH=/path/to/private/macos-membership \
+SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/path/to/prepared-private-artifact-package \
 swift build --disable-keychain --scratch-path .build-free-paid -c release
 ```
 
@@ -57,11 +53,11 @@ swift build --disable-keychain --scratch-path .build-free-paid -c release
 
 ## 用例三：账号与会员页面
 
-步骤：完成邮箱验证码登录、刷新、退出登录，再模拟网络失败后恢复；分别检查 Free 和 Plus 账户。
+步骤：完成邮箱验证码登录、刷新、退出登录，再模拟网络失败后恢复；分别检查 Free 和 Plus 账户。同时查看设置侧边栏“个人中心”入口在未登录、已登录、刷新和退出后的文字。
 
-预期：登录态由安全会话恢复；退出后本机立即失效，服务端撤销失败时可在网络恢复后补偿；Free 显示升级入口，Plus 显示有效权益。日志和可复制诊断不得包含邮箱、验证码、Token、安装标识或服务响应正文。
+预期：登录态由安全会话恢复；已登录时个人中心入口显示邮箱 `@` 前最多 6 个字符，前缀不足 6 个字符时完整显示；未登录或退出后显示“我”；刷新保留用户名，退出立即清空用户名；退出后本机立即失效，服务端撤销失败时可在网络恢复后补偿；Free 显示升级入口，Plus 显示有效权益。日志和可复制诊断不得包含邮箱、验证码、Token、安装标识或服务响应正文。
 
-失败判定：重启后冒用其他用户会员、本机退出后仍可使用 Plus、网络失败清除了可恢复会话，或敏感信息进入日志。
+失败判定：用户名显示完整邮箱、未按 `@` 前缀截取、超过 6 个字符、退出后仍显示用户名、重启后冒用其他用户会员、本机退出后仍可使用 Plus、网络失败清除了可恢复会话，或敏感信息进入日志。
 
 ## 用例四：7 天离线租约
 

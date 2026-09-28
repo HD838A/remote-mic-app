@@ -132,6 +132,54 @@ is_control_plane_run() {
     ' >/dev/null
 }
 
+is_docs_only_run() {
+  local run_json="$1"
+  local commit="$2"
+  printf '%s\n' "$run_json" | jq -e \
+    --arg workflow "$WORKFLOW_NAME" \
+    --arg headBranch "$SOURCE_BRANCH" \
+    --arg headSha "$commit" '
+      .workflowName == $workflow and
+      (($headBranch == "main" and .event == "push") or
+       ($headBranch != "main" and (.event == "push" or .event == "workflow_dispatch"))) and
+      .status == "completed" and
+      .conclusion == "success" and
+      .headBranch == $headBranch and
+      .headSha == $headSha and
+      ([.jobs[] | select(
+        .name == "Swift tests and build (Apple Silicon)" and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select(.name == "Run documentation checks" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run release control-plane fixture" or
+          .name == "Run Swift tests" or .name == "Run project self-test" or
+          .name == "Build release configuration") and .conclusion == "success")] | length) == 0
+      )] | length) == 1 and
+      ([.jobs[] | select(
+        .name == "Swift tests and build (Intel Ventura)" and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select(.name == "Run documentation checks" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run release control-plane fixture" or
+          .name == "Run Swift tests" or .name == "Run project self-test" or
+          .name == "Build release configuration") and .conclusion == "success")] | length) == 0
+      )] | length) == 1
+    ' >/dev/null
+}
+
+is_docs_only_diff() {
+  local base_commit="$1"
+  local candidate_commit="$2"
+  local changed=false
+  while IFS= read -r changed_path; do
+    [[ -n "$changed_path" ]] || continue
+    changed=true
+    case "$changed_path" in
+      *.md|Screenshots/*) ;;
+      *) return 1 ;;
+    esac
+  done < <(git diff --name-only "$base_commit" "$candidate_commit")
+  [[ "$changed" == true ]]
+}
+
 RUN_ID="$(find_successful_source_run_id "$SOURCE_COMMIT")"
 if [[ -z "$RUN_ID" || ! "$RUN_ID" =~ ^[0-9]+$ ]]; then
   echo "release source has no eligible successful macOS CI run: $SOURCE_BRANCH $SOURCE_COMMIT" >&2
@@ -143,8 +191,13 @@ PRODUCT_PROOF_COMMIT="$SOURCE_COMMIT"
 PRODUCT_CI_RUN_ID="$RUN_ID"
 PRODUCT_RUN_JSON="$RUN_JSON"
 if ! is_full_product_run "$RUN_JSON" "$SOURCE_COMMIT"; then
-  if ! is_control_plane_run "$RUN_JSON" "$SOURCE_COMMIT"; then
-    echo "source-branch CI run $RUN_ID is neither a full product run nor a control-plane-only run" >&2
+  inherited_proof_kind=""
+  if is_control_plane_run "$RUN_JSON" "$SOURCE_COMMIT"; then
+    inherited_proof_kind="control-plane"
+  elif is_docs_only_run "$RUN_JSON" "$SOURCE_COMMIT"; then
+    inherited_proof_kind="docs-only"
+  else
+    echo "source-branch CI run $RUN_ID is neither a full product run, docs-only run, nor control-plane-only run" >&2
     exit 1
   fi
 
@@ -164,12 +217,17 @@ if ! is_full_product_run "$RUN_JSON" "$SOURCE_COMMIT"; then
   done < <(git rev-list --first-parent --skip=1 --max-count=50 "$SOURCE_COMMIT")
 
   if [[ -z "$PRODUCT_PROOF_COMMIT" ]]; then
-    echo "control-plane-only source has no recent first-parent full two-architecture product proof on the same branch" >&2
+    echo "$inherited_proof_kind source has no recent first-parent full two-architecture product proof on the same branch" >&2
     exit 1
   fi
-  if ! "$CONTROL_PLANE_DIFF_BIN" \
-      "$PRODUCT_PROOF_COMMIT" "$SOURCE_COMMIT"; then
-    echo "source changes after the inherited product proof are not control-plane-only" >&2
+  if [[ "$inherited_proof_kind" == "control-plane" ]]; then
+    if ! "$CONTROL_PLANE_DIFF_BIN" \
+        "$PRODUCT_PROOF_COMMIT" "$SOURCE_COMMIT"; then
+      echo "source changes after the inherited product proof are not control-plane-only" >&2
+      exit 1
+    fi
+  elif ! is_docs_only_diff "$PRODUCT_PROOF_COMMIT" "$SOURCE_COMMIT"; then
+    echo "source changes after the inherited product proof are not docs-only" >&2
     exit 1
   fi
 fi

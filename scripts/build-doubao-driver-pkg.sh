@@ -115,6 +115,13 @@ run_release_stage() {
   fi
 }
 
+write_package_build_metadata() {
+  local plist_path="$1"
+  if ! /usr/bin/plutil -replace PackageBuild -string "$BUILD" "$plist_path" 2>/dev/null; then
+    /usr/bin/plutil -insert PackageBuild -string "$BUILD" "$plist_path"
+  fi
+}
+
 run_locked_productsign() {
   local stage="$1"
   local input_package="$2"
@@ -131,7 +138,10 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$INSTALLER_SIGNING_IDENTITY" ==
 fi
 "$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
 "$ROOT/scripts/verify-app.sh" "$APP"
-test -x "$APPLE_REMOTE_HCI_SERVICE"
+if [[ ! -x "$APPLE_REMOTE_HCI_SERVICE" ]]; then
+  print -u2 "Siri Remote helper is missing from the release App; configure SAYALL_SIRI_REMOTE_PACKAGE_PATH before building the Installer package"
+  exit 1
+fi
 test -f "$APPLE_REMOTE_HCI_PLIST"
 /usr/bin/plutil -lint "$APPLE_REMOTE_HCI_PLIST"
 
@@ -163,10 +173,8 @@ move_existing_path_to_trash "$LEGACY_UNINSTALL_PACKAGE" "${LEGACY_UNINSTALL_PACK
   "$RELEASE_CONFIG_PLIST" "$INSTALL_SCRIPTS/release-variant.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$RELEASE_CONFIG_PLIST" "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
-/usr/bin/plutil -replace PackageBuild -string "$BUILD" \
-  "$INSTALL_SCRIPTS/release-variant.plist"
-/usr/bin/plutil -replace PackageBuild -string "$BUILD" \
-  "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
+write_package_build_metadata "$INSTALL_SCRIPTS/release-variant.plist"
+write_package_build_metadata "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
 
@@ -184,9 +192,13 @@ while true; do
     "$COMPONENT_PLIST" 2>/dev/null || true)"
   [[ -z "$bundle_path" ]] && break
   if [[ "$bundle_path" == "Applications/SayAll.app" ]]; then
-    /usr/libexec/PlistBuddy \
+    if ! /usr/libexec/PlistBuddy \
       -c "Set :$component_index:BundleIsRelocatable false" \
-      "$COMPONENT_PLIST"
+      "$COMPONENT_PLIST" 2>/dev/null; then
+      /usr/libexec/PlistBuddy \
+        -c "Add :$component_index:BundleIsRelocatable bool false" \
+        "$COMPONENT_PLIST"
+    fi
     APP_COMPONENT_INDEX="$component_index"
     break
   fi
