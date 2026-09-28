@@ -1172,6 +1172,33 @@ struct SettingsPageRegressionTests {
         #expect(appSource.contains("semantic_newer_but_sparkle_rejected"))
     }
 
+    @Test func settingsPageUsesAnInlineAppIconPickerWithoutUnavailablePlaceholders() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let controllerSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/AppIconController.swift"),
+            encoding: .utf8
+        )
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("appIconPreferenceRow"))
+        #expect(settingsSource.contains("ForEach(appIconCatalog.availableChoices)"))
+        #expect(settingsSource.contains("settings.appIconChoice = choice"))
+        #expect(!settingsSource.contains("Picker(\"about.preferences.app_icon\""))
+        #expect(controllerSource.contains("static let alternateResourceName = \"AppIconAlternate\""))
+        #expect(controllerSource.contains("alternateImage == nil ? [.primary]"))
+        #expect(buildSource.contains("Resources/AppIconAlternate.png"))
+    }
+
     @Test func settingsPageOffersAnOptInLoginItemWithSystemApprovalRecovery() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

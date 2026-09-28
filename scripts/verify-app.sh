@@ -479,6 +479,9 @@ fi
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"
+if [[ -f "$ROOT/Resources/AppIconAlternate.png" ]]; then
+  test -f "$APP/Contents/Resources/AppIconAlternate.png"
+fi
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
 done

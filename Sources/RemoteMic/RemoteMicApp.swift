@@ -189,6 +189,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private let model = BridgeAppModel()
+    private lazy var appIconController = AppIconController()
     private let updateInformation = UpdateInformationStore()
     private let hardwareAnnouncements = HardwareAnnouncementStore()
     private lazy var localization = LocalizationStore(settings: model.settings)
@@ -239,6 +240,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             sparkleHadLaunchedBefore: UserDefaults.standard.bool(forKey: "SUHasLaunchedBefore")
         )
         observeUpdatePreferences()
+        observeAppIconPreference()
         configureUpdater()
         installTerminationSignalHandlers()
         configureApplicationMenu()
@@ -783,6 +785,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                     updaterController.updater.resetUpdateCycleAfterShortDelay()
                     refreshUpdateInformation()
                 }
+            }
+            .store(in: &subscriptions)
+    }
+
+    private func observeAppIconPreference() {
+        model.settings.$appIconChoice
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] choice in
+                self?.appIconController.apply(choice, source: "preference")
             }
             .store(in: &subscriptions)
     }

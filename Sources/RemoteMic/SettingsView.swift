@@ -449,6 +449,7 @@ struct SettingsView: View {
     private let setDockIconVisible: (Bool) -> Void
     private let setStatusBarIconVisible: (Bool) -> Void
     private let syncEntryPointVisibility: () -> Void
+    private let appIconCatalog: AppIconCatalog
     private let minimumContentSize: CGSize
     private let initialShortcutPickerShowsKeyboard: Bool
 
@@ -491,6 +492,7 @@ struct SettingsView: View {
         setDockIconVisible: @escaping (Bool) -> Void = { _ in },
         setStatusBarIconVisible: @escaping (Bool) -> Void = { _ in },
         syncEntryPointVisibility: @escaping () -> Void = {},
+        appIconCatalog: AppIconCatalog? = nil,
         initialSection: SettingsSection? = nil,
         initialShareSection: SettingsSection? = nil,
         initialMappingEditingButton: RemoteButton? = nil,
@@ -511,6 +513,7 @@ struct SettingsView: View {
         self.setDockIconVisible = setDockIconVisible
         self.setStatusBarIconVisible = setStatusBarIconVisible
         self.syncEntryPointVisibility = syncEntryPointVisibility
+        self.appIconCatalog = appIconCatalog ?? .live()
         self.minimumContentSize = minimumContentSize
         self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
         _selectedSection = State(initialValue: SettingsPageBehavior.initialSection(
@@ -3372,6 +3375,81 @@ struct SettingsView: View {
         .overlay(alignment: .bottom) { Divider() }
     }
 
+    private var appIconPreferenceRow: some View {
+        let selectedChoice = appIconCatalog.resolvedChoice(for: settings.appIconChoice)
+
+        return HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "app.badge")
+                .font(.title3)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("about.preferences.app_icon")
+                    .font(.subheadline.weight(.semibold))
+                Text("about.preferences.app_icon_help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 16)
+            HStack(spacing: 8) {
+                ForEach(appIconCatalog.availableChoices) { choice in
+                    Button {
+                        settings.appIconChoice = choice
+                    } label: {
+                        VStack(spacing: 5) {
+                            ZStack(alignment: .bottomTrailing) {
+                                Image(nsImage: appIconCatalog.image(for: choice))
+                                    .resizable()
+                                    .frame(width: 38, height: 38)
+                                if selectedChoice == choice {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, Color.accentColor)
+                                        .background(Circle().fill(.background))
+                                }
+                            }
+                            Text(appIconTitle(choice))
+                                .font(.system(size: 12, weight: .medium))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            selectedChoice == choice
+                                ? Color.accentColor.opacity(0.10)
+                                : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(
+                                    selectedChoice == choice
+                                        ? Color.accentColor.opacity(0.55)
+                                        : Color.secondary.opacity(0.18),
+                                    lineWidth: 1
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(appIconTitle(choice)))
+                    .accessibilityAddTraits(selectedChoice == choice ? .isSelected : [])
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func appIconTitle(_ choice: AppIconChoice) -> LocalizedStringKey {
+        switch choice {
+        case .primary:
+            return "about.preferences.app_icon_primary"
+        case .alternate:
+            return "about.preferences.app_icon_alternate"
+        }
+    }
+
     private var aboutPage: some View {
         settingsPage(contentPadding: 28) {
             PageHeader(title: localization.text("settings.page.title"))
@@ -3381,7 +3459,7 @@ struct SettingsView: View {
                     Group {
                         HStack(alignment: .top, spacing: 28) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Image(nsImage: NSApp.applicationIconImage)
+                                Image(nsImage: appIconCatalog.image(for: settings.appIconChoice))
                                     .resizable()
                                     .frame(width: 72, height: 72)
                                     .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
@@ -3529,6 +3607,10 @@ struct SettingsView: View {
                                 .toggleStyle(.switch)
                             }
                             .padding(.vertical, 8)
+
+                            Divider()
+
+                            appIconPreferenceRow
 
                             Divider()
 

@@ -555,6 +555,10 @@
 "about.preferences.show_dock_icon_help" = "关闭后仍可通过菜单栏图标打开无线麦。";
 "about.preferences.show_status_bar_icon" = "在菜单栏中显示应用图标";
 "about.preferences.show_status_bar_icon_help" = "如果 Dock 和菜单栏图标都已关闭，可再次启动无线麦来打开设置。";
+"about.preferences.app_icon" = "应用图标";
+"about.preferences.app_icon_help" = "选择在 Dock、应用切换器和设置窗口中显示的图标。";
+"about.preferences.app_icon_primary" = "默认";
+"about.preferences.app_icon_alternate" = "备用";
 "about.preferences.language" = "应用语言";
 "about.page.hero_subtitle" = "集中查看无线语音工作台的版本、偏好与支持信息";
 "about.page.hero_description" = "让遥控器成为随手可用的 Mac 语音与快捷操作入口。";
