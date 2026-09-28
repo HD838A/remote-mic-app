@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [个人中心日历按行读取连续日期，导致星期标签与日期错位](./2026-09-29-profile-calendar-weekday-layout.md)
 - [自定义组合快捷键缺少修饰键释放](./2026-09-16-custom-shortcut-missing-modifier-release.md)
 - [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md)
 - [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)
@@ -90,6 +91,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-09-29 | [个人中心日历按行读取连续日期，导致星期标签与日期错位](./2026-09-29-profile-calendar-weekday-layout.md)（Issue #444） | 最小修复、自动化、Release App 与生产截图验证通过，等待真实页面点击验收 |
 | 2026-09-27 | [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md) | 修复完成；构建、定向回归与修复前后对照通过，等待真机长时间运行与遥控器反复重连验收 |
 | 2026-09-26 | [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)（Issue #497） | 未复现、根因未确认；已补针对性日志与受门控的会话恢复，等待双账户真机复现验收 |
 | 2026-09-21 | [Onboarding 语音文字在松键后消失](./2026-09-21-onboarding-voice-text-disappears-on-release.md) | 修复已实现，等待微信输入法、豆包、Typeless 与实体遥控器真实验收 |

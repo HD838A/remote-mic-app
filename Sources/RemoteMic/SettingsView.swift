@@ -4847,7 +4847,7 @@ private struct StatisticsHeatmap: View {
         formatter.locale = localization.locale
         let symbols = formatter.shortWeekdaySymbols ?? []
         guard symbols.count == 7 else { return [] }
-        return Array(symbols.dropFirst()) + [symbols[0]]
+        return symbols
     }
 
     var body: some View {
@@ -4898,7 +4898,7 @@ private struct StatisticsHeatmap: View {
                             ForEach(0..<7, id: \.self) { row in
                                 HStack(spacing: cellSpacing) {
                                     ForEach(0..<columnCount, id: \.self) { column in
-                                        let index = row * columnCount + column
+                                        let index = column * 7 + row
                                         let day = days[index]
                                         Button {
                                             guard let date = day.date else { return }
