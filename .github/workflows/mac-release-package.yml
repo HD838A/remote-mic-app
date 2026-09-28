@@ -301,6 +301,12 @@ jobs:
             echo "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"
           } >> "$GITHUB_ENV"
 
+      - name: Build architecture-specific Siri Remote Opus dependencies
+        timeout-minutes: 5
+        run: |
+          RELEASE_VARIANT=apple-silicon ./scripts/build-apple-remote-opus.sh
+          RELEASE_VARIANT=intel ./scripts/build-apple-remote-opus.sh
+
       - name: Prepare protected release identity
         env:
           RELEASE_AGE_IDENTITY: ${{ secrets.RELEASE_AGE_IDENTITY }}
