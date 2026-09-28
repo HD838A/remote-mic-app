@@ -27,58 +27,68 @@ import Testing
 /// indefinitely, rotating a 4 MB runtime log every 20 minutes.
 @Suite("Audio engine configuration change policy")
 struct AudioConfigurationChangeRecoveryTests {
-    /// The regression: bound and idle must be ignored. Under the old condition this returned
-    /// "recover", which is the loop.
-    @Test func aChangeThatLeavesTheEngineBoundToTheSelectedDeviceNeedsNoRecovery() {
+    /// The regression: a bound, idle, empty output must be ignored even if the engine is not
+    /// currently running. Under the old condition this returned "recover", which is the loop.
+    @Test func aBoundIdleChangeWithNoQueuedAudioNeedsNoRecovery() {
         #expect(!AudioEngineConfigurationChangePolicy.needsRecovery(
-            selectedDeviceID: 88,
-            currentOutputDeviceID: 88
+            boundToSelectedDevice: true,
+            configurationHealthy: false,
+            hasActiveAudioSource: false,
+            pendingVoiceBufferCount: 0
         ))
     }
 
     /// The positive control, without which the fix could be "never recover from anything".
     @Test func aChangeThatMovedTheEngineOffTheSelectedDeviceNeedsRecovery() {
         #expect(AudioEngineConfigurationChangePolicy.needsRecovery(
-            selectedDeviceID: 88,
-            currentOutputDeviceID: 76
+            boundToSelectedDevice: false,
+            configurationHealthy: false,
+            hasActiveAudioSource: false,
+            pendingVoiceBufferCount: 0
         ))
     }
 
-    /// Unknown state has to fail towards recovery: an engine with no output device, or no
-    /// selection yet, is not evidence that the binding is fine.
-    @Test func anUnknownDeviceOnEitherSideNeedsRecovery() {
+    /// Unknown state has to fail towards recovery: it is not evidence that the binding is fine.
+    @Test func anUnknownBindingNeedsRecovery() {
         #expect(AudioEngineConfigurationChangePolicy.needsRecovery(
-            selectedDeviceID: nil,
-            currentOutputDeviceID: 88
-        ))
-        #expect(AudioEngineConfigurationChangePolicy.needsRecovery(
-            selectedDeviceID: 88,
-            currentOutputDeviceID: nil
-        ))
-        #expect(AudioEngineConfigurationChangePolicy.needsRecovery(
-            selectedDeviceID: nil,
-            currentOutputDeviceID: nil
+            boundToSelectedDevice: nil,
+            configurationHealthy: false,
+            hasActiveAudioSource: false,
+            pendingVoiceBufferCount: 0
         ))
     }
 
-    /// The decision must not consult whether audio is flowing.
-    ///
-    /// This is the actual defect, and it is a property of the signature: the policy cannot read
-    /// `engine.isRunning` because it is never given it. A future change that reintroduces the
-    /// dependency has to change this call site, which is the point.
-    @Test func theDecisionDependsOnlyOnTheBinding() {
-        // Same two device ids, asserted twice with nothing else supplied. Whatever the engine is
-        // doing, the answer is the same, because there is nothing else to consult.
-        let first = AudioEngineConfigurationChangePolicy.needsRecovery(
-            selectedDeviceID: 88,
-            currentOutputDeviceID: 88
-        )
-        let second = AudioEngineConfigurationChangePolicy.needsRecovery(
-            selectedDeviceID: 88,
-            currentOutputDeviceID: 88
-        )
-        #expect(first == second)
-        #expect(!first)
+    /// A healthy output needs no recovery even if a source is active; this prevents a delayed
+    /// self-notification from disrupting the session that triggered a successful rebind.
+    @Test func aHealthyBoundOutputNeedsNoRecovery() {
+        #expect(!AudioEngineConfigurationChangePolicy.needsRecovery(
+            boundToSelectedDevice: true,
+            configurationHealthy: true,
+            hasActiveAudioSource: true,
+            pendingVoiceBufferCount: 1
+        ))
+    }
+
+    /// Current main deliberately recovers a stopped player during live voice delivery. The idle
+    /// loop fix must not replace that newer protection with a binding-only decision.
+    @Test func anUnhealthyActiveOutputStillNeedsRecovery() {
+        #expect(AudioEngineConfigurationChangePolicy.needsRecovery(
+            boundToSelectedDevice: true,
+            configurationHealthy: false,
+            hasActiveAudioSource: true,
+            pendingVoiceBufferCount: 0
+        ))
+    }
+
+    /// A source may already have released while its final audio is still queued. Pending tail
+    /// audio keeps recovery enabled so the fix cannot trade the loop for dropped final words.
+    @Test func queuedTailAudioStillNeedsRecovery() {
+        #expect(AudioEngineConfigurationChangePolicy.needsRecovery(
+            boundToSelectedDevice: true,
+            configurationHealthy: false,
+            hasActiveAudioSource: false,
+            pendingVoiceBufferCount: 1
+        ))
     }
 
     /// The loop shape itself: feeding the policy what a self-inflicted rebind produces must not
@@ -95,8 +105,10 @@ struct AudioConfigurationChangeRecoveryTests {
         // Each iteration is one notification. A rebind rebinds to the selected device and emits
         // the next notification, which is exactly how the loop sustained itself.
         for _ in 0 ..< 10 where AudioEngineConfigurationChangePolicy.needsRecovery(
-            selectedDeviceID: selected,
-            currentOutputDeviceID: boundTo
+            boundToSelectedDevice: boundTo == selected,
+            configurationHealthy: false,
+            hasActiveAudioSource: false,
+            pendingVoiceBufferCount: 0
         ) {
             rebinds += 1
             boundTo = selected

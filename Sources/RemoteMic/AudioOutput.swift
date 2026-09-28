@@ -661,22 +661,23 @@ enum VirtualAudioConnectionLifecyclePolicy {
     }
 }
 
-/// Whether an `AVAudioEngineConfigurationChange` is worth recovering from.
+/// Whether a debounced `AVAudioEngineConfigurationChange` still needs recovery.
 ///
-/// The notification also fires for changes this app makes itself — reconfiguring the engine emits
-/// one — so "still pointed at the device we selected" means there is nothing to recover. The
-/// decision must not consult whether the engine is *running*: that made the suppression
-/// unavailable exactly while idle, which is when the self-inflicted changes happen and when
-/// there is nothing to fix. Each change scheduled a recovery, whose own rebind emitted the next
-/// change — a self-sustaining loop running about once a second, rotating a 4 MB runtime log
-/// every 20 minutes. Whether audio happens to be flowing is not evidence about the binding.
+/// Reconfiguring the engine emits the same notification as a real route failure. A correctly
+/// bound but idle output can therefore create a self-sustaining rebind loop if the stopped engine
+/// alone is treated as damage. Active delivery and queued tail audio are different: when either
+/// exists, an unhealthy engine still has user audio to protect and must retain the existing
+/// recovery behavior.
 enum AudioEngineConfigurationChangePolicy {
     static func needsRecovery(
-        selectedDeviceID: AudioDeviceID?,
-        currentOutputDeviceID: AudioDeviceID?
+        boundToSelectedDevice: Bool?,
+        configurationHealthy: Bool,
+        hasActiveAudioSource: Bool,
+        pendingVoiceBufferCount: Int
     ) -> Bool {
-        guard let selectedDeviceID, let currentOutputDeviceID else { return true }
-        return selectedDeviceID != currentOutputDeviceID
+        guard boundToSelectedDevice == true else { return true }
+        if configurationHealthy { return false }
+        return hasActiveAudioSource || pendingVoiceBufferCount > 0
     }
 }
 
@@ -1202,15 +1203,6 @@ final class VirtualAudioOutput {
                   self.engine === engine,
                   self.engineConfigurationGeneration == generation
             else { return }
-            if !AudioEngineConfigurationChangePolicy.needsRecovery(
-                selectedDeviceID: self.selectedDevice?.id,
-                currentOutputDeviceID: self.currentOutputDevice()?.id
-            ) {
-                AppLogger.shared.write(
-                    "AUDIO ENGINE configuration_ignored generation=\(generation) reason=still_bound"
-                )
-                return
-            }
             AppLogger.shared.write("AUDIO ENGINE configuration_changed generation=\(generation)")
             self.onConfigurationChange?()
         }

@@ -2172,6 +2172,31 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                       self.audioRecoveryGeneration == generation
                 else { return }
                 let coalescedEvents = self.audioRecoveryCoalescingState.consumePendingEventCount()
+                if reason == "engine_configuration_change" {
+                    let snapshot = self.audioOutput.diagnosticSnapshot()
+                    let configurationHealthy = snapshot.engineRunning &&
+                        snapshot.playerPlaying &&
+                        snapshot.boundToSelectedDevice == true
+                    guard AudioEngineConfigurationChangePolicy.needsRecovery(
+                        boundToSelectedDevice: snapshot.boundToSelectedDevice,
+                        configurationHealthy: configurationHealthy,
+                        hasActiveAudioSource: self.hasActiveVirtualAudioSource,
+                        pendingVoiceBufferCount: snapshot.pendingBuffers
+                    ) else {
+                        let ignoredReason = configurationHealthy
+                            ? "configuration_healthy"
+                            : "still_bound_idle"
+                        AppLogger.shared.write(
+                            "AUDIO RECOVERY ignored id=\(generation) reason=engine_configuration_change " +
+                                "decision=\(ignoredReason) coalesced_events=\(coalescedEvents) " +
+                                "active_audio=\(self.hasActiveVirtualAudioSource) " +
+                                "pending_buffers=\(snapshot.pendingBuffers) " +
+                                "state={\(self.audioOutput.diagnosticState())}"
+                        )
+                        self.audioRecoveryWorkItem = nil
+                        return
+                    }
+                }
                 AppLogger.shared.write(
                     "AUDIO RECOVERY begin id=\(generation) reason=\(reason) detail=\(details) " +
                         "coalesced_events=\(coalescedEvents) " +

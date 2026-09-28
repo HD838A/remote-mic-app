@@ -3,7 +3,7 @@
 ## 适用范围
 
 - 目标分支：包含 `Bugs/2026-09-05-idle-audio-rebind-loop.md` 修复的分支
-- 覆盖改动：`AVAudioEngineConfigurationChange` 的恢复判定改为只看引擎是否仍绑在选定设备，不再要求引擎正在运行
+- 覆盖改动：`AVAudioEngineConfigurationChange` 去抖后区分空闲自造变化与真实恢复需求；活跃语音、待播尾包、解绑和未知状态仍保留恢复
 - 缺陷记录：[`Bugs/2026-09-05-idle-audio-rebind-loop.md`](../Bugs/2026-09-05-idle-audio-rebind-loop.md)
 
 ## 测试前准备
@@ -12,7 +12,7 @@
 2. 观察命令：
 
 ```
-grep -E "AUDIO RECOVERY begin|configuration_ignored|configuration_changed" ~/Library/Logs/RemoteMic/runtime.log | tail -30
+grep -E "AUDIO RECOVERY (begin|ignored)|configuration_changed" ~/Library/Logs/RemoteMic/runtime.log | tail -30
 ```
 
 ## 用例
@@ -26,7 +26,7 @@ grep -E "AUDIO RECOVERY begin|configuration_ignored|configuration_changed" ~/Lib
 grep "AUDIO RECOVERY begin" ~/Library/Logs/RemoteMic/runtime.log | cut -c1-16 | uniq -c | tail -6
 ```
 
-预期：`AUDIO RECOVERY begin reason=engine_configuration_change` **不再以每分钟数十次的速率出现**。偶发的 `configuration_ignored reason=still_bound` 是正常的、期望的。
+预期：`AUDIO RECOVERY begin reason=engine_configuration_change` **不再以每分钟数十次的速率出现**。偶发的 `AUDIO RECOVERY ignored ... decision=still_bound_idle` 是正常的、期望的。
 
 失败判定：`AUDIO RECOVERY begin ... engine_configuration_change` 持续每分钟数十次；或日志文件几分钟内涨到 4MB 触发轮转。
 
@@ -40,7 +40,7 @@ grep "AUDIO RECOVERY begin" ~/Library/Logs/RemoteMic/runtime.log | cut -c1-16 | 
 2. 插拔一个外接音频设备（如 USB 声卡、DJI Mic 接收器、外接显示器自带音箱），或在系统声音设置里切换默认输出再切回。
 3. 观察日志。
 
-预期：出现 `AUDIO RECOVERY begin`（这次是应该的），且音频最终仍绑回 `MiRemoteV 2ch`，语音可继续正常播放。
+预期：如果实际绑定丢失或状态未知，应出现 `AUDIO RECOVERY begin`，且音频最终仍绑回 `MiRemoteV 2ch`。仅切换与明确选择的虚拟输出无关的系统默认输出时允许忽略，但下一次语音必须仍可正常播放。
 
 失败判定：设备变化后 App 不再恢复，音频停留在错误设备上；或语音播放中断且不恢复。
 
@@ -49,7 +49,7 @@ grep "AUDIO RECOVERY begin" ~/Library/Logs/RemoteMic/runtime.log | cut -c1-16 | 
 1. 按住语音键，说一段较长的话（10 秒以上）。
 2. 全程观察日志。
 
-预期：语音音频连续、完整，不因配置变化被打断；与上一正式版体验一致。
+预期：若配置变化导致引擎或播放器不健康，活跃语音不会命中 `still_bound_idle`，恢复路径仍会执行；语音音频连续、完整，与上一正式版体验一致。
 
 失败判定：语音中途卡顿、丢尾、或会话卡死（参见 `Bugs/2026-09-05-voice-session-wedges-when-audio-reconfigures-mid-drain.md`）。
 
@@ -71,7 +71,7 @@ grep -c "AUDIO RECOVERY begin" ~/Desktop/ac-runtime.log
 
 ## 验证边界
 
-- 已完成（自动化）：`Tests/RemoteMicTests/AudioConfigurationChangeRecoveryTests.swift` 五项，覆盖决策函数与循环形态；`swift test` 全量、`scripts/test.sh`、边界检查。
+- 已完成（自动化）：`Tests/RemoteMicTests/AudioConfigurationChangeRecoveryTests.swift` 七项，覆盖空闲循环、活跃语音、待播尾包、健康输出、解绑和未知状态；`swift test` 全量、`scripts/test.sh`、边界检查。
 - 参考（同形态代码的代理真机观测）：AC-01，同机对比修复前 48 次/分钟 → 修复后 0 次/3 分钟；本次上游版本尚未复测。
 - **未完成（须用户实测）**：AC-02 真实拔插、AC-03 语音播放中、AC-04 长时间运行。其中 AC-02 是本次改动的主要回归风险——代理只观测了稳态空闲，没有做任何真实设备变化。
 - 无法由代理执行：AC-02 至 AC-04 都需要真实音频设备操作与长时间真实使用。

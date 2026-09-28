@@ -27,33 +27,40 @@ AUDIO RECOVERY scheduled id=2029 reason=engine_configuration_change   ← 于是
 
 抑制这个循环的门禁要求「引擎正在运行」（上游现状为 `VirtualAudioHealthPolicy.isConfigurationHealthy` 中的 `engineRunning && playerPlaying`）。而循环恰好发生在引擎空闲时——也就是自造配置变化会发生、且完全没有东西需要恢复的时候。于是抑制在最该生效的场景下不可用，每一次自己造成的变化都被当成真实硬件变化去恢复，而恢复动作又造成下一次变化。
 
-判据本身拿错了：`engine.isRunning` 证明的是「音频正在流动」，不是「绑定仍然正确」。`currentOutputDevice()` 读的才是「还绑着」的直接判据，且不要求引擎在跑。
+判据缺少空闲边界：`engine.isRunning` 只能说明当前引擎状态，不能单独证明一次配置变化需要立即重绑。`currentOutputDevice()` 可以直接确认是否仍绑定；但当前主线还必须保留 stopped-player 恢复，所以不能在所有「仍绑定」场景中一律忽略。
 
 **上游已有缓解的边界**：`scheduleAudioRecovery` 的 `shouldKeepVirtualAudioActive` 门禁在「无连接、无语音」时忽略恢复（配合空闲释放引擎），覆盖了**遥控器断开**的空闲场景。但遥控器保持连接（`readyBluetoothBridgeCount > 0`）时虚拟音频视为应保持活跃，门禁放行——这正是用户最常处的常驻状态，循环在该状态下仍然成立。`configureVirtualAudioOutput` 也不判绑定、无条件重绑。
 
 ## 修复
 
-抽出 `AudioEngineConfigurationChangePolicy.needsRecovery(selectedDeviceID:currentOutputDeviceID:)`，只比较这两个设备 id：相等即忽略，任一为 nil 则朝「需要恢复」方向失败（引擎没有输出设备、或尚未选定，都不是绑定正常的证据）。配置变化通知回调改走该策略，判据不再依赖引擎是否运行。
+抽出 `AudioEngineConfigurationChangePolicy.needsRecovery(...)`，并在现有 1 秒配置变化去抖结束后读取稳定状态：
 
-`isConfigurationHealthy` 保留原义，仍服务于恢复路径上的诊断与 `default_system_output` 抑制，本次只替换通知回调这一处判据。
+- 未绑定或绑定未知时继续恢复；
+- 已绑定且完整健康时忽略；
+- 已绑定但不健康时，活跃语音或仍有待播尾包则继续恢复；
+- 只有「已绑定、不健康、没有活跃语音、没有待播尾包」的空闲状态才忽略，从而切断自造重绑闭环。
+
+这样保留当前主线对 stopped player、活跃会话和尾音排空的恢复语义；下一次语音开始仍会通过实时健康门禁重建空闲时失效的播放器。
 
 ## 验证
 
-自动化（5 项新测试）：
+自动化（7 项新测试）：
 
-- 绑定未变必须忽略（回归本体）；
+- 已绑定、空闲且无待播音频必须忽略（回归本体）；
 - 绑定被改必须恢复（正向对照，否则「永不恢复」也能通过）；
-- 任一侧未知必须恢复；
-- 判定不得依赖引擎是否运行（这是签名级别的性质：策略根本拿不到 `engine.isRunning`）；
+- 绑定未知必须恢复；
+- 已绑定且完整健康时必须忽略延迟到达的自造通知；
+- 已绑定但不健康时，活跃语音仍必须恢复；
+- 来源已结束但有待播尾包时仍必须恢复；
 - 按现场日志形态回放整个周期必须收敛为 0 次重绑。
 
 `swift test` 全量通过；`scripts/test.sh`、`scripts/check-repository-boundaries.sh` 通过。
 
-真机对比验证（此前在同形态代码上做过，本次上游版本待复测）：循环正在发生的机器上对比两个版本各 3 分钟——修复前约 144 次 `AUDIO RECOVERY begin`，修复后 0 次且出现 `configuration_ignored reason=still_bound`。按 `Testing/AudioConfigurationChangeRecovery.md` 复测，并补做真实拔插与语音会话中配置变化两项。
+真机对比验证（此前在同形态代码上做过，本次上游版本待复测）：循环正在发生的机器上对比两个版本各 3 分钟——修复前约 144 次 `AUDIO RECOVERY begin`，修复后 0 次且出现 `AUDIO RECOVERY ignored ... decision=still_bound_idle`。按 `Testing/AudioConfigurationChangeRecovery.md` 复测，并补做真实拔插与语音会话中配置变化两项。
 
 ## 未覆盖
 
-- 通知回调本身的接线（`observeConfigurationChanges` 私有且需要真实 `AVAudioEngine`）；
+- 通知回调和 1 秒去抖的真实 CoreAudio 接线（需要真实 `AVAudioEngine`）；
 - 真实拔插外接音频设备时恢复是否仍然及时；
 - 语音会话进行中发生配置变化的行为，与 `2026-09-05-voice-session-wedges-when-audio-reconfigures-mid-drain` 场景的交互；
 - 长时间运行后循环是否会以其他形式回来。
