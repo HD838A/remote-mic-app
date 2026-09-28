@@ -158,6 +158,9 @@ struct OnboardingView: View {
         self.voiceToolAvailabilityOverride = voiceToolAvailabilityOverride
         self.remoteInputDiagnosticOverride = remoteInputDiagnosticOverride
         self.interactionProbe = interactionProbe
+        _voiceToolAvailability = State(
+            initialValue: voiceToolAvailabilityOverride ?? Self.detectVoiceToolAvailability()
+        )
         _selectedInputMethodGuideStep = State(initialValue: initialInputMethodGuideStep)
         _voiceKeyMigrationSource = State(
             initialValue: model.settings.pendingOnboardingVoiceKeyMigration
@@ -2834,9 +2837,7 @@ struct OnboardingView: View {
     }
 
     private var visibleVoiceTools: [OnboardingVoiceTool] {
-        [
-            .doubao, .weixin, .vokie, .typeless, .other,
-        ]
+        OnboardingVoiceToolVisibilityPolicy.visibleTools(availability: voiceToolAvailability)
     }
 
     private var allRecognizedVoiceToolsUnavailable: Bool {
@@ -2851,9 +2852,9 @@ struct OnboardingView: View {
             return false
         case .other:
             return true
-        case .typeless, .vokie:
+        case .vokie:
             return true
-        case .doubao, .weixin:
+        case .doubao, .weixin, .typeless:
             return voiceToolAvailability[settings.onboardingVoiceTool] == .available
         }
     }
@@ -3394,14 +3395,19 @@ struct OnboardingView: View {
             refreshSelectedVoiceToolRuntimeState()
             return
         }
+        voiceToolAvailability = Self.detectVoiceToolAvailability()
+        refreshSelectedVoiceToolRuntimeState()
+    }
+
+    private static func detectVoiceToolAvailability()
+        -> [OnboardingVoiceTool: OnboardingVoiceToolAvailability] {
         var availability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability] = [:]
         for tool in [
             OnboardingVoiceTool.doubao, .weixin, .typeless, .vokie, .other,
         ] {
             availability[tool] = OnboardingInputSourceSwitcher.availability(for: tool)
         }
-        voiceToolAvailability = availability
-        refreshSelectedVoiceToolRuntimeState()
+        return availability
     }
 
     private func refreshSelectedVoiceToolRuntimeState() {

@@ -1014,7 +1014,40 @@ struct OnboardingFlowTests {
         #expect(selectionBody.contains("refreshSelectedInputMethodStatus()"))
         #expect(!selectionBody.contains("activateSelectedInputMethod()"))
         #expect(!selectionBody.contains("selectIfNeeded(tool)"))
-        #expect(source.contains("private var visibleVoiceTools: [OnboardingVoiceTool] {\n        ["))
+        #expect(source.contains("OnboardingVoiceToolVisibilityPolicy.visibleTools"))
+    }
+
+    @Test @MainActor func uninstalledOptionalVoiceToolsAreHiddenWhileVokieRemainsVisible() throws {
+        let unavailable: [OnboardingVoiceTool: OnboardingVoiceToolAvailability] = [
+            .doubao: .notInstalled,
+            .weixin: .notInstalled,
+            .vokie: .notInstalled,
+            .typeless: .notInstalled,
+            .other: .unknown,
+        ]
+        #expect(OnboardingVoiceToolVisibilityPolicy.visibleTools(availability: unavailable) == [
+            .doubao, .vokie, .other,
+        ])
+
+        let fixture = try OnboardingOffscreenFixture(
+            step: .voiceTool,
+            voiceTool: .vokie,
+            controlSource: .xiaomiRemote,
+            voiceToolAvailability: unavailable
+        )
+        defer { fixture.close() }
+        #expect(fixture.probe.actions["voice-tool.doubao"] != nil)
+        #expect(fixture.probe.actions["voice-tool.vokie"] != nil)
+        #expect(fixture.probe.actions["voice-tool.other"] != nil)
+        #expect(fixture.probe.actions["voice-tool.weixin"] == nil)
+        #expect(fixture.probe.actions["voice-tool.typeless"] == nil)
+
+        var installed = unavailable
+        installed[.weixin] = .available
+        installed[.typeless] = .available
+        #expect(OnboardingVoiceToolVisibilityPolicy.visibleTools(availability: installed) == [
+            .doubao, .weixin, .vokie, .typeless, .other,
+        ])
     }
 
     @Test func independentVoiceToolsAreAutoLaunchedAndMustBeRunningToComplete() throws {

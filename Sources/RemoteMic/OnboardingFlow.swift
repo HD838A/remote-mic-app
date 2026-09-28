@@ -655,6 +655,23 @@ enum OnboardingVoiceToolAvailability: String, Equatable, Hashable {
     case unknown
 }
 
+enum OnboardingVoiceToolVisibilityPolicy {
+    static func visibleTools(
+        availability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]
+    ) -> [OnboardingVoiceTool] {
+        var tools: [OnboardingVoiceTool] = [.doubao]
+        if availability[.weixin] == .available {
+            tools.append(.weixin)
+        }
+        tools.append(.vokie)
+        if availability[.typeless] == .available {
+            tools.append(.typeless)
+        }
+        tools.append(.other)
+        return tools
+    }
+}
+
 enum OnboardingVoiceToolRuntimeState: String, Equatable, Hashable {
     case running
     case notRunning = "not_running"
