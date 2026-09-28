@@ -138,7 +138,10 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$INSTALLER_SIGNING_IDENTITY" ==
 fi
 "$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
 "$ROOT/scripts/verify-app.sh" "$APP"
-test -x "$APPLE_REMOTE_HCI_SERVICE"
+if [[ ! -x "$APPLE_REMOTE_HCI_SERVICE" ]]; then
+  print -u2 "Siri Remote helper is missing from the release App; configure SAYALL_SIRI_REMOTE_PACKAGE_PATH before building the Installer package"
+  exit 1
+fi
 test -f "$APPLE_REMOTE_HCI_PLIST"
 /usr/bin/plutil -lint "$APPLE_REMOTE_HCI_PLIST"
 
