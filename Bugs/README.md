@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [自定义组合快捷键缺少修饰键释放](./2026-09-16-custom-shortcut-missing-modifier-release.md)
 - [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md)
 - [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)
 - [Onboarding 输入工具未运行、配对状态残留与语音测试页裁切](./2026-09-22-onboarding-tool-runtime-and-voice-test-gates.md)
