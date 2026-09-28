@@ -287,4 +287,61 @@ struct UpdateInformationTests {
             releaseNotes: ["English release note"]
         )))
     }
+
+    @Test @MainActor func availableUpdateBadgePersistsSeenVersionAndReturnsForANewerVersion() {
+        let suiteName = "UpdateInformationTests.badge.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let firstStore = UpdateInformationStore(userDefaults: defaults)
+        firstStore.setAvailable(
+            displayVersion: "1.9.22",
+            buildVersion: "183",
+            archiveURL: nil,
+            fallbackDescription: nil,
+            localeIdentifier: "zh-Hans"
+        )
+        #expect(firstStore.hasUnseenUpdate)
+
+        firstStore.markAvailableUpdateSeen()
+        #expect(!firstStore.hasUnseenUpdate)
+
+        let relaunchedStore = UpdateInformationStore(userDefaults: defaults)
+        relaunchedStore.setAvailable(
+            displayVersion: "1.9.22",
+            buildVersion: "183",
+            archiveURL: nil,
+            fallbackDescription: nil,
+            localeIdentifier: "zh-Hans"
+        )
+        #expect(!relaunchedStore.hasUnseenUpdate)
+
+        relaunchedStore.setAvailable(
+            displayVersion: "1.9.23",
+            buildVersion: "184",
+            archiveURL: nil,
+            fallbackDescription: nil,
+            localeIdentifier: "zh-Hans"
+        )
+        #expect(relaunchedStore.hasUnseenUpdate)
+    }
+
+    @Test @MainActor func updateBadgeClearsWhenTheCandidateIsNoLongerAvailable() {
+        let suiteName = "UpdateInformationTests.clearedBadge.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = UpdateInformationStore(userDefaults: defaults)
+
+        store.setAvailable(
+            displayVersion: "1.9.22",
+            buildVersion: "183",
+            archiveURL: nil,
+            fallbackDescription: nil,
+            localeIdentifier: "en"
+        )
+        #expect(store.hasUnseenUpdate)
+
+        store.setUpToDate()
+        #expect(!store.hasUnseenUpdate)
+    }
 }

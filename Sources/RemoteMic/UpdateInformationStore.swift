@@ -221,24 +221,35 @@ final class UpdateInformationStore: ObservableObject {
     typealias NotesLoader = @Sendable (URL) async throws -> String
 
     @Published private(set) var state: UpdateInformationState = .idle
+    @Published private(set) var hasUnseenUpdate = false
 
     private struct PendingUpdate: Equatable {
         let displayVersion: String
         let buildVersion: String
         let archiveURL: URL?
         let fallbackNotes: [String]
+
+        var identifier: String {
+            "\(displayVersion)|\(buildVersion)"
+        }
     }
 
+    private static let lastSeenUpdateIdentifierKey =
+        "updateInformation.lastSeenUpdateIdentifier"
+
+    private let userDefaults: UserDefaults
     private let notesLoader: NotesLoader
     private var pendingUpdate: PendingUpdate?
     private var notesTask: Task<Void, Never>?
     private var notesGeneration = 0
 
     init(
+        userDefaults: UserDefaults = .standard,
         notesLoader: @escaping NotesLoader = { url in
             try await UpdateReleaseNotes.load(from: url)
         }
     ) {
+        self.userDefaults = userDefaults
         self.notesLoader = notesLoader
     }
 
@@ -254,18 +265,21 @@ final class UpdateInformationStore: ObservableObject {
         notesTask?.cancel()
         pendingUpdate = nil
         state = .idle
+        clearUnseenUpdate(reason: "update_state_reset")
     }
 
     func setUpToDate() {
         notesTask?.cancel()
         pendingUpdate = nil
         state = .upToDate
+        clearUnseenUpdate(reason: "up_to_date")
     }
 
     func setUnavailable() {
         notesTask?.cancel()
         pendingUpdate = nil
         state = .unavailable
+        clearUnseenUpdate(reason: "update_information_unavailable")
     }
 
     func setAvailable(
@@ -281,9 +295,32 @@ final class UpdateInformationStore: ObservableObject {
             archiveURL: archiveURL,
             fallbackNotes: fallbackDescription.map(UpdateReleaseNotes.parse) ?? []
         )
+        let candidateChanged = pendingUpdate?.identifier != pending.identifier
         pendingUpdate = pending
         state = .available(information(for: pending, notes: pending.fallbackNotes))
+        if candidateChanged {
+            hasUnseenUpdate = userDefaults.string(
+                forKey: Self.lastSeenUpdateIdentifierKey
+            ) != pending.identifier
+            AppLogger.shared.write(
+                "UPDATE BADGE phase=completed result=\(hasUnseenUpdate ? "shown" : "suppressed") " +
+                    "reason=\(hasUnseenUpdate ? "new_update_detected" : "already_seen") " +
+                    "display_version=\(AppLogger.stableToken(displayVersion)) " +
+                    "build_version=\(AppLogger.stableToken(buildVersion))"
+            )
+        }
         loadReleaseNotes(for: pending, localeIdentifier: localeIdentifier)
+    }
+
+    func markAvailableUpdateSeen() {
+        guard hasUnseenUpdate, let pendingUpdate else { return }
+        userDefaults.set(pendingUpdate.identifier, forKey: Self.lastSeenUpdateIdentifierKey)
+        hasUnseenUpdate = false
+        AppLogger.shared.write(
+            "UPDATE BADGE phase=completed result=cleared reason=settings_opened " +
+                "display_version=\(AppLogger.stableToken(pendingUpdate.displayVersion)) " +
+                "build_version=\(AppLogger.stableToken(pendingUpdate.buildVersion))"
+        )
     }
 
     func reloadReleaseNotes(localeIdentifier: String) {
@@ -299,6 +336,14 @@ final class UpdateInformationStore: ObservableObject {
             displayVersion: pending.displayVersion,
             buildVersion: pending.buildVersion,
             releaseNotes: notes
+        )
+    }
+
+    private func clearUnseenUpdate(reason: String) {
+        guard hasUnseenUpdate else { return }
+        hasUnseenUpdate = false
+        AppLogger.shared.write(
+            "UPDATE BADGE phase=completed result=cleared reason=\(reason)"
         )
     }
 

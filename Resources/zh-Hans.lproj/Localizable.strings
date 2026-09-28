@@ -531,6 +531,7 @@
 "common.status.copied" = "已复制";
 "settings.section.about" = "关于";
 "settings.section.settings" = "设置";
+"settings.update_badge.accessibility_value" = "有新版本可用";
 "settings.page.title" = "设置";
 "settings.permissions.title" = "权限与隐私";
 "settings.general.title" = "通用";
