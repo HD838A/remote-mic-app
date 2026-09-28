@@ -918,6 +918,9 @@ struct SettingsView: View {
         settingsPage {
             PageHeader(title: localization.text("connection.page.title"))
         } content: {
+            if let warning = model.voiceKeyCompatibilityWarning {
+                voiceKeyCompatibilityWarningPanel(warning)
+            }
             CompatibilityGlassContainer(spacing: 14) {
                 HStack(alignment: .top, spacing: 14) {
                     connectionDevicePanel
@@ -931,6 +934,35 @@ struct SettingsView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+            }
+        }
+        .onAppear {
+            model.refreshVoiceKeyCompatibilityWarning()
+        }
+    }
+
+    private func voiceKeyCompatibilityWarningPanel(
+        _ warning: VoiceKeyCompatibilityWarning
+    ) -> some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 10) {
+                Label {
+                    Text("connection.voice_key_compatibility.title")
+                        .font(.system(size: 13, weight: .semibold))
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+
+                Text(LocalizedMessage(warning.messageKey).text(using: localization))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("connection.voice_key_compatibility.recheck") {
+                    model.recheckRemoteInput()
+                }
+                .compatibilityButtonStyle(.standard)
             }
         }
     }

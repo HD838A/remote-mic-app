@@ -893,6 +893,17 @@ final class HIDRemoteMonitor {
         ].contains(where: fileExists)
     }
 
+    static func isKarabinerElementsRunning(
+        bundleIdentifiers: [String] = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
+    ) -> Bool {
+        bundleIdentifiers.contains { identifier in
+            let normalized = identifier.lowercased()
+            return normalized == "org.pqrs.karabiner-elements" ||
+                normalized == "org.pqrs.karabiner-eventviewer" ||
+                normalized.hasPrefix("org.pqrs.karabiner.")
+        }
+    }
+
     private static func deviceOpenFailureMessage(
         result: IOReturn,
         karabinerElementsInstalled: Bool

@@ -24,6 +24,23 @@ struct SettingsPageRegressionTests {
         #expect(!settingsSource.contains("model.testToneStatus.text(using: localization)"))
     }
 
+    @Test func connectionPageShowsVoiceKeyCompatibilityWarningOnlyFromModelState() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("model.voiceKeyCompatibilityWarning"))
+        #expect(settingsSource.contains("model.refreshVoiceKeyCompatibilityWarning()"))
+        #expect(settingsSource.contains("model.recheckRemoteInput()"))
+        #expect(settingsSource.contains("warning.messageKey"))
+        #expect(settingsSource.contains("connection.voice_key_compatibility.title"))
+    }
+
     @Test func everyHardwareMappingPageUsesTheSharedHostEditor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
