@@ -206,7 +206,7 @@
   - [x] 输入工具页右栏按当前工具显示四项配置指引：豆包、微信、Vokie 使用浅色/深色真实截图，Typeless 与其他工具使用简短说明；五个工具都显示“去除系统 Fn 占用”和微信 App Fn 冲突步骤，麦克风匹配由语音测试页核对，最终仍由真实文字测试验证。
   - [x] 新用户 Onboarding 已改为 staged 语音键统一固定为 Fn，不再根据工具历史配置自动覆盖正式快捷键；真实文字通过后才提交验证后的 Binding。 <!-- workshop:status=已完成;priority=P1 -->
   - [ ] Onboarding 语音测试输入框页提供 0–24 dB 增益说明与调节，支持用户用小声/气声反复测试；自动化已覆盖页面与持久化路径，仍需真实遥控器、音频设备和第三方输入工具验收。
-    - 2026-09-25 已完成候选实现：新增版本化 Profile/Binding/PairingPlan，覆盖豆包、微信、Vokie、Typeless 与其他工具；工具页固定按豆包、微信、Vokie、Typeless、其他排序，历史 ChatterFly 值迁移为未选择。
+    - 2026-09-25 已完成候选实现：新增版本化 Profile/Binding/PairingPlan，覆盖豆包、微信、Vokie、Typeless 与其他工具；工具页保持豆包、微信、Vokie、Typeless、其他的相对顺序，其中微信与 Typeless 仅在确认已安装时显示，豆包、Vokie 和其他始终显示；历史 ChatterFly 值迁移为未选择。
     - 工具页不展示快捷键来源、学习路径或 Command/Option 选择；本次 Onboarding 的 staged 语音键统一固定为 Fn，选择工具时不立即改写正式配置。
     - 新配置采用 staged → verified 事务：只有真实会话开始、PCM、正常停止、第三方配置确认与文字上屏全部通过后才持久化；返回、退出或异常中断恢复原配置。
     - 控制来源已合并成单页并按 Package 门禁：公开构建只显示小米遥控器；完整包增加苹果遥控器第 6/7 代、Chromecast 及 Apple companion/Web 备用方式，实体设备优先展示。
