@@ -531,6 +531,7 @@
 "common.status.copied" = "Copied";
 "settings.section.about" = "About";
 "settings.section.settings" = "Settings";
+"settings.update_badge.accessibility_value" = "New version available";
 "settings.page.title" = "Settings";
 "settings.permissions.title" = "Permissions & Privacy";
 "settings.general.title" = "General";

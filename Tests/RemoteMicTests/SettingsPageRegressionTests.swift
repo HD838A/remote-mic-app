@@ -1220,6 +1220,33 @@ struct SettingsPageRegressionTests {
         ])
     }
 
+    @Test func updateBadgeBelongsOnlyToTheSettingsSidebarEntry() throws {
+        for section in SettingsSection.allCases {
+            #expect(SettingsPageBehavior.showsUpdateBadge(
+                for: section,
+                hasUnseenUpdate: true
+            ) == (section == .about))
+            #expect(SettingsPageBehavior.marksUpdateAsSeen(
+                whenSelecting: section
+            ) == (section == .about))
+        }
+        #expect(!SettingsPageBehavior.showsUpdateBadge(
+            for: .about,
+            hasUnseenUpdate: false
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("selectSidebarSection(section)"))
+        #expect(source.contains("updateInformation.markAvailableUpdateSeen()"))
+    }
+
     @Test func profileSidebarUsesTheLoginFallbackAndSanitizedAccountDisplayName() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

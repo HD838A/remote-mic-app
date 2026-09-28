@@ -173,6 +173,17 @@ enum SettingsPageBehavior {
         requestedSection == .permissions ? .about : requestedSection
     }
 
+    static func showsUpdateBadge(
+        for section: SettingsSection,
+        hasUnseenUpdate: Bool
+    ) -> Bool {
+        section == .about && hasUnseenUpdate
+    }
+
+    static func marksUpdateAsSeen(whenSelecting section: SettingsSection) -> Bool {
+        section == .about
+    }
+
     static let shareNavigationState = SettingsNavigationState(
         selectedSection: .about,
         expandedShareSection: .about
@@ -763,11 +774,23 @@ struct SettingsView: View {
 
     private func sidebarButton(_ section: SettingsSection) -> some View {
         Button {
-            selectedSection = section
+            selectSidebarSection(section)
         } label: {
             VStack(spacing: 7) {
-                Image(systemName: sectionSystemImage(section))
-                    .font(.system(size: 21, weight: .semibold))
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: sectionSystemImage(section))
+                        .font(.system(size: 21, weight: .semibold))
+                    if SettingsPageBehavior.showsUpdateBadge(
+                        for: section,
+                        hasUnseenUpdate: updateInformation.hasUnseenUpdate
+                    ) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 7, height: 7)
+                            .offset(x: 4, y: -3)
+                            .accessibilityHidden(true)
+                    }
+                }
                 if section == .privateFeature
                     || section == .macros
                     || section == .buttonProfiles
@@ -791,6 +814,19 @@ struct SettingsView: View {
         .foregroundStyle(selectedSection == section ? Color.accentColor : Color.secondary)
         .background(selectedSection == section ? Color.accentColor.opacity(0.10) : Color.clear)
         .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
+        .accessibilityValue(
+            SettingsPageBehavior.showsUpdateBadge(
+                for: section,
+                hasUnseenUpdate: updateInformation.hasUnseenUpdate
+            ) ? Text("settings.update_badge.accessibility_value") : Text("")
+        )
+    }
+
+    private func selectSidebarSection(_ section: SettingsSection) {
+        selectedSection = section
+        if SettingsPageBehavior.marksUpdateAsSeen(whenSelecting: section) {
+            updateInformation.markAvailableUpdateSeen()
+        }
     }
 
     @ViewBuilder

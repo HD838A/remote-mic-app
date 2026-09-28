@@ -146,8 +146,13 @@ enum SettingsScreenshotRenderer {
                 powerStates: remoteCardPowerStates
             )
         }
-        let updateInformation = UpdateInformationStore()
+        let updateInformation = UpdateInformationStore(userDefaults: defaults)
         seedAvailableUpdate(updateInformation, language: language)
+        if ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_UPDATE_SEEN"
+        ] == "1" {
+            updateInformation.markAvailableUpdateSeen()
+        }
         let localization = LocalizationStore(settings: settings)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
