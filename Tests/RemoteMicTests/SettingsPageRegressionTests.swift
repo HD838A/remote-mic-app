@@ -1189,6 +1189,10 @@ struct SettingsPageRegressionTests {
             contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
             encoding: .utf8
         )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
 
         #expect(settingsSource.contains("appIconPreferenceRow"))
         #expect(settingsSource.contains("ForEach(appIconCatalog.options)"))
@@ -1197,7 +1201,11 @@ struct SettingsPageRegressionTests {
         #expect(controllerSource.contains("struct AppIconIdentifier"))
         #expect(controllerSource.contains("let options: [AppIconOption]"))
         #expect(controllerSource.contains("subdirectory: \"AppIcons\""))
+        #expect(controllerSource.contains("#if arch(x86_64)"))
+        #expect(controllerSource.contains("\"faceted-duck-intel\""))
+        #expect(controllerSource.contains("\"faceted-duck\""))
         #expect(buildSource.contains("Resources/AppIcons"))
+        #expect(verifySource.contains("cmp -s"))
     }
 
     @Test func settingsPageOffersAnOptInLoginItemWithSystemApprovalRecovery() throws {

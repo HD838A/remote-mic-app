@@ -3,6 +3,7 @@ import Foundation
 
 struct AppIconIdentifier: RawRepresentable, Hashable, Identifiable, Codable {
     static let standard = AppIconIdentifier(rawValue: "standard")
+    static let facetedDuck = AppIconIdentifier(rawValue: "faceted-duck")
 
     let rawValue: String
 
@@ -38,7 +39,21 @@ private struct BundledAppIconDefinition {
 struct AppIconCatalog {
     // Register future icons here with a stable semantic ID and a matching
     // Resources/AppIcons/<resourceName>.png file.
-    private static let bundledDefinitions: [BundledAppIconDefinition] = []
+    private static let bundledDefinitions: [BundledAppIconDefinition] = [
+        BundledAppIconDefinition(
+            id: .facetedDuck,
+            resourceName: facetedDuckResourceName,
+            titleKey: "about.preferences.app_icon_faceted_duck"
+        ),
+    ]
+
+    private static let facetedDuckResourceName: String = {
+        #if arch(x86_64)
+        "faceted-duck-intel"
+        #else
+        "faceted-duck"
+        #endif
+    }()
 
     let options: [AppIconOption]
 

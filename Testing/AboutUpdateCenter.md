@@ -25,12 +25,14 @@
 
 ## 用例 1A：App 图标选择与资源缺失回退
 
-1. 在未包含 `Resources/AppIcons/` 图标资源的构建中打开“设置 → 通用”，检查“应用图标”行。
-2. 把经过确认的图标按图形语义命名为稳定 `kebab-case` 标识，保存到 `Resources/AppIcons/<icon-id>.png` 并注册对应本地化名称；重新构建后依次选择“默认”和每个新增图标。
-3. 每次选择后检查 Dock、Command-Tab 应用切换器和设置页顶部品牌图标，再退出并重新启动 App。
-4. 使用已保存“备用”选择的偏好启动一个不包含备用资源的构建。
+资源基线：`faceted-duck.png` 为 `1024 × 1024` RGBA PNG，SHA-256 `3061fdc5e3ca43d1801e9c07a0b25207b1d2d3da5e31ff799d77a1c38d9128bf`；`faceted-duck-intel.png` 为 `1024 × 1024` RGBA PNG，SHA-256 `569101880e6c10654fdc9eec208cd104a3f5eefb9ae32d8a3fe981620a84da5a`。构建和验证不得缩放、重新压缩或改写这两个文件。
 
-预期结果：页面使用紧凑的页面内图标按钮，不使用下拉框、Popover 或 Sheet；没有附加资源时只显示真实可用的默认图标，不显示空白或伪造占位项；存在多个已注册资源时按稳定顺序全部显示，点击后立即更新 Dock、应用切换器和设置页顶部图标，重启后保持选择；保存标识指向缺失资源时安全回退默认图标，App 正常启动。Finder、Launchpad 和 App 包文件继续显示签名安装包的主图标，不把运行时切换误报为修改安装包。
+1. 在设置页打开“通用 → 应用图标”，检查“默认”和“几何鸭”两个选项。
+2. 分别构建 Apple Silicon 与 Intel 版本；Apple Silicon 应加载 `Resources/AppIcons/faceted-duck.png`，Intel 应加载 `Resources/AppIcons/faceted-duck-intel.png`，两者在设置中使用同一个稳定标识 `faceted-duck`。
+3. 每次选择后检查 Dock、Command-Tab 应用切换器和设置页顶部品牌图标，再退出并重新启动 App。
+4. 使用已保存“几何鸭”选择的偏好启动一个不包含对应架构资源的构建。
+
+预期结果：页面使用紧凑的页面内图标按钮，不使用下拉框、Popover 或 Sheet；两个选项均显示真实图像，点击后立即更新 Dock、应用切换器和设置页顶部图标，重启后保持选择；Apple Silicon 和 Intel 构建分别显示对应原始资源，资源在打包前后逐字节一致；保存标识指向缺失资源时安全回退默认图标，App 正常启动。Finder、Launchpad 和 App 包文件继续显示签名安装包的主图标，不把运行时切换误报为修改安装包。
 
 失败判定：出现空白图标、低分辨率缩放或透明边缘异常；选择后 Dock、应用切换器或设置页仍显示旧图标；重启后丢失选择；资源缺失导致崩溃、不可见选项被选中，或运行时修改 App 包文件。
 

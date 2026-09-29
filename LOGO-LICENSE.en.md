@@ -10,6 +10,8 @@ This license applies only to the following brand assets and versions generated f
 
 - Resources/AppIcon.png
 - Resources/AppIcon.icns
+- Resources/AppIcons/faceted-duck.png
+- Resources/AppIcons/faceted-duck-intel.png
 
 These brand assets are not covered by the GPL-3.0-only license for the macOS software code. Menu-bar status icons, program code, and other resources not listed in this section are outside this license.
 

@@ -13,22 +13,21 @@ struct AppIconControllerTests {
         #expect(standardOnly.resolvedIdentifier(for: missingIdentifier) == .standard)
         #expect(standardOnly.image(for: missingIdentifier) === standard)
 
-        let midnightIdentifier = AppIconIdentifier(rawValue: "midnight")
-        let midnight = NSImage(size: NSSize(width: 64, height: 64))
+        let facetedDuck = NSImage(size: NSSize(width: 64, height: 64))
         let complete = AppIconCatalog(
             standardImage: standard,
             additionalOptions: [
                 AppIconOption(
-                    id: midnightIdentifier,
-                    titleKey: "about.preferences.app_icon_midnight",
-                    image: midnight
+                    id: .facetedDuck,
+                    titleKey: "about.preferences.app_icon_faceted_duck",
+                    image: facetedDuck
                 ),
             ]
         )
 
-        #expect(complete.options.map(\.id) == [.standard, midnightIdentifier])
-        #expect(complete.resolvedIdentifier(for: midnightIdentifier) == midnightIdentifier)
-        #expect(complete.image(for: midnightIdentifier) === midnight)
+        #expect(complete.options.map(\.id) == [.standard, .facetedDuck])
+        #expect(complete.resolvedIdentifier(for: .facetedDuck) == .facetedDuck)
+        #expect(complete.image(for: .facetedDuck) === facetedDuck)
     }
 
     @Test @MainActor
@@ -54,10 +53,9 @@ struct AppIconControllerTests {
         let settings = AppSettings(defaults: defaults)
         #expect(settings.appIconIdentifier == .standard)
 
-        let midnightIdentifier = AppIconIdentifier(rawValue: "midnight")
-        settings.appIconIdentifier = midnightIdentifier
+        settings.appIconIdentifier = .facetedDuck
         let reloaded = AppSettings(defaults: defaults)
-        #expect(reloaded.appIconIdentifier == midnightIdentifier)
+        #expect(reloaded.appIconIdentifier == .facetedDuck)
     }
 
     @Test
@@ -72,12 +70,28 @@ struct AppIconControllerTests {
         }
 
         let source = AppSettings(defaults: sourceDefaults)
-        let midnightIdentifier = AppIconIdentifier(rawValue: "midnight")
-        source.appIconIdentifier = midnightIdentifier
+        source.appIconIdentifier = .facetedDuck
         let data = try source.exportedConfigurationData()
 
         let destination = AppSettings(defaults: destinationDefaults)
         try destination.importConfiguration(from: data)
-        #expect(destination.appIconIdentifier == midnightIdentifier)
+        #expect(destination.appIconIdentifier == .facetedDuck)
+    }
+
+    @Test
+    func bundledFacetedDuckSourceAssetsAreFullSizePNGs() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for resourceName in ["faceted-duck", "faceted-duck-intel"] {
+            let url = root
+                .appendingPathComponent("Resources/AppIcons")
+                .appendingPathComponent("\(resourceName).png")
+            let data = try Data(contentsOf: url)
+            let representation = try #require(NSBitmapImageRep(data: data))
+            #expect(representation.pixelsWide == 1024)
+            #expect(representation.pixelsHigh == 1024)
+        }
     }
 }
