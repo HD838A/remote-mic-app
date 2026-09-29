@@ -4,6 +4,75 @@ import Testing
 
 @Suite("Bluetooth lifecycle")
 struct BluetoothLifecycleTests {
+    @Test func systemSuspensionOnlyRestartsAnInterruptedConnectionCycle() {
+        var readyState = BluetoothSystemSuspensionState()
+        let didSuspendReady = readyState.suspend(phase: .ready(1))
+        #expect(didSuspendReady)
+        #expect(readyState.isSuspended)
+        let didResumeReady = readyState.resume()
+        let readyNeedsConnectionCycle = readyState.consumeConnectionCycleNeeded()
+        #expect(didResumeReady)
+        #expect(!readyNeedsConnectionCycle)
+        #expect(!readyState.isSuspended)
+
+        var scanningState = BluetoothSystemSuspensionState()
+        let didSuspendScanning = scanningState.suspend(phase: .scanning(2))
+        let didResumeScanning = scanningState.resume()
+        let scanningNeedsConnectionCycle = scanningState.consumeConnectionCycleNeeded()
+        #expect(didSuspendScanning)
+        #expect(didResumeScanning)
+        #expect(scanningNeedsConnectionCycle)
+
+        var disconnectedWhileSleeping = BluetoothSystemSuspensionState()
+        let didSuspendBeforeDisconnect = disconnectedWhileSleeping.suspend(phase: .ready(3))
+        disconnectedWhileSleeping.markConnectionCycleNeeded()
+        let didResumeAfterDisconnect = disconnectedWhileSleeping.resume()
+        let disconnectNeedsConnectionCycle = disconnectedWhileSleeping.consumeConnectionCycleNeeded()
+        #expect(didSuspendBeforeDisconnect)
+        #expect(didResumeAfterDisconnect)
+        #expect(disconnectNeedsConnectionCycle)
+    }
+
+    @Test func systemSuspensionTransitionsAreIdempotent() {
+        var state = BluetoothSystemSuspensionState()
+
+        let firstSuspend = state.suspend(phase: .waitingReconnect(4))
+        let duplicateSuspend = state.suspend(phase: .ready(4))
+        let firstResume = state.resume()
+        let duplicateResume = state.resume()
+        let firstConsume = state.consumeConnectionCycleNeeded()
+        let duplicateConsume = state.consumeConnectionCycleNeeded()
+
+        #expect(firstSuspend)
+        #expect(!duplicateSuspend)
+        #expect(firstResume)
+        #expect(!duplicateResume)
+        #expect(firstConsume)
+        #expect(!duplicateConsume)
+    }
+
+    @Test func systemSuspensionIsWiredBeforeBluetoothStartAndAudioEarlyReturns() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let bridgeSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+            encoding: .utf8
+        )
+
+        #expect(modelSource.contains("bridge.setSystemSuspended("))
+        #expect(modelSource.contains("setBluetoothSystemSuspended("))
+        #expect(bridgeSource.contains("guard !systemSuspension.isSuspended else"))
+        #expect(bridgeSource.contains("BLE SYSTEM_SUSPENSION"))
+        #expect(bridgeSource.contains("BLE CONNECT deferred reason=system_suspended"))
+        #expect(bridgeSource.contains("reconnectDelayAfterFailure("))
+    }
+
     @Test func onlySystemWakeForcesBluetoothRecovery() {
         #expect(BluetoothWakeRecoveryPolicy.shouldForceReconnect(
             event: .systemDidWake,

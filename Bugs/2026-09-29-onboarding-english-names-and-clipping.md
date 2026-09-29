@@ -1,0 +1,96 @@
+# Onboarding 英文名称错误与文案裁切
+
+## 问题来源
+
+- GitHub Issue：[#492](https://github.com/HD838A/remote-mic-app/issues/492)
+- 基线：`origin/main` `0e2a1f19bb968cbdbd774cbed94448643b4404b4`
+- 环境：生产 Onboarding 固定窗口 `1020 × 772`，英文界面。
+
+## 复现
+
+1. 以英文运行 Onboarding。
+2. 进入语音工具选择页。
+3. 检查工具名称、说明、未检测提示和右侧四个设置步骤。
+
+实际结果：
+
+- 豆包显示为自行拼接的 `Doubao Input Method`。
+- 微信输入法显示为错误品牌名 `WeChat Input Method`，而官方公开名称为 `WeType`。
+- 页面使用普通用户不理解的 `voice tool` / `Another Voice Tool`。
+- Issue 截图中工具标题显示为 `Doubao Inp...`、`Another Voi...`，说明文字也被省略。
+- 当前离屏截图入口固定为简体中文，既有完整截图流程不能发现英文回归。
+
+预期结果：
+
+- 卡片使用官方品牌名 `Doubao`、`WeType`，其他入口使用明确的 `Other Voice App`。
+- 英文页面用 `voice typing app` 或 `voice app` 解释类别，不使用含义模糊的 `voice tool`。
+- 生产窗口内所有主要标题、说明、步骤和底部提示完整显示。
+- 离屏截图入口能够明确生成英文浅色、深色生产页面。
+
+## 日志检查
+
+这是静态本地化与布局问题，不经过运行时业务链路。Issue 没有提供运行日志；当前日志也不能证明或否定文字裁切。根因证据来自生产截图、字符串资源和 SwiftUI 尺寸约束。
+
+## 假设
+
+### H1：错误英文品牌名使标题超过卡片可用宽度
+
+- 支持：字符串资源使用 `Doubao Input Method` 和 `WeChat Input Method`；卡片标题限制为一行。
+- 冲突：缩短名称只能修复两个品牌，不能解释说明文字和其他页面裁切。
+- 实验：只把截图语言切为英文，保持当前布局，生成生产语音工具页。
+
+### H2：卡片和步骤的固定最大高度截断英文换行
+
+- 支持：工具卡固定为 `120` pt，说明最多三行；右侧步骤固定为 `54` pt，标题最多两行。
+- 冲突：短文案可能恰好适配，必须用生产截图逐状态验证。
+- 实验：保持当前字符串，生成英文工具页及四个右侧步骤。
+
+### H3：截图回归没有覆盖英文
+
+- 支持：`OnboardingScreenshotRenderer` 将语言硬编码为 `.simplifiedChinese`。
+- 冲突：测试手册要求检查英文，但入口自身无法选择英文。
+- 实验：只把硬编码语言临时切为 `.english`，确认同一生产入口能够复现裁切。
+
+根假设：H1、H2 共同造成用户可见裁切；H3 使问题没有被既有截图门禁发现。
+
+## 实验结果
+
+只把生产离屏渲染器的语言临时改为英文，保持业务状态、窗口和布局不变，生成实体遥控器浅色 9 页基线。随后撤销临时改动。
+
+- `06-voice-tool.png` 稳定复现 `Doubao Input...`、`WeChat Inpu...`、`Another Voic...`，Vokie 说明也被截断。
+- `04-remote.png` 底部恢复卡被固定导航区域遮挡。
+- `07-voice-test.png` 增益卡和滑块被固定导航区域遮挡。
+- 其余六页在该基线状态下没有发现主要文字裁切。
+- 基线 PNG 为 `2040 × 1600`，来自生产 `OnboardingView`，不是重绘或设计稿。
+
+实验确认 H1、H2、H3 均成立。
+
+## 根因
+
+英文资源使用了过长且不准确的自行翻译品牌名；工具卡、步骤卡和部分页面内容同时使用固定高度与行数限制；离屏截图入口又把语言固定为简体中文，导致英文裁切没有进入既有完整截图回归。
+
+## 修复与验证
+
+修复内容：
+
+- 英文卡片改用官方名称 `Doubao`、`WeType`，其他入口改为 `Other Voice App`；Onboarding 用户文案统一使用 `voice typing app` / `voice app`。
+- 工具卡和右栏步骤取消会截断英文的固定最大高度与行数限制。
+- 实体遥控器连接页压缩重复状态布局，并不再叠加与本页现有蓝牙恢复操作重复的 `remote.not_found` 故障卡。
+- 语音测试页使用更短的产品文案和更紧凑的输入框/确认卡布局，保留配置确认、真实文字和增益调节门禁。
+- 生产离屏截图入口新增 `REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE`，支持明确生成中文、英文或跟随系统的截图。
+
+视觉复核又发现并修复两处同类问题：
+
+- Apple 遥控器普通按键页的 `Play/Pause button` 在生产宽度下会被截断，用户可见名称缩短为 `Play/Pause`，并增加英文资源回归断言。
+- `Other Voice App` 选中时，左侧说明卡会压到固定底部导航区域；非 Vokie 卡片在保留完整文案的前提下收紧最小高度，Vokie 的介绍和站点入口保持原高度。
+
+最终验证：
+
+- `DEVELOPER_DIR=/Users/andy/Downloads/Xcode.app/Contents/Developer swift test --disable-keychain`：731 tests / 56 suites 全部通过。
+- 使用生产 `OnboardingView` 隐藏离屏入口生成并复核 184 张最终 PNG：公开包 36 张、完整 Package 控制来源 108 张、五种语音工具步骤 40 张；全部为 `2040 × 1600` PNG。
+- 截图证据目录：`Screenshots/design-drafts/onboarding-english-issue-492/`；最终清单 `SHA256SUMS-final.txt` 共 184 项，清单 SHA-256 为 `609227d8675602cb5fd09bbe161bb33ba2bda9405fb2af06a749836d0c8a1a30`。
+- 完整本地包：`dist/SayAll.app`。验证为 Developer ID Application、Team ID `L3QHLDRPAY`、Hardened Runtime；包含小米、Apple、Chromecast 和 Mac Remote 能力，不包含 AI、组合动作、键位方案或会员私有能力。
+- 启动烟测：从上述 `dist/SayAll.app` 启动后，其 `Contents/MacOS/RemoteMic` 进程保持运行。
+- 官网内容构建：12 pages；analytics 4/4；download proxy 14/14。官网只完成源码验证，没有部署生产。
+
+验证边界：未在本次自动化环境完成真实小米/Apple/Chromecast 遥控器、macOS 权限、真实音频路线，以及 Doubao、WeType、Vokie、Typeless 的现场文字上屏验收。截图、单元测试、签名和启动烟测不能替代这些真实环境用例。

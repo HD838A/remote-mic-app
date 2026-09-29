@@ -5,6 +5,7 @@ import SwiftUI
 enum OnboardingScreenshotRenderer {
     private enum RenderingError: Error, LocalizedError {
         case invalidAppearance(String)
+        case invalidLanguage(String)
         case missingFrameView
         case bitmapCreationFailed
         case pngCreationFailed
@@ -13,12 +14,44 @@ enum OnboardingScreenshotRenderer {
             switch self {
             case let .invalidAppearance(value):
                 return "Unsupported screenshot appearance: \(value). Use light, dark, or system."
+            case let .invalidLanguage(value):
+                return "Unsupported screenshot language: \(value). Use zh-Hans, en, or system."
             case .missingFrameView:
                 return "The offscreen window frame view is unavailable."
             case .bitmapCreationFailed:
                 return "The offscreen window bitmap could not be created."
             case .pngCreationFailed:
                 return "The offscreen window bitmap could not be encoded as PNG."
+            }
+        }
+    }
+
+    private enum ScreenshotLanguage {
+        case simplifiedChinese
+        case english
+        case system
+
+        init(environmentValue: String?) throws {
+            switch environmentValue?.lowercased() ?? "zh-hans" {
+            case "zh-hans", "zh_cn", "zh-cn":
+                self = .simplifiedChinese
+            case "en", "en-us", "en_us":
+                self = .english
+            case "system":
+                self = .system
+            case let value:
+                throw RenderingError.invalidLanguage(value)
+            }
+        }
+
+        var appLanguage: AppLanguage {
+            switch self {
+            case .simplifiedChinese:
+                return .simplifiedChinese
+            case .english:
+                return .english
+            case .system:
+                return .system
             }
         }
     }
@@ -50,6 +83,11 @@ enum OnboardingScreenshotRenderer {
 
     static func renderAll(to outputDirectory: URL, appearanceName: String?) throws {
         let screenshotAppearance = try ScreenshotAppearance(environmentValue: appearanceName)
+        let screenshotLanguage = try ScreenshotLanguage(
+            environmentValue: ProcessInfo.processInfo.environment[
+                "REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE"
+            ]
+        )
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -62,7 +100,7 @@ enum OnboardingScreenshotRenderer {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
-        settings.applicationLanguage = .simplifiedChinese
+        settings.applicationLanguage = screenshotLanguage.appLanguage
         let requestedVoiceTool = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_TOOL"
         ].flatMap(OnboardingVoiceTool.init(rawValue:))
