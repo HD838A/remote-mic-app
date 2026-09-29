@@ -152,6 +152,41 @@
 - 只有真实 macOS 电源管理、真实 MiRemoteV 2ch、真实遥控器和 `pmset` 才能证明 CoreAudio 断言确实消失并且 Mac 能进入自动休眠。
 - 用例七的「会话切回」只涉及快速用户切换与解锁，不依赖休眠/唤醒，因此不需要 `pmset`；但只有**真实双账户 + 真实遥控器 + 真实第三方语音工具**才能证明切回后确实恢复拾音，单机单账户与单元测试都不能替代。
 
+## 用例八：休眠期间暂停蓝牙扫描与重连
+
+对应 Issue [#441](https://github.com/HD838A/remote-mic-app/issues/441) 和
+[`Bugs/2026-09-29-sleeping-ble-scan-and-reconnect.md`](../Bugs/2026-09-29-sleeping-ble-scan-and-reconnect.md)。
+
+### 步骤
+
+1. 分别在遥控器 ready、正在扫描、等待自动重连三种状态下，让屏幕进入休眠；每种状态记录 UTC 时间。
+2. 休眠后至少观察两个原自动重连周期，不操作遥控器和 Mac。
+3. 唤醒并解锁，等待遥控器恢复 ready；立即完成三次真实语音和一次普通按键。
+4. 再执行一次“屏幕休眠 + 会话 inactive”的重叠事件，只解除屏幕休眠，确认会话解锁前不恢复扫描。
+
+### 预期日志
+
+- 最早的挂起事件后出现 `BLE SYSTEM_SUSPENSION phase=started result=paused ...`；
+- 最后一个挂起原因解除前，不再出现新的 `BLE SCANNING` 或 `BLE RECONNECT scheduled`；
+- 重复挂起事件不反复刷相同暂停日志；
+- 最后一个原因解除后出现 `BLE SYSTEM_SUSPENSION phase=completed result=resumed ...`；
+- 只有休眠前未 ready 或休眠中断连的桥出现 `phase=recovering`，原本 ready 且健康的桥不因屏幕事件单独重建；
+- 三次语音不丢首字、不断尾，普通按键正常。
+
+### 失败判定
+
+- 挂起期间出现新的主动扫描或定时重连；
+- 只解除一个重叠原因时提前恢复；
+- 暂停动作主动断开 ready 连接、截断语音或清空尾包；
+- 唤醒后必须手动点“立即重新连接”，或第一次语音无声、丢首字、断尾；
+- `pmset -g log` 仍显示与无线麦SayAll.app扫描时序稳定对应的高频 HID Activity / FullWake。
+
+### 额外证据
+
+- 休眠前、休眠中和唤醒后的 `pmset -g assertions`；
+- 覆盖测试窗口的 `pmset -g log`；
+- 若环境允许，采集同一窗口内的 `bluetoothd` `Server.LE.Scan` 日志，但不得记录设备身份。
+
 ## Issue #283 回归：恢复最近物理输入
 
 1. 选择 Wave Link 的目标物理麦克风，确认它成为系统默认输入。

@@ -1706,6 +1706,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         discoveryBluetoothBridge?.recoverVoiceLink(reason: reason)
     }
 
+    private func setBluetoothSystemSuspended(_ suspended: Bool, reason: String) {
+        bluetoothBridges.values.forEach {
+            $0.setSystemSuspended(suspended, reason: reason)
+        }
+        discoveryBluetoothBridge?.setSystemSuspended(suspended, reason: reason)
+    }
+
+    private func resumeBluetoothConnectionCyclesIfNeeded(reason: String) {
+        bluetoothBridges.values.forEach {
+            $0.resumeConnectionCycleIfNeeded(reason: reason)
+        }
+        discoveryBluetoothBridge?.resumeConnectionCycleIfNeeded(reason: reason)
+    }
+
     func refreshRemoteDiscovery() {
         guard started else { return }
         if discoveryBluetoothBridge == nil {
@@ -1977,11 +1991,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "test_tone=\(isPlayingTestTone) audio_ready=\(isAudioOutputReady)"
         )
         guard started, changed else { return }
+        setBluetoothSystemSuspended(
+            systemAudioSuspensionState.isSuspended,
+            reason: event.rawValue
+        )
         guard !audioStartupPending else {
             AppLogger.shared.write(
                 "SYSTEM AUDIO lifecycle_deferred event=\(event.rawValue) cause=audio_startup_pending " +
                     "suspended=\(systemAudioSuspensionState.isSuspended)"
             )
+            if !systemAudioSuspensionState.isSuspended {
+                resumeBluetoothConnectionCyclesIfNeeded(reason: event.rawValue)
+            }
             return
         }
 
@@ -2024,6 +2045,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             recoverBluetoothVoiceLink(reason: "session_activated")
         }
+        resumeBluetoothConnectionCyclesIfNeeded(reason: event.rawValue)
     }
 
     @discardableResult
@@ -3066,6 +3088,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 targetIdentifier: identifier
             )
             bluetoothBridges[identifier] = bridge
+            bridge.setSystemSuspended(
+                systemAudioSuspensionState.isSuspended,
+                reason: "bridge_start"
+            )
             bridge.start()
         }
         startBluetoothDiscoveryIfNeeded()
@@ -3082,6 +3108,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
         )
         discoveryBluetoothBridge = bridge
+        bridge.setSystemSuspended(
+            systemAudioSuspensionState.isSuspended,
+            reason: "bridge_start"
+        )
         bridge.start()
     }
 

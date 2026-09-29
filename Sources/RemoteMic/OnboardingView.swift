@@ -414,7 +414,7 @@ struct OnboardingView: View {
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 18) {
                     stepContent
-                    if let failureReason {
+                    if let failureReason, shouldShowStandaloneRecoveryCard(failureReason) {
                         recoveryCard(for: failureReason)
                     }
                 }
@@ -1010,7 +1010,6 @@ struct OnboardingView: View {
     @ViewBuilder
     private func voiceToolCard(for tool: OnboardingVoiceTool) -> some View {
         let isSelected = settings.onboardingVoiceTool == tool
-        let selectionHeight: CGFloat = tool == .vokie ? 84 : 100
 
         VStack(alignment: .leading, spacing: tool == .vokie ? 2 : 0) {
             onboardingActionButton(id: "voice-tool.\(tool.rawValue)") {
@@ -1027,12 +1026,12 @@ struct OnboardingView: View {
                         Text(localization.text(tool.titleKey))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.primary)
-                            .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text(localization.text(tool.detailKey))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.leading)
-                            .lineLimit(3, reservesSpace: true)
+                            .fixedSize(horizontal: false, vertical: true)
                         if voiceToolAvailability[tool] == .notInstalled {
                             Text(verbatim: localization.text("onboarding.voice_tool.status.not_installed"))
                                 .font(.system(size: 12, weight: .medium))
@@ -1047,7 +1046,7 @@ struct OnboardingView: View {
                 }
             }
             .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, minHeight: selectionHeight, maxHeight: selectionHeight, alignment: .top)
+            .frame(maxWidth: .infinity, minHeight: tool == .vokie ? 76 : 80, alignment: .top)
 
             if tool == .vokie {
                 onboardingLink(id: "voice-tool.vokie.website", destination: AppLinks.vokieWebsite) {
@@ -1059,7 +1058,7 @@ struct OnboardingView: View {
             }
         }
         .padding(10)
-        .frame(maxWidth: .infinity, minHeight: 120, maxHeight: 120, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: tool == .vokie ? 108 : 100, alignment: .top)
         .background(
             isSelected
                 ? Color.accentColor.opacity(0.09)
@@ -1136,12 +1135,12 @@ struct OnboardingView: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.primary)
                                 .multilineTextAlignment(.leading)
-                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxHeight: .infinity, alignment: .center)
                             Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 10)
-                        .frame(height: 54)
+                        .frame(minHeight: 54)
                         .background(
                             selectedIndex == index
                                 ? Color.accentColor.opacity(0.09)
@@ -1310,7 +1309,7 @@ struct OnboardingView: View {
     }
 
     private var permissionsContent: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 12) {
             onboardingTitle("onboarding.permissions.title")
             Text(verbatim: localization.text("onboarding.permissions.detail"))
                 .font(.system(size: 14))
@@ -1476,7 +1475,7 @@ struct OnboardingView: View {
                 }
             }
             .font(.system(size: 12))
-            .padding(14)
+            .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
             .overlay {
@@ -1500,7 +1499,8 @@ struct OnboardingView: View {
                             ? "onboarding.remote.hid_connected_detail"
                             : "onboarding.remote.searching_detail"
                 ),
-                isComplete: selectedControlConnected
+                isComplete: selectedControlConnected,
+                compact: true
             )
 
             statusCard(
@@ -1518,7 +1518,8 @@ struct OnboardingView: View {
                 ),
                 detail: physicalRemoteButtonStatusDetail,
                 isComplete: !observedRemoteButtons.isEmpty,
-                pendingColor: remoteInputDiagnostic.shouldShowVoiceButtonCorrection ? .orange : nil
+                pendingColor: remoteInputDiagnostic.shouldShowVoiceButtonCorrection ? .orange : nil,
+                compact: true
             )
 
             if shouldShowSecureInputWarning {
@@ -1827,7 +1828,7 @@ struct OnboardingView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .frame(minHeight: 104, maxHeight: 112)
+            .frame(minHeight: 84, maxHeight: 92)
 
             HStack(spacing: 12) {
                 Image(systemName: voiceSamplesReceived ? "waveform.circle.fill" : "waveform")
@@ -1993,7 +1994,7 @@ struct OnboardingView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(10)
+        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
         .overlay {
@@ -2264,6 +2265,15 @@ struct OnboardingView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.orange.opacity(0.25), lineWidth: 1)
         }
+    }
+
+    private func shouldShowStandaloneRecoveryCard(_ failure: FirstUseFailureReason) -> Bool {
+        if settings.onboardingStep == .remote,
+           settings.onboardingControlMethod == .physicalRemote,
+           failure == .remoteNotFound {
+            return false
+        }
+        return true
     }
 
     private func recoveryDetailKey(for failure: FirstUseFailureReason) -> String {
@@ -2752,14 +2762,15 @@ struct OnboardingView: View {
         title: String,
         detail: String,
         isComplete: Bool,
-        pendingColor: Color? = nil
+        pendingColor: Color? = nil,
+        compact: Bool = false
     ) -> some View {
         let statusColor = isComplete ? Color.green : (pendingColor ?? Color.accentColor)
-        return HStack(spacing: 13) {
+        return HStack(spacing: compact ? 10 : 13) {
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .medium))
+                .font(.system(size: compact ? 18 : 20, weight: .medium))
                 .foregroundStyle(statusColor)
-                .frame(width: 36, height: 36)
+                .frame(width: compact ? 32 : 36, height: compact ? 32 : 36)
                 .background(statusColor.opacity(0.10), in: Circle())
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -2771,7 +2782,7 @@ struct OnboardingView: View {
             }
             Spacer()
         }
-        .padding(14)
+        .padding(compact ? 10 : 14)
         .background(
             (pendingColor?.opacity(0.08) ?? Color.primary.opacity(0.035)),
             in: RoundedRectangle(cornerRadius: 12)

@@ -7,6 +7,7 @@
 - Simplifies first-run voice-tool selection and removes the unsupported ChatterFly option.
 - Shows the hold-or-toggle instruction that matches the selected controller and voice tool during the voice test.
 - Improves first-run voice verification, gain adjustment, and ordinary-button detection.
+- Uses the official names Doubao and WeType in first-run setup and keeps English instructions fully visible at the production window size.
 
 ## 1.9.20 (Pre-release)
 
