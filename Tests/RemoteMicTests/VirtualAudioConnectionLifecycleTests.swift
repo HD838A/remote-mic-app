@@ -287,7 +287,7 @@ struct VirtualAudioConnectionLifecycleTests {
         )
 
         #expect(!source.contains("AUDIO RECOVERY scheduled"))
-        #expect(source.contains("coalesced_events=\\(coalescedEvents)"))
+        #expect(source.contains("coalesced_events=\\(coalesced.count)"))
         #expect(source.contains("hasAllocatedOutputResources: audioOutput.hasAllocatedOutputResources"))
     }
 
