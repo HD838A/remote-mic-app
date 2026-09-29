@@ -26,7 +26,7 @@ struct CoreVoiceInputJourneyTests {
                 return true
             },
             enqueueAudio: { enqueuedAudio.append($0) },
-            drainAudio: { $0() },
+            drainAudio: { _, completion in completion() },
             onFailure: { failures.append($0) }
         )
         controller.setEnabled(true)
@@ -73,7 +73,7 @@ struct CoreVoiceInputJourneyTests {
                 return true
             },
             enqueueAudio: { enqueuedAudio.append($0) },
-            drainAudio: { drains.append($0) },
+            drainAudio: { _, completion in drains.append(completion) },
             onFailure: { _ in }
         )
         controller.setEnabled(true)
@@ -123,7 +123,7 @@ struct CoreVoiceInputJourneyTests {
                 return true
             },
             enqueueAudio: { enqueuedAudio.append($0) },
-            drainAudio: { $0() },
+            drainAudio: { _, completion in completion() },
             onFailure: { _ in }
         )
         controller.setEnabled(true)
@@ -159,7 +159,7 @@ struct CoreVoiceInputJourneyTests {
             destinationReadiness: coordinator.waitUntilReady,
             setFunctionKeyPressed: { _ in true },
             enqueueAudio: { enqueuedAudio.append($0) },
-            drainAudio: { $0() },
+            drainAudio: { _, completion in completion() },
             onFailure: { _ in }
         )
         controller.setEnabled(true)

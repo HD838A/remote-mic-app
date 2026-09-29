@@ -217,6 +217,164 @@ struct VirtualAudioConnectionLifecycleTests {
         ) == noErr
     }
 
+    @Test func reconfiguringTheOutputMidDrainStillReportsTheDrainExactlyOnce() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var completionCount = 0
+        // A long fallback keeps the audio side's own timer out of this test: the only way
+        // the completion can arrive is through the interrupting path below.
+        output.endSessionAfterDraining(maximumDelay: 60) { completionCount += 1 }
+        #expect(completionCount == 0)
+
+        output.endSession()
+
+        #expect(completionCount == 1)
+        #expect(output.pendingVoiceBufferCountForDiagnostics == 0)
+        output.stop()
+        #expect(completionCount == 1)
+    }
+
+    @Test func tearingTheEngineDownMidDrainStillReportsTheDrainExactlyOnce() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var completionCount = 0
+        output.endSessionAfterDraining(maximumDelay: 60) { completionCount += 1 }
+
+        output.stop()
+
+        #expect(completionCount == 1)
+        output.endSession()
+        #expect(completionCount == 1)
+    }
+
+    @Test func aDrainCompletionThatTearsTheOutputDownAgainReportsOnlyOnce() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var completionCount = 0
+        // Mirrors the release path, whose completion calls `stop()` on the same output.
+        output.endSessionAfterDraining(maximumDelay: 60) { [weak output] in
+            completionCount += 1
+            output?.stop()
+        }
+
+        output.endSession()
+
+        #expect(completionCount == 1)
+    }
+
+    @Test func multipleDrainRequestsWaitForTheSameActualDrain() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var firstCount = 0
+        var secondCount = 0
+        output.endSessionAfterDraining(maximumDelay: 60) { firstCount += 1 }
+
+        output.endSessionAfterDraining(maximumDelay: 60) { secondCount += 1 }
+
+        #expect(firstCount == 0)
+        #expect(secondCount == 0)
+        output.endSession()
+        #expect(firstCount == 1)
+        #expect(secondCount == 1)
+    }
+
+    @Test func interruptedDrainReportsForcedOutcome() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var outcome: VirtualAudioDrainOutcome?
+
+        output.endSessionAfterDraining(maximumDelay: 60) { value in
+            outcome = value
+        }
+        output.stop()
+
+        #expect(outcome == .forced)
+    }
+
+    @Test func anAlreadyEmptyDrainReportsNormalOutcome() {
+        let output = VirtualAudioOutput()
+        var outcome: VirtualAudioDrainOutcome?
+
+        output.endSessionAfterDraining(maximumDelay: 60) { value in
+            outcome = value
+        }
+
+        #expect(outcome == .normal)
+    }
+
+    @Test func drainLogsCorrelateRequestWithOneForcedTerminalOutcome() {
+        var logs: [String] = []
+        var uptime: TimeInterval = 10
+        let output = VirtualAudioOutput(
+            logger: { logs.append($0) },
+            uptime: { uptime }
+        )
+        output.registerPendingVoiceBuffer()
+
+        output.endSessionAfterDraining(
+            source: "voice_fn_tap",
+            operationID: 42,
+            maximumDelay: 60
+        ) { _ in }
+        uptime = 10.25
+        output.stop()
+
+        #expect(logs.contains { $0.contains(
+            "AUDIO DRAIN operation_id=42 source=voice_fn_tap phase=requested result=pending"
+        ) })
+        let terminalLogs = logs.filter {
+            $0.contains("AUDIO DRAIN operation_id=42 source=voice_fn_tap phase=completed")
+        }
+        #expect(terminalLogs.count == 1)
+        #expect(terminalLogs.first?.contains("result=forced reason=output_stop") == true)
+        #expect(terminalLogs.first?.contains("elapsed_ms=250") == true)
+        #expect(terminalLogs.first?.contains("interrupted_buffers=1") == true)
+    }
+
+    @Test func cancellingDrainLogsOneExplicitCancelledTerminalOutcome() {
+        var logs: [String] = []
+        let output = VirtualAudioOutput(logger: { logs.append($0) })
+        output.registerPendingVoiceBuffer()
+
+        output.endSessionAfterDraining(
+            source: "audio_release",
+            operationID: 7,
+            maximumDelay: 60
+        ) { _ in }
+        output.cancelPendingDrain()
+        output.stop()
+
+        let terminalLogs = logs.filter {
+            $0.contains("AUDIO DRAIN operation_id=7 source=audio_release") &&
+                ($0.contains("phase=completed") || $0.contains("phase=cancelled"))
+        }
+        #expect(terminalLogs.count == 1)
+        #expect(terminalLogs.first?.contains(
+            "phase=cancelled result=cancelled reason=explicit_cancel"
+        ) == true)
+    }
+
+    @Test func normalDrainPathsDoNotFlushThePlayer() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/AudioOutput.swift"),
+            encoding: .utf8
+        )
+
+        let immediateStart = try #require(source.range(of: "if shouldCompleteImmediately && !wasWaiting {"))
+        let timeoutStart = try #require(source.range(of: "if let maximumDelay, let generation {", range: immediateStart.upperBound..<source.endIndex))
+        let immediatePath = source[immediateStart.lowerBound..<timeoutStart.lowerBound]
+        #expect(!immediatePath.contains("flushPlayer()"))
+
+        let naturalStart = try #require(source.range(of: "private func finishDrainedSessionIfNeeded("))
+        let forcedStart = try #require(source.range(of: "private func finishDrainIfNeeded(", range: naturalStart.upperBound..<source.endIndex))
+        let naturalPath = source[naturalStart.lowerBound..<forcedStart.lowerBound]
+        #expect(!naturalPath.contains("flushPlayer()"))
+    }
+
     @Test func healthyExplicitOutputIgnoresDefaultSystemOutputOnlyChanges() {
         #expect(VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
             details: "properties=default_system_output",
