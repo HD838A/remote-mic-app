@@ -134,6 +134,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private var generationCounter: UInt64 = 0
     private var lifecycle: BluetoothLifecyclePhase = .stopped
     private var shouldRun = false
+    private var systemSuspension = BluetoothSystemSuspensionState()
     private var capabilities = XiaomiBluetoothBridge.defaultCapabilities
     private var decoder = IMAADPCMDecoder()
     private var accumulator = FrameAccumulator()
@@ -196,6 +197,13 @@ final class XiaomiBluetoothBridge: NSObject {
         shouldRun = true
         reconnectWorkItem?.cancel()
         reconnectPolicy.reset()
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            AppLogger.shared.write(
+                "BLE SYSTEM_SUSPENSION phase=deferred result=paused reason=bridge_start"
+            )
+            return
+        }
         beginConnectionCycle()
     }
 
@@ -218,6 +226,14 @@ final class XiaomiBluetoothBridge: NSObject {
 
     func reconnectNow() {
         guard shouldRun else { return }
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            AppLogger.shared.write(
+                "BLE SYSTEM_SUSPENSION phase=deferred result=paused reason=reconnect_requested"
+            )
+            return
+        }
+        _ = systemSuspension.consumeConnectionCycleNeeded()
         reconnectWorkItem?.cancel()
         reconnectPolicy.reset()
         central?.stopScan()
@@ -240,6 +256,13 @@ final class XiaomiBluetoothBridge: NSObject {
             AppLogger.shared.write("BLE RECOVERY phase=skipped cause=bridge_stopped trigger=\(reason)")
             return
         }
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            AppLogger.shared.write(
+                "BLE RECOVERY phase=deferred cause=system_suspended trigger=\(reason)"
+            )
+            return
+        }
         let centralState = central.map { String($0.state.rawValue) } ?? "none"
         AppLogger.shared.write(
             "BLE RECOVERY phase=requested trigger=\(reason) state=\(String(describing: state)) " +
@@ -250,8 +273,56 @@ final class XiaomiBluetoothBridge: NSObject {
         reconnectNow()
     }
 
+    func setSystemSuspended(_ suspended: Bool, reason: String) {
+        if suspended {
+            guard systemSuspension.suspend(phase: lifecycle) else { return }
+            central?.stopScan()
+            if !lifecycle.isReady,
+               let central,
+               let peripheral,
+               peripheral.state != .disconnected {
+                requestedReconnectDelay = nil
+                lifecycle = .disconnecting(lifecycle.generation ?? generationCounter)
+                central.cancelPeripheralConnection(peripheral)
+            }
+            reconnectWorkItem?.cancel()
+            reconnectWorkItem = nil
+            connectionTimeoutWorkItem?.cancel()
+            connectionTimeoutWorkItem = nil
+            initializationTimeoutWorkItem?.cancel()
+            initializationTimeoutWorkItem = nil
+            AppLogger.shared.write(
+                "BLE SYSTEM_SUSPENSION phase=started result=paused reason=\(reason) " +
+                    "lifecycle=\(String(describing: lifecycle)) " +
+                    "ready_preserved=\(lifecycle.isReady)"
+            )
+            return
+        }
+
+        guard systemSuspension.resume() else { return }
+        AppLogger.shared.write(
+            "BLE SYSTEM_SUSPENSION phase=completed result=resumed reason=\(reason) " +
+                "connection_cycle_needed=\(systemSuspension.connectionCycleNeeded)"
+        )
+    }
+
+    func resumeConnectionCycleIfNeeded(reason: String) {
+        guard systemSuspension.consumeConnectionCycleNeeded() else { return }
+        guard shouldRun, !lifecycle.isReady else { return }
+        AppLogger.shared.write(
+            "BLE SYSTEM_SUSPENSION phase=recovering result=requested reason=\(reason) " +
+                "lifecycle=\(String(describing: lifecycle))"
+        )
+        reconnectNow()
+    }
+
     private func beginConnectionCycle() {
-        guard shouldRun, central == nil else { return }
+        guard shouldRun else { return }
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            return
+        }
+        guard central == nil else { return }
         generationCounter &+= 1
         let generation = generationCounter
         lifecycle = .scanning(generation)
@@ -333,6 +404,7 @@ final class XiaomiBluetoothBridge: NSObject {
 
     private func discoverOrScan(using central: CBCentralManager, generation: UInt64) {
         guard shouldRun,
+              !systemSuspension.isSuspended,
               self.central === central,
               lifecycle == .scanning(generation),
               central.state == .poweredOn
@@ -450,6 +522,7 @@ final class XiaomiBluetoothBridge: NSObject {
         usesCachedTarget: Bool = false
     ) {
         guard shouldRun,
+              !systemSuspension.isSuspended,
               self.central === central,
               peripheral == nil,
               lifecycle == .scanning(generation)
@@ -503,6 +576,7 @@ final class XiaomiBluetoothBridge: NSObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self,
                   self.shouldRun,
+                  !self.systemSuspension.isSuspended,
                   self.currentGeneration() == generation,
                   self.lifecycle == .discovering(generation) ||
                     self.lifecycle == .awaitingCapabilities(generation)
@@ -518,6 +592,7 @@ final class XiaomiBluetoothBridge: NSObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self,
                   self.shouldRun,
+                  !self.systemSuspension.isSuspended,
                   self.currentGeneration() == generation,
                   self.lifecycle == .connecting(generation)
             else { return }
@@ -552,6 +627,16 @@ final class XiaomiBluetoothBridge: NSObject {
 
     private func scheduleReconnect(bypassCachedTarget: Bool = false) {
         guard shouldRun else { return }
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            reconnectWorkItem?.cancel()
+            reconnectWorkItem = nil
+            state = .reconnecting
+            AppLogger.shared.write(
+                "BLE RECONNECT deferred reason=system_suspended"
+            )
+            return
+        }
         reconnectWorkItem?.cancel()
         state = .reconnecting
         let delay = nextAutomaticReconnectDelay(
@@ -581,6 +666,17 @@ final class XiaomiBluetoothBridge: NSObject {
         return delay
     }
 
+    private func reconnectDelayAfterFailure(bypassCachedTarget: Bool) -> TimeInterval? {
+        guard shouldRun else { return nil }
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            return 0
+        }
+        return requestedReconnectDelay ?? nextAutomaticReconnectDelay(
+            bypassCachedTarget: bypassCachedTarget
+        )
+    }
+
     private func finishAttempt(reconnectAfter delay: TimeInterval?) {
         let finishedGeneration = lifecycle.generation ?? generationCounter
         central?.stopScan()
@@ -595,11 +691,22 @@ final class XiaomiBluetoothBridge: NSObject {
             return
         }
 
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            lifecycle = .stopped
+            state = .reconnecting
+            AppLogger.shared.write(
+                "BLE RECONNECT deferred reason=system_suspended"
+            )
+            return
+        }
+
         state = .reconnecting
         lifecycle = .waitingReconnect(finishedGeneration)
         let work = DispatchWorkItem { [weak self] in
             guard let self,
                   self.shouldRun,
+                  !self.systemSuspension.isSuspended,
                   self.lifecycle == .waitingReconnect(finishedGeneration)
             else { return }
             self.reconnectWorkItem = nil
@@ -928,6 +1035,13 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             lifecycle = .stopped
             return
         }
+        guard !systemSuspension.isSuspended else {
+            if transition.shouldStartFreshConnectionCycle || transition.shouldDiscover {
+                systemSuspension.markConnectionCycleNeeded()
+            }
+            central.stopScan()
+            return
+        }
         if transition.shouldStartFreshConnectionCycle {
             startFreshConnectionCycle()
             return
@@ -938,6 +1052,11 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     }
 
     private func startFreshConnectionCycle() {
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            central?.stopScan()
+            return
+        }
         central?.stopScan()
         central?.delegate = nil
         central = nil
@@ -952,7 +1071,7 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
-        guard self.central === central else { return }
+        guard !systemSuspension.isSuspended, self.central === central else { return }
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let serviceMatch = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID])?
             .contains(serviceUUID) == true
@@ -989,6 +1108,13 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               let generation = centralGeneration,
               lifecycle.acceptsDidConnect(generation: generation)
         else { return }
+        guard !systemSuspension.isSuspended else {
+            systemSuspension.markConnectionCycleNeeded()
+            lifecycle = .disconnecting(generation)
+            central.cancelPeripheralConnection(peripheral)
+            AppLogger.shared.write("BLE CONNECT deferred reason=system_suspended")
+            return
+        }
         connectionTimeoutWorkItem?.cancel()
         connectionTimeoutWorkItem = nil
         lifecycle = .discovering(generation)
@@ -1015,11 +1141,9 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         AppLogger.shared.write(
             "BLE CONNECT FAILED " + AppLogger.optionalErrorFields(error)
         )
-        let delay = shouldRun
-            ? requestedReconnectDelay ?? nextAutomaticReconnectDelay(
-                bypassCachedTarget: currentAttemptUsesCachedTarget
-            )
-            : nil
+        let delay = reconnectDelayAfterFailure(
+            bypassCachedTarget: currentAttemptUsesCachedTarget
+        )
         finishAttempt(reconnectAfter: delay)
         if !shouldRun { state = .stopped }
     }
@@ -1063,11 +1187,9 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         AppLogger.shared.write(
             "BLE DISCONNECTED phase=\(lifecycle) " + AppLogger.optionalErrorFields(error)
         )
-        let delay = shouldRun
-            ? requestedReconnectDelay ?? nextAutomaticReconnectDelay(
-                bypassCachedTarget: shouldBypassCachedTarget || currentAttemptUsesCachedTarget
-            )
-            : nil
+        let delay = reconnectDelayAfterFailure(
+            bypassCachedTarget: shouldBypassCachedTarget || currentAttemptUsesCachedTarget
+        )
         finishAttempt(reconnectAfter: delay)
         if !shouldRun { state = .stopped }
     }
@@ -1080,6 +1202,7 @@ extension XiaomiBluetoothBridge {
         error: Error?
     ) {
         guard shouldRun,
+              !systemSuspension.isSuspended,
               isCurrent(peripheral),
               currentGeneration() == generation,
               lifecycle.acceptsInitializationCallback(generation: generation)
@@ -1125,6 +1248,7 @@ extension XiaomiBluetoothBridge {
         let isOptionalService = service.uuid == batteryServiceUUID ||
             service.uuid == deviceInformationServiceUUID
         guard shouldRun,
+              (!systemSuspension.isSuspended || lifecycle.isReady),
               isCurrent(peripheral),
               currentGeneration() == generation,
               isOptionalService
@@ -1222,6 +1346,7 @@ extension XiaomiBluetoothBridge {
         error: Error?
     ) {
         guard shouldRun,
+              (!systemSuspension.isSuspended || lifecycle.isReady),
               isCurrent(peripheral),
               currentGeneration() == generation,
               lifecycle.acceptsNotificationUpdate(generation: generation)
