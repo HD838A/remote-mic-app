@@ -302,6 +302,27 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(outcome == .normal)
     }
 
+    @Test func normalDrainPathsDoNotFlushThePlayer() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/AudioOutput.swift"),
+            encoding: .utf8
+        )
+
+        let immediateStart = try #require(source.range(of: "if shouldCompleteImmediately && !wasWaiting {"))
+        let timeoutStart = try #require(source.range(of: "if let maximumDelay, let generation {", range: immediateStart.upperBound..<source.endIndex))
+        let immediatePath = source[immediateStart.lowerBound..<timeoutStart.lowerBound]
+        #expect(!immediatePath.contains("flushPlayer()"))
+
+        let naturalStart = try #require(source.range(of: "private func finishDrainedSessionIfNeeded("))
+        let forcedStart = try #require(source.range(of: "private func finishDrainIfNeeded(", range: naturalStart.upperBound..<source.endIndex))
+        let naturalPath = source[naturalStart.lowerBound..<forcedStart.lowerBound]
+        #expect(!naturalPath.contains("flushPlayer()"))
+    }
+
     @Test func healthyExplicitOutputIgnoresDefaultSystemOutputOnlyChanges() {
         #expect(VirtualAudioRecoveryPolicy.shouldIgnoreDefaultSystemOutputChange(
             details: "properties=default_system_output",

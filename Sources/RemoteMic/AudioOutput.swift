@@ -1049,7 +1049,6 @@ final class VirtualAudioOutput {
             drainCompletions.removeAll(keepingCapacity: true)
             drainGeneration &+= 1
             playbackLock.unlock()
-            flushPlayer()
             completions.forEach { $0(.normal) }
             return
         }
