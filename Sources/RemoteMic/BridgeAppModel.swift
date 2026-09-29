@@ -338,19 +338,25 @@ enum VoiceSamplePresentationPolicy {
 
 struct AudioRecoveryCoalescingState {
     private(set) var pendingEventCount = 0
+    private(set) var includesHardwareChange = false
 
-    mutating func recordEvent() {
+    mutating func recordEvent(reason: String) {
         pendingEventCount += 1
+        if reason == "hardware_change" {
+            includesHardwareChange = true
+        }
     }
 
-    mutating func consumePendingEventCount() -> Int {
-        let count = pendingEventCount
+    mutating func consumePendingEvents() -> (count: Int, includesHardwareChange: Bool) {
+        let result = (pendingEventCount, includesHardwareChange)
         pendingEventCount = 0
-        return count
+        includesHardwareChange = false
+        return result
     }
 
     mutating func reset() {
         pendingEventCount = 0
+        includesHardwareChange = false
     }
 }
 
@@ -2162,7 +2168,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 )
                 return
             }
-            self.audioRecoveryCoalescingState.recordEvent()
+            self.audioRecoveryCoalescingState.recordEvent(reason: reason)
             self.audioRecoveryGeneration &+= 1
             let generation = self.audioRecoveryGeneration
             self.audioRecoveryWorkItem?.cancel()
@@ -2171,8 +2177,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                       self.started,
                       self.audioRecoveryGeneration == generation
                 else { return }
-                let coalescedEvents = self.audioRecoveryCoalescingState.consumePendingEventCount()
-                if reason == "engine_configuration_change" {
+                let coalesced = self.audioRecoveryCoalescingState.consumePendingEvents()
+                let effectiveReason = coalesced.includesHardwareChange
+                    ? "hardware_change"
+                    : reason
+                if reason == "engine_configuration_change" && !coalesced.includesHardwareChange {
                     let snapshot = self.audioOutput.diagnosticSnapshot()
                     let configurationHealthy = snapshot.engineRunning &&
                         snapshot.playerPlaying &&
@@ -2188,7 +2197,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                             : "still_bound_idle"
                         AppLogger.shared.write(
                             "AUDIO RECOVERY ignored id=\(generation) reason=engine_configuration_change " +
-                                "decision=\(ignoredReason) coalesced_events=\(coalescedEvents) " +
+                                "decision=\(ignoredReason) coalesced_events=\(coalesced.count) " +
                                 "active_audio=\(self.hasActiveVirtualAudioSource) " +
                                 "pending_buffers=\(snapshot.pendingBuffers) " +
                                 "state={\(self.audioOutput.diagnosticState())}"
@@ -2198,14 +2207,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     }
                 }
                 AppLogger.shared.write(
-                    "AUDIO RECOVERY begin id=\(generation) reason=\(reason) detail=\(details) " +
-                        "coalesced_events=\(coalescedEvents) " +
+                    "AUDIO RECOVERY begin id=\(generation) reason=\(effectiveReason) detail=\(details) " +
+                        "coalesced_events=\(coalesced.count) " +
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.refreshAudioDevices()
-                self.applyAudioSettings(reason: "recovery_\(reason)")
+                self.applyAudioSettings(reason: "recovery_\(effectiveReason)")
                 AppLogger.shared.write(
-                    "AUDIO RECOVERY completed id=\(generation) reason=\(reason) " +
+                    "AUDIO RECOVERY completed id=\(generation) reason=\(effectiveReason) " +
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.audioRecoveryWorkItem = nil

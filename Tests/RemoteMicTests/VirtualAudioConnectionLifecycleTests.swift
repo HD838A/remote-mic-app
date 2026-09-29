@@ -235,15 +235,22 @@ struct VirtualAudioConnectionLifecycleTests {
     @Test func recoveryEventsAreCountedUntilTheDebouncedExecutionConsumesThem() {
         var state = AudioRecoveryCoalescingState()
 
-        state.recordEvent()
-        state.recordEvent()
-        state.recordEvent()
+        state.recordEvent(reason: "engine_configuration_change")
+        state.recordEvent(reason: "engine_configuration_change")
+        state.recordEvent(reason: "engine_configuration_change")
 
-        #expect(state.consumePendingEventCount() == 3)
-        #expect(state.consumePendingEventCount() == 0)
-        state.recordEvent()
+        let first = state.consumePendingEvents()
+        #expect(first.count == 3)
+        #expect(!first.includesHardwareChange)
+        #expect(state.consumePendingEvents().count == 0)
+        state.recordEvent(reason: "hardware_change")
+        state.recordEvent(reason: "engine_configuration_change")
+        let mixed = state.consumePendingEvents()
+        #expect(mixed.count == 2)
+        #expect(mixed.includesHardwareChange)
         state.reset()
-        #expect(state.consumePendingEventCount() == 0)
+        #expect(state.consumePendingEvents().count == 0)
+        #expect(!state.consumePendingEvents().includesHardwareChange)
     }
 
     @Test func releaseRequiresResourcesOrPendingBuffersAndNoExistingRelease() {

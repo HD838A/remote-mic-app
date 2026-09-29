@@ -3,7 +3,7 @@
 ## 适用范围
 
 - 目标分支：包含 `Bugs/2026-09-05-idle-audio-rebind-loop.md` 修复的分支
-- 覆盖改动：`AVAudioEngineConfigurationChange` 去抖后区分空闲自造变化与真实恢复需求；活跃语音、待播尾包、解绑和未知状态仍保留恢复
+- 覆盖改动：`AVAudioEngineConfigurationChange` 去抖后区分空闲自造变化与真实恢复需求；活跃语音、待播尾包、解绑和未知状态仍保留恢复；同一去抖窗口内真实硬件变化优先于后到的引擎通知
 - 缺陷记录：[`Bugs/2026-09-05-idle-audio-rebind-loop.md`](../Bugs/2026-09-05-idle-audio-rebind-loop.md)
 
 ## 测试前准备
@@ -44,6 +44,8 @@ grep "AUDIO RECOVERY begin" ~/Library/Logs/RemoteMic/runtime.log | cut -c1-16 | 
 
 失败判定：设备变化后 App 不再恢复，音频停留在错误设备上；或语音播放中断且不恢复。
 
+如果日志同时出现 `hardware_change` 和 `engine_configuration_change`，预期最终执行记录仍应使用 `reason=hardware_change`，不能只出现 `decision=still_bound_idle` 后结束。
+
 ### AC-03 语音播放中不受影响
 
 1. 按住语音键，说一段较长的话（10 秒以上）。
@@ -71,7 +73,7 @@ grep -c "AUDIO RECOVERY begin" ~/Desktop/ac-runtime.log
 
 ## 验证边界
 
-- 已完成（自动化）：`Tests/RemoteMicTests/AudioConfigurationChangeRecoveryTests.swift` 七项，覆盖空闲循环、活跃语音、待播尾包、健康输出、解绑和未知状态；`swift test` 全量、`scripts/test.sh`、边界检查。
+- 已完成（自动化）：策略测试覆盖空闲循环、活跃语音、待播尾包、健康输出、解绑、未知状态，以及硬件变化与引擎通知混合时硬件事件优先；`swift test` 全量、`scripts/test.sh`、边界检查。
 - 参考（同形态代码的代理真机观测）：AC-01，同机对比修复前 48 次/分钟 → 修复后 0 次/3 分钟；本次上游版本尚未复测。
 - **未完成（须用户实测）**：AC-02 真实拔插、AC-03 语音播放中、AC-04 长时间运行。其中 AC-02 是本次改动的主要回归风险——代理只观测了稳态空闲，没有做任何真实设备变化。
 - 无法由代理执行：AC-02 至 AC-04 都需要真实音频设备操作与长时间真实使用。
