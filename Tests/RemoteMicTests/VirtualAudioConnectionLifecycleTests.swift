@@ -302,6 +302,58 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(outcome == .normal)
     }
 
+    @Test func drainLogsCorrelateRequestWithOneForcedTerminalOutcome() {
+        var logs: [String] = []
+        var uptime: TimeInterval = 10
+        let output = VirtualAudioOutput(
+            logger: { logs.append($0) },
+            uptime: { uptime }
+        )
+        output.registerPendingVoiceBuffer()
+
+        output.endSessionAfterDraining(
+            source: "voice_fn_tap",
+            operationID: 42,
+            maximumDelay: 60
+        ) { _ in }
+        uptime = 10.25
+        output.stop()
+
+        #expect(logs.contains { $0.contains(
+            "AUDIO DRAIN operation_id=42 source=voice_fn_tap phase=requested result=pending"
+        ) })
+        let terminalLogs = logs.filter {
+            $0.contains("AUDIO DRAIN operation_id=42 source=voice_fn_tap phase=completed")
+        }
+        #expect(terminalLogs.count == 1)
+        #expect(terminalLogs.first?.contains("result=forced reason=output_stop") == true)
+        #expect(terminalLogs.first?.contains("elapsed_ms=250") == true)
+        #expect(terminalLogs.first?.contains("interrupted_buffers=1") == true)
+    }
+
+    @Test func cancellingDrainLogsOneExplicitCancelledTerminalOutcome() {
+        var logs: [String] = []
+        let output = VirtualAudioOutput(logger: { logs.append($0) })
+        output.registerPendingVoiceBuffer()
+
+        output.endSessionAfterDraining(
+            source: "audio_release",
+            operationID: 7,
+            maximumDelay: 60
+        ) { _ in }
+        output.cancelPendingDrain()
+        output.stop()
+
+        let terminalLogs = logs.filter {
+            $0.contains("AUDIO DRAIN operation_id=7 source=audio_release") &&
+                ($0.contains("phase=completed") || $0.contains("phase=cancelled"))
+        }
+        #expect(terminalLogs.count == 1)
+        #expect(terminalLogs.first?.contains(
+            "phase=cancelled result=cancelled reason=explicit_cancel"
+        ) == true)
+    }
+
     @Test func normalDrainPathsDoNotFlushThePlayer() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

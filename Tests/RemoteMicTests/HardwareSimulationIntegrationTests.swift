@@ -126,7 +126,7 @@ struct HardwareSimulationIntegrationTests {
                 return true
             },
             enqueueAudio: { queuedSamples.append(contentsOf: $0) },
-            drainAudio: { drainCompletions.append($0) },
+            drainAudio: { _, completion in drainCompletions.append(completion) },
             onFailure: { Issue.record("Fn tap unexpectedly failed: \($0.rawValue)") }
         )
         controller.setEnabled(true)

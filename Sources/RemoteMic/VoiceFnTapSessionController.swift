@@ -43,7 +43,7 @@ final class VoiceFnTapSessionController {
     typealias Scheduler = (TimeInterval, @escaping () -> Void) -> VoiceFnTapScheduledTask
     typealias FunctionKeySetter = (Bool) -> Bool
     typealias AudioEnqueuer = ([Int16]) -> Void
-    typealias AudioDrainer = (@escaping () -> Void) -> Void
+    typealias AudioDrainer = (UInt64, @escaping () -> Void) -> Void
     typealias DestinationReadiness = (
         @escaping (VoiceInputDestinationWaitResult) -> Void
     ) -> VoiceInputDestinationWait
@@ -66,6 +66,8 @@ final class VoiceFnTapSessionController {
     private let enqueueAudio: AudioEnqueuer
     private let drainAudio: AudioDrainer
     private let onFailure: (VoiceFnTapFailure) -> Void
+    private let logger: (String) -> Void
+    private let uptime: () -> TimeInterval
 
     private(set) var phase: Phase = .idle
     private(set) var isEnabled = false
@@ -78,6 +80,8 @@ final class VoiceFnTapSessionController {
     private var functionKeyIsPressed = false
     private var idleCompletions: [() -> Void] = []
     private var suppressAudioUntilRemoteStop = false
+    private var drainOperationID: UInt64?
+    private var drainStartedAtUptime: TimeInterval?
 
     var requiresCleanupBeforeMapping: Bool {
         phase != .idle || functionKeyIsPressed || suppressAudioUntilRemoteStop
@@ -92,7 +96,9 @@ final class VoiceFnTapSessionController {
         setFunctionKeyPressed: @escaping FunctionKeySetter,
         enqueueAudio: @escaping AudioEnqueuer,
         drainAudio: @escaping AudioDrainer,
-        onFailure: @escaping (VoiceFnTapFailure) -> Void
+        onFailure: @escaping (VoiceFnTapFailure) -> Void,
+        logger: @escaping (String) -> Void = { _ in },
+        uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
         self.startDelay = startDelay
         self.tapDuration = tapDuration
@@ -103,6 +109,8 @@ final class VoiceFnTapSessionController {
         self.enqueueAudio = enqueueAudio
         self.drainAudio = drainAudio
         self.onFailure = onFailure
+        self.logger = logger
+        self.uptime = uptime
     }
 
     func setEnabled(_ enabled: Bool, completion: (() -> Void)? = nil) {
@@ -218,6 +226,7 @@ final class VoiceFnTapSessionController {
         if needsStopTap, !postImmediateFunctionKeyTap() {
             onFailure(.stopTapFailed)
         }
+        logDrainTerminalIfNeeded(result: "cancelled", reason: "shutdown")
         resetSessionState()
         runIdleCompletions()
     }
@@ -301,6 +310,12 @@ final class VoiceFnTapSessionController {
         default:
             return
         }
+        drainOperationID = sessionGeneration
+        drainStartedAtUptime = uptime()
+        logger(
+            "VOICE FN TAP drain operation_id=\(sessionGeneration) " +
+                "phase=requested result=pending timeout_ms=\(Int(drainTimeout * 1_000))"
+        )
         // Safety net for a drain answer that never arrives at all: the audio side's own
         // fallback holds its output weakly, so a released output reports nothing and this
         // session would sit in `.draining` refusing every later voice press. Armed before
@@ -308,11 +323,26 @@ final class VoiceFnTapSessionController {
         // funnelled through the generation-guarded `beginStopTap` so a late fire cannot
         // touch a healthy later session.
         scheduledTasks.append(schedule(drainTimeout) { [weak self] in
-            self?.beginStopTap(generation: sessionGeneration)
+            self?.resolveDrain(generation: sessionGeneration, result: "timed_out")
         })
-        drainAudio { [weak self] in
-            self?.beginStopTap(generation: sessionGeneration)
+        drainAudio(sessionGeneration) { [weak self] in
+            self?.resolveDrain(generation: sessionGeneration, result: "answered")
         }
+    }
+
+    private func resolveDrain(generation sessionGeneration: UInt64, result: String) {
+        guard phase == .draining(sessionGeneration), generation == sessionGeneration else {
+            logger(
+                "VOICE FN TAP drain operation_id=\(sessionGeneration) " +
+                    "phase=ignored result=stale trigger=\(result)"
+            )
+            return
+        }
+        logger(
+            "VOICE FN TAP drain operation_id=\(sessionGeneration) " +
+                "phase=resolved result=\(result) elapsed_ms=\(drainElapsedMilliseconds())"
+        )
+        beginStopTap(generation: sessionGeneration)
     }
 
     private func beginStopTap(generation sessionGeneration: UInt64) {
@@ -327,6 +357,7 @@ final class VoiceFnTapSessionController {
                 self.fail(.stopTapFailed)
                 return
             }
+            self.logDrainTerminalIfNeeded(result: "session_closed", reason: "stop_tap_completed")
             self.finishSession()
         }
     }
@@ -397,6 +428,7 @@ final class VoiceFnTapSessionController {
         generation &+= 1
         cancelScheduledTasks()
         releaseFunctionKeyIfNeeded()
+        logDrainTerminalIfNeeded(result: "failed", reason: failure.rawValue)
         resetSessionState()
         runIdleCompletions()
         onFailure(failure)
@@ -406,6 +438,8 @@ final class VoiceFnTapSessionController {
         phase = .idle
         preRoll.removeAll(keepingCapacity: false)
         remoteEnded = false
+        drainOperationID = nil
+        drainStartedAtUptime = nil
         cancelScheduledTasks()
         releaseFunctionKeyIfNeeded()
     }
@@ -427,6 +461,20 @@ final class VoiceFnTapSessionController {
         let down = setFunctionKeyPressed(true)
         let up = setFunctionKeyPressed(false)
         return down && up
+    }
+
+    private func logDrainTerminalIfNeeded(result: String, reason: String) {
+        guard let drainOperationID, drainStartedAtUptime != nil else { return }
+        logger(
+            "VOICE FN TAP drain operation_id=\(drainOperationID) " +
+                "phase=completed result=\(result) reason=\(reason) " +
+                "elapsed_ms=\(drainElapsedMilliseconds())"
+        )
+    }
+
+    private func drainElapsedMilliseconds() -> Int {
+        guard let drainStartedAtUptime else { return 0 }
+        return max(0, Int((uptime() - drainStartedAtUptime) * 1_000))
     }
 
     private func appendPreRoll(_ samples: [Int16], toPendingVoice: Bool) {

@@ -85,6 +85,31 @@ struct VoiceFnTapSessionControllerTests {
         #expect(harness.functionKeyEvents == [true, false, true, false, true, false])
     }
 
+    @Test func drainDeadlineAndLateAnswerAreBothObservableWithoutDoubleClosing() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        let lateAnswer = harness.drainCompletions.removeFirst()
+
+        harness.scheduler.advance(by: 2)
+        harness.scheduler.advance(by: 0.12)
+        lateAnswer()
+
+        #expect(harness.logs.contains { $0.contains(
+            "VOICE FN TAP drain operation_id=1 phase=requested result=pending timeout_ms=2000"
+        ) })
+        #expect(harness.logs.contains { $0.contains(
+            "VOICE FN TAP drain operation_id=1 phase=resolved result=timed_out"
+        ) })
+        #expect(harness.logs.filter { $0.contains(
+            "VOICE FN TAP drain operation_id=1 phase=completed result=session_closed"
+        ) }.count == 1)
+        #expect(harness.logs.contains { $0.contains(
+            "VOICE FN TAP drain operation_id=1 phase=ignored result=stale trigger=answered"
+        ) })
+    }
+
     @Test func buffersPreRollAndStopsOnlyAfterDrain() {
         let harness = Harness()
         harness.controller.setEnabled(true)
@@ -206,6 +231,7 @@ private final class Harness {
     var enqueuedAudio: [[Int16]] = []
     var drainCompletions: [() -> Void] = []
     var failures: [VoiceFnTapFailure] = []
+    var logs: [String] = []
     lazy var controller = VoiceFnTapSessionController(
         schedule: scheduler.schedule,
         setFunctionKeyPressed: { [unowned self] pressed in
@@ -215,12 +241,14 @@ private final class Harness {
         enqueueAudio: { [unowned self] samples in
             enqueuedAudio.append(samples)
         },
-        drainAudio: { [unowned self] completion in
+        drainAudio: { [unowned self] _, completion in
             drainCompletions.append(completion)
         },
         onFailure: { [unowned self] failure in
             failures.append(failure)
-        }
+        },
+        logger: { [unowned self] message in logs.append(message) },
+        uptime: { [unowned self] in scheduler.currentTime }
     )
 
     init(functionKeyResults: [Bool] = []) {
@@ -246,7 +274,7 @@ private final class ManualScheduler {
         let operation: () -> Void
     }
 
-    private var currentTime: TimeInterval = 0
+    private(set) var currentTime: TimeInterval = 0
     private var nextID = 0
     private var entries: [Entry] = []
     private var cancelledIDs = Set<Int>()

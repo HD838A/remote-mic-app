@@ -754,6 +754,13 @@ final class VirtualAudioOutput {
         var samples = 0
     }
 
+    private struct DrainRequest {
+        let source: String
+        let operationID: UInt64
+        let startedAtUptime: TimeInterval
+        let completion: (VirtualAudioDrainOutcome) -> Void
+    }
+
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
     private var engineConfigurationObserver: NSObjectProtocol?
@@ -768,8 +775,11 @@ final class VirtualAudioOutput {
     private var playbackCountersByDeliveryGeneration: [Int: VirtualAudioPlaybackCounters] = [:]
     private var pendingByDeliveryGeneration: [Int: PendingDeliveryCounters] = [:]
     private var pendingDrainLogContexts: [String] = []
-    private var drainCompletions: [(VirtualAudioDrainOutcome) -> Void] = []
+    private var drainRequests: [DrainRequest] = []
     private var drainGeneration: UInt64 = 0
+    private var nextDrainOperationID: UInt64 = 0
+    private let logger: (String) -> Void
+    private let uptime: () -> TimeInterval
     private let sourceFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
@@ -780,6 +790,14 @@ final class VirtualAudioOutput {
     private(set) var selectedDevice: AudioDeviceInfo?
     private(set) var status = LocalizedMessage("audio.output.none_selected")
     var onConfigurationChange: (() -> Void)?
+
+    init(
+        logger: @escaping (String) -> Void = { AppLogger.shared.write($0) },
+        uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) {
+        self.logger = logger
+        self.uptime = uptime
+    }
 
     /// Counts one buffer as queued for playback. Together with
     /// `scheduledVoiceBufferDidFinish` this drives the pending-buffer count that
@@ -1013,43 +1031,76 @@ final class VirtualAudioOutput {
     }
 
     func endSessionAfterDraining(
+        source: String = "unspecified",
+        operationID: UInt64? = nil,
         maximumDelay: TimeInterval? = 0.75,
         completion: @escaping () -> Void
     ) {
-        endSessionAfterDraining(maximumDelay: maximumDelay) { _ in
+        endSessionAfterDraining(
+            source: source,
+            operationID: operationID,
+            maximumDelay: maximumDelay
+        ) { _ in
             completion()
         }
     }
 
     func endSessionAfterDraining(
+        source: String = "unspecified",
+        operationID: UInt64? = nil,
         maximumDelay: TimeInterval? = 0.75,
         completion: @escaping (VirtualAudioDrainOutcome) -> Void
     ) {
         playbackLock.lock()
+        nextDrainOperationID &+= 1
+        let resolvedOperationID = operationID ?? nextDrainOperationID
+        let request = DrainRequest(
+            source: source,
+            operationID: resolvedOperationID,
+            startedAtUptime: uptime(),
+            completion: completion
+        )
         let shouldCompleteImmediately = pendingVoiceBufferCount == 0
-        let wasWaiting = !drainCompletions.isEmpty
+        let wasWaiting = !drainRequests.isEmpty
+        let pendingBuffers = pendingVoiceBufferCount
+        let pendingSamples = pendingVoiceSampleCount
         let generation: UInt64?
         if shouldCompleteImmediately {
             // A completion already waiting for the main queue owns the zero-pending transition.
             // Append to it instead of flushing a newly queued session or invoking early.
-            drainCompletions.append(completion)
+            drainRequests.append(request)
             generation = nil
         } else {
             if !wasWaiting {
                 drainGeneration &+= 1
             }
-            drainCompletions.append(completion)
+            drainRequests.append(request)
             generation = drainGeneration
         }
         playbackLock.unlock()
 
+        logger(
+            "AUDIO DRAIN operation_id=\(resolvedOperationID) source=\(source) " +
+                "phase=requested result=pending pending_buffers=\(pendingBuffers) " +
+                "pending_samples=\(pendingSamples) timeout_ms=\(Self.milliseconds(maximumDelay)) " +
+                "joined_existing=\(wasWaiting)"
+        )
+
         if shouldCompleteImmediately && !wasWaiting {
             playbackLock.lock()
-            let completions = drainCompletions
-            drainCompletions.removeAll(keepingCapacity: true)
+            let requests = drainRequests
+            drainRequests.removeAll(keepingCapacity: true)
             drainGeneration &+= 1
             playbackLock.unlock()
-            completions.forEach { $0(.normal) }
+            completeDrainRequests(
+                requests,
+                outcome: .normal,
+                phase: "completed",
+                result: "normal",
+                reason: "no_pending",
+                pendingBuffers: 0,
+                pendingSamples: 0
+            )
             return
         }
         if let maximumDelay, let generation {
@@ -1061,9 +1112,20 @@ final class VirtualAudioOutput {
 
     func cancelPendingDrain() {
         playbackLock.lock()
-        drainCompletions.removeAll(keepingCapacity: true)
+        let cancelledRequests = drainRequests
+        let pendingBuffers = pendingVoiceBufferCount
+        let pendingSamples = pendingVoiceSampleCount
+        drainRequests.removeAll(keepingCapacity: true)
         drainGeneration &+= 1
         playbackLock.unlock()
+        logDrainRequests(
+            cancelledRequests,
+            phase: "cancelled",
+            result: "cancelled",
+            reason: "explicit_cancel",
+            pendingBuffers: pendingBuffers,
+            pendingSamples: pendingSamples
+        )
     }
 
     func logWhenPendingVoiceAudioDrains(context: String) {
@@ -1081,6 +1143,8 @@ final class VirtualAudioOutput {
     private func flushPlayer() {
         playbackLock.lock()
         let interruptedContexts = pendingVoiceBufferCount > 0 ? pendingDrainLogContexts : []
+        let interruptedBuffers = pendingVoiceBufferCount
+        let interruptedSamples = pendingVoiceSampleCount
         playbackCounters.interruptedBuffers += pendingVoiceBufferCount
         playbackCounters.interruptedSamples += pendingVoiceSampleCount
         recordPendingDeliveriesAsInterrupted()
@@ -1094,14 +1158,26 @@ final class VirtualAudioOutput {
         // it here strands the caller on a drain that can never report back, because the
         // fallback timer armed by `endSessionAfterDraining` is invalidated by the
         // generation bump below.
-        let interruptedDrains = drainCompletions
-        drainCompletions.removeAll(keepingCapacity: true)
+        let interruptedDrains = drainRequests
+        drainRequests.removeAll(keepingCapacity: true)
         drainGeneration &+= 1
         playbackLock.unlock()
         for context in interruptedContexts {
             AppLogger.shared.write("AUDIO PLAYBACK interrupted \(context)")
         }
-        defer { interruptedDrains.forEach { $0(.forced) } }
+        defer {
+            completeDrainRequests(
+                interruptedDrains,
+                outcome: .forced,
+                phase: "completed",
+                result: "forced",
+                reason: "player_flush",
+                pendingBuffers: 0,
+                pendingSamples: 0,
+                interruptedBuffers: interruptedBuffers,
+                interruptedSamples: interruptedSamples
+            )
+        }
         guard let player, engine?.isRunning == true else { return }
         player.stop()
         player.reset()
@@ -1116,6 +1192,8 @@ final class VirtualAudioOutput {
     func stop() {
         playbackLock.lock()
         let interruptedContexts = pendingVoiceBufferCount > 0 ? pendingDrainLogContexts : []
+        let interruptedBuffers = pendingVoiceBufferCount
+        let interruptedSamples = pendingVoiceSampleCount
         playbackCounters.interruptedBuffers += pendingVoiceBufferCount
         playbackCounters.interruptedSamples += pendingVoiceSampleCount
         recordPendingDeliveriesAsInterrupted()
@@ -1126,14 +1204,26 @@ final class VirtualAudioOutput {
         // Same contract as flushPlayer: stopping answers the drain waiter exactly
         // once, after the teardown below, instead of dropping it with the
         // generation bump.
-        let interruptedDrains = drainCompletions
-        drainCompletions.removeAll(keepingCapacity: true)
+        let interruptedDrains = drainRequests
+        drainRequests.removeAll(keepingCapacity: true)
         drainGeneration &+= 1
         playbackLock.unlock()
         for context in interruptedContexts {
             AppLogger.shared.write("AUDIO PLAYBACK interrupted \(context)")
         }
-        defer { interruptedDrains.forEach { $0(.forced) } }
+        defer {
+            completeDrainRequests(
+                interruptedDrains,
+                outcome: .forced,
+                phase: "completed",
+                result: "forced",
+                reason: "output_stop",
+                pendingBuffers: 0,
+                pendingSamples: 0,
+                interruptedBuffers: interruptedBuffers,
+                interruptedSamples: interruptedSamples
+            )
+        }
         removeEngineConfigurationObserver()
         player?.stop()
         engine?.stop()
@@ -1172,7 +1262,7 @@ final class VirtualAudioOutput {
         if pendingVoiceBufferCount == 0 {
             drainedContexts = pendingDrainLogContexts
             pendingDrainLogContexts.removeAll()
-            if !drainCompletions.isEmpty {
+            if !drainRequests.isEmpty {
                 completionGeneration = drainGeneration
             }
         }
@@ -1193,28 +1283,100 @@ final class VirtualAudioOutput {
     ) {
         playbackLock.lock()
         let shouldFinish = generation == drainGeneration && pendingVoiceBufferCount == 0
-        let completions = shouldFinish ? drainCompletions : []
+        let requests = shouldFinish ? drainRequests : []
         if shouldFinish {
-            drainCompletions.removeAll(keepingCapacity: true)
+            drainRequests.removeAll(keepingCapacity: true)
             drainGeneration &+= 1
         }
         playbackLock.unlock()
         guard shouldFinish else { return }
-        completions.forEach { $0(.normal) }
+        completeDrainRequests(
+            requests,
+            outcome: .normal,
+            phase: "completed",
+            result: "normal",
+            reason: "buffers_drained",
+            pendingBuffers: 0,
+            pendingSamples: 0
+        )
     }
 
     private func finishDrainIfNeeded(generation: UInt64) {
         playbackLock.lock()
-        let shouldFinish = generation == drainGeneration && !drainCompletions.isEmpty
-        let completions = shouldFinish ? drainCompletions : []
+        let shouldFinish = generation == drainGeneration && !drainRequests.isEmpty
+        let requests = shouldFinish ? drainRequests : []
+        let pendingBuffers = pendingVoiceBufferCount
+        let pendingSamples = pendingVoiceSampleCount
         if shouldFinish {
-            drainCompletions.removeAll(keepingCapacity: true)
+            drainRequests.removeAll(keepingCapacity: true)
             drainGeneration &+= 1
         }
         playbackLock.unlock()
         guard shouldFinish else { return }
         flushPlayer()
-        completions.forEach { $0(.forced) }
+        completeDrainRequests(
+            requests,
+            outcome: .forced,
+            phase: "completed",
+            result: "forced",
+            reason: "deadline",
+            pendingBuffers: 0,
+            pendingSamples: 0,
+            interruptedBuffers: pendingBuffers,
+            interruptedSamples: pendingSamples
+        )
+    }
+
+    private func completeDrainRequests(
+        _ requests: [DrainRequest],
+        outcome: VirtualAudioDrainOutcome,
+        phase: String,
+        result: String,
+        reason: String,
+        pendingBuffers: Int,
+        pendingSamples: Int,
+        interruptedBuffers: Int = 0,
+        interruptedSamples: Int = 0
+    ) {
+        logDrainRequests(
+            requests,
+            phase: phase,
+            result: result,
+            reason: reason,
+            pendingBuffers: pendingBuffers,
+            pendingSamples: pendingSamples,
+            interruptedBuffers: interruptedBuffers,
+            interruptedSamples: interruptedSamples
+        )
+        requests.forEach { $0.completion(outcome) }
+    }
+
+    private func logDrainRequests(
+        _ requests: [DrainRequest],
+        phase: String,
+        result: String,
+        reason: String,
+        pendingBuffers: Int,
+        pendingSamples: Int,
+        interruptedBuffers: Int = 0,
+        interruptedSamples: Int = 0
+    ) {
+        let now = uptime()
+        for request in requests {
+            let elapsedMilliseconds = max(0, Int((now - request.startedAtUptime) * 1_000))
+            logger(
+                "AUDIO DRAIN operation_id=\(request.operationID) source=\(request.source) " +
+                    "phase=\(phase) result=\(result) reason=\(reason) " +
+                    "elapsed_ms=\(elapsedMilliseconds) pending_buffers=\(pendingBuffers) " +
+                    "pending_samples=\(pendingSamples) interrupted_buffers=\(interruptedBuffers) " +
+                    "interrupted_samples=\(interruptedSamples)"
+            )
+        }
+    }
+
+    private static func milliseconds(_ interval: TimeInterval?) -> Int {
+        guard let interval else { return -1 }
+        return max(0, Int(interval * 1_000))
     }
 
     private func observeConfigurationChanges(for engine: AVAudioEngine) {

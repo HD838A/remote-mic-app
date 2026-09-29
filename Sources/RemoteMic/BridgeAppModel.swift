@@ -562,21 +562,26 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         enqueueAudio: { [weak self] samples in
             self?.enqueueVoiceFnTapAudio(samples)
         },
-        drainAudio: { [weak self] completion in
+        drainAudio: { [weak self] operationID, completion in
             guard let self else {
                 completion()
                 return
             }
-            self.audioOutput.endSessionAfterDraining { outcome in
+            self.audioOutput.endSessionAfterDraining(
+                source: "voice_fn_tap",
+                operationID: operationID
+            ) { outcome in
                 AppLogger.shared.write(
-                    "VOICE FN TAP playback_stop phase=completed completion=\(outcome.rawValue)"
+                    "VOICE FN TAP playback_stop operation_id=\(operationID) " +
+                        "phase=completed result=\(outcome.rawValue)"
                 )
                 completion()
             }
         },
         onFailure: { [weak self] failure in
             self?.handleVoiceFnTapFailure(failure)
-        }
+        },
+        logger: { AppLogger.shared.write($0) }
     )
     private lazy var transcriptCaptureCoordinator = TranscriptCaptureCoordinator(
         isEnabled: { [weak self] in
@@ -4337,7 +4342,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                   self.appleRemoteVoiceStopping,
                   self.appleRemoteVoiceStopOperation == stopOperation
             else { return }
-            self.audioOutput.endSessionAfterDraining(maximumDelay: nil) { [weak self] outcome in
+            self.audioOutput.endSessionAfterDraining(
+                source: "apple_remote",
+                operationID: stopOperation,
+                maximumDelay: nil
+            ) { [weak self] outcome in
                 self?.completeAppleRemoteVoiceStop(
                     operation: stopOperation,
                     deliveryGeneration: deliveryGeneration,
@@ -5856,7 +5865,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         case let .begin(stopGeneration):
             logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
-            audioOutput.endSessionAfterDraining { [weak self] outcome in
+            audioOutput.endSessionAfterDraining(
+                source: source.logName,
+                operationID: stopGeneration
+            ) { [weak self] outcome in
                 guard let self else { return }
                 AppLogger.shared.write(
                     "MOBILE VOICE playback_stop phase=completed source=\(source.logName) " +
@@ -6007,7 +6019,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "pending_buffers=\(pendingVoiceBufferCount) " +
                 "state={\(audioOutput.diagnosticState())}"
         )
-        audioOutput.endSessionAfterDraining { [weak self] outcome in
+        audioOutput.endSessionAfterDraining(
+            source: "audio_release",
+            operationID: generation
+        ) { [weak self] outcome in
             guard let self else { return }
             guard self.virtualAudioReleaseGeneration == generation else {
                 return
@@ -6899,7 +6914,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "pending_samples=\(outputBeforeStop.pendingSamples)"
         )
         // 尾包已经在 MIC_CLOSE 之前全部投递完毕，因此这里只做自然排空，绝不 flush。
-        audioOutput.endSessionAfterDraining(maximumDelay: nil) { [weak self] outcome in
+        audioOutput.endSessionAfterDraining(
+            source: "chromecast",
+            operationID: stopOperation,
+            maximumDelay: nil
+        ) { [weak self] outcome in
             self?.completeChromecastVoiceStop(
                 operation: stopOperation,
                 deliveryGeneration: deliveryGeneration,

@@ -55,6 +55,13 @@
 - 到期后的收尾与正常路径完全同路，下一次按键可被接受；
 - 2 秒明显高于音频侧 0.75 秒兜底，健康会话永远由 `drainAudio` 先离开 `.draining`。
 
+**验证日志——请求、异步等待与唯一终态可关联**
+
+- 每个排空请求记录 `AUDIO DRAIN operation_id=… source=… phase=requested result=pending`，并带上初始 `pending_buffers`、`pending_samples`、`timeout_ms` 与是否加入既有排空窗口。
+- 相同 `source + operation_id` 只记录一个 `completed` 或 `cancelled` 终态。稳定原因枚举区分 `no_pending`、`buffers_drained`、`deadline`、`player_flush`、`output_stop` 与 `explicit_cancel`，并记录 `elapsed_ms` 和中断缓冲/样本数。
+- Fn 点按控制器复用会话 generation 作为短生命周期 `operation_id`，额外记录排空回答、2 秒兜底、最终收尾以及迟到回答被忽略。这样可以从日志判断“音频排空已回答”与“Fn 会话真正退出 draining”是否都发生，而不会把回调入队误记成用户功能已恢复。
+- 日志不记录语音内容、设备 UUID、用户路径或第三方 App 私有状态。
+
 **`Tests/SelfTest/main.swift`——假调度器适配（不改断言）**
 
 该自测的假调度器取消动作是空实现，被取消的截止任务仍留在队列里。`.draining` 多挂一个截止任务后，原本「取一个操作」不足以取到收尾按键释放。改为执行队列里全部操作（截止任务因阶段守卫为空操作）。`check(...)` 的条件与数量一字未改。
@@ -73,6 +80,8 @@
   5. `interruptedDrainReportsForcedOutcome` —— 输出被停止时报告 `forced`，而不是伪装成正常排空；
   6. `aDrainAnswerThatNeverArrivesStillClosesTheSessionAndAcceptsTheNextPress` —— 排空回答永远不到达时，截止时间让会话收尾并**接受下一次按键**；
   7. `aTimelyDrainCancelsTheDeadlineBeforeItCanCutTheNextSession` —— 正常排空后截止时间不得影响后续健康会话。
+  8. `drainLogsCorrelateRequestWithOneForcedTerminalOutcome` / `cancellingDrainLogsOneExplicitCancelledTerminalOutcome` —— 同一操作只有一个可归因终态，耗时与被中断计数可用于现场验证；
+  9. `drainDeadlineAndLateAnswerAreBothObservableWithoutDoubleClosing` —— 2 秒兜底、最终收尾与迟到回答分别可观察，且不会重复关闭会话。
 - `scripts/test.sh` 自检测试通过（check 数量不变）；
 - `scripts/check-repository-boundaries.sh` 通过。
 

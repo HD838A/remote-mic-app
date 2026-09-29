@@ -100,13 +100,15 @@
 
 1. 复制 `~/Library/Logs/RemoteMic/runtime.log`。
 2. 标注用例编号、遥控器型号、目标 APP、前后台状态、打断动作类型、开始/结束时间。
-3. 重点搜索：`ATVV STREAM summary`、`AUDIO PLAYBACK drained`、`AUDIO PLAYBACK interrupted`、`AUDIO ENGINE configuration_changed`、`AUDIO ERROR player_restart_exception`、`AUDIO RELEASE completed`、`AUDIO REBIND`。
-4. 判读要点：`AUDIO PLAYBACK interrupted` **只说明打断被记录**，不说明会话已经正常收尾。必须同时确认打断之后的下一次语音键真的产生了新的 Fn 配对和文字，才能判定通过。
-5. 不需要提交用户语音内容。
+3. 重点搜索：`ATVV STREAM summary`、`AUDIO DRAIN`、`VOICE FN TAP drain`、`AUDIO PLAYBACK drained`、`AUDIO PLAYBACK interrupted`、`AUDIO ENGINE configuration_changed`、`AUDIO ERROR player_restart_exception`、`AUDIO RELEASE completed`、`AUDIO REBIND`。
+4. 每条 `AUDIO DRAIN phase=requested` 必须按相同的 `source` 与 `operation_id` 找到且只找到一个终态：`phase=completed` 或 `phase=cancelled`。`reason=no_pending|buffers_drained` 表示正常完成；`reason=deadline|player_flush|output_stop` 表示强制结束；`reason=explicit_cancel` 表示请求被明确取消。用 `elapsed_ms`、`pending_buffers`、`pending_samples`、`interrupted_buffers` 和 `interrupted_samples` 判断等待时间与被中断规模。
+5. Fn 点按路径还必须按相同 `operation_id` 检查 `VOICE FN TAP drain`：正常回调为 `phase=resolved result=answered`，2 秒兜底为 `result=timed_out`，最终必须有且只有一条 `phase=completed result=session_closed` 或明确的 `failed/cancelled`。兜底后迟到的音频回调会记录 `phase=ignored result=stale`，不能再产生第二条完成终态。
+6. `AUDIO PLAYBACK interrupted` **只说明打断被记录**，不说明会话已经正常收尾。必须同时确认排空请求有唯一终态，并在真机测试中确认打断之后的下一次语音键真的产生了新的 Fn 配对和文字，才能判定通过。
+7. 日志只包含短生命周期操作编号、计数和稳定枚举，不包含语音内容、设备身份或文件路径；不需要提交用户语音内容。
 
 ## 验证边界
 
-- **自动化已验证**：`VirtualAudioOutput` 的排空回调在被 `flushPlayer()` / `stop()` 打断、被多个排空请求共同等待、以及回调内部再次 `stop()` 时都恰好触发一次；自然排空报告 `normal`，中断报告 `forced`；`VoiceFnTapSessionController` 在排空回答完全不到达时由截止时间完成收尾并接受下一次语音，且正常排空会取消该截止时间。测试进程没有可用虚拟输出设备，`engine` 与 `player` 始终为 `nil`，真实播放节点分支未被执行。
+- **自动化已验证**：`VirtualAudioOutput` 的排空回调在被 `flushPlayer()` / `stop()` 打断、被多个排空请求共同等待、以及回调内部再次 `stop()` 时都恰好触发一次；自然排空报告 `normal`，中断报告 `forced`；排空日志能把请求与唯一的正常、强制或取消终态按 `source + operation_id` 关联，并记录耗时和缓冲计数；`VoiceFnTapSessionController` 在排空回答完全不到达时由截止时间完成收尾并接受下一次语音，且正常排空会取消该截止时间，迟到回答只记录为 `stale` 而不会二次完成。测试进程没有可用虚拟输出设备，`engine` 与 `player` 始终为 `nil`，真实播放节点分支未被执行。
 - **代理可验证**：构建、单元测试、自测脚本、仓库边界检查、日志文本。
 - **必须由真实硬件与真实用户完成**：本文件全部用例。真实音频设备热插拔、真实睡眠唤醒、真实 CoreBluetooth 时序、真实 Typeless / 豆包输入法听写结果、以及 2 秒截止时间在真机主队列阻塞时是否足够宽裕，均未经代理验证。
 - 交付测试包时必须同时说明：以上用例尚未完成真实环境验收。
