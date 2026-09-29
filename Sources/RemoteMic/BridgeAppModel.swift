@@ -338,19 +338,25 @@ enum VoiceSamplePresentationPolicy {
 
 struct AudioRecoveryCoalescingState {
     private(set) var pendingEventCount = 0
+    private(set) var includesHardwareChange = false
 
-    mutating func recordEvent() {
+    mutating func recordEvent(reason: String) {
         pendingEventCount += 1
+        if reason == "hardware_change" {
+            includesHardwareChange = true
+        }
     }
 
-    mutating func consumePendingEventCount() -> Int {
-        let count = pendingEventCount
+    mutating func consumePendingEvents() -> (count: Int, includesHardwareChange: Bool) {
+        let result = (pendingEventCount, includesHardwareChange)
         pendingEventCount = 0
-        return count
+        includesHardwareChange = false
+        return result
     }
 
     mutating func reset() {
         pendingEventCount = 0
+        includesHardwareChange = false
     }
 }
 
@@ -2194,7 +2200,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 )
                 return
             }
-            self.audioRecoveryCoalescingState.recordEvent()
+            self.audioRecoveryCoalescingState.recordEvent(reason: reason)
             self.audioRecoveryGeneration &+= 1
             let generation = self.audioRecoveryGeneration
             self.audioRecoveryWorkItem?.cancel()
@@ -2203,16 +2209,69 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                       self.started,
                       self.audioRecoveryGeneration == generation
                 else { return }
-                let coalescedEvents = self.audioRecoveryCoalescingState.consumePendingEventCount()
+                let startedAtUptime = ProcessInfo.processInfo.systemUptime
+                let coalesced = self.audioRecoveryCoalescingState.consumePendingEvents()
+                let effectiveReason = coalesced.includesHardwareChange
+                    ? "hardware_change"
+                    : reason
                 AppLogger.shared.write(
-                    "AUDIO RECOVERY begin id=\(generation) reason=\(reason) detail=\(details) " +
-                        "coalesced_events=\(coalescedEvents) " +
+                    "AUDIO RECOVERY operation_id=\(generation) phase=started result=pending " +
+                        "requested_reason=\(reason) effective_reason=\(effectiveReason) " +
+                        "detail=\(details) coalesced_events=\(coalesced.count) " +
+                        "includes_hardware_change=\(coalesced.includesHardwareChange)"
+                )
+                if reason == "engine_configuration_change" && !coalesced.includesHardwareChange {
+                    let snapshot = self.audioOutput.diagnosticSnapshot()
+                    let configurationHealthy = snapshot.engineRunning &&
+                        snapshot.playerPlaying &&
+                        snapshot.boundToSelectedDevice == true
+                    guard AudioEngineConfigurationChangePolicy.needsRecovery(
+                        boundToSelectedDevice: snapshot.boundToSelectedDevice,
+                        configurationHealthy: configurationHealthy,
+                        hasActiveAudioSource: self.hasActiveVirtualAudioSource,
+                        pendingVoiceBufferCount: snapshot.pendingBuffers
+                    ) else {
+                        let ignoredReason = configurationHealthy
+                            ? "configuration_healthy"
+                            : "still_bound_idle"
+                        AppLogger.shared.write(
+                            "AUDIO RECOVERY operation_id=\(generation) phase=completed result=ignored " +
+                                "reason=engine_configuration_change decision=\(ignoredReason) " +
+                                "detail=\(details) coalesced_events=\(coalesced.count) " +
+                                "includes_hardware_change=false " +
+                                "active_audio=\(self.hasActiveVirtualAudioSource) " +
+                                "pending_buffers=\(snapshot.pendingBuffers) pending_samples=\(snapshot.pendingSamples) " +
+                                "engine_running=\(snapshot.engineRunning) player_playing=\(snapshot.playerPlaying) " +
+                                "bound_to_selected=\(self.optionalDiagnosticBool(snapshot.boundToSelectedDevice)) " +
+                                "elapsed_ms=\(self.elapsedMilliseconds(since: startedAtUptime)) " +
+                                "state={\(self.audioOutput.diagnosticState())}"
+                        )
+                        self.audioRecoveryWorkItem = nil
+                        return
+                    }
+                }
+                AppLogger.shared.write(
+                    "AUDIO RECOVERY operation_id=\(generation) phase=applying result=pending " +
+                        "reason=\(effectiveReason) detail=\(details) " +
+                        "coalesced_events=\(coalesced.count) " +
+                        "includes_hardware_change=\(coalesced.includesHardwareChange) " +
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.refreshAudioDevices()
-                self.applyAudioSettings(reason: "recovery_\(reason)")
+                self.applyAudioSettings(reason: "recovery_\(effectiveReason)")
+                let completedSnapshot = self.audioOutput.diagnosticSnapshot()
+                let ready = completedSnapshot.engineRunning &&
+                    completedSnapshot.playerPlaying &&
+                    completedSnapshot.boundToSelectedDevice == true
                 AppLogger.shared.write(
-                    "AUDIO RECOVERY completed id=\(generation) reason=\(reason) " +
+                    "AUDIO RECOVERY operation_id=\(generation) phase=completed " +
+                        "result=\(ready ? "ready" : "degraded") reason=\(effectiveReason) " +
+                        "engine_running=\(completedSnapshot.engineRunning) " +
+                        "player_playing=\(completedSnapshot.playerPlaying) " +
+                        "bound_to_selected=\(self.optionalDiagnosticBool(completedSnapshot.boundToSelectedDevice)) " +
+                        "pending_buffers=\(completedSnapshot.pendingBuffers) " +
+                        "pending_samples=\(completedSnapshot.pendingSamples) " +
+                        "elapsed_ms=\(self.elapsedMilliseconds(since: startedAtUptime)) " +
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.audioRecoveryWorkItem = nil
@@ -4183,6 +4242,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func optionalDiagnosticInt(_ value: Int?) -> String {
         value.map(String.init) ?? "unknown"
+    }
+
+    private func elapsedMilliseconds(since uptime: TimeInterval) -> Int {
+        max(0, Int((ProcessInfo.processInfo.systemUptime - uptime) * 1_000))
     }
 
     private func beginAppleRemoteVoice(for device: SiriRemoteDeviceIdentity) {

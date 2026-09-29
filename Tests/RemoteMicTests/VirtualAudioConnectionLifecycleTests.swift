@@ -393,15 +393,22 @@ struct VirtualAudioConnectionLifecycleTests {
     @Test func recoveryEventsAreCountedUntilTheDebouncedExecutionConsumesThem() {
         var state = AudioRecoveryCoalescingState()
 
-        state.recordEvent()
-        state.recordEvent()
-        state.recordEvent()
+        state.recordEvent(reason: "engine_configuration_change")
+        state.recordEvent(reason: "engine_configuration_change")
+        state.recordEvent(reason: "engine_configuration_change")
 
-        #expect(state.consumePendingEventCount() == 3)
-        #expect(state.consumePendingEventCount() == 0)
-        state.recordEvent()
+        let first = state.consumePendingEvents()
+        #expect(first.count == 3)
+        #expect(!first.includesHardwareChange)
+        #expect(state.consumePendingEvents().count == 0)
+        state.recordEvent(reason: "hardware_change")
+        state.recordEvent(reason: "engine_configuration_change")
+        let mixed = state.consumePendingEvents()
+        #expect(mixed.count == 2)
+        #expect(mixed.includesHardwareChange)
         state.reset()
-        #expect(state.consumePendingEventCount() == 0)
+        #expect(state.consumePendingEvents().count == 0)
+        #expect(!state.consumePendingEvents().includesHardwareChange)
     }
 
     @Test func releaseRequiresResourcesOrPendingBuffersAndNoExistingRelease() {
@@ -438,7 +445,18 @@ struct VirtualAudioConnectionLifecycleTests {
         )
 
         #expect(!source.contains("AUDIO RECOVERY scheduled"))
-        #expect(source.contains("coalesced_events=\\(coalescedEvents)"))
+        #expect(source.contains(
+            "AUDIO RECOVERY operation_id=\\(generation) phase=started result=pending"
+        ))
+        #expect(source.contains(
+            "AUDIO RECOVERY operation_id=\\(generation) phase=completed result=ignored"
+        ))
+        #expect(source.contains("result=\\(ready ? \"ready\" : \"degraded\")"))
+        #expect(source.contains("coalesced_events=\\(coalesced.count)"))
+        #expect(source.contains("includes_hardware_change=\\(coalesced.includesHardwareChange)"))
+        #expect(source.contains("engine_running=\\(completedSnapshot.engineRunning)"))
+        #expect(source.contains("bound_to_selected=\\(self.optionalDiagnosticBool"))
+        #expect(source.contains("elapsed_ms=\\(self.elapsedMilliseconds"))
         #expect(source.contains("hasAllocatedOutputResources: audioOutput.hasAllocatedOutputResources"))
     }
 

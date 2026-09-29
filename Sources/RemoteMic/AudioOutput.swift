@@ -666,6 +666,26 @@ enum VirtualAudioConnectionLifecyclePolicy {
     }
 }
 
+/// Whether a debounced `AVAudioEngineConfigurationChange` still needs recovery.
+///
+/// Reconfiguring the engine emits the same notification as a real route failure. A correctly
+/// bound but idle output can therefore create a self-sustaining rebind loop if the stopped engine
+/// alone is treated as damage. Active delivery and queued tail audio are different: when either
+/// exists, an unhealthy engine still has user audio to protect and must retain the existing
+/// recovery behavior.
+enum AudioEngineConfigurationChangePolicy {
+    static func needsRecovery(
+        boundToSelectedDevice: Bool?,
+        configurationHealthy: Bool,
+        hasActiveAudioSource: Bool,
+        pendingVoiceBufferCount: Int
+    ) -> Bool {
+        guard boundToSelectedDevice == true else { return true }
+        if configurationHealthy { return false }
+        return hasActiveAudioSource || pendingVoiceBufferCount > 0
+    }
+}
+
 enum VirtualAudioRecoveryPolicy {
     static func shouldIgnoreDefaultSystemOutputChange(
         details: String,
@@ -1392,13 +1412,10 @@ final class VirtualAudioOutput {
                   self.engine === engine,
                   self.engineConfigurationGeneration == generation
             else { return }
-            if self.isConfigurationHealthy {
-                AppLogger.shared.write(
-                    "AUDIO ENGINE configuration_ignored generation=\(generation) reason=healthy"
-                )
-                return
-            }
-            AppLogger.shared.write("AUDIO ENGINE configuration_changed generation=\(generation)")
+            AppLogger.shared.write(
+                "AUDIO ENGINE configuration_changed generation=\(generation) " +
+                    "phase=observed result=pending"
+            )
             self.onConfigurationChange?()
         }
     }
