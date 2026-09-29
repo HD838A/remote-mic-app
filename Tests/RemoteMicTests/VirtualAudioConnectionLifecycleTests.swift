@@ -262,7 +262,7 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(completionCount == 1)
     }
 
-    @Test func aSecondDrainRequestDoesNotStrandTheFirstWaiter() {
+    @Test func multipleDrainRequestsWaitForTheSameActualDrain() {
         let output = VirtualAudioOutput()
         output.registerPendingVoiceBuffer()
         var firstCount = 0
@@ -271,11 +271,35 @@ struct VirtualAudioConnectionLifecycleTests {
 
         output.endSessionAfterDraining(maximumDelay: 60) { secondCount += 1 }
 
-        #expect(firstCount == 1)
+        #expect(firstCount == 0)
         #expect(secondCount == 0)
         output.endSession()
         #expect(firstCount == 1)
         #expect(secondCount == 1)
+    }
+
+    @Test func interruptedDrainReportsForcedOutcome() {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+        var outcome: VirtualAudioDrainOutcome?
+
+        output.endSessionAfterDraining(maximumDelay: 60) { value in
+            outcome = value
+        }
+        output.stop()
+
+        #expect(outcome == .forced)
+    }
+
+    @Test func anAlreadyEmptyDrainReportsNormalOutcome() {
+        let output = VirtualAudioOutput()
+        var outcome: VirtualAudioDrainOutcome?
+
+        output.endSessionAfterDraining(maximumDelay: 60) { value in
+            outcome = value
+        }
+
+        #expect(outcome == .normal)
     }
 
     @Test func healthyExplicitOutputIgnoresDefaultSystemOutputOnlyChanges() {

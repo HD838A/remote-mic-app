@@ -33,7 +33,7 @@
 1. RC003 按住语音键说话，松开语音键。
 2. **松开后 1 秒内**在系统声音设置或“音频 MIDI 设置”里切换 Mac 的音频输出设备（或插拔 USB 耳机）。
 3. 观察 Typeless 与日志。
-   - 预期：日志出现 `AUDIO PLAYBACK interrupted trace=…`（打断被记录，正常）。
+   - 预期：日志出现 `AUDIO PLAYBACK interrupted trace=…`（打断被记录），并且对应停止路径记录 `completion=forced`；这不是正常排空。
    - 预期：本次会话仍然完成收尾，Typeless 不会停留在“正在听写”。
 4. 再次按语音键说 3 到 5 个字，松开。
    - 预期：**这一次按键被接受**，正常产生一对 Fn 并出现文字，无需退出重启 App。
@@ -44,7 +44,7 @@
 
 1. RC003 按住语音键说话，松开语音键。
 2. 松开后 1 秒内关闭遥控器或让它离开蓝牙范围。
-   - 预期：日志出现 `AUDIO PLAYBACK interrupted`，随后出现 `AUDIO RELEASE completed reason=bluetooth_not_ready`。
+   - 预期：日志出现 `AUDIO PLAYBACK interrupted`，随后出现 `AUDIO RELEASE completed ... completion=forced`。
    - 预期：不出现「释放动作卡住」——`AUDIO RELEASE completed` 必须出现。
 3. 重新连接遥控器，再按一次语音键。
    - 预期：语音恢复，一次成功。
@@ -106,7 +106,7 @@
 
 ## 验证边界
 
-- **自动化已验证**：`VirtualAudioOutput` 的排空回调在被 `flushPlayer()` / `stop()` 打断、被第二次排空请求顶替、以及回调内部再次 `stop()` 时都恰好触发一次；`VoiceFnTapSessionController` 在排空回答完全不到达时由截止时间完成收尾并接受下一次语音，且正常排空会取消该截止时间。测试进程没有可用虚拟输出设备，`engine` 与 `player` 始终为 `nil`，真实播放节点分支未被执行。
+- **自动化已验证**：`VirtualAudioOutput` 的排空回调在被 `flushPlayer()` / `stop()` 打断、被多个排空请求共同等待、以及回调内部再次 `stop()` 时都恰好触发一次；自然排空报告 `normal`，中断报告 `forced`；`VoiceFnTapSessionController` 在排空回答完全不到达时由截止时间完成收尾并接受下一次语音，且正常排空会取消该截止时间。测试进程没有可用虚拟输出设备，`engine` 与 `player` 始终为 `nil`，真实播放节点分支未被执行。
 - **代理可验证**：构建、单元测试、自测脚本、仓库边界检查、日志文本。
 - **必须由真实硬件与真实用户完成**：本文件全部用例。真实音频设备热插拔、真实睡眠唤醒、真实 CoreBluetooth 时序、真实 Typeless / 豆包输入法听写结果、以及 2 秒截止时间在真机主队列阻塞时是否足够宽裕，均未经代理验证。
 - 交付测试包时必须同时说明：以上用例尚未完成真实环境验收。

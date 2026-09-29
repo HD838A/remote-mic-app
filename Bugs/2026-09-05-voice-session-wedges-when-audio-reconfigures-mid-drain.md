@@ -33,14 +33,15 @@
 **`Sources/RemoteMic/AudioOutput.swift`——把排空回调改成「一次且必达」**
 
 - `flushPlayer()` 与 `stop()` 各自在同一次持锁内把回调**取出**再置 `nil` 并递增 generation，解锁后用 `defer` 在函数结尾调用一次。打断也是一种结果，等待方需要被告知排空已结束，而不是继续等待。
-- `endSessionAfterDraining` 在写入新回调前把槽位原有占用者取出，并在新排空布置完成后用 `defer` 调用一次。
+- `endSessionAfterDraining` 改为等待队列；同一排空窗口内的多个等待方都会等到真实排空或同一次强制中断，不再让第二个请求提前完成第一个请求。
+- 回调带有 `normal` / `forced` 结果。Apple Remote、Chromecast、手机语音和虚拟音频释放日志现在能区分自然排空与被重配置/停止打断，避免把中断记成正常完成。
 
-保持一个槽位、不改成等待队列：`drainGeneration` 保证同一时刻只有最新一次排空有意义，而现在每条清空槽位的路径都必须先把占用者取走并调用，槽位不可能被静默覆盖。
+`drainGeneration` 仍负责使旧的超时任务失效；等待队列只覆盖同一个输出排空窗口，不改变不同语音来源之间原有的互斥和取消语义。
 
 锁纪律与重入（本次改动的主要风险，逐条排除）：
 
 - 回调一律在 `playbackLock` 解锁之后调用（`playbackLock` 是不可重入的 `NSLock`）；`defer` 的位置保证回调不会打在半拆半建的播放节点上。
-- 不会重复调用：回调引用只存在于 `drainCompletion` 一个槽位，所有读取它的位置都在同一次持锁内把它置 `nil`。
+- 不会重复调用：等待队列只在同一次持锁操作中整体取出并清空，所有读取它的位置都在解锁后调用。
 - `flushPlayer` → 重启失败 → 嵌套 `stop()` 不会重复调用：回调在最开头已被取走，嵌套路径只取到 `nil`。
 - 回调回头调用 `stop()`（虚拟音频释放路径的既有写法）不递归：槽位已是 `nil`，递归深度上限为 2。
 - 正常路径不会多写日志：归零后走 `flushPlayer()` 时 `interruptedContexts` 为空，不会把「已排空」误报成「被打断」。
@@ -68,9 +69,10 @@
   1. `reconfiguringTheOutputMidDrainStillReportsTheDrainExactlyOnce` —— 排空期间 `endSession()` 打断，回调恰好一次，随后 `stop()` 不再触发；
   2. `tearingTheEngineDownMidDrainStillReportsTheDrainExactlyOnce` —— 排空期间 `stop()` 打断，回调恰好一次；
   3. `aDrainCompletionThatTearsTheOutputDownAgainReportsOnlyOnce` —— 回调内部再次 `stop()` 不递归、不重复；
-  4. `aSecondDrainRequestDoesNotStrandTheFirstWaiter` —— 第二次排空请求把第一个等待方交还并调用，而不是覆盖丢弃；
-  5. `aDrainAnswerThatNeverArrivesStillClosesTheSessionAndAcceptsTheNextPress` —— 排空回答永远不到达时，截止时间让会话收尾并**接受下一次按键**；
-  6. `aTimelyDrainCancelsTheDeadlineBeforeItCanCutTheNextSession` —— 正常排空后截止时间不得影响后续健康会话。
+  4. `multipleDrainRequestsWaitForTheSameActualDrain` —— 第二次排空请求与第一个一起等待真实排空，不提前释放第一个等待方；
+  5. `interruptedDrainReportsForcedOutcome` —— 输出被停止时报告 `forced`，而不是伪装成正常排空；
+  6. `aDrainAnswerThatNeverArrivesStillClosesTheSessionAndAcceptsTheNextPress` —— 排空回答永远不到达时，截止时间让会话收尾并**接受下一次按键**；
+  7. `aTimelyDrainCancelsTheDeadlineBeforeItCanCutTheNextSession` —— 正常排空后截止时间不得影响后续健康会话。
 - `scripts/test.sh` 自检测试通过（check 数量不变）；
 - `scripts/check-repository-boundaries.sh` 通过。
 

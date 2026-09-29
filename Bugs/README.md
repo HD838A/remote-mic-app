@@ -99,7 +99,7 @@
 | 2026-09-20 | [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md) | 已修复（候选）；`OnboardingFlowTests` 50 项与本机真机语音测试通过，等待合入与发布后验证 |
 | 2026-09-20 | [虚拟设备被静音或音量过低时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md) | 自动解除静音与低于 0.2 的音量保护完成；MiRemoteV 2ch 属性自愈实测通过，等待 BlackHole 与完整语音链路验收 |
 | 2026-09-11 | [苹果遥控器 Command 语音键再次无法唤醒目标输入法](./2026-09-11-siri-remote-command-voice-regression.md) | 候选修复与失败门禁完成，等待真实遥控器和目标输入法验收 |
-| 2026-09-05 | [排空尾音期间音频重配置导致语音会话永久卡死](./2026-09-05-voice-session-wedges-when-audio-reconfigures-mid-drain.md) | 修复已实现，自动化 6 项断言通过；等待真实 RC003 + Typeless/豆包在排空间隙切换设备、睡眠唤醒与断连重连验收 |
+| 2026-09-05 | [排空尾音期间音频重配置导致语音会话永久卡死](./2026-09-05-voice-session-wedges-when-audio-reconfigures-mid-drain.md) | 修复已实现，自动化覆盖多等待方与 normal/forced 结果；等待真实 RC003 + Typeless/豆包在排空间隙切换设备、睡眠唤醒与断连重连验收 |
 | 2026-09-03 | [1.9.19 偶发显示“暂时无法获取更新信息”](./2026-09-03-github-api-update-feed-unavailable/DEBUG.md) | 候选修复、自动化与生产通道部署完成，等待 `1.9.21` 真实 Sparkle UI 验收 |
 | 2026-09-01 | [1.9.18「语音键模拟 Fn 点按」自动关闭](./2026-09-01-fn-tap-auto-disable/DEBUG.md) | 根因确认并完成候选修复；自动化通过，等待 RC003 与 Typeless 真机验收 |
 | 2026-08-31 | [Onboarding 语音诊断无法区分焦点、音频输出与第三方未提交](./2026-08-31-onboarding-voice-attempt-diagnostics/DEBUG.md) | 用户确认豆包麦克风配置根因；候选诊断、双端确认卡和本地完整验证完成，等待 PR CI 与独立真机验收 |
