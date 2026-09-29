@@ -43,6 +43,14 @@ AUDIO RECOVERY scheduled id=2029 reason=engine_configuration_change   ← 于是
 
 这样保留当前主线对 stopped player、活跃会话和尾音排空的恢复语义；下一次语音开始仍会通过实时健康门禁重建空闲时失效的播放器。
 
+## 验证日志
+
+- 去抖窗口真正执行时记录 `AUDIO RECOVERY operation_id=… phase=started result=pending`，并带上请求原因、有效原因、合并事件数和 `includes_hardware_change`；高频通知只在去抖窗口结束后记录一次操作，避免日志本身重新形成刷屏。
+- 空闲且仍绑定时，相同 `operation_id` 的唯一终态为 `phase=completed result=ignored decision=still_bound_idle`；真实恢复的唯一终态为 `result=ready|degraded`。
+- 终态记录 `engine_running`、`player_playing`、`bound_to_selected`、待播 buffer/sample 和 `elapsed_ms`，避免把 `applyAudioSettings` 已返回误记为恢复后已经可用。
+- 混合窗口会明确记录 `includes_hardware_change=true` 与 `effective_reason=hardware_change`，便于确认真实硬件事件没有被后到的引擎通知覆盖。
+- 日志只包含稳定枚举、短生命周期操作编号和计数，不包含设备 UUID、用户路径或音频内容。
+
 ## 验证
 
 自动化（7 项新测试，另增加事件合并状态断言）：

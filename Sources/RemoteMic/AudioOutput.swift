@@ -1203,7 +1203,10 @@ final class VirtualAudioOutput {
                   self.engine === engine,
                   self.engineConfigurationGeneration == generation
             else { return }
-            AppLogger.shared.write("AUDIO ENGINE configuration_changed generation=\(generation)")
+            AppLogger.shared.write(
+                "AUDIO ENGINE configuration_changed generation=\(generation) " +
+                    "phase=observed result=pending"
+            )
             self.onConfigurationChange?()
         }
     }

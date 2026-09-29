@@ -2199,10 +2199,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                       self.started,
                       self.audioRecoveryGeneration == generation
                 else { return }
+                let startedAtUptime = ProcessInfo.processInfo.systemUptime
                 let coalesced = self.audioRecoveryCoalescingState.consumePendingEvents()
                 let effectiveReason = coalesced.includesHardwareChange
                     ? "hardware_change"
                     : reason
+                AppLogger.shared.write(
+                    "AUDIO RECOVERY operation_id=\(generation) phase=started result=pending " +
+                        "requested_reason=\(reason) effective_reason=\(effectiveReason) " +
+                        "detail=\(details) coalesced_events=\(coalesced.count) " +
+                        "includes_hardware_change=\(coalesced.includesHardwareChange)"
+                )
                 if reason == "engine_configuration_change" && !coalesced.includesHardwareChange {
                     let snapshot = self.audioOutput.diagnosticSnapshot()
                     let configurationHealthy = snapshot.engineRunning &&
@@ -2218,10 +2225,15 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                             ? "configuration_healthy"
                             : "still_bound_idle"
                         AppLogger.shared.write(
-                            "AUDIO RECOVERY ignored id=\(generation) reason=engine_configuration_change " +
-                                "decision=\(ignoredReason) coalesced_events=\(coalesced.count) " +
+                            "AUDIO RECOVERY operation_id=\(generation) phase=completed result=ignored " +
+                                "reason=engine_configuration_change decision=\(ignoredReason) " +
+                                "detail=\(details) coalesced_events=\(coalesced.count) " +
+                                "includes_hardware_change=false " +
                                 "active_audio=\(self.hasActiveVirtualAudioSource) " +
-                                "pending_buffers=\(snapshot.pendingBuffers) " +
+                                "pending_buffers=\(snapshot.pendingBuffers) pending_samples=\(snapshot.pendingSamples) " +
+                                "engine_running=\(snapshot.engineRunning) player_playing=\(snapshot.playerPlaying) " +
+                                "bound_to_selected=\(self.optionalDiagnosticBool(snapshot.boundToSelectedDevice)) " +
+                                "elapsed_ms=\(self.elapsedMilliseconds(since: startedAtUptime)) " +
                                 "state={\(self.audioOutput.diagnosticState())}"
                         )
                         self.audioRecoveryWorkItem = nil
@@ -2229,14 +2241,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     }
                 }
                 AppLogger.shared.write(
-                    "AUDIO RECOVERY begin id=\(generation) reason=\(effectiveReason) detail=\(details) " +
+                    "AUDIO RECOVERY operation_id=\(generation) phase=applying result=pending " +
+                        "reason=\(effectiveReason) detail=\(details) " +
                         "coalesced_events=\(coalesced.count) " +
+                        "includes_hardware_change=\(coalesced.includesHardwareChange) " +
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.refreshAudioDevices()
                 self.applyAudioSettings(reason: "recovery_\(effectiveReason)")
+                let completedSnapshot = self.audioOutput.diagnosticSnapshot()
+                let ready = completedSnapshot.engineRunning &&
+                    completedSnapshot.playerPlaying &&
+                    completedSnapshot.boundToSelectedDevice == true
                 AppLogger.shared.write(
-                    "AUDIO RECOVERY completed id=\(generation) reason=\(effectiveReason) " +
+                    "AUDIO RECOVERY operation_id=\(generation) phase=completed " +
+                        "result=\(ready ? "ready" : "degraded") reason=\(effectiveReason) " +
+                        "engine_running=\(completedSnapshot.engineRunning) " +
+                        "player_playing=\(completedSnapshot.playerPlaying) " +
+                        "bound_to_selected=\(self.optionalDiagnosticBool(completedSnapshot.boundToSelectedDevice)) " +
+                        "pending_buffers=\(completedSnapshot.pendingBuffers) " +
+                        "pending_samples=\(completedSnapshot.pendingSamples) " +
+                        "elapsed_ms=\(self.elapsedMilliseconds(since: startedAtUptime)) " +
                         "state={\(self.audioOutput.diagnosticState())}"
                 )
                 self.audioRecoveryWorkItem = nil
@@ -4207,6 +4232,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func optionalDiagnosticInt(_ value: Int?) -> String {
         value.map(String.init) ?? "unknown"
+    }
+
+    private func elapsedMilliseconds(since uptime: TimeInterval) -> Int {
+        max(0, Int((ProcessInfo.processInfo.systemUptime - uptime) * 1_000))
     }
 
     private func beginAppleRemoteVoice(for device: SiriRemoteDeviceIdentity) {

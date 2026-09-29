@@ -287,7 +287,18 @@ struct VirtualAudioConnectionLifecycleTests {
         )
 
         #expect(!source.contains("AUDIO RECOVERY scheduled"))
+        #expect(source.contains(
+            "AUDIO RECOVERY operation_id=\\(generation) phase=started result=pending"
+        ))
+        #expect(source.contains(
+            "AUDIO RECOVERY operation_id=\\(generation) phase=completed result=ignored"
+        ))
+        #expect(source.contains("result=\\(ready ? \"ready\" : \"degraded\")"))
         #expect(source.contains("coalesced_events=\\(coalesced.count)"))
+        #expect(source.contains("includes_hardware_change=\\(coalesced.includesHardwareChange)"))
+        #expect(source.contains("engine_running=\\(completedSnapshot.engineRunning)"))
+        #expect(source.contains("bound_to_selected=\\(self.optionalDiagnosticBool"))
+        #expect(source.contains("elapsed_ms=\\(self.elapsedMilliseconds"))
         #expect(source.contains("hasAllocatedOutputResources: audioOutput.hasAllocatedOutputResources"))
     }
 
