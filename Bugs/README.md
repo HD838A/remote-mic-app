@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [HID 权限按实例重复轮询](./2026-09-25-per-instance-permission-poll.md)
 - [自定义组合快捷键丢失左右修饰键侧别](./2026-09-30-custom-shortcut-modifier-side-lost.md)
 - [Dock 偏好、系统媒体动作、音量摘要与窗口菜单回归](./2026-09-13-dock-media-window-actions.md)
 - [休眠期间仍持续蓝牙扫描和重连](./2026-09-29-sleeping-ble-scan-and-reconnect.md)
