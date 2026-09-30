@@ -177,10 +177,12 @@
 "action.context_menu" = "上下文菜单";
 "action.system_volume_up" = "系统音量 +";
 "action.system_volume_down" = "系统音量 -";
+"action.system_volume_up_short" = "Vol+";
+"action.system_volume_down_short" = "Vol-";
 "action.system_mute" = "系统静音";
 "action.play_pause" = "播放 / 暂停";
-"action.previous_command_left" = "上一首（⌘←）";
-"action.next_command_right" = "下一首（⌘→）";
+"action.previous_command_left" = "上一首（系统媒体）";
+"action.next_command_right" = "下一首（系统媒体）";
 "action.custom_shortcut" = "自定义快捷键";
 "action.focus_input" = "聚焦输入框";
 "action.open_custom_application" = "打开自定义 APP";
@@ -512,6 +514,7 @@
 "menu.about" = "关于无线麦";
 "menu.file" = "文件";
 "menu.edit" = "编辑";
+"menu.window" = "窗口";
 "menu.open_log_folder" = "打开日志所在文件夹";
 "menu.check_for_updates" = "检查更新…";
 "common.action.quit" = "退出";
@@ -634,6 +637,10 @@
 "common.action.cut" = "剪切";
 "common.action.paste" = "粘贴";
 "common.action.select_all" = "全选";
+"common.action.hide" = "隐藏无线麦";
+"common.action.hide_others" = "隐藏其他";
+"common.action.show_all" = "全部显示";
+"common.action.minimize" = "最小化";
 "about.version.history_load_failed" = "无法加载版本历史。";
 "about.preferences.open_main_window_at_launch" = "启动时自动打开主面板";
 "about.preferences.open_main_window_help" = "关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。";

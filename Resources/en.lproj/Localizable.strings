@@ -177,10 +177,12 @@
 "action.context_menu" = "Context Menu";
 "action.system_volume_up" = "System Volume +";
 "action.system_volume_down" = "System Volume -";
+"action.system_volume_up_short" = "Vol+";
+"action.system_volume_down_short" = "Vol-";
 "action.system_mute" = "Mute System Audio";
 "action.play_pause" = "Play / Pause";
-"action.previous_command_left" = "Previous (⌘←)";
-"action.next_command_right" = "Next (⌘→)";
+"action.previous_command_left" = "Previous Track (System Media)";
+"action.next_command_right" = "Next Track (System Media)";
 "action.custom_shortcut" = "Custom Shortcut";
 "action.focus_input" = "Focus Input Field";
 "action.open_custom_application" = "Open Custom App";
@@ -512,6 +514,7 @@
 "menu.about" = "About SayAll";
 "menu.file" = "File";
 "menu.edit" = "Edit";
+"menu.window" = "Window";
 "menu.open_log_folder" = "Open Log Folder";
 "menu.check_for_updates" = "Check for Updates…";
 "common.action.quit" = "Quit";
@@ -634,6 +637,10 @@
 "common.action.cut" = "Cut";
 "common.action.paste" = "Paste";
 "common.action.select_all" = "Select All";
+"common.action.hide" = "Hide SayAll";
+"common.action.hide_others" = "Hide Others";
+"common.action.show_all" = "Show All";
+"common.action.minimize" = "Minimize";
 "about.version.history_load_failed" = "Version history could not be loaded.";
 "about.preferences.open_main_window_at_launch" = "Open main window at launch";
 "about.preferences.open_main_window_help" = "When disabled, ordinary launches stay in the menu bar; the main window still appears after an update.";

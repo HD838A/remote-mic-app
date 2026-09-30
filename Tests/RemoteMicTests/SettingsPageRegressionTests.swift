@@ -609,7 +609,7 @@ struct SettingsPageRegressionTests {
         #expect(autosave.upperBound <= center.lowerBound)
     }
 
-    @Test func settingsWindowKeepsTheDockIconUntilItCloses() throws {
+    @Test func settingsWindowHonorsDockPreferenceAndKeepsStandardWindowActions() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -626,11 +626,15 @@ struct SettingsPageRegressionTests {
         #expect(appSource.contains("isSettingsWindowOpen = false"))
         #expect(!appSource.contains("window.canHide = false"))
         #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
+        #expect(appSource.contains("performMiniaturize:"))
+        #expect(appSource.contains("hideOtherApplications:"))
+        #expect(appSource.contains("unhideAllApplications:"))
+        #expect(appSource.contains("NSApp.windowsMenu = windowMenu"))
 
         #expect(SettingsWindowActivationPolicy.value(
             showDockIcon: false,
             isSettingsWindowOpen: true
-        ) == .regular)
+        ) == .accessory)
         #expect(SettingsWindowActivationPolicy.value(
             showDockIcon: false,
             isSettingsWindowOpen: false
@@ -639,6 +643,38 @@ struct SettingsPageRegressionTests {
             showDockIcon: true,
             isSettingsWindowOpen: false
         ) == .regular)
+    }
+
+    @Test func systemMediaAndVolumeSummariesUseUnambiguousLabels() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent(
+                "Resources/zh-Hans.lproj/Localizable.strings"
+            ),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent(
+                "Resources/en.lproj/Localizable.strings"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("action.system_volume_up_short"))
+        #expect(settingsSource.contains("action.system_volume_down_short"))
+        #expect(chinese.contains(#""action.system_volume_up_short" = "Vol+""#))
+        #expect(chinese.contains(#""action.system_volume_down_short" = "Vol-""#))
+        #expect(chinese.contains("上一首（系统媒体）"))
+        #expect(chinese.contains("下一首（系统媒体）"))
+        #expect(english.contains("Previous Track (System Media)"))
+        #expect(english.contains("Next Track (System Media)"))
     }
 
     @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
