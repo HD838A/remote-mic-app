@@ -4,13 +4,38 @@ import Testing
 
 @Suite("HID permission poll")
 struct HIDPermissionPollTests {
+    @Test func multipleSubscribersEvaluatePermissionOncePerTick() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var permissionEvaluationCount = 0
+        let poll = HIDPermissionPoll(
+            scheduler: scheduler,
+            permissionEvaluator: {
+                permissionEvaluationCount += 1
+                return false
+            },
+            logger: { _ in }
+        )
+        var firstResults: [Bool] = []
+        var secondResults: [Bool] = []
+        let first = poll.subscribe { firstResults.append($0) }
+        let second = poll.subscribe { secondResults.append($0) }
+
+        scheduler.fire()
+
+        #expect(permissionEvaluationCount == 1)
+        #expect(firstResults == [false])
+        #expect(secondResults == [false])
+        first.cancel()
+        second.cancel()
+    }
+
     @Test func multipleSubscribersShareOneRepeatingTimer() {
         let scheduler = HIDPermissionPollTestScheduler()
         let poll = HIDPermissionPoll(scheduler: scheduler, logger: { _ in })
         var firstCalls = 0
         var secondCalls = 0
-        let first = poll.subscribe { firstCalls += 1 }
-        let second = poll.subscribe { secondCalls += 1 }
+        let first = poll.subscribe { _ in firstCalls += 1 }
+        let second = poll.subscribe { _ in secondCalls += 1 }
 
         #expect(scheduler.scheduleCount == 1)
         #expect(scheduler.activeTaskCount == 1)
@@ -27,8 +52,8 @@ struct HIDPermissionPollTests {
         let poll = HIDPermissionPoll(scheduler: scheduler, logger: { _ in })
         var firstCalls = 0
         var secondCalls = 0
-        let first = poll.subscribe { firstCalls += 1 }
-        let second = poll.subscribe { secondCalls += 1 }
+        let first = poll.subscribe { _ in firstCalls += 1 }
+        let second = poll.subscribe { _ in secondCalls += 1 }
 
         first.cancel()
         #expect(scheduler.activeTaskCount == 1)
@@ -44,13 +69,13 @@ struct HIDPermissionPollTests {
     @Test func lastCancellationStopsTimerAndNextSubscriptionCreatesOneTimer() {
         let scheduler = HIDPermissionPollTestScheduler()
         let poll = HIDPermissionPoll(scheduler: scheduler, logger: { _ in })
-        let first = poll.subscribe {}
+        let first = poll.subscribe { _ in }
 
         first.cancel()
         #expect(scheduler.activeTaskCount == 0)
         #expect(scheduler.cancelCount == 1)
 
-        let second = poll.subscribe {}
+        let second = poll.subscribe { _ in }
         #expect(scheduler.scheduleCount == 2)
         #expect(scheduler.activeTaskCount == 1)
         second.cancel()
@@ -59,7 +84,7 @@ struct HIDPermissionPollTests {
     @Test func subscriptionDeinitAutomaticallyUnsubscribes() {
         let scheduler = HIDPermissionPollTestScheduler()
         let poll = HIDPermissionPoll(scheduler: scheduler, logger: { _ in })
-        var subscription: HIDPermissionPoll.Subscription? = poll.subscribe {}
+        var subscription: HIDPermissionPoll.Subscription? = poll.subscribe { _ in }
         weak let weakSubscription = subscription
 
         subscription = nil
@@ -71,7 +96,7 @@ struct HIDPermissionPollTests {
     @Test func repeatedCancellationIsIdempotent() {
         let scheduler = HIDPermissionPollTestScheduler()
         let poll = HIDPermissionPoll(scheduler: scheduler, logger: { _ in })
-        let subscription = poll.subscribe {}
+        let subscription = poll.subscribe { _ in }
 
         subscription.cancel()
         subscription.cancel()
@@ -83,7 +108,7 @@ struct HIDPermissionPollTests {
         let scheduler = HIDPermissionPollTestScheduler()
         let poll = HIDPermissionPoll(scheduler: scheduler, logger: { _ in })
         var subscription: HIDPermissionPoll.Subscription?
-        subscription = poll.subscribe {
+        subscription = poll.subscribe { _ in
             subscription?.cancel()
         }
 
@@ -96,8 +121,8 @@ struct HIDPermissionPollTests {
         let scheduler = HIDPermissionPollTestScheduler()
         var logs: [String] = []
         let poll = HIDPermissionPoll(scheduler: scheduler, logger: { logs.append($0) })
-        let first = poll.subscribe {}
-        let second = poll.subscribe {}
+        let first = poll.subscribe { _ in }
+        let second = poll.subscribe { _ in }
 
         first.cancel()
         second.cancel()
