@@ -34,6 +34,7 @@ private struct BundledAppIconDefinition {
     let id: AppIconIdentifier
     let resourceName: String
     let titleKey: String
+    let contentScale: CGFloat
 }
 
 struct AppIconCatalog {
@@ -43,7 +44,8 @@ struct AppIconCatalog {
         BundledAppIconDefinition(
             id: .facetedDuck,
             resourceName: "faceted-duck",
-            titleKey: "about.preferences.app_icon_faceted_duck"
+            titleKey: "about.preferences.app_icon_faceted_duck",
+            contentScale: 0.88
         ),
     ]
 
@@ -76,11 +78,14 @@ struct AppIconCatalog {
                 extension: "png",
                 subdirectory: "AppIcons",
                 in: resourceBundle
-            ).map {
+            ).map { sourceImage in
                 AppIconOption(
                     id: definition.id,
                     titleKey: definition.titleKey,
-                    image: $0
+                    image: applicationIconImage(
+                        sourceImage,
+                        contentScale: definition.contentScale
+                    )
                 )
             }
         }
@@ -100,6 +105,37 @@ struct AppIconCatalog {
 
     private func option(for requestedIdentifier: AppIconIdentifier) -> AppIconOption {
         options.first { $0.id == requestedIdentifier } ?? options[0]
+    }
+
+    static func applicationIconImage(
+        _ sourceImage: NSImage,
+        contentScale: CGFloat
+    ) -> NSImage {
+        let clampedScale = min(max(contentScale, 0.1), 1)
+        guard clampedScale < 1 else { return sourceImage }
+
+        let result = NSImage(size: sourceImage.size, flipped: false) { canvas in
+            NSGraphicsContext.current?.imageInterpolation = .high
+            let contentSize = NSSize(
+                width: canvas.width * clampedScale,
+                height: canvas.height * clampedScale
+            )
+            let contentRect = NSRect(
+                x: canvas.midX - contentSize.width / 2,
+                y: canvas.midY - contentSize.height / 2,
+                width: contentSize.width,
+                height: contentSize.height
+            )
+            sourceImage.draw(
+                in: contentRect,
+                from: NSRect(origin: .zero, size: sourceImage.size),
+                operation: .sourceOver,
+                fraction: 1
+            )
+            return true
+        }
+        result.isTemplate = sourceImage.isTemplate
+        return result
     }
 
     private static func image(

@@ -103,4 +103,21 @@ struct AppIconControllerTests {
             #expect(alpha <= (1.0 / 255.0))
         }
     }
+
+    @Test
+    func applicationIconImageAddsTransparentSafeAreaWithoutChangingCanvasSize() throws {
+        let source = NSImage(size: NSSize(width: 100, height: 100), flipped: false) { rect in
+            NSColor.black.setFill()
+            rect.fill()
+            return true
+        }
+
+        let result = AppIconCatalog.applicationIconImage(source, contentScale: 0.88)
+        let data = try #require(result.tiffRepresentation)
+        let representation = try #require(NSBitmapImageRep(data: data))
+
+        #expect(result.size == source.size)
+        #expect(representation.colorAt(x: 0, y: 0)?.alphaComponent == 0)
+        #expect(representation.colorAt(x: 50, y: 50)?.alphaComponent == 1)
+    }
 }

@@ -3399,25 +3399,19 @@ struct SettingsView: View {
                     Button {
                         settings.appIconIdentifier = option.id
                     } label: {
-                        VStack(spacing: 5) {
-                            ZStack(alignment: .bottomTrailing) {
-                                Image(nsImage: option.image)
-                                    .resizable()
-                                    .frame(width: 38, height: 38)
-                                if selectedIdentifier == option.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, Color.accentColor)
-                                        .background(Circle().fill(.background))
-                                }
+                        ZStack(alignment: .bottomTrailing) {
+                            Image(nsImage: option.image)
+                                .resizable()
+                                .frame(width: 38, height: 38)
+                            if selectedIdentifier == option.id {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(.white, Color.accentColor)
+                                    .background(Circle().fill(.background))
                             }
-                            Text(LocalizedStringKey(option.titleKey))
-                                .font(.system(size: 12, weight: .medium))
-                                .lineLimit(1)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
+                        .padding(7)
                         .background(
                             selectedIdentifier == option.id
                                 ? Color.accentColor.opacity(0.10)
