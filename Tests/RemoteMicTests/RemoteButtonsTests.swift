@@ -950,6 +950,27 @@ struct RemoteButtonsTests {
         ) == shortcut)
     }
 
+    @Test func customShortcutPreservesRightCommandDeviceSide() {
+        let localization = LocalizationStore(
+            settings: AppSettings(defaults: .standard),
+            resourceBundle: RemoteMicResourceBundle.mainOrDevelopment
+        )
+        localization.select(.english)
+        let rightCommandMask = NSEvent.ModifierFlags(rawValue: 0x10)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 43,
+            modifierFlags: [.command, rightCommandMask],
+            keyLabel: ","
+        )
+
+        #expect(shortcut.modifierFlags.contains(.command))
+        #expect(shortcut.modifierFlags.contains(rightCommandMask))
+        #expect(shortcut.cgEventFlags.contains(.maskCommand))
+        #expect(shortcut.cgEventFlags.contains(CGEventFlags(rawValue: 0x10)))
+        #expect(shortcut.visualDisplayName(using: localization) == "R⌘,")
+        #expect(shortcut.detailedDisplayName(using: localization) == "R Command + ,")
+    }
+
     @Test func customShortcutUsesIconDisplayAndFullTooltipNames() {
         let localization = LocalizationStore(settings: AppSettings(defaults: .standard))
         localization.select(.english)

@@ -374,7 +374,7 @@ struct ConfigurationImportValidationTests {
         #expect(settings.shortcut(for: .power) == Self.commandCommaShortcut)
     }
 
-    @Test func strayModifierBitsAreMaskedOnImport() throws {
+    @Test func supportedSideBitSurvivesWhileStrayModifierBitsAreMaskedOnImport() throws {
         let source = try exportedConfiguration(
             applicationPath: "/Applications/Example Agent.app"
         )
@@ -382,8 +382,8 @@ struct ConfigurationImportValidationTests {
         var json = source.json
         var shortcuts = try #require(json["buttonShortcuts"] as? [String: Any])
         var power = try #require(shortcuts[RemoteButton.power.rawValue] as? [String: Any])
-        // Caps Lock, numeric pad, a device-dependent side bit and a high bit the app never
-        // records, on top of plain Command.
+        // Caps Lock, numeric pad and a high bit the app never records surround the supported
+        // right Command device bit. Import must preserve only Command and its valid side.
         power["modifierFlagsRawValue"] = 0x0010_0010 | 0x0001_0000 | 0x0020_0000 | 0x8000_0000
         shortcuts[RemoteButton.power.rawValue] = power
         json["buttonShortcuts"] = shortcuts
@@ -397,7 +397,7 @@ struct ConfigurationImportValidationTests {
         let imported = try #require(settings.shortcut(for: .power))
         // The import rebuilds the shortcut through the normal initializer, so exactly the
         // supported mask survives — the same result a fresh recording produces.
-        #expect(imported.modifierFlagsRawValue == 0x0010_0000)
+        #expect(imported.modifierFlagsRawValue == 0x0010_0010)
     }
 
     // MARK: - Round trips
