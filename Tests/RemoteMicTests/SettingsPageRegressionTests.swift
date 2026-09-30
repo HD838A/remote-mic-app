@@ -176,6 +176,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("Text(\"settings.general.title\")"))
         #expect(source.contains("Button(\"about.configuration.export\", action: exportConfiguration)"))
         #expect(source.contains("Button(\"about.configuration.import\", action: importConfiguration)"))
+        #expect(source.contains("about.preferences.show_status_bar_icon"))
         #expect(source.contains("about.preferences.launch_at_login"))
         #expect(source.contains("about.preferences.open_main_window_at_launch"))
         #expect(source.contains("diagnostics.logs.copy_summary"))
@@ -643,6 +644,42 @@ struct SettingsPageRegressionTests {
             showDockIcon: true,
             isSettingsWindowOpen: false
         ) == .regular)
+    }
+
+    @Test func hiddenDockAndMenuBarKeepAnExplicitLaunchRecoveryPath() throws {
+        #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
+            baseLaunchDecision: true,
+            showDockIcon: true,
+            showStatusBarIcon: true
+        ))
+        #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
+            baseLaunchDecision: false,
+            showDockIcon: false,
+            showStatusBarIcon: false
+        ))
+        #expect(!AppEntryPointVisibilityPolicy.shouldShowMainWindow(
+            baseLaunchDecision: false,
+            showDockIcon: true,
+            showStatusBarIcon: false
+        ))
+        #expect(!AppEntryPointVisibilityPolicy.shouldShowMainWindow(
+            baseLaunchDecision: false,
+            showDockIcon: false,
+            showStatusBarIcon: true
+        ))
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMicApp.swift"),
+            encoding: .utf8
+        )
+        #expect(appSource.contains("guard statusItem == nil else"))
+        #expect(appSource.contains("NSStatusBar.system.removeStatusItem(statusItem)"))
+        #expect(appSource.contains("source: \"configuration_import\""))
+        #expect(appSource.contains("source=application_reopen"))
     }
 
     @Test func systemMediaAndVolumeSummariesUseUnambiguousLabels() throws {
