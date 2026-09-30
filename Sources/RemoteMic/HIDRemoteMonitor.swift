@@ -70,6 +70,7 @@ final class HIDRemoteMonitor {
     private let eventSuppressor: KeyboardEventSuppressor
     private let ownsEventSuppressor: Bool
     private let scheduler: HIDRemoteScheduling
+    private let permissionPoll: HIDPermissionPoll
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
     private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
@@ -96,7 +97,7 @@ final class HIDRemoteMonitor {
     private var gestureRecognizer = RemoteButtonGestureRecognizer()
     private var doubleClickTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     private var longPressTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
-    private var permissionMonitor: HIDRemoteScheduledTask?
+    private var permissionPollSubscription: HIDPermissionPoll.Subscription?
     private var appSwitcherTimeout: HIDRemoteScheduledTask?
     private var appSwitcherFrontmostMonitor: HIDRemoteScheduledTask?
     private var appSwitcherConfirmationProbe: HIDRemoteScheduledTask?
@@ -115,6 +116,7 @@ final class HIDRemoteMonitor {
         eventSuppressor: KeyboardEventSuppressor = KeyboardEventSuppressor(),
         ownsEventSuppressor: Bool = true,
         scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler(),
+        permissionPoll: HIDPermissionPoll = .shared,
         runtimePermissions: @escaping () -> Bool = {
             HIDRemoteMonitor.isInputMonitoringGranted && KeyboardInjector.isAccessibilityTrusted
         },
@@ -145,6 +147,7 @@ final class HIDRemoteMonitor {
         self.eventSuppressor = eventSuppressor
         self.ownsEventSuppressor = ownsEventSuppressor
         self.scheduler = scheduler
+        self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
             keyStatePoster: appSwitcherKeyStatePoster
@@ -271,8 +274,8 @@ final class HIDRemoteMonitor {
     }
 
     func stop() {
-        permissionMonitor?.cancel()
-        permissionMonitor = nil
+        permissionPollSubscription?.cancel()
+        permissionPollSubscription = nil
         resetInputState()
         if ownsEventSuppressor { eventSuppressor.stop() }
         probedDevices.forEach {
@@ -1292,16 +1295,13 @@ final class HIDRemoteMonitor {
     }
 
     private func startPermissionMonitor() {
-        let timer = scheduler.schedule(
-            afterMilliseconds: HIDRemoteTiming.permissionPollMilliseconds,
-            repeatingEveryMilliseconds: HIDRemoteTiming.permissionPollMilliseconds
-        ) { [weak self] in
+        permissionPollSubscription?.cancel()
+        permissionPollSubscription = permissionPoll.subscribe { [weak self] in
             guard let self, self.manager != nil else { return }
             if !self.runtimePermissionsAreValid() {
                 self.releaseForRevokedPermissions()
             }
         }
-        permissionMonitor = timer
     }
 
     private func releaseForRevokedPermissions() {
