@@ -1296,9 +1296,9 @@ final class HIDRemoteMonitor {
 
     private func startPermissionMonitor() {
         permissionPollSubscription?.cancel()
-        permissionPollSubscription = permissionPoll.subscribe { [weak self] in
+        permissionPollSubscription = permissionPoll.subscribe { [weak self] permissionsGranted in
             guard let self, self.manager != nil else { return }
-            if !self.runtimePermissionsAreValid() {
+            if !permissionsGranted {
                 self.releaseForRevokedPermissions()
             }
         }

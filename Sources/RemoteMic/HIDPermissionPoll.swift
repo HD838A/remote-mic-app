@@ -42,21 +42,26 @@ final class HIDPermissionPoll {
     }
 
     private let scheduler: HIDRemoteScheduling
+    private let permissionEvaluator: () -> Bool
     private let logger: (String) -> Void
     private let lock = NSLock()
-    private var subscribers: [UUID: () -> Void] = [:]
+    private var subscribers: [UUID: (Bool) -> Void] = [:]
     private var taskState: TaskState = .idle
 
     init(
         scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler(),
+        permissionEvaluator: @escaping () -> Bool = {
+            HIDRemoteMonitor.isInputMonitoringGranted && KeyboardInjector.isAccessibilityTrusted
+        },
         logger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
         self.scheduler = scheduler
+        self.permissionEvaluator = permissionEvaluator
         self.logger = logger
     }
 
     @discardableResult
-    func subscribe(_ handler: @escaping () -> Void) -> Subscription {
+    func subscribe(_ handler: @escaping (Bool) -> Void) -> Subscription {
         let token = UUID()
         let shouldStart: Bool
         let subscriberCount: Int
@@ -131,10 +136,12 @@ final class HIDPermissionPoll {
     }
 
     private func notifySubscribers() {
-        let handlers: [() -> Void]
+        let handlers: [(Bool) -> Void]
         lock.lock()
         handlers = Array(subscribers.values)
         lock.unlock()
-        handlers.forEach { $0() }
+        guard !handlers.isEmpty else { return }
+        let permissionsGranted = permissionEvaluator()
+        handlers.forEach { $0(permissionsGranted) }
     }
 }
