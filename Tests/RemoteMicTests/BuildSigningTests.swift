@@ -73,6 +73,21 @@ struct BuildSigningTests {
         #expect(!adHocSigningSource.contains("--options runtime"))
     }
 
+    @Test func buildChannelIsInjectedIntoPackagedInfoPlist() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("SAYALL_BUILD_CHANNEL=\"${SAYALL_BUILD_CHANNEL:-}\""))
+        #expect(source.contains("plutil -remove SayAllBuildChannel"))
+        #expect(source.contains("plutil -insert SayAllBuildChannel -string \"$SAYALL_BUILD_CHANNEL\""))
+    }
+
     @Test func siriRemoteIsOptInForCommunityBuilds() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
