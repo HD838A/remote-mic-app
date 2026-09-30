@@ -478,6 +478,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var connectedRemoteProfileIDs = Set<UUID>()
     @Published private(set) var remoteBatteryLevels: [UUID: Int] = [:]
     @Published private(set) var remotePowerStates: [UUID: RemotePowerState] = [:]
+    private var pendingRemoteBatteryLevels: [UUID: Int] = [:]
+    private var pendingRemotePowerStates: [UUID: RemotePowerState] = [:]
+    private var pendingRemoteModels: [UUID: XiaomiRemoteModel] = [:]
     @Published private(set) var remoteSystemDeviceNames: [UUID: String] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
@@ -3152,8 +3155,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func registerBluetoothBridgeIfNeeded(_ bridge: XiaomiBluetoothBridge) -> UUID? {
         guard let identifier = bluetoothIdentifier(for: bridge) else { return nil }
-        let profileID = settings.profileID(forBluetoothIdentifier: identifier)
-            ?? settings.registerBluetoothRemote(identifier: identifier)
+        let existingProfileID = settings.profileID(forBluetoothIdentifier: identifier)
+        let profileID = existingProfileID ?? settings.registerBluetoothRemote(identifier: identifier)
         if discoveryBluetoothBridge === bridge {
             discoveryBluetoothBridge = nil
             bluetoothBridges[identifier] = bridge
@@ -3161,7 +3164,34 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         } else if bluetoothBridges[identifier] == nil {
             bluetoothBridges[identifier] = bridge
         }
+        applyPendingRemoteTelemetry(identifier: identifier, profileID: profileID)
+        AppLogger.shared.write(
+            "REMOTE PROFILE phase=completed result=persisted reason=verified_remote_path " +
+                "created=\(existingProfileID == nil)"
+        )
         return profileID
+    }
+
+    private func applyPendingRemoteTelemetry(identifier: UUID, profileID: UUID) {
+        let hadBattery = pendingRemoteBatteryLevels[identifier] != nil
+        let hadPower = pendingRemotePowerStates[identifier] != nil
+        let hadModel = pendingRemoteModels[identifier] != nil
+        if let level = pendingRemoteBatteryLevels.removeValue(forKey: identifier) {
+            remoteBatteryLevels[profileID] = min(100, max(0, level))
+        }
+        if let powerState = pendingRemotePowerStates.removeValue(forKey: identifier) {
+            remotePowerStates[profileID] = powerState
+        }
+        if let model = pendingRemoteModels.removeValue(forKey: identifier) {
+            settings.updateRemoteProfileModel(profileID, model: model)
+            refreshRemoteDeviceNames(reason: .connection)
+        }
+        if hadBattery || hadPower || hadModel {
+            AppLogger.shared.write(
+                "REMOTE PROFILE_TELEMETRY phase=completed result=applied reason=profile_ready " +
+                    "battery=\(hadBattery) power=\(hadPower) model=\(hadModel)"
+            )
+        }
     }
 
     private func bluetoothIdentifier(for bridge: XiaomiBluetoothBridge) -> UUID? {
@@ -3171,7 +3201,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private func remoteProfileID(for bridge: XiaomiBluetoothBridge) -> UUID? {
         guard let identifier = bluetoothIdentifier(for: bridge) else { return nil }
         return settings.profileID(forBluetoothIdentifier: identifier)
-            ?? settings.registerBluetoothRemote(identifier: identifier)
     }
 
     func selectRemoteProfile(_ profileID: UUID) {
@@ -4711,10 +4740,21 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 cancelHIDMappingRecovery(reason: "bluetooth_not_ready")
             }
             let identifier = bluetoothIdentifier(for: bridge)
-            if let identifier,
-               let profileID = settings.profileID(forBluetoothIdentifier: identifier) {
-                remoteBatteryLevels.removeValue(forKey: profileID)
-                remotePowerStates.removeValue(forKey: profileID)
+            if let identifier {
+                let hadBattery = pendingRemoteBatteryLevels.removeValue(forKey: identifier) != nil
+                let hadPower = pendingRemotePowerStates.removeValue(forKey: identifier) != nil
+                let hadModel = pendingRemoteModels.removeValue(forKey: identifier) != nil
+                if hadBattery || hadPower || hadModel {
+                    AppLogger.shared.write(
+                        "REMOTE PROFILE_TELEMETRY phase=cancelled result=discarded " +
+                            "reason=bridge_not_ready battery=\(hadBattery) " +
+                            "power=\(hadPower) model=\(hadModel)"
+                    )
+                }
+                if let profileID = settings.profileID(forBluetoothIdentifier: identifier) {
+                    remoteBatteryLevels.removeValue(forKey: profileID)
+                    remotePowerStates.removeValue(forKey: profileID)
+                }
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
@@ -5117,7 +5157,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdateBatteryLevel level: Int?) {
-        guard let profileID = remoteProfileID(for: bridge) else { return }
+        guard let profileID = remoteProfileID(for: bridge) else {
+            if let identifier = bluetoothIdentifier(for: bridge) {
+                pendingRemoteBatteryLevels[identifier] = level
+                AppLogger.shared.write(
+                    "REMOTE PROFILE_TELEMETRY phase=buffered " +
+                        "result=\(level == nil ? "invalidated" : "deferred") " +
+                        "reason=handshake_pending kind=battery"
+                )
+            }
+            return
+        }
         if let level {
             remoteBatteryLevels[profileID] = min(100, max(0, level))
         } else {
@@ -5129,7 +5179,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ bridge: XiaomiBluetoothBridge,
         didIdentifyRemoteModel model: XiaomiRemoteModel
     ) {
-        guard let profileID = remoteProfileID(for: bridge) else { return }
+        guard let profileID = remoteProfileID(for: bridge) else {
+            if let identifier = bluetoothIdentifier(for: bridge) {
+                pendingRemoteModels[identifier] = model
+                AppLogger.shared.write(
+                    "REMOTE PROFILE_TELEMETRY phase=buffered result=deferred " +
+                        "reason=handshake_pending kind=model"
+                )
+            }
+            return
+        }
         settings.updateRemoteProfileModel(profileID, model: model)
         refreshRemoteDeviceNames(reason: .connection)
     }
@@ -5138,7 +5197,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ bridge: XiaomiBluetoothBridge,
         didUpdatePowerState state: RemotePowerState?
     ) {
-        guard let profileID = remoteProfileID(for: bridge) else { return }
+        guard let profileID = remoteProfileID(for: bridge) else {
+            if let identifier = bluetoothIdentifier(for: bridge) {
+                pendingRemotePowerStates[identifier] = state
+                AppLogger.shared.write(
+                    "REMOTE PROFILE_TELEMETRY phase=buffered " +
+                        "result=\(state == nil ? "invalidated" : "deferred") " +
+                        "reason=handshake_pending kind=power"
+                )
+            }
+            return
+        }
         if let state {
             remotePowerStates[profileID] = state
         } else {
