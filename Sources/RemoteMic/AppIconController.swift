@@ -42,18 +42,10 @@ struct AppIconCatalog {
     private static let bundledDefinitions: [BundledAppIconDefinition] = [
         BundledAppIconDefinition(
             id: .facetedDuck,
-            resourceName: facetedDuckResourceName,
+            resourceName: "faceted-duck",
             titleKey: "about.preferences.app_icon_faceted_duck"
         ),
     ]
-
-    private static let facetedDuckResourceName: String = {
-        #if arch(x86_64)
-        "faceted-duck-intel"
-        #else
-        "faceted-duck"
-        #endif
-    }()
 
     let options: [AppIconOption]
 

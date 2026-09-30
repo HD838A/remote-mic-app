@@ -26,7 +26,6 @@ Copyright (C) 2026 SayAll contributors
 - `Resources/AppIcon.png`；
 - `Resources/AppIcon.icns`；
 - `Resources/AppIcons/faceted-duck.png`；
-- `Resources/AppIcons/faceted-duck-intel.png`；
 - 由上述文件生成或演绎的版本。
 允许在未经修改的无线麦官方源码和官方发行版本中原样分发。用于其他应用、Fork、修改版本、产品或品牌标识时，必须事先取得版权所有者的书面授权。完整条款见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。
 

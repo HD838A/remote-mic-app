@@ -79,19 +79,28 @@ struct AppIconControllerTests {
     }
 
     @Test
-    func bundledFacetedDuckSourceAssetsAreFullSizePNGs() throws {
+    func bundledFacetedDuckSourceAssetIsAFullSizeRoundedPNG() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        for resourceName in ["faceted-duck", "faceted-duck-intel"] {
-            let url = root
-                .appendingPathComponent("Resources/AppIcons")
-                .appendingPathComponent("\(resourceName).png")
-            let data = try Data(contentsOf: url)
-            let representation = try #require(NSBitmapImageRep(data: data))
-            #expect(representation.pixelsWide == 1024)
-            #expect(representation.pixelsHigh == 1024)
+        let url = root
+            .appendingPathComponent("Resources/AppIcons")
+            .appendingPathComponent("faceted-duck.png")
+        let data = try Data(contentsOf: url)
+        let representation = try #require(NSBitmapImageRep(data: data))
+        #expect(representation.pixelsWide == 1024)
+        #expect(representation.pixelsHigh == 1024)
+        #expect(representation.hasAlpha)
+        let corners = [
+            (0, 0),
+            (representation.pixelsWide - 1, 0),
+            (0, representation.pixelsHigh - 1),
+            (representation.pixelsWide - 1, representation.pixelsHigh - 1),
+        ]
+        for (x, y) in corners {
+            let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
+            #expect(alpha <= (1.0 / 255.0))
         }
     }
 }

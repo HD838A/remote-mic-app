@@ -25,10 +25,10 @@
 
 ## 用例 1A：App 图标选择与资源缺失回退
 
-资源基线：`faceted-duck.png` 为 `1024 × 1024` RGBA PNG，SHA-256 `3061fdc5e3ca43d1801e9c07a0b25207b1d2d3da5e31ff799d77a1c38d9128bf`；`faceted-duck-intel.png` 为 `1024 × 1024` RGBA PNG，SHA-256 `569101880e6c10654fdc9eec208cd104a3f5eefb9ae32d8a3fe981620a84da5a`。构建和验证不得缩放、重新压缩或改写这两个文件。
+资源基线：`faceted-duck.png` 为 Apple Silicon 与 Intel 共用的 `1024 × 1024` RGBA PNG，SHA-256 `569101880e6c10654fdc9eec208cd104a3f5eefb9ae32d8a3fe981620a84da5a`。构建和验证不得缩放、重新压缩或改写该文件，四角必须保持透明。
 
 1. 在设置页打开“通用 → 应用图标”，检查“默认”和“几何鸭”两个选项。
-2. 分别构建 Apple Silicon 与 Intel 版本；Apple Silicon 应加载 `Resources/AppIcons/faceted-duck.png`，Intel 应加载 `Resources/AppIcons/faceted-duck-intel.png`，两者在设置中使用同一个稳定标识 `faceted-duck`。
+2. 分别构建 Apple Silicon 与 Intel 版本；两种架构都应加载 `Resources/AppIcons/faceted-duck.png`，并在设置中使用同一个稳定标识 `faceted-duck`。
 3. 每次选择后检查 Dock、Command-Tab 应用切换器和设置页顶部品牌图标，再退出并重新启动 App。
 4. 使用已保存“几何鸭”选择的偏好启动一个不包含对应架构资源的构建。
 
