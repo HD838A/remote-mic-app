@@ -45,7 +45,7 @@ struct AppIconCatalog {
             id: .facetedDuck,
             resourceName: "faceted-duck",
             titleKey: "about.preferences.app_icon_faceted_duck",
-            contentScale: 0.88
+            contentScale: 0.92
         ),
     ]
 

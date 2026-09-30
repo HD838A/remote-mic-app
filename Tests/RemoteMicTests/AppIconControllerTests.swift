@@ -112,7 +112,7 @@ struct AppIconControllerTests {
             return true
         }
 
-        let result = AppIconCatalog.applicationIconImage(source, contentScale: 0.88)
+        let result = AppIconCatalog.applicationIconImage(source, contentScale: 0.92)
         let data = try #require(result.tiffRepresentation)
         let representation = try #require(NSBitmapImageRep(data: data))
 

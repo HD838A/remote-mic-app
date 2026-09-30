@@ -1204,7 +1204,7 @@ struct SettingsPageRegressionTests {
         #expect(controllerSource.contains("let options: [AppIconOption]"))
         #expect(controllerSource.contains("subdirectory: \"AppIcons\""))
         #expect(controllerSource.contains("resourceName: \"faceted-duck\""))
-        #expect(controllerSource.contains("contentScale: 0.88"))
+        #expect(controllerSource.contains("contentScale: 0.92"))
         #expect(!controllerSource.contains("faceted-duck-intel"))
         #expect(buildSource.contains("Resources/AppIcons"))
         #expect(verifySource.contains("cmp -s"))
