@@ -447,6 +447,8 @@ struct SettingsView: View {
     private let checkForUpdates: () -> Void
     private let refreshUpdateInformation: () -> Void
     private let setDockIconVisible: (Bool) -> Void
+    private let setStatusBarIconVisible: (Bool) -> Void
+    private let syncEntryPointVisibility: () -> Void
     private let minimumContentSize: CGSize
     private let initialShortcutPickerShowsKeyboard: Bool
 
@@ -487,6 +489,8 @@ struct SettingsView: View {
         checkForUpdates: @escaping () -> Void = {},
         refreshUpdateInformation: @escaping () -> Void = {},
         setDockIconVisible: @escaping (Bool) -> Void = { _ in },
+        setStatusBarIconVisible: @escaping (Bool) -> Void = { _ in },
+        syncEntryPointVisibility: @escaping () -> Void = {},
         initialSection: SettingsSection? = nil,
         initialShareSection: SettingsSection? = nil,
         initialMappingEditingButton: RemoteButton? = nil,
@@ -505,6 +509,8 @@ struct SettingsView: View {
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
         self.setDockIconVisible = setDockIconVisible
+        self.setStatusBarIconVisible = setStatusBarIconVisible
+        self.syncEntryPointVisibility = syncEntryPointVisibility
         self.minimumContentSize = minimumContentSize
         self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
         _selectedSection = State(initialValue: SettingsPageBehavior.initialSection(
@@ -3527,6 +3533,31 @@ struct SettingsView: View {
                             Divider()
 
                             HStack(spacing: 14) {
+                                Image(systemName: "menubar.rectangle")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("about.preferences.show_status_bar_icon")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("about.preferences.show_status_bar_icon_help")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { settings.showStatusBarIcon },
+                                    set: { setStatusBarIconVisible($0) }
+                                ))
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                            }
+                            .padding(.vertical, 8)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
                                 Image(systemName: "power")
                                     .font(.title3)
                                     .foregroundStyle(Color.accentColor)
@@ -4118,7 +4149,7 @@ struct SettingsView: View {
         do {
             try model.importConfiguration(from: Data(contentsOf: url))
             localization.select(settings.applicationLanguage)
-            setDockIconVisible(settings.showDockIcon)
+            syncEntryPointVisibility()
             if settings.configurationImportNotice != nil {
                 configurationStatus = ConfigurationStatus(
                     message: LocalizedMessage("configuration.import.partial"),
