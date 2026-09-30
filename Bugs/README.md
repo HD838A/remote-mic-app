@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [自定义组合快捷键丢失左右修饰键侧别](./2026-09-30-custom-shortcut-modifier-side-lost.md)
 - [Dock 偏好、系统媒体动作、音量摘要与窗口菜单回归](./2026-09-13-dock-media-window-actions.md)
 - [休眠期间仍持续蓝牙扫描和重连](./2026-09-29-sleeping-ble-scan-and-reconnect.md)
 - [个人中心日历按行读取连续日期，导致星期标签与日期错位](./2026-09-29-profile-calendar-weekday-layout.md)

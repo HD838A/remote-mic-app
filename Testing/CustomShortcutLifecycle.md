@@ -2,7 +2,7 @@
 
 ## 范围与准备
 
-适用分支：`codex/custom-shortcut-modifier-lifecycle`。现有普通自定义组合无需重新录入。准备具有辅助功能权限的正式签名候选包、真实遥控器、实体键盘、至少两个 App 和两个 Codex 会话。不要用未签名本地构建替换用户安装版本。
+适用分支：`codex/integrate-pr361-modifier-side`。现有普通自定义组合无需重新录入；只有需要区分左右侧的组合需要在候选版重新录入一次。准备具有辅助功能权限的正式签名候选包、真实遥控器、实体键盘、至少两个 App 和两个 Codex 会话。不要用未签名本地构建替换用户安装版本。
 
 ## 自动化
 
@@ -17,7 +17,7 @@ swift test --disable-keychain --skip-build
 SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
 ```
 
-事件接收器替身检查协议，无真实按键注入。包含失败后释放、有限重试、下一次调用恢复及日志隐私边界。同步事务没有异步取消/超时状态；不增加按住、延时或重复任务。
+事件接收器替身检查协议，无真实按键注入。包含左右侧保存、右 Control/Option/Shift/Command 键码、失败后释放、有限重试、下一次调用恢复、另一侧实体键保留及日志隐私边界。同步事务没有异步取消/超时状态；不增加按住、延时或重复任务。
 
 ## 真实流程
 
@@ -28,11 +28,14 @@ SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
 5. 实体键盘先按住 Control，再触发 Control+Tab：不得合成该 Control 的松开，选择可保持到用户实际松键；同时按住 Shift/Option 等附加修饰键时按真实组合语义处理，不强制清除物理状态。重复在触发过程中按下实体修饰键，再手动松开，后续输入不得粘键。
 6. 撤销辅助功能权限后不得发送事件；重新授权后复测。事件构造/注入失败只由替身覆盖；真实权限和 WindowServer 拒绝不能用替身成功代替。
 7. 重启后旧快捷键仍存在，导入导出保持原格式，不要求重新录入。
+8. 进入快捷键录入，分别录入左、右 Command + 逗号，并在映射摘要与编辑器中确认显示 `左⌘,`、`右⌘,`；对左右 Option、Control、Shift 重复。显示合并为通用符号、左右保存值相同或重启后侧别丢失均失败。
+9. 在一个明确区分左右 Command 的测试 App 中，以实体键盘建立对照，再用遥控器连续触发右 Command + 逗号 20 次。每次只能触发右侧目标动作，前台 App 不应同时收到通用或左侧组合；出现漏触发、双触发、设置页等无关动作或后续输入粘住修饰键均失败。
+10. 实体键盘按住左 Command 时触发右 Command 组合；目标侧仍应为右侧，遥控器动作结束后左 Command 保持到用户真实松键。左右互换后重复。
 
 ## 日志
 
-从 App 的“文件 → 打开日志所在文件夹”收集测试时间段，筛选 `SHORTCUT SEQUENCE`，按 operation_id 配对 requested 和唯一 completed。正常结果为 submitted，失败说明 reason/cleanup_failed；submitted_events 仅证明提交次数，user_visible_result=unknown 不代表测试通过。不得收集输入文本、会话标题、设备标识或私有数据。
+从 App 的“文件 → 打开日志所在文件夹”收集测试时间段内的加密 `.rmlog`，交由受控支持环境解密后筛选 `SHORTCUT SEQUENCE`，按 operation_id 配对 requested 和唯一 completed。侧别组合的 requested 应为 `side_specific=true`；正常终态为 submitted，失败说明 reason/cleanup_failed。submitted_events 仅证明提交次数，user_visible_result=unknown 不代表测试通过。不得收集输入文本、会话标题、设备标识或私有数据。
 
 ## 验证边界
 
-自动化可证明构造出的事件类型、顺序、flags、清理和保存格式回归；不能证明目标 App 接受、WindowServer 实际切换、真正物理按键竞态、Intel 或私有模块整合。真实遥控器、第三方 App、全屏/多屏和权限恢复均待人工验收，因此 PR 保持 Draft。
+自动化可证明构造出的事件类型、顺序、左右设备位、清理和保存格式回归；不能证明目标 App 接受、WindowServer 实际切换、真正物理按键竞态、Intel 或私有模块整合。真实遥控器、区分左右侧的第三方 App、全屏/多屏和权限恢复均待人工验收；PR 在双架构 CI 与实际页面截图完成前不得合入。

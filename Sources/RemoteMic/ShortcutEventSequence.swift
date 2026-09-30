@@ -4,16 +4,84 @@ import Foundation
 /// One synchronous shortcut transaction. A private source keeps our injected flags
 /// out of the HID hardware snapshot used to preserve keys the user is holding.
 enum ShortcutEventSequence {
+    private struct ModifierFamily {
+        let flag: CGEventFlags
+        let leftKey: CGKeyCode
+        let leftDeviceBit: CGEventFlags
+        let rightKey: CGKeyCode?
+        let rightDeviceBit: CGEventFlags
+    }
+
+    private struct SelectedModifier {
+        let flag: CGEventFlags
+        let key: CGKeyCode
+        let deviceBit: CGEventFlags
+        let sideSpecific: Bool
+    }
+
     private static let lock = NSLock()
     // Existing saved combinations have no modifier side. Use left keys without
     // changing their persisted representation; standalone modifiers keep their path.
-    private static let modifiers: [(flag: CGEventFlags, key: CGKeyCode, deviceBit: UInt64)] = [
-        (.maskControl, 59, 0x0001),
-        (.maskAlternate, 58, 0x0020),
-        (.maskShift, 56, 0x0002),
-        (.maskCommand, 55, 0x0008),
-        (.maskSecondaryFn, 63, 0)
+    private static let modifierFamilies: [ModifierFamily] = [
+        ModifierFamily(
+            flag: .maskControl,
+            leftKey: 59,
+            leftDeviceBit: CGEventFlags(rawValue: 0x0001),
+            rightKey: 62,
+            rightDeviceBit: CGEventFlags(rawValue: 0x2000)
+        ),
+        ModifierFamily(
+            flag: .maskAlternate,
+            leftKey: 58,
+            leftDeviceBit: CGEventFlags(rawValue: 0x0020),
+            rightKey: 61,
+            rightDeviceBit: CGEventFlags(rawValue: 0x0040)
+        ),
+        ModifierFamily(
+            flag: .maskShift,
+            leftKey: 56,
+            leftDeviceBit: CGEventFlags(rawValue: 0x0002),
+            rightKey: 60,
+            rightDeviceBit: CGEventFlags(rawValue: 0x0004)
+        ),
+        ModifierFamily(
+            flag: .maskCommand,
+            leftKey: 55,
+            leftDeviceBit: CGEventFlags(rawValue: 0x0008),
+            rightKey: 54,
+            rightDeviceBit: CGEventFlags(rawValue: 0x0010)
+        ),
+        ModifierFamily(
+            flag: .maskSecondaryFn,
+            leftKey: 63,
+            leftDeviceBit: [],
+            rightKey: nil,
+            rightDeviceBit: []
+        )
     ]
+
+    private static func selectedModifiers(for requested: CGEventFlags) -> [SelectedModifier] {
+        modifierFamilies.compactMap { family in
+            guard requested.contains(family.flag) else { return nil }
+            if let rightKey = family.rightKey,
+               requested.contains(family.rightDeviceBit) {
+                return SelectedModifier(
+                    flag: family.flag,
+                    key: rightKey,
+                    deviceBit: family.rightDeviceBit,
+                    sideSpecific: true
+                )
+            }
+            let leftIsSpecific = !family.leftDeviceBit.isEmpty &&
+                requested.contains(family.leftDeviceBit)
+            return SelectedModifier(
+                flag: family.flag,
+                key: family.leftKey,
+                deviceBit: family.leftDeviceBit,
+                sideSpecific: leftIsSpecific
+            )
+        }
+    }
 
     static func post(_ event: CGEvent) -> Bool {
         event.post(tap: .cghidEventTap)
@@ -37,7 +105,11 @@ enum ShortcutEventSequence {
         var reason = "none"
         var submitted = 0
         var cleanupFailed = false
-        logger("\(prefix) phase=requested")
+        let selectedModifiers = selectedModifiers(for: requested)
+        logger(
+            "\(prefix) phase=requested modifier_count=\(selectedModifiers.count) " +
+                "side_specific=\(selectedModifiers.contains { $0.sideSpecific })"
+        )
         defer {
             let elapsed = Int((ProcessInfo.processInfo.systemUptime - started) * 1_000)
             logger("\(prefix) phase=completed result=\(result ? "submitted" : "failed") " +
@@ -50,11 +122,14 @@ enum ShortcutEventSequence {
             return false
         }
         let physicalAtStart = hardwareFlags()
-        let owned = modifiers.filter {
-            requested.contains($0.flag) && !physicalAtStart.contains($0.flag)
+        let owned = selectedModifiers.filter { modifier in
+            if modifier.sideSpecific {
+                return !physicalAtStart.contains(modifier.deviceBit)
+            }
+            return !physicalAtStart.contains(modifier.flag)
         }
         var synthetic: CGEventFlags = []
-        var attemptedModifiers: [(flag: CGEventFlags, key: CGKeyCode, deviceBit: UInt64)] = []
+        var attemptedModifiers: [SelectedModifier] = []
 
         func emit(_ code: CGKeyCode, down: Bool, modifier: Bool) -> Bool {
             guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
@@ -70,7 +145,7 @@ enum ShortcutEventSequence {
 
         for modifier in owned {
             synthetic.formUnion(modifier.flag)
-            synthetic.formUnion(CGEventFlags(rawValue: modifier.deviceBit))
+            synthetic.formUnion(modifier.deviceBit)
             // Include attempted presses in cleanup even when submission fails.
             attemptedModifiers.append(modifier)
             if !emit(modifier.key, down: true, modifier: true) {
@@ -93,7 +168,7 @@ enum ShortcutEventSequence {
         }
         for modifier in attemptedModifiers.reversed() {
             synthetic.subtract(modifier.flag)
-            synthetic.subtract(CGEventFlags(rawValue: modifier.deviceBit))
+            synthetic.subtract(modifier.deviceBit)
             if !emit(modifier.key, down: false, modifier: true) {
                 result = false
                 reason = "modifier_up_failed"

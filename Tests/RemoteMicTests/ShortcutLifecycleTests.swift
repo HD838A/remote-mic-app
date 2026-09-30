@@ -64,6 +64,44 @@ struct ShortcutLifecycleTests {
         #expect(events.last?.flags.isEmpty == true)
     }
 
+    @Test func rightSideModifiersUseRequestedPhysicalKeys() {
+        let cases: [(CGEventFlags, UInt64, CGKeyCode)] = [
+            (.maskControl, 0x2000, 62),
+            (.maskAlternate, 0x0040, 61),
+            (.maskShift, 0x0004, 60),
+            (.maskCommand, 0x0010, 54),
+        ]
+        for (genericFlag, sideBit, expectedKey) in cases {
+            var events: [Edge] = []
+            #expect(ShortcutEventSequence.send(
+                keyCode: 43,
+                modifiers: [genericFlag, CGEventFlags(rawValue: sideBit)],
+                hardwareFlags: { [] },
+                eventPoster: { events.append(Edge($0)); return true }
+            ))
+
+            #expect(events.map(\.code) == [expectedKey, 43, 43, expectedKey])
+            #expect(events.first?.flags.contains(CGEventFlags(rawValue: sideBit)) == true)
+            #expect(events.last?.flags.isEmpty == true)
+        }
+    }
+
+    @Test func requestedRightSideIsSynthesizedWhileLeftSideIsPhysicallyHeld() {
+        var events: [Edge] = []
+        let physical: CGEventFlags = [.maskCommand, CGEventFlags(rawValue: 0x08)]
+        #expect(ShortcutEventSequence.send(
+            keyCode: 43,
+            modifiers: [.maskCommand, CGEventFlags(rawValue: 0x10)],
+            hardwareFlags: { physical },
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+
+        #expect(events.map(\.code) == [54, 43, 43, 54])
+        #expect(events.first?.flags.contains(CGEventFlags(rawValue: 0x08)) == true)
+        #expect(events.first?.flags.contains(CGEventFlags(rawValue: 0x10)) == true)
+        #expect(events.last?.flags == physical)
+    }
+
     @Test(arguments: Array(0..<6))
     func failureCleansUpAndNextInvocationRecovers(_ failAt: Int) {
         var events: [Edge] = []
@@ -152,6 +190,7 @@ struct ShortcutLifecycleTests {
         ))
         #expect(logs.count == 2)
         #expect(logs[0].split(separator: " ")[2] == logs[1].split(separator: " ")[2])
+        #expect(logs[0].contains("side_specific=false"))
         #expect(logs[1].contains("result=submitted"))
         #expect(logs[1].contains("submitted_events=4"))
         #expect(logs[1].contains("user_visible_result=unknown"))
