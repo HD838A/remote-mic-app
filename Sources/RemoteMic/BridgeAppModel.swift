@@ -2383,7 +2383,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write("AUDIO TEST_TONE cancelled reason=\(logReason)")
     }
 
-    func applyHIDSettings(allowVoiceKeyModeFallback: Bool = true) {
+    func applyHIDSettings(
+        allowVoiceKeyModeFallback: Bool = true,
+        restartSiriRemote: Bool = true
+    ) {
         let permissionSnapshot = HIDPermissionSnapshot.current
         appliedHIDPermissionSnapshot = permissionSnapshot
         if !permissionSnapshot.accessibilityGranted {
@@ -2417,7 +2420,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if !requestedFnTapMode, voiceFnTapSession.requiresCleanupBeforeMapping {
             voiceFnTapSession.setEnabled(false) { [weak self] in
                 self?.applyHIDSettings(
-                    allowVoiceKeyModeFallback: allowVoiceKeyModeFallback
+                    allowVoiceKeyModeFallback: allowVoiceKeyModeFallback,
+                    restartSiriRemote: restartSiriRemote
                 )
             }
             return
@@ -2450,7 +2454,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 AppLogger.shared.write(
                     "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
                 )
-                scheduleHIDMappingRecoveryIfNeeded()
+                scheduleHIDMappingRecoveryIfNeeded(
+                    restartSiriRemote: restartSiriRemote
+                )
             } else {
                 settings.voiceFnTapModeEnabled = false
                 voiceFnTapSession.setEnabled(false)
@@ -2512,8 +2518,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
 #if SAYALL_SIRI_REMOTE_ENABLED
-        if started {
+        if started, restartSiriRemote {
             siriRemoteFeature.restart(customMappingEnabled: settings.customMappingEnabled)
+        } else if started {
+            AppLogger.shared.write(
+                "SIRI REMOTE SETTINGS phase=completed result=preserved " +
+                    "reason=voice_key_configuration_change"
+            )
         }
         refreshAppleRemoteHIDStatus()
 #endif
@@ -2524,7 +2535,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         refreshVoiceKeyCompatibilityWarning()
     }
 
-    private func scheduleHIDMappingRecoveryIfNeeded() {
+    private func scheduleHIDMappingRecoveryIfNeeded(
+        restartSiriRemote: Bool = true
+    ) {
         guard hidMappingRecoveryWorkItem == nil else { return }
         guard let delay = HIDMappingRecoveryPolicy.retryDelay(
             forAttempt: hidMappingRecoveryAttempt,
@@ -2562,9 +2575,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "HID MAPPING RECOVERY applying attempt=\(attempt) " +
                     "ready_bridges=\(self.readyBluetoothBridgeCount)"
             )
-            self.applyHIDSettings()
+            self.applyHIDSettings(restartSiriRemote: restartSiriRemote)
             if !self.voiceFunctionMapper.hasMatchingServices {
-                self.scheduleHIDMappingRecoveryIfNeeded()
+                self.scheduleHIDMappingRecoveryIfNeeded(
+                    restartSiriRemote: restartSiriRemote
+                )
             }
         }
         hidMappingRecoveryWorkItem = workItem
@@ -2783,7 +2798,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         settings.voiceFnTapModeEnabled = false
         voiceFnTapSession.setEnabled(false) { [weak self] in
-            self?.applyHIDSettings()
+            self?.applyHIDSettings(restartSiriRemote: false)
         }
     }
 
@@ -2834,7 +2849,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             voiceFnTapSession.setEnabled(false) { [weak self] in
                 guard let self else { return }
                 self.settings.voiceKeyMode = mode
-                self.applyHIDSettings()
+                self.applyHIDSettings(restartSiriRemote: false)
                 AppLogger.shared.write(
                     "VOICE KEY mode_change completed from=\(previousMode) to=\(mode.rawValue) result=applied"
                 )
@@ -2843,7 +2858,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
 
         settings.voiceKeyMode = .function
-        applyHIDSettings()
+        applyHIDSettings(restartSiriRemote: false)
         AppLogger.shared.write(
             "VOICE KEY mode_change completed from=\(previousMode) to=fn result=applied"
         )
@@ -2853,7 +2868,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         guard KeyboardInjector.isAccessibilityTrusted else {
             settings.voiceFnTapModeEnabled = false
             requestNextHIDPermissionIfNeeded(voiceFnTapModeRequested: true)
-            applyHIDSettings()
+            applyHIDSettings(restartSiriRemote: false)
             return
         }
 
@@ -2868,7 +2883,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     "VOICE FN TAP mode_pending_mapping reason=no_matching_service"
                 )
                 startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
-                scheduleHIDMappingRecoveryIfNeeded()
+                scheduleHIDMappingRecoveryIfNeeded(restartSiriRemote: false)
                 return
             }
             settings.voiceFnTapModeEnabled = false
@@ -2885,7 +2900,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         AppLogger.shared.write("VOICE FN TAP failed reason=\(failure.rawValue) fallback=hardware_fn")
         settings.voiceFnTapModeEnabled = false
         voiceFnTapSession.setEnabled(false)
-        applyHIDSettings()
+        applyHIDSettings(restartSiriRemote: false)
     }
 
     private func requestNextHIDPermissionIfNeeded(
