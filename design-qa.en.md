@@ -30,6 +30,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 - Profile uses four single-row KPIs in a wide window and may adapt to two columns in a narrow layout. Rankings appear beside a six-month square-cell calendar heatmap using semantic blue; the former bar chart and Less–More legend are not part of the current design.
 - The Web Remote invite sheet prominently recommends the iOS app, hides the raw TestFlight URL, and provides actions to open the beta page or copy its link.
 - Settings keeps the current version, available update, Check for Updates, release notes, and the off-by-default pre-release toggle together. Permissions & Privacy precedes General, followed by Diagnostics & Logs, Support, and Sharing. Language choices remain visible without a drop-down; the page does not show a glossary, Version History, or Quit button.
+- General uses inline icon buttons for the app-icon choice and only shows icon resources actually included in the installed build. A selection immediately updates the Dock, app switcher, and Settings branding and persists across launches; a missing resource falls back to the default icon without showing an unavailable placeholder.
 - All UI text uses stable semantic keys. Localized Markdown help falls back to English when the selected language has no matching document.
 
 ## Mandatory interaction, layout, and typography rules

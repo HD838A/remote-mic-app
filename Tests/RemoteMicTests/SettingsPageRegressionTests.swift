@@ -25,6 +25,26 @@ struct SettingsPageRegressionTests {
         #expect(!hardwarePage.contains("selectDefaultMappingRemoteIfAvailable"))
     }
 
+    @Test func settingsSidebarAndPageUseTheSameBackgroundColor() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(
+            settingsSource.contains(
+                ".background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())"
+            )
+        )
+        #expect(!settingsSource.contains(
+            ".background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())"
+        ))
+    }
+
     @Test func connectionPageKeepsCompatibilityAudioControlsWithoutExtraTools() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1190,6 +1210,44 @@ struct SettingsPageRegressionTests {
         #expect(appSource.contains("userDriverDelegate: self"))
         #expect(appSource.contains("standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool"))
         #expect(appSource.contains("semantic_newer_but_sparkle_rejected"))
+    }
+
+    @Test func settingsPageUsesAnInlineAppIconPickerWithoutUnavailablePlaceholders() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let controllerSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/AppIconController.swift"),
+            encoding: .utf8
+        )
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("appIconPreferenceRow"))
+        #expect(settingsSource.contains("ForEach(appIconCatalog.options)"))
+        #expect(settingsSource.contains("settings.appIconIdentifier = option.id"))
+        #expect(!settingsSource.contains("VStack(spacing: 5)"))
+        #expect(settingsSource.contains(".accessibilityLabel(Text(LocalizedStringKey(option.titleKey)))"))
+        #expect(!settingsSource.contains("Picker(\"about.preferences.app_icon\""))
+        #expect(controllerSource.contains("struct AppIconIdentifier"))
+        #expect(controllerSource.contains("let options: [AppIconOption]"))
+        #expect(controllerSource.contains("subdirectory: \"AppIcons\""))
+        #expect(controllerSource.contains("resourceName: \"faceted-duck\""))
+        #expect(controllerSource.contains("contentScale: 0.92"))
+        #expect(!controllerSource.contains("faceted-duck-intel"))
+        #expect(buildSource.contains("Resources/AppIcons"))
+        #expect(verifySource.contains("cmp -s"))
     }
 
     @Test func settingsPageOffersAnOptInLoginItemWithSystemApprovalRecovery() throws {
