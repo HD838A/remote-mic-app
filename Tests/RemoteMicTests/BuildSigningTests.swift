@@ -88,6 +88,29 @@ struct BuildSigningTests {
         #expect(source.contains("plutil -insert SayAllBuildChannel -string \"$SAYALL_BUILD_CHANNEL\""))
     }
 
+    @Test func internalBuildsCanRequireUsableDiagnosticLogging() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        for source in [buildSource, verifySource] {
+            #expect(source.contains("REQUIRE_DIAGNOSTIC_PUBLIC_KEY=\"${REQUIRE_DIAGNOSTIC_PUBLIC_KEY:-0}\""))
+            #expect(source.contains("DIAGNOSTIC_PUBLIC_KEY_SIZE"))
+            #expect(source.contains("32-byte Curve25519 public key"))
+        }
+        #expect(buildSource.contains("SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 is required for this build"))
+        #expect(verifySource.contains("App is missing the required diagnostic public key"))
+    }
+
     @Test func siriRemoteIsOptInForCommunityBuilds() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

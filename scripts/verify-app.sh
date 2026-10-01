@@ -24,6 +24,7 @@ REQUIRE_SAYALL_COMBINATION_ACTIONS="${REQUIRE_SAYALL_COMBINATION_ACTIONS:-0}"
 REQUIRE_SAYALL_BUTTON_PROFILES="${REQUIRE_SAYALL_BUTTON_PROFILES:-0}"
 REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE:-0}"
 REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS="${REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS:-0}"
+REQUIRE_DIAGNOSTIC_PUBLIC_KEY="${REQUIRE_DIAGNOSTIC_PUBLIC_KEY:-0}"
 
 case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
@@ -52,6 +53,10 @@ esac
 case "$REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_DIAGNOSTIC_PUBLIC_KEY" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_DIAGNOSTIC_PUBLIC_KEY must be 0 or 1"; exit 1 ;;
 esac
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && -z "$EXPECTED_DEVELOPER_TEAM_ID" ]]; then
   print -u2 "EXPECTED_DEVELOPER_TEAM_ID is required for Developer ID verification"
@@ -280,6 +285,24 @@ test "$(plutil -extract SUScheduledCheckInterval raw -o - "$PLIST")" = "86400"
 test "$(plutil -extract SUAutomaticallyUpdate raw -o - "$PLIST")" = "false"
 test "$(plutil -extract SUAllowsAutomaticUpdates raw -o - "$PLIST")" = "false"
 test -n "$(plutil -extract SUPublicEDKey raw -o - "$PLIST")"
+SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="$(
+  plutil -extract SayAllDiagnosticPublicKey raw -o - "$PLIST" 2>/dev/null || true
+)"
+if [[ "$REQUIRE_DIAGNOSTIC_PUBLIC_KEY" == "1" && -z "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
+  print -u2 "App is missing the required diagnostic public key"
+  exit 1
+fi
+if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
+  if ! DIAGNOSTIC_PUBLIC_KEY_SIZE="$(
+    print -rn -- "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" |
+      /usr/bin/base64 -D 2>/dev/null |
+      /usr/bin/wc -c |
+      /usr/bin/tr -d '[:space:]'
+  )" || [[ "$DIAGNOSTIC_PUBLIC_KEY_SIZE" != "32" ]]; then
+    print -u2 "SayAllDiagnosticPublicKey must encode a 32-byte Curve25519 public key"
+    exit 1
+  fi
+fi
 SAYALL_AI_INCLUDED="$(plutil -extract SayAllAIIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   SAYALL_AI_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllAI_SayAllAI.bundle"
