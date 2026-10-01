@@ -127,6 +127,11 @@ final class MacroFeatureIntegration: ObservableObject {
 
     func updateButtonProfilesAccess(_ decision: HostButtonProfilesAccessDecision) {
         #if canImport(SayAllButtonProfiles)
+        #if SAYALL_TEST_BUTTON_PROFILES_FREE
+        buttonProfilesFeature.updateButtonProfilesAccess(
+            .allowed(validUntil: .distantFuture)
+        )
+        #else
         let packageDecision: ButtonProfilesAccessDecision
         switch decision {
         case let .allowed(validUntil):
@@ -139,6 +144,7 @@ final class MacroFeatureIntegration: ObservableObject {
             packageDecision = .unavailable
         }
         buttonProfilesFeature.updateButtonProfilesAccess(packageDecision)
+        #endif
         #endif
     }
 

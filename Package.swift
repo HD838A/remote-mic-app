@@ -81,6 +81,15 @@ let sourceMacroCapabilitiesAvailable = combinationActionsPackagePath.map {
 } ?? false
 let privateArtifactsAvailable = !(privateArtifactPackagePath ?? "").isEmpty
 let macroCapabilitiesAvailable = sourceMacroCapabilitiesAvailable || privateArtifactsAvailable
+let buttonProfilesTestAccessEnabled = ProcessInfo.processInfo.environment[
+    "SAYALL_TEST_BUTTON_PROFILES_FREE"
+] == "1"
+if buttonProfilesTestAccessEnabled && (buttonProfilesPackagePath ?? "").isEmpty {
+    fatalError("free button profile test access requires the source button profiles package")
+}
+if buttonProfilesTestAccessEnabled && privateArtifactsAvailable {
+    fatalError("free button profile test access excludes private membership artifacts")
+}
 let chromecastPackagePath = ProcessInfo.processInfo.environment[
     "SAYALL_CHROMECAST_PACKAGE_PATH"
 ]
@@ -100,6 +109,9 @@ if macRemoteEnabled {
 }
 if macroCapabilitiesAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_MACRO_REMOTE_CAPABILITIES"))
+}
+if buttonProfilesTestAccessEnabled {
+    remoteMicSwiftSettings.append(.define("SAYALL_TEST_BUTTON_PROFILES_FREE"))
 }
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
 if siriRemoteEnabled {
