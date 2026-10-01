@@ -7,6 +7,12 @@ REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 GH_BIN="${GH_BIN:-gh}"
 WORKFLOW_FILE="mac-release-package.yml"
 MODE="${1:-preview}"
+INCLUDE_SAYALL_AI="${INCLUDE_SAYALL_AI:-0}"
+case "$INCLUDE_SAYALL_AI" in
+  0) include_ai=false ;;
+  1) include_ai=true ;;
+  *) print -u2 "INCLUDE_SAYALL_AI must be 0 or 1"; exit 2 ;;
+esac
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
   print -u2 "Preview staging is restricted to HD838A/remote-mic-app"
@@ -127,7 +133,8 @@ dispatched_at="$(/bin/date -u +'%Y-%m-%dT%H:%M:%SZ')"
 "$GH_BIN" workflow run "$WORKFLOW_FILE" --repo "$REPOSITORY" --ref main \
   --raw-field "mode=$MODE" \
   --raw-field "source_branch=$source_branch" \
-  --raw-field "expected_commit=$commit"
+  --raw-field "expected_commit=$commit" \
+  --raw-field "include_ai=$include_ai"
 
 run_id=""
 run_url=""
@@ -158,6 +165,7 @@ done
 }
 print "MAC RELEASE STAGING DISPATCHED"
 print "MODE: $MODE"
+print "INCLUDE_AI: $include_ai"
 print "TAG: $tag"
 print "SOURCE_BRANCH: $source_branch"
 print "SOURCE_COMMIT: $commit"

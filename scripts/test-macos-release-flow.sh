@@ -63,6 +63,34 @@ fi
 /usr/bin/grep -Fq 'mode:' "$package_workflow"
 /usr/bin/grep -Fq 'expected_commit:' "$package_workflow"
 /usr/bin/grep -Fq 'source_branch:' "$package_workflow"
+/usr/bin/grep -Fq 'if: ${{ inputs.include_ai }}' "$package_workflow"
+/usr/bin/grep -Fq 'INCLUDE_SAYALL_AI: ${{ inputs.include_ai && '\''1'\'' || '\''0'\'' }}' "$package_workflow"
+/usr/bin/grep -Fq 'INCLUDE_SAYALL_AI="${INCLUDE_SAYALL_AI:-0}"' "$ROOT/scripts/stage-macos-preview.sh"
+/usr/bin/grep -Fq -- 'include_ai=$include_ai' "$ROOT/scripts/stage-macos-preview.sh"
+# Execute the actual workflow configuration body without checkout or credentials.
+ai_input="$(/usr/bin/awk '/^      include_ai:/ { capture=1; next } capture && /^concurrency:/ { exit } capture { print }' "$package_workflow")"
+print -r -- "$ai_input" | /usr/bin/grep -Fq 'default: false'
+print -r -- "$ai_input" | /usr/bin/grep -Fq 'type: boolean'
+configure_features="$(/usr/bin/awk '
+  /- name: Configure private feature package/ { found=1; next }
+  found && /run: \|/ { capture=1; next }
+  capture && /^      - name:/ { exit }
+  capture { print }
+' "$package_workflow")"
+for ai_mode in 0 1; do
+  ai_env="$WORK_DIR/ai-config-$ai_mode.env"
+  INCLUDE_SAYALL_AI="$ai_mode" GITHUB_WORKSPACE="$WORK_DIR" GITHUB_ENV="$ai_env" \
+    /bin/bash -e -c "$configure_features"
+  /usr/bin/grep -Fxq "REQUIRE_SAYALL_AI_PACKAGE=$ai_mode" "$ai_env"
+  if [[ "$ai_mode" == 0 ]]; then
+    /usr/bin/grep -Fxq 'SAYALL_AI_PACKAGE_PATH=' "$ai_env"
+  else
+    /usr/bin/grep -Fxq "SAYALL_AI_PACKAGE_PATH=$WORK_DIR/.private-dependencies/sayall-ai" "$ai_env"
+  fi
+done
+ai_requirement="$(/usr/bin/grep '^export REQUIRE_SAYALL_AI_PACKAGE=' "$notarize_release")"
+[[ "$(env -u REQUIRE_SAYALL_AI_PACKAGE /bin/zsh -c "$ai_requirement; print -- \$REQUIRE_SAYALL_AI_PACKAGE")" == 0 ]]
+[[ "$(REQUIRE_SAYALL_AI_PACKAGE=1 /bin/zsh -c "$ai_requirement; print -- \$REQUIRE_SAYALL_AI_PACKAGE")" == 1 ]]
 /usr/bin/grep -Fq 'environment: mac-release' "$package_workflow"
 /usr/bin/grep -Fq 'prepare-public-release-assets.sh' "$package_workflow"
 /usr/bin/grep -Fq 'mac-preview-payload-v' "$package_workflow"

@@ -226,7 +226,7 @@ struct BuildSigningTests {
         #expect(verifySource.contains("Developer ID app is missing a production Web Remote relay URL"))
     }
 
-    @Test func productionReleaseRequiresAndVerifiesPrivateFeaturePackage() throws {
+    @Test func productionReleaseAIIsOptInAndVerifiedWhenRequired() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -245,13 +245,15 @@ struct BuildSigningTests {
         )
 
         #expect(buildSource.contains("SAYALL_AI_PACKAGE_PATH"))
+        #expect(buildSource.contains("SAYALL_AI_PACKAGE_PATH=\"${SAYALL_AI_PACKAGE_PATH:-}\""))
         #expect(!buildSource.contains("$ROOT/../sayall-ai/Package.swift"))
         #expect(buildSource.contains("A SayAllAI package is required for this build"))
         #expect(buildSource.contains("SayAllAI_SayAllAI.bundle"))
         #expect(buildSource.contains("SayAllAIIncluded"))
         #expect(buildSource.contains("DEFAULT_SCRATCH_PATH=\"/private/tmp/remote-mic-swiftpm/"))
         #expect(!buildSource.contains("DEFAULT_SCRATCH_PATH=\"$ROOT/.build-app-sayall-ai\""))
-        #expect(notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=1"))
+        #expect(notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=\"${REQUIRE_SAYALL_AI_PACKAGE:-0}\""))
+        #expect(!notarizeSource.contains("export REQUIRE_SAYALL_AI_PACKAGE=1"))
         #expect(notarizeSource.contains("export REQUIRE_SAYALL_COMBINATION_ACTIONS=1"))
         #expect(notarizeSource.contains("export REQUIRE_SAYALL_BUTTON_PROFILES="))
         #expect(verifySource.contains("App is missing the required SayAllAI package marker"))

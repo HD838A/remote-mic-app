@@ -43,6 +43,8 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 
 ## Preview staging：受保护的唯一签名入口
 
+AI 整理默认不进入发布包：本地构建未显式提供 `SAYALL_AI_PACKAGE_PATH` 时不链接 AI；公证入口默认 `REQUIRE_SAYALL_AI_PACKAGE=0`，不要求 AI 组件。受保护 staging 默认 `include_ai=false`，不 checkout 或注入 AI Package。需要 AI 的特定候选必须显式使用 `INCLUDE_SAYALL_AI=1 scripts/stage-macos-preview.sh preview`（或手动 dispatch 选择 `include_ai=true`）；此时按固定 Commit checkout，并要求构建和最终 App 验证 AI 组件。其他发布所需组件与 Developer ID、Apple 公证、staple、Gatekeeper 门禁不变。
+
 普通版本从与 `origin/main` 相同的 main worktree 执行；Hotfix 从与远端完全一致的 `hotfix/vX.Y.Z` worktree 执行：
 
     scripts/stage-macos-preview.sh preview
