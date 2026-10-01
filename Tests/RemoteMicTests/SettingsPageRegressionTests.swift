@@ -5,6 +5,26 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func mappingPageSelectsTheDefaultXiaomiStyleOnlyWhenTheSectionOpens() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("model.selectDefaultMappingRemoteIfAvailable()"))
+        let hardwarePageStart = try #require(source.range(of: "private func hardwareMappingPage"))
+        let hardwarePageEnd = try #require(source.range(
+            of: "private var configurationImportBanner",
+            range: hardwarePageStart.upperBound..<source.endIndex
+        ))
+        let hardwarePage = source[hardwarePageStart.lowerBound..<hardwarePageEnd.lowerBound]
+        #expect(!hardwarePage.contains("selectDefaultMappingRemoteIfAvailable"))
+    }
+
     @Test func settingsSidebarAndPageUseTheSameBackgroundColor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

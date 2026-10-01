@@ -71,7 +71,7 @@ struct RemoteDeviceNamePolicyTests {
         #expect(RemoteDeviceNamePolicy.observedSystemName(from: " \t\n") == nil)
     }
 
-    @Test func cardOrderUsesModelPinyinBeforeSystemName() {
+    @Test func cardOrderKeepsXiaomiBeforeAppleBeforeChromecast() {
         let xiaomi = makeProfile(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
             model: .rc003,
@@ -101,7 +101,24 @@ struct RemoteDeviceNamePolicyTests {
             systemName: { $0.customName }
         )
 
-        #expect(sorted.map(\.id) == [chromecast.id, apple.id, xiaomi.id])
+        #expect(sorted.map(\.id) == [xiaomi.id, apple.id, chromecast.id])
+    }
+
+    @Test func defaultMappingProfileUsesTheFirstXiaomiStyleRemote() throws {
+        let unknown = makeProfile(model: .unknown)
+        let apple = makeProfile(model: .appleSiriRemoteA2854)
+        let chromecast = makeProfile(model: .chromecastVoiceRemote)
+        let xiaomiPro = makeProfile(model: .rc003)
+        let xiaomi = makeProfile(model: .rc001)
+
+        let selected = try #require(RemoteDeviceNamePolicy.defaultMappingProfile(
+            from: [unknown, apple, chromecast, xiaomiPro, xiaomi]
+        ))
+
+        #expect(selected.id == xiaomiPro.id)
+        #expect(RemoteDeviceNamePolicy.defaultMappingProfile(
+            from: [unknown, apple, chromecast]
+        ) == nil)
     }
 
     @Test func cardOrderUsesSystemNamePinyinThenStableIDForTheSameModel() {

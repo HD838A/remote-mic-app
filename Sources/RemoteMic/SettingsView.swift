@@ -549,6 +549,9 @@ struct SettingsView: View {
             minHeight: minimumContentSize.height
         )
         .onAppear {
+            if selectedSection == .mapping {
+                model.selectDefaultMappingRemoteIfAvailable()
+            }
             model.refreshRemoteDeviceNames(reason: .page)
             refreshPermissionStates()
             loginItemService.refresh()
@@ -556,6 +559,9 @@ struct SettingsView: View {
             membershipFeature.refreshIfNeeded()
         }
         .onChange(of: selectedSection) { section in
+            if section == .mapping {
+                model.selectDefaultMappingRemoteIfAvailable()
+            }
             if section == .connection || section == .mapping {
                 model.refreshRemoteDeviceNames(reason: .page)
             }

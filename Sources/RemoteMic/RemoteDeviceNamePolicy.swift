@@ -52,6 +52,10 @@ enum RemoteDeviceNamePolicy {
         systemName: (RemoteDeviceProfile) -> String?
     ) -> [RemoteDeviceProfile] {
         profiles.sorted { lhs, rhs in
+            let lhsFamily = cardFamilyOrder(lhs.model)
+            let rhsFamily = cardFamilyOrder(rhs.model)
+            if lhsFamily != rhsFamily { return lhsFamily < rhsFamily }
+
             let modelOrder = compareCardNames(modelName(lhs), modelName(rhs), emptyLast: false)
             if modelOrder != .orderedSame { return modelOrder == .orderedAscending }
 
@@ -59,6 +63,21 @@ enum RemoteDeviceNamePolicy {
             if systemOrder != .orderedSame { return systemOrder == .orderedAscending }
 
             return lhs.id.uuidString.lowercased() < rhs.id.uuidString.lowercased()
+        }
+    }
+
+    static func defaultMappingProfile(
+        from profiles: [RemoteDeviceProfile]
+    ) -> RemoteDeviceProfile? {
+        profiles.first { $0.model == .rc001 || $0.model == .rc003 }
+    }
+
+    private static func cardFamilyOrder(_ model: XiaomiRemoteModel) -> Int {
+        switch model {
+        case .rc001, .rc003: 0
+        case .appleSiriRemoteA2854, .appleSiriRemoteA2540: 1
+        case .chromecastVoiceRemote: 2
+        case .unknown: 3
         }
     }
 
