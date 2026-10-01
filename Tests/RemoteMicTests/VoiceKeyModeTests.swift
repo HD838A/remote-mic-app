@@ -307,7 +307,7 @@ struct VoiceKeyModeTests {
             encoding: .utf8
         )
         let recoveryStart = try #require(
-            source.range(of: "private func scheduleHIDMappingRecoveryIfNeeded()")
+            source.range(of: "private func scheduleHIDMappingRecoveryIfNeeded(")
         )
         let recoveryEnd = try #require(source.range(
             of: "private func completeHIDMappingRecoveryIfNeeded()",
@@ -315,12 +315,14 @@ struct VoiceKeyModeTests {
         ))
         let recoverySource = source[recoveryStart.lowerBound..<recoveryEnd.lowerBound]
 
-        #expect(recoverySource.contains("self.applyHIDSettings()"))
+        #expect(recoverySource.contains(
+            "self.applyHIDSettings(restartSiriRemote: restartSiriRemote)"
+        ))
         #expect(!recoverySource.contains("settings.voiceKeyMode = .function"))
 
         let applyStart = try #require(source.range(of: "func applyHIDSettings("))
         let applyEnd = try #require(source.range(
-            of: "private func scheduleHIDMappingRecoveryIfNeeded()",
+            of: "private func scheduleHIDMappingRecoveryIfNeeded(",
             range: applyStart.upperBound..<source.endIndex
         ))
         let applySource = source[applyStart.lowerBound..<applyEnd.lowerBound]
@@ -346,7 +348,9 @@ struct VoiceKeyModeTests {
             "HIDMappingRecoveryPolicy.shouldPreserveFnTapPreferenceAfterMappingFailure"
         ))
         #expect(enableSource.contains("settings.voiceFnTapModeEnabled = true"))
-        #expect(enableSource.contains("scheduleHIDMappingRecoveryIfNeeded()"))
+        #expect(enableSource.contains(
+            "scheduleHIDMappingRecoveryIfNeeded(restartSiriRemote: false)"
+        ))
     }
 
     @Test func bluetoothCommandVoiceRequiresNeutralizedHardwareKeyBeforeAcceptance() throws {
@@ -409,6 +413,43 @@ struct VoiceKeyModeTests {
         #expect(activeGate.lowerBound < fallback.lowerBound)
         #expect(applySource.contains("mode_preserved reason=voice_active_mapping_failed"))
         #expect(applySource.contains("VOICE FN TAP mode_preserved reason=voice_active_mapping_failed"))
+    }
+
+    @Test func changingVoiceKeySettingsDoesNotRestartSiriRemote() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let fnTapStart = try #require(source.range(of: "func setVoiceFnTapModeEnabled"))
+        let fnTapEnd = try #require(source.range(
+            of: "func importConfiguration",
+            range: fnTapStart.upperBound..<source.endIndex
+        ))
+        let fnTapSource = source[fnTapStart.lowerBound..<fnTapEnd.lowerBound]
+        let modeStart = try #require(source.range(of: "func setVoiceKeyMode"))
+        let modeEnd = try #require(source.range(
+            of: "private func enableVoiceFnTapMode",
+            range: modeStart.upperBound..<source.endIndex
+        ))
+        let modeSource = source[modeStart.lowerBound..<modeEnd.lowerBound]
+        let applyStart = try #require(source.range(of: "func applyHIDSettings("))
+        let applyEnd = try #require(source.range(
+            of: "private func scheduleHIDMappingRecoveryIfNeeded",
+            range: applyStart.upperBound..<source.endIndex
+        ))
+        let applySource = source[applyStart.lowerBound..<applyEnd.lowerBound]
+
+        #expect(fnTapSource.contains("applyHIDSettings(restartSiriRemote: false)"))
+        #expect(modeSource.contains("applyHIDSettings(restartSiriRemote: false)"))
+        #expect(applySource.contains("restartSiriRemote: Bool = true"))
+        #expect(applySource.contains("if started, restartSiriRemote"))
+        #expect(applySource.contains(
+            "SIRI REMOTE SETTINGS phase=completed result=preserved"
+        ))
     }
 
     @Test func configurationImportUsesModelSafetyGate() throws {
