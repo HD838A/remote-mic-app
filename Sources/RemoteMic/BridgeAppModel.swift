@@ -3209,6 +3209,46 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         refreshBluetoothPresentation()
     }
 
+    func selectDefaultMappingRemoteIfAvailable() {
+        let localization = LocalizationStore(settings: settings)
+        let connectedProfiles = RemoteDeviceNamePolicy.sortedForCards(
+            settings.remoteDeviceProfiles.filter { isRemoteConnected($0.id) },
+            modelName: { profile in
+                RemoteDeviceNamePolicy.displayName(
+                    for: profile,
+                    among: self.settings.remoteDeviceProfiles,
+                    defaultName: localization.text(profile.model.localizationKey)
+                )
+            },
+            systemName: { self.systemDeviceName(for: $0) }
+        )
+        guard let profile = RemoteDeviceNamePolicy.defaultMappingProfile(
+            from: connectedProfiles
+        ) else {
+            AppLogger.shared.write(
+                "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
+                    "reason=xiaomi_unavailable"
+            )
+            return
+        }
+        guard profile.id != settings.selectedRemoteProfileID else {
+            AppLogger.shared.write(
+                "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
+                    "reason=xiaomi_already_selected"
+            )
+            return
+        }
+        AppLogger.shared.write(
+            "REMOTE MAPPING_DEFAULT phase=completed result=selected " +
+                "reason=xiaomi_default family=xiaomi"
+        )
+        if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"] != nil {
+            settings.selectRemoteProfile(profile.id)
+            return
+        }
+        selectRemoteProfile(profile.id)
+    }
+
     private func activateRemoteProfile(for bridge: XiaomiBluetoothBridge) -> UUID? {
         guard let profileID = registerBluetoothBridgeIfNeeded(bridge) else { return nil }
         selectRemoteProfile(profileID)
