@@ -182,12 +182,15 @@ final class AppIconController {
     ) -> AppIconIdentifier {
         operationID &+= 1
         let currentOperationID = operationID
+        let appliedIdentifier = catalog.resolvedIdentifier(for: requestedIdentifier)
+        let requestedLogIdentifier = appliedIdentifier == requestedIdentifier
+            ? appliedIdentifier.rawValue
+            : "unavailable"
         AppLogger.shared.write(
             "APP_ICON CHANGE operation_id=\(currentOperationID) phase=requested " +
-                "source=\(source) requested=\(requestedIdentifier.rawValue)"
+                "source=\(source) requested=\(requestedLogIdentifier)"
         )
 
-        let appliedIdentifier = catalog.resolvedIdentifier(for: requestedIdentifier)
         applyImage(catalog.image(for: appliedIdentifier))
         let result = appliedIdentifier == requestedIdentifier ? "applied" : "fallback"
         let reason = appliedIdentifier == requestedIdentifier

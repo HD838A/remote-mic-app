@@ -128,7 +128,7 @@
 
 ## 日志收集
 
-1. App 日志：`~/Library/Logs/RemoteMic/runtime.log`，重点搜索 `UPDATE CHECK`、`source=cloudflare_channel`、`HARDWARE ANNOUNCEMENT` 与 `APP_ICON CHANGE`；图标日志只包含 `standard` 或已注册的稳定图标标识、阶段、结果与稳定原因码。
+1. 在设置页打开日志目录，收集本次启动对应的 `.rmlog` 加密会话文件并交给受控支持环境分析，完整方法见 [运行日志测试手册](RuntimeLogging.md)；不要按明文读取或要求 App 解密。支持人员重点检查 `UPDATE CHECK`、`source=cloudflare_channel`、`HARDWARE ANNOUNCEMENT` 与 `APP_ICON CHANGE`；图标日志只包含已注册的可用稳定标识或固定 `unavailable`、阶段、结果与稳定原因码，不记录未知导入标识。缺失构建公钥时日志闭锁，不回退明文。
 2. Console：按进程筛选 `RemoteMic`、`Autoupdate`、`Updater` 和 `Installer`。
 3. 崩溃报告：`~/Library/Logs/DiagnosticReports/` 中本次测试时间之后的 Remote Mic 报告。
 4. Sparkle CLI 使用 `--verbose` 保存完整输出；退出码 `4` 表示没有新版本，不判失败。
