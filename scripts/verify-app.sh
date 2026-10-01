@@ -502,6 +502,14 @@ fi
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"
 done <<< "$EXPECTED_APP_FILES"
+if [[ -d "$ROOT/Resources/AppIcons" ]]; then
+  while IFS= read -r source_icon; do
+    relative_icon_path="${source_icon#$ROOT/Resources/AppIcons/}"
+    bundled_icon="$APP/Contents/Resources/AppIcons/$relative_icon_path"
+    test -f "$bundled_icon"
+    /usr/bin/cmp -s "$source_icon" "$bundled_icon"
+  done < <(find "$ROOT/Resources/AppIcons" -type f | LC_ALL=C sort)
+fi
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
 done
