@@ -3,6 +3,23 @@ import Testing
 @testable import RemoteMic
 
 struct AppIconControllerTests {
+    @Test
+    func standaloneSelfTestIncludesTheAppIconIdentifierSource() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let selfTestSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/test.sh"),
+            encoding: .utf8
+        )
+
+        #expect(selfTestSource.components(separatedBy: .newlines).contains {
+            $0.trimmingCharacters(in: .whitespaces) ==
+                #""$ROOT/Sources/RemoteMic/AppIconController.swift" \"#
+        })
+    }
+
     @Test @MainActor
     func catalogOnlyOffersImagesThatAreActuallyAvailable() {
         let standard = NSImage(size: NSSize(width: 64, height: 64))
