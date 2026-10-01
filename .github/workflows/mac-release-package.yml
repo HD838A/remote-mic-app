@@ -21,6 +21,11 @@ on:
         required: true
         default: main
         type: string
+      include_ai:
+        description: Include the optional AI整理 package
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: mac-release-staging-${{ inputs.mode }}-${{ inputs.expected_commit }}
@@ -138,6 +143,7 @@ jobs:
       RELEASE_STAGE_TIMEOUTS: 1
       SIGNED_RELEASE_TIMEOUT_SECONDS: 540
       RELEASE_MODE: ${{ inputs.mode }}
+      INCLUDE_SAYALL_AI: ${{ inputs.include_ai && '1' || '0' }}
 
     steps:
       - name: Verify protected dispatch identity before credentials
@@ -227,6 +233,7 @@ jobs:
           EOF
 
       - name: Check out private feature package
+        if: ${{ inputs.include_ai }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: ${{ steps.release-dependencies.outputs.sayall_ai_repository }}
@@ -277,7 +284,9 @@ jobs:
           SAYALL_PRIVATE_PLATFORM_COMMIT: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
           SAYALL_MAC_REMOTE_COMMIT: ${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}
         run: |
-          test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "$SAYALL_AI_COMMIT"
+          if [[ "$INCLUDE_SAYALL_AI" == 1 ]]; then
+            test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "$SAYALL_AI_COMMIT"
+          fi
           test "$(git -C .private-dependencies/sayall-private-platform rev-parse HEAD)" = "$SAYALL_PRIVATE_PLATFORM_COMMIT"
           test "$(git -C .private-dependencies/sayall-mac-remote rev-parse HEAD)" = "$SAYALL_MAC_REMOTE_COMMIT"
           test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift
@@ -291,11 +300,16 @@ jobs:
       - name: Configure private feature package
         run: |
           {
-            echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai"
+            if [[ "$INCLUDE_SAYALL_AI" == 1 ]]; then
+              echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai"
+              echo "REQUIRE_SAYALL_AI_PACKAGE=1"
+            else
+              echo "SAYALL_AI_PACKAGE_PATH="
+              echo "REQUIRE_SAYALL_AI_PACKAGE=0"
+            fi
             echo "SAYALL_COMBINATION_ACTIONS_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-combination-actions"
             echo "SAYALL_SIRI_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote"
             echo "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
-            echo "REQUIRE_SAYALL_AI_PACKAGE=1"
             echo "REQUIRE_SAYALL_COMBINATION_ACTIONS=1"
             echo "REQUIRE_SAYALL_BUTTON_PROFILES=0"
             echo "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"
