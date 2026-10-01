@@ -25,6 +25,7 @@ The following app-logo assets are separate proprietary brand assets and are not 
 
 - Resources/AppIcon.png
 - Resources/AppIcon.icns
+- Resources/AppIcons/faceted-duck.png
 - versions generated from or derived from those files
 They may be distributed unchanged as part of unmodified official SayAll source and official releases. Written authorization from the copyright owner is required for use as the icon, logo, or brand identity of another app, fork, modified version, product, or service. Read [LOGO-LICENSE.en.md](LOGO-LICENSE.en.md) for the complete terms.
 

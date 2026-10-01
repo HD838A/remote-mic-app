@@ -47,6 +47,7 @@ private struct PersonalizedConfiguration: Codable {
     let buttonRapidPressEnabled: [String: Bool]?
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
+    let appIconIdentifier: AppIconIdentifier?
     let showDockIcon: Bool
     let showStatusBarIcon: Bool?
     let openMainWindowAtLaunch: Bool?
@@ -307,6 +308,7 @@ final class AppSettings: ObservableObject {
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
         static let selectedRemoteProfileID = "selectedRemoteProfileID"
         static let applicationLanguage = "applicationLanguage"
+        static let appIconIdentifier = "appIconIdentifier"
         static let showDockIcon = "showDockIcon"
         static let showStatusBarIcon = "showStatusBarIcon"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
@@ -425,6 +427,12 @@ final class AppSettings: ObservableObject {
 
     @Published var applicationLanguage: AppLanguage {
         didSet { defaults.set(applicationLanguage.rawValue, forKey: Keys.applicationLanguage) }
+    }
+
+    @Published var appIconIdentifier: AppIconIdentifier {
+        didSet {
+            defaults.set(appIconIdentifier.rawValue, forKey: Keys.appIconIdentifier)
+        }
     }
 
     @Published var showDockIcon: Bool {
@@ -808,6 +816,9 @@ final class AppSettings: ObservableObject {
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
         ) ?? .system
+        appIconIdentifier = AppIconIdentifier(
+            rawValue: defaults.string(forKey: Keys.appIconIdentifier) ?? "standard"
+        )
         showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
             ? true
             : defaults.bool(forKey: Keys.showDockIcon)
@@ -1936,6 +1947,7 @@ final class AppSettings: ObservableObject {
             Keys.customApplicationProfiles,
             Keys.peripheralIdentifier,
             Keys.applicationLanguage,
+            Keys.appIconIdentifier,
             Keys.voiceFnTapModeEnabled,
             Keys.voiceKeyMode,
             Keys.totalButtonPressCount,
@@ -1976,6 +1988,7 @@ final class AppSettings: ObservableObject {
                 ),
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
+            appIconIdentifier: appIconIdentifier,
             showDockIcon: showDockIcon,
             showStatusBarIcon: showStatusBarIcon,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
@@ -2135,6 +2148,9 @@ final class AppSettings: ObservableObject {
         buttonRapidPressEnabled = importedRapidPressEnabled
         customApplicationProfiles = importedApplicationProfiles
         applicationLanguage = configuration.applicationLanguage
+        if let appIconIdentifier = configuration.appIconIdentifier {
+            self.appIconIdentifier = appIconIdentifier
+        }
         showDockIcon = configuration.showDockIcon
         if let showStatusBarIcon = configuration.showStatusBarIcon {
             self.showStatusBarIcon = showStatusBarIcon
