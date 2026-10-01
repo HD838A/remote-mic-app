@@ -89,7 +89,7 @@ AI 整理默认不进入发布包：本地构建未显式提供 `SAYALL_AI_PACKA
 
 test-macos-release-flow.sh 默认运行原 flow、元数据和 CI 证明 fixture。生成 UI 证明和 publication 中的独立验证仍在不同阶段执行；Apple 凭据入口与无凭据上传边界保持不变。
 
-macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。产品矩阵执行原产品测试、self-test、双架构 Release build 和可用的私有集成；BuildSigningTests 从产品矩阵移至独立的双架构 Release script checks，按相关源码、资源、构建、安装、依赖或 workflow 变更运行。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。
+macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。产品矩阵执行原产品测试、self-test、双架构 Release build 和可用的私有集成；BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflow 变更执行，不在私有矩阵重复运行。产品变更时，两条公开 lane 用 --skip-build 复用已编译测试产物运行这 24 项发布检查，独立 Release script checks 在 Ubuntu 汇总成功结果；纯发布控制面变更时才使用独立 Mac lane 编译并验证。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。
 
 仅修改开发启动、RC003 手工实验打包、Siri 蓝牙 trace 或旧语音验收工具时，不触发产品构建或发布检查；这些工具不在 CI 中执行。它们保持手工可调用，历史限制也保持明确：旧 voice-acceptance 不适配当前 .rmlog，Siri trace 会修改系统调试设置。其改动不能冒充新的产品验证证明；发布只允许继承经核对无产品变化的既有双架构证明。
 

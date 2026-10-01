@@ -115,6 +115,12 @@ jobs:
         if: needs.classify_changes.outputs.product_change == 'true'
         run: swift --version
 
+      - name: Verify release configuration
+        if: needs.classify_changes.outputs.product_change == 'true' && needs.classify_changes.outputs.release_checks == 'true'
+        run: |
+          ./scripts/verify-release-dependency-pins.sh
+          ./scripts/verify-release-dependency-pins.sh tokens
+
       - name: Run Swift tests
         if: needs.classify_changes.outputs.product_change == 'true'
         env:
@@ -135,6 +141,16 @@ jobs:
           swift test --disable-keychain --filter VoiceInputDestinationCoordinatorTests
           swift test --disable-keychain --filter CoreVoiceInputJourneyTests
 
+      - name: Run release control-plane fixture
+        if: needs.classify_changes.outputs.product_change == 'true' && needs.classify_changes.outputs.release_checks == 'true'
+        env:
+          SAYALL_AI_PACKAGE_PATH: ""
+          SAYALL_COMBINATION_ACTIONS_PATH: ""
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
+          SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
+        # Reuse the product test binary; no additional Mac compilation.
+        run: swift test --disable-keychain --skip-build --filter BuildSigningTests
+
       - name: Run project self-test
         if: needs.classify_changes.outputs.product_change == 'true'
         run: SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
@@ -150,9 +166,9 @@ jobs:
 
   release_checks:
     name: Release script checks (${{ matrix.label }})
-    needs: classify_changes
+    needs: [classify_changes, public_test]
     if: needs.classify_changes.outputs.release_checks == 'true'
-    runs-on: macos-15
+    runs-on: ${{ needs.classify_changes.outputs.product_change == 'true' && 'ubuntu-latest' || 'macos-15' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -167,16 +183,25 @@ jobs:
       RELEASE_VARIANT: ${{ matrix.variant }}
     steps:
       - name: Check out repository
+        if: needs.classify_changes.outputs.product_change != 'true'
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
       - name: Verify release configuration
+        if: needs.classify_changes.outputs.product_change != 'true'
         run: |
           ./scripts/verify-release-dependency-pins.sh
           ./scripts/verify-release-dependency-pins.sh tokens
       - name: Run release control-plane fixture
+        if: needs.classify_changes.outputs.product_change != 'true'
         # BuildSigningTests executes the consolidated shell fixture itself.
         run: swift test --disable-keychain --filter BuildSigningTests
+
+      - name: Require release checks from product lanes
+        if: needs.classify_changes.outputs.product_change == 'true'
+        env:
+          PUBLIC_RESULT: ${{ needs.public_test.result }}
+        run: test "$PUBLIC_RESULT" = success
 
   private_access:
     name: Detect private dependency access
