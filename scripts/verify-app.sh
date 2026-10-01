@@ -23,6 +23,7 @@ REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
 REQUIRE_SAYALL_COMBINATION_ACTIONS="${REQUIRE_SAYALL_COMBINATION_ACTIONS:-0}"
 REQUIRE_SAYALL_BUTTON_PROFILES="${REQUIRE_SAYALL_BUTTON_PROFILES:-0}"
 REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE:-0}"
+REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS="${REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS:-0}"
 
 case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
@@ -47,6 +48,10 @@ esac
 case "$REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS must be 0 or 1"; exit 1 ;;
 esac
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && -z "$EXPECTED_DEVELOPER_TEAM_ID" ]]; then
   print -u2 "EXPECTED_DEVELOPER_TEAM_ID is required for Developer ID verification"
@@ -319,6 +324,7 @@ if [[ "$REQUIRE_SAYALL_COMBINATION_ACTIONS" == "1" && \
   print -u2 "App is missing the required SayAll combination actions marker"
   exit 1
 fi
+SAYALL_PRIVATE_ARTIFACT_INCLUDED="$(plutil -extract SayAllPrivateArtifactsIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 SAYALL_BUTTON_PROFILES_INCLUDED="$(plutil -extract SayAllButtonProfilesIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle"
 SAYALL_MEMBERSHIP_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllMembership_SayAllMembershipUI.bundle"
@@ -339,14 +345,18 @@ if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" ]]; then
     print -u2 "SayAll button profiles Chinese localization is missing"
     exit 1
   fi
-  test -d "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE"
-  if [[ -d "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE/Contents/Resources" ]]; then
-    SAYALL_MEMBERSHIP_RESOURCE_ROOT="$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE/Contents/Resources"
+  if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+    test -d "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE"
+    if [[ -d "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE/Contents/Resources" ]]; then
+      SAYALL_MEMBERSHIP_RESOURCE_ROOT="$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE/Contents/Resources"
+    else
+      SAYALL_MEMBERSHIP_RESOURCE_ROOT="$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE"
+    fi
+    test -f "$SAYALL_MEMBERSHIP_RESOURCE_ROOT/MembershipCenterCopy.json"
+    test -f "$SAYALL_MEMBERSHIP_RESOURCE_ROOT/AppIcon.png"
   else
-    SAYALL_MEMBERSHIP_RESOURCE_ROOT="$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE"
+    test ! -e "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE"
   fi
-  test -f "$SAYALL_MEMBERSHIP_RESOURCE_ROOT/MembershipCenterCopy.json"
-  test -f "$SAYALL_MEMBERSHIP_RESOURCE_ROOT/AppIcon.png"
 elif [[ -e "$SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE" ]]; then
   print -u2 "SayAll button profiles resource bundle exists without the inclusion marker"
   exit 1
@@ -359,7 +369,27 @@ if [[ "$REQUIRE_SAYALL_BUTTON_PROFILES" == "1" && \
   print -u2 "App is missing the required SayAll button profiles marker"
   exit 1
 fi
-SAYALL_PRIVATE_ARTIFACT_INCLUDED="$(plutil -extract SayAllPrivateArtifactsIncluded raw -o - "$PLIST" 2>/dev/null || true)"
+SAYALL_BUTTON_PROFILES_TEST_ACCESS="$(plutil -extract SayAllButtonProfilesTestAccess raw -o - "$PLIST" 2>/dev/null || true)"
+case "$SAYALL_BUTTON_PROFILES_TEST_ACCESS" in
+  true|false) ;;
+  "") SAYALL_BUTTON_PROFILES_TEST_ACCESS=false ;;
+  *) print -u2 "invalid SayAllButtonProfilesTestAccess marker"; exit 1 ;;
+esac
+if [[ "$SAYALL_BUTTON_PROFILES_TEST_ACCESS" == "true" && \
+      "$SAYALL_BUTTON_PROFILES_INCLUDED" != "true" ]]; then
+  print -u2 "button profile test access exists without the button profiles marker"
+  exit 1
+fi
+if [[ "$SAYALL_BUTTON_PROFILES_TEST_ACCESS" == "true" && \
+      "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+  print -u2 "button profile test access must not include private membership artifacts"
+  exit 1
+fi
+if [[ "$REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS" == "1" && \
+      "$SAYALL_BUTTON_PROFILES_TEST_ACCESS" != "true" ]]; then
+  print -u2 "App is missing the required free button profile test access marker"
+  exit 1
+fi
 if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" && \
       "$SAYALL_COMBINATION_ACTIONS_INCLUDED" != "true" ]]; then
   print -u2 "private artifact marker exists without the combination actions marker"

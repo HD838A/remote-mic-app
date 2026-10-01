@@ -276,6 +276,42 @@ struct BuildSigningTests {
         #expect(verifySource.contains("CFBundleDevelopmentRegion"))
     }
 
+    @Test func internalButtonProfileTestAccessIsExplicitAndExcludesMembershipArtifacts() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let packageSource = try String(
+            contentsOf: root.appendingPathComponent("Package.swift"),
+            encoding: .utf8
+        )
+        let integrationSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MacroFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
+        let verifySource = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+
+        #expect(packageSource.contains("SAYALL_TEST_BUTTON_PROFILES_FREE"))
+        #expect(packageSource.contains(".define(\"SAYALL_TEST_BUTTON_PROFILES_FREE\")"))
+        #expect(packageSource.contains("free button profile test access requires the source button profiles package"))
+        #expect(integrationSource.contains("#if SAYALL_TEST_BUTTON_PROFILES_FREE"))
+        #expect(integrationSource.contains(".allowed(validUntil: .distantFuture)"))
+        #expect(buildSource.contains("SayAllButtonProfilesTestAccess"))
+        #expect(buildSource.contains("free button profile test access excludes private membership artifacts"))
+        #expect(verifySource.contains("REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS"))
+        #expect(verifySource.contains("SayAllButtonProfilesTestAccess"))
+        #expect(verifySource.contains("button profile test access must not include private membership artifacts"))
+    }
+
     @Test func preparedPrivateArtifactsAreOptionalAndFailClosed() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -471,6 +507,7 @@ struct BuildSigningTests {
         #expect(fixtureSource.contains("-u SAYALL_SIRI_REMOTE_PACKAGE_PATH"))
         #expect(fixtureSource.contains("-u SAYALL_COMBINATION_ACTIONS_PATH"))
         #expect(fixtureSource.contains("-u SAYALL_BUTTON_PROFILES_PACKAGE_PATH"))
+        #expect(fixtureSource.contains("-u SAYALL_TEST_BUTTON_PROFILES_FREE"))
         #expect(fixtureSource.contains("-u SAYALL_MEMBERSHIP_ADAPTER_PACKAGE_PATH"))
         #expect(fixtureSource.contains("-u SAYALL_MEMBERSHIP_PACKAGE_PATH"))
         let process = Process()

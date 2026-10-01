@@ -29,6 +29,7 @@ SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
 SAYALL_CHROMECAST_PACKAGE_PATH="${SAYALL_CHROMECAST_PACKAGE_PATH:-}"
 SAYALL_MEMBERSHIP_API_BASE_URL="${SAYALL_MEMBERSHIP_API_BASE_URL:-}"
 SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="${SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64:-}"
+SAYALL_TEST_BUTTON_PROFILES_FREE="${SAYALL_TEST_BUTTON_PROFILES_FREE:-0}"
 SAYALL_BUILD_CHANNEL="${SAYALL_BUILD_CHANNEL:-}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
@@ -82,6 +83,11 @@ case "$REQUIRE_SAYALL_CHROMECAST" in
   0|1) ;;
   *) print -u2 "REQUIRE_SAYALL_CHROMECAST must be 0 or 1"; exit 1 ;;
 esac
+case "$SAYALL_TEST_BUTTON_PROFILES_FREE" in
+  0|1) ;;
+  *) print -u2 "SAYALL_TEST_BUTTON_PROFILES_FREE must be 0 or 1"; exit 1 ;;
+esac
+export SAYALL_TEST_BUTTON_PROFILES_FREE
 case "$RELEASE_STAGE_TIMEOUTS" in
   0|1) ;;
   *) print -u2 "RELEASE_STAGE_TIMEOUTS must be 0 or 1"; exit 1 ;;
@@ -292,6 +298,16 @@ if [[ "$REQUIRE_SAYALL_BUTTON_PROFILES" == "1" &&
   print -u2 "A SayAll button profiles package is required for this build"
   exit 1
 fi
+if [[ "$SAYALL_TEST_BUTTON_PROFILES_FREE" == "1" &&
+      "$SAYALL_BUTTON_PROFILES_INCLUDED" != "true" ]]; then
+  print -u2 "free button profile test access requires the source button profiles package"
+  exit 1
+fi
+if [[ "$SAYALL_TEST_BUTTON_PROFILES_FREE" == "1" &&
+      "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+  print -u2 "free button profile test access excludes private membership artifacts"
+  exit 1
+fi
 if [[ -n "$SAYALL_MEMBERSHIP_API_BASE_URL" ]] && ! print -r -- "$SAYALL_MEMBERSHIP_API_BASE_URL" | \
     rg -q '^(https://[^[:space:]]+|http://127\.0\.0\.1(:[0-9]+)?(/[^[:space:]]*)?)$'; then
   print -u2 "SAYALL_MEMBERSHIP_API_BASE_URL must use HTTPS or local http://127.0.0.1"
@@ -347,6 +363,9 @@ if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
 fi
 if [[ "$SAYALL_CHROMECAST_INCLUDED" == "true" ]]; then
   SCRATCH_FLAVOR="${SCRATCH_FLAVOR}-chromecast"
+fi
+if [[ "$SAYALL_TEST_BUTTON_PROFILES_FREE" == "1" ]]; then
+  SCRATCH_FLAVOR="${SCRATCH_FLAVOR}-free-button-profiles-test"
 fi
 DEFAULT_SCRATCH_PATH="/private/tmp/remote-mic-swiftpm/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
 DEFAULT_CACHE_PATH="/private/tmp/remote-mic-swiftpm-cache/$VERSION-$BUILD/$RELEASE_VARIANT-$SCRATCH_FLAVOR"
@@ -445,6 +464,13 @@ plutil -insert SayAllCombinationActionsIncluded -bool "$SAYALL_COMBINATION_ACTIO
   "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllButtonProfilesIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllButtonProfilesIncluded -bool "$SAYALL_BUTTON_PROFILES_INCLUDED" \
+  "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllButtonProfilesTestAccess "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+SAYALL_BUTTON_PROFILES_TEST_ACCESS=false
+if [[ "$SAYALL_TEST_BUTTON_PROFILES_FREE" == "1" ]]; then
+  SAYALL_BUTTON_PROFILES_TEST_ACCESS=true
+fi
+plutil -insert SayAllButtonProfilesTestAccess -bool "$SAYALL_BUTTON_PROFILES_TEST_ACCESS" \
   "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
