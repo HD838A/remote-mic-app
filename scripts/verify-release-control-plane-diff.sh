@@ -25,8 +25,7 @@ while IFS= read -r changed_path; do
   changed=true
   case "$changed_path" in
     *.md|Screenshots/*) continue ;;
-    script/build_and_run.sh|Testing/build_rc003_preview.sh|\
-    scripts/run-apple-remote-no-packetlogger-probe.sh|scripts/voice-acceptance.sh)
+    script/build_and_run.sh)
       docs_only=false
       continue
       ;;

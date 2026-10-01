@@ -192,7 +192,8 @@ REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
 jq -e --arg commit "$bad_commit" '.productProofCommit == $commit' "$WORK_DIR/control-proof.json" >/dev/null
 
 # Subsequent manual tooling cannot be mistaken for a fresh product proof.
-print -r -- fixture > "$source_repo/scripts/run-apple-remote-no-packetlogger-probe.sh"
+/bin/mkdir -p "$source_repo/script"
+print -r -- fixture > "$source_repo/script/build_and_run.sh"
 /usr/bin/git -C "$source_repo" add .
 /usr/bin/git -C "$source_repo" commit -q -m 'manual tooling change'
 /usr/bin/git -C "$source_repo" push -q origin main
@@ -368,8 +369,7 @@ opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
 
 /usr/bin/grep -Fq -- '--disable-keychain' "$ROOT/scripts/build-app.sh"
 /usr/bin/grep -Fq 'xcrun swift build --disable-keychain' "$ROOT/scripts/test.sh"
-if [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/scripts/build-app.sh")" -lt 2 ]] || \
-   [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/Testing/build_rc003_preview.sh")" -lt 2 ]]; then
+if [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/scripts/build-app.sh")" -lt 2 ]]; then
   print -u2 "local SwiftPM entry points must disable macOS Keychain credential lookup"
   exit 1
 fi
@@ -814,9 +814,9 @@ for test_case in \
   'scripts/test-macos-release-flow.sh:false:true' \
   'scripts/verify-release-control-plane-diff.sh:false:true' \
   'script/build_and_run.sh:false:false' \
-  'Testing/build_rc003_preview.sh:false:false' \
-  'scripts/run-apple-remote-no-packetlogger-probe.sh:false:false' \
-  'scripts/voice-acceptance.sh:false:false' \
+  'Testing/LocalExperiment.command:true:false' \
+  'Testing/LocalProbe.swift:true:false' \
+  'scripts/local-log-collector.sh:true:true' \
   'Sources/RemoteMic/BridgeAppModel.swift:true:true' \
   'Sources/RemoteMic/FutureFeature.swift:true:false' \
   'scripts/unknown-future-tool.sh:true:true' \

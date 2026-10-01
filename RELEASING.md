@@ -91,7 +91,9 @@ test-macos-release-flow.sh 默认运行原 flow、元数据和 CI 证明 fixture
 
 macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。产品矩阵执行原产品测试、self-test、双架构 Release build 和可用的私有集成；BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflow 变更执行，不在私有矩阵重复运行。产品变更时，两条公开 lane 用 --skip-build 复用已编译测试产物运行这 24 项发布检查，独立 Release script checks 在 Ubuntu 汇总成功结果；纯发布控制面变更时才使用独立 Mac lane 编译并验证。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。
 
-仅修改开发启动、RC003 手工实验打包、Siri 蓝牙 trace 或旧语音验收工具时，不触发产品构建或发布检查；这些工具不在 CI 中执行。它们保持手工可调用，历史限制也保持明确：旧 voice-acceptance 不适配当前 .rmlog，Siri trace 会修改系统调试设置。其改动不能冒充新的产品验证证明；发布只允许继承经核对无产品变化的既有双架构证明。
+仅修改开发启动入口 script/build_and_run.sh 时，不触发产品构建或发布检查；该入口不在 CI 中执行，其改动不能冒充新的产品验证证明。发布只允许继承经核对无产品变化的既有双架构证明。
+
+2026-10-02 已移除 RC003 专用实验包构建、两个 RC003 启动器、Siri 手工蓝牙 trace、旧语音验收和 Chromecast 旧日志监听工具；这些一次性或过时工具不是当前产品、测试包或日志收集入口。现行测试包使用统一签名、公证流程，日志收集按 Testing/RuntimeLogging.md 执行。历史 Bug 文档中出现的旧工具名称只保留为当时的调查证据。
 
 ## Preview publication：无 Apple 凭据
 
