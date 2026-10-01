@@ -2,8 +2,22 @@ import SayAllMCPKit
 import SwiftUI
 
 struct TranscriptAgentAccessSection: View {
-    @StateObject private var model = TranscriptAgentAccessModel()
+    @StateObject private var model: TranscriptAgentAccessModel
     @EnvironmentObject private var localization: LocalizationStore
+
+    init() {
+        if let screenshotDirectory = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
+        ], !screenshotDirectory.isEmpty {
+            let accessRoot = URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            _model = StateObject(wrappedValue: TranscriptAgentAccessModel(
+                authorizationStore: SayAllMCPAuthorizationStore(accessRoot: accessRoot)
+            ))
+        } else {
+            _model = StateObject(wrappedValue: TranscriptAgentAccessModel())
+        }
+    }
 
     var body: some View {
         GlassPanel {

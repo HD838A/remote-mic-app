@@ -123,7 +123,7 @@ enum RemoteBatteryPresentationPolicy {
 }
 
 enum SettingsPageBehavior {
-    static let sidebarTopDragHeight: CGFloat = 20
+    static let sidebarTopDragHeight: CGFloat = 5
 
     static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
@@ -748,10 +748,24 @@ struct SettingsView: View {
             WindowDragArea()
                 .frame(height: SettingsPageBehavior.sidebarTopDragHeight)
                 .accessibilityHidden(true)
-            ForEach(visibleSections.filter { $0 != .statistics }) { section in
-                sidebarButton(section)
+            VStack(spacing: 4) {
+                Text(verbatim: "SayAll")
+                    .font(.system(size: 16, weight: .semibold))
+                Text(currentVersion)
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .accessibilityElement(children: .combine)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ForEach(visibleSections.filter { $0 != .statistics }) { section in
+                        sidebarButton(section)
+                    }
+                }
+            }
             Button {
                 let navigation = SettingsPageBehavior.shareNavigationState
                 selectedSection = navigation.selectedSection
@@ -793,8 +807,16 @@ struct SettingsView: View {
         } label: {
             VStack(spacing: 7) {
                 ZStack(alignment: .topTrailing) {
-                    Image(systemName: sectionSystemImage(section))
-                        .font(.system(size: 21, weight: .semibold))
+                    if section == .statistics {
+                        Image(nsImage: appIconCatalog.image(for: settings.appIconIdentifier))
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 28, height: 28)
+                            .accessibilityHidden(true)
+                    } else {
+                        Image(systemName: sectionSystemImage(section))
+                            .font(.system(size: 21, weight: .semibold))
+                    }
                     if SettingsPageBehavior.showsUpdateBadge(
                         for: section,
                         hasUnseenUpdate: updateInformation.hasUnseenUpdate
