@@ -5,6 +5,26 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func settingsSidebarAndPageUseTheSameBackgroundColor() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(
+            settingsSource.contains(
+                ".background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())"
+            )
+        )
+        #expect(!settingsSource.contains(
+            ".background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())"
+        ))
+    }
+
     @Test func connectionPageKeepsCompatibilityAudioControlsWithoutExtraTools() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

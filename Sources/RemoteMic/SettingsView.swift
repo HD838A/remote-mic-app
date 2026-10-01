@@ -542,7 +542,7 @@ struct SettingsView: View {
                 .ignoresSafeArea(.container, edges: .top)
             selectedPage
         }
-        .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
+        .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
         .frame(
             minWidth: minimumContentSize.width,
