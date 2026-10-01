@@ -109,8 +109,8 @@ jobs:
             printf 'product_change=%s\n' "$([[ "$control_only" == true || "$docs_only" == true ]] && echo false || echo true)"
           } >> "$GITHUB_OUTPUT"
 
-  test:
-    name: Swift tests and build (${{ matrix.label }})
+  public_test:
+    name: Public Swift tests and build (${{ matrix.label }})
     needs: classify_changes
     runs-on: macos-15
     timeout-minutes: 45
@@ -158,87 +158,6 @@ jobs:
           ./scripts/test-macos-release-flow.sh
           swift test --disable-keychain --filter BuildSigningTests
 
-      - name: Resolve versioned release dependencies
-        id: release-dependencies
-        if: needs.classify_changes.outputs.product_change == 'true'
-        run: ./scripts/resolve-release-dependencies.sh github-output
-
-      - name: Detect private dependency access
-        id: private-access
-        if: needs.classify_changes.outputs.product_change == 'true'
-        shell: bash
-        env:
-          SAYALL_AI_DEPLOY_KEY: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
-          SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
-          SAYALL_MAC_REMOTE_DEPLOY_KEY: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
-        run: |
-          available=true
-          check_access() {
-            local repository="$1"
-            local key="$2"
-            if [[ -z "$key" ]]; then
-              available=false
-              return
-            fi
-            eval "$(ssh-agent -s)" >/dev/null
-            if ! printf '%s\n' "$key" | ssh-add - >/dev/null 2>&1 || \
-               ! GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' \
-                 git ls-remote "git@github.com:$repository.git" HEAD >/dev/null 2>&1; then
-              available=false
-            fi
-            ssh-agent -k >/dev/null
-          }
-          check_access "${{ steps.release-dependencies.outputs.sayall_ai_repository }}" "$SAYALL_AI_DEPLOY_KEY"
-          check_access "${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}" "$SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY"
-          check_access "${{ steps.release-dependencies.outputs.sayall_mac_remote_repository }}" "$SAYALL_MAC_REMOTE_DEPLOY_KEY"
-          echo "available=$available" >> "$GITHUB_OUTPUT"
-          if [[ "$available" == true ]]; then
-            echo "Private dependency access is available; private integration checks will run."
-          else
-            echo "Private dependency access is unavailable; public build remains required and private integration checks are skipped."
-          fi
-
-      - name: Check out private feature package
-        if: steps.private-access.outputs.available == 'true'
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_ai_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_ai_commit }}
-          path: .private-dependencies/sayall-ai
-          ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Check out private macOS feature packages
-        if: steps.private-access.outputs.available == 'true'
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
-          path: .private-dependencies/sayall-private-platform
-          ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Configure private packages
-        if: steps.private-access.outputs.available == 'true'
-        run: |
-          echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai" >> "$GITHUB_ENV"
-          echo "SAYALL_COMBINATION_ACTIONS_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-combination-actions" >> "$GITHUB_ENV"
-
-      - name: Check out shared Mac remote package
-        id: remote-package
-        if: steps.private-access.outputs.available == 'true'
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_mac_remote_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}
-          path: .private-dependencies/sayall-mac-remote
-          ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Configure shared Mac remote package
-        if: steps.private-access.outputs.available == 'true'
-        run: echo "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote" >> "$GITHUB_ENV"
-
       - name: Enforce repository boundaries
         if: needs.classify_changes.outputs.product_change == 'true'
         run: ./scripts/check-repository-boundaries.sh
@@ -284,26 +203,152 @@ jobs:
           SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
         run: swift build --disable-keychain -c release --triple "${{ matrix.triple }}"
 
+  private_access:
+    name: Detect private dependency access
+    needs: classify_changes
+    if: needs.classify_changes.outputs.product_change == 'true'
+    runs-on: macos-15
+    outputs:
+      available: ${{ steps.private-access.outputs.available }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Resolve versioned release dependencies
+        id: release-dependencies
+        run: ./scripts/resolve-release-dependencies.sh github-output
+
+      - name: Detect private dependency access
+        id: private-access
+        shell: bash
+        env:
+          SAYALL_AI_DEPLOY_KEY: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
+          SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
+          SAYALL_MAC_REMOTE_DEPLOY_KEY: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
+        run: |
+          available=true
+          check_access() {
+            local repository="$1"
+            local key="$2"
+            if [[ -z "$key" ]]; then
+              available=false
+              return
+            fi
+            eval "$(ssh-agent -s)" >/dev/null
+            if ! printf '%s\n' "$key" | ssh-add - >/dev/null 2>&1 || \
+               ! GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' \
+                 git ls-remote "git@github.com:$repository.git" HEAD >/dev/null 2>&1; then
+              available=false
+            fi
+            ssh-agent -k >/dev/null
+          }
+          check_access "${{ steps.release-dependencies.outputs.sayall_ai_repository }}" "$SAYALL_AI_DEPLOY_KEY"
+          check_access "${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}" "$SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY"
+          check_access "${{ steps.release-dependencies.outputs.sayall_mac_remote_repository }}" "$SAYALL_MAC_REMOTE_DEPLOY_KEY"
+          echo "available=$available" >> "$GITHUB_OUTPUT"
+          if [[ "$available" == true ]]; then
+            echo "Private dependency access is available; private integration checks will run."
+          else
+            echo "Private dependency access is unavailable; public build remains required and private integration checks are skipped."
+          fi
+
+  private_test:
+    name: Private ${{ matrix.configuration }} tests and build (${{ matrix.label }})
+    needs: [classify_changes, private_access]
+    if: needs.classify_changes.outputs.product_change == 'true' && needs.private_access.outputs.available == 'true'
+    runs-on: macos-15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - configuration: free-combination-actions
+            variant: apple-silicon
+            label: Apple Silicon
+            triple: arm64-apple-macosx14.0
+          - configuration: free-combination-actions
+            variant: intel
+            label: Intel Ventura
+            triple: x86_64-apple-macosx13.0
+          - configuration: paid-button-profiles
+            variant: apple-silicon
+            label: Apple Silicon
+            triple: arm64-apple-macosx14.0
+          - configuration: paid-button-profiles
+            variant: intel
+            label: Intel Ventura
+            triple: x86_64-apple-macosx13.0
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      RELEASE_VARIANT: ${{ matrix.variant }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Resolve versioned release dependencies
+        id: release-dependencies
+        run: ./scripts/resolve-release-dependencies.sh github-output
+
+      - name: Check out private feature package
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ${{ steps.release-dependencies.outputs.sayall_ai_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_ai_commit }}
+          path: .private-dependencies/sayall-ai
+          ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Check out private macOS feature packages
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
+          path: .private-dependencies/sayall-private-platform
+          ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Check out shared Mac remote package
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ${{ steps.release-dependencies.outputs.sayall_mac_remote_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}
+          path: .private-dependencies/sayall-mac-remote
+          ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Configure private packages
+        run: |
+          {
+            echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai"
+            echo "SAYALL_COMBINATION_ACTIONS_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-combination-actions"
+            echo "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
+          } >> "$GITHUB_ENV"
+
       - name: Run free combination actions integration tests
-        if: steps.private-access.outputs.available == 'true'
-        run: swift test --disable-keychain --scratch-path ".build-private/${{ matrix.variant }}"
+        if: matrix.configuration == 'free-combination-actions'
+        env:
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
+        run: swift test --disable-keychain --scratch-path ".build-private-free/${{ matrix.variant }}"
 
       - name: Build free combination actions release configuration
-        if: steps.private-access.outputs.available == 'true'
+        if: matrix.configuration == 'free-combination-actions'
+        env:
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
         run: |
           swift build --disable-keychain \
-            --scratch-path ".build-private/${{ matrix.variant }}" \
+            --scratch-path ".build-private-free/${{ matrix.variant }}" \
             -c release \
             --triple "${{ matrix.triple }}"
 
       - name: Run paid button profiles integration tests
-        if: steps.private-access.outputs.available == 'true'
+        if: matrix.configuration == 'paid-button-profiles'
         env:
           SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ${{ github.workspace }}/.private-dependencies/sayall-private-platform/packages/macos-button-profiles
         run: swift test --disable-keychain --scratch-path ".build-private-paid/${{ matrix.variant }}"
 
       - name: Build paid button profiles release configuration
-        if: steps.private-access.outputs.available == 'true'
+        if: matrix.configuration == 'paid-button-profiles'
         env:
           SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ${{ github.workspace }}/.private-dependencies/sayall-private-platform/packages/macos-button-profiles
         run: |
@@ -311,3 +356,37 @@ jobs:
             --scratch-path ".build-private-paid/${{ matrix.variant }}" \
             -c release \
             --triple "${{ matrix.triple }}"
+
+  test:
+    name: Swift tests and build (${{ matrix.label }})
+    needs: [classify_changes, public_test, private_access, private_test]
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        label: [Apple Silicon, Intel Ventura]
+    steps:
+      - name: Require every applicable macOS CI lane
+        shell: bash
+        env:
+          CLASSIFY_RESULT: ${{ needs.classify_changes.result }}
+          PUBLIC_RESULT: ${{ needs.public_test.result }}
+          PRIVATE_ACCESS_RESULT: ${{ needs.private_access.result }}
+          PRIVATE_TEST_RESULT: ${{ needs.private_test.result }}
+          PRODUCT_CHANGE: ${{ needs.classify_changes.outputs.product_change }}
+          PRIVATE_AVAILABLE: ${{ needs.private_access.outputs.available }}
+        run: |
+          test "$CLASSIFY_RESULT" = success
+          test "$PUBLIC_RESULT" = success
+          case "$PRIVATE_ACCESS_RESULT" in
+            success|skipped) ;;
+            *) exit 1 ;;
+          esac
+          case "$PRIVATE_TEST_RESULT" in
+            success|skipped) ;;
+            *) exit 1 ;;
+          esac
+          if [[ "$PRODUCT_CHANGE" == true && "$PRIVATE_AVAILABLE" == true ]]; then
+            test "$PRIVATE_TEST_RESULT" = success
+          fi

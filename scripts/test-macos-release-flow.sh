@@ -105,11 +105,16 @@ fi
 /usr/bin/grep -Fq 'Build free combination actions release configuration' "$ci_workflow"
 /usr/bin/grep -Fq 'Run paid button profiles integration tests' "$ci_workflow"
 /usr/bin/grep -Fq 'Build paid button profiles release configuration' "$ci_workflow"
-/usr/bin/grep -Fq "if: steps.private-access.outputs.available == 'true'" "$ci_workflow"
+/usr/bin/grep -Fq 'name: Public Swift tests and build (${{ matrix.label }})' "$ci_workflow"
+/usr/bin/grep -Fq 'name: Private ${{ matrix.configuration }} tests and build (${{ matrix.label }})' "$ci_workflow"
+/usr/bin/grep -Fq "if: needs.classify_changes.outputs.product_change == 'true' && needs.private_access.outputs.available == 'true'" "$ci_workflow"
+/usr/bin/grep -Fq 'needs: [classify_changes, public_test, private_access, private_test]' "$ci_workflow"
+/usr/bin/grep -Fq 'PRIVATE_TEST_RESULT: ${{ needs.private_test.result }}' "$ci_workflow"
 if [[ "$(/usr/bin/grep -c -- 'SAYALL_COMBINATION_ACTIONS_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
    [[ "$(/usr/bin/grep -c -- 'SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
    [[ "$(/usr/bin/grep -c -- 'SAYALL_MAC_REMOTE_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
-   [[ "$(/usr/bin/grep -c -- "if: steps.private-access.outputs.available == 'true'" "$ci_workflow")" -lt 7 ]]; then
+   [[ "$(/usr/bin/grep -c -- 'configuration: free-combination-actions' "$ci_workflow")" -lt 2 ]] || \
+   [[ "$(/usr/bin/grep -c -- 'configuration: paid-button-profiles' "$ci_workflow")" -lt 2 ]]; then
   print -u2 "public CI must clear private package paths and private checks must remain conditional"
   exit 1
 fi
