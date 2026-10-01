@@ -30,7 +30,16 @@
 
 预期：不创建明文或伪装成加密的日志文件；系统开发日志最多记录 `encryption_public_key_missing` 等稳定原因。App 不崩溃，Sentry 仍不会因为缺少本地公钥而自动启动。
 
-## 用例 3：顺序、控制字符和大小上限
+## 用例 3：内部包必须拒绝缺失或无效公钥
+
+1. 不设置 `SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64`，以 `REQUIRE_DIAGNOSTIC_PUBLIC_KEY=1` 运行 `scripts/build-app.sh`。
+2. 分别传入无效 Base64、解码后不是 32 字节的值，重复构建。
+3. 使用有效的 32 字节 Curve25519 公钥完成构建，再以 `REQUIRE_DIAGNOSTIC_PUBLIC_KEY=1 scripts/verify-app.sh /path/to/SayAll.app` 验证最终 App。
+4. 从最终 App 的 `Info.plist` 移除或损坏 `SayAllDiagnosticPublicKey`，确认最终验证失败。
+
+预期：前三种无效输入都在签名和上传前失败；有效公钥被写入最终 `Info.plist` 且最终 App 验证通过；最终资产缺失或损坏该字段时不得继续作为内部测试包分发。验证输出不得打印公钥或对应私钥。
+
+## 用例 4：顺序、控制字符和大小上限
 
 运行：
 
@@ -42,7 +51,7 @@ swift test --disable-keychain --filter AppLoggerTests
 
 失败判定：任何测试失败，或为了测试读取了生产用户文件。
 
-## 用例 4：内部解密工具边界
+## 用例 5：内部解密工具边界
 
 1. 由受控支持环境取得与构建公钥对应的私钥，不将私钥复制到用户机器或公开仓库。
 2. 使用内部工具解析 `RMLG2` 头、解包文件密钥，再按长度前缀和 `seq` 顺序解密 AES-GCM 记录。
@@ -50,13 +59,13 @@ swift test --disable-keychain --filter AppLoggerTests
 
 预期：原文件可按时间和 `seq` 顺序读取；篡改记录验证失败并停止该记录，不把损坏内容当作成功日志。公开 App 只负责加密，不具备解密能力。
 
-## 用例 5：普通日志隐私
+## 用例 6：普通日志隐私
 
 触发权限、蓝牙、音频、输入工具和语音会话的成功、失败、取消、超时、重试与恢复路径，并由内部工具查看解密结果。
 
 预期：只出现稳定分类、错误 domain/code、计数、样本数和耗时；不出现用户语音、文字、剪贴板、路径、窗口标题、BLE 地址/名称、CoreAudio UID、第三方 App 私有配置或凭据。`received`、`decoded`、`enqueued` 不得被记成最终成功。
 
-## 用例 6：公开构建不包含私有诊断传输
+## 用例 7：公开构建不包含私有诊断传输
 
 确认公开仓库没有 Sentry 依赖、DSN 注入或私有 Package 路径：
 
@@ -72,7 +81,7 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 
 预期：公开构建返回 `serviceNotConfigured`，不调用私有传输、不初始化 Sentry、不读取本地 `.rmlog`，本地日志不被删除。
 
-## 用例 7：Sentry 发送内容（需受控 DSN）
+## 用例 8：Sentry 发送内容（需受控 DSN）
 
 只有在私有 Package 和私有受控构建环境提供测试 DSN 后执行；不使用生产账号或真实用户数据。公开仓库本身不执行该用例。
 
