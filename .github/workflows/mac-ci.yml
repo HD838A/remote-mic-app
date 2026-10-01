@@ -149,7 +149,9 @@ jobs:
           SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
           SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
         # Reuse the product test binary; no additional Mac compilation.
-        run: swift test --disable-keychain --skip-build --filter BuildSigningTests
+        run: |
+          command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
+          swift test --disable-keychain --skip-build --filter BuildSigningTests
 
       - name: Run project self-test
         if: needs.classify_changes.outputs.product_change == 'true'
@@ -195,7 +197,9 @@ jobs:
       - name: Run release control-plane fixture
         if: needs.classify_changes.outputs.product_change != 'true'
         # BuildSigningTests executes the consolidated shell fixture itself.
-        run: swift test --disable-keychain --filter BuildSigningTests
+        run: |
+          command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
+          swift test --disable-keychain --filter BuildSigningTests
 
       - name: Require release checks from product lanes
         if: needs.classify_changes.outputs.product_change == 'true'
