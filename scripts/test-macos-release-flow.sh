@@ -800,6 +800,7 @@ ROOT="$SCRIPT_ROOT"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-ci-classification-test.XXXXXX)"
 cleanup() {
   local trash_target="$HOME/.Trash/sayall-ci-classification-test.$(/bin/date +%s).$$.$RANDOM"
+  /bin/mkdir -p "$HOME/.Trash"
   /bin/mv "$WORK_DIR" "$trash_target"
 }
 trap cleanup EXIT
