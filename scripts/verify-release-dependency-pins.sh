@@ -2,6 +2,97 @@
 set -euo pipefail
 
 ROOT="${REPOSITORY_ROOT:-${0:A:h:h}}"
+
+# One configuration checker; keep resolve, token and pin checks independent.
+case "${1:-pins}" in
+  resolve)
+    shift
+    MANIFEST="${RELEASE_DEPENDENCIES_MANIFEST:-$ROOT/config/release-dependencies.json}"
+    MODE="${1:-json}"
+
+    if [[ "$#" -gt 1 ]]; then
+      print -u2 "usage: $0 [json|github-output]"
+      exit 2
+    fi
+    command -v jq >/dev/null 2>&1 || { print -u2 "Missing required command: jq"; exit 1; }
+    [[ -r "$MANIFEST" ]] || { print -u2 "release dependency manifest is unreadable: $MANIFEST"; exit 1; }
+
+    jq -e '
+      .schemaVersion == 1 and
+      (.dependencies | keys | sort) == ["sayAllAI", "sayAllMacRemote", "sayAllPrivatePlatform"] and
+      .dependencies.sayAllAI.repository == "GetSayAll/sayall-ai" and
+      .dependencies.sayAllPrivatePlatform.repository == "GetSayAll/sayall-private-platform" and
+      .dependencies.sayAllMacRemote.repository == "GetSayAll/sayall-mac-remote" and
+      ([.dependencies[] | .commit] | all(.[]; type == "string" and test("^[0-9a-f]{40}$")))
+    ' "$MANIFEST" >/dev/null || {
+      print -u2 "release dependency manifest has an invalid schema, repository, or commit"
+      exit 1
+    }
+
+    case "$MODE" in
+      json)
+        jq -S -c '.dependencies' "$MANIFEST"
+        ;;
+      github-output)
+        [[ -n "${GITHUB_OUTPUT:-}" ]] || { print -u2 "GITHUB_OUTPUT is required"; exit 2; }
+        {
+          print "sayall_ai_repository=$(jq -r '.dependencies.sayAllAI.repository' "$MANIFEST")"
+          print "sayall_ai_commit=$(jq -r '.dependencies.sayAllAI.commit' "$MANIFEST")"
+          print "sayall_private_platform_repository=$(jq -r '.dependencies.sayAllPrivatePlatform.repository' "$MANIFEST")"
+          print "sayall_private_platform_commit=$(jq -r '.dependencies.sayAllPrivatePlatform.commit' "$MANIFEST")"
+          print "sayall_mac_remote_repository=$(jq -r '.dependencies.sayAllMacRemote.repository' "$MANIFEST")"
+          print "sayall_mac_remote_commit=$(jq -r '.dependencies.sayAllMacRemote.commit' "$MANIFEST")"
+        } >> "$GITHUB_OUTPUT"
+        ;;
+      *)
+        print -u2 "mode must be json or github-output"
+        exit 2
+        ;;
+    esac
+
+    exit 0
+    ;;
+  tokens)
+    shift
+    [[ "$#" -eq 0 ]] || { print -u2 "usage: $0 tokens"; exit 2; }
+    umask 077
+    setopt null_glob
+    WORKFLOW_DIR="$ROOT/.github/workflows"
+
+    for workflow in "$WORKFLOW_DIR"/*.yml "$WORKFLOW_DIR"/*.yaml; do
+      [[ -f "$workflow" ]] || continue
+      /usr/bin/awk -v workflow="$workflow" '
+        function check_step() {
+          if (index(step, "gh ") > 0 || index(step, "gh\t") > 0 || index(step, "gh\n") > 0) {
+            if (step !~ /GH_TOKEN:[[:space:]]*\$\{\{[^}]+\}\}/) {
+              print workflow ":" start_line ": a step invokes gh without an explicit step-scoped GH_TOKEN" > "/dev/stderr"
+              failed = 1
+            }
+          }
+        }
+        /^      - name:/ {
+          check_step()
+          step = $0 "\n"
+          start_line = NR
+          next
+        }
+        { step = step $0 "\n" }
+        END {
+          check_step()
+          exit failed
+        }
+      ' "$workflow"
+    done
+
+    print "RELEASE WORKFLOW GH_TOKEN PASS"
+
+    exit 0
+    ;;
+  pins)
+    [[ "$#" -eq 0 ]] || shift
+    ;;
+  *) print -u2 "usage: $0 [pins|tokens|resolve [json|github-output]]"; exit 2 ;;
+esac
 CONTROL_ROOT="${RELEASE_CONTROL_ROOT:-$ROOT}"
 PACKAGE_MANIFEST="$ROOT/Package.swift"
 PACKAGE_RESOLVED="$ROOT/Package.resolved"
@@ -75,14 +166,14 @@ test -f "$PACKAGE_MANIFEST"
 test -f "$PACKAGE_RESOLVED"
 
 test -f "$DEPENDENCY_MANIFEST"
-test -x "$ROOT/scripts/resolve-release-dependencies.sh"
-dependencies_json="$(REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/resolve-release-dependencies.sh" json)"
+test -x "$ROOT/scripts/verify-release-dependency-pins.sh"
+dependencies_json="$(REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-dependency-pins.sh" resolve json)"
 sayall_ai_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllAI.commit')"
 sayall_private_platform_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllPrivatePlatform.commit')"
 sayall_mac_remote_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllMacRemote.commit')"
 
 for workflow in "${WORKFLOWS[@]}"; do
-  grep -Fq 'resolve-release-dependencies.sh' "$workflow" || {
+  grep -Fq 'verify-release-dependency-pins.sh resolve' "$workflow" || {
     print -u2 "${workflow:t} must resolve the versioned release dependency manifest"
     exit 1
   }

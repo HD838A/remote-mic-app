@@ -72,7 +72,26 @@ AI 整理默认不进入发布包：本地构建未显式提供 `SAYALL_AI_PACKA
 2. 用本地固定 feed，只把生产 appcast 的不可变 URL 前缀替换为本地地址，确保 enclosure 是 staging 的同一 ZIP。
 3. 使用稳定版 App 的真实 Sparkle UI 完成 check、download、install、首次启动、退出和二次启动；验证版本/Build、Team ID L3QHLDRPAY、公证、Gatekeeper、Sparkle helper 的 0755 权限和 Versions/Current 链接。
 4. 检查没有新增崩溃报告、应用可以再次启动，并用 scripts/record-preview-ui-attestation.sh 生成结构化证明。仅运行 Sparkle CLI probe、单元测试或静态解压不能替代真实 UI 安装；该步骤未完成时不得公开 Preview。
-5. scripts/verify-preview-ui-attestation.sh 必须重新核对 stage record、manifest、production/test appcast 摘要和安装结果。
+5. scripts/record-preview-ui-attestation.sh verify 必须重新核对 stage record、manifest、production/test appcast 摘要和安装结果。
+
+### 脚本合并后的入口与 CI 边界
+
+合并只改变工程入口，不改变双架构资产、签名、公证、staple、来源、真实 UI 或公开字节门禁：
+
+| 原入口 | 当前入口 |
+| --- | --- |
+| package-macos-release-variants.sh | notarize-release.sh --all；不带参数仍执行单架构 |
+| resolve-release-dependencies.sh | verify-release-dependency-pins.sh resolve [json\|github-output] |
+| verify-release-workflow-gh-token.sh | verify-release-dependency-pins.sh tokens |
+| verify-preview-ui-attestation.sh | record-preview-ui-attestation.sh verify |
+| test-prepare-preview-release.sh | test-macos-release-flow.sh metadata |
+| test-verify-release-ready-main-ci.sh | test-macos-release-flow.sh ready-ci |
+
+test-macos-release-flow.sh 默认运行原 flow、元数据和 CI 证明 fixture。生成 UI 证明和 publication 中的独立验证仍在不同阶段执行；Apple 凭据入口与无凭据上传边界保持不变。
+
+macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。产品矩阵执行原产品测试、self-test、双架构 Release build 和可用的私有集成；BuildSigningTests 从产品矩阵移至独立的双架构 Release script checks，按相关源码、资源、构建、安装、依赖或 workflow 变更运行。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。
+
+仅修改开发启动、RC003 手工实验打包、Siri 蓝牙 trace 或旧语音验收工具时，不触发产品构建或发布检查；这些工具不在 CI 中执行。它们保持手工可调用，历史限制也保持明确：旧 voice-acceptance 不适配当前 .rmlog，Siri trace 会修改系统调试设置。其改动不能冒充新的产品验证证明；发布只允许继承经核对无产品变化的既有双架构证明。
 
 ## Preview publication：无 Apple 凭据
 
