@@ -12,6 +12,7 @@ struct UnifiedButtonBinding: Codable, Equatable {
 struct ButtonLibraryAction: Identifiable, Equatable {
     var id: String
     var name: String
+    var stepCount: Int = 0
 }
 
 struct ButtonMappingProfile: Identifiable, Equatable {

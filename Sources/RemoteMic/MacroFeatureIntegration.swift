@@ -1,4 +1,7 @@
 import Combine
+#if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+import SayAllChromecast
+#endif
 import SwiftUI
 
 #if canImport(SayAllMacroRemoteMic)
@@ -76,7 +79,7 @@ final class MacroFeatureIntegration: ObservableObject {
 
     var libraryActions: [ButtonLibraryAction] {
         #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
-        feature.libraryActions.map { ButtonLibraryAction(id: $0.id, name: $0.name) }
+        feature.libraryActions.map { ButtonLibraryAction(id: $0.id, name: $0.name, stepCount: $0.stepCount) }
         #else
         []
         #endif
@@ -392,21 +395,14 @@ final class MacroFeatureIntegration: ObservableObject {
         selectedRemoteProfileID: UUID?,
         remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection],
-        onEditKeys: @escaping (UUID) -> Void = { _ in }
+        onEditKeys: @escaping (UUID) -> Void = { _ in },
+        chromecastReservedControlIDs: Set<String> = ["left", "right", "select"]
     ) -> AnyView {
-        #if SAYALL_UNIFIED_BUTTON_CONFIGURATION && canImport(SayAllButtonProfiles)
-        return buttonProfilesFeature.buttonProfilesView(
-            selectedRemoteProfileID: selectedRemoteProfileID,
-            remotePresentation: buttonProfilesRemotePresentation(for: remoteModel),
-            hostActionSections: [],
-            onEditKeys: onEditKeys)
-        #else
-
         #if canImport(SayAllButtonProfiles)
         #if SAYALL_MACRO_REMOTE_CAPABILITIES
         return buttonProfilesFeature.buttonProfilesView(
             selectedRemoteProfileID: selectedRemoteProfileID,
-            remotePresentation: buttonProfilesRemotePresentation(for: remoteModel),
+            remotePresentation: buttonProfilesRemotePresentation(for: remoteModel, chromecastReservedControlIDs: chromecastReservedControlIDs),
             hostActionSections: hostActionSections.map { section in
                 RemoteMicHostActionSection(
                     id: section.id,
@@ -452,7 +448,6 @@ final class MacroFeatureIntegration: ObservableObject {
         #else
         return AnyView(EmptyView())
         #endif
-        #endif
     }
 
     #if SAYALL_MACRO_REMOTE_CAPABILITIES && canImport(SayAllMacroRemoteMic)
@@ -462,8 +457,24 @@ final class MacroFeatureIntegration: ObservableObject {
         switch model {
         case .rc001:
             return SayAllMacroRemoteMic.RemoteMicRemotePresentation.xiaomiRC001(displayName: "RC001")
-        case .rc003, .chromecastVoiceRemote, .unknown, nil:
+        case .rc003, .unknown, nil:
             return SayAllMacroRemoteMic.RemoteMicRemotePresentation.xiaomiRC003(displayName: "RC003")
+        case .chromecastVoiceRemote:
+            #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+            let anchors = Dictionary(uniqueKeysWithValues: ChromecastMappingCanvas.placements.compactMap { placement in
+                RemoteMicMacroButton(rawValue: placement.controlID == "select" ? "ok" : placement.controlID)
+                    .map { ($0, placement.anchor) }
+            })
+            return RemoteMicRemotePresentation(
+                capabilities: RemoteMicRemoteModelCatalog.capabilities(for: RemoteMicRemoteModelID.chromecastVoiceRemote)!,
+                displayName: "Chromecast Voice Remote", image: ChromecastMappingCanvas.remoteImage,
+                aspectRatio: ChromecastMappingCanvas.remoteSize.width / ChromecastMappingCanvas.remoteSize.height,
+                anchors: anchors)
+            #else
+            return RemoteMicRemotePresentation(
+                capabilities: RemoteMicRemoteModelCatalog.capabilities(for: RemoteMicRemoteModelID.chromecastVoiceRemote)!,
+                displayName: "Chromecast Voice Remote", image: nil, aspectRatio: 155.0 / 510.0, anchors: [:])
+            #endif
         case .appleSiriRemoteA2854, .appleSiriRemoteA2540:
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             let siriModel: SayAllSiriRemoteModel = model == .appleSiriRemoteA2540
@@ -521,27 +532,19 @@ final class MacroFeatureIntegration: ObservableObject {
 
     #if canImport(SayAllButtonProfiles)
     private func buttonProfilesRemotePresentation(
-        for model: XiaomiRemoteModel?
+        for model: XiaomiRemoteModel?,
+        chromecastReservedControlIDs: Set<String>
     ) -> SayAllButtonProfiles.RemoteMicRemotePresentation {
-        switch model {
-        case .rc001:
-            return .xiaomiRC001(displayName: "RC001")
-        case .rc003, .chromecastVoiceRemote, .unknown, nil:
-            return .xiaomiRC003(displayName: "RC003")
-        case .appleSiriRemoteA2854, .appleSiriRemoteA2540:
-            let modelID = model == .appleSiriRemoteA2540
-                ? SayAllButtonProfiles.RemoteMicRemoteModelID.appleSiriRemoteA2540
-                : SayAllButtonProfiles.RemoteMicRemoteModelID.appleSiriRemoteA2854
-            return SayAllButtonProfiles.RemoteMicRemotePresentation(
-                capabilities: SayAllButtonProfiles.RemoteMicRemoteModelCatalog.capabilities(
-                    for: modelID
-                )!,
-                displayName: "Siri Remote",
-                image: nil,
-                aspectRatio: 423.0 / 1510.0,
-                anchors: [:]
-            )
-        }
+        let source = combinationActionsRemotePresentation(for: model)
+        guard model == .chromecastVoiceRemote else { return source }
+        let reserved = Set(chromecastReservedControlIDs.compactMap {
+            RemoteMicMacroButton(rawValue: $0 == "select" ? "ok" : $0)
+        })
+        return RemoteMicRemotePresentation(
+            capabilities: RemoteMicRemoteCapabilities(modelID: source.capabilities.modelID,
+                configurableButtons: RemoteMicRemoteModelCatalog.chromecastButtons, reservedButtons: reserved),
+            displayName: source.displayName, image: source.image,
+            aspectRatio: source.aspectRatio, anchors: source.anchors)
     }
     #endif
     #endif

@@ -835,7 +835,8 @@ struct SettingsView: View {
                         preservesMappingContextOnNavigation = true
                         editingMappingProfileID = profile
                         selectedSection = .mapping
-                    }
+                    },
+                    chromecastReservedControlIDs: buttonProfilesChromecastReservedControls
                 )
             } else {
                 aboutPage
@@ -1510,6 +1511,16 @@ struct SettingsView: View {
     }
     #endif
 
+    private var buttonProfilesChromecastReservedControls: Set<String> {
+        #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+        ChromecastRemoteControl.canvasReservedControlIDs(
+            allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
+            exceptions: settings.chromecastSystemReservedExceptions)
+        #else
+        ["left", "right", "select"]
+        #endif
+    }
+
     private func mappingConfiguration(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
         if let profile = editingMappingProfileID {
             return macroFeature.profileBinding(device: settings.selectedRemoteProfileID, profile: profile,
@@ -1609,16 +1620,29 @@ struct SettingsView: View {
             Text(localization.text("action.combination_action")).font(.system(size: 14, weight: .semibold))
             TextField(localization.text("button_mapping.search_macros"), text: $mappingMacroSearch)
                 .textFieldStyle(.roundedBorder).font(.system(size: 13))
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]) {
+            VStack(spacing: 6) {
                 ForEach(macroFeature.libraryActions.filter {
                     mappingMacroSearch.isEmpty || $0.name.localizedCaseInsensitiveContains(mappingMacroSearch)
                 }) { action in
-                    Button(action.name) {
+                    Button {
                         var binding = configured
                         binding.action = .combinationAction
                         binding.macroID = action.id
                         saveMappingBinding(binding, button: button, trigger: trigger)
-                    }.buttonStyle(.bordered)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "square.stack.3d.up")
+                            Text(action.name).font(.system(size: 13, weight: .medium))
+                            Spacer()
+                            Text(String(format: localization.text("button_mapping.macro_step_count"), action.stepCount))
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                            if configured.action == .combinationAction && configured.macroID == action.id {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            }
+                        }.padding(10).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                        .background(configured.action == .combinationAction && configured.macroID == action.id
+                            ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
                 }
             }
             if configured.action == .combinationAction,
@@ -1698,7 +1722,16 @@ struct SettingsView: View {
                             Color.clear
                                 .frame(height: 0)
                                 .id("mapping-page-top")
-                            mappingProfileSelector
+                            if let profileID = editingMappingProfileID,
+                               let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == profileID }) {
+                                HStack {
+                                    Text(localization.text("button_mapping.editing_profile") + "：" + profile.name)
+                                        .font(.system(size: 13, weight: .medium))
+                                    Spacer()
+                                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                                        .buttonStyle(.bordered)
+                                }
+                            }
                             configurationImportBanner
                             corruptedSettingsBanner
 

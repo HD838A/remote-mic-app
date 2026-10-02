@@ -1157,3 +1157,5 @@
 "button_mapping.macro_unavailable" = "组合动作不可用，请重新选择";
 
 "button_mapping.return_choose_macro" = "返回原按键并选择组合动作";
+
+"button_mapping.macro_step_count" = "%d 个步骤";
