@@ -7,7 +7,7 @@
 1. 使用本 worktree 的 `dist/SayAll.app`，退出正在运行的其他无线麦实例后启动该包。不要覆盖正式安装；此包为 Developer ID 签名的本地 App，不是公证发行版。
 2. 在系统设置中确认辅助功能和输入监控权限；实体遥控器另需蓝牙权限。常用语不需要麦克风权限，不占用语音键。
 3. 记录当前五个方向/OK 键及返回键映射；将一个普通按键（例如菜单键）的单击绑定到“打开常用语”。不要使用语音键。
-4. 打开“常用语”页，确认内置 12 条内容与默认五键。五键默认为 OK=好的、左=继续、上=说清楚一点、右=按你的来、下=思路可以，我补充一点。
+4. 在按键动作列表中点击“打开常用语”旁的“调整常用语”，确认无独立常用语侧栏，页面最左侧为五键圆盘，中间为常用语库，右侧为编辑内容。五键默认为 OK=好的、左=继续、上=说清楚一点、右=按你的来、下=思路可以，我补充一点。
 5. 打开一个普通可编辑输入框，放置光标并取消选区。仅使用脱敏测试内容；先复制一段可辨认的测试文本，以便检查剪贴板恢复。
 
 ## 核心流程
@@ -31,12 +31,14 @@
 
 ## 用户内容
 
-1. 在常用语页选择条目，编辑短显示与完整句并保存；修改内置条目产生本机用户副本，不回写源 Markdown。
-2. 新增条目后保存，分配到指定五键，再在目标 App 打开面板使用。只改变常用语面板中的分配，不改普通遥控映射。
+1. 进入调整页，先点击圆盘一个位置：只高亮该位置并显示其当前内容，不修改任何分配。再点击常用语库中的条目：仅该位置更新且立即保存在本机；其他四键保持。切换另一个位置再选择内容，结果必须独立。没有先选位置时，点击库条目只编辑内容，不改变五键分配。点击圆盘或库条目不得向其他 App 插入文字。
+2. 在右侧编辑短显示与完整句并“保存更改”；修改内置条目产生本机用户副本，不回写源 Markdown。新增后保存，再点圆盘位置和新条目完成分配，随后在目标 App 打开面板使用。只改变面板分配，不改普通遥控映射。删除已分配内容后该位置应显示未分配，重新选内容能恢复。
 3. 使用上移/下移调整顺序，关闭并重新启动 App：顺序、内容与分配保留。
 4. 删除条目：分配该条目的键显示未分配，按下时明确提示；其他条目和普通按键配置保持。
 5. 导出 JSON、修改一条测试内容、再导入原文件：常用语恢复，普通设置不变。导入错误 JSON、重复 ID、未知版本或无效绑定：明确报错，保留原数据。取消文件选择不会改数据。
 6. 恢复默认按键映射后，常用语内容仍保留。重新绑定打开动作可继续使用。
+7. 搜索短显示或完整句，结果可选择并分配；清空搜索恢复全部条目，当前键位与其他分配保持。内容编辑必须点击保存，分配选择立即保存；重启后两者都保留。
+8. 点击“返回按键”后回到原有按键与单击/双击/长按编辑上下文；进入其他侧栏页面，再返回按键，窗口几何不改变。调整入口只打开编辑页，不绑定“打开常用语”；点击打开动作才修改当前按键绑定。
 
 ## 来源、权限和第三方矩阵
 
@@ -65,11 +67,16 @@
 - `PANEL`：opened / closed 与关闭原因。
 - `INSERT`：进程内 operation_id、请求、前置检查、paste submitted/failed、clipboard restored/user_copy_preserved、唯一 completed 结果与耗时；排队取消明确记录 cancelled。
 - `EDIT` / `IMPORT` / `EXPORT`：操作类型、结果与失败/取消原因；不得包含常用语正文、剪贴板内容、路径、输入框文字、App 身份或设备身份。
+- `EDITOR` / `POSITION`：编辑页打开/关闭；进程内 position operation_id、键位选择请求与完成。仅选择位置不应出现 `EDIT action=assign`；从库选择内容后才出现分配保存，失败时保持原分配并提示。
 - `result=submitted` 和 `diagnostic_boundary=external_text_unobserved` 只证明提交了粘贴；请另行确认目标输入框真实上屏。不要把日志中的“入队”或“提交”作为验收成功。
 
 自动化：`CommonPhraseTests` 已覆盖资源四类非法输入、默认键位、用户副本与重启、资源更新、错误导入、来源隔离、快速按与松键消费、HID 手势前认领、剪贴板多类型恢复、新复制保护、粘贴失败、取消与恢复。公开宿主全部 796 项、注入全部遥控适配器的 852 项测试已通过；自动化使用模拟按键与测试剪贴板，不能替代真机。
 
-本机生产 UI 截图、签名包构建和离屏入口执行结果保存于本 worktree 的 `dist/common-phrases-*` 日志及 `Screenshots/common-phrases/`。另一无线麦实例正在运行，本轮保留该实例，未执行本包正常启动或真实窗口逐项点击。800×650 为离屏压力截图，生产默认/最小窗口为 1020×772。完整实际结果以交付说明为准；真实遥控器、第三方输入框文字上屏和语音实机基线仍待用户验收。本功能保持候选，TODO 不勾选完成。
+2026-10-03 圆盘与位置优先交互验证：公开全量 796 项、私有遥控适配器集成全量 852 项通过；最终按钮宽度适配及交互入口调整后，相关 62 项测试再次通过。日志分别为 `dist/common-phrases-circle-full-tests.log`、`dist/common-phrases-circle-integrated-tests.log` 和 `dist/common-phrases-circle-tests-final.log`。
+
+通过生产 `SettingsView` 的独立测试数据窗口实际点击验证：相邻调整入口、无独立侧栏；未选位置只查看内容；只选位置不写分配；选择条目后只更新选中键位；切换位置独立分配；编辑需保存且圆盘同步；搜索/清空；导出取消；返回保留确定键单击编辑上下文，再进入保留已保存内容。800×650 实际窗口逐一点击按键、回眸、连接、设置入口，页头与导航保持；此尺寸是压力测试入口，生产默认/最小窗口仍为 1020×772。窗口使用独立 UserDefaults，不启动硬件，不改用户配置。
+
+最终本地包 `dist/SayAll.app` 通过原生构建、资源门禁及 Developer ID（Team `L3QHLDRPAY`）深度严格签名检查，并已正常启动且进程保持。构建记录为 `dist/common-phrases-circle-app-build-final.log`。真实遥控器、第三方输入框文字上屏和语音实机基线仍待用户验收；启动进程和界面点击不证明这些路径通过。本功能保持候选，TODO 不勾选完成。
 
 
 ## 本轮文件与证据
@@ -78,16 +85,16 @@
 | --- | --- |
 | `CommonPhraseStore.swift` | 常用语数据、用户副本、本机持久化、导入校验与来源认领；导入修改过的内置条目也转为用户副本，重启后保留 |
 | `CommonPhraseInserter.swift` | 公开辅助功能元数据检查、串行粘贴、剪贴板恢复与脱敏终态日志 |
-| `CommonPhrasePanel.swift` | 非激活十字面板、返回/切换/断连/锁屏关闭、排队取消 |
-| `CommonPhraseSettingsView.swift` | 页面内新增、编辑、删除、排序、五键分配及系统文件导入导出；点击条目定位编辑区 |
+| `CommonPhrasePanel.swift` | 共用黑色五键圆盘、非激活面板、返回/切换/断连/锁屏关闭、排队取消 |
+| `CommonPhraseSettingsView.swift` | 左侧先选键位、中间选常用语完成分配、右侧编辑；新增、删除、排序、搜索及系统文件备份导入导出 |
 | `RemoteButtons.swift`、`KeyboardInjector.swift` | 新增稳定宿主动作 ID、动作分类与非重复语义，纳入内部动作分发 |
 | `BridgeAppModel.swift`、`HIDRemoteMonitor.swift` | 实体、手机/Web 的 command 和 buttonEventsV1 入口在手势前认领，Apple Watch 面板来源单独隔离，原有语音生命周期不改动 |
-| `SettingsView.swift`、`SettingsScreenshotRenderer.swift` | 新增免费侧栏页面和生产离屏截图入口，截图使用独立设置数据 |
+| `SettingsView.swift`、`SettingsScreenshotRenderer.swift` | 动作旁的调整入口、内部编辑页与返回导航；生产截图及最长 300 秒的交互验证入口使用独立设置数据，不启动硬件 |
 | 两种语言的 `Localizable.strings` | 动作、设置、面板和失败反馈的语义文案 |
 | `scripts/generate-common-phrases.py`、`scripts/build-app.sh`、`scripts/verify-app.sh` | 从唯一 Markdown 源生成并严格核对 Bundle JSON，错误源阻断构建 |
 | `CommonPhraseTests.swift`、`SettingsPageRegressionTests.swift` | 资源、持久化、来源与边沿、HID 回归、剪贴板事务及侧栏顺序验证 |
 | `PRODUCT_SPEC.md`、`built-in.md`、`feature/README.md`、`TODO.md`、`DOCUMENTATION.md`、本文 | 同步实现状态与测试入口，保留未来要求和未验收状态 |
-| `Screenshots/common-phrases/` | 20 张生产离屏 PNG：中/英、浅/深、800×650 压力尺寸与 1020×772 默认尺寸的页面/面板，以及 800×2200 的完整编辑区；格式、尺寸和摘要见 `manifest.json` |
+| `Screenshots/common-phrases/implemented-20261003/` | 最终 16 张生产离屏 PNG（中/英 × 浅/深 × 两尺寸的页面与面板），6 张实际窗口交互 JPEG；原始字节、尺寸和 SHA-256 见 `manifest.json`。旧截图保留作历史记录 |
 
 公开全量测试命令：`swift test --disable-keychain --scratch-path /private/tmp/remote-mic-swiftpm/common-phrases-debug`。集成测试另显式提供 Siri Remote、Chromecast、Mac Remote 的本地 Package 路径，并使用独立 scratch path；共 852 项通过。
 

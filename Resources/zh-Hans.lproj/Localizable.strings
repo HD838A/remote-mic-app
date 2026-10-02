@@ -1141,10 +1141,21 @@
 /* Common phrases */
 "action.open_common_phrases" = "打开常用语";
 "common_phrases.title" = "常用语";
+"common_phrases.adjust" = "调整常用语";
+"common_phrases.return_to_buttons" = "返回按键";
+"common_phrases.library" = "常用语库";
+"common_phrases.editor" = "编辑内容";
+"common_phrases.search" = "搜索常用语";
+"common_phrases.position_first" = "先点圆盘位置，再选择常用语。";
+"common_phrases.choose_position" = "请先选择一个键位。";
+"common_phrases.choose_phrase" = "从常用语库选择内容，立即保存分配。";
+"common_phrases.assign_only" = "这里只调整分配，不插入文字。";
+"common_phrases.import_hint" = "导入备份会替换当前常用语和五键分配。";
+"common_phrases.local_storage" = "保存在这台 Mac，重启后仍保留。";
 "common_phrases.panel_hint" = "按方向键或 OK 插入；返回键关闭。不会自动发送。";
 "common_phrases.close" = "关闭常用语";
 "common_phrases.settings_hint" = "在按键映射中绑定“打开常用语”。内容只保存在本机；插入时会暂时使用剪贴板。";
-"common_phrases.assign_hint" = "面板中的五个按键";
+"common_phrases.assign_hint" = "五键分配";
 "common_phrases.assign_selected" = "将当前已保存的常用语分配到按键";
 "common_phrases.key.up" = "上";
 "common_phrases.key.down" = "下";
@@ -1153,9 +1164,9 @@
 "common_phrases.unassigned" = "未分配";
 "common_phrases.add" = "新增常用语";
 "common_phrases.edit" = "编辑常用语";
-"common_phrases.import" = "导入";
-"common_phrases.export" = "导出";
-"common_phrases.save" = "保存";
+"common_phrases.import" = "导入备份";
+"common_phrases.export" = "导出备份";
+"common_phrases.save" = "保存更改";
 "common_phrases.delete" = "删除";
 "common_phrases.move_up" = "上移";
 "common_phrases.move_down" = "下移";

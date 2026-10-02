@@ -130,7 +130,6 @@ enum SettingsPageBehavior {
 
     static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
-        .commonPhrases,
         .macros,
         .buttonProfiles,
         .membership,
@@ -702,7 +701,8 @@ struct SettingsView: View {
     }
 
     private func sidebarButton(_ section: SettingsSection) -> some View {
-        Button {
+        let isSelected = (selectedSection == .commonPhrases ? .mapping : selectedSection) == section
+        return Button {
             selectSidebarSection(section)
         } label: {
             VStack(spacing: 7) {
@@ -748,9 +748,9 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .compatibilityFocusEffectDisabled()
-        .foregroundStyle(selectedSection == section ? Color.accentColor : Color.secondary)
-        .background(selectedSection == section ? Color.accentColor.opacity(0.10) : Color.clear)
-        .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
+        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+        .background(isSelected ? Color.accentColor.opacity(0.10) : Color.clear)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityValue(
             SettingsPageBehavior.showsUpdateBadge(
                 for: section,
@@ -840,7 +840,9 @@ struct SettingsView: View {
         case .statistics:
             statisticsPage
         case .commonPhrases:
-            CommonPhraseSettingsView(store: model.commonPhraseStore)
+            CommonPhraseSettingsView(store: model.commonPhraseStore) {
+                selectedSection = .mapping
+            }
         case .transcripts:
             transcriptHistoryPage
         case .permissions:
@@ -2284,55 +2286,72 @@ struct SettingsView: View {
         isManagedPowerAction: Bool,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
-            alignment: .leading,
-            spacing: 8
-        ) {
-            ForEach(actions) { action in
-                let unavailableApplication = action.presetApplication.map {
-                    !installedBundleIdentifiers.contains($0.bundleIdentifier)
-                } ?? false
-                let unavailableExperiment = action == .toggleLongRecording &&
-                    !settings.experimentalContinuousRecordingEnabled
-                Button {
-                    onSelect(action)
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: selectedAction == action ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(selectedAction == action ? Color.accentColor : Color.secondary)
-                        Text(
-                            action.displayName(using: localization) +
-                                (unavailableApplication
-                                    ? localization.text("common.suffix.not_installed")
-                                    : unavailableExperiment
-                                        ? localization.text("common.suffix.experimental_disabled")
-                                        : "")
-                        )
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        Spacer(minLength: 0)
-                    }
-                    .font(.system(size: 13, weight: selectedAction == action ? .semibold : .regular))
-                    .padding(.horizontal, 10)
-                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                    .background(
-                        selectedAction == action
-                            ? Color.accentColor.opacity(0.13)
-                            : Color.primary.opacity(0.045),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(
-                                selectedAction == action
-                                    ? Color.accentColor.opacity(0.55)
-                                    : Color.secondary.opacity(0.16)
+        VStack(alignment: .leading, spacing: 8) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(actions.filter { $0 != .openCommonPhrases }) { action in
+                    let unavailableApplication = action.presetApplication.map {
+                        !installedBundleIdentifiers.contains($0.bundleIdentifier)
+                    } ?? false
+                    let unavailableExperiment = action == .toggleLongRecording &&
+                        !settings.experimentalContinuousRecordingEnabled
+                    Button {
+                        onSelect(action)
+                    } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: selectedAction == action ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(selectedAction == action ? Color.accentColor : Color.secondary)
+                            Text(
+                                action.displayName(using: localization) +
+                                    (unavailableApplication
+                                        ? localization.text("common.suffix.not_installed")
+                                        : unavailableExperiment
+                                            ? localization.text("common.suffix.experimental_disabled")
+                                            : "")
                             )
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            Spacer(minLength: 0)
+                        }
+                        .font(.system(size: 13, weight: selectedAction == action ? .semibold : .regular))
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                        .background(
+                            selectedAction == action
+                                ? Color.accentColor.opacity(0.13)
+                                : Color.primary.opacity(0.045),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(
+                                    selectedAction == action
+                                        ? Color.accentColor.opacity(0.55)
+                                        : Color.secondary.opacity(0.16)
+                                )
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                 }
-                .buttonStyle(.plain)
-                .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
+            }
+            if actions.contains(.openCommonPhrases) {
+                HStack(spacing: 8) {
+                    Button { onSelect(.openCommonPhrases) } label: {
+                        Label(localization.text("action.open_common_phrases"),
+                              systemImage: selectedAction == .openCommonPhrases ? "checkmark.circle.fill" : "circle")
+                    }
+                    .disabled(isManagedPowerAction)
+                    Button(localization.text("common_phrases.adjust")) {
+                        selectedSection = .commonPhrases
+                    }
+                    .accessibilityIdentifier("common-phrases-adjust")
+                }
+                .font(.system(size: 13))
+                .buttonStyle(.bordered)
             }
         }
     }

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-02",
+  "mode": "built-in imagegen",
+  "scope": "Design drafts only",
+  "deliverables": [
+    {
+      "file": "panel-dark.png",
+      "format": "PNG",
+      "width": 1176,
+      "height": 1337,
+      "sha256": "4c9c2f205afd1a22d64e39df43b4c34445edec30b02729c91a94a3417fb681d6",
+      "references": [
+        "reference-web.jpg"
+      ],
+      "prompt": "Use case: ui-mockup. Edit the supplied screenshot of the current SayAll Web App into a single high-fidelity macOS common-phrases floating panel design. The screenshot is a visual reference for the ONE circular D-pad geometry ONLY. Remove all other Web controls, connection text and surrounding website. Make this panel entirely matte BLACK and charcoal, crisp white text. Main control must be ONE continuous black circular outer directional ring, with ONE separate circular OK button centered inside. Not five separate circles, not rectangular cross tiles. Same geometry as the supplied Web D-pad but black rather than gray. Soft subtle concentric rim, small restrained depth, not shiny chrome, no neon, no decoration. Flat straight-on UI on neutral gray background. Whole panel approx logical 440x500pt. Dark rounded container with header exact '常用语' left and close X right, then dominant circular disk diameter ~380pt, then one compact footer. Use native macOS system font, Chinese >=14pt logical. Render everything large and clean.\n\nInside the black circle, exactly four cardinal sectors with white chevron SYMBOLS rather than Chinese direction names: upper sector '⌃' with phrase '说清楚一点' beneath; left sector '‹' with '继续'; right sector '›' with '按你的来'; lower sector '⌄' with '思路可以，' then '我补充一点' across two lines. Center round button contains 'OK' above '好的'. Ring positions match physical directional remote keys. Phrase labels and symbols remain entirely inside their respective sectors, don't collide with center button, all five visible with equal visual hierarchy. No Chinese characters 上 下 左 右 as direction labels. No blue selection: black ring and darker/lighter black center with white type. Footer below circle exact '方向键或 OK 插入 · 返回键关闭' and next line '仅插入文字，不自动发送', both >=12pt. Chinese text of phrase names should be exact, not distorted. SINGLE UI draft only, no arrows/annotations outside the controls, no collage."
+    },
+    {
+      "file": "editor-light.png",
+      "format": "PNG",
+      "width": 1442,
+      "height": 1091,
+      "sha256": "e109aa0af01f439ea753395e3fbc44831d7bc843b24adc5f2007ca991a724a0b",
+      "references": [
+        "../revision-1/editor-light.png",
+        "panel-dark.png"
+      ],
+      "prompt": "Use case: ui-mockup. Revise Image 1 (previous SayAll macOS editing-page design) according to user feedback, using Image 2 (approved shape direction for black circular five-key panel) as the EXACT STYLE reference for the five-key assignment control. Output ONE flat high-fidelity macOS window design draft, light macOS settings style, logical 1020x772pt. Keep SayAll sidebar and native traffic lights; sidebar '按键' selected, '回眸', '连接', '设置', '分享', '我的'. NEVER add a 常用语 sidebar item. Chinese system text >=12pt logical. Completely REMOVE the old context strip containing '菜单键 · 单击', '打开常用语' and '调整常用语'. '打开常用语' MUST NOT appear anywhere in the editor. Top only back control '‹ 返回按键' and page title '调整常用语'. No duplicate title in a button. No web connection information.\n\nUse a practical THREE COLUMN content arrangement to fit the circular control visibly on the same page. Main area after sidebar ~875pt. Left library ~210pt, middle editing fields ~325pt, right assignment ~300pt; 14pt gaps. Content aligned top, quiet native cards with subtle borders, minimal margins. Circle is a central functional area in right column, not thumbnail and not overlay. Keep whole window unclipped.\n\nLEFT: heading '常用语库' and compact plus icon '新增'. Search '搜索常用语'. List drag handles, short labels and assigned SYMBOL badges: '好的' badge OK; '继续' badge ‹; selected '说清楚一点' badge ⌃; '按你的来' badge ›; '思路可以，我补充一点' badge ⌄ wrapping if necessary; then '不对吧？', '其他方案', '你会怎么选？', '总结结论', '先说怎么做' with remaining rows scrollable. Footer TWO adjacent compact buttons exact '导入备份' and '导出备份', below small readable helper '导入备份会替换当前常用语和五键分配。' on 2-3 lines. Do not invent cloud sync.\n\nMIDDLE: heading '编辑内容'. Single column permanently labeled fields: '中文短显示' contains '说清楚一点'; '中文完整句' multiline contains '看不懂，说清楚一点'; '英文短显示（可选）' contains 'Explain clearly'; '英文完整句（可选）' multiline contains \"I don't understand. Explain it more clearly\". Then blue button '保存更改' and quiet trash '删除这条'. Under them exact short statement '保存在这台 Mac，重启后仍保留。'. No debug paths, database names or JSON jargon. Explicit saving button saves editing fields.\n\nRIGHT: heading '五键分配'. Two short lines above disk exact '先选常用语，再点圆盘位置。' and '点击只分配，不插入文字。'. The control MUST be the same continuous matte BLACK circular outer directional ring and black round center as Image 2, now diameter ~280pt, with white chevrons and phrase labels. Not five separate circles, not pills or rectangle rows. NO Chinese direction labels 上 下 左 右. Exactly upper ⌃ with '说清楚一点'; left ‹ with '继续'; right › with '按你的来'; lower ⌄ with '思路可以，' then '我补充一点'; center round button 'OK' and '好的'. Every phrase legible >=12pt logical, correctly positioned, doesn't overlap center circle. No additional header/close button/footer copied from the floating panel: ONLY the circular control belongs in this column. Under circle a subtle checkmark status '分配后立即保存在本机'. Use dark ring consistently matching Image 2. Rest of editor remains LIGHT. Do not show opening or inserting action button. No popovers, sheets, dropdowns, external annotations or collage."
+    }
+  ],
+  "references": [
+    {
+      "file": "reference-web.jpg",
+      "format": "JPEG",
+      "width": 1280,
+      "height": 720,
+      "sha256": "99e351ab2cc3d3a1cb1900a726794d24b50d16c31ba3dcc75d265f8112ea1974",
+      "source": "Local apps/web Vite page at http://127.0.0.1:5178/, no connection established"
+    }
+  ],
+  "semantics": {
+    "builtInSource": "Resources/CommonPhrases/built-in.md, generated as bundled JSON",
+    "import": "User-selected compatible JSON archive; replaces current phrase library and bindings",
+    "export": "User-selected JSON file; default filename common-phrases.json; contains phrases and bindings",
+    "save": "UserDefaults.standard key commonPhrases.archive.v1; local Mac persistence only",
+    "assignment": "Select a saved phrase and click a circle sector; persists immediately; does not insert text",
+    "entry": "The open action and adjustment button belong together in the original key-mapping action list. Editor only has return navigation."
+  },
+  "review": {
+    "visual": "Checked Chinese wording, black circular geometry, direction symbols, same disk design in editor, no duplicate open action, no Common Phrases sidebar item and no clipping",
+    "boundary": "Concept drafts only. Runtime font sizing, interactions and responsive behavior need implementation validation."
+  }
+}

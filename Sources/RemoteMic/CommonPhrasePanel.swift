@@ -61,7 +61,7 @@ final class CommonPhraseController: ObservableObject {
         routing.open(source: source)
         messageKey = "common_phrases.panel_hint"
         isVisible = true
-        let window = CommonPhrasePanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 330),
+        let window = CommonPhrasePanel(contentRect: NSRect(origin: .zero, size: CommonPhrasePanelView.size),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.level = .floating
         window.isOpaque = false
@@ -72,7 +72,7 @@ final class CommonPhraseController: ObservableObject {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentView = NSHostingView(rootView: CommonPhrasePanelView(controller: self).environmentObject(localization))
         if let frame = NSScreen.main?.visibleFrame {
-            window.setFrameOrigin(NSPoint(x: frame.midX - 240, y: frame.minY + 48))
+            window.setFrameOrigin(NSPoint(x: frame.midX - CommonPhrasePanelView.size.width / 2, y: frame.minY + 48))
         }
         panel = window
         window.orderFrontRegardless()
@@ -126,36 +126,150 @@ final class CommonPhraseController: ObservableObject {
 }
 
 struct CommonPhrasePanelView: View {
+    static let size = CGSize(width: 440, height: 520)
     @ObservedObject var controller: CommonPhraseController
     @EnvironmentObject private var localization: LocalizationStore
-    private var english: Bool { localization.locale.language.languageCode?.identifier == "en" }
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             HStack {
-                Text(localization.text("common_phrases.title")).font(.system(size: 16, weight: .semibold))
+                Text(localization.text("common_phrases.title"))
+                    .font(.system(size: 22, weight: .semibold))
                 Spacer()
-                Button { controller.close(reason: "close_button") } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).accessibilityLabel(localization.text("common_phrases.close"))
+                Button { controller.close(reason: "close_button") } label: {
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(localization.text("common_phrases.close"))
             }
-            Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-                GridRow { Color.clear.gridCellUnsizedAxes([.horizontal, .vertical]); tile(.up); Color.clear.gridCellUnsizedAxes([.horizontal, .vertical]) }
-                GridRow { tile(.left); tile(.ok); tile(.right) }
-                GridRow { Color.clear.gridCellUnsizedAxes([.horizontal, .vertical]); tile(.down); Color.clear.gridCellUnsizedAxes([.horizontal, .vertical]) }
-            }
-            Text(localization.text(controller.messageKey)).font(.system(size: 12)).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            CommonPhrasePad(store: controller.store, diameter: 380, onSelect: controller.insert)
+            Divider().overlay(Color.white.opacity(0.12))
+            Text(localization.text(controller.messageKey))
+                .font(.system(size: 12)).foregroundStyle(Color.white.opacity(0.8))
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(18).frame(width: 480, height: 330)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .padding(22).frame(width: Self.size.width, height: Self.size.height)
+        .foregroundStyle(.white)
+        .background(Color(white: 0.075), in: RoundedRectangle(cornerRadius: 22))
+        .environment(\.colorScheme, .dark)
     }
-    private func tile(_ button: RemoteButton) -> some View {
-        Button { controller.insert(button) } label: {
-            VStack(spacing: 5) {
-                Text(button == .ok ? "OK" : localization.text("common_phrases.key.\(button.rawValue)"))
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
-                Text(controller.store.phrase(for: button)?.label(english: english) ?? localization.text("common_phrases.unassigned"))
-                    .font(.system(size: 13)).lineLimit(2).multilineTextAlignment(.center)
-            }.frame(width: 130, height: 62).contentShape(Rectangle())
-        }.buttonStyle(.bordered)
+}
+
+/// The panel and the editor share the same layout; callers decide whether a
+/// press inserts text or merely selects the assignment position.
+struct CommonPhrasePad: View {
+    @ObservedObject var store: CommonPhraseStore
+    var diameter: CGFloat
+    var selectedButton: RemoteButton? = nil
+    var onSelect: (RemoteButton) -> Void
+    @EnvironmentObject private var localization: LocalizationStore
+    private var english: Bool { localization.locale.language.languageCode?.identifier == "en" }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(colors: [Color(white: 0.16), Color(white: 0.065)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 1))
+                .shadow(color: .black.opacity(0.25), radius: 5, y: 3)
+            ForEach([RemoteButton.up, .right, .down, .left]) { button in
+                direction(button)
+            }
+            Button { onSelect(.ok) } label: {
+                VStack(spacing: 5) {
+                    Text("OK").font(.system(size: diameter > 300 ? 22 : 17, weight: .semibold))
+                    phraseLabel(.ok)
+                }
+                .frame(width: diameter * 0.38, height: diameter * 0.38)
+                .background(
+                    LinearGradient(colors: [Color(white: 0.19), Color(white: 0.085)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: Circle()
+                )
+                .overlay(Circle().stroke(selectedButton == .ok ? Color.accentColor : Color.black,
+                                         lineWidth: selectedButton == .ok ? 2 : 1))
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("OK"))
+            .accessibilityValue(store.phrase(for: .ok)?.label(english: english) ?? localization.text("common_phrases.unassigned"))
+            .accessibilityIdentifier("common-phrases-position-ok")
+            .accessibilityAddTraits(selectedButton == .ok ? .isSelected : [])
+        }
+        .foregroundStyle(.white)
+        .frame(width: diameter, height: diameter)
+    }
+
+    private func direction(_ button: RemoteButton) -> some View {
+        let vertical = button == .up || button == .down
+        let position: CGPoint = switch button {
+        case .up: CGPoint(x: 0.5, y: 0.17)
+        case .down: CGPoint(x: 0.5, y: 0.84)
+        case .left: CGPoint(x: 0.15, y: 0.5)
+        default: CGPoint(x: 0.85, y: 0.5)
+        }
+        let symbol: String = switch button {
+        case .up: "chevron.up"
+        case .down: "chevron.down"
+        case .left: "chevron.left"
+        default: "chevron.right"
+        }
+        let sector = CommonPhraseDirectionSector(button: button)
+        return Button { onSelect(button) } label: {
+            ZStack {
+                sector.fill(selectedButton == button ? Color.accentColor.opacity(0.25) : .clear)
+                if selectedButton == button {
+                    sector.stroke(Color.accentColor, lineWidth: 2)
+                }
+                VStack(spacing: 6) {
+                    Image(systemName: symbol)
+                        .font(.system(size: diameter > 300 ? 23 : 18, weight: .semibold))
+                    phraseLabel(button)
+                }
+                .frame(width: diameter * (vertical ? 0.52 : 0.27))
+                .position(x: diameter * position.x, y: diameter * position.y)
+            }
+            .frame(width: diameter, height: diameter)
+            .contentShape(sector)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(localization.text("common_phrases.key.\(button.rawValue)"))
+        .accessibilityValue(store.phrase(for: button)?.label(english: english) ?? localization.text("common_phrases.unassigned"))
+        .accessibilityIdentifier("common-phrases-position-\(button.rawValue)")
+        .accessibilityAddTraits(selectedButton == button ? .isSelected : [])
+    }
+
+    private func phraseLabel(_ button: RemoteButton) -> some View {
+        Text(store.phrase(for: button)?.label(english: english) ?? localization.text("common_phrases.unassigned"))
+            .font(.system(size: diameter > 300 ? 15 : 12))
+            .lineLimit(2).multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct CommonPhraseDirectionSector: Shape {
+    let button: RemoteButton
+
+    func path(in rect: CGRect) -> Path {
+        let start: Double = switch button {
+        case .up: 225
+        case .right: 315
+        case .down: 45
+        default: 135
+        }
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let outer = min(rect.width, rect.height) / 2
+        let inner = outer * 0.38
+        var path = Path()
+        path.addArc(center: center, radius: outer, startAngle: .degrees(start),
+                    endAngle: .degrees(start + 90), clockwise: false)
+        path.addLine(to: CGPoint(x: center.x + inner * cos((start + 90) * .pi / 180),
+                                y: center.y + inner * sin((start + 90) * .pi / 180)))
+        path.addArc(center: center, radius: inner, startAngle: .degrees(start + 90),
+                    endAngle: .degrees(start), clockwise: true)
+        path.closeSubpath()
+        return path
     }
 }

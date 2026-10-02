@@ -69,6 +69,8 @@ enum SettingsScreenshotRenderer {
         let showsRemoteCards = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_CARDS"
         ] == "1"
+        let onlySection = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION"]
+        let interactive = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1"
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -178,8 +180,12 @@ enum SettingsScreenshotRenderer {
         let previousAppearance = NSApp.appearance
         NSApp.appearance = appearance
         defer { NSApp.appearance = previousAppearance }
+        if interactive {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.finishLaunching()
+        }
 
-        for section in sections {
+        for section in sections where onlySection == nil || onlySection == section.rawValue {
             let rootView = SettingsView(
                 model: model,
                 updateInformation: updateInformation,
@@ -196,13 +202,25 @@ enum SettingsScreenshotRenderer {
             let hostingController = NSHostingController(rootView: rootView)
             let window = NSWindow(
                 contentRect: NSRect(origin: .zero, size: size),
-                styleMask: [.borderless],
+                styleMask: interactive ? [.titled, .closable, .resizable] : [.borderless],
                 backing: .buffered,
                 defer: false
             )
             window.contentViewController = hostingController
+            window.title = "SayAll — UI check"
             window.setContentSize(size)
             window.orderFront(nil)
+            if interactive {
+                // The production settings view uses isolated screenshot data;
+                // this bounded mode permits clicks without starting hardware.
+                window.center()
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                let deadline = Date().addingTimeInterval(300)
+                while window.isVisible && Date() < deadline {
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+                }
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
             window.contentView?.layoutSubtreeIfNeeded()
             window.contentView?.displayIfNeeded()
@@ -232,7 +250,7 @@ enum SettingsScreenshotRenderer {
 
         // Capture the same nonactivating panel view used for real input. This
         // hidden renderer neither opens a remote session nor posts text.
-        let panelSize = NSSize(width: 480, height: 330)
+        let panelSize = CommonPhrasePanelView.size
         let phrasePanel = NSPanel(contentRect: NSRect(origin: .zero, size: panelSize),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         phrasePanel.contentView = NSHostingView(rootView:

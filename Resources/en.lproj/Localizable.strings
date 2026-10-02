@@ -1141,10 +1141,21 @@
 /* Common phrases */
 "action.open_common_phrases" = "Open Common Phrases";
 "common_phrases.title" = "Common Phrases";
+"common_phrases.adjust" = "Adjust Common Phrases";
+"common_phrases.return_to_buttons" = "Back to Buttons";
+"common_phrases.library" = "Phrase Library";
+"common_phrases.editor" = "Edit Content";
+"common_phrases.search" = "Search phrases";
+"common_phrases.position_first" = "Choose a pad position, then a phrase.";
+"common_phrases.choose_position" = "Choose a button first.";
+"common_phrases.choose_phrase" = "Choose a phrase to save this assignment.";
+"common_phrases.assign_only" = "Assignments only. No text is inserted.";
+"common_phrases.import_hint" = "Import replaces your current phrases and five-button assignments.";
+"common_phrases.local_storage" = "Saved on this Mac and retained after restarting.";
 "common_phrases.panel_hint" = "Press an arrow or OK to insert. Back closes. Nothing is sent automatically.";
 "common_phrases.close" = "Close Common Phrases";
 "common_phrases.settings_hint" = "Bind Open Common Phrases in Buttons. Phrases stay on this Mac. Insertion briefly uses the clipboard.";
-"common_phrases.assign_hint" = "Five panel buttons";
+"common_phrases.assign_hint" = "Five-button Assignment";
 "common_phrases.assign_selected" = "Assign the saved phrase to a button";
 "common_phrases.key.up" = "Up";
 "common_phrases.key.down" = "Down";
@@ -1153,9 +1164,9 @@
 "common_phrases.unassigned" = "Unassigned";
 "common_phrases.add" = "Add Phrase";
 "common_phrases.edit" = "Edit Phrase";
-"common_phrases.import" = "Import";
-"common_phrases.export" = "Export";
-"common_phrases.save" = "Save";
+"common_phrases.import" = "Import Backup";
+"common_phrases.export" = "Export Backup";
+"common_phrases.save" = "Save Changes";
 "common_phrases.delete" = "Delete";
 "common_phrases.move_up" = "Move Up";
 "common_phrases.move_down" = "Move Down";

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-02",
+  "mode": "built-in imagegen",
+  "scope": "Design drafts only; no implementation changes.",
+  "deliverables": [
+    {
+      "file": "panel-light-v2.png",
+      "format": "PNG",
+      "width": 1513,
+      "height": 1039,
+      "sha256": "4b83748732bdfb6cf0e283d5964c414543ae212240e704aacf515091f264c32d",
+      "reference": "reference-panel.png",
+      "prompt": "Use case: ui-mockup. Edit the supplied reference screenshot into a polished high-fidelity macOS SayAll common-phrases floating panel design draft, preserving its five-key cross arrangement and exact meaning. Reference image is the existing implemented panel; improve its visual design only. Single panel centered on a soft neutral light backdrop, viewed straight-on, no perspective, no device mockup. Approximate panel logical dimensions 480x330; use generous pixel resolution and crisp Simplified Chinese native macOS PingFang typography, all final Chinese text at least 12pt. Native light material surface, rounded corners, fine divider/borders and soft modest shadow. Reduce heavy gray blocks into subtle nearly-white key surfaces. Semantic blue outline and subtle blue fill only on the center OK key. Header top left exact '常用语', upper right close X. Exactly five selectable rectangular keys in a directional cross: upper center small direction label '上' and main text '说清楚一点'; middle left '左' and '继续'; middle center 'OK' and '好的'; middle right '右' and '按你的来'; lower center '下' and '思路可以，我补充一点' on two balanced lines if needed. Keep every key text legible, do not shrink. Empty corners of cross remain empty. Footer exact '方向键或 OK 插入 · 返回键关闭' on one line, second subtle line '仅插入文字，不自动发送'. No sidebar, no editor fields, no additional action, no title outside panel, no annotations, no duplicated panel. Output a clean professional UI design draft.",
+      "revisionPrompt": "Edit this generated macOS common-phrases panel design draft with ONE targeted correction: increase BOTH footer instruction lines to the SAME font size as the small direction labels '上' '左' '右' '下' (at least 36 pixels in the current composition, minimum 12pt at intended logical panel width 480pt). Keep footer wording exact: first line '方向键或 OK 插入 · 返回键关闭'; second line '仅插入文字，不自动发送'. Use darker secondary gray for readability. Add footer height downward if necessary to fit without clipping, while keeping rest of the panel exactly unchanged: five-key cross, exact five phrases, blue center highlight, header, close X, material, background and borders. Do not shrink any text. No new content."
+    },
+    {
+      "file": "editor-light.png",
+      "format": "PNG",
+      "width": 1442,
+      "height": 1091,
+      "sha256": "72efb1777004f51fc537de1f5f4ea750b13b859cecc96261753a7ba38d41d6a8",
+      "reference": "reference-key-mapping.png",
+      "prompt": "Use case: ui-mockup. Transform the supplied SayAll existing macOS key-mapping screenshot into a single high fidelity design draft of the '调整常用语' editing page reached INSIDE the existing '按键' navigation. Use reference only as existing app visual style and sidebar structure; replace main key-mapping content entirely with the editing page, remove the remote photograph, REMOVE the independent sidebar item '常用语'. Preserve SayAll brand and other sidebar entries. Simplified Chinese native macOS system typography, crisp legible text, straight-on whole window, native traffic lights, light material and subtle borders, semantic blue selection instead of orange, restrained professional UI. Approximate logical window 1020 x 772, raster around 2040 x 1544. All Chinese labels >=12pt logical, main labels 14pt, title 25pt. No crop, no perspective, no marketing annotations.\n\nSidebar exactly: SayAll, selected '按键', then '回眸', '连接', '设置', with '分享' and '我的' toward bottom. Never put 常用语 in sidebar.\n\nMain page:\nTop left subtle back control '‹ 返回按键', followed below by primary title '调整常用语'. Directly below title a slim action context strip: label '菜单键 · 单击', followed by TWO ADJACENT compact button controls '打开常用语' and '调整常用语'; latter is selected blue-tinted to show current editor destination. These labels must be exact, and must appear together in this row. No new sidebar or floating modal.\n\nBelow: a two-column editing surface. Left column width ~245pt, heading '常用语库' and compact plus '新增'. Search field '搜索常用语'. Compact draggable rows with small dotted drag handles and a small assigned-key badge at right where applicable. Show rows in exact order: '好的' badge 'OK'; '继续' badge '左'; blue-selected '说清楚一点' badge '上'; '按你的来' badge '右'; '思路可以，我补充一点' badge '下' (wrap naturally); '不对吧？'; '其他方案'; '你会怎么选？'; '总结结论'; '先说怎么做'; allow rest via scrolling, no clipped text. Quiet controls '导入' '导出' in library footer.\n\nRight column: heading '编辑内容' and small standard blue '保存更改' button. Two side-by-side short-label fields with visible permanent labels '中文短显示' containing '说清楚一点', and '英文短显示（可选）' containing 'Explain clearly'. Below a multiline textarea labeled '中文完整句' with exact value '看不懂，说清楚一点'. Below an English textarea labeled '英文完整句（可选）' with exact text \"I don't understand. Explain it more clearly\". Below fields subtle short helper '短显示用于面板，完整句用于插入。' and quiet trash icon button '删除这条'.\n\nBelow BOTH columns across main content a compact inline assignment section heading '五键分配', brief instruction '选中左侧常用语，再点击按键分配'. Five compact evenly spaced assignment buttons in ONE row, each with key name above assigned short text. Exact pairs: '上' / '说清楚一点' (blue border); '左' / '继续'; 'OK' / '好的'; '右' / '按你的来'; '下' / '思路可以，我补充一点' (two lines, do not shrink Chinese). Width based on contents, long lower key may be wider. Keep all contents and spacing inside window. No dropdowns, no sheet/popover, no toggle invented, no protocol/developer text, no extra screens. This is ONE complementary editing-page design, not an option collage."
+    }
+  ],
+  "references": [
+    {
+      "file": "reference-panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "26edfc33653832d9216b033e9a7a81a52303b0e027ba99161c87f5795ac958a6"
+    },
+    {
+      "file": "reference-key-mapping.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "b3b43d6fe5dc8f0b8e20647df0f0a5b876d64c77a4911245ffc5abf88fd7f79e"
+    }
+  ],
+  "earlierDrafts": [
+    {
+      "file": "panel-light.png",
+      "format": "PNG",
+      "width": 1513,
+      "height": 1039,
+      "sha256": "7b4827510999011fa4ce52f992f50b1e674a9ea403d72e8250f4c1a410e54c3c"
+    }
+  ],
+  "review": {
+    "visual": "Reviewed both deliverables for Chinese text, five-key arrangement, adjacent action buttons, absent Common Phrases sidebar entry and clipping.",
+    "boundary": "Raster design drafts; runtime typography, responsive layouts and interactions require implementation verification."
+  }
+}

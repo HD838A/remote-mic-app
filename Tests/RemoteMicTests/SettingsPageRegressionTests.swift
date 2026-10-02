@@ -1454,7 +1454,6 @@ struct SettingsPageRegressionTests {
             membershipVisible: true
         ) == [
             .mapping,
-            .commonPhrases,
             .macros,
             .buttonProfiles,
             .membership,
