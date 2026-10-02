@@ -1097,22 +1097,26 @@ struct SettingsPageRegressionTests {
         #expect(bridgeSource.contains("webRemoteState = .plusRequired("))
         #expect(bridgeSource.contains("membership_check=bypassed"))
         #expect(bridgeSource.contains("/__local-test/remote-session"))
-        #expect(bridgeSource.contains("[\"local\", \"preview\", \"pr_preview\"].contains(Self.webRemoteBuildChannel)"))
-        #expect(bridgeSource.contains("serviceEnvironmentForDiagnostics == \"staging\""))
+        #expect(!bridgeSource.contains("webRemoteBuildChannel"))
+        #expect(bridgeSource.contains("webRemoteServiceEnvironment == \"staging\""))
         #expect(bridgeSource.contains("Self.isLoopbackRelayURL(relayURL)"))
-        #expect(bridgeSource.contains("webRemoteMembershipBypassRequested = BridgeAppModel.webRemoteBuildChannel == \"local\""))
-        let availability = bridgeSource.components(separatedBy: "var isWebRemoteMembershipBypassAvailable: Bool {")[1]
-            .components(separatedBy: "var isWebRemoteMembershipBypassEnabled")[0]
-        #expect(availability.contains("membershipFeature.supportsRemoteSessionAuthorization"))
-        #expect(!availability.contains("WebRemoteConfiguration.relayURL()"))
+        #expect(!bridgeSource.contains("webRemoteMembershipBypassRequested"))
+        #expect(bridgeSource.contains("var isWebRemoteMembershipBypassAvailable: Bool { false }"))
+        #expect(bridgeSource.contains("func setWebRemoteMembershipBypassEnabled(_ enabled: Bool) {}"))
+        let bypassPolicy = bridgeSource.components(separatedBy: "var isWebRemoteMembershipBypassEnabled: Bool {")[1]
+            .components(separatedBy: "private static func isLoopbackRelayURL")[0]
+        #expect(bypassPolicy.contains("membershipFeature.supportsRemoteSessionAuthorization"))
+        #expect(!bypassPolicy.contains("WebRemoteConfiguration.relayURL()"))
         #expect(bridgeSource.contains("testMembershipBypass: isWebRemoteMembershipBypassEnabled"))
         let environmentSubscription = bridgeSource.components(
             separatedBy: "membershipEnvironmentCancellable ="
         )[1].components(separatedBy: "audioOutput.onConfigurationChange")[0]
-        #expect(environmentSubscription.contains("environment == \"production\""))
-        #expect(!environmentSubscription.contains("serviceEnvironmentForDiagnostics == \"production\""))
+        #expect(environmentSubscription.contains("self.webRemoteClient.stop()"))
+        #expect(environmentSubscription.contains("self.webRemoteState = .disabled"))
+        #expect(environmentSubscription.contains("self.webRemoteSessionGeneration &+= 1"))
+        #expect(environmentSubscription.contains("self.webRemoteSessionIdempotencyKey = nil"))
+        #expect(environmentSubscription.contains("reason=service_environment_changed"))
         #expect(membershipSource.contains("testMembershipBypass: testMembershipBypass"))
-        #expect(bridgeSource.contains("webRemoteClient.stop()\n            enableWebRemoteConnection()"))
         #expect(!bridgeSource.contains("legacyVPS"))
         #expect(!bridgeSource.contains("legacy_vps"))
         #expect(bridgeSource.contains("type: \"sessionAttach\"") == false)
