@@ -5,6 +5,22 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func webRemoteEntryDoesNotRequireAnInviteCode() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(!source.contains("WebRemoteInvite"))
+        #expect(!source.contains("webRemoteInvite"))
+        #expect(source.contains("private func requestWebRemoteSession() {\n        openWebRemoteSession()\n    }"))
+        #expect(source.contains("model.enableWebRemoteConnection()"))
+        #expect(source.contains("guard model.webRemoteState.isEnabled else { return }"))
+    }
+
     @Test func mappingPageSelectsTheDefaultXiaomiStyleOnlyWhenTheSectionOpens() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
