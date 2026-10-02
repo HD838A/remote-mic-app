@@ -210,6 +210,59 @@ REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
 jq -e --arg commit "$bad_commit" '.productProofCommit == $commit' "$WORK_DIR/tooling-proof.json" >/dev/null
 print "CONTROL AND TOOLING PROOF FIXTURE PASS"
 
+# A repository-only run must inherit a real product proof, not become one.
+# Remove the fixture-only control/tooling paths recoverably to isolate the diff.
+/bin/mv "$source_repo/scripts/stage-macos-preview.sh" "$WORK_DIR/stage-macos-preview.saved"
+/bin/mv "$source_repo/script/build_and_run.sh" "$WORK_DIR/build-and-run.saved"
+print -r -- fixture > "$source_repo/scripts/verify-repository-governance.sh"
+print -r -- fixture > "$source_repo/AGENTS.md"
+/usr/bin/git -C "$source_repo" add -A
+/usr/bin/git -C "$source_repo" commit -q -m 'repository-only change'
+/usr/bin/git -C "$source_repo" push -q origin main
+repository_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+write_run_json 106 "$repository_commit" docs
+jq '.jobs |= map(.name = ("Public " + .name) |
+  .steps |= map(if .name == "Run documentation checks" then .name = "Run repository checks" else . end)
+)' "$fixture_root/run-106.json" > "$WORK_DIR/repository-run.json"
+/bin/mv "$WORK_DIR/repository-run.json" "$fixture_root/run-106.json"
+print -r -- 106 > "$fixture_root/commit-$repository_commit.id"
+REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+  RELEASE_READY_PROOF_OUTPUT="$WORK_DIR/repository-proof.json" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$repository_commit" main > "$WORK_DIR/repository-pass.log"
+jq -e --arg commit "$bad_commit" \
+  '.productProofCommit == $commit and .sourceCiRunId == 106 and .productCiRunId == 103' \
+  "$WORK_DIR/repository-proof.json" >/dev/null
+
+# Reject a failed check, wrong source identity or PR proof even if the run is green.
+for mutation in \
+  '.jobs[1].steps[0].conclusion = "failure"' \
+  '.headSha = "0000000000000000000000000000000000000000"' \
+  '.event = "pull_request"'; do
+  /bin/cp "$fixture_root/run-106.json" "$WORK_DIR/repository-original.json"
+  jq "$mutation" "$WORK_DIR/repository-original.json" > "$fixture_root/run-106.json"
+  if REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+      "$ROOT/scripts/verify-release-ready-main-ci.sh" "$repository_commit" main > "$WORK_DIR/rejected.log" 2>&1; then
+    print -u2 "release gate accepted invalid repository CI evidence"
+    exit 1
+  fi
+  /bin/mv "$WORK_DIR/repository-original.json" "$fixture_root/run-106.json"
+done
+
+print -r -- 'unverified product change' > "$source_repo/Sources/Product.swift"
+/usr/bin/git -C "$source_repo" add .
+/usr/bin/git -C "$source_repo" commit -q -m 'mixed repository and product change'
+/usr/bin/git -C "$source_repo" push -q origin main
+mixed_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+jq --arg sha "$mixed_commit" '.headSha = $sha' "$fixture_root/run-106.json" > "$fixture_root/run-107.json"
+print -r -- 107 > "$fixture_root/commit-$mixed_commit.id"
+if REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+    "$ROOT/scripts/verify-release-ready-main-ci.sh" "$mixed_commit" main > "$WORK_DIR/mixed-rejected.log" 2>&1; then
+  print -u2 "repository checks concealed an unverified product change"
+  exit 1
+fi
+/usr/bin/grep -Fq 'source changes after the inherited product proof are not docs-only' "$WORK_DIR/mixed-rejected.log"
+print "REPOSITORY PROOF INHERITANCE AND REJECTION FIXTURE PASS"
+
 )
 
 test_metadata() (
@@ -812,7 +865,9 @@ for test_case in \
   'scripts/install-doubao-driver.sh:true:true' \
   'scripts/verify-release-dependency-pins.sh:false:true' \
   'scripts/test-macos-release-flow.sh:false:true' \
-  'scripts/verify-release-control-plane-diff.sh:false:true' \
+  'scripts/verify-release-control-plane-diff.sh:true:true' \
+  'scripts/verify-repository-governance.sh:false:false:true' \
+  '.github/workflows/repository-governance.yml:false:false:true' \
   'script/build_and_run.sh:false:false' \
   'Testing/LocalExperiment.command:true:false' \
   'Testing/LocalProbe.swift:true:false' \
@@ -821,7 +876,8 @@ for test_case in \
   'Sources/RemoteMic/FutureFeature.swift:true:false' \
   'scripts/unknown-future-tool.sh:true:true' \
   'Testing/Manual.md:false:false'; do
-  IFS=: read -r changed_path expected_product expected_release <<< "$test_case"
+  IFS=: read -r changed_path expected_product expected_release expected_repository <<< "$test_case"
+  expected_repository="${expected_repository:-false}"
   (( case_number += 1 ))
   fixture_repo="$WORK_DIR/case-$case_number"
   /usr/bin/git init -q "$fixture_repo"
@@ -837,9 +893,60 @@ for test_case in \
     "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD)"
   print -r -- "$result" | /usr/bin/grep -Fxq "product_change=$expected_product"
   print -r -- "$result" | /usr/bin/grep -Fxq "release_checks=$expected_release"
+  print -r -- "$result" | /usr/bin/grep -Fxq "repository_only=$expected_repository"
   if [[ "$expected_product" == false && "$expected_release" == true ]]; then
     REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" "$base_commit" HEAD
   fi
+  if [[ "$expected_repository" == true ]]; then
+    print -r -- documentation > "$fixture_repo/AGENTS.md"
+    /usr/bin/git -C "$fixture_repo" add .
+    /usr/bin/git -C "$fixture_repo" commit -q -m 'mixed governance and docs'
+    REPOSITORY_ROOT="$fixture_repo" /bin/bash "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fxq 'repository_only=true'
+    /bin/mkdir -p "$fixture_repo/Sources"
+    print -r -- product > "$fixture_repo/Sources/Product.swift"
+    /usr/bin/git -C "$fixture_repo" add .
+    /usr/bin/git -C "$fixture_repo" commit -q -m 'mixed governance and product'
+    REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fxq 'product_change=true'
+  fi
+  if REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify 0000000000000000000000000000000000000000 HEAD > "$WORK_DIR/invalid-diff.log" 2>&1; then
+    print -u2 "classifier accepted an invalid Git diff"
+    exit 1
+  fi
+done
+
+# Pin scheduling boundaries and execute the actual required-context shell gate.
+ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
+classifier_job="$(/usr/bin/awk '/^  classify_changes:/ { capture=1 } /^  public_test:/ { exit } capture { print }' "$ci_workflow")"
+print -r -- "$classifier_job" | /usr/bin/grep -Fq 'runs-on: ubuntu-latest'
+/usr/bin/grep -Fq 'runs-on: ${{ needs.classify_changes.outputs.product_change == '\''true'\'' && '\''macos-15'\'' || '\''ubuntu-latest'\'' }}' "$ci_workflow"
+/usr/bin/grep -Fq 'group: mac-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == '\''pull_request'\'' && '\''pr'\'' || github.sha }}' "$ci_workflow"
+/usr/bin/grep -Fq 'cancel-in-progress: ${{ github.event_name == '\''pull_request'\'' }}' "$ci_workflow"
+summary_gate="$(/usr/bin/awk '
+  /- name: Require every applicable macOS CI lane/ { found=1 }
+  found && /run: \|/ { capture=1; next }
+  capture { print }
+' "$ci_workflow")"
+[[ -n "$summary_gate" ]]
+for gate_case in \
+  'true:true:success:success:true:success:success:0' \
+  'true:false:success:skipped:false:skipped:success:0' \
+  'false:false:skipped:skipped:none:skipped:success:0' \
+  'false:true:skipped:skipped:none:success:success:0' \
+  'true:true:skipped:success:true:success:success:1' \
+  'true:true:success:skipped:true:success:success:1' \
+  'true:true:success:cancelled:true:success:success:1' \
+  'true:false:success:success:false:skipped:success:1' \
+  'false:false:success:skipped:none:skipped:success:1' \
+  'false:false:skipped:skipped:none:skipped:failure:1' \
+  'false:true:skipped:skipped:none:failure:success:1' \
+  'unknown:false:skipped:skipped:none:skipped:success:1'; do
+  IFS=: read -r product release access private available release_result public expected_status <<< "$gate_case"
+  gate_status=0
+  CLASSIFY_RESULT=success PRODUCT_CHANGE="$product" RELEASE_CHECKS_REQUIRED="$release" \
+    PRIVATE_ACCESS_RESULT="$access" PRIVATE_TEST_RESULT="$private" PRIVATE_AVAILABLE="$available" \
+    RELEASE_CHECKS_RESULT="$release_result" PUBLIC_RESULT="$public" \
+    /bin/bash -e -c "$summary_gate" || gate_status=1
+  [[ "$gate_status" == "$expected_status" ]]
 done
 
 # Exercise the consolidated architecture entry without signatures or Apple services.
