@@ -8,7 +8,7 @@
 - 使用独立测试账户/数据目录，先导出旧配置并保留原免费模块绑定文件。不得用测试导入覆盖日常配置。
 - 准备两台可配置遥控器、两个目标 App、本机辅助功能/输入监控权限，以及具备 Plus 权益的方案环境。
   测试脚本只使用 `printf`、`sleep` 和简单 AppleScript 返回值，不读取第三方 App 私有数据。
-- 本轮本地 ad-hoc Release App 仅用于代理 UI 检查，不是可交付安装包；用户实测包必须另走 Developer ID 签名、公证和验证。
+- 实现阶段的 ad-hoc Release App 仅用于代理 UI 检查；2026-10-03 已另行构建 Developer ID 签名、公证的用户本地测试包，见文末交付记录。
 
 ## 自动化入口
 
@@ -158,3 +158,14 @@ Siri 方案最终保存、Chromecast 方案交互、完整深色编辑步骤及�
 本轮未完成实体遥控器、首次系统权限、第三方 App 最终响应及语音首尾完整性验收；
 Siri Remote/Chromecast 属于已实现适配的源码候选，不能宣称真机兼容验收通过或发布就绪。
 详细实施记录保存在私有营销仓库，TODO 父项保持未完成。
+
+## 2026-10-03 本地用户测试包
+
+- 本地交付目录：`dist/local-tests/unified-button-configuration-70adf112/`，入口 `SayAll.app`，简明步骤见同目录 `test-notes.md`。
+- 版本 1.9.21（228），Apple Silicon / macOS 14+，local 渠道；组合动作、键位方案、Siri Remote 与 Chromecast 包含，AI 关闭。
+- 宿主源码 `70adf112d0ab6e68ca03def4c76c0020c679b4ac`；私有源码 `96b472466a20546e8c92702722bc6031be7f6333`；构建不含未提交产品源码，不改变版本或发布 pin。
+- 此专用本地包启用现有方案测试权益，包内 `SayAllButtonProfilesTestAccess=true`；正式会员二进制未注入，不能用它验证会员授权或服务器流程，不上传、不进入公开发布。
+- 项目原生 build-app 构建，SwiftPM 保留 --disable-keychain；自检48通过，最终 verify-app 通过。
+- App 和嵌套组件 Developer ID / Team L3QHLDRPAY / Hardened Runtime、deep/strict 通过；Apple 公证 Accepted、stapler validate 与 Gatekeeper accepted / Notarized Developer ID 通过。
+- 最终副本用隔离 UserDefaults 和脱敏动作库打开生产设置窗口，确认对应精确路径进程持续存在；交付前只关闭此烟测进程，未用于迁移日常用户配置。
+- 正常用户启动、旧用户数据实际升级、首次权限及真实硬件尚由用户验收。测试前导出旧配置并保留组合动作备份，退出其他版本后打开本包；逐文件摘要和包身份保存在交付目录。
