@@ -1601,6 +1601,16 @@ struct SettingsView: View {
         }
     }
 
+    private var mappingPageHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            PageHeader(title: localization.text("button_mapping.page.title"))
+            Text(localization.text("button_mapping.page.subtitle"))
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var mappingPage: some View {
         hardwareMappingPage {
             RemoteMappingCanvas(
@@ -1635,7 +1645,7 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: 14) {
-                    PageHeader(title: localization.text("button_mapping.page.title"))
+                    mappingPageHeader
                         .fixedSize(horizontal: true, vertical: false)
                     mappingHeaderToggle
                     remoteDeviceSelector()
@@ -1644,7 +1654,7 @@ struct SettingsView: View {
 
                 HStack(alignment: .center, spacing: 14) {
                     VStack(alignment: .leading, spacing: 8) {
-                        PageHeader(title: localization.text("button_mapping.page.title"))
+                        mappingPageHeader
                             .fixedSize(horizontal: true, vertical: false)
                         mappingHeaderToggle
                     }
