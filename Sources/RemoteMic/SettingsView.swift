@@ -472,16 +472,11 @@ struct SettingsView: View {
     @State private var configurationStatus: ConfigurationStatus?
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
-    @State private var isWebRemoteInvitePresented = false
-    @State private var isWebRemoteInviteInvalidPresented = false
-    @State private var isWebRemoteInviteAuthorized = false
     @State private var isTestFlightLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
     @State private var expandedShareSection: SettingsSection?
-    @State private var webRemoteInviteCode = ""
     @State private var versionTapRevealCounter = VersionTapRevealCounter()
-    private static let requiredWebRemoteInviteCode = "8586"
 
     init(
         model: BridgeAppModel,
@@ -611,21 +606,6 @@ struct SettingsView: View {
         } message: {
             Text("connection.trusted_devices.clear_confirm.message")
         }
-        .sheet(isPresented: $isWebRemoteInvitePresented) {
-            if isWebRemoteInviteAuthorized {
-                webRemoteSessionView
-            } else {
-                webRemoteInviteSheet
-            }
-        }
-        .alert(
-            localization.text("connection.web.invite.invalid_title"),
-            isPresented: $isWebRemoteInviteInvalidPresented
-        ) {
-            Button(localization.text("common.action.ok")) {}
-        } message: {
-            Text("connection.web.invite.invalid_message")
-        }
         .alert(
             localization.text("button_mapping.permission_prompt.title"),
             isPresented: $isMappingPermissionAlertPresented
@@ -642,95 +622,6 @@ struct SettingsView: View {
         } message: {
             Text("button_mapping.permission_prompt.message")
         }
-    }
-
-    private var webRemoteInviteSheet: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: "iphone")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 52, height: 52)
-                        .background(Color.accentColor.opacity(0.14), in: Circle())
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("connection.web.invite.ios_eyebrow")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color.accentColor)
-                        Text("connection.web.invite.ios_title")
-                            .font(.title3.weight(.semibold))
-                        Text("connection.web.invite.ios_description")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                HStack(spacing: 10) {
-                    Link(destination: AppLinks.testFlightPublicBeta) {
-                        Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
-                    }
-                    .compatibilityButtonStyle(.prominent)
-
-                    Button {
-                        copyTestFlightPublicBetaLink()
-                    } label: {
-                        Label(
-                            localization.text(
-                                isTestFlightLinkCopied
-                                    ? "common.status.copied"
-                                    : "common.action.copy_link"
-                            ),
-                            systemImage: isTestFlightLinkCopied ? "checkmark" : "doc.on.doc"
-                        )
-                    }
-                    .compatibilityButtonStyle(.standard)
-                }
-            }
-            .padding(18)
-            .background(
-                Color.accentColor.opacity(0.10),
-                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.accentColor.opacity(0.28), lineWidth: 1)
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("connection.web.invite.title")
-                    .font(.headline)
-                Text("connection.web.invite.description")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            TextField(
-                localization.text("connection.web.invite.placeholder"),
-                text: $webRemoteInviteCode
-            )
-            .textFieldStyle(.roundedBorder)
-
-            HStack {
-                Spacer()
-                Button("common.action.cancel") {
-                    webRemoteInviteCode = ""
-                    isWebRemoteInvitePresented = false
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Button("connection.web.invite.unlock") {
-                    validateWebRemoteInviteCode()
-                }
-                .compatibilityButtonStyle(.prominent)
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(24)
-        .frame(width: 540)
     }
 
     private var webRemoteSessionView: some View {
@@ -4394,35 +4285,7 @@ struct SettingsView: View {
     }
 
     private func requestWebRemoteSession() {
-        guard isWebRemoteInviteAuthorized else {
-            webRemoteInviteCode = ""
-            isTestFlightLinkCopied = false
-            isWebRemoteInvitePresented = true
-            return
-        }
         openWebRemoteSession()
-    }
-
-    private func validateWebRemoteInviteCode() {
-        guard webRemoteInviteCode.trimmingCharacters(in: .whitespacesAndNewlines) ==
-                Self.requiredWebRemoteInviteCode
-        else {
-            webRemoteInviteCode = ""
-            isWebRemoteInvitePresented = false
-            DispatchQueue.main.async {
-                isWebRemoteInviteInvalidPresented = true
-            }
-            return
-        }
-        webRemoteInviteCode = ""
-        if !model.webRemoteState.isEnabled {
-            model.enableWebRemoteConnection()
-        }
-        guard model.webRemoteState.isEnabled else {
-            isWebRemoteInvitePresented = false
-            return
-        }
-        isWebRemoteInviteAuthorized = true
     }
 
     private func copyTestFlightPublicBetaLink() {

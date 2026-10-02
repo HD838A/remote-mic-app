@@ -2,6 +2,8 @@
 
 适用版本：`codex/rc003-voice-extension-test-20260826`，测试包版本 `1.9.15 (155)`。这是仅用于验证“遥控器语音输入是否能跨越物理语音段限制”的实验包，不代表正式版本已支持无限时长录音。
 
+> 历史实验记录：2026-10-02 已移除专用构建脚本与两个启动器。本手册保留当时的用例和验证边界，不是当前安装包的构建或分发入口；当前测试包仍须遵守 [发布规范](../RELEASING.md) 的签名、公证与验收门禁。
+
 ## 测试前准备
 
 1. 使用 macOS 14 或更高版本的 Apple Silicon Mac。
@@ -11,7 +13,7 @@
 
 ## 启动
 
-解压测试包后，双击同目录的 `launch_rc003_voice_extension_test.command`，或直接双击测试 App。测试 App 已在自身 `Info.plist` 中启用实验模式，不需要任何启动参数。
+解压对应历史测试包后，直接双击测试 App。测试 App 已在自身 `Info.plist` 中启用实验模式，不需要任何启动参数。
 
 ```bash
 open -n "SayAll-RC003-VoiceExtension-Test.app"

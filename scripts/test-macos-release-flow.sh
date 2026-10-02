@@ -1,8 +1,325 @@
 #!/bin/zsh
 set -euo pipefail
 umask 077
+SCRIPT_ROOT="${0:A:h:h}"
 
-ROOT="${0:A:h:h}"
+# Subshells preserve each fixture's variables, traps and recoverable cleanup.
+test_ready_ci() (
+ROOT="$SCRIPT_ROOT"
+export RELEASE_CONTROL_PLANE_DIFF_BIN="$ROOT/scripts/verify-release-control-plane-diff.sh"
+WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-release-ready-gate-test.XXXXXX)"
+
+cleanup() {
+  local trash_root="$HOME/.Trash"
+  local trash_target="$trash_root/sayall-release-ready-gate-test.$(/bin/date +%s).$$.$RANDOM"
+  /bin/mkdir -p "$trash_root"
+  [[ -d "$WORK_DIR" ]] && /bin/mv "$WORK_DIR" "$trash_target"
+}
+trap cleanup EXIT
+
+source_remote="$WORK_DIR/source-remote.git"
+source_repo="$WORK_DIR/source-repo"
+fixture_root="$WORK_DIR/gh-fixtures"
+/usr/bin/git init -q --bare "$source_remote"
+/usr/bin/git init -q "$source_repo"
+/usr/bin/git -C "$source_repo" config user.name "Release Gate Fixture"
+/usr/bin/git -C "$source_repo" config user.email "release-gate-fixture@example.invalid"
+/bin/mkdir -p "$source_repo/Sources" "$source_repo/Screenshots" "$fixture_root"
+print -r -- 'product baseline' > "$source_repo/Sources/Product.swift"
+/usr/bin/git -C "$source_repo" add Sources/Product.swift
+/usr/bin/git -C "$source_repo" commit -q -m 'full product baseline'
+/usr/bin/git -C "$source_repo" branch -M main
+/usr/bin/git -C "$source_repo" remote add origin "$source_remote"
+/usr/bin/git -C "$source_repo" push -q origin main
+product_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+
+print -r -- 'screenshot-only change' > "$source_repo/Screenshots/fixture.jpg"
+/usr/bin/git -C "$source_repo" add Screenshots/fixture.jpg
+/usr/bin/git -C "$source_repo" commit -q -m 'docs-only screenshot change'
+/usr/bin/git -C "$source_repo" push -q origin main
+docs_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+
+write_run_json() {
+  local run_id="$1"
+  local commit="$2"
+  local mode="$3"
+  jq -n \
+    --arg sha "$commit" \
+    --arg url "https://github.example.invalid/runs/$run_id" \
+    --arg mode "$mode" \
+    '{
+      workflowName: "macOS CI",
+      event: "push",
+      status: "completed",
+      conclusion: "success",
+      headBranch: "main",
+      headSha: $sha,
+      url: $url,
+      updatedAt: "2026-09-27T00:00:00Z",
+      jobs: [
+        {
+          name: "Swift tests and build (Apple Silicon)",
+          status: "completed",
+          conclusion: "success",
+          steps: (
+            if $mode == "full" then [
+              {name: "Run documentation checks", conclusion: "skipped"},
+              {name: "Run release control-plane fixture", conclusion: "skipped"},
+              {name: "Run Swift tests", conclusion: "success"},
+              {name: "Run project self-test", conclusion: "success"},
+              {name: "Build release configuration", conclusion: "success"}
+            ] else [
+              {name: "Run documentation checks", conclusion: "success"},
+              {name: "Run release control-plane fixture", conclusion: "skipped"},
+              {name: "Run Swift tests", conclusion: "skipped"},
+              {name: "Run project self-test", conclusion: "skipped"},
+              {name: "Build release configuration", conclusion: "skipped"}
+            ] end
+          )
+        },
+        {
+          name: "Swift tests and build (Intel Ventura)",
+          status: "completed",
+          conclusion: "success",
+          steps: (
+            if $mode == "full" then [
+              {name: "Run documentation checks", conclusion: "skipped"},
+              {name: "Run release control-plane fixture", conclusion: "skipped"},
+              {name: "Run Swift tests", conclusion: "success"},
+              {name: "Run project self-test", conclusion: "success"},
+              {name: "Build release configuration", conclusion: "success"}
+            ] else [
+              {name: "Run documentation checks", conclusion: "success"},
+              {name: "Run release control-plane fixture", conclusion: "skipped"},
+              {name: "Run Swift tests", conclusion: "skipped"},
+              {name: "Run project self-test", conclusion: "skipped"},
+              {name: "Build release configuration", conclusion: "skipped"}
+            ] end
+          )
+        }
+      ]
+    }' > "$fixture_root/run-$run_id.json"
+}
+
+write_run_json 100 "$product_commit" full
+write_run_json 101 "$docs_commit" docs
+print -r -- 100 > "$fixture_root/commit-$product_commit.id"
+print -r -- 101 > "$fixture_root/commit-$docs_commit.id"
+
+fake_gh="$WORK_DIR/fake-gh"
+print -r -- '#!/bin/zsh
+set -euo pipefail
+fixture_root="${FIXTURE_ROOT:?}"
+if [[ "$1" == run && "$2" == list ]]; then
+  commit=""
+  previous=""
+  for argument in "$@"; do
+    if [[ "$previous" == "--commit" ]]; then commit="$argument"; fi
+    previous="$argument"
+  done
+  [[ -r "$fixture_root/commit-$commit.id" ]] || exit 1
+  /bin/cat "$fixture_root/commit-$commit.id"
+  exit 0
+fi
+if [[ "$1" == run && "$2" == view ]]; then
+  cat "$fixture_root/run-$3.json"
+  exit 0
+fi
+exit 1
+' > "$fake_gh"
+/bin/chmod 755 "$fake_gh"
+
+docs_output="$WORK_DIR/docs-output.json"
+docs_result="$(REPOSITORY_ROOT="$source_repo" GITHUB_REPOSITORY=HD838A/remote-mic-app GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" RELEASE_READY_PROOF_OUTPUT="$docs_output" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$docs_commit" main)"
+print -r -- "$docs_result" | /usr/bin/grep -Fq 'PRODUCT_PROOF_COMMIT: '
+/usr/bin/jq -e --arg candidate "$docs_commit" --arg commit "$product_commit" \
+  '.candidateCommit == $candidate and .productProofCommit == $commit' "$docs_output" >/dev/null
+
+print -r -- 'product change after docs' > "$source_repo/Sources/Product.swift"
+/usr/bin/git -C "$source_repo" add Sources/Product.swift
+/usr/bin/git -C "$source_repo" commit -q -m 'product change without product CI'
+/usr/bin/git -C "$source_repo" push -q origin main
+bad_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+write_run_json 102 "$bad_commit" docs
+print -r -- 102 > "$fixture_root/commit-$bad_commit.id"
+
+if REPOSITORY_ROOT="$source_repo" GITHUB_REPOSITORY=HD838A/remote-mic-app GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+    "$ROOT/scripts/verify-release-ready-main-ci.sh" "$bad_commit" main > "$WORK_DIR/bad-output.log" 2>&1; then
+  print -u2 -- 'release gate accepted a product change without a full product CI run'
+  exit 1
+fi
+/usr/bin/grep -Fq 'source changes after the inherited product proof are not docs-only' "$WORK_DIR/bad-output.log"
+print -r -- 'docs-only release gate fixture passed'
+
+# Product steps live on public jobs; summary jobs must not substitute for them.
+write_run_json 103 "$bad_commit" full
+jq '.jobs |= map(.name = ("Public " + .name))' "$fixture_root/run-103.json" > "$WORK_DIR/modern-run.json"
+/bin/mv "$WORK_DIR/modern-run.json" "$fixture_root/run-103.json"
+print -r -- 103 > "$fixture_root/commit-$bad_commit.id"
+REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$bad_commit" main > "$WORK_DIR/modern-pass.log"
+jq '.jobs[1].steps |= map(select(.name != "Build release configuration"))' \
+  "$fixture_root/run-103.json" > "$WORK_DIR/incomplete-run.json"
+/bin/mv "$WORK_DIR/incomplete-run.json" "$fixture_root/run-103.json"
+if REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+    "$ROOT/scripts/verify-release-ready-main-ci.sh" "$bad_commit" main > "$WORK_DIR/incomplete.log" 2>&1; then
+  print -u2 "release gate accepted an incomplete public product lane"
+  exit 1
+fi
+print "MODERN PRODUCT PROOF FIXTURE PASS"
+
+# A control-plane run reuses the latest complete public product proof.
+write_run_json 103 "$bad_commit" full
+jq '.jobs |= map(.name = ("Public " + .name))' "$fixture_root/run-103.json" > "$WORK_DIR/modern-run.json"
+/bin/mv "$WORK_DIR/modern-run.json" "$fixture_root/run-103.json"
+/bin/mkdir -p "$source_repo/scripts"
+print -r -- fixture > "$source_repo/scripts/stage-macos-preview.sh"
+/usr/bin/git -C "$source_repo" add scripts/stage-macos-preview.sh
+/usr/bin/git -C "$source_repo" commit -q -m 'control-plane change'
+/usr/bin/git -C "$source_repo" push -q origin main
+control_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+write_run_json 104 "$control_commit" full
+jq '.jobs |= map(
+  .name |= sub("^Swift tests and build"; "Release script checks") |
+  .steps = [{name:"Run release control-plane fixture",conclusion:"success"}]
+)' "$fixture_root/run-104.json" > "$WORK_DIR/control-run.json"
+/bin/mv "$WORK_DIR/control-run.json" "$fixture_root/run-104.json"
+print -r -- 104 > "$fixture_root/commit-$control_commit.id"
+REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+  RELEASE_READY_PROOF_OUTPUT="$WORK_DIR/control-proof.json" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$control_commit" main > "$WORK_DIR/control-pass.log"
+jq -e --arg commit "$bad_commit" '.productProofCommit == $commit' "$WORK_DIR/control-proof.json" >/dev/null
+
+# Subsequent manual tooling cannot be mistaken for a fresh product proof.
+/bin/mkdir -p "$source_repo/script"
+print -r -- fixture > "$source_repo/script/build_and_run.sh"
+/usr/bin/git -C "$source_repo" add .
+/usr/bin/git -C "$source_repo" commit -q -m 'manual tooling change'
+/usr/bin/git -C "$source_repo" push -q origin main
+tooling_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+write_run_json 105 "$tooling_commit" docs
+jq '.jobs |= map(.name = ("Public " + .name) |
+  .steps |= map(if .name == "Run documentation checks" then .name = "Run tooling checks" else . end)
+)' "$fixture_root/run-105.json" > "$WORK_DIR/tooling-run.json"
+/bin/mv "$WORK_DIR/tooling-run.json" "$fixture_root/run-105.json"
+print -r -- 105 > "$fixture_root/commit-$tooling_commit.id"
+REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+  RELEASE_READY_PROOF_OUTPUT="$WORK_DIR/tooling-proof.json" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$tooling_commit" main > "$WORK_DIR/tooling-pass.log"
+jq -e --arg commit "$bad_commit" '.productProofCommit == $commit' "$WORK_DIR/tooling-proof.json" >/dev/null
+print "CONTROL AND TOOLING PROOF FIXTURE PASS"
+
+)
+
+test_metadata() (
+ROOT="$SCRIPT_ROOT"
+WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-prepare-preview-release-test.XXXXXX)"
+ORIGIN="$WORK_DIR/origin.git"
+CHECKOUT="$WORK_DIR/checkout"
+BRANCH="$WORK_DIR/metadata"
+FAKE_GH="$WORK_DIR/fake-gh"
+
+cleanup() {
+  local trash_root="$HOME/.Trash"
+  local trash_target="$trash_root/sayall-prepare-preview-release-test.$(/bin/date +%s).$$.$RANDOM"
+  /bin/mkdir -p "$trash_root"
+  [[ -d "$WORK_DIR" ]] && /bin/mv "$WORK_DIR" "$trash_target"
+}
+trap cleanup EXIT
+
+/usr/bin/git init -q --bare "$ORIGIN"
+/usr/bin/git clone -q "$ORIGIN" "$CHECKOUT"
+/bin/mkdir -p "$CHECKOUT/Resources/zh-Hans.lproj" "$CHECKOUT/Resources/en.lproj" "$CHECKOUT/scripts"
+/bin/cp "$ROOT/scripts/prepare-preview-release.sh" "$CHECKOUT/scripts/prepare-preview-release.sh"
+/bin/cp "$ROOT/scripts/verify-preview-cdn-availability.sh" "$CHECKOUT/scripts/verify-preview-cdn-availability.sh"
+/bin/chmod 755 "$CHECKOUT/scripts/prepare-preview-release.sh"
+/bin/chmod 755 "$CHECKOUT/scripts/verify-preview-cdn-availability.sh"
+print -r -- '<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleShortVersionString</key><string>1.9.10</string>
+<key>CFBundleVersion</key><string>139</string>
+</dict></plist>' > "$CHECKOUT/Resources/Info.plist"
+print -r -- '# History
+
+## 1.9.10
+
+- Previous.' > "$CHECKOUT/Resources/zh-Hans.lproj/ReleaseHistory.md"
+print -r -- '# History
+
+## 1.9.10
+
+- Previous.' > "$CHECKOUT/Resources/en.lproj/ReleaseHistory.md"
+/usr/bin/git -C "$CHECKOUT" add .
+/usr/bin/git -C "$CHECKOUT" -c user.name=Fixture -c user.email=fixture@example.invalid commit -q -m base
+/usr/bin/git -C "$CHECKOUT" branch -M main
+/usr/bin/git -C "$CHECKOUT" tag v1.9.10
+/usr/bin/git -C "$CHECKOUT" push -q origin main --tags
+/usr/bin/git clone -q "$ORIGIN" "$BRANCH"
+/usr/bin/git -C "$BRANCH" checkout -q -b codex/release-metadata origin/main
+
+print -r -- '#!/bin/zsh
+set -euo pipefail
+if [[ "$1" == api && "$2" == --include ]]; then
+  print -r -- "HTTP/2.0 404 Not Found"
+  exit 1
+fi
+print -u2 -- "unexpected fake gh invocation: $*"
+exit 1' > "$FAKE_GH"
+/bin/chmod 755 "$FAKE_GH"
+
+FAKE_BIN="$WORK_DIR/bin"
+/bin/mkdir -p "$FAKE_BIN"
+print -r -- '#!/bin/zsh
+set -euo pipefail
+print -rn -- 404' > "$FAKE_BIN/curl"
+/bin/chmod 755 "$FAKE_BIN/curl"
+
+zh_notes="$WORK_DIR/zh.md"
+en_notes="$WORK_DIR/en.md"
+print -r -- '- 修复预览发布流程。' > "$zh_notes"
+print -r -- '- Improved preview release flow.' > "$en_notes"
+
+PATH="$FAKE_BIN:$PATH" REPOSITORY_ROOT="$BRANCH" GH_BIN="$FAKE_GH" \
+  "$BRANCH/scripts/prepare-preview-release.sh" 1.9.10 1 "$zh_notes" "$en_notes" \
+  > "$WORK_DIR/result.txt"
+
+/usr/bin/grep -Fq 'SELECTED_VERSION: 1.9.11' "$WORK_DIR/result.txt"
+/usr/bin/grep -Fq 'SELECTED_BUILD: 140' "$WORK_DIR/result.txt"
+test "$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$BRANCH/Resources/Info.plist")" = 1.9.11
+test "$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$BRANCH/Resources/Info.plist")" = 140
+test "$(/usr/bin/git -C "$BRANCH" diff --name-only | LC_ALL=C /usr/bin/sort)" = \
+  $'Resources/Info.plist\nResources/en.lproj/ReleaseHistory.md\nResources/zh-Hans.lproj/ReleaseHistory.md'
+/usr/bin/grep -Fq '## 1.9.11（预发布）' "$BRANCH/Resources/zh-Hans.lproj/ReleaseHistory.md"
+/usr/bin/grep -Fq '## 1.9.11 (Pre-release)' "$BRANCH/Resources/en.lproj/ReleaseHistory.md"
+
+ERROR_BRANCH="$WORK_DIR/error-branch"
+ERROR_GH="$WORK_DIR/error-gh"
+/usr/bin/git clone -q "$ORIGIN" "$ERROR_BRANCH"
+/usr/bin/git -C "$ERROR_BRANCH" checkout -q -b codex/release-metadata-error origin/main
+print -r -- '#!/bin/zsh
+set -euo pipefail
+if [[ "$1" == api && "$2" == --include ]]; then
+  print -r -- "HTTP/2.0 500 Internal Server Error"
+  exit 1
+fi
+exit 1' > "$ERROR_GH"
+/bin/chmod 755 "$ERROR_GH"
+if PATH="$FAKE_BIN:$PATH" REPOSITORY_ROOT="$ERROR_BRANCH" GH_BIN="$ERROR_GH" \
+  "$ERROR_BRANCH/scripts/prepare-preview-release.sh" 1.9.11 141 "$zh_notes" "$en_notes" \
+  > "$WORK_DIR/error-result.txt" 2> "$WORK_DIR/error-stderr.txt"; then
+  print -u2 "prepare-preview-release treated a GitHub error as an available version"
+  exit 1
+fi
+/usr/bin/grep -Fq 'unable to check GitHub Release v1.9.11 (HTTP 500' "$WORK_DIR/error-stderr.txt"
+test "$(/usr/bin/git -C "$ERROR_BRANCH" status --porcelain)" = ""
+
+print "PREVIEW RELEASE PREPARATION FIXTURE PASS"
+
+)
+
+test_flow() (
+ROOT="$SCRIPT_ROOT"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-macos-release-flow-test.XXXXXX)"
 
 cleanup() {
@@ -19,8 +336,7 @@ for script in \
   verify-preview-cdn-availability.sh \
   verify-staged-release-assets.sh recover-preview-stage.sh publish-staged-preview.sh \
   publish-preview-release.sh promote-preview-release.sh prepare-staged-preview-ui-test.sh \
-  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh \
-  test-verify-release-ready-main-ci.sh; do
+  record-preview-ui-attestation.sh; do
   [[ -x "$ROOT/scripts/$script" ]] || {
     print -u2 "release helper is not executable: $script"
     exit 1
@@ -33,17 +349,16 @@ for script in \
   verify-preview-cdn-availability.sh \
   recover-preview-stage.sh publish-staged-preview.sh publish-preview-release.sh \
   promote-preview-release.sh prepare-staged-preview-ui-test.sh \
-  record-preview-ui-attestation.sh verify-preview-ui-attestation.sh \
-  test-verify-release-ready-main-ci.sh; do
+  record-preview-ui-attestation.sh; do
   case "$script" in
-    prepare-public-release-assets.sh|stage-macos-preview.sh|prepare-preview-release.sh|test-verify-release-ready-main-ci.sh)
+    prepare-public-release-assets.sh|stage-macos-preview.sh|prepare-preview-release.sh)
       zsh -n "$ROOT/scripts/$script" ;;
     *)
       bash -n "$ROOT/scripts/$script" ;;
   esac
 done
 
-"$ROOT/scripts/test-verify-release-ready-main-ci.sh"
+test_ready_ci
 
 package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
@@ -54,8 +369,7 @@ opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
 
 /usr/bin/grep -Fq -- '--disable-keychain' "$ROOT/scripts/build-app.sh"
 /usr/bin/grep -Fq 'xcrun swift build --disable-keychain' "$ROOT/scripts/test.sh"
-if [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/scripts/build-app.sh")" -lt 2 ]] || \
-   [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/Testing/build_rc003_preview.sh")" -lt 2 ]]; then
+if [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/scripts/build-app.sh")" -lt 2 ]]; then
   print -u2 "local SwiftPM entry points must disable macOS Keychain credential lookup"
   exit 1
 fi
@@ -136,7 +450,7 @@ fi
 /usr/bin/grep -Fq 'name: Public Swift tests and build (${{ matrix.label }})' "$ci_workflow"
 /usr/bin/grep -Fq 'name: Private ${{ matrix.configuration }} tests and build (${{ matrix.label }})' "$ci_workflow"
 /usr/bin/grep -Fq "if: needs.classify_changes.outputs.product_change == 'true' && needs.private_access.outputs.available == 'true'" "$ci_workflow"
-/usr/bin/grep -Fq 'needs: [classify_changes, public_test, private_access, private_test]' "$ci_workflow"
+/usr/bin/grep -Fq 'needs: [classify_changes, public_test, private_access, private_test, release_checks]' "$ci_workflow"
 /usr/bin/grep -Fq 'PRIVATE_TEST_RESULT: ${{ needs.private_test.result }}' "$ci_workflow"
 if [[ "$(/usr/bin/grep -c -- 'SAYALL_COMBINATION_ACTIONS_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
    [[ "$(/usr/bin/grep -c -- 'SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
@@ -196,11 +510,11 @@ if /usr/bin/grep -Eq 'package-macos|codesign|notary|xcrun stapler|upload-artifac
   exit 1
 fi
 
-REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-workflow-gh-token.sh" >/dev/null
+REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-dependency-pins.sh" tokens >/dev/null
 
 publication_source="$ROOT/scripts/publish-preview-release.sh"
 recovery_source="$ROOT/scripts/recover-preview-stage.sh"
-attestation_source="$ROOT/scripts/verify-preview-ui-attestation.sh"
+attestation_source="$ROOT/scripts/record-preview-ui-attestation.sh"
 ui_prep_source="$ROOT/scripts/prepare-staged-preview-ui-test.sh"
 /usr/bin/grep -Fq -- '--ref main' "$ROOT/scripts/stage-macos-preview.sh"
 /usr/bin/grep -Fq -- 'source_branch=$source_branch' "$ROOT/scripts/stage-macos-preview.sh"
@@ -215,7 +529,7 @@ ui_prep_source="$ROOT/scripts/prepare-staged-preview-ui-test.sh"
 /usr/bin/grep -Fq '.head_branch == "main"' "$ui_prep_source"
 /usr/bin/grep -Fq 'hotfix/vX.Y.Z' "$ROOT/scripts/verify-public-release-source.sh"
 /usr/bin/grep -Fq 'SOURCE_BASE_COMMIT' "$ROOT/scripts/verify-public-release-source.sh"
-/usr/bin/grep -Fq 'verify-preview-ui-attestation.sh' "$publication_source"
+/usr/bin/grep -Fq 'record-preview-ui-attestation.sh" verify' "$publication_source"
 /usr/bin/grep -Fq 'Preview publication must run from exact origin/main' "$publication_source"
 /usr/bin/grep -Fq 'stage-record/preview-stage-record.json' "$publication_source"
 /usr/bin/grep -Fq 'staging record artifact' "$recovery_source"
@@ -478,3 +792,77 @@ if "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/d
 fi
 
 print "MACOS RELEASE FLOW FIXTURE PASS"
+
+)
+
+test_ci_classification() (
+ROOT="$SCRIPT_ROOT"
+WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-ci-classification-test.XXXXXX)"
+cleanup() {
+  local trash_target="$HOME/.Trash/sayall-ci-classification-test.$(/bin/date +%s).$$.$RANDOM"
+  /bin/mkdir -p "$HOME/.Trash"
+  /bin/mv "$WORK_DIR" "$trash_target"
+}
+trap cleanup EXIT
+
+case_number=0
+for test_case in \
+  '.github/workflows/mac-ci.yml:true:true' \
+  'scripts/notarize-release.sh:true:true' \
+  'scripts/install-doubao-driver.sh:true:true' \
+  'scripts/verify-release-dependency-pins.sh:false:true' \
+  'scripts/test-macos-release-flow.sh:false:true' \
+  'scripts/verify-release-control-plane-diff.sh:false:true' \
+  'script/build_and_run.sh:false:false' \
+  'Testing/LocalExperiment.command:true:false' \
+  'Testing/LocalProbe.swift:true:false' \
+  'scripts/local-log-collector.sh:true:true' \
+  'Sources/RemoteMic/BridgeAppModel.swift:true:true' \
+  'Sources/RemoteMic/FutureFeature.swift:true:false' \
+  'scripts/unknown-future-tool.sh:true:true' \
+  'Testing/Manual.md:false:false'; do
+  IFS=: read -r changed_path expected_product expected_release <<< "$test_case"
+  (( case_number += 1 ))
+  fixture_repo="$WORK_DIR/case-$case_number"
+  /usr/bin/git init -q "$fixture_repo"
+  /usr/bin/git -C "$fixture_repo" config user.name Fixture
+  /usr/bin/git -C "$fixture_repo" config user.email fixture@example.invalid
+  /usr/bin/git -C "$fixture_repo" commit -q --allow-empty -m baseline
+  base_commit="$(/usr/bin/git -C "$fixture_repo" rev-parse HEAD)"
+  /bin/mkdir -p "$fixture_repo/${changed_path:h}"
+  print -r -- fixture > "$fixture_repo/$changed_path"
+  /usr/bin/git -C "$fixture_repo" add .
+  /usr/bin/git -C "$fixture_repo" commit -q -m change
+  result="$(REPOSITORY_ROOT="$fixture_repo" \
+    "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD)"
+  print -r -- "$result" | /usr/bin/grep -Fxq "product_change=$expected_product"
+  print -r -- "$result" | /usr/bin/grep -Fxq "release_checks=$expected_release"
+  if [[ "$expected_product" == false && "$expected_release" == true ]]; then
+    REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" "$base_commit" HEAD
+  fi
+done
+
+# Exercise the consolidated architecture entry without signatures or Apple services.
+fake_runner="$WORK_DIR/fake-variant-runner"
+print -r -- '#!/bin/zsh
+set -euo pipefail
+print -r -- "$RELEASE_VARIANT" >> "$VARIANT_LOG"
+' > "$fake_runner"
+/bin/chmod 755 "$fake_runner"
+for parallel_mode in 0 1; do
+  variant_log="$WORK_DIR/variants-$parallel_mode.log"
+  PARALLEL_RELEASE_VARIANTS="$parallel_mode" GENERATE_SPARKLE_UPDATE=0 \
+    RELEASE_VARIANT_RUNNER="$fake_runner" VARIANT_LOG="$variant_log" \
+    "$ROOT/scripts/notarize-release.sh" --all > "$WORK_DIR/variants-$parallel_mode.output"
+  [[ "$(LC_ALL=C sort "$variant_log")" == $'apple-silicon\nintel' ]]
+done
+print "CI CLASSIFICATION AND VARIANT ENTRY FIXTURE PASS"
+)
+
+case "${1:-all}" in
+  all) test_ci_classification; test_flow; test_metadata ;;
+  flow) test_ci_classification; test_flow ;;
+  metadata) test_metadata ;;
+  ready-ci) test_ready_ci ;;
+  *) print -u2 "usage: $0 [all|flow|metadata|ready-ci]"; exit 2 ;;
+esac

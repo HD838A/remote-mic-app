@@ -78,30 +78,24 @@ is_full_product_run() {
   local run_json="$1"
   local commit="$2"
   printf '%s\n' "$run_json" | jq -e \
-  --arg workflow "$WORKFLOW_NAME" \
-  --arg headBranch "$SOURCE_BRANCH" \
-  --arg headSha "$commit" '
+    --arg workflow "$WORKFLOW_NAME" --arg headBranch "$SOURCE_BRANCH" --arg headSha "$commit" '
+    def product_lane($lane):
+      ([.jobs[] | select(
+        (.name == ("Public Swift tests and build (" + $lane + ")") or
+         .name == ("Swift tests and build (" + $lane + ")")) and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select(.name == "Run Swift tests" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select(.name == "Run project self-test" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select(.name == "Build release configuration" and .conclusion == "success")] | length) == 1
+      )] | length) == 1;
     .workflowName == $workflow and
     (($headBranch == "main" and .event == "push") or
      ($headBranch != "main" and (.event == "push" or .event == "workflow_dispatch"))) and
-    .status == "completed" and
-    .conclusion == "success" and
-    .headBranch == $headBranch and
-    .headSha == $headSha and
-    ([.jobs[] | select(
-      .name == "Swift tests and build (Apple Silicon)" and
-      .status == "completed" and .conclusion == "success" and
-      ([.steps[] | select(.name == "Run Swift tests" and .conclusion == "success")] | length) == 1 and
-      ([.steps[] | select(.name == "Run project self-test" and .conclusion == "success")] | length) == 1 and
-      ([.steps[] | select(.name == "Build release configuration" and .conclusion == "success")] | length) == 1
-    )] | length) == 1 and
-    ([.jobs[] | select(
-      .name == "Swift tests and build (Intel Ventura)" and
-      .status == "completed" and .conclusion == "success" and
-      ([.steps[] | select(.name == "Run Swift tests" and .conclusion == "success")] | length) == 1 and
-      ([.steps[] | select(.name == "Run project self-test" and .conclusion == "success")] | length) == 1 and
-      ([.steps[] | select(.name == "Build release configuration" and .conclusion == "success")] | length) == 1
-    )] | length) == 1
+    .status == "completed" and .conclusion == "success" and
+    .headBranch == $headBranch and .headSha == $headSha and
+    product_lane("Apple Silicon") and product_lane("Intel Ventura") and
+    all(.jobs[] | select(.name | startswith("Private "));
+      .conclusion == "success" or .conclusion == "skipped")
   ' >/dev/null
 }
 
@@ -120,12 +114,14 @@ is_control_plane_run() {
       .headBranch == $headBranch and
       .headSha == $headSha and
       ([.jobs[] | select(
-        .name == "Swift tests and build (Apple Silicon)" and
+        (.name == "Swift tests and build (Apple Silicon)" or
+         .name == "Release script checks (Apple Silicon)") and
         .status == "completed" and .conclusion == "success" and
         ([.steps[] | select(.name == "Run release control-plane fixture" and .conclusion == "success")] | length) == 1
       )] | length) == 1 and
       ([.jobs[] | select(
-        .name == "Swift tests and build (Intel Ventura)" and
+        (.name == "Swift tests and build (Intel Ventura)" or
+         .name == "Release script checks (Intel Ventura)") and
         .status == "completed" and .conclusion == "success" and
         ([.steps[] | select(.name == "Run release control-plane fixture" and .conclusion == "success")] | length) == 1
       )] | length) == 1
@@ -147,17 +143,19 @@ is_docs_only_run() {
       .headBranch == $headBranch and
       .headSha == $headSha and
       ([.jobs[] | select(
-        .name == "Swift tests and build (Apple Silicon)" and
+        (.name == "Swift tests and build (Apple Silicon)" or
+         .name == "Public Swift tests and build (Apple Silicon)") and
         .status == "completed" and .conclusion == "success" and
-        ([.steps[] | select(.name == "Run documentation checks" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run documentation checks" or .name == "Run tooling checks") and .conclusion == "success")] | length) == 1 and
         ([.steps[] | select((.name == "Run release control-plane fixture" or
           .name == "Run Swift tests" or .name == "Run project self-test" or
           .name == "Build release configuration") and .conclusion == "success")] | length) == 0
       )] | length) == 1 and
       ([.jobs[] | select(
-        .name == "Swift tests and build (Intel Ventura)" and
+        (.name == "Swift tests and build (Intel Ventura)" or
+         .name == "Public Swift tests and build (Intel Ventura)") and
         .status == "completed" and .conclusion == "success" and
-        ([.steps[] | select(.name == "Run documentation checks" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run documentation checks" or .name == "Run tooling checks") and .conclusion == "success")] | length) == 1 and
         ([.steps[] | select((.name == "Run release control-plane fixture" or
           .name == "Run Swift tests" or .name == "Run project self-test" or
           .name == "Build release configuration") and .conclusion == "success")] | length) == 0
@@ -168,16 +166,9 @@ is_docs_only_run() {
 is_docs_only_diff() {
   local base_commit="$1"
   local candidate_commit="$2"
-  local changed=false
-  while IFS= read -r changed_path; do
-    [[ -n "$changed_path" ]] || continue
-    changed=true
-    case "$changed_path" in
-      *.md|Screenshots/*) ;;
-      *) return 1 ;;
-    esac
-  done < <(git diff --name-only "$base_commit" "$candidate_commit")
-  [[ "$changed" == true ]]
+  local classification
+  classification="$("$CONTROL_PLANE_DIFF_BIN" --classify "$base_commit" "$candidate_commit")" || return 1
+  printf '%s\n' "$classification" | grep -Fxq 'product_change=false'
 }
 
 RUN_ID="$(find_successful_source_run_id "$SOURCE_COMMIT")"
