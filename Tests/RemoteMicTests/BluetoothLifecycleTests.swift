@@ -73,6 +73,42 @@ struct BluetoothLifecycleTests {
         #expect(bridgeSource.contains("reconnectDelayAfterFailure("))
     }
 
+    @Test func batteryPollingOnlyRunsWithoutAnActiveNotificationSubscription() {
+        #expect(BluetoothBatteryPollingPolicy.interval == 300)
+        #expect(BluetoothBatteryPollingPolicy.shouldPoll(
+            supportsNotifications: false,
+            isNotifying: false
+        ))
+        #expect(BluetoothBatteryPollingPolicy.shouldPoll(
+            supportsNotifications: true,
+            isNotifying: false
+        ))
+        #expect(!BluetoothBatteryPollingPolicy.shouldPoll(
+            supportsNotifications: true,
+            isNotifying: true
+        ))
+    }
+
+    @Test func batteryRefreshIsWiredToPollingAndForegroundMetadataRefresh() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let bridgeSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+            encoding: .utf8
+        )
+
+        #expect(modelSource.contains("bridge.refreshBatteryTelemetry(reason: reason.rawValue)"))
+        #expect(bridgeSource.contains("BLE BATTERY polling_started"))
+        #expect(bridgeSource.contains("BLE BATTERY refresh_requested"))
+        #expect(bridgeSource.contains("stopBatteryPolling(reason: \"system_suspended\")"))
+    }
+
     @Test func onlySystemWakeForcesBluetoothRecovery() {
         #expect(BluetoothWakeRecoveryPolicy.shouldForceReconnect(
             event: .systemDidWake,

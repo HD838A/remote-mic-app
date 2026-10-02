@@ -202,15 +202,11 @@ struct SettingsPageRegressionTests {
         }
     }
 
-    @Test func legacyPermissionAndShareNavigationResolveToTheConsolidatedSettingsPage() {
+    @Test func legacyPermissionNavigationResolvesToTheConsolidatedSettingsPage() {
         #expect(SettingsPageBehavior.visibleSection(for: .permissions) == .about)
         for section in SettingsSection.allCases where section != .permissions {
             #expect(SettingsPageBehavior.visibleSection(for: section) == section)
         }
-        #expect(SettingsPageBehavior.shareNavigationState == SettingsNavigationState(
-            selectedSection: .about,
-            expandedShareSection: .about
-        ))
     }
 
     @Test func settingsRouteIsTheConsolidatedSettingsPage() throws {
@@ -225,7 +221,6 @@ struct SettingsPageRegressionTests {
 
         #expect(source.contains("case .about: return \"settings.section.settings\""))
         #expect(source.contains("switch SettingsPageBehavior.visibleSection(for: selectedSection)"))
-        #expect(source.contains("let navigation = SettingsPageBehavior.shareNavigationState"))
         #expect(source.contains("performPermissionAction(inputMonitoringAction)"))
         #expect(source.contains("SettingsPageBehavior.copyDiagnosticSummary("))
         #expect(source.contains("Text(\"settings.permissions.title\")"))
@@ -1098,22 +1093,26 @@ struct SettingsPageRegressionTests {
         #expect(bridgeSource.contains("webRemoteState = .plusRequired("))
         #expect(bridgeSource.contains("membership_check=bypassed"))
         #expect(bridgeSource.contains("/__local-test/remote-session"))
-        #expect(bridgeSource.contains("[\"local\", \"preview\", \"pr_preview\"].contains(Self.webRemoteBuildChannel)"))
-        #expect(bridgeSource.contains("serviceEnvironmentForDiagnostics == \"staging\""))
+        #expect(!bridgeSource.contains("webRemoteBuildChannel"))
+        #expect(bridgeSource.contains("webRemoteServiceEnvironment == \"staging\""))
         #expect(bridgeSource.contains("Self.isLoopbackRelayURL(relayURL)"))
-        #expect(bridgeSource.contains("webRemoteMembershipBypassRequested = BridgeAppModel.webRemoteBuildChannel == \"local\""))
-        let availability = bridgeSource.components(separatedBy: "var isWebRemoteMembershipBypassAvailable: Bool {")[1]
-            .components(separatedBy: "var isWebRemoteMembershipBypassEnabled")[0]
-        #expect(availability.contains("membershipFeature.supportsRemoteSessionAuthorization"))
-        #expect(!availability.contains("WebRemoteConfiguration.relayURL()"))
+        #expect(!bridgeSource.contains("webRemoteMembershipBypassRequested"))
+        #expect(bridgeSource.contains("var isWebRemoteMembershipBypassAvailable: Bool { false }"))
+        #expect(bridgeSource.contains("func setWebRemoteMembershipBypassEnabled(_ enabled: Bool) {}"))
+        let bypassPolicy = bridgeSource.components(separatedBy: "var isWebRemoteMembershipBypassEnabled: Bool {")[1]
+            .components(separatedBy: "private static func isLoopbackRelayURL")[0]
+        #expect(bypassPolicy.contains("membershipFeature.supportsRemoteSessionAuthorization"))
+        #expect(!bypassPolicy.contains("WebRemoteConfiguration.relayURL()"))
         #expect(bridgeSource.contains("testMembershipBypass: isWebRemoteMembershipBypassEnabled"))
         let environmentSubscription = bridgeSource.components(
             separatedBy: "membershipEnvironmentCancellable ="
         )[1].components(separatedBy: "audioOutput.onConfigurationChange")[0]
-        #expect(environmentSubscription.contains("environment == \"production\""))
-        #expect(!environmentSubscription.contains("serviceEnvironmentForDiagnostics == \"production\""))
+        #expect(environmentSubscription.contains("self.webRemoteClient.stop()"))
+        #expect(environmentSubscription.contains("self.webRemoteState = .disabled"))
+        #expect(environmentSubscription.contains("self.webRemoteSessionGeneration &+= 1"))
+        #expect(environmentSubscription.contains("self.webRemoteSessionIdempotencyKey = nil"))
+        #expect(environmentSubscription.contains("reason=service_environment_changed"))
         #expect(membershipSource.contains("testMembershipBypass: testMembershipBypass"))
-        #expect(bridgeSource.contains("webRemoteClient.stop()\n            enableWebRemoteConnection()"))
         #expect(!bridgeSource.contains("legacyVPS"))
         #expect(!bridgeSource.contains("legacy_vps"))
         #expect(bridgeSource.contains("type: \"sessionAttach\"") == false)
@@ -1750,7 +1749,7 @@ struct SettingsPageRegressionTests {
         #expect(!captureSource.contains("API"))
     }
 
-    @Test func profileKeepsSharingEntryBelowTheMainSidebarSections() throws {
+    @Test func profileOwnsSharingAboveStatisticsWithoutASidebarEntry() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1760,30 +1759,20 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(source.contains("sharePanel(for: .about)"))
-        #expect(source.contains("let navigation = SettingsPageBehavior.shareNavigationState"))
-        #expect(source.contains("selectedSection = navigation.selectedSection"))
-        #expect(source.contains("expandedShareSection = navigation.expandedShareSection"))
-        #expect(!source.contains("sharePanel(for: .statistics)"))
-        #expect(source.contains("Text(\"share.action\")"))
-        #expect(source.contains("share.sidebar.accessibility_label"))
+        #expect(!source.contains("sharePanel(for: .about)"))
+        #expect(!source.contains("Text(\"share.action\")"))
+        #expect(!source.contains("share.sidebar.accessibility_label"))
         #expect(source.contains("if visibleSections.contains(.statistics)"))
         #expect(source.contains("sidebarButton(.statistics)"))
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
 
-        let aboutStart = try #require(source.range(of: "private var aboutPage"))
-        let supportHelperStart = try #require(source.range(
-            of: "private var settingsSupportSection",
-            range: aboutStart.upperBound..<source.endIndex
-        ))
-        let aboutPageSource = source[aboutStart.lowerBound..<supportHelperStart.lowerBound]
-        let diagnosticsPosition = try #require(aboutPageSource.range(of: "inlineDiagnosticsSection"))
-        let supportPosition = try #require(aboutPageSource.range(of: "settingsSupportSection"))
-        let sharePosition = try #require(aboutPageSource.range(of: "sharePanel(for: .about)"))
-        #expect(diagnosticsPosition.lowerBound < supportPosition.lowerBound)
-        #expect(supportPosition.lowerBound < sharePosition.lowerBound)
-        #expect(aboutPageSource[sharePosition.upperBound...].contains("sharePanel(for: .about)") == false)
+        let profileStart = try #require(source.range(of: "private var statisticsPage"))
+        let summaryStart = try #require(source.range(of: "private var statisticsSummaryGrid"))
+        let profileSource = source[profileStart.lowerBound..<summaryStart.lowerBound]
+        let sharePosition = try #require(profileSource.range(of: "sharePanel(for: .statistics)"))
+        let metricsPosition = try #require(profileSource.range(of: "statisticsSummaryGrid"))
+        #expect(sharePosition.lowerBound < metricsPosition.lowerBound)
     }
 
     @Test func profileMetricsKeepApprovedWideSingleRowLayout() throws {
@@ -1822,7 +1811,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("let rankingWidth = max(360, availableWidth * 0.42)"))
         #expect(source.contains("ProposedViewSize(width: rankingWidth, height: nil)"))
         #expect(source.contains("statisticsVoiceSessionRankingPanel"))
-        #expect(source.contains("statisticsCalendarPanel\n                            statisticsVoiceSessionRankingPanel"))
+        #expect(source.contains("statisticsCalendarPanel\n                        statisticsVoiceSessionRankingPanel"))
         #expect(source.contains("entries.prefix(10)"))
         #expect(source.contains("settings.voiceSessionRanking.prefix(10)"))
         #expect(source.contains(".frame(maxWidth: .infinity, alignment: .top)"))
