@@ -7,7 +7,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 ## Review scope
 
 - Settings window: default and minimum content size 1020×772, freely resizable above that minimum. An 800×650 offscreen render is only a narrow-width stress check, not a supported production window size.
-- Pages: Connection & Voice, Button Mapping, Profile, Reflections, and Settings, including Permissions & Privacy, General, Diagnostics & Logs, Support, and Sharing.
+- Pages: Connection & Voice, Button Mapping, Profile, Reflections, and Settings, including Permissions & Privacy, General, Diagnostics & Logs and Support.
 - First-run Onboarding: approximately 1020×772, without step numbers, totals, percentages, Skip, or Continue Later.
 - Each page header shows only its primary title, without a redundant subtitle.
 - Repository screenshots:
@@ -21,15 +21,16 @@ This file is a convenience translation of the current mandatory design rules. Th
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
 - It uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
 - The window keeps native traffic-light controls and a meaningful logical title while hiding the visible title and titlebar separator. Page backgrounds extend to the top, only the dedicated blank titlebar region remains draggable, page content and controls do not move the whole window, and interactive content stays clear of the window controls.
-- Panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
+- Except for the flat Profile cards and sharing buttons, panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
 - The action editor shows only Basic Keys / System & Media / Custom Actions filter capsules. On first open, all action groups are visible without an All button. Filtering is temporary, does not execute or rewrite the current mapping, and Custom Actions also exposes app actions.
 - The UI does not show a separate mute key that is absent from the physical remote.
 - Regular UI uses product language instead of remote model codes, Bluetooth voice protocol names, button protocol names, hexadecimal button numbers, or device-identifier terminology.
+- Profile sharing appears below the page title and before the KPIs, expanding inline. Settings and the sidebar have no separate sharing entry. Profile panels use the remote device card's subtle fill, 10pt corners, and thin border instead of glass; the local privacy indicator uses plain text and an icon.
 - Profile uses four single-row KPIs in a wide window and may adapt to two columns in a narrow layout. Rankings appear beside a six-month square-cell calendar heatmap using semantic blue; the former bar chart and Less–More legend are not part of the current design.
 - The Web Remote invite sheet prominently recommends the iOS app, hides the raw TestFlight URL, and provides actions to open the beta page or copy its link.
-- Settings keeps the current version, available update, Check for Updates, release notes, and the off-by-default pre-release toggle together. Permissions & Privacy precedes General, followed by Diagnostics & Logs, Support, and Sharing. Language choices remain visible without a drop-down; the page does not show a glossary, Version History, or Quit button.
+- Settings keeps the current version, available update, Check for Updates, release notes, and the off-by-default pre-release toggle together. Permissions & Privacy precedes General, followed by Diagnostics & Logs and Support. Language choices remain visible without a drop-down; the page does not show a glossary, Version History, or Quit button.
 - General uses inline icon buttons for the app-icon choice and only shows icon resources actually included in the installed build. A selection immediately updates the Dock, app switcher, and Settings branding and persists across launches; a missing resource falls back to the default icon without showing an unavailable placeholder.
 - All UI text uses stable semantic keys. Localized Markdown help falls back to English when the selected language has no matching document.
 

@@ -182,7 +182,7 @@ enum SettingsScreenshotRenderer {
                 model: model,
                 updateInformation: updateInformation,
                 initialSection: section,
-                initialShareSection: section == .about && expandsShare ? section : nil,
+                initialShareSection: section == .statistics && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor
                     ? .ok
                     : nil,
