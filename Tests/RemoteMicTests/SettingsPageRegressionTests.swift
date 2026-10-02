@@ -202,15 +202,11 @@ struct SettingsPageRegressionTests {
         }
     }
 
-    @Test func legacyPermissionAndShareNavigationResolveToTheConsolidatedSettingsPage() {
+    @Test func legacyPermissionNavigationResolvesToTheConsolidatedSettingsPage() {
         #expect(SettingsPageBehavior.visibleSection(for: .permissions) == .about)
         for section in SettingsSection.allCases where section != .permissions {
             #expect(SettingsPageBehavior.visibleSection(for: section) == section)
         }
-        #expect(SettingsPageBehavior.shareNavigationState == SettingsNavigationState(
-            selectedSection: .about,
-            expandedShareSection: .about
-        ))
     }
 
     @Test func settingsRouteIsTheConsolidatedSettingsPage() throws {
@@ -225,7 +221,6 @@ struct SettingsPageRegressionTests {
 
         #expect(source.contains("case .about: return \"settings.section.settings\""))
         #expect(source.contains("switch SettingsPageBehavior.visibleSection(for: selectedSection)"))
-        #expect(source.contains("let navigation = SettingsPageBehavior.shareNavigationState"))
         #expect(source.contains("performPermissionAction(inputMonitoringAction)"))
         #expect(source.contains("SettingsPageBehavior.copyDiagnosticSummary("))
         #expect(source.contains("Text(\"settings.permissions.title\")"))
@@ -1753,7 +1748,7 @@ struct SettingsPageRegressionTests {
         #expect(!captureSource.contains("API"))
     }
 
-    @Test func profileKeepsSharingEntryBelowTheMainSidebarSections() throws {
+    @Test func profileOwnsSharingAboveStatisticsWithoutASidebarEntry() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1763,30 +1758,20 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(source.contains("sharePanel(for: .about)"))
-        #expect(source.contains("let navigation = SettingsPageBehavior.shareNavigationState"))
-        #expect(source.contains("selectedSection = navigation.selectedSection"))
-        #expect(source.contains("expandedShareSection = navigation.expandedShareSection"))
-        #expect(!source.contains("sharePanel(for: .statistics)"))
-        #expect(source.contains("Text(\"share.action\")"))
-        #expect(source.contains("share.sidebar.accessibility_label"))
+        #expect(!source.contains("sharePanel(for: .about)"))
+        #expect(!source.contains("Text(\"share.action\")"))
+        #expect(!source.contains("share.sidebar.accessibility_label"))
         #expect(source.contains("if visibleSections.contains(.statistics)"))
         #expect(source.contains("sidebarButton(.statistics)"))
         #expect(source.contains("ShareCard(url: shareURL)"))
         #expect(!source.contains(".popover"))
 
-        let aboutStart = try #require(source.range(of: "private var aboutPage"))
-        let supportHelperStart = try #require(source.range(
-            of: "private var settingsSupportSection",
-            range: aboutStart.upperBound..<source.endIndex
-        ))
-        let aboutPageSource = source[aboutStart.lowerBound..<supportHelperStart.lowerBound]
-        let diagnosticsPosition = try #require(aboutPageSource.range(of: "inlineDiagnosticsSection"))
-        let supportPosition = try #require(aboutPageSource.range(of: "settingsSupportSection"))
-        let sharePosition = try #require(aboutPageSource.range(of: "sharePanel(for: .about)"))
-        #expect(diagnosticsPosition.lowerBound < supportPosition.lowerBound)
-        #expect(supportPosition.lowerBound < sharePosition.lowerBound)
-        #expect(aboutPageSource[sharePosition.upperBound...].contains("sharePanel(for: .about)") == false)
+        let profileStart = try #require(source.range(of: "private var statisticsPage"))
+        let summaryStart = try #require(source.range(of: "private var statisticsSummaryGrid"))
+        let profileSource = source[profileStart.lowerBound..<summaryStart.lowerBound]
+        let sharePosition = try #require(profileSource.range(of: "sharePanel(for: .statistics)"))
+        let metricsPosition = try #require(profileSource.range(of: "statisticsSummaryGrid"))
+        #expect(sharePosition.lowerBound < metricsPosition.lowerBound)
     }
 
     @Test func profileMetricsKeepApprovedWideSingleRowLayout() throws {
@@ -1825,7 +1810,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("let rankingWidth = max(360, availableWidth * 0.42)"))
         #expect(source.contains("ProposedViewSize(width: rankingWidth, height: nil)"))
         #expect(source.contains("statisticsVoiceSessionRankingPanel"))
-        #expect(source.contains("statisticsCalendarPanel\n                            statisticsVoiceSessionRankingPanel"))
+        #expect(source.contains("statisticsCalendarPanel\n                        statisticsVoiceSessionRankingPanel"))
         #expect(source.contains("entries.prefix(10)"))
         #expect(source.contains("settings.voiceSessionRanking.prefix(10)"))
         #expect(source.contains(".frame(maxWidth: .infinity, alignment: .top)"))
