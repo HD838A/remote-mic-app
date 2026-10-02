@@ -631,7 +631,7 @@ struct SettingsView: View {
                 locale: localization.locale,
                 text: localization.text
             ),
-            onOpenPlus: {
+            membershipRequiredView: membershipFeature.membershipRequiredView(remoteAuthorizationDenied: true) {
                 isWebRemoteSessionPresented = false
                 selectedSection = .membership
                 membershipFeature.refreshIfNeeded()
@@ -803,11 +803,17 @@ struct SettingsView: View {
             }
         case .buttonProfiles:
             if macroFeature.isButtonProfilesVisible {
-                macroFeature.buttonProfilesView(
-                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
-                    remoteModel: settings.selectedRemoteProfile?.model,
-                    hostActionSections: buttonProfileHostActionSections
-                )
+                VStack(spacing: 12) {
+                    membershipFeature.membershipRequiredView(forButtonProfiles: true) {
+                        selectedSection = .membership
+                        membershipFeature.refreshIfNeeded()
+                    }
+                    macroFeature.buttonProfilesView(
+                        selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                        remoteModel: settings.selectedRemoteProfile?.model,
+                        hostActionSections: buttonProfileHostActionSections
+                    )
+                }
             } else {
                 aboutPage
             }
@@ -975,6 +981,13 @@ struct SettingsView: View {
 
     #endif
 
+    private var connectionMembershipRequiredView: some View {
+        membershipFeature.membershipRequiredView {
+            selectedSection = .membership
+            membershipFeature.refreshIfNeeded()
+        }
+    }
+
     private var phoneConnectionsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 14) {
@@ -1019,18 +1032,22 @@ struct SettingsView: View {
                     }
 
                     HStack(spacing: 8) {
-                        Button(
-                            model.isPhoneRemoteConnected
-                                ? "connection.phone.disconnect"
-                                : model.isPhoneRemoteConnectionEnabled
-                                    ? "connection.phone.cancel_waiting"
-                                    : "connection.phone.connect"
-                        ) {
-                            model.togglePhoneRemoteConnection()
+                        if membershipFeature.canUseCompanionConnections || model.isPhoneRemoteConnectionEnabled {
+                            Button(
+                                model.isPhoneRemoteConnected
+                                    ? "connection.phone.disconnect"
+                                    : model.isPhoneRemoteConnectionEnabled
+                                        ? "connection.phone.cancel_waiting"
+                                        : "connection.phone.connect"
+                            ) {
+                                model.togglePhoneRemoteConnection()
+                            }
+                            .compatibilityButtonStyle(
+                                model.isPhoneRemoteConnectionEnabled ? .standard : .prominent
+                            )
+                        } else {
+                            connectionMembershipRequiredView
                         }
-                        .compatibilityButtonStyle(
-                            model.isPhoneRemoteConnectionEnabled ? .standard : .prominent
-                        )
 
                         Link(destination: AppLinks.testFlightPublicBeta) {
                             Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
@@ -1090,16 +1107,20 @@ struct SettingsView: View {
                             : model.isWatchRemoteConnectionEnabled ? .orange : .secondary
                     )
 
-                    Button(
-                        model.isWatchRemoteConnected
-                            ? "connection.watch.disconnect"
-                            : model.isWatchRemoteConnectionEnabled
-                                ? "connection.watch.cancel_waiting"
-                                : "connection.watch.connect"
-                    ) {
-                        model.toggleWatchRemoteConnection()
+                    if membershipFeature.canUseCompanionConnections || model.isWatchRemoteConnectionEnabled {
+                        Button(
+                            model.isWatchRemoteConnected
+                                ? "connection.watch.disconnect"
+                                : model.isWatchRemoteConnectionEnabled
+                                    ? "connection.watch.cancel_waiting"
+                                    : "connection.watch.connect"
+                        ) {
+                            model.toggleWatchRemoteConnection()
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    } else {
+                        connectionMembershipRequiredView
                     }
-                    .compatibilityButtonStyle(.standard)
                 }
 
                 Divider()
@@ -1123,14 +1144,18 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(webRemoteStatusTint)
                         .lineLimit(1)
-                    Button(
-                        model.webRemoteState.isEnabled
-                            ? "connection.web.show_qr"
-                            : "connection.web.connect"
-                    ) {
-                        requestWebRemoteSession()
+                    if membershipFeature.canUseCompanionConnections || model.webRemoteState.isEnabled {
+                        Button(
+                            model.webRemoteState.isEnabled
+                                ? "connection.web.show_qr"
+                                : "connection.web.connect"
+                        ) {
+                            requestWebRemoteSession()
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    } else {
+                        connectionMembershipRequiredView
                     }
-                    .compatibilityButtonStyle(.standard)
                 }
 
                 Divider()
@@ -4274,7 +4299,7 @@ struct SettingsView: View {
             return localization.text("connection.web.connecting")
         case .waitingForPhone:
             return localization.text("connection.web.waiting_scan")
-        case .plusRequired:
+        case .membershipRequired, .plusRequired:
             return localization.text("connection.web.plus_required_title")
         case .awaitingApproval:
             return localization.text("connection.web.waiting_approval")
@@ -4289,7 +4314,7 @@ struct SettingsView: View {
         switch model.webRemoteState {
         case .connected:
             return .green
-        case .failed, .unavailable, .plusRequired:
+        case .failed, .unavailable, .membershipRequired, .plusRequired:
             return .orange
         default:
             return .secondary

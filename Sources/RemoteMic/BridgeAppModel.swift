@@ -634,6 +634,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var transcriptHistoryToggleCancellable: AnyCancellable?
     private var recordingToggleCancellable: AnyCancellable?
     private var membershipAccessCancellable: AnyCancellable?
+    private var membershipAccountCancellable: AnyCancellable?
     private var membershipEnvironmentCancellable: AnyCancellable?
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
@@ -875,10 +876,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             .sink { [weak macroFeature] decision in
                 macroFeature?.updateButtonProfilesAccess(decision)
             }
+        membershipAccountCancellable = membershipFeature.$accountDisplayName
+            .removeDuplicates()
+            .sink { [weak self] account in
+                guard let self, account == nil else { return }
+                self.disablePhoneRemoteConnection()
+                self.disableWebRemoteConnection()
+                self.webRemoteState = .disabled
+            }
         membershipEnvironmentCancellable = membershipFeature.$serviceEnvironmentForDiagnostics
             .removeDuplicates()
             .sink { [weak self] environment in
                 guard let self else { return }
+                self.disablePhoneRemoteConnection()
                 self.webRemoteSessionGeneration &+= 1
                 self.webRemoteSessionIdempotencyKey = nil
                 self.webRemoteClient.stop()
@@ -886,7 +896,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 AppLogger.shared.write(
                     "WEB REMOTE SESSION phase=cancelled result=cancelled " +
                         "reason=service_environment_changed " +
-                        "membership_check=\(environment == "staging" ? "bypassed" : "required")"
+                        "membership_check=required"
                 )
                 self.objectWillChange.send()
             }
@@ -1783,7 +1793,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func enablePhoneRemoteConnection() {
-        guard started, !isPhoneRemoteConnectionEnabled else { return }
+        guard started, membershipFeature.canStartCompanionConnection,
+              !isPhoneRemoteConnectionEnabled else { return }
         isPhoneRemoteConnectionEnabled = true
         phoneRemoteServer.start()
         watchBluetoothServer.start()
@@ -1823,6 +1834,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func enableWebRemoteConnection() {
         guard started else { return }
+        guard membershipFeature.canStartCompanionConnection else {
+            webRemoteState = .membershipRequired
+            return
+        }
         if case let .plusRequired(_, _, expiresAt) = webRemoteState,
            let expiresAt,
            expiresAt <= Date()
@@ -1925,11 +1940,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     throw HostRemoteSessionFailure.invalidResponse
                 }
                 if authorization.access == .plusRequired {
-                    webRemoteState = .plusRequired(
-                        joinURL: joinURL,
-                        pairingCode: pairingCode,
-                        expiresAt: authorization.expiresAt
-                    )
+                    webRemoteState = .membershipRequired
                     AppLogger.shared.write(
                         "WEB REMOTE SESSION operation_id=\(operationID) " +
                             "phase=previewed result=rejected reason=plus_required " +
@@ -1962,7 +1973,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 return
             } catch let failure as HostRemoteSessionFailure {
                 guard generation == webRemoteSessionGeneration else { return }
-                webRemoteState = .failed(webRemoteFailureMessage(failure))
+                if failure == .signInRequired || failure == .plusRequired {
+                    webRemoteState = .membershipRequired
+                } else {
+                    webRemoteState = .failed(webRemoteFailureMessage(failure))
+                }
                 AppLogger.shared.write(
                     "WEB REMOTE SESSION operation_id=\(operationID) " +
                         "phase=failed result=failed reason=\(webRemoteFailureReason(failure))"
@@ -1994,8 +2009,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     var isWebRemoteMembershipBypassEnabled: Bool {
-        webRemoteServiceEnvironment == "staging"
-            && membershipFeature.supportsRemoteSessionAuthorization
+        membershipFeature.remoteSessionMembershipBypassEnabled
     }
 
     // 兼容现有固定镜像的旧 UI 合同；不显示或恢复独立免检开关。
