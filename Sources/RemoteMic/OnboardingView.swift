@@ -2486,8 +2486,9 @@ struct OnboardingView: View {
     private var webRemoteIllustration: some View {
         VStack(spacing: 16) {
             switch model.webRemoteState {
-            case let .waitingForPhone(joinURL, pairingCode, _),
-                 let .awaitingApproval(joinURL, pairingCode, _):
+            case let .waitingForPhone(joinURL, _, _),
+                 let .awaitingApproval(joinURL, _, _),
+                 let .plusRequired(joinURL, _, _):
                 if let qrCode = webRemoteQRCode(for: joinURL) {
                     Image(nsImage: qrCode)
                         .interpolation(.none)
@@ -2498,9 +2499,11 @@ struct OnboardingView: View {
                 }
                 Text(verbatim: localization.text("onboarding.web_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
-                Text(pairingCode.map(String.init).joined(separator: " "))
-                    .font(.system(size: 28, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color.orange)
+                if case .plusRequired = model.webRemoteState {
+                    Text(verbatim: localization.text("connection.web.plus_required_title"))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+                }
             case let .connected(deviceName):
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 96))
@@ -3005,6 +3008,8 @@ struct OnboardingView: View {
         switch model.webRemoteState {
         case .connected:
             return localization.text("onboarding.web_remote.connected")
+        case .plusRequired:
+            return localization.text("connection.web.plus_required_title")
         case .unavailable, .failed:
             return localization.text("onboarding.web_remote.unavailable")
         case .connecting:

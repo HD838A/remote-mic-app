@@ -4,9 +4,12 @@ import SwiftUI
 @MainActor
 public protocol WebRemoteSessionModel: ObservableObject {
     var webRemoteState: WebRemoteSessionState { get }
+    var isWebRemoteMembershipBypassAvailable: Bool { get }
+    var isWebRemoteMembershipBypassEnabled: Bool { get }
 
     func enableWebRemoteConnection()
     func disableWebRemoteConnection()
+    func setWebRemoteMembershipBypassEnabled(_ enabled: Bool)
 }
 
 public struct WebRemoteSessionLocalization {
@@ -30,10 +33,12 @@ public struct WebRemoteSessionView<Model: WebRemoteSessionModel>: View {
 
     public init(
         model: Model,
-        localization: WebRemoteSessionLocalization
+        localization: WebRemoteSessionLocalization,
+        onOpenPlus: (() -> Void)? = nil
     ) {
         _model = ObservedObject(wrappedValue: model)
         self.localization = localization
+        _ = onOpenPlus
     }
 
     public var body: some View {

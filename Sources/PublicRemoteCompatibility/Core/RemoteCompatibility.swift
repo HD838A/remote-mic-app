@@ -172,18 +172,30 @@ public enum WebRemoteSessionState: Equatable, Sendable {
     case unavailable
     case connecting
     case waitingForPhone(joinURL: URL, pairingCode: String, expiresAt: Date?)
+    case plusRequired(joinURL: URL, pairingCode: String, expiresAt: Date?)
     case awaitingApproval(joinURL: URL, pairingCode: String, deviceName: String)
     case connected(deviceName: String)
     case failed(String)
 
     public var isEnabled: Bool {
         switch self {
-        case .disabled, .unavailable, .failed:
+        case .disabled, .unavailable, .plusRequired, .failed:
             return false
         default:
             return true
         }
     }
+}
+
+public enum WebRemoteSessionAuthorization: Equatable, Sendable {
+    case cloudflareV1(
+        webSocketURL: URL,
+        sessionID: String,
+        creatorToken: String,
+        joinURL: URL,
+        pairingCode: String,
+        expiresAt: Date?
+    )
 }
 
 public final class WebRemoteRelayClient: @unchecked Sendable {
@@ -203,7 +215,7 @@ public final class WebRemoteRelayClient: @unchecked Sendable {
     public init() {}
 
     public func start(
-        relayURL _: URL,
+        authorization _: WebRemoteSessionAuthorization,
         macName _: String,
         appVersion _: String?,
         buttonTitles _: [String: String]

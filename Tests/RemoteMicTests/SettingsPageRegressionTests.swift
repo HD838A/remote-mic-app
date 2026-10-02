@@ -290,23 +290,45 @@ struct SettingsPageRegressionTests {
         #expect(membershipFeature.buttonProfilesAccessDecision == .unavailable)
     }
 
-    @Test func membershipServiceConfigurationRequiresHTTPSExceptForLocalDevelopment() throws {
-        let secure = try #require(MembershipFeatureConfiguration.current(environment: [
-            "SAYALL_MEMBERSHIP_API_BASE_URL": "https://membership.example.com/api",
-        ]))
-        #expect(secure.baseURL.absoluteString == "https://membership.example.com/api")
+    @Test func serviceEnvironmentLivesInGeneralSettingsPageOutsideMembership() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let integrationSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MembershipFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+        #expect(!settingsSource.contains("case serviceEnvironment"))
+        #expect(!settingsSource.contains("case .serviceEnvironment:"))
+        #expect(settingsSource.contains("case membership"))
+        #expect(settingsSource.contains("case .membership:"))
+        #expect(settingsSource.contains("if membershipFeature.isEnvironmentSettingsVisible"))
+        #expect(settingsSource.contains("membershipFeature.serviceEnvironmentSettingsView()"))
+        #expect(integrationSource.contains("func serviceEnvironmentSettingsView()"))
+        #expect(integrationSource.contains("adapter?.serviceEnvironmentSettingsView()"))
+    }
 
-        let local = try #require(MembershipFeatureConfiguration.current(environment: [
-            "SAYALL_MEMBERSHIP_API_BASE_URL": "http://127.0.0.1:8787",
-        ]))
-        #expect(local.baseURL.absoluteString == "http://127.0.0.1:8787")
-
-        #expect(MembershipFeatureConfiguration.current(environment: [
-            "SAYALL_MEMBERSHIP_API_BASE_URL": "http://membership.example.com",
-        ]) == nil)
-        #expect(MembershipFeatureConfiguration.current(environment: [
-            "SAYALL_MEMBERSHIP_API_BASE_URL": "http://localhost:8787",
-        ]) == nil)
+    @Test func publicHostDoesNotOwnServiceEnvironmentConfiguration() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let membership = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MembershipFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+        #expect(!membership.contains("ServiceEnvironment"))
+        #expect(!membership.contains("membership-staging.sayall.app"))
+        #expect(!membership.contains("keychainNamespace"))
     }
 
     @Test func commerceBridgeKeepsPrivateCodeOptionalAndRoutesEveryRemoteSource() throws {
@@ -1042,6 +1064,62 @@ struct SettingsPageRegressionTests {
             source.range(of: voiceFnToggle)!.lowerBound >
                 source.range(of: "private var mappingPage")!.lowerBound
         )
+    }
+
+    @Test func cloudPhoneRemoteUsesOnlyTheCloudflareRelayContract() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let membershipSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/MembershipFeatureIntegration.swift"
+            ),
+            encoding: .utf8
+        )
+        let bridgeSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/BridgeAppModel.swift"
+            ),
+            encoding: .utf8
+        )
+        let compatibilitySource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/PublicRemoteCompatibility/Core/RemoteCompatibility.swift"
+            ),
+            encoding: .utf8
+        )
+
+        #expect(membershipSource.contains("adapter.createRemoteSession("))
+        #expect(membershipSource.contains("supportsRemoteSessionAuthorization"))
+        #expect(bridgeSource.contains(".createRemoteSessionAuthorization("))
+        #expect(bridgeSource.contains("idempotencyKey: idempotencyKey"))
+        #expect(bridgeSource.contains("webRemoteState = .plusRequired("))
+        #expect(bridgeSource.contains("membership_check=bypassed"))
+        #expect(bridgeSource.contains("/__local-test/remote-session"))
+        #expect(bridgeSource.contains("[\"local\", \"preview\", \"pr_preview\"].contains(Self.webRemoteBuildChannel)"))
+        #expect(bridgeSource.contains("serviceEnvironmentForDiagnostics == \"staging\""))
+        #expect(bridgeSource.contains("Self.isLoopbackRelayURL(relayURL)"))
+        #expect(bridgeSource.contains("webRemoteMembershipBypassRequested = BridgeAppModel.webRemoteBuildChannel == \"local\""))
+        let availability = bridgeSource.components(separatedBy: "var isWebRemoteMembershipBypassAvailable: Bool {")[1]
+            .components(separatedBy: "var isWebRemoteMembershipBypassEnabled")[0]
+        #expect(availability.contains("membershipFeature.supportsRemoteSessionAuthorization"))
+        #expect(!availability.contains("WebRemoteConfiguration.relayURL()"))
+        #expect(bridgeSource.contains("testMembershipBypass: isWebRemoteMembershipBypassEnabled"))
+        let environmentSubscription = bridgeSource.components(
+            separatedBy: "membershipEnvironmentCancellable ="
+        )[1].components(separatedBy: "audioOutput.onConfigurationChange")[0]
+        #expect(environmentSubscription.contains("environment == \"production\""))
+        #expect(!environmentSubscription.contains("serviceEnvironmentForDiagnostics == \"production\""))
+        #expect(membershipSource.contains("testMembershipBypass: testMembershipBypass"))
+        #expect(bridgeSource.contains("webRemoteClient.stop()\n            enableWebRemoteConnection()"))
+        #expect(!bridgeSource.contains("legacyVPS"))
+        #expect(!bridgeSource.contains("legacy_vps"))
+        #expect(bridgeSource.contains("type: \"sessionAttach\"") == false)
+        #expect(bridgeSource.contains("relay_mode=cloudflare_v1"))
+        #expect(compatibilitySource.contains("public enum WebRemoteSessionAuthorization"))
+        #expect(compatibilitySource.contains("case cloudflareV1("))
+        #expect(!compatibilitySource.contains("legacyVPS"))
     }
 
     @Test func remoteCardsShowCompleteNamesWithoutDuplicateConnectionSummary() throws {
