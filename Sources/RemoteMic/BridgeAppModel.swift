@@ -514,7 +514,6 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isWatchRemoteConnected = false
     @Published private(set) var phoneRemoteInvitation: PhoneRemoteInvitation?
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
-    @Published private var webRemoteMembershipBypassRequested = BridgeAppModel.webRemoteBuildChannel == "local"
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
     @Published private(set) var voiceKeyCompatibilityWarning: VoiceKeyCompatibilityWarning?
     @Published private(set) var diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.ready")
@@ -882,11 +881,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 guard let self else { return }
                 self.webRemoteSessionGeneration &+= 1
                 self.webRemoteSessionIdempotencyKey = nil
-                if self.webRemoteMembershipBypassRequested,
-                   environment == "production"
-                {
-                    self.webRemoteClient.stop()
-                }
+                self.webRemoteClient.stop()
+                self.webRemoteState = .disabled
+                AppLogger.shared.write(
+                    "WEB REMOTE SESSION phase=cancelled result=cancelled " +
+                        "reason=service_environment_changed " +
+                        "membership_check=\(environment == "staging" ? "bypassed" : "required")"
+                )
                 self.objectWillChange.send()
             }
         audioOutput.onConfigurationChange = { [weak self] in
@@ -1988,35 +1989,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
     }
 
-    var isWebRemoteMembershipBypassAvailable: Bool {
-        guard ["local", "preview", "pr_preview"].contains(Self.webRemoteBuildChannel),
-              membershipFeature.serviceEnvironmentForDiagnostics == "staging"
-        else { return false }
-        return membershipFeature.supportsRemoteSessionAuthorization
+    var webRemoteServiceEnvironment: String {
+        membershipFeature.serviceEnvironmentForDiagnostics
     }
 
     var isWebRemoteMembershipBypassEnabled: Bool {
-        webRemoteMembershipBypassRequested && isWebRemoteMembershipBypassAvailable
-    }
-
-    func setWebRemoteMembershipBypassEnabled(_ enabled: Bool) {
-        let accepted = enabled && isWebRemoteMembershipBypassAvailable
-        guard accepted != webRemoteMembershipBypassRequested else { return }
-        webRemoteMembershipBypassRequested = accepted
-        webRemoteSessionIdempotencyKey = nil
-        AppLogger.shared.write(
-            "WEB REMOTE TEST membership_check_bypass=" + (accepted ? "enabled" : "disabled")
-        )
-        if started {
-            webRemoteClient.stop()
-            enableWebRemoteConnection()
-        }
-    }
-
-    private static var webRemoteBuildChannel: String {
-        ProcessInfo.processInfo.environment["SAYALL_BUILD_CHANNEL"]
-            ?? Bundle.main.object(forInfoDictionaryKey: "SayAllBuildChannel") as? String
-            ?? "local"
+        webRemoteServiceEnvironment == "staging"
+            && membershipFeature.supportsRemoteSessionAuthorization
     }
 
     private static func isLoopbackRelayURL(_ url: URL) -> Bool {
