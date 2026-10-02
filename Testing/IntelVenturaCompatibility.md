@@ -64,7 +64,7 @@ RELEASE_VARIANT=intel ./scripts/verify-dmg.sh
 6. 验证单击、双击、长按映射，尤其确认 Fn 语音输入第一次触发即可向当前聚焦输入框输入。
 7. 验证 ATVV 语音开始、PCM 到达、松开结束，以及连续多次语音输入。
 8. 分别选择 MiRemoteV 2ch 和 BlackHole 2ch，确认两种音频回环设备都可完成语音输入。
-9. 验证 iOS 附近连接与网页版连接入口，不改变现有邀请码和服务配置行为。
+9. 验证 iOS 附近连接与网页版连接入口；网页版直接打开会话页，不要求邀请码，服务配置检查与 Mac 人工批准保持不变。
 10. 让 Mac 睡眠后唤醒，验证 App 不崩溃，遥控器、HID、音频设备和菜单栏状态能够恢复。
 11. 使用 Intel 测试 Feed 验证同架构跨版本更新；不得下载或安装 Apple Silicon 资产。
 12. 运行 `Uninstall SayAll Intel.pkg`，确认驱动移除、Core Audio 刷新且 App 的既有卸载行为不变。
