@@ -551,7 +551,9 @@ for source_localization_dir in "$ROOT"/Resources/*.lproj(N); do
   done < <(find "$source_localization_dir" -type f | LC_ALL=C sort)
 done
 
-if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' "$APP/Contents"; then
+# The pinned Sentry SDK embeds its public CI source paths in assertion strings.
+# Keep rejecting local user paths; only exempt that exact upstream source root.
+if rg --pcre2 -a -q '/Users/(?!runner/work/sentry-cocoa/sentry-cocoa/Sources/)[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' "$APP/Contents"; then
   print -u2 "bundle contains a forbidden local path or example device address"
   exit 1
 fi
