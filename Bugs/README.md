@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [常用语列表阻断 CI Release 构建](./2026-10-03-common-phrase-library-type-check.md)
 - [蓝牙遥控器电量长时间停留在旧值](./2026-10-03-bluetooth-battery-level-stale.md)
 - [HID 权限按实例重复轮询](./2026-09-25-per-instance-permission-poll.md)
 - [自定义组合快捷键丢失左右修饰键侧别](./2026-09-30-custom-shortcut-modifier-side-lost.md)

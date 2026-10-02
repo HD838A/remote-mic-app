@@ -107,64 +107,7 @@ struct CommonPhraseSettingsView: View {
             ScrollView {
                 LazyVStack(spacing: 1) {
                     ForEach(filteredPhrases) { phrase in
-                        Button { choosePhrase(phrase) } label: {
-                            HStack(spacing: 6) {
-                                VStack(spacing: 3) {
-                                    ForEach(0..<3) { _ in
-                                        HStack(spacing: 3) {
-                                            Circle().frame(width: 2, height: 2)
-                                            Circle().frame(width: 2, height: 2)
-                                        }
-                                    }
-                                }
-                                    .frame(width: 10).foregroundStyle(.secondary)
-                                    .accessibilityHidden(true)
-                                Text(phrase.label(english: english))
-                                    .foregroundStyle(selectedID == phrase.id ? Color.blue : Color.primary)
-                                    .fontWeight(selectedID == phrase.id ? .semibold : .regular)
-                                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                                HStack(spacing: 4) {
-                                    ForEach(CommonPhraseStore.buttons.filter { store.phrase(for: $0)?.id == phrase.id }) { button in
-                                        if button == .ok {
-                                            Text("OK").font(.system(size: 12, weight: .medium))
-                                        } else {
-                                            Image(systemName: symbol(for: button)).font(.system(size: 12, weight: .medium))
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 7)
-                                .frame(minHeight: 24)
-                                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.10)))
-                                .foregroundStyle(.primary)
-                                .opacity(CommonPhraseStore.buttons.contains { store.phrase(for: $0)?.id == phrase.id } ? 1 : 0)
-                            }
-                            .padding(.horizontal, 9).padding(.vertical, 7)
-                            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
-                            .background(selectedID == phrase.id ? Color.blue.opacity(0.18) : Color(nsColor: .textBackgroundColor),
-                                        in: RoundedRectangle(cornerRadius: 7))
-                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.08)))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .help(phrase.text(english: english))
-                        .accessibilityIdentifier("common-phrases-entry-\(phrase.id)")
-                        .onDrag {
-                            draggedPhraseID = phrase.id
-                            let provider = NSItemProvider()
-                            provider.registerDataRepresentation(forTypeIdentifier: "app.sayall.common-phrase", visibility: .ownProcess) { completion in
-                                completion(Data(phrase.id.utf8), nil)
-                                return nil
-                            }
-                            return provider
-                        }
-                        .onDrop(of: ["app.sayall.common-phrase"], isTargeted: nil) { _ in
-                            defer { draggedPhraseID = nil }
-                            guard let draggedPhraseID,
-                                  let source = store.archive.entries.firstIndex(where: { $0.id == draggedPhraseID }),
-                                  let target = store.archive.entries.firstIndex(where: { $0.id == phrase.id }) else { return false }
-                            return perform { try store.move(draggedPhraseID, by: target - source) }
-                        }
+                        libraryRow(phrase)
                     }
                 }
             }.scrollIndicators(.hidden)
@@ -185,6 +128,67 @@ struct CommonPhraseSettingsView: View {
         }.padding(14).frame(maxHeight: .infinity)
             .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.09)))
+    }
+
+    private func libraryRow(_ phrase: CommonPhrase) -> some View {
+        Button { choosePhrase(phrase) } label: {
+            HStack(spacing: 6) {
+                VStack(spacing: 3) {
+                    ForEach(0..<3) { _ in
+                        HStack(spacing: 3) {
+                            Circle().frame(width: 2, height: 2)
+                            Circle().frame(width: 2, height: 2)
+                        }
+                    }
+                }
+                    .frame(width: 10).foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text(phrase.label(english: english))
+                    .foregroundStyle(selectedID == phrase.id ? Color.blue : Color.primary)
+                    .fontWeight(selectedID == phrase.id ? .semibold : .regular)
+                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 4) {
+                    ForEach(CommonPhraseStore.buttons.filter { store.phrase(for: $0)?.id == phrase.id }) { button in
+                        if button == .ok {
+                            Text("OK").font(.system(size: 12, weight: .medium))
+                        } else {
+                            Image(systemName: symbol(for: button)).font(.system(size: 12, weight: .medium))
+                        }
+                    }
+                }
+                .padding(.horizontal, 7)
+                .frame(minHeight: 24)
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.10)))
+                .foregroundStyle(.primary)
+                .opacity(CommonPhraseStore.buttons.contains { store.phrase(for: $0)?.id == phrase.id } ? 1 : 0)
+            }
+            .padding(.horizontal, 9).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+            .background(selectedID == phrase.id ? Color.blue.opacity(0.18) : Color(nsColor: .textBackgroundColor),
+                        in: RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.08)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(phrase.text(english: english))
+        .accessibilityIdentifier("common-phrases-entry-\(phrase.id)")
+        .onDrag {
+            draggedPhraseID = phrase.id
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(forTypeIdentifier: "app.sayall.common-phrase", visibility: .ownProcess) { completion in
+                completion(Data(phrase.id.utf8), nil)
+                return nil
+            }
+            return provider
+        }
+        .onDrop(of: ["app.sayall.common-phrase"], isTargeted: nil) { _ in
+            defer { draggedPhraseID = nil }
+            guard let draggedPhraseID,
+                  let source = store.archive.entries.firstIndex(where: { $0.id == draggedPhraseID }),
+                  let target = store.archive.entries.firstIndex(where: { $0.id == phrase.id }) else { return false }
+            return perform { try store.move(draggedPhraseID, by: target - source) }
+        }
     }
 
     private var editorColumn: some View {
