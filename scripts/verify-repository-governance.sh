@@ -48,6 +48,10 @@ require_text BRANCH_MANAGEMENT.md '确认后必须在 PR 正文记录明确的�
 require_text BRANCH_MANAGEMENT.md '自动化 Agent 不得在缺少该确认时自行将其标记 Ready、批准或合入'
 require_heading AGENTS.md '## 规范层级与文档边界'
 require_heading AGENTS.md '## 任务范围与等待治理'
+require_heading AGENTS.md '## 临时测试工具入库边界'
+require_text AGENTS.md '不得新增、恢复或改名后进入版本控制'
+require_text AGENTS.md '不得新增或恢复可执行辅助文件'
+require_text .github/PULL_REQUEST_TEMPLATE.md '新增或恢复的工程辅助文件不含临时探针、手工 trace、一次性采集、实验包构建或启动器。'
 require_text AGENTS.md '分析、审查、诊断或状态查询默认只做只读检查并给出证据和结论'
 require_text AGENTS.md '当前任务之外的优化、重构、规范调整或历史清理必须拆成独立工作项'
 require_text AGENTS.md '禁止使用无法可靠收回控制权的交互式 CI 等待命令'
@@ -74,6 +78,35 @@ done < <(find Testing -maxdepth 1 -type f -name '*Contract.md' -print | sort)
 base_ref="${1:-}"
 if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 ]]; then
   git rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1 || fail "base commit is unavailable: $base_ref"
+
+  new_engineering_helper=false
+  while IFS= read -r -d '' path; do
+    case "$path" in
+      scripts/voice-acceptance.sh|Testing/build_rc003_preview.sh|Testing/启动Chromecast真机测试.command|Testing/启动RC003长语音测试.command|Testing/launch_rc003_voice_extension_test.command|scripts/run-apple-remote-no-packetlogger-probe.sh)
+        fail "retired manual tooling must not be restored: $path"
+        ;;
+    esac
+    lower_path="$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')"
+    file_mode="$(git ls-files --stage -- "$path" | awk 'NR == 1 { print $1 }')"
+    case "$lower_path" in
+      testing/*.sh|testing/*.bash|testing/*.zsh|testing/*.command|testing/*.swift|testing/*.py|testing/*.js|testing/*.mjs|testing/*.cjs|testing/*.ts|testing/*.rb|testing/*.pl|testing/*.ps1|testing/*.bat|testing/*.cmd)
+        fail "Testing must not gain executable helpers: $path"
+        ;;
+    esac
+    if [[ "$lower_path" == testing/* && "$file_mode" == 100755 ]]; then
+      fail "Testing must not gain executable helpers: $path"
+    fi
+    case "$lower_path" in
+      scripts/*|script/*)
+        new_engineering_helper=true
+        ;;
+    esac
+  done < <(git diff --no-renames --diff-filter=A --name-only -z "$base_ref...HEAD")
+
+  if [[ "$new_engineering_helper" == true && "${GITHUB_EVENT_NAME:-}" == pull_request ]]; then
+    grep -Fq -- '[x] 新增或恢复的工程辅助文件不含临时探针、手工 trace、一次性采集、实验包构建或启动器。' <<< "${GOVERNANCE_PR_BODY:-}" || \
+      fail 'new engineering helpers require the manual-tooling scope confirmation in the PR body'
+  fi
 
   governance_changed=false
   scope_violation=false
