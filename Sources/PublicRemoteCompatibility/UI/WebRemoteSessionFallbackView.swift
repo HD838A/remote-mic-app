@@ -4,12 +4,14 @@ import SwiftUI
 @MainActor
 public protocol WebRemoteSessionModel: ObservableObject {
     var webRemoteState: WebRemoteSessionState { get }
-    var isWebRemoteMembershipBypassAvailable: Bool { get }
-    var isWebRemoteMembershipBypassEnabled: Bool { get }
+    var webRemoteServiceEnvironment: String { get }
 
     func enableWebRemoteConnection()
     func disableWebRemoteConnection()
-    func setWebRemoteMembershipBypassEnabled(_ enabled: Bool)
+}
+
+public extension WebRemoteSessionModel {
+    var webRemoteServiceEnvironment: String { "production" }
 }
 
 public struct WebRemoteSessionLocalization {
