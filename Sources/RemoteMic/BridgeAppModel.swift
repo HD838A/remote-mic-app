@@ -3573,6 +3573,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                   connectedRemoteProfileIDs.contains(profileID)
             else { continue }
             requested += 1
+            bridge.refreshBatteryTelemetry(reason: reason.rawValue)
             let name = bridge.currentSystemDeviceName()
             if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 resolved += 1

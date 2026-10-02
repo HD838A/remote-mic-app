@@ -97,6 +97,17 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
     }
 }
 
+enum BluetoothBatteryPollingPolicy {
+    static let interval: TimeInterval = 5 * 60
+
+    static func shouldPoll(
+        supportsNotifications: Bool,
+        isNotifying: Bool
+    ) -> Bool {
+        !supportsNotifications || !isNotifying
+    }
+}
+
 final class XiaomiBluetoothBridge: NSObject {
     private static let defaultCapabilities = ATVVCapabilities(
         version: 0x0100,
@@ -122,6 +133,14 @@ final class XiaomiBluetoothBridge: NSObject {
     private var controlCharacteristic: CBCharacteristic?
     private var batteryCharacteristic: CBCharacteristic?
     private var batteryStatusCharacteristic: CBCharacteristic?
+    private var batteryLevelNeedsPolling = false
+    private var batteryStatusNeedsPolling = false
+    private var batteryRefreshWorkItem: DispatchWorkItem?
+    private var batteryPollingActive = false
+    private var hasObservedBatteryLevel = false
+    private var lastObservedBatteryLevel: Int?
+    private var hasObservedPowerState = false
+    private var lastObservedPowerState: RemotePowerState?
     private var subscribedUUIDs = Set<CBUUID>()
     private var reconnectWorkItem: DispatchWorkItem?
     private var connectionTimeoutWorkItem: DispatchWorkItem?
@@ -168,6 +187,21 @@ final class XiaomiBluetoothBridge: NSObject {
             .first(where: { $0.identifier == peripheral.identifier })?.name
     }
 
+    /// Re-read optional battery characteristics without changing connection or audio state.
+    func refreshBatteryTelemetry(reason: String) {
+        guard shouldRun,
+              !systemSuspension.isSuspended,
+              lifecycle.isReady,
+              let peripheral,
+              peripheral.state == .connected
+        else { return }
+        requestBatteryTelemetryRefresh(
+            peripheral: peripheral,
+            reason: reason,
+            pollingOnly: false
+        )
+    }
+
     fileprivate func handleNameUpdate(peripheral: CBPeripheral, generation: UInt64) {
         guard shouldRun, isCurrent(peripheral), lifecycle == .ready(generation) else { return }
         delegate?.bluetoothBridgeDeviceNameDidChange(self)
@@ -210,6 +244,7 @@ final class XiaomiBluetoothBridge: NSObject {
     func stop() {
         shouldRun = false
         reconnectWorkItem?.cancel()
+        stopBatteryPolling(reason: "bridge_stopped")
         reconnectPolicy.reset()
         central?.stopScan()
         closeMicrophoneIfNeeded()
@@ -276,6 +311,7 @@ final class XiaomiBluetoothBridge: NSObject {
     func setSystemSuspended(_ suspended: Bool, reason: String) {
         if suspended {
             guard systemSuspension.suspend(phase: lifecycle) else { return }
+            stopBatteryPolling(reason: "system_suspended")
             central?.stopScan()
             if !lifecycle.isReady,
                let central,
@@ -300,6 +336,9 @@ final class XiaomiBluetoothBridge: NSObject {
         }
 
         guard systemSuspension.resume() else { return }
+        if let generation = currentGeneration(), lifecycle.isReady {
+            updateBatteryPollingSchedule(generation: generation)
+        }
         AppLogger.shared.write(
             "BLE SYSTEM_SUSPENSION phase=completed result=resumed reason=\(reason) " +
                 "connection_cycle_needed=\(systemSuspension.connectionCycleNeeded)"
@@ -541,6 +580,7 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func resetPeripheral() {
+        stopBatteryPolling(reason: "peripheral_reset")
         peripheral?.delegate = nil
         peripheral = nil
         peripheralDelegateProxy = nil
@@ -550,6 +590,12 @@ final class XiaomiBluetoothBridge: NSObject {
         controlCharacteristic = nil
         batteryCharacteristic = nil
         batteryStatusCharacteristic = nil
+        batteryLevelNeedsPolling = false
+        batteryStatusNeedsPolling = false
+        hasObservedBatteryLevel = false
+        lastObservedBatteryLevel = nil
+        hasObservedPowerState = false
+        lastObservedPowerState = nil
         subscribedUUIDs.removeAll()
         connectionTimeoutWorkItem?.cancel()
         connectionTimeoutWorkItem = nil
@@ -747,6 +793,79 @@ final class XiaomiBluetoothBridge: NSObject {
         lifecycle = .awaitingCapabilities(generation)
         state = .discovering
         AppLogger.shared.write("ATVV CAPABILITIES requested name=\(peripheral.name ?? "MI RC")")
+    }
+
+    private func updateBatteryPollingSchedule(generation: UInt64) {
+        let needsPolling = batteryLevelNeedsPolling || batteryStatusNeedsPolling
+        guard shouldRun, needsPolling else {
+            stopBatteryPolling(reason: "notifications_active")
+            return
+        }
+        guard batteryRefreshWorkItem == nil else { return }
+        if !batteryPollingActive {
+            batteryPollingActive = true
+            AppLogger.shared.write(
+                "BLE BATTERY polling_started interval_ms=" +
+                    "\(Int((BluetoothBatteryPollingPolicy.interval * 1_000).rounded())) " +
+                    "level=\(batteryLevelNeedsPolling) power=\(batteryStatusNeedsPolling)"
+            )
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.batteryRefreshWorkItem = nil
+            guard self.shouldRun,
+                  !self.systemSuspension.isSuspended,
+                  self.currentGeneration() == generation,
+                  self.lifecycle.isReady,
+                  let peripheral = self.peripheral,
+                  peripheral.state == .connected
+            else {
+                self.stopBatteryPolling(reason: "connection_inactive")
+                return
+            }
+            self.requestBatteryTelemetryRefresh(
+                peripheral: peripheral,
+                reason: "timer",
+                pollingOnly: true
+            )
+            self.updateBatteryPollingSchedule(generation: generation)
+        }
+        batteryRefreshWorkItem = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + BluetoothBatteryPollingPolicy.interval,
+            execute: work
+        )
+    }
+
+    private func stopBatteryPolling(reason: String) {
+        batteryRefreshWorkItem?.cancel()
+        batteryRefreshWorkItem = nil
+        guard batteryPollingActive else { return }
+        batteryPollingActive = false
+        AppLogger.shared.write("BLE BATTERY polling_stopped reason=\(reason)")
+    }
+
+    private func requestBatteryTelemetryRefresh(
+        peripheral: CBPeripheral,
+        reason: String,
+        pollingOnly: Bool
+    ) {
+        var requested: [String] = []
+        if let batteryCharacteristic,
+           !pollingOnly || batteryLevelNeedsPolling {
+            peripheral.readValue(for: batteryCharacteristic)
+            requested.append("level")
+        }
+        if let batteryStatusCharacteristic,
+           !pollingOnly || batteryStatusNeedsPolling {
+            peripheral.readValue(for: batteryStatusCharacteristic)
+            requested.append("power")
+        }
+        guard !requested.isEmpty else { return }
+        AppLogger.shared.write(
+            "BLE BATTERY refresh_requested reason=\(reason) " +
+                "fields=\(requested.joined(separator: ","))"
+        )
     }
 
     private func handleControl(_ data: Data) {
@@ -1273,7 +1392,13 @@ extension XiaomiBluetoothBridge {
             if let characteristic = characteristics.first(where: { $0.uuid == batteryLevelUUID }) {
                 batteryCharacteristic = characteristic
                 peripheral.readValue(for: characteristic)
-                if characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate) {
+                let supportsNotifications = characteristic.properties.contains(.notify) ||
+                    characteristic.properties.contains(.indicate)
+                batteryLevelNeedsPolling = BluetoothBatteryPollingPolicy.shouldPoll(
+                    supportsNotifications: supportsNotifications,
+                    isNotifying: characteristic.isNotifying
+                )
+                if supportsNotifications {
                     peripheral.setNotifyValue(true, for: characteristic)
                 }
             } else {
@@ -1282,12 +1407,19 @@ extension XiaomiBluetoothBridge {
             if let characteristic = characteristics.first(where: { $0.uuid == batteryLevelStatusUUID }) {
                 batteryStatusCharacteristic = characteristic
                 peripheral.readValue(for: characteristic)
-                if characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate) {
+                let supportsNotifications = characteristic.properties.contains(.notify) ||
+                    characteristic.properties.contains(.indicate)
+                batteryStatusNeedsPolling = BluetoothBatteryPollingPolicy.shouldPoll(
+                    supportsNotifications: supportsNotifications,
+                    isNotifying: characteristic.isNotifying
+                )
+                if supportsNotifications {
                     peripheral.setNotifyValue(true, for: characteristic)
                 }
             } else {
                 delegate?.bluetoothBridge(self, didUpdatePowerState: nil)
             }
+            updateBatteryPollingSchedule(generation: generation)
             return
         }
         if service.uuid == deviceInformationServiceUUID {
@@ -1354,12 +1486,24 @@ extension XiaomiBluetoothBridge {
         let isOptionalCharacteristic = characteristic.uuid == batteryLevelUUID ||
             characteristic.uuid == batteryLevelStatusUUID
         if isOptionalCharacteristic {
+            let supportsNotifications = characteristic.properties.contains(.notify) ||
+                characteristic.properties.contains(.indicate)
+            let needsPolling = BluetoothBatteryPollingPolicy.shouldPoll(
+                supportsNotifications: supportsNotifications,
+                isNotifying: error == nil && characteristic.isNotifying
+            )
+            if characteristic.uuid == batteryLevelUUID {
+                batteryLevelNeedsPolling = needsPolling
+            } else {
+                batteryStatusNeedsPolling = needsPolling
+            }
             if let error {
                 AppLogger.shared.write(
                     "BLE BATTERY notification_failed uuid=\(characteristic.uuid.uuidString) " +
                         AppLogger.errorFields(error)
                 )
             }
+            updateBatteryPollingSchedule(generation: generation)
             return
         }
         if let error {
@@ -1399,11 +1543,15 @@ extension XiaomiBluetoothBridge {
                 AppLogger.shared.write(
                     "BLE BATTERY read_failed " + AppLogger.errorFields(error)
                 )
+                hasObservedBatteryLevel = false
+                lastObservedBatteryLevel = nil
                 delegate?.bluetoothBridge(self, didUpdateBatteryLevel: nil)
             } else if characteristic.uuid == batteryLevelStatusUUID {
                 AppLogger.shared.write(
                     "BLE POWER read_failed " + AppLogger.errorFields(error)
                 )
+                hasObservedPowerState = false
+                lastObservedPowerState = nil
                 delegate?.bluetoothBridge(self, didUpdatePowerState: nil)
             } else if characteristic.uuid == modelNumberUUID {
                 AppLogger.shared.write(
@@ -1415,12 +1563,18 @@ extension XiaomiBluetoothBridge {
         guard let data = characteristic.value else { return }
         if characteristic.uuid == batteryLevelUUID {
             let level = data.first.map(Int.init)
+            guard !hasObservedBatteryLevel || lastObservedBatteryLevel != level else { return }
+            hasObservedBatteryLevel = true
+            lastObservedBatteryLevel = level
             AppLogger.shared.write("BLE BATTERY level=\(level.map(String.init) ?? "unknown")")
             delegate?.bluetoothBridge(self, didUpdateBatteryLevel: level)
             return
         }
         if characteristic.uuid == batteryLevelStatusUUID {
             let powerState = RemotePowerState.decodeBatteryLevelStatus(data)
+            guard !hasObservedPowerState || lastObservedPowerState != powerState else { return }
+            hasObservedPowerState = true
+            lastObservedPowerState = powerState
             AppLogger.shared.write(
                 "BLE POWER state=\(powerState?.logValue ?? "unavailable")"
             )

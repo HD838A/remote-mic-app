@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [蓝牙遥控器电量长时间停留在旧值](./2026-10-03-bluetooth-battery-level-stale.md)
 - [HID 权限按实例重复轮询](./2026-09-25-per-instance-permission-poll.md)
 - [自定义组合快捷键丢失左右修饰键侧别](./2026-09-30-custom-shortcut-modifier-side-lost.md)
 - [Dock 偏好、系统媒体动作、音量摘要与窗口菜单回归](./2026-09-13-dock-media-window-actions.md)
@@ -98,6 +99,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-10-03 | [蓝牙遥控器电量长时间停留在旧值](./2026-10-03-bluetooth-battery-level-stale.md)（Issue #463） | 候选修复与自动化完成，等待 RC001 / RC003 真机电量变化验收 |
 | 2026-09-13 | [Dock 偏好、系统媒体动作、音量摘要与窗口菜单回归](./2026-09-13-dock-media-window-actions.md)（Issues #386、#407、#412、#413） | 最小候选修复与 754 项自动化通过，等待真实 Dock、播放器与窗口菜单验收 |
 | 2026-09-29 | [休眠期间仍持续蓝牙扫描和重连](./2026-09-29-sleeping-ble-scan-and-reconnect.md)（Issue #441） | 候选修复与定向自动化通过，等待真实整夜休眠、实体遥控器和 `pmset` 验收 |
 | 2026-09-29 | [个人中心日历按行读取连续日期，导致星期标签与日期错位](./2026-09-29-profile-calendar-weekday-layout.md)（Issue #444） | 最小修复、自动化、Release App 与生产截图验证通过，等待真实页面点击验收 |
