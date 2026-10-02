@@ -121,7 +121,8 @@ final class CommonPhraseStore: ObservableObject {
         guard let index = archive.entries.firstIndex(where: { $0.id == id }),
               archive.entries.indices.contains(index + offset) else { return }
         var candidate = archive
-        candidate.entries.swapAt(index, index + offset)
+        let phrase = candidate.entries.remove(at: index)
+        candidate.entries.insert(phrase, at: index + offset)
         try persist(action: "reorder") { candidate }
     }
 

@@ -1162,12 +1162,12 @@
 "common_phrases.key.left" = "Left";
 "common_phrases.key.right" = "Right";
 "common_phrases.unassigned" = "Unassigned";
-"common_phrases.add" = "Add Phrase";
+"common_phrases.add" = "Add";
 "common_phrases.edit" = "Edit Phrase";
 "common_phrases.import" = "Import Backup";
 "common_phrases.export" = "Export Backup";
 "common_phrases.save" = "Save Changes";
-"common_phrases.delete" = "Delete";
+"common_phrases.delete" = "Delete Phrase";
 "common_phrases.move_up" = "Move Up";
 "common_phrases.move_down" = "Move Down";
 "common_phrases.short_label" = "Short Label (Chinese)";

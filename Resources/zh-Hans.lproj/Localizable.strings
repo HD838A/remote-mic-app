@@ -1162,12 +1162,12 @@
 "common_phrases.key.left" = "左";
 "common_phrases.key.right" = "右";
 "common_phrases.unassigned" = "未分配";
-"common_phrases.add" = "新增常用语";
+"common_phrases.add" = "新增";
 "common_phrases.edit" = "编辑常用语";
 "common_phrases.import" = "导入备份";
 "common_phrases.export" = "导出备份";
 "common_phrases.save" = "保存更改";
-"common_phrases.delete" = "删除";
+"common_phrases.delete" = "删除这条";
 "common_phrases.move_up" = "上移";
 "common_phrases.move_down" = "下移";
 "common_phrases.short_label" = "中文短显示";

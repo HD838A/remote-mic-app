@@ -72,6 +72,24 @@ struct CommonPhraseTests {
         #expect(settings.action(for: .left) == prior)
     }
 
+    @Test func reorderAcrossSeveralRowsPreservesOtherEntriesAndBindings() throws {
+        let suite = "CommonPhraseTests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let data = try builtIns()
+        let store = CommonPhraseStore(defaults: defaults, builtInData: data)
+        let before = store.archive
+        let movedID = before.entries[0].id
+        try store.move(movedID, by: 4)
+        #expect(store.archive.entries[4].id == movedID)
+        #expect(store.archive.entries.filter { $0.id != movedID } == before.entries.filter { $0.id != movedID })
+        #expect(store.archive.bindings == before.bindings)
+        let reloaded = CommonPhraseStore(defaults: defaults, builtInData: data)
+        #expect(reloaded.archive == store.archive)
+        try reloaded.move(movedID, by: -4)
+        #expect(reloaded.archive == before)
+    }
+
     @Test func unmodifiedBuiltInsRefreshFromResourceAndMalformedImportDoesNotOverwrite() throws {
         let suite = "CommonPhraseTests." + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: suite))

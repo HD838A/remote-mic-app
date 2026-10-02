@@ -9,6 +9,7 @@ struct CommonPhraseSettingsView: View {
     @State private var selectedButton: RemoteButton?
     @State private var selectedID: String?
     @State private var search = ""
+    @State private var draggedPhraseID: String?
     @State private var text = ""
     @State private var shortLabel = ""
     @State private var englishText = ""
@@ -17,6 +18,10 @@ struct CommonPhraseSettingsView: View {
     @State private var fileOperation: UInt64 = 0
     @State private var selectionOperation: UInt64 = 0
     private var english: Bool { localization.locale.language.languageCode?.identifier == "en" }
+    private var canSave: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !shortLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && store.isAvailable
+    }
     private var filteredPhrases: [CommonPhrase] {
         store.archive.entries.filter {
             search.isEmpty || $0.label(english: english).localizedCaseInsensitiveContains(search)
@@ -80,21 +85,41 @@ struct CommonPhraseSettingsView: View {
                 Button {
                     selectedButton = nil
                     select(nil)
-                } label: { Image(systemName: "plus") }
+                } label: { Label(localization.text("common_phrases.add"), systemImage: "plus") }
+                .controlSize(.large)
                 .help(localization.text("common_phrases.add"))
                 .accessibilityLabel(localization.text("common_phrases.add"))
                 .accessibilityIdentifier("common-phrases-add")
             }
-            TextField(localization.text("common_phrases.search"), text: $search)
-                .accessibilityIdentifier("common-phrases-search")
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField(localization.text("common_phrases.search"), text: $search)
+                    .textFieldStyle(.plain)
+                    .accessibilityIdentifier("common-phrases-search")
+            }
+            .padding(10)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.10)))
             ScrollView {
-                LazyVStack(spacing: 4) {
+                LazyVStack(spacing: 1) {
                     ForEach(filteredPhrases) { phrase in
                         Button { choosePhrase(phrase) } label: {
                             HStack(spacing: 6) {
+                                VStack(spacing: 3) {
+                                    ForEach(0..<3) { _ in
+                                        HStack(spacing: 3) {
+                                            Circle().frame(width: 2, height: 2)
+                                            Circle().frame(width: 2, height: 2)
+                                        }
+                                    }
+                                }
+                                    .frame(width: 10).foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
                                 Text(phrase.label(english: english))
+                                    .foregroundStyle(selectedID == phrase.id ? Color.blue : Color.primary)
+                                    .fontWeight(selectedID == phrase.id ? .semibold : .regular)
                                     .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                                HStack(spacing: 2) {
+                                HStack(spacing: 4) {
                                     ForEach(CommonPhraseStore.buttons.filter { store.phrase(for: $0)?.id == phrase.id }) { button in
                                         if button == .ok {
                                             Text("OK").font(.system(size: 12, weight: .medium))
@@ -102,16 +127,40 @@ struct CommonPhraseSettingsView: View {
                                             Image(systemName: symbol(for: button)).font(.system(size: 12, weight: .medium))
                                         }
                                     }
-                                }.foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 7)
+                                .frame(minHeight: 24)
+                                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.10)))
+                                .foregroundStyle(.primary)
+                                .opacity(CommonPhraseStore.buttons.contains { store.phrase(for: $0)?.id == phrase.id } ? 1 : 0)
                             }
-                            .padding(9).frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
-                            .background(selectedID == phrase.id ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.025),
+                            .padding(.horizontal, 9).padding(.vertical, 7)
+                            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                            .background(selectedID == phrase.id ? Color.blue.opacity(0.18) : Color(nsColor: .textBackgroundColor),
                                         in: RoundedRectangle(cornerRadius: 7))
+                            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.08)))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help(phrase.text(english: english))
                         .accessibilityIdentifier("common-phrases-entry-\(phrase.id)")
+                        .onDrag {
+                            draggedPhraseID = phrase.id
+                            let provider = NSItemProvider()
+                            provider.registerDataRepresentation(forTypeIdentifier: "app.sayall.common-phrase", visibility: .ownProcess) { completion in
+                                completion(Data(phrase.id.utf8), nil)
+                                return nil
+                            }
+                            return provider
+                        }
+                        .onDrop(of: ["app.sayall.common-phrase"], isTargeted: nil) { _ in
+                            defer { draggedPhraseID = nil }
+                            guard let draggedPhraseID,
+                                  let source = store.archive.entries.firstIndex(where: { $0.id == draggedPhraseID }),
+                                  let target = store.archive.entries.firstIndex(where: { $0.id == phrase.id }) else { return false }
+                            return perform { try store.move(draggedPhraseID, by: target - source) }
+                        }
                     }
                 }
             }.scrollIndicators(.hidden)
@@ -131,11 +180,12 @@ struct CommonPhraseSettingsView: View {
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }.padding(14).frame(maxHeight: .infinity)
             .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.09)))
     }
 
     private var editorColumn: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 Text(localization.text("common_phrases.editor")).font(.system(size: 16, weight: .semibold))
                 if store.loadFailed {
                     Text(localization.text("common_phrases.error.resource_unavailable")).foregroundStyle(.red)
@@ -143,23 +193,37 @@ struct CommonPhraseSettingsView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(localization.text("common_phrases.short_label")).foregroundStyle(.secondary)
                     TextField("", text: $shortLabel)
+                        .textFieldStyle(.plain).padding(10).frame(minHeight: 36)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12)))
                         .accessibilityLabel(localization.text("common_phrases.short_label"))
                         .accessibilityIdentifier("common-phrases-label")
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(localization.text("common_phrases.full_text")).foregroundStyle(.secondary)
-                    TextField("", text: $text, axis: .vertical).lineLimit(3...5)
+                    TextEditor(text: $text)
+                        .scrollContentBackground(.hidden).frame(height: 90).padding(8)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12)))
                         .accessibilityLabel(localization.text("common_phrases.full_text"))
+                        .accessibilityIdentifier("common-phrases-text")
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(localization.text("common_phrases.english_label")).foregroundStyle(.secondary)
                     TextField("", text: $englishLabel)
+                        .textFieldStyle(.plain).padding(10).frame(minHeight: 36)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12)))
                         .accessibilityLabel(localization.text("common_phrases.english_label"))
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(localization.text("common_phrases.english_text")).foregroundStyle(.secondary)
-                    TextField("", text: $englishText, axis: .vertical).lineLimit(3...5)
+                    TextEditor(text: $englishText)
+                        .scrollContentBackground(.hidden).frame(height: 90).padding(8)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12)))
                         .accessibilityLabel(localization.text("common_phrases.english_text"))
+                        .accessibilityIdentifier("common-phrases-english-text")
                 }
                 ViewThatFits(in: .horizontal) {
                     HStack { editButtons }
@@ -175,31 +239,43 @@ struct CommonPhraseSettingsView: View {
             }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
         }.scrollIndicators(.hidden).frame(maxHeight: .infinity)
             .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.09)))
     }
 
     @ViewBuilder private var editButtons: some View {
-        Button(localization.text("common_phrases.save")) {
+        Button {
             perform {
                 let phrase = CommonPhrase(id: selectedID ?? "user-" + UUID().uuidString,
                     chineseText: text, chineseLabel: shortLabel, englishText: englishText, englishLabel: englishLabel)
                 selectedID = try store.save(phrase, replacing: selectedID)
             }
+        } label: {
+            Text(localization.text("common_phrases.save"))
+                .padding(.horizontal, 18).padding(.vertical, 10)
+                .foregroundStyle(.white)
+                .background(Color.blue, in: RoundedRectangle(cornerRadius: 8))
         }
-        .buttonStyle(.borderedProminent)
-        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || shortLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.isAvailable)
+        .buttonStyle(.plain)
+        .opacity(canSave ? 1 : 0.45)
+        .disabled(!canSave)
         .accessibilityIdentifier("common-phrases-save")
         if let selectedID {
-            Button(localization.text("common_phrases.delete")) {
+            Button {
                 perform { try store.delete(selectedID); select(nil) }
-            }.buttonStyle(.bordered)
+            } label: {
+                Label(localization.text("common_phrases.delete"), systemImage: "trash")
+                    .padding(.horizontal, 10).padding(.vertical, 9)
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.12)))
+            }.buttonStyle(.plain)
         }
     }
 
     @ViewBuilder private var backupButtons: some View {
         Button(localization.text("common_phrases.import")) { importPhrases() }
-            .fixedSize()
+            .controlSize(.large).fixedSize()
         Button(localization.text("common_phrases.export")) { exportPhrases() }
-            .fixedSize().disabled(!store.isAvailable)
+            .controlSize(.large).fixedSize().disabled(!store.isAvailable)
     }
 
     private func symbol(for button: RemoteButton) -> String {
