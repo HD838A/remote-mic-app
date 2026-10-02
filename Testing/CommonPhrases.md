@@ -127,6 +127,16 @@ HID 回放验证面板内绕过双击等待、关闭后恢复原映射。首次�
 
 文件必要性：`CommonPhrasePanel.swift` 调整居中说明和字号；`SettingsView.swift` 扩展筛选及动作按钮命中形状；`CommonPhraseSettingsView.swift` 将返回与标题同行并扩大返回区域；中英文资源同步两行说明与返回短文案；中英文设计规范、产品规范、TODO 与本文同步行为和验证边界。未实现的未来要求继续保留。
 
+### 2026-10-03 PR 主线同步与验收检查
+
+PR #558 提交前已同步 `origin/main` 的 `eb96536cca4ed519ced7db6d5d3b5a1ab13cae09`，产品源码提交为 `86e2a42ccd7bbd9514c3b9545fae405e4defd9c1`。公开全量 800 tests / 61 suites 通过，项目自检 48 passed / 0 failed；治理、仓库边界、变更 Markdown 相对链接及 `git diff --check` 通过。首次全量中发布 control-plane fixture 以 141 退出，随后该项单独复跑及全量复跑均通过，保留首次失败日志；不修改与本功能无关的发布实现。
+
+记录为 `dist/common-phrases-pr-full-tests.log`、`dist/common-phrases-pr-release-fixture-retry.log`、`dist/common-phrases-pr-full-tests-retry.log` 和 `dist/common-phrases-pr-selftest.log`。同步主线后重新构建的 all-remotes 本地包通过 Release、资源与 Developer ID 深度严格签名，见 `dist/common-phrases-pr-app-build.log`；本轮只启动独立 UI 验证副本，不宣称普通 App 启动或实机验收通过。
+
+生产 `SettingsView` 独立 UserDefaults 窗口以 `1020×772` 内容尺寸验证：五组筛选、具体 App 平铺且自定义 App 为末项、进入调整页、返回保持确定键单击编辑上下文，以及按键/回眸/连接/设置四个侧栏入口。操作通过辅助功能按钮动作；页面、页头和侧栏已查看，窗口几何保持。指针点击调整按钮右侧留白没有产生可确认的页面变化，不能将辅助功能操作通过当作边缘命中通过，也未据此猜测或修改实现；该项仍须按本手册用户步骤验收。
+
+最新中/英 × 浅/深的两种页面及圆盘生产截图、实际窗口原始 JPEG 位于 `Screenshots/common-phrases/pr-review-20261003/`，共 25 张图片的格式、尺寸、字节数和 SHA-256 见 `manifest.json`。截图来自上述产品源码，随后证据提交不改变产品代码。真实遥控器/移动来源、第三方文字上屏、语音稳定基线、原生拖放、编辑区滚动和多屏浮层仍待用户验收；PR 保持 Draft，TODO 保持候选。
+
 ## 本轮文件与证据
 
 | 文件 | 本次变化与用途 |
