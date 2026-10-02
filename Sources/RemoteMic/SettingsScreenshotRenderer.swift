@@ -82,6 +82,11 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        if let iconIdentifier = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_APP_ICON"
+        ] {
+            settings.appIconIdentifier = AppIconIdentifier(rawValue: iconIdentifier)
+        }
         var remoteCardSystemNames: [UUID: String] = [:]
         var remoteCardBatteryLevels: [UUID: Int] = [:]
         var remoteCardPowerStates: [UUID: RemotePowerState] = [:]
@@ -137,7 +142,16 @@ enum SettingsScreenshotRenderer {
             )
         }
         seedStatisticsForScreenshot(settings)
-        let model = BridgeAppModel(settings: settings)
+        let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
+        let model = BridgeAppModel(
+            settings: settings,
+            transcriptArchiveStore: TranscriptArchiveStore(
+                rootDirectoryURL: historyDirectory.appendingPathComponent("transcripts")
+            ),
+            recordingAssetStore: RecordingAssetStore(
+                rootDirectoryURL: historyDirectory.appendingPathComponent("recordings")
+            )
+        )
         if showsRemoteCards {
             model.configureRemoteCardsForSettingsScreenshot(
                 profileIDs: Set(remoteCardSystemNames.keys),
