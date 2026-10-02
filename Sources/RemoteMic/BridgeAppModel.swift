@@ -1813,8 +1813,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func enablePhoneRemoteConnection() {
-        guard started, membershipFeature.canStartCompanionConnection,
-              !isPhoneRemoteConnectionEnabled else { return }
+        guard started, !isPhoneRemoteConnectionEnabled else { return }
+        guard membershipFeature.canStartCompanionConnection else {
+            objectWillChange.send()
+            return
+        }
         isPhoneRemoteConnectionEnabled = true
         phoneRemoteServer.start()
         watchBluetoothServer.start()

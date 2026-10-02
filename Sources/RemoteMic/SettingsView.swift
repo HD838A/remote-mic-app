@@ -1032,7 +1032,7 @@ struct SettingsView: View {
                     }
 
                     HStack(spacing: 8) {
-                        if membershipFeature.canUseCompanionConnections || model.isPhoneRemoteConnectionEnabled {
+                        if membershipFeature.canStartCompanionConnection {
                             Button(
                                 model.isPhoneRemoteConnected
                                     ? "connection.phone.disconnect"
@@ -1069,7 +1069,7 @@ struct SettingsView: View {
                         .compatibilityButtonStyle(.standard)
                     }
 
-                    if let invitation = model.phoneRemoteInvitation {
+                    if membershipFeature.canStartCompanionConnection, let invitation = model.phoneRemoteInvitation {
                         Divider()
                         PhoneRemoteInvitationCard(invitation: invitation)
                     }
@@ -1107,7 +1107,7 @@ struct SettingsView: View {
                             : model.isWatchRemoteConnectionEnabled ? .orange : .secondary
                     )
 
-                    if membershipFeature.canUseCompanionConnections || model.isWatchRemoteConnectionEnabled {
+                    if membershipFeature.canStartCompanionConnection {
                         Button(
                             model.isWatchRemoteConnected
                                 ? "connection.watch.disconnect"
@@ -1144,7 +1144,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(webRemoteStatusTint)
                         .lineLimit(1)
-                    if membershipFeature.canUseCompanionConnections || model.webRemoteState.isEnabled {
+                    if membershipFeature.canStartCompanionConnection || model.webRemoteState.isEnabled {
                         Button(
                             model.webRemoteState.isEnabled
                                 ? "connection.web.show_qr"

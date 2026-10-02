@@ -2477,7 +2477,7 @@ struct OnboardingView: View {
                 Text(verbatim: localization.text("onboarding.iphone_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
                     .multilineTextAlignment(.center)
-            } else if !membershipFeature.canUseCompanionConnections {
+            } else if !membershipFeature.canStartCompanionConnection {
                 companionMembershipRequiredView
             } else {
                 Image(systemName: model.isPhoneRemoteConnected
