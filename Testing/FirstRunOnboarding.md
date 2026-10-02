@@ -4,6 +4,8 @@
 
 ## 适用范围
 
+Cloudflare 遥控合同接入：网页连接新增 Plus 权益状态仍展示 QR，但不满足连接门禁；二维码下不重复配对数字，批准弹窗保留校验。必须覆盖完整生产流程截图及中英/明暗，流程回归不能被 QR 静态截图代替；本轮证据与真机边界见对应 PR 和 [CloudPhoneRemote](CloudPhoneRemote.md)。
+
 - 版本：当前待验证的无线麦SayAll.app 控制设备前置选择与 Fn 统一 Onboarding
 - 来源：当前 PR 或已合入 `main` 的精确 Commit；发布流程不使用候选分支作为普通发布入口
 - 平台：macOS 14 及以上

@@ -436,6 +436,26 @@ private enum RecordingPlaybackStage: String {
     case startPlayback = "start_playback"
 }
 
+private struct LocalTestRemoteSessionResponse: Decodable {
+    let relayMode: String
+    let sessionID: String
+    let creatorToken: String
+    let joinURL: String
+    let webSocketURL: String
+    let pairingCode: String
+    let expiresAt: String
+
+    private enum CodingKeys: String, CodingKey {
+        case relayMode
+        case sessionID = "sessionId"
+        case creatorToken
+        case joinURL
+        case webSocketURL
+        case pairingCode
+        case expiresAt
+    }
+}
+
 enum VoiceKeyCompatibilityWarning: Equatable {
     case karabiner
     case otherInputTool
@@ -494,6 +514,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var isWatchRemoteConnected = false
     @Published private(set) var phoneRemoteInvitation: PhoneRemoteInvitation?
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
+    @Published private var webRemoteMembershipBypassRequested = BridgeAppModel.webRemoteBuildChannel == "local"
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
     @Published private(set) var voiceKeyCompatibilityWarning: VoiceKeyCompatibilityWarning?
     @Published private(set) var diagnosticUploadStatus = LocalizedMessage("diagnostics.upload.ready")
@@ -614,6 +635,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var transcriptHistoryToggleCancellable: AnyCancellable?
     private var recordingToggleCancellable: AnyCancellable?
     private var membershipAccessCancellable: AnyCancellable?
+    private var membershipEnvironmentCancellable: AnyCancellable?
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
     private var heldVoiceKeyMode: VoiceKeyMode?
@@ -657,6 +679,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var rc003VoiceExtensionDeadlineTimer: DispatchSourceTimer?
     private var phoneApprovalAlert: NSAlert?
     private var webApprovalAlert: NSAlert?
+    private var webRemoteSessionGeneration: UInt64 = 0
+    private var webRemoteSessionOperationCounter: UInt64 = 0
+    private var webRemoteSessionIdempotencyKey: String?
     private var remoteButtonTitles: [String: String] = [:]
     private var mobileButtonGestureRecognizers: [UsageEventSource: RemoteButtonGestureRecognizer] = [:]
     private var mobileDoubleClickTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
@@ -850,6 +875,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             .removeDuplicates()
             .sink { [weak macroFeature] decision in
                 macroFeature?.updateButtonProfilesAccess(decision)
+            }
+        membershipEnvironmentCancellable = membershipFeature.$serviceEnvironmentForDiagnostics
+            .removeDuplicates()
+            .sink { [weak self] environment in
+                guard let self else { return }
+                self.webRemoteSessionGeneration &+= 1
+                self.webRemoteSessionIdempotencyKey = nil
+                if self.webRemoteMembershipBypassRequested,
+                   environment == "production"
+                {
+                    self.webRemoteClient.stop()
+                }
+                self.objectWillChange.send()
             }
         audioOutput.onConfigurationChange = { [weak self] in
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
@@ -1784,27 +1822,297 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func enableWebRemoteConnection() {
         guard started else { return }
-        guard let relayURL = WebRemoteConfiguration.relayURL() else {
-            webRemoteState = .unavailable
-            AppLogger.shared.write("WEB REMOTE unavailable_missing_configuration")
-            return
+        if case let .plusRequired(_, _, expiresAt) = webRemoteState,
+           let expiresAt,
+           expiresAt <= Date()
+        {
+            webRemoteSessionIdempotencyKey = nil
         }
-        let version = Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String
+        webRemoteSessionGeneration &+= 1
+        webRemoteSessionOperationCounter &+= 1
+        let generation = webRemoteSessionGeneration
+        let operationID = "web_remote_\(webRemoteSessionOperationCounter)"
         webRemoteState = .connecting
-        webRemoteClient.start(
-            relayURL: relayURL,
-            macName: Host.current().localizedName ?? "Mac",
-            appVersion: version,
-            buttonTitles: remoteButtonTitles
+        AppLogger.shared.write(
+            "WEB REMOTE SESSION operation_id=\(operationID) " +
+                "phase=requested result=unknown"
         )
-        AppLogger.shared.write("WEB REMOTE enabled_by_user")
+        Task { @MainActor [weak self] in
+            await self?.startWebRemoteConnection(
+                generation: generation,
+                operationID: operationID
+            )
+        }
     }
 
     func disableWebRemoteConnection() {
+        webRemoteSessionGeneration &+= 1
+        webRemoteSessionIdempotencyKey = nil
         webRemoteClient.stop()
-        AppLogger.shared.write("WEB REMOTE disabled_by_user")
+        AppLogger.shared.write(
+            "WEB REMOTE SESSION phase=cancelled result=cancelled " +
+                "reason=cancelled_by_user"
+        )
+    }
+
+    @MainActor
+    private func startWebRemoteConnection(
+        generation: UInt64,
+        operationID: String
+    ) async {
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String
+
+        if isWebRemoteMembershipBypassEnabled,
+           let relayURL = WebRemoteConfiguration.relayURL(),
+           Self.isLoopbackRelayURL(relayURL)
+        {
+            do {
+                let idempotencyKey = webRemoteSessionIdempotencyKey
+                    ?? UUID().uuidString.lowercased()
+                webRemoteSessionIdempotencyKey = idempotencyKey
+                let relayAuthorization = try await localTestWebRemoteAuthorization(
+                    relayURL: relayURL,
+                    idempotencyKey: idempotencyKey
+                )
+                guard generation == webRemoteSessionGeneration else { return }
+                webRemoteClient.start(
+                    authorization: relayAuthorization,
+                    macName: Host.current().localizedName ?? "Mac",
+                    appVersion: version,
+                    buttonTitles: remoteButtonTitles
+                )
+                AppLogger.shared.write(
+                    "WEB REMOTE SESSION operation_id=\(operationID) " +
+                        "phase=authorized result=accepted relay_mode=cloudflare_v1 " +
+                        "membership_check=bypassed"
+                )
+            } catch {
+                guard generation == webRemoteSessionGeneration else { return }
+                webRemoteState = .failed(webRemoteFailureMessage(.invalidResponse))
+                AppLogger.shared.write(
+                    "WEB REMOTE SESSION operation_id=\(operationID) " +
+                        "phase=failed result=failed reason=local_test_session_unavailable"
+                )
+            }
+            return
+        }
+
+        if membershipFeature.supportsRemoteSessionAuthorization {
+            do {
+                let idempotencyKey = webRemoteSessionIdempotencyKey
+                    ?? UUID().uuidString.lowercased()
+                webRemoteSessionIdempotencyKey = idempotencyKey
+                let authorization = try await membershipFeature
+                    .createRemoteSessionAuthorization(
+                        idempotencyKey: idempotencyKey,
+                        clientContractVersion: 1,
+                        testMembershipBypass: isWebRemoteMembershipBypassEnabled
+                    )
+                guard generation == webRemoteSessionGeneration else {
+                    AppLogger.shared.write(
+                        "WEB REMOTE SESSION operation_id=\(operationID) " +
+                            "phase=cancelled result=cancelled reason=stale_generation"
+                    )
+                    return
+                }
+                guard let sessionID = authorization.sessionID,
+                      let joinURL = authorization.joinURL,
+                      let pairingCode = authorization.pairingCode
+                else {
+                    throw HostRemoteSessionFailure.invalidResponse
+                }
+                if authorization.access == .plusRequired {
+                    webRemoteState = .plusRequired(
+                        joinURL: joinURL,
+                        pairingCode: pairingCode,
+                        expiresAt: authorization.expiresAt
+                    )
+                    AppLogger.shared.write(
+                        "WEB REMOTE SESSION operation_id=\(operationID) " +
+                            "phase=previewed result=rejected reason=plus_required " +
+                            "relay_mode=cloudflare_v1"
+                    )
+                    return
+                }
+                guard let creatorToken = authorization.creatorToken else {
+                    throw HostRemoteSessionFailure.invalidResponse
+                }
+                let relayAuthorization = WebRemoteSessionAuthorization.cloudflareV1(
+                    webSocketURL: authorization.webSocketURL,
+                    sessionID: sessionID,
+                    creatorToken: creatorToken,
+                    joinURL: joinURL,
+                    pairingCode: pairingCode,
+                    expiresAt: authorization.expiresAt
+                )
+                webRemoteClient.start(
+                    authorization: relayAuthorization,
+                    macName: Host.current().localizedName ?? "Mac",
+                    appVersion: version,
+                    buttonTitles: remoteButtonTitles
+                )
+                AppLogger.shared.write(
+                    "WEB REMOTE SESSION operation_id=\(operationID) " +
+                        "phase=authorized result=accepted relay_mode=cloudflare_v1 " +
+                        "membership_check=\(isWebRemoteMembershipBypassEnabled ? "bypassed" : "required")"
+                )
+                return
+            } catch let failure as HostRemoteSessionFailure {
+                guard generation == webRemoteSessionGeneration else { return }
+                webRemoteState = .failed(webRemoteFailureMessage(failure))
+                AppLogger.shared.write(
+                    "WEB REMOTE SESSION operation_id=\(operationID) " +
+                        "phase=failed result=failed reason=\(webRemoteFailureReason(failure))"
+                )
+                return
+            } catch {
+                guard generation == webRemoteSessionGeneration else { return }
+                webRemoteState = .failed(
+                    webRemoteFailureMessage(.invalidResponse)
+                )
+                AppLogger.shared.write(
+                    "WEB REMOTE SESSION operation_id=\(operationID) " +
+                        "phase=failed result=failed reason=invalid_response"
+                )
+                return
+            }
+        }
+
+        guard generation == webRemoteSessionGeneration else { return }
+        webRemoteState = .unavailable
+        AppLogger.shared.write(
+            "WEB REMOTE SESSION operation_id=\(operationID) " +
+                "phase=failed result=failed reason=membership_component_unavailable"
+        )
+    }
+
+    var isWebRemoteMembershipBypassAvailable: Bool {
+        guard ["local", "preview", "pr_preview"].contains(Self.webRemoteBuildChannel),
+              membershipFeature.serviceEnvironmentForDiagnostics == "staging"
+        else { return false }
+        return membershipFeature.supportsRemoteSessionAuthorization
+    }
+
+    var isWebRemoteMembershipBypassEnabled: Bool {
+        webRemoteMembershipBypassRequested && isWebRemoteMembershipBypassAvailable
+    }
+
+    func setWebRemoteMembershipBypassEnabled(_ enabled: Bool) {
+        let accepted = enabled && isWebRemoteMembershipBypassAvailable
+        guard accepted != webRemoteMembershipBypassRequested else { return }
+        webRemoteMembershipBypassRequested = accepted
+        webRemoteSessionIdempotencyKey = nil
+        AppLogger.shared.write(
+            "WEB REMOTE TEST membership_check_bypass=" + (accepted ? "enabled" : "disabled")
+        )
+        if started {
+            webRemoteClient.stop()
+            enableWebRemoteConnection()
+        }
+    }
+
+    private static var webRemoteBuildChannel: String {
+        ProcessInfo.processInfo.environment["SAYALL_BUILD_CHANNEL"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "SayAllBuildChannel") as? String
+            ?? "local"
+    }
+
+    private static func isLoopbackRelayURL(_ url: URL) -> Bool {
+        guard url.scheme == "ws", let host = url.host?.lowercased() else { return false }
+        return host == "127.0.0.1" || host == "localhost" || host == "::1"
+    }
+
+    private func localTestWebRemoteAuthorization(
+        relayURL: URL,
+        idempotencyKey: String
+    ) async throws -> WebRemoteSessionAuthorization {
+        guard var components = URLComponents(url: relayURL, resolvingAgainstBaseURL: false),
+              Self.isLoopbackRelayURL(relayURL)
+        else { throw HostRemoteSessionFailure.invalidResponse }
+        components.scheme = relayURL.scheme == "wss" ? "https" : "http"
+        components.path = "/__local-test/remote-session"
+        components.query = nil
+        components.fragment = nil
+        guard let endpoint = components.url else {
+            throw HostRemoteSessionFailure.invalidResponse
+        }
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 201
+        else { throw HostRemoteSessionFailure.invalidResponse }
+        let payload = try JSONDecoder().decode(LocalTestRemoteSessionResponse.self, from: data)
+        guard payload.relayMode == "cloudflare_v1",
+              let webSocketURL = URL(string: payload.webSocketURL),
+              let joinURL = URL(string: payload.joinURL),
+              Self.isLoopbackRelayURL(webSocketURL),
+              webSocketURL.host?.lowercased() == relayURL.host?.lowercased(),
+              webSocketURL.port == relayURL.port,
+              payload.sessionID.count == 22,
+              payload.creatorToken.count == 43,
+              payload.pairingCode.count == 4
+        else { throw HostRemoteSessionFailure.invalidResponse }
+        return .cloudflareV1(
+            webSocketURL: webSocketURL,
+            sessionID: payload.sessionID,
+            creatorToken: payload.creatorToken,
+            joinURL: joinURL,
+            pairingCode: payload.pairingCode,
+            expiresAt: Self.webRemoteISO8601Date(payload.expiresAt)
+        )
+    }
+
+    private static func webRemoteISO8601Date(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value)
+    }
+
+    private func webRemoteFailureMessage(
+        _ failure: HostRemoteSessionFailure
+    ) -> String {
+        let key: String
+        switch failure {
+        case .signInRequired:
+            key = "connection.web.failure.sign_in_required"
+        case .deviceBindingRequired:
+            key = "connection.web.failure.device_binding_required"
+        case .plusRequired:
+            key = "connection.web.failure.plus_required"
+        case .upgradeRequired:
+            key = "connection.web.failure.upgrade_required"
+        case .unavailable:
+            key = "connection.web.failure.unavailable"
+        case .networkUnavailable:
+            key = "connection.web.failure.network_unavailable"
+        case .invalidResponse:
+            key = "connection.web.failure.invalid_response"
+        }
+        return LocalizedMessage(key).text(
+            using: LocalizationStore(
+                settings: settings,
+                resourceBundle: RemoteMicResourceBundle.mainOrDevelopment
+            )
+        )
+    }
+
+    private func webRemoteFailureReason(
+        _ failure: HostRemoteSessionFailure
+    ) -> String {
+        switch failure {
+        case .signInRequired: return "sign_in_required"
+        case .deviceBindingRequired: return "device_binding_required"
+        case .plusRequired: return "plus_required"
+        case .upgradeRequired: return "upgrade_required"
+        case .unavailable: return "remote_session_unavailable"
+        case .networkUnavailable: return "network_unavailable"
+        case .invalidResponse: return "invalid_response"
+        }
     }
 
     func updatePhoneRemoteButtonTitles(

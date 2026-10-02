@@ -630,7 +630,12 @@ struct SettingsView: View {
             localization: WebRemoteSessionLocalization(
                 locale: localization.locale,
                 text: localization.text
-            )
+            ),
+            onOpenPlus: {
+                isWebRemoteSessionPresented = false
+                selectedSection = .membership
+                membershipFeature.refreshIfNeeded()
+            }
         )
     }
 
@@ -3458,6 +3463,11 @@ struct SettingsView: View {
                             .font(.title3.weight(.semibold))
                             .frame(maxWidth: .infinity, alignment: .leading)
 
+                        if membershipFeature.isEnvironmentSettingsVisible {
+                            membershipFeature.serviceEnvironmentSettingsView()
+                                .padding(.vertical, 8)
+                        }
+
                         Group {
                             VStack(spacing: 0) {
                             HStack(spacing: 14) {
@@ -4264,6 +4274,8 @@ struct SettingsView: View {
             return localization.text("connection.web.connecting")
         case .waitingForPhone:
             return localization.text("connection.web.waiting_scan")
+        case .plusRequired:
+            return localization.text("connection.web.plus_required_title")
         case .awaitingApproval:
             return localization.text("connection.web.waiting_approval")
         case .connected:
@@ -4277,7 +4289,7 @@ struct SettingsView: View {
         switch model.webRemoteState {
         case .connected:
             return .green
-        case .failed, .unavailable:
+        case .failed, .unavailable, .plusRequired:
             return .orange
         default:
             return .secondary

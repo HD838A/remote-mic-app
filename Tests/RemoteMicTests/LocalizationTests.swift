@@ -174,6 +174,10 @@ struct LocalizationTests {
         #expect(english["remote.device.model.apple_siri_remote_a2854"] == "Apple Remote generation 7")
         #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote generation 6")
         #expect(english["remote.button.full.play_pause"] == "Play/Pause")
+        #expect(english["connection.web.title"] == "WeChat Mini Program & Web")
+        #expect(
+            english["connection.web.help_short"]?.contains("mini program") == true
+        )
 
         #expect(!english.isEmpty)
         for (key, value) in english {
@@ -202,6 +206,8 @@ struct LocalizationTests {
                 #expect(localized["onboarding.voice_tool.system_fn.conflict"] == "系统仍在使用 Fn")
                 #expect(localized["remote.device.model.apple_siri_remote_a2854"] == "苹果遥控器第 7 代")
                 #expect(localized["remote.device.model.apple_siri_remote_a2540"] == "苹果遥控器第 6 代")
+                #expect(localized["connection.web.title"] == "微信小程序与网页版")
+                #expect(localized["connection.web.help_short"]?.contains("微信小程序") == true)
             }
             #expect(Set(localized.keys) == Set(english.keys))
             #expect(Set(localizedInfo.keys) == Set(englishInfo.keys))
