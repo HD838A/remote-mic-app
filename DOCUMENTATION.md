@@ -37,6 +37,7 @@
 ## 测试、Bug 与历史证据
 
 - 根目录 [`Testing/`](Testing/) 存放当前测试手册、跨平台合同、候选准备记录和历史测试报告。除明确命名为合同的文件外，测试手册只定义验证方法和证据。
+- 临时探针、手工采集及实验包启动器的入库限制见 [`AGENTS.md` 的临时测试工具入库边界](AGENTS.md#临时测试工具入库边界)；正常产品回归与统一发布检查继续保留。
 - [`Bugs/README.md`](Bugs/README.md) 是 Bug 记录格式和索引；具体调查位于 `Bugs/`。
 - [`TODO.md`](TODO.md) 只记录待办，不是现行产品规范。
 - `feature/<feature>/README.md`、`development.md` 和 `testing.md` 保存功能档案、开发记录和历史验证边界，不覆盖 `PRODUCT_SPEC.md`。
