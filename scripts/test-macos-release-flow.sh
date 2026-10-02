@@ -263,6 +263,91 @@ fi
 /usr/bin/grep -Fq 'source changes after the inherited product proof are not docs-only' "$WORK_DIR/mixed-rejected.log"
 print "REPOSITORY PROOF INHERITANCE AND REJECTION FIXTURE PASS"
 
+# Consolidated jobs must prove both builds and both available private configurations.
+write_run_json 108 "$mixed_commit" full
+jq '
+  def passed($name): {name:$name, conclusion:"success"};
+  def job($name; $steps): {name:$name, status:"completed", conclusion:"success", steps:$steps};
+  [passed("Build release configuration (Apple Silicon)"),
+   passed("Build release configuration (Intel Ventura)")] as $builds |
+  .jobs = [
+    job("Classify changed files"; [passed("Detect private dependency access")]),
+    job("Public Swift tests and dual-architecture build";
+      [passed("Run Swift tests"), passed("Run project self-test"),
+       passed("Run core first-voice journey gate")] + $builds),
+    job("Private free-combination-actions tests and dual-architecture build";
+      [passed("Run private integration tests")] + $builds),
+    job("Private paid-button-profiles tests and dual-architecture build";
+      [passed("Run private integration tests")] + $builds),
+    job("Swift tests and build (Apple Silicon)"; [passed("Require every applicable macOS CI lane")]),
+    job("Swift tests and build (Intel Ventura)"; [passed("Require every applicable macOS CI lane")])
+  ]' "$fixture_root/run-108.json" > "$WORK_DIR/consolidated.json"
+/bin/cp "$WORK_DIR/consolidated.json" "$fixture_root/run-108.json"
+print -r -- 108 > "$fixture_root/commit-$mixed_commit.id"
+REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$mixed_commit" main > "$WORK_DIR/consolidated-pass.log"
+for mutation in \
+  '.jobs[1].steps |= map(select(.name != "Build release configuration (Intel Ventura)"))' \
+  '.jobs[1].steps |= map(select(.name != "Build release configuration (Apple Silicon)"))' \
+  '.jobs[2].steps |= map(select(.name != "Run private integration tests"))' \
+  '.jobs[3].steps |= map(select(.name != "Build release configuration (Intel Ventura)"))' \
+  '.jobs[3].conclusion = "failure"' \
+  '.jobs[3].conclusion = "cancelled"' \
+  '.jobs |= map(select(.name != "Private paid-button-profiles tests and dual-architecture build"))' \
+  '.jobs[3].conclusion = "skipped"' \
+  '.jobs[0].steps = []' \
+  '.jobs[5].conclusion = "failure"' \
+  '.event = "pull_request"' \
+  '.headSha = "0000000000000000000000000000000000000000"'; do
+  jq "$mutation" "$WORK_DIR/consolidated.json" > "$fixture_root/run-108.json"
+  if REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+      "$ROOT/scripts/verify-release-ready-main-ci.sh" "$mixed_commit" main > "$WORK_DIR/consolidated-rejected.log" 2>&1; then
+    print -u2 "release gate accepted incomplete consolidated product evidence: $mutation"
+    exit 1
+  fi
+done
+# With no private access GitHub may expose one skipped, unexpanded matrix job.
+jq '.jobs |= map(if (.name | startswith("Private ")) then
+  .conclusion = "skipped" | .steps = [] else . end)' \
+  "$WORK_DIR/consolidated.json" > "$fixture_root/run-108.json"
+REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$mixed_commit" main > "$WORK_DIR/no-private-pass.log"
+jq '.jobs |= map(select(.name != "Private paid-button-profiles tests and dual-architecture build"))' \
+  "$fixture_root/run-108.json" > "$WORK_DIR/single-skipped.json"
+/bin/mv "$WORK_DIR/single-skipped.json" "$fixture_root/run-108.json"
+REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$mixed_commit" main > "$WORK_DIR/single-skipped-pass.log"
+/bin/cp "$WORK_DIR/consolidated.json" "$fixture_root/run-108.json"
+
+# Modern lightweight and control-only jobs inherit, never substitute for product proof.
+for lightweight in docs tooling repository control; do
+  print -r -- "$lightweight" > "$source_repo/README.md"
+  if [[ "$lightweight" == control ]]; then
+    print -r -- fixture > "$source_repo/scripts/stage-macos-preview.sh"
+  fi
+  /usr/bin/git -C "$source_repo" add .
+  /usr/bin/git -C "$source_repo" commit -q -m "consolidated $lightweight fixture"
+  /usr/bin/git -C "$source_repo" push -q origin main
+  lightweight_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+  case "$lightweight" in
+    docs) check_step='Run documentation checks' ;;
+    tooling) check_step='Run tooling checks' ;;
+    repository) check_step='Run repository checks' ;;
+    control) check_step='Run release control-plane fixture' ;;
+  esac
+  jq --arg sha "$lightweight_commit" --arg step "$check_step" '
+    .headSha = $sha | .jobs = [.jobs[1] |
+      .steps = [{name:$step,conclusion:"success"}]]' \
+    "$WORK_DIR/consolidated.json" > "$fixture_root/run-109.json"
+  print -r -- 109 > "$fixture_root/commit-$lightweight_commit.id"
+  REPOSITORY_ROOT="$source_repo" GH_BIN="$fake_gh" FIXTURE_ROOT="$fixture_root" \
+    RELEASE_READY_PROOF_OUTPUT="$WORK_DIR/lightweight-proof.json" \
+    "$ROOT/scripts/verify-release-ready-main-ci.sh" "$lightweight_commit" main > "$WORK_DIR/lightweight-pass.log"
+  jq -e --arg commit "$mixed_commit" '.productProofCommit == $commit and .productCiRunId == 108' \
+    "$WORK_DIR/lightweight-proof.json" >/dev/null
+done
+print "CONSOLIDATED CI PROOF AND REJECTION FIXTURE PASS"
+
 )
 
 test_metadata() (
@@ -496,20 +581,20 @@ if /usr/bin/grep -Eq 'SAYALL_MACRO_PLATFORM_DEPLOY_KEY' "$ci_workflow" "$package
   exit 1
 fi
 /usr/bin/grep -Fq "GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new'" "$ci_workflow"
-/usr/bin/grep -Fq 'Run free combination actions integration tests' "$ci_workflow"
-/usr/bin/grep -Fq 'Build free combination actions release configuration' "$ci_workflow"
-/usr/bin/grep -Fq 'Run paid button profiles integration tests' "$ci_workflow"
-/usr/bin/grep -Fq 'Build paid button profiles release configuration' "$ci_workflow"
-/usr/bin/grep -Fq 'name: Public Swift tests and build (${{ matrix.label }})' "$ci_workflow"
-/usr/bin/grep -Fq 'name: Private ${{ matrix.configuration }} tests and build (${{ matrix.label }})' "$ci_workflow"
-/usr/bin/grep -Fq "if: needs.classify_changes.outputs.product_change == 'true' && needs.private_access.outputs.available == 'true'" "$ci_workflow"
-/usr/bin/grep -Fq 'needs: [classify_changes, public_test, private_access, private_test, release_checks]' "$ci_workflow"
+/usr/bin/grep -Fq 'Run private integration tests' "$ci_workflow"
+/usr/bin/grep -Fq 'Build release configuration (Apple Silicon)' "$ci_workflow"
+/usr/bin/grep -Fq 'Build release configuration (Intel Ventura)' "$ci_workflow"
+/usr/bin/grep -Fq 'name: Public Swift tests and dual-architecture build' "$ci_workflow"
+/usr/bin/grep -Fq 'name: Private ${{ matrix.configuration }} tests and dual-architecture build' "$ci_workflow"
+/usr/bin/grep -Fq "if: needs.classify_changes.outputs.product_change == 'true' && needs.classify_changes.outputs.private_available == 'true'" "$ci_workflow"
+/usr/bin/grep -Fq 'needs: [classify_changes, public_test, private_test]' "$ci_workflow"
 /usr/bin/grep -Fq 'PRIVATE_TEST_RESULT: ${{ needs.private_test.result }}' "$ci_workflow"
-if [[ "$(/usr/bin/grep -c -- 'SAYALL_COMBINATION_ACTIONS_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
-   [[ "$(/usr/bin/grep -c -- 'SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
-   [[ "$(/usr/bin/grep -c -- 'SAYALL_MAC_REMOTE_PACKAGE_PATH: ""' "$ci_workflow")" -lt 3 ]] || \
-   [[ "$(/usr/bin/grep -c -- 'configuration: free-combination-actions' "$ci_workflow")" -lt 2 ]] || \
-   [[ "$(/usr/bin/grep -c -- 'configuration: paid-button-profiles' "$ci_workflow")" -lt 2 ]]; then
+public_job="$(/usr/bin/awk '/^  public_test:/ { capture=1 } /^  private_test:/ { exit } capture { print }' "$ci_workflow")"
+for package_path in SAYALL_AI_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH; do
+  print -r -- "$public_job" | /usr/bin/grep -Fq "$package_path: \"\""
+done
+if ! /usr/bin/grep -Fq 'configuration: [free-combination-actions, paid-button-profiles]' "$ci_workflow" || \
+   ! /usr/bin/grep -Fq "matrix.configuration == 'paid-button-profiles'" "$ci_workflow"; then
   print -u2 "public CI must clear private package paths and private checks must remain conditional"
   exit 1
 fi
@@ -918,7 +1003,10 @@ done
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
 classifier_job="$(/usr/bin/awk '/^  classify_changes:/ { capture=1 } /^  public_test:/ { exit } capture { print }' "$ci_workflow")"
 print -r -- "$classifier_job" | /usr/bin/grep -Fq 'runs-on: ubuntu-latest'
-/usr/bin/grep -Fq 'runs-on: ${{ needs.classify_changes.outputs.product_change == '\''true'\'' && '\''macos-15'\'' || '\''ubuntu-latest'\'' }}' "$ci_workflow"
+/usr/bin/grep -Fq 'runs-on: ${{ (needs.classify_changes.outputs.product_change == '\''true'\'' || needs.classify_changes.outputs.release_checks == '\''true'\'') && '\''macos-15'\'' || '\''ubuntu-latest'\'' }}' "$ci_workflow"
+print -r -- "$classifier_job" | /usr/bin/grep -Fq 'Detect private dependency access'
+print -r -- "$classifier_job" | /usr/bin/grep -Fq 'command -v zsh'
+[[ "$(/usr/bin/awk '/^jobs:/ { capture=1; next } capture && /^  [a-z_]+:$/ { count++ } END { print count }' "$ci_workflow")" == 4 ]]
 /usr/bin/grep -Fq 'group: mac-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == '\''pull_request'\'' && '\''pr'\'' || github.sha }}' "$ci_workflow"
 /usr/bin/grep -Fq 'cancel-in-progress: ${{ github.event_name == '\''pull_request'\'' }}' "$ci_workflow"
 summary_gate="$(/usr/bin/awk '
@@ -928,23 +1016,24 @@ summary_gate="$(/usr/bin/awk '
 ' "$ci_workflow")"
 [[ -n "$summary_gate" ]]
 for gate_case in \
-  'true:true:success:success:true:success:success:0' \
-  'true:false:success:skipped:false:skipped:success:0' \
-  'false:false:skipped:skipped:none:skipped:success:0' \
-  'false:true:skipped:skipped:none:success:success:0' \
-  'true:true:skipped:success:true:success:success:1' \
-  'true:true:success:skipped:true:success:success:1' \
-  'true:true:success:cancelled:true:success:success:1' \
-  'true:false:success:success:false:skipped:success:1' \
-  'false:false:success:skipped:none:skipped:success:1' \
-  'false:false:skipped:skipped:none:skipped:failure:1' \
-  'false:true:skipped:skipped:none:failure:success:1' \
-  'unknown:false:skipped:skipped:none:skipped:success:1'; do
-  IFS=: read -r product release access private available release_result public expected_status <<< "$gate_case"
+  'true:true:success:success:true:success:0' \
+  'true:false:success:skipped:false:success:0' \
+  'false:false:success:skipped::success:0' \
+  'false:true:success:skipped::success:0' \
+  'true:true:failure:success:true:success:1' \
+  'true:true:success:skipped:true:success:1' \
+  'true:true:success:cancelled:true:success:1' \
+  'true:false:success:success:false:success:1' \
+  'false:false:success:skipped:true:success:1' \
+  'false:false:success:skipped::failure:1' \
+  'false:true:success:skipped::failure:1' \
+  'true:true:success:skipped::success:1' \
+  'true:unknown:success:success:true:success:1' \
+  'unknown:false:success:skipped::success:1'; do
+  IFS=: read -r product release classify private available public expected_status <<< "$gate_case"
   gate_status=0
-  CLASSIFY_RESULT=success PRODUCT_CHANGE="$product" RELEASE_CHECKS_REQUIRED="$release" \
-    PRIVATE_ACCESS_RESULT="$access" PRIVATE_TEST_RESULT="$private" PRIVATE_AVAILABLE="$available" \
-    RELEASE_CHECKS_RESULT="$release_result" PUBLIC_RESULT="$public" \
+  CLASSIFY_RESULT="$classify" PRODUCT_CHANGE="$product" RELEASE_CHECKS_REQUIRED="$release" \
+    PRIVATE_TEST_RESULT="$private" PRIVATE_AVAILABLE="$available" PUBLIC_RESULT="$public" \
     /bin/bash -e -c "$summary_gate" || gate_status=1
   [[ "$gate_status" == "$expected_status" ]]
 done
