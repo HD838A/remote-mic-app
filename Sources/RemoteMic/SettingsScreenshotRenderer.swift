@@ -28,6 +28,7 @@ enum SettingsScreenshotRenderer {
 
     private static let sections: [SettingsSection] = [
         .mapping,
+        .commonPhrases,
         .macros,
         .buttonProfiles,
         .membership,
@@ -145,6 +146,7 @@ enum SettingsScreenshotRenderer {
         let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
         let model = BridgeAppModel(
             settings: settings,
+            commonPhraseStore: CommonPhraseStore(defaults: defaults),
             transcriptArchiveStore: TranscriptArchiveStore(
                 rootDirectoryURL: historyDirectory.appendingPathComponent("transcripts")
             ),
@@ -227,6 +229,25 @@ enum SettingsScreenshotRenderer {
             window.orderOut(nil)
             window.contentViewController = nil
         }
+
+        // Capture the same nonactivating panel view used for real input. This
+        // hidden renderer neither opens a remote session nor posts text.
+        let panelSize = NSSize(width: 480, height: 330)
+        let phrasePanel = NSPanel(contentRect: NSRect(origin: .zero, size: panelSize),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        phrasePanel.contentView = NSHostingView(rootView:
+            CommonPhrasePanelView(controller: model.commonPhrases).environmentObject(localization))
+        phrasePanel.orderFront(nil)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        guard let view = phrasePanel.contentView,
+              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+        else { throw RenderingError.bitmapCreationFailed }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        guard let panelPNG = bitmap.representation(using: .png, properties: [:])
+        else { throw RenderingError.pngCreationFailed }
+        try panelPNG.write(to: outputDirectory.appendingPathComponent("common-phrases-panel.png"))
+        phrasePanel.orderOut(nil)
+        phrasePanel.contentView = nil
     }
 
     private static func seedAvailableUpdate(

@@ -22,6 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case mapping
     case statistics
     case transcripts
+    case commonPhrases
     case permissions
     case about
 
@@ -36,6 +37,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .membership: return ""
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
+        case .commonPhrases: return "common_phrases.title"
         case .transcripts: return "settings.section.transcripts"
         case .permissions: return "settings.section.permissions"
         case .about: return "settings.section.settings"
@@ -51,6 +53,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .membership: return "crown.fill"
         case .mapping: return "keyboard"
         case .statistics: return "person.crop.circle"
+        case .commonPhrases: return "text.quote"
         case .transcripts: return "text.bubble.fill"
         case .permissions: return "shield.lefthalf.filled"
         case .about: return "gearshape"
@@ -127,6 +130,7 @@ enum SettingsPageBehavior {
 
     static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
+        .commonPhrases,
         .macros,
         .buttonProfiles,
         .membership,
@@ -835,6 +839,8 @@ struct SettingsView: View {
             }
         case .statistics:
             statisticsPage
+        case .commonPhrases:
+            CommonPhraseSettingsView(store: model.commonPhraseStore)
         case .transcripts:
             transcriptHistoryPage
         case .permissions:
@@ -2861,6 +2867,7 @@ struct SettingsView: View {
     private func buttonProfileSystemImage(for action: ButtonAction) -> String {
         if action.presetApplication != nil { return "app" }
         switch action {
+        case .openCommonPhrases: return "text.quote"
         case .focusInput: return "scope"
         case .showDesktop: return "macwindow"
         case .appSwitcher: return "command"

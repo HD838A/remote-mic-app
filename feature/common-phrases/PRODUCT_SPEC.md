@@ -2,21 +2,22 @@
 
 ## 当前实现状态
 
-2026-10-02 核对基线：`origin/main`，Commit `e8af2da2d1c1440229ef61a1926dd49a1c6bae41`。
+2026-10-02 本地候选实现基线：`origin/main`，Commit `cfa5553b563748c94d57f655e907b2111305e917`。实现位于 `codex/common-phrases-docs-alignment-20261002`，尚未合入 main。
 
-**当前仅产品规范、内置 12 条常用语和默认五键声明已入库，功能代码尚未实现。** 下文保留完整产品要求与验收门禁，描述的是待交付行为，不代表当前 App 已支持常用语。
+**macOS 常用语已实现并进入本地测试包；真实遥控器、第三方输入框及稳定语音基线仍待验收。** 下文保留完整产品要求与未来增强，不因构建或自动化通过而标记产品验收完成。
 
 | 项目 | 当前状态 | 核对依据 |
 | --- | --- | --- |
-| 产品规范 | 已合入（PR #460） | 本文 |
-| 内置内容与默认键位 | 已合入（PR #461） | [`built-in.md`](../../Resources/CommonPhrases/built-in.md)：12 条内容，OK/左/上/右/下对应编号 1–5 |
-| 构建期 JSON 生成、非法输入校验与打包 | 未实现；常用语尚未进入 App Bundle | `scripts/build-app.sh`、`scripts/verify-app.sh`、`Package.swift` 尚无常用语接线 |
-| “打开常用语”动作与宿主动作入口 | 未实现 | `Sources/RemoteMic/RemoteButtons.swift`、`Sources/RemoteMic/BridgeAppModel.swift` 尚无该动作 |
-| 面板、运行时按键认领与文本插入 | 未实现 | `Sources/RemoteMic/` 尚无常用语面板及插入链路 |
-| 用户编辑、持久化与导入导出 | 未实现 | 尚无常用语数据管理实现 |
-| 专项测试、测试手册、截图与真机验收 | 未完成 | `Tests/`、`Testing/` 尚无常用语专项测试或手册；本次只核对源码与文档，未执行构建或真机验收 |
+| 产品规范、内置内容与默认键位 | 已入库；12 条内容，OK/左/上/右/下对应编号 1–5 | 本文与 [`built-in.md`](../../Resources/CommonPhrases/built-in.md) |
+| 构建期 JSON 生成、校验与打包 | 已实现；Markdown 不进入 Bundle | `scripts/generate-common-phrases.py`、`scripts/build-app.sh`、`scripts/verify-app.sh` |
+| “打开常用语”动作与宿主入口 | 已实现；公开构建可用，复用普通按键配置 | `RemoteButtons.swift`、`BridgeAppModel.swift` |
+| 面板、运行时认领与插入 | 已实现；来源隔离、即时非重复、剪贴板事务与失败提示 | `CommonPhrasePanel.swift`、`CommonPhraseStore.swift`、`CommonPhraseInserter.swift`、`HIDRemoteMonitor.swift` |
+| 用户编辑、持久化与导入导出 | 已实现；内置编辑成为用户副本，未修改的内置内容随资源刷新 | `CommonPhraseSettingsView.swift`、`CommonPhraseStore.swift` |
+| 自动化、测试手册与静态截图 | 已建立；公开宿主及私有遥控适配器集成测试通过 | [`测试手册`](../../Testing/CommonPhrases.md)、`CommonPhraseTests.swift`、`Screenshots/common-phrases/` |
+| 真机、第三方文字上屏与正常启动 | 待验收；已有另一无线麦实例运行，未停止它或执行本包正常启动 | 测试手册与交付说明；离屏渲染不能替代真实流程 |
+| Windows、云同步、Unicode/AX 直插增强 | 未实现；本期不做，保留后续边界 | 下文范围与备选增强 |
 
-后续实现与验证通过后，应同步更新本节、[`feature/README.md`](../README.md) 和 [`TODO.md`](../../TODO.md) 的状态；不得仅因规范或资源已入库就标记功能完成。
+[`feature/README.md`](../README.md) 与 [`TODO.md`](../../TODO.md) 同步为本地候选；TODO 保持未完成。
 
 ## 定位与适用范围
 
@@ -99,7 +100,7 @@
 
 ### 响应时延约束（实现必读）
 
-实现面板后，面板打开期间的响应必须绕过现有手势识别，否则可能延迟或吞掉首击；当前尚无面板，以下是接入约束。
+实现面板后，面板打开期间的响应必须绕过现有手势识别，否则可能延迟或吞掉首击；当前实现已在手势之前认领，以下约束继续适用。
 
 - 现有分发在按下时会先看该键是否配置了双击或长按：启用任一手势时，**不立即执行单击动作**，而是交给 `RemoteButtonGestureRecognizer` 判定。当前 `BridgeAppModel.handleMobileButtonEvent`、`handleAppleRemoteButton` 和 `handleChromecastButton` 均有该结构；具体入口以函数名定位，不依赖历史行号。
 - 后果：若用户在“左”键上配了双击，面板打开后按一下“左”会被推迟到手势判定结束才插入，用户感知为“按了没反应”或“反应很慢”。
@@ -114,9 +115,10 @@
 
 ### 文本插入方式与剪贴板
 
-- **待实现的首选路径：写入系统剪贴板 + 合成 `Cmd+V`。**
-- 当前代码依据：`KeyboardInjector.postKey(code:flags:)` 提供按键注入，另有公开辅助功能接口用于聚焦等操作；尚无 unicode 文本直插或通过 `kAXSelectedTextAttribute` 写入文本的入口。`BridgeAppModel.copyTranscript` 已有复制转写到剪贴板的能力，但不包含常用语粘贴及原剪贴板恢复，不能视为本功能已实现。常用语拟沿用按键注入模型，采用剪贴板 + `Cmd+V`；豆包、微信、浏览器和 Electron 输入框的实际覆盖须由真机验收确认。
-- 实现后本功能**会触碰用户剪贴板**，必须遵守下列约束：
+- **当前路径：写入系统剪贴板 + 合成 `Cmd+V`。**
+- `CommonPhraseInserter` 使用 `KeyboardInjector.postKeyState` 投递按下/释放；只通过公开辅助功能读取焦点、编辑性、安全属性和选区元数据，不读取目标文字。目标不明确、不可编辑、密码/安全输入、可识别的 Token 字段或非空选区时拒绝；未公开这些元数据的自定义编辑器可能暂不可用。微信、豆包、浏览器和 Electron 的实际覆盖由各自实测确认。
+- 插入事务串行；提交后约 250 ms 检查剪贴板 changeCount，仍归该事务所有时恢复所有原类型，已有新复制时保留新内容。第三方何时读取剪贴板、是否真正上屏不可观察，该等待不等于外部成功确认；日志只记 `submitted` 与 `external_text_unobserved`。面板关闭取消尚未提交的队列，已提交事务继续恢复剪贴板。
+- 本功能**会触碰用户剪贴板**，必须遵守下列约束：
   1. 写入前先快照原剪贴板内容。
   2. 只在插入这一瞬间写入，不做长期占用。
   3. 插入完成后，若期间**用户没有自行复制新内容**，必须恢复原剪贴板内容。
@@ -128,7 +130,7 @@
 
 - 面板打开期间对 OK/左/上/右/下/返回 的认领必须基于**运行时状态**，**不得写成长久生效的持久绑定**。
 - 依据：现有 `BridgeAppModel.performAppleRemoteConfiguredAction`、`performMobileConfiguredAction` 和 `performChromecastConfiguredAction` 先调用 `performButtonProfileBoundAction`；私有绑定执行成功后返回，不再执行用户配置的普通动作。若以持久绑定替代面板期间的临时认领，用户的方向键与 OK 会被**永久顶掉**。
-- 常用语运行时认领尚未实现；实现时须在每次按键事件中按面板状态重新判定，并验证关闭后立即恢复原映射，不得把现有私有绑定入口视为已具备该能力。
+- 常用语运行时认领已接通；每次按键事件按面板状态重新判定，仍须以真机验证关闭后立即恢复原映射，不得把现有私有绑定入口视为已具备该能力。
 - 手机遥控与网页版使用同一 `RemoteButton` 类型与同样的手势识别结构，因此运行时认领必须在这两条路径上也生效，不能只覆盖实体遥控器。注意移动路径使用的是 `settings.selectedRemoteProfileID`，认领判定不能依赖设备来源。
 
 ## 与其他能力的边界
@@ -152,7 +154,7 @@
 
 | 阶段 | 范围 | 完成判据 |
 | --- | --- | --- |
-| 1 数据管线 | `built-in.md` 的内容与默认键位声明已入库；仍需构建期生成 JSON 并打进 App，以及缺列/空单元格/编号不连续/标注不一致四类非法输入校验 | 改 md 重新打包后内置内容随之变化；四类非法输入各有一个失败用例 |
+| 1 数据管线 | 已实现构建期 JSON、打包及四类非法输入校验 | 改 md 重新打包后内置内容随之变化；四类非法输入各有一个失败用例 |
 | 2 动作接入 | 新增“打开常用语”动作，进入按键映射页动作列表并暴露为宿主动作 | 实体、手机、网页版三条来源都可绑定；未绑定时不改变任何按键行为 |
 | 3 面板与认领 | 十字面板、默认五键插入、返回关闭、关闭后原映射完整恢复、绕过手势识别 | 真机逐键验证；开关前后原映射逐键比对一致；配了双击的键在面板内仍能立即响应 |
 | 4 用户编辑 | 新增/编辑/删除/排序、本机持久化、导入导出 | 重启后保留；导入导出不夹带无关配置 |
@@ -181,14 +183,14 @@
 - **真机**：真实遥控器逐键插入、连续多次发送、无可用输入框、只读与密码输入框、前台 App 切换、面板开关后原映射完整恢复；实体遥控器、手机遥控、网页版三条来源各验一遍；微信、豆包等真实第三方输入框的文字上屏。
 - **边界声明**：以上任一项未完成时只能标记为候选，不得表述为已验收；单元测试、构建与截图都不能替代真机与第三方输入框验收。
 
-## 涉及文件（预估）
+## 涉及文件
 
 - `Resources/CommonPhrases/built-in.md`：内容与默认键位标注已入库；后续生成脚本以该文件为唯一人工编辑源。
 - `scripts/build-app.sh`、`scripts/verify-app.sh`：生成、打包与校验接线。
 - `Sources/RemoteMic/RemoteButtons.swift`：新增“打开常用语”动作及其分类、重复策略。
 - `Sources/RemoteMic/SettingsView.swift`、`Sources/RemoteMic/BridgeAppModel.swift`：动作目录、运行时认领（含绕过手势识别）与插入。
 - `Sources/RemoteMic/KeyboardInjector.swift`：剪贴板快照与 `Cmd+V` 插入入口（或与既有注入层协作的新入口）。
-- 新增面板视图源码：十字布局的非激活浮层。
+- `CommonPhrasePanel.swift`：十字布局的非激活浮层；`CommonPhraseStore.swift`：数据与运行时认领；`CommonPhraseInserter.swift`：剪贴板事务；`CommonPhraseSettingsView.swift`：页面内编辑。
 - `Tests/RemoteMicTests/`：数据管线校验、认领回归、剪贴板恢复。
 - `Testing/`：新增常用语测试手册。
 - `TODO.md`：同步该功能的完成状态。
