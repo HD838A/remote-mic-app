@@ -89,7 +89,9 @@ AI 整理默认不进入发布包：本地构建未显式提供 `SAYALL_AI_PACKA
 
 test-macos-release-flow.sh 默认运行原 flow、元数据和 CI 证明 fixture。生成 UI 证明和 publication 中的独立验证仍在不同阶段执行；Apple 凭据入口与无凭据上传边界保持不变。
 
-macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。产品矩阵执行原产品测试、self-test、双架构 Release build 和可用的私有集成；BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflow 变更执行，不在私有矩阵重复运行。产品变更时，两条公开 lane 用 --skip-build 复用已编译测试产物运行这 24 项发布检查，独立 Release script checks 在 Ubuntu 汇总成功结果；纯发布控制面变更时才使用独立 Mac lane 编译并验证。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。
+macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。产品 PR 共 7 个验证 Job：Ubuntu 分类兼私有权限探测、1 个公开 Mac Job、免费/付费各 1 个私有 Mac Job、2 个保留原名的 required summary 和独立 Repository governance。原架构矩阵的 native tests 都运行在同一 ARM runner；现在每配置以 macOS 13 最低部署目标运行完整 native tests 一次，然后分别以原配置构建 Apple Silicon/macOS 14 与 Intel/macOS 13 Release，配置之间仍使用隔离 scratch 路径。发布证明兼容历史双 lane，但新 Job 必须逐项证明两个架构构建成功；私有配置可用时，两种配置的测试及双架构构建也必须完成，summary 不能替代产品步骤。
+
+BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflow 变更执行，不在私有配置重复运行。产品变更时，公开 Job 用 --skip-build 复用已编译测试产物；纯发布控制面变更时由同一公开 Job 在 Mac 编译并验证，不再创建独立 Release script checks。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。减少 Job 和重复 native tests 不保证单次墙钟耗时，仍须用实际 CI 记录比较排队与执行时间。
 
 仅修改开发启动入口 script/build_and_run.sh 时，不触发产品构建或发布检查；该入口不在 CI 中执行，其改动不能冒充新的产品验证证明。发布只允许继承经核对无产品变化的既有双架构证明。
 

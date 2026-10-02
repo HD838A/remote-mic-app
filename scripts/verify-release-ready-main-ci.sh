@@ -79,6 +79,32 @@ is_full_product_run() {
   local commit="$2"
   printf '%s\n' "$run_json" | jq -e \
     --arg workflow "$WORKFLOW_NAME" --arg headBranch "$SOURCE_BRANCH" --arg headSha "$commit" '
+    . as $root |
+    def step_passed($step):
+      ([.steps[] | select(.name == $step and .conclusion == "success")] | length) == 1;
+    def dual_build:
+      step_passed("Build release configuration (Apple Silicon)") and
+      step_passed("Build release configuration (Intel Ventura)");
+    def consolidated_product:
+      ([.jobs[] | select(.name == "Public Swift tests and dual-architecture build" and
+        .status == "completed" and .conclusion == "success" and
+        step_passed("Run Swift tests") and step_passed("Run project self-test") and
+        step_passed("Run core first-voice journey gate") and dual_build)] | length) == 1 and
+      ([.jobs[] | select(.name == "Classify changed files" and
+        .conclusion == "success" and step_passed("Detect private dependency access"))] | length) == 1 and
+      all(["Apple Silicon", "Intel Ventura"][]; . as $lane |
+        ([ $root.jobs[] | select(.name == ("Swift tests and build (" + $lane + ")") and
+          .status == "completed" and .conclusion == "success" and
+          step_passed("Require every applicable macOS CI lane"))] | length) == 1) and
+      ([.jobs[] | select(.name | startswith("Private "))] as $private |
+        ($private | length) > 0 and
+        (all($private[]; .conclusion == "skipped") or
+          (($private | length) == 2 and
+           all(["free-combination-actions", "paid-button-profiles"][]; . as $configuration |
+             ([$private[] | select(
+               .name == ("Private " + $configuration + " tests and dual-architecture build") and
+               .status == "completed" and .conclusion == "success" and
+               step_passed("Run private integration tests") and dual_build)] | length) == 1))));
     def product_lane($lane):
       ([.jobs[] | select(
         (.name == ("Public Swift tests and build (" + $lane + ")") or
@@ -93,7 +119,7 @@ is_full_product_run() {
      ($headBranch != "main" and (.event == "push" or .event == "workflow_dispatch"))) and
     .status == "completed" and .conclusion == "success" and
     .headBranch == $headBranch and .headSha == $headSha and
-    product_lane("Apple Silicon") and product_lane("Intel Ventura") and
+    (consolidated_product or (product_lane("Apple Silicon") and product_lane("Intel Ventura"))) and
     all(.jobs[] | select(.name | startswith("Private "));
       .conclusion == "success" or .conclusion == "skipped")
   ' >/dev/null
@@ -113,7 +139,15 @@ is_control_plane_run() {
       .conclusion == "success" and
       .headBranch == $headBranch and
       .headSha == $headSha and
-      ([.jobs[] | select(
+      (([.jobs[] | select(
+        .name == "Public Swift tests and dual-architecture build" and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select(.name == "Run release control-plane fixture" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run Swift tests" or
+          .name == "Build release configuration (Apple Silicon)" or
+          .name == "Build release configuration (Intel Ventura)") and .conclusion == "success")] | length) == 0
+      )] | length) == 1 or
+      (([.jobs[] | select(
         (.name == "Swift tests and build (Apple Silicon)" or
          .name == "Release script checks (Apple Silicon)") and
         .status == "completed" and .conclusion == "success" and
@@ -124,7 +158,7 @@ is_control_plane_run() {
          .name == "Release script checks (Intel Ventura)") and
         .status == "completed" and .conclusion == "success" and
         ([.steps[] | select(.name == "Run release control-plane fixture" and .conclusion == "success")] | length) == 1
-      )] | length) == 1
+      )] | length) == 1))
     ' >/dev/null
 }
 
@@ -142,7 +176,16 @@ is_docs_only_run() {
       .conclusion == "success" and
       .headBranch == $headBranch and
       .headSha == $headSha and
-      ([.jobs[] | select(
+      (([.jobs[] | select(
+        .name == "Public Swift tests and dual-architecture build" and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select((.name == "Run documentation checks" or .name == "Run tooling checks" or .name == "Run repository checks") and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run release control-plane fixture" or
+          .name == "Run Swift tests" or .name == "Run project self-test" or
+          .name == "Build release configuration (Apple Silicon)" or
+          .name == "Build release configuration (Intel Ventura)") and .conclusion == "success")] | length) == 0
+      )] | length) == 1 or
+      (([.jobs[] | select(
         (.name == "Swift tests and build (Apple Silicon)" or
          .name == "Public Swift tests and build (Apple Silicon)") and
         .status == "completed" and .conclusion == "success" and
@@ -159,7 +202,7 @@ is_docs_only_run() {
         ([.steps[] | select((.name == "Run release control-plane fixture" or
           .name == "Run Swift tests" or .name == "Run project self-test" or
           .name == "Build release configuration") and .conclusion == "success")] | length) == 0
-      )] | length) == 1
+      )] | length) == 1))
     ' >/dev/null
 }
 
