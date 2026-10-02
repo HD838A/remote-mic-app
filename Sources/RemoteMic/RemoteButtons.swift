@@ -668,6 +668,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
     case basicKeys
     case systemAndMedia
     case custom
+    case commonPhrases
     case applications
 
     var id: String { rawValue }
@@ -677,6 +678,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
         case .basicKeys: return "button_mapping.action_group.basic_keys"
         case .systemAndMedia: return "button_mapping.action_group.system_and_media"
         case .custom: return "button_mapping.action_group.custom"
+        case .commonPhrases: return "common_phrases.title"
         case .applications: return "button_mapping.action_group.applications"
         }
     }
@@ -820,10 +822,14 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
-             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording, .openCommonPhrases:
+             .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
-        case .customShortcut, .focusInput, .openCustomApplication:
+        case .customShortcut, .focusInput:
             return .custom
+        case .openCommonPhrases:
+            return .commonPhrases
+        case .openCustomApplication:
+            return .applications
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
              .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
              .openZed:
@@ -867,7 +873,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         current: ButtonAction,
         experimentalContinuousRecordingEnabled: Bool
     ) -> [ButtonAction] {
-        allCases.filter { action in
+        let actions = allCases.filter { action in
             guard action.isEnabled(
                 experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled
             ) else {
@@ -876,6 +882,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             guard let application = action.presetApplication else { return true }
             return installedBundleIdentifiers.contains(application.bundleIdentifier) || action == current
         }
+        return actions.filter { $0 != .openCustomApplication } +
+            (actions.contains(.openCustomApplication) ? [.openCustomApplication] : [])
     }
 }
 

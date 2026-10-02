@@ -14,15 +14,22 @@ final class CommonPhraseController: ObservableObject {
     var onWillOpen: (() -> Void)?
     private var routing = CommonPhraseRouting()
     private var panel: NSPanel?
+    private var feedbackPanel: NSPanel?
     private let inserter: CommonPhraseInserter
+    private let frontmostProcessID: () -> pid_t?
     private var targetPID: pid_t?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var generation: UInt64 = 0
     private var localization: LocalizationStore?
 
-    init(store: CommonPhraseStore, inserter: CommonPhraseInserter = CommonPhraseInserter()) {
+    init(
+        store: CommonPhraseStore,
+        inserter: CommonPhraseInserter = CommonPhraseInserter(),
+        frontmostProcessID: @escaping () -> pid_t? = { NSWorkspace.shared.frontmostApplication?.processIdentifier }
+    ) {
         self.store = store
         self.inserter = inserter
+        self.frontmostProcessID = frontmostProcessID
         let workspaceCenter = NSWorkspace.shared.notificationCenter
         let activated = workspaceCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] notification in
             guard let self, self.isVisible,
@@ -57,7 +64,7 @@ final class CommonPhraseController: ObservableObject {
         onWillOpen?()
         self.localization = localization
         generation &+= 1
-        targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        targetPID = frontmostProcessID()
         routing.open(source: source)
         messageKey = "common_phrases.panel_hint"
         isVisible = true
@@ -71,8 +78,8 @@ final class CommonPhraseController: ObservableObject {
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentView = NSHostingView(rootView: CommonPhrasePanelView(controller: self).environmentObject(localization))
-        if let frame = NSScreen.main?.visibleFrame {
-            window.setFrameOrigin(NSPoint(x: frame.midX - CommonPhrasePanelView.size.width / 2, y: frame.minY + 48))
+        if let frame = NSScreen.main?.frame {
+            window.setFrameOrigin(NSPoint(x: frame.midX - CommonPhrasePanelView.size.width / 2, y: frame.midY - CommonPhrasePanelView.size.height / 2))
         }
         panel = window
         window.orderFrontRegardless()
@@ -83,7 +90,10 @@ final class CommonPhraseController: ObservableObject {
     func close(reason: String) {
         routing.close()
         inserter.cancelPending()
-        guard isVisible else { return }
+        guard isVisible || feedbackPanel != nil else { return }
+        feedbackPanel?.orderOut(nil)
+        feedbackPanel?.contentView = nil
+        feedbackPanel = nil
         isVisible = false
         panel?.orderOut(nil)
         panel?.contentView = nil
@@ -111,31 +121,65 @@ final class CommonPhraseController: ObservableObject {
 
     func insert(_ button: RemoteButton) {
         guard isVisible, let targetPID, let localization else { return }
-        guard let phrase = store.phrase(for: button) else {
-            messageKey = "common_phrases.error.no_phrase"
-            AppLogger.shared.write("COMMON_PHRASES INSERT phase=failed reason=no_phrase")
+        let phrase = store.phrase(for: button)
+        // End the one-shot panel before submitting. Its held release remains
+        // claimed, and the new insertion survives the panel's cancellation.
+        close(reason: "selection")
+        guard let phrase else {
+            AppLogger.shared.write("COMMON_PHRASES INSERT operation_id=\(generation) phase=failed result=failed reason=no_phrase")
+            showFailure("common_phrases.error.no_phrase")
             return
         }
         let current = generation
-        messageKey = "common_phrases.inserting"
         inserter.insert(phrase.text(english: localization.locale.language.languageCode?.identifier == "en"), into: targetPID) { [weak self] key in
-            guard let self, self.generation == current, self.isVisible else { return }
-            self.messageKey = key
+            guard let self, self.generation == current, key.hasPrefix("common_phrases.error.") else { return }
+            self.showFailure(key)
+        }
+    }
+
+    private func showFailure(_ key: String) {
+        guard let localization else { return }
+        messageKey = key
+        let size = CGSize(width: 300, height: 100)
+        let window = CommonPhrasePanel(contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        window.level = .floating
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hidesOnDeactivate = false
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.contentView = NSHostingView(rootView:
+            Text(localization.text(key)).font(.system(size: 16, weight: .medium))
+                .multilineTextAlignment(.center).foregroundStyle(.white).padding(16)
+                .frame(width: size.width, height: size.height)
+                .background(Color(white: 0.075), in: RoundedRectangle(cornerRadius: 16)).opacity(0.8))
+        if let frame = NSScreen.main?.frame {
+            window.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2))
+        }
+        feedbackPanel = window
+        window.orderFrontRegardless()
+        AppLogger.shared.write("COMMON_PHRASES FEEDBACK operation_id=\(generation) phase=shown result=visible reason=insertion_failed")
+        let current = generation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self, self.generation == current else { return }
+            self.close(reason: "failure_hint_timeout")
         }
     }
 }
 
 struct CommonPhrasePanelView: View {
-    static let size = CGSize(width: 440, height: 520)
+    static let size = CGSize(width: 300, height: 360)
     @ObservedObject var controller: CommonPhraseController
     @EnvironmentObject private var localization: LocalizationStore
 
     var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text(localization.text("common_phrases.title"))
-                    .font(.system(size: 22, weight: .semibold))
-                Spacer()
+        VStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 8) {
+                Text(localization.text(controller.messageKey))
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Button { controller.close(reason: "close_button") } label: {
                     Image(systemName: "xmark").font(.system(size: 16, weight: .semibold))
                         .frame(width: 30, height: 30)
@@ -143,16 +187,12 @@ struct CommonPhrasePanelView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(localization.text("common_phrases.close"))
             }
-            CommonPhrasePad(store: controller.store, diameter: 380, onSelect: controller.insert)
-            Divider().overlay(Color.white.opacity(0.12))
-            Text(localization.text(controller.messageKey))
-                .font(.system(size: 12)).foregroundStyle(Color.white.opacity(0.8))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            CommonPhrasePad(store: controller.store, diameter: 272, onSelect: controller.insert)
         }
-        .padding(22).frame(width: Self.size.width, height: Self.size.height)
+        .padding(14).frame(width: Self.size.width, height: Self.size.height)
         .foregroundStyle(.white)
         .background(Color(white: 0.075), in: RoundedRectangle(cornerRadius: 22))
+        .opacity(0.8)
         .environment(\.colorScheme, .dark)
     }
 }

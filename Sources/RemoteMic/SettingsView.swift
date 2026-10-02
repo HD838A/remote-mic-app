@@ -320,11 +320,13 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case basicKeys
     case systemAndMedia
     case custom
+    case commonPhrases
+    case applications
 
     var id: String { rawValue }
 
     static var visibleCases: [Self] {
-        [.basicKeys, .systemAndMedia, .custom]
+        [.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]
     }
 
     var localizationKey: String {
@@ -333,6 +335,8 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .basicKeys: return ButtonActionCategory.basicKeys.localizationKey
         case .systemAndMedia: return ButtonActionCategory.systemAndMedia.localizationKey
         case .custom: return ButtonActionCategory.custom.localizationKey
+        case .commonPhrases: return ButtonActionCategory.commonPhrases.localizationKey
+        case .applications: return ButtonActionCategory.applications.localizationKey
         }
     }
 
@@ -345,7 +349,11 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .systemAndMedia:
             return category == .systemAndMedia
         case .custom:
-            return category == .custom || category == .applications
+            return category == .custom
+        case .commonPhrases:
+            return category == .commonPhrases
+        case .applications:
+            return category == .applications
         }
     }
 }
@@ -464,7 +472,6 @@ struct SettingsView: View {
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var mappingActionFilter: MappingActionFilter = .all
-    @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
@@ -1390,7 +1397,6 @@ struct SettingsView: View {
                     selectedSiriRemoteControlID = controlID
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    isPresetApplicationActionsExpanded = false
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -1469,7 +1475,6 @@ struct SettingsView: View {
                     selectedChromecastControlID = controlID
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    isPresetApplicationActionsExpanded = false
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -1499,7 +1504,6 @@ struct SettingsView: View {
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    isPresetApplicationActionsExpanded = false
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -2191,7 +2195,6 @@ struct SettingsView: View {
                 Button {
                     guard mappingActionFilter != filter else { return }
                     mappingActionFilter = filter
-                    isPresetApplicationActionsExpanded = filter == .custom
                 } label: {
                     Text(localization.text(filter.localizationKey))
                         .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
@@ -2249,33 +2252,17 @@ struct SettingsView: View {
         isManagedPowerAction: Bool,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
-        if category == .applications {
-            DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded) {
-                mappingActionGrid(
-                    actions: actions,
-                    selectedAction: selectedAction,
-                    installedBundleIdentifiers: installedBundleIdentifiers,
-                    isManagedPowerAction: isManagedPowerAction,
-                    onSelect: onSelect
-                )
-                .padding(.top, 8)
-            } label: {
-                Text(localization.text(category.localizationKey))
-                    .font(.system(size: 14, weight: .semibold))
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(localization.text(category.localizationKey))
-                    .font(.system(size: 14, weight: .semibold))
+        VStack(alignment: .leading, spacing: 8) {
+            Text(localization.text(category.localizationKey))
+                .font(.system(size: 14, weight: .semibold))
 
-                mappingActionGrid(
-                    actions: actions,
-                    selectedAction: selectedAction,
-                    installedBundleIdentifiers: installedBundleIdentifiers,
-                    isManagedPowerAction: isManagedPowerAction,
-                    onSelect: onSelect
-                )
-            }
+            mappingActionGrid(
+                actions: actions,
+                selectedAction: selectedAction,
+                installedBundleIdentifiers: installedBundleIdentifiers,
+                isManagedPowerAction: isManagedPowerAction,
+                onSelect: onSelect
+            )
         }
     }
 
@@ -2292,7 +2279,7 @@ struct SettingsView: View {
                 alignment: .leading,
                 spacing: 8
             ) {
-                ForEach(actions.filter { $0 != .openCommonPhrases }) { action in
+                ForEach(actions) { action in
                     let unavailableApplication = action.presetApplication.map {
                         !installedBundleIdentifiers.contains($0.bundleIdentifier)
                     } ?? false
@@ -2301,58 +2288,54 @@ struct SettingsView: View {
                     Button {
                         onSelect(action)
                     } label: {
-                        HStack(spacing: 7) {
-                            Image(systemName: selectedAction == action ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(selectedAction == action ? Color.accentColor : Color.secondary)
-                            Text(
-                                action.displayName(using: localization) +
-                                    (unavailableApplication
-                                        ? localization.text("common.suffix.not_installed")
-                                        : unavailableExperiment
-                                            ? localization.text("common.suffix.experimental_disabled")
-                                            : "")
-                            )
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            Spacer(minLength: 0)
-                        }
-                        .font(.system(size: 13, weight: selectedAction == action ? .semibold : .regular))
-                        .padding(.horizontal, 10)
-                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                        .background(
-                            selectedAction == action
-                                ? Color.accentColor.opacity(0.13)
-                                : Color.primary.opacity(0.045),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        mappingActionLabel(
+                            title: action.displayName(using: localization) +
+                                (unavailableApplication
+                                    ? localization.text("common.suffix.not_installed")
+                                    : unavailableExperiment
+                                        ? localization.text("common.suffix.experimental_disabled")
+                                        : ""),
+                            isSelected: selectedAction == action,
+                            systemImage: selectedAction == action ? "checkmark.circle.fill" : "circle"
                         )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(
-                                    selectedAction == action
-                                        ? Color.accentColor.opacity(0.55)
-                                        : Color.secondary.opacity(0.16)
-                                )
-                        }
                     }
                     .buttonStyle(.plain)
                     .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                 }
-            }
-            if actions.contains(.openCommonPhrases) {
-                HStack(spacing: 8) {
-                    Button { onSelect(.openCommonPhrases) } label: {
-                        Label(localization.text("action.open_common_phrases"),
-                              systemImage: selectedAction == .openCommonPhrases ? "checkmark.circle.fill" : "circle")
-                    }
-                    .disabled(isManagedPowerAction)
-                    Button(localization.text("common_phrases.adjust")) {
+                if actions.contains(.openCommonPhrases) {
+                    Button {
                         selectedSection = .commonPhrases
+                    } label: {
+                        mappingActionLabel(
+                            title: localization.text("common_phrases.adjust"),
+                            isSelected: false,
+                            systemImage: "slider.horizontal.3"
+                        )
                     }
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("common-phrases-adjust")
                 }
-                .font(.system(size: 13))
-                .buttonStyle(.bordered)
             }
+        }
+    }
+
+    private func mappingActionLabel(title: String, isSelected: Bool, systemImage: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: systemImage)
+                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+            Text(title).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(isSelected ? Color.accentColor.opacity(0.55) : Color.secondary.opacity(0.16))
         }
     }
 

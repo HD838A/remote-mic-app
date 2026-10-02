@@ -195,6 +195,7 @@ struct CommonPhraseRouting {
         guard owner == source, CommonPhraseStore.buttons.contains(button) || button == .back
         else { return .unhandled }
         held.insert(input)
+        owner = nil
         return button == .back ? .close : .insert(button)
     }
 }

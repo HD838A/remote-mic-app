@@ -1152,7 +1152,7 @@
 "common_phrases.assign_only" = "这里只调整分配，不插入文字。";
 "common_phrases.import_hint" = "导入备份会替换当前常用语和五键分配。";
 "common_phrases.local_storage" = "保存在这台 Mac，重启后仍保留。";
-"common_phrases.panel_hint" = "按方向键或 OK 插入；返回键关闭。不会自动发送。";
+"common_phrases.panel_hint" = "方向键或 OK 插入后关闭\n返回键关闭，不自动发送";
 "common_phrases.close" = "关闭常用语";
 "common_phrases.settings_hint" = "在按键映射中绑定“打开常用语”。内容只保存在本机；插入时会暂时使用剪贴板。";
 "common_phrases.assign_hint" = "五键分配";

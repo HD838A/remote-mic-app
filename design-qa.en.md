@@ -24,7 +24,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 - Panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
-- The action editor shows only Basic Keys / System & Media / Custom Actions filter capsules. On first open, all action groups are visible without an All button. Filtering is temporary, does not execute or rewrite the current mapping, and Custom Actions also exposes app actions.
+- The action editor has five peer filters and sections: Basic Keys / System & Media / Custom Actions / Common Phrases / Open an App. On first open, all groups are visible without an All button. App actions stay expanded, with Open Custom App last; both common phrase buttons use the same dimensions, border and corner style as other actions. Filtering is temporary and resets when editing another button.
 - The UI does not show a separate mute key that is absent from the physical remote.
 - Regular UI uses product language instead of remote model codes, Bluetooth voice protocol names, button protocol names, hexadecimal button numbers, or device-identifier terminology.
 - Profile uses four single-row KPIs in a wide window and may adapt to two columns in a narrow layout. Rankings appear beside a six-month square-cell calendar heatmap using semantic blue; the former bar chart and Less–More legend are not part of the current design.

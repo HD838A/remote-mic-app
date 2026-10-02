@@ -290,8 +290,14 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
         #expect(ButtonAction.customShortcut.category == .custom)
-        #expect(ButtonAction.openCustomApplication.category == .custom)
+        #expect(ButtonAction.openCustomApplication.category == .applications)
         #expect(ButtonAction.openCodex.category == .applications)
+        #expect(ButtonAction.openCommonPhrases.category == .commonPhrases)
+        let applications = ButtonAction.pickerActions(
+            installedBundleIdentifiers: Set(PresetApplication.allCases.map(\.bundleIdentifier)),
+            current: .disabled, experimentalContinuousRecordingEnabled: false
+        ).filter { $0.category == .applications }
+        #expect(applications.last == .openCustomApplication)
         #expect(Set(ButtonAction.allCases.map(\.category)) == Set(ButtonActionCategory.allCases))
     }
 

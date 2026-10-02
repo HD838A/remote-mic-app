@@ -1152,7 +1152,7 @@
 "common_phrases.assign_only" = "Assignments only. No text is inserted.";
 "common_phrases.import_hint" = "Import replaces your current phrases and five-button assignments.";
 "common_phrases.local_storage" = "Saved on this Mac and retained after restarting.";
-"common_phrases.panel_hint" = "Press an arrow or OK to insert. Back closes. Nothing is sent automatically.";
+"common_phrases.panel_hint" = "Arrow/OK: insert and close.\nBack closes. No auto-send.";
 "common_phrases.close" = "Close Common Phrases";
 "common_phrases.settings_hint" = "Bind Open Common Phrases in Buttons. Phrases stay on this Mac. Insertion briefly uses the clipboard.";
 "common_phrases.assign_hint" = "Five-button Assignment";

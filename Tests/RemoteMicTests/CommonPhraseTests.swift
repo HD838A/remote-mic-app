@@ -119,19 +119,64 @@ struct CommonPhraseTests {
         #expect(routing.handle(.up, phase: .press, source: "web") == .unhandled)
         #expect(routing.handle(.up, phase: .press, source: "watch") == .unhandled)
         #expect(routing.handle(.up, phase: .press, source: "phone") == .insert(.up))
+        #expect(routing.owner == nil)
+        #expect(routing.claims(.up, source: "phone"))
         #expect(routing.handle(.up, phase: .press, source: "phone") == .consumed)
         #expect(routing.handle(.up, phase: .release, source: "phone") == .consumed)
-        #expect(routing.handle(.up, phase: .press, source: "phone") == .insert(.up))
-        #expect(routing.handle(.back, phase: .press, source: "phone") == .close)
-        routing.close()
-        #expect(routing.handle(.back, phase: .release, source: "phone") == .consumed)
-        #expect(routing.handle(.up, phase: .release, source: "phone") == .consumed)
         #expect(routing.handle(.up, phase: .press, source: "phone") == .unhandled)
+        routing.open(source: "phone")
+        #expect(routing.handle(.back, phase: .press, source: "phone") == .close)
+        #expect(routing.owner == nil)
+        #expect(routing.handle(.back, phase: .release, source: "phone") == .consumed)
         routing.open(source: "web")
         routing.reset(source: "web")
         #expect(routing.handle(.left, phase: .press, source: "web") == .unhandled)
         #expect(!ButtonAction.openCommonPhrases.allowsRepeat)
         #expect(ButtonAction.openCommonPhrases.isAppInternal)
+    }
+
+    @MainActor @Test func selectionClosesImmediatelyAndPreservesPasteAndClipboardRestoration() throws {
+        _ = NSApplication.shared
+        let suite = "CommonPhraseTests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CommonPhraseStore(defaults: defaults, builtInData: try builtIns())
+        let localization = LocalizationStore(settings: AppSettings(defaults: defaults))
+        let pasteboard = NSPasteboard(name: .init(suite))
+        pasteboard.setString("prior fixture", forType: .string)
+        var pending: [() -> Void] = []
+        var posts = 0
+        var failure: String?
+        var logs: [String] = []
+        let inserter = CommonPhraseInserter(pasteboard: pasteboard, validateTarget: { _ in failure },
+            postPaste: { posts += 1; return true }, schedule: { pending.append($0) }, logger: { logs.append($0) })
+        let controller = CommonPhraseController(store: store, inserter: inserter, frontmostProcessID: { 1 })
+        defer { controller.close(reason: "test_finished") }
+        #expect(controller.open(source: "test", localization: localization))
+        #expect(controller.handle(.up, phase: .press, source: "test"))
+        #expect(!controller.isVisible)
+        #expect(posts == 1)
+        #expect(controller.handle(.up, phase: .press, source: "test"))
+        #expect(controller.handle(.up, phase: .release, source: "test"))
+        #expect(!controller.handle(.up, phase: .press, source: "test"))
+        // Reopen while the first clipboard transaction is still draining.
+        #expect(controller.open(source: "test", localization: localization))
+        controller.insert(.ok)
+        #expect(!controller.isVisible)
+        #expect(posts == 1)
+        pending.removeFirst()()
+        #expect(posts == 2)
+        pending.removeFirst()()
+        #expect(pasteboard.string(forType: .string) == "prior fixture")
+        #expect(logs.filter { $0.contains("phase=completed result=submitted") }.count == 2)
+        #expect(!logs.contains { $0.contains("result=cancelled") || $0.contains("fixture") })
+        failure = "input_unavailable"
+        #expect(controller.open(source: "test", localization: localization))
+        controller.insert(.left)
+        #expect(!controller.isVisible)
+        #expect(controller.messageKey == "common_phrases.error.input_unavailable")
+        #expect(posts == 2)
+        #expect(pasteboard.string(forType: .string) == "prior fixture")
     }
 
     @MainActor @Test func clipboardRestoresAllTypesPreservesNewUserCopyAndSerializes() throws {
@@ -236,9 +281,15 @@ struct CommonPhraseTests {
         #expect(ordinary == 0)
         monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
         monitor.handleSimulatedReport(reportID: 1, data: report)
+        #expect(inserts == 1)
+        #expect(ordinary == 0)
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        // Match the production controller onWillOpen cancellation boundary.
+        monitor.cancelPendingButtonActions()
+        routing.open(source: "hid")
+        monitor.handleSimulatedReport(reportID: 1, data: report)
         #expect(inserts == 2)
         monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
-        routing.close()
         settings.setAction(.disabled, for: .left, trigger: .doubleClick)
         monitor.handleSimulatedReport(reportID: 1, data: report)
         #expect(ordinary == 1)
