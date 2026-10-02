@@ -141,7 +141,8 @@ for module_name in \
   framework="$STAGING_DIRECTORY/Artifacts/$module_name.xcframework/macos-arm64_x86_64/$module_name.framework"
   binary="$framework/$module_name"
   test -f "$binary"
-  lipo "$binary" -verify_arch arm64 x86_64
+  lipo "$binary" -verify_arch arm64
+  lipo "$binary" -verify_arch x86_64
   test "$(plutil -extract MinimumOSVersion raw -o - "$framework/Info.plist")" = "13.0"
 done
 unzip -q "$RELEASE_DIRECTORY/SayAllDiagnosticsTransport.xcframework.zip" \
@@ -150,13 +151,15 @@ transport_framework="$STAGING_DIRECTORY/Artifacts/SayAllDiagnosticsTransport.xcf
 test -n "$transport_framework"
 transport_binary="$(find "$transport_framework" -maxdepth 1 -type f ! -name Info.plist -print -quit)"
 test -f "$transport_binary"
-lipo "$transport_binary" -verify_arch arm64 x86_64
+lipo "$transport_binary" -verify_arch arm64
+lipo "$transport_binary" -verify_arch x86_64
 test "$(plutil -extract MinimumOSVersion raw -o - "$transport_framework/Info.plist")" = "13.0"
 unzip -q "$RELEASE_DIRECTORY/SayAllDiagnosticsSentry.xcframework.zip" \
   -d "$STAGING_DIRECTORY/Artifacts"
 sentry_framework="$STAGING_DIRECTORY/Artifacts/SayAllDiagnosticsSentry.xcframework/macos-arm64_arm64e_x86_64/Sentry.framework"
 test -f "$sentry_framework/Sentry"
-lipo "$sentry_framework/Sentry" -verify_arch arm64 x86_64
+lipo "$sentry_framework/Sentry" -verify_arch arm64
+lipo "$sentry_framework/Sentry" -verify_arch x86_64
 sentry_info_plist="$sentry_framework/Versions/A/Resources/Info.plist"
 test -f "$sentry_info_plist"
 unzip -q "$RELEASE_DIRECTORY/SayAllMembership_SayAllMembershipUI.bundle.zip" \

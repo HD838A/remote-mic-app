@@ -376,7 +376,11 @@ struct BuildSigningTests {
         #expect(prepareSource.contains("checksum manifest digest does not match the trusted value"))
         #expect(prepareSource.contains("repository_state.dirty == false"))
         #expect(prepareSource.contains("PREPARED_SHA256SUMS"))
-        #expect(prepareSource.contains("lipo \"$binary\" -verify_arch arm64 x86_64"))
+        for binary in ["$binary", "$transport_binary", "$sentry_framework/Sentry"] {
+            #expect(prepareSource.contains("lipo \"\(binary)\" -verify_arch arm64\n"))
+            #expect(prepareSource.contains("lipo \"\(binary)\" -verify_arch x86_64\n"))
+            #expect(!prepareSource.contains("lipo \"\(binary)\" -verify_arch arm64 x86_64"))
+        }
         #expect(prepareSource.contains("SayAllMembershipHostAdapter.xcframework.zip"))
         #expect(prepareSource.contains("name: \"SayAllMembershipHostAdapter\""))
         #expect(prepareSource.contains("SayAllMembership_SayAllMembershipUI.bundle.zip"))
