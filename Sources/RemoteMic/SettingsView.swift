@@ -810,17 +810,6 @@ struct SettingsView: View {
                         .buttonStyle(.borderedProminent)
                         .padding(10)
                     }
-                    Divider()
-                    Label(
-                        localization.text("macro.integration.focus_mcp_boundary"),
-                        systemImage: "info.circle"
-                    )
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 10)
                 }
             } else {
                 aboutPage

@@ -1435,7 +1435,7 @@ struct SettingsPageRegressionTests {
         #expect(integration.contains("onBindingEditorActivityChanged"))
         #expect(integration.contains("@Published private(set) var isEditorActive"))
         #expect(settings.contains("macroFeature.settingsView"))
-        #expect(settings.contains("macro.integration.focus_mcp_boundary"))
+        #expect(!settings.contains("macro.integration.focus_mcp_boundary"))
         #expect(settings.contains(".font(.system(size: 12))"))
         #expect(settings.contains("macroFeature.enrollmentView"))
         #expect(settings.contains("macroFeature.setEditorActive(false)"))
