@@ -1998,6 +1998,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             && membershipFeature.supportsRemoteSessionAuthorization
     }
 
+    // 兼容现有固定镜像的旧 UI 合同；不显示或恢复独立免检开关。
+    var isWebRemoteMembershipBypassAvailable: Bool { false }
+    func setWebRemoteMembershipBypassEnabled(_ enabled: Bool) {}
+
     private static func isLoopbackRelayURL(_ url: URL) -> Bool {
         guard url.scheme == "ws", let host = url.host?.lowercased() else { return false }
         return host == "127.0.0.1" || host == "localhost" || host == "::1"

@@ -7,6 +7,8 @@
 使用经验证的完整私有构件及固定 MacRemote 依赖。缺少私有组件时公开宿主仍能运行实体按键和语音，但不得把云端遥控显示为可用。
 测试包使用 staging；正式环境会员门禁仍生效。提前准备受支持虚拟麦克风和目标语音工具的公开设置。
 
+本轮新行为须使用新 Remote 与统一会员私有构件重新构建宿主。旧固定 Remote 镜像仅验证编译兼容：旧开关恒隐藏、setter 无操作；小程序取码仍是旧规则，不能当作新功能包验收。原因见[固定 UI 合同记录](../Bugs/2026-10-03-remote-session-pinned-ui-contract.md)。
+
 ## 连接与权益
 
 本轮生产组件截图与证据边界见[环境选择 UI 证据](../Screenshots/remote-environment-selection/README.md)；合成数据截图不能替代真实扫码或完整 App 验收。

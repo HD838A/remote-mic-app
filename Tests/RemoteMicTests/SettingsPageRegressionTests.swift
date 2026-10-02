@@ -1101,7 +1101,8 @@ struct SettingsPageRegressionTests {
         #expect(bridgeSource.contains("webRemoteServiceEnvironment == \"staging\""))
         #expect(bridgeSource.contains("Self.isLoopbackRelayURL(relayURL)"))
         #expect(!bridgeSource.contains("webRemoteMembershipBypassRequested"))
-        #expect(!bridgeSource.contains("setWebRemoteMembershipBypassEnabled"))
+        #expect(bridgeSource.contains("var isWebRemoteMembershipBypassAvailable: Bool { false }"))
+        #expect(bridgeSource.contains("func setWebRemoteMembershipBypassEnabled(_ enabled: Bool) {}"))
         let bypassPolicy = bridgeSource.components(separatedBy: "var isWebRemoteMembershipBypassEnabled: Bool {")[1]
             .components(separatedBy: "private static func isLoopbackRelayURL")[0]
         #expect(bypassPolicy.contains("membershipFeature.supportsRemoteSessionAuthorization"))
