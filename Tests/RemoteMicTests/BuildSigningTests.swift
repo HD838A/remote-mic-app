@@ -471,7 +471,7 @@ struct BuildSigningTests {
         #expect(stagingSource.contains("run_title=\"mac-release $MODE $source_branch $commit\""))
         #expect(stagingSource.contains("--include"))
         #expect(stagingSource.contains("releases/latest"))
-        #expect(stagingSource.contains("verify-release-workflow-gh-token.sh"))
+        #expect(stagingSource.contains("verify-release-dependency-pins.sh\" tokens"))
         #expect(stagingSource.contains("--ref main"))
         #expect(stagingSource.contains("source_branch=$source_branch"))
         #expect(sourceGuardSource.contains("hotfix/vX.Y.Z"))
@@ -483,7 +483,7 @@ struct BuildSigningTests {
         #expect(publicationSource.contains("stagedAt"))
         #expect(publicationSource.contains("--arg stagedAt \"$staged_at\""))
         #expect(!publicationSource.contains("--arg publishedAt \"$(/bin/date"))
-        #expect(publicationSource.contains("verify-preview-ui-attestation.sh"))
+        #expect(publicationSource.contains("record-preview-ui-attestation.sh\" verify"))
         #expect(publicationSource.contains("Preview publication must run from exact origin/main"))
         #expect(publicationSource.contains("HD838A/remote-mic-app"))
         #expect(publicationSource.contains("/mac/channels/$channel/$appcast"))
@@ -508,7 +508,7 @@ struct BuildSigningTests {
             encoding: .utf8
         )
         let fixtureSource = try String(
-            contentsOf: root.appendingPathComponent("scripts/test-prepare-preview-release.sh"),
+            contentsOf: root.appendingPathComponent("scripts/test-macos-release-flow.sh"),
             encoding: .utf8
         )
 

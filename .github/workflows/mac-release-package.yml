@@ -116,7 +116,7 @@ jobs:
       - name: Verify explicit GitHub token bindings
         env:
           REPOSITORY_ROOT: ${{ github.workspace }}
-        run: ./scripts/verify-release-workflow-gh-token.sh
+        run: ./scripts/verify-release-dependency-pins.sh tokens
 
       - name: Verify release metadata
         working-directory: release-source
@@ -211,7 +211,7 @@ jobs:
 
       - name: Resolve versioned release dependencies
         id: release-dependencies
-        run: ./scripts/resolve-release-dependencies.sh github-output
+        run: ./scripts/verify-release-dependency-pins.sh resolve github-output
 
       - name: Install signing tools
         run: |

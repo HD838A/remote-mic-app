@@ -43,7 +43,7 @@
 
 ## 用例 5：凭据和 token 边界
 
-1. 运行 scripts/verify-release-workflow-gh-token.sh。
+1. 运行 scripts/verify-release-dependency-pins.sh tokens。
 2. 静态检查 staging workflow 的每个 gh/API step。
 
 预期：每个 step 都显式设置 GH_TOKEN；publication workflow 不声明 Apple Environment 或 secrets；日志不包含凭据值。
@@ -59,7 +59,7 @@
 
 - 失败只影响本次 staging，不会升版本、Build 或创建 rerun 分支。
 - 已经成功的 artifact 可由 publication 复用，不重新进入 Apple 签名。
-- scripts/test-macos-release-flow.sh、scripts/test-prepare-preview-release.sh 和 BuildSigningTests 通过。
+- scripts/test-macos-release-flow.sh（包含 flow、metadata、ready-ci）和 BuildSigningTests 通过。
 
 ## 日志与边界
 

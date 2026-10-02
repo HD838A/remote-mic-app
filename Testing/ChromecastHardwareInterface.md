@@ -427,8 +427,7 @@ CODE_SIGN_IDENTITY="Developer ID Application: lei qian (L3QHLDRPAY)" \
      `open /Users/andy/MySrc/remote-mic-app-chromecase/dist/SayAll.app` 显式打开本表那份。
 2. 确认已安装 `MiRemoteV 2ch` 音频设备（侧边栏「连接」→「连接与语音」页的「音频输入与兼容」面板应显示已就绪）。本次不安装任何 helper。
 3. 在侧边栏「设置」页的「权限与隐私」区授予蓝牙、输入监控和辅助功能权限，然后完全退出并重新打开 App。
-4. 打开 `~/Library/Logs/RemoteMic/runtime.log`，保留现有文件，不清空、不覆盖。
-   - 建议直接双击 `Testing/启动Chromecast真机测试.command`，它会实时过滤出本手册用到的日志行，并在桌面留一份会话记录。
+4. 从 App“文件 → 打开日志所在文件夹”收集本次测试的 `.rmlog` 加密会话文件，保留既有日志，不清空、不覆盖。由受控支持环境解密后，按测试时间筛选 `CHROMECAST`、`ATVV` 和 `VOICE INTENT`；完整方法见 [运行日志测试手册](RuntimeLogging.md)。下文旧版 `runtime.log` 仅作为历史证据，不再依赖专用日志监听启动器。
 5. 进入侧边栏**「连接」**（链接图标，页面标题「连接与语音」）：**左列的设备面板**显示当前遥控器、照片与三行状态（连接状态 / 语音状态 / 语音快捷），**「重新连接」按钮也在这块面板上**。
    - ⚠️ 侧边栏**没有**单独的「Chromecast 遥控器」面板，也没有总开关：总开关已按产品要求移除，**恒为常开**；语音键模式**不在这一页**，在「按键映射」页底部（见用例 2）。
    - 界面长相见 `Testing/artifacts/chromecast-layout/`（由 App 自带离屏渲染导出，非截图拼贴）：

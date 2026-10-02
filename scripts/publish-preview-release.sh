@@ -128,7 +128,7 @@ stage_record="$recovered/stage-record/preview-stage-record.json"
   echo "Recovered stage is missing its authenticated staging record" >&2
   exit 1
 }
-"$ROOT/scripts/verify-preview-ui-attestation.sh" "$ATTESTATION" "$stage_record" "$public_dir" >/dev/null || {
+"$ROOT/scripts/record-preview-ui-attestation.sh" verify "$ATTESTATION" "$stage_record" "$public_dir" >/dev/null || {
   echo "Preview UI attestation failed final publication verification" >&2
   exit 1
 }

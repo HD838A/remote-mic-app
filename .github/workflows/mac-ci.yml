@@ -23,6 +23,8 @@ jobs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
       release_control_plane_only: ${{ steps.changes.outputs.release_control_plane_only }}
       product_change: ${{ steps.changes.outputs.product_change }}
+      tooling_only: ${{ steps.changes.outputs.tooling_only }}
+      release_checks: ${{ steps.changes.outputs.release_checks }}
     steps:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -38,7 +40,7 @@ jobs:
         run: |
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
             {
-              printf '%s\n' docs_only=false release_control_plane_only=false product_change=true
+              printf '%s\n' docs_only=false release_control_plane_only=false tooling_only=false product_change=true release_checks=true
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -48,66 +50,15 @@ jobs:
             before_sha="${{ github.event.before }}"
             if [[ -z "$before_sha" || "$before_sha" == 0000000000000000000000000000000000000000 ]]; then
               {
-                printf '%s\n' docs_only=false release_control_plane_only=false product_change=true
+                printf '%s\n' docs_only=false release_control_plane_only=false tooling_only=false product_change=true release_checks=true
               } >> "$GITHUB_OUTPUT"
               exit 0
             fi
             diff_range="$before_sha..HEAD"
           fi
 
-          changed=false
-          docs_only=true
-          control_only=true
-          while IFS= read -r path; do
-            [[ -n "$path" ]] || continue
-            changed=true
-            case "$path" in
-              *.md|Screenshots/*)
-                ;;
-              .github/workflows/mac-release-package.yml|\
-              .github/workflows/mac-preview-publication.yml|\
-              .github/workflows/mac-stable-promote.yml|\
-              scripts/prepare-preview-release.sh|\
-              scripts/stage-macos-preview.sh|\
-              scripts/prepare-public-release-assets.sh|\
-              scripts/verify-preview-cdn-availability.sh|\
-              scripts/verify-staged-release-assets.sh|\
-              scripts/recover-preview-stage.sh|\
-              scripts/publish-staged-preview.sh|\
-              scripts/publish-preview-release.sh|\
-              scripts/promote-preview-release.sh|\
-              scripts/prepare-staged-preview-ui-test.sh|\
-              scripts/record-preview-ui-attestation.sh|\
-              scripts/verify-preview-ui-attestation.sh|\
-              scripts/verify-release-ready-main-ci.sh|\
-              scripts/verify-release-dependency-pins.sh|\
-              scripts/verify-release-workflow-gh-token.sh|\
-              scripts/verify-release-control-plane-diff.sh|\
-              scripts/test-verify-release-ready-main-ci.sh|\
-              scripts/test-macos-release-flow.sh|\
-              scripts/test-prepare-preview-release.sh|\
-              Tests/RemoteMicTests/BuildSigningTests.swift)
-                docs_only=false
-                ;;
-              *)
-                docs_only=false
-                control_only=false
-                ;;
-            esac
-          done < <(git diff --name-only "$diff_range")
-
-          if [[ "$changed" != true ]]; then
-            docs_only=false
-            control_only=false
-          fi
-          if [[ "$docs_only" == true ]]; then
-            control_only=false
-          fi
-          {
-            printf 'docs_only=%s\n' "$docs_only"
-            printf 'release_control_plane_only=%s\n' "$control_only"
-            printf 'product_change=%s\n' "$([[ "$control_only" == true || "$docs_only" == true ]] && echo false || echo true)"
-          } >> "$GITHUB_OUTPUT"
+          base_sha="${diff_range%%.*}"
+          ./scripts/verify-release-control-plane-diff.sh --classify "$base_sha" HEAD >> "$GITHUB_OUTPUT"
 
   public_test:
     name: Public Swift tests and build (${{ matrix.label }})
@@ -152,23 +103,23 @@ jobs:
           done
           echo "Documentation-only change passed."
 
-      - name: Run release control-plane fixture
-        if: needs.classify_changes.outputs.release_control_plane_only == 'true'
-        run: |
-          ./scripts/test-macos-release-flow.sh
-          swift test --disable-keychain --filter BuildSigningTests
+      - name: Run tooling checks
+        if: needs.classify_changes.outputs.tooling_only == 'true'
+        run: echo "Manual developer tooling only; product and release checks are not applicable."
 
       - name: Enforce repository boundaries
         if: needs.classify_changes.outputs.product_change == 'true'
         run: ./scripts/check-repository-boundaries.sh
 
-      - name: Verify release dependency pins
-        if: needs.classify_changes.outputs.product_change == 'true'
-        run: ./scripts/verify-release-dependency-pins.sh
-
       - name: Show toolchain
         if: needs.classify_changes.outputs.product_change == 'true'
         run: swift --version
+
+      - name: Verify release configuration
+        if: needs.classify_changes.outputs.product_change == 'true' && needs.classify_changes.outputs.release_checks == 'true'
+        run: |
+          ./scripts/verify-release-dependency-pins.sh
+          ./scripts/verify-release-dependency-pins.sh tokens
 
       - name: Run Swift tests
         if: needs.classify_changes.outputs.product_change == 'true'
@@ -177,7 +128,7 @@ jobs:
           SAYALL_COMBINATION_ACTIONS_PATH: ""
           SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
           SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
-        run: swift test --disable-keychain
+        run: swift test --disable-keychain --skip BuildSigningTests
 
       - name: Run core first-voice journey gate
         if: needs.classify_changes.outputs.product_change == 'true'
@@ -189,6 +140,18 @@ jobs:
         run: |
           swift test --disable-keychain --filter VoiceInputDestinationCoordinatorTests
           swift test --disable-keychain --filter CoreVoiceInputJourneyTests
+
+      - name: Run release control-plane fixture
+        if: needs.classify_changes.outputs.product_change == 'true' && needs.classify_changes.outputs.release_checks == 'true'
+        env:
+          SAYALL_AI_PACKAGE_PATH: ""
+          SAYALL_COMBINATION_ACTIONS_PATH: ""
+          SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
+          SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
+        # Reuse the product test binary; no additional Mac compilation.
+        run: |
+          command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
+          swift test --disable-keychain --skip-build --filter BuildSigningTests
 
       - name: Run project self-test
         if: needs.classify_changes.outputs.product_change == 'true'
@@ -203,6 +166,47 @@ jobs:
           SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
         run: swift build --disable-keychain -c release --triple "${{ matrix.triple }}"
 
+  release_checks:
+    name: Release script checks (${{ matrix.label }})
+    needs: [classify_changes, public_test]
+    if: needs.classify_changes.outputs.release_checks == 'true'
+    runs-on: ${{ needs.classify_changes.outputs.product_change == 'true' && 'ubuntu-latest' || 'macos-15' }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: apple-silicon
+            label: Apple Silicon
+          - variant: intel
+            label: Intel Ventura
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      RELEASE_VARIANT: ${{ matrix.variant }}
+    steps:
+      - name: Check out repository
+        if: needs.classify_changes.outputs.product_change != 'true'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Verify release configuration
+        if: needs.classify_changes.outputs.product_change != 'true'
+        run: |
+          ./scripts/verify-release-dependency-pins.sh
+          ./scripts/verify-release-dependency-pins.sh tokens
+      - name: Run release control-plane fixture
+        if: needs.classify_changes.outputs.product_change != 'true'
+        # BuildSigningTests executes the consolidated shell fixture itself.
+        run: |
+          command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
+          swift test --disable-keychain --filter BuildSigningTests
+
+      - name: Require release checks from product lanes
+        if: needs.classify_changes.outputs.product_change == 'true'
+        env:
+          PUBLIC_RESULT: ${{ needs.public_test.result }}
+        run: test "$PUBLIC_RESULT" = success
+
   private_access:
     name: Detect private dependency access
     needs: classify_changes
@@ -216,7 +220,7 @@ jobs:
 
       - name: Resolve versioned release dependencies
         id: release-dependencies
-        run: ./scripts/resolve-release-dependencies.sh github-output
+        run: ./scripts/verify-release-dependency-pins.sh resolve github-output
 
       - name: Detect private dependency access
         id: private-access
@@ -288,7 +292,7 @@ jobs:
 
       - name: Resolve versioned release dependencies
         id: release-dependencies
-        run: ./scripts/resolve-release-dependencies.sh github-output
+        run: ./scripts/verify-release-dependency-pins.sh resolve github-output
 
       - name: Check out private feature package
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -329,7 +333,7 @@ jobs:
         if: matrix.configuration == 'free-combination-actions'
         env:
           SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
-        run: swift test --disable-keychain --scratch-path ".build-private-free/${{ matrix.variant }}"
+        run: swift test --disable-keychain --skip BuildSigningTests --scratch-path ".build-private-free/${{ matrix.variant }}"
 
       - name: Build free combination actions release configuration
         if: matrix.configuration == 'free-combination-actions'
@@ -345,7 +349,7 @@ jobs:
         if: matrix.configuration == 'paid-button-profiles'
         env:
           SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ${{ github.workspace }}/.private-dependencies/sayall-private-platform/packages/macos-button-profiles
-        run: swift test --disable-keychain --scratch-path ".build-private-paid/${{ matrix.variant }}"
+        run: swift test --disable-keychain --skip BuildSigningTests --scratch-path ".build-private-paid/${{ matrix.variant }}"
 
       - name: Build paid button profiles release configuration
         if: matrix.configuration == 'paid-button-profiles'
@@ -359,7 +363,7 @@ jobs:
 
   test:
     name: Swift tests and build (${{ matrix.label }})
-    needs: [classify_changes, public_test, private_access, private_test]
+    needs: [classify_changes, public_test, private_access, private_test, release_checks]
     if: always()
     runs-on: ubuntu-latest
     strategy:
@@ -374,11 +378,18 @@ jobs:
           PUBLIC_RESULT: ${{ needs.public_test.result }}
           PRIVATE_ACCESS_RESULT: ${{ needs.private_access.result }}
           PRIVATE_TEST_RESULT: ${{ needs.private_test.result }}
+          RELEASE_CHECKS_RESULT: ${{ needs.release_checks.result }}
+          RELEASE_CHECKS_REQUIRED: ${{ needs.classify_changes.outputs.release_checks }}
           PRODUCT_CHANGE: ${{ needs.classify_changes.outputs.product_change }}
           PRIVATE_AVAILABLE: ${{ needs.private_access.outputs.available }}
         run: |
           test "$CLASSIFY_RESULT" = success
           test "$PUBLIC_RESULT" = success
+          if [[ "$RELEASE_CHECKS_REQUIRED" == true ]]; then
+            test "$RELEASE_CHECKS_RESULT" = success
+          else
+            test "$RELEASE_CHECKS_RESULT" = skipped
+          fi
           case "$PRIVATE_ACCESS_RESULT" in
             success|skipped) ;;
             *) exit 1 ;;
