@@ -659,7 +659,8 @@ struct BuildSigningTests {
             "https://download.sayall.app/mac/channels/stable/appcast-intel.xml"
         ))
 
-        #expect(workflowSource.contains("RELEASE_VARIANT: ${{ matrix.variant }}"))
+        #expect(workflowSource.contains("RELEASE_VARIANT: apple-silicon"))
+        #expect(workflowSource.contains("RELEASE_VARIANT: intel"))
         #expect(workflowSource.contains("x86_64-apple-macosx13.0"))
         #expect(workflowSource.contains("apple-silicon"))
         #expect(workflowSource.contains("intel"))
